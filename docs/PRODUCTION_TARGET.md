@@ -4,7 +4,7 @@ RupayKg is India's circular-economy operating system for urban and rural resourc
 
 ## Non-negotiable truth model
 
-`LOCAL_CAPTURED -> SYNC_RECEIVED -> AUTHORITATIVE -> VERIFIED -> VALUE_ELIGIBLE`
+`LOCAL_CAPTURED -> SYNC_RECEIVED -> AUTHORITATIVE -> VERIFIED -> VALUE_ELIGIBLE -> CERTIFIED/ISSUED -> REGISTERED -> TRANSFERRED/RETIRED -> SETTLED -> REPORTED`
 
 A local/offline record is not authoritative. Authoritative persistence is not verification. Verification is not financial settlement. The UI must expose these states distinctly.
 
@@ -27,7 +27,7 @@ Offline clients must never:
 - mark money as settled; or
 - bypass organization/geography authorization.
 
-The server remains the source of truth. Conflicts remain explicit until resolved by an authorized workflow.
+The server remains the source of truth. Conflicts remain explicit until resolved by an authorized workflow. Online and offline capture must converge on the same server-side lifecycle and authorization rules.
 
 ## Geography
 
@@ -48,3 +48,7 @@ AI findings are advisory and source-grounded. They cannot mutate authoritative o
 The operating UI is designed for national/state/district administration, ULBs, Gram Panchayats, field workers, generators, collectors, processors, MRV/verifiers, EPR/compliance teams, carbon teams, registry/settlement operators, auditors and enterprise reporting users. Desktop consoles and low-connectivity mobile workflows consume the same API contracts.
 
 Google Stitch is used for design exploration and developer handoff through `DESIGN.md`; it is not treated as an authoritative backend or account integration.
+
+## Definition of done
+
+A production rollout is not complete until a clean environment can apply the ordered migrations and pass validation, an authorized user can execute the lifecycle, unauthorized users are denied, offline records synchronize safely, retries are idempotent, conflicts remain visible, value cannot bypass evidence/verification, registry events are auditable, settlement cannot finalize without external confirmation/reconciliation, and UI claims can be traced to authoritative state.
