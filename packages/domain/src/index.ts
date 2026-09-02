@@ -1,4 +1,5 @@
 export * from "./state-machines.js";
+export * from "./regulatory.js";
 
 export const STATUS = {
   VERIFIED: "VERIFIED",
