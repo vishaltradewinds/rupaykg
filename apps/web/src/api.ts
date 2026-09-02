@@ -38,5 +38,5 @@ export const api = {
   registry: (token: string) => get<Envelope<RegistryWorkspace>>("/api/v1/workspaces/registry", token),
   settlement: (token: string) => get<Envelope<SettlementWorkspace>>("/api/v1/workspaces/settlement", token),
   conflicts: (token: string) => get<Envelope<{ conflicts: FieldConflict[] }>>("/api/v1/field-sync/conflicts", token),
-  resolveConflict: (token: string, conflictId: string, resolutionStatus: "RESOLVED" | "REJECTED", reason: string) => post<unknown>(`/api/v1/field-sync/conflicts/${conflictId}/resolve`, { resolutionStatus, reason }, token),
+  resolveConflict: (token: string, conflictId: string, resolutionStatus: "RESOLVED" | "REJECTED", resolutionReason: string) => post<unknown>(`/api/v1/field-sync/conflicts/${conflictId}/resolve`, { resolutionStatus, resolutionReason }, token),
 };
