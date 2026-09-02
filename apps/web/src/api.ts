@@ -18,16 +18,16 @@ const apiBase = import.meta.env.VITE_API_BASE_URL ?? "";
 async function get<T>(path: string, token?: string): Promise<T> { const response = await fetch(`${apiBase}${path}`, { headers: token ? { Authorization: `Bearer ${token}` } : undefined }); if (!response.ok) throw new Error(`${path} HTTP ${response.status}`); return response.json() as Promise<T>; }
 async function post<T>(path: string, body: unknown, token: string): Promise<T> { const response = await fetch(`${apiBase}${path}`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify(body) }); if (!response.ok) throw new Error(`${path} HTTP ${response.status}`); return response.json() as Promise<T>; }
 export const api = {
-  overview: (token?: string) => get<Overview>("/api/v1/overview", token), health: () => get<Health>("/health"), regulatory: () => get<RegulatoryResponse>("/api/v1/regulatory/sources"),
-  geographyRoots: (token: string) => get<Envelope<{ geography: Geography[] }>>("/api/v1/geography/roots", token),
-  geographyChildren: (parentId: string, token: string) => get<Envelope<{ geography: Geography[] }>>(`/api/v1/geography/children/${parentId}`, token),
-  resourceFlows: (token: string, geographyId?: string) => get<Envelope<{ resourceFlows: ResourceFlow[] }>>(`/api/v1/workspaces/resource-flows${geographyId ? `?geographyId=${encodeURIComponent(geographyId)}` : ""}`, token),
-  mrv: (token: string, geographyId?: string) => get<Envelope<MvrWorkspace>>(`/api/v1/workspaces/mrv${geographyId ? `?geographyId=${encodeURIComponent(geographyId)}` : ""}`, token),
-  compliance: (token: string, geographyId?: string) => get<Envelope<ComplianceWorkspace>>(`/api/v1/workspaces/compliance${geographyId ? `?geographyId=${encodeURIComponent(geographyId)}` : ""}`, token),
-  carbon: (token: string, geographyId?: string) => get<Envelope<CarbonWorkspace>>(`/api/v1/workspaces/carbon${geographyId ? `?geographyId=${encodeURIComponent(geographyId)}` : ""}`, token),
-  registry: (token: string, geographyId?: string) => get<Envelope<RegistryWorkspace>>(`/api/v1/workspaces/registry${geographyId ? `?geographyId=${encodeURIComponent(geographyId)}` : ""}`, token),
-  settlement: (token: string, geographyId?: string) => get<Envelope<SettlementWorkspace>>(`/api/v1/workspaces/settlement${geographyId ? `?geographyId=${encodeURIComponent(geographyId)}` : ""}`, token),
-  intelligence: (token: string, geographyId?: string) => get<IntelligenceResponse>(`/api/v1/workspaces/intelligence${geographyId ? `?geographyId=${encodeURIComponent(geographyId)}` : ""}`, token),
-  conflicts: (token: string) => get<Envelope<{ conflicts: FieldConflict[] }>>("/api/v1/field-sync/conflicts", token),
-  resolveConflict: (token: string, conflictId: string, resolutionStatus: "RESOLVED" | "REJECTED", resolutionReason: string) => post<unknown>(`/api/v1/field-sync/conflicts/${conflictId}/resolve`, { resolutionStatus, resolutionReason }, token),
+ overview: (token?: string) => get<Overview>("/api/v1/overview", token), health: () => get<Health>("/health"), regulatory: () => get<RegulatoryResponse>("/api/v1/regulatory/sources"),
+ geographyRoots: (token: string) => get<Envelope<{ geography: Geography[] }>>("/api/v1/geography/roots", token),
+ geographyChildren: (parentId: string, token?: string) => get<Envelope<{ geography: Geography[] }>>(`/api/v1/geography/children/${parentId}`, token ?? import.meta.env.VITE_RUPAYKG_SESSION_TOKEN ?? ""),
+ resourceFlows: (token: string, geographyId?: string) => get<Envelope<{ resourceFlows: ResourceFlow[] }>>(`/api/v1/workspaces/resource-flows${geographyId ? `?geographyId=${encodeURIComponent(geographyId)}` : ""}`, token),
+ mrv: (token: string, geographyId?: string) => get<Envelope<MvrWorkspace>>(`/api/v1/workspaces/mrv${geographyId ? `?geographyId=${encodeURIComponent(geographyId)}` : ""}`, token),
+ compliance: (token: string, geographyId?: string) => get<Envelope<ComplianceWorkspace>>(`/api/v1/workspaces/compliance${geographyId ? `?geographyId=${encodeURIComponent(geographyId)}` : ""}`, token),
+ carbon: (token: string, geographyId?: string) => get<Envelope<CarbonWorkspace>>(`/api/v1/workspaces/carbon${geographyId ? `?geographyId=${encodeURIComponent(geographyId)}` : ""}`, token),
+ registry: (token: string, geographyId?: string) => get<Envelope<RegistryWorkspace>>(`/api/v1/workspaces/registry${geographyId ? `?geographyId=${encodeURIComponent(geographyId)}` : ""}`, token),
+ settlement: (token: string, geographyId?: string) => get<Envelope<SettlementWorkspace>>(`/api/v1/workspaces/settlement${geographyId ? `?geographyId=${encodeURIComponent(geographyId)}` : ""}`, token),
+ intelligence: (token: string, geographyId?: string) => get<IntelligenceResponse>(`/api/v1/workspaces/intelligence${geographyId ? `?geographyId=${encodeURIComponent(geographyId)}` : ""}`, token),
+ conflicts: (token: string) => get<Envelope<{ conflicts: FieldConflict[] }>>("/api/v1/field-sync/conflicts", token),
+ resolveConflict: (token: string, conflictId: string, resolutionStatus: "RESOLVED" | "REJECTED", resolutionReason: string) => post<unknown>(`/api/v1/field-sync/conflicts/${conflictId}/resolve`, { resolutionStatus, resolutionReason }, token),
 };
