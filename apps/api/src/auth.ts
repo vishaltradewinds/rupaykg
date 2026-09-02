@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import type { FastifyRequest } from "fastify";
-import type { Pool } from "pg";
+import type { Pool, PoolClient } from "pg";
 
 export type AuthContext = {
   identityId: string;
@@ -37,6 +37,30 @@ export async function authenticate(request: FastifyRequest, pool: Pool | null): 
 
 export function canActForOrganization(auth: AuthContext, organizationId: string): boolean {
   return auth.memberships.some((m) => m.organization_id === organizationId);
+}
+
+export async function canVerifyEvidence(client: PoolClient, identityId: string, evidenceId: string): Promise<boolean> {
+  const result = await client.query<{ ok: boolean }>(
+    `select exists (
+       select 1
+       from evidence e
+       join activities a on a.id = e.activity_id
+       join organization_memberships om
+         on om.organization_id = a.organization_id
+        and om.identity_id = $2
+        and om.status = 'VERIFIED'
+       join roles r on r.id = om.role_id
+       where e.id = $1
+         and (
+           lower(r.name) in ('verifier','auditor','validator','verification_officer')
+           or r.permissions @> '["VERIFY_EVIDENCE"]'::jsonb
+           or r.permissions @> '["verification:approve"]'::jsonb
+           or r.permissions @> '["verification.approve"]'::jsonb
+         )
+     ) as ok`,
+    [evidenceId, identityId],
+  );
+  return result.rows[0]?.ok === true;
 }
 
 export function bearerChallenge(): { error: string; code: "AUTH_REQUIRED" } {
