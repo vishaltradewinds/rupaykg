@@ -18,7 +18,7 @@ jobs:
         with:
           node-version: '22.x'
           package-manager-cache: false
-      - run: npm install
+      - run: npm install --no-audit --no-fund
       - run: npm run validate:migrations
       - run: npm run typecheck
       - run: npm run build
