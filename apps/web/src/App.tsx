@@ -3,8 +3,7 @@ import { useEffect, useState } from "react";
 type Overview = { source: string; syntheticData: boolean; counts: Record<string, number> };
 type Health = { status: string; database: string; syntheticData: boolean };
 const nav = ["Command Center", "Resource Flows", "MRV & Evidence", "Compliance", "Carbon", "Registry", "Settlement", "Regulatory Watch"];
-
-const apiBase = "";
+const apiBase = import.meta.env.VITE_API_BASE_URL ?? "";
 
 export default function App() {
   const [overview, setOverview] = useState<Overview | null>(null);
