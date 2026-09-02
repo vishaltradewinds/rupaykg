@@ -93,5 +93,10 @@ create table evidence_verification_requirements (
 create index mrv_observations_activity_idx on mrv_observations(activity_id);
 create index evidence_requirements_activity_idx on evidence_verification_requirements(activity_id);
 
+alter table geography add column if not exists external_code text;
+alter table geography add column if not exists metadata jsonb not null default '{}';
+create index geography_parent_idx on geography(parent_id);
+create index geography_external_code_idx on geography(external_code);
+
 alter table measurements add constraint measurements_positive_value check (value > 0);
 alter table evidence add constraint evidence_has_reference check (content_uri is not null or content_hash is not null);
