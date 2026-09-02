@@ -127,13 +127,15 @@ export async function syncQueue(token: string, fetchImpl = fetch): Promise<Queue
           idempotencyKey: item.idempotencyKey,
           clientSequence: item.clientSequence,
           capturedAt: item.capturedAt,
-          payload: item.payload,
+          payload: { operationType: item.payload.operation, ...item.payload },
         }),
       });
       if (!response.ok) throw new Error(`submit HTTP ${response.status}`);
-      const accepted = await response.json() as { envelopeId: string; status: string };
-      await updateQueue(item.localId, { state: "RECEIVED", serverEnvelopeId: accepted.envelopeId });
-      const apply = await fetchImpl(`/api/v1/field-sync/envelopes/${accepted.envelopeId}/apply`, {
+      const accepted = await response.json() as { envelope?: { id?: string }; envelopeId?: string; status?: string };
+      const serverEnvelopeId = accepted.envelopeId ?? accepted.envelope?.id;
+      if (!serverEnvelopeId) throw new Error("submit response did not include envelope id");
+      await updateQueue(item.localId, { state: "RECEIVED", serverEnvelopeId });
+      const apply = await fetchImpl(`/api/v1/field-sync/envelopes/${serverEnvelopeId}/apply`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
       });
