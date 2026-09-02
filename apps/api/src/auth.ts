@@ -2,7 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import type { FastifyRequest } from "fastify";
 import type { Pool } from "pg";
 
-type AuthContext = {
+export type AuthContext = {
   identityId: string;
   memberships: Array<{ organization_id: string; role_id: string; status: string }>;
 };
