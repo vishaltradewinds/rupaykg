@@ -32,6 +32,19 @@ function openDb(): Promise<IDBDatabase> {
   });
 }
 
+async function withMetaTransaction<T>(mode: IDBTransactionMode, fn: (store: IDBObjectStore) => Promise<T>): Promise<T> {
+  const db = await openDb();
+  const tx = db.transaction(META, mode);
+  const store = tx.objectStore(META);
+  const result = await fn(store);
+  await new Promise<void>((resolve, reject) => {
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error ?? new Error("IndexedDB transaction failed"));
+    tx.onabort = () => reject(tx.error ?? new Error("IndexedDB transaction aborted"));
+  });
+  return result;
+}
+
 async function metaGet<T>(key: string): Promise<T | undefined> {
   const db = await openDb();
   return new Promise((resolve, reject) => {
@@ -42,29 +55,31 @@ async function metaGet<T>(key: string): Promise<T | undefined> {
   });
 }
 
-async function metaPut(key: string, value: unknown): Promise<void> {
-  const db = await openDb();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(META, "readwrite");
-    tx.objectStore(META).put(value, key);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
+export async function getDeviceId(): Promise<string> {
+  return withMetaTransaction("readwrite", async store => {
+    const existing = await new Promise<string | undefined>((resolve, reject) => {
+      const req = store.get(DEVICE_KEY);
+      req.onsuccess = () => resolve(req.result as string | undefined);
+      req.onerror = () => reject(req.error);
+    });
+    if (existing) return existing;
+    const id = crypto.randomUUID();
+    store.put(id, DEVICE_KEY);
+    return id;
   });
 }
 
-export async function getDeviceId(): Promise<string> {
-  const existing = await metaGet<string>(DEVICE_KEY);
-  if (existing) return existing;
-  const id = crypto.randomUUID();
-  await metaPut(DEVICE_KEY, id);
-  return id;
-}
-
 async function nextSequence(): Promise<number> {
-  const current = (await metaGet<number>(SEQUENCE_KEY)) ?? 0;
-  const next = current + 1;
-  await metaPut(SEQUENCE_KEY, next);
-  return next;
+  return withMetaTransaction("readwrite", async store => {
+    const current = await new Promise<number | undefined>((resolve, reject) => {
+      const req = store.get(SEQUENCE_KEY);
+      req.onsuccess = () => resolve(req.result as number | undefined);
+      req.onerror = () => reject(req.error);
+    });
+    const next = (current ?? 0) + 1;
+    store.put(next, SEQUENCE_KEY);
+    return next;
+  });
 }
 
 export async function enqueue(payload: QueuedEnvelope["payload"]): Promise<QueuedEnvelope> {
@@ -84,7 +99,8 @@ export async function enqueue(payload: QueuedEnvelope["payload"]): Promise<Queue
     const tx = db.transaction(STORE, "readwrite");
     tx.objectStore(STORE).put(envelope);
     tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
+    tx.onerror = () => reject(tx.error ?? new Error("Queue write failed"));
+    tx.onabort = () => reject(tx.error ?? new Error("Queue write aborted"));
   });
   return envelope;
 }
@@ -101,16 +117,21 @@ export async function listQueue(): Promise<QueuedEnvelope[]> {
 
 export async function updateQueue(localId: string, patch: Partial<QueuedEnvelope>): Promise<void> {
   const db = await openDb();
-  return new Promise((resolve, reject) => {
+  await new Promise<void>((resolve, reject) => {
     const tx = db.transaction(STORE, "readwrite");
     const store = tx.objectStore(STORE);
     const req = store.get(localId);
     req.onsuccess = () => {
-      if (!req.result) return reject(new Error("Queue item not found"));
+      if (!req.result) {
+        tx.abort();
+        reject(new Error("Queue item not found"));
+        return;
+      }
       store.put({ ...req.result, ...patch, updatedAt: new Date().toISOString() });
     };
     tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
+    tx.onerror = () => reject(tx.error ?? new Error("Queue update failed"));
+    tx.onabort = () => reject(tx.error ?? new Error("Queue update aborted"));
   });
 }
 
@@ -131,7 +152,7 @@ export async function syncQueue(token: string, fetchImpl = fetch): Promise<Queue
         }),
       });
       if (!response.ok) throw new Error(`submit HTTP ${response.status}`);
-      const accepted = await response.json() as { envelope?: { id?: string }; envelopeId?: string; status?: string };
+      const accepted = await response.json() as { envelope?: { id?: string }; envelopeId?: string };
       const serverEnvelopeId = accepted.envelopeId ?? accepted.envelope?.id;
       if (!serverEnvelopeId) throw new Error("submit response did not include envelope id");
       await updateQueue(item.localId, { state: "RECEIVED", serverEnvelopeId });
@@ -141,10 +162,12 @@ export async function syncQueue(token: string, fetchImpl = fetch): Promise<Queue
       });
       if (apply.ok) await updateQueue(item.localId, { state: "APPLIED" });
       else if (apply.status === 409) await updateQueue(item.localId, { state: "CONFLICT", error: `apply HTTP ${apply.status}` });
+      else if (apply.status === 400 || apply.status === 403) throw new Error(`apply HTTP ${apply.status}`);
       else throw new Error(`apply HTTP ${apply.status}`);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Sync failed";
-      await updateQueue(item.localId, { state: navigator.onLine ? "FAILED" : "QUEUED", error: message });
+      const isOnline = typeof navigator === "undefined" || navigator.onLine !== false;
+      await updateQueue(item.localId, { state: isOnline ? "FAILED" : "QUEUED", error: message });
     }
   }
   return listQueue();
