@@ -4,15 +4,16 @@ type Overview = { source: string; syntheticData: boolean; counts: Record<string,
 type Health = { status: string; database: string; syntheticData: boolean };
 const nav = ["Command Center", "Resource Flows", "MRV & Evidence", "Compliance", "Carbon", "Registry", "Settlement", "Regulatory Watch"];
 
+const apiBase = "";
+
 export default function App() {
   const [overview, setOverview] = useState<Overview | null>(null);
   const [health, setHealth] = useState<Health | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
-    const base = import.meta.env.VITE_API_BASE_URL ?? "";
     Promise.all([
-      fetch(`${base}/api/v1/overview`).then(async r => r.ok ? r.json() : Promise.reject(new Error(`Overview HTTP ${r.status}`))),
-      fetch(`${base}/health`).then(r => r.json()),
+      fetch(`${apiBase}/api/v1/overview`).then(async r => r.ok ? r.json() : Promise.reject(new Error(`Overview HTTP ${r.status}`))),
+      fetch(`${apiBase}/health`).then(r => r.ok ? r.json() : Promise.reject(new Error(`Health HTTP ${r.status}`))),
     ]).then(([o, h]) => { setOverview(o); setHealth(h); }).catch(e => setError(e instanceof Error ? e.message : "API unavailable"));
   }, []);
   const count = (key: string) => overview?.counts[key] ?? "—";
