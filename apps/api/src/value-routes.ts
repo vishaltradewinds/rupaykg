@@ -82,7 +82,8 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
       if (!canActForOrganization(auth, period.rows[0].organization_id)) return reply.code(403).send({ error: "Organization access denied", code: "ORG_FORBIDDEN" });
       const evidenceId = str(body, "evidenceId"); const verificationId = str(body, "verificationId");
       if (verificationId && !evidenceId) return reply.code(400).send({ error: "verificationId requires evidenceId" });
-      const state = classifyMetric({ code: metricCode, scope, value, unit, evidenceId: evidenceId ?? undefined, verificationId: verificationId ?? undefined });
+      const metric = { code: metricCode, scope, value, unit, ...(evidenceId ? { evidenceId } : {}), ...(verificationId ? { verificationId } : {}) };
+      const state = classifyMetric(metric);
       if (verificationId) {
         const verified = await pool.query("select 1 from verifications where id = $1 and evidence_id = $2 and decision = 'APPROVED'", [verificationId, evidenceId]);
         if (!verified.rows[0]) return reply.code(409).send({ error: "Verification is not an approved verification for the supplied evidence", code: "VERIFICATION_INVALID" });
