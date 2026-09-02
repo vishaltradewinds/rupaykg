@@ -20,7 +20,7 @@ async function post<T>(path: string, body: unknown, token: string): Promise<T> {
 export const api = {
  overview: (token?: string) => get<Overview>("/api/v1/overview", token), health: () => get<Health>("/health"), regulatory: () => get<RegulatoryResponse>("/api/v1/regulatory/sources"),
  geographyRoots: (token: string) => get<Envelope<{ geography: Geography[] }>>("/api/v1/geography/roots", token),
- geographyChildren: (parentId: string, token?: string) => get<Envelope<{ geography: Geography[] }>>(`/api/v1/geography/children/${parentId}`, token ?? import.meta.env.VITE_RUPAYKG_SESSION_TOKEN ?? ""),
+ geographyChildren: (parentId: string, token: string) => get<Envelope<{ geography: Geography[] }>>(`/api/v1/geography/children/${parentId}`, token),
  resourceFlows: (token: string, geographyId?: string) => get<Envelope<{ resourceFlows: ResourceFlow[] }>>(`/api/v1/workspaces/resource-flows${geographyId ? `?geographyId=${encodeURIComponent(geographyId)}` : ""}`, token),
  mrv: (token: string, geographyId?: string) => get<Envelope<MvrWorkspace>>(`/api/v1/workspaces/mrv${geographyId ? `?geographyId=${encodeURIComponent(geographyId)}` : ""}`, token),
  compliance: (token: string, geographyId?: string) => get<Envelope<ComplianceWorkspace>>(`/api/v1/workspaces/compliance${geographyId ? `?geographyId=${encodeURIComponent(geographyId)}` : ""}`, token),
