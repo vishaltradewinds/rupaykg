@@ -4,6 +4,7 @@ import { Pool, type PoolClient, type PoolConfig } from "pg";
 import { authenticate, bearerChallenge, canActForOrganization, type AuthContext } from "./auth.js";
 import { registerValueRoutes } from "./value-routes.js";
 import { registerRegistryRoutes } from "./registry-routes.js";
+import { registerSyncRoutes } from "./sync-routes.js";
 
 const app = Fastify({ logger: true });
 await app.register(cors, { origin: true });
@@ -171,6 +172,7 @@ app.post("/api/v1/evidence/:evidenceId/verification", async (request, reply) => 
 
 await registerValueRoutes(app, pool);
 await registerRegistryRoutes(app, pool);
+await registerSyncRoutes(app, pool);
 
 const port = Number(process.env.PORT ?? 3000);
 const host = process.env.HOST ?? "0.0.0.0";
