@@ -21,8 +21,8 @@ create table identity_sessions (
   request_context jsonb not null default '{}'
 );
 
-alter table devices add column if not exists registered_by_identity_id uuid references identities(id);
-alter table devices add column if not exists last_seen_at timestamptz;
+alter table field_devices add column if not exists registered_by_identity_id uuid references identities(id);
+alter table field_devices add column if not exists last_seen_at timestamptz;
 
 create index memberships_identity_idx on organization_memberships(identity_id);
 create index memberships_org_idx on organization_memberships(organization_id);
