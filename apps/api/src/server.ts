@@ -2,6 +2,7 @@ import Fastify from "fastify";
 import cors from "@fastify/cors";
 import { Pool, type PoolClient, type PoolConfig } from "pg";
 import { authenticate, bearerChallenge, canActForOrganization, type AuthContext } from "./auth.js";
+import { registerValueRoutes } from "./value-routes.js";
 
 const app = Fastify({ logger: true });
 await app.register(cors, { origin: true });
@@ -166,6 +167,8 @@ app.post("/api/v1/evidence/:evidenceId/verification", async (request, reply) => 
     return reply.code(503).send({ error: "Evidence verification unavailable", syntheticData: false });
   }
 });
+
+await registerValueRoutes(app, pool);
 
 const port = Number(process.env.PORT ?? 3000);
 const host = process.env.HOST ?? "0.0.0.0";
