@@ -14,6 +14,7 @@ Apply migrations in filename order against a fresh PostgreSQL database:
 10. `010_integrity_controls.sql` — tamper-evident registry/settlement event hashing and append-only guards.
 11. `011_field_sync_application.sql` — authoritative entity-application metadata for field envelopes.
 12. `012_geography_authorization.sql` — organization geography roots and database-enforced descendant scope.
+13. `013_settlement_external_confirmation.sql` — external authority confirmation and reconciliation gates before settlement finalization.
 
 Migration files are intentionally ordered and each numbered migration must have one authoritative owner. Do not reintroduce duplicate numbered migrations containing the same tables or enums.
 
@@ -30,3 +31,7 @@ Receiving an offline envelope does not mutate authoritative business state. An e
 ## Geography authorization rule
 
 An organization may have explicit verified geography roots. When roots exist, activities and resource flows are accepted only when their geography is the assigned root or a descendant of an assigned root. This is enforced in PostgreSQL so API and offline paths cannot bypass the authorization boundary. Organizations without configured geography roots remain governed by their existing organization-membership authorization until scopes are provisioned.
+
+## Settlement truth rule
+
+A settlement may enter `SETTLED` only when the authoritative settlement record contains an external settlement reference, an external-authority confirmation timestamp, and a reconciliation reference. These fields cannot be cleared after confirmation. Internal workflow transitions alone must never be treated as proof that funds moved.
