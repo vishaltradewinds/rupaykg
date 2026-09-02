@@ -32,69 +32,56 @@ function openDb(): Promise<IDBDatabase> {
   });
 }
 
-async function withMetaTransaction<T>(mode: IDBTransactionMode, fn: (store: IDBObjectStore) => Promise<T>): Promise<T> {
-  const db = await openDb();
-  const tx = db.transaction(META, mode);
-  const store = tx.objectStore(META);
-  const result = await fn(store);
-  await new Promise<void>((resolve, reject) => {
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error ?? new Error("IndexedDB transaction failed"));
-    tx.onabort = () => reject(tx.error ?? new Error("IndexedDB transaction aborted"));
-  });
-  return result;
-}
-
-async function metaGet<T>(key: string): Promise<T | undefined> {
-  const db = await openDb();
+function allocateDeviceAndSequence(db: IDBDatabase): Promise<{ deviceId: string; clientSequence: number }> {
   return new Promise((resolve, reject) => {
-    const tx = db.transaction(META, "readonly");
-    const req = tx.objectStore(META).get(key);
-    req.onsuccess = () => resolve(req.result as T | undefined);
-    req.onerror = () => reject(req.error);
+    const tx = db.transaction(META, "readwrite");
+    const store = tx.objectStore(META);
+    let deviceId: string | undefined;
+    let sequence: number | undefined;
+    let settled = false;
+    const fail = (error: unknown) => { if (!settled) { settled = true; reject(error instanceof Error ? error : new Error("IndexedDB metadata transaction failed")); } };
+    const deviceReq = store.get(DEVICE_KEY);
+    deviceReq.onerror = () => fail(deviceReq.error);
+    deviceReq.onsuccess = () => {
+      deviceId = (deviceReq.result as string | undefined) ?? crypto.randomUUID();
+      if (!deviceReq.result) store.put(deviceId, DEVICE_KEY);
+      const sequenceReq = store.get(SEQUENCE_KEY);
+      sequenceReq.onerror = () => fail(sequenceReq.error);
+      sequenceReq.onsuccess = () => {
+        sequence = ((sequenceReq.result as number | undefined) ?? 0) + 1;
+        store.put(sequence, SEQUENCE_KEY);
+      };
+    };
+    tx.oncomplete = () => { if (!settled && deviceId && sequence !== undefined) { settled = true; resolve({ deviceId, clientSequence: sequence }); } };
+    tx.onerror = () => fail(tx.error);
+    tx.onabort = () => fail(tx.error ?? new Error("IndexedDB metadata transaction aborted"));
   });
 }
 
 export async function getDeviceId(): Promise<string> {
-  return withMetaTransaction("readwrite", async store => {
-    const existing = await new Promise<string | undefined>((resolve, reject) => {
-      const req = store.get(DEVICE_KEY);
-      req.onsuccess = () => resolve(req.result as string | undefined);
-      req.onerror = () => reject(req.error);
-    });
-    if (existing) return existing;
-    const id = crypto.randomUUID();
-    store.put(id, DEVICE_KEY);
-    return id;
-  });
-}
-
-async function nextSequence(): Promise<number> {
-  return withMetaTransaction("readwrite", async store => {
-    const current = await new Promise<number | undefined>((resolve, reject) => {
-      const req = store.get(SEQUENCE_KEY);
-      req.onsuccess = () => resolve(req.result as number | undefined);
-      req.onerror = () => reject(req.error);
-    });
-    const next = (current ?? 0) + 1;
-    store.put(next, SEQUENCE_KEY);
-    return next;
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(META, "readonly");
+    const req = tx.objectStore(META).get(DEVICE_KEY);
+    req.onsuccess = () => resolve((req.result as string | undefined) ?? "");
+    req.onerror = () => reject(req.error ?? new Error("Device identity unavailable"));
   });
 }
 
 export async function enqueue(payload: QueuedEnvelope["payload"]): Promise<QueuedEnvelope> {
+  const db = await openDb();
+  const { deviceId, clientSequence } = await allocateDeviceAndSequence(db);
   const now = new Date().toISOString();
   const envelope: QueuedEnvelope = {
     localId: crypto.randomUUID(),
     idempotencyKey: crypto.randomUUID(),
-    deviceId: await getDeviceId(),
-    clientSequence: await nextSequence(),
+    deviceId,
+    clientSequence,
     capturedAt: now,
     payload,
     state: "QUEUED",
     updatedAt: now,
   };
-  const db = await openDb();
   await new Promise<void>((resolve, reject) => {
     const tx = db.transaction(STORE, "readwrite");
     tx.objectStore(STORE).put(envelope);
@@ -121,12 +108,9 @@ export async function updateQueue(localId: string, patch: Partial<QueuedEnvelope
     const tx = db.transaction(STORE, "readwrite");
     const store = tx.objectStore(STORE);
     const req = store.get(localId);
+    req.onerror = () => { try { tx.abort(); } catch {} reject(req.error ?? new Error("Queue lookup failed")); };
     req.onsuccess = () => {
-      if (!req.result) {
-        tx.abort();
-        reject(new Error("Queue item not found"));
-        return;
-      }
+      if (!req.result) { try { tx.abort(); } catch {} reject(new Error("Queue item not found")); return; }
       store.put({ ...req.result, ...patch, updatedAt: new Date().toISOString() });
     };
     tx.oncomplete = () => resolve();
@@ -143,26 +127,16 @@ export async function syncQueue(token: string, fetchImpl = fetch): Promise<Queue
       const response = await fetchImpl("/api/v1/field-sync/envelopes", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          deviceId: item.deviceId,
-          idempotencyKey: item.idempotencyKey,
-          clientSequence: item.clientSequence,
-          capturedAt: item.capturedAt,
-          payload: { operationType: item.payload.operation, ...item.payload },
-        }),
+        body: JSON.stringify({ deviceId: item.deviceId, idempotencyKey: item.idempotencyKey, clientSequence: item.clientSequence, capturedAt: item.capturedAt, payload: { operationType: item.payload.operation, ...item.payload } }),
       });
       if (!response.ok) throw new Error(`submit HTTP ${response.status}`);
       const accepted = await response.json() as { envelope?: { id?: string }; envelopeId?: string };
       const serverEnvelopeId = accepted.envelopeId ?? accepted.envelope?.id;
       if (!serverEnvelopeId) throw new Error("submit response did not include envelope id");
       await updateQueue(item.localId, { state: "RECEIVED", serverEnvelopeId });
-      const apply = await fetchImpl(`/api/v1/field-sync/envelopes/${serverEnvelopeId}/apply`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const apply = await fetchImpl(`/api/v1/field-sync/envelopes/${serverEnvelopeId}/apply`, { method: "POST", headers: { Authorization: `Bearer ${token}` } });
       if (apply.ok) await updateQueue(item.localId, { state: "APPLIED" });
       else if (apply.status === 409) await updateQueue(item.localId, { state: "CONFLICT", error: `apply HTTP ${apply.status}` });
-      else if (apply.status === 400 || apply.status === 403) throw new Error(`apply HTTP ${apply.status}`);
       else throw new Error(`apply HTTP ${apply.status}`);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Sync failed";
