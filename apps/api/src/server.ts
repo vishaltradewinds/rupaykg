@@ -44,15 +44,11 @@ app.get("/api/v1/overview", async (request, reply) => {
       query<{ count: string }>("select count(*)::text as count from settlements where status = 'SETTLED'"),
     ]);
     return {
-      source: "postgresql",
-      syntheticData: false,
+      source: "postgresql", syntheticData: false,
       counts: {
-        activities: Number(activities[0]?.count ?? 0),
-        measurements: Number(measurements[0]?.count ?? 0),
-        evidence: Number(evidence[0]?.count ?? 0),
-        approvedVerifications: Number(verifications[0]?.count ?? 0),
-        openObligations: Number(obligations[0]?.count ?? 0),
-        issuedOrActiveCredentials: Number(credentials[0]?.count ?? 0),
+        activities: Number(activities[0]?.count ?? 0), measurements: Number(measurements[0]?.count ?? 0),
+        evidence: Number(evidence[0]?.count ?? 0), approvedVerifications: Number(verifications[0]?.count ?? 0),
+        openObligations: Number(obligations[0]?.count ?? 0), issuedOrActiveCredentials: Number(credentials[0]?.count ?? 0),
         settledTransactions: Number(settlements[0]?.count ?? 0),
       },
     };
@@ -69,6 +65,40 @@ app.get("/api/v1/regulatory/sources", async (request, reply) => {
   } catch (error) {
     request.log.error(error);
     return reply.code(503).send({ error: "Regulatory source catalog unavailable", syntheticData: false });
+  }
+});
+
+app.get("/api/v1/geography/children/:parentId", async (request, reply) => {
+  try {
+    const { parentId } = request.params as { parentId: string };
+    const rows = await query("select id, parent_id, kind, code, external_code, name, source, source_version, valid_from, valid_to, metadata from geography where parent_id = $1 order by name", [parentId]);
+    return { source: "postgresql", syntheticData: false, geography: rows };
+  } catch (error) {
+    request.log.error(error);
+    return reply.code(503).send({ error: "Authoritative geography unavailable", syntheticData: false });
+  }
+});
+
+app.post("/api/v1/operations/sync", async (request, reply) => {
+  const body = request.body as Partial<{
+    idempotencyKey: string; actorIdentityId: string; deviceId: string; capturedAt: string;
+    sequence: number; payload: Record<string, unknown>; payloadHash: string;
+  }> | undefined;
+  if (!body?.idempotencyKey || !body.actorIdentityId || !body.deviceId || !body.capturedAt || !body.payload) {
+    return reply.code(400).send({ error: "idempotencyKey, actorIdentityId, deviceId, capturedAt and payload are required" });
+  }
+  if (Number.isNaN(Date.parse(body.capturedAt))) return reply.code(400).send({ error: "capturedAt must be an ISO date" });
+  try {
+    const existing = await query<{ id: string; status: string }>("select id, status from operation_sync_envelopes where idempotency_key = $1", [body.idempotencyKey]);
+    if (existing[0]) return { source: "postgresql", syntheticData: false, replay: true, operation: existing[0] };
+    const rows = await query<{ id: string; status: string }>(
+      "insert into operation_sync_envelopes (idempotency_key, actor_identity_id, device_id, client_sequence, captured_at, payload, payload_hash) values ($1,$2,$3,$4,$5,$6,$7) returning id, status",
+      [body.idempotencyKey, body.actorIdentityId, body.deviceId, body.sequence ?? null, body.capturedAt, body.payload, body.payloadHash ?? null]
+    );
+    return reply.code(202).send({ source: "postgresql", syntheticData: false, replay: false, operation: rows[0] });
+  } catch (error) {
+    request.log.error(error);
+    return reply.code(503).send({ error: "Operation intake unavailable", syntheticData: false });
   }
 });
 
