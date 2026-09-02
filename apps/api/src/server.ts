@@ -1,16 +1,16 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
-import { Pool } from "pg";
+import { Pool, type PoolConfig } from "pg";
 
 const app = Fastify({ logger: true });
 await app.register(cors, { origin: true });
 
 const databaseUrl = process.env.DATABASE_URL;
-const pool = databaseUrl
-  ? new Pool({ connectionString: databaseUrl, max: 10, ssl: process.env.DATABASE_SSL === "false" ? false : undefined })
-  : null;
+const poolConfig: PoolConfig = { connectionString: databaseUrl, max: 10 };
+if (process.env.DATABASE_SSL !== "false") poolConfig.ssl = { rejectUnauthorized: false };
+const pool = databaseUrl ? new Pool(poolConfig) : null;
 
-async function query<T>(text: string, values: unknown[] = []): Promise<T[]> {
+async function query<T extends Record<string, unknown>>(text: string, values: unknown[] = []): Promise<T[]> {
   if (!pool) throw new Error("DATABASE_URL is not configured");
   const result = await pool.query<T>(text, values);
   return result.rows;
@@ -32,7 +32,7 @@ app.get("/api/v1/status", async () => ({
   syntheticData: false,
 }));
 
-app.get("/api/v1/overview", async (_request, reply) => {
+app.get("/api/v1/overview", async (request, reply) => {
   try {
     const [activities, measurements, evidence, verifications, obligations, credentials, settlements] = await Promise.all([
       query<{ count: string }>("select count(*)::text as count from activities"),
