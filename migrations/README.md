@@ -13,6 +13,7 @@ Apply migrations in filename order against a fresh PostgreSQL database:
 9. `009_field_sync.sql` — durable offline field envelopes, conflicts and cursors.
 10. `010_integrity_controls.sql` — tamper-evident registry/settlement event hashing and append-only guards.
 11. `011_field_sync_application.sql` — authoritative entity-application metadata for field envelopes.
+12. `012_geography_authorization.sql` — organization geography roots and database-enforced descendant scope.
 
 Migration files are intentionally ordered and each numbered migration must have one authoritative owner. Do not reintroduce duplicate numbered migrations containing the same tables or enums.
 
@@ -24,4 +25,8 @@ Verification requires a verified organization membership with the `VERIFY_EVIDEN
 
 ## Field-sync application rule
 
-Receiving an offline envelope does not mutate authoritative business state. An envelope is applied only through an explicit authenticated application step. Supported operation types are deliberately allow-listed: `ACTIVITY_CREATE`, `MEASUREMENT_CREATE`, `EVIDENCE_CREATE`, and `RESOURCE_FLOW_CREATE`. The domain mutation and envelope status change commit in the same database transaction; failures roll back both. PostgreSQL transaction isolation and locking are used to prevent concurrent applications from producing an inconsistent committed state.
+Receiving an offline envelope does not mutate authoritative business state. An envelope is applied only through an explicit authenticated application step. Supported operation types are deliberately allow-listed: `ACTIVITY_CREATE`, `MEASUREMENT_CREATE`, `EVIDENCE_CREATE`, and `RESOURCE_FLOW_CREATE`. The domain mutation and envelope status change commit in the same database transaction; failures roll back both.
+
+## Geography authorization rule
+
+An organization may have explicit verified geography roots. When roots exist, activities and resource flows are accepted only when their geography is the assigned root or a descendant of an assigned root. This is enforced in PostgreSQL so API and offline paths cannot bypass the authorization boundary. Organizations without configured geography roots remain governed by their existing organization-membership authorization until scopes are provisioned.
