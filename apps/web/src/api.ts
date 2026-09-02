@@ -2,6 +2,9 @@ export type Overview = { source: string; syntheticData: boolean; counts: Record<
 export type Health = { status: string; database: string; syntheticData: boolean };
 export type RegulatorySource = { id: string; authority: string; title: string; instrument: string; reference: string; effective_from: string | null; jurisdiction: string; status: string; affected_module: string | null };
 export type RegulatoryResponse = { source: string; syntheticData: boolean; sources: RegulatorySource[] };
+export type Geography = { id: string; parent_id: string | null; kind: string; code: string | null; external_code: string | null; name: string; source: string | null; source_version: string | null; valid_from: string | null; valid_to: string | null; metadata: Record<string, unknown> };
+export type IntelligenceFinding = { kind: string; sourceRecordIds: string[]; sourceType: string; title: string; status: string; geography: string | null; occurredAt: string | null; action: "REVIEW"; authoritativeMutation: false };
+export type IntelligenceResponse = { source: string; syntheticData: boolean; advisory: true; findings: IntelligenceFinding[] };
 
 type Envelope<T> = { source: string; syntheticData: boolean; data: T };
 export type ResourceFlow = { id: string; organization_id: string; organization_name: string; origin_type: string; resource_form: string; material_code: string; declared_quantity: number; unit: string; status: string; source_geography_id: string | null; source_geography_name: string | null; destination_geography_id: string | null; destination_geography_name: string | null; created_at: string };
@@ -31,12 +34,14 @@ export const api = {
   overview: () => get<Overview>("/api/v1/overview"),
   health: () => get<Health>("/health"),
   regulatory: () => get<RegulatoryResponse>("/api/v1/regulatory/sources"),
+  geographyChildren: (parentId: string) => get<Envelope<{ geography: Geography[] }>>(`/api/v1/geography/children/${parentId}`),
   resourceFlows: (token: string) => get<Envelope<{ resourceFlows: ResourceFlow[] }>>("/api/v1/workspaces/resource-flows", token),
   mrv: (token: string) => get<Envelope<MvrWorkspace>>("/api/v1/workspaces/mrv", token),
   compliance: (token: string) => get<Envelope<ComplianceWorkspace>>("/api/v1/workspaces/compliance", token),
   carbon: (token: string) => get<Envelope<CarbonWorkspace>>("/api/v1/workspaces/carbon", token),
   registry: (token: string) => get<Envelope<RegistryWorkspace>>("/api/v1/workspaces/registry", token),
   settlement: (token: string) => get<Envelope<SettlementWorkspace>>("/api/v1/workspaces/settlement", token),
+  intelligence: (token: string) => get<IntelligenceResponse>("/api/v1/workspaces/intelligence", token),
   conflicts: (token: string) => get<Envelope<{ conflicts: FieldConflict[] }>>("/api/v1/field-sync/conflicts", token),
   resolveConflict: (token: string, conflictId: string, resolutionStatus: "RESOLVED" | "REJECTED", resolutionReason: string) => post<unknown>(`/api/v1/field-sync/conflicts/${conflictId}/resolve`, { resolutionStatus, resolutionReason }, token),
 };
