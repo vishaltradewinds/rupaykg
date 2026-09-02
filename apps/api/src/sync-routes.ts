@@ -2,22 +2,13 @@ import { createHash } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import type { Pool, PoolClient } from "pg";
 import { authenticate, bearerChallenge } from "./auth.js";
+import { validateConflictResolution, validateSyncEnvelope } from "./sync-validation.js";
 
 type AuthContext = Awaited<ReturnType<typeof authenticate>>;
-type Reply = { code: (status: number) => { send: (body: unknown) => unknown } };
-
-type EnvelopeInput = {
-  idempotencyKey?: unknown;
-  deviceId?: unknown;
-  clientSequence?: unknown;
-  capturedAt?: unknown;
-  payload?: unknown;
-};
 
 function bodyOf(request: { body: unknown }): Record<string, unknown> {
   return (request.body && typeof request.body === "object" ? request.body : {}) as Record<string, unknown>;
 }
-function requiredString(value: unknown): string | null { return typeof value === "string" && value.trim() ? value.trim() : null; }
 function isUuid(value: string): boolean { return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value); }
 function payloadHash(payload: unknown): string { return createHash("sha256").update(JSON.stringify(payload)).digest("hex"); }
 
@@ -39,17 +30,13 @@ export async function registerSyncRoutes(app: FastifyInstance, pool: Pool | null
     let auth: AuthContext;
     try { auth = await authenticate(request, pool); if (!auth) return reply.code(401).send(bearerChallenge()); }
     catch (error) { request.log.error(error); return reply.code(503).send({ error: "Authentication service unavailable", code: "AUTH_UNAVAILABLE" }); }
-    const body = bodyOf(request) as EnvelopeInput;
-    const idempotencyKey = requiredString(body.idempotencyKey), deviceId = requiredString(body.deviceId), capturedAt = requiredString(body.capturedAt);
-    const clientSequence = Number(body.clientSequence);
-    if (!idempotencyKey || !deviceId || !capturedAt || !Number.isSafeInteger(clientSequence) || clientSequence < 1 || body.payload === undefined) return reply.code(400).send({ error: "idempotencyKey, deviceId, positive integer clientSequence, capturedAt and payload are required", code: "INVALID_ENVELOPE" });
-    if (!isUuid(deviceId)) return reply.code(400).send({ error: "deviceId must be a field device UUID", code: "INVALID_DEVICE" });
-    if (Number.isNaN(Date.parse(capturedAt))) return reply.code(400).send({ error: "capturedAt must be an ISO date", code: "INVALID_CAPTURE_TIME" });
-    if (body.payload === null || typeof body.payload !== "object") return reply.code(400).send({ error: "payload must be a JSON object or array", code: "INVALID_PAYLOAD" });
+    const validation = validateSyncEnvelope(bodyOf(request));
+    if (!validation.ok) return reply.code(400).send({ error: validation.error, code: validation.code });
+    const { idempotencyKey, deviceId, capturedAt, clientSequence, payload } = validation;
     try {
       const device = await requireFieldDevice(pool, auth, deviceId);
       if (!device) return reply.code(403).send({ error: "Field device is not verified for this identity", code: "DEVICE_FORBIDDEN" });
-      const hash = payloadHash(body.payload), client = await pool.connect();
+      const hash = payloadHash(payload), client = await pool.connect();
       try {
         await client.query("BEGIN");
         const replay = await client.query<{ id: string; status: string; payload_hash: string; server_cursor: string | null }>(`select id, status, payload_hash, server_cursor from field_sync_envelopes where device_id = $1 and idempotency_key = $2 for update`, [deviceId, idempotencyKey]);
@@ -66,7 +53,7 @@ export async function registerSyncRoutes(app: FastifyInstance, pool: Pool | null
           await client.query("COMMIT"); return reply.code(409).send({ source: "postgresql", syntheticData: false, code: "CLIENT_SEQUENCE_CONFLICT", conflictId: conflict.rows[0].id, envelopeId: existing.id });
         }
         const serverCursor = await nextServerCursor(client, deviceId);
-        const inserted = await client.query<{ id: string; status: string; server_cursor: number; received_at: string }>(`insert into field_sync_envelopes (device_id, identity_id, idempotency_key, client_sequence, captured_at, payload, payload_hash, server_cursor) values ($1,$2,$3,$4,$5,$6,$7,$8) returning id, status, server_cursor, received_at`, [deviceId, auth.identityId, idempotencyKey, clientSequence, capturedAt, body.payload, hash, serverCursor]);
+        const inserted = await client.query<{ id: string; status: string; server_cursor: number; received_at: string }>(`insert into field_sync_envelopes (device_id, identity_id, idempotency_key, client_sequence, captured_at, payload, payload_hash, server_cursor) values ($1,$2,$3,$4,$5,$6,$7,$8) returning id, status, server_cursor, received_at`, [deviceId, auth.identityId, idempotencyKey, clientSequence, capturedAt, payload, hash, serverCursor]);
         await client.query("update field_devices set last_seen_at = now() where id = $1", [deviceId]);
         await client.query("COMMIT"); return reply.code(202).send({ source: "postgresql", syntheticData: false, replay: false, authoritativeMutation: false, envelope: inserted.rows[0] });
       } catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }
@@ -90,12 +77,11 @@ export async function registerSyncRoutes(app: FastifyInstance, pool: Pool | null
     try { auth = await authenticate(request, pool); if (!auth) return reply.code(401).send(bearerChallenge()); }
     catch (error) { request.log.error(error); return reply.code(503).send({ error: "Authentication service unavailable", code: "AUTH_UNAVAILABLE" }); }
     const { conflictId } = request.params as { conflictId: string };
-    const body = bodyOf(request);
-    const resolutionStatus = requiredString(body.resolutionStatus);
-    const reason = requiredString(body.resolutionReason);
-    if (!isUuid(conflictId) || !resolutionStatus || !["RESOLVED", "REJECTED"].includes(resolutionStatus) || !reason) return reply.code(400).send({ error: "conflictId, resolutionStatus RESOLVED|REJECTED and resolutionReason are required", code: "INVALID_RESOLUTION" });
+    if (!isUuid(conflictId)) return reply.code(400).send({ error: "conflictId must be a UUID", code: "INVALID_CONFLICT" });
+    const validation = validateConflictResolution(bodyOf(request));
+    if (!validation.ok) return reply.code(400).send({ error: validation.error, code: validation.code });
     try {
-      const result = await pool.query(`update field_sync_conflicts c set resolution_status = $2, resolution_reason = $3, resolved_by_identity_id = $4, resolved_at = now() where c.id = $1 and c.resolution_status = 'OPEN' and exists (select 1 from field_sync_envelopes e where e.id = c.envelope_id and e.identity_id = $4) returning c.id, c.envelope_id, c.resolution_status, c.resolution_reason, c.resolved_by_identity_id, c.resolved_at`, [conflictId, resolutionStatus, reason, auth.identityId]);
+      const result = await pool.query(`update field_sync_conflicts c set resolution_status = $2, resolution_reason = $3, resolved_by_identity_id = $4, resolved_at = now() where c.id = $1 and c.resolution_status = 'OPEN' and exists (select 1 from field_sync_envelopes e where e.id = c.envelope_id and e.identity_id = $4) returning c.id, c.envelope_id, c.resolution_status, c.resolution_reason, c.resolved_by_identity_id, c.resolved_at`, [conflictId, validation.resolutionStatus, validation.resolutionReason, auth.identityId]);
       if (!result.rows[0]) return reply.code(404).send({ error: "Open conflict not found for authenticated identity", code: "CONFLICT_NOT_FOUND" });
       return reply.code(200).send({ source: "postgresql", syntheticData: false, authoritativeMutation: false, conflict: result.rows[0] });
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Conflict resolution unavailable", syntheticData: false }); }
