@@ -1,5 +1,6 @@
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
 
 const databaseUrl = process.env.DATABASE_URL;
@@ -20,18 +21,24 @@ try {
     )
   `);
 
-  const migrationDir = path.resolve(process.cwd(), "migrations");
+  const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
+  const migrationDir = path.join(repoRoot, "migrations");
   const files = (await readdir(migrationDir))
     .filter((name) => /^\d+_.+\.sql$/.test(name))
     .sort();
 
   for (const filename of files) {
     const version = filename.split("_", 1)[0];
-    const existing = await pool.query<{ version: string }>(
-      "select version from schema_migrations where version = $1",
+    const existing = await pool.query<{ version: string; filename: string }>(
+      "select version, filename from schema_migrations where version = $1",
       [version],
     );
-    if (existing.rows[0]) continue;
+    if (existing.rows[0]) {
+      if (existing.rows[0].filename !== filename) {
+        throw new Error(`Migration version ${version} is already recorded as ${existing.rows[0].filename}, not ${filename}`);
+      }
+      continue;
+    }
 
     const sql = await readFile(path.join(migrationDir, filename), "utf8");
     const client = await pool.connect();
