@@ -51,22 +51,12 @@ begin
 end;
 $$;
 
-drop trigger if exists registry_event_hash_guard on registry_events;
-create trigger registry_event_hash_guard
-before insert on registry_events
-for each row execute function hash_registry_event();
-
 create or replace function reject_registry_event_update()
 returns trigger language plpgsql as $$
 begin
   raise exception 'registry events are append-only';
 end;
 $$;
-
-drop trigger if exists registry_event_append_only on registry_events;
-create trigger registry_event_append_only
-before update or delete on registry_events
-for each row execute function reject_registry_event_update();
 
 create or replace function hash_settlement_event()
 returns trigger language plpgsql as $$
@@ -78,6 +68,23 @@ begin
 end;
 $$;
 
+create or replace function reject_settlement_event_update()
+returns trigger language plpgsql as $$
+begin
+  raise exception 'settlement events are append-only';
+end;
+$$;
+
+drop trigger if exists registry_event_hash_guard on registry_events;
+create trigger registry_event_hash_guard
+before insert on registry_events
+for each row execute function hash_registry_event();
+
+drop trigger if exists registry_event_append_only on registry_events;
+create trigger registry_event_append_only
+before update or delete on registry_events
+for each row execute function reject_registry_event_update();
+
 drop trigger if exists settlement_event_hash_guard on settlement_events;
 create trigger settlement_event_hash_guard
 before insert on settlement_events
@@ -87,12 +94,5 @@ drop trigger if exists settlement_event_append_only on settlement_events;
 create trigger settlement_event_append_only
 before update or delete on settlement_events
 for each row execute function reject_settlement_event_update();
-
-create or replace function reject_settlement_event_update()
-returns trigger language plpgsql as $$
-begin
-  raise exception 'settlement events are append-only';
-end;
-$$;
 
 create index if not exists verifications_verifier_idx on verifications(verifier_identity_id, decided_at desc);
