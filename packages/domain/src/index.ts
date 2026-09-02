@@ -2,6 +2,7 @@ export * from "./state-machines.js";
 export * from "./regulatory.js";
 export * from "./resource-flows.js";
 export * from "./field-operations.js";
+export * from "./geography.js";
 
 export const STATUS = {
   VERIFIED: "VERIFIED",
