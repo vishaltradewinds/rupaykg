@@ -1,6 +1,7 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import { Pool, type PoolClient, type PoolConfig } from "pg";
+import { authenticate, bearerChallenge, canActForOrganization, type AuthContext } from "./auth.js";
 
 const app = Fastify({ logger: true });
 await app.register(cors, { origin: true });
@@ -45,6 +46,29 @@ async function withTransaction<T>(fn: (client: PoolClient) => Promise<T>): Promi
   }
 }
 
+async function requireAuth(request: Parameters<typeof authenticate>[0], reply: { code: (status: number) => { send: (body: unknown) => unknown } }): Promise<AuthContext | null> {
+  try {
+    const auth = await authenticate(request, pool);
+    if (!auth) {
+      reply.code(401).send(bearerChallenge());
+      return null;
+    }
+    return auth;
+  } catch (error) {
+    request.log.error(error);
+    reply.code(503).send({ error: "Authentication service unavailable", code: "AUTH_UNAVAILABLE" });
+    return null;
+  }
+}
+
+function requireOrganization(auth: AuthContext, organizationId: string, reply: { code: (status: number) => { send: (body: unknown) => unknown } }): boolean {
+  if (!canActForOrganization(auth, organizationId)) {
+    reply.code(403).send({ error: "No verified membership for organization", code: "ORG_FORBIDDEN" });
+    return false;
+  }
+  return true;
+}
+
 app.get("/health", async (_request, reply) => {
   let database: "AVAILABLE" | "UNAVAILABLE" = "UNAVAILABLE";
   if (pool) {
@@ -76,50 +100,71 @@ app.get("/api/v1/geography/children/:parentId", async (request, reply) => {
 });
 
 app.post("/api/v1/operations/sync", async (request, reply) => {
-  const body = bodyOf(request); const idempotencyKey = requiredString(body, "idempotencyKey"); const actorIdentityId = requiredString(body, "actorIdentityId"); const deviceId = requiredString(body, "deviceId"); const capturedAt = requiredString(body, "capturedAt");
-  if (!idempotencyKey || !actorIdentityId || !deviceId || !capturedAt || !body.payload) return reply.code(400).send({ error: "idempotencyKey, actorIdentityId, deviceId, capturedAt and payload are required" });
+  const auth = await requireAuth(request, reply); if (!auth) return;
+  const body = bodyOf(request); const idempotencyKey = requiredString(body, "idempotencyKey"); const deviceId = requiredString(body, "deviceId"); const capturedAt = requiredString(body, "capturedAt");
+  if (!idempotencyKey || !deviceId || !capturedAt || !body.payload) return reply.code(400).send({ error: "idempotencyKey, deviceId, capturedAt and payload are required" });
   if (Number.isNaN(Date.parse(capturedAt))) return reply.code(400).send({ error: "capturedAt must be an ISO date" });
   try {
-    const existing = await query<{ id: string; status: string }>("select id, status from operation_sync_envelopes where idempotency_key = $1", [idempotencyKey]);
-    if (existing[0]) return { source: "postgresql", syntheticData: false, replay: true, operation: existing[0] };
-    const rows = await query<{ id: string; status: string }>("insert into operation_sync_envelopes (idempotency_key, actor_identity_id, device_id, client_sequence, captured_at, payload, payload_hash) values ($1,$2,$3,$4,$5,$6,$7) returning id, status", [idempotencyKey, actorIdentityId, deviceId, body.sequence ?? null, capturedAt, body.payload, body.payloadHash ?? null]);
+    const existing = await query<{ id: string; status: string; actor_identity_id: string }>("select id, status, actor_identity_id from operation_sync_envelopes where idempotency_key = $1", [idempotencyKey]);
+    if (existing[0]) {
+      if (existing[0].actor_identity_id !== auth.identityId) return reply.code(403).send({ error: "Idempotency key belongs to another identity", code: "IDEMPOTENCY_FORBIDDEN" });
+      return { source: "postgresql", syntheticData: false, replay: true, operation: existing[0] };
+    }
+    const rows = await query<{ id: string; status: string }>("insert into operation_sync_envelopes (idempotency_key, actor_identity_id, device_id, client_sequence, captured_at, payload, payload_hash) values ($1,$2,$3,$4,$5,$6,$7) returning id, status", [idempotencyKey, auth.identityId, deviceId, body.sequence ?? null, capturedAt, body.payload, body.payloadHash ?? null]);
     return reply.code(202).send({ source: "postgresql", syntheticData: false, replay: false, operation: rows[0] });
   } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Operation intake unavailable", syntheticData: false }); }
 });
 
 app.post("/api/v1/resource-flows", async (request, reply) => {
+  const auth = await requireAuth(request, reply); if (!auth) return;
   const body = bodyOf(request); const organizationId = requiredString(body, "organizationId"); const originType = requiredString(body, "originType"); const resourceForm = requiredString(body, "resourceForm"); const materialCode = requiredString(body, "materialCode"); const unit = requiredString(body, "unit"); const quantity = requiredPositiveNumber(body, "quantity");
-  if (!organizationId || !originType || !resourceForm || !materialCode || !unit || quantity === null) return reply.code(400).send({ error: "organizationId, originType, resourceForm, materialCode, positive quantity and unit are required" });
+  if (!organizationId || !originType || !resourceForm || !materialCode || !unit || quantity === null) return reply.code(400).send({ error: "organizationId, originType, resourceForm, positive quantity and unit are required" });
+  if (!requireOrganization(auth, organizationId, reply)) return;
   try { const rows = await query("insert into resource_flows (organization_id, origin_type, resource_form, material_code, declared_quantity, unit, source_geography_id, destination_geography_id) values ($1,$2,$3,$4,$5,$6,$7,$8) returning *", [organizationId, originType, resourceForm, materialCode, quantity, unit, body.sourceGeographyId ?? null, body.destinationGeographyId ?? null]); return reply.code(201).send({ source: "postgresql", syntheticData: false, resourceFlow: rows[0] }); }
   catch (error) { request.log.error(error); return reply.code(503).send({ error: "Resource flow creation unavailable", syntheticData: false }); }
 });
 
 app.post("/api/v1/activities/:activityId/measurements", async (request, reply) => {
+  const auth = await requireAuth(request, reply); if (!auth) return;
   const { activityId } = request.params as { activityId: string }; const body = bodyOf(request); const value = requiredPositiveNumber(body, "value"); const unit = requiredString(body, "unit"); const method = requiredString(body, "method"); const source = requiredString(body, "source"); const measuredAt = requiredString(body, "measuredAt");
   if (value === null || !unit || !method || !source || !measuredAt || Number.isNaN(Date.parse(measuredAt))) return reply.code(400).send({ error: "positive value, unit, method, source and valid measuredAt are required" });
-  try { const rows = await query("insert into measurements (activity_id, value, unit, method, source, measured_at) values ($1,$2,$3,$4,$5,$6) returning *", [activityId, value, unit, method, source, measuredAt]); return reply.code(201).send({ source: "postgresql", syntheticData: false, measurement: rows[0] }); }
-  catch (error) { request.log.error(error); return reply.code(503).send({ error: "Measurement recording unavailable", syntheticData: false }); }
+  try {
+    const allowed = await query<{ ok: boolean }>("select exists (select 1 from activities a join organization_memberships om on om.organization_id = a.organization_id where a.id = $1 and om.identity_id = $2 and om.status = 'VERIFIED') as ok", [activityId, auth.identityId]);
+    if (!allowed[0]?.ok) return reply.code(403).send({ error: "No verified membership for activity organization", code: "ACTIVITY_FORBIDDEN" });
+    const rows = await query("insert into measurements (activity_id, value, unit, method, source, measured_at) values ($1,$2,$3,$4,$5,$6) returning *", [activityId, value, unit, method, source, measuredAt]); return reply.code(201).send({ source: "postgresql", syntheticData: false, measurement: rows[0] });
+  } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Measurement recording unavailable", syntheticData: false }); }
 });
 
 app.post("/api/v1/activities/:activityId/evidence", async (request, reply) => {
+  const auth = await requireAuth(request, reply); if (!auth) return;
   const { activityId } = request.params as { activityId: string }; const body = bodyOf(request); const evidenceType = requiredString(body, "evidenceType"); const capturedAt = requiredString(body, "capturedAt"); const contentUri = requiredString(body, "contentUri"); const contentHash = requiredString(body, "contentHash");
   if (!evidenceType || !capturedAt || (!contentUri && !contentHash) || Number.isNaN(Date.parse(capturedAt))) return reply.code(400).send({ error: "evidenceType, valid capturedAt and contentUri or contentHash are required" });
-  try { const rows = await query("insert into evidence (activity_id, measurement_id, evidence_type, captured_at, content_uri, content_hash, metadata) values ($1,$2,$3,$4,$5,$6,$7) returning *", [activityId, body.measurementId ?? null, evidenceType, capturedAt, contentUri, contentHash, body.metadata ?? {}]); return reply.code(201).send({ source: "postgresql", syntheticData: false, evidence: rows[0] }); }
-  catch (error) { request.log.error(error); return reply.code(503).send({ error: "Evidence intake unavailable", syntheticData: false }); }
+  try {
+    const allowed = await query<{ ok: boolean }>("select exists (select 1 from activities a join organization_memberships om on om.organization_id = a.organization_id where a.id = $1 and om.identity_id = $2 and om.status = 'VERIFIED') as ok", [activityId, auth.identityId]);
+    if (!allowed[0]?.ok) return reply.code(403).send({ error: "No verified membership for activity organization", code: "ACTIVITY_FORBIDDEN" });
+    const rows = await query("insert into evidence (activity_id, measurement_id, evidence_type, captured_at, content_uri, content_hash, metadata) values ($1,$2,$3,$4,$5,$6,$7) returning *", [activityId, body.measurementId ?? null, evidenceType, capturedAt, contentUri, contentHash, body.metadata ?? {}]); return reply.code(201).send({ source: "postgresql", syntheticData: false, evidence: rows[0] });
+  } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Evidence intake unavailable", syntheticData: false }); }
 });
 
 app.post("/api/v1/evidence/:evidenceId/verification", async (request, reply) => {
-  const { evidenceId } = request.params as { evidenceId: string }; const body = bodyOf(request); const verifierIdentityId = requiredString(body, "verifierIdentityId"); const decision = requiredString(body, "decision"); const scope = requiredString(body, "scope");
-  if (!verifierIdentityId || !scope || !decision || !["APPROVED", "REJECTED"].includes(decision)) return reply.code(400).send({ error: "verifierIdentityId, scope and decision APPROVED|REJECTED are required" });
+  const auth = await requireAuth(request, reply); if (!auth) return;
+  const { evidenceId } = request.params as { evidenceId: string }; const body = bodyOf(request); const verifierIdentityId = auth.identityId; const decision = requiredString(body, "decision"); const scope = requiredString(body, "scope");
+  if (!scope || !decision || !["APPROVED", "REJECTED"].includes(decision)) return reply.code(400).send({ error: "scope and decision APPROVED|REJECTED are required" });
   try {
     const verification = await withTransaction(async client => {
+      const access = await client.query("select exists (select 1 from evidence e join activities a on a.id = e.activity_id join organization_memberships om on om.organization_id = a.organization_id where e.id = $1 and om.identity_id = $2 and om.status = 'VERIFIED') as ok", [evidenceId, auth.identityId]);
+      if (!access.rows[0]?.ok) throw Object.assign(new Error("Verifier has no verified membership for evidence organization"), { code: "VERIFICATION_FORBIDDEN" });
       const result = await client.query("insert into verifications (evidence_id, verifier_identity_id, decision, scope, rationale) values ($1,$2,$3,$4,$5) returning *", [evidenceId, verifierIdentityId, decision, scope, body.rationale ?? null]);
       const evidenceResult = await client.query("update evidence set status = $2 where id = $1 returning id, status", [evidenceId, decision === "APPROVED" ? "VERIFIED" : "REJECTED"]);
       if (evidenceResult.rowCount !== 1) throw new Error("Evidence record not found");
       return result.rows[0];
     });
     return reply.code(201).send({ source: "postgresql", syntheticData: false, verification });
-  } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Evidence verification unavailable", syntheticData: false }); }
+  } catch (error) {
+    request.log.error(error);
+    if ((error as { code?: string }).code === "VERIFICATION_FORBIDDEN") return reply.code(403).send({ error: "Verifier is not authorized for this evidence", code: "VERIFICATION_FORBIDDEN" });
+    return reply.code(503).send({ error: "Evidence verification unavailable", syntheticData: false });
+  }
 });
 
 const port = Number(process.env.PORT ?? 3000);
