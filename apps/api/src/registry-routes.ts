@@ -2,8 +2,8 @@ import type { FastifyInstance } from "fastify";
 import type { Pool, PoolClient } from "pg";
 import { authenticate, canActForOrganization, type AuthContext } from "./auth.js";
 
- type Reply = { code: (status: number) => { send: (body: unknown) => unknown } };
- type Request = { body: unknown; params: Record<string, string>; log: { error: (error: unknown) => void } };
+type Reply = { code: (status: number) => { send: (body: unknown) => unknown } };
+type Request = { body: unknown; params: Record<string, string>; log: { error: (error: unknown) => void } };
 
 function bodyOf(request: Request): Record<string, unknown> {
   return request.body && typeof request.body === "object" ? request.body as Record<string, unknown> : {};
@@ -174,7 +174,7 @@ export async function registerRegistryRoutes(app: FastifyInstance, pool: Pool | 
         if(row.rows[0].status!=='AUTHORIZED') throw Object.assign(new Error('Settlement must be AUTHORIZED before execution'),{code:'INVALID_TRANSITION'});
         await client.query("update settlements set status='EXECUTING', external_reference=$2 where id=$1",[settlementId,externalReference]);
         await client.query("insert into settlement_events (settlement_id,event_type,actor_identity_id,external_reference,event_hash) values ($1,'EXECUTING',$2,$3,$4)",[settlementId,auth.identityId,externalReference,`execute:${settlementId}:${externalReference}`]);
-        return client.query("update settlements set status='RECONCILING', settled_at=now() where id=$1 returning *",[settlementId]).then(r=>r.rows[0]);
+        return client.query("update settlements set status='RECONCILING' where id=$1 returning *",[settlementId]).then(r=>r.rows[0]);
       });
       return { source:'postgresql', syntheticData:false, settlement:result };
     } catch(error){const code=(error as {code?:string}).code;if(code==='NOT_FOUND')return reply.code(404).send({error:'Settlement not found'});if(code==='ORG_FORBIDDEN')return reply.code(403).send({error:'Settlement party access denied',code});if(code==='INVALID_TRANSITION')return reply.code(409).send({error:(error as Error).message,code});request.log.error(error);return reply.code(503).send({error:'Settlement execution unavailable',syntheticData:false});}
@@ -183,14 +183,16 @@ export async function registerRegistryRoutes(app: FastifyInstance, pool: Pool | 
   app.post("/api/v1/settlements/:settlementId/confirm", async (request, reply) => {
     const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
     const settlementId = (request.params as { settlementId: string }).settlementId;
+    const body = bodyOf(request as never); const confirmationReference = str(body, 'confirmationReference');
+    if (!confirmationReference) return reply.code(400).send({ error: "confirmationReference is required from the external settlement authority" });
     try {
       const result = await tx(pool, async client => {
         const row = await client.query<{ status: string; payer_id: string; payee_id: string }>("select status,payer_id,payee_id from settlements where id=$1 for update",[settlementId]);
         if(!row.rows[0]) throw Object.assign(new Error('Settlement not found'),{code:'NOT_FOUND'});
         if(!canActForOrganization(auth,row.rows[0].payer_id) && !canActForOrganization(auth,row.rows[0].payee_id)) throw Object.assign(new Error('Settlement party access denied'),{code:'ORG_FORBIDDEN'});
         if(row.rows[0].status!=='RECONCILING') throw Object.assign(new Error('Settlement must be RECONCILING before confirmation'),{code:'INVALID_TRANSITION'});
-        const updated=await client.query("update settlements set status='SETTLED', settled_at=coalesce(settled_at,now()) where id=$1 returning *",[settlementId]);
-        await client.query("insert into settlement_events (settlement_id,event_type,actor_identity_id,event_hash) values ($1,'SETTLED',$2,$3)",[settlementId,auth.identityId,`settled:${settlementId}:${Date.now()}`]);
+        const updated=await client.query("update settlements set status='SETTLED', settled_at=now() where id=$1 returning *",[settlementId]);
+        await client.query("insert into settlement_events (settlement_id,event_type,actor_identity_id,external_reference,event_hash) values ($1,'SETTLED',$2,$3,$4)",[settlementId,auth.identityId,confirmationReference,`settled:${settlementId}:${confirmationReference}`]);
         return updated.rows[0];
       });
       return {source:'postgresql',syntheticData:false,settlement:result};
