@@ -4,12 +4,11 @@
 create or replace function enforce_verification_independence()
 returns trigger language plpgsql as $$
 declare
-  activity_org uuid;
   activity_actor uuid;
   verifier_authorized boolean;
 begin
-  select a.organization_id, a.actor_identity_id
-    into activity_org, activity_actor
+  select a.actor_identity_id
+    into activity_actor
     from activities a
     join evidence e on e.activity_id = a.id
    where e.id = new.evidence_id;
@@ -54,8 +53,20 @@ $$;
 
 drop trigger if exists registry_event_hash_guard on registry_events;
 create trigger registry_event_hash_guard
-before insert or update on registry_events
+before insert on registry_events
 for each row execute function hash_registry_event();
+
+create or replace function reject_registry_event_update()
+returns trigger language plpgsql as $$
+begin
+  raise exception 'registry events are append-only';
+end;
+$$;
+
+drop trigger if exists registry_event_append_only on registry_events;
+create trigger registry_event_append_only
+before update or delete on registry_events
+for each row execute function reject_registry_event_update();
 
 create or replace function hash_settlement_event()
 returns trigger language plpgsql as $$
@@ -69,7 +80,19 @@ $$;
 
 drop trigger if exists settlement_event_hash_guard on settlement_events;
 create trigger settlement_event_hash_guard
-before insert or update on settlement_events
+before insert on settlement_events
 for each row execute function hash_settlement_event();
+
+drop trigger if exists settlement_event_append_only on settlement_events;
+create trigger settlement_event_append_only
+before update or delete on settlement_events
+for each row execute function reject_settlement_event_update();
+
+create or replace function reject_settlement_event_update()
+returns trigger language plpgsql as $$
+begin
+  raise exception 'settlement events are append-only';
+end;
+$$;
 
 create index if not exists verifications_verifier_idx on verifications(verifier_identity_id, decided_at desc);
