@@ -60,6 +60,7 @@ Urban and rural workflows share the same authoritative domain model while allowi
 - `docs/REGISTRY.md` — credentials and registry
 - `docs/SETTLEMENT.md` — governed settlement
 - `docs/SECURITY.md` — security and truthfulness controls
+- `docs/PRODUCTION_TARGET.md` — production acceptance criteria and offline trust model
 
 ## Development status
 
