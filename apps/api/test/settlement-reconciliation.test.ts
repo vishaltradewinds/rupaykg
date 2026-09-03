@@ -10,9 +10,10 @@ let settlementId = "";
 beforeAll(async () => {
   if (!pool) return;
   const result = await pool.query<{ id: string }>(
-    `insert into settlements (amount, currency, status)
-     values (1, 'INR', 'AUTHORIZED')
+    `insert into settlements (amount, currency, status, authorization_reference, verified_at)
+     values (1, 'INR', 'AUTHORIZED', $1, now())
      returning id`,
+    [randomUUID()],
   );
   settlementId = result.rows[0].id;
 });
