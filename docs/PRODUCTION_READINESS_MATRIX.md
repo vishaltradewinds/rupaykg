@@ -23,7 +23,7 @@ A status must never be inferred from legacy documentation alone.
 | Evidence | GREEN | Evidence requires activity linkage and content URI/hash; provenance is retained. |
 | Verification | GREEN | Verifier authorization and lifecycle controls are present. |
 | Carbon calculations | AMBER | Generic deterministic calculation is implemented and now evidence-bound with dataset/formula/calculation hashes; methodology-specific production eligibility still requires source lock, applicability mapping, numerical reconciliation and regression evidence. |
-| Methodology governance | AMBER | `methodology_versions` now carries explicit source, applicability, parameter, equation and reconciliation readiness fields; actual methodology records must be populated and independently verified. |
+| Methodology governance | AMBER | `methodology_versions` carries source, applicability, parameter, equation and reconciliation readiness fields; independent numerical-reconciliation and regression evidence is now a separate immutable governance record and is required for `PRODUCTION_ELIGIBLE`. |
 | EPR/compliance | GREEN | Evidence/authorization controls are present in current value routes. |
 | ESG reporting | GREEN | Organization-scoped reporting path exists. |
 | Credential issuance | GREEN | High-risk DB permission boundary prevents unauthorized registry issuance. |
@@ -53,7 +53,7 @@ Before declaring the platform production-ready, execute the following against th
 6. Confirm duplicate envelope replay is idempotent and cross-identity reuse is rejected.
 7. Execute the activity → measurement → evidence → verification lifecycle.
 8. Confirm carbon calculation rejects missing/mismatched evidence and records deterministic provenance hashes.
-9. Confirm a methodology cannot be marked `PRODUCTION_ELIGIBLE` without source/reconciliation evidence required by database controls.
+9. Confirm a methodology cannot be marked `PRODUCTION_ELIGIBLE` without source provenance, implementation mapping, independent numerical-reconciliation evidence and independent regression evidence required by database controls.
 10. Confirm unauthorized registry issuance/transfer/retirement fails at the database boundary.
 11. Confirm settlement cannot reach `SETTLED` without external confirmation and reconciliation.
 12. Confirm settlement confirmation/reconciliation evidence cannot be cleared or mutated.
@@ -76,7 +76,7 @@ The current methodology governance lifecycle is:
 
 `SOURCE_LOCKED → IMPLEMENTATION_MAPPED → NUMERICALLY_RECONCILED → REGRESSION_VERIFIED → PRODUCTION_ELIGIBLE`
 
-Database controls prevent a methodology from claiming `PRODUCTION_ELIGIBLE` without source provenance and reconciliation evidence. This is a readiness control, not a regulatory approval claim.
+Database controls prevent a methodology from claiming `PRODUCTION_ELIGIBLE` without source provenance, independent reconciliation evidence and independent regression evidence. This is a readiness control, not a regulatory approval claim.
 
 ## Release gate
 
