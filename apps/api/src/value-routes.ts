@@ -43,6 +43,10 @@ async function assertActivityGeographyScope(client: Pool | PoolClient, geography
      ) as ok`, [identityId, geographyId]);
   return result.rows[0]?.ok === true ? { ok: true } : { ok: false, code: "GEOGRAPHY_FORBIDDEN" };
 }
+async function hasValuePermission(pool: Pool, functionName: "can_assess_epr" | "can_write_esg", identityId: string, organizationId: string): Promise<boolean> {
+  const result = await pool.query<{ ok: boolean }>(`select ${functionName}($1,$2) as ok`, [identityId, organizationId]);
+  return result.rows[0]?.ok === true;
+}
 
 export async function registerValueRoutes(app: FastifyInstance, pool: Pool | null): Promise<void> {
   app.post("/api/v1/carbon/calculations", async (request, reply) => {
@@ -71,12 +75,14 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
     try {
       const obligation = await pool.query<{ id: string; organization_id: string; required_quantity: string }>("select id, organization_id, required_quantity from obligations where id = $1", [obligationId]);
       if (!obligation.rows[0]) return reply.code(404).send({ error: "Obligation not found" });
-      if (!canActForOrganization(auth, obligation.rows[0].organization_id)) return reply.code(403).send({ error: "Organization access denied", code: "ORG_FORBIDDEN" });
+      const organizationId = obligation.rows[0].organization_id;
+      if (!canActForOrganization(auth, organizationId)) return reply.code(403).send({ error: "Organization access denied", code: "ORG_FORBIDDEN" });
+      if (!await hasValuePermission(pool, "can_assess_epr", auth.identityId, organizationId)) return reply.code(403).send({ error: "EPR assessment permission required", code: "EPR_ASSESS_FORBIDDEN" });
       const evidence = await pool.query<{ evidence_id: string; verification_id: string; quantity: string }>(
         `select c.evidence_id, c.verification_id, c.quantity::text from epr_credits c join epr_obligations eo on eo.scheme_id = c.scheme_id and eo.obligated_organization_id = $1
          join evidence e on e.id = c.evidence_id join verifications v on v.id = c.verification_id
          where eo.obligation_id = $2 and c.status in ('ELIGIBLE','ISSUED','ACTIVE') and e.status = 'VERIFIED' and v.decision = 'APPROVED'`,
-        [obligation.rows[0].organization_id, obligationId]);
+        [organizationId, obligationId]);
       const assessment = assessEprObligation(Number(obligation.rows[0].required_quantity ?? 0), evidence.rows.map(row => ({ evidenceId: row.evidence_id, verificationId: row.verification_id, approved: true, quantity: Number(row.quantity) })));
       await pool.query("update obligations set status = $2, required_quantity = $3 where id = $1", [obligationId, assessment.status, assessment.requiredQuantity]);
       return { source: "postgresql", syntheticData: false, assessment };
@@ -91,7 +97,9 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
     try {
       const period = await pool.query<{ organization_id: string }>("select organization_id from esg_reporting_periods where id = $1", [periodId]);
       if (!period.rows[0]) return reply.code(404).send({ error: "Reporting period not found" });
-      if (!canActForOrganization(auth, period.rows[0].organization_id)) return reply.code(403).send({ error: "Organization access denied", code: "ORG_FORBIDDEN" });
+      const organizationId = period.rows[0].organization_id;
+      if (!canActForOrganization(auth, organizationId)) return reply.code(403).send({ error: "Organization access denied", code: "ORG_FORBIDDEN" });
+      if (!await hasValuePermission(pool, "can_write_esg", auth.identityId, organizationId)) return reply.code(403).send({ error: "ESG metric write permission required", code: "ESG_WRITE_FORBIDDEN" });
       const evidenceId = str(body, "evidenceId"); const verificationId = str(body, "verificationId");
       if (verificationId && !evidenceId) return reply.code(400).send({ error: "verificationId requires evidenceId" });
       const metric = { code: metricCode, scope, value, unit, ...(evidenceId ? { evidenceId } : {}), ...(verificationId ? { verificationId } : {}) };
