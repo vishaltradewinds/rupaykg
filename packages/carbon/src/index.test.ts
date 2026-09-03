@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { calculateBmWa03001, calculateEmissionReduction, isIssuableCarbonValue, sha256Canonical } from "./index.js";
+import { calculateBmWa03001, calculateEmissionReduction, evaluateBmWa03001Applicability, isIssuableCarbonValue, sha256Canonical } from "./index.js";
 
 test("calculates a methodology-versioned result without issuing a credential", () => {
   const result = calculateEmissionReduction({
@@ -56,6 +56,41 @@ test("reconciles BM WA03.001 Equation 4 deterministically", () => {
     "BM.WA03.001.EQ4.OXIDATION_ADJUSTMENT.V1",
     "BM.WA03.001.EQ4.PROJECT_AND_LEAKAGE_DEDUCTION.V1",
   ]);
+});
+
+test("BM WA03.001 applicability gate accepts an in-scope landfill activity", () => {
+  const result = evaluateBmWa03001Applicability({
+    sector: "Waste Handling and Disposal",
+    activity: "Landfill methane recovery",
+    reducesOrganicWasteRecycling: false,
+    managementDeliberatelyChangedToIncreaseMethane: false,
+    changeWasRequiredForTechnicalOrRegulatoryReasons: false,
+  });
+  assert.deepEqual(result, { eligible: true, reasons: [] });
+});
+
+test("BM WA03.001 applicability gate fails closed for restricted activities", () => {
+  const result = evaluateBmWa03001Applicability({
+    sector: "Waste Handling and Disposal",
+    activity: "Landfill methane recovery",
+    reducesOrganicWasteRecycling: true,
+    managementDeliberatelyChangedToIncreaseMethane: true,
+    changeWasRequiredForTechnicalOrRegulatoryReasons: false,
+  });
+  assert.equal(result.eligible, false);
+  assert.equal(result.reasons.length, 2);
+});
+
+test("BM WA03.001 applicability gate rejects the wrong sector", () => {
+  const result = evaluateBmWa03001Applicability({
+    sector: "Energy Industries",
+    activity: "Landfill methane recovery",
+    reducesOrganicWasteRecycling: false,
+    managementDeliberatelyChangedToIncreaseMethane: false,
+    changeWasRequiredForTechnicalOrRegulatoryReasons: false,
+  });
+  assert.equal(result.eligible, false);
+  assert.match(result.reasons[0], /sector/);
 });
 
 test("BM WA03.001 rejects invalid oxidation factors", () => {
