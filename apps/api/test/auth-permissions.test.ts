@@ -1,6 +1,6 @@
 import { describe, expect, it } from "node:test";
 import assert from "node:assert/strict";
-import { HIGH_RISK_PERMISSIONS, canPerformHighRiskActionInDatabase, type AuthContext } from "../src/auth.js";
+import { HIGH_RISK_PERMISSIONS, canPerformHighRiskActionInDatabase, canVerifyEvidence, type AuthContext } from "../src/auth.js";
 
 describe("high-risk authorization policy", () => {
   it("defines every production high-risk action with an explicit canonical permission", () => {
@@ -61,5 +61,20 @@ describe("high-risk authorization policy", () => {
     } as never;
     const allowed = await canPerformHighRiskActionInDatabase(client, auth, "org-1", "SETTLE_FUNDS");
     expect(allowed).toBe(false);
+  });
+
+  it("uses explicit VERIFY_EVIDENCE permission instead of role-name elevation", async () => {
+    const queries: Array<{ text: string; values: unknown[] }> = [];
+    const client = {
+      query: async (text: string, values: unknown[]) => {
+        queries.push({ text, values });
+        return { rows: [{ ok: true }] };
+      },
+    } as never;
+    const allowed = await canVerifyEvidence(client, "identity-1", "evidence-1");
+    assert.equal(allowed, true);
+    assert.equal(queries.length, 1);
+    assert.doesNotMatch(queries[0].text, /lower\(r\.name\)/);
+    assert.deepEqual(queries[0].values, ["evidence-1", "identity-1", ["VERIFY_EVIDENCE", "verification:approve", "verification.approve"]]);
   });
 });
