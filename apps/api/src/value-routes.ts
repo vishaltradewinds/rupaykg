@@ -27,11 +27,21 @@ async function authFor(request: Request, reply: Reply, pool: Pool | null): Promi
     request.log.error(error); reply.code(503).send({ error: "Authentication service unavailable", code: "AUTH_UNAVAILABLE" }); return null;
   }
 }
-async function activityAccess(client: Pool | PoolClient, activityId: string, identityId: string): Promise<{ organization_id: string } | null> {
-  const result = await client.query<{ organization_id: string }>(
-    `select a.organization_id from activities a join organization_memberships om on om.organization_id = a.organization_id
+async function activityAccess(client: Pool | PoolClient, activityId: string, identityId: string): Promise<{ organization_id: string; geography_id: string | null } | null> {
+  const result = await client.query<{ organization_id: string; geography_id: string | null }>(
+    `select a.organization_id, a.geography_id from activities a join organization_memberships om on om.organization_id = a.organization_id
      where a.id = $1 and om.identity_id = $2 and om.status = 'VERIFIED'`, [activityId, identityId]);
   return result.rows[0] ?? null;
+}
+async function assertActivityGeographyScope(client: Pool | PoolClient, geographyId: string | null, identityId: string): Promise<{ ok: boolean; code?: string }> {
+  if (!geographyId) return { ok: false, code: "ACTIVITY_GEOGRAPHY_REQUIRED" };
+  const result = await client.query<{ ok: boolean }>(
+    `select exists(
+       select 1 from organization_memberships om
+       where om.identity_id = $1 and om.status = 'VERIFIED'
+         and organization_has_geography_scope(om.organization_id, $2)
+     ) as ok`, [identityId, geographyId]);
+  return result.rows[0]?.ok === true ? { ok: true } : { ok: false, code: "GEOGRAPHY_FORBIDDEN" };
 }
 
 export async function registerValueRoutes(app: FastifyInstance, pool: Pool | null): Promise<void> {
@@ -44,6 +54,8 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
     if (!activityId || !methodologyCode || !methodologyVersion || baselineTco2e === null || projectTco2e === null) return reply.code(400).send({ error: "activityId, methodologyCode, methodologyVersion, baselineTco2e and projectTco2e are required" });
     try {
       const access = await activityAccess(pool, activityId, auth.identityId); if (!access) return reply.code(403).send({ error: "Activity access denied", code: "ACTIVITY_FORBIDDEN" });
+      const geography = await assertActivityGeographyScope(pool, access.geography_id, auth.identityId);
+      if (!geography.ok) return reply.code(geography.code === "ACTIVITY_GEOGRAPHY_REQUIRED" ? 409 : 403).send({ error: geography.code === "ACTIVITY_GEOGRAPHY_REQUIRED" ? "Activity must have an authorized geography before value calculation" : "Activity geography is outside organization authorization scope", code: geography.code });
       const method = await pool.query<{ id: string }>("select id from methodology_versions where methodology_code = $1 and version = $2", [methodologyCode, methodologyVersion]);
       if (!method.rows[0]) return reply.code(409).send({ error: "Methodology version is not registered", code: "METHODOLOGY_NOT_REGISTERED" });
       const result = calculateEmissionReduction({ activityId, methodologyCode, methodologyVersion, baselineTco2e, projectTco2e, leakageTco2e, uncertaintyTco2e });
