@@ -40,6 +40,24 @@ async function verifiedOrganizationAccess(client: PoolClient, identityId: string
   const result = await client.query<{ ok: boolean }>(`select exists (select 1 from organization_memberships where identity_id = $1 and organization_id = $2 and status = 'VERIFIED') as ok`, [identityId, organizationId]);
   return result.rows[0]?.ok === true;
 }
+async function authorizedGeography(client: PoolClient, identityId: string, geographyId: string, organizationId?: string): Promise<boolean> {
+  if (!isUuid(geographyId)) return false;
+  const result = await client.query<{ ok: boolean }>(`select exists(
+    select 1 from organization_memberships om
+    where om.identity_id = $1 and om.status = 'VERIFIED'
+      ${organizationId ? "and om.organization_id = $3" : ""}
+      and organization_has_geography_scope(om.organization_id, $2)
+  ) as ok`, organizationId ? [identityId, geographyId, organizationId] : [identityId, geographyId]);
+  return result.rows[0]?.ok === true;
+}
+async function activityGeographyAccess(client: PoolClient, identityId: string, activityId: string): Promise<boolean> {
+  const result = await client.query<{ geography_id: string | null }>(`select a.geography_id from activities a where a.id = $1 and exists(
+    select 1 from organization_memberships om where om.organization_id = a.organization_id and om.identity_id = $2 and om.status = 'VERIFIED'
+  )`, [activityId, identityId]);
+  const geographyId = result.rows[0]?.geography_id;
+  if (!geographyId) return false;
+  return authorizedGeography(client, identityId, geographyId);
+}
 
 async function applyOperation(client: PoolClient, identityId: string, payload: OperationPayload): Promise<{ entityType: string; entityId: string }> {
   const operationType = stringValue(payload, "operationType");
@@ -49,9 +67,10 @@ async function applyOperation(client: PoolClient, identityId: string, payload: O
     const organizationId = stringValue(payload, "organizationId");
     const activityType = stringValue(payload, "activityType");
     const occurredAt = dateValue(payload, "occurredAt");
-    const geographyId = payload.geographyId == null ? null : stringValue(payload, "geographyId");
-    if (!organizationId || !activityType || (payload.occurredAt !== undefined && !occurredAt) || (geographyId && !isUuid(geographyId))) throw Object.assign(new Error("ACTIVITY_CREATE requires organizationId, activityType and a valid optional occurredAt/geographyId"), { code: "INVALID_OPERATION" });
+    const geographyId = stringValue(payload, "geographyId");
+    if (!organizationId || !activityType || (payload.occurredAt !== undefined && !occurredAt) || !geographyId || !isUuid(geographyId)) throw Object.assign(new Error("ACTIVITY_CREATE requires organizationId, activityType, valid optional occurredAt and an authorized geographyId"), { code: "INVALID_OPERATION" });
     if (!await verifiedOrganizationAccess(client, identityId, organizationId)) throw Object.assign(new Error("No verified membership for activity organization"), { code: "OPERATION_FORBIDDEN" });
+    if (!await authorizedGeography(client, identityId, geographyId, organizationId)) throw Object.assign(new Error("Activity geography is outside organization authorization scope"), { code: "OPERATION_FORBIDDEN" });
     const result = await client.query<{ id: string }>(`insert into activities (organization_id, actor_identity_id, geography_id, activity_type, status, occurred_at, metadata) values ($1,$2,$3,$4,'DRAFT',$5,$6) returning id`, [organizationId, identityId, geographyId, activityType, occurredAt, payload.metadata ?? {}]);
     return { entityType: "activity", entityId: result.rows[0]!.id };
   }
@@ -64,8 +83,7 @@ async function applyOperation(client: PoolClient, identityId: string, payload: O
     const source = stringValue(payload, "source");
     const measuredAt = dateValue(payload, "measuredAt");
     if (!activityId || !isUuid(activityId) || value === null || !unit || !method || !source || !measuredAt) throw Object.assign(new Error("MEASUREMENT_CREATE requires activityId, positive value, unit, method, source and valid measuredAt"), { code: "INVALID_OPERATION" });
-    const access = await client.query<{ ok: boolean }>(`select exists (select 1 from activities a join organization_memberships om on om.organization_id = a.organization_id where a.id = $1 and om.identity_id = $2 and om.status = 'VERIFIED') as ok`, [activityId, identityId]);
-    if (!access.rows[0]?.ok) throw Object.assign(new Error("No verified membership for activity organization"), { code: "OPERATION_FORBIDDEN" });
+    if (!await activityGeographyAccess(client, identityId, activityId)) throw Object.assign(new Error("Activity is outside organization authorization scope or has no authorized geography"), { code: "OPERATION_FORBIDDEN" });
     const result = await client.query<{ id: string }>(`insert into measurements (activity_id, value, unit, method, source, measured_at, metadata) values ($1,$2,$3,$4,$5,$6,$7) returning id`, [activityId, value, unit, method, source, measuredAt, payload.metadata ?? {}]);
     return { entityType: "measurement", entityId: result.rows[0]!.id };
   }
@@ -78,8 +96,7 @@ async function applyOperation(client: PoolClient, identityId: string, payload: O
     const contentHash = stringValue(payload, "contentHash");
     const measurementId = payload.measurementId == null ? null : stringValue(payload, "measurementId");
     if (!activityId || !isUuid(activityId) || !evidenceType || !capturedAt || (!contentUri && !contentHash) || (measurementId && !isUuid(measurementId))) throw Object.assign(new Error("EVIDENCE_CREATE requires activityId, evidenceType, valid capturedAt and contentUri or contentHash"), { code: "INVALID_OPERATION" });
-    const access = await client.query<{ ok: boolean }>(`select exists (select 1 from activities a join organization_memberships om on om.organization_id = a.organization_id where a.id = $1 and om.identity_id = $2 and om.status = 'VERIFIED') as ok`, [activityId, identityId]);
-    if (!access.rows[0]?.ok) throw Object.assign(new Error("No verified membership for activity organization"), { code: "OPERATION_FORBIDDEN" });
+    if (!await activityGeographyAccess(client, identityId, activityId)) throw Object.assign(new Error("Activity is outside organization authorization scope or has no authorized geography"), { code: "OPERATION_FORBIDDEN" });
     if (measurementId) {
       const measurement = await client.query<{ ok: boolean }>(`select exists (select 1 from measurements where id = $1 and activity_id = $2) as ok`, [measurementId, activityId]);
       if (!measurement.rows[0]?.ok) throw Object.assign(new Error("Measurement does not belong to activity"), { code: "INVALID_OPERATION" });
@@ -99,6 +116,8 @@ async function applyOperation(client: PoolClient, identityId: string, payload: O
     const destinationGeographyId = payload.destinationGeographyId == null ? null : stringValue(payload, "destinationGeographyId");
     if (!organizationId || !originType || !resourceForm || !materialCode || !unit || quantity === null || (sourceGeographyId && !isUuid(sourceGeographyId)) || (destinationGeographyId && !isUuid(destinationGeographyId))) throw Object.assign(new Error("RESOURCE_FLOW_CREATE requires organizationId, originType, resourceForm, materialCode, positive quantity and unit"), { code: "INVALID_OPERATION" });
     if (!await verifiedOrganizationAccess(client, identityId, organizationId)) throw Object.assign(new Error("No verified membership for resource-flow organization"), { code: "OPERATION_FORBIDDEN" });
+    if (sourceGeographyId && !await authorizedGeography(client, identityId, sourceGeographyId, organizationId)) throw Object.assign(new Error("Source geography is outside organization authorization scope"), { code: "OPERATION_FORBIDDEN" });
+    if (destinationGeographyId && !await authorizedGeography(client, identityId, destinationGeographyId, organizationId)) throw Object.assign(new Error("Destination geography is outside organization authorization scope"), { code: "OPERATION_FORBIDDEN" });
     const result = await client.query<{ id: string }>(`insert into resource_flows (organization_id, origin_type, resource_form, material_code, declared_quantity, unit, source_geography_id, destination_geography_id) values ($1,$2,$3,$4,$5,$6,$7,$8) returning id`, [organizationId, originType, resourceForm, materialCode, quantity, unit, sourceGeographyId, destinationGeographyId]);
     return { entityType: "resource_flow", entityId: result.rows[0]!.id };
   }
