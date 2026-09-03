@@ -56,6 +56,8 @@ Every calculation input should have:
 | Time period | Applicable monitoring period |
 | Quality/provenance | Evidence and validation information |
 
+For the implemented BM WA03.001 Equation 4 adapter, the package now exposes `BM_WA03001_PARAMETER_DICTIONARY` and `validateBmWa03001Input()`. The controlled mapping explicitly identifies the six accepted parameters, units and source classes (`MONITORED`, `CALCULATED`, `METHODOLOGY_CONSTANT`) and fails closed on missing/non-finite values or invalid bounded factors. The dictionary describes the adapter contract; it does not certify the underlying monitoring instruments or referenced BM-T tools.
+
 No unapproved default may be introduced merely to make a calculation complete.
 
 ## 4. Deterministic calculation trace
@@ -94,7 +96,7 @@ For each production methodology, maintain at least one independently reviewable 
 
 A reference case proves numerical reproducibility only. It does not prove regulator acceptance or external certification.
 
-The current package contains a deterministic BM WA03.001 Equation 4 regression fixture and applicability-gate tests. These are intentionally treated as software implementation coverage, not as production eligibility evidence.
+The current package contains a deterministic BM WA03.001 Equation 4 regression fixture, parameter-contract tests and applicability-gate tests. These are intentionally treated as software implementation coverage, not as production eligibility evidence.
 
 ## 7. Evidence boundary
 
@@ -129,7 +131,7 @@ Use these statuses:
 
 A methodology should not be described as production-reconciled merely because CI passes.
 
-The current BM WA03.001 adapter has reached **IMPLEMENTATION_MAPPED for the core Equation 4 calculation**, with deterministic regression and applicability-gate coverage. It remains below `PRODUCTION_ELIGIBLE` until the dependent tools, complete parameter/evidence mapping, independently captured source hash, monitored evidence chain and independent reconciliation/regression package are all established and verified.
+The current BM WA03.001 adapter has reached **IMPLEMENTATION_MAPPED for the core Equation 4 calculation**, with deterministic regression, parameter-contract and applicability-gate coverage. It remains below `PRODUCTION_ELIGIBLE` until the dependent tools, complete parameter/evidence mapping, independently captured source hash, monitored evidence chain and independent reconciliation/regression package are all established and verified.
 
 ## 11. Legacy BM WA03 references
 
