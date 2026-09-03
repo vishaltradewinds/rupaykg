@@ -1,6 +1,6 @@
 export type Overview = { source: string; syntheticData: boolean; counts: Record<string, number> };
 export type Health = { status: string; database: string; syntheticData: boolean };
-export type RegulatorySource = { id: string; authority: string; title: string; instrument: string; reference: string; effective_from: string | null; jurisdiction: string; status: string; affected_module: string | null };
+export type RegulatorySource = { id: string; authority: string; title: string; instrument: string; reference: string; source_url: string | null; published_on: string | null; effective_from: string | null; jurisdiction: string; status: string; affected_module: string | null; verified_on: string | null };
 export type RegulatoryResponse = { source: string; syntheticData: boolean; sources: RegulatorySource[] };
 export type Geography = { id: string; parent_id: string | null; kind: string; code: string | null; external_code: string | null; name: string; source: string | null; source_version: string | null; valid_from: string | null; valid_to: string | null; metadata: Record<string, unknown> };
 export type IntelligenceFinding = { kind: string; sourceRecordIds: string[]; sourceType: string; title: string; status: string; geography: string | null; occurredAt: string | null; action: "REVIEW"; authoritativeMutation: false };
