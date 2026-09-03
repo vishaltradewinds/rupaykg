@@ -26,21 +26,23 @@ test("production lifecycle integration gate", { skip: !url }, async () => {
     const credential = (await c.query("insert into credentials(activity_id,issuer_organization_id,trust_root_id,status,verification_id,quantity,unit) values($1,$2,'integration-root','ISSUED',$3,100,'kg') returning id", [activity, org, verification])).rows[0].id;
     await c.query("insert into registry_events(credential_id,event_type,to_owner_id,verification_id,recorded_by_identity_id,event_hash) values($1,'ISSUED',$2,$3,$4,'integration')", [credential, org, verification, verifier]);
     await c.query("update credentials set status='ACTIVE' where id=$1", [credential]);
+    await reject(c, () => c.query("insert into credentials(activity_id,issuer_organization_id,trust_root_id,status,verification_id,quantity,unit) values($1,$2,'integration-root','ISSUED',$3,100,'kg')", [activity, org, verification]), /duplicate key|credentials_activity_verification_unique_idx/);
 
     const settlement = (await c.query("insert into settlements(credential_id,payer_id,payee_id,amount,currency,status) values($1,$2,$2,1000,'INR','CREATED') returning id", [credential, org])).rows[0].id;
     await c.query("update settlements set status='AUTHORIZED',authorization_reference='auth',verified_at=now() where id=$1", [settlement]);
-    await c.query("update settlements set status='EXECUTING' where id=$1", [settlement]);
+    await c.query("update settlements set status='EXECUTING',external_reference='bank-1' where id=$1", [settlement]);
     await c.query("update settlements set status='RECONCILING' where id=$1", [settlement]);
     await reject(c, () => c.query("update settlements set status='SETTLED' where id=$1", [settlement]), /external settlement reference/);
-    await c.query("update settlements set status='SETTLED',external_reference='bank-1',external_confirmed_at=now(),reconciliation_reference='recon-1',settled_at=now() where id=$1", [settlement]);
+    await c.query("update settlements set status='SETTLED',external_confirmed_at=now(),reconciliation_reference='recon-1',settled_at=now() where id=$1", [settlement]);
+    await reject(c, () => c.query("update settlements set external_reference='bank-2' where id=$1", [settlement]), /external settlement reference cannot be changed/);
+    await reject(c, () => c.query("update settlements set external_confirmed_at=null where id=$1", [settlement]), /cannot be cleared/);
+    await reject(c, () => c.query("update registry_events set event_type='TAMPERED' where credential_id=$1", [credential]), /append-only/);
 
     const state = (await c.query("select a.status activity,e.status evidence,v.decision verification,c.status credential,s.status settlement,s.external_reference,s.external_confirmed_at,s.reconciliation_reference from activities a join evidence e on e.activity_id=a.id join verifications v on v.id=$1 join credentials c on c.id=$2 join settlements s on s.id=$3 where a.id=$4 and e.id=$5", [verification, credential, settlement, activity, evidence])).rows[0];
     assert.deepEqual([state.activity, state.evidence, state.verification, state.credential, state.settlement], ["COMPLETED", "VERIFIED", "APPROVED", "ACTIVE", "SETTLED"]);
     assert.equal(state.external_reference, "bank-1");
     assert.ok(state.external_confirmed_at instanceof Date);
     assert.equal(state.reconciliation_reference, "recon-1");
-    await reject(c, () => c.query("update settlements set external_confirmed_at=null where id=$1", [settlement]), /cannot be cleared/);
-    await reject(c, () => c.query("update registry_events set event_type='TAMPERED' where credential_id=$1", [credential]), /append-only/);
     await c.query("rollback");
   } catch (error) {
     await c.query("rollback");
