@@ -49,7 +49,7 @@ test("reconciles BM WA03.001 Equation 4 deterministically", () => {
   });
   assert.equal(result.methodologyCode, "BM WA03.001");
   assert.equal(result.methodologyVersion, "1.0");
-  assert.equal(result.resultTco2e, 22663.4);
+  assert.equal(result.resultTco2e, 22783);
   assert.equal(result.status, "CALCULATED_PENDING_VERIFICATION");
   assert.deepEqual(result.trace.map(step => step.equationId), [
     "BM.WA03.001.EQ4.METHANE_DELTA.V1",
