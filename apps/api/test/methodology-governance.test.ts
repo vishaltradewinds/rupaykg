@@ -5,6 +5,8 @@ import { randomUUID } from "node:crypto";
 
 const databaseUrl = process.env.DATABASE_URL;
 
+const evidenceHash = (seed: string) => seed.repeat(64).slice(0, 64);
+
 test("methodology governance fails closed and becomes immutable after progression", async (t) => {
   if (!databaseUrl) {
     t.skip("DATABASE_URL is required for methodology governance integration tests");
@@ -54,10 +56,38 @@ test("methodology governance fails closed and becomes immutable after progressio
     );
 
     await assert.rejects(
-      pool.query("update methodology_versions set governance_status='PRODUCTION_ELIGIBLE', reconciliation_evidence='[]'::jsonb where id=$1", [methodologyId]),
-      /requires reconciliation evidence|violates check constraint/,
+      pool.query("update methodology_versions set governance_status='PRODUCTION_ELIGIBLE' where id=$1", [methodologyId]),
+      /requires independent numerical reconciliation evidence|requires independent regression evidence|requires reconciliation evidence/, 
+    );
+
+    await pool.query(
+      "insert into methodology_governance_evidence (methodology_version_id,evidence_kind,reference,evidence_hash,independent_party,evidence) values ($1,'NUMERICAL_RECONCILIATION','fixture-reconciliation',$2,'independent-test-party',$3)",
+      [methodologyId, evidenceHash("c"), { expected: 22783, unit: "tCO2e", fixture: "BM.WA03.001.EQ4.V1" }],
+    );
+
+    await assert.rejects(
+      pool.query("update methodology_versions set governance_status='PRODUCTION_ELIGIBLE' where id=$1", [methodologyId]),
+      /requires independent regression evidence/,
+    );
+
+    await pool.query(
+      "insert into methodology_governance_evidence (methodology_version_id,evidence_kind,reference,evidence_hash,independent_party,evidence) values ($1,'REGRESSION_TEST','fixture-regression',$2,'independent-test-party',$3)",
+      [methodologyId, evidenceHash("d"), { test: "methodology-governance", status: "PASS" }],
+    );
+
+    await pool.query("update methodology_versions set governance_status='PRODUCTION_ELIGIBLE' where id=$1", [methodologyId]);
+
+    await assert.rejects(
+      pool.query("update methodology_governance_evidence set evidence_hash=$2 where methodology_version_id=$1 and evidence_kind='NUMERICAL_RECONCILIATION'", [methodologyId, evidenceHash("e")]),
+      /methodology governance evidence is immutable/,
+    );
+
+    await assert.rejects(
+      pool.query("update methodology_governance_evidence set independent_party='changed' where methodology_version_id=$1 and evidence_kind='REGRESSION_TEST'", [methodologyId]),
+      /methodology governance evidence is immutable/,
     );
   } finally {
+    await pool.query("delete from methodology_governance_evidence where methodology_version_id=$1", [methodologyId]);
     await pool.query("delete from methodology_versions where id=$1", [methodologyId]);
     await pool.end();
   }
