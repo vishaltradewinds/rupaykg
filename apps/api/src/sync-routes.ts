@@ -101,7 +101,7 @@ async function applyOperation(client: PoolClient, identityId: string, payload: O
       const measurement = await client.query<{ ok: boolean }>(`select exists (select 1 from measurements where id = $1 and activity_id = $2) as ok`, [measurementId, activityId]);
       if (!measurement.rows[0]?.ok) throw Object.assign(new Error("Measurement does not belong to activity"), { code: "INVALID_OPERATION" });
     }
-    const result = await client.query<{ id: string }>(`insert into evidence (activity_id, measurement_id, evidence_type, captured_at, content_uri, content_hash, metadata) values ($1,$2,$3,$4,$5,$6,$7) returning id`, [activityId, measurementId, evidenceType, capturedAt, contentUri, contentHash, payload.metadata ?? {}]);
+    const result = await client.query<{ id: string }>(`insert into evidence (activity_id, measurement_id, evidence_type, captured_at, content_uri, content_hash, metadata, captured_by_identity_id) values ($1,$2,$3,$4,$5,$6,$7,$8) returning id`, [activityId, measurementId, evidenceType, capturedAt, contentUri, contentHash, payload.metadata ?? {}, identityId]);
     return { entityType: "evidence", entityId: result.rows[0]!.id };
   }
 
@@ -146,9 +146,12 @@ export async function registerSyncRoutes(app: FastifyInstance, pool: Pool | null
         if (!membership.rows[0]?.ok) { await client.query("ROLLBACK"); return reply.code(400).send({ error: "Device identity must have verified membership in the organization", code: "DEVICE_IDENTITY_FORBIDDEN" }); }
         const existing = await client.query<{ id: string; status: string }>("select id,status from field_devices where device_id=$1", [deviceId]);
         if (existing.rows[0]) { await client.query("ROLLBACK"); return reply.code(409).send({ error: "Device identifier is already enrolled", code: "DEVICE_ALREADY_ENROLLED", device: existing.rows[0] }); }
-        const inserted = await client.query<{ id: string; device_id: string; identity_id: string; organization_id: string; status: string }>("insert into field_devices(device_id,identity_id,organization_id,status) values($1,$2,$3,'PENDING') returning id,device_id,identity_id,organization_id,status", [deviceId, identityId, organizationId]);
+        const inserted = await client.query<{ id: string; device_id: string; identity_id: string; organization_id: string; status: string }>("insert into field_devices(device_id,identity_id,organization_id,status,registered_by_identity_id,registered_at) values($1,$2,$3,'PENDING',$4,now()) returning id,device_id,identity_id,organization_id,status,registered_by_identity_id,registered_at", [deviceId, identityId, organizationId, auth.identityId]);
+        const device = inserted.rows[0];
+        if (!device) throw new Error("Field device was not created");
+        await client.query("insert into audit_events(actor_identity_id,organization_id,action,target_type,target_id,event_hash,payload) values($1,$2,'FIELD_DEVICE_ENROLLED','field_device',$3,$4,$5)", [auth.identityId, organizationId, device.id, payloadHash({ action: "FIELD_DEVICE_ENROLLED", deviceId: device.id, registeredIdentityId: identityId }), { deviceId: device.device_id, identityId: device.identity_id, status: device.status }]);
         await client.query("COMMIT");
-        return reply.code(201).send({ source: "postgresql", syntheticData: false, authoritativeMutation: true, device: inserted.rows[0] });
+        return reply.code(201).send({ source: "postgresql", syntheticData: false, authoritativeMutation: true, device });
       } catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Field-device enrollment unavailable", code: "FIELD_DEVICE_ENROLLMENT_UNAVAILABLE", syntheticData: false }); }
   });
@@ -171,9 +174,12 @@ export async function registerSyncRoutes(app: FastifyInstance, pool: Pool | null
         const manager = await client.query<{ ok: boolean }>("select can_manage_field_device($1,$2) as ok", [auth.identityId, row.organization_id]);
         if (!manager.rows[0]?.ok) { await client.query("ROLLBACK"); return reply.code(403).send({ error: "Field-device management permission required", code: "FIELD_DEVICE_FORBIDDEN" }); }
         if (row.status === "VERIFIED") { await client.query("COMMIT"); return reply.code(200).send({ source: "postgresql", syntheticData: false, replay: true, authoritativeMutation: false, device: { id: deviceId, organizationId: row.organization_id, status: row.status } }); }
-        const updated = await client.query<{ id: string; device_id: string; identity_id: string; organization_id: string; status: string }>("update field_devices set status='VERIFIED' where id=$1 and status='PENDING' returning id,device_id,identity_id,organization_id,status", [deviceId]);
+        const updated = await client.query<{ id: string; device_id: string; identity_id: string; organization_id: string; status: string }>("update field_devices set status='VERIFIED',verified_by_identity_id=$2,verified_at=now() where id=$1 and status='PENDING' returning id,device_id,identity_id,organization_id,status,verified_by_identity_id,verified_at", [deviceId, auth.identityId]);
+        const verifiedDevice = updated.rows[0];
+        if (!verifiedDevice) throw new Error("Field device verification did not update a pending device");
+        await client.query("insert into audit_events(actor_identity_id,organization_id,action,target_type,target_id,event_hash,payload) values($1,$2,'FIELD_DEVICE_VERIFIED','field_device',$3,$4,$5)", [auth.identityId, row.organization_id, deviceId, payloadHash({ action: "FIELD_DEVICE_VERIFIED", deviceId, verifiedIdentityId: auth.identityId }), { deviceId: verifiedDevice.device_id, identityId: verifiedDevice.identity_id, status: verifiedDevice.status }]);
         await client.query("COMMIT");
-        return reply.code(200).send({ source: "postgresql", syntheticData: false, authoritativeMutation: true, device: updated.rows[0] });
+        return reply.code(200).send({ source: "postgresql", syntheticData: false, authoritativeMutation: true, device: verifiedDevice });
       } catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Field-device verification unavailable", code: "FIELD_DEVICE_VERIFICATION_UNAVAILABLE", syntheticData: false }); }
   });
@@ -184,7 +190,7 @@ export async function registerSyncRoutes(app: FastifyInstance, pool: Pool | null
     try { auth = await authenticate(request, pool); if (!auth) return reply.code(401).send(bearerChallenge()); }
     catch (error) { request.log.error(error); return reply.code(503).send({ error: "Authentication service unavailable", code: "AUTH_UNAVAILABLE" }); }
     try {
-      const result = await pool.query(`select fd.id,fd.device_id,fd.identity_id,fd.organization_id,fd.last_seen_at,fd.status,fd.metadata from field_devices fd where exists(select 1 from organization_memberships om where om.organization_id=fd.organization_id and om.identity_id=$1 and om.status='VERIFIED') order by fd.organization_id,fd.device_id`, [auth.identityId]);
+      const result = await pool.query(`select fd.id,fd.device_id,fd.identity_id,fd.organization_id,fd.registered_by_identity_id,fd.registered_at,fd.verified_by_identity_id,fd.verified_at,fd.last_seen_at,fd.status,fd.metadata from field_devices fd where exists(select 1 from organization_memberships om where om.organization_id=fd.organization_id and om.identity_id=$1 and om.status='VERIFIED') order by fd.organization_id,fd.device_id`, [auth.identityId]);
       return { source: "postgresql", syntheticData: false, devices: result.rows };
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Field-device inventory unavailable", syntheticData: false }); }
   });
