@@ -32,7 +32,7 @@ test("production lifecycle integration gate", { skip: !url }, async () => {
     await c.query("update settlements set status='AUTHORIZED',authorization_reference='auth',verified_at=now() where id=$1", [settlement]);
     await c.query("update settlements set status='EXECUTING',external_reference='bank-1' where id=$1", [settlement]);
     await c.query("update settlements set status='RECONCILING' where id=$1", [settlement]);
-    await reject(c, () => c.query("update settlements set status='SETTLED' where id=$1", [settlement]), /external settlement reference/);
+    await reject(c, () => c.query("update settlements set status='SETTLED' where id=$1", [settlement]), /external authority confirmation/);
     await c.query("update settlements set status='SETTLED',external_confirmed_at=now(),reconciliation_reference='recon-1',settled_at=now() where id=$1", [settlement]);
     await reject(c, () => c.query("update settlements set external_reference='bank-2' where id=$1", [settlement]), /external settlement reference cannot be changed/);
     await reject(c, () => c.query("update settlements set external_confirmed_at=null where id=$1", [settlement]), /cannot be cleared/);
