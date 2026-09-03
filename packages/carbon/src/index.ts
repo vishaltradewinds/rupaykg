@@ -34,12 +34,12 @@ export type BmWa03001Input = {
   oxidationFactor: number;
 };
 
-export type BmWa03001Result = {
-  methodologyCode: "BM WA03.001";
-  methodologyVersion: "1.0";
-  resultTco2e: number;
-  status: "CALCULATED_PENDING_VERIFICATION";
-  trace: CarbonTraceStep[];
+export type BmWa03001ApplicabilityInput = {
+  sector: string;
+  activity: string;
+  reducesOrganicWasteRecycling: boolean;
+  managementDeliberatelyChangedToIncreaseMethane: boolean;
+  changeWasRequiredForTechnicalOrRegulatoryReasons: boolean;
 };
 
 export const BM_WA03001_SOURCE = {
@@ -50,6 +50,19 @@ export const BM_WA03001_SOURCE = {
   equation: "ERy,calculated = (FCH4,PJ,y - FCH4,BL,y) × GWPCH4 × (1 - OX) - PEy - LEy",
   equationId: "BM.WA03.001.EQ4.V1",
 } as const;
+
+export type BmWa03001Result = {
+  methodologyCode: "BM WA03.001";
+  methodologyVersion: "1.0";
+  resultTco2e: number;
+  status: "CALCULATED_PENDING_VERIFICATION";
+  trace: CarbonTraceStep[];
+};
+
+export type BmWa03001ApplicabilityResult = {
+  eligible: boolean;
+  reasons: string[];
+};
 
 function assertFiniteNonNegative(value: number, name: string): void {
   if (!Number.isFinite(value) || value < 0) throw new Error(`${name} must be a finite non-negative number`);
@@ -101,6 +114,26 @@ export function calculateEmissionReduction(input: CarbonInput): CarbonResult {
       { equationId: "CARBON.NET_NON_NEGATIVE_FLOOR.V1", inputs: { netBeforeFloor }, result: net },
     ],
   };
+}
+
+/**
+ * Evaluate the explicit BM WA03.001 applicability restrictions before calculation.
+ * This is a fail-closed gate; it does not establish additionality, baseline
+ * methane potential, monitoring-tool outputs, or production eligibility.
+ */
+export function evaluateBmWa03001Applicability(input: BmWa03001ApplicabilityInput): BmWa03001ApplicabilityResult {
+  const reasons: string[] = [];
+  if (input.sector.trim().toLowerCase() !== "waste handling and disposal") {
+    reasons.push("sector must be Waste Handling and Disposal");
+  }
+  if (!input.activity.trim()) reasons.push("activity is required");
+  if (input.reducesOrganicWasteRecycling) {
+    reasons.push("project must not reduce organic-waste recycling");
+  }
+  if (input.managementDeliberatelyChangedToIncreaseMethane && !input.changeWasRequiredForTechnicalOrRegulatoryReasons) {
+    reasons.push("SWDS management must not be deliberately changed to increase methane generation unless required for technical or regulatory reasons");
+  }
+  return { eligible: reasons.length === 0, reasons };
 }
 
 /**
