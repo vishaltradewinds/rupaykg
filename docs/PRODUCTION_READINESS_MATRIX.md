@@ -22,7 +22,8 @@ A status must never be inferred from legacy documentation alone.
 | MRV measurements | GREEN | Measurement writes require authorized activity geography. |
 | Evidence | GREEN | Evidence requires activity linkage and content URI/hash; provenance is retained. |
 | Verification | GREEN | Verifier authorization and lifecycle controls are present. |
-| Carbon calculations | GREEN | Deterministic package calculates pending-verification value; methodology version is required. |
+| Carbon calculations | AMBER | Generic deterministic calculation is implemented and now evidence-bound with dataset/formula/calculation hashes; methodology-specific production eligibility still requires source lock, applicability mapping, numerical reconciliation and regression evidence. |
+| Methodology governance | AMBER | `methodology_versions` now carries explicit source, applicability, parameter, equation and reconciliation readiness fields; actual methodology records must be populated and independently verified. |
 | EPR/compliance | GREEN | Evidence/authorization controls are present in current value routes. |
 | ESG reporting | GREEN | Organization-scoped reporting path exists. |
 | Credential issuance | GREEN | High-risk DB permission boundary prevents unauthorized registry issuance. |
@@ -34,7 +35,6 @@ A status must never be inferred from legacy documentation alone.
 | AI/intelligence | GREEN | Advisory boundary; authoritative state is not delegated to AI. |
 | UI truthfulness | GREEN | UI consumes backend-authorized data and distinguishes authoritative state. |
 | Regulatory source catalog | AMBER | Current catalog is PostgreSQL-backed; real regulatory/reference data must be provisioned and maintained. |
-| Methodology-specific carbon adapters | AMBER | Current generic carbon calculation exists; each production methodology requires source-locked equation/tool mapping and independent reconciliation before official claims. |
 | External carbon-market submission | AMBER | Must remain manual/controlled until an official external interface is actually connected and tested. |
 | Physical instrumentation | AMBER | Hardware/site integration is an external acceptance gate, not simulated. |
 | External trust rails | NOT_VERIFIED | Legacy Hedera/VC capabilities are not assumed in the current repository without current implementation and live acceptance evidence. |
@@ -52,14 +52,15 @@ Before declaring the platform production-ready, execute the following against th
 5. Confirm a pending field device cannot submit authoritative envelopes.
 6. Confirm duplicate envelope replay is idempotent and cross-identity reuse is rejected.
 7. Execute the activity → measurement → evidence → verification lifecycle.
-8. Confirm value calculation cannot bypass evidence/verification requirements.
-9. Confirm unauthorized registry issuance/transfer/retirement fails at the database boundary.
-10. Confirm settlement cannot reach `SETTLED` without external confirmation and reconciliation.
-11. Confirm settlement confirmation/reconciliation evidence cannot be cleared or mutated.
-12. Confirm AI/intelligence operations cannot mutate authoritative lifecycle state.
-13. Confirm UI displays only backend-authorized organization/geography data.
-14. Confirm no demo/simulated record is represented as real production activity.
-15. Where a regulatory methodology or external provider is used, independently verify the exact source/version and preserve its provenance.
+8. Confirm carbon calculation rejects missing/mismatched evidence and records deterministic provenance hashes.
+9. Confirm a methodology cannot be marked `PRODUCTION_ELIGIBLE` without source/reconciliation evidence required by database controls.
+10. Confirm unauthorized registry issuance/transfer/retirement fails at the database boundary.
+11. Confirm settlement cannot reach `SETTLED` without external confirmation and reconciliation.
+12. Confirm settlement confirmation/reconciliation evidence cannot be cleared or mutated.
+13. Confirm AI/intelligence operations cannot mutate authoritative lifecycle state.
+14. Confirm UI displays only backend-authorized organization/geography data.
+15. Confirm no demo/simulated record is represented as real production activity.
+16. Where a regulatory methodology or external provider is used, independently verify the exact source/version and preserve its provenance.
 
 ## Carbon methodology discipline
 
@@ -70,6 +71,12 @@ Legacy AI Studio documents contain useful examples such as BM WA03.001 and BM WA
 - Missing required parameters or evidence must fail closed.
 - Deterministic intermediate values should be preserved so an auditor can reproduce the final result.
 - Official issuance must remain externally confirmed; internal `ISSUED` state must not impersonate government/registry issuance.
+
+The current methodology governance lifecycle is:
+
+`SOURCE_LOCKED → IMPLEMENTATION_MAPPED → NUMERICALLY_RECONCILED → REGRESSION_VERIFIED → PRODUCTION_ELIGIBLE`
+
+Database controls prevent a methodology from claiming `PRODUCTION_ELIGIBLE` without source provenance and reconciliation evidence. This is a readiness control, not a regulatory approval claim.
 
 ## Release gate
 
