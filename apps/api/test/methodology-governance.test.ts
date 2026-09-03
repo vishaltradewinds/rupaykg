@@ -23,8 +23,8 @@ test("methodology governance fails closed before production eligibility", async 
     );
 
     await assert.rejects(
-      pool.query("update methodology_versions set governance_status='NUMERICALLY_RECONCILED', source_reference='test', source_hash=$2, applicability_rules=$3, parameter_dictionary=$4, equation_mapping=$5, reconciliation_reference='recon-1', reconciled_at=now() where id=$1", [methodologyId, "a".repeat(64), { sector: "TEST" }, { value: "number" }, { equation: "TEST.V1" }]),
-      /requires numerical reconciliation|requires reconciliation evidence|violates check constraint/,
+      pool.query("update methodology_versions set governance_status='NUMERICALLY_RECONCILED', source_reference='test', source_hash=$2, applicability_rules=$3, parameter_dictionary=$4, equation_mapping=$5, reconciliation_reference='recon-1', reconciled_at=now() where id=$1", [methodologyId, "a".repeat(64), { sector: "TEST" }, { value: "number" }, {}]),
+      /requires applicability, parameter and equation mappings|violates check constraint/,
     );
 
     await pool.query("update methodology_versions set governance_status='REGRESSION_VERIFIED', source_reference='test', source_hash=$2, applicability_rules=$3, parameter_dictionary=$4, equation_mapping=$5, reconciliation_reference='recon-1', reconciled_at=now(), reconciliation_evidence=$6, regression_verified_at=now() where id=$1", [methodologyId, "a".repeat(64), { sector: "TEST" }, { value: "number" }, { equation: "TEST.V1" }, [{ reference: "fixture-1" }]]);
