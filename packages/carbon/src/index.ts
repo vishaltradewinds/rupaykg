@@ -25,6 +25,36 @@ export type CarbonResult = {
   trace: CarbonTraceStep[];
 };
 
+export type BmWa03001Input = {
+  fch4ProjectTch4: number;
+  fch4BaselineTch4: number;
+  gwpCh4Tco2ePerTch4: number;
+  projectEmissionsTco2e: number;
+  leakageTco2e: number;
+  oxidationFactor: number;
+};
+
+export type BmWa03001Result = {
+  methodologyCode: "BM WA03.001";
+  methodologyVersion: "1.0";
+  resultTco2e: number;
+  status: "CALCULATED_PENDING_VERIFICATION";
+  trace: CarbonTraceStep[];
+};
+
+export const BM_WA03001_SOURCE = {
+  reference: "https://beeindia.gov.in/sites/default/files/BM%20WA03.001.pdf",
+  publicationDate: "2025-03-27",
+  version: "1.0",
+  sector: "Waste Handling and Disposal",
+  equation: "ERy,calculated = (FCH4,PJ,y - FCH4,BL,y) × GWPCH4 × (1 - OX) - PEy - LEy",
+  equationId: "BM.WA03.001.EQ4.V1",
+} as const;
+
+function assertFiniteNonNegative(value: number, name: string): void {
+  if (!Number.isFinite(value) || value < 0) throw new Error(`${name} must be a finite non-negative number`);
+}
+
 export function canonicalize(value: unknown): string {
   if (value === null || typeof value !== "object") return JSON.stringify(value);
   if (Array.isArray(value)) return `[${value.map(canonicalize).join(",")}]`;
@@ -69,6 +99,34 @@ export function calculateEmissionReduction(input: CarbonInput): CarbonResult {
       { equationId: "CARBON.GROSS_REDUCTION.V1", inputs: { baselineTco2e: normalizedInputs.baselineTco2e, projectTco2e: normalizedInputs.projectTco2e }, result: gross },
       { equationId: "CARBON.NET_REDUCTION.V1", inputs: { grossReductionTco2e: gross, leakageTco2e: leakage }, result: netBeforeFloor },
       { equationId: "CARBON.NET_NON_NEGATIVE_FLOOR.V1", inputs: { netBeforeFloor }, result: net },
+    ],
+  };
+}
+
+/**
+ * Implements the actual annual BM WA03.001 Equation (4) once its dependent
+ * monitored quantities/tools have been independently established. It does not
+ * implement BM-T-011, BM-T-004, BM-T-003 or additionality; callers must supply
+ * their authoritative outputs and retain their evidence separately.
+ */
+export function calculateBmWa03001(input: BmWa03001Input): BmWa03001Result {
+  for (const [key, value] of Object.entries(input)) assertFiniteNonNegative(value, key);
+  if (input.oxidationFactor > 1) throw new Error("oxidationFactor must be between 0 and 1");
+  if (input.gwpCh4Tco2ePerTch4 === 0) throw new Error("gwpCh4Tco2ePerTch4 must be greater than zero");
+
+  const methaneDelta = input.fch4ProjectTch4 - input.fch4BaselineTch4;
+  const oxidationAdjusted = methaneDelta * input.gwpCh4Tco2ePerTch4 * (1 - input.oxidationFactor);
+  const result = oxidationAdjusted - input.projectEmissionsTco2e - input.leakageTco2e;
+
+  return {
+    methodologyCode: "BM WA03.001",
+    methodologyVersion: "1.0",
+    resultTco2e: result,
+    status: "CALCULATED_PENDING_VERIFICATION",
+    trace: [
+      { equationId: "BM.WA03.001.EQ4.METHANE_DELTA.V1", inputs: { fch4ProjectTch4: input.fch4ProjectTch4, fch4BaselineTch4: input.fch4BaselineTch4 }, result: methaneDelta },
+      { equationId: "BM.WA03.001.EQ4.OXIDATION_ADJUSTMENT.V1", inputs: { methaneDelta, gwpCh4Tco2ePerTch4: input.gwpCh4Tco2ePerTch4, oxidationFactor: input.oxidationFactor }, result: oxidationAdjusted },
+      { equationId: "BM.WA03.001.EQ4.PROJECT_AND_LEAKAGE_DEDUCTION.V1", inputs: { oxidationAdjusted, projectEmissionsTco2e: input.projectEmissionsTco2e, leakageTco2e: input.leakageTco2e }, result },
     ],
   };
 }
