@@ -39,6 +39,8 @@ The internal eligibility result is an internal assessment. It must never be repr
 
 For BM WA03.001, the official source states that the methodology covers capture and combustion of methane from landfills and includes applicability restrictions concerning recycling and deliberate changes intended to increase methane generation. These conditions must be represented as an explicit applicability assessment before production eligibility.
 
+The Carbon package now exposes `evaluateBmWa03001Applicability()`. It is a fail-closed software gate for the explicitly modeled restrictions. It intentionally does not claim to establish additionality, baseline methane potential, monitoring-system acceptance, instrument calibration, or regulatory approval; those remain controlled dependencies/evidence requirements.
+
 ## 3. Parameter dictionary
 
 Every calculation input should have:
@@ -92,7 +94,7 @@ For each production methodology, maintain at least one independently reviewable 
 
 A reference case proves numerical reproducibility only. It does not prove regulator acceptance or external certification.
 
-The current package contains a deterministic BM WA03.001 Equation 4 regression fixture. It is intentionally treated as numerical implementation coverage, not as production eligibility evidence.
+The current package contains a deterministic BM WA03.001 Equation 4 regression fixture and applicability-gate tests. These are intentionally treated as software implementation coverage, not as production eligibility evidence.
 
 ## 7. Evidence boundary
 
@@ -127,7 +129,7 @@ Use these statuses:
 
 A methodology should not be described as production-reconciled merely because CI passes.
 
-The current BM WA03.001 adapter has reached **IMPLEMENTATION_MAPPED for the core Equation 4 calculation**, with deterministic regression coverage. It remains below `PRODUCTION_ELIGIBLE` until the dependent tools, complete applicability/parameter mapping, independently captured source hash, monitored evidence chain and regression/reconciliation package are all established and verified.
+The current BM WA03.001 adapter has reached **IMPLEMENTATION_MAPPED for the core Equation 4 calculation**, with deterministic regression and applicability-gate coverage. It remains below `PRODUCTION_ELIGIBLE` until the dependent tools, complete parameter/evidence mapping, independently captured source hash, monitored evidence chain and independent reconciliation/regression package are all established and verified.
 
 ## 11. Legacy BM WA03 references
 
