@@ -92,14 +92,13 @@ export async function canVerifyEvidence(client: PoolClient, identityId: string, 
         and om.status = 'VERIFIED'
        join roles r on r.id = om.role_id
        where e.id = $1
-         and (
-           lower(r.name) in ('verifier','auditor','validator','verification_officer')
-           or r.permissions @> '["VERIFY_EVIDENCE"]'::jsonb
-           or r.permissions @> '["verification:approve"]'::jsonb
-           or r.permissions @> '["verification.approve"]'::jsonb
+         and exists (
+           select 1
+             from jsonb_array_elements_text(r.permissions) permission
+            where permission = any($3::text[])
          )
      ) as ok`,
-    [evidenceId, identityId],
+    [evidenceId, identityId, HIGH_RISK_PERMISSIONS.VERIFY_EVIDENCE],
   );
   return result.rows[0]?.ok === true;
 }
