@@ -39,7 +39,8 @@ test("production lifecycle integration gate", { skip: !url }, async () => {
     await reject(c, () => c.query("update settlements set status='SETTLED' where id=$1", [settlement]), /external authority confirmation/);
     await c.query("update settlements set status='SETTLED',external_confirmed_at=now(),reconciliation_reference='recon-1',settled_at=now() where id=$1", [settlement]);
     await reject(c, () => c.query("update settlements set external_reference='bank-2' where id=$1", [settlement]), /external settlement reference cannot be changed/);
-    await reject(c, () => c.query("update settlements set external_confirmed_at=null where id=$1", [settlement]), /cannot be cleared/);
+    await reject(c, () => c.query("update settlements set external_confirmed_at=null where id=$1", [settlement]), /cannot be changed|cannot be cleared/);
+    await reject(c, () => c.query("update settlements set reconciliation_reference=null where id=$1", [settlement]), /cannot be changed|cannot be cleared/);
     await reject(c, () => c.query("update registry_events set event_type='TAMPERED' where credential_id=$1", [credential]), /append-only/);
 
     const state = (await c.query("select a.status activity,e.status evidence,v.decision verification,c.status credential,s.status settlement,s.external_reference,s.external_confirmed_at,s.reconciliation_reference from activities a join evidence e on e.activity_id=a.id join verifications v on v.id=$1 join credentials c on c.id=$2 join settlements s on s.id=$3 where a.id=$4 and e.id=$5", [verification, credential, settlement, activity, evidence])).rows[0];
