@@ -64,8 +64,36 @@ export type BmWa03001ApplicabilityResult = {
   reasons: string[];
 };
 
+export type BmWa03001ParameterDefinition = {
+  code: keyof BmWa03001Input;
+  unit: string;
+  required: true;
+  sourceClass: "MONITORED" | "CALCULATED" | "METHODOLOGY_CONSTANT";
+  equationIds: readonly string[];
+};
+
+/** Controlled mapping for the implemented Equation 4 adapter. */
+export const BM_WA03001_PARAMETER_DICTIONARY: readonly BmWa03001ParameterDefinition[] = [
+  { code: "fch4ProjectTch4", unit: "tCH4", required: true, sourceClass: "MONITORED", equationIds: ["BM.WA03.001.EQ4.V1"] },
+  { code: "fch4BaselineTch4", unit: "tCH4", required: true, sourceClass: "CALCULATED", equationIds: ["BM.WA03.001.EQ4.V1"] },
+  { code: "gwpCh4Tco2ePerTch4", unit: "tCO2e/tCH4", required: true, sourceClass: "METHODOLOGY_CONSTANT", equationIds: ["BM.WA03.001.EQ4.V1"] },
+  { code: "projectEmissionsTco2e", unit: "tCO2e", required: true, sourceClass: "MONITORED", equationIds: ["BM.WA03.001.EQ4.V1"] },
+  { code: "leakageTco2e", unit: "tCO2e", required: true, sourceClass: "CALCULATED", equationIds: ["BM.WA03.001.EQ4.V1"] },
+  { code: "oxidationFactor", unit: "fraction", required: true, sourceClass: "METHODOLOGY_CONSTANT", equationIds: ["BM.WA03.001.EQ4.V1"] },
+] as const;
+
 function assertFiniteNonNegative(value: number, name: string): void {
   if (!Number.isFinite(value) || value < 0) throw new Error(`${name} must be a finite non-negative number`);
+}
+
+export function validateBmWa03001Input(input: BmWa03001Input): void {
+  for (const definition of BM_WA03001_PARAMETER_DICTIONARY) {
+    const value = input[definition.code];
+    if (typeof value !== "number" || !Number.isFinite(value)) throw new Error(`${definition.code} is required and must be finite`);
+    assertFiniteNonNegative(value, definition.code);
+  }
+  if (input.oxidationFactor > 1) throw new Error("oxidationFactor must be between 0 and 1");
+  if (input.gwpCh4Tco2ePerTch4 === 0) throw new Error("gwpCh4Tco2ePerTch4 must be greater than zero");
 }
 
 export function canonicalize(value: unknown): string {
@@ -116,20 +144,12 @@ export function calculateEmissionReduction(input: CarbonInput): CarbonResult {
   };
 }
 
-/**
- * Evaluate the explicit BM WA03.001 applicability restrictions before calculation.
- * This is a fail-closed gate; it does not establish additionality, baseline
- * methane potential, monitoring-tool outputs, or production eligibility.
- */
+/** Evaluate explicit BM WA03.001 applicability restrictions before calculation. */
 export function evaluateBmWa03001Applicability(input: BmWa03001ApplicabilityInput): BmWa03001ApplicabilityResult {
   const reasons: string[] = [];
-  if (input.sector.trim().toLowerCase() !== "waste handling and disposal") {
-    reasons.push("sector must be Waste Handling and Disposal");
-  }
+  if (input.sector.trim().toLowerCase() !== "waste handling and disposal") reasons.push("sector must be Waste Handling and Disposal");
   if (!input.activity.trim()) reasons.push("activity is required");
-  if (input.reducesOrganicWasteRecycling) {
-    reasons.push("project must not reduce organic-waste recycling");
-  }
+  if (input.reducesOrganicWasteRecycling) reasons.push("project must not reduce organic-waste recycling");
   if (input.managementDeliberatelyChangedToIncreaseMethane && !input.changeWasRequiredForTechnicalOrRegulatoryReasons) {
     reasons.push("SWDS management must not be deliberately changed to increase methane generation unless required for technical or regulatory reasons");
   }
@@ -137,20 +157,15 @@ export function evaluateBmWa03001Applicability(input: BmWa03001ApplicabilityInpu
 }
 
 /**
- * Implements the actual annual BM WA03.001 Equation (4) once its dependent
- * monitored quantities/tools have been independently established. It does not
- * implement BM-T-011, BM-T-004, BM-T-003 or additionality; callers must supply
- * their authoritative outputs and retain their evidence separately.
+ * Implements annual BM WA03.001 Equation (4) once dependent monitored
+ * quantities/tools have been independently established. It does not implement
+ * BM-T-011, BM-T-004, BM-T-003 or additionality.
  */
 export function calculateBmWa03001(input: BmWa03001Input): BmWa03001Result {
-  for (const [key, value] of Object.entries(input)) assertFiniteNonNegative(value, key);
-  if (input.oxidationFactor > 1) throw new Error("oxidationFactor must be between 0 and 1");
-  if (input.gwpCh4Tco2ePerTch4 === 0) throw new Error("gwpCh4Tco2ePerTch4 must be greater than zero");
-
+  validateBmWa03001Input(input);
   const methaneDelta = input.fch4ProjectTch4 - input.fch4BaselineTch4;
   const oxidationAdjusted = methaneDelta * input.gwpCh4Tco2ePerTch4 * (1 - input.oxidationFactor);
   const result = oxidationAdjusted - input.projectEmissionsTco2e - input.leakageTco2e;
-
   return {
     methodologyCode: "BM WA03.001",
     methodologyVersion: "1.0",
