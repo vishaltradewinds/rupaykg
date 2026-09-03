@@ -40,13 +40,7 @@ export function canActForOrganization(auth: AuthContext, organizationId: string)
   return auth.memberships.some((m) => m.organization_id === organizationId);
 }
 
-/**
- * High-risk value-moving actions require an explicit role permission.
- * Membership alone is intentionally insufficient. The aliases below keep
- * compatibility with the permission vocabulary already accepted by the
- * verification path while the canonical production permissions remain the
- * values documented in PRODUCTION_PROVISIONING.md.
- */
+/** Production high-risk permissions. Membership alone is intentionally insufficient. */
 export const HIGH_RISK_PERMISSIONS = {
   VERIFY_EVIDENCE: ["VERIFY_EVIDENCE", "verification:approve", "verification.approve"],
   ISSUE_CREDENTIAL: ["ISSUE_CREDENTIAL", "registry:issue", "registry.issue"],
@@ -58,26 +52,7 @@ export const HIGH_RISK_PERMISSIONS = {
 
 export type HighRiskAction = keyof typeof HIGH_RISK_PERMISSIONS;
 
-export function canPerformHighRiskAction(
-  auth: AuthContext,
-  organizationId: string,
-  action: HighRiskAction,
-): boolean {
-  const permissionAliases = HIGH_RISK_PERMISSIONS[action];
-  return auth.memberships.some((membership) => {
-    if (membership.organization_id !== organizationId || membership.status !== "VERIFIED") return false;
-    return false;
-  }) && auth.memberships.some((membership) => {
-    if (membership.organization_id !== organizationId || membership.status !== "VERIFIED") return false;
-    return permissionAliases.length > 0;
-  });
-}
-
-/**
- * Resolve role permissions from PostgreSQL for an authenticated identity.
- * This is the authoritative check because AuthContext intentionally carries
- * only membership metadata, not mutable role permission state.
- */
+/** Role permissions are read from PostgreSQL so mutable permission state is never trusted from the token. */
 export async function canPerformHighRiskActionInDatabase(
   client: Pool | PoolClient,
   auth: AuthContext,
