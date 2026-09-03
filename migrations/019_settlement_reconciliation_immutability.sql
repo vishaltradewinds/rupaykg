@@ -22,7 +22,7 @@ $$;
 drop trigger if exists settlement_confirmation_mutation_guard on settlements;
 create trigger settlement_confirmation_mutation_guard
 before update on settlements
-for each row execute function prevent_settlement_confirmation_mutation;
+for each row execute function prevent_settlement_confirmation_mutation();
 
 alter table settlements
   add constraint settlement_reconciliation_requires_confirmation
