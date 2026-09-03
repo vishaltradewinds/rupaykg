@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import type { Pool, PoolClient } from "pg";
 import { calculateEmissionReduction, sha256Canonical } from "@rupaykg/carbon";
@@ -20,25 +19,29 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
   app.post("/api/v1/carbon/calculations", async (request, reply) => {
     const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
     const body = bodyOf(request as never);
-    const activityId = str(body, "activityId"); const methodologyCode = str(body, "methodologyCode"); const methodologyVersion = str(body, "methodologyVersion");
+    const activityId = str(body, "activityId"); const methodologyCode = str(body, "methodologyCode"); const methodologyVersion = str(body, "methodologyVersion"); const evidenceId = str(body, "evidenceId");
     const baselineTco2e = nonNegative(body, "baselineTco2e"); const projectTco2e = nonNegative(body, "projectTco2e");
     const leakageTco2e = nonNegative(body, "leakageTco2e") ?? 0; const uncertaintyTco2e = nonNegative(body, "uncertaintyTco2e") ?? 0;
-    if (!activityId || !methodologyCode || !methodologyVersion || baselineTco2e === null || projectTco2e === null) return reply.code(400).send({ error: "activityId, methodologyCode, methodologyVersion, baselineTco2e and projectTco2e are required" });
+    if (!activityId || !methodologyCode || !methodologyVersion || !evidenceId || baselineTco2e === null || projectTco2e === null) return reply.code(400).send({ error: "activityId, methodologyCode, methodologyVersion, evidenceId, baselineTco2e and projectTco2e are required", code: "CARBON_EVIDENCE_REQUIRED" });
     try {
       const access = await activityAccess(pool, activityId, auth.identityId); if (!access) return reply.code(403).send({ error: "Activity access denied", code: "ACTIVITY_FORBIDDEN" });
       const geography = await assertActivityGeographyScope(pool, access.geography_id, auth.identityId);
       if (!geography.ok) return reply.code(geography.code === "ACTIVITY_GEOGRAPHY_REQUIRED" ? 409 : 403).send({ error: geography.code === "ACTIVITY_GEOGRAPHY_REQUIRED" ? "Activity must have an authorized geography before value calculation" : "Activity geography is outside organization authorization scope", code: geography.code });
-      const method = await pool.query<{ id: string; rules: unknown }>("select id, rules from methodology_versions where methodology_code = $1 and version = $2", [methodologyCode, methodologyVersion]);
+      const evidence = await pool.query<{ id: string; activity_id: string | null; content_hash: string | null; content_uri: string | null; status: string }>("select id, activity_id, content_hash, content_uri, status from evidence where id = $1", [evidenceId]);
+      const evidenceRow = evidence.rows[0];
+      if (!evidenceRow || evidenceRow.activity_id !== activityId) return reply.code(409).send({ error: "Evidence must exist and belong to the activity", code: "EVIDENCE_ACTIVITY_MISMATCH" });
+      if (!evidenceRow.content_hash && !evidenceRow.content_uri) return reply.code(409).send({ error: "Evidence must have a content hash or authoritative content URI", code: "EVIDENCE_PROVENANCE_REQUIRED" });
+      const method = await pool.query<{ id: string; rules: unknown; governance_status: string }>("select id, rules, governance_status from methodology_versions where methodology_code = $1 and version = $2", [methodologyCode, methodologyVersion]);
       if (!method.rows[0]) return reply.code(409).send({ error: "Methodology version is not registered", code: "METHODOLOGY_NOT_REGISTERED" });
       const result = calculateEmissionReduction({ activityId, methodologyCode, methodologyVersion, baselineTco2e, projectTco2e, leakageTco2e, uncertaintyTco2e });
-      const dataset = { activityId, normalizedInputs: result.normalizedInputs };
+      const dataset = { activityId, evidence: { id: evidenceId, contentHash: evidenceRow.content_hash, contentUri: evidenceRow.content_uri, status: evidenceRow.status }, normalizedInputs: result.normalizedInputs };
       const datasetHash = sha256Canonical(dataset);
       const formulaHash = sha256Canonical(method.rows[0].rules);
-      const calculationTrace = result.trace.map(step => ({ ...step, evidenceHash: datasetHash }));
-      const calculationHash = sha256Canonical({ provenanceVersion: "1", methodologyCode, methodologyVersion, datasetHash, formulaHash, calculationTrace, result: { grossReductionTco2e: result.grossReductionTco2e, netReductionTco2e: result.netReductionTco2e, uncertaintyTco2e: result.uncertaintyTco2e } });
-      const inputs = result.normalizedInputs;
+      const calculationTrace = result.trace.map(step => ({ ...step, evidenceId, evidenceHash: datasetHash }));
+      const calculationHash = sha256Canonical({ provenanceVersion: "1", methodologyCode, methodologyVersion, methodologyGovernanceStatus: method.rows[0].governance_status, datasetHash, formulaHash, calculationTrace, result: { grossReductionTco2e: result.grossReductionTco2e, netReductionTco2e: result.netReductionTco2e, uncertaintyTco2e: result.uncertaintyTco2e } });
+      const inputs = { ...result.normalizedInputs, evidenceId };
       const inserted = await pool.query("insert into carbon_calculations (activity_id, methodology_version_id, inputs, result, unit, status, calculated_at, baseline_result, uncertainty, dataset_hash, formula_hash, calculation_trace, provenance_version, calculation_hash) values ($1,$2,$3,$4,$5,$6,now(),$7,$8,$9,$10,$11,$12,$13) returning *", [activityId, method.rows[0].id, inputs, result.netReductionTco2e, "tCO2e", result.status, baselineTco2e, uncertaintyTco2e, datasetHash, formulaHash, JSON.stringify(calculationTrace), "1", calculationHash]);
-      return reply.code(201).send({ source: "postgresql", syntheticData: false, calculation: inserted.rows[0], calculationResult: { ...result, datasetHash, formulaHash, calculationTrace, calculationHash } });
+      return reply.code(201).send({ source: "postgresql", syntheticData: false, calculation: inserted.rows[0], calculationResult: { ...result, evidenceId, datasetHash, formulaHash, calculationTrace, calculationHash } });
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Carbon calculation unavailable", syntheticData: false }); }
   });
 
