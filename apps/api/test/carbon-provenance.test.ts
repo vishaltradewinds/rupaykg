@@ -24,8 +24,8 @@ test("carbon provenance is immutable in PostgreSQL", async (t) => {
     await pool.query("begin");
     await pool.query("insert into organizations (id,name,organization_type) values ($1,$2,$3)", [organizationId, "Carbon Provenance Test Org", "TEST"]);
     await pool.query("insert into activities (id,organization_id,activity_type) values ($1,$2,$3)", [activityId, organizationId, "CARBON_TEST"]);
-    await pool.query("insert into methodology_versions (id,methodology_code,version,rules) values ($1,$2,$3,$4)", [methodologyId, "TEST-METHOD", "1", { equation: "baseline-project" }]);
-    await pool.query("insert into carbon_calculations (id,activity_id,methodology_version_id,inputs,result,unit,status,calculated_at,dataset_hash,formula_hash,calculation_trace,provenance_version,calculation_hash) values ($1,$2,$3,$4,$5,$6,$7,now(),$8,$9,$10,$11,$12)", [calculationId, activityId, methodologyId, { baselineTco2e: 10, projectTco2e: 4 }, 6, "tCO2e", "CALCULATED_PENDING_VERIFICATION", datasetHash, formulaHash, [{ equationId: "TEST.V1", result: 6, evidenceHash: datasetHash }], "1", calculationHash]);
+    await pool.query("insert into methodology_versions (id,methodology_code,version,rules) values ($1,$2,$3,$4)", [methodologyId, "TEST-METHOD", "1", JSON.stringify({ equation: "baseline-project" })]);
+    await pool.query("insert into carbon_calculations (id,activity_id,methodology_version_id,inputs,result,unit,status,calculated_at,dataset_hash,formula_hash,calculation_trace,provenance_version,calculation_hash) values ($1,$2,$3,$4,$5,$6,$7,now(),$8,$9,$10,$11,$12)", [calculationId, activityId, methodologyId, JSON.stringify({ baselineTco2e: 10, projectTco2e: 4 }), 6, "tCO2e", "CALCULATED_PENDING_VERIFICATION", datasetHash, formulaHash, JSON.stringify([{ equationId: "TEST.V1", result: 6, evidenceHash: datasetHash }]), "1", calculationHash]);
     await pool.query("commit");
 
     await assert.rejects(
