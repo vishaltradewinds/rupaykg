@@ -35,27 +35,41 @@ before(async () => {
       "insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED')",
       [verifier, owner, verifierRole],
     );
-    const activity = (await c.query<{ id: string }>(
+
+    const retiredActivity = (await c.query<{ id: string }>(
       "insert into activities(organization_id,actor_identity_id,activity_type,status,completed_at) values($1,$2,'COLLECTION','COMPLETED',now()) returning id",
       [owner, actor],
     )).rows[0]!.id;
-    const evidence = (await c.query<{ id: string }>(
+    const retiredEvidence = (await c.query<{ id: string }>(
       "insert into evidence(activity_id,evidence_type,status,captured_at,content_hash) values($1,'SETTLEMENT_GUARD','VERIFIED',now(),$2) returning id",
-      [activity, `settlement-guard-${suffix}`],
+      [retiredActivity, `settlement-guard-retired-${suffix}`],
     )).rows[0]!.id;
-    const verification = (await c.query<{ id: string }>(
+    const retiredVerification = (await c.query<{ id: string }>(
       "insert into verifications(evidence_id,activity_id,verifier_identity_id,decision,scope,rationale) values($1,$2,$3,'APPROVED','settlement-guard','independent database guard test') returning id",
-      [evidence, activity, verifier],
+      [retiredEvidence, retiredActivity, verifier],
     )).rows[0]!.id;
 
     retiredCredentialId = (await c.query<{ id: string }>(
       "insert into credentials(activity_id,issuer_organization_id,trust_root_id,status,verification_id,quantity,unit,issued_at) values($1,$2,$3,'RETIRED',$4,1,'kg',now()) returning id",
-      [activity, owner, `settlement-guard-root-${suffix}`, verification],
+      [retiredActivity, owner, `settlement-guard-retired-root-${suffix}`, retiredVerification],
+    )).rows[0]!.id;
+
+    const openActivity = (await c.query<{ id: string }>(
+      "insert into activities(organization_id,actor_identity_id,activity_type,status,completed_at) values($1,$2,'COLLECTION','COMPLETED',now()) returning id",
+      [owner, actor],
+    )).rows[0]!.id;
+    const openEvidence = (await c.query<{ id: string }>(
+      "insert into evidence(activity_id,evidence_type,status,captured_at,content_hash) values($1,'SETTLEMENT_GUARD','VERIFIED',now(),$2) returning id",
+      [openActivity, `settlement-guard-open-${suffix}`],
+    )).rows[0]!.id;
+    const openVerification = (await c.query<{ id: string }>(
+      "insert into verifications(evidence_id,activity_id,verifier_identity_id,decision,scope,rationale) values($1,$2,$3,'APPROVED','settlement-guard','independent database guard test') returning id",
+      [openEvidence, openActivity, verifier],
     )).rows[0]!.id;
 
     openSettlementCredentialId = (await c.query<{ id: string }>(
       "insert into credentials(activity_id,issuer_organization_id,trust_root_id,status,verification_id,quantity,unit,issued_at) values($1,$2,$3,'ACTIVE',$4,2,'kg',now()) returning id",
-      [activity, owner, `settlement-guard-open-${suffix}`, verification],
+      [openActivity, owner, `settlement-guard-open-root-${suffix}`, openVerification],
     )).rows[0]!.id;
 
     await c.query("commit");
