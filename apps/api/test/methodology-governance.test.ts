@@ -17,7 +17,7 @@ test("methodology governance fails closed and becomes immutable after progressio
   const methodologyId = randomUUID();
 
   try {
-    await pool.query("insert into methodology_versions (id,methodology_code,version,rules) values ($1,$2,$3,$4)", [methodologyId, "TEST-GOVERNANCE", "1", { equation: "test" }]);
+    await pool.query("insert into methodology_versions (id,methodology_code,version,rules) values ($1,$2,$3,$4)", [methodologyId, "TEST-GOVERNANCE", "1", JSON.stringify({ equation: "test" })]);
 
     await assert.rejects(
       pool.query("update methodology_versions set governance_status='IMPLEMENTATION_MAPPED' where id=$1", [methodologyId]),
@@ -25,11 +25,11 @@ test("methodology governance fails closed and becomes immutable after progressio
     );
 
     await assert.rejects(
-      pool.query("update methodology_versions set governance_status='NUMERICALLY_RECONCILED', source_reference='test', source_hash=$2, applicability_rules=$3, parameter_dictionary=$4, equation_mapping=$5, reconciliation_reference='recon-1', reconciled_at=now() where id=$1", [methodologyId, "a".repeat(64), { sector: "TEST" }, { value: "number" }, {}]),
+      pool.query("update methodology_versions set governance_status='NUMERICALLY_RECONCILED', source_reference='test', source_hash=$2, applicability_rules=$3, parameter_dictionary=$4, equation_mapping=$5, reconciliation_reference='recon-1', reconciled_at=now() where id=$1", [methodologyId, "a".repeat(64), JSON.stringify({ sector: "TEST" }), JSON.stringify({ value: "number" }), JSON.stringify({})]),
       /requires applicability, parameter and equation mappings|violates check constraint/,
     );
 
-    await pool.query("update methodology_versions set governance_status='IMPLEMENTATION_MAPPED', source_reference='test', source_hash=$2, applicability_rules=$3, parameter_dictionary=$4, equation_mapping=$5 where id=$1", [methodologyId, "a".repeat(64), { sector: "TEST" }, { value: "number" }, { equation: "TEST.V1" }]);
+    await pool.query("update methodology_versions set governance_status='IMPLEMENTATION_MAPPED', source_reference='test', source_hash=$2, applicability_rules=$3, parameter_dictionary=$4, equation_mapping=$5 where id=$1", [methodologyId, "a".repeat(64), JSON.stringify({ sector: "TEST" }), JSON.stringify({ value: "number" }), JSON.stringify({ equation: "TEST.V1" })]);
 
     await assert.rejects(
       pool.query("update methodology_versions set source_hash=$2 where id=$1", [methodologyId, "b".repeat(64)]),
@@ -41,7 +41,7 @@ test("methodology governance fails closed and becomes immutable after progressio
       /methodology governance status cannot regress/,
     );
 
-    await pool.query("update methodology_versions set governance_status='NUMERICALLY_RECONCILED', reconciliation_reference='recon-1', reconciled_at=now(), reconciliation_evidence=$2 where id=$1", [methodologyId, [{ reference: "fixture-1" }]]);
+    await pool.query("update methodology_versions set governance_status='NUMERICALLY_RECONCILED', reconciliation_reference='recon-1', reconciled_at=now(), reconciliation_evidence=$2 where id=$1", [methodologyId, JSON.stringify([{ reference: "fixture-1" }])]);
 
     await assert.rejects(
       pool.query("update methodology_versions set reconciliation_reference='changed' where id=$1", [methodologyId]),
@@ -57,12 +57,12 @@ test("methodology governance fails closed and becomes immutable after progressio
 
     await assert.rejects(
       pool.query("update methodology_versions set governance_status='PRODUCTION_ELIGIBLE' where id=$1", [methodologyId]),
-      /requires independent numerical reconciliation evidence|requires independent regression evidence|requires reconciliation evidence/, 
+      /requires independent numerical reconciliation evidence|requires independent regression evidence|requires reconciliation evidence/,
     );
 
     await pool.query(
       "insert into methodology_governance_evidence (methodology_version_id,evidence_kind,reference,evidence_hash,independent_party,evidence) values ($1,'NUMERICAL_RECONCILIATION','fixture-reconciliation',$2,'independent-test-party',$3)",
-      [methodologyId, evidenceHash("c"), { expected: 22783, unit: "tCO2e", fixture: "BM.WA03.001.EQ4.V1" }],
+      [methodologyId, evidenceHash("c"), JSON.stringify({ expected: 22783, unit: "tCO2e", fixture: "BM.WA03.001.EQ4.V1" })],
     );
 
     await assert.rejects(
@@ -72,7 +72,7 @@ test("methodology governance fails closed and becomes immutable after progressio
 
     await pool.query(
       "insert into methodology_governance_evidence (methodology_version_id,evidence_kind,reference,evidence_hash,independent_party,evidence) values ($1,'REGRESSION_TEST','fixture-regression',$2,'independent-test-party',$3)",
-      [methodologyId, evidenceHash("d"), { test: "methodology-governance", status: "PASS" }],
+      [methodologyId, evidenceHash("d"), JSON.stringify({ test: "methodology-governance", status: "PASS" })],
     );
 
     await pool.query("update methodology_versions set governance_status='PRODUCTION_ELIGIBLE' where id=$1", [methodologyId]);
