@@ -120,6 +120,12 @@ describe("registry and settlement runtime acceptance", () => {
     assert.equal(confirmedBody.settlement.reconciliation_reference, `recon-${suffix}`);
     const immutable = await pool.query("update settlements set external_confirmed_at=null where id=$1", [settlementId]).then(() => null).catch(error => error);
     assert.ok(immutable instanceof Error);
+    const reauthorize = await request(`/api/v1/settlements/${settlementId}/authorize`, { method: "POST", body: JSON.stringify({ authorizationReference: `auth-repeat-${suffix}` }) }, actorToken);
+    assert.equal(reauthorize.status, 409);
+    const resettle = await request(`/api/v1/settlements/${settlementId}/settle`, { method: "POST", body: JSON.stringify({ externalReference: `payment-repeat-${suffix}` }) }, actorToken);
+    assert.equal(resettle.status, 409);
+    const reconfirm = await request(`/api/v1/settlements/${settlementId}/confirm`, { method: "POST", body: JSON.stringify({ confirmationReference: `bank-confirm-repeat-${suffix}`, reconciliationReference: `recon-repeat-${suffix}` }) }, actorToken);
+    assert.equal(reconfirm.status, 409);
   });
 
   it("requires current-owner transfer permission and permits governed retirement", async () => {
@@ -130,6 +136,9 @@ describe("registry and settlement runtime acceptance", () => {
     const transferred = await request(`/api/v1/credentials/${credentialId}/transfer`, { method: "POST", body: JSON.stringify({ toOwnerId: destinationOrgId }) }, actorToken);
     assert.equal(transferred.status, 200);
     assert.equal((await body(transferred)).registryEvent.event_type, "TRANSFERRED");
+    const staleOwnerTransfer = await request(`/api/v1/credentials/${credentialId}/transfer`, { method: "POST", body: JSON.stringify({ toOwnerId: ownerOrgId }) }, actorToken);
+    assert.equal(staleOwnerTransfer.status, 403);
+    assert.equal((await body(staleOwnerTransfer)).code, "ORG_FORBIDDEN");
     const destinationRole = (await pool.query<{ id: string }>("insert into roles(organization_id,name,permissions) values($1,$2,$3::jsonb) returning id", [destinationOrgId, `RETIRE-${suffix}`, JSON.stringify(["RETIRE_CREDENTIAL"])] )).rows[0]!.id;
     await pool.query("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED')", [actorId, destinationOrgId, destinationRole]);
     const retired = await request(`/api/v1/credentials/${credentialId}/retire`, { method: "POST", body: "{}" }, actorToken);
