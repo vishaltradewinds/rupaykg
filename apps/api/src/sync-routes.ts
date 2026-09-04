@@ -74,46 +74,23 @@ async function applyOperation(client: PoolClient, identityId: string, payload: O
     const result = await client.query<{ id: string }>(`insert into activities (organization_id, actor_identity_id, geography_id, activity_type, status, occurred_at, metadata) values ($1,$2,$3,$4,'DRAFT',$5,$6) returning id`, [organizationId, identityId, geographyId, activityType, occurredAt, payload.metadata ?? {}]);
     return { entityType: "activity", entityId: result.rows[0]!.id };
   }
-
   if (operationType === "MEASUREMENT_CREATE") {
-    const activityId = stringValue(payload, "activityId");
-    const value = positiveNumber(payload, "value");
-    const unit = stringValue(payload, "unit");
-    const method = stringValue(payload, "method");
-    const source = stringValue(payload, "source");
-    const measuredAt = dateValue(payload, "measuredAt");
+    const activityId = stringValue(payload, "activityId"); const value = positiveNumber(payload, "value"); const unit = stringValue(payload, "unit"); const method = stringValue(payload, "method"); const source = stringValue(payload, "source"); const measuredAt = dateValue(payload, "measuredAt");
     if (!activityId || !isUuid(activityId) || value === null || !unit || !method || !source || !measuredAt) throw Object.assign(new Error("MEASUREMENT_CREATE requires activityId, positive value, unit, method, source and valid measuredAt"), { code: "INVALID_OPERATION" });
     if (!await activityGeographyAccess(client, identityId, activityId)) throw Object.assign(new Error("Activity is outside organization authorization scope or has no authorized geography"), { code: "OPERATION_FORBIDDEN" });
     const result = await client.query<{ id: string }>(`insert into measurements (activity_id, value, unit, method, source, measured_at, metadata) values ($1,$2,$3,$4,$5,$6,$7) returning id`, [activityId, value, unit, method, source, measuredAt, payload.metadata ?? {}]);
     return { entityType: "measurement", entityId: result.rows[0]!.id };
   }
-
   if (operationType === "EVIDENCE_CREATE") {
-    const activityId = stringValue(payload, "activityId");
-    const evidenceType = stringValue(payload, "evidenceType");
-    const capturedAt = dateValue(payload, "capturedAt");
-    const contentUri = stringValue(payload, "contentUri");
-    const contentHash = stringValue(payload, "contentHash");
-    const measurementId = payload.measurementId == null ? null : stringValue(payload, "measurementId");
+    const activityId = stringValue(payload, "activityId"); const evidenceType = stringValue(payload, "evidenceType"); const capturedAt = dateValue(payload, "capturedAt"); const contentUri = stringValue(payload, "contentUri"); const contentHash = stringValue(payload, "contentHash"); const measurementId = payload.measurementId == null ? null : stringValue(payload, "measurementId");
     if (!activityId || !isUuid(activityId) || !evidenceType || !capturedAt || (!contentUri && !contentHash) || (measurementId && !isUuid(measurementId))) throw Object.assign(new Error("EVIDENCE_CREATE requires activityId, evidenceType, valid capturedAt and contentUri or contentHash"), { code: "INVALID_OPERATION" });
     if (!await activityGeographyAccess(client, identityId, activityId)) throw Object.assign(new Error("Activity is outside organization authorization scope or has no authorized geography"), { code: "OPERATION_FORBIDDEN" });
-    if (measurementId) {
-      const measurement = await client.query<{ ok: boolean }>(`select exists (select 1 from measurements where id = $1 and activity_id = $2) as ok`, [measurementId, activityId]);
-      if (!measurement.rows[0]?.ok) throw Object.assign(new Error("Measurement does not belong to activity"), { code: "INVALID_OPERATION" });
-    }
+    if (measurementId) { const measurement = await client.query<{ ok: boolean }>(`select exists (select 1 from measurements where id = $1 and activity_id = $2) as ok`, [measurementId, activityId]); if (!measurement.rows[0]?.ok) throw Object.assign(new Error("Measurement does not belong to activity"), { code: "INVALID_OPERATION" }); }
     const result = await client.query<{ id: string }>(`insert into evidence (activity_id, measurement_id, evidence_type, captured_at, content_uri, content_hash, metadata, captured_by_identity_id) values ($1,$2,$3,$4,$5,$6,$7,$8) returning id`, [activityId, measurementId, evidenceType, capturedAt, contentUri, contentHash, payload.metadata ?? {}, identityId]);
     return { entityType: "evidence", entityId: result.rows[0]!.id };
   }
-
   if (operationType === "RESOURCE_FLOW_CREATE") {
-    const organizationId = stringValue(payload, "organizationId");
-    const originType = stringValue(payload, "originType");
-    const resourceForm = stringValue(payload, "resourceForm");
-    const materialCode = stringValue(payload, "materialCode");
-    const quantity = positiveNumber(payload, "quantity");
-    const unit = stringValue(payload, "unit");
-    const sourceGeographyId = payload.sourceGeographyId == null ? null : stringValue(payload, "sourceGeographyId");
-    const destinationGeographyId = payload.destinationGeographyId == null ? null : stringValue(payload, "destinationGeographyId");
+    const organizationId = stringValue(payload, "organizationId"); const originType = stringValue(payload, "originType"); const resourceForm = stringValue(payload, "resourceForm"); const materialCode = stringValue(payload, "materialCode"); const quantity = positiveNumber(payload, "quantity"); const unit = stringValue(payload, "unit"); const sourceGeographyId = payload.sourceGeographyId == null ? null : stringValue(payload, "sourceGeographyId"); const destinationGeographyId = payload.destinationGeographyId == null ? null : stringValue(payload, "destinationGeographyId");
     if (!organizationId || !originType || !resourceForm || !materialCode || quantity === null || !unit || (sourceGeographyId && !isUuid(sourceGeographyId)) || (destinationGeographyId && !isUuid(destinationGeographyId))) throw Object.assign(new Error("RESOURCE_FLOW_CREATE requires organizationId, originType, resourceForm, materialCode, positive quantity and unit"), { code: "INVALID_OPERATION" });
     if (!await verifiedOrganizationAccess(client, identityId, organizationId)) throw Object.assign(new Error("No verified membership for resource-flow organization"), { code: "OPERATION_FORBIDDEN" });
     if (sourceGeographyId && !await authorizedGeography(client, identityId, sourceGeographyId, organizationId)) throw Object.assign(new Error("Source geography is outside organization authorization scope"), { code: "OPERATION_FORBIDDEN" });
@@ -121,174 +98,47 @@ async function applyOperation(client: PoolClient, identityId: string, payload: O
     const result = await client.query<{ id: string }>(`insert into resource_flows (organization_id, origin_type, resource_form, material_code, declared_quantity, unit, source_geography_id, destination_geography_id) values ($1,$2,$3,$4,$5,$6,$7,$8) returning id`, [organizationId, originType, resourceForm, materialCode, quantity, unit, sourceGeographyId, destinationGeographyId]);
     return { entityType: "resource_flow", entityId: result.rows[0]!.id };
   }
-
   throw Object.assign(new Error(`Unsupported operationType: ${operationType}`), { code: "UNSUPPORTED_OPERATION" });
 }
 
 export async function registerSyncRoutes(app: FastifyInstance, pool: Pool | null): Promise<void> {
   app.post("/api/v1/field-devices/enroll", async (request, reply) => {
     if (!pool) return reply.code(503).send({ error: "Field-device enrollment unavailable", code: "DATABASE_UNAVAILABLE", syntheticData: false });
-    let auth: AuthContext;
-    try { auth = await authenticate(request, pool); if (!auth) return reply.code(401).send(bearerChallenge()); }
-    catch (error) { request.log.error(error); return reply.code(503).send({ error: "Authentication service unavailable", code: "AUTH_UNAVAILABLE" }); }
-    const body = bodyOf(request);
-    const organizationId = typeof body.organizationId === "string" ? body.organizationId.trim() : "";
-    const deviceId = typeof body.deviceId === "string" ? body.deviceId.trim() : "";
-    const identityId = typeof body.identityId === "string" ? body.identityId.trim() : auth.identityId;
+    let auth: AuthContext; try { auth = await authenticate(request, pool); if (!auth) return reply.code(401).send(bearerChallenge()); } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Authentication service unavailable", code: "AUTH_UNAVAILABLE" }); }
+    const body = bodyOf(request); const organizationId = typeof body.organizationId === "string" ? body.organizationId.trim() : ""; const deviceId = typeof body.deviceId === "string" ? body.deviceId.trim() : ""; const identityId = typeof body.identityId === "string" ? body.identityId.trim() : auth.identityId;
     if (!isUuid(organizationId) || !deviceId || deviceId.length > 200 || !isUuid(identityId)) return reply.code(400).send({ error: "organizationId and identityId must be UUIDs and deviceId is required", code: "INVALID_DEVICE_ENROLLMENT" });
-    try {
-      const client = await pool.connect();
-      try {
-        await client.query("BEGIN");
-        const manager = await client.query<{ ok: boolean }>("select can_manage_field_device($1,$2) as ok", [auth.identityId, organizationId]);
-        if (!manager.rows[0]?.ok) { await client.query("ROLLBACK"); return reply.code(403).send({ error: "Field-device management permission required", code: "FIELD_DEVICE_FORBIDDEN" }); }
-        const membership = await client.query<{ ok: boolean }>("select exists(select 1 from organization_memberships where identity_id=$1 and organization_id=$2 and status='VERIFIED') as ok", [identityId, organizationId]);
-        if (!membership.rows[0]?.ok) { await client.query("ROLLBACK"); return reply.code(400).send({ error: "Device identity must have verified membership in the organization", code: "DEVICE_IDENTITY_FORBIDDEN" }); }
-        const existing = await client.query<{ id: string; status: string }>("select id,status from field_devices where device_id=$1", [deviceId]);
-        if (existing.rows[0]) { await client.query("ROLLBACK"); return reply.code(409).send({ error: "Device identifier is already enrolled", code: "DEVICE_ALREADY_ENROLLED", device: existing.rows[0] }); }
-        const inserted = await client.query<{ id: string; device_id: string; identity_id: string; organization_id: string; status: string }>("insert into field_devices(device_id,identity_id,organization_id,status,registered_by_identity_id,registered_at) values($1,$2,$3,'PENDING',$4) returning id,device_id,identity_id,organization_id,status,registered_by_identity_id,registered_at", [deviceId, identityId, organizationId, auth.identityId]);
-        const device = inserted.rows[0];
-        if (!device) throw new Error("Field device was not created");
-        await client.query("insert into audit_events(actor_identity_id,organization_id,action,target_type,target_id,event_hash,payload) values($1,$2,'FIELD_DEVICE_ENROLLED','field_device',$3,$4,$5)", [auth.identityId, organizationId, device.id, payloadHash({ action: "FIELD_DEVICE_ENROLLED", deviceId: device.id, registeredIdentityId: identityId }), { deviceId: device.device_id, identityId: device.identity_id, status: device.status }]);
-        await client.query("COMMIT");
-        return reply.code(201).send({ source: "postgresql", syntheticData: false, authoritativeMutation: true, device });
-      } catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }
-    } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Field-device enrollment unavailable", code: "FIELD_DEVICE_ENROLLMENT_UNAVAILABLE", syntheticData: false }); }
+    try { const client = await pool.connect(); try { await client.query("BEGIN"); const manager = await client.query<{ ok: boolean }>("select can_manage_field_device($1,$2) as ok", [auth.identityId, organizationId]); if (!manager.rows[0]?.ok) { await client.query("ROLLBACK"); return reply.code(403).send({ error: "Field-device management permission required", code: "FIELD_DEVICE_FORBIDDEN" }); } const membership = await client.query<{ ok: boolean }>("select exists(select 1 from organization_memberships where identity_id=$1 and organization_id=$2 and status='VERIFIED') as ok", [identityId, organizationId]); if (!membership.rows[0]?.ok) { await client.query("ROLLBACK"); return reply.code(400).send({ error: "Device identity must have verified membership in the organization", code: "DEVICE_IDENTITY_FORBIDDEN" }); } const existing = await client.query<{ id: string; status: string }>("select id,status from field_devices where device_id=$1", [deviceId]); if (existing.rows[0]) { await client.query("ROLLBACK"); return reply.code(409).send({ error: "Device identifier is already enrolled", code: "DEVICE_ALREADY_ENROLLED", device: existing.rows[0] }); } const inserted = await client.query<{ id: string; device_id: string; identity_id: string; organization_id: string; status: string }>("insert into field_devices(device_id,identity_id,organization_id,status,registered_by_identity_id,registered_at) values($1,$2,$3,'PENDING',$4,now()) returning id,device_id,identity_id,organization_id,status,registered_by_identity_id,registered_at", [deviceId, identityId, organizationId, auth.identityId]); const device = inserted.rows[0]; if (!device) throw new Error("Field device was not created"); await client.query("insert into audit_events(actor_identity_id,organization_id,action,target_type,target_id,event_hash,payload) values($1,$2,'FIELD_DEVICE_ENROLLED','field_device',$3,$4,$5)", [auth.identityId, organizationId, device.id, payloadHash({ action: "FIELD_DEVICE_ENROLLED", deviceId: device.id, registeredIdentityId: identityId }), { deviceId: device.device_id, identityId: device.identity_id, status: device.status }]); await client.query("COMMIT"); return reply.code(201).send({ source: "postgresql", syntheticData: false, authoritativeMutation: true, device }); } catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); } } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Field-device enrollment unavailable", code: "FIELD_DEVICE_ENROLLMENT_UNAVAILABLE", syntheticData: false }); }
   });
 
   app.post("/api/v1/field-devices/:deviceId/verify", async (request, reply) => {
     if (!pool) return reply.code(503).send({ error: "Field-device verification unavailable", code: "DATABASE_UNAVAILABLE", syntheticData: false });
-    let auth: AuthContext;
-    try { auth = await authenticate(request, pool); if (!auth) return reply.code(401).send(bearerChallenge()); }
-    catch (error) { request.log.error(error); return reply.code(503).send({ error: "Authentication service unavailable", code: "AUTH_UNAVAILABLE" }); }
-    const { deviceId } = request.params as { deviceId: string };
-    if (!isUuid(deviceId)) return reply.code(400).send({ error: "deviceId must be a UUID", code: "INVALID_DEVICE_ID" });
-    try {
-      const client = await pool.connect();
-      try {
-        await client.query("BEGIN");
-        const device = await client.query<{ organization_id: string; status: string }>("select organization_id,status from field_devices where id=$1 for update", [deviceId]);
-        const row = device.rows[0];
-        if (!row) { await client.query("ROLLBACK"); return reply.code(404).send({ error: "Field device not found", code: "DEVICE_NOT_FOUND" }); }
-        if (!row.organization_id) { await client.query("ROLLBACK"); return reply.code(409).send({ error: "Field device is not bound to an organization", code: "DEVICE_UNBOUND" }); }
-        const manager = await client.query<{ ok: boolean }>("select can_manage_field_device($1,$2) as ok", [auth.identityId, row.organization_id]);
-        if (!manager.rows[0]?.ok) { await client.query("ROLLBACK"); return reply.code(403).send({ error: "Field-device management permission required", code: "FIELD_DEVICE_FORBIDDEN" }); }
-        if (row.status === "VERIFIED") { await client.query("COMMIT"); return reply.code(200).send({ source: "postgresql", syntheticData: false, replay: true, authoritativeMutation: false, device: { id: deviceId, organizationId: row.organization_id, status: row.status } }); }
-        const updated = await client.query<{ id: string; device_id: string; identity_id: string; organization_id: string; status: string }>("update field_devices set status='VERIFIED',verified_by_identity_id=$2,verified_at=now() where id=$1 and status='PENDING' returning id,device_id,identity_id,organization_id,status,verified_by_identity_id,verified_at", [deviceId, auth.identityId]);
-        const verifiedDevice = updated.rows[0];
-        if (!verifiedDevice) throw new Error("Field device verification did not update a pending device");
-        await client.query("insert into audit_events(actor_identity_id,organization_id,action,target_type,target_id,event_hash,payload) values($1,$2,'FIELD_DEVICE_VERIFIED','field_device',$3,$4,$5)", [auth.identityId, row.organization_id, deviceId, payloadHash({ action: "FIELD_DEVICE_VERIFIED", deviceId, verifiedIdentityId: auth.identityId }), { deviceId: verifiedDevice.device_id, identityId: verifiedDevice.identity_id, status: verifiedDevice.status }]);
-        await client.query("COMMIT");
-        return reply.code(200).send({ source: "postgresql", syntheticData: false, authoritativeMutation: true, device: verifiedDevice });
-      } catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }
-    } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Field device verification unavailable", code: "FIELD_DEVICE_VERIFICATION_UNAVAILABLE", syntheticData: false }); }
+    let auth: AuthContext; try { auth = await authenticate(request, pool); if (!auth) return reply.code(401).send(bearerChallenge()); } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Authentication service unavailable", code: "AUTH_UNAVAILABLE" }); }
+    const { deviceId } = request.params as { deviceId: string }; if (!isUuid(deviceId)) return reply.code(400).send({ error: "deviceId must be a UUID", code: "INVALID_DEVICE_ID" });
+    try { const client = await pool.connect(); try { await client.query("BEGIN"); const device = await client.query<{ organization_id: string; status: string }>("select organization_id,status from field_devices where id=$1 for update", [deviceId]); const row = device.rows[0]; if (!row) { await client.query("ROLLBACK"); return reply.code(404).send({ error: "Field device not found", code: "DEVICE_NOT_FOUND" }); } if (!row.organization_id) { await client.query("ROLLBACK"); return reply.code(409).send({ error: "Field device is not bound to an organization", code: "DEVICE_UNBOUND" }); } const manager = await client.query<{ ok: boolean }>("select can_manage_field_device($1,$2) as ok", [auth.identityId, row.organization_id]); if (!manager.rows[0]?.ok) { await client.query("ROLLBACK"); return reply.code(403).send({ error: "Field-device management permission required", code: "FIELD_DEVICE_FORBIDDEN" }); } if (row.status === "VERIFIED") { await client.query("COMMIT"); return reply.code(200).send({ source: "postgresql", syntheticData: false, replay: true, authoritativeMutation: false, device: { id: deviceId, organizationId: row.organization_id, status: row.status } }); } const updated = await client.query<{ id: string; device_id: string; identity_id: string; organization_id: string; status: string }>("update field_devices set status='VERIFIED',verified_by_identity_id=$2,verified_at=now() where id=$1 and status='PENDING' returning id,device_id,identity_id,organization_id,status,verified_by_identity_id,verified_at", [deviceId, auth.identityId]); const verifiedDevice = updated.rows[0]; if (!verifiedDevice) throw new Error("Field device verification did not update a pending device"); await client.query("insert into audit_events(actor_identity_id,organization_id,action,target_type,target_id,event_hash,payload) values($1,$2,'FIELD_DEVICE_VERIFIED','field_device',$3,$4,$5)", [auth.identityId, row.organization_id, deviceId, payloadHash({ action: "FIELD_DEVICE_VERIFIED", deviceId, verifiedIdentityId: auth.identityId }), { deviceId: verifiedDevice.device_id, identityId: verifiedDevice.identity_id, status: verifiedDevice.status }]); await client.query("COMMIT"); return reply.code(200).send({ source: "postgresql", syntheticData: false, authoritativeMutation: true, device: verifiedDevice }); } catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); } } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Field device verification unavailable", code: "FIELD_DEVICE_VERIFICATION_UNAVAILABLE", syntheticData: false }); }
   });
 
   app.get("/api/v1/field-devices", async (request, reply) => {
-    if (!pool) return reply.code(503).send({ error: "Field-device inventory unavailable", code: "DATABASE_UNAVAILABLE", syntheticData: false });
-    let auth: AuthContext;
-    try { auth = await authenticate(request, pool); if (!auth) return reply.code(401).send(bearerChallenge()); }
-    catch (error) { request.log.error(error); return reply.code(503).send({ error: "Authentication service unavailable", code: "AUTH_UNAVAILABLE" }); }
-    try {
-      const result = await pool.query(`select fd.id,fd.device_id,fd.identity_id,fd.organization_id,fd.registered_by_identity_id,fd.registered_at,fd.verified_by_identity_id,fd.verified_at,fd.last_seen_at,fd.status,fd.metadata from field_devices fd where exists(select 1 from organization_memberships om where om.organization_id=fd.organization_id and om.identity_id=$1 and om.status='VERIFIED') order by fd.organization_id,fd.device_id`, [auth.identityId]);
-      return { source: "postgresql", syntheticData: false, devices: result.rows };
-    } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Field-device inventory unavailable", syntheticData: false }); }
+    if (!pool) return reply.code(503).send({ error: "Field-device inventory unavailable", code: "DATABASE_UNAVAILABLE", syntheticData: false }); let auth: AuthContext; try { auth = await authenticate(request, pool); if (!auth) return reply.code(401).send(bearerChallenge()); } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Authentication service unavailable", code: "AUTH_UNAVAILABLE" }); } try { const result = await pool.query(`select fd.id,fd.device_id,fd.identity_id,fd.organization_id,fd.registered_by_identity_id,fd.registered_at,fd.verified_by_identity_id,fd.verified_at,fd.last_seen_at,fd.status,fd.metadata from field_devices fd where exists(select 1 from organization_memberships om where om.organization_id=fd.organization_id and om.identity_id=$1 and om.status='VERIFIED') order by fd.organization_id,fd.device_id`, [auth.identityId]); return { source: "postgresql", syntheticData: false, devices: result.rows }; } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Field-device inventory unavailable", syntheticData: false }); }
   });
 
   app.post("/api/v1/field-sync/envelopes", async (request, reply) => {
-    if (!pool) return reply.code(503).send({ error: "Field sync unavailable", code: "DATABASE_UNAVAILABLE", syntheticData: false });
-    let auth: AuthContext;
-    try { auth = await authenticate(request, pool); if (!auth) return reply.code(401).send(bearerChallenge()); }
-    catch (error) { request.log.error(error); return reply.code(503).send({ error: "Authentication service unavailable", code: "AUTH_UNAVAILABLE" }); }
-    const validation = validateSyncEnvelope(bodyOf(request));
-    if (!validation.ok) return reply.code(400).send({ error: validation.error, code: validation.code });
-    const { idempotencyKey, deviceId, capturedAt, clientSequence, payload } = validation;
-    try {
-      const device = await requireFieldDevice(pool, auth, deviceId);
-      if (!device) return reply.code(403).send({ error: "Field device is not verified for this identity", code: "DEVICE_FORBIDDEN" });
-      const hash = payloadHash(payload), client = await pool.connect();
-      try {
-        await client.query("BEGIN");
-        const replay = await client.query<{ id: string; status: string; payload_hash: string; server_cursor: string | null; applied_entity_type: string | null; applied_entity_id: string | null }>(`select id, status, payload_hash, server_cursor, applied_entity_type, applied_entity_id from field_sync_envelopes where device_id = $1 and idempotency_key = $2 for update`, [deviceId, idempotencyKey]);
-        if (replay.rows[0]) {
-          const existing = replay.rows[0];
-          const samePayload = await client.query<{ same: boolean }>(`select payload = $3::jsonb as same from field_sync_envelopes where id = $1`, [existing.id, idempotencyKey, JSON.stringify(payload)]);
-          if (!samePayload.rows[0]?.same) { await client.query("ROLLBACK"); return reply.code(409).send({ error: "Idempotency key was already used with a different payload", code: "IDEMPOTENCY_CONFLICT" }); }
-          await client.query("COMMIT"); return reply.code(200).send({ source: "postgresql", syntheticData: false, replay: true, envelope: existing });
-        }
-        const sequenceReplay = await client.query<{ id: string; idempotency_key: string; payload_hash: string; status: string; server_cursor: string | null }>(`select id, idempotency_key, payload_hash, status, server_cursor from field_sync_envelopes where device_id = $1 and client_sequence = $2 for update`, [deviceId, clientSequence]);
-        if (sequenceReplay.rows[0]) {
-          const existing = sequenceReplay.rows[0];
-          if (existing.payload_hash === hash && existing.idempotency_key === idempotencyKey) { await client.query("COMMIT"); return reply.code(200).send({ source: "postgresql", syntheticData: false, replay: true, envelope: existing }); }
-          const conflict = await client.query(`insert into field_sync_conflicts (envelope_id, entity_type, conflict_type, client_version, resolution_status) values ($1, 'field_sync_envelope', 'CLIENT_SEQUENCE_COLLISION', $2, 'OPEN') returning id`, [existing.id, JSON.stringify({ idempotencyKey, clientSequence, payloadHash: hash })]);
-          const conflictRow = conflict.rows[0];
-          if (!conflictRow) { await client.query("ROLLBACK"); throw new Error("Conflict record was not created"); }
-          await client.query("COMMIT"); return reply.code(409).send({ source: "postgresql", syntheticData: false, code: "CLIENT_SEQUENCE_CONFLICT", conflictId: conflictRow.id, envelopeId: existing.id });
-        }
-        const serverCursor = await nextServerCursor(client, deviceId);
-        const inserted = await client.query<{ id: string; status: string; server_cursor: number; received_at: string }>(`insert into field_sync_envelopes (device_id, identity_id, idempotency_key, client_sequence, captured_at, payload, payload_hash, server_cursor) values ($1,$2,$3,$4,$5,$6,$7,$8) returning id, status, server_cursor, received_at`, [deviceId, auth.identityId, idempotencyKey, clientSequence, capturedAt, payload, hash, serverCursor]);
-        const insertedRow = inserted.rows[0];
-        if (!insertedRow) { await client.query("ROLLBACK"); throw new Error("Sync envelope was not created"); }
-        await client.query("update field_devices set last_seen_at = now() where id = $1", [deviceId]);
-        await client.query("COMMIT"); return reply.code(202).send({ source: "postgresql", syntheticData: false, replay: false, authoritativeMutation: false, envelope: insertedRow });
-      } catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }
-    } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Field sync intake unavailable", syntheticData: false }); }
+    if (!pool) return reply.code(503).send({ error: "Field sync unavailable", code: "DATABASE_UNAVAILABLE", syntheticData: false }); let auth: AuthContext; try { auth = await authenticate(request, pool); if (!auth) return reply.code(401).send(bearerChallenge()); } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Authentication service unavailable", code: "AUTH_UNAVAILABLE" }); }
+    const validation = validateSyncEnvelope(bodyOf(request)); if (!validation.ok) return reply.code(400).send({ error: validation.error, code: validation.code }); const { idempotencyKey, deviceId, capturedAt, clientSequence, payload } = validation;
+    try { const device = await requireFieldDevice(pool, auth, deviceId); if (!device) return reply.code(403).send({ error: "Field device is not verified for this identity", code: "DEVICE_FORBIDDEN" }); const hash = payloadHash(payload), client = await pool.connect(); try { await client.query("BEGIN"); const replay = await client.query<{ id: string; status: string; payload_hash: string; server_cursor: string | null; applied_entity_type: string | null; applied_entity_id: string | null }>(`select id, status, payload_hash, server_cursor, applied_entity_type, applied_entity_id from field_sync_envelopes where device_id = $1 and idempotency_key = $2 for update`, [deviceId, idempotencyKey]); if (replay.rows[0]) { const existing = replay.rows[0]; const samePayload = await client.query<{ same: boolean }>(`select payload = $2::jsonb as same from field_sync_envelopes where id = $1`, [existing.id, JSON.stringify(payload)]); if (!samePayload.rows[0]?.same) { await client.query("ROLLBACK"); return reply.code(409).send({ error: "Idempotency key was already used with a different payload", code: "IDEMPOTENCY_CONFLICT" }); } await client.query("COMMIT"); return reply.code(200).send({ source: "postgresql", syntheticData: false, replay: true, envelope: existing }); }
+      const sequenceReplay = await client.query<{ id: string; idempotency_key: string; payload_hash: string; status: string; server_cursor: string | null }>(`select id, idempotency_key, payload_hash, status, server_cursor from field_sync_envelopes where device_id = $1 and client_sequence = $2 for update`, [deviceId, clientSequence]); if (sequenceReplay.rows[0]) { const existing = sequenceReplay.rows[0]; if (existing.payload_hash === hash && existing.idempotency_key === idempotencyKey) { await client.query("COMMIT"); return reply.code(200).send({ source: "postgresql", syntheticData: false, replay: true, envelope: existing }); } const conflict = await client.query(`insert into field_sync_conflicts (envelope_id, entity_type, conflict_type, client_version, resolution_status) values ($1, 'field_sync_envelope', 'CLIENT_SEQUENCE_COLLISION', $2, 'OPEN') returning id`, [existing.id, JSON.stringify({ idempotencyKey, clientSequence, payloadHash: hash })]); const conflictRow = conflict.rows[0]; if (!conflictRow) { await client.query("ROLLBACK"); throw new Error("Conflict record was not created"); } await client.query("COMMIT"); return reply.code(409).send({ source: "postgresql", syntheticData: false, code: "CLIENT_SEQUENCE_CONFLICT", conflictId: conflictRow.id, envelopeId: existing.id }); }
+      const serverCursor = await nextServerCursor(client, deviceId); const inserted = await client.query<{ id: string; status: string; server_cursor: number; received_at: string }>(`insert into field_sync_envelopes (device_id, identity_id, idempotency_key, client_sequence, captured_at, payload, payload_hash, server_cursor) values ($1,$2,$3,$4,$5,$6,$7,$8) returning id, status, server_cursor, received_at`, [deviceId, auth.identityId, idempotencyKey, clientSequence, capturedAt, payload, hash, serverCursor]); const insertedRow = inserted.rows[0]; if (!insertedRow) { await client.query("ROLLBACK"); throw new Error("Sync envelope was not created"); } await client.query("update field_devices set last_seen_at = now() where id = $1", [deviceId]); await client.query("COMMIT"); return reply.code(202).send({ source: "postgresql", syntheticData: false, replay: false, authoritativeMutation: false, envelope: insertedRow }); } catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); } } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Field sync intake unavailable", syntheticData: false }); }
   });
 
   app.post("/api/v1/field-sync/envelopes/:envelopeId/apply", async (request, reply) => {
-    if (!pool) return reply.code(503).send({ error: "Field sync unavailable", code: "DATABASE_UNAVAILABLE", syntheticData: false });
-    let auth: AuthContext;
-    try { auth = await authenticate(request, pool); if (!auth) return reply.code(401).send(bearerChallenge()); }
-    catch (error) { request.log.error(error); return reply.code(503).send({ error: "Authentication service unavailable", code: "AUTH_UNAVAILABLE" }); }
-    const { envelopeId } = request.params as { envelopeId: string };
-    if (!isUuid(envelopeId)) return reply.code(400).send({ error: "envelopeId must be a UUID", code: "INVALID_ENVELOPE" });
-    try {
-      const client = await pool.connect();
-      try {
-        await client.query("BEGIN");
-        const envelope = await client.query<{ id: string; identity_id: string; status: string; payload: OperationPayload; applied_entity_type: string | null; applied_entity_id: string | null }>(`select id, identity_id, status, payload, applied_entity_type, applied_entity_id from field_sync_envelopes where id = $1 for update`, [envelopeId]);
-        const row = envelope.rows[0];
-        if (!row || row.identity_id !== auth.identityId) { await client.query("ROLLBACK"); return reply.code(404).send({ error: "Sync envelope not found for authenticated identity", code: "ENVELOPE_NOT_FOUND" }); }
-        if (row.status === "APPLIED") { await client.query("COMMIT"); return reply.code(200).send({ source: "postgresql", syntheticData: false, replay: true, authoritativeMutation: true, entityType: row.applied_entity_type, entityId: row.applied_entity_id }); }
-        if (row.status !== "RECEIVED") { await client.query("ROLLBACK"); return reply.code(409).send({ error: `Envelope cannot be applied from status ${row.status}`, code: "ENVELOPE_NOT_APPLICABLE" }); }
-        const applied = await applyOperation(client, auth.identityId, row.payload);
-        await client.query(`update field_sync_envelopes set status = 'APPLIED', applied_at = now(), applied_entity_type = $2, applied_entity_id = $3 where id = $1`, [envelopeId, applied.entityType, applied.entityId]);
-        await client.query("COMMIT");
-        return reply.code(200).send({ source: "postgresql", syntheticData: false, replay: false, authoritativeMutation: true, envelopeId, entityType: applied.entityType, entityId: applied.entityId });
-      } catch (error) {
-        await client.query("ROLLBACK");
-        const code = (error as { code?: string }).code;
-        if (code === "INVALID_OPERATION" || code === "UNSUPPORTED_OPERATION") return reply.code(400).send({ error: (error as Error).message, code });
-        if (code === "OPERATION_FORBIDDEN") return reply.code(403).send({ error: (error as Error).message, code });
-        request.log.error(error); return reply.code(503).send({ error: "Authoritative operation application unavailable", syntheticData: false });
-      } finally { client.release(); }
-    } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Field sync application unavailable", syntheticData: false }); }
+    if (!pool) return reply.code(503).send({ error: "Field sync unavailable", code: "DATABASE_UNAVAILABLE", syntheticData: false }); let auth: AuthContext; try { auth = await authenticate(request, pool); if (!auth) return reply.code(401).send(bearerChallenge()); } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Authentication service unavailable", code: "AUTH_UNAVAILABLE" }); } const { envelopeId } = request.params as { envelopeId: string }; if (!isUuid(envelopeId)) return reply.code(400).send({ error: "envelopeId must be a UUID", code: "INVALID_ENVELOPE" });
+    try { const client = await pool.connect(); try { await client.query("BEGIN"); const envelope = await client.query<{ id: string; identity_id: string; status: string; payload: OperationPayload; applied_entity_type: string | null; applied_entity_id: string | null }>(`select id, identity_id, status, payload, applied_entity_type, applied_entity_id from field_sync_envelopes where id = $1 for update`, [envelopeId]); const row = envelope.rows[0]; if (!row || row.identity_id !== auth.identityId) { await client.query("ROLLBACK"); return reply.code(404).send({ error: "Sync envelope not found for authenticated identity", code: "ENVELOPE_NOT_FOUND" }); } if (row.status === "APPLIED") { await client.query("COMMIT"); return reply.code(200).send({ source: "postgresql", syntheticData: false, replay: true, authoritativeMutation: true, entityType: row.applied_entity_type, entityId: row.applied_entity_id }); } if (row.status !== "RECEIVED") { await client.query("ROLLBACK"); return reply.code(409).send({ error: `Envelope cannot be applied from status ${row.status}`, code: "ENVELOPE_NOT_APPLICABLE" }); } const applied = await applyOperation(client, auth.identityId, row.payload); await client.query(`update field_sync_envelopes set status = 'APPLIED', applied_at = now(), applied_entity_type = $2, applied_entity_id = $3 where id = $1`, [envelopeId, applied.entityType, applied.entityId]); await client.query("COMMIT"); return reply.code(200).send({ source: "postgresql", syntheticData: false, replay: false, authoritativeMutation: true, envelopeId, entityType: applied.entityType, entityId: applied.entityId }); } catch (error) { await client.query("ROLLBACK"); const code = (error as { code?: string }).code; if (code === "INVALID_OPERATION" || code === "UNSUPPORTED_OPERATION") return reply.code(400).send({ error: (error as Error).message, code }); if (code === "OPERATION_FORBIDDEN") return reply.code(403).send({ error: (error as Error).message, code }); request.log.error(error); return reply.code(503).send({ error: "Authoritative operation application unavailable", syntheticData: false }); } finally { client.release(); } } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Field sync application unavailable", syntheticData: false }); }
   });
 
   app.get("/api/v1/field-sync/conflicts", async (request, reply) => {
-    if (!pool) return reply.code(503).send({ error: "Field sync unavailable", code: "DATABASE_UNAVAILABLE", syntheticData: false });
-    let auth: AuthContext;
-    try { auth = await authenticate(request, pool); if (!auth) return reply.code(401).send(bearerChallenge()); }
-    catch (error) { request.log.error(error); return reply.code(503).send({ error: "Authentication service unavailable", code: "AUTH_UNAVAILABLE" }); }
-    try {
-      const result = await pool.query(`select c.id, c.envelope_id, c.entity_type, c.entity_id, c.conflict_type, c.authoritative_version, c.client_version, c.resolution_status, c.resolution_reason, c.resolved_by_identity_id, c.resolved_at, c.created_at from field_sync_conflicts c join field_sync_envelopes e on e.id = c.envelope_id where e.identity_id = $1 order by c.created_at desc`, [auth.identityId]);
-      return { source: "postgresql", syntheticData: false, conflicts: result.rows };
-    } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Field sync conflicts unavailable", syntheticData: false }); }
+    if (!pool) return reply.code(503).send({ error: "Field sync unavailable", code: "DATABASE_UNAVAILABLE", syntheticData: false }); let auth: AuthContext; try { auth = await authenticate(request, pool); if (!auth) return reply.code(401).send(bearerChallenge()); } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Authentication service unavailable", code: "AUTH_UNAVAILABLE" }); } try { const result = await pool.query(`select c.id, c.envelope_id, c.entity_type, c.entity_id, c.conflict_type, c.authoritative_version, c.client_version, c.resolution_status, c.resolution_reason, c.resolved_by_identity_id, c.resolved_at, c.created_at from field_sync_conflicts c join field_sync_envelopes e on e.id = c.envelope_id where e.identity_id = $1 order by c.created_at desc`, [auth.identityId]); return { source: "postgresql", syntheticData: false, conflicts: result.rows }; } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Field sync conflicts unavailable", syntheticData: false }); }
   });
 
   app.post("/api/v1/field-sync/conflicts/:conflictId/resolve", async (request, reply) => {
-    if (!pool) return reply.code(503).send({ error: "Field sync unavailable", code: "DATABASE_UNAVAILABLE", syntheticData: false });
-    let auth: AuthContext;
-    try { auth = await authenticate(request, pool); if (!auth) return reply.code(401).send(bearerChallenge()); }
-    catch (error) { request.log.error(error); return reply.code(503).send({ error: "Authentication service unavailable", code: "AUTH_UNAVAILABLE" }); }
-    const { conflictId } = request.params as { conflictId: string };
-    if (!isUuid(conflictId)) return reply.code(400).send({ error: "conflictId must be a UUID", code: "INVALID_CONFLICT" });
-    const validation = validateConflictResolution(bodyOf(request));
-    if (!validation.ok) return reply.code(400).send({ error: validation.error, code: validation.code });
-    try {
-      const result = await pool.query(`update field_sync_conflicts c set resolution_status = $2, resolution_reason = $3, resolved_by_identity_id = $4, resolved_at = now() where c.id = $1 and c.resolution_status = 'OPEN' and exists (select 1 from field_sync_envelopes e where e.id = c.envelope_id and e.identity_id = $4) returning c.id, c.envelope_id, c.resolution_status, c.resolution_reason, c.resolved_by_identity_id, c.resolved_at`, [conflictId, validation.resolutionStatus, validation.resolutionReason, auth.identityId]);
-      if (!result.rows[0]) return reply.code(404).send({ error: "Open conflict not found for authenticated identity", code: "CONFLICT_NOT_FOUND" });
-      return reply.code(200).send({ source: "postgresql", syntheticData: false, authoritativeMutation: false, conflict: result.rows[0] });
-    } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Conflict resolution unavailable", syntheticData: false }); }
+    if (!pool) return reply.code(503).send({ error: "Field sync unavailable", code: "DATABASE_UNAVAILABLE", syntheticData: false }); let auth: AuthContext; try { auth = await authenticate(request, pool); if (!auth) return reply.code(401).send(bearerChallenge()); } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Authentication service unavailable", code: "AUTH_UNAVAILABLE" }); } const { conflictId } = request.params as { conflictId: string }; if (!isUuid(conflictId)) return reply.code(400).send({ error: "conflictId must be a UUID", code: "INVALID_CONFLICT" }); const validation = validateConflictResolution(bodyOf(request)); if (!validation.ok) return reply.code(400).send({ error: validation.error, code: validation.code }); try { const result = await pool.query(`update field_sync_conflicts c set resolution_status = $2, resolution_reason = $3, resolved_by_identity_id = $4, resolved_at = now() where c.id = $1 and c.resolution_status = 'OPEN' and exists (select 1 from field_sync_envelopes e where e.id = c.envelope_id and e.identity_id = $4) returning c.id, c.envelope_id, c.resolution_status, c.resolution_reason, c.resolved_by_identity_id, c.resolved_at`, [conflictId, validation.resolutionStatus, validation.resolutionReason, auth.identityId]); if (!result.rows[0]) return reply.code(404).send({ error: "Open conflict not found for authenticated identity", code: "CONFLICT_NOT_FOUND" }); return reply.code(200).send({ source: "postgresql", syntheticData: false, authoritativeMutation: false, conflict: result.rows[0] }); } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Conflict resolution unavailable", syntheticData: false }); }
   });
 }
