@@ -14,7 +14,7 @@ describe("high-risk authorization policy", () => {
     ] as const;
     assert.deepEqual(Object.keys(HIGH_RISK_PERMISSIONS), expected);
     for (const permission of expected) {
-      assert.ok(HIGH_RISK_PERMISSIONS[permission].includes(permission));
+      assert.ok((HIGH_RISK_PERMISSIONS[permission] as readonly string[]).includes(permission));
     }
   });
 
