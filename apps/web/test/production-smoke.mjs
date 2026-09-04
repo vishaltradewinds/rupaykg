@@ -1,11 +1,12 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 
-const root = resolve(new URL("..", import.meta.url).pathname, "..");
-const dist = join(root, "dist");
+const webRoot = resolve(new URL("..", import.meta.url).pathname, "..");
+const repoRoot = resolve(webRoot, "../..");
+const dist = join(webRoot, "dist");
 const indexPath = join(dist, "index.html");
-const sourceApi = readFileSync(join(root, "src", "api.ts"), "utf8");
-const sourceApp = readFileSync(join(root, "src", "App.tsx"), "utf8");
+const sourceApi = readFileSync(join(webRoot, "src", "api.ts"), "utf8");
+const sourceApp = readFileSync(join(webRoot, "src", "App.tsx"), "utf8");
 
 function assert(condition, message) {
   if (!condition) throw new Error(`Web production smoke failed: ${message}`);
@@ -40,6 +41,7 @@ assert(sourceApp.includes("Sessions are validated by the authoritative RupayKG A
 assert(sourceApp.includes("UI display does not approve, issue, transfer or mutate carbon value"), "carbon UI does not declare non-mutating provenance semantics");
 assert(sourceApp.includes("Advisory only"), "intelligence UI does not declare advisory-only semantics");
 assert(sourceApp.includes("window.sessionStorage"), "session handling is not confined to browser session storage");
+assert(existsSync(join(repoRoot, "apps", "api", "src", "api.ts")) === false, "smoke path resolution unexpectedly points at apps/src/api.ts");
 
 const bundledText = assets
   .map(asset => readFileSync(join(dist, asset), "utf8"))
