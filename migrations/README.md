@@ -3,7 +3,7 @@
 Apply migrations in filename order against a fresh PostgreSQL database:
 
 1. `001_core.sql` — authoritative core entities and lifecycle enums.
-2. `002_regulatory.sql` — versioned regulatory source catalog.
+2. `002_regulatory.sql` — versioned regulatory source catalog; this historical seed migration is immutable and later provenance corrections belong in subsequent migrations.
 3. `003_identity_geography_operations.sql` — source-versioned geography, identity credentials, assignments and offline operation intake.
 4. `004_security_auth.sql` — organization memberships and opaque identity sessions.
 5. `005_carbon_epr_esg.sql` — carbon projects/calculations, EPR and ESG reporting records.
@@ -15,6 +15,20 @@ Apply migrations in filename order against a fresh PostgreSQL database:
 11. `011_field_sync_application.sql` — authoritative entity-application metadata for field envelopes.
 12. `012_geography_authorization.sql` — organization geography roots and database-enforced descendant scope.
 13. `013_settlement_external_confirmation.sql` — external authority confirmation and reconciliation gates before settlement finalization.
+14. `014_registry_settlement_idempotency.sql` — idempotency constraints for registry and settlement mutations.
+15. `015_high_risk_action_permissions.sql` — explicit high-risk action permissions for registry and settlement operations.
+16. `016_field_device_enrollment.sql` — field-device enrollment and lifecycle controls.
+17. `017_field_device_provenance.sql` — field-device provenance metadata and integrity controls.
+18. `018_value_mutation_permissions.sql` — authorization boundaries for value-layer mutations.
+19. `019_settlement_reconciliation_immutability.sql` — immutable settlement reconciliation evidence and state controls.
+20. `020_carbon_calculation_provenance.sql` — evidence-bound carbon calculation provenance.
+21. `021_methodology_governance.sql` — methodology source lock, applicability/parameter/equation mapping and production-eligibility governance.
+22. `022_carbon_provenance_integrity.sql` — database integrity controls for carbon provenance.
+23. `024_methodology_governance_immutability.sql` — forward-only methodology governance and immutable mapped/reconciled state.
+24. `025_methodology_reconciliation_evidence.sql` — independent numerical reconciliation and regression-verification evidence required for production eligibility.
+25. `026_regulatory_source_provenance.sql` — exact verified official-source corrections and verification dates for regulatory records; does not rewrite the historical seed migration.
+
+Migration `023` is intentionally absent from the current repository history; do not renumber later migrations to fill the gap. Migration numbering is identity, not a requirement for contiguous integers.
 
 Migration files are intentionally ordered and each numbered migration must have one authoritative owner. Do not reintroduce duplicate numbered migrations containing the same tables or enums.
 
