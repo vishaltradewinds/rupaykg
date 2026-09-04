@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 
-const webRoot = resolve(new URL("..", import.meta.url).pathname, "..");
+const webRoot = resolve(new URL("..", import.meta.url).pathname);
 const repoRoot = resolve(webRoot, "../..");
 const dist = join(webRoot, "dist");
 const indexPath = join(dist, "index.html");
