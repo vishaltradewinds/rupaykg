@@ -19,13 +19,17 @@ before(async () => {
       "insert into organizations(name,organization_type) values($1,'PROCESSOR') returning id",
       [`settlement-guard-owner-${suffix}`],
     )).rows[0]!.id;
-    const identity = (await c.query<{ id: string }>(
+    const actor = (await c.query<{ id: string }>(
       "insert into identities(external_subject,display_name) values($1,$2) returning id",
-      [`settlement-guard-identity-${suffix}`, "Settlement Guard Test"],
+      [`settlement-guard-actor-${suffix}`, "Settlement Guard Actor"],
+    )).rows[0]!.id;
+    const verifier = (await c.query<{ id: string }>(
+      "insert into identities(external_subject,display_name) values($1,$2) returning id",
+      [`settlement-guard-verifier-${suffix}`, "Settlement Guard Independent Verifier"],
     )).rows[0]!.id;
     const activity = (await c.query<{ id: string }>(
       "insert into activities(organization_id,actor_identity_id,activity_type,status,completed_at) values($1,$2,'COLLECTION','COMPLETED',now()) returning id",
-      [owner, identity],
+      [owner, actor],
     )).rows[0]!.id;
     const evidence = (await c.query<{ id: string }>(
       "insert into evidence(activity_id,evidence_type,status,captured_at,content_hash) values($1,'SETTLEMENT_GUARD','VERIFIED',now(),$2) returning id",
@@ -33,7 +37,7 @@ before(async () => {
     )).rows[0]!.id;
     const verification = (await c.query<{ id: string }>(
       "insert into verifications(evidence_id,activity_id,verifier_identity_id,decision,scope,rationale) values($1,$2,$3,'APPROVED','settlement-guard','independent database guard test') returning id",
-      [evidence, activity, identity],
+      [evidence, activity, verifier],
     )).rows[0]!.id;
 
     retiredCredentialId = (await c.query<{ id: string }>(
