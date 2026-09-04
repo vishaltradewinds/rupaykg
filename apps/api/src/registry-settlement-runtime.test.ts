@@ -144,6 +144,9 @@ describe("registry and settlement runtime acceptance", () => {
     const retired = await request(`/api/v1/credentials/${credentialId}/retire`, { method: "POST", body: "{}" }, actorToken);
     assert.equal(retired.status, 200);
     assert.equal((await body(retired)).registryEvent.event_type, "RETIRED");
+    const retiredSettlement = await request("/api/v1/settlements", { method: "POST", body: JSON.stringify({ credentialId, payerId: destinationOrgId, payeeId: ownerOrgId, amount: 1, currency: "INR" }) }, actorToken);
+    assert.equal(retiredSettlement.status, 409);
+    assert.equal((await body(retiredSettlement)).code, "CREDENTIAL_RETIRED");
     const state = await pool.query<{ status: string }>("select status from credentials where id=$1", [credentialId]);
     assert.equal(state.rows[0]?.status, "RETIRED");
   });
