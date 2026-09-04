@@ -158,13 +158,13 @@ describe("runtime acceptance", () => {
     assert.equal(state.rows[0]?.activity_status, "DRAFT"); assert.equal(state.rows[0]?.evidence_status, "VERIFIED");
   });
 
-  it("binds carbon calculations to evidence and deterministic provenance, and fails closed on mismatched evidence", async () => {
+  it("fails closed when evidence belongs to a different activity, then binds valid carbon calculations to deterministic provenance", async () => {
     if (!pool) return;
     methodologyId = randomUUID();
     await pool.query("insert into methodology_versions(id,methodology_code,version,rules,governance_status) values($1,$2,$3,$4,'SOURCE_LOCKED')", [methodologyId, `RUNTIME-${suffix}`, "1", JSON.stringify({ formula: "baseline-project-leakage-uncertainty" })]);
-    const mismatchEvidenceId = (await pool.query<{ id: string }>("insert into evidence(activity_id,evidence_type,captured_at,content_hash,status,captured_by_identity_id) values($1,'RUNTIME_TEST',$2,$3,'VERIFIED',$4) returning id", [activityId, new Date().toISOString(), `sha256:mismatch-${suffix}`, actorId])).rows[0]!.id;
-    const mismatch = await request("/api/v1/carbon/calculations", { method: "POST", body: JSON.stringify({ activityId, methodologyCode: `RUNTIME-${suffix}`, methodologyVersion: "1", evidenceId: mismatchEvidenceId, baselineTco2e: 100, projectTco2e: 40, leakageTco2e: 5, uncertaintyTco2e: 2 }) }, actorToken);
-    assert.equal(mismatch.status, 409);
+    const otherActivityId = (await pool.query<{ id: string }>("insert into activities(organization_id,actor_identity_id,geography_id,activity_type,status) values($1,$2,$3,'COLLECTION','DRAFT') returning id", [orgId, actorId, geographyId])).rows[0]!.id;
+    const mismatch = await request("/api/v1/carbon/calculations", { method: "POST", body: JSON.stringify({ activityId: otherActivityId, methodologyCode: `RUNTIME-${suffix}`, methodologyVersion: "1", evidenceId, baselineTco2e: 100, projectTco2e: 40, leakageTco2e: 5, uncertaintyTco2e: 2 }) }, actorToken);
+    assert.equal(mismatch.status, 409); assert.equal((await body(mismatch)).code, "EVIDENCE_ACTIVITY_MISMATCH");
     const calculated = await request("/api/v1/carbon/calculations", { method: "POST", body: JSON.stringify({ activityId, methodologyCode: `RUNTIME-${suffix}`, methodologyVersion: "1", evidenceId, baselineTco2e: 100, projectTco2e: 40, leakageTco2e: 5, uncertaintyTco2e: 2 }) }, actorToken);
     assert.equal(calculated.status, 201);
     const result = await body(calculated);
