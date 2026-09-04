@@ -9,10 +9,12 @@ import { registerWorkspaceRoutes } from "./workspace-routes.js";
 import { registerIntelligenceRoutes } from "./intelligence-routes.js";
 
 const app = Fastify({ logger: true });
-await app.register(cors, { origin: true });
+const allowedOrigins = process.env.RUPAYKG_ALLOWED_ORIGINS?.split(",").map(origin => origin.trim()).filter(Boolean) ?? [];
+await app.register(cors, { origin: allowedOrigins.length ? allowedOrigins : false });
 const databaseUrl = process.env.DATABASE_URL;
 const poolConfig: PoolConfig = { connectionString: databaseUrl, max: 10 };
-if (process.env.DATABASE_SSL !== "false") poolConfig.ssl = { rejectUnauthorized: false };
+if (process.env.DATABASE_SSL === "require") poolConfig.ssl = { rejectUnauthorized: true };
+else if (process.env.DATABASE_SSL !== "false") poolConfig.ssl = { rejectUnauthorized: false };
 const pool = databaseUrl ? new Pool(poolConfig) : null;
 async function query<T extends Record<string, unknown>>(text: string, values: unknown[] = []): Promise<T[]> { if (!pool) throw new Error("DATABASE_URL is not configured"); return (await pool.query<T>(text, values)).rows; }
 function bodyOf(request: { body: unknown }): Record<string, unknown> { return (request.body && typeof request.body === "object" ? request.body : {}) as Record<string, unknown>; }
