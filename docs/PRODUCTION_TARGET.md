@@ -1,6 +1,6 @@
 # RupayKg production target
 
-RupayKg is India's circular-economy operating system for urban and rural resource flows. The production target is one authoritative national data model with geography-aware authorization, offline field capture, evidence-backed MRV, compliance, carbon accounting, environmental credentials, registry operations, governed settlement and reporting.
+RupayKG is India's circular-economy operating system for urban and rural resource flows. The production target is one authoritative national data model with geography-aware authorization, offline field capture, evidence-backed MRV, compliance, carbon accounting, environmental credentials, registry operations, governed settlement and reporting.
 
 ## Non-negotiable truth model
 
@@ -13,6 +13,21 @@ A local/offline record is not authoritative. Authoritative persistence is not ve
 `GENERATE -> AGGREGATE -> MEASURE -> TRANSPORT -> PROCESS -> EVIDENCE -> VERIFY -> CALCULATE VALUE -> CERTIFY/ISSUE -> REGISTRY -> TRANSFER/RETIRE -> SETTLE -> REPORT`
 
 Every value-bearing transition requires the appropriate upstream evidence, authorization and authoritative persistence.
+
+## Production configuration contract
+
+Production startup must use `apps/api/src/production-server.ts` (compiled as `dist/src/production-server.js`), not the development `server.ts` entrypoint directly. Startup fails closed unless all of the following are true:
+
+- `NODE_ENV=production`.
+- `DATABASE_URL` is a valid PostgreSQL URL and does not target localhost.
+- `DATABASE_SSL=require`.
+- `RUPAYKG_AUTH_MODE=real`.
+- `RUPAYKG_ALLOWED_ORIGINS` contains one or more HTTPS origins with no path, query or fragment.
+- `RUPAYKG_SYNTHETIC_DATA` is not enabled.
+- `VITE_RUPAYKG_SESSION_TOKEN` is unset. A client-bundled session token is never a production credential.
+- The authoritative server is not allowed to boot while its CORS registration is permissive. Until the server consumes the explicit allowed-origin list directly, the production entrypoint rejects that unsafe configuration rather than starting.
+
+The checked-in `.env.example` documents this contract without containing production credentials. Production secrets and identity material must be supplied only by the deployment secret/configuration system.
 
 ## Offline operating contract
 
@@ -51,4 +66,4 @@ Google Stitch is used for design exploration and developer handoff through `DESI
 
 ## Definition of done
 
-A production rollout is not complete until a clean environment can apply the ordered migrations and pass validation, an authorized user can execute the lifecycle, unauthorized users are denied, offline records synchronize safely, retries are idempotent, conflicts remain visible, value cannot bypass evidence/verification, registry events are auditable, settlement cannot finalize without external confirmation/reconciliation, and UI claims can be traced to authoritative state.
+A production rollout is not complete until a clean environment can apply the ordered migrations and pass validation, the production entrypoint rejects incomplete/unsafe configuration, an authorized user can execute the lifecycle, unauthorized users are denied, offline records synchronize safely, retries are idempotent, conflicts remain visible, value cannot bypass evidence/verification, registry events are auditable, settlement cannot finalize without external confirmation/reconciliation, and UI claims can be traced to authoritative state.
