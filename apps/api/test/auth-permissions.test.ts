@@ -1,4 +1,4 @@
-import { describe, expect, it } from "node:test";
+import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { HIGH_RISK_PERMISSIONS, canPerformHighRiskActionInDatabase, canVerifyEvidence, type AuthContext } from "../src/auth.js";
 
@@ -47,8 +47,8 @@ describe("high-risk authorization policy", () => {
     const allowed = await canPerformHighRiskActionInDatabase(client, auth, "org-1", "ISSUE_CREDENTIAL");
     assert.equal(allowed, true);
     assert.equal(queries.length, 1);
-    assert.match(queries[0].text, /jsonb_array_elements_text\(r\.permissions\)/);
-    assert.deepEqual(queries[0].values, ["identity-1", "org-1", ["ISSUE_CREDENTIAL", "registry:issue", "registry.issue"]]);
+    assert.match(queries[0]!.text, /jsonb_array_elements_text\(r\.permissions\)/);
+    assert.deepEqual(queries[0]!.values, ["identity-1", "org-1", ["ISSUE_CREDENTIAL", "registry:issue", "registry.issue"]]);
   });
 
   it("fails closed when the authoritative role query reports no permission", async () => {
@@ -60,7 +60,7 @@ describe("high-risk authorization policy", () => {
       query: async () => ({ rows: [{ ok: false }] }),
     } as never;
     const allowed = await canPerformHighRiskActionInDatabase(client, auth, "org-1", "SETTLE_FUNDS");
-    expect(allowed).toBe(false);
+    assert.equal(allowed, false);
   });
 
   it("uses explicit VERIFY_EVIDENCE permission instead of role-name elevation", async () => {
@@ -74,7 +74,7 @@ describe("high-risk authorization policy", () => {
     const allowed = await canVerifyEvidence(client, "identity-1", "evidence-1");
     assert.equal(allowed, true);
     assert.equal(queries.length, 1);
-    assert.doesNotMatch(queries[0].text, /lower\(r\.name\)/);
-    assert.deepEqual(queries[0].values, ["evidence-1", "identity-1", ["VERIFY_EVIDENCE", "verification:approve", "verification.approve"]]);
+    assert.doesNotMatch(queries[0]!.text, /lower\(r\.name\)/);
+    assert.deepEqual(queries[0]!.values, ["evidence-1", "identity-1", ["VERIFY_EVIDENCE", "verification:approve", "verification.approve"]]);
   });
 });
