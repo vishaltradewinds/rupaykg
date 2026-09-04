@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "node:test";
+import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
@@ -7,7 +7,7 @@ const databaseUrl = process.env.DATABASE_URL;
 const pool = databaseUrl ? new Pool({ connectionString: databaseUrl }) : null;
 let settlementId = "";
 
-beforeAll(async () => {
+before(async () => {
   if (!pool) return;
   const result = await pool.query<{ id: string }>(
     `insert into settlements (amount, currency, status, authorization_reference, verified_at)
@@ -15,10 +15,10 @@ beforeAll(async () => {
      returning id`,
     [randomUUID()],
   );
-  settlementId = result.rows[0].id;
+  settlementId = result.rows[0]!.id;
 });
 
-afterAll(async () => {
+after(async () => {
   if (!pool) return;
   if (settlementId) await pool.query("delete from settlements where id = $1", [settlementId]);
   await pool.end();
@@ -71,7 +71,7 @@ describe("settlement reconciliation invariants", () => {
       `update settlements set status = 'SETTLED' where id = $1 returning status`,
       [settlementId],
     );
-    expect(settled.rows[0].status).toBe("SETTLED");
+    assert.equal(settled.rows[0]!.status, "SETTLED");
   });
 
   it("rejects mutation or clearing of confirmed reconciliation evidence", async () => {
