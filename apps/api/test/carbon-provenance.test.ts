@@ -30,23 +30,23 @@ test("carbon provenance is immutable in PostgreSQL", async (t) => {
 
     await assert.rejects(
       pool.query("update carbon_calculations set dataset_hash=$2 where id=$1", [calculationId, "d".repeat(64)]),
-      /dataset provenance cannot be changed/,
+      /carbon calculation dataset provenance cannot be changed/,
     );
     await assert.rejects(
       pool.query("update carbon_calculations set formula_hash=$2 where id=$1", [calculationId, "e".repeat(64)]),
-      /formula provenance cannot be changed/,
+      /carbon calculation formula provenance cannot be changed/,
     );
     await assert.rejects(
       pool.query("update carbon_calculations set calculation_trace=$2 where id=$1", [calculationId, JSON.stringify([{ equationId: "ALTERED" }])]),
-      /calculation trace cannot be changed/,
+      /carbon calculation trace cannot be changed/,
     );
     await assert.rejects(
       pool.query("update carbon_calculations set provenance_version='2' where id=$1", [calculationId]),
-      /provenance version cannot be changed/,
+      /carbon calculation provenance version cannot be changed/,
     );
     await assert.rejects(
       pool.query("update carbon_calculations set calculation_hash=$2 where id=$1", [calculationId, "f".repeat(64)]),
-      /calculation provenance hash cannot be changed/,
+      /carbon calculation hash cannot be changed/,
     );
   } finally {
     await pool.query("delete from carbon_calculations where id=$1", [calculationId]);
