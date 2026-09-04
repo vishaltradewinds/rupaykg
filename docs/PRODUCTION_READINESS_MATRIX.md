@@ -13,7 +13,7 @@ A status must never be inferred from legacy documentation alone.
 
 ## Current evidence snapshot
 
-The canonical `main` branch has passed the full CI validation chain through GitHub Actions run **#269** on commit `fa83b6a4eea689563ae2baa644d28f74b60affc6`: migration validation, clean PostgreSQL migration, typecheck, production build and the complete discovered test suite all passed. The immediately preceding runtime-acceptance correction was independently verified by CI run **#268** on commit `6f5d91cf2dc90fc87c609383a602c66eedeecf8`. These are repository/CI evidence only; they do not replace external acceptance or production configuration.
+The canonical `main` branch has passed the full CI validation chain through GitHub Actions run **#274** on commit **`91d93e2c9f2f54b0a688617ec68cd2964d0198df`**: migration validation, clean PostgreSQL migration, typecheck, production build and the complete discovered test suite all passed. The current commit also includes the isolated HTTP runtime acceptance suite for registry and settlement authorization/finalization, including explicit high-risk permission denial, credential issuance/activation, settlement authorization → execution → external confirmation/reconciliation, immutable settlement evidence, governed transfer and retirement, and the production `syntheticData: false` assertion. The preceding carbon runtime-acceptance correction was independently verified by CI run **#268** on commit **`6f5d91cf2dc90fc87c609383a602c66eedeecf8`**. These are repository/CI evidence only; they do not replace external acceptance or production configuration.
 
 | Domain | Current status | Acceptance evidence / remaining gate |
 |---|---|---|
@@ -30,12 +30,12 @@ The canonical `main` branch has passed the full CI validation chain through GitH
 | Methodology governance | AMBER | Source lock, applicability/parameter/equation mappings, independent numerical-reconciliation evidence and independent regression evidence are database-enforced and tested; actual regulatory/production methodology approval remains external. |
 | EPR/compliance | GREEN | Evidence/authorization controls are present in current value routes and tests. |
 | ESG reporting | GREEN | Organization-scoped reporting path exists and is built in CI. |
-| Credential issuance | GREEN | High-risk DB permission boundary prevents unauthorized registry issuance; lifecycle and guardrail tests pass. |
-| Credential transfer/retirement | GREEN | High-risk DB permission boundary applies to registry events; governed transitions are tested. |
-| Registry auditability | GREEN | Registry events are protected as append-only/auditable state. |
-| Settlement authorization | GREEN | Explicit high-risk settlement authorization is required and settlement transition controls are tested. |
-| Settlement finalization | GREEN | External reference + confirmation + reconciliation are required by database controls and integration tests. |
-| Settlement evidence immutability | GREEN | Database guard prevents clearing/changing confirmation/reconciliation evidence. |
+| Credential issuance | GREEN | High-risk DB permission boundary prevents unauthorized registry issuance; HTTP runtime acceptance covers permission denial, issuance, activation and non-synthetic production response. |
+| Credential transfer/retirement | GREEN | High-risk DB permission boundary applies to registry events; HTTP runtime acceptance covers denied transfer, governed transfer and retirement. |
+| Registry auditability | GREEN | Registry events are protected as append-only/auditable state; runtime fixtures are isolated rather than deleting immutable events during teardown. |
+| Settlement authorization | GREEN | Explicit high-risk settlement authorization is required and HTTP runtime acceptance covers the transition. |
+| Settlement finalization | GREEN | External reference + confirmation + reconciliation are required by database controls and HTTP runtime acceptance; premature direct `SETTLED` transition is rejected. |
+| Settlement evidence immutability | GREEN | Database guard and HTTP runtime acceptance prevent clearing/changing confirmation/reconciliation evidence. |
 | AI/intelligence | GREEN | Advisory boundary; authoritative state is not delegated to AI and runtime acceptance verifies non-mutation. |
 | UI truthfulness | GREEN | UI consumes backend-authorized data and distinguishes authoritative state; frontend production build/typecheck pass. |
 | Regulatory source catalog | AMBER | Current catalog is PostgreSQL-backed and exact BEE source provenance corrections are recorded; maintained real regulatory/reference data still requires operational provisioning and ongoing verification. |
