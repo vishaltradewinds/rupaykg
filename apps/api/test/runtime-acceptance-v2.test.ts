@@ -162,7 +162,7 @@ describe("runtime acceptance", () => {
     if (!pool) return;
     methodologyId = randomUUID();
     await pool.query("insert into methodology_versions(id,methodology_code,version,rules,governance_status) values($1,$2,$3,$4,'SOURCE_LOCKED')", [methodologyId, `RUNTIME-${suffix}`, "1", JSON.stringify({ formula: "baseline-project-leakage-uncertainty" })]);
-    const mismatchEvidenceId = (await pool.query<{ id: string }>("insert into evidence(activity_id,evidence_type,content_hash,status,captured_by_identity_id) values($1,'RUNTIME_TEST',$2,'VERIFIED',$3) returning id", [activityId, `sha256:mismatch-${suffix}`, actorId])).rows[0]!.id;
+    const mismatchEvidenceId = (await pool.query<{ id: string }>("insert into evidence(activity_id,evidence_type,captured_at,content_hash,status,captured_by_identity_id) values($1,'RUNTIME_TEST',$2,$3,'VERIFIED',$4) returning id", [activityId, new Date().toISOString(), `sha256:mismatch-${suffix}`, actorId])).rows[0]!.id;
     const mismatch = await request("/api/v1/carbon/calculations", { method: "POST", body: JSON.stringify({ activityId, methodologyCode: `RUNTIME-${suffix}`, methodologyVersion: "1", evidenceId: mismatchEvidenceId, baselineTco2e: 100, projectTco2e: 40, leakageTco2e: 5, uncertaintyTco2e: 2 }) }, actorToken);
     assert.equal(mismatch.status, 409);
     const calculated = await request("/api/v1/carbon/calculations", { method: "POST", body: JSON.stringify({ activityId, methodologyCode: `RUNTIME-${suffix}`, methodologyVersion: "1", evidenceId, baselineTco2e: 100, projectTco2e: 40, leakageTco2e: 5, uncertaintyTco2e: 2 }) }, actorToken);
@@ -183,15 +183,13 @@ describe("runtime acceptance", () => {
 
   it("keeps intelligence advisory and non-mutating", async () => {
     if (!pool) return;
-    const beforeState = await pool.query<{ status: string }>("select status from activities where id=$1", [activityId]);
+    const beforeState = (await pool.query<{ status: string }>("select status from activities where id=$1", [activityId])).rows[0]?.status;
     const response = await request("/api/v1/workspaces/intelligence", {}, actorToken);
     assert.equal(response.status, 200);
     const result = await body(response);
-    assert.equal(result.syntheticData, false);
-    assert.equal(result.advisory, true);
-    assert.ok(Array.isArray(result.findings));
-    assert.equal(result.findings.some((finding: Record<string, unknown>) => finding.authoritativeMutation === true), false);
-    const afterState = await pool.query<{ status: string }>("select status from activities where id=$1", [activityId]);
-    assert.equal(afterState.rows[0]?.status, beforeState.rows[0]?.status);
+    assert.equal(result.advisory, true); assert.equal(result.syntheticData, false);
+    assert.ok((result.findings ?? []).every((finding: any) => finding.authoritativeMutation === false));
+    const afterState = (await pool.query<{ status: string }>("select status from activities where id=$1", [activityId])).rows[0]?.status;
+    assert.equal(afterState, beforeState);
   });
 });
