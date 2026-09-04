@@ -97,7 +97,7 @@ before(async () => {
   }
 
   const port = new URL(baseUrl).port;
-  server = spawn(process.execPath, ["dist/server.js"], {
+  server = spawn(process.execPath, ["dist/src/server.js"], {
     cwd: process.cwd(),
     env: { ...process.env, PORT: port, HOST: "127.0.0.1", DATABASE_URL: databaseUrl, DATABASE_SSL: "false" },
     stdio: ["ignore", "ignore", "pipe"],
@@ -106,7 +106,7 @@ before(async () => {
   await waitFor(`${baseUrl}/health`, 200, server, "server");
 
   const noDbPort = String(Number(port) + 1);
-  noDbServer = spawn(process.execPath, ["dist/server.js"], {
+  noDbServer = spawn(process.execPath, ["dist/src/server.js"], {
     cwd: process.cwd(),
     env: { ...process.env, PORT: noDbPort, HOST: "127.0.0.1", DATABASE_URL: "", DATABASE_SSL: "false" },
     stdio: ["ignore", "ignore", "pipe"],
