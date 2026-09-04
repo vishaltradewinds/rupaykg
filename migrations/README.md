@@ -28,6 +28,7 @@ Apply migrations in filename order against a fresh PostgreSQL database:
 24. `025_methodology_reconciliation_evidence.sql` — independent numerical reconciliation and regression-verification evidence required for production eligibility.
 25. `026_regulatory_source_provenance.sql` — exact verified official-source corrections and verification dates for regulatory records; does not rewrite the historical seed migration.
 26. `027_verification_permission_guard.sql` — database verification authorization guard requiring explicit `VERIFY_EVIDENCE` permission rather than legacy role-name elevation.
+27. `028_settlement_retired_credential_guard.sql` — prevents settlement creation for retired credentials and prevents retirement while an attached settlement remains open.
 
 Migration `023` is intentionally absent from the current repository history; do not renumber later migrations to fill the gap. Migration numbering is identity, not a requirement for contiguous integers.
 
@@ -50,3 +51,5 @@ An organization may have explicit verified geography roots. When roots exist, ac
 ## Settlement truth rule
 
 A settlement may enter `SETTLED` only when the authoritative settlement record contains an external settlement reference, an external-authority confirmation timestamp, and a reconciliation reference. These fields cannot be cleared after confirmation. Internal workflow transitions alone must never be treated as proof that funds moved.
+
+A credential in `RETIRED` state cannot be used to create a settlement. A credential cannot be retired while it has an open settlement (`CREATED`, `AUTHORIZED`, `EXECUTING`, or `RECONCILING`). These lifecycle constraints are enforced at the PostgreSQL boundary rather than relying only on HTTP route behavior.
