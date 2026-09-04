@@ -74,17 +74,17 @@ after(async () => {
   if (!pool || !ownerOrgId) return;
   const c = await pool.connect();
   try {
-    await c.query("delete from settlement_events where settlement_id in (select id from settlements where payer_id=$1 or payee_id=$1)", [ownerOrgId]);
-    await c.query("delete from settlements where payer_id=$1 or payee_id=$1", [ownerOrgId]);
-    await c.query("delete from registry_events where credential_id in (select id from credentials where issuer_organization_id=$1)", [ownerOrgId]);
-    await c.query("delete from credentials where issuer_organization_id=$1", [ownerOrgId]);
+    await c.query("delete from settlement_events where settlement_id in (select id from settlements where payer_id in ($1,$2) or payee_id in ($1,$2))", [ownerOrgId, destinationOrgId]);
+    await c.query("delete from settlements where payer_id in ($1,$2) or payee_id in ($1,$2)", [ownerOrgId, destinationOrgId]);
+    await c.query("delete from registry_events where credential_id in (select id from credentials where issuer_organization_id in ($1,$2))", [ownerOrgId, destinationOrgId]);
+    await c.query("delete from credentials where issuer_organization_id in ($1,$2)", [ownerOrgId, destinationOrgId]);
     await c.query("delete from verifications where evidence_id in (select id from evidence where activity_id in (select id from activities where organization_id=$1))", [ownerOrgId]);
     await c.query("delete from evidence where activity_id in (select id from activities where organization_id=$1)", [ownerOrgId]);
     await c.query("delete from measurements where activity_id in (select id from activities where organization_id=$1)", [ownerOrgId]);
     await c.query("delete from activities where organization_id=$1", [ownerOrgId]);
     await c.query("delete from identity_sessions where identity_id in ($1,$2)", [actorId, verifierId]);
-    await c.query("delete from organization_memberships where organization_id=$1", [ownerOrgId]);
-    await c.query("delete from roles where organization_id=$1", [ownerOrgId]);
+    await c.query("delete from organization_memberships where identity_id in ($1,$2) or organization_id in ($3,$4)", [actorId, verifierId, ownerOrgId, destinationOrgId]);
+    await c.query("delete from roles where organization_id in ($1,$2)", [ownerOrgId, destinationOrgId]);
     await c.query("delete from organization_geography_scopes where organization_id=$1", [ownerOrgId]);
     await c.query("delete from identities where id in ($1,$2)", [actorId, verifierId]);
     await c.query("delete from geography where id=$1", [geographyId]);
@@ -147,7 +147,7 @@ describe("registry and settlement runtime acceptance", () => {
 
   it("requires current-owner transfer permission and permits governed retirement", async () => {
     if (!pool) return;
-    const denied = (await request(`/api/v1/credentials/${credentialId}/transfer`, { method: "POST", body: JSON.stringify({ toOwnerId: destinationOrgId }) }, verifierToken));
+    const denied = await request(`/api/v1/credentials/${credentialId}/transfer`, { method: "POST", body: JSON.stringify({ toOwnerId: destinationOrgId }) }, verifierToken);
     assert.equal(denied.status, 403);
     assert.equal((await body(denied)).code, "HIGH_RISK_PERMISSION_REQUIRED");
     const transferred = await request(`/api/v1/credentials/${credentialId}/transfer`, { method: "POST", body: JSON.stringify({ toOwnerId: destinationOrgId }) }, actorToken);
