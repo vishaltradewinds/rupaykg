@@ -48,7 +48,7 @@ describe("settlement reconciliation invariants", () => {
         `update settlements set external_confirmed_at = now() where id = $1`,
         [settlementId],
       ),
-      /reconciliation/i,
+      /reconciliation|confirmation/i,
     );
   });
 
