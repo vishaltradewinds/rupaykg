@@ -10,6 +10,8 @@ const pool = databaseUrl ? new Pool({ connectionString: databaseUrl, max: 4 }) :
 const suffix = randomUUID();
 let server: ChildProcess | null = null;
 let noDbServer: ChildProcess | null = null;
+let serverError = "";
+let noDbServerError = "";
 let orgId = "";
 let geographyId = "";
 let outOfScopeGeographyId = "";
@@ -30,10 +32,20 @@ function token(): string {
 function tokenHash(value: string): string {
   return createHash("sha256").update(value).digest("hex");
 }
-async function waitFor(url: string, expectedStatus: number, child: ChildProcess, timeoutMs = 15_000): Promise<void> {
+function captureErrors(child: ChildProcess, target: "server" | "noDb"): void {
+  child.stderr?.setEncoding("utf8");
+  child.stderr?.on("data", (chunk: string) => {
+    if (target === "server") serverError += chunk;
+    else noDbServerError += chunk;
+  });
+}
+async function waitFor(url: string, expectedStatus: number, child: ChildProcess, target: "server" | "noDb", timeoutMs = 15_000): Promise<void> {
   const started = Date.now();
   while (Date.now() - started < timeoutMs) {
-    if (child.exitCode !== null) throw new Error(`runtime server exited with code ${child.exitCode}`);
+    if (child.exitCode !== null) {
+      const details = target === "server" ? serverError : noDbServerError;
+      throw new Error(`runtime server exited with code ${child.exitCode}${details ? `: ${details.trim()}` : ""}`);
+    }
     try {
       const response = await fetch(url);
       if (response.status === expectedStatus) return;
@@ -59,7 +71,6 @@ before(async () => {
   try {
     await c.query("BEGIN");
     orgId = (await c.query<{ id: string }>("insert into organizations(name,organization_type) values($1,'COLLECTOR') returning id", [`runtime-${suffix}`])).rows[0]!.id;
-    const otherOrg = (await c.query<{ id: string }>("insert into organizations(name,organization_type) values($1,'COLLECTOR') returning id", [`runtime-other-${suffix}`])).rows[0]!.id;
     geographyId = (await c.query<{ id: string }>("insert into geography(kind,code,name) values('STATE_UT',$1,$2) returning id", [`RUNTIME-${suffix}`, `Runtime State ${suffix}`])).rows[0]!.id;
     outOfScopeGeographyId = (await c.query<{ id: string }>("insert into geography(kind,code,name) values('STATE_UT',$1,$2) returning id", [`RUNTIME-OTHER-${suffix}`, `Runtime Other State ${suffix}`])).rows[0]!.id;
     await c.query("insert into organization_geography_scopes(organization_id,geography_id) values($1,$2)", [orgId, geographyId]);
@@ -89,17 +100,19 @@ before(async () => {
   server = spawn(process.execPath, ["dist/server.js"], {
     cwd: process.cwd(),
     env: { ...process.env, PORT: port, HOST: "127.0.0.1", DATABASE_URL: databaseUrl, DATABASE_SSL: "false" },
-    stdio: "ignore",
+    stdio: ["ignore", "ignore", "pipe"],
   });
-  await waitFor(`${baseUrl}/health`, 200, server);
+  captureErrors(server, "server");
+  await waitFor(`${baseUrl}/health`, 200, server, "server");
 
   const noDbPort = String(Number(port) + 1);
   noDbServer = spawn(process.execPath, ["dist/server.js"], {
     cwd: process.cwd(),
     env: { ...process.env, PORT: noDbPort, HOST: "127.0.0.1", DATABASE_URL: "", DATABASE_SSL: "false" },
-    stdio: "ignore",
+    stdio: ["ignore", "ignore", "pipe"],
   });
-  await waitFor(`http://127.0.0.1:${noDbPort}/health`, 503, noDbServer);
+  captureErrors(noDbServer, "noDb");
+  await waitFor(`http://127.0.0.1:${noDbPort}/health`, 503, noDbServer, "noDb");
 });
 
 after(async () => {
