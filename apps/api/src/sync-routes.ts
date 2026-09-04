@@ -110,11 +110,11 @@ async function applyOperation(client: PoolClient, identityId: string, payload: O
     const originType = stringValue(payload, "originType");
     const resourceForm = stringValue(payload, "resourceForm");
     const materialCode = stringValue(payload, "materialCode");
-    const unit = stringValue(payload, "unit");
     const quantity = positiveNumber(payload, "quantity");
+    const unit = stringValue(payload, "unit");
     const sourceGeographyId = payload.sourceGeographyId == null ? null : stringValue(payload, "sourceGeographyId");
     const destinationGeographyId = payload.destinationGeographyId == null ? null : stringValue(payload, "destinationGeographyId");
-    if (!organizationId || !originType || !resourceForm || !materialCode || !unit || quantity === null || (sourceGeographyId && !isUuid(sourceGeographyId)) || (destinationGeographyId && !isUuid(destinationGeographyId))) throw Object.assign(new Error("RESOURCE_FLOW_CREATE requires organizationId, originType, resourceForm, materialCode, positive quantity and unit"), { code: "INVALID_OPERATION" });
+    if (!organizationId || !originType || !resourceForm || !materialCode || quantity === null || !unit || (sourceGeographyId && !isUuid(sourceGeographyId)) || (destinationGeographyId && !isUuid(destinationGeographyId))) throw Object.assign(new Error("RESOURCE_FLOW_CREATE requires organizationId, originType, resourceForm, materialCode, positive quantity and unit"), { code: "INVALID_OPERATION" });
     if (!await verifiedOrganizationAccess(client, identityId, organizationId)) throw Object.assign(new Error("No verified membership for resource-flow organization"), { code: "OPERATION_FORBIDDEN" });
     if (sourceGeographyId && !await authorizedGeography(client, identityId, sourceGeographyId, organizationId)) throw Object.assign(new Error("Source geography is outside organization authorization scope"), { code: "OPERATION_FORBIDDEN" });
     if (destinationGeographyId && !await authorizedGeography(client, identityId, destinationGeographyId, organizationId)) throw Object.assign(new Error("Destination geography is outside organization authorization scope"), { code: "OPERATION_FORBIDDEN" });
@@ -146,7 +146,7 @@ export async function registerSyncRoutes(app: FastifyInstance, pool: Pool | null
         if (!membership.rows[0]?.ok) { await client.query("ROLLBACK"); return reply.code(400).send({ error: "Device identity must have verified membership in the organization", code: "DEVICE_IDENTITY_FORBIDDEN" }); }
         const existing = await client.query<{ id: string; status: string }>("select id,status from field_devices where device_id=$1", [deviceId]);
         if (existing.rows[0]) { await client.query("ROLLBACK"); return reply.code(409).send({ error: "Device identifier is already enrolled", code: "DEVICE_ALREADY_ENROLLED", device: existing.rows[0] }); }
-        const inserted = await client.query<{ id: string; device_id: string; identity_id: string; organization_id: string; status: string }>("insert into field_devices(device_id,identity_id,organization_id,status,registered_by_identity_id,registered_at) values($1,$2,$3,'PENDING',$4,now()) returning id,device_id,identity_id,organization_id,status,registered_by_identity_id,registered_at", [deviceId, identityId, organizationId, auth.identityId]);
+        const inserted = await client.query<{ id: string; device_id: string; identity_id: string; organization_id: string; status: string }>("insert into field_devices(device_id,identity_id,organization_id,status,registered_by_identity_id,registered_at) values($1,$2,$3,'PENDING',$4) returning id,device_id,identity_id,organization_id,status,registered_by_identity_id,registered_at", [deviceId, identityId, organizationId, auth.identityId]);
         const device = inserted.rows[0];
         if (!device) throw new Error("Field device was not created");
         await client.query("insert into audit_events(actor_identity_id,organization_id,action,target_type,target_id,event_hash,payload) values($1,$2,'FIELD_DEVICE_ENROLLED','field_device',$3,$4,$5)", [auth.identityId, organizationId, device.id, payloadHash({ action: "FIELD_DEVICE_ENROLLED", deviceId: device.id, registeredIdentityId: identityId }), { deviceId: device.device_id, identityId: device.identity_id, status: device.status }]);
@@ -181,7 +181,7 @@ export async function registerSyncRoutes(app: FastifyInstance, pool: Pool | null
         await client.query("COMMIT");
         return reply.code(200).send({ source: "postgresql", syntheticData: false, authoritativeMutation: true, device: verifiedDevice });
       } catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }
-    } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Field-device verification unavailable", code: "FIELD_DEVICE_VERIFICATION_UNAVAILABLE", syntheticData: false }); }
+    } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Field device verification unavailable", code: "FIELD_DEVICE_VERIFICATION_UNAVAILABLE", syntheticData: false }); }
   });
 
   app.get("/api/v1/field-devices", async (request, reply) => {
@@ -212,7 +212,8 @@ export async function registerSyncRoutes(app: FastifyInstance, pool: Pool | null
         const replay = await client.query<{ id: string; status: string; payload_hash: string; server_cursor: string | null; applied_entity_type: string | null; applied_entity_id: string | null }>(`select id, status, payload_hash, server_cursor, applied_entity_type, applied_entity_id from field_sync_envelopes where device_id = $1 and idempotency_key = $2 for update`, [deviceId, idempotencyKey]);
         if (replay.rows[0]) {
           const existing = replay.rows[0];
-          if (existing.payload_hash !== hash) { await client.query("ROLLBACK"); return reply.code(409).send({ error: "Idempotency key was already used with a different payload", code: "IDEMPOTENCY_CONFLICT" }); }
+          const samePayload = await client.query<{ same: boolean }>(`select payload = $3::jsonb as same from field_sync_envelopes where id = $1`, [existing.id, idempotencyKey, JSON.stringify(payload)]);
+          if (!samePayload.rows[0]?.same) { await client.query("ROLLBACK"); return reply.code(409).send({ error: "Idempotency key was already used with a different payload", code: "IDEMPOTENCY_CONFLICT" }); }
           await client.query("COMMIT"); return reply.code(200).send({ source: "postgresql", syntheticData: false, replay: true, envelope: existing });
         }
         const sequenceReplay = await client.query<{ id: string; idempotency_key: string; payload_hash: string; status: string; server_cursor: string | null }>(`select id, idempotency_key, payload_hash, status, server_cursor from field_sync_envelopes where device_id = $1 and client_sequence = $2 for update`, [deviceId, clientSequence]);
