@@ -9,8 +9,8 @@ export type ProductionConfig = {
   syntheticData: false;
 };
 
-function required(name: string): string {
-  const value = process.env[name]?.trim();
+function required(env: NodeJS.ProcessEnv, name: string): string {
+  const value = env[name]?.trim();
   if (!value) throw new Error(`PRODUCTION_CONFIG_INVALID: ${name} is required`);
   return value;
 }
@@ -56,9 +56,9 @@ export function readProductionConfig(env: NodeJS.ProcessEnv = process.env): Prod
   if (env.VITE_RUPAYKG_SESSION_TOKEN?.trim()) throw new Error("PRODUCTION_CONFIG_INVALID: VITE_RUPAYKG_SESSION_TOKEN must not be provided in production");
   return {
     environment: "production",
-    databaseUrl: productionDatabaseUrl(required("DATABASE_URL")),
+    databaseUrl: productionDatabaseUrl(required(env, "DATABASE_URL")),
     databaseSsl: "require",
-    allowedOrigins: origins(required("RUPAYKG_ALLOWED_ORIGINS")),
+    allowedOrigins: origins(required(env, "RUPAYKG_ALLOWED_ORIGINS")),
     authMode: "real",
     syntheticData: false,
   };
