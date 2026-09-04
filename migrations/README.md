@@ -27,6 +27,7 @@ Apply migrations in filename order against a fresh PostgreSQL database:
 23. `024_methodology_governance_immutability.sql` — forward-only methodology governance and immutable mapped/reconciled state.
 24. `025_methodology_reconciliation_evidence.sql` — independent numerical reconciliation and regression-verification evidence required for production eligibility.
 25. `026_regulatory_source_provenance.sql` — exact verified official-source corrections and verification dates for regulatory records; does not rewrite the historical seed migration.
+26. `027_verification_permission_guard.sql` — database verification authorization guard requiring explicit `VERIFY_EVIDENCE` permission rather than legacy role-name elevation.
 
 Migration `023` is intentionally absent from the current repository history; do not renumber later migrations to fill the gap. Migration numbering is identity, not a requirement for contiguous integers.
 
