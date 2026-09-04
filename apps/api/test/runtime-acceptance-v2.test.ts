@@ -24,6 +24,7 @@ let verifiedDeviceId = "";
 let envelopeId = "";
 let activityId = "";
 let evidenceId = "";
+let methodologyId = "";
 
 const token = () => randomBytes(32).toString("base64url");
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
@@ -97,10 +98,12 @@ after(async () => {
     await c.query("delete from field_sync_envelopes where device_id in (select id from field_devices where organization_id=$1)", [orgId]);
     await c.query("delete from field_sync_cursors where device_id in (select id from field_devices where organization_id=$1)", [orgId]);
     await c.query("delete from field_devices where organization_id=$1", [orgId]);
+    await c.query("delete from carbon_calculations where activity_id in (select id from activities where organization_id=$1)", [orgId]);
     await c.query("delete from verifications where evidence_id in (select id from evidence where activity_id in (select id from activities where organization_id=$1))", [orgId]);
     await c.query("delete from evidence where activity_id in (select id from activities where organization_id=$1)", [orgId]);
     await c.query("delete from measurements where activity_id in (select id from activities where organization_id=$1)", [orgId]);
     await c.query("delete from activities where organization_id=$1", [orgId]);
+    if (methodologyId) await c.query("delete from methodology_versions where id=$1", [methodologyId]);
     await c.query("delete from identity_sessions where identity_id in ($1,$2)", [actorId, verifierId]);
     await c.query("delete from organization_memberships where organization_id=$1", [orgId]);
     await c.query("delete from roles where organization_id=$1", [orgId]);
@@ -153,5 +156,42 @@ describe("runtime acceptance", () => {
     assert.equal(verified.status, 201);
     const state = await pool.query<{ activity_status: string; evidence_status: string }>("select a.status activity_status,e.status evidence_status from activities a join evidence e on e.activity_id=a.id where a.id=$1 and e.id=$2", [activityId, evidenceId]);
     assert.equal(state.rows[0]?.activity_status, "DRAFT"); assert.equal(state.rows[0]?.evidence_status, "VERIFIED");
+  });
+
+  it("binds carbon calculations to evidence and deterministic provenance, and fails closed on mismatched evidence", async () => {
+    if (!pool) return;
+    methodologyId = randomUUID();
+    await pool.query("insert into methodology_versions(id,methodology_code,version,rules,governance_status) values($1,$2,$3,$4,'SOURCE_LOCKED')", [methodologyId, `RUNTIME-${suffix}`, "1", JSON.stringify({ formula: "baseline-project-leakage-uncertainty" })]);
+    const mismatchEvidenceId = (await pool.query<{ id: string }>("insert into evidence(activity_id,evidence_type,content_hash,status,captured_by_identity_id) values($1,'RUNTIME_TEST',$2,'VERIFIED',$3) returning id", [activityId, `sha256:mismatch-${suffix}`, actorId])).rows[0]!.id;
+    const mismatch = await request("/api/v1/carbon/calculations", { method: "POST", body: JSON.stringify({ activityId, methodologyCode: `RUNTIME-${suffix}`, methodologyVersion: "1", evidenceId: mismatchEvidenceId, baselineTco2e: 100, projectTco2e: 40, leakageTco2e: 5, uncertaintyTco2e: 2 }) }, actorToken);
+    assert.equal(mismatch.status, 409);
+    const calculated = await request("/api/v1/carbon/calculations", { method: "POST", body: JSON.stringify({ activityId, methodologyCode: `RUNTIME-${suffix}`, methodologyVersion: "1", evidenceId, baselineTco2e: 100, projectTco2e: 40, leakageTco2e: 5, uncertaintyTco2e: 2 }) }, actorToken);
+    assert.equal(calculated.status, 201);
+    const result = await body(calculated);
+    assert.equal(result.syntheticData, false);
+    assert.equal(result.calculation.provenance_version, "1");
+    assert.match(result.calculation.dataset_hash, /^[a-f0-9]{64}$/);
+    assert.match(result.calculation.formula_hash, /^[a-f0-9]{64}$/);
+    assert.match(result.calculation.calculation_hash, /^[a-f0-9]{64}$/);
+    const second = await request("/api/v1/carbon/calculations", { method: "POST", body: JSON.stringify({ activityId, methodologyCode: `RUNTIME-${suffix}`, methodologyVersion: "1", evidenceId, baselineTco2e: 100, projectTco2e: 40, leakageTco2e: 5, uncertaintyTco2e: 2 }) }, actorToken);
+    assert.equal(second.status, 201);
+    const secondResult = await body(second);
+    assert.equal(secondResult.calculation.dataset_hash, result.calculation.dataset_hash);
+    assert.equal(secondResult.calculation.formula_hash, result.calculation.formula_hash);
+    assert.equal(secondResult.calculation.calculation_hash, result.calculation.calculation_hash);
+  });
+
+  it("keeps intelligence advisory and non-mutating", async () => {
+    if (!pool) return;
+    const beforeState = await pool.query<{ status: string }>("select status from activities where id=$1", [activityId]);
+    const response = await request("/api/v1/workspaces/intelligence", {}, actorToken);
+    assert.equal(response.status, 200);
+    const result = await body(response);
+    assert.equal(result.syntheticData, false);
+    assert.equal(result.advisory, true);
+    assert.ok(Array.isArray(result.findings));
+    assert.equal(result.findings.some((finding: Record<string, unknown>) => finding.authoritativeMutation === true), false);
+    const afterState = await pool.query<{ status: string }>("select status from activities where id=$1", [activityId]);
+    assert.equal(afterState.rows[0]?.status, beforeState.rows[0]?.status);
   });
 });
