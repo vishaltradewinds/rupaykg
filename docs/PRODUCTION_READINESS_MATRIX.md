@@ -11,35 +11,39 @@ This matrix converts the useful readiness discipline from the former AI Studio r
 
 A status must never be inferred from legacy documentation alone.
 
+## Current evidence snapshot
+
+The canonical `main` branch has passed the full CI validation chain through GitHub Actions run **#269** on commit `fa83b6a4eea689563ae2baa644d28f74b60affc6`: migration validation, clean PostgreSQL migration, typecheck, production build and the complete discovered test suite all passed. The immediately preceding runtime-acceptance correction was independently verified by CI run **#268** on commit `6f5d91cf2dc90fc87c609383a602c66eedeecf8`. These are repository/CI evidence only; they do not replace external acceptance or production configuration.
+
 | Domain | Current status | Acceptance evidence / remaining gate |
 |---|---|---|
-| Authoritative database | GREEN | PostgreSQL is the business-state source of truth. |
-| Lifecycle state model | GREEN | Current target defines authoritative lifecycle and value gates. |
-| Organization authorization | GREEN | Verified membership required for protected organization operations. |
-| Geography authorization | GREEN | Organization geography scope is checked server-side. |
-| Field-device enrollment | GREEN | Device must be verified and bound to authorized identity/org. |
-| Offline synchronization | GREEN | Envelopes carry identity, sequence/timestamp/idempotency data and are replay-aware. |
-| MRV measurements | GREEN | Measurement writes require authorized activity geography. |
-| Evidence | GREEN | Evidence requires activity linkage and content URI/hash; provenance is retained. |
-| Verification | GREEN | Verifier authorization and lifecycle controls are present. |
-| Carbon calculations | AMBER | Generic deterministic calculation is implemented and now evidence-bound with dataset/formula/calculation hashes; methodology-specific production eligibility still requires source lock, applicability mapping, numerical reconciliation and regression evidence. |
-| Methodology governance | AMBER | `methodology_versions` carries source, applicability, parameter, equation and reconciliation readiness fields; independent numerical-reconciliation and regression evidence is now a separate immutable governance record and is required for `PRODUCTION_ELIGIBLE`. |
-| EPR/compliance | GREEN | Evidence/authorization controls are present in current value routes. |
-| ESG reporting | GREEN | Organization-scoped reporting path exists. |
-| Credential issuance | GREEN | High-risk DB permission boundary prevents unauthorized registry issuance. |
-| Credential transfer/retirement | GREEN | High-risk DB permission boundary applies to registry events. |
+| Authoritative database | GREEN | PostgreSQL is the business-state source of truth; clean CI migration and DB-backed tests pass. |
+| Lifecycle state model | GREEN | Current target defines authoritative lifecycle and value gates; lifecycle integration tests execute in CI. |
+| Organization authorization | GREEN | Verified membership required for protected organization operations; authorization tests pass. |
+| Geography authorization | GREEN | Organization geography scope is checked server-side and exercised at runtime. |
+| Field-device enrollment | GREEN | Device must be verified and bound to authorized identity/org; pending-device runtime acceptance passes. |
+| Offline synchronization | GREEN | Envelopes carry identity, sequence/timestamp/idempotency data and are replay-aware; runtime replay and cross-identity rejection pass. |
+| MRV measurements | GREEN | Measurement writes require authorized activity geography; lifecycle runtime acceptance passes. |
+| Evidence | GREEN | Evidence requires activity linkage and content URI/hash; provenance is retained and independently verified. |
+| Verification | GREEN | Verifier authorization, self-verification rejection and database permission guard are covered. |
+| Carbon calculations | AMBER | Generic deterministic calculation is evidence-bound with dataset/formula/calculation hashes and mismatched-activity evidence now fails closed at runtime; methodology-specific production eligibility and external acceptance remain gated. |
+| Methodology governance | AMBER | Source lock, applicability/parameter/equation mappings, independent numerical-reconciliation evidence and independent regression evidence are database-enforced and tested; actual regulatory/production methodology approval remains external. |
+| EPR/compliance | GREEN | Evidence/authorization controls are present in current value routes and tests. |
+| ESG reporting | GREEN | Organization-scoped reporting path exists and is built in CI. |
+| Credential issuance | GREEN | High-risk DB permission boundary prevents unauthorized registry issuance; lifecycle and guardrail tests pass. |
+| Credential transfer/retirement | GREEN | High-risk DB permission boundary applies to registry events; governed transitions are tested. |
 | Registry auditability | GREEN | Registry events are protected as append-only/auditable state. |
-| Settlement authorization | GREEN | Explicit high-risk settlement authorization is required. |
-| Settlement finalization | GREEN | External reference + confirmation + reconciliation are required. |
+| Settlement authorization | GREEN | Explicit high-risk settlement authorization is required and settlement transition controls are tested. |
+| Settlement finalization | GREEN | External reference + confirmation + reconciliation are required by database controls and integration tests. |
 | Settlement evidence immutability | GREEN | Database guard prevents clearing/changing confirmation/reconciliation evidence. |
-| AI/intelligence | GREEN | Advisory boundary; authoritative state is not delegated to AI. |
-| UI truthfulness | GREEN | UI consumes backend-authorized data and distinguishes authoritative state. |
-| Regulatory source catalog | AMBER | Current catalog is PostgreSQL-backed; real regulatory/reference data must be provisioned and maintained. |
+| AI/intelligence | GREEN | Advisory boundary; authoritative state is not delegated to AI and runtime acceptance verifies non-mutation. |
+| UI truthfulness | GREEN | UI consumes backend-authorized data and distinguishes authoritative state; frontend production build/typecheck pass. |
+| Regulatory source catalog | AMBER | Current catalog is PostgreSQL-backed and exact BEE source provenance corrections are recorded; maintained real regulatory/reference data still requires operational provisioning and ongoing verification. |
 | External carbon-market submission | AMBER | Must remain manual/controlled until an official external interface is actually connected and tested. |
 | Physical instrumentation | AMBER | Hardware/site integration is an external acceptance gate, not simulated. |
 | External trust rails | NOT_VERIFIED | Legacy Hedera/VC capabilities are not assumed in the current repository without current implementation and live acceptance evidence. |
-| Production identity/role provisioning | AMBER | Requires controlled deployment-time provisioning. |
-| Cloud Run | AMBER | Final deployment gate after production PostgreSQL/configuration and runtime acceptance. |
+| Production identity/role provisioning | AMBER | Requires controlled deployment-time provisioning with real identities and explicit permissions. |
+| Cloud Run | AMBER | Final deployment gate after production PostgreSQL/configuration, external acceptance and runtime acceptance. |
 
 ## Required production acceptance
 
