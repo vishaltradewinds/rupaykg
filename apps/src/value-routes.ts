@@ -4,6 +4,7 @@ import { calculateEmissionReduction, sha256Canonical } from "@rupaykg/carbon";
 import { assessEprObligation } from "@rupaykg/compliance";
 import { classifyMetric } from "@rupaykg/esg";
 import { authenticate, canActForOrganization, type AuthContext } from "./auth.js";
+import { registerAuthRoutes } from "./auth-routes.js";
 
 type Reply = { code: (status: number) => { send: (body: unknown) => unknown } };
 type Request = { body: unknown; params: Record<string, string>; log: { error: (error: unknown) => void }; headers: Record<string, string | undefined> };
@@ -16,6 +17,7 @@ async function assertActivityGeographyScope(client: Pool | PoolClient, geography
 async function hasValuePermission(pool: Pool, functionName: "can_assess_epr" | "can_write_esg", identityId: string, organizationId: string): Promise<boolean> { const result = await pool.query<{ ok: boolean }>(`select ${functionName}($1,$2) as ok`, [identityId, organizationId]); return result.rows[0]?.ok === true; }
 
 export async function registerValueRoutes(app: FastifyInstance, pool: Pool | null): Promise<void> {
+  await registerAuthRoutes(app, pool);
   app.post("/api/v1/carbon/calculations", async (request, reply) => {
     const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
     const body = bodyOf(request as never);
