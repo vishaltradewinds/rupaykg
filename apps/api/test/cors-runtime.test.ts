@@ -2,12 +2,18 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { request } from "node:http";
 import { resolve } from "node:path";
+import { test } from "node:test";
 
 const appRoot = resolve(new URL("..", import.meta.url).pathname);
 const serverPath = resolve(appRoot, "dist/src/server.js");
 const port = 39127;
 
-function httpOptions(origin: string): Promise<{ statusCode?: number; headers: Record<string, string | string[] | undefined> }> {
+type HttpOptionsResult = {
+  headers: Record<string, string | string[] | undefined>;
+  statusCode?: number;
+};
+
+function httpOptions(origin: string): Promise<HttpOptionsResult> {
   return new Promise((resolveRequest, reject) => {
     const req = request({
       hostname: "127.0.0.1",
@@ -20,7 +26,11 @@ function httpOptions(origin: string): Promise<{ statusCode?: number; headers: Re
       },
     }, (res) => {
       res.resume();
-      res.on("end", () => resolveRequest({ statusCode: res.statusCode, headers: res.headers }));
+      res.on("end", () => {
+        const result: HttpOptionsResult = { headers: res.headers };
+        if (res.statusCode !== undefined) result.statusCode = res.statusCode;
+        resolveRequest(result);
+      });
     });
     req.on("error", reject);
     req.end();
