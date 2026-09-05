@@ -41,3 +41,5 @@ jobs:
       - run: npm run typecheck
       - run: npm run build
       - run: npm test
+      - name: Build production container
+        run: docker build --pull --tag rupaykg:ci .
