@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type { Pool } from "pg";
-import { authenticate, bearerChallenge, type AuthContext } from "./auth.js";
+import { authenticate, bearerChallenge, canVerifyEvidence, type AuthContext } from "./auth.js";
 
 async function requireAuth(app: FastifyInstance, pool: Pool | null, request: Parameters<typeof authenticate>[0], reply: { code: (status: number) => { send: (body: unknown) => unknown } }): Promise<AuthContext | null> {
   if (!pool) { reply.code(503).send({ error: "Authoritative API unavailable", code: "DATABASE_UNAVAILABLE", syntheticData: false }); return null; }
@@ -33,6 +33,39 @@ export async function registerWorkspaceRoutes(app: FastifyInstance, pool: Pool |
       pool.query(`select e.id,e.activity_id,e.measurement_id,e.evidence_type,e.status,e.captured_at,e.content_uri,e.content_hash from evidence e join activities a on a.id=e.activity_id where a.organization_id=any($1::uuid[])${clause} order by e.captured_at desc limit 100`,params),
       pool.query(`select v.id,v.evidence_id,v.activity_id,v.verifier_identity_id,v.decision,v.scope,v.rationale,v.decided_at from verifications v join evidence e on e.id=v.evidence_id join activities a on a.id=e.activity_id where a.organization_id=any($1::uuid[])${clause} order by v.decided_at desc limit 100`,params)]);return result({activities:activities.rows,measurements:measurements.rows,evidence:evidence.rows,verifications:verifications.rows});}
     catch(error){request.log.error(error);return reply.code(503).send({error:"MRV workspace unavailable",syntheticData:false});}
+  });
+
+  app.post("/api/v1/evidence/:evidenceId/verification", async (request, reply) => {
+    if (!pool) return reply.code(503).send({ error: "Evidence verification unavailable", code: "DATABASE_UNAVAILABLE", syntheticData: false });
+    let auth: AuthContext | null;
+    try { auth = await authenticate(request, pool); } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Authentication service unavailable", code: "AUTH_UNAVAILABLE", syntheticData: false }); }
+    if (!auth) return reply.code(401).send(bearerChallenge());
+    const { evidenceId } = request.params as { evidenceId: string };
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(evidenceId)) return reply.code(400).send({ error: "evidenceId must be a UUID", code: "INVALID_EVIDENCE_ID" });
+    const body = request.body && typeof request.body === "object" ? request.body as Record<string, unknown> : {};
+    const decision = typeof body.decision === "string" ? body.decision.trim().toUpperCase() : "";
+    const scope = typeof body.scope === "string" ? body.scope.trim() : "";
+    if (decision !== "APPROVED" || !scope) return reply.code(400).send({ error: "decision=APPROVED and scope are required", code: "INVALID_VERIFICATION" });
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      const evidence = await client.query<{ activity_id: string }>("select activity_id from evidence where id=$1 for update", [evidenceId]);
+      const activityId = evidence.rows[0]?.activity_id;
+      if (!activityId) { await client.query("ROLLBACK"); return reply.code(404).send({ error: "Evidence not found", code: "EVIDENCE_NOT_FOUND" }); }
+      const authorized = await canVerifyEvidence(client, auth.identityId, evidenceId);
+      if (!authorized) { await client.query("ROLLBACK"); return reply.code(403).send({ error: "Explicit verification permission required", code: "VERIFY_EVIDENCE_FORBIDDEN" }); }
+      const inserted = await client.query<{ id: string; evidence_id: string; activity_id: string; verifier_identity_id: string; decision: string; scope: string; decided_at: string }>(
+        "insert into verifications(evidence_id,activity_id,verifier_identity_id,decision,scope) values($1,$2,$3,$4,$5) returning id,evidence_id,activity_id,verifier_identity_id,decision,scope,decided_at",
+        [evidenceId, activityId, auth.identityId, decision, scope],
+      );
+      await client.query("update evidence set status='VERIFIED' where id=$1", [evidenceId]);
+      await client.query("COMMIT");
+      return reply.code(201).send({ source: "postgresql", syntheticData: false, authoritativeMutation: true, verification: inserted.rows[0] });
+    } catch (error) {
+      await client.query("ROLLBACK");
+      request.log.error(error);
+      return reply.code(503).send({ error: "Evidence verification unavailable", code: "VERIFICATION_UNAVAILABLE", syntheticData: false });
+    } finally { client.release(); }
   });
 
   app.get("/api/v1/workspaces/compliance", async (request, reply) => {
