@@ -4,7 +4,7 @@
   "private": true,
   "description": "India's Circular Economy Operating System",
   "packageManager": "npm@11",
-  "workspaces": ["apps", "packages/*"],
+  "workspaces": ["apps", "apps/web", "packages/*"],
   "scripts": {
     "build": "npm run build --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
@@ -13,6 +13,7 @@
     "validate:migrations": "node scripts/validate-migrations.mjs"
   },
   "devDependencies": {
-    "@types/node": "^24.0.0"
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.2"
   }
 }
