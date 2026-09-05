@@ -34,24 +34,23 @@ export async function verifyFirebaseIdToken(token: string, projectId = process.e
   if (!projectId) throw new Error("FIREBASE_PROJECT_ID is required for Firebase authentication");
   const parts = token.split(".");
   if (parts.length !== 3) throw new Error("Invalid Firebase ID token format");
-  const header = JSON.parse(b64url(parts[0]).toString("utf8")) as { alg?: string; kid?: string };
-  const payload = JSON.parse(b64url(parts[1]).toString("utf8")) as FirebaseClaims;
+  const header = JSON.parse(b64url(parts[0]!).toString("utf8")) as { alg?: string; kid?: string };
+  const payload = JSON.parse(b64url(parts[1]!).toString("utf8")) as FirebaseClaims;
   if (header.alg !== "RS256" || !header.kid) throw new Error("Unsupported Firebase ID token signing algorithm");
   if (payload.aud !== projectId || payload.iss !== `https://securetoken.google.com/${projectId}`) throw new Error("Firebase ID token project mismatch");
   const now = Math.floor(Date.now() / 1000);
   if (!payload.sub || payload.sub.length > 128 || payload.exp <= now || payload.iat > now + 60 || payload.auth_time > now + 60) throw new Error("Firebase ID token time or subject claims are invalid");
   const keys = await certificates();
-  const key = keys[header.kid];
-  if (!key) {
+  let publicKey = keys[header.kid];
+  if (!publicKey) {
     certCache = null;
     const refreshed = await certificates();
-    if (!refreshed[header.kid]) throw new Error("Firebase ID token signing key is unknown");
+    publicKey = refreshed[header.kid];
+    if (!publicKey) throw new Error("Firebase ID token signing key is unknown");
   }
-  const publicKey = (certCache?.keys ?? keys)[header.kid];
-  if (!publicKey) throw new Error("Firebase ID token signing key is unavailable");
   const verifier = createVerify("RSA-SHA256");
-  verifier.update(`${parts[0]}.${parts[1]}`);
+  verifier.update(`${parts[0]!}.${parts[1]!}`);
   verifier.end();
-  if (!verifier.verify(publicKey, b64url(parts[2]))) throw new Error("Firebase ID token signature is invalid");
+  if (!verifier.verify(publicKey, b64url(parts[2]!))) throw new Error("Firebase ID token signature is invalid");
   return payload;
 }
