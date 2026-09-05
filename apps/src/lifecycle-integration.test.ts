@@ -23,7 +23,7 @@ test("production lifecycle integration gate", { skip: !url }, async () => {
     await c.query("update evidence set status='VERIFIED' where id=$1", [evidence]);
     await c.query("update activities set status='COMPLETED' where id=$1", [activity]);
 
-    const unauthorizedRole = (await c.query("insert into roles(organization_id,name,permissions) values($1,'READER','[]') returning id", [org])).rows[0].id;
+    const unauthorizedRole = (await c.query("insert into roles(organization_id,name,permissions) values($1,'READER','[\"dashboard:read\"]') returning id", [org])).rows[0].id;
     const unauthorized = (await c.query("insert into identities(external_subject,display_name) values('integration-unauthorized','unauthorized') returning id")).rows[0].id;
     await c.query("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED')", [unauthorized, org, unauthorizedRole]);
     const credential = (await c.query("insert into credentials(activity_id,issuer_organization_id,trust_root_id,status,verification_id,quantity,unit) values($1,$2,'integration-root','ISSUED',$3,100,'kg') returning id", [activity, org, verification])).rows[0].id;
