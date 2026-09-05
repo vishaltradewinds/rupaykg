@@ -1,5 +1,8 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
+import fastifyStatic from "@fastify/static";
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 import { Pool, type PoolClient, type PoolConfig } from "pg";
 import { authenticate, bearerChallenge, canActForOrganization, canVerifyEvidence, type AuthContext } from "./auth.js";
 import { registerValueRoutes } from "./value-routes.js";
@@ -11,6 +14,10 @@ import { registerIntelligenceRoutes } from "./intelligence-routes.js";
 const app = Fastify({ logger: true });
 const allowedOrigins = process.env.RUPAYKG_ALLOWED_ORIGINS?.split(",").map(origin => origin.trim()).filter(Boolean) ?? [];
 await app.register(cors, { origin: allowedOrigins.length ? allowedOrigins : false });
+const webRoot = resolve(process.cwd(), "apps/web/dist");
+if (existsSync(webRoot)) {
+  await app.register(fastifyStatic, { root: webRoot, wildcard: false });
+}
 const databaseUrl = process.env.DATABASE_URL;
 const poolConfig: PoolConfig = { connectionString: databaseUrl, max: 10 };
 if (process.env.DATABASE_SSL === "require") {
@@ -47,7 +54,7 @@ app.get("/api/v1/overview", async (request, reply) => {
       query<{ count: string }>("select count(*)::text as count from verifications v join activities a on a.id=v.activity_id where a.organization_id = any($1::uuid[]) and v.decision = 'APPROVED'", [organizationIds]),
       query<{ count: string }>("select count(*)::text as count from obligations where organization_id = any($1::uuid[]) and status = 'OPEN'", [organizationIds]),
       query<{ count: string }>("select count(*)::text as count from credentials where issuer_organization_id = any($1::uuid[]) and status in ('ISSUED','ACTIVE','TRANSFERRED','RETIRED')", [organizationIds]),
-      query<{ count: string }>("select count(*)::text as count from settlements where (payer_id = any($1::uuid[]) or payee_id = any($1::uuid[])) and status = 'SETTLED'", [organizationIds, organizationIds]),
+      query<{ count: string }>("select count(*)::text as count from settlements where (payer_id = any($1::uuid[]) or payee_id = any($1::uuid[])) and status = 'SETTLED'", [organizationIds]),
     ]);
     return { source: "postgresql", syntheticData: false, counts: { activities: Number(activities[0]?.count ?? 0), measurements: Number(measurements[0]?.count ?? 0), evidence: Number(evidence[0]?.count ?? 0), approvedVerifications: Number(verifications[0]?.count ?? 0), openObligations: Number(obligations[0]?.count ?? 0), issuedOrActiveCredentials: Number(credentials[0]?.count ?? 0), settledTransactions: Number(settlements[0]?.count ?? 0) } };
   } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Authoritative overview unavailable", syntheticData: false }); }
@@ -66,6 +73,10 @@ await registerRegistryRoutes(app, { pool, query, withTransaction, requireAuth, r
 await registerSyncRoutes(app, { pool, query, withTransaction, requireAuth, requireOrganization, requestedGeography });
 await registerWorkspaceRoutes(app, { pool, query, withTransaction, requireAuth, requireOrganization, requestedGeography });
 await registerIntelligenceRoutes(app, { pool, query, withTransaction, requireAuth, requireOrganization, requestedGeography });
+
+if (existsSync(webRoot)) {
+  app.get("/*", async (_request, reply) => reply.sendFile("index.html"));
+}
 
 const port = Number(process.env.PORT ?? 3000);
 const host = process.env.HOST ?? "0.0.0.0";
