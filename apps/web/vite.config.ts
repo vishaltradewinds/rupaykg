@@ -3,6 +3,6 @@ import react from "@vitejs/plugin-react";
 
 export default defineConfig({
   plugins: [react()],
-  // CI browser smoke validates the built app through Vite's production preview.
+  // CI smoke uses the production preview and runner Chromium before release.
   build: { outDir: "dist", emptyOutDir: true },
 });
