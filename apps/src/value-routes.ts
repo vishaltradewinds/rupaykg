@@ -30,6 +30,9 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
       const evidence = await pool.query<{ id: string; activity_id: string | null; content_hash: string | null; content_uri: string | null; status: string }>("select id, activity_id, content_hash, content_uri, status from evidence where id = $1", [evidenceId]);
       const evidenceRow = evidence.rows[0];
       if (!evidenceRow || evidenceRow.activity_id !== activityId) return reply.code(409).send({ error: "Evidence must exist and belong to the activity", code: "EVIDENCE_ACTIVITY_MISMATCH" });
+      if (evidenceRow.status !== "VERIFIED") return reply.code(409).send({ error: "Evidence must be verified before value calculation", code: "EVIDENCE_NOT_VERIFIED" });
+      const verification = await pool.query<{ id: string }>("select id from verifications where evidence_id = $1 and decision = 'APPROVED' limit 1", [evidenceId]);
+      if (!verification.rows[0]) return reply.code(409).send({ error: "Approved verification is required before value calculation", code: "VERIFICATION_REQUIRED" });
       if (!evidenceRow.content_hash && !evidenceRow.content_uri) return reply.code(409).send({ error: "Evidence must have a content hash or authoritative content URI", code: "EVIDENCE_PROVENANCE_REQUIRED" });
       const method = await pool.query<{ id: string; rules: unknown; governance_status: string }>("select id, rules, governance_status from methodology_versions where methodology_code = $1 and version = $2", [methodologyCode, methodologyVersion]);
       if (!method.rows[0]) return reply.code(409).send({ error: "Methodology version is not registered", code: "METHODOLOGY_NOT_REGISTERED" });
