@@ -25,7 +25,9 @@ Production startup must use `apps/api/src/production-server.ts` (compiled as `di
 - `RUPAYKG_ALLOWED_ORIGINS` contains one or more HTTPS origins with no path, query or fragment.
 - `RUPAYKG_SYNTHETIC_DATA` is not enabled.
 - `VITE_RUPAYKG_SESSION_TOKEN` is unset. A client-bundled session token is never a production credential.
-- The authoritative server is not allowed to boot while its CORS registration is permissive. Until the server consumes the explicit allowed-origin list directly, the production entrypoint rejects that unsafe configuration rather than starting.
+- The authoritative Fastify server consumes the explicit `RUPAYKG_ALLOWED_ORIGINS` list directly. Reflective/permissive CORS is not a production policy.
+
+The production entrypoint validates the configuration and passes the validated values to the authoritative server; it does not rely on source scanning to enforce CORS. Runtime CORS behavior is covered by an automated acceptance test.
 
 The checked-in `.env.example` documents this contract without containing production credentials. Production secrets and identity material must be supplied only by the deployment secret/configuration system.
 
@@ -66,4 +68,4 @@ Google Stitch is used for design exploration and developer handoff through `DESI
 
 ## Definition of done
 
-A production rollout is not complete until a clean environment can apply the ordered migrations and pass validation, the production entrypoint rejects incomplete/unsafe configuration, an authorized user can execute the lifecycle, unauthorized users are denied, offline records synchronize safely, retries are idempotent, conflicts remain visible, value cannot bypass evidence/verification, registry events are auditable, settlement cannot finalize without external confirmation/reconciliation, and UI claims can be traced to authoritative state.
+A production rollout is not complete until a clean environment can apply the ordered migrations and pass validation, the production entrypoint rejects incomplete/unsafe configuration, an authorized user can execute the lifecycle, unauthorized users are denied, offline records synchronize safely, retries are idempotent, conflicts remain visible, value cannot bypass evidence/verification, registry events are auditable, settlement cannot finalize without external confirmation/reconciliation, CORS is enforced by the actual Fastify runtime policy, and UI claims can be traced to authoritative state.
