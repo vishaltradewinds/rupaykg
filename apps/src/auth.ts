@@ -57,14 +57,13 @@ export const HIGH_RISK_PERMISSIONS = {
 
 export type HighRiskAction = keyof typeof HIGH_RISK_PERMISSIONS;
 
-/** Generic tenant-local permission check. Permissions are always read from PostgreSQL. */
+/** Generic tenant-local permission check. The SQL predicate is authoritative for membership and role. */
 export async function hasOrganizationPermission(
   client: Pool | PoolClient,
   auth: AuthContext,
   organizationId: string,
   permissions: readonly string[],
 ): Promise<boolean> {
-  if (!canActForOrganization(auth, organizationId)) return false;
   const result = await client.query<{ ok: boolean }>(
     `select exists (
        select 1
