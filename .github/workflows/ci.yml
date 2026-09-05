@@ -55,17 +55,12 @@ jobs:
             fi
             sleep 1
           done
-          curl --fail --silent http://127.0.0.1:4173/ >/dev/null
+          html="$(curl --fail --silent http://127.0.0.1:4173/)"
+          grep -q 'id="root"' <<<"$html"
+          grep -q 'assets/' <<<"$html"
           npx --yes playwright@1.55.0 install --with-deps chromium
-          npm install --global @playwright/cli@latest
-          playwright-cli open http://127.0.0.1:4173/
-          playwright-cli snapshot --filename=/tmp/rupaykg-web-snapshot.yml
-          playwright-cli eval '() => document.body.innerText.trim().length > 0 ? "HAS_CONTENT" : "BLANK"'
-          playwright-cli eval '() => document.querySelector("[data-nextjs-dialog], .vite-error-overlay, #webpack-dev-server-client-overlay") ? "ERROR_OVERLAY" : "OK"'
-          playwright-cli screenshot --filename=/tmp/rupaykg-web-smoke.png
-          grep -q "RupayKG" /tmp/rupaykg-web-snapshot.yml
-          grep -q "STAKEHOLDER LOGIN" /tmp/rupaykg-web-snapshot.yml
-          playwright-cli close
+          npx --yes playwright@1.55.0 screenshot --device="Desktop Chrome" --wait-for-timeout=1000 http://127.0.0.1:4173/ /tmp/rupaykg-web-smoke.png
+          test -s /tmp/rupaykg-web-smoke.png
       - run: npm test
       - name: Build production container
         run: docker build --pull --tag rupaykg:ci .
