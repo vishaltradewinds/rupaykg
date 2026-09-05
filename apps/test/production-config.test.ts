@@ -8,6 +8,7 @@ const baseEnv = {
   DATABASE_SSL: "require",
   DATABASE_CA_CERT: "-----BEGIN CERTIFICATE-----\nproduction-test-ca\n-----END CERTIFICATE-----",
   RUPAYKG_AUTH_MODE: "real",
+  FIREBASE_PROJECT_ID: "rupaykg-test",
   RUPAYKG_ALLOWED_ORIGINS: "https://app.rupaykg.example,https://admin.rupaykg.example",
   RUPAYKG_SYNTHETIC_DATA: "false",
 };
@@ -20,6 +21,7 @@ test("production config accepts the fail-closed production contract", () => {
     databaseCaCert: baseEnv.DATABASE_CA_CERT,
     allowedOrigins: ["https://app.rupaykg.example", "https://admin.rupaykg.example"],
     authMode: "real",
+    firebaseProjectId: baseEnv.FIREBASE_PROJECT_ID,
     syntheticData: false,
   });
 });
@@ -31,6 +33,7 @@ test("production config rejects missing or unsafe production requirements", () =
     [{ ...baseEnv, DATABASE_SSL: "false" }, /DATABASE_SSL must be require/],
     [{ ...baseEnv, DATABASE_CA_CERT: "" }, /DATABASE_CA_CERT is required/],
     [{ ...baseEnv, RUPAYKG_AUTH_MODE: "session" }, /RUPAYKG_AUTH_MODE must be real/],
+    [{ ...baseEnv, FIREBASE_PROJECT_ID: "" }, /FIREBASE_PROJECT_ID is required/],
     [{ ...baseEnv, RUPAYKG_ALLOWED_ORIGINS: "http://app.rupaykg.example" }, /origin must use HTTPS/],
     [{ ...baseEnv, RUPAYKG_ALLOWED_ORIGINS: "https://app.rupaykg.example/path" }, /must not contain path/],
     [{ ...baseEnv, RUPAYKG_SYNTHETIC_DATA: "true" }, /synthetic data is forbidden/],
