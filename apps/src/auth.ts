@@ -22,8 +22,13 @@ export async function authenticate(request: FastifyRequest, pool: Pool | null): 
   const token = header.slice("Bearer ".length).trim();
   if (!token) return null;
   const rows = await pool.query<{ identity_id: string }>(
-    `select identity_id from identity_sessions
-     where token_hash = $1 and revoked_at is null and expires_at > now()`,
+    `select s.identity_id
+       from identity_sessions s
+       join identities i on i.id = s.identity_id
+      where s.token_hash = $1
+        and s.revoked_at is null
+        and s.expires_at > now()
+        and i.status = 'VERIFIED'`,
     [hashToken(token)],
   );
   if (!rows.rows[0]) return null;
@@ -52,15 +57,14 @@ export const HIGH_RISK_PERMISSIONS = {
 
 export type HighRiskAction = keyof typeof HIGH_RISK_PERMISSIONS;
 
-/** Role permissions are read from PostgreSQL so mutable permission state is never trusted from the token. */
-export async function canPerformHighRiskActionInDatabase(
+/** Generic tenant-local permission check. Permissions are always read from PostgreSQL. */
+export async function hasOrganizationPermission(
   client: Pool | PoolClient,
   auth: AuthContext,
   organizationId: string,
-  action: HighRiskAction,
+  permissions: readonly string[],
 ): Promise<boolean> {
   if (!canActForOrganization(auth, organizationId)) return false;
-  const aliases = HIGH_RISK_PERMISSIONS[action];
   const result = await client.query<{ ok: boolean }>(
     `select exists (
        select 1
@@ -75,9 +79,19 @@ export async function canPerformHighRiskActionInDatabase(
              where permission = any($3::text[])
           )
      ) as ok`,
-    [auth.identityId, organizationId, aliases],
+    [auth.identityId, organizationId, permissions],
   );
   return result.rows[0]?.ok === true;
+}
+
+/** Production high-risk permissions. Membership alone is intentionally insufficient. */
+export async function canPerformHighRiskActionInDatabase(
+  client: Pool | PoolClient,
+  auth: AuthContext,
+  organizationId: string,
+  action: HighRiskAction,
+): Promise<boolean> {
+  return hasOrganizationPermission(client, auth, organizationId, HIGH_RISK_PERMISSIONS[action]);
 }
 
 export async function canVerifyEvidence(client: PoolClient, identityId: string, evidenceId: string): Promise<boolean> {
