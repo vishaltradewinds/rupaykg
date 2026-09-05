@@ -58,11 +58,22 @@ jobs:
           html="$(curl --fail --silent http://127.0.0.1:4173/)"
           grep -q 'id="root"' <<<"$html"
           grep -q 'assets/' <<<"$html"
-          google-chrome --headless --no-sandbox --disable-gpu --dump-dom --virtual-time-budget=2000 http://127.0.0.1:4173/ > /tmp/rupaykg-web-dom.html
+          google-chrome --version
+          set +e
+          google-chrome --headless=new --no-sandbox --disable-gpu --disable-dev-shm-usage --disable-extensions --no-first-run --user-data-dir=/tmp/rupaykg-chrome --dump-dom --virtual-time-budget=2000 http://127.0.0.1:4173/ > /tmp/rupaykg-web-dom.html 2>/tmp/rupaykg-chrome-dom.err
+          dom_status=$?
+          set -e
+          cat /tmp/rupaykg-chrome-dom.err
+          test -s /tmp/rupaykg-web-dom.html
           grep -q 'RupayKG' /tmp/rupaykg-web-dom.html
           grep -q 'STAKEHOLDER LOGIN' /tmp/rupaykg-web-dom.html
-          google-chrome --headless --no-sandbox --disable-gpu --hide-scrollbars --window-size=1440,1200 --screenshot=/tmp/rupaykg-web-smoke.png --virtual-time-budget=2000 http://127.0.0.1:4173/
+          set +e
+          google-chrome --headless=new --no-sandbox --disable-gpu --disable-dev-shm-usage --disable-extensions --no-first-run --user-data-dir=/tmp/rupaykg-chrome-shot --hide-scrollbars --window-size=1440,1200 --screenshot=/tmp/rupaykg-web-smoke.png --virtual-time-budget=2000 http://127.0.0.1:4173/ >/tmp/rupaykg-chrome-shot.out 2>&1
+          shot_status=$?
+          set -e
+          cat /tmp/rupaykg-chrome-shot.out
           test -s /tmp/rupaykg-web-smoke.png
+          echo "Chrome DOM exit: $dom_status; screenshot exit: $shot_status"
       - run: npm test
       - name: Build production container
         run: docker build --pull --tag rupaykg:ci .
