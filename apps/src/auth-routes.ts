@@ -23,9 +23,6 @@ export async function registerAuthRoutes(app: FastifyInstance, pool: Pool | null
     try {
       const claims = await verifyFirebaseIdToken(idToken);
       if (claims.email && !claims.email_verified) return reply.code(403).send({ error: "Verified email is required before RupayKG access", code: "EMAIL_VERIFICATION_REQUIRED" });
-      // A first-time Firebase identity is locally verified so it can submit onboarding.
-      // Existing authoritative identity status must never be overwritten during login:
-      // this preserves suspension/rejection and makes revocation effective across sessions.
       const identity = await pool.query<{ id: string }>(`insert into identities(external_subject,display_name,email,status) values($1,$2,$3,'VERIFIED') on conflict(external_subject) do update set display_name=excluded.display_name,email=excluded.email returning id`, [claims.sub, claims.name?.trim() || claims.email?.trim() || `Firebase user ${claims.sub.slice(0, 8)}`, claims.email?.trim().toLowerCase() || null]);
       const identityRow = identity.rows[0]; if (!identityRow) throw new Error("Identity insert returned no row");
       const status = await pool.query<{ status: string }>("select status from identities where id=$1", [identityRow.id]);
@@ -59,6 +56,13 @@ export async function registerAuthRoutes(app: FastifyInstance, pool: Pool | null
     } catch (error) { await client.query("rollback"); request.log.error(error); return reply.code(503).send({ error: "Stakeholder application could not be created", code: "ONBOARDING_UNAVAILABLE" }); } finally { client.release(); }
   });
   app.get("/api/v1/onboarding/applications", async (request, reply) => { const auth = await requireAuth(request, reply, pool); if (!auth || !pool) return; const rows = await pool.query(`select id,organization_id,requested_role_key,requested_organization_type,geography_id,status,applicant_note,created_at,reviewed_at from stakeholder_applications where identity_id=$1 order by created_at desc` , [auth.identityId]); return { source: "postgresql", syntheticData: false, applications: rows.rows }; });
+  app.get("/api/v1/onboarding/review-queue", async (request, reply) => {
+    const auth = await requireAuth(request, reply, pool); if (!auth || !pool) return;
+    const allowed = await pool.query<{ ok: boolean }>(`select exists(select 1 from organization_memberships om join roles r on r.id=om.role_id where om.identity_id=$1 and om.status='VERIFIED' and (r.permissions @> '["MANAGE_STAKEHOLDERS"]'::jsonb or r.name in('platform_admin','super_admin'))) ok`, [auth.identityId]);
+    if (!allowed.rows[0]?.ok) return reply.code(403).send({ error: "Explicit MANAGE_STAKEHOLDERS permission is required", code: "STAKEHOLDER_APPROVAL_FORBIDDEN" });
+    const rows = await pool.query(`select sa.id,sa.organization_id,sa.requested_role_key,sa.requested_organization_type,sa.geography_id,sa.status,sa.applicant_note,sa.created_at,sa.reviewed_at,i.id applicant_identity_id,i.display_name applicant_name,i.email applicant_email,o.name organization_name,o.organization_type from stakeholder_applications sa join identities i on i.id=sa.identity_id join organizations o on o.id=sa.organization_id where sa.status='PENDING' order by sa.created_at asc`);
+    return { source: "postgresql", syntheticData: false, applications: rows.rows };
+  });
   app.post("/api/v1/onboarding/applications/:applicationId/approve", async (request, reply) => {
     const auth = await requireAuth(request, reply, pool); if (!auth || !pool) return;
     const id = (request.params as { applicationId: string }).applicationId;
