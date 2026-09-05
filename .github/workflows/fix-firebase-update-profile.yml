@@ -1,0 +1,55 @@
+name: One-time Firebase modular API fix
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: contains(github.event.head_commit.message, 'fix(web): remove ambient Firebase auth module shadowing') || contains(github.event.head_commit.message, 'security(onboarding): prevent stakeholder self-approval')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Replace deprecated instance method with modular Firebase API
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('apps/web/src/main.tsx')
+          s = p.read_text()
+          old = 'credential.user.updateProfile({displayName:displayName.trim()})'
+          new = 'updateProfile(credential.user,{displayName:displayName.trim()})'
+          if old not in s:
+              raise SystemExit('target expression not found')
+          p.write_text(s.replace(old, new))
+          PY
+      - name: Add modular import
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('apps/web/src/main.tsx')
+          s = p.read_text()
+          old = 'createUserWithEmailAndPassword, getAuth, sendEmailVerification, setPersistence, signInWithEmailAndPassword, signOut, browserSessionPersistence'
+          new = 'createUserWithEmailAndPassword, getAuth, sendEmailVerification, setPersistence, signInWithEmailAndPassword, signOut, browserSessionPersistence, updateProfile'
+          if old not in s:
+              raise SystemExit('import target not found')
+          p.write_text(s.replace(old, new))
+          PY
+      - name: Commit fix
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add apps/web/src/main.tsx
+          git diff --cached --quiet && exit 0
+          git commit -m 'fix(web): use modular Firebase updateProfile'
+          git push
+      - name: Remove one-time workflow
+        if: always()
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm -f .github/workflows/fix-firebase-update-profile.yml || true
+          git commit -m 'chore(ci): remove one-time Firebase fix workflow' || true
+          git push || true
