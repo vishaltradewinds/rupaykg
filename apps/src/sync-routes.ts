@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import type { Pool, PoolClient } from "pg";
-import { authenticate, bearerChallenge } from "./auth.js";
+import { authenticate, bearerChallenge, hasOrganizationPermission } from "./auth.js";
 import { validateConflictResolution, validateSyncEnvelope } from "./sync-validation.js";
 
 type AuthContext = Awaited<ReturnType<typeof authenticate>>;
@@ -70,6 +70,7 @@ async function applyOperation(client: PoolClient, identityId: string, payload: O
     const geographyId = stringValue(payload, "geographyId");
     if (!organizationId || !activityType || (payload.occurredAt !== undefined && !occurredAt) || !geographyId || !isUuid(geographyId)) throw Object.assign(new Error("ACTIVITY_CREATE requires organizationId, activityType, valid optional occurredAt and an authorized geographyId"), { code: "INVALID_OPERATION" });
     if (!await verifiedOrganizationAccess(client, identityId, organizationId)) throw Object.assign(new Error("No verified membership for activity organization"), { code: "OPERATION_FORBIDDEN" });
+    if (!await hasOrganizationPermission(client, { identityId, memberships: [] }, organizationId, ["waste:record"])) throw Object.assign(new Error("Waste recording permission required for activity creation"), { code: "OPERATION_FORBIDDEN" });
     if (!await authorizedGeography(client, identityId, geographyId, organizationId)) throw Object.assign(new Error("Activity geography is outside organization authorization scope"), { code: "OPERATION_FORBIDDEN" });
     const result = await client.query<{ id: string }>(`insert into activities (organization_id, actor_identity_id, geography_id, activity_type, status, occurred_at, metadata) values ($1,$2,$3,$4,'DRAFT',$5,$6) returning id`, [organizationId, identityId, geographyId, activityType, occurredAt, payload.metadata ?? {}]);
     return { entityType: "activity", entityId: result.rows[0]!.id };
@@ -77,6 +78,9 @@ async function applyOperation(client: PoolClient, identityId: string, payload: O
   if (operationType === "MEASUREMENT_CREATE") {
     const activityId = stringValue(payload, "activityId"); const value = positiveNumber(payload, "value"); const unit = stringValue(payload, "unit"); const method = stringValue(payload, "method"); const source = stringValue(payload, "source"); const measuredAt = dateValue(payload, "measuredAt");
     if (!activityId || !isUuid(activityId) || value === null || !unit || !method || !source || !measuredAt) throw Object.assign(new Error("MEASUREMENT_CREATE requires activityId, positive value, unit, method, source and valid measuredAt"), { code: "INVALID_OPERATION" });
+    const activity = await client.query<{ organization_id: string }>(`select a.organization_id from activities a where a.id = $1`, [activityId]);
+    const organizationId = activity.rows[0]?.organization_id;
+    if (!organizationId || !await hasOrganizationPermission(client, { identityId, memberships: [] }, organizationId, ["waste:record"])) throw Object.assign(new Error("Waste recording permission required for measurement creation"), { code: "OPERATION_FORBIDDEN" });
     if (!await activityGeographyAccess(client, identityId, activityId)) throw Object.assign(new Error("Activity is outside organization authorization scope or has no authorized geography"), { code: "OPERATION_FORBIDDEN" });
     const result = await client.query<{ id: string }>(`insert into measurements (activity_id, value, unit, method, source, measured_at, metadata) values ($1,$2,$3,$4,$5,$6,$7) returning id`, [activityId, value, unit, method, source, measuredAt, payload.metadata ?? {}]);
     return { entityType: "measurement", entityId: result.rows[0]!.id };
@@ -84,6 +88,9 @@ async function applyOperation(client: PoolClient, identityId: string, payload: O
   if (operationType === "EVIDENCE_CREATE") {
     const activityId = stringValue(payload, "activityId"); const evidenceType = stringValue(payload, "evidenceType"); const capturedAt = dateValue(payload, "capturedAt"); const contentUri = stringValue(payload, "contentUri"); const contentHash = stringValue(payload, "contentHash"); const measurementId = payload.measurementId == null ? null : stringValue(payload, "measurementId");
     if (!activityId || !isUuid(activityId) || !evidenceType || !capturedAt || (!contentUri && !contentHash) || (measurementId && !isUuid(measurementId))) throw Object.assign(new Error("EVIDENCE_CREATE requires activityId, evidenceType, valid capturedAt and contentUri or contentHash"), { code: "INVALID_OPERATION" });
+    const activity = await client.query<{ organization_id: string }>(`select a.organization_id from activities a where a.id = $1`, [activityId]);
+    const organizationId = activity.rows[0]?.organization_id;
+    if (!organizationId || !await hasOrganizationPermission(client, { identityId, memberships: [] }, organizationId, ["evidence:upload"])) throw Object.assign(new Error("Evidence upload permission required"), { code: "OPERATION_FORBIDDEN" });
     if (!await activityGeographyAccess(client, identityId, activityId)) throw Object.assign(new Error("Activity is outside organization authorization scope or has no authorized geography"), { code: "OPERATION_FORBIDDEN" });
     if (measurementId) { const measurement = await client.query<{ ok: boolean }>(`select exists (select 1 from measurements where id = $1 and activity_id = $2) as ok`, [measurementId, activityId]); if (!measurement.rows[0]?.ok) throw Object.assign(new Error("Measurement does not belong to activity"), { code: "INVALID_OPERATION" }); }
     const result = await client.query<{ id: string }>(`insert into evidence (activity_id, measurement_id, evidence_type, captured_at, content_uri, content_hash, metadata, captured_by_identity_id) values ($1,$2,$3,$4,$5,$6,$7,$8) returning id`, [activityId, measurementId, evidenceType, capturedAt, contentUri, contentHash, payload.metadata ?? {}, identityId]);
@@ -93,6 +100,7 @@ async function applyOperation(client: PoolClient, identityId: string, payload: O
     const organizationId = stringValue(payload, "organizationId"); const originType = stringValue(payload, "originType"); const resourceForm = stringValue(payload, "resourceForm"); const materialCode = stringValue(payload, "materialCode"); const quantity = positiveNumber(payload, "quantity"); const unit = stringValue(payload, "unit"); const sourceGeographyId = payload.sourceGeographyId == null ? null : stringValue(payload, "sourceGeographyId"); const destinationGeographyId = payload.destinationGeographyId == null ? null : stringValue(payload, "destinationGeographyId");
     if (!organizationId || !originType || !resourceForm || !materialCode || quantity === null || !unit || (sourceGeographyId && !isUuid(sourceGeographyId)) || (destinationGeographyId && !isUuid(destinationGeographyId))) throw Object.assign(new Error("RESOURCE_FLOW_CREATE requires organizationId, originType, resourceForm, materialCode, positive quantity and unit"), { code: "INVALID_OPERATION" });
     if (!await verifiedOrganizationAccess(client, identityId, organizationId)) throw Object.assign(new Error("No verified membership for resource-flow organization"), { code: "OPERATION_FORBIDDEN" });
+    if (!await hasOrganizationPermission(client, { identityId, memberships: [] }, organizationId, ["waste:record"])) throw Object.assign(new Error("Waste recording permission required for resource-flow creation"), { code: "OPERATION_FORBIDDEN" });
     if (sourceGeographyId && !await authorizedGeography(client, identityId, sourceGeographyId, organizationId)) throw Object.assign(new Error("Source geography is outside organization authorization scope"), { code: "OPERATION_FORBIDDEN" });
     if (destinationGeographyId && !await authorizedGeography(client, identityId, destinationGeographyId, organizationId)) throw Object.assign(new Error("Destination geography is outside organization authorization scope"), { code: "OPERATION_FORBIDDEN" });
     const result = await client.query<{ id: string }>(`insert into resource_flows (organization_id, origin_type, resource_form, material_code, declared_quantity, unit, source_geography_id, destination_geography_id) values ($1,$2,$3,$4,$5,$6,$7,$8) returning id`, [organizationId, originType, resourceForm, materialCode, quantity, unit, sourceGeographyId, destinationGeographyId]);
