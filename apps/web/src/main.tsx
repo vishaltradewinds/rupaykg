@@ -4,6 +4,7 @@ import "./styles.css";
 
 type Overview = { source: string; syntheticData: boolean; counts: Record<string, number> };
 type Status = { service: string; version: string; sourceOfTruth: string; syntheticData: boolean };
+type Health = { status: "READY" | "DEGRADED"; database: "AVAILABLE" | "UNAVAILABLE"; syntheticData: boolean };
 type RegulatorySource = { id: string; authority: string; title: string; instrument: string; reference: string; jurisdiction: string; status: string; effective_from?: string | null; source_url?: string | null };
 type Workspace = { source: string; syntheticData: boolean; data?: Record<string, unknown>; [key: string]: unknown };
 type WorkspaceKey = "mrv" | "compliance" | "carbon" | "registry" | "settlement" | "resource-flows" | "intelligence";
@@ -50,6 +51,7 @@ function App() {
   const [token, setToken] = useState("");
   const [draftToken, setDraftToken] = useState("");
   const [status, setStatus] = useState<Status | null>(null);
+  const [health, setHealth] = useState<Health | null>(null);
   const [overview, setOverview] = useState<Overview | null>(null);
   const [sources, setSources] = useState<RegulatorySource[] | null>(null);
   const [workspaceData, setWorkspaceData] = useState<Partial<Record<WorkspaceKey, Workspace>>>({});
@@ -63,10 +65,23 @@ function App() {
   async function refresh(activeToken = token) {
     setLoading(true); setError("");
     try {
-      const publicStatus = await api<Status>("/api/v1/status");
+      const [runtimeHealth, publicStatus, regulatory] = await Promise.all([
+        fetch("/health", { headers: { Accept: "application/json" } }).then(async response => {
+          const body = await response.json().catch(() => ({}));
+          if (response.status !== 200 && response.status !== 503) throw new Error(body?.error ?? `Health check failed (${response.status})`);
+          return body as Health;
+        }),
+        api<Status>("/api/v1/status"),
+        api<{ sources: RegulatorySource[] }>("/api/v1/regulatory/sources"),
+      ]);
+      setHealth(runtimeHealth);
       setStatus(publicStatus);
-      const regulatory = await api<{ sources: RegulatorySource[] }>("/api/v1/regulatory/sources");
       setSources(regulatory.sources);
+      if (runtimeHealth.status !== "READY" || runtimeHealth.database !== "AVAILABLE") {
+        setOverview(null); setWorkspaceData({});
+        setError("Authoritative PostgreSQL is unavailable; organization data remains hidden.");
+        return;
+      }
       if (!activeToken) { setOverview(null); setWorkspaceData({}); setError("Enter an authenticated session token to load organization data."); return; }
       const [nextOverview, ...workspaceResults] = await Promise.all([
         api<Overview>("/api/v1/overview", activeToken),
@@ -87,13 +102,13 @@ function App() {
   return <div className="app-shell">
     <header className="topbar">
       <div className="brand"><span className="brand-mark">R</span><div><strong>RupayKG</strong><span>circular economy operating system</span></div></div>
-      <div className="system-state"><span className={`dot ${status ? "ready" : ""}`} /> {status ? "API connected" : "Connecting…"}</div>
+      <div className="system-state"><span className={`dot ${health?.status === "READY" ? "ready" : ""}`} /> {health?.status === "READY" ? "Backend ready" : health?.status === "DEGRADED" ? "Backend degraded" : "Checking backend…"}</div>
     </header>
 
     <main>
       <section className="hero">
         <div><p className="eyebrow">AUTHORITATIVE OPERATIONS</p><h1>From physical activity to verified value.</h1><p className="lede">One operational view across waste, MRV, carbon, EPR, credentials and settlement — reflecting authoritative PostgreSQL state rather than invented UI state.</p></div>
-        <div className="authority-card"><span>Source of truth</span><strong>{status?.sourceOfTruth ?? "—"}</strong><small>{status?.syntheticData ? "Synthetic data enabled" : "Synthetic data disabled"}</small></div>
+        <div className="authority-card"><span>Source of truth</span><strong>{status?.sourceOfTruth ?? "—"}</strong><small>{status?.syntheticData ? "Synthetic data enabled" : health?.status === "READY" ? "Synthetic data disabled" : "Authoritative database unavailable"}</small></div>
       </section>
 
       <section className="session-panel">
@@ -104,13 +119,13 @@ function App() {
       {error && <div className="notice" role="alert">{error}</div>}
 
       <section className="section-heading"><div><p className="eyebrow">CONTROL TOWER</p><h2>Authoritative state</h2></div><span>{overview ? `${total} recorded items` : "No organization snapshot"}</span></section>
-      <section className="metrics">{Object.entries(labels).map(([key, label]) => <article className="metric" key={key}><span>{label}</span><strong>{overview?.counts[key] ?? "—"}</strong><small>{overview ? "PostgreSQL" : "Requires session"}</small></article>)}</section>
+      <section className="metrics">{Object.entries(labels).map(([key, label]) => <article className="metric" key={key}><span>{label}</span><strong>{overview?.counts[key] ?? "—"}</strong><small>{overview ? "PostgreSQL" : "Requires ready backend + session"}</small></article>)}</section>
 
-      <section className="section-heading"><div><p className="eyebrow">OPERATING WORKSPACES</p><h2>Backend projections</h2></div><span>{token ? "Authenticated" : "Requires session"}</span></section>
-      <nav className="workspace-tabs" aria-label="Operating workspaces">{workspaces.map((workspace) => <button key={workspace.key} className={selectedWorkspace === workspace.key ? "tab active" : "tab"} onClick={() => setSelectedWorkspace(workspace.key)} disabled={!token}>{workspace.label}</button>)}</nav>
+      <section className="section-heading"><div><p className="eyebrow">OPERATING WORKSPACES</p><h2>Backend projections</h2></div><span>{token && health?.status === "READY" ? "Authenticated" : "Requires ready backend + session"}</span></section>
+      <nav className="workspace-tabs" aria-label="Operating workspaces">{workspaces.map((workspace) => <button key={workspace.key} className={selectedWorkspace === workspace.key ? "tab active" : "tab"} onClick={() => setSelectedWorkspace(workspace.key)} disabled={!token || health?.status !== "READY"}>{workspace.label}</button>)}</nav>
       <section className="workspace-panel">
-        <div className="workspace-panel-head"><div><strong>{selected.label}</strong><span>{selectedData ? `${selectedRows.length} records returned by the authoritative API` : "No organization data loaded"}</span></div>{token && <button className="secondary" onClick={() => void refresh(token)} disabled={loading}>{loading ? "Refreshing…" : "Refresh"}</button>}</div>
-        {!token ? <div className="empty">Connect an authenticated session to view this workspace. No placeholder records are shown.</div> : selectedRows.length ? selectedRows.slice(0, 100).map((row, index) => <WorkspaceView key={index} item={(row && typeof row === "object" ? row : { value: row }) as Record<string, unknown>} workspace={selected} />) : <div className="empty">The authoritative API returned no records for this workspace.</div>}
+        <div className="workspace-panel-head"><div><strong>{selected.label}</strong><span>{selectedData ? `${selectedRows.length} records returned by the authoritative API` : "No organization data loaded"}</span></div>{token && health?.status === "READY" && <button className="secondary" onClick={() => void refresh(token)} disabled={loading}>{loading ? "Refreshing…" : "Refresh"}</button>}</div>
+        {!token ? <div className="empty">Connect an authenticated session to view this workspace. No placeholder records are shown.</div> : health?.status !== "READY" ? <div className="empty">The authoritative backend is not ready. No organization records are shown.</div> : selectedRows.length ? selectedRows.slice(0, 100).map((row, index) => <WorkspaceView key={index} item={(row && typeof row === "object" ? row : { value: row }) as Record<string, unknown>} workspace={selected} />) : <div className="empty">The authoritative API returned no records for this workspace.</div>}
       </section>
 
       <section className="section-heading"><div><p className="eyebrow">REGULATORY PROVENANCE</p><h2>Source catalogue</h2></div><span>{sources ? `${sources.length} authoritative records` : "Loading…"}</span></section>
