@@ -57,8 +57,11 @@ end;
 $$;
 
 drop trigger if exists roles_default_permissions_guard on roles;
+-- Only populate defaults when a role is first created or renamed. An explicit
+-- administrator change to an existing permission set, including [] to disable
+-- a role, must remain authoritative.
 create trigger roles_default_permissions_guard
-before insert or update of name, permissions on roles
+before insert or update of name on roles
 for each row execute function apply_rupaykg_role_defaults();
 
 -- Repair roles created by the previous onboarding implementation.
