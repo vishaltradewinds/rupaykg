@@ -4,7 +4,6 @@ export type ProductionConfig = {
   environment: "production";
   databaseUrl: string;
   databaseSsl: "require";
-  databaseCaCert: string;
   allowedOrigins: string[];
   authMode: "real";
   syntheticData: false;
@@ -29,13 +28,6 @@ function productionDatabaseUrl(value: string): string {
   const host = parsed.hostname.toLowerCase();
   if (["localhost", "127.0.0.1", "::1"].includes(host)) {
     throw new Error("PRODUCTION_CONFIG_INVALID: production DATABASE_URL must not target localhost");
-  }
-  return value;
-}
-
-function productionCaCert(value: string): string {
-  if (!value.includes("BEGIN CERTIFICATE") || !value.includes("END CERTIFICATE")) {
-    throw new Error("PRODUCTION_CONFIG_INVALID: DATABASE_CA_CERT must contain a PEM certificate");
   }
   return value;
 }
@@ -66,7 +58,6 @@ export function readProductionConfig(env: NodeJS.ProcessEnv = process.env): Prod
     environment: "production",
     databaseUrl: productionDatabaseUrl(required(env, "DATABASE_URL")),
     databaseSsl: "require",
-    databaseCaCert: productionCaCert(required(env, "DATABASE_CA_CERT")),
     allowedOrigins: origins(required(env, "RUPAYKG_ALLOWED_ORIGINS")),
     authMode: "real",
     syntheticData: false,
