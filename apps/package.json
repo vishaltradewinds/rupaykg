@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@fastify/cors": "^11.0.0",
+    "@fastify/static": "^8.2.0",
     "@rupaykg/carbon": "0.1.0",
     "@rupaykg/compliance": "0.1.0",
     "@rupaykg/esg": "0.1.0",
