@@ -29,10 +29,20 @@ const workspaces: Array<{ key: WorkspaceKey; label: string; path: string; collec
   { key: "intelligence", label: "Intelligence", path: "/api/v1/workspaces/intelligence", collection: "findings" },
 ];
 
+class ApiError extends Error {
+  status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
 async function api<T>(path: string, token = ""): Promise<T> {
   const response = await fetch(path, { headers: { Accept: "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
   const body = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(body?.error ?? `Request failed (${response.status})`);
+  if (!response.ok) throw new ApiError(body?.error ?? `Request failed (${response.status})`, response.status);
   return body as T;
 }
 
@@ -54,6 +64,14 @@ function WorkspaceView({ item, workspace }: { item: Record<string, unknown>; wor
   return <article className="workspace-row"><div className="workspace-title"><strong>{value(item.title ?? item.activity_type ?? item.obligation_type ?? item.methodology_code ?? item.status ?? item.kind ?? workspace.label)}</strong><span>{workspace.label}</span></div><div className="workspace-fields">{entries.slice(0, 7).map(([key, fieldValue]) => <span key={key}><b>{key.replaceAll("_", " ")}</b>{value(fieldValue)}</span>)}</div></article>;
 }
 
+function errorMessage(cause: unknown): string {
+  if (cause instanceof ApiError) {
+    if (cause.status === 401 || cause.status === 403) return "The session token was rejected. Enter a valid authenticated session token.";
+    return cause.message;
+  }
+  return cause instanceof Error ? cause.message : "Unable to load authoritative data.";
+}
+
 function App() {
   const [token, setToken] = useState("");
   const [draftToken, setDraftToken] = useState("");
@@ -71,21 +89,37 @@ function App() {
 
   async function refresh(activeToken = token) {
     setLoading(true); setError("");
+    let runtimeHealth: Health;
     try {
-      const runtimeHealth = await health();
+      runtimeHealth = await health();
       setBackendHealth(runtimeHealth);
-      if (runtimeHealth.status !== "READY" || runtimeHealth.database !== "AVAILABLE") {
-        setOverview(null); setWorkspaceData({});
-        setError("Authoritative PostgreSQL is unavailable; organization data remains hidden.");
-        return;
-      }
+    } catch (cause) {
+      setBackendHealth(null);
+      setOverview(null); setWorkspaceData({});
+      setError(errorMessage(cause));
+      setLoading(false);
+      return;
+    }
+
+    if (runtimeHealth.status !== "READY" || runtimeHealth.database !== "AVAILABLE") {
+      setOverview(null); setWorkspaceData({});
+      setError("Authoritative PostgreSQL is unavailable; organization data remains hidden.");
+      setLoading(false);
+      return;
+    }
+
+    try {
       const [publicStatus, regulatory] = await Promise.all([
         api<Status>("/api/v1/status"),
         api<{ sources: RegulatorySource[] }>("/api/v1/regulatory/sources"),
       ]);
       setStatus(publicStatus);
       setSources(regulatory.sources);
-      if (!activeToken) { setOverview(null); setWorkspaceData({}); setError("Enter an authenticated session token to load organization data."); return; }
+      if (!activeToken) {
+        setOverview(null); setWorkspaceData({});
+        setError("Enter an authenticated session token to load organization data.");
+        return;
+      }
       const [nextOverview, ...workspaceResults] = await Promise.all([
         api<Overview>("/api/v1/overview", activeToken),
         ...workspaces.map(async (workspace) => ({ key: workspace.key, data: await api<Workspace>(workspace.path, activeToken) })),
@@ -93,8 +127,8 @@ function App() {
       setOverview(nextOverview);
       setWorkspaceData(Object.fromEntries(workspaceResults.map(({ key, data }) => [key, data])) as Partial<Record<WorkspaceKey, Workspace>>);
     } catch (cause) {
-      setBackendHealth(null);
-      setError(cause instanceof Error ? cause.message : "Unable to load authoritative data.");
+      setOverview(null); setWorkspaceData({});
+      setError(errorMessage(cause));
     } finally { setLoading(false); }
   }
 
