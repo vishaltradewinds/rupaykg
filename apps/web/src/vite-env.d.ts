@@ -10,9 +10,3 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv;
 }
-
-declare module "firebase/auth" {
-  interface User {
-    updateProfile(profile: { displayName?: string | null; photoURL?: string | null }): Promise<void>;
-  }
-}
