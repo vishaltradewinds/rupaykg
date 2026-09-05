@@ -94,6 +94,12 @@ export async function canPerformHighRiskActionInDatabase(
   return hasOrganizationPermission(client, auth, organizationId, HIGH_RISK_PERMISSIONS[action]);
 }
 
+/**
+ * Verification is an independent governance action. The verifier may belong to
+ * a different organization than the evidence owner, but must hold an explicit
+ * verification permission and an authorized geography scope covering the
+ * activity being verified.
+ */
 export async function canVerifyEvidence(client: PoolClient, identityId: string, evidenceId: string): Promise<boolean> {
   const result = await client.query<{ ok: boolean }>(
     `select exists (
@@ -101,9 +107,10 @@ export async function canVerifyEvidence(client: PoolClient, identityId: string, 
        from evidence e
        join activities a on a.id = e.activity_id
        join organization_memberships om
-         on om.organization_id = a.organization_id
-        and om.identity_id = $2
+         on om.identity_id = $2
         and om.status = 'VERIFIED'
+        and a.geography_id is not null
+        and organization_has_geography_scope(om.organization_id, a.geography_id)
        join roles r on r.id = om.role_id
        where e.id = $1
          and exists (
