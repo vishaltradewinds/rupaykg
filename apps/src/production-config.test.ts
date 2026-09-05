@@ -6,6 +6,7 @@ const valid = {
   NODE_ENV: "production",
   DATABASE_URL: "postgresql://prod.example.invalid:5432/rupaykg",
   DATABASE_SSL: "require",
+  DATABASE_CA_CERT: "-----BEGIN CERTIFICATE-----\nproduction-test-ca\n-----END CERTIFICATE-----",
   RUPAYKG_ALLOWED_ORIGINS: "https://app.rupaykg.example",
   RUPAYKG_AUTH_MODE: "real",
 } as const;
@@ -17,6 +18,7 @@ describe("production configuration", () => {
       environment: "production",
       databaseUrl: valid.DATABASE_URL,
       databaseSsl: "require",
+      databaseCaCert: valid.DATABASE_CA_CERT,
       allowedOrigins: ["https://app.rupaykg.example"],
       authMode: "real",
       syntheticData: false,
@@ -37,6 +39,10 @@ describe("production configuration", () => {
 
   it("requires TLS database configuration", () => {
     assert.throws(() => readProductionConfig({ ...valid, DATABASE_SSL: "false" }), /DATABASE_SSL must be require/);
+  });
+
+  it("requires a production CA certificate for PostgreSQL TLS", () => {
+    assert.throws(() => readProductionConfig({ ...valid, DATABASE_CA_CERT: "" }), /DATABASE_CA_CERT is required/);
   });
 
   it("requires real authentication", () => {
