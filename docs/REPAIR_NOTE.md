@@ -1,0 +1,1 @@
+Temporary repository repair marker; canonical server source is restored from its last known-good Git blob. This file may be removed after CI verification.
