@@ -3,7 +3,7 @@ import type { Pool, PoolClient } from "pg";
 import { calculateEmissionReduction, sha256Canonical } from "@rupaykg/carbon";
 import { assessEprObligation } from "@rupaykg/compliance";
 import { classifyMetric } from "@rupaykg/esg";
-import { authenticate, canActForOrganization, type AuthContext } from "./auth.js";
+import { authenticate, canActForOrganization, hasOrganizationPermission, type AuthContext } from "./auth.js";
 import { registerAuthRoutes } from "./auth-routes.js";
 
 type Reply = { code: (status: number) => { send: (body: unknown) => unknown } };
@@ -27,6 +27,7 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
     if (!activityId || !methodologyCode || !methodologyVersion || !evidenceId || baselineTco2e === null || projectTco2e === null) return reply.code(400).send({ error: "activityId, methodologyCode, methodologyVersion, evidenceId, baselineTco2e and projectTco2e are required", code: "CARBON_EVIDENCE_REQUIRED" });
     try {
       const access = await activityAccess(pool, activityId, auth.identityId); if (!access) return reply.code(403).send({ error: "Activity access denied", code: "ACTIVITY_FORBIDDEN" });
+      if (!await hasOrganizationPermission(pool, auth, access.organization_id, ["projects:manage"])) return reply.code(403).send({ error: "Explicit projects:manage permission is required", code: "CARBON_CALCULATION_FORBIDDEN" });
       const geography = await assertActivityGeographyScope(pool, access.geography_id, auth.identityId);
       if (!geography.ok) return reply.code(geography.code === "ACTIVITY_GEOGRAPHY_REQUIRED" ? 409 : 403).send({ error: geography.code === "ACTIVITY_GEOGRAPHY_REQUIRED" ? "Activity must have an authorized geography before value calculation" : "Activity geography is outside organization authorization scope", code: geography.code });
       const evidence = await pool.query<{ id: string; activity_id: string | null; content_hash: string | null; content_uri: string | null; status: string }>("select id, activity_id, content_hash, content_uri, status from evidence where id = $1", [evidenceId]);
