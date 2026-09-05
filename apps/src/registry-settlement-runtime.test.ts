@@ -76,7 +76,7 @@ after(async () => {
 describe("registry and settlement runtime acceptance", () => {
   it("requires explicit registry permission before issuance", async () => {
     if (!pool) return;
-    const deniedRole = (await pool.query<{ id: string }>("insert into roles(organization_id,name,permissions) values($1,$2,'[]') returning id", [ownerOrgId, `DENIED-${suffix}`])).rows[0]!.id;
+    const deniedRole = (await pool.query<{ id: string }>("insert into roles(organization_id,name,permissions) values($1,$2,'[\"dashboard:read\"]') returning id", [ownerOrgId, `DENIED-${suffix}`])).rows[0]!.id;
     const deniedIdentity = (await pool.query<{ id: string }>("insert into identities(external_subject,display_name) values($1,$2) returning id", [`runtime-registry-denied-${suffix}`, "Denied Registry Actor"])).rows[0]!.id;
     const deniedToken = token();
     await pool.query("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED')", [deniedIdentity, ownerOrgId, deniedRole]);
