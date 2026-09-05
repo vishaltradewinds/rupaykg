@@ -36,6 +36,8 @@ jobs:
           node-version: '22.x'
           package-manager-cache: false
       - run: npm install --no-audit --no-fund
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
       - run: npm run validate:migrations
       - run: npm run migrate -w @rupaykg/api
       - run: npm run typecheck
