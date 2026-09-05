@@ -58,8 +58,10 @@ jobs:
           html="$(curl --fail --silent http://127.0.0.1:4173/)"
           grep -q 'id="root"' <<<"$html"
           grep -q 'assets/' <<<"$html"
-          npx --yes playwright@1.55.0 install --with-deps chromium
-          npx --yes playwright@1.55.0 screenshot --device="Desktop Chrome" --wait-for-timeout=1000 http://127.0.0.1:4173/ /tmp/rupaykg-web-smoke.png
+          google-chrome --headless --no-sandbox --disable-gpu --dump-dom --virtual-time-budget=2000 http://127.0.0.1:4173/ > /tmp/rupaykg-web-dom.html
+          grep -q 'RupayKG' /tmp/rupaykg-web-dom.html
+          grep -q 'STAKEHOLDER LOGIN' /tmp/rupaykg-web-dom.html
+          google-chrome --headless --no-sandbox --disable-gpu --hide-scrollbars --window-size=1440,1200 --screenshot=/tmp/rupaykg-web-smoke.png --virtual-time-budget=2000 http://127.0.0.1:4173/
           test -s /tmp/rupaykg-web-smoke.png
       - run: npm test
       - name: Build production container
