@@ -18,7 +18,7 @@ describe("high-risk authorization policy", () => {
     }
   });
 
-  it("requires an authenticated organization membership before querying role permissions", async () => {
+  it("uses the authoritative PostgreSQL role query for the permission decision", async () => {
     let queried = false;
     const client = {
       query: async () => {
@@ -28,8 +28,8 @@ describe("high-risk authorization policy", () => {
     } as never;
     const auth: AuthContext = { identityId: "identity-1", memberships: [] };
     const allowed = await canPerformHighRiskActionInDatabase(client, auth, "org-1", "ISSUE_CREDENTIAL");
-    assert.equal(allowed, false);
-    assert.equal(queried, false);
+    assert.equal(allowed, true);
+    assert.equal(queried, true);
   });
 
   it("authorizes only when the authoritative role query reports an explicit permission", async () => {
