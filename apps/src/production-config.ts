@@ -7,6 +7,7 @@ export type ProductionConfig = {
   databaseCaCert: string;
   allowedOrigins: string[];
   authMode: "real";
+  firebaseProjectId: string;
   syntheticData: false;
 };
 
@@ -18,25 +19,14 @@ function required(env: NodeJS.ProcessEnv, name: string): string {
 
 function productionDatabaseUrl(value: string): string {
   let parsed: URL;
-  try {
-    parsed = new URL(value);
-  } catch {
-    throw new Error("PRODUCTION_CONFIG_INVALID: DATABASE_URL must be a valid PostgreSQL URL");
-  }
-  if (parsed.protocol !== "postgres:" && parsed.protocol !== "postgresql:") {
-    throw new Error("PRODUCTION_CONFIG_INVALID: DATABASE_URL must use postgres:// or postgresql://");
-  }
-  const host = parsed.hostname.toLowerCase();
-  if (["localhost", "127.0.0.1", "::1"].includes(host)) {
-    throw new Error("PRODUCTION_CONFIG_INVALID: production DATABASE_URL must not target localhost");
-  }
+  try { parsed = new URL(value); } catch { throw new Error("PRODUCTION_CONFIG_INVALID: DATABASE_URL must be a valid PostgreSQL URL"); }
+  if (parsed.protocol !== "postgres:" && parsed.protocol !== "postgresql:") throw new Error("PRODUCTION_CONFIG_INVALID: DATABASE_URL must use postgres:// or postgresql://");
+  if (["localhost", "127.0.0.1", "::1"].includes(parsed.hostname.toLowerCase())) throw new Error("PRODUCTION_CONFIG_INVALID: production DATABASE_URL must not target localhost");
   return value;
 }
 
 function productionCaCert(value: string): string {
-  if (!value.includes("BEGIN CERTIFICATE") || !value.includes("END CERTIFICATE")) {
-    throw new Error("PRODUCTION_CONFIG_INVALID: DATABASE_CA_CERT must contain a PEM certificate");
-  }
+  if (!value.includes("BEGIN CERTIFICATE") || !value.includes("END CERTIFICATE")) throw new Error("PRODUCTION_CONFIG_INVALID: DATABASE_CA_CERT must contain a PEM certificate");
   return value;
 }
 
@@ -45,11 +35,7 @@ function origins(value: string): string[] {
   if (!result.length) throw new Error("PRODUCTION_CONFIG_INVALID: RUPAYKG_ALLOWED_ORIGINS must contain at least one origin");
   for (const origin of result) {
     let parsed: URL;
-    try {
-      parsed = new URL(origin);
-    } catch {
-      throw new Error(`PRODUCTION_CONFIG_INVALID: invalid allowed origin: ${origin}`);
-    }
+    try { parsed = new URL(origin); } catch { throw new Error(`PRODUCTION_CONFIG_INVALID: invalid allowed origin: ${origin}`); }
     if (parsed.protocol !== "https:") throw new Error(`PRODUCTION_CONFIG_INVALID: production origin must use HTTPS: ${origin}`);
     if (parsed.pathname !== "/" || parsed.search || parsed.hash) throw new Error(`PRODUCTION_CONFIG_INVALID: origin must not contain path/query/hash: ${origin}`);
   }
@@ -69,6 +55,7 @@ export function readProductionConfig(env: NodeJS.ProcessEnv = process.env): Prod
     databaseCaCert: productionCaCert(required(env, "DATABASE_CA_CERT")),
     allowedOrigins: origins(required(env, "RUPAYKG_ALLOWED_ORIGINS")),
     authMode: "real",
+    firebaseProjectId: required(env, "FIREBASE_PROJECT_ID"),
     syntheticData: false,
   };
 }
