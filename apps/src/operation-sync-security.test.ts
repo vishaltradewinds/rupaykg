@@ -31,6 +31,7 @@ test("operation sync cannot claim an unverified or another identity's device", a
       [deviceId, deviceIdentity, org],
     );
 
+    await client.query("savepoint pending_device_rejection");
     await assert.rejects(
       client.query(
         "insert into operation_sync_envelopes(idempotency_key,actor_identity_id,device_id,captured_at,payload) values($1,$2,$3,now(),'{}')",
@@ -38,9 +39,11 @@ test("operation sync cannot claim an unverified or another identity's device", a
       ),
       /not verified/i,
     );
+    await client.query("rollback to savepoint pending_device_rejection");
 
     await client.query("update field_devices set status='VERIFIED' where device_id=$1", [deviceId]);
 
+    await client.query("savepoint cross_identity_rejection");
     await assert.rejects(
       client.query(
         "insert into operation_sync_envelopes(idempotency_key,actor_identity_id,device_id,captured_at,payload) values($1,$2,$3,now(),'{}')",
@@ -48,6 +51,7 @@ test("operation sync cannot claim an unverified or another identity's device", a
       ),
       /does not match enrolled device/i,
     );
+    await client.query("rollback to savepoint cross_identity_rejection");
 
     const accepted = await client.query<{ id: string }>(
       "insert into operation_sync_envelopes(idempotency_key,actor_identity_id,device_id,captured_at,payload) values($1,$2,$3,now(),'{}') returning id",
