@@ -11,5 +11,8 @@
     "typecheck": "npm run build -w @rupaykg/domain && npm run build -w @rupaykg/carbon && npm run build -w @rupaykg/compliance && npm run build -w @rupaykg/esg && npm run typecheck --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",
     "validate:migrations": "node scripts/validate-migrations.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0"
   }
 }
