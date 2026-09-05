@@ -23,8 +23,13 @@ export async function registerAuthRoutes(app: FastifyInstance, pool: Pool | null
     try {
       const claims = await verifyFirebaseIdToken(idToken);
       if (claims.email && !claims.email_verified) return reply.code(403).send({ error: "Verified email is required before RupayKG access", code: "EMAIL_VERIFICATION_REQUIRED" });
+      // A first-time Firebase identity is locally verified so it can submit onboarding.
+      // Existing authoritative identity status must never be overwritten during login:
+      // this preserves suspension/rejection and makes revocation effective across sessions.
       const identity = await pool.query<{ id: string }>(`insert into identities(external_subject,display_name,email,status) values($1,$2,$3,'VERIFIED') on conflict(external_subject) do update set display_name=excluded.display_name,email=excluded.email returning id`, [claims.sub, claims.name?.trim() || claims.email?.trim() || `Firebase user ${claims.sub.slice(0, 8)}`, claims.email?.trim().toLowerCase() || null]);
       const identityRow = identity.rows[0]; if (!identityRow) throw new Error("Identity insert returned no row");
+      const status = await pool.query<{ status: string }>("select status from identities where id=$1", [identityRow.id]);
+      if (!status.rows[0] || status.rows[0].status !== "VERIFIED") return reply.code(403).send({ error: "RupayKG identity is not active", code: "IDENTITY_INACTIVE" });
       const sessionToken = issueOpaqueToken();
       await pool.query(`insert into identity_sessions(identity_id,expires_at,token_hash,request_context) values($1,now()+interval '8 hours',$2,$3)`, [identityRow.id, hash(sessionToken), JSON.stringify({ provider: "firebase", auth_time: claims.auth_time })]);
       const memberships = await pool.query(`select om.organization_id,om.role_id,om.status,r.name role_name,o.name organization_name,o.organization_type from organization_memberships om join roles r on r.id=om.role_id join organizations o on o.id=om.organization_id where om.identity_id=$1 order by om.created_at`, [identityRow.id]);
