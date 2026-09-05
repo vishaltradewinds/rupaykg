@@ -4,7 +4,7 @@
   "private": true,
   "description": "India's Circular Economy Operating System",
   "packageManager": "npm@11",
-  "workspaces": ["apps/*", "packages/*"],
+  "workspaces": ["apps", "packages/*"],
   "scripts": {
     "build": "npm run build --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
