@@ -9,6 +9,7 @@ const valid = {
   DATABASE_CA_CERT: "-----BEGIN CERTIFICATE-----\nproduction-test-ca\n-----END CERTIFICATE-----",
   RUPAYKG_ALLOWED_ORIGINS: "https://app.rupaykg.example",
   RUPAYKG_AUTH_MODE: "real",
+  FIREBASE_PROJECT_ID: "rupaykg-production",
 } as const;
 
 describe("production configuration", () => {
@@ -21,8 +22,13 @@ describe("production configuration", () => {
       databaseCaCert: valid.DATABASE_CA_CERT,
       allowedOrigins: ["https://app.rupaykg.example"],
       authMode: "real",
+      firebaseProjectId: valid.FIREBASE_PROJECT_ID,
       syntheticData: false,
     });
+  });
+
+  it("fails closed without Firebase project identity", () => {
+    assert.throws(() => readProductionConfig({ ...valid, FIREBASE_PROJECT_ID: "" }), /FIREBASE_PROJECT_ID is required/);
   });
 
   it("fails closed when production mode is not explicit", () => {
