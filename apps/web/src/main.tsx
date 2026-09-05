@@ -93,6 +93,7 @@ function App() {
       setOverview(nextOverview);
       setWorkspaceData(Object.fromEntries(workspaceResults.map(({ key, data }) => [key, data])) as Partial<Record<WorkspaceKey, Workspace>>);
     } catch (cause) {
+      setBackendHealth(null);
       setError(cause instanceof Error ? cause.message : "Unable to load authoritative data.");
     } finally { setLoading(false); }
   }
@@ -105,7 +106,7 @@ function App() {
   return <div className="app-shell">
     <header className="topbar">
       <div className="brand"><span className="brand-mark">R</span><div><strong>RupayKG</strong><span>circular economy operating system</span></div></div>
-      <div className="system-state"><span className={`dot ${backendHealth?.status === "READY" ? "ready" : ""}`} /> {backendHealth?.status === "READY" ? "Backend ready" : backendHealth?.status === "DEGRADED" ? "Backend degraded" : "Checking backend…"}</div>
+      <div className="system-state" aria-live="polite"><span className={`dot ${backendHealth?.status === "READY" ? "ready" : ""}`} /> {backendHealth?.status === "READY" ? "Backend ready" : backendHealth?.status === "DEGRADED" ? "Backend degraded" : "Backend status unavailable"}</div>
     </header>
 
     <main>
@@ -125,9 +126,9 @@ function App() {
       <section className="metrics">{Object.entries(labels).map(([key, label]) => <article className="metric" key={key}><span>{label}</span><strong>{overview?.counts[key] ?? "—"}</strong><small>{overview ? "PostgreSQL" : "Requires ready backend + session"}</small></article>)}</section>
 
       <section className="section-heading"><div><p className="eyebrow">OPERATING WORKSPACES</p><h2>Backend projections</h2></div><span>{token && backendHealth?.status === "READY" ? "Authenticated" : "Requires ready backend + session"}</span></section>
-      <nav className="workspace-tabs" aria-label="Operating workspaces">{workspaces.map((workspace) => <button key={workspace.key} className={selectedWorkspace === workspace.key ? "tab active" : "tab"} onClick={() => setSelectedWorkspace(workspace.key)} disabled={!token || backendHealth?.status !== "READY"}>{workspace.label}</button>)}</nav>
+      <nav className="workspace-tabs" aria-label="Operating workspaces">{workspaces.map((workspace) => <button type="button" key={workspace.key} className={selectedWorkspace === workspace.key ? "tab active" : "tab"} onClick={() => setSelectedWorkspace(workspace.key)} disabled={!token || backendHealth?.status !== "READY"} aria-pressed={selectedWorkspace === workspace.key}>{workspace.label}</button>)}</nav>
       <section className="workspace-panel">
-        <div className="workspace-panel-head"><div><strong>{selected.label}</strong><span>{selectedData ? `${selectedRows.length} records returned by the authoritative API` : "No organization data loaded"}</span></div>{token && backendHealth?.status === "READY" && <button className="secondary" onClick={() => void refresh(token)} disabled={loading}>{loading ? "Refreshing…" : "Refresh"}</button>}</div>
+        <div className="workspace-panel-head"><div><strong>{selected.label}</strong><span>{selectedData ? `${selectedRows.length} records returned by the authoritative API` : "No organization data loaded"}</span></div>{token && backendHealth?.status === "READY" && <button type="button" className="secondary" onClick={() => void refresh(token)} disabled={loading}>{loading ? "Refreshing…" : "Refresh"}</button>}</div>
         {!token ? <div className="empty">Connect an authenticated session to view this workspace. No placeholder records are shown.</div> : backendHealth?.status !== "READY" ? <div className="empty">The authoritative backend is not ready. No organization records are shown.</div> : selectedRows.length ? selectedRows.slice(0, 100).map((row, index) => <WorkspaceView key={index} item={(row && typeof row === "object" ? row : { value: row }) as Record<string, unknown>} workspace={selected} />) : <div className="empty">The authoritative API returned no records for this workspace.</div>}
       </section>
 
