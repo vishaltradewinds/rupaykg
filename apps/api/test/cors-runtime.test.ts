@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { request } from "node:http";
-import { once } from "node:events";
 import { resolve } from "node:path";
 
 const appRoot = resolve(new URL("..", import.meta.url).pathname);
@@ -46,13 +45,13 @@ test("Fastify CORS enforces the configured origin allowlist", async () => {
       ...process.env,
       DATABASE_URL: "",
       DATABASE_SSL: "false",
+      PORT: String(port),
       RUPAYKG_ALLOWED_ORIGINS: "https://app.rupaykg.example,https://admin.rupaykg.example",
     },
-    stdio: ["ignore", "pipe", "pipe"],
+    stdio: "ignore",
   });
 
   try {
-    await once(child.stdout, "data");
     await waitForServer();
 
     const allowed = await httpOptions("https://app.rupaykg.example");
@@ -62,6 +61,9 @@ test("Fastify CORS enforces the configured origin allowlist", async () => {
     assert.equal(denied.headers["access-control-allow-origin"], undefined);
   } finally {
     child.kill("SIGTERM");
-    await once(child, "exit").catch(() => undefined);
+    await new Promise<void>((resolveExit) => {
+      if (child.exitCode !== null) return resolveExit();
+      child.once("exit", () => resolveExit());
+    });
   }
 });
