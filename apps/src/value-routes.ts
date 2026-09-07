@@ -23,8 +23,8 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
     const body = bodyOf(request as never);
     const activityId = str(body, "activityId"); const methodologyCode = str(body, "methodologyCode"); const methodologyVersion = str(body, "methodologyVersion"); const evidenceId = str(body, "evidenceId");
     const baselineTco2e = nonNegative(body, "baselineTco2e"); const projectTco2e = nonNegative(body, "projectTco2e");
-    const leakageTco2e = nonNegative(body, "leakageTco2e") ?? 0; const uncertaintyTco2e = nonNegative(body, "uncertaintyTco2e") ?? 0;
-    if (!activityId || !methodologyCode || !methodologyVersion || !evidenceId || baselineTco2e === null || projectTco2e === null) return reply.code(400).send({ error: "activityId, methodologyCode, methodologyVersion, evidenceId, baselineTco2e and projectTco2e are required", code: "CARBON_EVIDENCE_REQUIRED" });
+    const leakageTco2e = nonNegative(body, "leakageTco2e"); const uncertaintyTco2e = nonNegative(body, "uncertaintyTco2e");
+    if (!activityId || !methodologyCode || !methodologyVersion || !evidenceId || baselineTco2e === null || projectTco2e === null || leakageTco2e === null || uncertaintyTco2e === null) return reply.code(400).send({ error: "activityId, methodologyCode, methodologyVersion, evidenceId, baselineTco2e, projectTco2e, leakageTco2e and uncertaintyTco2e are required", code: "CARBON_INPUTS_REQUIRED" });
     try {
       const access = await activityAccess(pool, activityId, auth.identityId); if (!access) return reply.code(403).send({ error: "Activity access denied", code: "ACTIVITY_FORBIDDEN" });
       if (!await hasOrganizationPermission(pool, auth, access.organization_id, ["projects:manage"])) return reply.code(403).send({ error: "Explicit projects:manage permission is required", code: "CARBON_CALCULATION_FORBIDDEN" });
