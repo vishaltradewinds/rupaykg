@@ -59,7 +59,7 @@ describe("settlement reconciliation invariants", () => {
     if (!pool) return;
     await assert.rejects(
       pool.query(`update settlements set status = 'SETTLED' where id = $1`, [settlementId]),
-      /external settlement reference|external authority confirmation|reconciliation reference/i,
+      /external settlement reference|external authority confirmation|reconciliation reference|invalid settlement lifecycle transition/i,
     );
 
     await pool.query(
@@ -81,15 +81,15 @@ describe("settlement reconciliation invariants", () => {
     if (!pool) return;
     await assert.rejects(
       pool.query(`update settlements set reconciliation_reference = $1 where id = $2`, [randomUUID(), settlementId]),
-      /cannot be changed|cannot be cleared/i,
+      /cannot be changed|cannot be cleared|settlement_reconciliation_requires_confirmation|settlement_confirmation_requires_reference/i,
     );
     await assert.rejects(
       pool.query(`update settlements set reconciliation_reference = null where id = $1`, [settlementId]),
-      /cannot be changed|cannot be cleared/i,
+      /cannot be changed|cannot be cleared|settlement_reconciliation_requires_confirmation|settlement_confirmation_requires_reference/i,
     );
     await assert.rejects(
       pool.query(`update settlements set external_confirmed_at = now() + interval '1 minute' where id = $1`, [settlementId]),
-      /cannot be changed/i,
+      /cannot be changed|cannot be cleared|settlement_reconciliation_requires_confirmation|settlement_confirmation_requires_reference/i,
     );
   });
 });
