@@ -93,4 +93,14 @@ export async function registerWorkspaceRoutes(app: FastifyInstance, pool: Pool |
     try{const params:unknown[]=[ids];if(geographyId)params.push(geographyId);const rows=await pool.query(`select s.id,s.obligation_id,s.credential_id,s.payer_id,p.name as payer_name,s.payee_id,py.name as payee_name,s.amount,s.currency,s.status,s.external_reference,s.created_at,s.settled_at from settlements s left join organizations p on p.id=s.payer_id left join organizations py on py.id=s.payee_id left join credentials c on c.id=s.credential_id left join activities a on a.id=c.activity_id where (s.payer_id=any($1::uuid[]) or s.payee_id=any($1::uuid[])) and organization_has_geography_scope(a.organization_id,a.geography_id)${geoClause(geographyId,"a.geography_id")} order by s.created_at desc limit 100`,params);return result({settlements:rows.rows});}
     catch(error){request.log.error(error);return reply.code(503).send({error:"Settlement workspace unavailable",syntheticData:false});}
   });
+
+  app.get("/api/v1/workspaces/esg", async (request, reply) => {
+    const auth = await requireAuth(app, pool, request, reply); if (!auth || !pool) return;
+    const ids = orgIds(auth); if (!ids.length) return result({ reportingPeriods: [], metrics: [] });
+    try {
+      const periods = await pool.query(`select id,organization_id,period_start,period_end,framework,status from esg_reporting_periods where organization_id=any($1::uuid[]) order by period_end desc,period_start desc limit 100`, [ids]);
+      const metrics = await pool.query(`select em.id,em.reporting_period_id,em.metric_code,em.scope,em.value,em.unit,em.source_activity_id,em.evidence_id,em.verification_id,em.status,em.metadata from esg_metrics em join esg_reporting_periods rp on rp.id=em.reporting_period_id where rp.organization_id=any($1::uuid[]) order by em.id desc limit 200`, [ids]);
+      return result({ reportingPeriods: periods.rows, metrics: metrics.rows });
+    } catch (error) { request.log.error(error); return reply.code(503).send({ error: "ESG workspace unavailable", syntheticData: false }); }
+  });
 }
