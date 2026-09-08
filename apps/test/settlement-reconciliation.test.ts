@@ -11,11 +11,12 @@ before(async () => {
   if (!pool) return;
   const result = await pool.query<{ id: string }>(
     `insert into settlements (amount, currency, status, authorization_reference, verified_at)
-     values (1, 'INR', 'AUTHORIZED', $1, now())
+     values (1, 'INR', 'CREATED', $1, now())
      returning id`,
     [randomUUID()],
   );
   settlementId = result.rows[0]!.id;
+  await pool.query(`update settlements set status = 'AUTHORIZED' where id = $1`, [settlementId]);
 });
 
 after(async () => {
