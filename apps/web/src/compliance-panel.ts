@@ -16,7 +16,6 @@ type Obligation = {
 };
 
 type Me = { memberships: Array<{ organization_id: string; status: string }> };
-
 type PanelState = { status: string; message: string; obligations: Obligation[] };
 
 const firebaseConfig = {
@@ -27,7 +26,7 @@ const firebaseConfig = {
 };
 
 const firebaseConfigured = Object.values(firebaseConfig).every(Boolean);
-const firebaseAuth = firebaseConfigured ? getAuth(initializeApp(firebaseConfig)) : null;
+const firebaseAuth = firebaseConfigured ? getAuth(initializeApp(firebaseConfig, "compliance-assessment")) : null;
 const root = document.getElementById("compliance-assessment");
 
 async function api<T>(path: string, token = "", init: RequestInit = {}): Promise<T> {
@@ -94,6 +93,8 @@ if (root && firebaseAuth) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ idToken }),
       });
+      const me = await api<Me>("/api/v1/auth/me", session.sessionToken);
+      if (!me.memberships.some((membership) => membership.status === "VERIFIED")) throw new Error("A verified organization membership is required.");
       const result = await api<{ assessment?: { status?: string; requiredQuantity?: number | string } }>(
         `/api/v1/epr/obligations/${id}/assess`, session.sessionToken, { method: "POST" },
       );
