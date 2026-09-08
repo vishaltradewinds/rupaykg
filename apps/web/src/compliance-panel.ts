@@ -132,3 +132,5 @@ if (root && firebaseAuth) {
     else render({ status: "SIGN IN REQUIRED", message: "Sign in to load authorized compliance obligations.", obligations: [] });
   });
 }
+
+// Keep the authoritative compliance panel on the push-CI path so the complete production gate runs.
