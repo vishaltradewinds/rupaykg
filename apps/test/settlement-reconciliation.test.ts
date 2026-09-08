@@ -17,6 +17,8 @@ before(async () => {
   );
   settlementId = result.rows[0]!.id;
   await pool.query(`update settlements set status = 'AUTHORIZED' where id = $1`, [settlementId]);
+  await pool.query(`update settlements set status = 'EXECUTING' where id = $1`, [settlementId]);
+  await pool.query(`update settlements set status = 'RECONCILING' where id = $1`, [settlementId]);
 });
 
 after(async () => {
