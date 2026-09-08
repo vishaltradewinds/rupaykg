@@ -15,8 +15,9 @@ type Obligation = {
   status: string;
 };
 
-type Me = { memberships: Array<{ organization_id: string; status: string }> };
-type PanelState = { status: string; message: string; obligations: Obligation[] };
+type Membership = { organization_id: string; status: string; can_assess_epr?: boolean; permissions?: string[] };
+type Me = { memberships: Membership[] };
+type PanelState = { status: string; message: string; obligations: Obligation[]; canAssess: boolean };
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -58,7 +59,7 @@ if (root && firebaseAuth) {
             <span>${text(obligation.organization_name)} · ${text(obligation.jurisdiction_name)} · ${formatDate(obligation.period_start)} – ${formatDate(obligation.period_end)}</span>
             <small>Status: ${text(obligation.status)} · Required quantity: ${text(obligation.required_quantity)}</small>
           </div>
-          <button data-assess="${obligation.id}">Assess obligation</button>
+          ${state.canAssess ? `<button data-assess="${obligation.id}">Assess obligation</button>` : `<span class="field-help">Assessment permission not granted</span>`}
         </article>`).join("")
       : `<div class="empty">No authorized obligations are available for assessment.</div>`;
 
@@ -94,7 +95,9 @@ if (root && firebaseAuth) {
         body: JSON.stringify({ idToken }),
       });
       const me = await api<Me>("/api/v1/auth/me", session.sessionToken);
-      if (!me.memberships.some((membership) => membership.status === "VERIFIED")) throw new Error("A verified organization membership is required.");
+      const membership = me.memberships.find((candidate) => candidate.status === "VERIFIED");
+      if (!membership) throw new Error("A verified organization membership is required.");
+      if (membership.can_assess_epr !== true) throw new Error("EPR assessment permission is not granted for the active organization membership.");
       const result = await api<{ assessment?: { status?: string; requiredQuantity?: number | string } }>(
         `/api/v1/epr/obligations/${id}/assess`, session.sessionToken, { method: "POST" },
       );
@@ -118,19 +121,18 @@ if (root && firebaseAuth) {
         body: JSON.stringify({ idToken }),
       });
       const me = await api<Me>("/api/v1/auth/me", session.sessionToken);
-      if (!me.memberships.some((membership) => membership.status === "VERIFIED")) {
-        throw new Error("A verified organization membership is required.");
-      }
+      const membership = me.memberships.find((candidate) => candidate.status === "VERIFIED");
+      if (!membership) throw new Error("A verified organization membership is required.");
       const workspace = await api<{ data: { obligations: Obligation[] } }>("/api/v1/workspaces/compliance", session.sessionToken);
-      render({ status: "READY", message: "Assessments use authoritative obligation and verified-credit records.", obligations: workspace.data.obligations ?? [] });
+      render({ status: "READY", message: membership.can_assess_epr === true ? "Assessments use authoritative obligation and verified-credit records." : "Compliance obligations are visible, but EPR assessment permission is not granted.", obligations: workspace.data.obligations ?? [], canAssess: membership.can_assess_epr === true });
     } catch (error) {
-      render({ status: "UNAVAILABLE", message: error instanceof Error ? error.message : "Unable to load authoritative compliance data.", obligations: [] });
+      render({ status: "UNAVAILABLE", message: error instanceof Error ? error.message : "Unable to load authoritative compliance data.", obligations: [], canAssess: false });
     }
   };
 
   onAuthStateChanged(firebaseAuth, (user) => {
     if (user) void load(user);
-    else render({ status: "SIGN IN REQUIRED", message: "Sign in to load authorized compliance obligations.", obligations: [] });
+    else render({ status: "SIGN IN REQUIRED", message: "Sign in to load authorized compliance obligations.", obligations: [], canAssess: false });
   });
 }
 
