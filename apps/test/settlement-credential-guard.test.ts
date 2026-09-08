@@ -50,9 +50,11 @@ before(async () => {
     )).rows[0]!.id;
 
     retiredCredentialId = (await c.query<{ id: string }>(
-      "insert into credentials(activity_id,issuer_organization_id,trust_root_id,status,verification_id,quantity,unit,issued_at) values($1,$2,$3,'ACTIVE',$4,1,'kg',now()) returning id",
+      "insert into credentials(activity_id,issuer_organization_id,trust_root_id,status,verification_id,quantity,unit,issued_at) values($1,$2,$3,'ELIGIBLE',$4,1,'kg',now()) returning id",
       [retiredActivity, owner, `settlement-guard-retired-root-${suffix}`, retiredVerification],
     )).rows[0]!.id;
+    await c.query("update credentials set status='ISSUED' where id=$1", [retiredCredentialId]);
+    await c.query("update credentials set status='ACTIVE' where id=$1", [retiredCredentialId]);
     await c.query("update credentials set status='RETIRED' where id=$1", [retiredCredentialId]);
 
     const openActivity = (await c.query<{ id: string }>(
@@ -69,9 +71,11 @@ before(async () => {
     )).rows[0]!.id;
 
     openSettlementCredentialId = (await c.query<{ id: string }>(
-      "insert into credentials(activity_id,issuer_organization_id,trust_root_id,status,verification_id,quantity,unit,issued_at) values($1,$2,$3,'ACTIVE',$4,2,'kg',now()) returning id",
+      "insert into credentials(activity_id,issuer_organization_id,trust_root_id,status,verification_id,quantity,unit,issued_at) values($1,$2,$3,'ELIGIBLE',$4,2,'kg',now()) returning id",
       [openActivity, owner, `settlement-guard-open-root-${suffix}`, openVerification],
     )).rows[0]!.id;
+    await c.query("update credentials set status='ISSUED' where id=$1", [openSettlementCredentialId]);
+    await c.query("update credentials set status='ACTIVE' where id=$1", [openSettlementCredentialId]);
 
     await c.query("commit");
   } catch (error) {
