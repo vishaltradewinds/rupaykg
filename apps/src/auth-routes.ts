@@ -71,7 +71,7 @@ export async function registerAuthRoutes(app: FastifyInstance, pool: Pool | null
   app.get("/api/v1/onboarding/review-queue", async (request, reply) => {
     const auth = await requireAuth(request, reply, pool); if (!auth || !pool) return;
     if (!auth.isPlatformAdmin && !auth.permissions.includes("MANAGE_STAKEHOLDERS")) return reply.code(403).send({ error: "Stakeholder management permission required", code: "FORBIDDEN" });
-    const result = await pool.query(`select sa.id,sa.organization_id,sa.requested_role_key,sa.requested_organization_type,sa.geography_id,sa.status,sa.created_at,sa.reviewed_at,sa.applicant_note,sa.applicant_identity_id,i.display_name as applicant_name,i.email as applicant_email,o.name as organization_name,o.type as organization_type,g.name as geography_name,g.kind as geography_kind from stakeholder_applications sa join identities i on i.id=sa.applicant_identity_id join organizations o on o.id=sa.organization_id left join geographies g on g.id=sa.geography_id where sa.status='PENDING' order by sa.created_at asc`);
+    const result = await pool.query(`select sa.id,sa.organization_id,sa.requested_role_key,sa.requested_organization_type,sa.geography_id,sa.status,sa.created_at,sa.reviewed_at,sa.applicant_note,sa.applicant_identity_id,i.display_name as applicant_name,i.email as applicant_email,o.name as organization_name,o.type as organization_type from stakeholder_applications sa join identities i on i.id=sa.applicant_identity_id join organizations o on o.id=sa.organization_id where sa.status='PENDING' order by sa.created_at asc`);
     return reply.send({ applications: result.rows });
   });
 
