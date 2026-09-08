@@ -1,6 +1,5 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
-import { getAuth, onAuthStateChanged } from "firebase/auth";
-import { signInWithRedirect, getRedirectResult } from "firebase/auth";
+import { getAuth, onAuthStateChanged, signInWithRedirect, getRedirectResult, GoogleAuthProvider } from "firebase/auth";
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -33,24 +32,11 @@ let error = "";
 
 function escapeHtml(value: unknown): string { return String(value ?? "").replace(/[&<>\"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[char] ?? char)); }
 function activeMembership(): Membership | null { return session?.memberships.find((membership) => membership.status === "VERIFIED") ?? null; }
-function canWrite(): boolean { const membership = activeMembership(); return membership?.can_write_esg === true; }
+function canWrite(): boolean { return activeMembership()?.can_write_esg === true; }
 function render(): void {
   const writable = canWrite();
-  root.innerHTML = `<section class="esg-panel" aria-labelledby="esg-title">
-    <div class="esg-panel__header"><div><p class="esg-panel__eyebrow">ESG reporting</p><h2 id="esg-title">Record an ESG metric</h2><p class="esg-panel__intro">Use an existing PostgreSQL reporting period. RupayKG does not create synthetic reporting periods or metric values.</p></div><span class="esg-panel__status">${session ? (writable ? "Write access" : "Read only") : "Sign-in required"}</span></div>
-    ${message ? `<p class="esg-panel__message" role="status">${escapeHtml(message)}</p>` : ""}
-    ${error ? `<p class="esg-panel__error" role="alert">${escapeHtml(error)}</p>` : ""}
-    ${!session ? `<button id="esg-sign-in" type="button">Sign in to ESG workspace</button>` : !activeMembership() ? `<p class="esg-panel__notice">A verified organization membership is required.</p>` : `<form id="esg-form" class="esg-form">
-      <label>Reporting period<select id="esg-period" required ${periods.length ? "" : "disabled"}>${periods.length ? periods.map((period) => `<option value="${escapeHtml(period.id)}">${escapeHtml(period.framework)} · ${escapeHtml(period.period_start)} → ${escapeHtml(period.period_end)} · ${escapeHtml(period.status)}</option>`).join("") : "<option>No reporting periods available</option>"}</select></label>
-      <label>Metric code<input id="esg-code" required placeholder="Authoritative metric code" autocomplete="off"></label>
-      <label>Scope<select id="esg-scope" required><option value="1">Scope 1</option><option value="2">Scope 2</option><option value="3">Scope 3</option><option value="IMPACT">Impact</option></select></label>
-      <div class="esg-form__row"><label>Value<input id="esg-value" required type="number" min="0" step="any" inputmode="decimal"></label><label>Unit<input id="esg-unit" required placeholder="e.g. tCO2e" autocomplete="off"></label></div>
-      <div class="esg-form__row"><label>Evidence ID <span class="esg-form__optional">optional</span><input id="esg-evidence" placeholder="Verified evidence UUID" autocomplete="off"></label><label>Verification ID <span class="esg-form__optional">optional</span><input id="esg-verification" placeholder="Approved verification UUID" autocomplete="off"></label></div>
-      <button id="esg-submit" type="submit" ${writable && periods.length ? "" : "disabled"}>${writable ? "Record metric" : "ESG write permission required"}</button>
-    </form>`}
-    <div class="esg-panel__records"><div class="esg-panel__records-header"><h3>Recorded metrics</h3><span>${metrics.length} loaded</span></div>${metrics.length ? `<div class="esg-record-list">${metrics.map((metric) => `<article class="esg-record"><strong>${escapeHtml(metric.metric_code)}</strong><span>Scope ${escapeHtml(metric.scope)} · ${escapeHtml(metric.value)} ${escapeHtml(metric.unit)}</span><small>${escapeHtml(metric.status)}</small></article>`).join("")}</div>` : `<p class="esg-panel__empty">No ESG metrics are visible for the authorized organizations.</p>`}</div>
-  </section>`;
-  document.getElementById("esg-sign-in")?.addEventListener("click", () => void signInWithRedirect(auth, undefined as never));
+  root.innerHTML = `<section class="esg-panel" aria-labelledby="esg-title"><div class="esg-panel__header"><div><p class="esg-panel__eyebrow">ESG reporting</p><h2 id="esg-title">Record an ESG metric</h2><p class="esg-panel__intro">Use an existing PostgreSQL reporting period. RupayKG does not create synthetic reporting periods or metric values.</p></div><span class="esg-panel__status">${session ? (writable ? "Write access" : "Read only") : "Sign-in required"}</span></div>${message ? `<p class="esg-panel__message" role="status">${escapeHtml(message)}</p>` : ""}${error ? `<p class="esg-panel__error" role="alert">${escapeHtml(error)}</p>` : ""}${!session ? `<button id="esg-sign-in" type="button">Sign in to ESG workspace</button>` : !activeMembership() ? `<p class="esg-panel__notice">A verified organization membership is required.</p>` : `<form id="esg-form" class="esg-form"><label>Reporting period<select id="esg-period" required ${periods.length ? "" : "disabled"}>${periods.length ? periods.map((period) => `<option value="${escapeHtml(period.id)}">${escapeHtml(period.framework)} · ${escapeHtml(period.period_start)} → ${escapeHtml(period.period_end)} · ${escapeHtml(period.status)}</option>`).join("") : "<option>No reporting periods available</option>"}</select></label><label>Metric code<input id="esg-code" required placeholder="Authoritative metric code" autocomplete="off"></label><label>Scope<select id="esg-scope" required><option value="1">Scope 1</option><option value="2">Scope 2</option><option value="3">Scope 3</option><option value="IMPACT">Impact</option></select></label><div class="esg-form__row"><label>Value<input id="esg-value" required type="number" min="0" step="any" inputmode="decimal"></label><label>Unit<input id="esg-unit" required placeholder="e.g. tCO2e" autocomplete="off"></label></div><div class="esg-form__row"><label>Evidence ID <span class="esg-form__optional">optional</span><input id="esg-evidence" placeholder="Verified evidence UUID" autocomplete="off"></label><label>Verification ID <span class="esg-form__optional">optional</span><input id="esg-verification" placeholder="Approved verification UUID" autocomplete="off"></label></div><button id="esg-submit" type="submit" ${writable && periods.length ? "" : "disabled"}>${writable ? "Record metric" : "ESG write permission required"}</button></form>`}<div class="esg-panel__records"><div class="esg-panel__records-header"><h3>Recorded metrics</h3><span>${metrics.length} loaded</span></div>${metrics.length ? `<div class="esg-record-list">${metrics.map((metric) => `<article class="esg-record"><strong>${escapeHtml(metric.metric_code)}</strong><span>Scope ${escapeHtml(metric.scope)} · ${escapeHtml(metric.value)} ${escapeHtml(metric.unit)}</span><small>${escapeHtml(metric.status)}</small></article>`).join("")}</div>` : `<p class="esg-panel__empty">No ESG metrics are visible for the authorized organizations.</p>`}</div></section>`;
+  document.getElementById("esg-sign-in")?.addEventListener("click", () => void signInWithRedirect(auth, new GoogleAuthProvider()));
   document.getElementById("esg-form")?.addEventListener("submit", (event) => { event.preventDefault(); void submitMetric(); });
 }
 
@@ -89,8 +75,5 @@ async function submitMetric(): Promise<void> {
 }
 
 getRedirectResult(auth).catch((caught) => { error = caught instanceof Error ? caught.message : "Firebase sign-in failed."; render(); });
-onAuthStateChanged(auth, (user) => {
-  if (!user) { session = null; periods = []; metrics = []; render(); return; }
-  void loadSession(user).catch((caught) => { session = null; error = caught instanceof Error ? caught.message : "ESG workspace unavailable."; render(); });
-});
+onAuthStateChanged(auth, (user) => { if (!user) { session = null; periods = []; metrics = []; render(); return; } void loadSession(user).catch((caught) => { session = null; error = caught instanceof Error ? caught.message : "ESG workspace unavailable."; render(); }); });
 render();
