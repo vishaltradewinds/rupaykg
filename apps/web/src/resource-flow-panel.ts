@@ -45,6 +45,7 @@ if (root && configured) {
   const destination = form.elements.namedItem("destinationGeographyId") as HTMLSelectElement;
 
   function setMessage(text: string, error = false) { message.textContent = text; message.classList.toggle("error-text", error); }
+  function escapeHtml(value: unknown): string { return String(value ?? "").replace(/[&<>\"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[character] ?? character)); }
   async function exchange() {
     const user = firebaseAuth.currentUser;
     if (!user || !user.emailVerified) { sessionToken = ""; organizationId = ""; canRecord = false; submit.disabled = true; state.textContent = "Sign in to record"; setMessage("Verify your email and sign in with a verified stakeholder membership."); return; }
@@ -77,7 +78,7 @@ if (root && configured) {
     if (!response.ok) throw new Error(body?.error ?? "Authorized geography unavailable");
     geography = body?.data?.geography ?? [];
     for (const select of [source, destination]) {
-      select.innerHTML = `<option value="">None supplied</option>` + geography.map(g => `<option value="${g.id}">${g.name} · ${g.kind}</option>`).join("");
+      select.innerHTML = `<option value="">None supplied</option>` + geography.map(g => `<option value="${escapeHtml(g.id)}">${escapeHtml(g.name)} · ${escapeHtml(g.kind)}</option>`).join("");
     }
   }
   form.addEventListener("submit", async event => {
