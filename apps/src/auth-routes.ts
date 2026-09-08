@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import type { Pool } from "pg";
 import { authenticate, issueOpaqueToken, type AuthContext } from "./auth.js";
+import { getPermissionsForRole } from "./rbac-policy.js";
 import { verifyFirebaseIdToken } from "./firebase-auth.js";
 
 type Body = Record<string, unknown>;
@@ -48,7 +49,7 @@ export async function registerAuthRoutes(app: FastifyInstance, pool: Pool | null
     try {
       await client.query("begin");
       const organization = await client.query<{ id: string }>("insert into organizations(name,organization_type,status) values($1,$2,'PENDING') returning id", [organizationName, option[2]]); const organizationRow = organization.rows[0]; if (!organizationRow) throw new Error("Organization insert returned no row");
-      const role = await client.query<{ id: string }>("insert into roles(organization_id,name,permissions,geography_scope) values($1,$2,'[]','[]') returning id", [organizationRow.id, roleKey]); const roleRow = role.rows[0]; if (!roleRow) throw new Error("Role insert returned no row");
+      const role = await client.query<{ id: string }>("insert into roles(organization_id,name,permissions,geography_scope) values($1,$2,$3,'[]') returning id", [organizationRow.id, roleKey, JSON.stringify(getPermissionsForRole(roleKey))]); const roleRow = role.rows[0]; if (!roleRow) throw new Error("Role insert returned no row");
       await client.query("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'PENDING')", [auth.identityId, organizationRow.id, roleRow.id]);
       if (geographyId) await client.query("insert into organization_geography_scopes(organization_id,geography_id,status) values($1,$2,'PENDING')", [organizationRow.id, geographyId]);
       const application = await client.query("insert into stakeholder_applications(identity_id,organization_id,role_id,requested_role_key,requested_organization_type,geography_id,status,applicant_note) values($1,$2,$3,$4,$5,$6,'PENDING',$7) returning *", [auth.identityId, organizationRow.id, roleRow.id, roleKey, option[2], geographyId, note]);
