@@ -44,6 +44,10 @@ function text(value: unknown) {
   return value === null || value === undefined || value === "" ? "—" : String(value);
 }
 
+function escapeHtml(value: unknown) {
+  return text(value).replace(/[&<>\"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" })[character] ?? character);
+}
+
 function formatDate(value: string) {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString();
@@ -55,11 +59,11 @@ if (root && firebaseAuth) {
       ? state.obligations.map((obligation) => `
         <article class="compliance-row">
           <div>
-            <strong>${text(obligation.obligation_type)}</strong>
-            <span>${text(obligation.organization_name)} · ${text(obligation.jurisdiction_name)} · ${formatDate(obligation.period_start)} – ${formatDate(obligation.period_end)}</span>
-            <small>Status: ${text(obligation.status)} · Required quantity: ${text(obligation.required_quantity)}</small>
+            <strong>${escapeHtml(obligation.obligation_type)}</strong>
+            <span>${escapeHtml(obligation.organization_name)} · ${escapeHtml(obligation.jurisdiction_name)} · ${escapeHtml(formatDate(obligation.period_start))} – ${escapeHtml(formatDate(obligation.period_end))}</span>
+            <small>Status: ${escapeHtml(obligation.status)} · Required quantity: ${escapeHtml(obligation.required_quantity)}</small>
           </div>
-          ${state.canAssess ? `<button data-assess="${obligation.id}">Assess obligation</button>` : `<span class="field-help">Assessment permission not granted</span>`}
+          ${state.canAssess ? `<button data-assess="${escapeHtml(obligation.id)}">Assess obligation</button>` : `<span class="field-help">Assessment permission not granted</span>`}
         </article>`).join("")
       : `<div class="empty">No authorized obligations are available for assessment.</div>`;
 
@@ -71,9 +75,9 @@ if (root && firebaseAuth) {
             <h2>EPR obligation assessment</h2>
             <p>Assess an existing obligation through the production API. No quantities or obligation state are synthesized in the browser.</p>
           </div>
-          <span class="compliance-state">${state.status}</span>
+          <span class="compliance-state">${escapeHtml(state.status)}</span>
         </div>
-        ${state.message ? `<div class="resource-flow-state">${state.message}</div>` : ""}
+        ${state.message ? `<div class="resource-flow-state">${escapeHtml(state.message)}</div>` : ""}
         <div class="compliance-list">${rows}</div>
       </section>`;
 
