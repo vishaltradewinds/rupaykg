@@ -56,7 +56,10 @@ if (root && configured) {
       const meResponse = await fetch("/api/v1/auth/me", { headers: { Authorization: `Bearer ${sessionToken}`, Accept: "application/json" } });
       const me = await meResponse.json();
       if (!meResponse.ok) throw new Error(me?.error ?? "Unable to load stakeholder membership");
-      organizationId = me?.memberships?.[0]?.organization_id ?? "";
+      const verifiedMembership = Array.isArray(me?.memberships)
+        ? me.memberships.find((membership: { status?: string }) => membership?.status === "VERIFIED")
+        : null;
+      organizationId = verifiedMembership?.organization_id ?? "";
       if (!organizationId) throw new Error("A verified organization membership is required to record resource flows.");
       state.textContent = "Authorized stakeholder";
       await loadGeography();
