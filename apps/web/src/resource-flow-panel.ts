@@ -13,12 +13,13 @@ if (root && configured) {
   const firebaseAuth = getAuth(initializeApp(config, "resource-flow-intake"));
   let sessionToken = "";
   let organizationId = "";
+  let canRecord = false;
   let geography: Array<{ id: string; name: string; kind: string }> = [];
 
   root.innerHTML = `
     <section class="resource-flow-card">
       <div class="resource-flow-head">
-        <div><p class="eyebrow">AUTHORITATIVE MUTATION</p><h2>Resource flow intake</h2><p>Record a real movement of material through the authoritative API. Organization and geography authorization remain server-enforced.</p></div>
+        <div><p class="eyebrow">AUTHORITATIVE MUTATION</p><h2>Resource flow intake</h2><p>Record a real movement of material through the authoritative API. Organization, capability and geography authorization remain server-enforced.</p></div>
         <span class="resource-flow-state" data-state>Sign in to record</span>
       </div>
       <form data-form>
@@ -46,7 +47,7 @@ if (root && configured) {
   function setMessage(text: string, error = false) { message.textContent = text; message.classList.toggle("error-text", error); }
   async function exchange() {
     const user = firebaseAuth.currentUser;
-    if (!user || !user.emailVerified) { sessionToken = ""; organizationId = ""; submit.disabled = true; state.textContent = "Sign in to record"; setMessage("Verify your email and sign in with a verified stakeholder membership."); return; }
+    if (!user || !user.emailVerified) { sessionToken = ""; organizationId = ""; canRecord = false; submit.disabled = true; state.textContent = "Sign in to record"; setMessage("Verify your email and sign in with a verified stakeholder membership."); return; }
     try {
       const idToken = await user.getIdToken(true);
       const exchange = await fetch("/api/v1/auth/exchange", { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify({ idToken }) });
@@ -60,13 +61,14 @@ if (root && configured) {
         ? me.memberships.find((membership: { status?: string }) => membership?.status === "VERIFIED")
         : null;
       organizationId = verifiedMembership?.organization_id ?? "";
+      canRecord = Array.isArray(verifiedMembership?.permissions) && verifiedMembership.permissions.includes("waste:record");
       if (!organizationId) throw new Error("A verified organization membership is required to record resource flows.");
-      state.textContent = "Authorized stakeholder";
+      state.textContent = canRecord ? "Authorized stakeholder" : "Read-only stakeholder";
       await loadGeography();
-      submit.disabled = false;
-      setMessage("Authorized. Record only observed material movements; the API will re-check permissions and geography scope.");
+      submit.disabled = !canRecord;
+      setMessage(canRecord ? "Authorized. Record only observed material movements; the API will re-check permissions and geography scope." : "Your verified membership is read-only for resource recording; no write action is available.", !canRecord);
     } catch (error) {
-      sessionToken = ""; organizationId = ""; submit.disabled = true; state.textContent = "Authorization unavailable"; setMessage(error instanceof Error ? error.message : "Authorization unavailable", true);
+      sessionToken = ""; organizationId = ""; canRecord = false; submit.disabled = true; state.textContent = "Authorization unavailable"; setMessage(error instanceof Error ? error.message : "Authorization unavailable", true);
     }
   }
   async function loadGeography() {
@@ -80,7 +82,7 @@ if (root && configured) {
   }
   form.addEventListener("submit", async event => {
     event.preventDefault();
-    if (!sessionToken || !organizationId) return;
+    if (!sessionToken || !organizationId || !canRecord) return;
     const data = new FormData(form);
     const sourceGeographyId = String(data.get("sourceGeographyId") ?? "").trim();
     const destinationGeographyId = String(data.get("destinationGeographyId") ?? "").trim();
@@ -96,7 +98,7 @@ if (root && configured) {
       source.value = ""; destination.value = "";
       window.dispatchEvent(new CustomEvent("rupaykg:resource-flow-created"));
     } catch (error) { setMessage(error instanceof Error ? error.message : "Resource flow creation failed", true); }
-    finally { submit.disabled = !sessionToken || !organizationId; }
+    finally { submit.disabled = !sessionToken || !organizationId || !canRecord; }
   });
   root.querySelector<HTMLButtonElement>("[data-refresh]")!.addEventListener("click", () => void exchange());
   onAuthStateChanged(firebaseAuth, () => void exchange());
