@@ -50,9 +50,10 @@ before(async () => {
     )).rows[0]!.id;
 
     retiredCredentialId = (await c.query<{ id: string }>(
-      "insert into credentials(activity_id,issuer_organization_id,trust_root_id,status,verification_id,quantity,unit,issued_at) values($1,$2,$3,'RETIRED',$4,1,'kg',now()) returning id",
+      "insert into credentials(activity_id,issuer_organization_id,trust_root_id,status,verification_id,quantity,unit,issued_at) values($1,$2,$3,'ACTIVE',$4,1,'kg',now()) returning id",
       [retiredActivity, owner, `settlement-guard-retired-root-${suffix}`, retiredVerification],
     )).rows[0]!.id;
+    await c.query("update credentials set status='RETIRED' where id=$1", [retiredCredentialId]);
 
     const openActivity = (await c.query<{ id: string }>(
       "insert into activities(organization_id,actor_identity_id,activity_type,status,completed_at) values($1,$2,'COLLECTION','COMPLETED',now()) returning id",
