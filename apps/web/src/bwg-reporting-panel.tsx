@@ -13,6 +13,7 @@ const app = getApps().some((item) => item.name === "bwg-reporting") ? getApp("bw
 const auth = getAuth(app);
 const root = document.getElementById("bwg-reporting");
 if (!root) throw new Error("BWG reporting mount missing");
+const mount = root;
 
 let session: Session | null = null;
 let workspace: Workspace = { profiles: [], periods: [], wasteReports: [], eprReports: [], esgReports: [] };
@@ -29,7 +30,7 @@ function render(): void {
   const profile = workspace.profiles[0];
   const activePeriod = workspace.periods[0];
   const periodOptions = workspace.periods.map((p) => `<option value="${escapeHtml(p.id)}">${escapeHtml(p.period_start)} → ${escapeHtml(p.period_end)} · ${escapeHtml(p.reporting_basis)}</option>`).join("") || `<option value="">Create a period first</option>`;
-  root.innerHTML = `<section class="compliance-card bwg-card" aria-labelledby="bwg-title">
+  mount.innerHTML = `<section class="compliance-card bwg-card" aria-labelledby="bwg-title">
     <div class="compliance-head"><div><p class="eyebrow">BULK WASTE GENERATOR</p><h2 id="bwg-title">EPR &amp; ESG reporting</h2><p>Record authoritative BWG applicability, waste flows, EPR evidence and ESG metrics. Submission or acceptance is never inferred.</p></div><span class="compliance-state">${session ? "AUTHENTICATED" : "SIGN IN REQUIRED"}</span></div>
     ${message ? `<div class="resource-flow-state">${escapeHtml(message)}</div>` : ""}${error ? `<div class="resource-flow-state" role="alert">${escapeHtml(error)}</div>` : ""}
     ${!session ? `<button id="bwg-sign-in" type="button">Sign in to BWG workspace</button>` : !activeMembership() ? `<div class="field-help">A verified organization membership is required.</div>` : `<div class="bwg-grid">
@@ -38,13 +39,13 @@ function render(): void {
       <form id="bwg-waste-form" class="esg-form"><h3>3. Waste report</h3><label>Reporting period<select id="bwg-waste-period" required>${periodOptions}</select></label><label>Waste stream<input id="bwg-stream" required placeholder="Dry / wet / plastic / organic…"></label><div class="esg-form__row"><label>Generated<input id="bwg-generated" required type="number" min="0" step="0.001"></label><label>Segregated<input id="bwg-segregated" type="number" min="0" step="0.001" value="0"></label></div><div class="esg-form__row"><label>Channelised<input id="bwg-channelized" type="number" min="0" step="0.001" value="0"></label><label>Processed<input id="bwg-processed" type="number" min="0" step="0.001" value="0"></label></div><label>Unit<input id="bwg-unit" required value="kg"></label><label>Verified evidence UUID <span class="esg-form__optional">optional</span><input id="bwg-waste-evidence"></label><label>Approved verification UUID <span class="esg-form__optional">optional</span><input id="bwg-waste-verification"></label><button type="submit" ${canWrite("waste:record") && workspace.periods.length ? "" : "disabled"}>Record waste report</button></form>
       <form id="bwg-epr-form" class="esg-form"><h3>4. EPR report</h3><label>Reporting period<select id="bwg-epr-period" required>${periodOptions}</select></label><label>EPR scheme UUID<input id="bwg-scheme" required placeholder="Authoritative epr_schemes UUID"></label><label>Category code<input id="bwg-category" required placeholder="Authoritative category code"></label><div class="esg-form__row"><label>Obligated quantity<input id="bwg-obligated" required type="number" min="0" step="0.001"></label><label>Fulfilled quantity<input id="bwg-fulfilled" required type="number" min="0" step="0.001"></label></div><label>Verified evidence UUID <span class="esg-form__optional">optional</span><input id="bwg-epr-evidence"></label><label>Approved verification UUID <span class="esg-form__optional">optional</span><input id="bwg-epr-verification"></label><button type="submit" ${canWrite("epr:manage") && workspace.periods.length ? "" : "disabled"}>Record EPR report</button><p class="field-help">This records an authoritative report only. It does not submit to CPCB or claim CPCB acceptance.</p></form>
       <form id="bwg-esg-form" class="esg-form"><h3>5. ESG metric</h3><label>Reporting period<select id="bwg-esg-period" required>${periodOptions}</select></label><label>Metric code<input id="bwg-metric" required placeholder="Authoritative metric code"></label><div class="esg-form__row"><label>Scope<input id="bwg-scope" required placeholder="1 / 2 / 3 / IMPACT"></label><label>Unit<input id="bwg-esg-unit" required placeholder="kg, kWh, tCO2e…"></label></div><label>Value<input id="bwg-value" required type="number" min="0" step="any"></label><label>Verified evidence UUID <span class="esg-form__optional">optional</span><input id="bwg-esg-evidence"></label><label>Approved verification UUID <span class="esg-form__optional">optional</span><input id="bwg-esg-verification"></label><button type="submit" ${canWrite("reports:write") && workspace.periods.length ? "" : "disabled"}>Record ESG metric</button><p class="field-help">Only users with the authoritative ESG write capability can record metrics.</p></form>
-    </div><div class="compliance-list"><h3>Authoritative records</h3><p class="field-help">Profiles: ${workspace.profiles.length} · periods: ${workspace.periods.length} · waste reports: ${workspace.wasteReports.length} · EPR reports: ${workspace.eprReports.length} · ESG reports: ${workspace.esgReports.length}</p></div>`}`;
-  root.querySelector("#bwg-sign-in")?.addEventListener("click", () => void signInWithRedirect(auth, new GoogleAuthProvider()));
-  root.querySelector("#bwg-profile-form")?.addEventListener("submit", (event) => { event.preventDefault(); void saveProfile(); });
-  root.querySelector("#bwg-period-form")?.addEventListener("submit", (event) => { event.preventDefault(); void createPeriod(); });
-  root.querySelector("#bwg-waste-form")?.addEventListener("submit", (event) => { event.preventDefault(); void saveWaste(); });
-  root.querySelector("#bwg-epr-form")?.addEventListener("submit", (event) => { event.preventDefault(); void saveEpr(); });
-  root.querySelector("#bwg-esg-form")?.addEventListener("submit", (event) => { event.preventDefault(); void saveEsg(); });
+    </div><div class="compliance-list"><h3>Authoritative records</h3><p class="field-help">Profiles: ${workspace.profiles.length} · periods: ${workspace.periods.length} · waste reports: ${workspace.wasteReports.length} · EPR reports: ${workspace.eprReports.length} · ESG reports: ${workspace.esgReports.length}</p></div>`;
+  mount.querySelector("#bwg-sign-in")?.addEventListener("click", () => void signInWithRedirect(auth, new GoogleAuthProvider()));
+  mount.querySelector("#bwg-profile-form")?.addEventListener("submit", (event) => { event.preventDefault(); void saveProfile(); });
+  mount.querySelector("#bwg-period-form")?.addEventListener("submit", (event) => { event.preventDefault(); void createPeriod(); });
+  mount.querySelector("#bwg-waste-form")?.addEventListener("submit", (event) => { event.preventDefault(); void saveWaste(); });
+  mount.querySelector("#bwg-epr-form")?.addEventListener("submit", (event) => { event.preventDefault(); void saveEpr(); });
+  mount.querySelector("#bwg-esg-form")?.addEventListener("submit", (event) => { event.preventDefault(); void saveEsg(); });
 }
 
 async function load(): Promise<void> { if (!session) return; const response = await api("/api/v1/workspaces/bwg"); workspace = response.data ?? workspace; render(); }
