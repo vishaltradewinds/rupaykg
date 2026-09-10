@@ -16,28 +16,24 @@
     <script>
       (() => {
         const storageKey = "rupaykg.activeOrganizationId";
-        const workspacePrefix = "/api/v1/workspaces/";
         const originalFetch = window.fetch.bind(window);
-
         const selectedOrganization = () => window.localStorage.getItem(storageKey) || "";
-        const withOrganizationHeader = (input, init) => {
-          const organizationId = selectedOrganization();
-          if (!organizationId) return [input, init];
-          const headers = new Headers(init?.headers || (input instanceof Request ? input.headers : undefined));
-          headers.set("X-RupayKG-Organization-Id", organizationId);
-          return [input, { ...(init || {}), headers }];
-        };
+        const isApiRequest = (url) => url.startsWith("/api/v1/") || url.includes("/api/v1/");
 
         window.fetch = async (input, init) => {
           const url = typeof input === "string" ? input : input.url;
-          const isWorkspaceRequest = url.startsWith(workspacePrefix) || url.includes(workspacePrefix);
-          const args = isWorkspaceRequest ? withOrganizationHeader(input, init) : [input, init];
+          const organizationId = selectedOrganization();
+          let args = [input, init];
+          if (organizationId && isApiRequest(url)) {
+            const headers = new Headers(init?.headers || (input instanceof Request ? input.headers : undefined));
+            headers.set("X-RupayKG-Organization-Id", organizationId);
+            args = [input, { ...(init || {}), headers }];
+          }
           const response = await originalFetch(args[0], args[1]);
           if (url.includes("/api/v1/auth/me")) {
             response.clone().json().then((body) => {
-              const verified = Array.isArray(body?.memberships)
-                ? body.memberships.find((membership) => membership?.status === "VERIFIED")
-                : null;
+              const memberships = Array.isArray(body?.memberships) ? body.memberships : [];
+              const verified = memberships.find((membership) => membership?.status === "VERIFIED");
               if (verified?.organization_id && !selectedOrganization()) {
                 window.localStorage.setItem(storageKey, verified.organization_id);
               }
@@ -50,7 +46,6 @@
           if (!select?.value) return;
           window.localStorage.setItem(storageKey, select.value);
         };
-
         const observer = new MutationObserver(() => {
           const select = document.querySelector('select[aria-label="Active organization"]');
           if (!select) return;
