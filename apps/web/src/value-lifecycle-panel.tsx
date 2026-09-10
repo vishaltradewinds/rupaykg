@@ -29,7 +29,7 @@ function installMutationBridge() {
   target[key] = true;
   const original = window.fetch.bind(window);
   window.fetch = async (input, init) => {
-    const url = typeof input === "string" ? input : input.url;
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
     const method = (init?.method || (input instanceof Request ? input.method : "GET")).toUpperCase();
     const response = await original(input, init);
     if (["POST", "PUT", "PATCH"].includes(method) && response.ok && url.includes("/api/v1/")) {
