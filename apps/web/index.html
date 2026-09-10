@@ -40,7 +40,9 @@
           if (isLogoutRequest(url, method)) window.localStorage.removeItem(storageKey);
           if (organizationId && isApiRequest(url) && !isAuthMeRequest(url) && !isLogoutRequest(url, method)) {
             const headers = new Headers(init?.headers || (input instanceof Request ? input.headers : undefined));
-            headers.set("X-RupayKG-Organization-Id", organizationId);
+            // Never overwrite an explicitly supplied organization context. The backend's
+            // active-organization authorization remains authoritative and fail-closed.
+            if (!headers.has("X-RupayKG-Organization-Id")) headers.set("X-RupayKG-Organization-Id", organizationId);
             args = [input, { ...(init || {}), headers }];
           }
           const response = await originalFetch(args[0], args[1]);
