@@ -45,7 +45,9 @@ export async function authenticate(request: FastifyRequest, pool: Pool | null): 
   const activeOrganizationId = typeof requested === "string" && requested.trim() ? requested.trim() : undefined;
   if (activeOrganizationId && !UUID_RE.test(activeOrganizationId)) return null;
   if (activeOrganizationId && !memberships.rows.some((m) => m.organization_id === activeOrganizationId)) return null;
-  return { identityId: rows.rows[0].identity_id, memberships: memberships.rows, activeOrganizationId };
+  return activeOrganizationId
+    ? { identityId: rows.rows[0].identity_id, memberships: memberships.rows, activeOrganizationId }
+    : { identityId: rows.rows[0].identity_id, memberships: memberships.rows };
 }
 
 export function canActForOrganization(auth: AuthContext, organizationId: string): boolean {
