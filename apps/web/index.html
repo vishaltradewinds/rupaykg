@@ -45,7 +45,9 @@
           }
           const response = await originalFetch(args[0], args[1]);
           if (isAuthMeRequest(url)) {
-            if (response.status === 401) {
+            if (response.status === 401 || response.status === 403) {
+              // A rejected identity bootstrap means the persisted organization
+              // context cannot be trusted for the next authenticated identity.
               window.localStorage.removeItem(storageKey);
             } else {
               response.clone().json().then(reconcileOrganization).catch(() => undefined);
