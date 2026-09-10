@@ -21,6 +21,7 @@
         const selectedOrganization = () => window.localStorage.getItem(storageKey) || "";
         const isApiRequest = (url) => url.startsWith("/api/v1/") || url.includes("/api/v1/");
         const isAuthMeRequest = (url) => url.includes("/api/v1/auth/me");
+        const isLogoutRequest = (url, method) => method.toUpperCase() === "POST" && url.includes("/api/v1/auth/logout");
 
         const reconcileOrganization = (body) => {
           const memberships = Array.isArray(body?.memberships) ? body.memberships : [];
@@ -28,31 +29,24 @@
           const current = selectedOrganization();
           const currentIsVerified = verified.some((membership) => membership.organization_id === current);
           if (current && !currentIsVerified) window.localStorage.removeItem(storageKey);
-          if (!currentIsVerified && verified[0]?.organization_id) {
-            window.localStorage.setItem(storageKey, verified[0].organization_id);
-          }
+          if (!currentIsVerified && verified[0]?.organization_id) window.localStorage.setItem(storageKey, verified[0].organization_id);
         };
 
         window.fetch = async (input, init) => {
           const url = typeof input === "string" ? input : input.url;
+          const method = init?.method || (input instanceof Request ? input.method : "GET");
           const organizationId = selectedOrganization();
           let args = [input, init];
-          // Never send a persisted organization context while resolving the current
-          // identity. This prevents a stale org from blocking account switches.
-          if (organizationId && isApiRequest(url) && !isAuthMeRequest(url)) {
+          if (isLogoutRequest(url, method)) window.localStorage.removeItem(storageKey);
+          if (organizationId && isApiRequest(url) && !isAuthMeRequest(url) && !isLogoutRequest(url, method)) {
             const headers = new Headers(init?.headers || (input instanceof Request ? input.headers : undefined));
             headers.set("X-RupayKG-Organization-Id", organizationId);
             args = [input, { ...(init || {}), headers }];
           }
           const response = await originalFetch(args[0], args[1]);
           if (isAuthMeRequest(url)) {
-            if (response.status === 401 || response.status === 403) {
-              // A rejected identity bootstrap means the persisted organization
-              // context cannot be trusted for the next authenticated identity.
-              window.localStorage.removeItem(storageKey);
-            } else {
-              response.clone().json().then(reconcileOrganization).catch(() => undefined);
-            }
+            if (response.status === 401 || response.status === 403) window.localStorage.removeItem(storageKey);
+            else response.clone().json().then(reconcileOrganization).catch(() => undefined);
           }
           return response;
         };
@@ -74,6 +68,42 @@
           });
         });
         observer.observe(document.documentElement, { childList: true, subtree: true });
+
+        const status = document.createElement("div");
+        status.id = "rupaykg-offline-status";
+        status.setAttribute("role", "status");
+        status.setAttribute("aria-live", "polite");
+        Object.assign(status.style, { position: "fixed", right: "14px", bottom: "14px", zIndex: "20", maxWidth: "min(360px,calc(100vw - 28px))", padding: "9px 12px", border: "1px solid #314c63", borderRadius: "999px", background: "rgba(7,17,31,.94)", color: "#a8bbcb", font: "600 11px system-ui,sans-serif", boxShadow: "0 8px 30px rgba(0,0,0,.28)", pointerEvents: "none" });
+        document.body.appendChild(status);
+
+        const setStatus = (text) => { status.textContent = text; status.hidden = !text; };
+        const refreshQueueStatus = async () => {
+          try {
+            const db = await new Promise((resolve, reject) => {
+              const request = indexedDB.open("rupaykg-field-operations", 3);
+              request.onsuccess = () => resolve(request.result);
+              request.onerror = () => reject(request.error);
+            });
+            const count = await new Promise((resolve, reject) => {
+              const tx = db.transaction("pending", "readonly");
+              const request = tx.objectStore("pending").count();
+              request.onsuccess = () => resolve(request.result);
+              request.onerror = () => reject(request.error);
+            });
+            db.close();
+            if (count > 0) setStatus(`${count} field operation${count === 1 ? "" : "s"} pending sync`);
+            else if (navigator.onLine) setStatus("");
+          } catch { setStatus(""); }
+        };
+        window.addEventListener("offline", () => setStatus("Offline — new field operations will be queued"));
+        window.addEventListener("online", () => { setStatus("Back online — syncing field operations"); void refreshQueueStatus(); });
+        window.addEventListener("rupaykg:offline-sync", (event) => {
+          const detail = event.detail || {};
+          if (detail.status === "QUEUED") setStatus("Field operation queued — pending authoritative sync");
+          else if (detail.status === "SYNCED") { setStatus("Field operation synced and accepted"); setTimeout(() => void refreshQueueStatus(), 1200); }
+          else if (detail.status === "REJECTED") setStatus(`Field operation rejected by API (${detail.httpStatus ?? "4xx"})`);
+        });
+        void refreshQueueStatus();
       })();
     </script>
     <script type="module" src="/src/main.tsx"></script>
