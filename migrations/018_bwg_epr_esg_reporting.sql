@@ -61,8 +61,7 @@ create table bwg_epr_reports (
   verification_id uuid references verifications(id),
   status record_status not null default 'PENDING',
   metadata jsonb not null default '{}',
-  created_at timestamptz not null default now(),
-  check (fulfilled_quantity <= obligated_quantity)
+  created_at timestamptz not null default now()
 );
 
 create table bwg_esg_reports (
