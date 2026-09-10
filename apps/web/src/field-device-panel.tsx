@@ -1,3 +1,4 @@
+import React from "react";
 import { createRoot } from "react-dom/client";
 import { getApps, initializeApp } from "firebase/app";
 import { getAuth, onAuthStateChanged, type User } from "firebase/auth";
@@ -30,15 +31,13 @@ const organizationStorageKey = "rupaykg.activeOrganizationId";
 
 async function sessionFor(user: User) {
   const idToken = await user.getIdToken(true);
-  const response = await fetch("/api/v1/auth/exchange", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify({ idToken }),
-  });
+  const response = await fetch("/api/v1/auth/exchange", { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify({ idToken }) });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(body?.error ?? `Authentication failed (${response.status})`);
   return String(body.sessionToken);
 }
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) { return <label className="form-field"><span>{label}</span>{children}</label>; }
 
 function Panel() {
   const [user, setUser] = React.useState<User | null>(null);
@@ -69,12 +68,9 @@ function Panel() {
         const meResponse = await fetch("/api/v1/auth/me", { headers: { Authorization: `Bearer ${session}`, Accept: "application/json" } });
         const me = await meResponse.json().catch(() => ({})) as Me;
         setIdentityId(me.identity?.id ?? "");
-        const activeOrg = localStorage.getItem(organizationStorageKey) ?? "";
-        setOrganizationId(activeOrg);
+        setOrganizationId(localStorage.getItem(organizationStorageKey) ?? "");
         await load(session);
-      } catch (cause) {
-        setError(cause instanceof Error ? cause.message : "Unable to load field-device governance.");
-      }
+      } catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to load field-device governance."); }
     });
   }, [load]);
 
@@ -133,8 +129,7 @@ function Panel() {
   </section>;
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) { return <label className="form-field"><span>{label}</span>{children}</label>; }
-
-import React from "react";
-const mount = document.getElementById("field-device-management");
-if (mount) createRoot(mount).render(<Panel />);
+const mount = document.createElement("div");
+mount.id = "field-device-management";
+document.body.appendChild(mount);
+createRoot(mount).render(<Panel />);
