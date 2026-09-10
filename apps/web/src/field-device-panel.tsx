@@ -16,7 +16,8 @@ type Device = {
   last_seen_at?: string | null;
   status: string;
 };
-type Me = { identity: { id: string } | null };
+type Membership = { organization_id: string; organization_name: string; status: string };
+type Me = { identity: { id: string } | null; memberships?: Membership[] };
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -37,12 +38,13 @@ async function sessionFor(user: User) {
   return String(body.sessionToken);
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) { return <label className="form-field"><span>{label}</span>{children}</label>; }
+function Field({ label, children, help }: { label: string; children: React.ReactNode; help?: string }) { return <label className="form-field"><span>{label}</span>{children}{help && <small>{help}</small>}</label>; }
 
 function Panel() {
   const [user, setUser] = React.useState<User | null>(null);
   const [token, setToken] = React.useState("");
   const [identityId, setIdentityId] = React.useState("");
+  const [identities, setIdentities] = React.useState<Membership[]>([]);
   const [organizationId, setOrganizationId] = React.useState(() => localStorage.getItem(organizationStorageKey) ?? "");
   const [deviceId, setDeviceId] = React.useState("");
   const [devices, setDevices] = React.useState<Device[]>([]);
@@ -61,13 +63,15 @@ function Panel() {
     if (!firebaseAuth) return;
     return onAuthStateChanged(firebaseAuth, async currentUser => {
       setUser(currentUser);
-      if (!currentUser) { setToken(""); setDevices([]); return; }
+      if (!currentUser) { setToken(""); setDevices([]); setIdentities([]); return; }
       try {
         const session = await sessionFor(currentUser);
         setToken(session);
         const meResponse = await fetch("/api/v1/auth/me", { headers: { Authorization: `Bearer ${session}`, Accept: "application/json" } });
         const me = await meResponse.json().catch(() => ({})) as Me;
+        const verifiedMemberships = (me.memberships ?? []).filter(m => m.status === "VERIFIED");
         setIdentityId(me.identity?.id ?? "");
+        setIdentities(verifiedMemberships);
         setOrganizationId(localStorage.getItem(organizationStorageKey) ?? "");
         await load(session);
       } catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to load field-device governance."); }
@@ -81,13 +85,28 @@ function Panel() {
     return () => { window.removeEventListener("storage", sync); window.clearInterval(timer); };
   }, []);
 
+  React.useEffect(() => {
+    if (!organizationId) return;
+    const member = identities.find(item => item.organization_id === organizationId);
+    if (!member && identities.length) setIdentityId("");
+    else if (member && identityId === "") setIdentityId(member.organization_id === organizationId ? identities.find(item => item.organization_id === organizationId)?.organization_id ?? "" : identityId);
+  }, [organizationId, identities, identityId]);
+
   if (!user || !token) return null;
 
+  const eligibleIdentities = identities.filter(item => item.organization_id === organizationId);
+  // The authenticated identity is the only identity guaranteed to be selectable without
+  // an additional identity-directory endpoint. The backend independently enforces that
+  // any supplied identity has verified membership in the selected organization.
+  const currentIdentity = identities.find(item => item.organization_id === organizationId);
+
   async function enroll() {
-    if (!organizationId || !deviceId.trim() || !identityId) { setError("Select an active organization and provide a device identifier."); return; }
+    if (!organizationId || !deviceId.trim()) { setError("Select an active organization and provide a device identifier."); return; }
+    const selectedIdentityId = currentIdentity?.organization_id === organizationId ? identityId : "";
+    if (!selectedIdentityId) { setError("The authenticated identity is not available as a verified member of the active organization."); return; }
     setBusy(true); setError(""); setMessage("");
     try {
-      const response = await fetch("/api/v1/field-devices/enroll", { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify({ organizationId, deviceId: deviceId.trim(), identityId }) });
+      const response = await fetch("/api/v1/field-devices/enroll", { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify({ organizationId, deviceId: deviceId.trim(), identityId: selectedIdentityId }) });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body?.error ?? `Enrollment failed (${response.status})`);
       setMessage("Field device enrolled as PENDING. A permitted manager must verify it before field sync can use it.");
@@ -116,9 +135,11 @@ function Panel() {
     {message && <div className="notice success" role="status">{message}</div>}
     <div className="onboarding-form">
       <Field label="Active organization"><input value={organizationId} readOnly placeholder="Select an active organization above" /></Field>
-      <Field label="Enrolled identity"><input value={identityId} readOnly /></Field>
+      <Field label="Enrolled identity" help="The backend verifies that this identity has verified membership in the active organization.">
+        <input value={identityId} readOnly aria-describedby="field-device-identity-help" />
+      </Field>
       <Field label="Device identifier"><input value={deviceId} onChange={e => setDeviceId(e.target.value)} maxLength={200} placeholder="Device identifier / hardware UUID" /></Field>
-      <button type="button" onClick={() => void enroll()} disabled={busy || !organizationId || !deviceId.trim()}>Enroll field device</button>
+      <button type="button" onClick={() => void enroll()} disabled={busy || !organizationId || !deviceId.trim() || !eligibleIdentities.length}>Enroll field device</button>
     </div>
     <div className="source-list">
       {devices.length === 0 ? <div className="empty">No field devices are visible for the current authenticated identity and organization scope.</div> : devices.map(device => <article className="source-row" key={device.id}>
