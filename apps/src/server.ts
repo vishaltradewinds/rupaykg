@@ -9,6 +9,7 @@ import { registerValueRoutes } from "./value-routes.js";
 import { registerRegistryRoutes } from "./registry-routes.js";
 import { registerSyncRoutes } from "./sync-routes.js";
 import { registerWorkspaceRoutes } from "./workspace-routes.js";
+import { registerBwgRoutes } from "./bwg-routes.js";
 import { registerIntelligenceRoutes } from "./intelligence-routes.js";
 
 const app = Fastify({ logger: true });
@@ -93,6 +94,7 @@ await registerValueRoutes(app, pool);
 await registerRegistryRoutes(app, pool);
 await registerSyncRoutes(app, pool);
 await registerWorkspaceRoutes(app, pool);
+await registerBwgRoutes(app, pool);
 await registerIntelligenceRoutes(app, pool);
 
 if (existsSync(webRoot)) {
