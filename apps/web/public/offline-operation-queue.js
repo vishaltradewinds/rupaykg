@@ -1,8 +1,9 @@
 (() => {
   const DB_NAME = "rupaykg-field-operations";
   const STORE = "pending";
-  const DB_VERSION = 2;
+  const DB_VERSION = 3;
   const isOperationSync = (url, method) => method.toUpperCase() === "POST" && (url.startsWith("/api/v1/operations/sync") || url.includes("/api/v1/operations/sync"));
+  const isLogout = (url, method) => method.toUpperCase() === "POST" && (url.startsWith("/api/v1/auth/logout") || url.includes("/api/v1/auth/logout"));
   let sessionAuthorization = "";
   let sessionOrganization = "";
 
@@ -12,6 +13,21 @@
       const db = request.result;
       if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE, { keyPath: "id" });
       if (request.oldVersion < 2) {
+        const store = request.transaction.objectStore(STORE);
+        const cursorRequest = store.openCursor();
+        cursorRequest.onsuccess = () => {
+          const cursor = cursorRequest.result;
+          if (!cursor) return;
+          const value = cursor.value;
+          if (value?.headers) {
+            const headers = new Headers(value.headers);
+            headers.delete("authorization");
+            cursor.update({ ...value, headers: Array.from(headers.entries()) });
+          }
+          cursor.continue();
+        };
+      }
+      if (request.oldVersion < 3) {
         const store = request.transaction.objectStore(STORE);
         const cursorRequest = store.openCursor();
         cursorRequest.onsuccess = () => {
@@ -74,7 +90,7 @@
         const headers = new Headers(record.headers || []);
         headers.set("Authorization", sessionAuthorization);
         if (sessionOrganization) headers.set("X-RupayKG-Organization-Id", sessionOrganization);
-        const response = await window.fetch(record.url, { method: record.method, headers, body: record.body });
+        const response = await originalFetch(record.url, { method: record.method, headers, body: record.body });
         if (response.ok) {
           await remove(record.id);
           window.dispatchEvent(new CustomEvent("rupaykg:offline-sync", { detail: { id: record.id, status: "SYNCED" } }));
@@ -104,6 +120,15 @@
     const headers = new Headers(sourceHeaders);
     const authorization = headers.get("Authorization");
     const organization = headers.get("X-RupayKG-Organization-Id");
+
+    // Logout is the security boundary: revoke the in-memory replay credential before
+    // sending the logout request so queued work can never replay under the old session.
+    if (isLogout(url, method)) {
+      sessionAuthorization = "";
+      sessionOrganization = "";
+      return originalFetch(input, init);
+    }
+
     if (authorization) sessionAuthorization = authorization;
     if (organization) sessionOrganization = organization;
     if (!isOperationSync(url, method) || navigator.onLine) {
