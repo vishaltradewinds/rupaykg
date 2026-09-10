@@ -5,6 +5,7 @@ import type { Pool, PoolClient } from "pg";
 export type AuthContext = {
   identityId: string;
   memberships: Array<{ organization_id: string; role_id: string; status: string }>;
+  activeOrganizationId?: string;
 };
 
 function hashToken(token: string): string {
@@ -16,7 +17,6 @@ export function issueOpaqueToken(): string {
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const WORKSPACE_PREFIX = "/api/v1/workspaces/";
 
 export async function authenticate(request: FastifyRequest, pool: Pool | null): Promise<AuthContext | null> {
   if (!pool) return null;
@@ -41,26 +41,18 @@ export async function authenticate(request: FastifyRequest, pool: Pool | null): 
       where identity_id = $1 and status = 'VERIFIED'`,
     [rows.rows[0].identity_id],
   );
-  const selectedOrganizationId = request.headers["x-rupaykg-organization-id"];
-  if (typeof selectedOrganizationId === "string" && selectedOrganizationId.trim()) {
-    const organizationId = selectedOrganizationId.trim();
-    if (!UUID_RE.test(organizationId)) return { identityId: rows.rows[0].identity_id, memberships: [] };
-    return {
-      identityId: rows.rows[0].identity_id,
-      memberships: memberships.rows.filter((membership) => membership.organization_id === organizationId),
-    };
-  }
-  if (request.url.startsWith(WORKSPACE_PREFIX) && memberships.rows.length) {
-    return { identityId: rows.rows[0].identity_id, memberships: [memberships.rows[0]] };
-  }
-  return { identityId: rows.rows[0].identity_id, memberships: memberships.rows };
+  const requested = request.headers["x-rupaykg-organization-id"];
+  const activeOrganizationId = typeof requested === "string" && requested.trim() ? requested.trim() : undefined;
+  if (activeOrganizationId && !UUID_RE.test(activeOrganizationId)) return null;
+  if (activeOrganizationId && !memberships.rows.some((m) => m.organization_id === activeOrganizationId)) return null;
+  return { identityId: rows.rows[0].identity_id, memberships: memberships.rows, activeOrganizationId };
 }
 
 export function canActForOrganization(auth: AuthContext, organizationId: string): boolean {
-  return auth.memberships.some((m) => m.organization_id === organizationId);
+  return auth.memberships.some((m) => m.organization_id === organizationId)
+    && (!auth.activeOrganizationId || auth.activeOrganizationId === organizationId);
 }
 
-/** Production high-risk permissions. Membership alone is intentionally insufficient. */
 export const HIGH_RISK_PERMISSIONS = {
   VERIFY_EVIDENCE: ["VERIFY_EVIDENCE", "verification:approve", "verification.approve"],
   ISSUE_CREDENTIAL: ["ISSUE_CREDENTIAL", "registry:issue", "registry.issue"],
@@ -72,66 +64,31 @@ export const HIGH_RISK_PERMISSIONS = {
 
 export type HighRiskAction = keyof typeof HIGH_RISK_PERMISSIONS;
 
-/** Generic tenant-local permission check. The SQL predicate is authoritative for membership and role. */
-export async function hasOrganizationPermission(
-  client: Pool | PoolClient,
-  auth: AuthContext,
-  organizationId: string,
-  permissions: readonly string[],
-): Promise<boolean> {
+export async function hasOrganizationPermission(client: Pool | PoolClient, auth: AuthContext, organizationId: string, permissions: readonly string[]): Promise<boolean> {
+  if (!canActForOrganization(auth, organizationId)) return false;
   const result = await client.query<{ ok: boolean }>(
     `select exists (
-       select 1
-         from organization_memberships om
-         join roles r on r.id = om.role_id
-        where om.identity_id = $1
-          and om.organization_id = $2
-          and om.status = 'VERIFIED'
-          and exists (
-            select 1
-              from jsonb_array_elements_text(r.permissions) permission
-             where permission = any($3::text[])
-          )
+       select 1 from organization_memberships om join roles r on r.id = om.role_id
+        where om.identity_id = $1 and om.organization_id = $2 and om.status = 'VERIFIED'
+          and exists (select 1 from jsonb_array_elements_text(r.permissions) permission where permission = any($3::text[]))
      ) as ok`,
     [auth.identityId, organizationId, permissions],
   );
   return result.rows[0]?.ok === true;
 }
 
-/** Production high-risk permissions. Membership alone is intentionally insufficient. */
-export async function canPerformHighRiskActionInDatabase(
-  client: Pool | PoolClient,
-  auth: AuthContext,
-  organizationId: string,
-  action: HighRiskAction,
-): Promise<boolean> {
+export async function canPerformHighRiskActionInDatabase(client: Pool | PoolClient, auth: AuthContext, organizationId: string, action: HighRiskAction): Promise<boolean> {
   return hasOrganizationPermission(client, auth, organizationId, HIGH_RISK_PERMISSIONS[action]);
 }
 
-/**
- * Verification is an independent governance action. The verifier may belong to
- * a different organization than the evidence owner, but must hold an explicit
- * verification permission and an authorized geography scope covering the
- * activity being verified.
- */
 export async function canVerifyEvidence(client: PoolClient, identityId: string, evidenceId: string): Promise<boolean> {
   const result = await client.query<{ ok: boolean }>(
     `select exists (
-       select 1
-       from evidence e
-       join activities a on a.id = e.activity_id
-       join organization_memberships om
-         on om.identity_id = $2
-        and om.status = 'VERIFIED'
-        and a.geography_id is not null
-        and organization_has_geography_scope(om.organization_id, a.geography_id)
-       join roles r on r.id = om.role_id
-       where e.id = $1
-         and exists (
-           select 1
-             from jsonb_array_elements_text(r.permissions) permission
-            where permission = any($3::text[])
-         )
+       select 1 from evidence e join activities a on a.id = e.activity_id
+       join organization_memberships om on om.identity_id = $2 and om.status = 'VERIFIED'
+        and a.geography_id is not null and organization_has_geography_scope(om.organization_id, a.geography_id)
+       join roles r on r.id = om.role_id where e.id = $1
+        and exists (select 1 from jsonb_array_elements_text(r.permissions) permission where permission = any($3::text[]))
      ) as ok`,
     [evidenceId, identityId, HIGH_RISK_PERMISSIONS.VERIFY_EVIDENCE],
   );
