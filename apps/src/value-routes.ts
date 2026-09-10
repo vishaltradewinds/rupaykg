@@ -103,16 +103,26 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
   app.get("/api/v1/workspaces/bwg", async (request, reply) => {
     const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
     const ids = [...new Set(auth.memberships.map((membership) => membership.organization_id))];
-    if (!ids.length) return { source: "postgresql", syntheticData: false, data: { profiles: [], periods: [], wasteReports: [], eprReports: [], esgReports: [] } };
+    if (!ids.length) return { source: "postgresql", syntheticData: false, data: { profiles: [], periods: [], wasteReports: [], eprReports: [], esgReports: [], jurisdictions: [], schemes: [] } };
     try {
-      const [profiles, periods, wasteReports, eprReports, esgReports] = await Promise.all([
+      const [profiles, periods, wasteReports, eprReports, esgReports, jurisdictions, schemes] = await Promise.all([
         pool.query("select p.*, g.name as jurisdiction_name from bwg_profiles p left join geography g on g.id=p.jurisdiction_id where p.organization_id=any($1::uuid[]) order by p.updated_at desc", [ids]),
         pool.query("select * from bwg_reporting_periods where organization_id=any($1::uuid[]) order by period_end desc", [ids]),
         pool.query("select w.*, r.organization_id from bwg_waste_reports w join bwg_reporting_periods r on r.id=w.reporting_period_id where r.organization_id=any($1::uuid[]) order by w.created_at desc", [ids]),
         pool.query("select e.*, r.organization_id, s.name as scheme_name from bwg_epr_reports e join bwg_reporting_periods r on r.id=e.reporting_period_id join epr_schemes s on s.id=e.scheme_id where r.organization_id=any($1::uuid[]) order by e.created_at desc", [ids]),
         pool.query("select e.*, r.organization_id from bwg_esg_reports e join bwg_reporting_periods r on r.id=e.reporting_period_id where r.organization_id=any($1::uuid[]) order by e.created_at desc", [ids]),
+        pool.query("select distinct g.id, g.name from geography g join organization_geography_scopes ogs on ogs.geography_id=g.id where ogs.organization_id=any($1::uuid[]) and ogs.status='VERIFIED' order by g.name", [ids]),
+        pool.query("select id, code, name, authority, jurisdiction_id from epr_schemes where status='VERIFIED' order by name"),
       ]);
-      return { source: "postgresql", syntheticData: false, data: { profiles: profiles.rows, periods: periods.rows, wasteReports: wasteReports.rows, eprReports: eprReports.rows, esgReports: esgReports.rows } };
+      const organizations = await Promise.all(ids.map(async (organizationId) => ({
+        organizationId,
+        profileUpdate: await hasOrganizationPermission(pool, auth, organizationId, ["profile:update", "waste:record"]),
+        periodCreate: await hasOrganizationPermission(pool, auth, organizationId, ["reports:read", "waste:record"]),
+        wasteRecord: await hasOrganizationPermission(pool, auth, organizationId, ["waste:record"]),
+        eprManage: await hasOrganizationPermission(pool, auth, organizationId, ["epr:manage"]),
+        esgWrite: await hasValuePermission(pool, "can_write_esg", auth.identityId, organizationId),
+      })));
+      return { source: "postgresql", syntheticData: false, data: { profiles: profiles.rows, periods: periods.rows, wasteReports: wasteReports.rows, eprReports: eprReports.rows, esgReports: esgReports.rows, jurisdictions: jurisdictions.rows, schemes: schemes.rows, organizations } };
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "BWG reporting workspace unavailable", code: "BWG_WORKSPACE_UNAVAILABLE", syntheticData: false }); }
   });
 
@@ -164,7 +174,7 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
   app.post("/api/v1/bwg/reporting-periods/:periodId/epr", async (request, reply) => {
     const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
     const periodId = (request.params as { periodId: string }).periodId; const body = bodyOf(request as never); const schemeId = str(body, "schemeId"); const categoryCode = str(body, "categoryCode"); const obligated = nonNegative(body, "obligatedQuantity"); const fulfilled = nonNegative(body, "fulfilledQuantity");
-    if (!schemeId || !categoryCode || obligated === null || fulfilled === null || fulfilled > obligated) return reply.code(400).send({ error: "schemeId, categoryCode and valid obligated/fulfilled quantities are required", code: "BWG_EPR_REQUIRED" });
+    if (!schemeId || !categoryCode || obligated === null || fulfilled === null) return reply.code(400).send({ error: "schemeId, categoryCode and non-negative obligated/fulfilled quantities are required", code: "BWG_EPR_REQUIRED" });
     try {
       const period = await pool.query<{ organization_id: string }>("select organization_id from bwg_reporting_periods where id=$1", [periodId]); if (!period.rows[0]) return reply.code(404).send({ error: "BWG reporting period not found" });
       const organizationId = period.rows[0].organization_id; if (!canActForOrganization(auth, organizationId)) return reply.code(403).send({ error: "Organization access denied", code: "ORG_FORBIDDEN" });
