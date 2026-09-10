@@ -73,17 +73,18 @@ app.post("/api/v1/operations/sync", async (request, reply) => {
   if (Number.isNaN(Date.parse(capturedAt))) return reply.code(400).send({ error: "capturedAt must be an ISO date" });
   const authorization = request.headers.authorization;
   if (!authorization?.startsWith("Bearer ")) return reply.code(401).send(bearerChallenge());
+  const organizationId = request.headers["x-rupaykg-organization-id"];
   const clientSequenceValue = Number(body.clientSequence ?? body.sequence ?? Date.now());
   const clientSequence = Number.isSafeInteger(clientSequenceValue) && clientSequenceValue > 0 ? clientSequenceValue : Date.now();
   try {
-    const intake = await app.inject({ method: "POST", url: "/api/v1/field-sync/envelopes", headers: { authorization, "content-type": "application/json" }, payload: { idempotencyKey, deviceId, clientSequence, capturedAt, payload } });
+    const intake = await app.inject({ method: "POST", url: "/api/v1/field-sync/envelopes", headers: { authorization, "x-rupaykg-organization-id": organizationId, "content-type": "application/json" }, payload: { idempotencyKey, deviceId, clientSequence, capturedAt, payload } });
     const intakeBody = intake.json() as Record<string, unknown>;
     if (intake.statusCode >= 400) return reply.code(intake.statusCode).send(intakeBody);
     const envelope = intakeBody.envelope as Record<string, unknown> | undefined;
     const envelopeId = typeof envelope?.id === "string" ? envelope.id : null;
     if (!envelopeId) return reply.code(503).send({ error: "Authoritative field sync envelope was not returned", code: "FIELD_SYNC_ENVELOPE_MISSING", syntheticData: false });
     if (intakeBody.replay === true && envelope?.status === "APPLIED") return reply.code(200).send({ source: "postgresql", syntheticData: false, replay: true, authoritativeMutation: true, entityType: envelope.applied_entity_type, entityId: envelope.applied_entity_id, envelopeId });
-    const applied = await app.inject({ method: "POST", url: `/api/v1/field-sync/envelopes/${envelopeId}/apply`, headers: { authorization, "content-type": "application/json" }, payload: {} });
+    const applied = await app.inject({ method: "POST", url: `/api/v1/field-sync/envelopes/${envelopeId}/apply`, headers: { authorization, "x-rupaykg-organization-id": organizationId, "content-type": "application/json" }, payload: {} });
     return reply.code(applied.statusCode).send(applied.json());
   } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Authoritative operation application unavailable", code: "OPERATION_SYNC_UNAVAILABLE", syntheticData: false }); }
 });
