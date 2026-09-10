@@ -24,16 +24,12 @@
         const isApiRequest = (url) => url.startsWith("/api/v1/") || url.includes("/api/v1/");
         const isAuthMeRequest = (url) => url.includes("/api/v1/auth/me");
         const isLogoutRequest = (url, method) => method.toUpperCase() === "POST" && url.includes("/api/v1/auth/logout");
-
         const reconcileOrganization = (body) => {
-          const memberships = Array.isArray(body?.memberships) ? body.memberships : [];
-          const verified = memberships.filter((membership) => membership?.status === "VERIFIED");
+          const verified = (Array.isArray(body?.memberships) ? body.memberships : []).filter(m => m?.status === "VERIFIED");
           const current = selectedOrganization();
-          const currentIsVerified = verified.some((membership) => membership.organization_id === current);
-          if (current && !currentIsVerified) window.localStorage.removeItem(storageKey);
-          if (!currentIsVerified && verified[0]?.organization_id) window.localStorage.setItem(storageKey, verified[0].organization_id);
+          if (current && !verified.some(m => m.organization_id === current)) window.localStorage.removeItem(storageKey);
+          if (!verified.some(m => m.organization_id === current) && verified[0]?.organization_id) window.localStorage.setItem(storageKey, verified[0].organization_id);
         };
-
         window.fetch = async (input, init) => {
           const url = typeof input === "string" ? input : input.url;
           const method = init?.method || (input instanceof Request ? input.method : "GET");
@@ -52,77 +48,69 @@
           }
           return response;
         };
-
-        const syncOrganizationSelection = (select) => {
-          if (!select?.value) return;
-          window.localStorage.setItem(storageKey, select.value);
-        };
-        const observer = new MutationObserver(() => {
+        const syncOrganizationSelection = (select) => { if (select?.value) window.localStorage.setItem(storageKey, select.value); };
+        new MutationObserver(() => {
           const select = document.querySelector('select[aria-label="Active organization"]');
           if (!select) return;
           if (!selectedOrganization()) syncOrganizationSelection(select);
           if (select.dataset.rupaykgOrganizationBound === "true") return;
           select.dataset.rupaykgOrganizationBound = "true";
-          select.addEventListener("change", () => {
-            syncOrganizationSelection(select);
-            const refresh = Array.from(document.querySelectorAll("button")).find((button) => button.textContent?.trim() === "Refresh");
-            refresh?.click();
-          });
-        });
-        observer.observe(document.documentElement, { childList: true, subtree: true });
+          select.addEventListener("change", () => { syncOrganizationSelection(select); Array.from(document.querySelectorAll("button")).find(b => b.textContent?.trim() === "Refresh")?.click(); });
+        }).observe(document.documentElement, { childList: true, subtree: true });
 
         const status = document.createElement("div");
         status.id = "rupaykg-offline-status";
         status.setAttribute("role", "status");
         status.setAttribute("aria-live", "polite");
-        Object.assign(status.style, { position: "fixed", right: "14px", bottom: "14px", zIndex: "20", maxWidth: "min(360px,calc(100vw - 28px))", padding: "9px 12px", border: "1px solid #314c63", borderRadius: "999px", background: "rgba(7,17,31,.94)", color: "#a8bbcb", font: "600 11px system-ui,sans-serif", boxShadow: "0 8px 30px rgba(0,0,0,.28)", pointerEvents: "none" });
+        Object.assign(status.style, { position: "fixed", right: "14px", bottom: "14px", zIndex: "20", maxWidth: "min(420px,calc(100vw - 28px))", padding: "9px 12px", border: "1px solid #314c63", borderRadius: "12px", background: "rgba(7,17,31,.96)", color: "#a8bbcb", font: "600 11px system-ui,sans-serif", boxShadow: "0 8px 30px rgba(0,0,0,.28)" });
         document.body.appendChild(status);
-
         const setStatus = (text) => { status.textContent = text; status.hidden = !text; };
-        const readQueueCounts = async () => {
-          const db = await new Promise((resolve, reject) => {
-            const request = indexedDB.open(queueDb, queueDbVersion);
-            request.onupgradeneeded = () => {
-              const upgradeDb = request.result;
-              if (!upgradeDb.objectStoreNames.contains("pending")) upgradeDb.createObjectStore("pending", { keyPath: "id" });
-              if (!upgradeDb.objectStoreNames.contains("rejected")) upgradeDb.createObjectStore("rejected", { keyPath: "id" });
-            };
-            request.onsuccess = () => resolve(request.result);
-            request.onerror = () => reject(request.error);
+
+        const openDb = () => new Promise((resolve, reject) => {
+          const request = indexedDB.open(queueDb, queueDbVersion);
+          request.onupgradeneeded = () => { const db = request.result; if (!db.objectStoreNames.contains("pending")) db.createObjectStore("pending", { keyPath: "id" }); if (!db.objectStoreNames.contains("rejected")) db.createObjectStore("rejected", { keyPath: "id" }); };
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error);
+        });
+        const readStore = async (storeName) => {
+          const db = await openDb();
+          const rows = await new Promise((resolve, reject) => { const tx = db.transaction(storeName, "readonly"); const req = tx.objectStore(storeName).getAll(); req.onsuccess = () => resolve(req.result || []); req.onerror = () => reject(req.error); });
+          db.close(); return rows;
+        };
+        const readQueueCounts = async () => { const [pending, rejected] = await Promise.all([readStore("pending"), readStore("rejected")]); return { pending: pending.length, rejected: rejected.length }; };
+        const safeText = (v, fallback = "—") => { if (v === null || v === undefined || v === "") return fallback; if (typeof v === "string") return v; try { return JSON.stringify(v); } catch { return fallback; } };
+        const renderRejected = async () => {
+          const existing = document.getElementById("rupaykg-rejected-review");
+          if (existing) existing.remove();
+          const rejected = await readStore("rejected");
+          if (!rejected.length) return;
+          const panel = document.createElement("section");
+          panel.id = "rupaykg-rejected-review";
+          panel.setAttribute("aria-label", "Rejected offline field operations");
+          Object.assign(panel.style, { position: "fixed", right: "14px", bottom: "58px", zIndex: "21", width: "min(520px,calc(100vw - 28px))", maxHeight: "min(70vh,620px)", overflow: "auto", padding: "14px", border: "1px solid #314c63", borderRadius: "14px", background: "#07111f", color: "#dbe7ef", font: "13px system-ui,sans-serif", boxShadow: "0 18px 50px rgba(0,0,0,.4)" });
+          const title = document.createElement("div"); title.textContent = "Field operations requiring review"; title.style.fontWeight = "700"; title.style.marginBottom = "10px"; panel.appendChild(title);
+          rejected.slice().sort((a,b) => String(b.rejectedAt || "").localeCompare(String(a.rejectedAt || ""))).forEach(record => {
+            const item = document.createElement("article"); Object.assign(item.style, { borderTop: "1px solid #23394a", padding: "10px 0" });
+            const payload = (() => { try { return record.body ? JSON.parse(record.body) : {}; } catch { return {}; } })();
+            const operationType = payload?.payload?.operationType || "UNKNOWN";
+            const reason = typeof record.error === "string" ? record.error : record.error?.error || record.error?.message || `HTTP ${record.httpStatus || "4xx"}`;
+            item.innerHTML = `<div style="font-weight:700">${safeText(operationType)}</div><div style="margin-top:4px">Rejected: ${safeText(record.rejectedAt)} · HTTP ${safeText(record.httpStatus)}</div><div style="margin-top:6px;word-break:break-word">Reason: ${safeText(reason)}</div><div style="margin-top:6px;opacity:.72;word-break:break-word">Operation: ${safeText(record.id)}</div>`;
+            panel.appendChild(item);
           });
-          const counts = await new Promise((resolve, reject) => {
-            const tx = db.transaction(["pending", "rejected"], "readonly");
-            const pending = tx.objectStore("pending").count();
-            const rejected = tx.objectStore("rejected").count();
-            let pendingCount;
-            let rejectedCount;
-            pending.onsuccess = () => { pendingCount = pending.result; };
-            rejected.onsuccess = () => { rejectedCount = rejected.result; };
-            tx.oncomplete = () => resolve({ pending: pendingCount || 0, rejected: rejectedCount || 0 });
-            tx.onerror = () => reject(tx.error);
-          });
-          db.close();
-          return counts;
+          const note = document.createElement("div"); note.textContent = "Rejected records are retained as immutable history. Correct the source data and submit a new field operation; this review panel never replays or mutates a rejected record."; Object.assign(note.style, { marginTop: "10px", paddingTop: "10px", borderTop: "1px solid #23394a", opacity: ".78", lineHeight: "1.4" }); panel.appendChild(note);
+          document.body.appendChild(panel);
         };
         const refreshQueueStatus = async () => {
-          try {
-            const { pending, rejected } = await readQueueCounts();
-            if (rejected > 0) setStatus(`${rejected} field operation${rejected === 1 ? "" : "s"} rejected — review required`);
-            else if (pending > 0) setStatus(`${pending} field operation${pending === 1 ? "" : "s"} pending sync`);
-            else if (navigator.onLine) setStatus("");
-          } catch { setStatus(""); }
+          try { const { pending, rejected } = await readQueueCounts(); if (rejected > 0) { setStatus(`${rejected} field operation${rejected === 1 ? "" : "s"} rejected — review required`); status.style.pointerEvents = "auto"; status.style.cursor = "pointer"; status.onclick = () => void renderRejected(); } else if (pending > 0) { setStatus(`${pending} field operation${pending === 1 ? "" : "s"} pending sync`); status.style.pointerEvents = "none"; status.onclick = null; } else if (navigator.onLine) { setStatus(""); status.onclick = null; } } catch { setStatus(""); }
         };
         window.addEventListener("offline", () => setStatus("Offline — new field operations will be queued"));
         window.addEventListener("online", () => { setStatus("Back online — syncing field operations"); void refreshQueueStatus(); });
-        window.addEventListener("rupaykg:offline-sync", (event) => {
+        window.addEventListener("rupaykg:offline-sync", event => {
           const detail = event.detail || {};
-          if (detail.status === "COUNTS") {
-            if (detail.rejected > 0) setStatus(`${detail.rejected} field operation${detail.rejected === 1 ? "" : "s"} rejected — review required`);
-            else if (detail.pending > 0) setStatus(`${detail.pending} field operation${detail.pending === 1 ? "" : "s"} pending sync`);
-            else if (navigator.onLine) setStatus("");
-          } else if (detail.status === "QUEUED") setStatus("Field operation queued — pending authoritative sync");
+          if (detail.status === "COUNTS") { if (detail.rejected > 0) { setStatus(`${detail.rejected} field operation${detail.rejected === 1 ? "" : "s"} rejected — review required`); status.style.pointerEvents = "auto"; status.style.cursor = "pointer"; status.onclick = () => void renderRejected(); } else if (detail.pending > 0) setStatus(`${detail.pending} field operation${detail.pending === 1 ? "" : "s"} pending sync`); else if (navigator.onLine) setStatus(""); }
+          else if (detail.status === "QUEUED") setStatus("Field operation queued — pending authoritative sync");
           else if (detail.status === "SYNCED") { setStatus("Field operation synced and accepted"); setTimeout(() => void refreshQueueStatus(), 1200); }
-          else if (detail.status === "REJECTED") { setStatus(`Field operation rejected by API (${detail.httpStatus ?? "4xx"}) — review required`); setTimeout(() => void refreshQueueStatus(), 1200); }
+          else if (detail.status === "REJECTED") { setStatus(`Field operation rejected by API (${detail.httpStatus ?? "4xx"}) — review required`); status.style.pointerEvents = "auto"; status.style.cursor = "pointer"; status.onclick = () => void renderRejected(); }
         });
         void refreshQueueStatus();
       })();
