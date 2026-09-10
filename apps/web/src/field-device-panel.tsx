@@ -44,13 +44,16 @@ function Panel() {
   const [user, setUser] = React.useState<User | null>(null);
   const [token, setToken] = React.useState("");
   const [identityId, setIdentityId] = React.useState("");
-  const [identities, setIdentities] = React.useState<Membership[]>([]);
+  const [memberships, setMemberships] = React.useState<Membership[]>([]);
   const [organizationId, setOrganizationId] = React.useState(() => localStorage.getItem(organizationStorageKey) ?? "");
   const [deviceId, setDeviceId] = React.useState("");
   const [devices, setDevices] = React.useState<Device[]>([]);
   const [busy, setBusy] = React.useState(false);
   const [message, setMessage] = React.useState("");
   const [error, setError] = React.useState("");
+
+  const activeMembership = memberships.find(m => m.organization_id === organizationId && m.status === "VERIFIED");
+  const canEnrollForActiveOrganization = Boolean(activeMembership && identityId);
 
   const load = React.useCallback(async (session: string) => {
     const response = await fetch("/api/v1/field-devices", { headers: { Authorization: `Bearer ${session}`, Accept: "application/json" } });
@@ -63,15 +66,14 @@ function Panel() {
     if (!firebaseAuth) return;
     return onAuthStateChanged(firebaseAuth, async currentUser => {
       setUser(currentUser);
-      if (!currentUser) { setToken(""); setDevices([]); setIdentities([]); return; }
+      if (!currentUser) { setToken(""); setDevices([]); setMemberships([]); setIdentityId(""); return; }
       try {
         const session = await sessionFor(currentUser);
         setToken(session);
         const meResponse = await fetch("/api/v1/auth/me", { headers: { Authorization: `Bearer ${session}`, Accept: "application/json" } });
         const me = await meResponse.json().catch(() => ({})) as Me;
-        const verifiedMemberships = (me.memberships ?? []).filter(m => m.status === "VERIFIED");
         setIdentityId(me.identity?.id ?? "");
-        setIdentities(verifiedMemberships);
+        setMemberships((me.memberships ?? []).filter(m => m.status === "VERIFIED"));
         setOrganizationId(localStorage.getItem(organizationStorageKey) ?? "");
         await load(session);
       } catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to load field-device governance."); }
@@ -85,28 +87,13 @@ function Panel() {
     return () => { window.removeEventListener("storage", sync); window.clearInterval(timer); };
   }, []);
 
-  React.useEffect(() => {
-    if (!organizationId) return;
-    const member = identities.find(item => item.organization_id === organizationId);
-    if (!member && identities.length) setIdentityId("");
-    else if (member && identityId === "") setIdentityId(member.organization_id === organizationId ? identities.find(item => item.organization_id === organizationId)?.organization_id ?? "" : identityId);
-  }, [organizationId, identities, identityId]);
-
   if (!user || !token) return null;
 
-  const eligibleIdentities = identities.filter(item => item.organization_id === organizationId);
-  // The authenticated identity is the only identity guaranteed to be selectable without
-  // an additional identity-directory endpoint. The backend independently enforces that
-  // any supplied identity has verified membership in the selected organization.
-  const currentIdentity = identities.find(item => item.organization_id === organizationId);
-
   async function enroll() {
-    if (!organizationId || !deviceId.trim()) { setError("Select an active organization and provide a device identifier."); return; }
-    const selectedIdentityId = currentIdentity?.organization_id === organizationId ? identityId : "";
-    if (!selectedIdentityId) { setError("The authenticated identity is not available as a verified member of the active organization."); return; }
+    if (!canEnrollForActiveOrganization || !deviceId.trim()) { setError("Select a verified active organization and provide a device identifier."); return; }
     setBusy(true); setError(""); setMessage("");
     try {
-      const response = await fetch("/api/v1/field-devices/enroll", { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify({ organizationId, deviceId: deviceId.trim(), identityId: selectedIdentityId }) });
+      const response = await fetch("/api/v1/field-devices/enroll", { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify({ organizationId, deviceId: deviceId.trim(), identityId }) });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body?.error ?? `Enrollment failed (${response.status})`);
       setMessage("Field device enrolled as PENDING. A permitted manager must verify it before field sync can use it.");
@@ -134,12 +121,12 @@ function Panel() {
     {error && <div className="notice error" role="alert">{error}</div>}
     {message && <div className="notice success" role="status">{message}</div>}
     <div className="onboarding-form">
-      <Field label="Active organization"><input value={organizationId} readOnly placeholder="Select an active organization above" /></Field>
-      <Field label="Enrolled identity" help="The backend verifies that this identity has verified membership in the active organization.">
-        <input value={identityId} readOnly aria-describedby="field-device-identity-help" />
+      <Field label="Active organization"><input value={activeMembership?.organization_name ?? organizationId} readOnly placeholder="Select an active organization above" /></Field>
+      <Field label="Enrolled identity" help="This first-stage workflow enrolls the authenticated identity. The backend independently requires verified organization membership.">
+        <input value={identityId} readOnly aria-label="Authenticated enrolled identity" />
       </Field>
       <Field label="Device identifier"><input value={deviceId} onChange={e => setDeviceId(e.target.value)} maxLength={200} placeholder="Device identifier / hardware UUID" /></Field>
-      <button type="button" onClick={() => void enroll()} disabled={busy || !organizationId || !deviceId.trim() || !eligibleIdentities.length}>Enroll field device</button>
+      <button type="button" onClick={() => void enroll()} disabled={busy || !canEnrollForActiveOrganization || !deviceId.trim()}>Enroll field device</button>
     </div>
     <div className="source-list">
       {devices.length === 0 ? <div className="empty">No field devices are visible for the current authenticated identity and organization scope.</div> : devices.map(device => <article className="source-row" key={device.id}>
