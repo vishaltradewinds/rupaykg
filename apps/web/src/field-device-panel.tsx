@@ -1,3 +1,4 @@
+import "./value-lifecycle-panel";
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { getApps, initializeApp } from "firebase/app";
