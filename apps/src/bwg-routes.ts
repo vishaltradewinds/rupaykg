@@ -5,7 +5,7 @@ import { authenticate, bearerChallenge, canActForOrganization, hasOrganizationPe
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 type Reply = { code: (status: number) => { send: (body: unknown) => unknown } };
-type Request = { body: unknown; params: Record<string, string>; query: unknown; log: { error: (error: unknown) => void } };
+type Request = { body: unknown; params: any; query: unknown; log: { error: (error: unknown) => void } };
 function bodyOf(request: Request): Record<string, unknown> { return request.body && typeof request.body === "object" ? request.body as Record<string, unknown> : {}; }
 function str(body: Record<string, unknown>, key: string): string | null { return typeof body[key] === "string" && body[key].trim() ? body[key].trim() : null; }
 function nonNegative(body: Record<string, unknown>, key: string): number | null { const n = Number(body[key]); return Number.isFinite(n) && n >= 0 ? n : null; }
