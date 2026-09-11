@@ -12,6 +12,10 @@ permissions:
 env:
   DATABASE_URL: postgresql://postgres:postgres@localhost:5432/rupaykg
   DATABASE_SSL: "false"
+  VITE_FIREBASE_API_KEY: ci-public-api-key
+  VITE_FIREBASE_AUTH_DOMAIN: ci.firebaseapp.com
+  VITE_FIREBASE_PROJECT_ID: rupaykg-ci
+  VITE_FIREBASE_APP_ID: ci:firebase:app
 
 jobs:
   validate:
@@ -73,4 +77,10 @@ jobs:
           echo "Chrome DOM exit: $dom_status; screenshot exit: $shot_status"
       - run: npm test
       - name: Build production container
-        run: docker build --pull --tag rupaykg:ci .
+        run: |
+          docker build --pull \
+            --build-arg VITE_FIREBASE_API_KEY="$VITE_FIREBASE_API_KEY" \
+            --build-arg VITE_FIREBASE_AUTH_DOMAIN="$VITE_FIREBASE_AUTH_DOMAIN" \
+            --build-arg VITE_FIREBASE_PROJECT_ID="$VITE_FIREBASE_PROJECT_ID" \
+            --build-arg VITE_FIREBASE_APP_ID="$VITE_FIREBASE_APP_ID" \
+            --tag rupaykg:ci .
