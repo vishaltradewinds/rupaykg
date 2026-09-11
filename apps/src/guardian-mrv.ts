@@ -3,7 +3,7 @@ export interface GuardianMrvRequest {
   verificationId: string;
   evidenceId: string;
   policyId: string;
-  methodologyCode?: string;
+  methodologyCode?: string | undefined;
   observations: unknown[];
   evidence: unknown[];
   metadata?: Record<string, unknown>;
@@ -40,7 +40,7 @@ export async function executeGuardianMrv(input: GuardianMrvRequest): Promise<Gua
     const response = await fetch(url, {
       method: "POST",
       headers: { "content-type": "application/json", ...(process.env.GUARDIAN_API_TOKEN ? { authorization: `Bearer ${process.env.GUARDIAN_API_TOKEN}` } : {}) },
-      body: JSON.stringify({ schema: "rupaykg:guardian-mrv:v1", policyId: input.policyId, activityId: input.activityId, verificationId: input.verificationId, evidenceId: input.evidenceId, methodologyCode: input.methodologyCode, observations: input.observations, evidence: input.evidence, metadata: input.metadata }),
+      body: JSON.stringify({ schema: "rupaykg:guardian-mrv:v1", policyId: input.policyId, activityId: input.activityId, verificationId: input.verificationId, evidenceId: input.evidenceId, ...(input.methodologyCode !== undefined ? { methodologyCode: input.methodologyCode } : {}), observations: input.observations, evidence: input.evidence, metadata: input.metadata }),
     });
     const raw = await response.json().catch(() => null);
     if (!response.ok) return { status: "UNAVAILABLE", executionId: null, policyId: input.policyId, raw, message: `Guardian MRV endpoint returned HTTP ${response.status}.` };
