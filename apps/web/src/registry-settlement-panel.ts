@@ -13,7 +13,8 @@ type SettlementWorkspace = { data: { settlements?: Settlement[] } };
 
 const config = { apiKey: import.meta.env.VITE_FIREBASE_API_KEY, authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN, projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID, appId: import.meta.env.VITE_FIREBASE_APP_ID };
 const configured = Object.values(config).every(Boolean);
-const auth = configured ? getAuth(getApps().some(app => app.name === "registry-settlement") ? getApps().find(app => app.name === "registry-settlement")! : initializeApp(config, "registry-settlement")) : null;
+const app = configured ? (getApps().find(candidate => candidate.name === "registry-settlement") ?? initializeApp(config, "registry-settlement")) : null;
+const auth = app ? getAuth(app) : null;
 const root = document.getElementById("registry-settlement");
 const organizationKey = "rupaykg.activeOrganizationId";
 
@@ -46,8 +47,8 @@ function render(state: { status: string; message: string; credentials: Credentia
   root.innerHTML = `<section class="compliance-card" aria-labelledby="registry-settlement-title"><div class="compliance-head"><div><p class="eyebrow">AUTHORITATIVE VALUE OPERATIONS</p><h2 id="registry-settlement-title">Registry & settlement control room</h2><p>Read-only projection of PostgreSQL registry and settlement state. External confirmation is never inferred from an internal status.</p></div><span class="compliance-state">${escape(state.status)}</span></div>${state.message ? `<div class="resource-flow-state" role="status">${escape(state.message)}</div>` : ""}<div class="compliance-list"><h3>Credentials</h3>${credentialRows}<h3>Registry events</h3>${eventRows}<h3>Settlements & reconciliation</h3>${settlementRows}</div></section>`;
 }
 
-async function load(user: User): Promise<void> {
-  if (!root || !auth) return;
+async function load(user: User, firebaseAuth: ReturnType<typeof getAuth>): Promise<void> {
+  if (!root) return;
   try {
     const session = await exchange(user);
     const verified = session.memberships.filter(m => m.status === "VERIFIED");
@@ -59,10 +60,14 @@ async function load(user: User): Promise<void> {
   } catch (error) {
     render({ status: "UNAVAILABLE", message: error instanceof Error ? error.message : "Authoritative registry and settlement data is unavailable.", credentials: [], events: [], settlements: [] });
   }
+  void firebaseAuth;
 }
 
 if (root) {
   if (!auth) render({ status: "CONFIGURATION REQUIRED", message: "Firebase configuration is required for authenticated registry and settlement access.", credentials: [], events: [], settlements: [] });
-  else onAuthStateChanged(auth, user => { if (user) void load(user); else render({ status: "SIGN IN REQUIRED", message: "Sign in to load authorized registry and settlement state.", credentials: [], events: [], settlements: [] }); });
-  window.addEventListener("storage", event => { if (event.key === organizationKey) { const user = auth?.currentUser; if (user) void load(user); } });
+  else {
+    const firebaseAuth = auth;
+    onAuthStateChanged(firebaseAuth, user => { if (user) void load(user, firebaseAuth); else render({ status: "SIGN IN REQUIRED", message: "Sign in to load authorized registry and settlement state.", credentials: [], events: [], settlements: [] }); });
+    window.addEventListener("storage", event => { if (event.key === organizationKey) { const user = firebaseAuth.currentUser; if (user) void load(user, firebaseAuth); } });
+  }
 }
