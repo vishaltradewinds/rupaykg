@@ -1,8 +1,15 @@
 import type { FastifyInstance } from "fastify";
 import type { Pool } from "pg";
-import { authenticate, bearerChallenge, type AuthContext } from "./auth.js";
+import { authenticate, bearerChallenge, hasOrganizationPermission, type AuthContext } from "./auth.js";
 
-function orgIds(auth: AuthContext): string[] { return [...new Set(auth.memberships.map((m) => m.organization_id))]; }
+function orgIds(auth: AuthContext): string[] {
+  return auth.activeOrganizationId ? [auth.activeOrganizationId] : [...new Set(auth.memberships.map((m) => m.organization_id))];
+}
+
+function requestedGeography(request: { query: unknown }): string | null {
+  const q = request.query && typeof request.query === "object" ? request.query as Record<string, unknown> : {};
+  return typeof q.geographyId === "string" && q.geographyId.trim() ? q.geographyId.trim() : null;
+}
 
 export async function registerIntelligenceRoutes(app: FastifyInstance, pool: Pool | null): Promise<void> {
   app.get("/api/v1/workspaces/intelligence", async (request, reply) => {
@@ -12,7 +19,28 @@ export async function registerIntelligenceRoutes(app: FastifyInstance, pool: Poo
     if (!auth) return reply.code(401).send(bearerChallenge());
     const ids = orgIds(auth);
     if (!ids.length) return { source: "postgresql", syntheticData: false, findings: [] };
+    for (const organizationId of ids) {
+      if (!await hasOrganizationPermission(pool, auth, organizationId, ["audit:read"])) {
+        return reply.code(403).send({ error: "Intelligence workspace read permission required", code: "WORKSPACE_READ_FORBIDDEN", workspace: "intelligence" });
+      }
+    }
+    const geographyId = requestedGeography(request);
+    if (geographyId) {
+      const scope = await pool.query<{ ok: boolean }>(
+        `select exists (
+           select 1 from organization_memberships om
+            where om.identity_id=$1 and om.status='VERIFIED'
+              and ($3::uuid is null or om.organization_id=$3::uuid)
+              and organization_has_geography_scope(om.organization_id,$2)
+         ) as ok`,
+        [auth.identityId, geographyId, auth.activeOrganizationId ?? null],
+      );
+      if (!scope.rows[0]?.ok) return reply.code(403).send({ error: "Geography outside organization authorization scope", code: "GEOGRAPHY_FORBIDDEN" });
+    }
     try {
+      const params: unknown[] = [ids];
+      const geographyClause = geographyId ? " and a.geography_id = $2" : "";
+      if (geographyId) params.push(geographyId);
       const rows = await pool.query(`
         select a.id as source_record_id, 'ACTIVITY' as source_type,
                a.activity_type, a.status, a.geography_id, g.name as geography_name,
@@ -20,7 +48,9 @@ export async function registerIntelligenceRoutes(app: FastifyInstance, pool: Poo
         from activities a
         left join geography g on g.id = a.geography_id
         where a.organization_id = any($1::uuid[])
-        order by a.created_at desc limit 100`, [ids]);
+          and organization_has_geography_scope(a.organization_id, a.geography_id)
+          ${geographyClause}
+        order by a.created_at desc limit 100`, params);
       const findings = rows.rows.map((row) => ({
         kind: "OPERATIONAL_REVIEW",
         sourceRecordIds: [row.source_record_id],
