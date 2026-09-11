@@ -19,6 +19,29 @@ async function requirePermission(pool: Pool, auth: AuthContext, organizationId: 
   return hasOrganizationPermission(pool, auth, organizationId, permissions);
 }
 
+async function activityInAuthorizedGeography(pool: Pool, auth: AuthContext, activityId: string, organizationId: string): Promise<boolean> {
+  const result = await pool.query<{ ok: boolean }>(
+    `select exists(
+       select 1 from activities a
+       where a.id=$1 and a.organization_id=$2 and a.geography_id is not null
+         and organization_has_geography_scope(a.organization_id,a.geography_id)
+     ) as ok`,
+    [activityId, organizationId],
+  );
+  if (result.rows[0]?.ok !== true) return false;
+  const membership = await pool.query<{ ok: boolean }>(
+    `select exists(
+       select 1 from organization_memberships om
+       join activities a on a.organization_id=om.organization_id
+       where om.identity_id=$1 and om.organization_id=$2 and om.status='VERIFIED'
+         and a.id=$3 and a.geography_id is not null
+         and organization_has_geography_scope(om.organization_id,a.geography_id)
+     ) as ok`,
+    [auth.identityId, organizationId, activityId],
+  );
+  return membership.rows[0]?.ok === true;
+}
+
 export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null): Promise<void> {
   app.get("/api/v1/mrv/status", async (request, reply) => {
     const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
@@ -55,6 +78,7 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
       if (!row) return reply.code(409).send({ error: "Activity, verification and evidence must be bound to the same activity", code: "MRV_BINDING_INVALID" });
       if (!canActForOrganization(auth, row.organization_id)) return reply.code(403).send({ error: "Organization access denied", code: "ORG_FORBIDDEN" });
       if (!await requirePermission(pool, auth, row.organization_id, ["guardian:operate"])) return reply.code(403).send({ error: "Guardian MRV operation permission required", code: "MRV_PERMISSION_REQUIRED" });
+      if (!await activityInAuthorizedGeography(pool, auth, activityId, row.organization_id)) return reply.code(403).send({ error: "Activity geography is outside organization authorization scope", code: "GEOGRAPHY_FORBIDDEN" });
       if (row.activity_status !== "COMPLETED" || row.decision !== "APPROVED" || row.evidence_status !== "VERIFIED" || row.evidence_activity_id !== activityId) return reply.code(409).send({ error: "Completed activity, approved verification and VERIFIED evidence are required before Guardian MRV", code: "MRV_PRECONDITION_FAILED" });
 
       const observations = await pool.query("select id, parameter_code, observed_value, unit, method, instrument_id, observed_at, uncertainty, quality_status, metadata from mrv_observations where activity_id=$1 order by observed_at", [activityId]);
@@ -78,6 +102,7 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
       const owner = await pool.query<{ organization_id: string }>("select organization_id from activities where id=$1", [activityId]);
       if (!owner.rows[0] || !canActForOrganization(auth, owner.rows[0].organization_id)) return reply.code(403).send({ error: "Organization access denied", code: "ORG_FORBIDDEN" });
       if (!await requirePermission(pool, auth, owner.rows[0].organization_id, ["guardian:read"])) return reply.code(403).send({ error: "Guardian read permission required", code: "MRV_PERMISSION_REQUIRED" });
+      if (!await activityInAuthorizedGeography(pool, auth, activityId, owner.rows[0].organization_id)) return reply.code(403).send({ error: "Activity geography is outside organization authorization scope", code: "GEOGRAPHY_FORBIDDEN" });
       const rows = await pool.query("select * from mrv_provenance_events where activity_id=$1 order by created_at desc", [activityId]);
       return { source: "postgresql", syntheticData: false, eligibleForRegistry: rows.rows.some(r => r.guardian_status === "VERIFIED" && r.hcs_status === "CONSENSUS_CONFIRMED"), provenance: rows.rows };
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "MRV provenance unavailable", syntheticData: false }); }
@@ -97,6 +122,7 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
       const owner = await pool.query<{ organization_id: string }>("select organization_id from activities where id=$1", [row.activity_id]);
       if (!owner.rows[0] || !canActForOrganization(auth, owner.rows[0].organization_id)) return reply.code(403).send({ error: "Organization access denied", code: "ORG_FORBIDDEN" });
       if (!await requirePermission(pool, auth, owner.rows[0].organization_id, ["guardian:read"])) return reply.code(403).send({ error: "Guardian read permission required", code: "MRV_PERMISSION_REQUIRED" });
+      if (!await activityInAuthorizedGeography(pool, auth, row.activity_id, owner.rows[0].organization_id)) return reply.code(403).send({ error: "Activity geography is outside organization authorization scope", code: "GEOGRAPHY_FORBIDDEN" });
       return { source: "hedera-mirror-node", syntheticData: false, ...(await verifyHcsMessage(timestamp, row.hcs_topic_id, row.integrity_hash, row.activity_id, row.verification_id, row.evidence_id, row.guardian_execution_id)) };
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Hedera mirror-node verification unavailable", code: "HCS_VERIFY_UNAVAILABLE", syntheticData: false }); }
   });
