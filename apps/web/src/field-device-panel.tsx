@@ -17,7 +17,7 @@ type Device = {
   last_seen_at?: string | null;
   status: string;
 };
-type Membership = { organization_id: string; organization_name: string; status: string };
+type Membership = { organization_id: string; organization_name: string; status: string; role_name?: string; permissions?: unknown };
 type Me = { identity: { id: string } | null; memberships?: Membership[] };
 
 const firebaseConfig = {
@@ -30,6 +30,14 @@ const configured = Object.values(firebaseConfig).every(Boolean);
 const firebaseApp = configured ? (getApps()[0] ?? initializeApp(firebaseConfig)) : null;
 const firebaseAuth = firebaseApp ? getAuth(firebaseApp) : null;
 const organizationStorageKey = "rupaykg.activeOrganizationId";
+const fieldDeviceManagerRoles = new Set(["admin", "administrator", "org_admin", "organization_admin", "field_manager", "operations_manager"]);
+
+function hasFieldDeviceManagement(membership?: Membership): boolean {
+  if (!membership || membership.status !== "VERIFIED") return false;
+  if (typeof membership.role_name === "string" && fieldDeviceManagerRoles.has(membership.role_name.toLowerCase())) return true;
+  if (!Array.isArray(membership.permissions)) return false;
+  return membership.permissions.some(permission => typeof permission === "string" && ["MANAGE_FIELD_DEVICES", "field_device:manage", "field_device.manage"].includes(permission));
+}
 
 async function sessionFor(user: User) {
   const idToken = await user.getIdToken(true);
@@ -54,7 +62,9 @@ function Panel() {
   const [error, setError] = React.useState("");
 
   const activeMembership = memberships.find(m => m.organization_id === organizationId && m.status === "VERIFIED");
-  const canEnrollForActiveOrganization = Boolean(activeMembership && identityId);
+  const canManageActiveOrganization = hasFieldDeviceManagement(activeMembership);
+  const canEnrollForActiveOrganization = Boolean(activeMembership && identityId && canManageActiveOrganization);
+  const canManageDevice = React.useCallback((device: Device) => hasFieldDeviceManagement(memberships.find(m => m.organization_id === device.organization_id)), [memberships]);
 
   const load = React.useCallback(async (session: string) => {
     const response = await fetch("/api/v1/field-devices", { headers: { Authorization: `Bearer ${session}`, Accept: "application/json" } });
@@ -91,7 +101,7 @@ function Panel() {
   if (!user || !token) return null;
 
   async function enroll() {
-    if (!canEnrollForActiveOrganization || !deviceId.trim()) { setError("Select a verified active organization and provide a device identifier."); return; }
+    if (!canEnrollForActiveOrganization || !deviceId.trim()) { setError("A verified active organization with field-device management permission is required, along with a device identifier."); return; }
     setBusy(true); setError(""); setMessage("");
     try {
       const response = await fetch("/api/v1/field-devices/enroll", { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify({ organizationId, deviceId: deviceId.trim(), identityId }) });
@@ -121,18 +131,19 @@ function Panel() {
     <p className="field-help">Device enrollment and verification are authoritative backend mutations. Enrollment creates PENDING state; only a permitted organization manager can verify a device.</p>
     {error && <div className="notice error" role="alert">{error}</div>}
     {message && <div className="notice success" role="status">{message}</div>}
+    {!canManageActiveOrganization && activeMembership && <div className="notice" role="status">Field-device management is restricted to permitted organization managers. Your current role can view the device inventory but cannot enroll or verify devices.</div>}
     <div className="onboarding-form">
       <Field label="Active organization"><input value={activeMembership?.organization_name ?? organizationId} readOnly placeholder="Select an active organization above" /></Field>
-      <Field label="Enrolled identity" help="This first-stage workflow enrolls the authenticated identity. The backend independently requires verified organization membership.">
+      <Field label="Enrolled identity" help="This first-stage workflow enrolls the authenticated identity. The backend independently requires verified organization membership and field-device management permission.">
         <input value={identityId} readOnly aria-label="Authenticated enrolled identity" />
       </Field>
-      <Field label="Device identifier"><input value={deviceId} onChange={e => setDeviceId(e.target.value)} maxLength={200} placeholder="Device identifier / hardware UUID" /></Field>
+      <Field label="Device identifier"><input value={deviceId} onChange={e => setDeviceId(e.target.value)} maxLength={200} placeholder="Device identifier / hardware UUID" disabled={!canEnrollForActiveOrganization} /></Field>
       <button type="button" onClick={() => void enroll()} disabled={busy || !canEnrollForActiveOrganization || !deviceId.trim()}>Enroll field device</button>
     </div>
     <div className="source-list">
       {devices.length === 0 ? <div className="empty">No field devices are visible for the current authenticated identity and organization scope.</div> : devices.map(device => <article className="source-row" key={device.id}>
         <div><strong>{device.device_id}</strong><p>{device.identity_id} · registered {device.registered_at ? new Date(device.registered_at).toLocaleString() : "—"}</p><small>Device record: {device.id}</small></div>
-        <div className="button-row"><span className="status-pill">{device.status}</span>{device.status === "PENDING" && <button type="button" onClick={() => void verify(device.id)} disabled={busy}>Verify</button>}</div>
+        <div className="button-row"><span className="status-pill">{device.status}</span>{device.status === "PENDING" && canManageDevice(device) && <button type="button" onClick={() => void verify(device.id)} disabled={busy}>Verify</button>}</div>
       </article>)}
     </div>
   </section>;
