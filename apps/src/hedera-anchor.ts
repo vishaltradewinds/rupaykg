@@ -11,10 +11,10 @@ export interface AnchorPayload {
   guardianPolicyId: string;
   guardianExecutionId: string;
   mrvStatus: "VERIFIED";
-  methodologyCode?: string;
-  quantity?: number;
-  unit?: string;
-  metadata?: Record<string, unknown>;
+  methodologyCode?: string | undefined;
+  quantity?: number | undefined;
+  unit?: string | undefined;
+  metadata?: Record<string, unknown> | undefined;
 }
 
 export interface AnchorResult {
@@ -84,7 +84,7 @@ export async function submitHcsAnchor(payload: AnchorPayload): Promise<AnchorRes
     else if (network === "previewnet") client = Client.forPreviewnet();
     else client = Client.forTestnet();
     client.setOperator(AccountId.fromString(process.env.HEDERA_OPERATOR_ID!), PrivateKey.fromString(process.env.HEDERA_OPERATOR_KEY!));
-    const message = JSON.stringify({ schema: payload.schema, integrityHash: hash, ...payload, anchoredAt: new Date().toISOString() });
+    const message = JSON.stringify({ ...payload, integrityHash: hash, anchoredAt: new Date().toISOString() });
     const response = await new TopicMessageSubmitTransaction().setTopicId(TopicId.fromString(topicId)).setMessage(message).execute(client);
     const record = await response.getRecord(client);
     const consensusTimestamp = record.consensusTimestamp?.toString() ?? null;
