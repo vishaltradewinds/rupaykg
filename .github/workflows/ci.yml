@@ -72,7 +72,7 @@ jobs:
           set -e
           test -s /tmp/rupaykg-web-dom.html
           grep -q 'RupayKG' /tmp/rupaykg-web-dom.html
-          grep -q 'STAKEHOLDER LOGIN' /tmp/rupaykg-web-dom.html
+          grep -q 'STAKEHOLDER OPERATING SYSTEM' /tmp/rupaykg-web-dom.html
           test -s /tmp/rupaykg-web-smoke.png
           echo "Chrome DOM exit: $dom_status; screenshot exit: $shot_status"
       - run: npm test
