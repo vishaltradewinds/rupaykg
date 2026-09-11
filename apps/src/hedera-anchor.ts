@@ -126,6 +126,7 @@ export async function verifyHcsMessage(consensusTimestamp: string, topicId = pro
   ];
   for (const [field, expected] of requiredMatches) if (record[field] !== expected) return { verified: false, network, consensusTimestamp: found.consensus_timestamp, sequenceNumber: found.sequence_number, payload, error: `HCS provenance field mismatch: ${field}` };
   const { integrityHash: anchoredHash, anchoredAt: _anchoredAt, ...unsignedPayload } = record;
-  if (typeof anchoredHash !== "string" || integrityHash(unsignedPayload as unknown as AnchorPayload) !== anchoredHash) return { verified: false, network, consensusTimestamp: found.consensus_timestamp, sequenceNumber: found.sequence_number, payload, error: "HCS integrity hash does not match the anchored provenance payload" };
+  const candidate = unsignedPayload as unknown as AnchorPayload;
+  if (typeof anchoredHash !== "string" || integrityHash(candidate) !== anchoredHash) return { verified: false, network, consensusTimestamp: found.consensus_timestamp, sequenceNumber: found.sequence_number, payload, error: "HCS integrity hash does not match the anchored provenance payload" };
   return { verified: true, network, consensusTimestamp: found.consensus_timestamp, sequenceNumber: found.sequence_number, payload };
 }
