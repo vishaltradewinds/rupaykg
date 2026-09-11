@@ -42,12 +42,20 @@ export async function authenticate(request: FastifyRequest, pool: Pool | null): 
     [rows.rows[0].identity_id],
   );
   const requested = request.headers["x-rupaykg-organization-id"];
-  const activeOrganizationId = typeof requested === "string" && requested.trim() ? requested.trim() : undefined;
-  if (activeOrganizationId && !UUID_RE.test(activeOrganizationId)) return null;
-  if (activeOrganizationId && !memberships.rows.some((m) => m.organization_id === activeOrganizationId)) return null;
-  return activeOrganizationId
-    ? { identityId: rows.rows[0].identity_id, memberships: memberships.rows, activeOrganizationId }
-    : { identityId: rows.rows[0].identity_id, memberships: memberships.rows };
+  const requestedOrganizationId = typeof requested === "string" && requested.trim() ? requested.trim() : undefined;
+  if (requestedOrganizationId && !UUID_RE.test(requestedOrganizationId)) return null;
+  if (requestedOrganizationId && !memberships.rows.some((m) => m.organization_id === requestedOrganizationId)) return null;
+
+  // All operational records are organization-scoped. A multi-organization identity
+  // must explicitly select the organization before any endpoint can project data or
+  // authorize an action. A single-organization identity is safely scoped implicitly.
+  if (memberships.rows.length > 1 && !requestedOrganizationId) return null;
+  const activeOrganizationId = requestedOrganizationId ?? memberships.rows[0]?.organization_id;
+  return {
+    identityId: rows.rows[0].identity_id,
+    memberships: memberships.rows,
+    ...(activeOrganizationId ? { activeOrganizationId } : {}),
+  };
 }
 
 export function canActForOrganization(auth: AuthContext, organizationId: string): boolean {
