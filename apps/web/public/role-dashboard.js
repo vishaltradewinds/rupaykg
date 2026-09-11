@@ -14,27 +14,21 @@
     commercial_generator: { title: "Commercial generator", subtitle: "Operate verified waste, EPR and ESG reporting workflows where applicable.", workspaces: ["Resource flows", "Compliance", "ESG", "MRV"], operations: ["Field MRV intake"] },
     institution_generator: { title: "Institutional generator", subtitle: "Maintain authoritative waste, compliance and ESG records.", workspaces: ["Resource flows", "Compliance", "ESG", "MRV"], operations: ["Field MRV intake"] },
     PROJECT_OWNER: { title: "Environmental project", subtitle: "Move verified activity through methodology, registry and settlement controls.", workspaces: ["MRV", "Carbon", "Registry", "Settlement"], operations: ["Field MRV intake", "Carbon calculation", "Credential registry", "Settlement"] },
-    ACVA_USER: { title: "Verification workspace", subtitle: "Review authoritative evidence and verification state without bypassing server controls.", workspaces: ["MRV", "Carbon", "Registry"], operations: ["Field MRV intake"] },
-    ccc_buyer: { title: "Carbon / ESG buyer", subtitle: "Review verified environmental value, registry state and settlement records.", workspaces: ["Carbon", "Registry", "Settlement", "ESG"], operations: ["Credential registry", "Settlement"] },
-    epr_partner: { title: "EPR operations", subtitle: "Review applicable obligations, verified evidence and EPR reporting state.", workspaces: ["Compliance", "MRV", "Resource flows", "ESG"], operations: ["Field MRV intake"] },
-    csr_partner: { title: "ESG / CSR operations", subtitle: "Review authoritative environmental outcomes and reporting evidence.", workspaces: ["ESG", "MRV", "Carbon", "Compliance"], operations: ["Carbon calculation"] },
+    ACVA_USER: { title: "Verification workspace", subtitle: "Review authoritative evidence and verification state without bypassing server controls.", workspaces: ["MRV", "Carbon", "Registry"], operations: [] },
+    ccc_buyer: { title: "Carbon / ESG buyer", subtitle: "Review verified environmental value, registry state and settlement records.", workspaces: ["Carbon", "Registry", "Settlement", "ESG"], operations: [] },
+    epr_partner: { title: "EPR operations", subtitle: "Review applicable obligations, verified evidence and EPR reporting state.", workspaces: ["Compliance", "MRV", "Resource flows", "ESG"], operations: [] },
+    csr_partner: { title: "ESG / CSR operations", subtitle: "Review authoritative environmental outcomes and reporting evidence.", workspaces: ["ESG", "MRV", "Carbon", "Compliance"], operations: [] },
     regulator: { title: "Regulatory oversight", subtitle: "Inspect authorised records, provenance and governance state. High-risk mutations remain server-gated.", workspaces: ["Compliance", "MRV", "Registry", "ESG", "Intelligence"], operations: [] }
   };
 
-  const workspaceAliases = { ESG: "Intelligence", Intelligence: "Intelligence" };
   const workspaceButton = (name) => Array.from(document.querySelectorAll(".workspace-tabs button")).find((button) => button.textContent?.trim() === name);
+  const mountTarget = (name) => name === "ESG" ? document.getElementById("esg-metrics") : name === "EPR" ? document.getElementById("bwg-reporting") : null;
   const roleFromIdentity = () => {
     const text = document.querySelector(".identity-bar span")?.textContent || "";
     const match = text.match(/^(.+?)\s·/);
     if (!match) return "";
-    const label = match[1].trim();
-    const entry = Object.entries(roleConfig).find(([key]) => {
-      const roleLabel = document.querySelector(`.onboarding-form option[value="${CSS.escape(key)}"]`)?.textContent?.trim();
-      return roleLabel === label;
-    });
-    if (entry) return entry[0];
     const known = { "Citizen / household": "citizen", "Farmer / rural producer": "farmer", "Waste collection worker": "safai_mitra", "FPO / rural enterprise": "fpo", "ULB / municipal authority": "municipal_admin", "Municipal / bulk generator": "municipal_generator", "Aggregator / transporter": "aggregator", "MRF / recycler / processor": "processor", "Industrial generator": "industry_generator", "Commercial generator": "commercial_generator", "Institutional generator": "institution_generator", "Carbon project owner": "PROJECT_OWNER", "ACVA user": "ACVA_USER", "Carbon / ESG buyer": "ccc_buyer", "EPR partner": "epr_partner", "CSR / ESG partner": "csr_partner", "Regulator / public authority": "regulator" };
-    return known[label] || "";
+    return known[match[1].trim()] || "";
   };
 
   function render() {
@@ -43,7 +37,6 @@
     const tabs = document.querySelector(".workspace-tabs");
     const operationGrid = document.querySelector(".operation-grid");
     if (!identity || !metrics || !tabs || !operationGrid) return;
-
     const role = roleFromIdentity();
     const config = roleConfig[role];
     if (!config) return;
@@ -55,44 +48,37 @@
       panel.className = "role-command-center";
       metrics.parentNode?.insertBefore(panel, metrics);
     }
-
     panel.innerHTML = "";
+    Object.assign(panel.style, { display: "grid", gridTemplateColumns: "minmax(0,1fr) auto", gap: "18px", alignItems: "center", margin: "0 0 22px", padding: "18px 20px", border: "1px solid #28435c", borderRadius: "16px", background: "linear-gradient(135deg,rgba(15,34,52,.95),rgba(10,27,43,.82))" });
+
     const copy = document.createElement("div");
-    copy.className = "role-command-copy";
-    const eyebrow = document.createElement("p");
-    eyebrow.className = "eyebrow";
-    eyebrow.textContent = "STAKEHOLDER COMMAND CENTER";
-    const title = document.createElement("h2");
-    title.textContent = config.title;
-    const subtitle = document.createElement("p");
-    subtitle.textContent = config.subtitle;
+    const eyebrow = document.createElement("p"); eyebrow.className = "eyebrow"; eyebrow.textContent = "STAKEHOLDER COMMAND CENTER";
+    const title = document.createElement("h2"); title.textContent = config.title;
+    const subtitle = document.createElement("p"); subtitle.textContent = config.subtitle; subtitle.style.cssText = "margin:7px 0 0;color:#7890a5;font-size:11px;line-height:1.5";
     copy.append(eyebrow, title, subtitle);
 
-    const actions = document.createElement("div");
-    actions.className = "role-command-actions";
-    config.workspaces.forEach((workspace) => {
-      const target = workspaceButton(workspace) || workspaceButton(workspaceAliases[workspace]);
-      if (!target) return;
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = "secondary";
-      button.textContent = workspace;
-      button.addEventListener("click", () => target.click());
+    const actions = document.createElement("div"); actions.style.cssText = "display:flex;flex-wrap:wrap;gap:7px;justify-content:flex-end";
+    config.workspaces.forEach((name) => {
+      const button = document.createElement("button"); button.type = "button"; button.className = "secondary"; button.textContent = name;
+      const target = workspaceButton(name);
+      if (target) button.addEventListener("click", () => target.click());
+      else {
+        const mount = mountTarget(name);
+        if (!mount) { button.disabled = true; button.title = "Workspace is not available for this session"; }
+        else button.addEventListener("click", () => mount.scrollIntoView({ behavior: "smooth", block: "start" }));
+      }
       actions.appendChild(button);
     });
     panel.append(copy, actions);
 
     Array.from(tabs.querySelectorAll("button")).forEach((button) => {
       const name = button.textContent?.trim() || "";
-      button.hidden = !config.workspaces.includes(name) && !config.workspaces.includes(workspaceAliases[name]);
+      button.hidden = !config.workspaces.includes(name);
     });
-
     Array.from(operationGrid.querySelectorAll("article")).forEach((article) => {
       const heading = article.querySelector("h3")?.textContent?.trim() || "";
-      const allowed = config.operations.includes(heading);
-      article.hidden = !allowed;
+      article.hidden = !config.operations.includes(heading);
     });
-
     const operationConsole = document.querySelector(".operation-console");
     if (operationConsole) operationConsole.hidden = config.operations.length === 0;
   }
@@ -103,7 +89,6 @@
     scheduled = true;
     requestAnimationFrame(() => { scheduled = false; render(); });
   };
-
   new MutationObserver(schedule).observe(document.documentElement, { childList: true, subtree: true });
   window.addEventListener("storage", schedule);
   schedule();
