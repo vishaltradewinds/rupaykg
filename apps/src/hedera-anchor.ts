@@ -103,11 +103,11 @@ export async function submitHcsAnchor(payload: AnchorPayload): Promise<AnchorRes
 export async function verifyHcsMessage(consensusTimestamp: string, topicId = process.env.HEDERA_TOPIC_ID || "", expectedIntegrityHash?: string, expectedActivityId?: string, expectedVerificationId?: string, expectedEvidenceId?: string, expectedGuardianExecutionId?: string) {
   const network = networkName();
   if (!topicId) return { verified: false, network, error: "HEDERA_TOPIC_ID is not configured" };
-  const response = await fetch(`${mirrorEndpoint(network)}/api/v1/topics/${encodeURIComponent(topicId)}/messages?limit=100&order=desc`);
+  const response = await fetch(`${mirrorEndpoint(network)}/api/v1/topics/${encodeURIComponent(topicId)}/messages?timestamp=${encodeURIComponent(`eq:${consensusTimestamp}`)}&limit=1&order=desc`);
   if (!response.ok) return { verified: false, network, error: `Mirror node HTTP ${response.status}` };
-  const data = await response.json() as { messages?: Array<{ consensus_timestamp?: string; sequence_number?: number; message?: string }> };
-  const found = data.messages?.find(message => message.consensus_timestamp === consensusTimestamp);
-  if (!found) return { verified: false, network, error: "Consensus message not found in the mirror-node window" };
+  const data = await response.json() as { messages?: Array<{ consensus_timestamp?: string; sequence_number?: number; message?: string; topic_id?: string }> };
+  const found = data.messages?.find(message => message.consensus_timestamp === consensusTimestamp && (!message.topic_id || message.topic_id === topicId));
+  if (!found) return { verified: false, network, error: "Consensus message not found for the supplied Hedera topic and consensus timestamp" };
   let payload: unknown = null;
   if (found.message) {
     try { payload = JSON.parse(Buffer.from(found.message, "base64").toString("utf8")); }
