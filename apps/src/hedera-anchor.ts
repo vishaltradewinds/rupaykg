@@ -100,7 +100,7 @@ export async function submitHcsAnchor(payload: AnchorPayload): Promise<AnchorRes
   }
 }
 
-export async function verifyHcsMessage(consensusTimestamp: string, topicId = process.env.HEDERA_TOPIC_ID || "") {
+export async function verifyHcsMessage(consensusTimestamp: string, topicId = process.env.HEDERA_TOPIC_ID || "", expectedIntegrityHash?: string, expectedActivityId?: string, expectedVerificationId?: string, expectedEvidenceId?: string, expectedGuardianExecutionId?: string) {
   const network = networkName();
   if (!topicId) return { verified: false, network, error: "HEDERA_TOPIC_ID is not configured" };
   const response = await fetch(`${mirrorEndpoint(network)}/api/v1/topics/${encodeURIComponent(topicId)}/messages?limit=100&order=desc`);
@@ -113,5 +113,19 @@ export async function verifyHcsMessage(consensusTimestamp: string, topicId = pro
     try { payload = JSON.parse(Buffer.from(found.message, "base64").toString("utf8")); }
     catch { payload = Buffer.from(found.message, "base64").toString("utf8"); }
   }
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return { verified: false, network, consensusTimestamp: found.consensus_timestamp, sequenceNumber: found.sequence_number, payload, error: "HCS message payload is not a structured RupayKG provenance record" };
+  const record = payload as Record<string, unknown>;
+  const requiredMatches = [
+    ["schema", "rupaykg:mrv:v1"],
+    ["mrvStatus", "VERIFIED"],
+    ...(expectedIntegrityHash ? [["integrityHash", expectedIntegrityHash]] as const : []),
+    ...(expectedActivityId ? [["activityId", expectedActivityId]] as const : []),
+    ...(expectedVerificationId ? [["verificationId", expectedVerificationId]] as const : []),
+    ...(expectedEvidenceId ? [["evidenceId", expectedEvidenceId]] as const : []),
+    ...(expectedGuardianExecutionId ? [["guardianExecutionId", expectedGuardianExecutionId]] as const : []),
+  ];
+  for (const [field, expected] of requiredMatches) if (record[field] !== expected) return { verified: false, network, consensusTimestamp: found.consensus_timestamp, sequenceNumber: found.sequence_number, payload, error: `HCS provenance field mismatch: ${field}` };
+  const { integrityHash: anchoredHash, anchoredAt: _anchoredAt, ...unsignedPayload } = record;
+  if (typeof anchoredHash !== "string" || integrityHash(unsignedPayload as AnchorPayload) !== anchoredHash) return { verified: false, network, consensusTimestamp: found.consensus_timestamp, sequenceNumber: found.sequence_number, payload, error: "HCS integrity hash does not match the anchored provenance payload" };
   return { verified: true, network, consensusTimestamp: found.consensus_timestamp, sequenceNumber: found.sequence_number, payload };
 }
