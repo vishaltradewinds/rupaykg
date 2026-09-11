@@ -42,7 +42,8 @@ export async function registerWorkspaceRoutes(app: FastifyInstance, pool: Pool |
   app.addHook("preHandler", async (request, reply) => {
     const route = request.routeOptions.url ?? "";
     if (!route.startsWith("/api/v1/workspaces/")) return;
-    const workspace = route.split("/").pop() as WorkspaceName;
+    const routeWorkspace = route.split("/").pop() ?? "";
+    const workspace = routeWorkspace === "resource-flows" ? "resourceFlows" : routeWorkspace as WorkspaceName;
     if (!(workspace in WORKSPACE_READ_PERMISSIONS)) return;
     const auth = await requireAuth(app, pool, request, reply);
     if (!auth || !pool) return;
