@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type { Pool } from "pg";
-import { authenticate, canActForOrganization, type AuthContext } from "./auth.js";
+import { authenticate, canActForOrganization, hasOrganizationPermission, type AuthContext } from "./auth.js";
 import { executeGuardianMrv, guardianStatus } from "./guardian-mrv.js";
 import { hederaStatus, submitHcsAnchor, verifyHcsMessage } from "./hedera-anchor.js";
 
@@ -15,8 +15,15 @@ async function authFor(request: Request, reply: Reply, pool: Pool | null): Promi
   catch (error) { request.log.error(error); reply.code(503).send({ error: "Authentication service unavailable", code: "AUTH_UNAVAILABLE" }); return null; }
 }
 
+async function requirePermission(pool: Pool, auth: AuthContext, organizationId: string, permissions: readonly string[]): Promise<boolean> {
+  return hasOrganizationPermission(pool, auth, organizationId, permissions);
+}
+
 export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null): Promise<void> {
-  app.get("/api/v1/mrv/status", async () => {
+  app.get("/api/v1/mrv/status", async (request, reply) => {
+    const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
+    const organizationId = auth.activeOrganizationId || auth.memberships[0]?.organization_id;
+    if (!organizationId || !await requirePermission(pool, auth, organizationId, ["guardian:read"])) return reply.code(403).send({ error: "Guardian read permission required", code: "MRV_PERMISSION_REQUIRED" });
     const guardian = guardianStatus();
     const hedera = hederaStatus();
     return {
@@ -47,6 +54,7 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
       const row = context.rows[0];
       if (!row) return reply.code(409).send({ error: "Activity, verification and evidence must be bound to the same activity", code: "MRV_BINDING_INVALID" });
       if (!canActForOrganization(auth, row.organization_id)) return reply.code(403).send({ error: "Organization access denied", code: "ORG_FORBIDDEN" });
+      if (!await requirePermission(pool, auth, row.organization_id, ["guardian:operate"])) return reply.code(403).send({ error: "Guardian MRV operation permission required", code: "MRV_PERMISSION_REQUIRED" });
       if (row.activity_status !== "COMPLETED" || row.decision !== "APPROVED" || row.evidence_status !== "VERIFIED" || row.evidence_activity_id !== activityId) return reply.code(409).send({ error: "Completed activity, approved verification and VERIFIED evidence are required before Guardian MRV", code: "MRV_PRECONDITION_FAILED" });
 
       const observations = await pool.query("select id, parameter_code, observed_value, unit, method, instrument_id, observed_at, uncertainty, quality_status, metadata from mrv_observations where activity_id=$1 order by observed_at", [activityId]);
@@ -69,6 +77,7 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
     try {
       const owner = await pool.query<{ organization_id: string }>("select organization_id from activities where id=$1", [activityId]);
       if (!owner.rows[0] || !canActForOrganization(auth, owner.rows[0].organization_id)) return reply.code(403).send({ error: "Organization access denied", code: "ORG_FORBIDDEN" });
+      if (!await requirePermission(pool, auth, owner.rows[0].organization_id, ["guardian:read"])) return reply.code(403).send({ error: "Guardian read permission required", code: "MRV_PERMISSION_REQUIRED" });
       const rows = await pool.query("select * from mrv_provenance_events where activity_id=$1 order by created_at desc", [activityId]);
       return { source: "postgresql", syntheticData: false, eligibleForRegistry: rows.rows.some(r => r.guardian_status === "VERIFIED" && r.hcs_status === "CONSENSUS_CONFIRMED"), provenance: rows.rows };
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "MRV provenance unavailable", syntheticData: false }); }
@@ -87,6 +96,7 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
       if (!row.hcs_topic_id || row.hcs_topic_id !== (process.env.HEDERA_TOPIC_ID || "")) return reply.code(409).send({ error: "Persisted MRV provenance topic does not match the configured Hedera topic", code: "HCS_TOPIC_MISMATCH" });
       const owner = await pool.query<{ organization_id: string }>("select organization_id from activities where id=$1", [row.activity_id]);
       if (!owner.rows[0] || !canActForOrganization(auth, owner.rows[0].organization_id)) return reply.code(403).send({ error: "Organization access denied", code: "ORG_FORBIDDEN" });
+      if (!await requirePermission(pool, auth, owner.rows[0].organization_id, ["guardian:read"])) return reply.code(403).send({ error: "Guardian read permission required", code: "MRV_PERMISSION_REQUIRED" });
       return { source: "hedera-mirror-node", syntheticData: false, ...(await verifyHcsMessage(timestamp, row.hcs_topic_id, row.integrity_hash, row.activity_id, row.verification_id, row.evidence_id, row.guardian_execution_id)) };
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Hedera mirror-node verification unavailable", code: "HCS_VERIFY_UNAVAILABLE", syntheticData: false }); }
   });
