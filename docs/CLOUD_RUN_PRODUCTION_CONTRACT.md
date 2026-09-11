@@ -9,7 +9,7 @@ This document defines the deployment contract for the canonical `vishaltradewind
 - The same Fastify production server serves the built web application from `apps/web/dist` and exposes the authoritative `/api/v1/*` API.
 - The browser uses relative `/api/v1/...` requests; there is no required `VITE_API_BASE_URL` deployment setting.
 - Cloud Run supplies the ingress `PORT`; the application listens on `0.0.0.0` and must not require a hard-coded production port.
-- Prefer a controlled Dockerfile + Cloud Build + Artifact Registry flow for production. Cloud Run can deploy from source, but Google documents image-based deployment as the more controllable option when full build customization is required. citeturn0search0turn0search1
+- Prefer a controlled Dockerfile + Cloud Build + Artifact Registry flow for production. Cloud Run also supports source deployment, but image-based deployment gives full control over the build when a Dockerfile is used.
 
 ## Frontend build configuration
 
@@ -70,7 +70,7 @@ Do **not** set `PORT`; Cloud Run injects it for the ingress container.
 
 `cloudbuild.yaml` is a **build-and-push-only** pipeline. It does not deploy Cloud Run. It builds the canonical Dockerfile, supplies the four public Firebase build arguments, and publishes an immutable commit-SHA-tagged image to Artifact Registry.
 
-For a pilot, invoke Cloud Build with the real Firebase web configuration and a deliberate Artifact Registry region/repository. Do not put production database secrets into the substitutions. After the image is built and acceptance-tested, deploy the exact image digest to Cloud Run. Cloud Run revisions are immutable, and image tags are resolved to a digest for the serving revision. citeturn0search10
+For a pilot, invoke Cloud Build with the real Firebase web configuration and a deliberate Artifact Registry region/repository. Do not put production database secrets into the substitutions. After the image is built and acceptance-tested, deploy the exact image digest to Cloud Run.
 
 ## Deployment acceptance sequence
 
