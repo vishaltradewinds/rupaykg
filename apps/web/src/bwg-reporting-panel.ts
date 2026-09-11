@@ -42,9 +42,9 @@ function render() {
   const org = member();
   if (!org) { root.innerHTML = `<section class="compliance-card bwg-card"><div class="compliance-head"><div><p class="eyebrow">BULK WASTE GENERATOR</p><h2>EPR &amp; ESG reporting</h2></div><span class="compliance-state">VERIFICATION REQUIRED</span></div><p class="field-help">A verified organization membership is required before authoritative reporting can be accessed.</p></section>`; return; }
   const periods = workspace.periods.map((p) => `<option value="${esc(p.id)}">${esc(p.period_start)} → ${esc(p.period_end)} · ${esc(p.reporting_basis)}</option>`).join("");
-  const jurisdictions = workspace.jurisdictions.map((g) => `<option value="${esc(g.id)}">${esc(g.name)}</option>`).join("");
-  const schemes = workspace.schemes.map((s) => `<option value="${esc(s.id)}">${esc(s.name)} · ${esc(s.code)} · ${esc(s.authority)}</option>`).join("");
   const profile = workspace.profiles.find((p) => p.organization_id === org.organization_id);
+  const jurisdictions = workspace.jurisdictions.map((g) => `<option value="${esc(g.id)}" ${g.id === profile?.jurisdiction_id ? "selected" : ""}>${esc(g.name)}</option>`).join("");
+  const schemes = workspace.schemes.map((s) => `<option value="${esc(s.id)}">${esc(s.name)} · ${esc(s.code)} · ${esc(s.authority)}</option>`).join("");
   const status = profile?.applicability_status ?? "PENDING";
   const registrationStatus = profile?.regulatory_registration_status ?? "UNKNOWN";
   const registrationReference = profile?.regulatory_registration_reference ?? "";
