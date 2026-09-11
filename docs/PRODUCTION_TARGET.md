@@ -16,7 +16,9 @@ Every value-bearing transition requires the appropriate upstream evidence, autho
 
 ## Production configuration contract
 
-Production startup must use `apps/api/src/production-server.ts` (compiled as `dist/src/production-server.js`), not the development `server.ts` entrypoint directly. Startup fails closed unless all of the following are true:
+Production startup uses `apps/src/production-server.ts` (compiled as `apps/dist/src/production-server.js`), not the development `server.ts` entrypoint directly. The production Fastify server also serves the built web application from `apps/web/dist`.
+
+Startup fails closed unless all of the following are true:
 
 - `NODE_ENV=production`.
 - `DATABASE_URL` is a valid PostgreSQL URL and does not target localhost.
@@ -29,7 +31,9 @@ Production startup must use `apps/api/src/production-server.ts` (compiled as `di
 
 The production entrypoint validates the configuration and passes the validated values to the authoritative server; it does not rely on source scanning to enforce CORS. Runtime CORS behavior is covered by an automated acceptance test.
 
-The checked-in `.env.example` documents this contract without containing production credentials. Production secrets and identity material must be supplied only by the deployment secret/configuration system.
+The browser build additionally requires the four public Firebase web configuration values: `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID`, and `VITE_FIREBASE_APP_ID`. Missing values fail the web build rather than producing an unauthenticated production bundle.
+
+The checked-in `.env.example` documents the contract without containing production credentials. Production secrets and identity material must be supplied only by the deployment secret/configuration system.
 
 ## Offline operating contract
 
@@ -68,4 +72,4 @@ Google Stitch is used for design exploration and developer handoff through `DESI
 
 ## Definition of done
 
-A production rollout is not complete until a clean environment can apply the ordered migrations and pass validation, the production entrypoint rejects incomplete/unsafe configuration, an authorized user can execute the lifecycle, unauthorized users are denied, offline records synchronize safely, retries are idempotent, conflicts remain visible, value cannot bypass evidence/verification, registry events are auditable, settlement cannot finalize without external confirmation/reconciliation, CORS is enforced by the actual Fastify runtime policy, and UI claims can be traced to authoritative state.
+A production rollout is not complete until a clean environment can apply the ordered migrations and pass validation, the production entrypoint rejects incomplete/unsafe configuration, the production web build rejects missing Firebase configuration, an authorized user can execute the lifecycle, unauthorized users are denied, offline records synchronize safely, retries are idempotent, conflicts remain visible, value cannot bypass evidence/verification, registry events are auditable, settlement cannot finalize without external confirmation/reconciliation, CORS is enforced by the actual Fastify runtime policy, and UI claims can be traced to authoritative state.
