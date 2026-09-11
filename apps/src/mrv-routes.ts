@@ -16,7 +16,20 @@ async function authFor(request: Request, reply: Reply, pool: Pool | null): Promi
 }
 
 export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null): Promise<void> {
-  app.get("/api/v1/mrv/status", async () => ({ source: "runtime", syntheticData: false, guardian: guardianStatus(), hedera: hederaStatus(), registryEligibility: "GUARDIAN_VERIFIED_AND_HCS_CONSENSUS_CONFIRMED" }));
+  app.get("/api/v1/mrv/status", async () => {
+    const guardian = guardianStatus();
+    const hedera = hederaStatus();
+    return {
+      source: "runtime",
+      syntheticData: false,
+      guardian,
+      hedera,
+      // Configuration/readiness is not proof of a registry-eligible MRV event.
+      // Eligibility is established only per provenance record after Guardian
+      // returns VERIFIED and Hedera returns CONSENSUS_CONFIRMED.
+      registryEligibility: "REQUIRES_GUARDIAN_VERIFIED_AND_HCS_CONSENSUS_CONFIRMED_PROVENANCE",
+    };
+  });
 
   app.post("/api/v1/mrv/activities/:activityId/submit", async (request, reply) => {
     const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
