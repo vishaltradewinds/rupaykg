@@ -20,7 +20,7 @@ export async function registerIntelligenceRoutes(app: FastifyInstance, pool: Poo
     const ids = orgIds(auth);
     if (!ids.length) return { source: "postgresql", syntheticData: false, findings: [] };
     for (const organizationId of ids) {
-      if (!await hasOrganizationPermission(pool, auth, organizationId, ["audit:read"])) {
+      if (!await hasOrganizationPermission(pool, auth, organizationId, ["audit:read", "projects:manage"])) {
         return reply.code(403).send({ error: "Intelligence workspace read permission required", code: "WORKSPACE_READ_FORBIDDEN", workspace: "intelligence" });
       }
     }
