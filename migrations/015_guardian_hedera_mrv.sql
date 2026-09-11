@@ -24,3 +24,26 @@ create table if not exists mrv_provenance_events (
 create index if not exists mrv_provenance_activity_idx on mrv_provenance_events(activity_id, created_at desc);
 create index if not exists mrv_provenance_verification_idx on mrv_provenance_events(verification_id, created_at desc);
 create index if not exists mrv_provenance_hcs_idx on mrv_provenance_events(hcs_consensus_timestamp);
+
+-- Registry issuance is not allowed to bypass the Guardian + HCS MRV gate.
+create or replace function require_guardian_hcs_mrv_for_credential()
+returns trigger language plpgsql as $$
+begin
+  if not exists (
+    select 1
+      from mrv_provenance_events m
+     where m.activity_id = new.activity_id
+       and m.verification_id = new.verification_id
+       and m.guardian_status = 'VERIFIED'
+       and m.hcs_status = 'CONSENSUS_CONFIRMED'
+  ) then
+    raise exception 'CREDENTIAL_MRV_REQUIRED: Guardian VERIFIED + Hedera HCS consensus provenance is required before credential issuance';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists credentials_require_guardian_hcs_mrv on credentials;
+create trigger credentials_require_guardian_hcs_mrv
+before insert on credentials
+for each row execute function require_guardian_hcs_mrv_for_credential();
