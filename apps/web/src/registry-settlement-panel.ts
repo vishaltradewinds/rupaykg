@@ -64,5 +64,5 @@ async function load(user: User): Promise<void> {
 if (root) {
   if (!auth) render({ status: "CONFIGURATION REQUIRED", message: "Firebase configuration is required for authenticated registry and settlement access.", credentials: [], events: [], settlements: [] });
   else onAuthStateChanged(auth, user => { if (user) void load(user); else render({ status: "SIGN IN REQUIRED", message: "Sign in to load authorized registry and settlement state.", credentials: [], events: [], settlements: [] }); });
-  window.addEventListener("storage", event => { if (event.key === organizationKey && auth.currentUser) void load(auth.currentUser); });
+  window.addEventListener("storage", event => { if (event.key === organizationKey) { const user = auth?.currentUser; if (user) void load(user); } });
 }
