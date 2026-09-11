@@ -13,6 +13,10 @@
     "lint": "npm run lint --workspaces --if-present",
     "validate:migrations": "node scripts/validate-migrations.mjs"
   },
+  "overrides": {
+    "protobufjs": "8.8.0",
+    "ws": "8.21.0"
+  },
   "devDependencies": {
     "@types/node": "^24.0.0",
     "@vitejs/plugin-react": "^5.0.2",
