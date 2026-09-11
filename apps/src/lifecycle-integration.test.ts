@@ -11,6 +11,7 @@ test("production lifecycle integration gate", { skip: !url }, async () => {
   try {
     await c.query("begin");
     const org = (await c.query("insert into organizations(name,organization_type) values('integration','COLLECTOR') returning id")).rows[0].id;
+    const buyer = (await c.query("insert into organizations(name,organization_type) values('integration-buyer','INDUSTRY_GENERATOR') returning id")).rows[0].id;
     const actor = (await c.query("insert into identities(external_subject,display_name) values('integration-actor','actor') returning id")).rows[0].id;
     const verifier = (await c.query("insert into identities(external_subject,display_name) values('integration-verifier','verifier') returning id")).rows[0].id;
     const role = (await c.query("insert into roles(organization_id,name,permissions) values($1,'VERIFIER','[\"VERIFY_EVIDENCE\",\"ISSUE_CREDENTIAL\"]') returning id", [org])).rows[0].id;
@@ -39,7 +40,7 @@ test("production lifecycle integration gate", { skip: !url }, async () => {
     await c.query("update credentials set status='ACTIVE' where id=$1", [credential]);
     await reject(c, () => c.query("insert into credentials(activity_id,issuer_organization_id,trust_root_id,status,verification_id,quantity,unit) values($1,$2,'integration-root','ISSUED',$3,100,'kg')", [activity, org, verification]), /duplicate key|credentials_activity_verification_unique_idx/);
 
-    const settlement = (await c.query("insert into settlements(credential_id,payer_id,payee_id,amount,currency,status) values($1,$2,$2,1000,'INR','CREATED') returning id", [credential, org])).rows[0].id;
+    const settlement = (await c.query("insert into settlements(credential_id,payer_id,payee_id,amount,currency,status) values($1,$2,$3,1000,'INR','CREATED') returning id", [credential, org, buyer])).rows[0].id;
     await c.query("update settlements set status='AUTHORIZED',authorization_reference='auth',verified_at=now() where id=$1", [settlement]);
     await c.query("update settlements set status='EXECUTING',external_reference='bank-1' where id=$1", [settlement]);
     await c.query("update settlements set status='RECONCILING' where id=$1", [settlement]);
