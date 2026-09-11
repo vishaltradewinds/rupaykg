@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type { Pool } from "pg";
-import { authenticate, bearerChallenge, canVerifyEvidence, type AuthContext } from "./auth.js";
+import { authenticate, bearerChallenge, canVerifyEvidence, hasOrganizationPermission, type AuthContext } from "./auth.js";
 
 async function requireAuth(app: FastifyInstance, pool: Pool | null, request: Parameters<typeof authenticate>[0], reply: { code: (status: number) => { send: (body: unknown) => unknown } }): Promise<AuthContext | null> {
   if (!pool) { reply.code(503).send({ error: "Authoritative API unavailable", code: "DATABASE_UNAVAILABLE", syntheticData: false }); return null; }
@@ -17,7 +17,39 @@ async function authorizeGeography(pool: Pool, auth: AuthContext, geographyId: st
 }
 function geoClause(geographyId: string | null, column: string): string { return geographyId ? ` and ${column} = $2` : ""; }
 
+const WORKSPACE_READ_PERMISSIONS: Record<string, readonly string[]> = {
+  resourceFlows: ["waste:read"],
+  mrv: ["evidence:upload", "evidence:review", "guardian:read"],
+  compliance: ["reports:read", "swm:read", "epr:read", "audit:read"],
+  carbon: ["reports:read", "credits:read", "projects:read"],
+  registry: ["registry:read", "credits:read"],
+  settlement: ["credits:read", "settlement:authorize", "settlement:settle", "AUTHORIZE_SETTLEMENT", "SETTLE_FUNDS"],
+  esg: ["reports:read", "epr:read", "csr:read", "audit:read"],
+};
+
+async function authorizeWorkspaceRead(pool: Pool, auth: AuthContext, workspace: keyof typeof WORKSPACE_READ_PERMISSIONS): Promise<boolean> {
+  const organizations = orgIds(auth);
+  if (!organizations.length) return false;
+  const permissions = WORKSPACE_READ_PERMISSIONS[workspace];
+  for (const organizationId of organizations) {
+    if (!await hasOrganizationPermission(pool, auth, organizationId, permissions)) return false;
+  }
+  return true;
+}
+
 export async function registerWorkspaceRoutes(app: FastifyInstance, pool: Pool | null): Promise<void> {
+  app.addHook("preHandler", async (request, reply) => {
+    const route = request.routeOptions.url ?? "";
+    if (!route.startsWith("/api/v1/workspaces/")) return;
+    const workspace = route.split("/").pop() as keyof typeof WORKSPACE_READ_PERMISSIONS;
+    if (!(workspace in WORKSPACE_READ_PERMISSIONS)) return;
+    const auth = await requireAuth(app, pool, request, reply);
+    if (!auth || !pool) return;
+    if (!await authorizeWorkspaceRead(pool, auth, workspace)) {
+      return reply.code(403).send({ error: "Workspace read permission required", code: "WORKSPACE_READ_FORBIDDEN", workspace });
+    }
+  });
+
   app.get("/api/v1/workspaces/resource-flows", async (request, reply) => {
     const auth = await requireAuth(app, pool, request, reply); if (!auth || !pool) return; const ids = orgIds(auth); if (!ids.length) return result({ resourceFlows: [] });
     const geographyId = requestedGeography(request); if (geographyId && !await authorizeGeography(pool, auth, geographyId)) return reply.code(403).send({ error: "Geography outside organization authorization scope", code: "GEOGRAPHY_FORBIDDEN" });
