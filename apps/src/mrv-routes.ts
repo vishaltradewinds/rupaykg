@@ -1,0 +1,73 @@
+import type { FastifyInstance } from "fastify";
+import type { Pool } from "pg";
+import { authenticate, canActForOrganization, type AuthContext } from "./auth.js";
+import { executeGuardianMrv, guardianStatus } from "./guardian-mrv.js";
+import { hederaStatus, submitHcsAnchor, verifyHcsMessage } from "./hedera-anchor.js";
+
+type Reply = { code: (status: number) => { send: (body: unknown) => unknown } };
+type Request = { body: unknown; params: Record<string, string>; log: { error: (error: unknown) => void } };
+const bodyOf = (r: Request): Record<string, unknown> => r.body && typeof r.body === "object" ? r.body as Record<string, unknown> : {};
+const str = (b: Record<string, unknown>, k: string): string | null => typeof b[k] === "string" && b[k].trim() ? b[k].trim() : null;
+
+async function authFor(request: Request, reply: Reply, pool: Pool | null): Promise<AuthContext | null> {
+  if (!pool) { reply.code(503).send({ error: "Database unavailable", code: "DATABASE_UNAVAILABLE" }); return null; }
+  try { const auth = await authenticate(request as never, pool); if (!auth) { reply.code(401).send({ error: "Authenticated session required", code: "AUTH_REQUIRED" }); return null; } return auth; }
+  catch (error) { request.log.error(error); reply.code(503).send({ error: "Authentication service unavailable", code: "AUTH_UNAVAILABLE" }); return null; }
+}
+
+export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null): Promise<void> {
+  app.get("/api/v1/mrv/status", async () => ({ source: "runtime", syntheticData: false, guardian: guardianStatus(), hedera: hederaStatus(), registryEligibility: "GUARDIAN_VERIFIED_AND_HCS_CONSENSUS_CONFIRMED" }));
+
+  app.post("/api/v1/mrv/activities/:activityId/submit", async (request, reply) => {
+    const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
+    const activityId = (request.params as { activityId: string }).activityId;
+    const body = bodyOf(request as never);
+    const verificationId = str(body, "verificationId");
+    const evidenceId = str(body, "evidenceId");
+    const policyId = str(body, "guardianPolicyId") || process.env.GUARDIAN_MRV_POLICY_ID || null;
+    const methodologyCode = str(body, "methodologyCode") || undefined;
+    if (!verificationId || !evidenceId || !policyId) return reply.code(400).send({ error: "verificationId, evidenceId and guardianPolicyId (or GUARDIAN_MRV_POLICY_ID) are required" });
+    try {
+      const context = await pool.query<{ organization_id: string; activity_status: string; decision: string; evidence_status: string; evidence_activity_id: string | null; evidence_count: string; observation_count: string }>(
+        `select a.organization_id, a.status activity_status, v.decision, e.status evidence_status, e.activity_id evidence_activity_id,
+                (select count(*)::text from evidence e2 where e2.activity_id=a.id) evidence_count,
+                (select count(*)::text from mrv_observations mo where mo.activity_id=a.id) observation_count
+           from activities a join verifications v on v.id=$2 and v.activity_id=a.id join evidence e on e.id=$3 and e.activity_id=a.id where a.id=$1`,
+        [activityId, verificationId, evidenceId]);
+      const row = context.rows[0];
+      if (!row) return reply.code(409).send({ error: "Activity, verification and evidence must be bound to the same activity", code: "MRV_BINDING_INVALID" });
+      if (!canActForOrganization(auth, row.organization_id)) return reply.code(403).send({ error: "Organization access denied", code: "ORG_FORBIDDEN" });
+      if (row.activity_status !== "COMPLETED" || row.decision !== "APPROVED" || row.evidence_status !== "VERIFIED" || row.evidence_activity_id !== activityId) return reply.code(409).send({ error: "Completed activity, approved verification and VERIFIED evidence are required before Guardian MRV", code: "MRV_PRECONDITION_FAILED" });
+
+      const observations = await pool.query("select id, parameter_code, observed_value, unit, method, instrument_id, observed_at, uncertainty, quality_status, metadata from mrv_observations where activity_id=$1 order by observed_at", [activityId]);
+      const evidence = await pool.query("select id, evidence_type, content_uri, content_hash, captured_at, source, status, metadata from evidence where activity_id=$1 order by captured_at", [activityId]);
+      const guardian = await executeGuardianMrv({ activityId, verificationId, evidenceId, policyId, methodologyCode, observations: observations.rows, evidence: evidence.rows, metadata: { evidenceCount: Number(row.evidence_count), observationCount: Number(row.observation_count) } });
+      if (guardian.status !== "VERIFIED" || !guardian.executionId) return reply.code(503).send({ source: "guardian", syntheticData: false, guardian, eligibleForRegistry: false });
+
+      const quantityRow = await pool.query<{ quantity: string | null; unit: string | null }>("select quantity::text quantity, unit from measurements where activity_id=$1 order by measured_at desc nulls last, created_at desc limit 1", [activityId]);
+      const quantity = quantityRow.rows[0]?.quantity ? Number(quantityRow.rows[0].quantity) : undefined;
+      const unit = quantityRow.rows[0]?.unit || undefined;
+      const anchor = await submitHcsAnchor({ schema: "rupaykg:mrv:v1", activityId, verificationId, evidenceId, guardianPolicyId: policyId, guardianExecutionId: guardian.executionId, mrvStatus: "VERIFIED", methodologyCode, quantity, unit, metadata: { guardianStatus: guardian.status } });
+      const persisted = await pool.query(`insert into mrv_provenance_events(activity_id,verification_id,evidence_id,guardian_policy_id,guardian_execution_id,guardian_status,hcs_status,hcs_topic_id,hcs_transaction_id,hcs_consensus_timestamp,integrity_hash,methodology_code,metadata) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) on conflict(activity_id,verification_id,integrity_hash) do update set guardian_execution_id=excluded.guardian_execution_id,guardian_status=excluded.guardian_status,hcs_status=excluded.hcs_status,hcs_transaction_id=excluded.hcs_transaction_id,hcs_consensus_timestamp=excluded.hcs_consensus_timestamp,metadata=excluded.metadata returning *`, [activityId, verificationId, evidenceId, policyId, guardian.executionId, guardian.status, anchor.status, anchor.topicId || null, anchor.transactionId, anchor.consensusTimestamp, anchor.integrityHash, methodologyCode || null, JSON.stringify({ guardian: guardian.raw ?? null })]);
+      return reply.code(anchor.status === "CONSENSUS_CONFIRMED" ? 201 : 503).send({ source: "postgresql+guardian+hedera", syntheticData: false, guardian, hedera: anchor, provenance: persisted.rows[0], eligibleForRegistry: anchor.status === "CONSENSUS_CONFIRMED" });
+    } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Authoritative MRV submission unavailable", code: "MRV_UNAVAILABLE", syntheticData: false }); }
+  });
+
+  app.get("/api/v1/mrv/provenance/:activityId", async (request, reply) => {
+    const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
+    const activityId = (request.params as { activityId: string }).activityId;
+    try {
+      const owner = await pool.query<{ organization_id: string }>("select organization_id from activities where id=$1", [activityId]);
+      if (!owner.rows[0] || !canActForOrganization(auth, owner.rows[0].organization_id)) return reply.code(403).send({ error: "Organization access denied", code: "ORG_FORBIDDEN" });
+      const rows = await pool.query("select * from mrv_provenance_events where activity_id=$1 order by created_at desc", [activityId]);
+      return { source: "postgresql", syntheticData: false, eligibleForRegistry: rows.rows.some(r => r.guardian_status === "VERIFIED" && r.hcs_status === "CONSENSUS_CONFIRMED"), provenance: rows.rows };
+    } catch (error) { request.log.error(error); return reply.code(503).send({ error: "MRV provenance unavailable", syntheticData: false }); }
+  });
+
+  app.get("/api/v1/mrv/hedera/verify/:consensusTimestamp", async (request, reply) => {
+    const auth = await authFor(request as never, reply, pool); if (!auth) return;
+    const timestamp = (request.params as { consensusTimestamp: string }).consensusTimestamp;
+    try { return { source: "hedera-mirror-node", syntheticData: false, ...(await verifyHcsMessage(timestamp)) }; }
+    catch (error) { request.log.error(error); return reply.code(503).send({ error: "Hedera mirror-node verification unavailable", syntheticData: false }); }
+  });
+}
