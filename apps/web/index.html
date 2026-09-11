@@ -14,6 +14,7 @@
     <div id="esg-metrics"></div>
     <div id="bwg-reporting"></div>
     <div id="mrv-provenance"></div>
+    <div id="registry-settlement"></div>
     <script src="/offline-operation-queue.js"></script>
     <script>
       (() => {
@@ -66,59 +67,17 @@
         Object.assign(status.style, { position: "fixed", right: "14px", bottom: "14px", zIndex: "20", maxWidth: "min(420px,calc(100vw - 28px))", padding: "9px 12px", border: "1px solid #314c63", borderRadius: "12px", background: "rgba(7,17,31,.96)", color: "#a8bbcb", font: "600 11px system-ui,sans-serif", boxShadow: "0 8px 30px rgba(0,0,0,.28)", textAlign: "left" });
         document.body.appendChild(status);
         const setStatus = (text) => { status.textContent = text; status.hidden = !text; };
-
-        const openDb = () => new Promise((resolve, reject) => {
-          const request = indexedDB.open(queueDb, queueDbVersion);
-          request.onupgradeneeded = () => { const db = request.result; if (!db.objectStoreNames.contains("pending")) db.createObjectStore("pending", { keyPath: "id" }); if (!db.objectStoreNames.contains("rejected")) db.createObjectStore("rejected", { keyPath: "id" }); };
-          request.onsuccess = () => resolve(request.result);
-          request.onerror = () => reject(request.error);
-        });
-        const readStore = async (storeName) => {
-          const db = await openDb();
-          const rows = await new Promise((resolve, reject) => { const tx = db.transaction(storeName, "readonly"); const req = tx.objectStore(storeName).getAll(); req.onsuccess = () => resolve(req.result || []); req.onerror = () => reject(req.error); });
-          db.close(); return rows;
-        };
+        const openDb = () => new Promise((resolve, reject) => { const request = indexedDB.open(queueDb, queueDbVersion); request.onupgradeneeded = () => { const db = request.result; if (!db.objectStoreNames.contains("pending")) db.createObjectStore("pending", { keyPath: "id" }); if (!db.objectStoreNames.contains("rejected")) db.createObjectStore("rejected", { keyPath: "id" }); }; request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
+        const readStore = async (storeName) => { const db = await openDb(); const rows = await new Promise((resolve, reject) => { const tx = db.transaction(storeName, "readonly"); const req = tx.objectStore(storeName).getAll(); req.onsuccess = () => resolve(req.result || []); req.onerror = () => reject(req.error); }); db.close(); return rows; };
         const readQueueCounts = async () => { const [pending, rejected] = await Promise.all([readStore("pending"), readStore("rejected")]); return { pending: pending.length, rejected: rejected.length }; };
         const safeText = (v, fallback = "—") => { if (v === null || v === undefined || v === "") return fallback; if (typeof v === "string") return v; try { return JSON.stringify(v); } catch { return fallback; } };
         const addLine = (parent, label, value, emphasis = false) => { const line = document.createElement("div"); line.style.cssText = "margin-top:5px;word-break:break-word;line-height:1.35"; const strong = document.createElement("span"); strong.textContent = `${label}: `; if (emphasis) strong.style.fontWeight = "700"; line.appendChild(strong); const text = document.createElement("span"); text.textContent = safeText(value); line.appendChild(text); parent.appendChild(line); };
-        const renderRejected = async () => {
-          const existing = document.getElementById("rupaykg-rejected-review");
-          if (existing) existing.remove();
-          const rejected = await readStore("rejected");
-          if (!rejected.length) return;
-          const panel = document.createElement("section");
-          panel.id = "rupaykg-rejected-review";
-          panel.setAttribute("aria-label", "Rejected offline field operations");
-          Object.assign(panel.style, { position: "fixed", right: "14px", bottom: "58px", zIndex: "21", width: "min(520px,calc(100vw - 28px))", maxHeight: "min(70vh,620px)", overflow: "auto", padding: "14px", border: "1px solid #314c63", borderRadius: "14px", background: "#07111f", color: "#dbe7ef", font: "13px system-ui,sans-serif", boxShadow: "0 18px 50px rgba(0,0,0,.4)" });
-          const title = document.createElement("div"); title.textContent = "Field operations requiring review"; title.style.fontWeight = "700"; title.style.marginBottom = "10px"; panel.appendChild(title);
-          const close = document.createElement("button"); close.type = "button"; close.textContent = "Close"; Object.assign(close.style, { position: "absolute", top: "10px", right: "10px" }); close.onclick = () => panel.remove(); panel.appendChild(close);
-          rejected.slice().sort((a,b) => String(b.rejectedAt || "").localeCompare(String(a.rejectedAt || ""))).forEach(record => {
-            const item = document.createElement("article"); Object.assign(item.style, { borderTop: "1px solid #23394a", padding: "10px 0" });
-            const payload = (() => { try { return record.body ? JSON.parse(record.body) : {}; } catch { return {}; } })();
-            addLine(item, "Operation type", payload?.payload?.operationType || "UNKNOWN", true);
-            addLine(item, "Rejected", record.rejectedAt);
-            addLine(item, "HTTP status", record.httpStatus);
-            const reason = typeof record.error === "string" ? record.error : record.error?.error || record.error?.message || `HTTP ${record.httpStatus || "4xx"}`;
-            addLine(item, "Reason", reason);
-            addLine(item, "Operation ID", record.id);
-            panel.appendChild(item);
-          });
-          const note = document.createElement("div"); note.textContent = "Rejected records remain immutable history. Correct the source data and submit a new field operation; this panel never replays or mutates a rejected record."; Object.assign(note.style, { marginTop: "10px", paddingTop: "10px", borderTop: "1px solid #23394a", opacity: ".78", lineHeight: "1.4" }); panel.appendChild(note);
-          document.body.appendChild(panel);
-        };
+        const renderRejected = async () => { const existing = document.getElementById("rupaykg-rejected-review"); if (existing) existing.remove(); const rejected = await readStore("rejected"); if (!rejected.length) return; const panel = document.createElement("section"); panel.id = "rupaykg-rejected-review"; panel.setAttribute("aria-label", "Rejected offline field operations"); Object.assign(panel.style, { position: "fixed", right: "14px", bottom: "58px", zIndex: "21", width: "min(520px,calc(100vw - 28px))", maxHeight: "min(70vh,620px)", overflow: "auto", padding: "14px", border: "1px solid #314c63", borderRadius: "14px", background: "#07111f", color: "#dbe7ef", font: "13px system-ui,sans-serif", boxShadow: "0 18px 50px rgba(0,0,0,.4)" }); const title = document.createElement("div"); title.textContent = "Field operations requiring review"; title.style.fontWeight = "700"; title.style.marginBottom = "10px"; panel.appendChild(title); const close = document.createElement("button"); close.type = "button"; close.textContent = "Close"; Object.assign(close.style, { position: "absolute", top: "10px", right: "10px" }); close.onclick = () => panel.remove(); panel.appendChild(close); rejected.slice().sort((a,b) => String(b.rejectedAt || "").localeCompare(String(a.rejectedAt || ""))).forEach(record => { const item = document.createElement("article"); Object.assign(item.style, { borderTop: "1px solid #23394a", padding: "10px 0" }); const payload = (() => { try { return record.body ? JSON.parse(record.body) : {}; } catch { return {}; } })(); addLine(item, "Operation type", payload?.payload?.operationType || "UNKNOWN", true); addLine(item, "Rejected", record.rejectedAt); addLine(item, "HTTP status", record.httpStatus); const reason = typeof record.error === "string" ? record.error : record.error?.error || record.error?.message || `HTTP ${record.httpStatus || "4xx"}`; addLine(item, "Reason", reason); addLine(item, "Operation ID", record.id); panel.appendChild(item); }); const note = document.createElement("div"); note.textContent = "Rejected records remain immutable history. Correct the source data and submit a new field operation; this panel never replays or mutates a rejected record."; Object.assign(note.style, { marginTop: "10px", paddingTop: "10px", borderTop: "1px solid #23394a", opacity: ".78", lineHeight: "1.4" }); panel.appendChild(note); document.body.appendChild(panel); };
         const showRejectedAction = () => { status.style.pointerEvents = "auto"; status.style.cursor = "pointer"; status.onclick = () => void renderRejected(); };
-        const refreshQueueStatus = async () => {
-          try { const { pending, rejected } = await readQueueCounts(); if (rejected > 0) { setStatus(`${rejected} field operation${rejected === 1 ? "" : "s"} rejected — review required`); showRejectedAction(); } else if (pending > 0) { setStatus(`${pending} field operation${pending === 1 ? "" : "s"} pending sync`); status.style.pointerEvents = "none"; status.onclick = null; } else if (navigator.onLine) { setStatus(""); status.onclick = null; } } catch { setStatus(""); }
-        };
+        const refreshQueueStatus = async () => { try { const { pending, rejected } = await readQueueCounts(); if (rejected > 0) { setStatus(`${rejected} field operation${rejected === 1 ? "" : "s"} rejected — review required`); showRejectedAction(); } else if (pending > 0) { setStatus(`${pending} field operation${pending === 1 ? "" : "s"} pending sync`); status.style.pointerEvents = "none"; status.onclick = null; } else if (navigator.onLine) { setStatus(""); status.onclick = null; } } catch { setStatus(""); } };
         window.addEventListener("offline", () => setStatus("Offline — new field operations will be queued"));
         window.addEventListener("online", () => { setStatus("Back online — syncing field operations"); void refreshQueueStatus(); });
-        window.addEventListener("rupaykg:offline-sync", event => {
-          const detail = event.detail || {};
-          if (detail.status === "COUNTS") { if (detail.rejected > 0) { setStatus(`${detail.rejected} field operation${detail.rejected === 1 ? "" : "s"} rejected — review required`); showRejectedAction(); } else if (detail.pending > 0) setStatus(`${detail.pending} field operation${detail.pending === 1 ? "" : "s"} pending sync`); else if (navigator.onLine) setStatus(""); }
-          else if (detail.status === "QUEUED") setStatus("Field operation queued — pending authoritative sync");
-          else if (detail.status === "SYNCED") { setStatus("Field operation synced and accepted"); setTimeout(() => void refreshQueueStatus(), 1200); }
-          else if (detail.status === "REJECTED") { setStatus(`Field operation rejected by API (${detail.httpStatus ?? "4xx"}) — review required`); showRejectedAction(); }
-        });
+        window.addEventListener("rupaykg:offline-sync", event => { const detail = event.detail || {}; if (detail.status === "COUNTS") { if (detail.rejected > 0) { setStatus(`${detail.rejected} field operation${detail.rejected === 1 ? "" : "s"} rejected — review required`); showRejectedAction(); } else if (detail.pending > 0) setStatus(`${detail.pending} field operation${detail.pending === 1 ? "" : "s"} pending sync`); else if (navigator.onLine) setStatus(""); } else if (detail.status === "QUEUED") setStatus("Field operation queued — pending authoritative sync"); else if (detail.status === "SYNCED") { setStatus("Field operation synced and accepted"); setTimeout(() => void refreshQueueStatus(), 1200); } else if (detail.status === "REJECTED") { setStatus(`Field operation rejected by API (${detail.httpStatus ?? "4xx"}) — review required`); showRejectedAction(); } });
         void refreshQueueStatus();
       })();
     </script>
@@ -129,6 +88,7 @@
     <script type="module" src="/src/esg-panel.ts"></script>
     <script type="module" src="/src/bwg-reporting-panel.ts"></script>
     <script type="module" src="/src/mrv-provenance-panel.ts"></script>
+    <script type="module" src="/src/registry-settlement-panel.ts"></script>
     <script src="/role-dashboard.js"></script>
   </body>
 </html>
