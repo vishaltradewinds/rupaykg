@@ -4,7 +4,7 @@ steps:
       - build
       - --pull
       - --tag
-      - ${_IMAGE}
+      - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/rupaykg/rupaykg:${COMMIT_SHA}
       - --build-arg
       - VITE_FIREBASE_API_KEY=${_VITE_FIREBASE_API_KEY}
       - --build-arg
@@ -17,13 +17,13 @@ steps:
   - name: gcr.io/cloud-builders/docker
     args:
       - push
-      - ${_IMAGE}
+      - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/rupaykg/rupaykg:${COMMIT_SHA}
 
 images:
-  - ${_IMAGE}
+  - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/rupaykg/rupaykg:${COMMIT_SHA}
 
 substitutions:
-  _IMAGE: ${LOCATION}-docker.pkg.dev/${PROJECT_ID}/rupaykg/rupaykg:${COMMIT_SHA}
+  _REGION: asia-south1
   _VITE_FIREBASE_API_KEY: REPLACE_WITH_FIREBASE_WEB_API_KEY
   _VITE_FIREBASE_AUTH_DOMAIN: REPLACE_WITH_FIREBASE_AUTH_DOMAIN
   _VITE_FIREBASE_PROJECT_ID: REPLACE_WITH_FIREBASE_PROJECT_ID
