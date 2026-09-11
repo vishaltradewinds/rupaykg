@@ -1,6 +1,7 @@
 (() => {
   "use strict";
 
+  // Presentation-only role projection. Server-side RBAC remains authoritative.
   const roleConfig = {
     citizen: { title: "Community activity", subtitle: "Record and follow verified local resource activity.", workspaces: ["Resource flows", "MRV"], operations: ["Field MRV intake"] },
     farmer: { title: "Rural resource activity", subtitle: "Capture authorised activity, evidence and verified outcomes for your geography.", workspaces: ["Resource flows", "MRV", "Carbon"], operations: ["Field MRV intake", "Carbon calculation"] },
@@ -8,12 +9,12 @@
     fpo: { title: "Rural enterprise", subtitle: "Track resource flows, verified activity and applicable value workflows.", workspaces: ["Resource flows", "MRV", "Carbon", "Compliance", "EPR & ESG reporting"], operations: ["Field MRV intake", "Carbon calculation"] },
     municipal_admin: { title: "ULB operations", subtitle: "Monitor authorised resource flows, MRV, compliance and governance records.", workspaces: ["Resource flows", "MRV", "Compliance", "EPR & ESG reporting"], operations: ["Field MRV intake"] },
     municipal_generator: { title: "Municipal / bulk generator", subtitle: "Manage authoritative SWM, EPR and ESG records without implying external submission or acceptance.", workspaces: ["Resource flows", "MRV", "Compliance", "EPR & ESG reporting"], operations: ["Field MRV intake"] },
-    aggregator: { title: "Aggregation & transport", subtitle: "Track authorised collection, movement, evidence and downstream processing records.", workspaces: ["Resource flows", "MRV", "Registry"], operations: ["Field MRV intake"] },
-    processor: { title: "Processing & recycling", subtitle: "Track processing evidence, MRV verification and eligible registry outcomes.", workspaces: ["Resource flows", "MRV", "Compliance", "Registry"], operations: ["Field MRV intake", "Credential registry"] },
+    aggregator: { title: "Aggregation & transport", subtitle: "Track authorised collection, movement, evidence and downstream processing records.", workspaces: ["Resource flows", "MRV"], operations: ["Field MRV intake"] },
+    processor: { title: "Processing & recycling", subtitle: "Track processing evidence and MRV verification within your authorised operating scope.", workspaces: ["Resource flows", "MRV", "Compliance"], operations: ["Field MRV intake"] },
     industry_generator: { title: "Industrial generator", subtitle: "Operate verified resource, compliance, EPR/ESG, carbon and reporting workflows.", workspaces: ["Resource flows", "MRV", "Compliance", "Carbon", "EPR & ESG reporting"], operations: ["Field MRV intake", "Carbon calculation"] },
     commercial_generator: { title: "Commercial generator", subtitle: "Operate verified waste, BWG, EPR and ESG reporting workflows where applicable.", workspaces: ["Resource flows", "Compliance", "EPR & ESG reporting", "MRV"], operations: ["Field MRV intake"] },
     institution_generator: { title: "Institutional generator", subtitle: "Maintain authoritative waste, BWG, compliance and ESG records.", workspaces: ["Resource flows", "Compliance", "EPR & ESG reporting", "MRV"], operations: ["Field MRV intake"] },
-    PROJECT_OWNER: { title: "Environmental project", subtitle: "Move verified activity through methodology, registry and settlement controls.", workspaces: ["MRV", "Carbon", "Registry", "Settlement"], operations: ["Field MRV intake", "Carbon calculation", "Credential registry", "Settlement"] },
+    PROJECT_OWNER: { title: "Environmental project", subtitle: "Move verified activity through methodology and registry controls; settlement remains separately permission-gated.", workspaces: ["MRV", "Carbon", "Registry"], operations: ["Field MRV intake", "Carbon calculation"] },
     ACVA_USER: { title: "Verification workspace", subtitle: "Review authoritative evidence and verification state without bypassing server controls.", workspaces: ["MRV", "Carbon", "Registry"], operations: [] },
     ccc_buyer: { title: "Carbon / ESG buyer", subtitle: "Review verified environmental value, registry state, settlement and ESG records.", workspaces: ["Carbon", "Registry", "Settlement", "EPR & ESG reporting"], operations: [] },
     epr_partner: { title: "EPR operations", subtitle: "Review applicable obligations, verified evidence and EPR/ESG reporting state.", workspaces: ["Compliance", "MRV", "EPR & ESG reporting"], operations: [] },
@@ -37,8 +38,7 @@
     const tabs = document.querySelector(".workspace-tabs");
     const operationGrid = document.querySelector(".operation-grid");
     if (!identity || !metrics || !tabs || !operationGrid) return;
-    const role = roleFromIdentity();
-    const config = roleConfig[role];
+    const config = roleConfig[roleFromIdentity()];
     if (!config) return;
 
     let panel = document.getElementById("role-command-center");
@@ -72,12 +72,10 @@
     panel.append(copy, actions);
 
     Array.from(tabs.querySelectorAll("button")).forEach((button) => {
-      const name = button.textContent?.trim() || "";
-      button.hidden = !config.workspaces.includes(name);
+      button.hidden = !config.workspaces.includes(button.textContent?.trim() || "");
     });
     Array.from(operationGrid.querySelectorAll("article")).forEach((article) => {
-      const heading = article.querySelector("h3")?.textContent?.trim() || "";
-      article.hidden = !config.operations.includes(heading);
+      article.hidden = !config.operations.includes(article.querySelector("h3")?.textContent?.trim() || "");
     });
     const operationConsole = document.querySelector(".operation-console");
     if (operationConsole) operationConsole.hidden = config.operations.length === 0;
