@@ -12,8 +12,9 @@ type ProvenanceResponse = { source?: string; syntheticData?: boolean; eligibleFo
 const config = { apiKey: import.meta.env.VITE_FIREBASE_API_KEY, authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN, projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID, appId: import.meta.env.VITE_FIREBASE_APP_ID };
 const app = getApps().some((item) => item.name === "mrv-provenance") ? getApp("mrv-provenance") : initializeApp(config, "mrv-provenance");
 const auth = getAuth(app);
-const root = document.getElementById("mrv-provenance");
-if (!root) throw new Error("MRV provenance mount missing");
+const rootElement = document.getElementById("mrv-provenance");
+if (!rootElement) throw new Error("MRV provenance mount missing");
+const root: HTMLElement = rootElement;
 const esc = (value: unknown) => String(value ?? "—").replace(/[&<>\"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[c] ?? c));
 let token = "";
 let message = "";
