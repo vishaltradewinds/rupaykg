@@ -47,17 +47,17 @@ where not exists (select 1 from regulatory_sources where authority='Ministry of 
 
 insert into regulatory_sources
 (authority,title,instrument,reference,published_on,effective_from,jurisdiction,source_url,verified_on,status,affected_module,notes)
-select 'Ministry of Environment, Forest and Climate Change','Environment (Construction and Demolition) Waste Management Rules, 2025','RULE','C&D Waste Management Rules, 2025','2025-01-01','2025-01-01','India','https://cdwm.cpcb.gov.in/','2026-09-11','IN_FORCE','compliance','CPCB C&D system supports registration, compliance submissions, EPR certificate workflows and utilization tracking under the notified regime.')
+select 'Ministry of Environment, Forest and Climate Change','Environment (Construction and Demolition) Waste Management Rules, 2025','RULE','C&D Waste Management Rules, 2025','2025-01-01','2025-01-01','India','https://cdwm.cpcb.gov.in/','2026-09-11','IN_FORCE','compliance','CPCB C&D system supports registration, compliance submissions, EPR certificate workflows and utilization tracking under the notified regime.'
 where not exists (select 1 from regulatory_sources where authority='Ministry of Environment, Forest and Climate Change' and title='Environment (Construction and Demolition) Waste Management Rules, 2025');
 
 insert into regulatory_sources
 (authority,title,instrument,reference,published_on,effective_from,jurisdiction,source_url,verified_on,status,affected_module,notes)
-select 'Securities and Exchange Board of India','BRSR - Business Responsibility and Sustainability Reporting','CIRCULAR','SEBI/HO/CFD/CMD-2/P/CIR/2021/562','2021-05-10','2022-04-01','India','https://www.sebi.gov.in/sebi_data/attachdocs/may-2021/1620655793598.pdf','2026-09-11','IN_FORCE','esg','Applicable BRSR disclosures must remain traceable to authoritative records; RupayKG is not the statutory filing authority.')
+select 'Securities and Exchange Board of India','BRSR - Business Responsibility and Sustainability Reporting','CIRCULAR','SEBI/HO/CFD/CMD-2/P/CIR/2021/562','2021-05-10','2022-04-01','India','https://www.sebi.gov.in/sebi_data/attachdocs/may-2021/1620655793598.pdf','2026-09-11','IN_FORCE','esg','Applicable BRSR disclosures must remain traceable to authoritative records; RupayKG is not the statutory filing authority.'
 where not exists (select 1 from regulatory_sources where authority='Securities and Exchange Board of India' and title='BRSR - Business Responsibility and Sustainability Reporting');
 
 insert into regulatory_sources
 (authority,title,instrument,reference,published_on,effective_from,jurisdiction,source_url,verified_on,status,affected_module,notes)
-select 'Securities and Exchange Board of India','BRSR Core - Framework for assurance and ESG disclosures for value chain','CIRCULAR','SEBI/HO/CFD/CFD-SEC-2/P/CIR/2023/122','2023-07-12','2023-07-12','India','https://www.sebi.gov.in/legal/circulars/jul-2023/brsr-core-framework-for-assurance-and-esg-disclosures-for-value-chain_73854.html','2026-09-11','IN_FORCE','esg','Track applicable BRSR Core metrics, value-chain disclosures and independent assurance state.')
+select 'Securities and Exchange Board of India','BRSR Core - Framework for assurance and ESG disclosures for value chain','CIRCULAR','SEBI/HO/CFD/CFD-SEC-2/P/CIR/2023/122','2023-07-12','2023-07-12','India','https://www.sebi.gov.in/legal/circulars/jul-2023/brsr-core-framework-for-assurance-and-esg-disclosures-for-value-chain_73854.html','2026-09-11','IN_FORCE','esg','Track applicable BRSR Core metrics, value-chain disclosures and independent assurance state.'
 where not exists (select 1 from regulatory_sources where authority='Securities and Exchange Board of India' and title='BRSR Core - Framework for assurance and ESG disclosures for value chain');
 
 -- The catalog is an implementation boundary, not statutory certification.
