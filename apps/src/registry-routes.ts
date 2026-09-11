@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type { Pool, PoolClient } from "pg";
-import { authenticate, canActForOrganization, canPerformHighRiskActionInDatabase, type AuthContext } from "./auth.js";
+import { authenticate, canActForOrganization, canPerformHighRiskActionInDatabase, hasOrganizationPermission, type AuthContext } from "./auth.js";
 
 type Reply={code:(status:number)=>{send:(body:unknown)=>unknown}};
 type Request={body:unknown;params:Record<string,string>;log:{error:(error:unknown)=>void}};
@@ -53,7 +53,10 @@ export async function registerRegistryRoutes(app:FastifyInstance,pool:Pool|null)
   });
 
   app.post("/api/v1/settlements",async(request,reply)=>{
-    const auth=await authFor(request as never,reply,pool);if(!auth||!pool)return;const b=bodyOf(request as never);const credentialId=str(b,"credentialId"),payerId=str(b,"payerId"),payeeId=str(b,"payeeId"),currency=str(b,"currency"),amount=positive(b,"amount");if(!credentialId||!payerId||!payeeId||amount===null||!currency||currency.length!==3)return reply.code(400).send({error:"credentialId, payerId, payeeId, positive amount and 3-letter currency are required"});if(!canActForOrganization(auth,payerId)&&!canActForOrganization(auth,payeeId))return reply.code(403).send({error:"Settlement party access denied",code:"ORG_FORBIDDEN"});
+    const auth=await authFor(request as never,reply,pool);if(!auth||!pool)return;const b=bodyOf(request as never);const credentialId=str(b,"credentialId"),payerId=str(b,"payerId"),payeeId=str(b,"payeeId"),currency=str(b,"currency"),amount=positive(b,"amount");if(!credentialId||!payerId||!payeeId||amount===null||!currency||currency.length!==3)return reply.code(400).send({error:"credentialId, payerId, payeeId, positive amount and 3-letter currency are required"});
+    const partyOrganizationId=canActForOrganization(auth,payerId)?payerId:canActForOrganization(auth,payeeId)?payeeId:null;
+    if(!partyOrganizationId)return reply.code(403).send({error:"Settlement party access denied",code:"ORG_FORBIDDEN"});
+    if(!await hasOrganizationPermission(pool,auth,partyOrganizationId,["settlement:authorize"]))return reply.code(403).send({error:"Explicit settlement:authorize permission is required to create a settlement",code:"SETTLEMENT_CREATE_FORBIDDEN"});
     try{return reply.code(201).send({source:"postgresql",syntheticData:false,settlement:await tx(pool,async c=>{const cr=await c.query<{status:string}>("select status from credentials where id=$1 for update",[credentialId]);if(!cr.rows[0])throw Object.assign(new Error("Credential not found"),{code:"NOT_FOUND"});if(cr.rows[0].status==="RETIRED")throw Object.assign(new Error("Retired credentials cannot create settlements"),{code:"CREDENTIAL_RETIRED"});if(!["ACTIVE","TRANSFERRED"].includes(cr.rows[0].status))throw Object.assign(new Error("Credential must have an authoritative registry state before settlement"),{code:"REGISTRY_REQUIRED"});const ev=await c.query("select id from registry_events where credential_id=$1 and event_type in('ISSUED','TRANSFERRED','RETIRED') order by created_at desc limit 1",[credentialId]);if(!ev.rows[0])throw Object.assign(new Error("Authoritative registry event required"),{code:"REGISTRY_REQUIRED"});const s=await c.query("insert into settlements(credential_id,payer_id,payee_id,amount,currency,status,external_reference) values($1,$2,$3,$4,$5,'CREATED',$6) returning *",[credentialId,payerId,payeeId,amount,currency,str(b,"externalReference")]);return s.rows[0]})})}catch(error){const code=(error as {code?:string}).code;if(code==="NOT_FOUND")return reply.code(404).send({error:"Credential not found"});if(code==="REGISTRY_REQUIRED"||code==="CREDENTIAL_RETIRED")return reply.code(409).send({error:(error as Error).message,code});request.log.error(error);return reply.code(503).send({error:"Settlement creation unavailable",syntheticData:false})}
   });
 
