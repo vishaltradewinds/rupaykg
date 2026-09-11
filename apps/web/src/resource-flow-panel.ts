@@ -46,6 +46,7 @@ if (root && configured) {
 
   function setMessage(text: string, error = false) { message.textContent = text; message.classList.toggle("error-text", error); }
   function escapeHtml(value: unknown): string { return String(value ?? "").replace(/[&<>\"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[character] ?? character)); }
+  function activeOrganizationId(): string { return window.localStorage.getItem("rupaykg.activeOrganizationId")?.trim() ?? ""; }
   async function exchange() {
     const user = firebaseAuth.currentUser;
     if (!user || !user.emailVerified) { sessionToken = ""; organizationId = ""; canRecord = false; submit.disabled = true; state.textContent = "Sign in to record"; setMessage("Verify your email and sign in with a verified stakeholder membership."); return; }
@@ -58,10 +59,13 @@ if (root && configured) {
       const meResponse = await fetch("/api/v1/auth/me", { headers: { Authorization: `Bearer ${sessionToken}`, Accept: "application/json" } });
       const me = await meResponse.json();
       if (!meResponse.ok) throw new Error(me?.error ?? "Unable to load stakeholder membership");
-      const verifiedMembership = Array.isArray(me?.memberships)
-        ? me.memberships.find((membership: { status?: string }) => membership?.status === "VERIFIED")
-        : null;
+      const verifiedMemberships = Array.isArray(me?.memberships)
+        ? me.memberships.filter((membership: { status?: string }) => membership?.status === "VERIFIED")
+        : [];
+      const requestedOrganizationId = activeOrganizationId();
+      const verifiedMembership = verifiedMemberships.find((membership: { organization_id?: string }) => membership?.organization_id === requestedOrganizationId) ?? verifiedMemberships[0] ?? null;
       organizationId = verifiedMembership?.organization_id ?? "";
+      if (requestedOrganizationId && organizationId !== requestedOrganizationId) window.localStorage.setItem("rupaykg.activeOrganizationId", organizationId);
       canRecord = Array.isArray(verifiedMembership?.permissions) && verifiedMembership.permissions.includes("waste:record");
       if (!organizationId) throw new Error("A verified organization membership is required to record resource flows.");
       state.textContent = canRecord ? "Authorized stakeholder" : "Read-only stakeholder";
@@ -102,6 +106,9 @@ if (root && configured) {
     finally { submit.disabled = !sessionToken || !organizationId || !canRecord; }
   });
   root.querySelector<HTMLButtonElement>("[data-refresh]")!.addEventListener("click", () => void exchange());
+  const organizationSelect = document.querySelector<HTMLSelectElement>('select[aria-label="Active organization"]');
+  organizationSelect?.addEventListener("change", () => void exchange());
+  window.addEventListener("storage", event => { if (event.key === "rupaykg.activeOrganizationId") void exchange(); });
   onAuthStateChanged(firebaseAuth, () => void exchange());
 } else if (root) {
   root.innerHTML = `<section class="resource-flow-card"><p class="field-help">Resource-flow intake is unavailable until the Firebase client configuration is present.</p></section>`;
