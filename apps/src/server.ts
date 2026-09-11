@@ -11,6 +11,7 @@ import { registerSyncRoutes } from "./sync-routes.js";
 import { registerWorkspaceRoutes } from "./workspace-routes.js";
 import { registerBwgRoutes } from "./bwg-routes.js";
 import { registerIntelligenceRoutes } from "./intelligence-routes.js";
+import { registerMrvRoutes } from "./mrv-routes.js";
 
 const app = Fastify({ logger: true });
 const allowedOrigins = process.env.RUPAYKG_ALLOWED_ORIGINS?.split(",").map(origin => origin.trim()).filter(Boolean) ?? [];
@@ -97,6 +98,7 @@ await registerSyncRoutes(app, pool);
 await registerWorkspaceRoutes(app, pool);
 await registerBwgRoutes(app, pool);
 await registerIntelligenceRoutes(app, pool);
+await registerMrvRoutes(app, pool);
 
 if (existsSync(webRoot)) {
   app.get("/*", async (_request, reply) => reply.sendFile("index.html"));
