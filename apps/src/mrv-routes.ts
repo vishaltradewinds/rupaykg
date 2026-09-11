@@ -24,9 +24,6 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
       syntheticData: false,
       guardian,
       hedera,
-      // Configuration/readiness is not proof of a registry-eligible MRV event.
-      // Eligibility is established only per provenance record after Guardian
-      // returns VERIFIED and Hedera returns CONSENSUS_CONFIRMED.
       registryEligibility: "REQUIRES_GUARDIAN_VERIFIED_AND_HCS_CONSENSUS_CONFIRMED_PROVENANCE",
     };
   });
@@ -78,9 +75,19 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
   });
 
   app.get("/api/v1/mrv/hedera/verify/:consensusTimestamp", async (request, reply) => {
-    const auth = await authFor(request as never, reply, pool); if (!auth) return;
+    const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
     const timestamp = (request.params as { consensusTimestamp: string }).consensusTimestamp;
-    try { return { source: "hedera-mirror-node", syntheticData: false, ...(await verifyHcsMessage(timestamp)) }; }
-    catch (error) { request.log.error(error); return reply.code(503).send({ error: "Hedera mirror-node verification unavailable", syntheticData: false }); }
+    try {
+      const provenance = await pool.query<{ activity_id: string; verification_id: string; evidence_id: string; guardian_execution_id: string; integrity_hash: string; hcs_topic_id: string | null }>(
+        "select activity_id, verification_id, evidence_id, guardian_execution_id, integrity_hash, hcs_topic_id from mrv_provenance_events where hcs_consensus_timestamp=$1 order by created_at desc limit 1",
+        [timestamp],
+      );
+      const row = provenance.rows[0];
+      if (!row) return reply.code(404).send({ error: "No persisted MRV provenance is bound to this Hedera consensus timestamp", code: "HCS_PROVENANCE_NOT_FOUND" });
+      if (!row.hcs_topic_id || row.hcs_topic_id !== (process.env.HEDERA_TOPIC_ID || "")) return reply.code(409).send({ error: "Persisted MRV provenance topic does not match the configured Hedera topic", code: "HCS_TOPIC_MISMATCH" });
+      const owner = await pool.query<{ organization_id: string }>("select organization_id from activities where id=$1", [row.activity_id]);
+      if (!owner.rows[0] || !canActForOrganization(auth, owner.rows[0].organization_id)) return reply.code(403).send({ error: "Organization access denied", code: "ORG_FORBIDDEN" });
+      return { source: "hedera-mirror-node", syntheticData: false, ...(await verifyHcsMessage(timestamp, row.hcs_topic_id, row.integrity_hash, row.activity_id, row.verification_id, row.evidence_id, row.guardian_execution_id)) };
+    } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Hedera mirror-node verification unavailable", code: "HCS_VERIFY_UNAVAILABLE", syntheticData: false }); }
   });
 }
