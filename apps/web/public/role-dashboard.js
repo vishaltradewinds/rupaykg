@@ -38,7 +38,7 @@
     section.className = "operational-console lifecycle-operations";
     section.setAttribute("aria-label", "Authoritative operational controls");
     section.innerHTML = '<div class="section-heading"><div><p class="eyebrow">AUTHORITATIVE OPERATIONS</p><h2>Execute governed lifecycle actions</h2></div><span>Existing operational panels use the same authenticated API and server-side permissions</span></div><p class="field-help">These controls preserve the existing mutation workflows: field devices, resource-flow intake, MRV provenance, compliance/EPR, ESG reporting, registry/settlement and value lifecycle. No client-side state is treated as authoritative.</p>';
-    const ids = ["field-device-management", "resource-flow-intake", "mrv-provenance", "compliance-assessment", "bwg-reporting", "esg-metrics", "registry-settlement"];
+    const ids = ["field-device-management", "resource-flow-intake", "mrv-provenance", "compliance-assessment", "bwg-reporting", "esg-metrics", "registry-settlement", "value-lifecycle-management"];
     const grid = document.createElement("div");
     grid.className = "operational-panels";
     ids.forEach(id => { const node = document.getElementById(id); if (node) grid.appendChild(node); });
