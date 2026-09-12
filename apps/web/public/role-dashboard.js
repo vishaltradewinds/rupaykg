@@ -46,6 +46,26 @@
     anchor.insertAdjacentElement("afterend", section);
   }
 
+  function scopeOperationalPanels(config) {
+    const panelWorkspaces = {
+      "field-device-management": ["Operations"],
+      "resource-flow-intake": ["Operations"],
+      "mrv-provenance": ["MRV & Evidence"],
+      "compliance-assessment": ["Compliance & EPR"],
+      "bwg-reporting": ["Compliance & EPR", "ESG / BRSR"],
+      "esg-metrics": ["ESG / BRSR"],
+      "registry-settlement": ["Registry", "Settlement"],
+      "value-lifecycle-management": ["Carbon & Value", "Registry", "Settlement"]
+    };
+    Object.entries(panelWorkspaces).forEach(([id, allowed]) => {
+      const node = document.getElementById(id);
+      if (!node) return;
+      const visible = allowed.some(workspace => config.workspaces.includes(workspace));
+      node.hidden = !visible;
+      node.setAttribute("aria-hidden", visible ? "false" : "true");
+    });
+  }
+
   function render() {
     const identity = document.querySelector(".identity-bar");
     const metrics = document.querySelector(".metrics");
@@ -55,6 +75,7 @@
     if (!config) return;
 
     mountOperationalConsole();
+    scopeOperationalPanels(config);
 
     let panel = document.getElementById("role-command-center");
     if (!panel) {
