@@ -3,6 +3,7 @@ import type { Pool } from "pg";
 import { authenticate, canActForOrganization, hasOrganizationPermission, type AuthContext } from "./auth.js";
 import { executeGuardianMrv, guardianStatus } from "./guardian-mrv.js";
 import { hederaStatus, submitHcsAnchor, verifyHcsMessage } from "./hedera-anchor.js";
+import { registerStatutoryRoutes } from "./statutory-routes.js";
 
 type Reply = { code: (status: number) => { send: (body: unknown) => unknown } };
 type Request = { body: unknown; params: Record<string, string>; log: { error: (error: unknown) => void } };
@@ -126,4 +127,6 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
       return { source: "hedera-mirror-node", syntheticData: false, ...(await verifyHcsMessage(timestamp, row.hcs_topic_id, row.integrity_hash, row.activity_id, row.verification_id, row.evidence_id, row.guardian_execution_id)) };
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Hedera mirror-node verification unavailable", code: "HCS_VERIFY_UNAVAILABLE", syntheticData: false }); }
   });
+
+  await registerStatutoryRoutes(app, pool);
 }
