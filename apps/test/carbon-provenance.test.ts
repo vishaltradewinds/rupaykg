@@ -49,6 +49,7 @@ test("carbon provenance is immutable in PostgreSQL", async (t) => {
       /carbon calculation hash cannot be changed/,
     );
   } finally {
+    await pool.query("delete from environmental_attribute_claims where activity_id=$1", [activityId]);
     await pool.query("delete from carbon_calculations where id=$1", [calculationId]);
     await pool.query("delete from methodology_versions where id=$1", [methodologyId]);
     await pool.query("delete from activities where id=$1", [activityId]);
