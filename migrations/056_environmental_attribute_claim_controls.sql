@@ -33,15 +33,18 @@ create index environmental_claim_basis_idx
 create index environmental_claim_framework_idx
   on environmental_attribute_claims(framework_code, claim_type, status);
 
--- A value claim consumes an explicit basis. Two different environmental claim types
--- cannot consume the same basis unless an authoritative framework explicitly permits
--- coexistence by using distinct basis keys. ESG reporting references are non-consuming.
+-- A value claim consumes an explicit basis. One active value claim owns that basis.
+-- A different authoritative allocation must use a distinct basis key. ESG reporting
+-- references remain non-consuming and may coexist with value claims.
 create or replace function prevent_environmental_attribute_double_claim()
 returns trigger
 language plpgsql
 as $$
 begin
   if NEW.consumption_mode = 'VALUE_CLAIM' and NEW.status = 'ACTIVE' then
+    -- Serialize competing claims for the same basis so concurrent transactions cannot
+    -- both pass the availability check.
+    perform pg_advisory_xact_lock(hashtextextended(NEW.basis_key, 0));
     if exists (
       select 1
       from environmental_attribute_claims c
@@ -49,11 +52,10 @@ begin
         and c.consumption_mode = 'VALUE_CLAIM'
         and c.status = 'ACTIVE'
         and c.id <> NEW.id
-        and c.claim_type <> NEW.claim_type
     ) then
       raise exception using
         errcode = '23514',
-        message = 'Environmental attribute basis is already consumed by a different claim type',
+        message = 'Environmental attribute basis is already consumed',
         detail = 'Use an explicitly authorized distinct basis allocation when the governing framework permits coexistence.';
     end if;
   end if;
