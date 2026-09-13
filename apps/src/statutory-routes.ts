@@ -81,10 +81,13 @@ export async function registerStatutoryRoutes(app: FastifyInstance, pool: Pool |
     const water = nonNegative(body, "waterConsumptionLpd");
     const waste = nonNegative(body, "solidWasteKgpd");
     if ([floorArea, water, waste].some(value => value === null)) return reply.code(400).send({ error: "BWG measurements must be non-negative numbers", code: "INVALID_BWG_MEASUREMENTS" });
+    const floorAreaValue = floorArea ?? undefined;
+    const waterValue = water ?? undefined;
+    const wasteValue = waste ?? undefined;
     const evidenceId = text(body, "evidenceId");
     const verificationId = text(body, "verificationId");
     if (!await evidenceBindingValid(pool, organizationId, evidenceId, verificationId)) return reply.code(400).send({ error: "Evidence and verification must be supplied together and belong to the organization", code: "STATUTORY_EVIDENCE_BINDING_INVALID" });
-    const status = bwgStatus(floorArea, water, waste);
+    const status = bwgStatus(floorAreaValue, waterValue, wasteValue);
     const note = text(body, "determinationNote");
     try {
       const result = await pool.query(
@@ -94,7 +97,7 @@ export async function registerStatutoryRoutes(app: FastifyInstance, pool: Pool |
            applicability_status,evidence_id,verification_id,determination_note,determined_by_identity_id,determined_at)
          values($1,coalesce($2::date,current_date),$3,$4,$5,20000,40000,100,'SWM_RULES_2026_S_O_388_E',$6,$7,$8,$9,$10,now())
          returning *`,
-        [organizationId, text(body, "assessmentDate"), floorArea ?? null, water ?? null, waste ?? null, status, evidenceId, verificationId, note, auth.identityId],
+        [organizationId, text(body, "assessmentDate"), floorAreaValue, waterValue, wasteValue, status, evidenceId, verificationId, note, auth.identityId],
       );
       return reply.code(201).send({ source: "postgresql", syntheticData: false, assessment: result.rows[0], statutoryBoundary: "INTERNAL_APPLICABILITY_PREPARATION_ONLY", externalRegistrationRequired: status === "APPLICABLE" });
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "BWG assessment could not be persisted", code: "STATUTORY_WRITE_UNAVAILABLE", syntheticData: false }); }
