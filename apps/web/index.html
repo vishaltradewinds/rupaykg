@@ -17,6 +17,7 @@
     <div id="mrv-provenance"></div>
     <div id="registry-settlement"></div>
     <div id="value-lifecycle-management"></div>
+    <div id="rupaykg-onboarding-governance"></div>
     <script src="/offline-operation-queue.js"></script>
     <script>
       (() => {
@@ -61,11 +62,8 @@
           select.dataset.rupaykgOrganizationBound = "true";
           select.addEventListener("change", () => { syncOrganizationSelection(select); Array.from(document.querySelectorAll("button")).find(b => b.textContent?.trim() === "Refresh")?.click(); });
         }).observe(document.documentElement, { childList: true, subtree: true });
-
         const status = document.createElement("button");
-        status.id = "rupaykg-offline-status";
-        status.type = "button";
-        status.setAttribute("aria-live", "polite");
+        status.id = "rupaykg-offline-status"; status.type = "button"; status.setAttribute("aria-live", "polite");
         Object.assign(status.style, { position: "fixed", right: "14px", bottom: "14px", zIndex: "20", maxWidth: "min(420px,calc(100vw - 28px))", padding: "9px 12px", border: "1px solid #314c63", borderRadius: "12px", background: "rgba(7,17,31,.96)", color: "#a8bbcb", font: "600 11px system-ui,sans-serif", boxShadow: "0 8px 30px rgba(0,0,0,.28)", textAlign: "left" });
         document.body.appendChild(status);
         const setStatus = (text) => { status.textContent = text; status.hidden = !text; };
@@ -88,6 +86,7 @@
     <script type="module" src="/src/resource-flow-panel.ts"></script>
     <script type="module" src="/src/compliance-panel.ts"></script>
     <script type="module" src="/src/statutory-applicability-panel.ts"></script>
+    <script type="module" src="/src/onboarding-governance-panel.ts"></script>
     <script type="module" src="/src/esg-panel.ts"></script>
     <script type="module" src="/src/bwg-reporting-panel.ts"></script>
     <script type="module" src="/src/mrv-provenance-panel.ts"></script>
