@@ -2,6 +2,7 @@ import { getApps, getApp, initializeApp } from "firebase/app";
 import { getAuth, onAuthStateChanged, signInWithRedirect, GoogleAuthProvider } from "firebase/auth";
 import "./styles.css";
 
+type Membership = { organization_id: string; status: string };
 type Verification = { id: string; evidence_id: string; activity_id: string; verifier_identity_id: string; decision: string; scope: string; rationale?: string | null; decided_at: string };
 type Evidence = { id: string; activity_id: string; evidence_type: string; status: string; captured_at: string; content_hash?: string | null };
 type Activity = { id: string; activity_type: string; status: string; occurred_at?: string | null; created_at: string };
@@ -9,6 +10,7 @@ type Provenance = { activity_id: string; verification_id: string; evidence_id: s
 type MrvStatus = { guardian?: { configured?: boolean; integration?: string; syntheticData?: boolean }; hedera?: { configured?: boolean; network?: string; topicId?: string; writeStatus?: string; consensusStatus?: string; syntheticData?: boolean }; registryEligibility?: string; syntheticData?: boolean };
 type Workspace = { source?: string; syntheticData?: boolean; data?: { activities?: Activity[]; verifications?: Verification[]; evidence?: Evidence[] } };
 type ProvenanceResponse = { source?: string; syntheticData?: boolean; eligibleForRegistry?: boolean; provenance?: Provenance[] };
+type Session = { sessionToken: string; memberships: Membership[] };
 const config = { apiKey: import.meta.env.VITE_FIREBASE_API_KEY, authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN, projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID, appId: import.meta.env.VITE_FIREBASE_APP_ID };
 const app = getApps().some((item) => item.name === "mrv-provenance") ? getApp("mrv-provenance") : initializeApp(config, "mrv-provenance");
 const auth = getAuth(app);
@@ -21,9 +23,16 @@ let message = "";
 let workspace: Workspace | null = null;
 let status: MrvStatus | null = null;
 let provenance: Provenance[] = [];
+const organizationKey = "rupaykg.activeOrganizationId";
+const activeOrganizationId = () => localStorage.getItem(organizationKey)?.trim() ?? "";
 
 async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const response = await fetch(path, { ...init, headers: { Accept: "application/json", ...(init.headers ?? {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
+  const headers = new Headers(init.headers);
+  headers.set("Accept", "application/json");
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  const organizationId = activeOrganizationId();
+  if (token && organizationId) headers.set("x-rupaykg-organization-id", organizationId);
+  const response = await fetch(path, { ...init, headers });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(body.error ?? `Request failed (${response.status})`);
   return body as T;
@@ -62,9 +71,14 @@ onAuthStateChanged(auth, async (user) => {
   try {
     if (!user.emailVerified) throw new Error("Verified email is required before MRV provenance access.");
     const idToken = await user.getIdToken(true);
-    const exchanged = await api<{ sessionToken: string }>("/api/v1/auth/exchange", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ idToken }) });
+    const exchanged = await api<{ sessionToken: string; memberships?: Membership[] }>("/api/v1/auth/exchange", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ idToken }) });
     token = exchanged.sessionToken;
+    const verified = (exchanged.memberships ?? []).filter((membership) => membership.status === "VERIFIED");
+    if (!activeOrganizationId() && verified.length) localStorage.setItem(organizationKey, verified[0].organization_id);
+    else if (activeOrganizationId() && !verified.some((membership) => membership.organization_id === activeOrganizationId()) && verified.length) localStorage.setItem(organizationKey, verified[0].organization_id);
     await load();
   } catch (error) { token = ""; message = error instanceof Error ? error.message : "Unable to authenticate MRV provenance."; render(); }
 });
+
+window.addEventListener("storage", (event) => { if (event.key === organizationKey) void load(); });
 render();
