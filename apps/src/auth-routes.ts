@@ -15,6 +15,7 @@ const roleKeys = new Set<StakeholderRoleKey>(STAKEHOLDER_OPTIONS.map(([key]) => 
 const hash = (token: string) => createHash("sha256").update(token).digest("hex");
 const bodyOf = (request: { body: unknown }): Body => request.body && typeof request.body === "object" ? request.body as Body : {};
 async function requireAuth(request: any, reply: any, pool: Pool | null): Promise<AuthContext | null> { if (!pool) { reply.code(503).send({ error: "Database unavailable", code: "DATABASE_UNAVAILABLE" }); return null; } const auth = await authenticate(request, pool); if (!auth) { reply.code(401).send({ error: "Authenticated session required", code: "AUTH_REQUIRED" }); return null; } return auth; }
+async function isPlatformReviewer(pool: Pool, identityId: string): Promise<boolean> { const allowed = await pool.query<{ ok: boolean }>(`select exists(select 1 from organization_memberships om join roles r on r.id=om.role_id where om.identity_id=$1 and om.status='VERIFIED' and r.name in('platform_admin','super_admin')) ok`, [identityId]); return allowed.rows[0]?.ok === true; }
 
 export async function registerAuthRoutes(app: FastifyInstance, pool: Pool | null): Promise<void> {
   app.post("/api/v1/auth/exchange", async (request, reply) => {
@@ -31,11 +32,11 @@ export async function registerAuthRoutes(app: FastifyInstance, pool: Pool | null
       const sessionToken = issueOpaqueToken();
       await pool.query(`insert into identity_sessions(identity_id,expires_at,token_hash,request_context) values($1,now()+interval '8 hours',$2,$3)`, [identityRow.id, hash(sessionToken), JSON.stringify({ provider: "firebase", auth_time: claims.auth_time })]);
       const memberships = await pool.query(`select om.organization_id,om.role_id,om.status,r.name role_name,r.permissions,o.name organization_name,o.organization_type,can_assess_epr(om.identity_id,om.organization_id) as can_assess_epr,can_write_esg(om.identity_id,om.organization_id) as can_write_esg from organization_memberships om join roles r on r.id=om.role_id join organizations o on o.id=om.organization_id where om.identity_id=$1 order by om.created_at`, [identityRow.id]);
-      const applications = await pool.query(`select id,organization_id,requested_role_key,requested_organization_type,status,created_at,reviewed_at from stakeholder_applications where identity_id=$1 order by created_at desc`, [identityRow.id]);
+      const applications = await pool.query(`select id,organization_id,requested_role_key,requested_organization_type,status,created_at,reviewed_at,review_note from stakeholder_applications where identity_id=$1 order by created_at desc`, [identityRow.id]);
       return { source: "postgresql", syntheticData: false, sessionToken, expiresInSeconds: 28800, identity: { id: identityRow.id, externalSubject: claims.sub, displayName: claims.name ?? claims.email, email: claims.email, emailVerified: true }, memberships: memberships.rows, applications: applications.rows };
     } catch (error) { request.log.error(error); return reply.code(401).send({ error: "Firebase identity could not be verified", code: "IDENTITY_VERIFICATION_FAILED" }); }
   });
-  app.get("/api/v1/auth/me", async (request, reply) => { const auth = await requireAuth(request, reply, pool); if (!auth || !pool) return; const [identity, memberships, applications] = await Promise.all([pool.query(`select id,display_name,email,status from identities where id=$1`, [auth.identityId]), pool.query(`select om.organization_id,om.role_id,om.status,r.name role_name,r.permissions,o.name organization_name,o.organization_type,can_assess_epr(om.identity_id,om.organization_id) as can_assess_epr,can_write_esg(om.identity_id,om.organization_id) as can_write_esg from organization_memberships om join roles r on r.id=om.role_id join organizations o on o.id=om.organization_id where om.identity_id=$1`, [auth.identityId]), pool.query(`select id,organization_id,requested_role_key,requested_organization_type,status,created_at,reviewed_at from stakeholder_applications where identity_id=$1 order by created_at desc`, [auth.identityId])]); return { source: "postgresql", syntheticData: false, identity: identity.rows[0] ?? null, memberships: memberships.rows, applications: applications.rows }; });
+  app.get("/api/v1/auth/me", async (request, reply) => { const auth = await requireAuth(request, reply, pool); if (!auth || !pool) return; const [identity, memberships, applications] = await Promise.all([pool.query(`select id,display_name,email,status from identities where id=$1`, [auth.identityId]), pool.query(`select om.organization_id,om.role_id,om.status,r.name role_name,r.permissions,o.name organization_name,o.organization_type,can_assess_epr(om.identity_id,om.organization_id) as can_assess_epr,can_write_esg(om.identity_id,om.organization_id) as can_write_esg from organization_memberships om join roles r on r.id=om.role_id join organizations o on o.id=om.organization_id where om.identity_id=$1`, [auth.identityId]), pool.query(`select id,organization_id,requested_role_key,requested_organization_type,status,created_at,reviewed_at,review_note from stakeholder_applications where identity_id=$1 order by created_at desc`, [auth.identityId])]); return { source: "postgresql", syntheticData: false, identity: identity.rows[0] ?? null, memberships: memberships.rows, applications: applications.rows }; });
   app.post("/api/v1/auth/logout", async (request, reply) => { if (!pool) return reply.code(503).send({ error: "Database unavailable", code: "DATABASE_UNAVAILABLE" }); const header = request.headers.authorization; if (header?.startsWith("Bearer ")) await pool.query("update identity_sessions set revoked_at=now() where token_hash=$1 and revoked_at is null", [hash(header.slice(7).trim())]); return reply.code(204).send(); });
   app.get("/api/v1/onboarding/options", async () => ({ source: "application", syntheticData: false, stakeholders: STAKEHOLDER_OPTIONS.map(([key, label, organizationType]) => ({ key, label, organizationType })) }));
   app.post("/api/v1/onboarding/applications", async (request, reply) => {
@@ -56,28 +57,58 @@ export async function registerAuthRoutes(app: FastifyInstance, pool: Pool | null
       await client.query("commit"); return reply.code(201).send({ source: "postgresql", syntheticData: false, application: application.rows[0], message: "Application submitted. A verified platform authority must approve the organization membership before operational access is granted." });
     } catch (error) { await client.query("rollback"); request.log.error(error); return reply.code(503).send({ error: "Stakeholder application could not be created", code: "ONBOARDING_UNAVAILABLE" }); } finally { client.release(); }
   });
-  app.get("/api/v1/onboarding/applications", async (request, reply) => { const auth = await requireAuth(request, reply, pool); if (!auth || !pool) return; const rows = await pool.query(`select id,organization_id,requested_role_key,requested_organization_type,geography_id,status,applicant_note,created_at,reviewed_at from stakeholder_applications where identity_id=$1 order by created_at desc` , [auth.identityId]); return { source: "postgresql", syntheticData: false, applications: rows.rows }; });
+  app.get("/api/v1/onboarding/applications", async (request, reply) => { const auth = await requireAuth(request, reply, pool); if (!auth || !pool) return; const rows = await pool.query(`select id,organization_id,requested_role_key,requested_organization_type,geography_id,status,applicant_note,created_at,reviewed_at,review_note from stakeholder_applications where identity_id=$1 order by created_at desc` , [auth.identityId]); return { source: "postgresql", syntheticData: false, applications: rows.rows }; });
+  app.post("/api/v1/onboarding/applications/:applicationId/withdraw", async (request, reply) => {
+    const auth = await requireAuth(request, reply, pool); if (!auth || !pool) return;
+    const id = (request.params as { applicationId: string }).applicationId;
+    const client = await pool.connect();
+    try {
+      await client.query("begin");
+      const result = await client.query<{ organization_id: string }>(`update stakeholder_applications set status='WITHDRAWN',reviewed_at=now(),review_note=null where id=$1 and identity_id=$2 and status='PENDING' returning organization_id`, [id, auth.identityId]);
+      const row = result.rows[0]; if (!row) { await client.query("rollback"); return reply.code(404).send({ error: "Pending stakeholder application not found", code: "APPLICATION_NOT_FOUND" }); }
+      await client.query("update organization_memberships set status='WITHDRAWN' where organization_id=$1 and identity_id=$2 and status='PENDING'", [row.organization_id, auth.identityId]);
+      await client.query("update organization_geography_scopes set status='WITHDRAWN' where organization_id=$1 and status='PENDING'", [row.organization_id]);
+      await client.query("update organizations set status='WITHDRAWN' where id=$1 and status='PENDING'", [row.organization_id]);
+      await client.query("commit"); return { source: "postgresql", syntheticData: false, status: "WITHDRAWN", organizationId: row.organization_id };
+    } catch (error) { await client.query("rollback"); request.log.error(error); return reply.code(503).send({ error: "Stakeholder withdrawal could not be finalized", code: "WITHDRAWAL_UNAVAILABLE" }); } finally { client.release(); }
+  });
   app.get("/api/v1/onboarding/review-queue", async (request, reply) => {
     const auth = await requireAuth(request, reply, pool); if (!auth || !pool) return;
-    const allowed = await pool.query<{ ok: boolean }>(`select exists(select 1 from organization_memberships om join roles r on r.id=om.role_id where om.identity_id=$1 and om.status='VERIFIED' and r.name in('platform_admin','super_admin')) ok`, [auth.identityId]);
-    if (!allowed.rows[0]?.ok) return reply.code(403).send({ error: "Verified platform_admin or super_admin role is required", code: "STAKEHOLDER_APPROVAL_FORBIDDEN" });
-    const rows = await pool.query(`select sa.id,sa.organization_id,sa.requested_role_key,sa.requested_organization_type,sa.geography_id,g.name geography_name,g.kind geography_kind,sa.status,sa.applicant_note,sa.created_at,sa.reviewed_at,i.id applicant_identity_id,i.display_name applicant_name,i.email applicant_email,o.name organization_name,o.organization_type from stakeholder_applications sa join identities i on i.id=sa.identity_id join organizations o on o.id=sa.organization_id left join geography g on g.id=sa.geography_id where sa.status='PENDING' order by sa.created_at asc`);
+    if (!await isPlatformReviewer(pool, auth.identityId)) return reply.code(403).send({ error: "Verified platform_admin or super_admin role is required", code: "STAKEHOLDER_APPROVAL_FORBIDDEN" });
+    const rows = await pool.query(`select sa.id,sa.organization_id,sa.requested_role_key,sa.requested_organization_type,sa.geography_id,g.name geography_name,g.kind geography_kind,sa.status,sa.applicant_note,sa.review_note,sa.created_at,sa.reviewed_at,i.id applicant_identity_id,i.display_name applicant_name,i.email applicant_email,o.name organization_name,o.organization_type from stakeholder_applications sa join identities i on i.id=sa.identity_id join organizations o on o.id=sa.organization_id left join geography g on g.id=sa.geography_id where sa.status='PENDING' order by sa.created_at asc`);
     return { source: "postgresql", syntheticData: false, applications: rows.rows };
   });
   app.post("/api/v1/onboarding/applications/:applicationId/approve", async (request, reply) => {
     const auth = await requireAuth(request, reply, pool); if (!auth || !pool) return;
     const id = (request.params as { applicationId: string }).applicationId;
-    const allowed = await pool.query<{ ok: boolean }>(`select exists(select 1 from organization_memberships om join roles r on r.id=om.role_id where om.identity_id=$1 and om.status='VERIFIED' and r.name in('platform_admin','super_admin')) ok`, [auth.identityId]);
-    if (!allowed.rows[0]?.ok) return reply.code(403).send({ error: "Verified platform_admin or super_admin role is required", code: "STAKEHOLDER_APPROVAL_FORBIDDEN" });
+    if (!await isPlatformReviewer(pool, auth.identityId)) return reply.code(403).send({ error: "Verified platform_admin or super_admin role is required", code: "STAKEHOLDER_APPROVAL_FORBIDDEN" });
+    const reviewNote = text(bodyOf(request), "reviewNote");
     const client = await pool.connect();
     try {
       await client.query("begin");
-      const result = await client.query<{ organization_id: string; role_id: string; identity_id: string }>(`update stakeholder_applications set status='APPROVED',reviewed_by_identity_id=$1,reviewed_at=now() where id=$2 and status='PENDING' and identity_id<>$1 returning organization_id,role_id,identity_id`, [auth.identityId, id]);
+      const result = await client.query<{ organization_id: string; role_id: string; identity_id: string }>(`update stakeholder_applications set status='APPROVED',reviewed_by_identity_id=$1,reviewed_at=now(),review_note=$3 where id=$2 and status='PENDING' and identity_id<>$1 returning organization_id,role_id,identity_id`, [auth.identityId, id, reviewNote]);
       const resultRow = result.rows[0]; if (!resultRow) { await client.query("rollback"); return reply.code(404).send({ error: "Pending stakeholder application not found or self-approval is forbidden", code: "APPLICATION_NOT_FOUND" }); }
       await client.query("update organization_memberships set status='VERIFIED' where organization_id=$1 and role_id=$2 and identity_id=$3", [resultRow.organization_id, resultRow.role_id, resultRow.identity_id]);
       await client.query("update organizations set status='VERIFIED' where id=$1", [resultRow.organization_id]);
       await client.query("update organization_geography_scopes set status='VERIFIED' where organization_id=$1", [resultRow.organization_id]);
       await client.query("commit"); return { source: "postgresql", syntheticData: false, status: "APPROVED", organizationId: resultRow.organization_id };
     } catch (error) { await client.query("rollback"); request.log.error(error); return reply.code(503).send({ error: "Stakeholder approval could not be finalized", code: "APPROVAL_UNAVAILABLE" }); } finally { client.release(); }
+  });
+  app.post("/api/v1/onboarding/applications/:applicationId/reject", async (request, reply) => {
+    const auth = await requireAuth(request, reply, pool); if (!auth || !pool) return;
+    const id = (request.params as { applicationId: string }).applicationId;
+    if (!await isPlatformReviewer(pool, auth.identityId)) return reply.code(403).send({ error: "Verified platform_admin or super_admin role is required", code: "STAKEHOLDER_REJECTION_FORBIDDEN" });
+    const reviewNote = text(bodyOf(request), "reviewNote");
+    if (!reviewNote) return reply.code(400).send({ error: "reviewNote is required when rejecting an application", code: "REVIEW_NOTE_REQUIRED" });
+    const client = await pool.connect();
+    try {
+      await client.query("begin");
+      const result = await client.query<{ organization_id: string; identity_id: string }>(`update stakeholder_applications set status='REJECTED',reviewed_by_identity_id=$1,reviewed_at=now(),review_note=$3 where id=$2 and status='PENDING' and identity_id<>$1 returning organization_id,identity_id`, [auth.identityId, id, reviewNote]);
+      const row = result.rows[0]; if (!row) { await client.query("rollback"); return reply.code(404).send({ error: "Pending stakeholder application not found or self-rejection is forbidden", code: "APPLICATION_NOT_FOUND" }); }
+      await client.query("update organization_memberships set status='REJECTED' where organization_id=$1 and identity_id=$2 and status='PENDING'", [row.organization_id, row.identity_id]);
+      await client.query("update organization_geography_scopes set status='REJECTED' where organization_id=$1 and status='PENDING'", [row.organization_id]);
+      await client.query("update organizations set status='REJECTED' where id=$1 and status='PENDING'", [row.organization_id]);
+      await client.query("commit"); return { source: "postgresql", syntheticData: false, status: "REJECTED", organizationId: row.organization_id };
+    } catch (error) { await client.query("rollback"); request.log.error(error); return reply.code(503).send({ error: "Stakeholder rejection could not be finalized", code: "REJECTION_UNAVAILABLE" }); } finally { client.release(); }
   });
 }
