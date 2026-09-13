@@ -68,6 +68,7 @@ export async function registerStatutoryRoutes(app: FastifyInstance, pool: Pool |
     const water = nonNegative(body, "waterConsumptionLpd");
     const waste = nonNegative(body, "solidWasteKgpd");
     if ([floorArea, water, waste].some(value => value === null)) return reply.code(400).send({ error: "BWG measurements must be non-negative numbers", code: "INVALID_BWG_MEASUREMENTS" });
+    if (floorArea === null || water === null || waste === null) return reply.code(400).send({ error: "BWG measurements must be non-negative numbers", code: "INVALID_BWG_MEASUREMENTS" });
     const evidenceId = text(body, "evidenceId");
     const verificationId = text(body, "verificationId");
     if (!await evidenceBindingValid(pool, organizationId, evidenceId, verificationId)) return reply.code(400).send({ error: "Evidence and verification must be supplied together and belong to the organization", code: "STATUTORY_EVIDENCE_BINDING_INVALID" });
