@@ -66,9 +66,9 @@ export async function registerAuthRoutes(app: FastifyInstance, pool: Pool | null
       await client.query("begin");
       const result = await client.query<{ organization_id: string }>(`update stakeholder_applications set status='WITHDRAWN',reviewed_at=now(),review_note=null where id=$1 and identity_id=$2 and status='PENDING' returning organization_id`, [id, auth.identityId]);
       const row = result.rows[0]; if (!row) { await client.query("rollback"); return reply.code(404).send({ error: "Pending stakeholder application not found", code: "APPLICATION_NOT_FOUND" }); }
-      await client.query("update organization_memberships set status='WITHDRAWN' where organization_id=$1 and identity_id=$2 and status='PENDING'", [row.organization_id, auth.identityId]);
-      await client.query("update organization_geography_scopes set status='WITHDRAWN' where organization_id=$1 and status='PENDING'", [row.organization_id]);
-      await client.query("update organizations set status='WITHDRAWN' where id=$1 and status='PENDING'", [row.organization_id]);
+      await client.query("update organization_memberships set status='REJECTED' where organization_id=$1 and identity_id=$2 and status='PENDING'", [row.organization_id, auth.identityId]);
+      await client.query("update organization_geography_scopes set status='REJECTED' where organization_id=$1 and status='PENDING'", [row.organization_id]);
+      await client.query("update organizations set status='REJECTED' where id=$1 and status='PENDING'", [row.organization_id]);
       await client.query("commit"); return { source: "postgresql", syntheticData: false, status: "WITHDRAWN", organizationId: row.organization_id };
     } catch (error) { await client.query("rollback"); request.log.error(error); return reply.code(503).send({ error: "Stakeholder withdrawal could not be finalized", code: "WITHDRAWAL_UNAVAILABLE" }); } finally { client.release(); }
   });
