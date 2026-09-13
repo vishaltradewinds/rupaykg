@@ -61,6 +61,10 @@ The UI stakeholder model currently covers household/citizen, farmer, Safai Mitra
 
 Server-side organization membership, permission, and geography checks remain the security boundary. Client-side role labels are presentation only.
 
+## Onboarding governance
+
+Organization-backed stakeholder onboarding now requires legal identity fields and a non-sensitive evidence reference/content hash. The backend stores these in the organization legal-verification model and keeps verification separate from operational membership. Platform-admin/super-admin reviewers must complete legal verification before approving organization-backed operational access. This is an internal governance control and does not represent CPCB registration, statutory approval, SEBI acceptance, or any other external authority determination.
+
 ## EPR / regulatory boundary
 
 The UI may prepare and expose evidence-backed EPR obligations, quantities, certificates/transactions received from an actual external authority, and reporting readiness. It must not label an internal RupayKG record as a CPCB certificate or regulatory acceptance unless the external authority actually issued or accepted it.
