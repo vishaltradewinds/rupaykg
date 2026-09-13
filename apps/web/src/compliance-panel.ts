@@ -17,17 +17,28 @@ type Obligation = {
 type RegulatorySource = { authority: string; title: string; instrument: string; source_url: string; verified_on: string; status: string; affected_module: string; notes: string };
 type Membership = { organization_id: string; status: string; can_assess_epr?: boolean; permissions?: string[] };
 type Me = { memberships: Membership[] };
+type Exchange = { sessionToken: string; memberships?: Membership[] };
 type PanelState = { status: string; message: string; obligations: Obligation[]; canAssess: boolean; eprSource: RegulatorySource | null };
 const firebaseConfig = { apiKey: import.meta.env.VITE_FIREBASE_API_KEY, authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN, projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID, appId: import.meta.env.VITE_FIREBASE_APP_ID };
 const firebaseConfigured = Object.values(firebaseConfig).every(Boolean);
 const firebaseAuth = firebaseConfigured ? getAuth(initializeApp(firebaseConfig, "compliance-assessment")) : null;
 const root = document.getElementById("compliance-assessment");
-async function api<T>(path: string, token = "", init: RequestInit = {}): Promise<T> { const headers = new Headers(init.headers); headers.set("Accept", "application/json"); if (token) headers.set("Authorization", `Bearer ${token}`); const response = await fetch(path, { ...init, headers }); const body = await response.json().catch(() => ({})); if (!response.ok) throw new Error(body?.error ?? `Request failed (${response.status})`); return body as T; }
+const organizationKey = "rupaykg.activeOrganizationId";
+function activeOrganizationId(): string { return window.localStorage.getItem(organizationKey)?.trim() ?? ""; }
+function persistOrganization(id: string): void { if (id) window.localStorage.setItem(organizationKey, id); }
+function reconcileOrganization(memberships: Membership[]): string {
+  const verified = memberships.filter((candidate) => candidate.status === "VERIFIED");
+  const selected = activeOrganizationId();
+  const valid = verified.find((candidate) => candidate.organization_id === selected)?.organization_id ?? verified[0]?.organization_id ?? "";
+  if (valid && valid !== selected) persistOrganization(valid);
+  return valid;
+}
+async function api<T>(path: string, token = "", init: RequestInit = {}): Promise<T> { const headers = new Headers(init.headers); headers.set("Accept", "application/json"); if (token) headers.set("Authorization", `Bearer ${token}`); const org = activeOrganizationId(); if (token && org) headers.set("X-RupayKG-Organization-Id", org); const response = await fetch(path, { ...init, headers }); const body = await response.json().catch(() => ({})); if (!response.ok) throw new Error(body?.error ?? `Request failed (${response.status})`); return body as T; }
 function text(value: unknown) { return value === null || value === undefined || value === "" ? "—" : String(value); }
-function escapeHtml(value: unknown) { return text(value).replace(/[&<>\"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" })[character] ?? character); }
+function escapeHtml(value: unknown) { return text(value).replace(/[&<>\"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[character] ?? character)); }
 function safeHttpUrl(value: unknown) { try { const url = new URL(String(value)); return url.protocol === "https:" ? url.toString() : null; } catch { return null; } }
 function formatDate(value: string) { const date = new Date(value); return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString(); }
-function selectedOrganizationId(): string { return window.localStorage.getItem("rupaykg.activeOrganizationId")?.trim() ?? ""; }
+function selectedOrganizationId(): string { return activeOrganizationId(); }
 function selectMembership(me: Me): Membership | null { const verified = me.memberships.filter((candidate) => candidate.status === "VERIFIED"); const selected = selectedOrganizationId(); return verified.find((candidate) => candidate.organization_id === selected) ?? verified[0] ?? null; }
 if (root && firebaseAuth) {
   const render = (state: PanelState) => {
@@ -41,7 +52,8 @@ if (root && firebaseAuth) {
     const button = root.querySelector<HTMLButtonElement>(`[data-assess="${id}"]`); if (button) button.disabled = true;
     try {
       const user = firebaseAuth.currentUser; if (!user || !user.emailVerified) throw new Error("Verified Firebase sign-in is required.");
-      const idToken = await user.getIdToken(true); const session = await api<{ sessionToken: string }>("/api/v1/auth/exchange", "", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ idToken }) });
+      const idToken = await user.getIdToken(true); const session = await api<Exchange>("/api/v1/auth/exchange", "", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ idToken }) });
+      reconcileOrganization(session.memberships ?? []);
       const me = await api<Me>("/api/v1/auth/me", session.sessionToken); const membership = selectMembership(me); if (!membership) throw new Error("A verified organization membership is required.");
       if (membership.can_assess_epr !== true) throw new Error("EPR assessment permission is not granted for the active organization membership.");
       const result = await api<{ assessment?: { status?: string; requiredQuantity?: number | string } }>(`/api/v1/epr/obligations/${id}/assess`, session.sessionToken, { method: "POST" });
@@ -53,7 +65,8 @@ if (root && firebaseAuth) {
   const load = async (user: User) => {
     try {
       if (!user.emailVerified) throw new Error("Verify your email address before using compliance assessment.");
-      const idToken = await user.getIdToken(true); const session = await api<{ sessionToken: string }>("/api/v1/auth/exchange", "", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ idToken }) });
+      const idToken = await user.getIdToken(true); const session = await api<Exchange>("/api/v1/auth/exchange", "", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ idToken }) });
+      reconcileOrganization(session.memberships ?? []);
       const me = await api<Me>("/api/v1/auth/me", session.sessionToken); const membership = selectMembership(me); if (!membership) throw new Error("A verified organization membership is required.");
       const [workspace, sources] = await Promise.all([api<{ data: { obligations: Obligation[] } }>("/api/v1/workspaces/compliance", session.sessionToken), api<{ sources: RegulatorySource[] }>("/api/v1/regulatory/sources")]);
       const eprSource = (sources.sources ?? []).find((source) => source.affected_module === "compliance" && source.title.toLowerCase().includes("common epr portal") && source.status === "IN_FORCE") ?? null;
@@ -62,6 +75,6 @@ if (root && firebaseAuth) {
   };
   onAuthStateChanged(firebaseAuth, (user) => { if (user) void load(user); else render({ status: "SIGN IN REQUIRED", message: "Sign in to load authorized compliance obligations.", obligations: [], canAssess: false, eprSource: null }); });
   document.querySelector<HTMLSelectElement>('select[aria-label="Active organization"]')?.addEventListener("change", () => { const user = firebaseAuth.currentUser; if (user) void load(user); });
-  window.addEventListener("storage", (event) => { if (event.key === "rupaykg.activeOrganizationId") { const user = firebaseAuth.currentUser; if (user) void load(user); } });
+  window.addEventListener("storage", (event) => { if (event.key === organizationKey) { const user = firebaseAuth.currentUser; if (user) void load(user); } });
 }
 // Keep the authoritative compliance panel on the push-CI path so the complete production gate runs.
