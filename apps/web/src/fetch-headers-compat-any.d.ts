@@ -1,4 +1,7 @@
 // Browser fetch compatibility overload for conditionally constructed headers.
-// This affects only TypeScript's DOM signature; runtime headers and authorization
-// values remain exactly as constructed by the application.
-declare function fetch(input: RequestInfo | URL, init?: any): Promise<Response>;
+// Keep the overload limited to the browser RequestInit contract; it exists only
+// because some independently mounted panels build plain string header maps.
+declare function fetch(
+  input: RequestInfo | URL,
+  init?: RequestInit | (Omit<RequestInit, "headers"> & { headers?: Record<string, string> })
+): Promise<Response>;
