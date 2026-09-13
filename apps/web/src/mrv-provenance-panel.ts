@@ -1,6 +1,7 @@
 import { getApps, getApp, initializeApp } from "firebase/app";
 import { getAuth, onAuthStateChanged, signInWithRedirect, GoogleAuthProvider } from "firebase/auth";
 import "./styles.css";
+import "./multilingual-national";
 
 type Membership = { organization_id: string; status: string };
 type Verification = { id: string; evidence_id: string; activity_id: string; verifier_identity_id: string; decision: string; scope: string; rationale?: string | null; decided_at: string };
