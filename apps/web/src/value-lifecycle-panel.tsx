@@ -39,12 +39,22 @@ function installMutationBridge() {
   };
 }
 
+function verifiedOrganizationId(memberships: Me["memberships"]) {
+  const verified = memberships.filter(m => m.status === "VERIFIED");
+  const stored = localStorage.getItem(organizationStorageKey) ?? "";
+  return verified.some(m => m.organization_id === stored) ? stored : verified[0]?.organization_id ?? "";
+}
+
 async function sessionFor(user: User) {
   const idToken = await user.getIdToken(true);
   const response = await fetch("/api/v1/auth/exchange", { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify({ idToken }) });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(body?.error ?? `Authentication failed (${response.status})`);
-  return String(body.sessionToken);
+  const memberships = Array.isArray(body?.memberships) ? body.memberships as Me["memberships"] : [];
+  const organizationId = verifiedOrganizationId(memberships);
+  if (organizationId) localStorage.setItem(organizationStorageKey, organizationId);
+  else localStorage.removeItem(organizationStorageKey);
+  return { token: String(body.sessionToken), organizationId };
 }
 
 function Field({ label, children, help }: { label: string; children: React.ReactNode; help?: string }) {
@@ -93,20 +103,28 @@ function Panel() {
   const canSettle = ["SETTLE_FUNDS", "settlement:settle", "settlement.settle"].some(p => permissions.has(p));
 
   const api = React.useCallback(async <T,>(path: string, init: RequestInit): Promise<T> => {
-    const response = await fetch(path, { ...init, headers: { Accept: "application/json", Authorization: `Bearer ${token}`, "Content-Type": "application/json", ...(init.headers ?? {}) } });
+    const headers = new Headers(init.headers);
+    headers.set("Accept", "application/json");
+    headers.set("Authorization", `Bearer ${token}`);
+    headers.set("Content-Type", "application/json");
+    if (organizationId) headers.set("X-RupayKG-Organization-Id", organizationId);
+    const response = await fetch(path, { ...init, headers });
     const body = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(body?.error ?? `Request failed (${response.status})`);
     return body as T;
-  }, [token]);
+  }, [token, organizationId]);
 
   React.useEffect(() => { installMutationBridge(); }, []);
 
   React.useEffect(() => {
-    const sync = () => setOrganizationId(localStorage.getItem(organizationStorageKey) ?? "");
+    const sync = () => {
+      const stored = localStorage.getItem(organizationStorageKey) ?? "";
+      if (stored && me?.memberships.some(m => m.status === "VERIFIED" && m.organization_id === stored)) setOrganizationId(stored);
+    };
     window.addEventListener("storage", sync);
     const timer = window.setInterval(sync, 1000);
     return () => { window.removeEventListener("storage", sync); window.clearInterval(timer); };
-  }, []);
+  }, [me]);
 
   React.useEffect(() => {
     const onMutation = (event: Event) => {
@@ -142,15 +160,21 @@ function Panel() {
     if (!firebaseAuth) return;
     return onAuthStateChanged(firebaseAuth, async currentUser => {
       setUser(currentUser);
-      if (!currentUser) { setToken(""); setMe(null); return; }
+      if (!currentUser) { setToken(""); setMe(null); localStorage.removeItem(organizationStorageKey); return; }
       try {
         const session = await sessionFor(currentUser);
-        setToken(session);
-        const response = await fetch("/api/v1/auth/me", { headers: { Authorization: `Bearer ${session}`, Accept: "application/json" } });
+        setToken(session.token);
+        setOrganizationId(session.organizationId);
+        const headers = new Headers({ Authorization: `Bearer ${session.token}`, Accept: "application/json" });
+        if (session.organizationId) headers.set("X-RupayKG-Organization-Id", session.organizationId);
+        const response = await fetch("/api/v1/auth/me", { headers });
         const body = await response.json().catch(() => ({})) as Me;
         if (!response.ok) throw new Error((body as any)?.error ?? "Unable to load authenticated organization context.");
+        const resolvedOrganizationId = verifiedOrganizationId(body.memberships ?? []);
+        if (resolvedOrganizationId) localStorage.setItem(organizationStorageKey, resolvedOrganizationId);
+        else localStorage.removeItem(organizationStorageKey);
+        setOrganizationId(resolvedOrganizationId);
         setMe(body);
-        setOrganizationId(localStorage.getItem(organizationStorageKey) ?? body.memberships.find(m => m.status === "VERIFIED")?.organization_id ?? "");
       } catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to load lifecycle controls."); }
     });
   }, []);
