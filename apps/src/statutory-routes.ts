@@ -20,39 +20,26 @@ async function authFor(request: Request, reply: Reply, pool: Pool | null): Promi
     return auth;
   } catch (error) {
     request.log.error(error);
-    reply.code(503).send({ error: "Authentication service unavailable", code: "AUTH_UNAVAILABLE" });
-    return null;
+    reply.code(503).send({ error: "Authentication service unavailable", code: "AUTH_UNAVAILABLE" }); return null;
   }
 }
 
 async function organizationFor(auth: AuthContext, pool: Pool, request: Request, reply: Reply): Promise<string | null> {
   const requested = text(bodyOf(request), "organizationId") || auth.activeOrganizationId || auth.memberships[0]?.organization_id || null;
-  if (!requested || !canActForOrganization(auth, requested)) {
-    reply.code(403).send({ error: "No verified membership for organization", code: "ORG_FORBIDDEN" });
-    return null;
-  }
+  if (!requested || !canActForOrganization(auth, requested)) { reply.code(403).send({ error: "No verified membership for organization", code: "ORG_FORBIDDEN" }); return null; }
   return requested;
 }
 
 async function evidenceBindingValid(pool: Pool, organizationId: string, evidenceId: string | null, verificationId: string | null): Promise<boolean> {
   if (!evidenceId && !verificationId) return true;
   if (!evidenceId || !verificationId) return false;
-  const result = await pool.query<{ ok: boolean }>(
-    `select exists(
-       select 1 from evidence e
-       join activities a on a.id=e.activity_id
-       join verifications v on v.id=$3 and v.activity_id=a.id
-       where e.id=$2 and a.organization_id=$1
-     ) ok`,
-    [organizationId, evidenceId, verificationId],
-  );
+  const result = await pool.query<{ ok: boolean }>(`select exists(select 1 from evidence e join activities a on a.id=e.activity_id join verifications v on v.id=$3 and v.activity_id=a.id where e.id=$2 and a.organization_id=$1) ok`, [organizationId, evidenceId, verificationId]);
   return result.rows[0]?.ok === true;
 }
 
 function bwgStatus(floorArea: number | null | undefined, water: number | null | undefined, waste: number | null | undefined): "UNKNOWN" | "UNDER_REVIEW" | "APPLICABLE" | "NOT_APPLICABLE" {
   if ([floorArea, water, waste].some(value => value === null)) return "UNDER_REVIEW";
-  const complete = floorArea !== undefined && water !== undefined && waste !== undefined;
-  if (!complete) return "UNKNOWN";
+  if (floorArea === undefined || water === undefined || waste === undefined) return "UNKNOWN";
   return floorArea >= 20000 || water >= 40000 || waste >= 100 ? "APPLICABLE" : "NOT_APPLICABLE";
 }
 
@@ -87,15 +74,7 @@ export async function registerStatutoryRoutes(app: FastifyInstance, pool: Pool |
     const status = bwgStatus(floorArea, water, waste);
     const note = text(body, "determinationNote");
     try {
-      const result = await pool.query(
-        `insert into organization_bwg_assessments
-          (organization_id,assessment_date,floor_area_sq_m,water_consumption_lpd,solid_waste_kgpd,
-           floor_area_threshold_sq_m,water_threshold_lpd,waste_threshold_kgpd,threshold_basis,
-           applicability_status,evidence_id,verification_id,determination_note,determined_by_identity_id,determined_at)
-         values($1,coalesce($2::date,current_date),$3,$4,$5,20000,40000,100,'SWM_RULES_2026_S_O_388_E',$6,$7,$8,$9,$10,now())
-         returning *`,
-        [organizationId, text(body, "assessmentDate"), floorArea ?? null, water ?? null, waste ?? null, status, evidenceId, verificationId, note, auth.identityId],
-      );
+      const result = await pool.query(`insert into organization_bwg_assessments (organization_id,assessment_date,floor_area_sq_m,water_consumption_lpd,solid_waste_kgpd,floor_area_threshold_sq_m,water_threshold_lpd,waste_threshold_kgpd,threshold_basis,applicability_status,evidence_id,verification_id,determination_note,determined_by_identity_id,determined_at) values($1,coalesce($2::date,current_date),$3,$4,$5,20000,40000,100,'SWM_RULES_2026_S_O_388_E',$6,$7,$8,$9,$10,now()) returning *`, [organizationId, text(body, "assessmentDate"), floorArea ?? null, water ?? null, waste ?? null, status, evidenceId, verificationId, note, auth.identityId]);
       return reply.code(201).send({ source: "postgresql", syntheticData: false, assessment: result.rows[0], statutoryBoundary: "INTERNAL_APPLICABILITY_PREPARATION_ONLY", externalRegistrationRequired: status === "APPLICABLE" });
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "BWG assessment could not be persisted", code: "STATUTORY_WRITE_UNAVAILABLE", syntheticData: false }); }
   });
@@ -115,18 +94,7 @@ export async function registerStatutoryRoutes(app: FastifyInstance, pool: Pool |
     const verificationId = text(body, "verificationId");
     if (!await evidenceBindingValid(pool, organizationId, evidenceId, verificationId)) return reply.code(400).send({ error: "Evidence and verification must be supplied together and belong to the organization", code: "STATUTORY_EVIDENCE_BINDING_INVALID" });
     try {
-      const result = await pool.query(
-        `insert into organization_epr_applicability
-          (organization_id,scheme,rule_reference,applicability_status,basis,cpcb_registration_status,cpcb_registration_reference,evidence_id,verification_id,determination_note,determined_by_identity_id,determined_at)
-         values($1,$2,$3,$4,coalesce($5::jsonb,'{}'),$6,$7,$8,$9,$10,$11,now())
-         on conflict(organization_id,scheme) do update set
-           rule_reference=excluded.rule_reference,applicability_status=excluded.applicability_status,basis=excluded.basis,
-           cpcb_registration_status=excluded.cpcb_registration_status,cpcb_registration_reference=excluded.cpcb_registration_reference,
-           evidence_id=excluded.evidence_id,verification_id=excluded.verification_id,determination_note=excluded.determination_note,
-           determined_by_identity_id=excluded.determined_by_identity_id,determined_at=excluded.determined_at
-         returning *`,
-        [organizationId, scheme, text(body, "ruleReference"), status, typeof body.basis === "string" ? body.basis : JSON.stringify(body.basis ?? {}), text(body, "cpcbRegistrationStatus") || "NOT_ASSERTED", text(body, "cpcbRegistrationReference"), evidenceId, verificationId, text(body, "determinationNote"), auth.identityId],
-      );
+      const result = await pool.query(`insert into organization_epr_applicability (organization_id,scheme,rule_reference,applicability_status,basis,cpcb_registration_status,cpcb_registration_reference,evidence_id,verification_id,determination_note,determined_by_identity_id,determined_at) values($1,$2,$3,$4,coalesce($5::jsonb,'{}'),$6,$7,$8,$9,$10,$11,now()) on conflict(organization_id,scheme) do update set rule_reference=excluded.rule_reference,applicability_status=excluded.applicability_status,basis=excluded.basis, cpcb_registration_status=excluded.cpcb_registration_status,cpcb_registration_reference=excluded.cpcb_registration_reference,evidence_id=excluded.evidence_id,verification_id=excluded.verification_id,determination_note=excluded.determination_note,determined_by_identity_id=excluded.determined_by_identity_id,determined_at=excluded.determined_at returning *`, [organizationId, scheme, text(body, "ruleReference"), status, typeof body.basis === "string" ? body.basis : JSON.stringify(body.basis ?? {}), text(body, "cpcbRegistrationStatus") || "NOT_ASSERTED", text(body, "cpcbRegistrationReference"), evidenceId, verificationId, text(body, "determinationNote"), auth.identityId]);
       return reply.code(201).send({ source: "postgresql", syntheticData: false, applicability: result.rows[0], statutoryBoundary: "INTERNAL_APPLICABILITY_PREPARATION_ONLY", cpcbExternalStatus: result.rows[0]?.cpcb_registration_status });
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "EPR applicability could not be persisted", code: "EPR_WRITE_UNAVAILABLE", syntheticData: false }); }
   });
