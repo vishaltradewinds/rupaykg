@@ -49,7 +49,7 @@ async function evidenceBindingValid(pool: Pool, organizationId: string, evidence
   return result.rows[0]?.ok === true;
 }
 
-function bwgStatus(floorArea: number | undefined, water: number | undefined, waste: number | undefined): "UNKNOWN" | "UNDER_REVIEW" | "APPLICABLE" | "NOT_APPLICABLE" {
+function bwgStatus(floorArea: number | null | undefined, water: number | null | undefined, waste: number | null | undefined): "UNKNOWN" | "UNDER_REVIEW" | "APPLICABLE" | "NOT_APPLICABLE" {
   if ([floorArea, water, waste].some(value => value === null)) return "UNDER_REVIEW";
   const complete = floorArea !== undefined && water !== undefined && waste !== undefined;
   if (!complete) return "UNKNOWN";
