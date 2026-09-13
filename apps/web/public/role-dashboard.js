@@ -66,6 +66,32 @@
     });
   }
 
+  function mountAccessibilityControls() {
+    if (document.getElementById("rupaykg-accessibility-controls")) return;
+    const panel = document.createElement("section");
+    panel.id = "rupaykg-accessibility-controls";
+    panel.setAttribute("aria-label", "Accessibility and assistance");
+    Object.assign(panel.style, { position: "fixed", left: "12px", bottom: "12px", zIndex: "30", display: "flex", flexWrap: "wrap", gap: "6px", maxWidth: "calc(100vw - 24px)", padding: "8px", border: "1px solid #31516b", borderRadius: "14px", background: "rgba(7,17,31,.96)", boxShadow: "0 12px 36px rgba(0,0,0,.32)" });
+    const makeButton = (label, title, handler) => { const b = document.createElement("button"); b.type = "button"; b.textContent = label; b.title = title; b.setAttribute("aria-label", title); b.className = "secondary"; b.addEventListener("click", handler); return b; };
+    let fontScale = Number(localStorage.getItem("rupaykg.fontScale") || "1");
+    const applyScale = () => { document.documentElement.style.setProperty("--rupaykg-font-scale", String(fontScale)); document.body.style.fontSize = `${fontScale}em`; localStorage.setItem("rupaykg.fontScale", String(fontScale)); };
+    const speak = () => { if (!("speechSynthesis" in window)) return; window.speechSynthesis.cancel(); const text = document.querySelector("main")?.innerText || document.body.innerText; const utterance = new SpeechSynthesisUtterance(text.slice(0, 5000)); utterance.lang = document.documentElement.lang || "en-IN"; window.speechSynthesis.speak(utterance); };
+    const stop = () => { if ("speechSynthesis" in window) window.speechSynthesis.cancel(); };
+    const listen = () => { const Recognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition; if (!Recognition) { alert("Voice input is not available on this device/browser."); return; } const recognition = new Recognition(); recognition.lang = document.documentElement.lang || "en-IN"; recognition.interimResults = false; recognition.maxAlternatives = 1; recognition.onresult = (event: any) => { const transcript = event.results?.[0]?.[0]?.transcript || ""; const active = document.activeElement as HTMLInputElement | HTMLTextAreaElement | null; if (active && (active.tagName === "INPUT" || active.tagName === "TEXTAREA")) { const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(active), "value")?.set; setter?.call(active, `${active.value ? `${active.value} ` : ""}${transcript}`); active.dispatchEvent(new Event("input", { bubbles: true })); } }; recognition.start(); };
+    panel.append(
+      makeButton("A+", "Increase text size", () => { fontScale = Math.min(1.35, +(fontScale + 0.1).toFixed(2)); applyScale(); }),
+      makeButton("A−", "Decrease text size", () => { fontScale = Math.max(0.9, +(fontScale - 0.1).toFixed(2)); applyScale(); }),
+      makeButton("◐", "High contrast", () => { document.documentElement.classList.toggle("rupaykg-high-contrast"); localStorage.setItem("rupaykg.highContrast", document.documentElement.classList.contains("rupaykg-high-contrast") ? "1" : "0"); }),
+      makeButton("🔊", "Read page aloud", speak),
+      makeButton("■", "Stop reading", stop),
+      makeButton("🎤", "Enter text by voice", listen)
+    );
+    document.body.appendChild(panel);
+    applyScale();
+    if (localStorage.getItem("rupaykg.highContrast") === "1") document.documentElement.classList.add("rupaykg-high-contrast");
+    const style = document.createElement("style"); style.textContent = ".rupaykg-high-contrast body{background:#000!important;color:#fff!important}.rupaykg-high-contrast button,.rupaykg-high-contrast input,.rupaykg-high-contrast select,.rupaykg-high-contrast textarea{border-color:#fff!important;color:#fff!important;background:#111!important}.rupaykg-high-contrast a{color:#7dd3fc!important}button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid #facc15!important;outline-offset:2px}"; document.head.appendChild(style);
+  }
+
   function render() {
     const identity = document.querySelector(".identity-bar");
     const metrics = document.querySelector(".metrics");
@@ -73,10 +99,9 @@
     if (!identity || !metrics || !tabs) return;
     const config = roleConfig[roleFromIdentity()];
     if (!config) return;
-
     mountOperationalConsole();
     scopeOperationalPanels(config);
-
+    mountAccessibilityControls();
     let panel = document.getElementById("role-command-center");
     if (!panel) {
       panel = document.createElement("section");
@@ -86,23 +111,14 @@
     }
     panel.innerHTML = "";
     Object.assign(panel.style, { display: "grid", gridTemplateColumns: window.matchMedia("(max-width: 720px)").matches ? "minmax(0,1fr)" : "minmax(0,1fr) auto", gap: "18px", alignItems: "center", margin: "0 0 22px", padding: "18px 20px", border: "1px solid #28435c", borderRadius: "16px", background: "linear-gradient(135deg,rgba(15,34,52,.95),rgba(10,27,43,.82))" });
-
     const copy = document.createElement("div");
     const eyebrow = document.createElement("p"); eyebrow.className = "eyebrow"; eyebrow.textContent = "STAKEHOLDER COMMAND CENTER";
     const title = document.createElement("h2"); title.textContent = config.title;
     const subtitle = document.createElement("p"); subtitle.textContent = config.subtitle; subtitle.style.cssText = "margin:7px 0 0;color:#7890a5;font-size:11px;line-height:1.5";
     copy.append(eyebrow, title, subtitle);
-
     const actions = document.createElement("div"); actions.style.cssText = "display:flex;flex-wrap:wrap;gap:7px;justify-content:flex-end";
-    config.workspaces.forEach(name => {
-      const target = Array.from(document.querySelectorAll(".workspace-tabs button")).find(button => button.textContent?.trim() === name);
-      const button = document.createElement("button"); button.type = "button"; button.className = "secondary"; button.textContent = name;
-      if (target) button.addEventListener("click", () => target.click());
-      else button.disabled = true;
-      actions.appendChild(button);
-    });
+    config.workspaces.forEach(name => { const target = Array.from(document.querySelectorAll(".workspace-tabs button")).find(button => button.textContent?.trim() === name); const button = document.createElement("button"); button.type = "button"; button.className = "secondary"; button.textContent = name; if (target) button.addEventListener("click", () => target.click()); else button.disabled = true; actions.appendChild(button); });
     panel.append(copy, actions);
-
     Array.from(tabs.querySelectorAll("button")).forEach(button => { button.hidden = !config.workspaces.includes(button.textContent?.trim() || ""); });
     const console = document.getElementById("operational-console");
     if (console) console.hidden = false;
