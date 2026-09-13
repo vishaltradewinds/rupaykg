@@ -5,8 +5,19 @@
   const DB_VERSION = 4;
   const isOperationSync = (url, method) => method.toUpperCase() === "POST" && (url.startsWith("/api/v1/operations/sync") || url.includes("/api/v1/operations/sync"));
   const isLogout = (url, method) => method.toUpperCase() === "POST" && (url.startsWith("/api/v1/auth/logout") || url.includes("/api/v1/auth/logout"));
+  const isAuthExchange = (url, method) => method.toUpperCase() === "POST" && (url.startsWith("/api/v1/auth/exchange") || url.includes("/api/v1/auth/exchange"));
+  const organizationKey = "rupaykg.activeOrganizationId";
   let sessionAuthorization = "";
   let sessionOrganization = "";
+
+  const selectedOrganization = () => window.localStorage.getItem(organizationKey) || sessionOrganization || "";
+  const reconcileOrganization = (body) => {
+    const verified = (Array.isArray(body?.memberships) ? body.memberships : []).filter(m => m?.status === "VERIFIED");
+    const current = selectedOrganization();
+    if (current && !verified.some(m => m.organization_id === current)) window.localStorage.removeItem(organizationKey);
+    if (!verified.some(m => m.organization_id === current) && verified[0]?.organization_id) window.localStorage.setItem(organizationKey, verified[0].organization_id);
+    sessionOrganization = window.localStorage.getItem(organizationKey) || "";
+  };
 
   const openDb = () => new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
@@ -117,17 +128,24 @@
     const sourceHeaders = init?.headers || (input instanceof Request ? input.headers : undefined);
     const headers = new Headers(sourceHeaders);
     const authorization = headers.get("Authorization");
-    const organization = headers.get("X-RupayKG-Organization-Id");
+    const organization = headers.get("X-RupayKG-Organization-Id") || selectedOrganization();
 
     if (isLogout(url, method)) {
       sessionAuthorization = "";
       sessionOrganization = "";
+      window.localStorage.removeItem(organizationKey);
       return originalFetch(input, init);
     }
     if (authorization) sessionAuthorization = authorization;
+    if (organization && !headers.has("X-RupayKG-Organization-Id")) headers.set("X-RupayKG-Organization-Id", organization);
     if (organization) sessionOrganization = organization;
+
     if (!isOperationSync(url, method) || navigator.onLine) {
-      const response = await originalFetch(input, init);
+      const requestInit = headers.has("X-RupayKG-Organization-Id") ? { ...(init || {}), headers } : init;
+      const response = await originalFetch(input, requestInit);
+      if (isAuthExchange(url, method)) {
+        response.clone().json().then(body => reconcileOrganization(body)).catch(() => undefined);
+      }
       if (authorization || organization) void replay();
       return response;
     }
