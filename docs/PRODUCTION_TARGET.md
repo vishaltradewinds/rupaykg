@@ -10,9 +10,19 @@ A local/offline record is not authoritative. Authoritative persistence is not ve
 
 ## End-to-end lifecycle
 
-`GENERATE -> AGGREGATE -> MEASURE -> TRANSPORT -> PROCESS -> EVIDENCE -> VERIFY -> CALCULATE VALUE -> CERTIFY/ISSUE -> REGISTRY -> TRANSFER/RETIRE -> SETTLE -> REPORT`
+`ONBOARD -> GENERATE -> AGGREGATE -> MEASURE -> TRANSPORT -> PROCESS -> EVIDENCE -> VERIFY -> COMPLIANCE/EPR -> CALCULATE VALUE -> CERTIFY/ISSUE -> REGISTRY -> TRANSFER/RETIRE -> SETTLE/RECONCILE -> ESG/REGULATORY REPORT`
 
 Every value-bearing transition requires the appropriate upstream evidence, authorization and authoritative persistence.
+
+## Guardian trust rail
+
+Hedera Guardian is the external policy/MRV trust rail, not a replacement for the RupayKG operational system of record. The authoritative provenance chain is:
+
+`ACTIVITY -> MEASUREMENT -> EVIDENCE -> VERIFICATION -> CALCULATION -> GUARDIAN POLICY/EVIDENCE RECORD -> HEDERA ANCHOR -> CREDENTIAL/CLAIM -> REGISTRY -> SETTLEMENT/REPORTING`
+
+Guardian-bound submissions carry a RupayKG contract identifier, correlation ID and deterministic idempotency key. Provider responses must contain an authoritative execution identifier before a `VERIFIED` result can be accepted. Timeouts, malformed responses, unavailable credentials/providers and rejected workflows fail closed; the platform never fabricates Guardian execution IDs, policy decisions, Hedera transactions, consensus timestamps or credentials.
+
+Guardian integration is therefore a separate external-trust state. A locally `VERIFIED` operational record must not be presented as Guardian-verified until the external provider actually returns the required authoritative result. Likewise, a Guardian result does not by itself constitute CPCB registration, EPR certificate issuance, regulator acceptance or financial settlement.
 
 ## Production configuration contract
 
@@ -56,6 +66,14 @@ The authoritative hierarchy supports India -> State/UT -> District -> Sub-distri
 
 Organizations are expected to operate within configured geography scopes. No UI or API should infer authorization from a client-selected geography.
 
+## Stakeholder operating model
+
+The platform must support distinct permissions and dashboards for national/state/district administration, ULBs, Gram Panchayats, bulk waste generators, generators/producers/brand owners where applicable, collectors, transporters, processors/recyclers, MRV/verifiers, EPR/compliance teams, carbon/value teams, registry/settlement operators, auditors and enterprise ESG/reporting users. A stakeholder dashboard is a presentation of authoritative API state; it is not an independent source of truth.
+
+## EPR/statutory boundary
+
+RupayKG may prepare evidence, calculations, reconciliation and reporting data for statutory workflows and integrate with authoritative regulator processes where supported. Internal records must never be labelled as CPCB certificates, registrations, approvals, EPR credits, regulatory filings or regulator acceptance unless the authoritative external system actually issued or accepted that artifact. Plastic EPR records must remain traceable to the underlying activity, measurement, evidence, verification and applicable CPCB process.
+
 ## Settlement truth
 
 Internal workflow state is never proof that funds moved. A settlement can become `SETTLED` only after an external settlement reference, external-authority confirmation timestamp and reconciliation reference are present. Confirmation data is retained and cannot be cleared.
@@ -66,10 +84,10 @@ AI findings are advisory and source-grounded. They cannot mutate authoritative o
 
 ## UI/UX target
 
-The operating UI is designed for national/state/district administration, ULBs, Gram Panchayats, field workers, generators, collectors, processors, MRV/verifiers, EPR/compliance teams, carbon teams, registry/settlement operators, auditors and enterprise reporting users. Desktop consoles and low-connectivity mobile workflows consume the same API contracts.
+The operating UI is designed for national/state/district administration, ULBs, Gram Panchayats, field workers, generators, collectors, processors, MRV/verifiers, EPR/compliance teams, carbon teams, registry/settlement operators, auditors and enterprise reporting users. Desktop consoles and low-connectivity mobile workflows consume the same API contracts. External-trust state (Guardian/Hedera) must be visible separately from local verification and statutory status.
 
 Google Stitch is used for design exploration and developer handoff through `DESIGN.md`; it is not treated as an authoritative backend or account integration.
 
 ## Definition of done
 
-A production rollout is not complete until a clean environment can apply the ordered migrations and pass validation, the production entrypoint rejects incomplete/unsafe configuration, the production web build rejects missing Firebase configuration, an authorized user can execute the lifecycle, unauthorized users are denied, offline records synchronize safely, retries are idempotent, conflicts remain visible, value cannot bypass evidence/verification, registry events are auditable, settlement cannot finalize without external confirmation/reconciliation, CORS is enforced by the actual Fastify runtime policy, and UI claims can be traced to authoritative state.
+A production rollout is not complete until a clean environment can apply the ordered migrations and pass validation, the production entrypoint rejects incomplete/unsafe configuration, the production web build rejects missing Firebase configuration, an authorized user can execute the lifecycle, unauthorized users are denied, offline records synchronize safely, retries are idempotent, conflicts remain visible, value cannot bypass evidence/verification, Guardian integration is fail-closed and correlation/idempotency-safe, real Guardian and Hedera acceptance is verified separately, registry events are auditable, settlement cannot finalize without external confirmation/reconciliation, CORS is enforced by the actual Fastify runtime policy, and UI claims can be traced to authoritative state.
