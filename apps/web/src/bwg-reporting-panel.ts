@@ -69,13 +69,14 @@ function render() {
   root.querySelector("#period")?.addEventListener("submit", (e) => { e.preventDefault(); if (value("end") < value("start")) { messageKind = "error"; message = "Reporting period end date must be on or after the start date."; render(); return; } void save("/api/v1/bwg/reporting-periods", { organizationId: org.organization_id, periodStart: value("start"), periodEnd: value("end"), reportingBasis: value("basis") }); });
   root.querySelector("#waste")?.addEventListener("submit", (e) => { e.preventDefault(); const generated = num("generated"); if (num("segregated") > generated || num("channelized") > generated || num("processed") > num("channelized")) { messageKind = "error"; message = "Waste quantities must satisfy segregated ≤ generated, channelised ≤ generated, and processed ≤ channelised."; render(); return; } const id = value("wperiod"); void save(`/api/v1/bwg/reporting-periods/${encodeURIComponent(id)}/waste`, { wasteStream: value("stream"), generatedQuantity: generated, segregatedQuantity: num("segregated"), channelizedQuantity: num("channelized"), processedQuantity: num("processed"), unit: value("unit"), evidenceId: value("wevidence") || undefined, verificationId: value("wverification") || undefined }); });
   root.querySelector("#epr")?.addEventListener("submit", (e) => { e.preventDefault(); const id = value("eperiod"); void save(`/api/v1/bwg/reporting-periods/${encodeURIComponent(id)}/epr`, { schemeId: value("scheme"), categoryCode: value("category"), obligatedQuantity: num("obligated"), fulfilledQuantity: num("fulfilled"), evidenceId: value("eevidence") || undefined, verificationId: value("everification") || undefined }); });
-  root.querySelector("#esg")?.addEventListener("submit", (e) => { e.preventDefault(); const id = value("gperiod"); void save(`/api/v1/bwg/reporting-periods/${encodeURIComponent(id)}/esg`, { metricCode: value("metric"), scope: value("scope"), unit: value("gunit"), value: num("gvalue"), value: num("gvalue"), evidenceId: value("gevidence") || undefined, verificationId: value("gverification") || undefined }); });
+  root.querySelector("#esg")?.addEventListener("submit", (e) => { e.preventDefault(); const id = value("gperiod"); void save(`/api/v1/bwg/reporting-periods/${encodeURIComponent(id)}/esg`, { metricCode: value("metric"), scope: value("scope"), unit: value("gunit"), value: num("gvalue"), evidenceId: value("gevidence") || undefined, verificationId: value("gverification") || undefined }); });
 }
 
 async function load() {
   if (!session) return;
   const ids = verifiedMembers().map((m) => m.organization_id);
-  if (!selectedOrganizationId || !ids.includes(selectedOrganizationId)) selectedOrganizationId = activeOrganizationId() && ids.includes(activeOrganizationId()) ? activeOrganizationId() : ids[0] ?? "";
+  const stored = activeOrganizationId();
+  if (!selectedOrganizationId || !ids.includes(selectedOrganizationId)) selectedOrganizationId = stored && ids.includes(stored) ? stored : ids[0] ?? "";
   if (selectedOrganizationId) persistOrganization(selectedOrganizationId);
   if (!selectedOrganizationId) { workspace = { profiles: [], periods: [], wasteReports: [], eprReports: [], esgReports: [], jurisdictions: [], schemes: [], organizations: [] }; render(); return; }
   try {
