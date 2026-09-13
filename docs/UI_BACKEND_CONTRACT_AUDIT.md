@@ -47,6 +47,19 @@ Registry eligibility requires persisted provenance satisfying both:
 
 The UI must display these as **external trust/provenance states**, never as CPCB approval, CPCB certificate issuance, statutory authorization, or legal environmental-credit certification.
 
+## Statutory applicability contract
+
+The backend now exposes organization-scoped statutory applicability preparation through:
+
+- `GET /api/v1/statutory/applicability`
+- `POST /api/v1/statutory/bwg/assess`
+- `POST /api/v1/statutory/epr`
+- `POST /api/v1/statutory/epr/:id/external-registration`
+
+BWG assessment uses the SWM Rules 2026 platform rule reference `SWM_RULES_2026_S_O_388_E` with thresholds of 20,000 sq m floor area, 40,000 litres/day water consumption, or 100 kg/day solid waste. Missing measurements remain under review; the assessment is an internal applicability determination and does not itself create statutory registration or approval.
+
+EPR applicability is scheme-specific. RupayKG keeps internal applicability/preparation state separate from the CPCB external registration state. `REGISTERED_EXTERNALLY` requires an externally issued CPCB registration reference; RupayKG only records that external reference and does not issue it.
+
 ## Fail-closed UI rules
 
 1. `NOT_CONFIGURED`, `UNAVAILABLE`, timeout, malformed provider response, missing execution ID, missing HCS transaction/consensus data, or failed verification must remain visibly unverified.
@@ -54,6 +67,7 @@ The UI must display these as **external trust/provenance states**, never as CPCB
 3. Empty provenance means **not confirmed**, not success.
 4. Local verification is distinct from Guardian verification and Hedera consensus.
 5. EPR/ESG outputs must identify whether they are internal evidence/reporting artifacts or actually accepted/issued by the relevant authority.
+6. Statutory applicability status is an internal preparation state unless an external authority reference is explicitly recorded.
 
 ## Stakeholder scope
 
@@ -79,6 +93,7 @@ For plastic EPR, source evidence and processor-side records must remain traceabl
 4. Stakeholder workspace authorization is verified for every domain.
 5. MRV UI exposes local verification separately from Guardian/Hedera provenance.
 6. EPR/ESG UI does not overstate statutory status.
-7. Container/runtime verification is green.
-8. Live Guardian + Hedera + required external authority acceptance is completed where applicable.
-9. Cloud Run deployment is performed only after all preceding gates pass.
+7. Statutory applicability UI is organization-scoped and reflects backend status without manufacturing external acceptance.
+8. Container/runtime verification is green.
+9. Live Guardian + Hedera + required external authority acceptance is completed where applicable.
+10. Cloud Run deployment is performed only after all preceding gates pass.
