@@ -16,17 +16,18 @@ begin
       message = 'Environmental attribute basis is required';
   end if;
 
+  perform pg_advisory_xact_lock(hashtextextended(p_basis_key, 0));
+
   if exists (
     select 1
     from environmental_attribute_claims c
     where c.basis_key = p_basis_key
       and c.consumption_mode = 'VALUE_CLAIM'
       and c.status = 'ACTIVE'
-      and c.claim_type <> p_claim_type
   ) then
     raise exception using
       errcode = '23514',
-      message = 'Environmental attribute basis is already consumed by a different claim type',
+      message = 'Environmental attribute basis is already consumed',
       detail = 'An explicit distinct authoritative allocation is required before another value claim can consume this basis.';
   end if;
 end;
