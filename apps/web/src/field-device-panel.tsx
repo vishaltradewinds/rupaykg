@@ -32,6 +32,8 @@ const firebaseAuth = firebaseApp ? getAuth(firebaseApp) : null;
 const organizationStorageKey = "rupaykg.activeOrganizationId";
 const fieldDeviceManagerRoles = new Set(["admin", "administrator", "org_admin", "organization_admin", "field_manager", "operations_manager"]);
 
+function activeOrganizationId(): string { return localStorage.getItem(organizationStorageKey)?.trim() ?? ""; }
+function organizationHeaders(): Record<string, string> { const id = activeOrganizationId(); return id ? { "x-rupaykg-organization-id": id } : {}; }
 function hasFieldDeviceManagement(membership?: Membership): boolean {
   if (!membership || membership.status !== "VERIFIED") return false;
   if (typeof membership.role_name === "string" && fieldDeviceManagerRoles.has(membership.role_name.toLowerCase())) return true;
@@ -44,6 +46,11 @@ async function sessionFor(user: User) {
   const response = await fetch("/api/v1/auth/exchange", { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify({ idToken }) });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(body?.error ?? `Authentication failed (${response.status})`);
+  const memberships = Array.isArray(body.memberships) ? body.memberships as Membership[] : [];
+  const verified = memberships.filter(membership => membership.status === "VERIFIED");
+  const selected = activeOrganizationId();
+  const organizationId = verified.find(membership => membership.organization_id === selected)?.organization_id ?? verified[0]?.organization_id ?? "";
+  if (organizationId && organizationId !== selected) localStorage.setItem(organizationStorageKey, organizationId);
   return String(body.sessionToken);
 }
 
@@ -67,7 +74,7 @@ function Panel() {
   const canManageDevice = React.useCallback((device: Device) => hasFieldDeviceManagement(memberships.find(m => m.organization_id === device.organization_id)), [memberships]);
 
   const load = React.useCallback(async (session: string) => {
-    const response = await fetch("/api/v1/field-devices", { headers: { Authorization: `Bearer ${session}`, Accept: "application/json" } });
+    const response = await fetch("/api/v1/field-devices", { headers: { Authorization: `Bearer ${session}`, Accept: "application/json", ...organizationHeaders() } });
     const body = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(body?.error ?? `Field-device inventory failed (${response.status})`);
     setDevices(Array.isArray(body.devices) ? body.devices : []);
@@ -81,11 +88,17 @@ function Panel() {
       try {
         const session = await sessionFor(currentUser);
         setToken(session);
-        const meResponse = await fetch("/api/v1/auth/me", { headers: { Authorization: `Bearer ${session}`, Accept: "application/json" } });
+        const meResponse = await fetch("/api/v1/auth/me", { headers: { Authorization: `Bearer ${session}`, Accept: "application/json", ...organizationHeaders() } });
         const me = await meResponse.json().catch(() => ({})) as Me;
+        if (!meResponse.ok) throw new Error((me as { error?: string })?.error ?? `Authentication context failed (${meResponse.status})`);
+        const verifiedMemberships = (me.memberships ?? []).filter(m => m.status === "VERIFIED");
+        const storedOrganizationId = activeOrganizationId();
+        const active = verifiedMemberships.find(m => m.organization_id === storedOrganizationId) ?? verifiedMemberships[0];
+        if (!active) throw new Error("A verified organization membership is required for field-device governance.");
+        if (active.organization_id !== storedOrganizationId) localStorage.setItem(organizationStorageKey, active.organization_id);
+        setOrganizationId(active.organization_id);
         setIdentityId(me.identity?.id ?? "");
-        setMemberships((me.memberships ?? []).filter(m => m.status === "VERIFIED"));
-        setOrganizationId(localStorage.getItem(organizationStorageKey) ?? "");
+        setMemberships(verifiedMemberships);
         await load(session);
       } catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to load field-device governance."); }
     });
@@ -104,7 +117,7 @@ function Panel() {
     if (!canEnrollForActiveOrganization || !deviceId.trim()) { setError("A verified active organization with field-device management permission is required, along with a device identifier."); return; }
     setBusy(true); setError(""); setMessage("");
     try {
-      const response = await fetch("/api/v1/field-devices/enroll", { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify({ organizationId, deviceId: deviceId.trim(), identityId }) });
+      const response = await fetch("/api/v1/field-devices/enroll", { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", Accept: "application/json", ...organizationHeaders() }, body: JSON.stringify({ organizationId, deviceId: deviceId.trim(), identityId }) });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body?.error ?? `Enrollment failed (${response.status})`);
       setMessage("Field device enrolled as PENDING. A permitted manager must verify it before field sync can use it.");
@@ -117,7 +130,7 @@ function Panel() {
   async function verify(id: string) {
     setBusy(true); setError(""); setMessage("");
     try {
-      const response = await fetch(`/api/v1/field-devices/${id}/verify`, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", Accept: "application/json" }, body: "{}" });
+      const response = await fetch(`/api/v1/field-devices/${id}/verify`, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", Accept: "application/json", ...organizationHeaders() }, body: "{}" });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body?.error ?? `Verification failed (${response.status})`);
       setMessage("Field device verified. It can now be used for authoritative field sync by its enrolled identity.");
