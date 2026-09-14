@@ -52,7 +52,7 @@ export async function authenticate(request: FastifyRequest, pool: Pool | null): 
   // authorize an action. A single-organization identity is safely scoped implicitly.
   if (memberships.rows.length > 1 && !requestedOrganizationId) return null;
   const activeOrganizationId = requestedOrganizationId ?? memberships.rows[0]?.organization_id;
-  const requestPath = (request.url ?? "").split("?", 1)[0];
+  const requestPath = ((request.url ?? "").split("?", 1)[0]) ?? "";
   const bilateralOrganizationScope = requestPath === "/api/v1/settlements"
     || requestPath.startsWith("/api/v1/settlements/");
   return {
