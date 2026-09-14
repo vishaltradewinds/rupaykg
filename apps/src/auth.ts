@@ -6,6 +6,7 @@ export type AuthContext = {
   identityId: string;
   memberships: Array<{ organization_id: string; role_id: string; status: string }>;
   activeOrganizationId?: string;
+  bilateralOrganizationScope?: boolean;
 };
 
 function hashToken(token: string): string {
@@ -51,16 +52,20 @@ export async function authenticate(request: FastifyRequest, pool: Pool | null): 
   // authorize an action. A single-organization identity is safely scoped implicitly.
   if (memberships.rows.length > 1 && !requestedOrganizationId) return null;
   const activeOrganizationId = requestedOrganizationId ?? memberships.rows[0]?.organization_id;
+  const requestPath = request.url.split("?", 1)[0];
+  const bilateralOrganizationScope = requestPath === "/api/v1/settlements"
+    || requestPath.startsWith("/api/v1/settlements/");
   return {
     identityId: rows.rows[0].identity_id,
     memberships: memberships.rows,
     ...(activeOrganizationId ? { activeOrganizationId } : {}),
+    ...(bilateralOrganizationScope ? { bilateralOrganizationScope: true } : {}),
   };
 }
 
 export function canActForOrganization(auth: AuthContext, organizationId: string): boolean {
   return auth.memberships.some((m) => m.organization_id === organizationId)
-    && (!auth.activeOrganizationId || auth.activeOrganizationId === organizationId);
+    && (auth.bilateralOrganizationScope || !auth.activeOrganizationId || auth.activeOrganizationId === organizationId);
 }
 
 export const HIGH_RISK_PERMISSIONS = {
