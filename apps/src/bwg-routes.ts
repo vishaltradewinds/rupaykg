@@ -1,13 +1,12 @@
 import type { FastifyInstance } from "fastify";
 import type { Pool } from "pg";
-import { registerStatutoryRoutes } from "./statutory-routes.js";
 
 /**
- * The server keeps this compatibility registration point for BWG/statutory
- * functionality. The authoritative statutory module owns both BWG and EPR
- * applicability routes so the UI/API contract cannot drift into duplicate
- * Fastify registrations.
+ * Compatibility registration point retained for the server's existing BWG
+ * registration order. The authoritative statutory module is registered by
+ * the MRV route module; this shim must remain inert to prevent duplicate
+ * Fastify statutory route declarations.
  */
-export async function registerBwgRoutes(app: FastifyInstance, pool: Pool | null): Promise<void> {
-  await registerStatutoryRoutes(app, pool);
+export async function registerBwgRoutes(_app: FastifyInstance, _pool: Pool | null): Promise<void> {
+  return;
 }
