@@ -1,6 +1,14 @@
 (() => {
   "use strict";
 
+  const uxStyles = "/src/ux-mobile.css";
+  if (!document.querySelector(`link[href="${uxStyles}"]`)) {
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = uxStyles;
+    document.head.appendChild(link);
+  }
+
   const rootId = "citizen-farmer-guided";
   const draftKey = "rupaykg.citizenFarmerDraft";
 
@@ -37,13 +45,7 @@
     const controls = document.createElement("div");
     controls.className = "citizen-assistance-controls";
     controls.setAttribute("aria-label", "Assisted entry controls");
-    Object.assign(controls.style, {
-      display: "flex",
-      flexWrap: "wrap",
-      gap: "8px",
-      marginTop: "10px",
-      alignItems: "center"
-    });
+    Object.assign(controls.style, { display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "10px", alignItems: "center" });
 
     const makeButton = (label, title, handler) => {
       const button = document.createElement("button");
@@ -71,75 +73,40 @@
       status.textContent = "Saved draft restored. Review it before recording.";
     }
 
-    const save = makeButton("Save draft", "Save this entry on this device for later", () => {
-      saveDraft(form);
-      status.textContent = "Draft saved on this device. It is not an authoritative record.";
-    });
-
-    const clear = makeButton("Clear draft", "Clear the saved draft on this device", () => {
-      clearDraft();
-      form.reset();
-      status.textContent = "Saved draft cleared.";
-    });
-
+    const save = makeButton("Save draft", "Save this entry on this device for later", () => { saveDraft(form); status.textContent = "Draft saved on this device. It is not an authoritative record."; });
+    const clear = makeButton("Clear draft", "Clear the saved draft on this device", () => { clearDraft(); form.reset(); status.textContent = "Saved draft cleared."; });
     const voice = makeButton("🎤 Voice", "Enter the active field using voice", () => {
       const Recognition = speechRecognition();
-      if (!Recognition) {
-        status.textContent = "Voice input is not available in this browser. You can type normally.";
-        return;
-      }
+      if (!Recognition) { status.textContent = "Voice input is not available in this browser. You can type normally."; return; }
       const active = document.activeElement;
       const target = active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement ? active : form.elements.namedItem("quantity");
       if (!(target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) return;
       const recognition = new Recognition();
-      recognition.lang = preferredLanguage();
-      recognition.interimResults = false;
-      recognition.maxAlternatives = 1;
+      recognition.lang = preferredLanguage(); recognition.interimResults = false; recognition.maxAlternatives = 1;
       status.textContent = "Listening…";
       recognition.onresult = (event) => {
         const transcript = event.results?.[0]?.[0]?.transcript || "";
         const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(target), "value")?.set;
         setter?.call(target, target.type === "number" ? transcript.replace(/[^0-9.,-]/g, "").replace(",", ".") : transcript);
-        target.dispatchEvent(new Event("input", { bubbles: true }));
-        target.dispatchEvent(new Event("change", { bubbles: true }));
+        target.dispatchEvent(new Event("input", { bubbles: true })); target.dispatchEvent(new Event("change", { bubbles: true }));
         status.textContent = "Voice entry added. Review the value before recording.";
       };
       recognition.onerror = () => { status.textContent = "Voice input could not be completed. Please try again or type the value."; };
       recognition.onend = () => { if (status.textContent === "Listening…") status.textContent = "Voice input ended."; };
       recognition.start();
     });
-
     const read = makeButton("🔊 Read", "Read this guided entry form aloud", () => {
-      if (!("speechSynthesis" in window)) {
-        status.textContent = "Read-aloud is not available in this browser.";
-        return;
-      }
-      window.speechSynthesis.cancel();
-      const text = root.innerText || "";
-      const utterance = new SpeechSynthesisUtterance(text.slice(0, 3000));
-      utterance.lang = preferredLanguage();
-      window.speechSynthesis.speak(utterance);
-      status.textContent = "Reading the guided entry aloud.";
+      if (!("speechSynthesis" in window)) { status.textContent = "Read-aloud is not available in this browser."; return; }
+      window.speechSynthesis.cancel(); const utterance = new SpeechSynthesisUtterance((root.innerText || "").slice(0, 3000)); utterance.lang = preferredLanguage(); window.speechSynthesis.speak(utterance); status.textContent = "Reading the guided entry aloud.";
     });
-
-    const stop = makeButton("■ Stop", "Stop read-aloud", () => {
-      if ("speechSynthesis" in window) window.speechSynthesis.cancel();
-      status.textContent = "Read-aloud stopped.";
-    });
+    const stop = makeButton("■ Stop", "Stop read-aloud", () => { if ("speechSynthesis" in window) window.speechSynthesis.cancel(); status.textContent = "Read-aloud stopped."; });
 
     controls.append(save, clear, voice, read, stop, status);
     const actions = root.querySelector(".resource-flow-actions");
     if (actions) actions.insertAdjacentElement("afterend", controls);
-
-    form.addEventListener("input", () => {
-      if (document.visibilityState === "hidden") saveDraft(form);
-    });
-
+    form.addEventListener("input", () => { if (document.visibilityState === "hidden") saveDraft(form); });
     form.addEventListener("submit", () => clearDraft());
-    window.addEventListener("beforeunload", () => {
-      const quantity = form.elements.namedItem("quantity");
-      if (quantity instanceof HTMLInputElement && quantity.value) saveDraft(form);
-    });
+    window.addEventListener("beforeunload", () => { const quantity = form.elements.namedItem("quantity"); if (quantity instanceof HTMLInputElement && quantity.value) saveDraft(form); });
   }
 
   const observer = new MutationObserver(mount);
