@@ -15,7 +15,7 @@ type Metric = { id: string; reporting_period_id: string; metric_code: string; sc
 type Session = { sessionToken: string; memberships: Membership[] };
 const api = async (path: string, options: RequestInit = {}, token?: string) => { const headers = new Headers(options.headers); headers.set("Content-Type", "application/json"); if (token) headers.set("Authorization", `Bearer ${token}`); const org = selectedOrganizationId(); if (token && org) headers.set("x-rupaykg-organization-id", org); const response = await fetch(path, { ...options, headers }); const data = await response.json().catch(() => ({})); if (!response.ok) throw new Error(data.error ?? `Request failed (${response.status})`); return data; };
 let session: Session | null = null, periods: Period[] = [], metrics: Metric[] = [], message = "", error = "";
-function escapeHtml(value: unknown): string { return String(value ?? "").replace(/[&<>\\"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\\\"": "&quot;" }[char] ?? char)); }
+function escapeHtml(value: unknown): string { return String(value ?? "").replace(/[&<>\"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[char] ?? char)); }
 function selectedOrganizationId(): string { return window.localStorage.getItem("rupaykg.activeOrganizationId") ?? ""; }
 function activeMembership(): Membership | null { const memberships = session?.memberships.filter((membership) => membership.status === "VERIFIED") ?? []; const activeId = selectedOrganizationId(); return memberships.find((membership) => membership.organization_id === activeId) ?? memberships[0] ?? null; }
 function canWrite(): boolean { return activeMembership()?.can_write_esg === true; }
