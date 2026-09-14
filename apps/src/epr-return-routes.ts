@@ -55,8 +55,8 @@ export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool |
     if (!await hasOrganizationPermission(pool, auth, organizationId, ["epr:manage"])) return reply.code(403).send({ error: "EPR management permission required", code: "EPR_RETURN_WRITE_FORBIDDEN" });
     if (Number.isNaN(Date.parse(periodStart)) || Number.isNaN(Date.parse(periodEnd)) || periodStart > periodEnd) return reply.code(400).send({ error: "Valid periodStart and periodEnd are required", code: "INVALID_PERIOD" });
     try {
-      const rows = await pool.query(`insert into epr_returns(scheme_id,organization_id,obligation_id,period_start,period_end,return_type,reported_quantity,status) select $1,$2,$3,$4::date,$5::date,$6,$7,'DRAFT' where exists(select 1 from epr_schemes where id=$1 and status='VERIFIED') and exists(select 1 from epr_obligations eo join obligations o on o.id=eo.obligation_id where eo.id=$3 and eo.scheme_id=$1 and eo.obligated_organization_id=$2 and o.period_start <= $5::date and o.period_end >= $4::date) returning *`, [schemeId, organizationId, obligationId, periodStart, periodEnd, returnType, reportedQuantity]);
-      if (!rows.rows[0]) return reply.code(409).send({ error: "Verified EPR scheme and matching open obligation are required", code: "EPR_RETURN_NOT_ELIGIBLE" });
+      const rows = await pool.query(`insert into epr_returns(scheme_id,organization_id,obligation_id,period_start,period_end,return_type,reported_quantity,status) select $1,$2,$3,$4::date,$5::date,$6,$7,'DRAFT' where exists(select 1 from epr_schemes where id=$1 and status='VERIFIED') and exists(select 1 from epr_obligations eo join obligations o on o.id=eo.obligation_id where eo.id=$3 and eo.scheme_id=$1 and eo.obligated_organization_id=$2 and eo.status in ('OPEN','ELIGIBLE') and o.period_start <= $5::date and o.period_end >= $4::date) returning *`, [schemeId, organizationId, obligationId, periodStart, periodEnd, returnType, reportedQuantity]);
+      if (!rows.rows[0]) return reply.code(409).send({ error: "Verified EPR scheme and matching open/eligible obligation are required", code: "EPR_RETURN_NOT_ELIGIBLE" });
       return reply.code(201).send({ source: "postgresql", syntheticData: false, authoritativeMutation: true, eprReturn: rows.rows[0] });
     } catch (error: unknown) {
       request.log.error(error);
@@ -76,11 +76,12 @@ export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool |
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
-      const current = await client.query(`select r.*,eo.target_quantity,eo.fulfilled_quantity as obligation_fulfilled,s.code as scheme_code from epr_returns r join epr_obligations eo on eo.id=r.obligation_id join epr_schemes s on s.id=r.scheme_id where r.id=$1 for update`, [returnId]);
+      const current = await client.query(`select r.*,eo.target_quantity,eo.fulfilled_quantity as obligation_fulfilled,eo.status as obligation_status,s.code as scheme_code from epr_returns r join epr_obligations eo on eo.id=r.obligation_id join epr_schemes s on s.id=r.scheme_id where r.id=$1 for update`, [returnId]);
       const row = current.rows[0];
       if (!row) { await client.query("ROLLBACK"); return reply.code(404).send({ error: "EPR return not found", code: "EPR_RETURN_NOT_FOUND" }); }
       if (!canAct(auth, row.organization_id) || !await hasOrganizationPermission(pool, auth, row.organization_id, ["epr:manage"])) { await client.query("ROLLBACK"); return reply.code(403).send({ error: "EPR management permission required", code: "EPR_RETURN_WRITE_FORBIDDEN" }); }
       if (row.status !== "DRAFT" && row.status !== "REJECTED") { await client.query("ROLLBACK"); return reply.code(409).send({ error: `Return cannot be submitted from ${row.status}`, code: "INVALID_EPR_RETURN_STATE" }); }
+      if (!["OPEN", "ELIGIBLE"].includes(row.obligation_status)) { await client.query("ROLLBACK"); return reply.code(409).send({ error: `EPR obligation cannot be fulfilled from ${row.obligation_status}`, code: "OBLIGATION_NOT_ELIGIBLE" }); }
       const evidence = await client.query(`select e.id,e.status,e.content_hash,e.content_uri,a.organization_id,a.geography_id from evidence e join activities a on a.id=e.activity_id join verifications v on v.id=$2 and v.evidence_id=e.id and v.decision='APPROVED' where e.id=$1`, [evidenceId, verificationId]);
       const evidenceRow = evidence.rows[0];
       if (!evidenceRow || evidenceRow.status !== "VERIFIED" || (!evidenceRow.content_hash && !evidenceRow.content_uri) || evidenceRow.organization_id !== row.organization_id || !evidenceRow.geography_id) { await client.query("ROLLBACK"); return reply.code(409).send({ error: "Submission evidence must be verified, provenance-backed, approved and organization-scoped", code: "EVIDENCE_NOT_ELIGIBLE" }); }
