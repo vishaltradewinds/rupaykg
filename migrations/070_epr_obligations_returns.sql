@@ -31,7 +31,6 @@ create table if not exists epr_returns (
 create index if not exists epr_returns_org_period_idx
   on epr_returns(organization_id,period_start,period_end);
 
--- A return may only claim fulfilled quantity supported by existing EPR obligations.
 create or replace function enforce_epr_return_quantity()
 returns trigger
 language plpgsql
@@ -63,7 +62,6 @@ create trigger epr_return_quantity_guard
 before insert or update on epr_returns
 for each row execute function enforce_epr_return_quantity();
 
--- A transfer is evidence-backed before it can be completed.
 create or replace function enforce_epr_transfer_evidence()
 returns trigger
 language plpgsql
@@ -79,4 +77,4 @@ $$;
 drop trigger if exists epr_transfer_evidence_guard on epr_credit_transfers;
 create trigger epr_transfer_evidence_guard
 before insert or update on epr_credit_transfers
-for each row execute function enforce_epr_transfer_evidence;
+for each row execute function enforce_epr_transfer_evidence();
