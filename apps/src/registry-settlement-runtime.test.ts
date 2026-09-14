@@ -95,6 +95,13 @@ describe("registry and settlement runtime acceptance", () => {
     const reauthorize = await request(`/api/v1/settlements/${settlementId}/authorize`, { method: "POST", body: JSON.stringify({ authorizationReference: `auth-repeat-${suffix}` }) }, actorToken, ownerOrgId); assert.equal(reauthorize.status, 409);
     const resettle = await request(`/api/v1/settlements/${settlementId}/settle`, { method: "POST", body: JSON.stringify({ externalReference: `payment-repeat-${suffix}` }) }, actorToken, ownerOrgId); assert.equal(resettle.status, 409);
     const reconfirm = await request(`/api/v1/settlements/${settlementId}/confirm`, { method: "POST", body: JSON.stringify({ confirmationReference: `bank-confirm-repeat-${suffix}`, reconciliationReference: `recon-repeat-${suffix}` }) }, actorToken, ownerOrgId); assert.equal(reconfirm.status, 409);
+
+    const secondCreated = await request("/api/v1/settlements", { method: "POST", body: JSON.stringify({ credentialId, payerId: ownerOrgId, payeeId: destinationOrgId, amount: 500, currency: "INR", externalReference: `payment-second-${suffix}` }) }, actorToken, ownerOrgId);
+    assert.equal(secondCreated.status, 201); const secondSettlementId = (await body(secondCreated)).settlement.id;
+    const secondAuthorized = await request(`/api/v1/settlements/${secondSettlementId}/authorize`, { method: "POST", body: JSON.stringify({ authorizationReference: `auth-second-${suffix}` }) }, actorToken, ownerOrgId); assert.equal(secondAuthorized.status, 200);
+    const secondSettled = await request(`/api/v1/settlements/${secondSettlementId}/settle`, { method: "POST", body: JSON.stringify({ externalReference: `payment-second-${suffix}` }) }, actorToken, ownerOrgId); assert.equal(secondSettled.status, 200);
+    const duplicateConfirmation = await request(`/api/v1/settlements/${secondSettlementId}/confirm`, { method: "POST", body: JSON.stringify({ confirmationReference: `bank-confirm-${suffix}`, reconciliationReference: `recon-second-${suffix}` }) }, actorToken, ownerOrgId); assert.equal(duplicateConfirmation.status, 409); assert.equal((await body(duplicateConfirmation)).code, "CONFIRMATION_REFERENCE_EXISTS");
+    const duplicateReconciliation = await request(`/api/v1/settlements/${secondSettlementId}/confirm`, { method: "POST", body: JSON.stringify({ confirmationReference: `bank-confirm-second-${suffix}`, reconciliationReference: `recon-${suffix}` }) }, actorToken, ownerOrgId); assert.equal(duplicateReconciliation.status, 409); assert.equal((await body(duplicateReconciliation)).code, "RECONCILIATION_REFERENCE_EXISTS");
   });
 
   it("requires current-owner transfer permission and permits governed retirement", async () => {
