@@ -18,14 +18,16 @@
     ccc_buyer: { title: "Carbon / ESG buyer", subtitle: "Review verified environmental value, registry state, settlement and ESG records.", workspaces: ["Carbon & Value", "Registry", "Settlement", "ESG / BRSR"] },
     epr_partner: { title: "EPR operations", subtitle: "Review applicable obligations, verified evidence and EPR/ESG reporting state.", workspaces: ["Compliance & EPR", "MRV & Evidence", "ESG / BRSR"] },
     csr_partner: { title: "ESG / CSR operations", subtitle: "Review authoritative environmental outcomes and reporting evidence.", workspaces: ["ESG / BRSR", "MRV & Evidence", "Carbon & Value", "Compliance & EPR"] },
-    regulator: { title: "Regulatory oversight", subtitle: "Inspect authorised records, provenance and governance state. High-risk mutations remain server-gated.", workspaces: ["Compliance & EPR", "MRV & Evidence", "Registry", "ESG / BRSR", "Intelligence"] }
+    regulator: { title: "Regulatory oversight", subtitle: "Inspect authorised records, provenance and governance state. High-risk mutations remain server-gated.", workspaces: ["Compliance & EPR", "MRV & Evidence", "Registry", "ESG / BRSR", "Intelligence"] },
+    platform_admin: { title: "Platform governance", subtitle: "Review onboarding, authorised operational records, compliance and reporting state without bypassing server-side controls.", workspaces: ["Operations", "MRV & Evidence", "Compliance & EPR", "ESG / BRSR"] },
+    super_admin: { title: "Platform governance", subtitle: "Review authorised platform lifecycle, value, registry, settlement and reporting state; server-side permissions remain authoritative.", workspaces: ["Operations", "MRV & Evidence", "Compliance & EPR", "Carbon & Value", "Registry", "Settlement", "ESG / BRSR"] }
   };
 
   const roleFromIdentity = () => {
     const text = document.querySelector(".identity-bar span")?.textContent || "";
     const match = text.match(/^(.+?)\s·/);
     if (!match) return "";
-    const known = { "Citizen / household": "citizen", "Farmer / rural producer": "farmer", "Waste collection worker": "safai_mitra", "FPO / rural enterprise": "fpo", "ULB / municipal authority": "municipal_admin", "Municipal / bulk generator": "municipal_generator", "Collector / aggregator / transporter": "aggregator", "MRF / recycler / processor": "processor", "Industrial generator": "industry_generator", "Commercial generator": "commercial_generator", "Institutional generator": "institution_generator", "Carbon project owner": "PROJECT_OWNER", "MRV / assurance user": "ACVA_USER", "Carbon / ESG buyer": "ccc_buyer", "EPR partner": "epr_partner", "CSR / ESG partner": "csr_partner", "Regulator / public authority": "regulator" };
+    const known = { "Citizen / household": "citizen", "Farmer / rural producer": "farmer", "Waste collection worker": "safai_mitra", "FPO / rural enterprise": "fpo", "ULB / municipal authority": "municipal_admin", "Municipal / bulk generator": "municipal_generator", "Collector / aggregator / transporter": "aggregator", "MRF / recycler / processor": "processor", "Industrial generator": "industry_generator", "Commercial generator": "commercial_generator", "Institutional generator": "institution_generator", "Carbon project owner": "PROJECT_OWNER", "MRV / assurance user": "ACVA_USER", "Carbon / ESG buyer": "ccc_buyer", "EPR partner": "epr_partner", "CSR / ESG partner": "csr_partner", "Regulator / public authority": "regulator", "Platform administrator": "platform_admin", "Platform super administrator": "super_admin" };
     return known[match[1].trim()] || "";
   };
 
