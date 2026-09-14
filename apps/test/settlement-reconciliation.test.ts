@@ -83,7 +83,7 @@ before(async () => {
     `insert into settlements (credential_id, payer_id, payee_id, amount, currency, status, authorization_reference, verified_at)
      values ($1, $2, $3, 1, 'INR', 'CREATED', $4, now())
      returning id`,
-    [credential, counterparty, owner, randomUUID()],
+    [credential, owner, counterparty, randomUUID()],
   );
   settlementId = result.rows[0]!.id;
   await pool.query(`update settlements set status = 'AUTHORIZED' where id = $1`, [settlementId]);
