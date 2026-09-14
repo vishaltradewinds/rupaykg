@@ -108,14 +108,22 @@ export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool |
     if (!externalReference) return reply.code(400).send({ error: "externalReference is required", code: "EXTERNAL_REFERENCE_REQUIRED" });
     const client = await pool.connect();
     try {
-      const row = await client.query<{ organization_id: string; status: string; external_reference: string | null }>("select organization_id,status,external_reference from epr_returns where id=$1 for update", [(request.params as { returnId: string }).returnId]);
-      if (!row.rows[0]) return reply.code(404).send({ error: "EPR return not found", code: "EPR_RETURN_NOT_FOUND" });
-      if (!canAct(auth, row.rows[0].organization_id) || !await hasOrganizationPermission(pool, auth, row.rows[0].organization_id, ["epr:manage"])) return reply.code(403).send({ error: "EPR management permission required", code: "EPR_RETURN_WRITE_FORBIDDEN" });
-      if (!["SUBMITTED","ACCEPTED","COMPLETED"].includes(row.rows[0].status)) return reply.code(409).send({ error: "External reference can only be recorded after submission", code: "INVALID_EPR_RETURN_STATE" });
-      if (row.rows[0].external_reference && row.rows[0].external_reference !== externalReference) return reply.code(409).send({ error: "A different external reference is already recorded for this EPR return", code: "EXTERNAL_REFERENCE_IMMUTABLE" });
-      const updated = await client.query("update epr_returns set external_reference=$2 where id=$1 returning *", [(request.params as { returnId: string }).returnId, externalReference]);
+      await client.query("BEGIN");
+      const returnId = (request.params as { returnId: string }).returnId;
+      const row = await client.query<{ organization_id: string; status: string; external_reference: string | null }>("select organization_id,status,external_reference from epr_returns where id=$1 for update", [returnId]);
+      if (!row.rows[0]) { await client.query("ROLLBACK"); return reply.code(404).send({ error: "EPR return not found", code: "EPR_RETURN_NOT_FOUND" }); }
+      if (!canAct(auth, row.rows[0].organization_id) || !await hasOrganizationPermission(pool, auth, row.rows[0].organization_id, ["epr:manage"])) { await client.query("ROLLBACK"); return reply.code(403).send({ error: "EPR management permission required", code: "EPR_RETURN_WRITE_FORBIDDEN" }); }
+      if (!["SUBMITTED","ACCEPTED","COMPLETED"].includes(row.rows[0].status)) { await client.query("ROLLBACK"); return reply.code(409).send({ error: "External reference can only be recorded after submission", code: "INVALID_EPR_RETURN_STATE" }); }
+      if (row.rows[0].external_reference && row.rows[0].external_reference !== externalReference) { await client.query("ROLLBACK"); return reply.code(409).send({ error: "A different external reference is already recorded for this EPR return", code: "EXTERNAL_REFERENCE_IMMUTABLE" }); }
+      const updated = await client.query("update epr_returns set external_reference=$2 where id=$1 returning *", [returnId, externalReference]);
+      await client.query("COMMIT");
       return { source: "postgresql", syntheticData: false, authoritativeMutation: true, eprReturn: updated.rows[0], externalSubmission: "EXTERNAL_REFERENCE_RECORDED_NOT_ISSUED_BY_RUPAYKG" };
-    } catch (error) { await client.query("ROLLBACK").catch(() => undefined); request.log.error(error); return reply.code(503).send({ error: "External EPR reference recording unavailable", syntheticData: false }); }
-    finally { await client.query("ROLLBACK").catch(() => undefined); client.release(); }
+    } catch (error: unknown) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      request.log.error(error);
+      const message = error instanceof Error ? error.message : "";
+      if (message.toLowerCase().includes("duplicate key")) return reply.code(409).send({ error: "That external EPR reference is already recorded on another return", code: "EXTERNAL_REFERENCE_EXISTS" });
+      return reply.code(503).send({ error: "External EPR reference recording unavailable", syntheticData: false });
+    } finally { client.release(); }
   });
 }
