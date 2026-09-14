@@ -1,0 +1,35 @@
+/* Additive nationwide/mobile UX layer. Keeps authoritative workflows intact. */
+:root{--rupaykg-safe-bottom:128px}
+main{padding-bottom:calc(64px + var(--rupaykg-safe-bottom))}
+button,.auth-form button,.onboarding-form button,.form-field button{min-height:44px}
+input,select,textarea{min-height:44px}
+.workspace-tabs{scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch}
+.workspace-tabs .tab{scroll-snap-align:start;white-space:nowrap}
+#rupaykg-national-language-selector{max-width:calc(100vw - 28px);box-shadow:0 8px 28px rgba(0,0,0,.28)}
+#rupaykg-national-language-selector select{min-height:38px}
+#rupaykg-accessibility-controls{padding-bottom:max(8px,env(safe-area-inset-bottom))!important}
+#rupaykg-offline-status{bottom:max(14px,env(safe-area-inset-bottom))!important}
+.citizen-assistance-controls{padding:4px 0}
+.citizen-assistance-controls button{min-height:44px;touch-action:manipulation}
+[aria-hidden="true"]{pointer-events:none}
+@media(max-width:600px){
+  :root{--rupaykg-safe-bottom:154px}
+  .topbar{min-height:64px;height:auto;padding-top:10px;padding-bottom:10px}
+  .brand-mark{width:34px;height:34px}
+  .brand strong{font-size:16px}
+  .brand span{font-size:10px}
+  h1{font-size:clamp(34px,12vw,52px)}
+  h2{font-size:22px}
+  .lede{font-size:15px}
+  .workspace-panel-head{align-items:flex-start;flex-direction:column}
+  .workspace-title{align-items:flex-start;flex-direction:column;gap:6px}
+  .identity-actions{grid-template-columns:1fr!important}
+  #rupaykg-national-language-selector{left:12px;right:12px;top:8px;width:auto;max-width:none;justify-content:space-between}
+  #rupaykg-national-language-selector label{font-size:11px}
+  #rupaykg-national-language-selector select{max-width:58vw;min-width:0}
+  #rupaykg-accessibility-controls{left:8px!important;right:8px!important;bottom:max(8px,env(safe-area-inset-bottom))!important;max-width:none!important;justify-content:center}
+  #rupaykg-accessibility-controls button{flex:1 1 70px;min-width:64px}
+  #rupaykg-offline-status{right:8px!important;left:8px!important;bottom:96px!important;max-width:none!important}
+}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
+@media(forced-colors:active){button,input,select,textarea{forced-color-adjust:auto}.workspace-panel,.metric,.command-card,.auth-card,.onboarding-card{border:1px solid CanvasText}}
