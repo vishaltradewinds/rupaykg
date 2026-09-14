@@ -45,7 +45,7 @@ app.get("/api/v1/status", async () => ({ service: "rupaykg-api", version: "0.1.0
 app.get("/api/v1/overview", async (request, reply) => {
   const auth = await requireAuth(request, reply); if (!auth || !pool) return;
   try {
-    const organizationIds = [...new Set(auth.memberships.map(m => m.organization_id))];
+    const organizationIds = auth.activeOrganizationId ? [auth.activeOrganizationId] : [...new Set(auth.memberships.map(m => m.organization_id))];
     if (!organizationIds.length) return { source: "postgresql", syntheticData: false, counts: { activities: 0, measurements: 0, evidence: 0, approvedVerifications: 0, openObligations: 0, issuedOrActiveCredentials: 0, settledTransactions: 0 } };
     const [activities, measurements, evidence, verifications, obligations, credentials, settlements] = await Promise.all([
       query<{ count: string }>("select count(*)::text as count from activities a where a.organization_id = any($1::uuid[]) and a.geography_id is not null and exists (select 1 from organization_memberships om where om.organization_id=a.organization_id and om.identity_id=$2 and om.status='VERIFIED' and organization_has_geography_scope(om.organization_id,a.geography_id))", [organizationIds, auth.identityId]),
@@ -54,7 +54,7 @@ app.get("/api/v1/overview", async (request, reply) => {
       query<{ count: string }>("select count(*)::text as count from verifications v join activities a on a.id=v.activity_id where a.organization_id = any($1::uuid[]) and a.geography_id is not null and exists (select 1 from organization_memberships om where om.organization_id=a.organization_id and om.identity_id=$2 and om.status='VERIFIED' and organization_has_geography_scope(om.organization_id,a.geography_id)) and v.decision = 'APPROVED'", [organizationIds, auth.identityId]),
       query<{ count: string }>("select count(*)::text as count from obligations where organization_id = any($1::uuid[]) and status = 'OPEN'", [organizationIds]),
       query<{ count: string }>("select count(*)::text as count from credentials where issuer_organization_id = any($1::uuid[]) and status in ('ISSUED','ACTIVE','TRANSFERRED','RETIRED')", [organizationIds]),
-      query<{ count: string }>("select count(*)::text as count from settlements where (payer_id = any($1::uuid[]) or payee_id = any($1::uuid[])) and status = 'SETTLED'", [organizationIds]),
+      query<{ count: string }>("select count(*)::text as count from settlements where (payer_id = any($1::uuid[]) or payee_id = any($1::uuid[])) and status = 'SETTLED'", [organizationIds, organizationIds]),
     ]);
     return { source: "postgresql", syntheticData: false, counts: { activities: Number(activities[0]?.count ?? 0), measurements: Number(measurements[0]?.count ?? 0), evidence: Number(evidence[0]?.count ?? 0), approvedVerifications: Number(verifications[0]?.count ?? 0), openObligations: Number(obligations[0]?.count ?? 0), issuedOrActiveCredentials: Number(credentials[0]?.count ?? 0), settledTransactions: Number(settlements[0]?.count ?? 0) } };
   } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Authoritative overview unavailable", syntheticData: false }); }
