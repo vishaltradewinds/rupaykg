@@ -58,7 +58,9 @@ describe("settlement credential lifecycle database guards", () => {
 
   it("prevents retirement while an attached settlement remains open", async () => {
     if (!pool) return;
-    await pool.query("insert into settlements(credential_id,payer_id,payee_id,amount,currency,status) values($1,$2,$3,200,'INR','CREATED')", [openSettlementCredentialId, (await pool.query<{ id: string }>("select to_owner_id as id from registry_events where credential_id=$1 order by created_at desc limit 1", [openSettlementCredentialId])).rows[0]!.id, (await pool.query<{ id: string }>("select id from organizations where name=$1", [`settlement-guard-owner-${suffix}`])).rows[0]!.id]);
+    const owner = (await pool.query<{ id: string }>("select to_owner_id as id from registry_events where credential_id=$1 order by created_at desc limit 1", [openSettlementCredentialId])).rows[0]!.id;
+    const counterparty = (await pool.query<{ id: string }>("insert into organizations(name,organization_type) values($1,'PROCESSOR') returning id", [`settlement-guard-counterparty-${suffix}`])).rows[0]!.id;
+    await pool.query("insert into settlements(credential_id,payer_id,payee_id,amount,currency,status) values($1,$2,$3,200,'INR','CREATED')", [openSettlementCredentialId, owner, counterparty]);
     const error = await pool.query("update credentials set status='RETIRED' where id=$1", [openSettlementCredentialId]).then(() => null).catch((value: unknown) => value);
     assert.ok(error instanceof Error);
     assert.match(error.message, /Credential cannot be retired while a settlement is open/i);
