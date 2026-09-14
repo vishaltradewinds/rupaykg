@@ -53,7 +53,7 @@ describe("settlement credential lifecycle database guards", () => {
     if (!pool) return;
     const error = await pool.query("insert into settlements(credential_id,amount,currency,status) values($1,100,'INR','CREATED')", [retiredCredentialId]).then(() => null).catch((value: unknown) => value);
     assert.ok(error instanceof Error);
-    assert.match(error.message, /Settlement requires an active or transferred credential/i);
+    assert.match(error.message, /Retired credentials cannot create settlements/i);
   });
 
   it("prevents retirement while an attached settlement remains open", async () => {
