@@ -1,7 +1,7 @@
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
+import { randomUUID } from "node:crypto";
 
 const databaseUrl = process.env.DATABASE_URL;
 const pool = databaseUrl ? new Pool({ connectionString: databaseUrl }) : null;
@@ -51,6 +51,19 @@ before(async () => {
     "insert into verifications(evidence_id,activity_id,verifier_identity_id,decision,scope,rationale) values($1,$2,$3,'APPROVED','settlement-reconciliation','independent database guard test') returning id",
     [evidence, activity, verifier],
   )).rows[0]!.id;
+  await pool.query(
+    "insert into mrv_provenance_events(activity_id,verification_id,evidence_id,guardian_policy_id,guardian_execution_id,guardian_status,hcs_status,hcs_topic_id,hcs_transaction_id,hcs_consensus_timestamp,integrity_hash,metadata) values($1,$2,$3,$4,$5,'VERIFIED','CONSENSUS_CONFIRMED','0.0.123',$6,now(),$7,$8::jsonb)",
+    [
+      activity,
+      verification,
+      evidence,
+      `settlement-reconciliation-policy-${suffix}`,
+      `settlement-reconciliation-execution-${suffix}`,
+      `settlement-reconciliation-tx-${suffix}`,
+      `settlement-reconciliation-hash-${suffix}`,
+      JSON.stringify({ testFixture: true }),
+    ],
+  );
   const credential = (await pool.query<{ id: string }>(
     "insert into credentials(activity_id,issuer_organization_id,trust_root_id,status,verification_id,quantity,unit,issued_at) values($1,$2,$3,'ELIGIBLE',$4,1,'kg',now()) returning id",
     [activity, owner, `settlement-reconciliation-root-${suffix}`, verification],
@@ -100,10 +113,7 @@ describe("settlement reconciliation invariants", () => {
   it("rejects external confirmation without reconciliation evidence", async () => {
     if (!pool) return;
     await assert.rejects(
-      pool.query(
-        `update settlements set external_confirmed_at = now() where id = $1`,
-        [settlementId],
-      ),
+      pool.query(`update settlements set external_confirmed_at = now() where id = $1`, [settlementId]),
       /reconciliation|confirmation/i,
     );
   });
