@@ -43,6 +43,11 @@ async function evidenceBindingValid(pool: Pool, organizationId: string, evidence
        join activities a on a.id=e.activity_id
        join verifications v on v.id=$3 and v.activity_id=a.id
        where e.id=$2 and a.organization_id=$1
+         and e.status='VERIFIED'
+         and v.decision='APPROVED'
+         and (e.content_hash is not null or e.content_uri is not null)
+         and a.geography_id is not null
+         and organization_has_geography_scope(a.organization_id,a.geography_id)
      ) ok`,
     [organizationId, evidenceId, verificationId],
   );
@@ -82,7 +87,7 @@ export async function registerStatutoryRoutes(app: FastifyInstance, pool: Pool |
     if (floorArea === null || water === null || waste === null) return reply.code(400).send({ error: "BWG measurements must be non-negative numbers", code: "INVALID_BWG_MEASUREMENTS" });
     const evidenceId = text(body, "evidenceId");
     const verificationId = text(body, "verificationId");
-    if (!await evidenceBindingValid(pool, organizationId, evidenceId, verificationId)) return reply.code(400).send({ error: "Evidence and verification must be supplied together and belong to the organization", code: "STATUTORY_EVIDENCE_BINDING_INVALID" });
+    if (!await evidenceBindingValid(pool, organizationId, evidenceId, verificationId)) return reply.code(400).send({ error: "Evidence and verification must be supplied together and be verified, approved, and organization/geography scoped", code: "STATUTORY_EVIDENCE_BINDING_INVALID" });
     const status = bwgStatus(floorArea, water, waste);
     const note = text(body, "determinationNote");
     try {
@@ -112,7 +117,7 @@ export async function registerStatutoryRoutes(app: FastifyInstance, pool: Pool |
     if (!allowed.has(status)) return reply.code(400).send({ error: "Invalid EPR applicability status", code: "INVALID_EPR_APPLICABILITY" });
     const evidenceId = text(body, "evidenceId");
     const verificationId = text(body, "verificationId");
-    if (!await evidenceBindingValid(pool, organizationId, evidenceId, verificationId)) return reply.code(400).send({ error: "Evidence and verification must be supplied together and belong to the organization", code: "STATUTORY_EVIDENCE_BINDING_INVALID" });
+    if (!await evidenceBindingValid(pool, organizationId, evidenceId, verificationId)) return reply.code(400).send({ error: "Evidence and verification must be supplied together and be verified, approved, and organization/geography scoped", code: "STATUTORY_EVIDENCE_BINDING_INVALID" });
     try {
       const result = await pool.query(
         `insert into organization_epr_applicability
