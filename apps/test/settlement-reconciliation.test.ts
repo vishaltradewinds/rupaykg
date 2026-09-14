@@ -22,6 +22,10 @@ before(async () => {
     "insert into geography(kind,code,name,source) values('DISTRICT',$1,$2,'test') returning id",
     [`SETTLEMENT-RECON-${suffix}`, `Settlement Reconciliation District ${suffix}`],
   )).rows[0]!.id;
+  await pool.query(
+    "insert into organization_geography_scopes(organization_id,geography_id,status) values($1,$2,'VERIFIED')",
+    [owner, geography],
+  );
   const actor = (await pool.query<{ id: string }>(
     "insert into identities(external_subject,display_name) values($1,$2) returning id",
     [`settlement-reconciliation-actor-${suffix}`, "Settlement Reconciliation Actor"],
