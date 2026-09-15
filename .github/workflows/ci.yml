@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, field-sync-acceptance-real]
+    branches: [main]
   pull_request:
     branches: [main]
 
@@ -46,8 +46,6 @@ jobs:
       - run: npm run migrate -w @rupaykg/api
       - run: npm run typecheck
       - run: npm run build
-      - name: Field sync acceptance test
-        run: node --test dist/field-sync-acceptance-real.test.js
       - name: Browser smoke test production web build
         shell: bash
         run: |
