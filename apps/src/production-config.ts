@@ -57,7 +57,7 @@ export function readProductionConfig(env: NodeJS.ProcessEnv = process.env): Prod
   if (env.VITE_RUPAYKG_SESSION_TOKEN?.trim()) throw new Error("PRODUCTION_CONFIG_INVALID: VITE_RUPAYKG_SESSION_TOKEN must not be provided in production");
   const databaseUrl = productionDatabaseUrl(required(env, "DATABASE_URL"));
   const parsedDatabaseUrl = new URL(databaseUrl);
-  const renderInternalDatabase = env.RENDER === "true" && parsedDatabaseUrl.hostname.endsWith(".render.com") && !parsedDatabaseUrl.searchParams.get("sslmode");
+  const renderInternalDatabase = env.RUPAYKG_DATABASE_PROVIDER === "render" && parsedDatabaseUrl.hostname.endsWith(".render.com") && !parsedDatabaseUrl.searchParams.get("sslmode");
   if (!renderInternalDatabase && env.DATABASE_SSL !== "require") throw new Error("PRODUCTION_CONFIG_INVALID: DATABASE_SSL must be require");
   return {
     environment: "production",
