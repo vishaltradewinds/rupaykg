@@ -1,5 +1,5 @@
-import { getApps, getAuth, onAuthStateChanged, type User } from "firebase/auth";
-import { initializeApp } from "firebase/app";
+import { getApps, initializeApp } from "firebase/app";
+import { getAuth, onAuthStateChanged, type User } from "firebase/auth";
 import { getOperatingContextConfig, readOperatingContext, type OperatingContext } from "./operating-context";
 
 const PANEL_ID = "rupaykg-operating-dashboard";
@@ -8,7 +8,6 @@ const firebaseConfigured = Object.values(firebaseConfig).every(Boolean);
 const firebaseApp = firebaseConfigured ? (getApps()[0] ?? initializeApp(firebaseConfig)) : null;
 const firebaseAuth = firebaseApp ? getAuth(firebaseApp) : null;
 let sessionToken = "";
-let refreshTimer = 0;
 
 type Overview = { source: string; syntheticData: boolean; counts: Record<string, number> };
 
@@ -79,7 +78,7 @@ function mount(): void {
   if (firebaseAuth) onAuthStateChanged(firebaseAuth, async user => { sessionToken = ""; if (!user) { render(); return; } try { await establishSession(user); await loadOverview(); } catch (cause) { render(readOperatingContext(), undefined, cause instanceof Error ? cause.message : "Authentication unavailable"); } });
   window.addEventListener("rupaykg:operating-context-change", event => { const context = (event as CustomEvent<OperatingContext>).detail === "rural" ? "rural" : "urban"; void loadOverview(context); });
   window.addEventListener("storage", event => { if (event.key === "rupaykg.activeOrganizationId") void loadOverview(); });
-  refreshTimer = window.setInterval(() => { if (sessionToken) void loadOverview(); }, 60000);
+  window.setInterval(() => { if (sessionToken) void loadOverview(); }, 60000);
 }
 
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", mount, { once: true }); else mount();
