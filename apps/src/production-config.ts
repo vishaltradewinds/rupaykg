@@ -27,14 +27,9 @@ function productionDatabaseUrl(value: string): string {
 
 function productionCaCert(value: string, databaseUrl: string): string {
   if (value.includes("BEGIN CERTIFICATE") && value.includes("END CERTIFICATE")) return value;
-
-  // Render's external Postgres URL uses Render-managed public TLS. Node.js can
-  // validate that certificate with its standard trust store, so a custom CA
-  // bundle is not required when sslmode=require is present in the URL.
   let parsed: URL;
   try { parsed = new URL(databaseUrl); } catch { throw new Error("PRODUCTION_CONFIG_INVALID: DATABASE_URL must be a valid PostgreSQL URL"); }
   if (parsed.searchParams.get("sslmode") === "require") return "";
-
   throw new Error("PRODUCTION_CONFIG_INVALID: DATABASE_CA_CERT must contain a PEM certificate unless DATABASE_URL uses sslmode=require");
 }
 
@@ -57,10 +52,11 @@ export function readProductionConfig(env: NodeJS.ProcessEnv = process.env): Prod
   if (env.VITE_RUPAYKG_SESSION_TOKEN?.trim()) throw new Error("PRODUCTION_CONFIG_INVALID: VITE_RUPAYKG_SESSION_TOKEN must not be provided in production");
   const databaseUrl = productionDatabaseUrl(required(env, "DATABASE_URL"));
   const parsedDatabaseUrl = new URL(databaseUrl);
-  // Render's internal Postgres hostname is private to the Render network and
-  // does not include sslmode. Detect it from the connection URL so deployment
-  // does not depend on a provider-specific environment variable being exposed.
-  const renderInternalDatabase = parsedDatabaseUrl.hostname.endsWith(".render.com") && !parsedDatabaseUrl.searchParams.get("sslmode");
+  // Render internal Postgres URLs use private dpg-* hostnames. Public Render
+  // Postgres endpoints use *.render.com and therefore require managed TLS.
+  const renderInternalDatabase =
+    /^dpg-[a-z0-9-]+$/i.test(parsedDatabaseUrl.hostname) &&
+    !parsedDatabaseUrl.searchParams.get("sslmode");
   if (!renderInternalDatabase && env.DATABASE_SSL !== "require") throw new Error("PRODUCTION_CONFIG_INVALID: DATABASE_SSL must be require");
   return {
     environment: "production",
