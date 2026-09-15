@@ -48,7 +48,7 @@ describe("production configuration", () => {
   });
 
   it("requires a production CA certificate for PostgreSQL TLS", () => {
-    assert.throws(() => readProductionConfig({ ...valid, DATABASE_CA_CERT: "" }), /DATABASE_CA_CERT is required/);
+    assert.throws(() => readProductionConfig({ ...valid, DATABASE_CA_CERT: "" }), /DATABASE_CA_CERT must contain a PEM certificate/);
   });
 
   it("requires real authentication", () => {
