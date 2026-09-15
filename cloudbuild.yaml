@@ -14,7 +14,15 @@ steps:
             exit 1
           fi
         done
-        echo "Firebase build configuration validation passed."
+
+        if [[ "${_VITE_FIREBASE_PROJECT_ID}" != "${PROJECT_ID}" ]]; then
+          echo "ERROR: Firebase project ID must match the Google Cloud project being built."
+          echo "       Cloud Build project: ${PROJECT_ID}"
+          echo "       Firebase project:    ${_VITE_FIREBASE_PROJECT_ID}"
+          exit 1
+        fi
+
+        echo "Firebase production build configuration validation passed."
 
   - name: gcr.io/cloud-builders/docker
     args:
@@ -42,10 +50,12 @@ images:
 
 substitutions:
   _REGION: asia-south1
-  _VITE_FIREBASE_API_KEY: REPLACE_WITH_FIREBASE_WEB_API_KEY
-  _VITE_FIREBASE_AUTH_DOMAIN: REPLACE_WITH_FIREBASE_AUTH_DOMAIN
-  _VITE_FIREBASE_PROJECT_ID: REPLACE_WITH_FIREBASE_PROJECT_ID
-  _VITE_FIREBASE_APP_ID: REPLACE_WITH_FIREBASE_APP_ID
+  # Intentionally blank: production deployments must provide the Firebase web app config.
+  # Never commit production credentials or rely on placeholder defaults.
+  _VITE_FIREBASE_API_KEY: ""
+  _VITE_FIREBASE_AUTH_DOMAIN: ""
+  _VITE_FIREBASE_PROJECT_ID: ""
+  _VITE_FIREBASE_APP_ID: ""
 
 options:
   logging: CLOUD_LOGGING_ONLY
