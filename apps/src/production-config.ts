@@ -25,9 +25,17 @@ function productionDatabaseUrl(value: string): string {
   return value;
 }
 
-function productionCaCert(value: string): string {
-  if (!value.includes("BEGIN CERTIFICATE") || !value.includes("END CERTIFICATE")) throw new Error("PRODUCTION_CONFIG_INVALID: DATABASE_CA_CERT must contain a PEM certificate");
-  return value;
+function productionCaCert(value: string, databaseUrl: string): string {
+  if (value.includes("BEGIN CERTIFICATE") && value.includes("END CERTIFICATE")) return value;
+
+  // Render's external Postgres URL uses Render-managed public TLS. Node.js can
+  // validate that certificate with its standard trust store, so a custom CA
+  // bundle is not required when sslmode=require is present in the URL.
+  let parsed: URL;
+  try { parsed = new URL(databaseUrl); } catch { throw new Error("PRODUCTION_CONFIG_INVALID: DATABASE_URL must be a valid PostgreSQL URL"); }
+  if (parsed.searchParams.get("sslmode") === "require") return "";
+
+  throw new Error("PRODUCTION_CONFIG_INVALID: DATABASE_CA_CERT must contain a PEM certificate unless DATABASE_URL uses sslmode=require");
 }
 
 function origins(value: string): string[] {
@@ -48,11 +56,12 @@ export function readProductionConfig(env: NodeJS.ProcessEnv = process.env): Prod
   if (env.RUPAYKG_AUTH_MODE !== "real") throw new Error("PRODUCTION_CONFIG_INVALID: RUPAYKG_AUTH_MODE must be real");
   if (env.DATABASE_SSL !== "require") throw new Error("PRODUCTION_CONFIG_INVALID: DATABASE_SSL must be require");
   if (env.VITE_RUPAYKG_SESSION_TOKEN?.trim()) throw new Error("PRODUCTION_CONFIG_INVALID: VITE_RUPAYKG_SESSION_TOKEN must not be provided in production");
+  const databaseUrl = productionDatabaseUrl(required(env, "DATABASE_URL"));
   return {
     environment: "production",
-    databaseUrl: productionDatabaseUrl(required(env, "DATABASE_URL")),
+    databaseUrl,
     databaseSsl: "require",
-    databaseCaCert: productionCaCert(required(env, "DATABASE_CA_CERT")),
+    databaseCaCert: productionCaCert(env.DATABASE_CA_CERT?.trim() ?? "", databaseUrl),
     allowedOrigins: origins(required(env, "RUPAYKG_ALLOWED_ORIGINS")),
     authMode: "real",
     firebaseProjectId: required(env, "FIREBASE_PROJECT_ID"),
