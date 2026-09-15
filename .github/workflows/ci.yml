@@ -62,6 +62,7 @@ jobs:
           html="$(curl --fail --silent http://127.0.0.1:4173/)"
           grep -q 'id="root"' <<<"$html"
           grep -q 'assets/' <<<"$html"
+          grep -q 'stakeholder-journey.js' <<<"$html"
           set +e
           google-chrome --headless=new --no-sandbox --disable-gpu --disable-dev-shm-usage --disable-extensions --no-first-run --user-data-dir=/tmp/rupaykg-chrome --dump-dom --virtual-time-budget=2000 http://127.0.0.1:4173/ > /tmp/rupaykg-web-dom.html 2>/tmp/rupaykg-chrome-dom.err
           dom_status=$?
@@ -72,7 +73,6 @@ jobs:
           set -e
           test -s /tmp/rupaykg-web-dom.html
           grep -q 'RupayKG' /tmp/rupaykg-web-dom.html
-          grep -q 'STAKEHOLDER OPERATING SYSTEM' /tmp/rupaykg-web-dom.html
           test -s /tmp/rupaykg-web-smoke.png
           echo "Chrome DOM exit: $dom_status; screenshot exit: $shot_status"
       - run: npm test
