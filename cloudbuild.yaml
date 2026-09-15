@@ -1,4 +1,21 @@
 steps:
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        for value in \
+          "${_VITE_FIREBASE_API_KEY}" \
+          "${_VITE_FIREBASE_AUTH_DOMAIN}" \
+          "${_VITE_FIREBASE_PROJECT_ID}" \
+          "${_VITE_FIREBASE_APP_ID}"; do
+          if [[ -z "$value" || "$value" == REPLACE_WITH_* ]]; then
+            echo "ERROR: production build requires real Firebase web configuration; placeholder or empty value detected."
+            exit 1
+          fi
+        done
+        echo "Firebase build configuration validation passed."
+
   - name: gcr.io/cloud-builders/docker
     args:
       - build
@@ -14,6 +31,7 @@ steps:
       - --build-arg
       - VITE_FIREBASE_APP_ID=${_VITE_FIREBASE_APP_ID}
       - .
+
   - name: gcr.io/cloud-builders/docker
     args:
       - push
