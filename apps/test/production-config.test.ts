@@ -31,7 +31,7 @@ test("production config rejects missing or unsafe production requirements", () =
     [{ ...baseEnv, NODE_ENV: "development" }, /NODE_ENV must be production/],
     [{ ...baseEnv, DATABASE_URL: "postgresql://localhost/rupaykg" }, /must not target localhost/],
     [{ ...baseEnv, DATABASE_SSL: "false" }, /DATABASE_SSL must be require/],
-    [{ ...baseEnv, DATABASE_CA_CERT: "" }, /DATABASE_CA_CERT is required/],
+    [{ ...baseEnv, DATABASE_CA_CERT: "" }, /DATABASE_CA_CERT must contain a PEM certificate/],
     [{ ...baseEnv, RUPAYKG_AUTH_MODE: "session" }, /RUPAYKG_AUTH_MODE must be real/],
     [{ ...baseEnv, FIREBASE_PROJECT_ID: "" }, /FIREBASE_PROJECT_ID is required/],
     [{ ...baseEnv, RUPAYKG_ALLOWED_ORIGINS: "http://app.rupaykg.example" }, /origin must use HTTPS/],
