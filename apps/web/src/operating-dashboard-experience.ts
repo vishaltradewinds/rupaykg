@@ -34,6 +34,7 @@ function card(label: string, value: string): HTMLElement {
 
 function render(context: OperatingContext = readOperatingContext(), overview?: Overview, error?: string): void {
   const config = getOperatingContextConfig(context);
+  const isRural = context === "rural";
   const panel = ensurePanel(); panel.textContent = "";
   const title = document.createElement("strong"); title.textContent = `${config.label} operating dashboard`; Object.assign(title.style, { display: "block", fontSize: "17px", color: "#e8f4fa", marginBottom: "3px" }); panel.appendChild(title);
   const subtitle = document.createElement("div"); subtitle.textContent = `${config.anchor} · ${config.unit} · ${config.waste}`; Object.assign(subtitle.style, { opacity: ".78", marginBottom: "12px" }); panel.appendChild(subtitle);
@@ -42,15 +43,17 @@ function render(context: OperatingContext = readOperatingContext(), overview?: O
   [["Operating geography", config.geography], ["Primary actor", config.actor], ["Field focus", config.fieldFocus], ["Analytics", config.analytics]].forEach(([label, value]) => contextGrid.appendChild(card(label, value)));
   panel.appendChild(contextGrid);
 
-  const heading = document.createElement("div"); heading.textContent = "Authoritative operating totals"; Object.assign(heading.style, { marginTop: "14px", marginBottom: "8px", fontWeight: "700", fontSize: "13px" }); panel.appendChild(heading);
+  const heading = document.createElement("div"); heading.textContent = `${isRural ? "Village / biomass" : "Ward / MSW"} authoritative totals`; Object.assign(heading.style, { marginTop: "14px", marginBottom: "8px", fontWeight: "700", fontSize: "13px" }); panel.appendChild(heading);
   const dataGrid = document.createElement("div"); Object.assign(dataGrid.style, { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(125px,1fr))", gap: "8px" });
   const counts = overview?.counts ?? {};
-  [["Activities", counts.activities], ["Measurements", counts.measurements], ["Evidence", counts.evidence], ["Approved verification", counts.approvedVerifications], ["Credentials", counts.issuedOrActiveCredentials], ["Settled transactions", counts.settledTransactions]].forEach(([label, value]) => dataGrid.appendChild(card(String(label), overview ? String(value ?? 0) : "—")));
+  const activityLabel = isRural ? "Biomass activities" : "MSW activities";
+  const measurementLabel = isRural ? "Biomass measurements" : "MSW measurements";
+  [[activityLabel, counts.activities], [measurementLabel, counts.measurements], ["Evidence", counts.evidence], ["Approved verification", counts.approvedVerifications], ["Credentials", counts.issuedOrActiveCredentials], ["Settled transactions", counts.settledTransactions]].forEach(([label, value]) => dataGrid.appendChild(card(String(label), overview ? String(value ?? 0) : "—")));
   panel.appendChild(dataGrid);
 
-  const source = document.createElement("div"); source.textContent = overview ? `Source: ${overview.source} · syntheticData=${overview.syntheticData ? "true" : "false"}` : error ? `Authoritative data unavailable: ${error}` : "Authenticating…"; Object.assign(source.style, { marginTop: "9px", opacity: ".72", fontSize: "11px" }); panel.appendChild(source);
-  const flow = document.createElement("div"); flow.textContent = "Capture → Measure → Evidence → Verify → Provenance → Registry → Value"; Object.assign(flow.style, { marginTop: "12px", padding: "9px 10px", borderRadius: "10px", background: "rgba(45,140,255,.08)", border: "1px solid rgba(45,140,255,.16)", fontWeight: "700" }); panel.appendChild(flow);
-  const note = document.createElement("div"); note.textContent = context === "rural" ? "Rural mode prioritizes village-level biomass capture and offline field operations." : "Urban mode prioritizes ward-level MSW capture, collection and material recovery flows."; Object.assign(note.style, { marginTop: "8px", opacity: ".72" }); panel.appendChild(note);
+  const source = document.createElement("div"); source.textContent = overview ? `Source: ${overview.source} · authorized organization scope · syntheticData=${overview.syntheticData ? "true" : "false"}` : error ? `Authoritative data unavailable: ${error}` : "Authenticating…"; Object.assign(source.style, { marginTop: "9px", opacity: ".72", fontSize: "11px" }); panel.appendChild(source);
+  const flow = document.createElement("div"); flow.textContent = isRural ? "Capture biomass → Measure → Evidence → Verify → Provenance → Registry → Value" : "Capture MSW → Measure → Evidence → Verify → Provenance → Registry → Value"; Object.assign(flow.style, { marginTop: "12px", padding: "9px 10px", borderRadius: "10px", background: "rgba(45,140,255,.08)", border: "1px solid rgba(45,140,255,.16)", fontWeight: "700" }); panel.appendChild(flow);
+  const note = document.createElement("div"); note.textContent = isRural ? "Rural mode: village-level biomass and offline field operations. Data remains subject to the same authoritative MRV, geography and organization authorization." : "Urban mode: ward-level MSW, collection and material recovery. Data remains subject to the same authoritative MRV, geography and organization authorization."; Object.assign(note.style, { marginTop: "8px", opacity: ".72" }); panel.appendChild(note);
 }
 
 async function establishSession(user: User): Promise<void> {
