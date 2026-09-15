@@ -3,7 +3,7 @@ const PRODUCTION_ENV = "production";
 export type ProductionConfig = {
   environment: "production";
   databaseUrl: string;
-  databaseSsl: "require";
+  databaseSsl: "require" | "false";
   databaseCaCert: string;
   allowedOrigins: string[];
   authMode: "real";
@@ -54,14 +54,16 @@ export function readProductionConfig(env: NodeJS.ProcessEnv = process.env): Prod
   if (env.NODE_ENV !== PRODUCTION_ENV) throw new Error("PRODUCTION_CONFIG_NOT_ACTIVE: NODE_ENV must be production");
   if (env.RUPAYKG_SYNTHETIC_DATA?.toLowerCase() === "true") throw new Error("PRODUCTION_CONFIG_INVALID: synthetic data is forbidden in production");
   if (env.RUPAYKG_AUTH_MODE !== "real") throw new Error("PRODUCTION_CONFIG_INVALID: RUPAYKG_AUTH_MODE must be real");
-  if (env.DATABASE_SSL !== "require") throw new Error("PRODUCTION_CONFIG_INVALID: DATABASE_SSL must be require");
   if (env.VITE_RUPAYKG_SESSION_TOKEN?.trim()) throw new Error("PRODUCTION_CONFIG_INVALID: VITE_RUPAYKG_SESSION_TOKEN must not be provided in production");
   const databaseUrl = productionDatabaseUrl(required(env, "DATABASE_URL"));
+  const parsedDatabaseUrl = new URL(databaseUrl);
+  const renderInternalDatabase = env.RENDER === "true" && parsedDatabaseUrl.hostname.endsWith(".render.com") && !parsedDatabaseUrl.searchParams.get("sslmode");
+  if (!renderInternalDatabase && env.DATABASE_SSL !== "require") throw new Error("PRODUCTION_CONFIG_INVALID: DATABASE_SSL must be require");
   return {
     environment: "production",
     databaseUrl,
-    databaseSsl: "require",
-    databaseCaCert: productionCaCert(env.DATABASE_CA_CERT?.trim() ?? "", databaseUrl),
+    databaseSsl: renderInternalDatabase ? "false" : "require",
+    databaseCaCert: renderInternalDatabase ? "" : productionCaCert(env.DATABASE_CA_CERT?.trim() ?? "", databaseUrl),
     allowedOrigins: origins(required(env, "RUPAYKG_ALLOWED_ORIGINS")),
     authMode: "real",
     firebaseProjectId: required(env, "FIREBASE_PROJECT_ID"),
