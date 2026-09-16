@@ -3,32 +3,43 @@ import { getAuth, onAuthStateChanged, type User } from "firebase/auth";
 
 const rootId = "rupaykg-onboarding-governance";
 const storageKey = "rupaykg.activeOrganizationId";
-const fetchPatchKey = "__rupaykgOnboardingGovernanceFetchPatched";
 let sessionToken = "";
 
-type Guidance = { title: string; steps: string[] };
-
-const roleGuidance: Record<string, Guidance> = {
-  citizen: { title: "Individual participant", steps: ["Confirm identity and operating area", "Complete the local participation review", "Use Operations after approval"] },
-  farmer: { title: "Farmer / rural producer", steps: ["Confirm producer identity and operating geography", "Complete local or rural-authority review", "Use Operations and MRV after approval"] },
-  safai_mitra: { title: "Waste collection worker", steps: ["Confirm worker identity and operating area", "Complete authorized local review", "Use field operations after approval"] },
-  fpo: { title: "FPO / rural enterprise", steps: ["Confirm organization/legal identity", "Complete local → district → state review as applicable", "Use Operations and MRV after approval"] },
-  municipal_admin: { title: "ULB / municipal authority", steps: ["Confirm municipal authority and geography", "Complete authorized local/state governance review", "Use institutional Operations, Compliance and MRV after approval"] },
-  municipal_generator: { title: "Municipal / bulk generator", steps: ["Confirm facility and organization identity", "Complete applicable local/district/state review", "Use Operations and Compliance after approval"] },
-  aggregator: { title: "Aggregator / transporter", steps: ["Confirm operating organization and geography", "Complete hierarchy approval", "Use Operations and MRV after approval"] },
-  processor: { title: "MRF / recycler / processor", steps: ["Confirm facility and legal identity", "Complete hierarchy approval and legal verification", "Use Operations, MRV and Compliance after approval"] },
-  industry_generator: { title: "Industrial generator", steps: ["Confirm legal entity and facility", "Complete hierarchy approval and legal verification", "Use Operations, Compliance and ESG after approval"] },
-  commercial_generator: { title: "Commercial / bulk generator", steps: ["Confirm organization and operating site", "Complete applicable hierarchy approval", "Use Operations and Compliance after approval"] },
-  institution_generator: { title: "Institutional generator", steps: ["Confirm institution and operating site", "Complete applicable hierarchy approval", "Use Operations and Compliance after approval"] },
-  PROJECT_OWNER: { title: "Carbon project owner", steps: ["Confirm project organization and geography", "Complete hierarchy and legal verification", "Use MRV → Carbon & Value after approval"] },
-  ACVA_USER: { title: "MRV / assurance user", steps: ["Confirm assurance organization and scope", "Complete hierarchy and legal verification", "Use MRV & Evidence after approval"] },
-  ccc_buyer: { title: "Carbon / ESG buyer", steps: ["Confirm buyer organization and legal identity", "Complete hierarchy and legal verification", "Use Carbon/Registry/ESG functions after approval"] },
-  epr_partner: { title: "EPR participant", steps: ["Confirm producer/brand/importer organization", "Complete hierarchy and legal verification", "Use Compliance & EPR after approval"] },
-  csr_partner: { title: "CSR / ESG partner", steps: ["Confirm organization and legal identity", "Complete hierarchy and legal verification", "Use ESG / BRSR after approval"] },
-  regulator: { title: "Regulator / public authority", steps: ["Confirm authority identity and jurisdiction", "Complete authorized governance review", "Use read-only oversight functions after approval"] }
+type Application = {
+  id: string;
+  organization_name?: string;
+  applicant_email?: string;
+  requested_role_key?: string;
+  geography_name?: string;
+  legal_name?: string;
+  legal_form?: string;
+  registration_identifier?: string;
+  evidence_count?: number;
+  verification_status?: string;
+  nextApproval?: { approval_level?: string; status?: string };
 };
 
-function root(): HTMLElement {
+const guidance: Record<string, string[]> = {
+  citizen: ["Confirm identity and operating area", "Complete local participation review", "Use Operations after approval"],
+  farmer: ["Confirm producer identity and geography", "Complete authorized rural review", "Use Operations and MRV after approval"],
+  safai_mitra: ["Confirm worker identity and area", "Complete authorized local review", "Use field operations after approval"],
+  fpo: ["Confirm organization identity", "Complete local, district and state review as applicable", "Use Operations and MRV after approval"],
+  municipal_admin: ["Confirm municipal authority and geography", "Complete authorized governance review", "Use institutional Operations, Compliance and MRV after approval"],
+  municipal_generator: ["Confirm facility and organization", "Complete applicable hierarchy review", "Use Operations and Compliance after approval"],
+  aggregator: ["Confirm operating organization and geography", "Complete hierarchy approval", "Use Operations and MRV after approval"],
+  processor: ["Confirm facility and legal identity", "Complete hierarchy and legal verification", "Use Operations, MRV and Compliance after approval"],
+  industry_generator: ["Confirm legal entity and facility", "Complete hierarchy and legal verification", "Use Operations, Compliance and ESG after approval"],
+  commercial_generator: ["Confirm organization and operating site", "Complete applicable hierarchy approval", "Use Operations and Compliance after approval"],
+  institution_generator: ["Confirm institution and operating site", "Complete applicable hierarchy approval", "Use Operations and Compliance after approval"],
+  PROJECT_OWNER: ["Confirm project organization and geography", "Complete hierarchy and legal verification", "Use MRV and Carbon after approval"],
+  ACVA_USER: ["Confirm assurance organization and scope", "Complete hierarchy and legal verification", "Use MRV after approval"],
+  ccc_buyer: ["Confirm buyer organization and legal identity", "Complete hierarchy and legal verification", "Use Carbon, Registry and ESG after approval"],
+  epr_partner: ["Confirm producer, brand or importer identity", "Complete hierarchy and legal verification", "Use Compliance and EPR after approval"],
+  csr_partner: ["Confirm organization and legal identity", "Complete hierarchy and legal verification", "Use ESG and BRSR after approval"],
+  regulator: ["Confirm authority identity and jurisdiction", "Complete authorized governance review", "Use read-only oversight after approval"]
+};
+
+function getRoot(): HTMLElement {
   let el = document.getElementById(rootId);
   if (!el) {
     el = document.createElement("section");
@@ -59,193 +70,100 @@ async function establishSession(user: User) {
   const body = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(body?.error || "Unable to establish RupayKG session");
   sessionToken = body.sessionToken || "";
-  const verified = (body.memberships || []).filter((m: any) => m?.status === "VERIFIED");
-  if (!localStorage.getItem(storageKey) && verified[0]?.organization_id) {
-    localStorage.setItem(storageKey, verified[0].organization_id);
-  }
+  const memberships = Array.isArray(body.memberships) ? body.memberships : [];
+  const verified = memberships.find((m: any) => m && m.status === "VERIFIED" && m.organization_id);
+  if (!localStorage.getItem(storageKey) && verified) localStorage.setItem(storageKey, verified.organization_id);
 }
 
-function field(label: string, name: string, placeholder: string, required = false, type = "text") {
-  const wrap = document.createElement("label");
-  wrap.className = "form-field";
-  const span = document.createElement("span");
-  span.textContent = `${label}${required ? " *" : ""}`;
-  wrap.appendChild(span);
-  const input = type === "textarea" ? document.createElement("textarea") : document.createElement("input");
-  input.setAttribute("aria-label", label);
-  input.dataset.governanceInput = name;
-  input.placeholder = placeholder;
-  if (type !== "textarea") (input as HTMLInputElement).type = type;
-  if (required) input.required = true;
-  if (type === "textarea") (input as HTMLTextAreaElement).rows = 2;
-  wrap.appendChild(input);
-  return wrap;
-}
-
-function injectApplicantFields(form: HTMLFormElement) {
-  if (form.querySelector("[data-rupaykg-governance-fields]")) return;
-  const box = document.createElement("fieldset");
-  box.dataset.rupaykgGovernanceFields = "true";
-  box.style.cssText = "margin:8px 0;padding:12px;border:1px solid #314c63;border-radius:12px";
-  const legend = document.createElement("legend");
-  legend.textContent = "Legal identity & verification evidence";
-  box.appendChild(legend);
-  const note = document.createElement("p");
-  note.textContent = "Organization-backed stakeholders must complete legal verification before final approval. These references do not constitute CPCB registration, statutory approval, or regulatory acceptance.";
-  note.style.cssText = "font-size:12px;opacity:.78;line-height:1.4";
-  box.appendChild(note);
-  box.append(field("Legal name", "legalName", "Registered legal name", true));
-  box.append(field("Legal form", "legalForm", "Company / LLP / Trust / ULB / etc.", true));
-  box.append(field("Registration identifier", "registrationIdentifier", "CIN / registration number / applicable identifier", true));
-  box.append(field("Registration authority", "registrationAuthority", "MCA / Registrar / ULB / competent authority", true));
-  box.append(field("Evidence type", "evidenceType", "Incorporation / registration / authorization", true));
-  box.append(field("Document reference", "documentReference", "Controlled document or repository reference", true));
-  box.append(field("Evidence content hash", "contentHash", "SHA-256 or controlled content hash", true));
-  box.append(field("Evidence issuer", "issuerName", "Issuing authority / institution"));
-  box.append(field("Issued at", "issuedAt", "YYYY-MM-DD", false, "date"));
-  box.append(field("Expires at", "expiresAt", "YYYY-MM-DD", false, "date"));
-  form.insertBefore(box, form.querySelector("button[type=submit]") || null);
-}
-
-function values(): Record<string, string> {
-  const result: Record<string, string> = {};
-  document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>("[data-governance-input]").forEach((input) => {
-    if (input.dataset.governanceInput) result[input.dataset.governanceInput] = input.value.trim();
-  });
-  return result;
-}
-
-function patchOnboardingFetch() {
-  const scopedWindow = window as typeof window & { [fetchPatchKey]?: boolean };
-  if (scopedWindow[fetchPatchKey]) return;
-  const original = window.fetch.bind(window);
-  scopedWindow[fetchPatchKey] = true;
-  window.fetch = async (input, init) => {
-    const url = typeof input === "string" ? input : input instanceof Request ? input.url : input instanceof URL ? input.toString() : String(input);
-    const method = init?.method || (input instanceof Request ? input.method : "GET");
-    const isApplicationPost = method.toUpperCase() === "POST" && url.includes("/api/v1/onboarding/applications") && !url.includes("/withdraw") && !url.includes("/approve") && !url.includes("/reject") && !url.includes("/verify-legal");
-    if (isApplicationPost) {
-      const headers = new Headers(init?.headers || (input instanceof Request ? input.headers : undefined));
-      if (headers.get("Content-Type")?.includes("application/json") && typeof init?.body === "string") {
-        const body = JSON.parse(init.body);
-        Object.assign(body, values());
-        init = { ...init, body: JSON.stringify(body), headers };
-      }
-    }
-    return original(input, init);
-  };
-}
-
-function renderChecklist(target: Element, role: string) {
-  const guidance = roleGuidance[role];
-  if (!guidance || target.querySelector("[data-rupaykg-role-checklist]")) return;
+function renderApplicant(target: Element, application: Application) {
+  const old = document.getElementById("rupaykg-onboarding-status");
+  if (old) old.remove();
   const box = document.createElement("section");
-  box.dataset.rupaykgRoleChecklist = "true";
+  box.id = "rupaykg-onboarding-status";
   box.style.cssText = "margin:10px 0;padding:12px;border:1px solid #314c63;border-radius:12px";
   const title = document.createElement("strong");
-  title.textContent = `Onboarding path · ${guidance.title}`;
+  title.textContent = `Onboarding · ${application.requested_role_key || "Stakeholder"}`;
   box.appendChild(title);
-  const intro = document.createElement("p");
-  intro.textContent = "Access is activated only after the required authority chain approves the application. The server determines the next authority from the selected geography.";
-  intro.style.cssText = "font-size:12px;opacity:.78;line-height:1.45";
-  box.appendChild(intro);
-  guidance.steps.forEach((step, index) => {
+  const status = document.createElement("p");
+  status.textContent = `Status: ${application.nextApproval?.status || "PENDING"}. Access remains blocked until the required authority chain is complete.`;
+  status.style.cssText = "font-size:12px;line-height:1.45;opacity:.8";
+  box.appendChild(status);
+  const steps = guidance[application.requested_role_key || ""] || ["Confirm identity and geography", "Complete the server-authorized approval chain", "Use role-specific workspaces after approval"];
+  steps.forEach((text, index) => {
     const row = document.createElement("div");
-    row.textContent = `${index + 1}. ${step}`;
+    row.textContent = `${index + 1}. ${text}`;
     row.style.cssText = "font-size:12px;margin-top:5px";
     box.appendChild(row);
   });
-  target.appendChild(box);
+  target.prepend(box);
 }
 
-async function renderApplicantStatus() {
+async function applicantStatus() {
   if (!sessionToken) return;
   try {
     const me = await api("/api/v1/auth/me");
-    const pending = (me.applications || []).find((application: any) => application.status === "PENDING");
+    const applications: Application[] = Array.isArray(me.applications) ? me.applications : [];
+    const pending = applications.find((a) => a.status === "PENDING") || applications[0];
     const target = document.querySelector(".onboarding-card");
-    if (!target) return;
-    if (pending) {
-      renderChecklist(target, String(pending.requested_role_key));
-      let banner = document.getElementById("rupaykg-legal-status");
-      if (!banner) {
-        banner = document.createElement("div");
-        banner.id = "rupaykg-legal-status";
-        target.insertBefore(banner, target.querySelector(".auth-form") || target.firstChild);
-      }
-      banner.style.cssText = "margin:10px 0;padding:10px 12px;border:1px solid #314c63;border-radius:12px;font-size:12px;line-height:1.45";
-      banner.textContent = `Application status: ${pending.status} · Approval follows the server-authorized hierarchy for the selected geography. Operational access remains blocked until the required approvals are complete.`;
-    } else {
-      document.getElementById("rupaykg-legal-status")?.remove();
-    }
+    if (target && pending) renderApplicant(target, pending);
   } catch {
-    // Never synthesize applicant status.
+    // Do not manufacture status when the authoritative endpoint is unavailable.
   }
 }
 
-async function renderReviewerQueue() {
+async function reviewerQueue() {
   if (!sessionToken) return;
   try {
     const result = await api("/api/v1/onboarding/review-queue");
-    const applications = Array.isArray(result.applications) ? result.applications : [];
-    const panel = root();
+    const applications: Application[] = Array.isArray(result.applications) ? result.applications : [];
+    const panel = getRoot();
     panel.replaceChildren();
     panel.style.cssText = "max-width:980px;margin:18px auto;padding:0 16px";
-
-    const heading = document.createElement("div");
     const title = document.createElement("strong");
-    title.textContent = "Stakeholder approval & legal verification queue";
-    heading.appendChild(title);
-    const note = document.createElement("div");
-    note.textContent = "The server determines reviewer eligibility from role, organization membership, geography scope and the current approval step.";
-    note.style.cssText = "font-size:12px;opacity:.72;margin-top:4px";
-    heading.appendChild(note);
-    panel.appendChild(heading);
-
+    title.textContent = "Stakeholder approval queue";
+    panel.appendChild(title);
+    const note = document.createElement("p");
+    note.textContent = "Reviewer eligibility and the current approval step are determined by the server from authority role, membership and geography.";
+    note.style.cssText = "font-size:12px;opacity:.72";
+    panel.appendChild(note);
     if (!applications.length) {
       const empty = document.createElement("div");
-      empty.textContent = "No applications are currently awaiting action in this authority scope.";
-      empty.style.cssText = "margin-top:10px;padding:12px;border:1px solid #314c63;border-radius:12px;font-size:12px;opacity:.78";
+      empty.textContent = "No applications are awaiting action in this authority scope.";
+      empty.style.cssText = "padding:12px;border:1px solid #314c63;border-radius:12px;font-size:12px";
       panel.appendChild(empty);
       return;
     }
-
-    for (const application of applications) {
+    applications.forEach((application) => {
       const card = document.createElement("article");
       card.style.cssText = "margin-top:10px;padding:12px;border:1px solid #314c63;border-radius:12px";
       const name = document.createElement("strong");
-      name.textContent = String(application.organization_name || "Organization");
+      name.textContent = application.organization_name || "Organization";
       card.appendChild(name);
-
-      const identity = document.createElement("div");
-      identity.textContent = `${String(application.requested_role_key || "Role")} · ${String(application.applicant_email || "")} · ${String(application.geography_name || "No geography")}`;
-      identity.style.cssText = "font-size:12px;opacity:.78;margin:4px 0";
-      card.appendChild(identity);
-
-      const next = document.createElement("div");
-      const nextStep = application.nextApproval;
-      next.textContent = `Current approval step: ${nextStep ? `${String(nextStep.approval_level)} · ${String(nextStep.status)}` : "None"}`;
-      next.style.cssText = "font-size:12px;margin-top:5px";
-      card.appendChild(next);
-
+      const meta = document.createElement("div");
+      meta.textContent = `${application.requested_role_key || "Role"} · ${application.applicant_email || ""} · ${application.geography_name || "No geography"}`;
+      meta.style.cssText = "font-size:12px;opacity:.78;margin-top:4px";
+      card.appendChild(meta);
+      const step = document.createElement("div");
+      const approval = application.nextApproval;
+      step.textContent = approval ? `Current step: ${approval.approval_level || "AUTHORITY"} · ${approval.status || "PENDING"}` : "Current step: unavailable";
+      step.style.cssText = "font-size:12px;margin-top:6px";
+      card.appendChild(step);
       const legal = document.createElement("div");
-      legal.textContent = `Legal: ${String(application.legal_name || "—")} · ${String(application.legal_form || "—")} · ${String(application.registration_identifier || "—")} · Evidence records: ${String(application.evidence_count ?? 0)} · Legal status: ${String(application.verification_status || "PENDING")}`;
-      legal.style.cssText = "font-size:12px;margin-top:5px";
+      legal.textContent = `Legal: ${application.legal_name || "—"} · ${application.legal_form || "—"} · ${application.registration_identifier || "—"} · Evidence: ${application.evidence_count ?? 0} · Status: ${application.verification_status || "PENDING"}`;
+      legal.style.cssText = "font-size:12px;margin-top:6px";
       card.appendChild(legal);
-
       const controls = document.createElement("div");
       controls.style.cssText = "display:flex;gap:8px;flex-wrap:wrap;margin-top:8px";
-      const reviewNote = document.createElement("input");
-      reviewNote.placeholder = "Review rationale";
-      reviewNote.style.minWidth = "260px";
-      controls.appendChild(reviewNote);
-
-      for (const action of ["approve", "reject"] as const) {
+      const rationale = document.createElement("input");
+      rationale.placeholder = "Review rationale";
+      rationale.style.minWidth = "260px";
+      controls.appendChild(rationale);
+      ["approve", "reject"].forEach((action) => {
         const button = document.createElement("button");
         button.type = "button";
         button.textContent = action === "approve" ? "Approve current step" : "Reject application";
         button.onclick = async () => {
-          if (action === "reject" && !reviewNote.value.trim()) {
+          if (action === "reject" && !rationale.value.trim()) {
             alert("A review rationale is required.");
             return;
           }
@@ -254,19 +172,19 @@ async function renderReviewerQueue() {
             await api(`/api/v1/onboarding/applications/${application.id}/${action}`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ reviewNote: reviewNote.value.trim() || undefined })
+              body: JSON.stringify({ reviewNote: rationale.value.trim() || undefined })
             });
-            await renderReviewerQueue();
+            await reviewerQueue();
           } catch (error) {
             alert(error instanceof Error ? error.message : "Approval action failed");
             button.disabled = false;
           }
         };
         controls.appendChild(button);
-      }
+      });
       card.appendChild(controls);
       panel.appendChild(card);
-    }
+    });
   } catch {
     // Non-authorized users receive no reviewer surface.
   }
@@ -275,26 +193,46 @@ async function renderReviewerQueue() {
 async function boot(user: User) {
   try {
     await establishSession(user);
-    patchOnboardingFetch();
   } catch {
     return;
   }
-
   const observer = new MutationObserver(() => {
-    document.querySelectorAll<HTMLFormElement>("form.auth-form").forEach(injectApplicantFields);
+    document.querySelectorAll<HTMLFormElement>("form.auth-form").forEach((form) => {
+      if (form.querySelector("[data-rupaykg-governance-fields]")) return;
+      const box = document.createElement("fieldset");
+      box.dataset.rupaykgGovernanceFields = "true";
+      box.style.cssText = "margin:8px 0;padding:12px;border:1px solid #314c63;border-radius:12px";
+      const legend = document.createElement("legend");
+      legend.textContent = "Legal identity & verification evidence";
+      box.appendChild(legend);
+      [
+        ["Legal name", "legalName", "Registered legal name"],
+        ["Legal form", "legalForm", "Company / LLP / Trust / ULB / etc."],
+        ["Registration identifier", "registrationIdentifier", "CIN / registration number / applicable identifier"],
+        ["Registration authority", "registrationAuthority", "MCA / Registrar / ULB / competent authority"],
+        ["Evidence type", "evidenceType", "Incorporation / registration / authorization"],
+        ["Document reference", "documentReference", "Controlled document reference"],
+        ["Evidence content hash", "contentHash", "SHA-256 or controlled content hash"]
+      ].forEach(([label, name, placeholder]) => {
+        const field = document.createElement("label");
+        field.style.cssText = "display:block;margin:7px 0;font-size:12px";
+        field.textContent = label;
+        const input = document.createElement("input");
+        input.name = name;
+        input.placeholder = placeholder;
+        input.required = true;
+        input.style.cssText = "display:block;width:100%;margin-top:4px";
+        field.appendChild(input);
+        box.appendChild(field);
+      });
+      form.appendChild(box);
+    });
   });
   observer.observe(document.documentElement, { childList: true, subtree: true });
-  document.querySelectorAll<HTMLFormElement>("form.auth-form").forEach(injectApplicantFields);
-  await renderApplicantStatus();
-  await renderReviewerQueue();
-
-  setInterval(() => {
-    document.querySelectorAll<HTMLFormElement>("form.auth-form").forEach(injectApplicantFields);
-    void renderApplicantStatus();
-  }, 2500);
+  await applicantStatus();
+  await reviewerQueue();
 }
 
-patchOnboardingFetch();
 if (getApps().length) {
   onAuthStateChanged(getAuth(getApp()), (user) => {
     if (user) void boot(user);
