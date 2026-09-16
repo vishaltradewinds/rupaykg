@@ -5,7 +5,10 @@ import "./styles.css";
 type Membership = { organization_id: string; status: string; permissions?: string[] };
 type Session = { sessionToken: string; memberships: Membership[] };
 type Evidence = { id: string; activity_id: string; evidence_type: string; status: string; captured_at: string; content_hash?: string | null };
-type Workspace = { data?: { evidence?: Evidence[] } };
+type Activity = { id: string; status?: string; activity_type?: string; occurred_at?: string | null };
+type Measurement = { id: string; activity_id: string; value?: unknown; unit?: string; quality_status?: string; measured_at?: string };
+type Verification = { id: string; activity_id: string; evidence_id?: string; decision?: string; scope?: string; decided_at?: string };
+type Workspace = { data?: { activities?: Activity[]; measurements?: Measurement[]; evidence?: Evidence[]; verifications?: Verification[] } };
 
 const config = { apiKey: import.meta.env.VITE_FIREBASE_API_KEY, authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN, projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID, appId: import.meta.env.VITE_FIREBASE_APP_ID };
 const configured = Object.values(config).every(Boolean);
@@ -19,64 +22,59 @@ let message = "";
 let loading = false;
 
 async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const headers = new Headers(init.headers);
-  headers.set("Accept", "application/json");
+  const headers = new Headers(init.headers); headers.set("Accept", "application/json");
   if (token) headers.set("Authorization", `Bearer ${token}`);
-  const organizationId = activeOrganizationId();
-  if (token && organizationId) headers.set("x-rupaykg-organization-id", organizationId);
-  const response = await fetch(path, { ...init, headers });
-  const body = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(body?.error ?? `Request failed (${response.status})`);
-  return body as T;
+  const organizationId = activeOrganizationId(); if (token && organizationId) headers.set("x-rupaykg-organization-id", organizationId);
+  const response = await fetch(path, { ...init, headers }); const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body?.error ?? `Request failed (${response.status})`); return body as T;
 }
 
 async function exchange(user: import("firebase/auth").User): Promise<Session> {
   if (!user.emailVerified) throw new Error("Verified email is required before verification actions.");
   const response = await fetch("/api/v1/auth/exchange", { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify({ idToken: await user.getIdToken(true) }) });
-  const body = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(body?.error ?? `Authentication failed (${response.status})`);
+  const body = await response.json().catch(() => ({})); if (!response.ok) throw new Error(body?.error ?? `Authentication failed (${response.status})`);
   return { sessionToken: String(body.sessionToken ?? ""), memberships: Array.isArray(body.memberships) ? body.memberships : [] };
 }
 
 const esc = (value: unknown) => String(value ?? "—").replace(/[&<>\"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[c] ?? c));
-
 function canVerify(memberships: Membership[]): boolean {
   const organizationId = activeOrganizationId();
   const membership = memberships.find((item) => item.status === "VERIFIED" && (!organizationId || item.organization_id === organizationId));
   return Boolean(membership?.permissions?.some((permission) => ["VERIFY_EVIDENCE", "verification:approve", "verification.approve"].includes(permission)));
 }
+function jump(label: string) { const button = Array.from(document.querySelectorAll("button")).find((item) => item.textContent?.trim().toLowerCase().includes(label.toLowerCase())); button?.click(); }
 
-function render(evidence: Evidence[] = [], authorized = false) {
+function render(workspace: Workspace | null = null, authorized = false) {
   if (!root) return;
-  root.innerHTML = `<section class="compliance-card" aria-labelledby="mrv-verification-actions-title"><div class="compliance-head"><div><p class="eyebrow">MRV CONTROL</p><h2 id="mrv-verification-actions-title">Evidence verification queue</h2><p>Approve evidence only through the authoritative verification API. Guardian/Hedera provenance remains a separate downstream trust gate.</p></div><span class="compliance-state">${authorized ? "VERIFIER ACCESS" : token ? "READ ONLY" : "SIGN IN REQUIRED"}</span></div>${message ? `<div class="resource-flow-state" role="status">${esc(message)}</div>` : ""}${!token ? `<p class="field-help">Sign in with a verified account to review evidence.</p>` : !authorized ? `<p class="field-help">This organization membership does not have the backend verification permission.</p>` : evidence.length ? `<div class="compliance-list">${evidence.slice(0, 30).map((item) => `<article class="compliance-row"><div><strong>${esc(item.evidence_type)}</strong><span>Activity ${esc(item.activity_id)} · captured ${esc(item.captured_at)}</span><small>Status: ${esc(item.status)} · Evidence ${esc(item.id)}</small></div>${item.status === "VERIFIED" ? `<span class="compliance-state">VERIFIED</span>` : `<div class="resource-flow-actions"><input data-scope="${esc(item.id)}" aria-label="Verification scope for ${esc(item.id)}" placeholder="Verification scope" autocomplete="off"><button data-verify="${esc(item.id)}" type="button" ${loading ? "disabled" : ""}>Approve verification</button></div>`}</article>`).join("")}</div>` : `<p class="field-help">No evidence records are currently available for verification.</p>`}</section>`;
+  const data = workspace?.data; const evidence = data?.evidence ?? []; const activities = data?.activities ?? []; const measurements = data?.measurements ?? []; const verifications = data?.verifications ?? [];
+  const verifiedEvidence = evidence.filter((item) => item.status === "VERIFIED").length;
+  const approved = verifications.filter((item) => item.decision === "APPROVED").length;
+  const measuredActivities = new Set(measurements.map((item) => item.activity_id));
+  const evidenceActivities = new Set(evidence.map((item) => item.activity_id));
+  const verificationActivities = new Set(verifications.map((item) => item.activity_id));
+  const readyForCarbon = activities.filter((item) => item.status === "COMPLETED" && measuredActivities.has(item.id) && evidenceActivities.has(item.id) && verificationActivities.has(item.id)).length;
+  const next = !activities.length ? "Record an authoritative activity" : readyForCarbon ? "Continue to Carbon / Value" : evidence.some((item) => item.status !== "VERIFIED") ? "Verify outstanding evidence" : "Complete the missing MRV record";
+  root.innerHTML = `<section class="compliance-card" aria-labelledby="mrv-verification-actions-title"><div class="compliance-head"><div><p class="eyebrow">MRV CONTROL</p><h2 id="mrv-verification-actions-title">Evidence verification queue</h2><p>Review local MRV evidence first. Guardian execution and Hedera consensus remain separate downstream trust gates.</p></div><span class="compliance-state">${authorized ? "VERIFIER ACCESS" : token ? "READ ONLY" : "SIGN IN REQUIRED"}</span></div>${message ? `<div class="resource-flow-state" role="status">${esc(message)}</div>` : ""}${!token ? `<p class="field-help">Sign in with a verified account to review evidence.</p>` : !authorized ? `<p class="field-help">This organization membership does not have the backend verification permission.</p>` : `<div class="bwg-grid"><article class="esg-form"><h3>MRV readiness</h3><p class="field-help">Activities <strong>${activities.length}</strong> · Measurements <strong>${measurements.length}</strong> · Evidence <strong>${evidence.length}</strong> · Approved verification <strong>${approved}</strong></p><div class="compliance-state">VERIFIED evidence: ${verifiedEvidence}</div><div class="compliance-state">Activities with activity + measurement + evidence + verification: ${readyForCarbon}</div><p class="field-help"><strong>Next:</strong> ${esc(next)}</p><div class="resource-flow-actions"><button type="button" data-jump="mrv &amp; evidence">Stay in MRV</button><button type="button" data-jump="carbon / value">Open Carbon / Value</button></div></article><article class="esg-form"><h3>Verification queue</h3><p class="field-help">Approval is recorded only through the authoritative verification API.</p>${evidence.length ? evidence.slice(0, 30).map((item) => `<article class="compliance-row"><div><strong>${esc(item.evidence_type)}</strong><span>Activity ${esc(item.activity_id)} · captured ${esc(item.captured_at)}</span><small>Status: ${esc(item.status)} · Evidence ${esc(item.id)}</small></div>${item.status === "VERIFIED" ? `<span class="compliance-state">VERIFIED</span>` : `<div class="resource-flow-actions"><input data-scope="${esc(item.id)}" aria-label="Verification scope for ${esc(item.id)}" placeholder="Verification scope" autocomplete="off"><button data-verify="${esc(item.id)}" type="button" ${loading ? "disabled" : ""}>Approve verification</button></div>`}</article>`).join("") : `<p class="field-help">No evidence records are currently available for verification.</p>`}</article></div>`}</section>`;
   root.querySelectorAll<HTMLButtonElement>("[data-verify]").forEach((button) => button.addEventListener("click", () => void verify(button.dataset.verify ?? "")));
+  root.querySelectorAll<HTMLButtonElement>("[data-jump]").forEach((button) => button.addEventListener("click", () => jump(button.dataset.jump ?? "")));
 }
 
 async function load() {
   if (!token) return render();
   try {
-    const me = await api<{ memberships: Membership[] }>("/api/v1/auth/me");
-    const authorized = canVerify(me.memberships ?? []);
-    if (!authorized) return render([], false);
-    const workspace = await api<Workspace>("/api/v1/workspaces/mrv");
-    render(workspace.data?.evidence ?? [], true);
-  } catch (error) {
-    message = error instanceof Error ? error.message : "Authoritative MRV verification queue is unavailable.";
-    render([], false);
-  }
+    const me = await api<{ memberships: Membership[] }>("/api/v1/auth/me"); const authorized = canVerify(me.memberships ?? []);
+    if (!authorized) return render(null, false);
+    const workspace = await api<Workspace>("/api/v1/workspaces/mrv"); message = ""; render(workspace, true);
+  } catch (error) { message = error instanceof Error ? error.message : "Authoritative MRV verification queue is unavailable."; render(null, false); }
 }
 
 async function verify(evidenceId: string) {
-  const input = root?.querySelector<HTMLInputElement>(`[data-scope="${CSS.escape(evidenceId)}"]`);
-  const scope = input?.value.trim() ?? "";
+  const input = root?.querySelector<HTMLInputElement>(`[data-scope="${CSS.escape(evidenceId)}"]`); const scope = input?.value.trim() ?? "";
   if (!scope) { message = "Verification scope is required before approval."; return void load(); }
-  loading = true; message = ""; render([], true);
-  try {
-    await api(`/api/v1/evidence/${encodeURIComponent(evidenceId)}/verification`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ decision: "APPROVED", scope }) });
-    message = "Evidence verification recorded by the authoritative backend.";
-  } catch (error) {
-    message = error instanceof Error ? error.message : "Evidence verification failed.";
-  } finally { loading = false; await load(); }
+  loading = true; message = ""; render(null, true);
+  try { await api(`/api/v1/evidence/${encodeURIComponent(evidenceId)}/verification`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ decision: "APPROVED", scope }) }); message = "Evidence verification recorded by the authoritative backend."; }
+  catch (error) { message = error instanceof Error ? error.message : "Evidence verification failed."; }
+  finally { loading = false; await load(); window.dispatchEvent(new Event("rupaykg:authoritative-mutation")); }
 }
 
 if (auth && root) {
