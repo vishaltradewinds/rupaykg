@@ -1,17 +1,10 @@
 /* RupayKG stakeholder-first refinement. Presentation-only layer. */
-.landing-nav{gap:2px;margin-right:18px}
-.landing-tab{padding:7px 9px!important;font-size:10px!important}
-.landing-hero{min-height:470px;grid-template-columns:minmax(0,1fr) 300px;gap:54px;padding:28px 0 12px}
-.landing-copy h1{max-width:700px;font-weight:600}
-.landing-copy>p:not(.eyebrow){max-width:590px;font-size:15px;line-height:1.65}
-.landing-actions{margin-top:24px}.landing-actions button{min-width:118px}
-.landing-orbit{width:270px;height:270px;opacity:.82;box-shadow:0 0 0 30px rgba(130,181,139,.018),0 0 0 62px rgba(130,181,139,.012)}
-.landing-orbit:before{inset:34px}.landing-orbit:after{inset:68px}.landing-orbit strong{width:62px;height:62px;font-size:22px}.landing-orbit span{font-size:7px}
-.landing-content{min-height:0}.landing-panel{padding:30px 0 32px}.landing-panel h2{font-size:26px;letter-spacing:-.03em}.landing-panel>p:not(.eyebrow){max-width:680px;font-size:12px;line-height:1.65}
-.landing-mini-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:22px}.landing-mini-grid article{padding:14px;min-height:112px}.landing-mini-grid span{font-size:12px}.landing-mini-grid small{font-size:9px}
-.stakeholder-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:20px}.stakeholder-card{min-height:165px!important;padding:16px!important;border-radius:10px!important}.stakeholder-card strong{font-size:13px}.stakeholder-card small{font-size:9px;line-height:1.45}
-.journey-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:22px}.journey-grid article{padding:17px}.journey-grid h3{font-size:14px;margin:15px 0 7px}.journey-grid p{font-size:10px;line-height:1.5}
-.trust-list{grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin-top:20px}.trust-list span{padding:11px;font-size:9px}
-.landing-panel .eyebrow{margin-bottom:9px}.landing-actions button.secondary{opacity:.82}
-@media(max-width:900px){.landing-hero{grid-template-columns:1fr;gap:30px;min-height:0}.landing-orbit{justify-self:start;width:230px;height:230px}.landing-mini-grid,.stakeholder-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.journey-grid{grid-template-columns:1fr 1fr}.trust-list{grid-template-columns:1fr 1fr}}
-@media(max-width:600px){.landing-hero{padding-top:12px;gap:24px}.landing-copy h1{font-size:clamp(38px,12vw,56px);line-height:1}.landing-copy>p:not(.eyebrow){font-size:13px;line-height:1.6;margin-top:18px}.landing-actions{margin-top:20px;gap:8px}.landing-actions button{min-width:0}.landing-orbit{justify-self:center;width:190px;height:190px}.landing-orbit:before{inset:26px}.landing-orbit:after{inset:52px}.landing-orbit strong{width:52px;height:52px;font-size:18px}.landing-orbit span{font-size:6px}.landing-panel{padding:25px 0 28px}.landing-panel h2{font-size:23px}.landing-mini-grid,.stakeholder-grid,.journey-grid,.trust-list{grid-template-columns:1fr}.landing-mini-grid article{min-height:0}.stakeholder-card{min-height:145px!important}}
+.landing-nav{display:none!important}
+.landing-panel{display:none!important}
+.landing-orbit{display:none!important}
+.landing-hero{min-height:430px;display:block;padding:54px 0 34px}
+.landing-copy{max-width:760px}
+.landing-copy h1{max-width:760px;font-weight:600}
+.landing-copy>p:not(.eyebrow){max-width:650px;font-size:15px;line-height:1.7}
+.landing-actions{margin-top:26px;gap:10px}.landing-actions button{min-width:124px}
+@media(max-width:600px){.landing-hero{min-height:0;padding:30px 0 24px}.landing-copy h1{font-size:clamp(40px,12vw,58px);line-height:1}.landing-copy>p:not(.eyebrow){font-size:13px;line-height:1.6;margin-top:18px}.landing-actions{margin-top:20px;gap:8px}.landing-actions button{min-width:0}}
