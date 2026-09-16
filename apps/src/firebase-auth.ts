@@ -52,8 +52,5 @@ export async function verifyFirebaseIdToken(token: string, projectId = process.e
   verifier.update(`${parts[0]!}.${parts[1]!}`);
   verifier.end();
   if (!verifier.verify(publicKey, b64url(parts[2]!))) throw new Error("Firebase ID token signature is invalid");
-  // Firebase cryptographic identity remains fully verified. RupayKG access is
-  // controlled by Firebase authentication plus server-side organization/role
-  // authorization; email verification is treated as an optional contact check.
   return payload;
 }
