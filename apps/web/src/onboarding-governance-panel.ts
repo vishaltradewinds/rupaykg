@@ -7,6 +7,7 @@ let sessionToken = "";
 
 type Application = {
   id: string;
+  status?: string;
   organization_name?: string;
   applicant_email?: string;
   requested_role_key?: string;
@@ -186,55 +187,26 @@ async function reviewerQueue() {
       panel.appendChild(card);
     });
   } catch {
-    // Non-authorized users receive no reviewer surface.
+    // Server authorization is authoritative; unauthorized users simply receive no queue.
   }
 }
 
-async function boot(user: User) {
-  try {
-    await establishSession(user);
-  } catch {
-    return;
-  }
-  const observer = new MutationObserver(() => {
-    document.querySelectorAll<HTMLFormElement>("form.auth-form").forEach((form) => {
-      if (form.querySelector("[data-rupaykg-governance-fields]")) return;
-      const box = document.createElement("fieldset");
-      box.dataset.rupaykgGovernanceFields = "true";
-      box.style.cssText = "margin:8px 0;padding:12px;border:1px solid #314c63;border-radius:12px";
-      const legend = document.createElement("legend");
-      legend.textContent = "Legal identity & verification evidence";
-      box.appendChild(legend);
-      [
-        ["Legal name", "legalName", "Registered legal name"],
-        ["Legal form", "legalForm", "Company / LLP / Trust / ULB / etc."],
-        ["Registration identifier", "registrationIdentifier", "CIN / registration number / applicable identifier"],
-        ["Registration authority", "registrationAuthority", "MCA / Registrar / ULB / competent authority"],
-        ["Evidence type", "evidenceType", "Incorporation / registration / authorization"],
-        ["Document reference", "documentReference", "Controlled document reference"],
-        ["Evidence content hash", "contentHash", "SHA-256 or controlled content hash"]
-      ].forEach(([label, name, placeholder]) => {
-        const field = document.createElement("label");
-        field.style.cssText = "display:block;margin:7px 0;font-size:12px";
-        field.textContent = label;
-        const input = document.createElement("input");
-        input.name = name;
-        input.placeholder = placeholder;
-        input.required = true;
-        input.style.cssText = "display:block;width:100%;margin-top:4px";
-        field.appendChild(input);
-        box.appendChild(field);
-      });
-      form.appendChild(box);
-    });
+function mount() {
+  const app = getApps().length ? getApp() : null;
+  if (!app) return;
+  const auth = getAuth(app);
+  onAuthStateChanged(auth, async (user) => {
+    sessionToken = "";
+    if (!user) return;
+    try {
+      await establishSession(user);
+      await applicantStatus();
+      await reviewerQueue();
+    } catch {
+      // Keep onboarding UI quiet when the authoritative session cannot be established.
+    }
   });
-  observer.observe(document.documentElement, { childList: true, subtree: true });
-  await applicantStatus();
-  await reviewerQueue();
 }
 
-if (getApps().length) {
-  onAuthStateChanged(getAuth(getApp()), (user) => {
-    if (user) void boot(user);
-  });
-}
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", mount, { once: true });
+else mount();
