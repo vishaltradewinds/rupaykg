@@ -21,7 +21,7 @@ function ULBCommandCenter(){
  const membership=useMemo(()=>{const id=orgId();return me?.memberships.find(m=>m.status==="VERIFIED"&&m.organization_id===id)??me?.memberships.find(m=>m.status==="VERIFIED");},[me]);
  const visible=!!membership&&(membership.role_name==="municipal_admin"||membership.role_name==="regulator"||membership.organization_type.toLowerCase().includes("municipal")||membership.organization_type.toLowerCase().includes("ulb"));
  async function refresh(){if(!token||!visible)return;setLoading(true);setError("");try{const [o,r,m,c]=await Promise.all([api<{counts:Counts}>("/api/v1/overview",token),api<Workspace>("/api/v1/workspaces/resource-flows",token),api<Workspace>("/api/v1/workspaces/mrv",token),api<Workspace>("/api/v1/workspaces/compliance",token)]);setCounts(o.counts??{});setOps(r);setMrv(m);setCompliance(c);}catch(e){setError(e instanceof Error?e.message:"Unable to load institutional data");}finally{setLoading(false)}}
- useEffect(()=>{if(visible)void refresh()},[visible,token,orgId()]);
+ useEffect(()=>{if(visible)void refresh()},[visible,token]);
  if(!visible)return null;
  const flows=arr(ops,"resourceFlows"),activities=arr(mrv,"activities"),measurements=arr(mrv,"measurements"),evidence=arr(mrv,"evidence"),verifications=arr(mrv,"verifications"),obligations=arr(compliance,"obligations");
  const verified=Number(counts.approvedVerifications??count(verifications.filter(x=>String((x as any).status??(x as any).decision??"").toUpperCase().includes("APPROV"))));
@@ -32,5 +32,5 @@ function ULBCommandCenter(){
   <div className="ulb-boundary"><div><p className="eyebrow">GOVERNANCE BOUNDARY</p><strong>Operational visibility ≠ regulatory issuance.</strong><p>RupayKg can show activity, evidence, verification and compliance state. Credential issuance, external registry consensus, government acceptance and settlement remain separate authoritative stages.</p></div><div className="ulb-source">Source: PostgreSQL<br/>Synthetic data: {ops?.syntheticData===true?"true":"false"}</div></div>{error&&<p className="error">{error}</p>}</section>;
 }
 
-createRootSafe();
-function createRootSafe(){const root=document.getElementById("ulb-command-center");if(!root)return;import("react-dom/client").then(({createRoot})=>createRoot(root).render(<ULBCommandCenter/>));}
+function mount(){let root=document.getElementById("ulb-command-center");if(!root){root=document.createElement("div");root.id="ulb-command-center";const anchor=document.getElementById("carbon-command-center")??document.getElementById("root");anchor?.parentElement?.insertBefore(root,anchor.nextSibling);if(!root.isConnected)return}import("react-dom/client").then(({createRoot})=>createRoot(root!).render(<ULBCommandCenter/>));}
+mount();
