@@ -23,6 +23,26 @@
     super_admin: { title: "Platform governance", subtitle: "Review authorised platform lifecycle, value, registry, settlement and reporting state; server-side permissions remain authoritative." }
   };
 
+  const operationalPanelIds = [
+    "field-device-management", "resource-flow-intake", "citizen-farmer-guided",
+    "mrv-provenance", "mrv-verification-actions", "compliance-assessment",
+    "epr-return-lifecycle", "statutory-applicability", "bwg-reporting", "esg-metrics",
+    "registry-issuance", "registry-settlement", "settlement-reconciliation-control",
+    "value-lifecycle-management"
+  ];
+
+  function hideOperationalPanelsUntilAuthenticated() {
+    operationalPanelIds.forEach(id => {
+      const node = document.getElementById(id);
+      if (node) {
+        node.hidden = true;
+        node.setAttribute("aria-hidden", "true");
+      }
+    });
+  }
+
+  hideOperationalPanelsUntilAuthenticated();
+
   const roleFromIdentity = () => {
     const text = document.querySelector(".identity-bar span")?.textContent || "";
     const match = text.match(/^(.+?)\s·/);
@@ -44,10 +64,9 @@
     section.className = "operational-console lifecycle-operations";
     section.setAttribute("aria-label", "Authoritative operational controls");
     section.innerHTML = '<div class="section-heading"><div><p class="eyebrow">AUTHORITATIVE OPERATIONS</p><h2>Execute governed lifecycle actions</h2></div><span>Existing operational panels use the same authenticated API and server-side permissions</span></div><p class="field-help">Controls below are projections of existing backend workflows. Availability follows the authorized workspace returned by the application; the server remains authoritative for every mutation.</p>';
-    const ids = ["field-device-management", "resource-flow-intake", "citizen-farmer-guided", "mrv-provenance", "mrv-verification-actions", "compliance-assessment", "epr-return-lifecycle", "statutory-applicability", "bwg-reporting", "esg-metrics", "registry-issuance", "registry-settlement", "settlement-reconciliation-control", "value-lifecycle-management"];
     const grid = document.createElement("div");
     grid.className = "operational-panels";
-    ids.forEach(id => { const node = document.getElementById(id); if (node) grid.appendChild(node); });
+    operationalPanelIds.forEach(id => { const node = document.getElementById(id); if (node) grid.appendChild(node); });
     section.appendChild(grid);
     anchor.insertAdjacentElement("afterend", section);
   }
