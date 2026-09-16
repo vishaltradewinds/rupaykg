@@ -21,7 +21,9 @@ try {
     )
   `);
 
-  const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+  // Compiled file: /app/apps/dist/src/migrate.js
+  // Runtime migration directory: /app/migrations
+  const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
   const migrationDir = path.join(repoRoot, "migrations");
   const files = (await readdir(migrationDir))
     .filter((name) => /^\d+_.+\.sql$/.test(name))
