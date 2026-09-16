@@ -131,19 +131,19 @@ function Panel() {
     </div>
 
     <div className="ccc-stages">
-      <Stage name="Activity" state={calculations.length ? "VERIFIED" : "UNAVAILABLE"} detail={calculations.length ? `${calculations.length} calculation record${calculations.length === 1 ? "" : "s"}` : "No carbon calculation linked yet"} onClick={() => jump("operations")} />
-      <Stage name="Evidence" state={calculations.length ? "PENDING" : "UNAVAILABLE"} detail="Calculation provenance points back to activity evidence" onClick={() => jump("mrv & evidence")} />
-      <Stage name="Verification" state={calculations.length ? "PENDING" : "UNAVAILABLE"} detail="Approved verification is required before value calculation" onClick={() => jump("mrv & evidence")} />
+      <Stage name="Activity" state={latest?.activity_id ? "VERIFIED" : "UNAVAILABLE"} detail={latest?.activity_id ? "Calculation is linked to an authoritative activity" : "No carbon calculation linked yet"} onClick={() => jump("operations")} />
+      <Stage name="Evidence" state="UNAVAILABLE" detail="Evidence state is not inferred from calculation records" onClick={() => jump("mrv & evidence")} />
+      <Stage name="Verification" state="UNAVAILABLE" detail="Verification state must come from authoritative MRV records" onClick={() => jump("mrv & evidence")} />
       <Stage name="Methodology" state={methodologyState} detail={latest ? `${latest.methodology_code ?? "Methodology"} · v${latest.methodology_version ?? "—"}` : "Registered methodology not yet observed"} />
       <Stage name="Calculation" state={calculationState} detail={latest ? `${display(latest.result)} ${latest.unit ?? ""}` : "No authoritative calculation"} />
-      <Stage name="Credential" state={latest ? "PENDING" : "UNAVAILABLE"} detail="Separate registry authority; calculation does not imply issuance" onClick={() => jump("registry")} />
-      <Stage name="Settlement" state={latest ? "PENDING" : "UNAVAILABLE"} detail="Separate settlement authority; no synthetic transaction state" onClick={() => jump("settlement")} />
+      <Stage name="Credential" state="UNAVAILABLE" detail="Registry authority is separate; calculation does not imply issuance" onClick={() => jump("registry")} />
+      <Stage name="Settlement" state="UNAVAILABLE" detail="Settlement authority is separate; no transaction state inferred" onClick={() => jump("settlement")} />
     </div>
 
     <div className="ccc-metrics">
       <article><span>CALCULATIONS</span><strong>{calculations.length}</strong><small>Authoritative carbon calculation records</small></article>
-      <article><span>VERIFIED</span><strong>{verifiedCount}</strong><small>Records with a recognized active/verified status</small></article>
-      <article><span>PENDING</span><strong>{pendingCount}</strong><small>Records requiring downstream or status completion</small></article>
+      <article><span>VERIFIED</span><strong>{verifiedCount}</strong><small>Calculation records with a recognized verified status</small></article>
+      <article><span>PENDING</span><strong>{pendingCount}</strong><small>Calculation records requiring status completion</small></article>
       <article><span>VALUE STATE</span><strong>{valueState}</strong><small>Never inferred beyond backend state</small></article>
     </div>
 
