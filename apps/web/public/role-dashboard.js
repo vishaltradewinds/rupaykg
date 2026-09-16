@@ -31,17 +31,21 @@
     "value-lifecycle-management"
   ];
 
-  function hideOperationalPanelsUntilAuthenticated() {
+  const concealOperationalPanels = () => {
     operationalPanelIds.forEach(id => {
       const node = document.getElementById(id);
-      if (node) {
-        node.hidden = true;
-        node.setAttribute("aria-hidden", "true");
-      }
+      if (!node) return;
+      node.hidden = true;
+      node.setAttribute("aria-hidden", "true");
+      node.style.setProperty("display", "none", "important");
     });
-  }
-
-  hideOperationalPanelsUntilAuthenticated();
+    const console = document.getElementById("operational-console");
+    if (console) {
+      console.hidden = true;
+      console.setAttribute("aria-hidden", "true");
+      console.style.setProperty("display", "none", "important");
+    }
+  };
 
   const roleFromIdentity = () => {
     const text = document.querySelector(".identity-bar span")?.textContent || "";
@@ -94,6 +98,7 @@
       const visible = allowed.some(workspace => workspaces.includes(workspace));
       node.hidden = !visible;
       node.setAttribute("aria-hidden", visible ? "false" : "true");
+      node.style.setProperty("display", visible ? "" : "none", "important");
     });
   }
 
@@ -120,11 +125,11 @@
     const identity = document.querySelector(".identity-bar");
     const metrics = document.querySelector(".metrics");
     const tabs = document.querySelector(".workspace-tabs");
-    if (!identity || !metrics || !tabs) return;
+    if (!identity || !metrics || !tabs) { concealOperationalPanels(); return; }
     const config = roleConfig[roleFromIdentity()];
-    if (!config) return;
+    if (!config) { concealOperationalPanels(); return; }
     const workspaces = backendWorkspaces(tabs);
-    if (!workspaces.length) return;
+    if (!workspaces.length) { concealOperationalPanels(); return; }
     mountOperationalConsole();
     scopeOperationalPanels(workspaces);
     mountAccessibilityControls();
@@ -134,11 +139,12 @@
     Object.assign(panel.style, { display: "grid", gridTemplateColumns: window.matchMedia("(max-width: 720px)").matches ? "minmax(0,1fr)" : "minmax(0,1fr) auto", gap: "18px", alignItems: "center", margin: "0 0 22px", padding: "18px 20px", border: "1px solid #28435c", borderRadius: "16px", background: "linear-gradient(135deg,rgba(15,34,52,.95),rgba(10,27,43,.82))" });
     const copy = document.createElement("div"); const eyebrow = document.createElement("p"); eyebrow.className = "eyebrow"; eyebrow.textContent = "STAKEHOLDER COMMAND CENTER"; const title = document.createElement("h2"); title.textContent = config.title; const subtitle = document.createElement("p"); subtitle.textContent = config.subtitle; subtitle.style.cssText = "margin:7px 0 0;color:#7890a5;font-size:11px;line-height:1.5"; copy.append(eyebrow, title, subtitle);
     const actions = document.createElement("div"); actions.style.cssText = "display:flex;flex-wrap:wrap;gap:7px;justify-content:flex-end"; workspaces.forEach(name => { const target = Array.from(document.querySelectorAll(".workspace-tabs button")).find(button => button.textContent?.trim() === name && !button.hidden); const button = document.createElement("button"); button.type = "button"; button.className = "secondary"; button.textContent = name; if (target) button.addEventListener("click", () => target.click()); else button.disabled = true; actions.appendChild(button); }); panel.append(copy, actions);
-    const console = document.getElementById("operational-console"); if (console) console.hidden = false;
+    const console = document.getElementById("operational-console"); if (console) { console.hidden = false; console.setAttribute("aria-hidden", "false"); console.style.setProperty("display", "", "important"); }
   }
 
+  concealOperationalPanels();
   let scheduled = false;
-  const schedule = () => { if (scheduled) return; scheduled = true; requestAnimationFrame(() => { scheduled = false; render(); }); };
+  const schedule = () => { concealOperationalPanels(); if (scheduled) return; scheduled = true; requestAnimationFrame(() => { scheduled = false; render(); }); };
   new MutationObserver(schedule).observe(document.documentElement, { childList: true, subtree: true });
   window.addEventListener("storage", schedule);
   window.addEventListener("resize", schedule);
