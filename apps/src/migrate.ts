@@ -1,4 +1,5 @@
 import { readdir, readFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
@@ -21,10 +22,12 @@ try {
     )
   `);
 
-  // Compiled file: /app/apps/dist/src/migrate.js
-  // Runtime migration directory: /app/migrations
-  const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
-  const migrationDir = path.join(repoRoot, "migrations");
+  // Support both CI/source execution (/repo/apps/src) and the production
+  // container (/app/apps/dist/src). Never assume a single filesystem root.
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const candidates = [path.resolve(here, "../../migrations"), path.resolve(here, "../../../migrations")];
+  const migrationDir = candidates.find((candidate) => existsSync(candidate));
+  if (!migrationDir) throw new Error(`Migration directory not found. Checked: ${candidates.join(", ")}`);
   const files = (await readdir(migrationDir))
     .filter((name) => /^\d+_.+\.sql$/.test(name))
     .sort();
