@@ -18,18 +18,18 @@ create index if not exists stakeholder_application_approvals_application_idx on 
 
 create or replace function rupaykg_seed_stakeholder_approval_chain()
 returns trigger language plpgsql as $$
-declare k geography_kind; levels text[]; idx integer := 1;
+declare gk geography_kind; levels text[]; level_name text; idx integer := 1;
 begin
-  select g.kind into k from geography g where g.id=new.geography_id;
+  select g.kind into gk from geography g where g.id=new.geography_id;
   levels := case
-    when k in ('ULB','WARD','LOCALITY','GRAM_PANCHAYAT','VILLAGE','CLUSTER') then array['LOCAL','DISTRICT','STATE','PLATFORM']
-    when k in ('SUB_DISTRICT','DISTRICT') then array['DISTRICT','STATE','PLATFORM']
-    when k='STATE_UT' then array['STATE','PLATFORM']
+    when gk in ('ULB','WARD','LOCALITY','GRAM_PANCHAYAT','VILLAGE','CLUSTER') then array['LOCAL','DISTRICT','STATE','PLATFORM']
+    when gk in ('SUB_DISTRICT','DISTRICT') then array['DISTRICT','STATE','PLATFORM']
+    when gk='STATE_UT' then array['STATE','PLATFORM']
     else array['PLATFORM']
   end;
-  foreach k in array levels loop
+  foreach level_name in array levels loop
     insert into stakeholder_application_approvals(application_id,step_order,approval_level,geography_id)
-    values(new.id,idx,k,new.geography_id) on conflict do nothing;
+    values(new.id,idx,level_name,new.geography_id) on conflict do nothing;
     idx := idx+1;
   end loop;
   return new;
@@ -38,16 +38,15 @@ $$;
 drop trigger if exists stakeholder_application_chain_seed on stakeholder_applications;
 create trigger stakeholder_application_chain_seed after insert on stakeholder_applications for each row execute function rupaykg_seed_stakeholder_approval_chain();
 
--- Backfill any pending applications created before this migration.
 do $$
-declare r record; k geography_kind; levels text[]; level_name text; idx integer;
+declare r record; gk geography_kind; levels text[]; level_name text; idx integer;
 begin
   for r in select sa.id,sa.geography_id from stakeholder_applications sa where sa.status='PENDING' loop
-    select g.kind into k from geography g where g.id=r.geography_id;
+    select g.kind into gk from geography g where g.id=r.geography_id;
     levels := case
-      when k in ('ULB','WARD','LOCALITY','GRAM_PANCHAYAT','VILLAGE','CLUSTER') then array['LOCAL','DISTRICT','STATE','PLATFORM']
-      when k in ('SUB_DISTRICT','DISTRICT') then array['DISTRICT','STATE','PLATFORM']
-      when k='STATE_UT' then array['STATE','PLATFORM']
+      when gk in ('ULB','WARD','LOCALITY','GRAM_PANCHAYAT','VILLAGE','CLUSTER') then array['LOCAL','DISTRICT','STATE','PLATFORM']
+      when gk in ('SUB_DISTRICT','DISTRICT') then array['DISTRICT','STATE','PLATFORM']
+      when gk='STATE_UT' then array['STATE','PLATFORM']
       else array['PLATFORM']
     end;
     idx:=1;
