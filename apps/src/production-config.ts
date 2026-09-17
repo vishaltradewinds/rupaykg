@@ -7,7 +7,6 @@ export type ProductionConfig = {
   databaseCaCert: string;
   allowedOrigins: string[];
   authMode: "real";
-  firebaseProjectId: string;
   syntheticData: false;
 };
 
@@ -52,8 +51,6 @@ export function readProductionConfig(env: NodeJS.ProcessEnv = process.env): Prod
   if (env.VITE_RUPAYKG_SESSION_TOKEN?.trim()) throw new Error("PRODUCTION_CONFIG_INVALID: VITE_RUPAYKG_SESSION_TOKEN must not be provided in production");
   const databaseUrl = productionDatabaseUrl(required(env, "DATABASE_URL"));
   const parsedDatabaseUrl = new URL(databaseUrl);
-  // Render internal Postgres URLs use private dpg-* hostnames. Public Render
-  // Postgres endpoints use *.render.com and therefore require managed TLS.
   const renderInternalDatabase =
     /^dpg-[a-z0-9-]+$/i.test(parsedDatabaseUrl.hostname) &&
     !parsedDatabaseUrl.searchParams.get("sslmode");
@@ -65,7 +62,6 @@ export function readProductionConfig(env: NodeJS.ProcessEnv = process.env): Prod
     databaseCaCert: renderInternalDatabase ? "" : productionCaCert(env.DATABASE_CA_CERT?.trim() ?? "", databaseUrl),
     allowedOrigins: origins(required(env, "RUPAYKG_ALLOWED_ORIGINS")),
     authMode: "real",
-    firebaseProjectId: required(env, "FIREBASE_PROJECT_ID"),
     syntheticData: false,
   };
 }
