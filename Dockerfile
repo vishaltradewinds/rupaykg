@@ -22,4 +22,4 @@ COPY --from=build /app/migrations ./migrations
 
 USER node
 EXPOSE 8080
-CMD ["sh", "-c", "node apps/dist/src/migrate.js && node apps/dist/src/production-server.js"]
+CMD ["sh", "-c", "node apps/dist/src/migrate.js && node apps/dist/src/acceptance-seed.js && node apps/dist/src/production-server.js"]
