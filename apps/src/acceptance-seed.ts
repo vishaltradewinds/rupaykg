@@ -91,7 +91,7 @@ try {
     organizationId = existing.rows[0].id;
   }
 
-  const role = await pool.query<{ id: string }>(
+  const operatorRole = await pool.query<{ id: string }>(
     `insert into roles(organization_id, name, permissions, geography_scope)
      values ($1, 'Live Acceptance Operator', $2::jsonb, '[]'::jsonb)
      on conflict(organization_id, name) do update
@@ -99,14 +99,32 @@ try {
      returning id`,
     [organizationId, JSON.stringify(["guardian:read", "guardian:operate", "verification:approve"])],
   );
-  if (!role.rows[0]) throw new Error("Acceptance role could not be created");
-  const roleId = role.rows[0].id;
+  if (!operatorRole.rows[0]) throw new Error("Acceptance operator role could not be created");
+  const operatorRoleId = operatorRole.rows[0].id;
+
+  const verifierRole = await pool.query<{ id: string }>(
+    `insert into roles(organization_id, name, permissions, geography_scope)
+     values ($1, 'Live Acceptance Verifier', $2::jsonb, '[]'::jsonb)
+     on conflict(organization_id, name) do update
+       set permissions=excluded.permissions, geography_scope=excluded.geography_scope
+     returning id`,
+    [organizationId, JSON.stringify(["VERIFY_EVIDENCE", "verification:approve", "verification.approve"])],
+  );
+  if (!verifierRole.rows[0]) throw new Error("Acceptance verifier role could not be created");
+  const verifierRoleId = verifierRole.rows[0].id;
 
   await pool.query(
     `insert into organization_memberships(identity_id, organization_id, role_id, status)
      values ($1,$2,$3,'VERIFIED')
      on conflict(identity_id, organization_id, role_id) do update set status='VERIFIED'`,
-    [identityId, organizationId, roleId],
+    [identityId, organizationId, operatorRoleId],
+  );
+
+  await pool.query(
+    `insert into organization_memberships(identity_id, organization_id, role_id, status)
+     values ($1,$2,$3,'VERIFIED')
+     on conflict(identity_id, organization_id, role_id) do update set status='VERIFIED'`,
+    [verifierIdentityId, organizationId, verifierRoleId],
   );
 
   await pool.query(
@@ -187,7 +205,7 @@ try {
   await pool.query(
     `insert into activity_assignments(activity_id, identity_id, role_id)
      values ($1,$2,$3) on conflict(activity_id, identity_id) do update set role_id=excluded.role_id`,
-    [activityId, identityId, roleId],
+    [activityId, identityId, operatorRoleId],
   );
 
   await pool.query(
