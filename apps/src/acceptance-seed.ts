@@ -49,6 +49,7 @@ try {
      on conflict(external_subject) do update set display_name=excluded.display_name, status='VERIFIED'
      returning id`,
   );
+  if (!identity.rows[0]) throw new Error("Acceptance identity could not be created");
   const identityId = identity.rows[0].id;
 
   const organization = await pool.query<{ id: string }>(
@@ -74,6 +75,7 @@ try {
      returning id`,
     [organizationId, JSON.stringify(["guardian:read", "guardian:operate", "verification:approve"])],
   );
+  if (!role.rows[0]) throw new Error("Acceptance role could not be created");
   const roleId = role.rows[0].id;
 
   await pool.query(
@@ -101,6 +103,7 @@ try {
      returning id`,
     [organizationId, identityId, geographyId, JSON.stringify({ acceptanceFixture: true, methodologyCode: "WA03.001" })],
   );
+  if (!activity.rows[0]) throw new Error("Acceptance activity could not be created");
   const activityId = activity.rows[0].id;
 
   const measurement = await pool.query<{ id: string }>(
@@ -109,6 +112,7 @@ try {
      returning id`,
     [activityId, JSON.stringify({ acceptanceFixture: true })],
   );
+  if (!measurement.rows[0]) throw new Error("Acceptance measurement could not be created");
   const measurementId = measurement.rows[0].id;
 
   const evidence = await pool.query<{ id: string }>(
