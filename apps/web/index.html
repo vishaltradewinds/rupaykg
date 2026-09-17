@@ -10,110 +10,14 @@
   </head>
   <body>
     <div id="root"></div>
-    <div id="resource-flow-intake"></div>
-    <div id="citizen-farmer-guided"></div>
-    <div id="compliance-assessment"></div>
-    <div id="epr-return-lifecycle"></div>
-    <div id="statutory-applicability"></div>
-    <div id="esg-metrics"></div>
-    <div id="bwg-reporting"></div>
-    <div id="mrv-provenance"></div>
-    <div id="mrv-verification-actions"></div>
-    <div id="registry-issuance"></div>
-    <div id="registry-settlement"></div>
-    <div id="settlement-reconciliation-control"></div>
-    <div id="value-lifecycle-management"></div>
-    <div id="carbon-command-center"></div>
-    <div id="rupaykg-onboarding-governance"></div>
+    <div id="resource-flow-intake"></div><div id="citizen-farmer-guided"></div><div id="compliance-assessment"></div><div id="epr-return-lifecycle"></div><div id="statutory-applicability"></div><div id="esg-metrics"></div><div id="bwg-reporting"></div><div id="mrv-provenance"></div><div id="mrv-verification-actions"></div><div id="registry-issuance"></div><div id="registry-settlement"></div><div id="settlement-reconciliation-control"></div><div id="value-lifecycle-management"></div><div id="carbon-command-center"></div><div id="rupaykg-onboarding-governance"></div>
     <script src="/offline-operation-queue.js"></script>
     <script>
-      (() => {
-        const storageKey = "rupaykg.activeOrganizationId";
-        const queueDb = "rupaykg-field-operations";
-        const queueDbVersion = 4;
-        const originalFetch = window.fetch.bind(window);
-        const selectedOrganization = () => window.localStorage.getItem(storageKey) || "";
-        const isApiRequest = (url) => url.startsWith("/api/v1/") || url.includes("/api/v1/");
-        const isAuthMeRequest = (url) => url.includes("/api/v1/auth/me");
-        const isLogoutRequest = (url, method) => method.toUpperCase() === "POST" && url.includes("/api/v1/auth/logout");
-        const reconcileOrganization = (body) => {
-          const verified = (Array.isArray(body?.memberships) ? body.memberships : []).filter(m => m?.status === "VERIFIED");
-          const current = selectedOrganization();
-          if (current && !verified.some(m => m.organization_id === current)) window.localStorage.removeItem(storageKey);
-          if (!verified.some(m => m.organization_id === current) && verified[0]?.organization_id) window.localStorage.setItem(storageKey, verified[0].organization_id);
-        };
-        window.fetch = async (input, init) => {
-          const url = typeof input === "string" ? input : input.url;
-          const method = init?.method || (input instanceof Request ? input.method : "GET");
-          const organizationId = selectedOrganization();
-          let args = [input, init];
-          if (isLogoutRequest(url, method)) window.localStorage.removeItem(storageKey);
-          if (organizationId && isApiRequest(url) && !isAuthMeRequest(url) && !isLogoutRequest(url, method)) {
-            const headers = new Headers(init?.headers || (input instanceof Request ? input.headers : undefined));
-            if (!headers.has("X-RupayKG-Organization-Id")) headers.set("X-RupayKG-Organization-Id", organizationId);
-            args = [input, { ...(init || {}), headers }];
-          }
-          const response = await originalFetch(args[0], args[1]);
-          if (isAuthMeRequest(url)) {
-            if (response.status === 401 || response.status === 403) window.localStorage.removeItem(storageKey);
-            else response.clone().json().then(reconcileOrganization).catch(() => undefined);
-          }
-          return response;
-        };
-        const syncOrganizationSelection = (select) => { if (select?.value) window.localStorage.setItem(storageKey, select.value); };
-        new MutationObserver(() => {
-          const select = document.querySelector('select[aria-label="Active organization"]');
-          if (!select) return;
-          if (!selectedOrganization()) syncOrganizationSelection(select);
-          if (select.dataset.rupaykgOrganizationBound === "true") return;
-          select.dataset.rupaykgOrganizationBound = "true";
-          select.addEventListener("change", () => { syncOrganizationSelection(select); Array.from(document.querySelectorAll("button")).find(b => b.textContent?.trim() === "Refresh")?.click(); });
-        }).observe(document.documentElement, { childList: true, subtree: true });
-        const status = document.createElement("button");
-        status.id = "rupaykg-offline-status"; status.type = "button"; status.setAttribute("aria-live", "polite");
-        Object.assign(status.style, { position: "fixed", right: "14px", bottom: "14px", zIndex: "20", maxWidth: "min(420px,calc(100vw - 28px))", padding: "9px 12px", border: "1px solid #314c63", borderRadius: "12px", background: "rgba(7,17,31,.96)", color: "#a8bbcb", font: "600 11px system-ui,sans-serif", boxShadow: "0 8px 30px rgba(0,0,0,.28)", textAlign: "left" });
-        document.body.appendChild(status);
-        const setStatus = (text) => { status.textContent = text; status.hidden = !text; };
-        const openDb = () => new Promise((resolve, reject) => { const request = indexedDB.open(queueDb, queueDbVersion); request.onupgradeneeded = () => { const db = request.result; if (!db.objectStoreNames.contains("pending")) db.createObjectStore("pending", { keyPath: "id" }); if (!db.objectStoreNames.contains("rejected")) db.createObjectStore("rejected", { keyPath: "id" }); }; request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
-        const readStore = async (storeName) => { const db = await openDb(); const rows = await new Promise((resolve, reject) => { const tx = db.transaction(storeName, "readonly"); const req = tx.objectStore(storeName).getAll(); req.onsuccess = () => resolve(req.result || []); req.onerror = () => reject(req.error); }); db.close(); return rows; };
-        const readQueueCounts = async () => { const [pending, rejected] = await Promise.all([readStore("pending"), readStore("rejected")]); return { pending: pending.length, rejected: rejected.length }; };
-        const safeText = (v, fallback = "—") => { if (v === null || v === undefined || v === "") return fallback; if (typeof v === "string") return v; try { return JSON.stringify(v); } catch { return fallback; } };
-        const addLine = (parent, label, value, emphasis = false) => { const line = document.createElement("div"); line.style.cssText = "margin-top:5px;word-break:break-word;line-height:1.35"; const strong = document.createElement("span"); strong.textContent = `${label}: `; if (emphasis) strong.style.fontWeight = "700"; line.appendChild(strong); const text = document.createElement("span"); text.textContent = safeText(value); line.appendChild(text); };
-        const renderRejected = async () => { const existing = document.getElementById("rupaykg-rejected-review"); if (existing) existing.remove(); const rejected = await readStore("rejected"); if (!rejected.length) return; const panel = document.createElement("section"); panel.id = "rupaykg-rejected-review"; panel.setAttribute("aria-label", "Rejected offline field operations"); Object.assign(panel.style, { position: "fixed", right: "14px", bottom: "58px", zIndex: "21", width: "min(520px,calc(100vw - 28px))", maxHeight: "min(70vh,620px)", overflow: "auto", padding: "14px", border: "1px solid #314c63", borderRadius: "14px", background: "#07111f", color: "#dbe7ef", font: "13px system-ui,sans-serif", boxShadow: "0 18px 50px rgba(0,0,0,.4)" }); const title = document.createElement("div"); title.textContent = "Field operations requiring review"; title.style.fontWeight = "700"; title.style.marginBottom = "10px"; panel.appendChild(title); const close = document.createElement("button"); close.type = "button"; close.textContent = "Close"; Object.assign(close.style, { position: "absolute", top: "10px", right: "10px" }); close.onclick = () => panel.remove(); panel.appendChild(close); rejected.slice().sort((a,b) => String(b.rejectedAt || "").localeCompare(String(a.rejectedAt || ""))).forEach(record => { const item = document.createElement("article"); Object.assign(item.style, { borderTop: "1px solid #23394a", padding: "10px 0" }); const payload = (() => { try { return record.body ? JSON.parse(record.body) : {}; } catch { return {}; } })(); addLine(item, "Operation type", payload?.payload?.operationType || "UNKNOWN", true); addLine(item, "Rejected", record.rejectedAt); addLine(item, "HTTP status", record.httpStatus); const reason = typeof record.error === "string" ? record.error : record.error?.error || record.error?.message || `HTTP ${record.httpStatus || "4xx"}`; addLine(item, "Reason", reason); addLine(item, "Operation ID", record.id); panel.appendChild(item); }); const note = document.createElement("div"); note.textContent = "Rejected records remain immutable history. Correct the source data and submit a new field operation; this panel never replays or mutates a rejected record."; Object.assign(note.style, { marginTop: "10px", paddingTop: "10px", borderTop: "1px solid #23394a", opacity: ".78", lineHeight: "1.4" }); panel.appendChild(note); document.body.appendChild(panel); };
-        const showRejectedAction = () => { status.style.pointerEvents = "auto"; status.style.cursor = "pointer"; status.onclick = () => void renderRejected(); };
-        const refreshQueueStatus = async () => { try { const { pending, rejected } = await readQueueCounts(); if (rejected > 0) { setStatus(`${rejected} field operation${rejected === 1 ? "" : "s"} rejected — review required`); showRejectedAction(); } else if (pending > 0) { setStatus(`${pending} field operation${pending === 1 ? "" : "s"} pending sync`); status.style.pointerEvents = "none"; status.onclick = null; } else if (navigator.onLine) { setStatus(""); status.onclick = null; } } catch { setStatus(""); } };
-        window.addEventListener("offline", () => setStatus("Offline — new field operations will be queued"));
-        window.addEventListener("online", () => { setStatus("Back online — syncing field operations"); void refreshQueueStatus(); });
-        window.addEventListener("rupaykg:offline-sync", event => { const detail = event.detail || {}; if (detail.status === "COUNTS") { if (detail.rejected > 0) { setStatus(`${detail.rejected} field operation${detail.rejected === 1 ? "" : "s"} rejected — review required`); showRejectedAction(); } else if (detail.pending > 0) setStatus(`${detail.pending} field operation${detail.pending === 1 ? "" : "s"} pending sync`); else if (navigator.onLine) setStatus(""); } else if (detail.status === "QUEUED") setStatus("Field operation queued — pending authoritative sync"); else if (detail.status === "SYNCED") { setStatus("Field operation synced and accepted"); setTimeout(() => void refreshQueueStatus(), 1200); } else if (detail.status === "REJECTED") { setStatus(`Field operation rejected by API (${detail.httpStatus ?? "4xx"}) — review required`); showRejectedAction(); } });
-        void refreshQueueStatus();
-      })();
+      (()=>{const storageKey="rupaykg.activeOrganizationId",queueDb="rupaykg-field-operations",queueDbVersion=4,originalFetch=window.fetch.bind(window),selectedOrganization=()=>window.localStorage.getItem(storageKey)||"",isApiRequest=url=>url.startsWith("/api/v1/")||url.includes("/api/v1/"),isAuthMeRequest=url=>url.includes("/api/v1/auth/me"),isLogoutRequest=(url,method)=>method.toUpperCase()==="POST"&&url.includes("/api/v1/auth/logout"),reconcileOrganization=body=>{const verified=(Array.isArray(body?.memberships)?body.memberships:[]).filter(m=>m?.status==="VERIFIED"),current=selectedOrganization();if(current&&!verified.some(m=>m.organization_id===current))window.localStorage.removeItem(storageKey);if(!verified.some(m=>m.organization_id===current)&&verified[0]?.organization_id)window.localStorage.setItem(storageKey,verified[0].organization_id)};window.fetch=async(input,init)=>{const url=typeof input==="string"?input:input.url,method=init?.method||(input instanceof Request?input.method:"GET"),organizationId=selectedOrganization();let args=[input,init];if(isLogoutRequest(url,method))window.localStorage.removeItem(storageKey);if(organizationId&&isApiRequest(url)&&!isAuthMeRequest(url)&&!isLogoutRequest(url,method)){const headers=new Headers(init?.headers||(input instanceof Request?input.headers:undefined));if(!headers.has("X-RupayKG-Organization-Id"))headers.set("X-RupayKG-Organization-Id",organizationId);args=[input,{...(init||{}),headers}]}const response=await originalFetch(args[0],args[1]);if(isAuthMeRequest(url)){if(response.status===401||response.status===403)window.localStorage.removeItem(storageKey);else response.clone().json().then(reconcileOrganization).catch(()=>undefined)}return response};const status=document.createElement("button");status.id="rupaykg-offline-status";status.type="button";status.setAttribute("aria-live","polite");Object.assign(status.style,{position:"fixed",right:"14px",bottom:"14px",zIndex:"20",maxWidth:"min(420px,calc(100vw - 28px))",padding:"9px 12px",border:"1px solid #314c63",borderRadius:"12px",background:"rgba(7,17,31,.96)",color:"#a8bbcb",font:"600 11px system-ui,sans-serif",boxShadow:"0 8px 30px rgba(0,0,0,.28)",textAlign:"left"});document.body.appendChild(status);const setStatus=text=>{status.textContent=text;status.hidden=!text};window.addEventListener("offline",()=>setStatus("Offline — new field operations will be queued"));window.addEventListener("online",()=>setStatus("Back online"));})();
     </script>
     <script type="module" src="/src/main.tsx"></script>
     <script src="/signin-bridge.js"></script>
-    <script type="module" src="/src/operating-context-selector.ts"></script>
-    <script type="module" src="/src/operating-context-bridge.ts"></script>
-    <script type="module" src="/src/operating-dashboard-experience.ts"></script>
-    <script type="module" src="/src/operating-workflow-experience.ts"></script>
-    <script type="module" src="/src/field-capture-experience.ts"></script>
-    <script type="module" src="/src/field-device-panel.tsx"></script>
-    <script type="module" src="/src/resource-flow-panel.ts"></script>
-    <script type="module" src="/src/citizen-farmer-guided-panel.ts"></script>
-    <script type="module" src="/src/compliance-panel.ts"></script>
-    <script type="module" src="/src/epr-return-panel.ts"></script>
-    <script type="module" src="/src/statutory-applicability-panel.ts"></script>
-    <script type="module" src="/src/onboarding-governance-panel.ts"></script>
-    <script type="module" src="/src/esg-panel.ts"></script>
-    <script type="module" src="/src/bwg-reporting-panel.ts"></script>
-    <script type="module" src="/src/mrv-provenance-panel.ts"></script>
-    <script type="module" src="/src/mrv-verification-actions.ts"></script>
-    <script type="module" src="/src/registry-issuance-panel.ts"></script>
-    <script type="module" src="/src/registry-settlement-panel.ts"></script>
-    <script type="module" src="/src/settlement-reconciliation-panel.ts"></script>
-    <script type="module" src="/src/value-lifecycle-panel.tsx"></script>
-    <script type="module" src="/src/ulb-command-center.tsx"></script>
-    <script src="/citizen-assistance.js"></script>
-    <script src="/national-language-selector.js"></script>
-    <script src="/role-dashboard.js"></script>
-    <script src="/stakeholder-journey.js"></script>
+    <script type="module" src="/src/operating-context-selector.ts"></script><script type="module" src="/src/operating-context-bridge.ts"></script><script type="module" src="/src/operating-workflow-experience.ts"></script><script type="module" src="/src/field-capture-experience.ts"></script><script type="module" src="/src/field-device-panel.tsx"></script><script type="module" src="/src/resource-flow-panel.ts"></script><script type="module" src="/src/citizen-farmer-guided-panel.ts"></script><script type="module" src="/src/compliance-panel.ts"></script><script type="module" src="/src/epr-return-panel.ts"></script><script type="module" src="/src/statutory-applicability-panel.ts"></script><script type="module" src="/src/onboarding-governance-panel.ts"></script><script type="module" src="/src/esg-panel.ts"></script><script type="module" src="/src/bwg-reporting-panel.ts"></script><script type="module" src="/src/mrv-provenance-panel.ts"></script><script type="module" src="/src/mrv-verification-actions.ts"></script><script type="module" src="/src/registry-issuance-panel.ts"></script><script type="module" src="/src/registry-settlement-panel.ts"></script><script type="module" src="/src/settlement-reconciliation-panel.ts"></script><script type="module" src="/src/value-lifecycle-panel.tsx"></script><script type="module" src="/src/ulb-command-center.tsx"></script>
+    <script src="/citizen-assistance.js"></script><script src="/national-language-selector.js"></script><script src="/role-dashboard.js"></script><script src="/stakeholder-journey.js"></script>
   </body>
 </html>
