@@ -5,8 +5,9 @@ import { Pool } from "pg";
  * Creates one deterministic, idempotent live-acceptance dataset.
  *
  * Safety: this file does nothing unless RUPAYKG_ACCEPTANCE_SEED_ON_START=true.
- * It deliberately reuses an existing, source-versioned geography record and
- * never invents LGD geography data.
+ * It prefers an existing source-versioned operational geography. If none exists,
+ * it uses the dedicated source-versioned acceptance fixture geography created by
+ * migration 081; it never invents LGD/government geography data.
  */
 
 if (process.env.RUPAYKG_ACCEPTANCE_SEED_ON_START !== "true") {
@@ -35,13 +36,27 @@ try {
   const geography = await pool.query<{ id: string }>(
     `select id from geography
       where kind in ('ULB','DISTRICT','STATE_UT')
+        and source is not null
+        and source_version is not null
       order by case kind when 'ULB' then 1 when 'DISTRICT' then 2 else 3 end, created_at nulls last
       limit 1`,
   );
-  if (!geography.rows[0]) {
-    throw new Error("No source-versioned geography exists; refusing to invent acceptance geography");
+
+  let geographyId = geography.rows[0]?.id;
+  if (!geographyId) {
+    const fixtureGeography = await pool.query<{ id: string }>(
+      `select id from geography
+        where kind='CLUSTER'
+          and code='RUPAYKG-ACCEPTANCE-V1'
+          and source='RupayKG Acceptance Fixture Geography'
+          and source_version='v1'
+        limit 1`,
+    );
+    geographyId = fixtureGeography.rows[0]?.id;
   }
-  const geographyId = geography.rows[0].id;
+  if (!geographyId) {
+    throw new Error("No source-versioned geography exists; acceptance fixture migration 081 may not have applied");
+  }
 
   const identity = await pool.query<{ id: string }>(
     `insert into identities(external_subject, display_name, status)
