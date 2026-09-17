@@ -1,11 +1,9 @@
-import { createHash, randomBytes, scrypt as scryptCb, timingSafeEqual } from "node:crypto";
-import { promisify } from "node:util";
+import { createHash, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import type { Pool } from "pg";
 import { authenticate, issueOpaqueToken, type AuthContext } from "./auth.js";
 import { getPermissionsForRole } from "./rbac-policy.js";
 
-const scrypt = promisify(scryptCb);
 type Body = Record<string, unknown>;
 const text = (body: Body, key: string) => typeof body[key] === "string" && body[key].trim() ? body[key].trim() : null;
 export const STAKEHOLDER_OPTIONS = [
@@ -18,8 +16,8 @@ const bodyOf = (request: { body: unknown }): Body => request.body && typeof requ
 const emailOf = (body: Body) => text(body, "email")?.toLowerCase() ?? null;
 const organizationRequiresLegalVerification = (organizationType: string) => organizationType !== "individual";
 const validPassword = (password: string) => password.length >= 10 && password.length <= 200;
-async function passwordHash(password: string, salt = randomBytes(16).toString("base64url")) { const derived = await scrypt(password, salt, 64, { N: 16384, r: 8, p: 1 }); return { salt, hash: Buffer.from(derived as Uint8Array).toString("base64url") }; }
-async function passwordMatches(password: string, salt: string, stored: string) { const derived = await scrypt(password, salt, 64, { N: 16384, r: 8, p: 1 }); const a = Buffer.from(stored, "base64url"); const b = Buffer.from(derived as Uint8Array); return a.length === b.length && timingSafeEqual(a, b); }
+function passwordHash(password: string, salt = randomBytes(16).toString("base64url")) { return { salt, hash: scryptSync(password, salt, 64, { N: 16384, r: 8, p: 1 }).toString("base64url") }; }
+function passwordMatches(password: string, salt: string, stored: string) { try { const derived = scryptSync(password, salt, 64, { N: 16384, r: 8, p: 1 }); const a = Buffer.from(stored, "base64url"); return a.length === derived.length && timingSafeEqual(a, derived); } catch { return false; } }
 async function requireAuth(request: any, reply: any, pool: Pool | null): Promise<AuthContext | null> { if (!pool) { reply.code(503).send({ error: "Database unavailable", code: "DATABASE_UNAVAILABLE" }); return null; } const auth = await authenticate(request, pool); if (!auth) { reply.code(401).send({ error: "Authenticated session required", code: "AUTH_REQUIRED" }); return null; } return auth; }
 async function isPlatformReviewer(pool: Pool, identityId: string): Promise<boolean> { const allowed = await pool.query<{ ok: boolean }>(`select exists(select 1 from organization_memberships om join roles r on r.id=om.role_id where om.identity_id=$1 and om.status='VERIFIED' and r.name in('platform_admin','super_admin')) ok`, [identityId]); return allowed.rows[0]?.ok === true; }
 async function issueSession(pool: Pool, identityId: string, context: Record<string, unknown>) { const sessionToken = issueOpaqueToken(); await pool.query(`insert into identity_sessions(identity_id,expires_at,token_hash,request_context) values($1,now()+interval '8 hours',$2,$3)`, [identityId, hash(sessionToken), JSON.stringify({ provider: "rupaykg-native", ...context })]); return sessionToken; }
@@ -36,7 +34,7 @@ export async function registerAuthRoutes(app: FastifyInstance, pool: Pool | null
       await client.query("begin");
       const identity = await client.query<{ id: string }>(`insert into identities(external_subject,display_name,email,status) values($1,$2,$3,'VERIFIED') returning id`, [`native:${email}`, name?.trim() || email, email]);
       const identityId = identity.rows[0]?.id; if (!identityId) throw new Error("Identity creation failed");
-      const credentials = await passwordHash(password);
+      const credentials = passwordHash(password);
       await client.query(`insert into identity_password_credentials(identity_id,password_hash,password_salt,password_algorithm) values($1,$2,$3,'scrypt')`, [identityId, credentials.hash, credentials.salt]);
       await client.query("commit");
       return reply.code(201).send({ source: "postgresql", syntheticData: false, identity: { id: identityId, display_name: name?.trim() || email, email, status: "VERIFIED" }, message: "Account created. Sign in to begin stakeholder onboarding. Organization access remains subject to verified membership and hierarchy approval." });
@@ -50,7 +48,7 @@ export async function registerAuthRoutes(app: FastifyInstance, pool: Pool | null
     const result = await pool.query<{ id: string; display_name: string; email: string | null; status: string; password_hash: string; password_salt: string; failed_attempts: number; locked_until: Date | null }>(`select i.id,i.display_name,i.email,i.status,pc.password_hash,pc.password_salt,pc.failed_attempts,pc.locked_until from identities i join identity_password_credentials pc on pc.identity_id=i.id where lower(i.email)=lower($1) limit 1`, [email]);
     const row = result.rows[0];
     if (!row || (row.locked_until && row.locked_until.getTime() > Date.now())) return reply.code(401).send({ error: "Invalid email or password", code: "INVALID_CREDENTIALS" });
-    const ok = await passwordMatches(password, row.password_salt, row.password_hash).catch(() => false);
+    const ok = passwordMatches(password, row.password_salt, row.password_hash);
     if (!ok) { await pool.query(`update identity_password_credentials set failed_attempts=failed_attempts+1,locked_until=case when failed_attempts+1>=10 then now()+interval '15 minutes' else locked_until end where identity_id=$1`, [row.id]); return reply.code(401).send({ error: "Invalid email or password", code: "INVALID_CREDENTIALS" }); }
     await pool.query(`update identity_password_credentials set failed_attempts=0,locked_until=null where identity_id=$1`, [row.id]);
     if (row.status !== "VERIFIED") return reply.code(403).send({ error: "RupayKG identity is not active", code: "IDENTITY_INACTIVE" });
