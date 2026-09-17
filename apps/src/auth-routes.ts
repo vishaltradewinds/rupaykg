@@ -1,13 +1,13 @@
-import { createHash } from "node:crypto";
+import { createHash, randomBytes, scrypt as scryptCb, timingSafeEqual } from "node:crypto";
+import { promisify } from "node:util";
 import type { FastifyInstance } from "fastify";
 import type { Pool } from "pg";
 import { authenticate, issueOpaqueToken, type AuthContext } from "./auth.js";
 import { getPermissionsForRole } from "./rbac-policy.js";
-import { verifyFirebaseIdToken } from "./firebase-auth.js";
 
+const scrypt = promisify(scryptCb);
 type Body = Record<string, unknown>;
 const text = (body: Body, key: string) => typeof body[key] === "string" && body[key].trim() ? body[key].trim() : null;
-const bool = (body: Body, key: string) => typeof body[key] === "boolean" ? body[key] : null;
 export const STAKEHOLDER_OPTIONS = [
   ["citizen", "Citizen / household / waste generator", "individual"], ["farmer", "Farmer / rural producer", "rural_enterprise"], ["safai_mitra", "Waste collection worker / Safai Mitra", "collection_operator"], ["fpo", "FPO / rural enterprise / Panchayat partner", "rural_institution"], ["municipal_admin", "ULB / municipal authority", "ulb"], ["municipal_generator", "Municipal / bulk facility generator", "bulk_generator"], ["aggregator", "Aggregator / transporter", "logistics"], ["processor", "MRF / recycler / processor / treatment facility", "processing_facility"], ["industry_generator", "Industrial generator", "industrial_generator"], ["commercial_generator", "Commercial / bulk waste generator", "commercial_generator"], ["institution_generator", "Institutional generator", "institutional_generator"], ["PROJECT_OWNER", "Carbon project owner", "carbon_project"], ["ACVA_USER", "Accredited Carbon Verification Agency user", "acva"], ["ccc_buyer", "Carbon / ESG buyer", "buyer"], ["epr_partner", "Producer / brand owner / importer / EPR partner", "epr"], ["csr_partner", "CSR / ESG partner", "csr"], ["regulator", "Regulator / public authority", "regulator"]
 ] as const;
@@ -15,45 +15,58 @@ type StakeholderRoleKey = typeof STAKEHOLDER_OPTIONS[number][0];
 const roleKeys = new Set<StakeholderRoleKey>(STAKEHOLDER_OPTIONS.map(([key]) => key));
 const hash = (token: string) => createHash("sha256").update(token).digest("hex");
 const bodyOf = (request: { body: unknown }): Body => request.body && typeof request.body === "object" ? request.body as Body : {};
+const emailOf = (body: Body) => text(body, "email")?.toLowerCase() ?? null;
 const organizationRequiresLegalVerification = (organizationType: string) => organizationType !== "individual";
+const validPassword = (password: string) => password.length >= 10 && password.length <= 200;
+async function passwordHash(password: string, salt = randomBytes(16).toString("base64url")) { const derived = await scrypt(password, salt, 64, { N: 16384, r: 8, p: 1 }); return { salt, hash: Buffer.from(derived as Uint8Array).toString("base64url") }; }
+async function passwordMatches(password: string, salt: string, stored: string) { const derived = await scrypt(password, salt, 64, { N: 16384, r: 8, p: 1 }); const a = Buffer.from(stored, "base64url"); const b = Buffer.from(derived as Uint8Array); return a.length === b.length && timingSafeEqual(a, b); }
 async function requireAuth(request: any, reply: any, pool: Pool | null): Promise<AuthContext | null> { if (!pool) { reply.code(503).send({ error: "Database unavailable", code: "DATABASE_UNAVAILABLE" }); return null; } const auth = await authenticate(request, pool); if (!auth) { reply.code(401).send({ error: "Authenticated session required", code: "AUTH_REQUIRED" }); return null; } return auth; }
 async function isPlatformReviewer(pool: Pool, identityId: string): Promise<boolean> { const allowed = await pool.query<{ ok: boolean }>(`select exists(select 1 from organization_memberships om join roles r on r.id=om.role_id where om.identity_id=$1 and om.status='VERIFIED' and r.name in('platform_admin','super_admin')) ok`, [identityId]); return allowed.rows[0]?.ok === true; }
+async function issueSession(pool: Pool, identityId: string, context: Record<string, unknown>) { const sessionToken = issueOpaqueToken(); await pool.query(`insert into identity_sessions(identity_id,expires_at,token_hash,request_context) values($1,now()+interval '8 hours',$2,$3)`, [identityId, hash(sessionToken), JSON.stringify({ provider: "rupaykg-native", ...context })]); return sessionToken; }
 
 export async function registerAuthRoutes(app: FastifyInstance, pool: Pool | null): Promise<void> {
-  app.post("/api/v1/auth/exchange", async (request, reply) => {
+  app.post("/api/v1/auth/register", async (request, reply) => {
     if (!pool) return reply.code(503).send({ error: "Database unavailable", code: "DATABASE_UNAVAILABLE" });
-    const idToken = text(bodyOf(request), "idToken");
-    if (!idToken) return reply.code(400).send({ error: "idToken is required", code: "ID_TOKEN_REQUIRED" });
+    const body = bodyOf(request), email = emailOf(body), name = text(body, "name"), password = text(body, "password");
+    if (!email || !/^\S+@\S+\.\S+$/.test(email) || !password || !validPassword(password)) return reply.code(400).send({ error: "A valid email and a password of 10–200 characters are required", code: "INVALID_CREDENTIALS" });
+    const existing = await pool.query<{ id: string }>("select id from identities where lower(email)=lower($1) limit 1", [email]);
+    if (existing.rows[0]) return reply.code(409).send({ error: "An account with this email already exists", code: "ACCOUNT_EXISTS" });
+    const client = await pool.connect();
     try {
-      const claims = await verifyFirebaseIdToken(idToken);
-      if (!claims.email) return reply.code(403).send({ error: "A Firebase account email is required", code: "EMAIL_REQUIRED" });
-      const identity = await pool.query<{ id: string }>(`insert into identities(external_subject,display_name,email,status) values($1,$2,$3,'VERIFIED') on conflict(external_subject) do update set display_name=excluded.display_name,email=excluded.email returning id`, [claims.sub, claims.name?.trim() || claims.email.trim(), claims.email.trim().toLowerCase()]);
-      const identityRow = identity.rows[0]; if (!identityRow) throw new Error("Identity insert returned no row");
-      const status = await pool.query<{ status: string }>("select status from identities where id=$1", [identityRow.id]);
-      if (!status.rows[0] || status.rows[0].status !== "VERIFIED") return reply.code(403).send({ error: "RupayKG identity is not active", code: "IDENTITY_INACTIVE" });
-      const sessionToken = issueOpaqueToken();
-      await pool.query(`insert into identity_sessions(identity_id,expires_at,token_hash,request_context) values($1,now()+interval '8 hours',$2,$3)`, [identityRow.id, hash(sessionToken), JSON.stringify({ provider: "firebase", auth_time: claims.auth_time, email_verified: claims.email_verified === true })]);
-      const memberships = await pool.query(`select om.organization_id,om.role_id,om.status,r.name role_name,r.permissions,o.name organization_name,o.organization_type,can_assess_epr(om.identity_id,om.organization_id) as can_assess_epr,can_write_esg(om.identity_id,om.organization_id) as can_write_esg from organization_memberships om join roles r on r.id=om.role_id join organizations o on o.id=om.organization_id where om.identity_id=$1 order by om.created_at`, [identityRow.id]);
-      const applications = await pool.query(`select sa.id,sa.organization_id,sa.requested_role_key,sa.requested_organization_type,sa.status,sa.created_at,sa.reviewed_at,sa.review_note,o.verification_status,o.verification_note,(select count(*) from organization_verification_evidence ove where ove.organization_id=o.id) evidence_count from stakeholder_applications sa join organizations o on o.id=sa.organization_id where sa.identity_id=$1 order by sa.created_at desc`, [identityRow.id]);
-      return { source: "postgresql", syntheticData: false, sessionToken, expiresInSeconds: 28800, identity: { id: identityRow.id, externalSubject: claims.sub, displayName: claims.name ?? claims.email, email: claims.email, emailVerified: claims.email_verified === true }, memberships: memberships.rows, applications: applications.rows };
-    } catch (error) { request.log.error(error); return reply.code(401).send({ error: "Firebase identity could not be verified", code: "IDENTITY_VERIFICATION_FAILED" }); }
+      await client.query("begin");
+      const identity = await client.query<{ id: string }>(`insert into identities(external_subject,display_name,email,status) values($1,$2,$3,'VERIFIED') returning id`, [`native:${email}`, name?.trim() || email, email]);
+      const identityId = identity.rows[0]?.id; if (!identityId) throw new Error("Identity creation failed");
+      const credentials = await passwordHash(password);
+      await client.query(`insert into identity_password_credentials(identity_id,password_hash,password_salt,password_algorithm) values($1,$2,$3,'scrypt')`, [identityId, credentials.hash, credentials.salt]);
+      await client.query("commit");
+      return reply.code(201).send({ source: "postgresql", syntheticData: false, identity: { id: identityId, display_name: name?.trim() || email, email, status: "VERIFIED" }, message: "Account created. Sign in to begin stakeholder onboarding. Organization access remains subject to verified membership and hierarchy approval." });
+    } catch (error) { await client.query("rollback"); request.log.error(error); return reply.code(503).send({ error: "Account could not be created", code: "REGISTRATION_UNAVAILABLE" }); } finally { client.release(); }
   });
+
+  app.post("/api/v1/auth/login", async (request, reply) => {
+    if (!pool) return reply.code(503).send({ error: "Database unavailable", code: "DATABASE_UNAVAILABLE" });
+    const body = bodyOf(request), email = emailOf(body), password = text(body, "password");
+    if (!email || !password) return reply.code(400).send({ error: "Email and password are required", code: "INVALID_CREDENTIALS" });
+    const result = await pool.query<{ id: string; display_name: string; email: string | null; status: string; password_hash: string; password_salt: string; failed_attempts: number; locked_until: Date | null }>(`select i.id,i.display_name,i.email,i.status,pc.password_hash,pc.password_salt,pc.failed_attempts,pc.locked_until from identities i join identity_password_credentials pc on pc.identity_id=i.id where lower(i.email)=lower($1) limit 1`, [email]);
+    const row = result.rows[0];
+    if (!row || (row.locked_until && row.locked_until.getTime() > Date.now())) return reply.code(401).send({ error: "Invalid email or password", code: "INVALID_CREDENTIALS" });
+    const ok = await passwordMatches(password, row.password_salt, row.password_hash).catch(() => false);
+    if (!ok) { await pool.query(`update identity_password_credentials set failed_attempts=failed_attempts+1,locked_until=case when failed_attempts+1>=10 then now()+interval '15 minutes' else locked_until end where identity_id=$1`, [row.id]); return reply.code(401).send({ error: "Invalid email or password", code: "INVALID_CREDENTIALS" }); }
+    await pool.query(`update identity_password_credentials set failed_attempts=0,locked_until=null where identity_id=$1`, [row.id]);
+    if (row.status !== "VERIFIED") return reply.code(403).send({ error: "RupayKG identity is not active", code: "IDENTITY_INACTIVE" });
+    const sessionToken = await issueSession(pool, row.id, { auth_time: Math.floor(Date.now() / 1000) });
+    const memberships = await pool.query(`select om.organization_id,om.role_id,om.status,r.name role_name,r.permissions,o.name organization_name,o.organization_type,can_assess_epr(om.identity_id,om.organization_id) as can_assess_epr,can_write_esg(om.identity_id,om.organization_id) as can_write_esg from organization_memberships om join roles r on r.id=om.role_id join organizations o on o.id=om.organization_id where om.identity_id=$1 order by om.created_at`, [row.id]);
+    const applications = await pool.query(`select sa.id,sa.organization_id,sa.requested_role_key,sa.requested_organization_type,sa.status,sa.created_at,sa.reviewed_at,sa.review_note,o.verification_status,o.verification_note,(select count(*) from organization_verification_evidence ove where ove.organization_id=o.id) evidence_count from stakeholder_applications sa join organizations o on o.id=sa.organization_id where sa.identity_id=$1 order by sa.created_at desc`, [row.id]);
+    return { source: "postgresql", syntheticData: false, sessionToken, expiresInSeconds: 28800, identity: { id: row.id, displayName: row.display_name, email: row.email, emailVerified: true }, memberships: memberships.rows, applications: applications.rows };
+  });
+
   app.get("/api/v1/auth/me", async (request, reply) => { const auth = await requireAuth(request, reply, pool); if (!auth || !pool) return; const [identity, memberships, applications] = await Promise.all([pool.query(`select id,display_name,email,status from identities where id=$1`, [auth.identityId]), pool.query(`select om.organization_id,om.role_id,om.status,r.name role_name,r.permissions,o.name organization_name,o.organization_type,can_assess_epr(om.identity_id,om.organization_id) as can_assess_epr,can_write_esg(om.identity_id,om.organization_id) as can_write_esg from organization_memberships om join roles r on r.id=om.role_id join organizations o on o.id=om.organization_id where om.identity_id=$1`, [auth.identityId]), pool.query(`select sa.id,sa.organization_id,sa.requested_role_key,sa.requested_organization_type,sa.status,sa.created_at,sa.reviewed_at,sa.review_note,o.verification_status,o.verification_note,(select count(*) from organization_verification_evidence ove where ove.organization_id=o.id) evidence_count from stakeholder_applications sa join organizations o on o.id=sa.organization_id where sa.identity_id=$1 order by sa.created_at desc`, [auth.identityId])]); return { source: "postgresql", syntheticData: false, identity: identity.rows[0] ?? null, memberships: memberships.rows, applications: applications.rows }; });
   app.post("/api/v1/auth/logout", async (request, reply) => { if (!pool) return reply.code(503).send({ error: "Database unavailable", code: "DATABASE_UNAVAILABLE" }); const header = request.headers.authorization; if (header?.startsWith("Bearer ")) await pool.query("update identity_sessions set revoked_at=now() where token_hash=$1 and revoked_at is null", [hash(header.slice(7).trim())]); return reply.code(204).send(); });
   app.get("/api/v1/onboarding/options", async () => ({ source: "application", syntheticData: false, stakeholders: STAKEHOLDER_OPTIONS.map(([key, label, organizationType]) => ({ key, label, organizationType })) }));
   app.post("/api/v1/onboarding/applications", async (request, reply) => {
     const auth = await requireAuth(request, reply, pool); if (!auth || !pool) return;
     const body = bodyOf(request), organizationName = text(body, "organizationName"), roleKeyText = text(body, "roleKey"), note = text(body, "applicantNote"), geographyId = text(body, "geographyId");
-    const legalName = text(body, "legalName") ?? organizationName;
-    const legalForm = text(body, "legalForm");
-    const registrationIdentifier = text(body, "registrationIdentifier");
-    const registrationAuthority = text(body, "registrationAuthority");
-    const evidenceType = text(body, "evidenceType");
-    const documentReference = text(body, "documentReference");
-    const contentHash = text(body, "contentHash");
-    const issuerName = text(body, "issuerName");
-    const issuedAt = text(body, "issuedAt");
-    const expiresAt = text(body, "expiresAt");
+    const legalName = text(body, "legalName") ?? organizationName, legalForm = text(body, "legalForm"), registrationIdentifier = text(body, "registrationIdentifier"), registrationAuthority = text(body, "registrationAuthority"), evidenceType = text(body, "evidenceType"), documentReference = text(body, "documentReference"), contentHash = text(body, "contentHash"), issuerName = text(body, "issuerName"), issuedAt = text(body, "issuedAt"), expiresAt = text(body, "expiresAt");
     if (!organizationName || !roleKeyText || !roleKeys.has(roleKeyText as StakeholderRoleKey)) return reply.code(400).send({ error: "organizationName and a supported stakeholder role are required", code: "INVALID_ONBOARDING" });
     const roleKey = roleKeyText as StakeholderRoleKey; const option = STAKEHOLDER_OPTIONS.find(([key]) => key === roleKey); if (!option) return reply.code(400).send({ error: "Unsupported stakeholder role", code: "INVALID_ONBOARDING" });
     if (organizationRequiresLegalVerification(option[2]) && (!legalName || !legalForm || !registrationIdentifier || !registrationAuthority)) return reply.code(400).send({ error: "Legal name, legal form, registration identifier and registration authority are required for organization-backed stakeholder onboarding", code: "LEGAL_IDENTITY_REQUIRED" });
@@ -75,16 +88,8 @@ export async function registerAuthRoutes(app: FastifyInstance, pool: Pool | null
   app.get("/api/v1/onboarding/applications", async (request, reply) => { const auth = await requireAuth(request, reply, pool); if (!auth || !pool) return; const rows = await pool.query(`select sa.id,sa.organization_id,sa.requested_role_key,sa.requested_organization_type,sa.geography_id,sa.status,sa.applicant_note,sa.created_at,sa.reviewed_at,sa.review_note,o.verification_status,o.verification_note,(select count(*) from organization_verification_evidence ove where ove.organization_id=o.id) evidence_count from stakeholder_applications sa join organizations o on o.id=sa.organization_id where sa.identity_id=$1 order by sa.created_at desc`, [auth.identityId]); return { source: "postgresql", syntheticData: false, applications: rows.rows }; });
   app.post("/api/v1/onboarding/applications/:applicationId/withdraw", async (request, reply) => {
     const auth = await requireAuth(request, reply, pool); if (!auth || !pool) return;
-    const id = (request.params as { applicationId: string }).applicationId;
-    const client = await pool.connect();
-    try {
-      await client.query("begin");
-      const result = await client.query<{ organization_id: string }>(`update stakeholder_applications set status='WITHDRAWN',reviewed_at=now(),review_note=null where id=$1 and identity_id=$2 and status='PENDING' returning organization_id`, [id, auth.identityId]);
-      const row = result.rows[0]; if (!row) { await client.query("rollback"); return reply.code(404).send({ error: "Pending stakeholder application not found", code: "APPLICATION_NOT_FOUND" }); }
-      await client.query("update organization_memberships set status='REJECTED' where organization_id=$1 and identity_id=$2 and status='PENDING'", [row.organization_id, auth.identityId]);
-      await client.query("update organization_geography_scopes set status='REJECTED' where organization_id=$1 and status='PENDING'", [row.organization_id]);
-      await client.query("update organizations set status='REJECTED',verification_status='REJECTED',verification_note='Application withdrawn by applicant' where id=$1 and status='PENDING'", [row.organization_id]);
-      await client.query("commit"); return { source: "postgresql", syntheticData: false, status: "WITHDRAWN", organizationId: row.organization_id };
-    } catch (error) { await client.query("rollback"); request.log.error(error); return reply.code(503).send({ error: "Stakeholder withdrawal could not be finalized", code: "WITHDRAWAL_UNAVAILABLE" }); } finally { client.release(); }
+    const id = (request.params as { applicationId: string }).applicationId; const client = await pool.connect();
+    try { await client.query("begin"); const result = await client.query<{ organization_id: string }>(`update stakeholder_applications set status='WITHDRAWN',reviewed_at=now(),review_note=null where id=$1 and identity_id=$2 and status='PENDING' returning organization_id`, [id, auth.identityId]); const row = result.rows[0]; if (!row) { await client.query("rollback"); return reply.code(404).send({ error: "Pending stakeholder application not found", code: "APPLICATION_NOT_FOUND" }); } await client.query("update organization_memberships set status='REJECTED' where organization_id=$1 and identity_id=$2 and status='PENDING'", [row.organization_id, auth.identityId]); await client.query("update organization_geography_scopes set status='REJECTED' where organization_id=$1 and status='PENDING'", [row.organization_id]); await client.query("update organizations set status='REJECTED',verification_status='REJECTED',verification_note='Application withdrawn by applicant' where id=$1 and status='PENDING'", [row.organization_id]); await client.query("commit"); return { source: "postgresql", syntheticData: false, status: "WITHDRAWN", organizationId: row.organization_id }; }
+    catch (error) { await client.query("rollback"); request.log.error(error); return reply.code(503).send({ error: "Stakeholder withdrawal could not be finalized", code: "WITHDRAWAL_UNAVAILABLE" }); } finally { client.release(); }
   });
 }
