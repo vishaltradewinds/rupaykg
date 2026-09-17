@@ -67,6 +67,15 @@ try {
   if (!identity.rows[0]) throw new Error("Acceptance identity could not be created");
   const identityId = identity.rows[0].id;
 
+  const verifier = await pool.query<{ id: string }>(
+    `insert into identities(external_subject, display_name, status)
+     values ('rupaykg-live-acceptance-verifier-v1', 'RupayKG Live Acceptance Independent Verifier', 'VERIFIED')
+     on conflict(external_subject) do update set display_name=excluded.display_name, status='VERIFIED'
+     returning id`,
+  );
+  if (!verifier.rows[0]) throw new Error("Acceptance verifier identity could not be created");
+  const verifierIdentityId = verifier.rows[0].id;
+
   const organization = await pool.query<{ id: string }>(
     `insert into organizations(name, organization_type, status)
      values ('RupayKG Live Acceptance Test', 'ACCEPTANCE_TEST', 'VERIFIED')
@@ -155,13 +164,13 @@ try {
      values ($1,$2,$3,'APPROVED','WA03.001','Live acceptance fixture approved for external Guardian/Hedera integration test',now())
      on conflict do nothing
      returning id`,
-    [evidenceId, activityId, identityId],
+    [evidenceId, activityId, verifierIdentityId],
   );
   let verificationId = verification.rows[0]?.id;
   if (!verificationId) {
     const existing = await pool.query<{ id: string }>(
       `select id from verifications where activity_id=$1 and evidence_id=$2 and verifier_identity_id=$3 order by decided_at desc limit 1`,
-      [activityId, evidenceId, identityId],
+      [activityId, evidenceId, verifierIdentityId],
     );
     verificationId = existing.rows[0]?.id;
   }
