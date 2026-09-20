@@ -46,7 +46,7 @@ Before a production rollback:
 
 ## Current acceptance evidence
 
-- Local full test suite: 88/88 passed.
+- Local full test suite: **not currently re-verified on the 2026-09-20 checkpoint**; the prior 88/88 statement is historical evidence only.
 - Production `/health`: HTTP 200, database available, synthetic data false.
 - Production authentication without a session: HTTP 401, fail-closed.
 - Guardian/Hedera live acceptance remains pending real external credentials and execution evidence.

@@ -10,15 +10,15 @@ This document is the production-control record for RupayKg under SHAKTI — Stan
 
 - Repository: `vishaltradewinds/rupaykg`
 - Default branch: `main`
-- Current deployed commit: `61a36493362bb4f4304ec9d52c9032002999e54d`
-- Current commit: `fix(acceptance): authorize independent verifier`
+- Current deployed commit: `5c1c215c777b0e7f15a4b74168db5c0f9307fbd5`
+- Current commit: `docs: add production backup and rollback runbook`
 - Render service: `rupaykg`
 - Render URL: `https://rupaykg.onrender.com`
 - Render branch: `main`
 - Auto-deploy: enabled
 - Current Render deployment state: live
-- Latest observed production deployment: `dep-dalu6inqj5pc73ear3t0`
-- Latest observed startup state: PostgreSQL migrations current at 81 files; service listening; root request returned HTTP 200.
+- Latest observed production deployment: `dep-dans9ibm8hqs73cck110`
+- Latest observed startup state: PostgreSQL-backed health/readiness verified on the current live deployment; service listening; root request returned HTTP 200.
 - Acceptance fixture is being created at startup and is explicitly marked as a fixture.
 
 ## SHAKTI gate status
