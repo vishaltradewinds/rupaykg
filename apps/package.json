@@ -9,7 +9,7 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "migrate": "tsx src/migrate.ts",
-    "test": "npm run build && files=$(find dist -type f -name '*.test.js' -print); if [ -z \"$files\" ]; then echo 'No compiled API test files found; build/typecheck validation already passed.'; else node --test $files; fi"
+    "test": "npm run build && node --test \"dist/**/*.test.js\""
   },
   "dependencies": {
     "@fastify/cors": "^11.0.0",
