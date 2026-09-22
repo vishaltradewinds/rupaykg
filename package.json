@@ -4,14 +4,19 @@
   "private": true,
   "description": "India's Circular Economy Operating System",
   "packageManager": "npm@11",
-  "workspaces": ["apps", "apps/web", "packages/*"],
+  "workspaces": [
+    "apps",
+    "apps/web",
+    "packages/*"
+  ],
   "scripts": {
     "build": "npm run build -w @rupaykg/domain && npm run build -w @rupaykg/carbon && npm run build -w @rupaykg/compliance && npm run build -w @rupaykg/esg && npm run build -w @rupaykg/intelligence && npm run build -w @rupaykg/api && npm run build -w @rupaykg/web",
     "start": "node apps/dist/src/production-server.js",
     "test": "npm run test --workspaces --if-present",
     "typecheck": "npm run build -w @rupaykg/domain && npm run build -w @rupaykg/carbon && npm run build -w @rupaykg/compliance && npm run build -w @rupaykg/esg && npm run build -w @rupaykg/intelligence && npm run typecheck --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",
-    "validate:migrations": "node scripts/validate-migrations.mjs"
+    "validate:migrations": "node scripts/validate-migrations.mjs",
+    "ecosystem:reconcile": "node scripts/reconcile-ecosystem-state.mjs"
   },
   "overrides": {
     "protobufjs": "8.8.0",

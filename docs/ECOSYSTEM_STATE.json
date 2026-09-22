@@ -1,0 +1,34 @@
+﻿{
+  "schemaVersion": 1,
+  "system": "RupayKg Ecosystem Continuity & Reconciliation",
+  "rule": "RECONCILE -> IDENTIFY NEXT UNFINISHED ITEM -> EXECUTE ONLY THAT ITEM -> VERIFY -> UPDATE CHECKPOINT",
+  "sourceOfTruth": "vishaltradewinds/rupaykg",
+  "referenceOnly": ["vishaltradewinds/rupaykg-aistudio"],
+  "states": ["VERIFIED_DONE", "IN_PROGRESS", "BLOCKED", "UNVERIFIED", "NEXT", "NOT_STARTED"],
+  "items": [
+    {"id":"repo-source-of-truth","area":"Repository","state":"VERIFIED_DONE","evidence":"Production repository is vishaltradewinds/rupaykg"},
+    {"id":"pc-clone","area":"Local workspace","state":"VERIFIED_DONE","evidence":"C:\\Users\\Vishal\\Documents\\GitHub\\rupaykg"},
+    {"id":"docker","area":"Infrastructure","state":"VERIFIED_DONE","evidence":"Docker Engine verified on connected PC"},
+    {"id":"rupaykg-production","area":"Production","state":"VERIFIED_DONE","evidence":"Render service rupaykg is live"},
+    {"id":"github-ci","area":"CI","state":"VERIFIED_DONE","evidence":"Latest verified CI run 35514484727 succeeded"},
+    {"id":"guardian-stack","area":"Guardian","state":"VERIFIED_DONE","evidence":"Local Guardian quickstart services running"},
+    {"id":"guardian-auth","area":"Guardian","state":"VERIFIED_DONE","evidence":"User confirmed Guardian authentication/setup already completed"},
+    {"id":"guardian-mrv-sender","area":"Guardian MRV","state":"VERIFIED_DONE","evidence":"guardian-mrv-sender-test is running"},
+    {"id":"rupaykg-guardian-adapter","area":"MRV","state":"VERIFIED_DONE","evidence":"apps/src/guardian-mrv.ts implements rupaykg:guardian-mrv:v1 contract"},
+    {"id":"live-acceptance-workflow","area":"Acceptance","state":"VERIFIED_DONE","evidence":".github/workflows/guardian-live-acceptance.yml exists and enforces non-synthetic Guardian/Hedera/Mirror Node proof"},
+    {"id":"guardian-policy-id","area":"Guardian","state":"NEXT","evidence":"Real published policy/workflow identifier still needs to be resolved from authenticated Guardian"},
+    {"id":"guardian-verified","area":"Acceptance","state":"NOT_STARTED","evidence":"Requires real live submission"},
+    {"id":"hedera-consensus","area":"Acceptance","state":"NOT_STARTED","evidence":"Requires real HCS confirmation"},
+    {"id":"persisted-provenance","area":"Acceptance","state":"NOT_STARTED","evidence":"Requires successful live acceptance"},
+    {"id":"mirror-node-verification","area":"Acceptance","state":"NOT_STARTED","evidence":"Requires real consensus timestamp and Mirror Node verification"},
+    {"id":"issue-11","area":"Governance","state":"BLOCKED","evidence":"Keep open until all real acceptance evidence exists"}
+  ],
+  "operatingRules": [
+    "Never redo VERIFIED_DONE work unless new evidence contradicts it.",
+    "Never convert historical evidence into current verification.",
+    "Never invent credentials, IDs, timestamps, signatures, policy IDs, execution IDs or acceptance results.",
+    "Every new work session starts by reading this manifest and reconciling only changed or stale items.",
+    "When an item is completed, update its state and evidence in the same coherent change.",
+    "When blocked, record the exact blocker and continue with independent work instead of repeating completed setup."
+  ]
+}
