@@ -1,0 +1,146 @@
+{
+  "createDate": "2026-09-22T13:01:31.855Z",
+  "updateDate": "2026-09-22T13:01:31.856Z",
+  "uuid": "8b2d9c31-5c1b-4a7f-9b5a-000000000001",
+  "hash": "",
+  "name": "WA03.001 Project Applicability",
+  "description": "BEE BM WA03.001 applicability, boundary and eligibility evidence.",
+  "entity": "NONE",
+  "documentFileId": null,
+  "contextFileId": null,
+  "version": "1.0.0",
+  "sourceVersion": "BEE BM WA03.001 v1.0",
+  "creator": "",
+  "owner": "",
+  "topicId": null,
+  "messageId": null,
+  "documentURL": null,
+  "contextURL": "schema:8b2d9c31-5c1b-4a7f-9b5a-000000000001",
+  "iri": "#8b2d9c31-5c1b-4a7f-9b5a-000000000001",
+  "system": false,
+  "active": false,
+  "category": "POLICY",
+  "codeVersion": "1.5.1",
+  "defs": [],
+  "errors": [],
+  "document": {
+    "$id": "#8b2d9c31-5c1b-4a7f-9b5a-000000000001",
+    "$comment": "{\"@id\":\"schema:8b2d9c31-5c1b-4a7f-9b5a-000000000001#8b2d9c31-5c1b-4a7f-9b5a-000000000001\",\"term\":\"8b2d9c31-5c1b-4a7f-9b5a-000000000001\"}",
+    "title": "WA03.001 Project Applicability",
+    "description": "BEE BM WA03.001 applicability, boundary and eligibility evidence.",
+    "type": "object",
+    "properties": {
+      "@context": {
+        "oneOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        ],
+        "readOnly": true
+      },
+      "type": {
+        "oneOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        ],
+        "readOnly": true
+      },
+      "id": {
+        "type": "string",
+        "readOnly": true
+      },
+      "projectId": {
+        "title": "Project ID",
+        "description": "RupayKg project/activity identifier",
+        "readOnly": false,
+        "type": "string"
+      },
+      "landfillSite": {
+        "title": "Landfill Site",
+        "description": "Landfill facility and physical boundary",
+        "readOnly": false,
+        "type": "string"
+      },
+      "projectBoundary": {
+        "title": "Project Boundary",
+        "description": "Sources/sinks included in the project boundary",
+        "readOnly": false,
+        "type": "string"
+      },
+      "methaneRecoveryPathway": {
+        "title": "Methane Recovery Pathway",
+        "description": "Recovery and destruction/use pathway",
+        "readOnly": false,
+        "type": "string"
+      },
+      "projectStartDate": {
+        "title": "Project Start Date",
+        "description": "Project activity start date",
+        "readOnly": false,
+        "type": "string"
+      },
+      "eligibilityBasis": {
+        "title": "Eligibility Basis",
+        "description": "Regulatory eligibility and ownership/control basis",
+        "readOnly": false,
+        "type": "string"
+      },
+      "evidenceRef": {
+        "title": "Evidence Reference",
+        "description": "Evidence package reference",
+        "readOnly": false,
+        "type": "string"
+      }
+    },
+    "required": [
+      "@context",
+      "type",
+      "projectId",
+      "landfillSite",
+      "projectBoundary",
+      "methaneRecoveryPathway",
+      "projectStartDate",
+      "eligibilityBasis",
+      "evidenceRef"
+    ],
+    "additionalProperties": false
+  },
+  "context": {
+    "@context": {
+      "projectId": {
+        "@type": "https://www.schema.org/text"
+      },
+      "landfillSite": {
+        "@type": "https://www.schema.org/text"
+      },
+      "projectBoundary": {
+        "@type": "https://www.schema.org/text"
+      },
+      "methaneRecoveryPathway": {
+        "@type": "https://www.schema.org/text"
+      },
+      "projectStartDate": {
+        "@type": "https://www.schema.org/text"
+      },
+      "eligibilityBasis": {
+        "@type": "https://www.schema.org/text"
+      },
+      "evidenceRef": {
+        "@type": "https://www.schema.org/text"
+      }
+    }
+  }
+}

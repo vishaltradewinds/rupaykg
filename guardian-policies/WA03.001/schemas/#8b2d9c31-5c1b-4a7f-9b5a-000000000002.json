@@ -1,0 +1,135 @@
+{
+  "createDate": "2026-09-22T13:01:31.856Z",
+  "updateDate": "2026-09-22T13:01:31.856Z",
+  "uuid": "8b2d9c31-5c1b-4a7f-9b5a-000000000002",
+  "hash": "",
+  "name": "WA03.001 Baseline Determination",
+  "description": "Baseline methane determination with BM-T-011 dependency.",
+  "entity": "NONE",
+  "documentFileId": null,
+  "contextFileId": null,
+  "version": "1.0.0",
+  "sourceVersion": "BEE BM WA03.001 v1.0",
+  "creator": "",
+  "owner": "",
+  "topicId": null,
+  "messageId": null,
+  "documentURL": null,
+  "contextURL": "schema:8b2d9c31-5c1b-4a7f-9b5a-000000000002",
+  "iri": "#8b2d9c31-5c1b-4a7f-9b5a-000000000002",
+  "system": false,
+  "active": false,
+  "category": "POLICY",
+  "codeVersion": "1.5.1",
+  "defs": [],
+  "errors": [],
+  "document": {
+    "$id": "#8b2d9c31-5c1b-4a7f-9b5a-000000000002",
+    "$comment": "{\"@id\":\"schema:8b2d9c31-5c1b-4a7f-9b5a-000000000002#8b2d9c31-5c1b-4a7f-9b5a-000000000002\",\"term\":\"8b2d9c31-5c1b-4a7f-9b5a-000000000002\"}",
+    "title": "WA03.001 Baseline Determination",
+    "description": "Baseline methane determination with BM-T-011 dependency.",
+    "type": "object",
+    "properties": {
+      "@context": {
+        "oneOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        ],
+        "readOnly": true
+      },
+      "type": {
+        "oneOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        ],
+        "readOnly": true
+      },
+      "id": {
+        "type": "string",
+        "readOnly": true
+      },
+      "activityId": {
+        "title": "Activity ID",
+        "description": "RupayKg activity identifier",
+        "readOnly": false,
+        "type": "string"
+      },
+      "baselineMethod": {
+        "title": "Baseline Method",
+        "description": "BEE BM-T-011 method/version used",
+        "readOnly": false,
+        "type": "string"
+      },
+      "fch4BL": {
+        "title": "FCH4,BL,y",
+        "description": "Baseline methane quantity in tCH4 for the monitoring period",
+        "readOnly": false,
+        "type": "number"
+      },
+      "bmT011Inputs": {
+        "title": "BM-T-011 Inputs",
+        "description": "Reference to complete BM-T-011 input dataset",
+        "readOnly": false,
+        "type": "string"
+      },
+      "bmT011Evidence": {
+        "title": "BM-T-011 Evidence",
+        "description": "Evidence reference for BM-T-011 calculation",
+        "readOnly": false,
+        "type": "string"
+      },
+      "baselineAssumptions": {
+        "title": "Baseline Assumptions",
+        "description": "Explicit baseline assumptions",
+        "readOnly": false,
+        "type": "string"
+      }
+    },
+    "required": [
+      "@context",
+      "type",
+      "activityId",
+      "baselineMethod",
+      "fch4BL",
+      "bmT011Inputs",
+      "bmT011Evidence"
+    ],
+    "additionalProperties": false
+  },
+  "context": {
+    "@context": {
+      "activityId": {
+        "@type": "https://www.schema.org/text"
+      },
+      "baselineMethod": {
+        "@type": "https://www.schema.org/text"
+      },
+      "fch4BL": {
+        "@type": "https://www.schema.org/text"
+      },
+      "bmT011Inputs": {
+        "@type": "https://www.schema.org/text"
+      },
+      "bmT011Evidence": {
+        "@type": "https://www.schema.org/text"
+      },
+      "baselineAssumptions": {
+        "@type": "https://www.schema.org/text"
+      }
+    }
+  }
+}

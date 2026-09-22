@@ -1,0 +1,165 @@
+{
+  "createDate": "2026-09-22T13:01:31.857Z",
+  "updateDate": "2026-09-22T13:01:31.857Z",
+  "uuid": "8b2d9c31-5c1b-4a7f-9b5a-000000000003",
+  "hash": "",
+  "name": "WA03.001 Project Monitoring",
+  "description": "Measured methane recovery, oxidation, project emissions and leakage evidence.",
+  "entity": "NONE",
+  "documentFileId": null,
+  "contextFileId": null,
+  "version": "1.0.0",
+  "sourceVersion": "BEE BM WA03.001 v1.0",
+  "creator": "",
+  "owner": "",
+  "topicId": null,
+  "messageId": null,
+  "documentURL": null,
+  "contextURL": "schema:8b2d9c31-5c1b-4a7f-9b5a-000000000003",
+  "iri": "#8b2d9c31-5c1b-4a7f-9b5a-000000000003",
+  "system": false,
+  "active": false,
+  "category": "POLICY",
+  "codeVersion": "1.5.1",
+  "defs": [],
+  "errors": [],
+  "document": {
+    "$id": "#8b2d9c31-5c1b-4a7f-9b5a-000000000003",
+    "$comment": "{\"@id\":\"schema:8b2d9c31-5c1b-4a7f-9b5a-000000000003#8b2d9c31-5c1b-4a7f-9b5a-000000000003\",\"term\":\"8b2d9c31-5c1b-4a7f-9b5a-000000000003\"}",
+    "title": "WA03.001 Project Monitoring",
+    "description": "Measured methane recovery, oxidation, project emissions and leakage evidence.",
+    "type": "object",
+    "properties": {
+      "@context": {
+        "oneOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        ],
+        "readOnly": true
+      },
+      "type": {
+        "oneOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        ],
+        "readOnly": true
+      },
+      "id": {
+        "type": "string",
+        "readOnly": true
+      },
+      "activityId": {
+        "title": "Activity ID",
+        "description": "RupayKg activity identifier",
+        "readOnly": false,
+        "type": "string"
+      },
+      "fch4PJ": {
+        "title": "FCH4,PJ,y",
+        "description": "Project methane quantity in tCH4 for the monitoring period",
+        "readOnly": false,
+        "type": "number"
+      },
+      "ox": {
+        "title": "OX",
+        "description": "Oxidation factor supported by authoritative evidence",
+        "readOnly": false,
+        "type": "number"
+      },
+      "pey": {
+        "title": "PEy",
+        "description": "Project emissions in tCO2e",
+        "readOnly": false,
+        "type": "number"
+      },
+      "ley": {
+        "title": "LEy",
+        "description": "Leakage emissions in tCO2e",
+        "readOnly": false,
+        "type": "number"
+      },
+      "measurementEvidence": {
+        "title": "Measurement Evidence",
+        "description": "Raw measurement/evidence reference",
+        "readOnly": false,
+        "type": "string"
+      },
+      "calibrationEvidence": {
+        "title": "Calibration Evidence",
+        "description": "Instrument calibration evidence reference",
+        "readOnly": false,
+        "type": "string"
+      },
+      "dataGapTreatment": {
+        "title": "Data Gap Treatment",
+        "description": "Methodology-compliant treatment of missing data",
+        "readOnly": false,
+        "type": "string"
+      },
+      "unitsConfirmed": {
+        "title": "Units Confirmed",
+        "description": "Explicit confirmation that all measurement units are correct",
+        "readOnly": false,
+        "type": "string"
+      }
+    },
+    "required": [
+      "@context",
+      "type",
+      "activityId",
+      "fch4PJ",
+      "ox",
+      "pey",
+      "ley",
+      "measurementEvidence",
+      "calibrationEvidence",
+      "unitsConfirmed"
+    ],
+    "additionalProperties": false
+  },
+  "context": {
+    "@context": {
+      "activityId": {
+        "@type": "https://www.schema.org/text"
+      },
+      "fch4PJ": {
+        "@type": "https://www.schema.org/text"
+      },
+      "ox": {
+        "@type": "https://www.schema.org/text"
+      },
+      "pey": {
+        "@type": "https://www.schema.org/text"
+      },
+      "ley": {
+        "@type": "https://www.schema.org/text"
+      },
+      "measurementEvidence": {
+        "@type": "https://www.schema.org/text"
+      },
+      "calibrationEvidence": {
+        "@type": "https://www.schema.org/text"
+      },
+      "dataGapTreatment": {
+        "@type": "https://www.schema.org/text"
+      },
+      "unitsConfirmed": {
+        "@type": "https://www.schema.org/text"
+      }
+    }
+  }
+}

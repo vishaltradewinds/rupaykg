@@ -1,0 +1,155 @@
+{
+  "createDate": "2026-09-22T13:01:31.857Z",
+  "updateDate": "2026-09-22T13:01:31.857Z",
+  "uuid": "8b2d9c31-5c1b-4a7f-9b5a-000000000005",
+  "hash": "",
+  "name": "WA03.001 Verification Decision",
+  "description": "Independent verification freeze and decision.",
+  "entity": "NONE",
+  "documentFileId": null,
+  "contextFileId": null,
+  "version": "1.0.0",
+  "sourceVersion": "BEE BM WA03.001 v1.0",
+  "creator": "",
+  "owner": "",
+  "topicId": null,
+  "messageId": null,
+  "documentURL": null,
+  "contextURL": "schema:8b2d9c31-5c1b-4a7f-9b5a-000000000005",
+  "iri": "#8b2d9c31-5c1b-4a7f-9b5a-000000000005",
+  "system": false,
+  "active": false,
+  "category": "POLICY",
+  "codeVersion": "1.5.1",
+  "defs": [],
+  "errors": [],
+  "document": {
+    "$id": "#8b2d9c31-5c1b-4a7f-9b5a-000000000005",
+    "$comment": "{\"@id\":\"schema:8b2d9c31-5c1b-4a7f-9b5a-000000000005#8b2d9c31-5c1b-4a7f-9b5a-000000000005\",\"term\":\"8b2d9c31-5c1b-4a7f-9b5a-000000000005\"}",
+    "title": "WA03.001 Verification Decision",
+    "description": "Independent verification freeze and decision.",
+    "type": "object",
+    "properties": {
+      "@context": {
+        "oneOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        ],
+        "readOnly": true
+      },
+      "type": {
+        "oneOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        ],
+        "readOnly": true
+      },
+      "id": {
+        "type": "string",
+        "readOnly": true
+      },
+      "verificationId": {
+        "title": "Verification ID",
+        "description": "RupayKg verification identifier",
+        "readOnly": false,
+        "type": "string"
+      },
+      "methodologyCode": {
+        "title": "Methodology Code",
+        "description": "Must be WA03.001",
+        "readOnly": false,
+        "type": "string"
+      },
+      "methodologyVersion": {
+        "title": "Methodology Version",
+        "description": "Must be 1.0",
+        "readOnly": false,
+        "type": "string"
+      },
+      "evidenceComplete": {
+        "title": "Evidence Complete",
+        "description": "Mandatory evidence completeness decision",
+        "readOnly": false,
+        "type": "string"
+      },
+      "calculationFrozen": {
+        "title": "Calculation Frozen",
+        "description": "Calculation inputs frozen before decision",
+        "readOnly": false,
+        "type": "string"
+      },
+      "verifierDecision": {
+        "title": "Verifier Decision",
+        "description": "VERIFIED or REJECTED",
+        "readOnly": false,
+        "type": "string"
+      },
+      "verifierComments": {
+        "title": "Verifier Comments",
+        "description": "Independent verification notes",
+        "readOnly": false,
+        "type": "string"
+      },
+      "provenanceRef": {
+        "title": "Provenance Reference",
+        "description": "Evidence/provenance package reference",
+        "readOnly": false,
+        "type": "string"
+      }
+    },
+    "required": [
+      "@context",
+      "type",
+      "verificationId",
+      "methodologyCode",
+      "methodologyVersion",
+      "evidenceComplete",
+      "calculationFrozen",
+      "verifierDecision",
+      "provenanceRef"
+    ],
+    "additionalProperties": false
+  },
+  "context": {
+    "@context": {
+      "verificationId": {
+        "@type": "https://www.schema.org/text"
+      },
+      "methodologyCode": {
+        "@type": "https://www.schema.org/text"
+      },
+      "methodologyVersion": {
+        "@type": "https://www.schema.org/text"
+      },
+      "evidenceComplete": {
+        "@type": "https://www.schema.org/text"
+      },
+      "calculationFrozen": {
+        "@type": "https://www.schema.org/text"
+      },
+      "verifierDecision": {
+        "@type": "https://www.schema.org/text"
+      },
+      "verifierComments": {
+        "@type": "https://www.schema.org/text"
+      },
+      "provenanceRef": {
+        "@type": "https://www.schema.org/text"
+      }
+    }
+  }
+}

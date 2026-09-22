@@ -1,0 +1,306 @@
+{
+  "updateDate": "2026-09-22T13:01:31.862Z",
+  "uuid": "2b1dbf72-0d6c-4d90-9e16-5e8b8c000301",
+  "name": "RupayKg BM WA03.001 Landfill Methane Recovery",
+  "version": "1.0.0",
+  "description": "Guardian-native dMRV policy specification for BEE BM WA03.001 v1.0. BEE is the controlling regulatory authority. Guardian examples are not substituted.",
+  "topicDescription": "RupayKg WA03.001 policy",
+  "creator": "",
+  "owner": "",
+  "policyRoles": [
+    "Project Proponent",
+    "Verification Body",
+    "NO_ROLE",
+    "OWNER"
+  ],
+  "policyNavigation": [],
+  "policyGroups": [],
+  "policyTopics": [],
+  "policyTokens": [],
+  "instanceTopicId": null,
+  "synchronizationTopicId": null,
+  "policyTag": "rupaykg_wa03_001_v1",
+  "codeVersion": "1.5.1",
+  "hash": "",
+  "hashMapFileId": null,
+  "importantParameters": {
+    "atValidation": "WA03.001 applicability, baseline, monitoring and independent verification evidence",
+    "monitored": "FCH4,PJ,y; FCH4,BL,y; GWPCH4=29.8; OX; PEy; LEy"
+  },
+  "typicalProjects": "Indian landfill methane recovery projects",
+  "applicabilityConditions": "BEE BM WA03.001 v1.0 applicability and regulatory eligibility",
+  "categories": [
+    "",
+    "",
+    ""
+  ],
+  "categoriesExport": [],
+  "detailsUrl": "https://beeindia.gov.in/sites/default/files/BM%20WA03.001.pdf",
+  "tools": [],
+  "config": {
+    "id": "67e03bac-d28f-40b2-8f8d-529ae9e704e6",
+    "blockType": "interfaceContainerBlock",
+    "permissions": [
+      "ANY_ROLE"
+    ],
+    "onErrorAction": "no-action",
+    "uiMetaData": {
+      "type": "blank",
+      "fields": []
+    },
+    "options": [],
+    "dataSource": "auto",
+    "tag": "WA03_001_ROOT",
+    "children": [
+      {
+        "id": "e33cdcfd-27fa-40fc-b04e-9093b2bd6175",
+        "blockType": "policyRolesBlock",
+        "defaultActive": true,
+        "permissions": [
+          "NO_ROLE"
+        ],
+        "onErrorAction": "no-action",
+        "uiMetaData": {},
+        "tag": "Choose_Role",
+        "children": [],
+        "events": [],
+        "artifacts": [],
+        "roles": [
+          "Project Proponent",
+          "Verification Body"
+        ]
+      },
+      {
+        "id": "ecb272a0-6975-4e67-88d4-8bb349d9db0c",
+        "blockType": "interfaceContainerBlock",
+        "defaultActive": true,
+        "permissions": [
+          "Project Proponent"
+        ],
+        "onErrorAction": "no-action",
+        "uiMetaData": {
+          "type": "tabs"
+        },
+        "tag": "Project_Proponent",
+        "children": [
+          {
+            "id": "a0c1cb2e-e0db-43b3-a606-1b534bd45a98",
+            "blockType": "requestVcDocumentBlock",
+            "defaultActive": true,
+            "permissions": [
+              "Project Proponent"
+            ],
+            "onErrorAction": "no-action",
+            "uiMetaData": {
+              "type": "page",
+              "title": "WA03.001 Applicability"
+            },
+            "tag": "wa03_applicability_form",
+            "children": [],
+            "events": [],
+            "artifacts": [],
+            "presetFields": [],
+            "schema": "#8b2d9c31-5c1b-4a7f-9b5a-000000000001",
+            "idType": "UUID"
+          },
+          {
+            "id": "3a44044f-b197-40bf-9671-2265e38139cf",
+            "blockType": "requestVcDocumentBlock",
+            "defaultActive": true,
+            "permissions": [
+              "Project Proponent"
+            ],
+            "onErrorAction": "no-action",
+            "uiMetaData": {
+              "type": "page",
+              "title": "WA03.001 Baseline / BM-T-011"
+            },
+            "tag": "wa03_baseline_form",
+            "children": [],
+            "events": [],
+            "artifacts": [],
+            "presetFields": [],
+            "schema": "#8b2d9c31-5c1b-4a7f-9b5a-000000000002",
+            "idType": "UUID"
+          },
+          {
+            "id": "32918c3d-2f8c-416c-9857-c4703cf72cef",
+            "blockType": "requestVcDocumentBlock",
+            "defaultActive": true,
+            "permissions": [
+              "Project Proponent"
+            ],
+            "onErrorAction": "no-action",
+            "uiMetaData": {
+              "type": "page",
+              "title": "WA03.001 Monitoring"
+            },
+            "tag": "wa03_monitoring_form",
+            "children": [],
+            "events": [],
+            "artifacts": [],
+            "presetFields": [],
+            "schema": "#8b2d9c31-5c1b-4a7f-9b5a-000000000003",
+            "idType": "UUID"
+          },
+          {
+            "id": "7c895e5c-aa1f-4b5a-9f1e-23c52b8451dd",
+            "blockType": "calculateContainerBlock",
+            "defaultActive": true,
+            "permissions": [
+              "Project Proponent"
+            ],
+            "onErrorAction": "no-action",
+            "uiMetaData": {},
+            "tag": "wa03_equation4_calc",
+            "children": [
+              {
+                "id": "eaadfa59-48e8-4835-9c35-8127d390defe",
+                "blockType": "calculateMathAddonBlock",
+                "defaultActive": true,
+                "permissions": [
+                  "Project Proponent"
+                ],
+                "onErrorAction": "no-action",
+                "uiMetaData": {},
+                "tag": "wa03_equation4_math",
+                "children": [],
+                "events": [],
+                "artifacts": [],
+                "equations": [
+                  {
+                    "variable": "E_GWP",
+                    "formula": "29.8"
+                  },
+                  {
+                    "variable": "E_ER",
+                    "formula": "(E_FCH4_PJ-E_FCH4_BL)*E_GWP*(1-E_OX)-E_PE-E_LE"
+                  }
+                ]
+              }
+            ],
+            "events": [],
+            "artifacts": [],
+            "inputSchema": "#8b2d9c31-5c1b-4a7f-9b5a-000000000003",
+            "inputFields": [
+              {
+                "name": "fch4PJ",
+                "title": "FCH4,PJ,y",
+                "value": "E_FCH4_PJ"
+              },
+              {
+                "name": "fch4BL",
+                "title": "FCH4,BL,y",
+                "value": "E_FCH4_BL"
+              },
+              {
+                "name": "ox",
+                "title": "OX",
+                "value": "E_OX"
+              },
+              {
+                "name": "pey",
+                "title": "PEy",
+                "value": "E_PE"
+              },
+              {
+                "name": "ley",
+                "title": "LEy",
+                "value": "E_LE"
+              },
+              {
+                "name": "activityId",
+                "title": "Activity ID",
+                "value": "E_ACTIVITY"
+              }
+            ],
+            "outputSchema": "#8b2d9c31-5c1b-4a7f-9b5a-000000000004",
+            "outputFields": [
+              {
+                "name": "activityId",
+                "title": "Activity ID",
+                "value": "E_ACTIVITY"
+              },
+              {
+                "name": "fch4PJ",
+                "title": "FCH4,PJ,y",
+                "value": "E_FCH4_PJ"
+              },
+              {
+                "name": "fch4BL",
+                "title": "FCH4,BL,y",
+                "value": "E_FCH4_BL"
+              },
+              {
+                "name": "gwpCH4",
+                "title": "GWPCH4",
+                "value": "E_GWP"
+              },
+              {
+                "name": "ox",
+                "title": "OX",
+                "value": "E_OX"
+              },
+              {
+                "name": "pey",
+                "title": "PEy",
+                "value": "E_PE"
+              },
+              {
+                "name": "ley",
+                "title": "LEy",
+                "value": "E_LE"
+              },
+              {
+                "name": "ery",
+                "title": "ERy,calculated",
+                "value": "E_ER"
+              }
+            ]
+          }
+        ],
+        "events": [],
+        "artifacts": []
+      },
+      {
+        "id": "4227b767-16c5-458a-8118-c6a93e4fb380",
+        "blockType": "interfaceContainerBlock",
+        "defaultActive": true,
+        "permissions": [
+          "Verification Body"
+        ],
+        "onErrorAction": "no-action",
+        "uiMetaData": {
+          "type": "tabs"
+        },
+        "tag": "Verification_Body",
+        "children": [
+          {
+            "id": "7bb0c6de-6206-4e49-bdb5-897b60b09147",
+            "blockType": "requestVcDocumentBlock",
+            "defaultActive": true,
+            "permissions": [
+              "Verification Body"
+            ],
+            "onErrorAction": "no-action",
+            "uiMetaData": {
+              "type": "page",
+              "title": "WA03.001 Independent Verification"
+            },
+            "tag": "wa03_verification_form",
+            "children": [],
+            "events": [],
+            "artifacts": [],
+            "presetFields": [],
+            "schema": "#8b2d9c31-5c1b-4a7f-9b5a-000000000005",
+            "idType": "UUID"
+          }
+        ],
+        "events": [],
+        "artifacts": []
+      }
+    ],
+    "events": [],
+    "artifacts": []
+  }
+}
