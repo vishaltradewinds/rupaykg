@@ -1,10 +1,2 @@
-const fs=require('fs');const path=require('path');const {execFileSync}=require('child_process');
-const root=path.resolve('docs/guardian-policy/wa03.001');
-const out=path.resolve('artifacts/RupayKg-WA03.001-v1.policy');
-fs.mkdirSync(path.dirname(out),{recursive:true});
-const tmp=path.join(root,'_bundle');fs.rmSync(tmp,{recursive:true,force:true});fs.mkdirSync(path.join(tmp,'schemas'),{recursive:true});
-fs.copyFileSync(path.join(root,'policy.json'),path.join(tmp,'policy.json'));
-for(const f of fs.readdirSync(path.join(root,'schemas')).filter(x=>x.endsWith('.json')))fs.copyFileSync(path.join(root,'schemas',f),path.join(tmp,'schemas',f));
-if(fs.existsSync(out))fs.rmSync(out);const zip=out+'.zip';if(fs.existsSync(zip))fs.rmSync(zip);
-if(process.platform==='win32')execFileSync('powershell.exe',['-NoProfile','-Command',"Compress-Archive -Path '"+tmp+"\\*' -DestinationPath '"+zip+"' -Force"],{stdio:'inherit'});else execFileSync('zip',['-r',zip,'.'],{stdio:'inherit',cwd:tmp});
-fs.copyFileSync(zip,out);fs.rmSync(zip);fs.rmSync(tmp,{recursive:true,force:true});console.log(out);
+import fs from 'node:fs';import path from 'node:path';import {execFileSync} from 'node:child_process';
+const root=path.resolve('docs/guardian-policy/wa03.001');const out=path.resolve('artifacts/RupayKg-WA03.001-v1.policy');fs.mkdirSync(path.dirname(out),{recursive:true});const tmp=path.join(root,'_bundle');fs.rmSync(tmp,{recursive:true,force:true});fs.mkdirSync(path.join(tmp,'schemas'),{recursive:true});fs.copyFileSync(path.join(root,'policy.json'),path.join(tmp,'policy.json'));for(const f of fs.readdirSync(path.join(root,'schemas')).filter(x=>x.endsWith('.json')))fs.copyFileSync(path.join(root,'schemas',f),path.join(tmp,'schemas',f));if(fs.existsSync(out))fs.rmSync(out);const zip=out+'.zip';if(fs.existsSync(zip))fs.rmSync(zip);execFileSync('powershell.exe',['-NoProfile','-Command',"Compress-Archive -Path '"+tmp+"\\*' -DestinationPath '"+zip+"' -Force"],{stdio:'inherit'});fs.copyFileSync(zip,out);fs.rmSync(zip);fs.rmSync(tmp,{recursive:true,force:true});console.log(out);
