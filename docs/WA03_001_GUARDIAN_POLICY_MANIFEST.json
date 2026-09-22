@@ -1,0 +1,73 @@
+{
+  "policy_key": "rupaykg:wa03.001:landfill-methane-recovery:v1",
+  "status": "BUILD_SPECIFICATION",
+  "controlling_methodology": {
+    "authority": "Bureau of Energy Efficiency",
+    "code": "BM WA03.001",
+    "version": "1.0",
+    "date": "2025-03-27"
+  },
+  "lineage": [
+    {
+      "authority": "UNFCCC CDM",
+      "code": "AMS-III.G",
+      "role": "methodology lineage/reference only"
+    }
+  ],
+  "companion_methods": [
+    {
+      "code": "BM WA03.002",
+      "role": "conditional companion only"
+    }
+  ],
+  "supporting_tools": [
+    "BM-T-001",
+    "BM-T-002",
+    "BM-T-003",
+    "BM-T-004",
+    "BM-T-006",
+    "BM-T-011",
+    "BM-T-012"
+  ],
+  "guardian_reference_policy_rule": "implementation patterns only; never regulatory substitution",
+  "equation": {
+    "id": "WA03.001-EQ4",
+    "formula": "(FCH4,PJ,y - FCH4,BL,y) * GWPCH4 * (1 - OX) - PEy - LEy",
+    "gwp_ch4_tco2e_per_tch4": 29.8
+  },
+  "required_gates": [
+    "applicability",
+    "baseline",
+    "monitoring",
+    "methane_recovery",
+    "oxidation",
+    "project_emissions",
+    "leakage",
+    "deterministic_equation_4",
+    "verification_freeze",
+    "provenance_submission"
+  ],
+  "integration_tags": {
+    "methodologyCode": "WA03.001",
+    "policyId": "REAL_GUARDIAN_ID_REQUIRED",
+    "activityId": "RUPAYKG_ACTIVITY_ID",
+    "verificationId": "RUPAYKG_VERIFICATION_ID",
+    "evidenceId": "RUPAYKG_EVIDENCE_ID"
+  },
+  "production_acceptance_requires": [
+    "real_policy_id",
+    "guardian_verified",
+    "guardian_execution_id",
+    "hedera_consensus_confirmed",
+    "persisted_provenance",
+    "mirror_node_verified",
+    "live_non_synthetic_acceptance"
+  ],
+  "claims_blocked_until_evidence": [
+    "published_policy",
+    "guardian_policy_id",
+    "hedera_acceptance",
+    "mirror_node_verification",
+    "production_eligibility"
+  ]
+}
