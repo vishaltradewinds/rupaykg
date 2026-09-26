@@ -1,5 +1,5 @@
 {
-  "updateDate": "2026-09-22T13:01:31.862Z",
+  "updateDate": "2026-09-24T09:14:36.144Z",
   "uuid": "2b1dbf72-0d6c-4d90-9e16-5e8b8c000301",
   "name": "RupayKg BM WA03.001 Landfill Methane Recovery",
   "version": "1.0.0",
@@ -38,7 +38,7 @@
   "detailsUrl": "https://beeindia.gov.in/sites/default/files/BM%20WA03.001.pdf",
   "tools": [],
   "config": {
-    "id": "67e03bac-d28f-40b2-8f8d-529ae9e704e6",
+    "id": "ee4fb9cf-947b-474a-a9b0-b3cd7dbeace2",
     "blockType": "interfaceContainerBlock",
     "permissions": [
       "ANY_ROLE"
@@ -53,7 +53,7 @@
     "tag": "WA03_001_ROOT",
     "children": [
       {
-        "id": "e33cdcfd-27fa-40fc-b04e-9093b2bd6175",
+        "id": "f88bbf83-1f85-4f52-982a-a3ef577d1dc7",
         "blockType": "policyRolesBlock",
         "defaultActive": true,
         "permissions": [
@@ -71,7 +71,7 @@
         ]
       },
       {
-        "id": "ecb272a0-6975-4e67-88d4-8bb349d9db0c",
+        "id": "0df9a0ce-7b94-4494-81dd-fc4669b38db5",
         "blockType": "interfaceContainerBlock",
         "defaultActive": true,
         "permissions": [
@@ -84,7 +84,7 @@
         "tag": "Project_Proponent",
         "children": [
           {
-            "id": "a0c1cb2e-e0db-43b3-a606-1b534bd45a98",
+            "id": "a0230842-f33c-4ca9-a499-f44bcb92460c",
             "blockType": "requestVcDocumentBlock",
             "defaultActive": true,
             "permissions": [
@@ -104,7 +104,7 @@
             "idType": "UUID"
           },
           {
-            "id": "3a44044f-b197-40bf-9671-2265e38139cf",
+            "id": "2302bf51-71f7-440e-ba59-7b3691f8ddbd",
             "blockType": "requestVcDocumentBlock",
             "defaultActive": true,
             "permissions": [
@@ -124,7 +124,7 @@
             "idType": "UUID"
           },
           {
-            "id": "32918c3d-2f8c-416c-9857-c4703cf72cef",
+            "id": "c9afb072-9781-4626-9b75-1cd7bce73d1b",
             "blockType": "requestVcDocumentBlock",
             "defaultActive": true,
             "permissions": [
@@ -144,7 +144,7 @@
             "idType": "UUID"
           },
           {
-            "id": "7c895e5c-aa1f-4b5a-9f1e-23c52b8451dd",
+            "id": "7207cc7b-552a-4e45-9e69-6d15259160c5",
             "blockType": "calculateContainerBlock",
             "defaultActive": true,
             "permissions": [
@@ -155,7 +155,7 @@
             "tag": "wa03_equation4_calc",
             "children": [
               {
-                "id": "eaadfa59-48e8-4835-9c35-8127d390defe",
+                "id": "aa7d80c7-49de-4bde-9b65-e5af7dc80dd5",
                 "blockType": "calculateMathAddonBlock",
                 "defaultActive": true,
                 "permissions": [
@@ -263,7 +263,7 @@
         "artifacts": []
       },
       {
-        "id": "4227b767-16c5-458a-8118-c6a93e4fb380",
+        "id": "fcb9c262-c881-4dc0-8ab0-aa98de2c631f",
         "blockType": "interfaceContainerBlock",
         "defaultActive": true,
         "permissions": [
@@ -276,7 +276,7 @@
         "tag": "Verification_Body",
         "children": [
           {
-            "id": "7bb0c6de-6206-4e49-bdb5-897b60b09147",
+            "id": "8ed947fa-dd87-48b8-809a-21dd3b43556b",
             "blockType": "requestVcDocumentBlock",
             "defaultActive": true,
             "permissions": [
