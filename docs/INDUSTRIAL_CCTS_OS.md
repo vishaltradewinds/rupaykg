@@ -34,7 +34,48 @@ Keep a separate project record and eligibility gate for project proponent, proje
 
 A project may progress through Draft → Eligibility Review → PDD/Monitoring Plan → Validation → Monitoring → Verification → Registry Submission → Issuance only through explicitly recorded evidence and authorised decisions. Never mark a stage complete without evidence of the external authority/ACVA action where required.
 
-### Shared services
+### Agricultural residue and stubble-burning pathway (operational evidence layer; eligibility gated)
+
+Purpose: support a commercial chain from farmer/FPO → field-level residue record → collection/aggregation → weighbridge/transport → processor or energy user → monitoring evidence pack. This extends RupayKg's waste-to-carbon MRV and KrishiKendra's physical residue chain; it does not create an independent crediting methodology.
+
+### Official methodology register baseline
+BEE's live register, last updated 7 July 2026, lists:
+- BM AG04.002 — Emission reduction through improved management practices in rice cultivation (Agriculture).
+- BM WA03.003 — Production of Compressed Bio-gas (CBG) (Waste Handling and Disposal).
+- BM EN01.003 — Electricity and Heat Generation from Biomass (Energy).
+- Related tools listed by BEE include BM-T-002 (fossil fuel combustion), BM-T-003 (electricity), BM-T-008 (anaerobic digesters), and BM-T-010 (biomass).
+
+Official register: https://beeindia.gov.in/view_content.php?lang=1&lid=571
+
+These register entries are not blanket approval for every stubble-burning intervention. Before a project can be marked eligible, retrieve the full current approved methodology and version, verify the project activity and feedstock fit its applicability conditions, establish the baseline and additionality as required, identify all relevant gases/sources/sinks, apply only the tools referenced or permitted by that methodology, and document monitoring, leakage, uncertainty and verification requirements. An external summary is not a substitute for the approved text.
+
+**Specific guardrails**
+- Do not assume BM AG04.002 covers all residue removal or burning avoidance solely because it concerns rice-cultivation management.
+- BM WA03.003 and BM EN01.003 may be relevant to CBG or biomass energy projects only when their actual feedstock, baseline, output, monitoring and other applicability conditions are met. A bale receipt or plant delivery is not itself a carbon reduction.
+- The BEE register describes BMT-T-AR-0006 as a soil-organic-carbon tool for afforestation/reforestation activities. Do not apply it to ordinary crop-residue retention unless an authoritative applicable methodology explicitly permits that use.
+- Do not hard-code the user-supplied baseline/project formula, IPCC factors, grain-to-straw ratios, global-warming potentials, soil-carbon credit or “one tonne equals one issued CCC” into production calculations without mapping every term to the selected current methodology and applicable CCTS procedures.
+- A thermal anomaly is a monitoring signal, not automatically a conclusive legal finding. Preserve source, timestamp, spatial resolution, confidence, field intersection, review outcome and any appeal/correction evidence. Apply methodology-specific consequences only when confirmed.
+- Treat any Verra VM0042 route as a separate voluntary-standard pathway unless a documented, lawful mechanism explicitly authorises the intended interaction. Never silently combine or claim the same reduction in multiple registries.
+- Keep evidence capture and indicative estimates separate from verified reductions, project registration, registry submission and actual CCC issuance.
+
+### Minimum operational evidence chain
+1. Farmer/FPO and authorised land-use/plot evidence; field boundary, area, crop, season and unique parcel ID.
+2. Baseline evidence relevant to the selected methodology, including historical practice evidence where required; do not assume every enrolled field would otherwise burn.
+3. Residue event records: collection date, residue type, net mass, moisture/basis, calibrated scale reference, geotag, operator and photo/document hashes.
+4. Chain of custody: unique lot/QR, source parcels, aggregation, split/merge events, transport vehicle, weighbridge tickets, custody transfers, storage loss and rejection records.
+5. End use: processor receipt, feedstock consumption, process output, electricity/fuel substitution where applicable, energy/calorific measurements, fossil fuel/electricity use, digestate or by-product handling and leakage evidence required by the methodology.
+6. In-situ records where applicable: equipment and fuel activity, residue treatment, crop/soil parameters, sampling design and laboratory results only when the selected approved methodology requires them.
+7. Fire monitoring: source/provider, acquisition time, detection confidence, exact field intersection, human review, false-positive/correction trail, and methodology-specific eligibility consequence.
+8. Independent review, versioned methodology and factors, reproducible calculation pack, ACVA evidence, registry submission reference and authoritative issuance record.
+
+### State machine and calculation controls
+- Evidence states: RECORDED → QUALITY_CHECKED → REVIEWED; retain corrections rather than overwriting the evidence trail.
+- Methodology states: UNMAPPED → SCOPE_REVIEW → APPROVED_FOR_PROJECT only after documented applicability review against the current official methodology. Project-specific approval is not BEE approval.
+- Calculation states: NOT_CALCULATED → INDICATIVE_ONLY → METHODOLOGY_CALCULATION_PENDING_REVIEW → VERIFIED_BY_ACVA (external evidence required). No local state may set a project to REGISTERED or CCC_ISSUED without the authoritative external record.
+- Do not calculate a final credit quantity until all required inputs, units, factors, baseline, project emissions, leakage, uncertainty and monitoring rules are complete for the selected methodology. Unknown terms must block final calculation rather than silently default to zero.
+- CCC issuance is an external registry outcome, not an application-side mint or an estimate rounded to tCO2e.
+
+## Shared services
 - Versioned official-source register with publisher, title, URL, publication/effective dates, retrieved-at timestamp, hash, superseded-by, and review status.
 - Evidence metadata, immutable audit events, access control and data lineage.
 - Unit-normalised calculations with formula and factor versions; reproducible recalculation.
