@@ -71,6 +71,9 @@ jobs:
           grep -q 'RupayKG' /tmp/rupaykg-web-dom.html
           test -s /tmp/rupaykg-web-smoke.png
           echo "Chrome DOM exit: $dom_status; screenshot exit: $shot_status"
-      - run: npm test
+      - name: Run tests including disposable PostgreSQL acceptance
+        env:
+          RUPAYKG_RUN_DB_INTEGRATION_TESTS: "1"
+        run: npm test
       - name: Build production container
         run: docker build --pull --tag rupaykg:ci .
