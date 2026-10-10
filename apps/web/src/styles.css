@@ -31,3 +31,6 @@
 .trust-blocked{color:#d9a1a7!important}
 @media(max-width:900px){.admin-status-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:600px){.super-admin-console{padding:15px}.admin-status-grid{grid-template-columns:1fr 1fr}.admin-status-grid article>strong{font-size:15px}.admin-capabilities article{grid-template-columns:1fr;gap:8px}.admin-capabilities article>span{text-align:left}.admin-capabilities .admin-api-note{grid-column:auto}}
+
+.admin-platform-counts{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media(max-width:900px){.admin-platform-counts{grid-template-columns:repeat(2,minmax(0,1fr))}}
