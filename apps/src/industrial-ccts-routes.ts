@@ -231,6 +231,74 @@ export async function registerIndustrialCctsRoutes(app: FastifyInstance, pool: P
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Residue lot could not be recorded", code: "AGRI_LOT_WRITE_FAILED" }); }
   });
 
+  app.post("/api/v1/agri-residue/lots/:lotId/custody-events", async (request, reply) => {
+    const auth = await authFor(request, reply, pool); if (!auth || !pool) return;
+    const { lotId } = request.params as { lotId: string };
+    const body = objectBody(request.body);
+    const eventType = nonEmpty(body.eventType, 40);
+    const eventAt = nonEmpty(body.eventAt, 40);
+    const evidenceReference = nonEmpty(body.evidenceReference, 1000);
+    const evidenceHash = nonEmpty(body.evidenceHash, 64);
+    const allowedEvents = ["COLLECTED","WEIGHED","TRANSFERRED","TRANSPORT_STARTED","TRANSPORT_ARRIVED","STORED","DELIVERED","PROCESSED","REJECTED","CORRECTED"];
+    if (!UUID.test(lotId) || !eventType || !allowedEvents.includes(eventType) || !eventAt || !Number.isFinite(Date.parse(eventAt)) || !evidenceReference || !evidenceHash || !isSha256Digest(evidenceHash)) return reply.code(400).send({ error: "Valid lot, event type/time and SHA-256 evidence reference are required", code: "AGRI_CUSTODY_EVENT_INVALID" });
+    const statusByEvent: Record<string,string> = { COLLECTED:"COLLECTED", TRANSPORT_STARTED:"IN_TRANSIT", TRANSPORT_ARRIVED:"AT_DEPOT", STORED:"AT_DEPOT", DELIVERED:"DELIVERED", PROCESSED:"PROCESSED", REJECTED:"REJECTED" };
+    const client = await pool.connect();
+    try {
+      await client.query("begin");
+      const found = await client.query("select id,organization_id,custody_status from agri_residue_lots where id=$1 for update", [lotId]);
+      const lot = found.rows[0];
+      if (!lot) { await client.query("rollback"); return reply.code(404).send({ error: "Residue lot not found", code: "AGRI_LOT_NOT_FOUND" }); }
+      if (!authorized(auth, lot.organization_id) || !await hasOrganizationPermission(client as unknown as Pool, auth, lot.organization_id, ["industrial_ccts:manage","reports:manage","resource_flows:manage"])) { await client.query("rollback"); return reply.code(403).send({ error: "Verified organization membership and residue-management permission required", code: "AGRI_FORBIDDEN" }); }
+      const allowedFrom: Record<string,string[]> = {
+        COLLECTED:["AT_SOURCE"], WEIGHED:["AT_SOURCE","COLLECTED"], TRANSFERRED:["COLLECTED","AT_DEPOT","DELIVERED"],
+        TRANSPORT_STARTED:["COLLECTED","AT_DEPOT"], TRANSPORT_ARRIVED:["IN_TRANSIT"], STORED:["AT_DEPOT"],
+        DELIVERED:["IN_TRANSIT","AT_DEPOT"], PROCESSED:["DELIVERED"], REJECTED:["AT_SOURCE","COLLECTED","IN_TRANSIT","AT_DEPOT","DELIVERED"], CORRECTED:["AT_SOURCE","COLLECTED","IN_TRANSIT","AT_DEPOT","DELIVERED","PROCESSED","REJECTED","DISPUTED"]
+      };
+      const allowedTransitions = allowedFrom[eventType];
+      if (!allowedTransitions || !allowedTransitions.includes(lot.custody_status)) { await client.query("rollback"); return reply.code(409).send({ error: "Custody transition is not allowed from the current lot state", code: "AGRI_CUSTODY_TRANSITION_INVALID", currentStatus: lot.custody_status }); }
+      const saved = await client.query("insert into agri_residue_custody_events (id,lot_id,event_type,event_at,actor_organization_id,counterparty_organization_id,location_geojson,vehicle_reference,ticket_reference,evidence_reference,evidence_hash,details,created_by) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) returning id,lot_id,event_type,event_at,evidence_reference,evidence_hash,created_at", [randomUUID(),lotId,eventType,new Date(eventAt).toISOString(),lot.organization_id,nonEmpty(body.counterpartyOrganizationId,64),body.locationGeojson && typeof body.locationGeojson==="object" ? JSON.stringify(body.locationGeojson) : null,nonEmpty(body.vehicleReference,160),nonEmpty(body.ticketReference,200),evidenceReference,evidenceHash.toLowerCase(),JSON.stringify(body.details && typeof body.details==="object" ? body.details : {}),auth.identityId]);
+      const nextStatus = statusByEvent[eventType];
+      if (nextStatus) await client.query("update agri_residue_lots set custody_status=$2 where id=$1", [lotId,nextStatus]);
+      await client.query("commit");
+      return reply.code(201).send({ source:"postgresql",syntheticData:false,event:saved.rows[0],custodyStatus:nextStatus ?? lot.custody_status,note:"Custody evidence is recorded; carbon-credit eligibility is not inferred." });
+    } catch (error) { await client.query("rollback").catch(()=>undefined); request.log.error(error); return reply.code(503).send({ error:"Custody event could not be recorded",code:"AGRI_CUSTODY_EVENT_WRITE_FAILED" }); }
+    finally { client.release(); }
+  });
+
+  app.post("/api/v1/agri-residue/lots/:lotId/processing-receipts", async (request, reply) => {
+    const auth = await authFor(request, reply, pool); if (!auth || !pool) return;
+    const { lotId } = request.params as { lotId: string };
+    const body = objectBody(request.body);
+    const processorOrganizationId = nonEmpty(body.processorOrganizationId,64);
+    const processType = nonEmpty(body.processType,40);
+    const receivedMass = Number(body.receivedMass);
+    const massUnit = nonEmpty(body.massUnit,8);
+    const receivedAt = nonEmpty(body.receivedAt,40);
+    const ticket = nonEmpty(body.weighbridgeReference,200);
+    const evidenceHash = nonEmpty(body.evidenceHash,64);
+    const allowedProcesses = ["CBG","BIOMASS_ELECTRICITY","BIOMASS_HEAT","PELLETIZATION","COMPOSTING","IN_SITU_TREATMENT","OTHER"];
+    if (!UUID.test(lotId) || !processorOrganizationId || !UUID.test(processorOrganizationId) || !processType || !allowedProcesses.includes(processType) || !Number.isFinite(receivedMass) || receivedMass<=0 || !["kg","t"].includes(massUnit ?? "") || !receivedAt || !Number.isFinite(Date.parse(receivedAt)) || !ticket || !evidenceHash || !isSha256Digest(evidenceHash)) return reply.code(400).send({ error:"Valid processor, process type, positive received mass, unit, time, weighbridge ticket and SHA-256 evidence are required",code:"AGRI_PROCESSING_RECEIPT_INVALID" });
+    if (!authorized(auth,processorOrganizationId) || !await hasOrganizationPermission(pool,auth,processorOrganizationId,["industrial_ccts:manage","reports:manage","resource_flows:manage"])) return reply.code(403).send({ error:"Verified processor membership and residue-management permission required",code:"AGRI_FORBIDDEN" });
+    const client = await pool.connect();
+    try {
+      await client.query("begin");
+      const found = await client.query("select id,organization_id,net_mass,mass_unit,custody_status from agri_residue_lots where id=$1 for update",[lotId]);
+      const lot=found.rows[0];
+      if(!lot){await client.query("rollback");return reply.code(404).send({error:"Residue lot not found",code:"AGRI_LOT_NOT_FOUND"});}
+      if(!authorized(auth,lot.organization_id) || !await hasOrganizationPermission(client as unknown as Pool,auth,lot.organization_id,["industrial_ccts:manage","reports:manage","resource_flows:manage"])){await client.query("rollback");return reply.code(403).send({error:"Verified source-organization membership and permission required",code:"AGRI_FORBIDDEN"});}
+      if(!["DELIVERED","PROCESSED"].includes(lot.custody_status)){await client.query("rollback");return reply.code(409).send({error:"Lot must be delivered before processor receipt",code:"AGRI_LOT_NOT_DELIVERED"});}
+      const prior=await client.query("select coalesce(sum(case when mass_unit='t' then received_mass*1000 else received_mass end),0) as received_kg from agri_residue_processing_receipts where lot_id=$1",[lotId]);
+      const lotKg=Number(lot.net_mass)*(lot.mass_unit==="t"?1000:1);
+      const newKg=receivedMass*(massUnit==="t"?1000:1);
+      if(Number(prior.rows[0].received_kg)+newKg>lotKg+0.0001){await client.query("rollback");return reply.code(422).send({error:"Processing receipt exceeds remaining traceable lot mass",code:"AGRI_MASS_BALANCE_EXCEEDED",lotMassKg:lotKg,previouslyReceivedKg:Number(prior.rows[0].received_kg),attemptedKg:newKg});}
+      const saved=await client.query("insert into agri_residue_processing_receipts (id,lot_id,processor_organization_id,process_type,received_mass,mass_unit,received_at,weighbridge_reference,evidence_hash,process_data,created_by) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) returning id,lot_id,processor_organization_id,process_type,received_mass,mass_unit,received_at,weighbridge_reference,evidence_hash,created_at",[randomUUID(),lotId,processorOrganizationId,processType,receivedMass,massUnit,new Date(receivedAt).toISOString(),ticket,evidenceHash.toLowerCase(),JSON.stringify(body.processData && typeof body.processData==="object"?body.processData:{}),auth.identityId]);
+      await client.query("update agri_residue_lots set custody_status='PROCESSED' where id=$1",[lotId]);
+      await client.query("commit");
+      return reply.code(201).send({source:"postgresql",syntheticData:false,receipt:saved.rows[0],note:"Receipt records physical utilization only; methodology eligibility, emissions reduction and CCC issuance remain separate."});
+    }catch(error){await client.query("rollback").catch(()=>undefined);request.log.error(error);return reply.code(503).send({error:"Processing receipt could not be recorded",code:"AGRI_PROCESSING_RECEIPT_WRITE_FAILED"});}
+    finally{client.release();}
+  });
+
   app.post("/api/v1/industrial-ccts/offset-projects", async (request, reply) => {
     const auth = await authFor(request, reply, pool); if (!auth || !pool) return;
     const body = objectBody(request.body);
