@@ -6,7 +6,7 @@ create table if not exists agri_residue_fields (
  farmer_reference text,
  village_code text,
  district_code text,
- state_code text not null default 'IN-MP',
+ state_code text not null,
  crop_code text not null,
  crop_season text not null,
  area_hectares numeric(18,6) not null check (area_hectares > 0),
