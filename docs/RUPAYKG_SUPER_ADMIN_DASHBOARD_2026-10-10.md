@@ -40,12 +40,15 @@
 - Added a PostgreSQL integration test for persisted identity suspension, session revocation, audit evidence and rejection of subsequent authentication. It only runs when both `DATABASE_URL` and `RUPAYKG_RUN_DB_INTEGRATION_TESTS=1` are explicitly set; it was skipped locally because no database URL is configured.
 - Migration structure validation: passed; 82 migration files validated.
 - `git diff --check`: passed.
-- Full database-backed acceptance of migration 082 and authenticated browser acceptance remain outstanding.
+- The production dependency audit initially failed on the Hedera SDK's pinned `@grpc/grpc-js` 1.12.7. The API now explicitly depends on patched `@grpc/grpc-js` 1.14.6, the root override pins that version, and `package-lock.json` is committed. Local `npm audit --omit=dev --audit-level=high` now reports 0 vulnerabilities.
+- CI explicitly sets `RUPAYKG_RUN_DB_INTEGRATION_TESTS=1` against its disposable PostgreSQL service. The migration, database-backed identity-suspension/session-revocation/audit/authentication test, production web smoke test, dependency audit and production-container build all passed on CI run `38047298829`.
+- CI workspace test result: 103 passed, 0 failed, 0 skipped; API 69/69 passed, including the PostgreSQL acceptance test, and the other workspaces passed 34/34 tests.
+- Production lifecycle / Guardian-Hedera acceptance and authenticated browser acceptance remain outstanding.
 
 ## Not yet accepted / remaining
 
-1. Run the five skipped database-backed / production-lifecycle acceptance gates in CI or against a dedicated test database.
-2. Apply migration 082 only to a dedicated test PostgreSQL database and test real transactions, session revocation, audit hash continuity, last-Super-Admin concurrency, and identity/membership lifecycle.
+1. Four other database-backed / production-lifecycle gates remain skipped; run them against dedicated disposable PostgreSQL / provider test infrastructure.
+2. Extend database acceptance to cover audit hash-chain continuity, concurrent last-Super-Admin revocation attempts, and broader identity/membership lifecycle scenarios. Migration 082 and the new suspension integration test have passed in CI's disposable PostgreSQL database; no production database was changed.
 3. Add a separate dual-control approval process for platform-reserved role grants/recovery and high-risk permission changes.
 4. Add authenticated browser acceptance tests for the Super Admin UI and verify authorization failures for non-admin identities.
 5. Run Guardian/Hedera production acceptance separately: real Guardian VERIFIED, HCS CONSENSUS_CONFIRMED, Mirror Node verification, policy import/publish and database-backed retry acceptance.
