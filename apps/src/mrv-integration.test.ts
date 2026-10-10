@@ -10,7 +10,7 @@ test("MRV integrations fail closed when external providers are not configured", 
   delete process.env.HEDERA_OPERATOR_KEY;
   delete process.env.GUARDIAN_MRV_SUBMIT_URL;
   try {
-    assert.equal(hederaStatus().writeStatus, "NOT_AVAILABLE");
+    assert.equal(hederaStatus().writeStatus, "NOT_CONFIGURED");
     assert.equal(guardianStatus().configured, false);
     const result = await submitHcsAnchor({ schema: "rupaykg:mrv:v1", activityId: "a", verificationId: "v", evidenceId: "e", guardianPolicyId: "p", guardianExecutionId: "g", mrvStatus: "VERIFIED" });
     assert.equal(result.status, "NOT_CONFIGURED");
