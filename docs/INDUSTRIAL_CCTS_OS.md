@@ -105,6 +105,9 @@ All records need stable IDs, tenant/owner, timestamps, source references, status
 
 ## Backend API surface (implemented on the feature branch; not deployed)
 - GET /api/v1/industrial-ccts/regulatory-register
+- POST /api/v1/agri-residue/fields (field and baseline evidence intake)
+- POST /api/v1/agri-residue/fields/{fieldId}/fire-observations (monitoring signals, always pending review)
+- POST /api/v1/agri-residue/lots (weighed residue lot traceability; no carbon conversion)
 - POST /api/v1/industrial-ccts/facilities
 - GET /api/v1/industrial-ccts/facilities/{facilityId}
 - POST /api/v1/industrial-ccts/facilities/{facilityId}/periods
