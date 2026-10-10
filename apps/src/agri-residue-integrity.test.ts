@@ -13,7 +13,7 @@ test("custody event support blocks one-sided cross-organization transfers and un
 test("residue lot remains DELIVERED until cumulative processor receipts reconcile to measured lot mass", () => {
   assert.equal(deriveResidueLotStatus(1000, 0), "DELIVERED");
   assert.equal(deriveResidueLotStatus(1000, 400), "DELIVERED");
-  assert.equal(deriveResidueLotStatus(1000, 999.8), "PROCESSED");
+  assert.equal(deriveResidueLotStatus(1000, 999.99995), "PROCESSED");
   assert.equal(deriveResidueLotStatus(1000, 1000), "PROCESSED");
 });
 
