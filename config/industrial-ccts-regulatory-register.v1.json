@@ -66,11 +66,63 @@
           "id": "BM WA03.002",
           "name": "Flaring or use of landfill gas",
           "sector": "Waste Handling and Disposal"
+        },
+        {
+          "id": "BM AG04.001",
+          "name": "Methane recovery from livestock and manure management at households and small farms",
+          "sector": "Agriculture"
+        },
+        {
+          "id": "BM AG04.002",
+          "name": "Emission reduction through improved management practices in rice cultivation",
+          "sector": "Agriculture",
+          "limitations": [
+            "Do not infer that all crop-residue burning avoidance is eligible; confirm the methodology's applicability conditions and full current version."
+          ]
+        },
+        {
+          "id": "BM WA03.003",
+          "name": "Production of Compressed Bio-gas (CBG)",
+          "sector": "Waste Handling and Disposal",
+          "limitations": [
+            "Biomass feedstock origin and stubble-burning avoidance eligibility must be explicitly covered by the methodology and approved project documents."
+          ]
+        },
+        {
+          "id": "BM EN01.003",
+          "name": "Electricity and Heat Generation from Biomass",
+          "sector": "Energy",
+          "limitations": [
+            "Biomass feedstock and baseline fuel displacement must meet the full methodology; residue collection alone does not establish credits."
+          ]
         }
       ],
       "limitations": [
         "Retrieve and apply the full methodology and current version before eligibility decisions."
-      ]
+      ],
+      "tools": [
+        {
+          "id": "BM-T-002",
+          "name": "Tool to calculate project or leakage CO2 emissions from fossil fuel combustion",
+          "status": "Listed by BEE; applicability must be confirmed against selected methodology."
+        },
+        {
+          "id": "BM-T-003",
+          "name": "Baseline, project and/or leakage emissions from electricity consumption and monitoring of electricity generation",
+          "status": "Listed by BEE; applicability must be confirmed against selected methodology."
+        },
+        {
+          "id": "BM-T-008",
+          "name": "Project and leakage emissions from anaerobic digesters",
+          "status": "Listed by BEE; applicability must be confirmed against selected methodology."
+        },
+        {
+          "id": "BM-T-010",
+          "name": "Project and leakage emissions from biomass",
+          "status": "Listed by BEE; applicability must be confirmed against selected methodology."
+        }
+      ],
+      "caution": "BEE's register lists the methodology identifiers and names, but project eligibility, formulas, baseline, monitoring parameters, leakage, tool applicability and issuance conditions must be taken from the complete current approved methodology and applicable procedures. Do not import third-party formula summaries as authoritative rules."
     },
     {
       "id": "BEE-ACVA-REGISTER",
