@@ -129,6 +129,36 @@ export async function registerIndustrialCctsRoutes(app: FastifyInstance, pool: P
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Target rule could not be stored", code: "CCTS_TARGET_WRITE_FAILED" }); }
   });
 
+  app.post("/api/v1/industrial-ccts/target-rules/:targetRuleId/review", async (request, reply) => {
+    const auth = await authFor(request, reply, pool); if (!auth || !pool) return;
+    const { targetRuleId } = request.params as { targetRuleId: string };
+    const body = objectBody(request.body);
+    const decision = nonEmpty(body.decision, 20);
+    const reviewReference = nonEmpty(body.reviewEvidenceReference, 1000);
+    const reviewHash = nonEmpty(body.reviewEvidenceHash, 64);
+    if (!UUID.test(targetRuleId) || decision !== "APPROVE" || !reviewReference || !/^https:\/\//i.test(reviewReference) || !reviewHash || !/^[a-f0-9]{64}$/i.test(reviewHash)) {
+      return reply.code(400).send({ error: "A valid rule ID, APPROVE decision, HTTPS official-notification reference and SHA-256 artifact hash are required", code: "CCTS_INVALID_RULE_REVIEW" });
+    }
+    let sourceHost = "";
+    try { sourceHost = new URL(reviewReference).hostname.toLowerCase(); } catch { return reply.code(400).send({ error: "Invalid review evidence URL", code: "CCTS_INVALID_REVIEW_URL" }); }
+    const officialHosts = ["beeindia.gov.in", "powermin.gov.in", "egazette.nic.in", "cercind.gov.in", "grid-india.in"];
+    if (!officialHosts.some(host => sourceHost === host || sourceHost.endsWith("." + host))) return reply.code(422).send({ error: "Review evidence must reference a recognized official Indian carbon-market authority domain", code: "CCTS_NON_OFFICIAL_REVIEW_SOURCE" });
+    try {
+      const found = await pool.query("select id,organization_id,created_by,status from industrial_ccts_target_rules where id=$1", [targetRuleId]);
+      const rule = found.rows[0];
+      if (!rule) return reply.code(404).send({ error: "Target rule not found", code: "CCTS_NOT_FOUND" });
+      if (!authorized(auth, rule.organization_id) || !await hasOrganizationPermission(pool, auth, rule.organization_id, ["industrial_ccts:regulatory:approve"])) return reply.code(403).send({ error: "Verified organization membership and explicit regulatory-approval permission required", code: "CCTS_REVIEW_FORBIDDEN" });
+      if (rule.created_by === auth.identityId) return reply.code(403).send({ error: "Independent review is required; the rule creator cannot approve their own rule", code: "CCTS_SELF_APPROVAL_BLOCKED" });
+      if (rule.status !== "PENDING_REVIEW") return reply.code(409).send({ error: "Only pending rules can be reviewed", code: "CCTS_RULE_NOT_PENDING" });
+      const saved = await pool.query(
+        "with updated as (update industrial_ccts_target_rules set status='ACTIVE', reviewed_by=$2, reviewed_at=now(), review_reference=$3, review_hash=$4 where id=$1 and status='PENDING_REVIEW' returning id,organization_id,sector_code,rule_name,target_value,target_unit,period_start,period_end,source_reference,source_hash,status,reviewed_by,reviewed_at,review_reference,review_hash), audit as (insert into industrial_ccts_audit_events (organization_id,entity_type,entity_id,action,actor_identity_id,details) select organization_id,'industrial_ccts_target_rule',id,'REGULATORY_RULE_APPROVED',$2,jsonb_build_object('reviewReference',$3,'reviewHash',$4,'decision','APPROVE') from updated returning id) select updated.* from updated cross join audit",
+        [targetRuleId, auth.identityId, reviewReference, reviewHash.toLowerCase()],
+      );
+      if (!saved.rows[0]) return reply.code(409).send({ error: "Target rule changed during review; reload and retry", code: "CCTS_REVIEW_CONFLICT" });
+      return { source: "postgresql", syntheticData: false, targetRule: saved.rows[0], note: "Approval is an internal, independently authorised review only; it does not establish regulator approval or replace notification verification." };
+    } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Target rule review could not be recorded", code: "CCTS_REVIEW_WRITE_FAILED" }); }
+  });
+
   app.post("/api/v1/industrial-ccts/offset-projects", async (request, reply) => {
     const auth = await authFor(request, reply, pool); if (!auth || !pool) return;
     const body = objectBody(request.body);
