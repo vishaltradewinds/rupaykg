@@ -34,3 +34,29 @@
 
 .admin-platform-counts{grid-template-columns:repeat(3,minmax(0,1fr))}
 @media(max-width:900px){.admin-platform-counts{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* Super Admin identity, access and audit workbench. */
+.admin-governance{display:grid;gap:16px;padding-top:8px;border-top:1px solid rgba(174,209,182,.14)}
+.admin-governance>.section-heading{margin:0}
+.admin-reason{display:grid;gap:7px;font-size:11px;color:#b4c7b9}
+.admin-reason textarea{min-height:72px}
+.admin-management-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;align-items:start}
+.admin-management-panel{display:grid;align-content:start;gap:12px;min-width:0;padding:16px;border:1px solid rgba(174,209,182,.13);border-radius:11px;background:rgba(4,14,9,.3)}
+.admin-management-panel>.section-heading{margin:0}
+.admin-management-panel h3{margin:0;font-size:14px}
+.admin-management-panel label{display:grid;gap:6px;font-size:11px;color:#b4c7b9}
+.admin-management-panel input:not([type=checkbox]),.admin-management-panel select{width:100%;min-width:0;padding:10px;border:1px solid rgba(174,209,182,.22);border-radius:7px;background:#09150e;color:#e4eee7}
+.admin-search{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}
+.admin-record-list{display:grid;gap:8px;max-height:460px;overflow:auto}
+.admin-record-list>article{display:grid;gap:7px;min-width:0;padding:12px;border:1px solid rgba(174,209,182,.1);border-radius:8px;background:rgba(2,10,6,.34)}
+.admin-record-list>article>strong{font-size:12px;overflow-wrap:anywhere}
+.admin-record-list small,.admin-management-panel>small{font-size:10px;line-height:1.5;color:#8ea496;overflow-wrap:anywhere}
+.admin-inline-actions{display:flex;flex-wrap:wrap;gap:7px}
+.admin-inline-actions button,.admin-management-panel>button{font-size:10px;padding:8px 10px}
+.admin-permission-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+.admin-permission-list label{display:flex;align-items:center;gap:7px;min-width:0;padding:8px;border:1px solid rgba(174,209,182,.1);border-radius:6px;font-size:10px;overflow-wrap:anywhere}
+.admin-permission-list input{accent-color:#8ac49b}
+.admin-record-list details summary{cursor:pointer;color:#a7c6b0;font-size:10px}
+.admin-record-list pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:10px;color:#a9b9ad}
+@media(max-width:900px){.admin-management-grid{grid-template-columns:1fr}}
+@media(max-width:560px){.admin-management-panel{padding:12px}.admin-permission-list{grid-template-columns:1fr}.admin-search{grid-template-columns:1fr}.admin-inline-actions button{flex:1}}

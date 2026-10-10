@@ -32,7 +32,8 @@ export async function authenticate(request: FastifyRequest, pool: Pool | null): 
       where s.token_hash = $1
         and s.revoked_at is null
         and s.expires_at > now()
-        and i.status = 'VERIFIED'`,
+        and i.status = 'VERIFIED'
+        and i.suspended_at is null`,
     [hashToken(token)],
   );
   if (!rows.rows[0]) return null;

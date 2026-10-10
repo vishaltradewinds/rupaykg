@@ -84,3 +84,189 @@ test("Super Admin receives platform-wide aggregate counts only", async () => {
   });
   await app.close();
 });
+
+test("ordinary verified members cannot access the identity directory", async () => {
+  const app = Fastify({ logger: false });
+  await registerPlatformAdminRoutes(app, fakePool(false));
+  const response = await app.inject({
+    method: "GET",
+    url: "/api/v1/admin/identities",
+    headers: { authorization: "Bearer test-session", "x-rupaykg-organization-id": organizationId },
+  });
+  assert.equal(response.statusCode, 403);
+  assert.equal(response.json().code, "PLATFORM_ADMIN_FORBIDDEN");
+  await app.close();
+});
+
+test("Super Admin cannot suspend their own identity", async () => {
+  const app = Fastify({ logger: false });
+  await registerPlatformAdminRoutes(app, fakePool(true));
+  const response = await app.inject({
+    method: "POST",
+    url: `/api/v1/admin/identities/${identityId}/suspend`,
+    headers: { authorization: "Bearer test-session", "x-rupaykg-organization-id": organizationId },
+    payload: { reason: "Prevent accidental self-lockout" },
+  });
+  assert.equal(response.statusCode, 409);
+  assert.equal(response.json().code, "SELF_SUSPENSION_FORBIDDEN");
+  await app.close();
+});
+
+test("role editor rejects privileged permissions from its safe permission catalogue", async () => {
+  const app = Fastify({ logger: false });
+  await registerPlatformAdminRoutes(app, fakePool(true));
+  const response = await app.inject({
+    method: "PATCH",
+    url: `/api/v1/admin/roles/${roleId}/permissions`,
+    headers: { authorization: "Bearer test-session", "x-rupaykg-organization-id": organizationId },
+    payload: { permissions: ["admin:users"], reason: "Attempt to grant admin privilege" },
+  });
+  assert.equal(response.statusCode, 400);
+  assert.equal(response.json().code, "ROLE_PERMISSIONS_INVALID");
+  await app.close();
+});
+
+test("membership grant cannot be used for self-escalation", async () => {
+  const app = Fastify({ logger: false });
+  await registerPlatformAdminRoutes(app, fakePool(true));
+  const response = await app.inject({
+    method: "POST",
+    url: "/api/v1/admin/memberships",
+    headers: { authorization: "Bearer test-session", "x-rupaykg-organization-id": organizationId },
+    payload: { identityId, organizationId, roleId, reason: "Attempt to grant self access" },
+  });
+  assert.equal(response.statusCode, 409);
+  assert.equal(response.json().code, "SELF_ROLE_CHANGE_FORBIDDEN");
+  await app.close();
+});
+
+test("the last active Super Admin membership cannot be revoked", async () => {
+  const pool = {
+    query: async (sql: string) => {
+      if (sql.includes("from identity_sessions")) return { rows: [{ identity_id: identityId }] };
+      if (sql.includes("from organization_memberships") && sql.includes("where identity_id")) {
+        return { rows: [{ organization_id: organizationId, role_id: roleId, status: "VERIFIED" }] };
+      }
+      if (sql.includes("r.name = 'super_admin'")) return { rows: [{ ok: true }] };
+      throw new Error(`Unexpected pool SQL in last-admin test: ${sql}`);
+    },
+    connect: async () => ({
+      query: async (sql: string) => {
+        if (/^(begin|commit|rollback)$/i.test(sql.trim())) return { rows: [], rowCount: 0 };
+        if (sql.includes("where om.id=$1 for update")) return { rows: [{
+          id: "423e4567-e89b-42d3-a456-426614174000",
+          identity_id: "523e4567-e89b-42d3-a456-426614174000",
+          organization_id: organizationId,
+          organization_status: "VERIFIED",
+          role_id: roleId,
+          role_name: "super_admin",
+          status: "VERIFIED",
+          identity_status: "VERIFIED",
+          suspended_at: null,
+          last_revoked_at: null,
+        }] };
+        if (sql.includes("count(*)::text count from organization_memberships")) return { rows: [{ count: "1" }] };
+        if (sql.includes("pg_advisory_xact_lock")) return { rows: [] };
+        throw new Error(`Unexpected client SQL in last-admin test: ${sql}`);
+      },
+      release: () => undefined,
+    }),
+  } as unknown as Pool;
+  const app = Fastify({ logger: false });
+  await registerPlatformAdminRoutes(app, pool);
+  const response = await app.inject({
+    method: "PATCH",
+    url: "/api/v1/admin/memberships/423e4567-e89b-42d3-a456-426614174000/status",
+    headers: { authorization: "Bearer test-session", "x-rupaykg-organization-id": organizationId },
+    payload: { status: "REVOKED", reason: "Approved access review request" },
+  });
+  assert.equal(response.statusCode, 409);
+  assert.equal(response.json().code, "LAST_SUPER_ADMIN_PROTECTED");
+  await app.close();
+});
+
+test("identity suspension revokes active sessions and records an audit event transactionally", async () => {
+  const statements: string[] = [];
+  const pool = {
+    query: async (sql: string) => {
+      if (sql.includes("from identity_sessions")) return { rows: [{ identity_id: identityId }] };
+      if (sql.includes("from organization_memberships") && sql.includes("where identity_id")) {
+        return { rows: [{ organization_id: organizationId, role_id: roleId, status: "VERIFIED" }] };
+      }
+      if (sql.includes("r.name = 'super_admin'")) return { rows: [{ ok: true }] };
+      throw new Error(`Unexpected pool SQL in identity-suspension test: ${sql}`);
+    },
+    connect: async () => ({
+      query: async (sql: string) => {
+        statements.push(sql);
+        if (/^(begin|commit|rollback)$/i.test(sql.trim())) return { rows: [], rowCount: 0 };
+        if (sql.includes("select id,status,suspended_at from identities")) return { rows: [{
+          id: "523e4567-e89b-42d3-a456-426614174000", status: "VERIFIED", suspended_at: null,
+        }] };
+        if (sql.includes("r.name in ('super_admin','platform_admin')")) return { rows: [{ ok: false }] };
+        if (sql.includes("update identities set suspended_at=now()")) return { rows: [], rowCount: 1 };
+        if (sql.includes("update identity_sessions set revoked_at=now()")) return { rows: [], rowCount: 2 };
+        if (sql.includes("pg_advisory_xact_lock")) return { rows: [] };
+        if (sql.includes("select event_hash from audit_events")) return { rows: [] };
+        if (sql.includes("insert into audit_events")) return { rows: [], rowCount: 1 };
+        throw new Error(`Unexpected client SQL in identity-suspension test: ${sql}`);
+      },
+      release: () => undefined,
+    }),
+  } as unknown as Pool;
+  const targetId = "523e4567-e89b-42d3-a456-426614174000";
+  const app = Fastify({ logger: false });
+  await registerPlatformAdminRoutes(app, pool);
+  const response = await app.inject({
+    method: "POST",
+    url: `/api/v1/admin/identities/${targetId}/suspend`,
+    headers: { authorization: "Bearer test-session", "x-rupaykg-organization-id": organizationId },
+    payload: { reason: "Confirmed security incident review" },
+  });
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.json().suspended, true);
+  assert.equal(response.json().revokedSessions, 2);
+  assert.ok(statements.some(sql => sql.includes("update identities set suspended_at=now()")));
+  assert.ok(statements.some(sql => sql.includes("update identity_sessions set revoked_at=now()")));
+  assert.ok(statements.some(sql => sql.includes("insert into audit_events")));
+  assert.equal(statements.filter(sql => sql.trim().toLowerCase() === "commit").length, 1);
+  await app.close();
+});
+
+test("platform-reserved administrators cannot be suspended through the generic identity action", async () => {
+  const statements: string[] = [];
+  const pool = {
+    query: async (sql: string) => {
+      if (sql.includes("from identity_sessions")) return { rows: [{ identity_id: identityId }] };
+      if (sql.includes("from organization_memberships") && sql.includes("where identity_id")) {
+        return { rows: [{ organization_id: organizationId, role_id: roleId, status: "VERIFIED" }] };
+      }
+      if (sql.includes("r.name = 'super_admin'")) return { rows: [{ ok: true }] };
+      throw new Error(`Unexpected pool SQL in reserved-admin test: ${sql}`);
+    },
+    connect: async () => ({
+      query: async (sql: string) => {
+        statements.push(sql);
+        if (/^(begin|commit|rollback)$/i.test(sql.trim())) return { rows: [], rowCount: 0 };
+        if (sql.includes("select id,status,suspended_at from identities")) return { rows: [{
+          id: "523e4567-e89b-42d3-a456-426614174000", status: "VERIFIED", suspended_at: null,
+        }] };
+        if (sql.includes("r.name in ('super_admin','platform_admin')")) return { rows: [{ ok: true }] };
+        throw new Error(`Unexpected client SQL in reserved-admin test: ${sql}`);
+      },
+      release: () => undefined,
+    }),
+  } as unknown as Pool;
+  const app = Fastify({ logger: false });
+  await registerPlatformAdminRoutes(app, pool);
+  const response = await app.inject({
+    method: "POST",
+    url: "/api/v1/admin/identities/523e4567-e89b-42d3-a456-426614174000/suspend",
+    headers: { authorization: "Bearer test-session", "x-rupaykg-organization-id": organizationId },
+    payload: { reason: "Requested privileged administrator suspension" },
+  });
+  assert.equal(response.statusCode, 409);
+  assert.equal(response.json().code, "RESERVED_ADMIN_SUSPENSION_BLOCKED");
+  assert.ok(!statements.some(sql => sql.includes("update identities set suspended_at=now()")));
+  await app.close();
+});

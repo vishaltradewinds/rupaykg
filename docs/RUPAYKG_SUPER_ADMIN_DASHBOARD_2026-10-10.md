@@ -1,37 +1,52 @@
-﻿# RupayKg Super Admin Control Centre â€” 10 October 2026
+# RupayKg Super Admin Governance — 10 October 2026
 
-## Scope
+## Scope and repository state
 
-Repository: `vishaltradewinds/rupaykg`
-Workspace: `C:\Users\Vishal\rupaykg-live`
-Branch: `fix/guardian-hedera-gate-20261010`
+- Repository: `vishaltradewinds/rupaykg`
+- Workspace: `C:\Users\Vishal\rupaykg-live`
+- Branch: `fix/guardian-hedera-gate-20261010`
+- This work is repository-only. It does not apply database migrations to production, merge the pull request, or deploy a service.
 
-## Implemented
+## Implemented in the branch
 
-- The active React workspace now presents a dedicated **Super Admin Control Centre** only when the selected verified membership role is `super_admin`.
-- The console distinguishes global service/database health from operational data that remains scoped to the selected verified organization.
-- A new `GET /api/v1/admin/overview` endpoint returns platform-wide aggregate counts for verified identities, organizations, verified memberships, pending applications, pending legal reviews, and Guardian-verified/HCS-consensus-confirmed MRV records.
-- The endpoint fails closed when the database is unavailable or there is no authenticated session.
-- The endpoint checks the authenticated identity has a verified `super_admin` membership before returning any platform-wide aggregate data. Ordinary verified members receive HTTP 403.
-- The UI reports whether role permissions exist for user, role, security, and system administration, but explicitly marks their dedicated mutation APIs as not implemented. No fake action buttons were added.
-- Responsive layouts were added for the control centre and platform metrics.
+### Platform overview
+- Dedicated responsive Super Admin Control Centre.
+- Platform-wide aggregate counts for verified active identities, organizations, verified memberships, pending applications, pending legal reviews, and Guardian-verified/HCS-consensus-confirmed MRV records.
+- Operational data remains organization-scoped. Configuration indicators do not claim that an actual Guardian/Hedera verification succeeded.
 
-## Verification
+### Server-side administration APIs
+- `GET /api/v1/admin/overview`: platform aggregate counts.
+- `GET /api/v1/admin/identities?search=&limit=`: bounded identity directory with suspension and active-session status.
+- `POST /api/v1/admin/identities/:identityId/suspend`: suspends a verified identity and revokes active sessions; self-suspension and platform-reserved administrator suspension are blocked.
+- `POST /api/v1/admin/identities/:identityId/reactivate`: reactivates only an identity whose verification status remains VERIFIED; sessions stay revoked. Platform-reserved administrator reactivation is blocked for separate governance.
+- `POST /api/v1/admin/identities/:identityId/revoke-sessions`: revokes all active sessions for an identity.
+- `GET /api/v1/admin/roles` and `PATCH /api/v1/admin/roles/:roleId/permissions`: lists roles and permits edits only from a low-risk permission allowlist. Reserved and high-risk roles cannot be edited by this path.
+- `GET /api/v1/admin/memberships`, `POST /api/v1/admin/memberships`, and `PATCH /api/v1/admin/memberships/:membershipId/status`: grants eligible existing roles, revokes membership access, and restores only previously administratively revoked memberships. Pending/rejected onboarding applications cannot be bypassed. Self-escalation and reserved-role grant/restoration are blocked; the last active Super Admin cannot be revoked.
+- `GET /api/v1/admin/audit-events?limit=`: bounded security/audit event listing.
 
-- `npm run build`: passed after the frontend and API changes.
-- Route tests cover database unavailable (503), missing authentication (401), non-Super-Admin denial (403), and platform aggregate response (200).
-- `npm test`: PASS â€” 91 passed, 0 failed, 4 skipped. Skips are existing database/production-lifecycle gates requiring configured acceptance infrastructure.
-- `git diff --check`: PASS.
+### Audit and identity controls
+- Each administrative mutation requires a reason and records the actor, target, request ID, organization scope, payload, prior hash and SHA-256 event hash in the same database transaction.
+- Audit writes from this route use a PostgreSQL advisory lock to serialize the hash-link operation.
+- Identity authentication now rejects identities with an active `suspended_at` marker.
+- Migration `082_super_admin_identity_governance.sql` adds identity suspension metadata and membership revocation metadata.
+- The UI provides identity search, suspend/reactivate, session revocation, a low-risk role permission editor, membership grant/revoke/restore, and recent audit-event review.
+- The UI does not offer generic super_admin/platform_admin assignment. High-risk permission edits and reserved-administrator recovery require a separate dual-control workflow.
 
-## Explicit boundaries and remaining work
+## Local verification
 
-This is a platform overview and governance entry point, not a complete IAM administration suite. The following are not yet implemented and must not be inferred from the role permission labels alone:
+- API TypeScript build: passed.
+- Web production build: passed.
+- Workspace unit tests: 98 passed, 0 failed, 4 skipped across API and other packages. The four skips are existing database-backed / production-lifecycle gates; API tests alone report 64 passed, 0 failed, 4 skipped.
+- Migration structure validation: passed; 82 migration files validated.
+- `git diff --check`: passed.
+- Full database-backed acceptance of migration 082 and authenticated browser acceptance remain outstanding.
 
-1. Secure identity search/detail, account suspension/reactivation, session revocation and access review.
-2. Role and permission grant/revoke workflows, with protection against self-escalation and removal of the last Super Admin.
-3. Security-event and immutable audit-log browsing.
-4. System configuration changes, secrets rotation, provider/policy management and approval workflow.
-5. Dedicated UI acceptance tests for Super Admin and negative authorization tests against a real test database.
-6. A separate audited platform-level permission model and approval policy for high-impact administration actions.
+## Not yet accepted / remaining
 
-The platform overview exposes only aggregate counts, not cross-organization personal records. The API has not been deployed to production as part of this change. Do not merge or deploy solely because the local build and unit tests pass; complete the Shakti production gate and verify database-backed behavior first.
+1. Run the four skipped database-backed / production-lifecycle acceptance gates in CI or against a dedicated test database.
+2. Apply migration 082 only to a dedicated test PostgreSQL database and test real transactions, session revocation, audit hash continuity, last-Super-Admin concurrency, and identity/membership lifecycle.
+3. Add a separate dual-control approval process for platform-reserved role grants/recovery and high-risk permission changes.
+4. Add authenticated browser acceptance tests for the Super Admin UI and verify authorization failures for non-admin identities.
+5. Run Guardian/Hedera production acceptance separately: real Guardian VERIFIED, HCS CONSENSUS_CONFIRMED, Mirror Node verification, policy import/publish and database-backed retry acceptance.
+
+Do not merge or deploy based on frontend/API compilation and unit tests alone. Production acceptance is not verified by this document.
