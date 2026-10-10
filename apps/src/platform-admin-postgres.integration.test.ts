@@ -1,0 +1,98 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { createHash, randomBytes } from "node:crypto";
+import Fastify from "fastify";
+import { Pool } from "pg";
+import { registerPlatformAdminRoutes } from "./platform-admin-routes.js";
+
+const enabled = process.env.RUPAYKG_RUN_DB_INTEGRATION_TESTS === "1" && Boolean(process.env.DATABASE_URL);
+const hash = (value: string) => createHash("sha256").update(value).digest("hex");
+
+test("PostgreSQL Super Admin suspension revokes sessions and blocks subsequent authentication", { skip: !enabled }, async (t) => {
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  const app = Fastify({ logger: false });
+  await registerPlatformAdminRoutes(app, pool);
+  const suffix = randomBytes(8).toString("hex");
+  const actorToken = randomBytes(32).toString("base64url");
+  const targetToken = randomBytes(32).toString("base64url");
+  let actorId = "";
+  let targetId = "";
+  let organizationId = "";
+  let roleId = "";
+  let membershipId = "";
+  let auditId = "";
+  try {
+    const org = await pool.query<{ id: string }>(
+      "insert into organizations(name,organization_type,status) values($1,'test_fixture','VERIFIED') returning id",
+      [`TEST-ADMIN-${suffix}`],
+    );
+    organizationId = org.rows[0]!.id;
+    const actor = await pool.query<{ id: string }>(
+      "insert into identities(external_subject,display_name,email,status) values($1,$2,$3,'VERIFIED') returning id",
+      [`test-admin:${suffix}`, `Test Admin ${suffix}`, `test-admin-${suffix}@example.invalid`],
+    );
+    actorId = actor.rows[0]!.id;
+    const target = await pool.query<{ id: string }>(
+      "insert into identities(external_subject,display_name,email,status) values($1,$2,$3,'VERIFIED') returning id",
+      [`test-target:${suffix}`, `Test Target ${suffix}`, `test-target-${suffix}@example.invalid`],
+    );
+    targetId = target.rows[0]!.id;
+    const role = await pool.query<{ id: string }>(
+      "insert into roles(organization_id,name,permissions,geography_scope) values($1,'super_admin',$2::jsonb,'[]') returning id",
+      [organizationId, JSON.stringify(["dashboard:read", "admin:users", "admin:roles", "admin:security"])],
+    );
+    roleId = role.rows[0]!.id;
+    const membership = await pool.query<{ id: string }>(
+      "insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED') returning id",
+      [actorId, organizationId, roleId],
+    );
+    membershipId = membership.rows[0]!.id;
+    await pool.query(
+      "insert into identity_sessions(identity_id,expires_at,token_hash) values($1,now()+interval '1 hour',$2),($3,now()+interval '1 hour',$4)",
+      [actorId, hash(actorToken), targetId, hash(targetToken)],
+    );
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/v1/admin/identities/${targetId}/suspend`,
+      headers: { authorization: `Bearer ${actorToken}`, "x-rupaykg-organization-id": organizationId },
+      payload: { reason: "Database integration test suspension" },
+    });
+    assert.equal(response.statusCode, 200, response.body);
+    assert.equal(response.json().suspended, true);
+
+    const identity = await pool.query<{ suspended_at: Date | null }>(
+      "select suspended_at from identities where id=$1",
+      [targetId],
+    );
+    assert.ok(identity.rows[0]?.suspended_at, "identity should persist its suspension marker");
+    const session = await pool.query<{ revoked_at: Date | null }>(
+      "select revoked_at from identity_sessions where identity_id=$1 and token_hash=$2",
+      [targetId, hash(targetToken)],
+    );
+    assert.ok(session.rows[0]?.revoked_at, "target session should be revoked in PostgreSQL");
+
+    const rejected = await app.inject({
+      method: "GET",
+      url: "/api/v1/admin/overview",
+      headers: { authorization: `Bearer ${targetToken}` },
+    });
+    assert.equal(rejected.statusCode, 401, "suspended identity must fail authentication");
+    const audit = await pool.query<{ id: string; event_hash: string; previous_hash: string | null }>(
+      "select id,event_hash,previous_hash from audit_events where actor_identity_id=$1 and target_id=$2 and action='IDENTITY_SUSPENDED' order by created_at desc limit 1",
+      [actorId, targetId],
+    );
+    auditId = audit.rows[0]?.id ?? "";
+    assert.ok(audit.rows[0]?.event_hash, "suspension should have an audit event");
+  } finally {
+    await app.close();
+    // This test is permitted only against an explicitly designated disposable test database.
+    if (auditId) await pool.query("delete from audit_events where id=$1", [auditId]);
+    if (actorId || targetId) await pool.query("delete from identity_sessions where identity_id = any($1::uuid[])", [[actorId, targetId].filter(Boolean)]);
+    if (membershipId) await pool.query("delete from organization_memberships where id=$1", [membershipId]);
+    if (roleId) await pool.query("delete from roles where id=$1", [roleId]);
+    if (actorId || targetId) await pool.query("delete from identities where id = any($1::uuid[])", [[actorId, targetId].filter(Boolean)]);
+    if (organizationId) await pool.query("delete from organizations where id=$1", [organizationId]);
+    await pool.end();
+  }
+});

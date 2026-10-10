@@ -36,14 +36,15 @@
 
 - API TypeScript build: passed.
 - Web production build: passed.
-- Workspace unit tests: 98 passed, 0 failed, 4 skipped across API and other packages. The four skips are existing database-backed / production-lifecycle gates; API tests alone report 64 passed, 0 failed, 4 skipped.
+- Workspace unit tests: 98 passed, 0 failed, 5 skipped across API and other packages. API tests report 64 passed, 0 failed, 5 skipped; skips require database-backed / production-lifecycle acceptance infrastructure.
+- Added a PostgreSQL integration test for persisted identity suspension, session revocation, audit evidence and rejection of subsequent authentication. It only runs when both `DATABASE_URL` and `RUPAYKG_RUN_DB_INTEGRATION_TESTS=1` are explicitly set; it was skipped locally because no database URL is configured.
 - Migration structure validation: passed; 82 migration files validated.
 - `git diff --check`: passed.
 - Full database-backed acceptance of migration 082 and authenticated browser acceptance remain outstanding.
 
 ## Not yet accepted / remaining
 
-1. Run the four skipped database-backed / production-lifecycle acceptance gates in CI or against a dedicated test database.
+1. Run the five skipped database-backed / production-lifecycle acceptance gates in CI or against a dedicated test database.
 2. Apply migration 082 only to a dedicated test PostgreSQL database and test real transactions, session revocation, audit hash continuity, last-Super-Admin concurrency, and identity/membership lifecycle.
 3. Add a separate dual-control approval process for platform-reserved role grants/recovery and high-risk permission changes.
 4. Add authenticated browser acceptance tests for the Super Admin UI and verify authorization failures for non-admin identities.
