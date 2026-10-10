@@ -164,6 +164,73 @@ export async function registerIndustrialCctsRoutes(app: FastifyInstance, pool: P
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Target rule review could not be recorded", code: "CCTS_REVIEW_WRITE_FAILED" }); }
   });
 
+  app.post("/api/v1/agri-residue/fields", async (request, reply) => {
+    const auth = await authFor(request, reply, pool); if (!auth || !pool) return;
+    const body = objectBody(request.body);
+    const organizationId = nonEmpty(body.organizationId, 64);
+    const parcelReference = nonEmpty(body.parcelReference, 160);
+    const cropCode = nonEmpty(body.cropCode, 80);
+    const cropSeason = nonEmpty(body.cropSeason, 80);
+    const stateCode = nonEmpty(body.stateCode, 20);
+    const area = Number(body.areaHectares);
+    const boundary = body.boundaryGeojson;
+    if (!organizationId || !UUID.test(organizationId) || !parcelReference || !cropCode || !cropSeason || !stateCode || !Number.isFinite(area) || area <= 0 || !boundary || typeof boundary !== "object" || Array.isArray(boundary)) return reply.code(400).send({ error: "Organization, parcel reference, crop, season, state, positive area and GeoJSON boundary are required", code: "AGRI_FIELD_INVALID" });
+    if (!authorized(auth, organizationId) || !await hasOrganizationPermission(pool, auth, organizationId, ["industrial_ccts:manage", "reports:manage", "resource_flows:manage"])) return reply.code(403).send({ error: "Verified organization membership and residue-management permission required", code: "AGRI_FORBIDDEN" });
+    try {
+      const result = await pool.query("insert into agri_residue_fields (id,organization_id,parcel_reference,farmer_reference,village_code,district_code,state_code,crop_code,crop_season,area_hectares,boundary_geojson,land_use_evidence_reference,land_use_evidence_hash,baseline_evidence_reference,baseline_evidence_hash,baseline_status,created_by) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'PENDING_REVIEW',$16) returning id,organization_id,parcel_reference,crop_code,crop_season,state_code,area_hectares,baseline_status,created_at", [randomUUID(),organizationId,parcelReference,nonEmpty(body.farmerReference,160),nonEmpty(body.villageCode,80),nonEmpty(body.districtCode,80),stateCode,cropCode,cropSeason,area,JSON.stringify(boundary),nonEmpty(body.landUseEvidenceReference,1000),isSha256Digest(String(body.landUseEvidenceHash ?? ""))?String(body.landUseEvidenceHash).toLowerCase():null,nonEmpty(body.baselineEvidenceReference,1000),isSha256Digest(String(body.baselineEvidenceHash ?? ""))?String(body.baselineEvidenceHash).toLowerCase():null,auth.identityId]);
+      return reply.code(201).send({ source: "postgresql", syntheticData: false, field: result.rows[0], note: "Field and baseline remain pending review; field registration does not establish methodology eligibility or CCC entitlement." });
+    } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Field could not be recorded", code: "AGRI_FIELD_WRITE_FAILED" }); }
+  });
+
+  app.post("/api/v1/agri-residue/fields/:fieldId/fire-observations", async (request, reply) => {
+    const auth = await authFor(request, reply, pool); if (!auth || !pool) return;
+    const { fieldId } = request.params as { fieldId: string };
+    const body = objectBody(request.body);
+    const source = nonEmpty(body.observationSource, 160);
+    const observedAt = nonEmpty(body.observedAt, 40);
+    const reference = nonEmpty(body.evidenceReference, 1000);
+    const hash = nonEmpty(body.evidenceHash, 64);
+    const detected = body.detectedFire;
+    const confidence = body.confidence == null ? null : Number(body.confidence);
+    if (!UUID.test(fieldId) || !source || !observedAt || !Number.isFinite(Date.parse(observedAt)) || !reference || !hash || !isSha256Digest(hash) || typeof detected !== "boolean" || (confidence !== null && (!Number.isFinite(confidence) || confidence < 0 || confidence > 1))) return reply.code(400).send({ error: "Valid field, observation source/time, fire flag, optional 0–1 confidence, evidence reference and SHA-256 hash are required", code: "AGRI_FIRE_OBSERVATION_INVALID" });
+    try {
+      const found = await pool.query("select organization_id from agri_residue_fields where id=$1", [fieldId]);
+      const organizationId = found.rows[0]?.organization_id as string | undefined;
+      if (!organizationId) return reply.code(404).send({ error: "Field not found", code: "AGRI_FIELD_NOT_FOUND" });
+      if (!authorized(auth, organizationId) || !await hasOrganizationPermission(pool, auth, organizationId, ["industrial_ccts:manage", "reports:manage", "resource_flows:manage"])) return reply.code(403).send({ error: "Verified organization membership and residue-management permission required", code: "AGRI_FORBIDDEN" });
+      const result = await pool.query("insert into agri_residue_fire_observations (id,field_id,observation_source,observed_at,detected_fire,confidence,spatial_intersection,evidence_reference,evidence_hash,created_by) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) returning id,field_id,observation_source,observed_at,detected_fire,confidence,evidence_reference,evidence_hash,review_status,created_at", [randomUUID(),fieldId,source,new Date(observedAt).toISOString(),detected,confidence,body.spatialIntersection && typeof body.spatialIntersection==="object" ? JSON.stringify(body.spatialIntersection) : null,reference,hash.toLowerCase(),auth.identityId]);
+      return reply.code(201).send({ source: "postgresql", syntheticData: false, observation: result.rows[0], note: "Fire observations are evidence signals pending review, not automatic legal findings or automatic credit deductions." });
+    } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Fire observation could not be recorded", code: "AGRI_FIRE_OBSERVATION_WRITE_FAILED" }); }
+  });
+
+  app.post("/api/v1/agri-residue/lots", async (request, reply) => {
+    const auth = await authFor(request, reply, pool); if (!auth || !pool) return;
+    const body = objectBody(request.body);
+    const organizationId = nonEmpty(body.organizationId, 64);
+    const lotCode = nonEmpty(body.lotCode, 160);
+    const residueType = nonEmpty(body.residueType, 80);
+    const cropSeason = nonEmpty(body.cropSeason, 80);
+    const mass = Number(body.netMass);
+    const unit = nonEmpty(body.massUnit, 8);
+    const basis = nonEmpty(body.massBasis, 20);
+    const weighingReference = nonEmpty(body.weighingReference, 1000);
+    const evidenceHash = nonEmpty(body.weighingEvidenceHash, 64);
+    const measuredAt = nonEmpty(body.measuredAt, 40);
+    const sourceFieldId = body.sourceFieldId == null ? null : nonEmpty(body.sourceFieldId, 64);
+    const moisture = body.moisturePercent == null ? null : Number(body.moisturePercent);
+    if (!organizationId || !UUID.test(organizationId) || !lotCode || !residueType || !cropSeason || !Number.isFinite(mass) || mass <= 0 || !["kg","t"].includes(unit ?? "") || !["AS_RECEIVED","DRY_MATTER","UNKNOWN"].includes(basis ?? "") || !weighingReference || !evidenceHash || !isSha256Digest(evidenceHash) || !measuredAt || !Number.isFinite(Date.parse(measuredAt)) || (sourceFieldId !== null && (!sourceFieldId || !UUID.test(sourceFieldId))) || (moisture !== null && (!Number.isFinite(moisture) || moisture < 0 || moisture > 100))) return reply.code(400).send({ error: "Complete lot identity, positive measured mass, unit/basis, timestamp, scale reference and SHA-256 evidence are required", code: "AGRI_LOT_INVALID" });
+    if (!authorized(auth, organizationId) || !await hasOrganizationPermission(pool, auth, organizationId, ["industrial_ccts:manage", "reports:manage", "resource_flows:manage"])) return reply.code(403).send({ error: "Verified organization membership and residue-management permission required", code: "AGRI_FORBIDDEN" });
+    try {
+      if (sourceFieldId) {
+        const field = await pool.query("select organization_id from agri_residue_fields where id=$1", [sourceFieldId]);
+        if (!field.rows[0] || field.rows[0].organization_id !== organizationId) return reply.code(422).send({ error: "Source field must exist in the same organization", code: "AGRI_FIELD_SCOPE_MISMATCH" });
+      }
+      const result = await pool.query("insert into agri_residue_lots (id,organization_id,lot_code,source_field_id,residue_type,crop_season,net_mass,mass_unit,moisture_percent,mass_basis,weighing_reference,weighing_evidence_hash,measured_at,created_by) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) on conflict (organization_id,lot_code) do nothing returning id,organization_id,lot_code,source_field_id,residue_type,crop_season,net_mass,mass_unit,moisture_percent,mass_basis,weighing_reference,weighing_evidence_hash,measured_at,custody_status,created_at", [randomUUID(),organizationId,lotCode,sourceFieldId,residueType,cropSeason,mass,unit,moisture,basis,weighingReference,evidenceHash.toLowerCase(),new Date(measuredAt).toISOString(),auth.identityId]);
+      if (!result.rows[0]) return reply.code(409).send({ error: "Lot code already exists for this organization", code: "AGRI_DUPLICATE_LOT" });
+      return reply.code(201).send({ source: "postgresql", syntheticData: false, lot: result.rows[0], note: "Recorded mass is traceability evidence only; it is not converted into carbon credits." });
+    } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Residue lot could not be recorded", code: "AGRI_LOT_WRITE_FAILED" }); }
+  });
+
   app.post("/api/v1/industrial-ccts/offset-projects", async (request, reply) => {
     const auth = await authFor(request, reply, pool); if (!auth || !pool) return;
     const body = objectBody(request.body);
