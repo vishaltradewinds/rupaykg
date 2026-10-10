@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { integrityHash, type AnchorPayload } from "./hedera-anchor.js";
+import { hederaStatus, integrityHash, type AnchorPayload } from "./hedera-anchor.js";
 
 function payload(): AnchorPayload {
   return {
@@ -52,4 +52,26 @@ test("integrity hash is deterministic across object key order", () => {
     quantity: undefined,
   };
   assert.equal(integrityHash(original), integrityHash(reordered));
+});
+
+test("Hedera status reports configuration without claiming live read or consensus availability", () => {
+  const keys = ["HEDERA_NETWORK", "HEDERA_OPERATOR_ID", "HEDERA_OPERATOR_KEY", "HEDERA_TOPIC_ID"] as const;
+  const previous = Object.fromEntries(keys.map(key => [key, process.env[key]]));
+  try {
+    process.env.HEDERA_NETWORK = "testnet";
+    process.env.HEDERA_OPERATOR_ID = "0.0.1234";
+    process.env.HEDERA_OPERATOR_KEY = "a-valid-looking-test-key-with-enough-length";
+    process.env.HEDERA_TOPIC_ID = "0.0.5678";
+    const status = hederaStatus();
+    assert.equal(status.configured, true);
+    assert.equal(status.readStatus, "NOT_CHECKED");
+    assert.equal(status.writeStatus, "CONFIGURED");
+    assert.equal(status.consensusStatus, "NOT_CHECKED");
+  } finally {
+    for (const key of keys) {
+      const value = previous[key];
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
 });
