@@ -62,18 +62,26 @@ A project may progress through Draft → Eligibility Review → PDD/Monitoring P
 
 All records need stable IDs, tenant/owner, timestamps, source references, status, and audit history. Do not store secrets in evidence or logs.
 
-## API contract proposal
-- GET /api/industrial-ccts/regulatory-register
-- POST /api/industrial-ccts/facilities
-- POST /api/industrial-ccts/facilities/{facilityId}/periods
-- POST /api/industrial-ccts/facilities/{facilityId}/calculations
-- POST /api/industrial-ccts/compliance-obligations
-- POST /api/industrial-ccts/offset-projects
-- POST /api/industrial-ccts/offset-projects/{projectId}/eligibility-review
-- POST /api/industrial-ccts/offset-projects/{projectId}/evidence
-- GET /api/industrial-ccts/audit/{entityType}/{entityId}
+## Backend API surface (implemented on the feature branch; not deployed)
+- GET /api/v1/industrial-ccts/regulatory-register
+- POST /api/v1/industrial-ccts/facilities
+- GET /api/v1/industrial-ccts/facilities/{facilityId}
+- POST /api/v1/industrial-ccts/facilities/{facilityId}/periods
+- POST /api/v1/industrial-ccts/facilities/{facilityId}/calculations
+- POST /api/v1/industrial-ccts/target-rules
+- POST /api/v1/industrial-ccts/target-rules/{targetRuleId}/review
+- POST /api/v1/industrial-ccts/offset-projects
+- POST /api/v1/industrial-ccts/offset-projects/{projectId}/evidence
 
-These routes are proposals only until implemented and covered by tests. Mutating requests require authentication, authorisation, schema validation, idempotency for submissions, correlation IDs, audit logging and rate limiting.
+## Known implementation gaps (must remain release blockers)
+- The review endpoint records an internal independent approval, official-domain URL, and artifact hash. It does not fetch the document, prove that the hash matches its bytes, or prove the notification supports the target. The reviewer must inspect the source and its applicability; regulator acceptance is not implied.
+- The regulatory register is a dated baseline; scheduled refresh, source retrieval, byte-level hashing, supersession detection, and reviewer workflow remain incomplete.
+- Emissions factors, gas boundaries, unit conversion/compatibility, uncertainty treatment, full target formula/threshold comparison, and evidence-quality review are not yet a complete statutory calculation engine.
+- Offset lifecycle transitions, eligibility rules, PDD/monitoring-plan workflow, ACVA verification, official registry submission, issuance reconciliation, and duplicate-credit screening are not implemented end-to-end.
+- A general audit-read API and transactionally complete audit logging for every mutating route are not implemented. The independent target-rule review is currently the only CCTS mutation that writes its audit event atomically.
+- Frontend/user journey, rate limiting, idempotency keys, correlation IDs, operational dashboards, deployment configuration, and production monitoring are not complete.
+
+All mutating routes require authentication and organization permission checks. Facility designation, target rule creation, calculations, and offset records fail closed where required evidence is missing. A prepared calculation is not a statutory submission, verified result, or certificate. These routes are a backend foundation, not a production-ready statutory service.
 
 ## Mandatory fail-closed rules
 1. Unknown or stale target/methodology: no final calculation or eligibility claim.
