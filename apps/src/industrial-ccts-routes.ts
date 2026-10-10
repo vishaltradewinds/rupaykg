@@ -4,6 +4,14 @@ import type { Pool } from "pg";
 import { authenticate, bearerChallenge, hasOrganizationPermission, type AuthContext } from "./auth.js";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const OFFICIAL_CCTS_HOSTS = ["beeindia.gov.in", "powermin.gov.in", "egazette.nic.in", "cercind.gov.in", "grid-india.in"];
+export function isOfficialCctsReviewReference(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && !url.username && !url.password && OFFICIAL_CCTS_HOSTS.some(host => url.hostname.toLowerCase() === host || url.hostname.toLowerCase().endsWith("." + host));
+  } catch { return false; }
+}
+export function isSha256Digest(value: string): boolean { return /^[a-f0-9]{64}$/i.test(value); }
 type Reply = { code: (status: number) => { send: (body: unknown) => unknown } };
 
 async function authFor(request: Parameters<typeof authenticate>[0], reply: Reply, pool: Pool | null): Promise<AuthContext | null> {
@@ -136,13 +144,9 @@ export async function registerIndustrialCctsRoutes(app: FastifyInstance, pool: P
     const decision = nonEmpty(body.decision, 20);
     const reviewReference = nonEmpty(body.reviewEvidenceReference, 1000);
     const reviewHash = nonEmpty(body.reviewEvidenceHash, 64);
-    if (!UUID.test(targetRuleId) || decision !== "APPROVE" || !reviewReference || !/^https:\/\//i.test(reviewReference) || !reviewHash || !/^[a-f0-9]{64}$/i.test(reviewHash)) {
+    if (!UUID.test(targetRuleId) || decision !== "APPROVE" || !reviewReference || !isOfficialCctsReviewReference(reviewReference) || !reviewHash || !isSha256Digest(reviewHash)) {
       return reply.code(400).send({ error: "A valid rule ID, APPROVE decision, HTTPS official-notification reference and SHA-256 artifact hash are required", code: "CCTS_INVALID_RULE_REVIEW" });
     }
-    let sourceHost = "";
-    try { sourceHost = new URL(reviewReference).hostname.toLowerCase(); } catch { return reply.code(400).send({ error: "Invalid review evidence URL", code: "CCTS_INVALID_REVIEW_URL" }); }
-    const officialHosts = ["beeindia.gov.in", "powermin.gov.in", "egazette.nic.in", "cercind.gov.in", "grid-india.in"];
-    if (!officialHosts.some(host => sourceHost === host || sourceHost.endsWith("." + host))) return reply.code(422).send({ error: "Review evidence must reference a recognized official Indian carbon-market authority domain", code: "CCTS_NON_OFFICIAL_REVIEW_SOURCE" });
     try {
       const found = await pool.query("select id,organization_id,created_by,status from industrial_ccts_target_rules where id=$1", [targetRuleId]);
       const rule = found.rows[0];
