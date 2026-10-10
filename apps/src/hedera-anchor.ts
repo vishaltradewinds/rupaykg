@@ -46,10 +46,21 @@ function configured(): boolean {
 }
 
 function canonical(value: unknown): string {
-  if (value === null || typeof value !== "object") return JSON.stringify(value);
-  if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
-  const object = value as Record<string, unknown>;
-  return `{${Object.keys(object).sort().map(k => `${JSON.stringify(k)}:${canonical(object[k])}`).join(",")}}`;
+  if (value === null) return "null";
+  if (Array.isArray(value)) {
+    // JSON.stringify serializes undefined-like array entries as null.
+    return `[${value.map(item => item === undefined || typeof item === "function" || typeof item === "symbol" ? "null" : canonical(item)).join(",")}]`;
+  }
+  if (typeof value === "object") {
+    const object = value as Record<string, unknown>;
+    // JSON.stringify omits undefined-like object properties. Hash exactly that payload contract.
+    const entries = Object.keys(object)
+      .filter(key => object[key] !== undefined && typeof object[key] !== "function" && typeof object[key] !== "symbol")
+      .sort()
+      .map(key => `${JSON.stringify(key)}:${canonical(object[key])}`);
+    return `{${entries.join(",")}}`;
+  }
+  return JSON.stringify(value) ?? "null";
 }
 
 export function integrityHash(payload: AnchorPayload): string {
@@ -59,9 +70,10 @@ export function integrityHash(payload: AnchorPayload): string {
 export function hederaStatus() {
   const network = networkName();
   return {
-    readStatus: "AVAILABLE" as const,
-    writeStatus: configured() ? "AVAILABLE" as const : "NOT_AVAILABLE" as const,
-    consensusStatus: configured() ? "CONFIGURED" as const : "NOT_AVAILABLE" as const,
+    // Configuration is not proof that the Mirror Node is reachable or a write has reached consensus.
+    readStatus: "NOT_CHECKED" as const,
+    writeStatus: configured() ? "CONFIGURED" as const : "NOT_CONFIGURED" as const,
+    consensusStatus: configured() ? "NOT_CHECKED" as const : "NOT_CONFIGURED" as const,
     network,
     mirrorNodeEndpoint: mirrorEndpoint(network),
     topicId: process.env.HEDERA_TOPIC_ID || "NOT_CONFIGURED",
