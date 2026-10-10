@@ -1,51 +1,70 @@
-# Rural-first product boundary: KrishiKendra and RupayKg
+# RupayKg rural operating model
 
-**Decision status:** Product/architecture direction for the agricultural-residue pathway. This is not a regulatory eligibility decision and does not authorize carbon-credit issuance.
+**Decision status:** Product and architecture direction for RupayKg. This is not a regulatory eligibility decision and does not authorize carbon-credit issuance.
 
-## 1. Product boundary
+## 1. Product purpose
 
-- **KrishiKendra is the farmer-facing rural service layer.** Its active user journeys remain Farm Mechanization Services and Machinery/Partner Network. Farmers, FPOs, custom-hiring centres, machinery operators, village aggregators and processors interact through simple, mobile-first workflows aligned to the agricultural calendar.
-- **RupayKg is the evidence, circular-economy and environmental-value layer.** It consumes permissioned operational records from KrishiKendra and other authorized parties to establish material provenance, custody, processing, end use and MRV evidence.
-- Biomass inventory, residue buyer matching and environmental value remain largely backend capabilities rather than extra farmer-facing verticals.
-- Industrial CCTS workflows remain a separate, reusable compliance capability. They must not dictate the rural product's primary navigation, data model or onboarding experience.
+RupayKg is a rural-first waste-to-value and environmental MRV infrastructure platform. It should help rural participants turn waste and biomass streams into traceable material, commercial and environmental outcomes, while preserving evidence needed for legitimate reporting and any applicable carbon-credit pathway.
+
+Rural users and operating partners may include farmers and farmer groups, village waste collectors, aggregators, self-help groups, rural entrepreneurs, local bodies, transporters, recyclers, biomass processors, composting/biogas operators, industrial buyers, project developers, auditors and authorized verifiers.
+
+RupayKg is its own platform. Its product scope, identity, roadmap and user journeys must not depend on or be presented as a module of another platform.
 
 ## 2. Rural operating journey
 
-1. Identify farmer/FPO, village, field/parcel, crop, season and consent/authority to record data.
-2. Record the relevant baseline and residue-management plan with evidence provenance and review status.
-3. Arrange mechanization/collection through the KrishiKendra partner network.
-4. Record measured residue lots, units, moisture/basis where relevant, scale/ticket evidence and time/location.
-5. Track custody transfers with sender and receiver acknowledgement, transport and weighment evidence.
-6. Record processor intake, processing outputs, losses and documented final use; reconcile input/output mass.
-7. Build a traceable MRV evidence package. Only then assess applicability against the complete, current, authoritative methodology and its monitoring requirements.
-8. Keep operational payment/market transactions, estimated environmental benefit, independently verified reductions, project registration and officially issued credits as separate states.
+1. **Discover the local waste stream:** identify the source, material type, geography, seasonality, approximate quantity, current handling/disposal practice and responsible parties.
+2. **Register the source and baseline evidence:** record relevant source/parcel or facility identifiers, permissions/consent where applicable, baseline practice, evidence provenance and review status.
+3. **Organize collection and aggregation:** register collectors, collection points, schedules, transport and agreed material specifications; support assisted and low-bandwidth data entry.
+4. **Measure the material:** record quantity, unit, measurement method, time, moisture/basis when relevant, weighing ticket or device reference and supporting evidence.
+5. **Maintain custody:** capture each handover with sender and receiver, time, location, transport reference, quantity and evidence; identify missing acknowledgements and discrepancies.
+6. **Verify processing and final use:** record processor intake, process type, outputs, losses, rejects and end-use evidence; reconcile incoming and outgoing mass and investigate unexplained differences.
+7. **Record commercial outcomes:** connect material transactions, service charges, buyer receipts and settlements where in scope. Keep commercial settlement separate from environmental claims.
+8. **Build the MRV evidence package:** link source, baseline, activity, measurement, custody, processing and end-use records. Assess the full current methodology and project-specific eligibility before making a regulated or crediting claim.
+9. **Track independent assurance and external outcomes:** keep internal review, validation, verification, project registration, submission and official registry issuance as separate states.
 
 ## 3. Rural usability requirements
 
-- Ordinary-phone-first, low-bandwidth and assisted workflows; avoid requiring a farmer to understand carbon terminology.
-- Local-language labels and guided steps; capture only the data needed for the current task.
-- Permit offline/delayed synchronization only with explicit timestamps, source identity and conflict handling; never silently treat unsynced data as verified.
-- Support assisted onboarding by authorized FPO/partner staff while retaining attribution, consent and audit history.
-- Design for village-level aggregation and practical field evidence, not only corporate facility records.
+- Design for ordinary Android phones, low bandwidth, intermittent connectivity and assisted use at village collection points.
+- Use guided workflows and local-language-ready labels; do not require a rural participant to understand carbon accounting.
+- Capture the minimum data required at each step, with clear explanations of why it is needed.
+- Support delayed synchronization only with original event time, sync time, source/actor identity, idempotency and conflict handling. Unsynced records must not silently become verified evidence.
+- Support multiple operating models: individual source, group/FPO, village aggregator, local body, independent collector and processor.
+- Make exceptions visible: missing weighment, unmatched custody handover, quantity mismatch, duplicate ticket, rejected load or missing end-use proof.
+- Provide an assisted operator path without hiding who entered or attested to a record.
 
 ## 4. Evidence and integrity controls
 
-- Every important record should retain source, actor/organization, event time, location where relevant, evidence hash/reference, review status and correction history.
-- A satellite/fire anomaly is an evidence signal, not by itself a conclusive legal finding or automatic credit deduction. Methodology-specific treatment must be documented and independently reviewed.
-- Do not infer carbon reductions from tonnes of residue alone. Calculations require a specifically applicable methodology, its approved parameters, baseline, additionality, leakage, uncertainty, monitoring and verification rules.
-- Keep voluntary standards and CCTS pathways separate unless authoritative project-specific documentation establishes a lawful interaction. Prevent duplicate environmental claims.
-- RupayKg must not mint or represent an estimated amount as an officially issued Carbon Credit Certificate. Issuance is an external registry outcome.
-- A reviewer attestation that a source URL/hash was recorded is not proof that the underlying source is authoritative or that a project is eligible.
+- Important records should retain source, actor and organization, event time, location where relevant, evidence reference/hash, review status and correction history.
+- A photograph or satellite/fire anomaly is a supporting signal, not automatically a conclusive legal finding. Apply only the consequence specified by the applicable methodology and review process.
+- Do not infer carbon reductions from tonnes collected or processed alone. Calculation requires a specifically applicable methodology, baseline, additionality, approved parameters, leakage and uncertainty treatment, monitoring rules and the required independent assurance.
+- Keep CCTS and voluntary crediting pathways distinct unless authoritative project-specific documentation establishes a lawful interaction. Prevent duplicate environmental claims.
+- Never represent an application estimate or internal ledger entry as an officially issued Carbon Credit Certificate. Issuance is an external registry outcome.
+- A stored source URL or hash proves what was recorded, not that the source is authoritative or that a claim is eligible.
+- Preserve an auditable trail for corrections, disputed measurements, custody breaks, rejected evidence and reviewer decisions.
 
-## 5. Release gates
+## 5. Platform capability boundaries
 
-Before describing this as a live rural MRV service, require:
-- End-to-end tests for farmer/field intake, lot measurement, custody transfer, processor receipts, corrections and cross-organization reconciliation.
-- Realistic field trials with farmers/FPOs, collection partners and processors.
-- Verified geospatial intersection and documented satellite/provider data provenance where those sources are used.
+RupayKg may provide:
+- Rural source and waste-stream onboarding.
+- Material lot, measurement, custody and processing records.
+- Aggregation and buyer/processor traceability.
+- Mass-balance and exception management.
+- Evidence collection, provenance, review and audit trail.
+- Methodology applicability controls and versioned MRV evidence packages.
+- Commercial reconciliation where explicitly implemented.
+- Interfaces to authorized validation, verification and registry workflows when supported by verified integrations.
+
+Do not describe a capability as operational merely because a database table, API route, user interface or mock integration exists. Distinguish implemented, tested, externally integrated, independently validated and production-deployed states.
+
+## 6. Release gates
+
+Before describing RupayKg as a live rural MRV service, require:
+- End-to-end tests for source registration, measurement, custody handover, processing, correction and cross-organization reconciliation.
+- Field trials with representative rural participants and operating partners.
+- Geospatial and external-data provenance validation wherever those data are used.
 - Independent weighing-device and evidence-source validation appropriate to the use case.
-- A methodology applicability decision supported by the full current official methodology and project-specific review.
-- Security, privacy/consent, retention, audit, recovery and role-separation checks.
+- A methodology applicability decision supported by the complete current authoritative methodology and project-specific review.
+- Security, privacy/consent, access control, retention, audit and recovery checks.
 - Independent validation/verification and registry reconciliation where required by the selected pathway.
 
-**Current implementation note:** The agricultural-residue APIs and schema on this feature branch are an evidence-layer foundation only. They are not a complete farmer-facing product, a validated carbon calculation engine, a registered project, an independently verified reduction, or a deployed service.
+**Current implementation note:** The agricultural-residue APIs and schema on the feature branch are an evidence-layer foundation only. They are not a complete rural product, a validated carbon calculation engine, a registered project, an independently verified reduction or a deployed service.
