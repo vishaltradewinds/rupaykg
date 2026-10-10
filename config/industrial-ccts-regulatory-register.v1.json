@@ -1,0 +1,92 @@
+{
+  "schemaVersion": "rupaykg:industrial-ccts-regulatory-register:v1",
+  "reviewedAt": "2026-10-10",
+  "status": "reference-baseline-needs-current-notification-verification",
+  "sources": [
+    {
+      "id": "MOP-LS-2026-03-12-CCTS",
+      "publisher": "Ministry of Power, Government of India",
+      "title": "Lok Sabha response on CCTS",
+      "url": "https://powermin.gov.in/sites/default/files/uploads/LS12032026_Eng_0.pdf",
+      "publishedOrAnsweredAt": "2026-03-12",
+      "facts": {
+        "patTransitionedSectors": [
+          "Aluminium",
+          "Cement",
+          "Chlor-Alkali",
+          "Pulp and Paper",
+          "Petrochemicals",
+          "Petroleum Refinery",
+          "Textile"
+        ],
+        "obligatedEntitiesWithTargetsReported": 490,
+        "certificatesIssuedToObligatedEntitiesAtResponseDate": 0,
+        "offsetSectors": [
+          "Energy",
+          "Industries",
+          "Agriculture",
+          "Waste Handling and Disposal",
+          "Forestry",
+          "Transport",
+          "Fugitive Emissions",
+          "Construction",
+          "Solvent Use",
+          "Carbon Capture, Utilization and Storage"
+        ]
+      },
+      "limitations": [
+        "Dated parliamentary response; do not present these counts as live values.",
+        "Sector presence does not establish an individual facility's designation or target.",
+        "Check subsequent notifications before operational decisions."
+      ]
+    },
+    {
+      "id": "BEE-OFFSET-METHODOLOGIES",
+      "publisher": "Bureau of Energy Efficiency",
+      "title": "Approved Methodologies under Offset Mechanism",
+      "url": "https://beeindia.gov.in/view_content.php?lang=1&lid=571",
+      "lastUpdated": "2026-07-07",
+      "methodologies": [
+        {
+          "id": "BM IN02.001",
+          "name": "Energy efficiency and fuel switching measures for industrial facilities",
+          "sector": "Industries"
+        },
+        {
+          "id": "BM IN02.002",
+          "name": "Hydrogen production using methane extracted from biogas",
+          "sector": "Industries"
+        },
+        {
+          "id": "BM WA03.001",
+          "name": "Landfill methane recovery",
+          "sector": "Waste Handling and Disposal"
+        },
+        {
+          "id": "BM WA03.002",
+          "name": "Flaring or use of landfill gas",
+          "sector": "Waste Handling and Disposal"
+        }
+      ],
+      "limitations": [
+        "Retrieve and apply the full methodology and current version before eligibility decisions."
+      ]
+    },
+    {
+      "id": "BEE-ACVA-REGISTER",
+      "publisher": "Bureau of Energy Efficiency",
+      "title": "Accredited Carbon Verification Agencies empanelled under CCTS",
+      "url": "https://beeindia.gov.in/view_content.php?lang=1&lid=568",
+      "lastChecked": "2026-10-10",
+      "limitations": [
+        "Check live register, accreditation type, validity, and sector scope before selecting a verifier."
+      ]
+    }
+  ],
+  "governance": {
+    "noSyntheticRegulatoryFacts": true,
+    "complianceAndOffsetMechanismsSeparate": true,
+    "esCertsAndCarbonCreditCertificatesSeparate": true,
+    "localStateDoesNotImplyExternalAcceptance": true
+  }
+}
