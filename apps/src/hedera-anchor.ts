@@ -70,9 +70,10 @@ export function integrityHash(payload: AnchorPayload): string {
 export function hederaStatus() {
   const network = networkName();
   return {
-    readStatus: "AVAILABLE" as const,
-    writeStatus: configured() ? "AVAILABLE" as const : "NOT_AVAILABLE" as const,
-    consensusStatus: configured() ? "CONFIGURED" as const : "NOT_AVAILABLE" as const,
+    // Configuration is not proof that the Mirror Node is reachable or a write has reached consensus.
+    readStatus: "NOT_CHECKED" as const,
+    writeStatus: configured() ? "CONFIGURED" as const : "NOT_CONFIGURED" as const,
+    consensusStatus: configured() ? "NOT_CHECKED" as const : "NOT_CONFIGURED" as const,
     network,
     mirrorNodeEndpoint: mirrorEndpoint(network),
     topicId: process.env.HEDERA_TOPIC_ID || "NOT_CONFIGURED",
