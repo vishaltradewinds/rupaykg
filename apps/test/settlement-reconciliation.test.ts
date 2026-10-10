@@ -98,7 +98,7 @@ after(async () => {
 });
 
 describe("settlement reconciliation invariants", () => {
-  it("runs against PostgreSQL in CI", () => {
+  it("runs against PostgreSQL in CI", { skip: !pool }, () => {
     assert.ok(pool, "DATABASE_URL is required for settlement integration tests");
     assert.match(settlementId, /^[0-9a-f-]{36}$/i);
   });

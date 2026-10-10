@@ -1,7 +1,7 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import fastifyStatic from "@fastify/static";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { Pool, type PoolClient, type PoolConfig } from "pg";
 import { authenticate, bearerChallenge, canActForOrganization, hasOrganizationPermission, type AuthContext } from "./auth.js";
@@ -79,5 +79,5 @@ await registerBwgRoutes(app, pool);
 await registerIntelligenceRoutes(app, pool);
 await registerMrvRoutes(app, pool);
 
-if (existsSync(webRoot)) app.get("/*", async (_request, reply) => reply.sendFile("index.html"));
+if (existsSync(webRoot)) app.get("/*", async (_request, reply) => reply.type("text/html; charset=utf-8").send(readFileSync(resolve(webRoot, "index.html"), "utf8")));
 const port = Number(process.env.PORT ?? 3000); const host = process.env.HOST ?? "0.0.0.0"; await app.listen({ port, host });
