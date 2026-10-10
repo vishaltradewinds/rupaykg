@@ -17,7 +17,7 @@ create table if not exists industrial_ccts_target_rules (
  id uuid primary key, organization_id uuid not null references organizations(id), sector_code text not null, rule_name text not null,
  target_value numeric(24,10) not null check (target_value > 0), target_unit text not null, period_start date not null, period_end date not null,
  source_reference text not null, source_hash char(64) not null check (source_hash ~ '^[a-f0-9]{64}$'),
- status text not null default 'ACTIVE' check (status in ('ACTIVE','SUPERSEDED','WITHDRAWN')),
+ status text not null default 'PENDING_REVIEW' check (status in ('PENDING_REVIEW','ACTIVE','SUPERSEDED','WITHDRAWN')),
  created_by uuid not null references identities(id), created_at timestamptz not null default now(), check (period_end >= period_start)
 );
 create table if not exists industrial_ccts_periods (
