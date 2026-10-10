@@ -125,7 +125,7 @@ export async function registerIndustrialCctsRoutes(app: FastifyInstance, pool: P
     if (!authorized(auth, organizationId) || !await hasOrganizationPermission(pool, auth, organizationId, ["industrial_ccts:manage", "compliance:manage"])) return reply.code(403).send({ error: "Verified organization membership and CCTS management permission required", code: "CCTS_FORBIDDEN" });
     try {
       const result = await pool.query("insert into industrial_ccts_target_rules (id,organization_id,sector_code,rule_name,target_value,target_unit,period_start,period_end,source_reference,source_hash,created_by) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) returning *", [randomUUID(), organizationId, sector, name, value, unit, start, end, source, hash.toLowerCase(), auth.identityId]);
-      return reply.code(201).send({ source: "postgresql", syntheticData: false, targetRule: result.rows[0], status: "ACTIVE" });
+      return reply.code(201).send({ source: "postgresql", syntheticData: false, targetRule: result.rows[0], status: "PENDING_REVIEW", note: "Target rules are not usable for calculations until separately reviewed against an official notification." });
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Target rule could not be stored", code: "CCTS_TARGET_WRITE_FAILED" }); }
   });
 
