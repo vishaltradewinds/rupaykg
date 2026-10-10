@@ -203,6 +203,26 @@ export async function registerIndustrialCctsRoutes(app: FastifyInstance, pool: P
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Fire observation could not be recorded", code: "AGRI_FIRE_OBSERVATION_WRITE_FAILED" }); }
   });
 
+  app.post("/api/v1/agri-residue/fire-observations/:observationId/review", async (request, reply) => {
+    const auth = await authFor(request, reply, pool); if (!auth || !pool) return;
+    const { observationId } = request.params as { observationId: string };
+    const body = objectBody(request.body);
+    const decision = nonEmpty(body.decision, 20);
+    const reviewNote = nonEmpty(body.reviewNote, 2000);
+    if (!UUID.test(observationId) || !["CONFIRMED","DISMISSED","INCONCLUSIVE"].includes(decision ?? "") || !reviewNote) return reply.code(400).send({ error: "Observation ID, review decision and review note are required", code: "AGRI_FIRE_REVIEW_INVALID" });
+    try {
+      const found = await pool.query("select o.id,o.review_status,o.created_by,f.organization_id from agri_residue_fire_observations o join agri_residue_fields f on f.id=o.field_id where o.id=$1",[observationId]);
+      const observation=found.rows[0];
+      if(!observation) return reply.code(404).send({error:"Fire observation not found",code:"AGRI_FIRE_OBSERVATION_NOT_FOUND"});
+      if(!authorized(auth,observation.organization_id) || !await hasOrganizationPermission(pool,auth,observation.organization_id,["industrial_ccts:regulatory:approve"])) return reply.code(403).send({error:"Verified organization membership and explicit independent-review permission required",code:"AGRI_FIRE_REVIEW_FORBIDDEN"});
+      if(observation.created_by===auth.identityId) return reply.code(403).send({error:"The evidence creator cannot independently review the observation",code:"AGRI_FIRE_SELF_REVIEW_BLOCKED"});
+      if(observation.review_status!=="PENDING_REVIEW") return reply.code(409).send({error:"Only pending observations can be reviewed",code:"AGRI_FIRE_REVIEW_NOT_PENDING"});
+      const saved=await pool.query("with updated as (update agri_residue_fire_observations set review_status=$2,review_note=$3,reviewed_by=$4,reviewed_at=now() where id=$1 and review_status='PENDING_REVIEW' returning id,field_id,review_status,review_note,reviewed_by,reviewed_at), audit as (insert into industrial_ccts_audit_events (organization_id,entity_type,entity_id,action,actor_identity_id,details) select f.organization_id,'agri_residue_fire_observation',u.id,'FIRE_OBSERVATION_REVIEWED',$4,jsonb_build_object('decision',$2,'reviewNote',$3) from updated u join agri_residue_fields f on f.id=u.field_id returning id) select updated.* from updated cross join audit",[observationId,decision,reviewNote,auth.identityId]);
+      if(!saved.rows[0]) return reply.code(409).send({error:"Observation changed during review; reload and retry",code:"AGRI_FIRE_REVIEW_CONFLICT"});
+      return {source:"postgresql",syntheticData:false,observation:saved.rows[0],note:"This is a recorded internal evidence review, not a legal finding or automatic crediting decision. Apply any methodology-specific consequence only after methodology review."};
+    } catch(error){request.log.error(error);return reply.code(503).send({error:"Fire observation review could not be recorded",code:"AGRI_FIRE_REVIEW_WRITE_FAILED"});}
+  });
+
   app.post("/api/v1/agri-residue/lots", async (request, reply) => {
     const auth = await authFor(request, reply, pool); if (!auth || !pool) return;
     const body = objectBody(request.body);

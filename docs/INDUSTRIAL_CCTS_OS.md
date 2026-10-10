@@ -107,6 +107,7 @@ All records need stable IDs, tenant/owner, timestamps, source references, status
 - GET /api/v1/industrial-ccts/regulatory-register
 - POST /api/v1/agri-residue/fields (field and baseline evidence intake)
 - POST /api/v1/agri-residue/fields/{fieldId}/fire-observations (monitoring signals, always pending review)
+- POST /api/v1/agri-residue/fire-observations/{observationId}/review (independent review with atomic audit event; no automatic credit deduction)
 - POST /api/v1/agri-residue/lots (weighed residue lot traceability; no carbon conversion)
 - POST /api/v1/agri-residue/lots/{lotId}/custody-events (validated, audited chain-of-custody state transitions)
 - POST /api/v1/agri-residue/lots/{lotId}/processing-receipts (processor receipt with transactional lot-mass reconciliation)
