@@ -12,6 +12,14 @@ export function isOfficialCctsReviewReference(value: string): boolean {
   } catch { return false; }
 }
 export function isSha256Digest(value: string): boolean { return /^[a-f0-9]{64}$/i.test(value); }
+const CUSTODY_EVENT_TYPES = ["COLLECTED","WEIGHED","TRANSFERRED","TRANSPORT_STARTED","TRANSPORT_ARRIVED","STORED","DELIVERED","PROCESSED","REJECTED","CORRECTED"] as const;
+export function isCustodyEventSupported(eventType: string): boolean {
+  return CUSTODY_EVENT_TYPES.includes(eventType as typeof CUSTODY_EVENT_TYPES[number]) && eventType !== "TRANSFERRED" && eventType !== "PROCESSED";
+}
+export function deriveResidueLotStatus(lotMassKg: number, cumulativeReceivedKg: number): "DELIVERED" | "PROCESSED" {
+  if (!Number.isFinite(lotMassKg) || lotMassKg <= 0 || !Number.isFinite(cumulativeReceivedKg) || cumulativeReceivedKg < 0) throw new RangeError("Mass values must be finite; lot mass must be positive and cumulative receipts non-negative");
+  return cumulativeReceivedKg >= lotMassKg - 0.0001 ? "PROCESSED" : "DELIVERED";
+}
 type Reply = { code: (status: number) => { send: (body: unknown) => unknown } };
 
 async function authFor(request: Parameters<typeof authenticate>[0], reply: Reply, pool: Pool | null): Promise<AuthContext | null> {
@@ -259,10 +267,9 @@ export async function registerIndustrialCctsRoutes(app: FastifyInstance, pool: P
     const eventAt = nonEmpty(body.eventAt, 40);
     const evidenceReference = nonEmpty(body.evidenceReference, 1000);
     const evidenceHash = nonEmpty(body.evidenceHash, 64);
-    const allowedEvents = ["COLLECTED","WEIGHED","TRANSFERRED","TRANSPORT_STARTED","TRANSPORT_ARRIVED","STORED","DELIVERED","PROCESSED","REJECTED","CORRECTED"];
-    if (!UUID.test(lotId) || !eventType || !allowedEvents.includes(eventType) || !eventAt || !Number.isFinite(Date.parse(eventAt)) || !evidenceReference || !evidenceHash || !isSha256Digest(evidenceHash)) return reply.code(400).send({ error: "Valid lot, event type/time and SHA-256 evidence reference are required", code: "AGRI_CUSTODY_EVENT_INVALID" });
+    if (!UUID.test(lotId) || !eventType || !CUSTODY_EVENT_TYPES.includes(eventType as typeof CUSTODY_EVENT_TYPES[number]) || !eventAt || !Number.isFinite(Date.parse(eventAt)) || !evidenceReference || !evidenceHash || !isSha256Digest(evidenceHash)) return reply.code(400).send({ error: "Valid lot, event type/time and SHA-256 evidence reference are required", code: "AGRI_CUSTODY_EVENT_INVALID" });
     // A one-sided event cannot prove a cross-organization handover. Until the receiver-acknowledgement workflow exists, block transfers rather than recording them as completed custody transitions.
-    if (eventType === "TRANSFERRED") return reply.code(422).send({ error: "Cross-organization transfer requires a receiver-acknowledgement workflow that is not yet implemented", code: "AGRI_TRANSFER_ACK_REQUIRED" });
+    if (!isCustodyEventSupported(eventType)) return reply.code(422).send({ error: "Cross-organization transfer requires a receiver-acknowledgement workflow that is not yet implemented", code: "AGRI_TRANSFER_ACK_REQUIRED" });
     // Processing completion must be backed by a measured processor receipt and mass reconciliation, not by a caller-supplied event alone.
     if (eventType === "PROCESSED") return reply.code(422).send({ error: "Processing completion must be recorded through the processing-receipt endpoint", code: "AGRI_PROCESSING_RECEIPT_REQUIRED" });
     const statusByEvent: Record<string,string> = { COLLECTED:"COLLECTED", TRANSPORT_STARTED:"IN_TRANSIT", TRANSPORT_ARRIVED:"AT_DEPOT", STORED:"AT_DEPOT", DELIVERED:"DELIVERED", REJECTED:"REJECTED" };
@@ -318,8 +325,8 @@ export async function registerIndustrialCctsRoutes(app: FastifyInstance, pool: P
       const cumulativeReceivedKg=previouslyReceivedKg+newKg;
       if(cumulativeReceivedKg>lotKg+0.0001){await client.query("rollback");return reply.code(422).send({error:"Processing receipt exceeds remaining traceable lot mass",code:"AGRI_MASS_BALANCE_EXCEEDED",lotMassKg:lotKg,previouslyReceivedKg,attemptedKg:newKg});}
       const saved=await client.query("insert into agri_residue_processing_receipts (id,lot_id,processor_organization_id,process_type,received_mass,mass_unit,received_at,weighbridge_reference,evidence_hash,process_data,created_by) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) returning id,lot_id,processor_organization_id,process_type,received_mass,mass_unit,received_at,weighbridge_reference,evidence_hash,created_at",[randomUUID(),lotId,processorOrganizationId,processType,receivedMass,massUnit,new Date(receivedAt).toISOString(),ticket,evidenceHash.toLowerCase(),JSON.stringify(body.processData && typeof body.processData==="object"?body.processData:{}),auth.identityId]);
-      const fullyReconciled = cumulativeReceivedKg >= lotKg - 0.0001;
-      const nextStatus = fullyReconciled ? "PROCESSED" : "DELIVERED";
+      const nextStatus = deriveResidueLotStatus(lotKg, cumulativeReceivedKg);
+      const fullyReconciled = nextStatus === "PROCESSED";
       await client.query("update agri_residue_lots set custody_status=$2 where id=$1",[lotId,nextStatus]);
       await client.query("commit");
       return reply.code(201).send({source:"postgresql",syntheticData:false,receipt:saved.rows[0],massBalance:{lotMassKg:lotKg,previouslyReceivedKg,newReceiptKg:newKg,cumulativeReceivedKg,fullyReconciled},custodyStatus:nextStatus,note:"Receipt records physical utilization only; the lot is marked PROCESSED only when cumulative receipts reconcile to measured source mass. Methodology eligibility, emissions reduction and CCC issuance remain separate."});
