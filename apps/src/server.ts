@@ -13,6 +13,7 @@ import { registerWorkspaceRoutes } from "./workspace-routes.js";
 import { registerBwgRoutes } from "./bwg-routes.js";
 import { registerIntelligenceRoutes } from "./intelligence-routes.js";
 import { registerMrvRoutes } from "./mrv-routes.js";
+import { registerIndustrialCctsRoutes } from "./industrial-ccts-routes.js";
 
 const app = Fastify({ logger: true });
 const allowedOrigins = process.env.RUPAYKG_ALLOWED_ORIGINS?.split(",").map(origin => origin.trim()).filter(Boolean) ?? [];
@@ -78,6 +79,7 @@ await registerWorkspaceRoutes(app, pool);
 await registerBwgRoutes(app, pool);
 await registerIntelligenceRoutes(app, pool);
 await registerMrvRoutes(app, pool);
+await registerIndustrialCctsRoutes(app, pool);
 
 if (existsSync(webRoot)) app.get("/*", async (_request, reply) => reply.sendFile("index.html"));
 const port = Number(process.env.PORT ?? 3000); const host = process.env.HOST ?? "0.0.0.0"; await app.listen({ port, host });
