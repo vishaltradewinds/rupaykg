@@ -148,12 +148,13 @@ export async function registerIndustrialCctsRoutes(app: FastifyInstance, pool: P
       return reply.code(400).send({ error: "A valid rule ID, APPROVE decision, HTTPS official-notification reference and SHA-256 artifact hash are required", code: "CCTS_INVALID_RULE_REVIEW" });
     }
     try {
-      const found = await pool.query("select id,organization_id,created_by,status from industrial_ccts_target_rules where id=$1", [targetRuleId]);
+      const found = await pool.query("select id,organization_id,created_by,status,source_reference,source_hash from industrial_ccts_target_rules where id=$1", [targetRuleId]);
       const rule = found.rows[0];
       if (!rule) return reply.code(404).send({ error: "Target rule not found", code: "CCTS_NOT_FOUND" });
       if (!authorized(auth, rule.organization_id) || !await hasOrganizationPermission(pool, auth, rule.organization_id, ["industrial_ccts:regulatory:approve"])) return reply.code(403).send({ error: "Verified organization membership and explicit regulatory-approval permission required", code: "CCTS_REVIEW_FORBIDDEN" });
       if (rule.created_by === auth.identityId) return reply.code(403).send({ error: "Independent review is required; the rule creator cannot approve their own rule", code: "CCTS_SELF_APPROVAL_BLOCKED" });
       if (rule.status !== "PENDING_REVIEW") return reply.code(409).send({ error: "Only pending rules can be reviewed", code: "CCTS_RULE_NOT_PENDING" });
+      if (rule.source_reference !== reviewReference || String(rule.source_hash).trim().toLowerCase() !== reviewHash.toLowerCase()) return reply.code(422).send({ error: "Review evidence must match the exact source URL and artifact hash recorded on the pending rule", code: "CCTS_REVIEW_SOURCE_MISMATCH" });
       const saved = await pool.query(
         "with updated as (update industrial_ccts_target_rules set status='ACTIVE', reviewed_by=$2, reviewed_at=now(), review_reference=$3, review_hash=$4 where id=$1 and status='PENDING_REVIEW' returning id,organization_id,sector_code,rule_name,target_value,target_unit,period_start,period_end,source_reference,source_hash,status,reviewed_by,reviewed_at,review_reference,review_hash), audit as (insert into industrial_ccts_audit_events (organization_id,entity_type,entity_id,action,actor_identity_id,details) select organization_id,'industrial_ccts_target_rule',id,'REGULATORY_RULE_APPROVED',$2,jsonb_build_object('reviewReference',$3,'reviewHash',$4,'decision','APPROVE') from updated returning id) select updated.* from updated cross join audit",
         [targetRuleId, auth.identityId, reviewReference, reviewHash.toLowerCase()],
