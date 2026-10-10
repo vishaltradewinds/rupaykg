@@ -269,9 +269,11 @@ export async function registerIndustrialCctsRoutes(app: FastifyInstance, pool: P
     const evidenceHash = nonEmpty(body.evidenceHash, 64);
     if (!UUID.test(lotId) || !eventType || !CUSTODY_EVENT_TYPES.includes(eventType as typeof CUSTODY_EVENT_TYPES[number]) || !eventAt || !Number.isFinite(Date.parse(eventAt)) || !evidenceReference || !evidenceHash || !isSha256Digest(evidenceHash)) return reply.code(400).send({ error: "Valid lot, event type/time and SHA-256 evidence reference are required", code: "AGRI_CUSTODY_EVENT_INVALID" });
     // A one-sided event cannot prove a cross-organization handover. Until the receiver-acknowledgement workflow exists, block transfers rather than recording them as completed custody transitions.
-    if (!isCustodyEventSupported(eventType)) return reply.code(422).send({ error: "Cross-organization transfer requires a receiver-acknowledgement workflow that is not yet implemented", code: "AGRI_TRANSFER_ACK_REQUIRED" });
-    // Processing completion must be backed by a measured processor receipt and mass reconciliation, not by a caller-supplied event alone.
-    if (eventType === "PROCESSED") return reply.code(422).send({ error: "Processing completion must be recorded through the processing-receipt endpoint", code: "AGRI_PROCESSING_RECEIPT_REQUIRED" });
+    if (!isCustodyEventSupported(eventType)) {
+      if (eventType === "TRANSFERRED") return reply.code(422).send({ error: "Cross-organization transfer requires a receiver-acknowledgement workflow that is not yet implemented", code: "AGRI_TRANSFER_ACK_REQUIRED" });
+      // Processing completion must be backed by a measured processor receipt and mass reconciliation, not by a caller-supplied event alone.
+      if (eventType === "PROCESSED") return reply.code(422).send({ error: "Processing completion must be recorded through the processing-receipt endpoint", code: "AGRI_PROCESSING_RECEIPT_REQUIRED" });
+    }
     const statusByEvent: Record<string,string> = { COLLECTED:"COLLECTED", TRANSPORT_STARTED:"IN_TRANSIT", TRANSPORT_ARRIVED:"AT_DEPOT", STORED:"AT_DEPOT", DELIVERED:"DELIVERED", REJECTED:"REJECTED" };
     const client = await pool.connect();
     try {
