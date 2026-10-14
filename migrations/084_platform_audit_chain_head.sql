@@ -11,27 +11,8 @@ create table if not exists platform_audit_chain_head (
   )
 );
 
--- Do not guess a chain head if pre-existing audit history is branched or disconnected.
-do $audit$
-declare
-  existing_events bigint;
-  terminal_events bigint;
-begin
-  select count(*) into existing_events from audit_events;
-  if existing_events > 0 then
-    select count(*) into terminal_events
-      from audit_events e
-     where not exists (
-       select 1 from audit_events successor
-        where successor.previous_hash = e.event_hash
-     );
-    if terminal_events <> 1 then
-      raise exception 'PLATFORM_AUDIT_CHAIN_RECONCILIATION_REQUIRED: expected exactly one terminal audit event, found %', terminal_events;
-    end if;
-  end if;
-end;
-$audit$;
-
+-- Initialize only when there is exactly one terminal event. A branched/disconnected
+-- history leaves the head absent, so platform-admin audit writes fail closed until reconciled.
 insert into platform_audit_chain_head(singleton, last_event_id, last_event_hash)
 select true, e.id, e.event_hash
   from audit_events e
@@ -39,10 +20,16 @@ select true, e.id, e.event_hash
    select 1 from audit_events successor
     where successor.previous_hash = e.event_hash
  )
+   and (select count(*) from audit_events terminal
+         where not exists (
+           select 1 from audit_events successor
+            where successor.previous_hash = terminal.event_hash
+         )) = 1
  limit 1
 on conflict (singleton) do nothing;
 
 insert into platform_audit_chain_head(singleton)
 select true
  where not exists (select 1 from platform_audit_chain_head where singleton=true)
+   and not exists (select 1 from audit_events)
 on conflict (singleton) do nothing;
