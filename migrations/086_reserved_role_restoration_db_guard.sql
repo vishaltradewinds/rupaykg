@@ -17,6 +17,12 @@ begin
     from roles r
    where r.id = new.role_id and r.organization_id = new.organization_id;
   if role_name in ('super_admin','platform_admin') then
+    -- Initial Super Admin bootstrap is an out-of-band root-of-trust operation; it cannot
+    -- require approval from an already-existing Super Admin. Ordinary API grant routes
+    -- remain blocked for both reserved roles. Direct platform_admin inserts stay DB-guarded.
+    if TG_OP = 'INSERT' and role_name = 'super_admin' then
+      return new;
+    end if;
     if TG_OP = 'INSERT' then
       select exists (
         select 1
