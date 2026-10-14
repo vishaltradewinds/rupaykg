@@ -266,7 +266,10 @@ test("PostgreSQL requires two distinct active Super Admins for reserved-role gra
     if (targetMembershipId) await pool.query("delete from organization_memberships where id=$1", [targetMembershipId]);
     if (requesterMembershipId || approverMembershipId) await pool.query("delete from organization_memberships where id=any($1::uuid[])", [[requesterMembershipId, approverMembershipId].filter(Boolean)]);
     if (requesterId || approverId) await pool.query("delete from identity_sessions where identity_id=any($1::uuid[])", [[requesterId, approverId].filter(Boolean)]);
-    if (superAdminRoleId || reservedRoleId) await pool.query("delete from roles where id=any($1::uuid[])", [[superAdminRoleId, reservedRoleId].filter(Boolean)]);
+    if (superAdminRoleId || reservedRoleId) {
+      await pool.query("delete from organization_memberships where role_id=any($1::uuid[])", [[superAdminRoleId, reservedRoleId].filter(Boolean)]);
+      await pool.query("delete from roles where id=any($1::uuid[])", [[superAdminRoleId, reservedRoleId].filter(Boolean)]);
+    }
     // Audit actor and organization foreign keys require these fixture rows to remain in the disposable DB.
     await pool.end();
   }
