@@ -1,5 +1,6 @@
--- Durable, transactionally locked head for the platform-admin hash-linked audit chain.
--- The row lock, rather than created_at or random UUID ordering, defines the authoritative append order.
+-- Durable, transactionally locked head for platform-admin audit appends.
+-- Existing audit rows are a migration-time anchor only: older writers do not all participate
+-- in this chain. After cutover, platform-admin writes advance this head transactionally.
 create table if not exists platform_audit_chain_head (
   singleton boolean primary key default true check (singleton),
   last_event_id uuid,
@@ -11,20 +12,10 @@ create table if not exists platform_audit_chain_head (
   )
 );
 
--- Initialize only when there is exactly one terminal event. A branched/disconnected
--- history leaves the head absent, so platform-admin audit writes fail closed until reconciled.
 insert into platform_audit_chain_head(singleton, last_event_id, last_event_hash)
 select true, e.id, e.event_hash
   from audit_events e
- where not exists (
-   select 1 from audit_events successor
-    where successor.previous_hash = e.event_hash
- )
-   and (select count(*) from audit_events terminal
-         where not exists (
-           select 1 from audit_events successor
-            where successor.previous_hash = terminal.event_hash
-         )) = 1
+ order by e.created_at desc, e.id desc
  limit 1
 on conflict (singleton) do nothing;
 
