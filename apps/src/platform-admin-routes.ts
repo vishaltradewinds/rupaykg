@@ -350,14 +350,14 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
     const roleId = text(body, "roleId");
     const membershipId = text(body, "membershipId");
     const reason = text(body, "reason");
-    if (!["GRANT_RESERVED_ROLE", "RESTORE_SUPER_ADMIN"].includes(requestType ?? "")) {
+    if (!["GRANT_RESERVED_ROLE", "RESTORE_RESERVED_ROLE"].includes(requestType ?? "")) {
       return routeError(reply, 400, "requestType must be GRANT_RESERVED_ROLE or RESTORE_SUPER_ADMIN", "ACCESS_CHANGE_TYPE_INVALID");
     }
     if (!validReason(reason)) return routeError(reply, 400, "A reason of 8–1000 characters is required", "ADMIN_REASON_REQUIRED");
     if (requestType === "GRANT_RESERVED_ROLE" && (!identityId || !UUID.test(identityId) || !organizationId || !UUID.test(organizationId) || !roleId || !UUID.test(roleId))) {
       return routeError(reply, 400, "Valid identityId, organizationId and roleId are required for a role grant", "ACCESS_CHANGE_INPUT_INVALID");
     }
-    if (requestType === "RESTORE_SUPER_ADMIN" && (!membershipId || !UUID.test(membershipId))) {
+    if (requestType === "RESTORE_RESERVED_ROLE" && (!membershipId || !UUID.test(membershipId))) {
       return routeError(reply, 400, "A valid membershipId is required for Super Admin restoration", "ACCESS_CHANGE_INPUT_INVALID");
     }
     try {
@@ -391,7 +391,7 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
           );
           const row = selected.rows[0];
           if (!row) return { status: 404 as const, body: { error: "Membership not found", code: "MEMBERSHIP_NOT_FOUND" } };
-          if (row.role_name !== "super_admin" || row.status !== "REJECTED" || !row.last_revoked_at) return { status: 409 as const, body: { error: "Only a previously revoked Super Admin membership can be restored through dual control", code: "SUPER_ADMIN_RESTORE_NOT_ELIGIBLE" } };
+          if (!RESERVED_ROLES.has(row.role_name) || row.status !== "REJECTED" || !row.last_revoked_at) return { status: 409 as const, body: { error: "Only a previously revoked reserved platform-role membership can be restored through dual control", code: "RESERVED_ROLE_RESTORE_NOT_ELIGIBLE" } };
           if (row.identity_id === context.auth.identityId) return { status: 409 as const, body: { error: "You cannot request privileged access restoration for yourself", code: "SELF_ROLE_CHANGE_FORBIDDEN" } };
           if (row.identity_status !== "VERIFIED" || row.suspended_at || row.organization_status !== "VERIFIED") return { status: 409 as const, body: { error: "Target identity and organization must be verified and active", code: "ACCESS_CHANGE_TARGET_INACTIVE" } };
           target = { identity_id: row.identity_id, organization_id: row.organization_id, role_id: row.role_id, role_name: row.role_name, identity_status: row.identity_status, suspended_at: row.suspended_at, organization_status: row.organization_status, role_organization_id: row.role_organization_id, membership_id: membershipId };
@@ -518,7 +518,7 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
             [change.membership_id],
           );
           const membership = existing.rows[0];
-          if (!membership || membership.identity_id !== change.target_identity_id || membership.organization_id !== change.organization_id || membership.role_id !== change.role_id || membership.status !== "REJECTED" || !membership.last_revoked_at || targetRow.role_name !== "super_admin") {
+          if (!membership || membership.identity_id !== change.target_identity_id || membership.organization_id !== change.organization_id || membership.role_id !== change.role_id || membership.status !== "REJECTED" || !membership.last_revoked_at || !RESERVED_ROLES.has(targetRow.role_name)) {
             return { status: 409 as const, body: { error: "Super Admin membership state changed; submit a new request", code: "ACCESS_CHANGE_MEMBERSHIP_CHANGED" } };
           }
           await client.query("update organization_memberships set status='VERIFIED' where id=$1", [change.membership_id]);
@@ -528,7 +528,7 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
           "update platform_access_change_requests set status='APPROVED',approver_identity_id=$2,decision_reason=$3,decided_at=clock_timestamp(),applied_at=clock_timestamp() where id=$1",
           [requestId, context.auth.identityId, reason],
         );
-        const action = change.request_type === "RESTORE_SUPER_ADMIN" ? "SUPER_ADMIN_RESTORED_DUAL_CONTROL" : "RESERVED_ROLE_GRANTED_DUAL_CONTROL";
+        const action = change.request_type === "RESTORE_RESERVED_ROLE" ? "SUPER_ADMIN_RESTORED_DUAL_CONTROL" : "RESERVED_ROLE_GRANTED_DUAL_CONTROL";
         await audit(client, request, context.auth.identityId, action, "organization_membership", membershipId,
           { requestId, requestType: change.request_type, requesterIdentityId: change.requester_identity_id, approverIdentityId: context.auth.identityId, reason, decisionReason: reason }, change.organization_id);
         return { status: 200 as const, body: { source: "postgresql", syntheticData: false, requestId, membershipId, status: "APPROVED", applied: true } };
