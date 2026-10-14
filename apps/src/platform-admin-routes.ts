@@ -458,6 +458,7 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
         const change = selected.rows[0];
         if (!change) return { status: 404 as const, body: { error: "Access change request not found", code: "ACCESS_CHANGE_NOT_FOUND" } };
         if (change.status !== "PENDING") return { status: 409 as const, body: { error: "Access change request has already been decided", code: "ACCESS_CHANGE_ALREADY_DECIDED" } };
+        if (change.requester_identity_id === context.auth.identityId) return { status: 409 as const, body: { error: "A different Super Admin must decide this request", code: "DUAL_CONTROL_SELF_APPROVAL_FORBIDDEN" } };
         const expectedRequestHash = hash(JSON.stringify({
           requestType: change.request_type,
           identityId: change.target_identity_id,
@@ -468,7 +469,6 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
           reason: change.reason,
         }));
         if (expectedRequestHash !== change.request_hash) return { status: 409 as const, body: { error: "Access request contents no longer match their recorded integrity hash", code: "ACCESS_CHANGE_INTEGRITY_MISMATCH" } };
-        if (change.requester_identity_id === context.auth.identityId) return { status: 409 as const, body: { error: "A different Super Admin must decide this request", code: "DUAL_CONTROL_SELF_APPROVAL_FORBIDDEN" } };
         const authorities = await client.query<{ requester_active: boolean; approver_active: boolean }>(
           `select
              exists(select 1 from organization_memberships om join roles r on r.id=om.role_id join identities i on i.id=om.identity_id join organizations o on o.id=om.organization_id and o.status='VERIFIED'
