@@ -120,31 +120,13 @@ test("PostgreSQL Super Admin suspension revokes sessions and blocks subsequent a
   } finally {
     await app.close();
     // This test is permitted only against an explicitly designated disposable test database.
-    if (actorId && targetId) {
-      const testEvents = await pool.query<{ id: string; previous_hash: string | null }>(
-        "select id,previous_hash from audit_events where actor_identity_id=$1 and target_id=$2 and action in ('IDENTITY_SUSPENDED','IDENTITY_REACTIVATED') order by created_at,id",
-        [actorId, targetId],
-      );
-      const head = await pool.query<{ last_event_id: string | null }>(
-        "select last_event_id from platform_audit_chain_head where singleton=true",
-      );
-      if (testEvents.rows.some(event => event.id === head.rows[0]?.last_event_id)) {
-        const predecessorHash = testEvents.rows[0]?.previous_hash ?? null;
-        const predecessor = predecessorHash
-          ? await pool.query<{ id: string }>("select id from audit_events where event_hash=$1 limit 1", [predecessorHash])
-          : { rows: [] as Array<{ id: string }> };
-        await pool.query(
-          "update platform_audit_chain_head set last_event_id=$1,last_event_hash=$2,updated_at=clock_timestamp() where singleton=true",
-          [predecessor.rows[0]?.id ?? null, predecessorHash],
-        );
-      }
-      await pool.query("delete from audit_events where actor_identity_id=$1 and target_id=$2 and action in ('IDENTITY_SUSPENDED','IDENTITY_REACTIVATED')", [actorId, targetId]);
-    }
+    // Audit events are append-only: deleting them would break the hash chain and make the
+    // authoritative chain head point to a removed event. Retain the audit actor and organization
+    // referenced by those events; clean up only unreferenced fixture rows.
     if (actorId || targetId) await pool.query("delete from identity_sessions where identity_id = any($1::uuid[])", [[actorId, targetId].filter(Boolean)]);
     if (membershipId) await pool.query("delete from organization_memberships where id=$1", [membershipId]);
     if (roleId) await pool.query("delete from roles where id=$1", [roleId]);
-    if (actorId || targetId) await pool.query("delete from identities where id = any($1::uuid[])", [[actorId, targetId].filter(Boolean)]);
-    if (organizationId) await pool.query("delete from organizations where id=$1", [organizationId]);
+    if (targetId) await pool.query("delete from identities where id=$1", [targetId]);
     await pool.end();
   }
 });
