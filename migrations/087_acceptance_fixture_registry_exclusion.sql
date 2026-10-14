@@ -1,6 +1,6 @@
 -- Refuse rollout if an acceptance fixture already backs a value-bearing credential.
 -- Do not silently rewrite historical registry state; require a separate audited review.
-do $
+do $preflight$
 begin
   if exists (
     select 1
@@ -17,7 +17,7 @@ begin
     raise exception 'ACCEPTANCE_FIXTURE_CREDENTIAL_REQUIRES_MANUAL_REVIEW: a value-bearing credential is backed by acceptance fixture data';
   end if;
 end;
-$;
+$preflight$;
 
 -- Acceptance fixtures are useful for proving the external trust rail, but must never
 -- become carbon-credit registry assets. Enforce this at the database boundary.
