@@ -87,6 +87,24 @@ describe("registry and settlement runtime acceptance", () => {
     }
   });
 
+  it("invalidates persisted Mirror Node proof when the anchored provenance tuple changes", async () => {
+    if (!pool) return;
+    const original = await pool.query<{ hcs_transaction_id: string }>(
+      "select hcs_transaction_id from mrv_provenance_events where activity_id=$1 and verification_id=$2",
+      [activityId, verificationId],
+    );
+    const originalTransactionId = original.rows[0]?.hcs_transaction_id;
+    assert.ok(originalTransactionId);
+    await pool.query("update mrv_provenance_events set hcs_transaction_id=$1 where activity_id=$2 and verification_id=$3", ["changed-anchor-" + suffix, activityId, verificationId]);
+    const invalidated = await pool.query<{ mirror_node_verified_at: Date | null }>(
+      "select mirror_node_verified_at from mrv_provenance_events where activity_id=$1 and verification_id=$2",
+      [activityId, verificationId],
+    );
+    assert.equal(invalidated.rows[0]?.mirror_node_verified_at, null, "anchor mutation must invalidate prior Mirror Node verification");
+    await pool.query("update mrv_provenance_events set hcs_transaction_id=$1 where activity_id=$2 and verification_id=$3", [originalTransactionId, activityId, verificationId]);
+    await pool.query("update mrv_provenance_events set mirror_node_verified_at=clock_timestamp() where activity_id=$1 and verification_id=$2", [activityId, verificationId]);
+  });
+
   it("issues and activates only after verified evidence and approved independent verification", async () => {
     if (!pool) return;
     const response = await request("/api/v1/credentials", { method: "POST", body: JSON.stringify({ activityId, trustRootId: `runtime-root-${suffix}`, verificationId, issuerOrganizationId: ownerOrgId, quantity: 100, unit: "kg" }) }, actorToken, ownerOrgId);
