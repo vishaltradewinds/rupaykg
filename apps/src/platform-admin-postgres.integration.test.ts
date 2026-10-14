@@ -177,7 +177,7 @@ test("PostgreSQL serializes concurrent Super Admin revocations and preserves one
     const statuses = responses.map((response) => response.statusCode);
     const successes = statuses.filter((status) => status === 200).length;
     assert.ok(successes >= 1, `at least one revocation should complete; statuses=${statuses.join(",")}; responses=${responses.map((response) => response.body).join(" | ")}`);
-    assert.ok(statuses.every((status) => [200, 403, 409].includes(status)), `concurrent revocation must not deadlock or fail as a server error; statuses=${statuses.join(",")}; responses=${responses.map((response) => response.body).join(" | ")}`);
+    assert.ok(statuses.every((status) => [200, 401, 403, 409].includes(status)), `concurrent revocation must not deadlock or fail as a server error; revoked sessions may correctly return 401; statuses=${statuses.join(",")}; responses=${responses.map((response) => response.body).join(" | ")}`);
     assert.ok(successes <= Math.min(2, activeBefore - 1), "concurrent revocations must never remove the last active Super Admin");
 
     const active = await pool.query<{ count: string }>(
