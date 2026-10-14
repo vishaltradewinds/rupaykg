@@ -78,10 +78,18 @@ describe("registry and settlement runtime acceptance", () => {
       const response = await request("/api/v1/credentials", { method: "POST", body: JSON.stringify({ activityId, trustRootId: "runtime-root-missing-mirror-" + suffix, verificationId, issuerOrganizationId: ownerOrgId, quantity: 100, unit: "kg" }) }, actorToken, ownerOrgId);
       assert.equal(response.status, 409);
       assert.equal((await body(response)).code, "MIRROR_NODE_VERIFICATION_REQUIRED");
-      await assert.rejects(
-        pool.query("insert into credentials(activity_id,issuer_organization_id,trust_root_id,status,verification_id,quantity,unit,issued_at) values($1,$2,$3,'ELIGIBLE',$4,1,'kg',now())", [activityId, ownerOrgId, "runtime-root-db-trigger-" + suffix, verificationId]),
-        /CREDENTIAL_MRV_REQUIRED/,
+      const pendingCredential = await pool.query<{ id: string }>(
+        "insert into credentials(activity_id,issuer_organization_id,trust_root_id,status,verification_id,quantity,unit,issued_at) values($1,$2,$3,'ELIGIBLE',$4,1,'kg',now()) returning id",
+        [activityId, ownerOrgId, "runtime-root-db-trigger-" + suffix, verificationId],
       );
+      try {
+        await assert.rejects(
+          pool.query("update credentials set status='ISSUED' where id=$1", [pendingCredential.rows[0]!.id]),
+          /CREDENTIAL_MRV_REQUIRED/,
+        );
+      } finally {
+        await pool.query("delete from credentials where id=$1", [pendingCredential.rows[0]!.id]);
+      }
     } finally {
       await pool.query("update mrv_provenance_events set mirror_node_verified_at=clock_timestamp() where activity_id=$1 and verification_id=$2", [activityId, verificationId]);
     }
