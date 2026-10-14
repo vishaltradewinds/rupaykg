@@ -40,7 +40,7 @@ $$;
 
 drop trigger if exists credentials_require_guardian_hcs_mrv on credentials;
 create trigger credentials_require_guardian_hcs_mrv
-before insert on credentials
+before insert or update on credentials
 for each row execute function require_guardian_hcs_mrv_for_credential();
 
 -- Any mutation of the anchored provenance tuple invalidates prior Mirror Node verification.
