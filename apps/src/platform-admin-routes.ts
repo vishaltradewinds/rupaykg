@@ -430,6 +430,10 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
     if (!validReason(reason)) return routeError(reply, 400, "A reason of 8–1000 characters is required", "ADMIN_REASON_REQUIRED");
     try {
       const result = await transaction(pool, async (client) => {
+        // Acquire the global membership-revocation lock before row locks. This prevents
+        // opposite-direction concurrent revocations from deadlocking while each holds
+        // its own target membership and waits for the other target's identity/role rows.
+        if (requestedStatus === "REVOKED") await client.query("select pg_advisory_xact_lock(82026011)");
         const selected = await client.query<{ id: string; identity_id: string; organization_id: string; organization_status: string; role_id: string; role_name: string; status: string; identity_status: string; suspended_at: Date | null; last_revoked_at: Date | null }>(
           `select om.id,om.identity_id,om.organization_id,o.status organization_status,om.role_id,r.name role_name,
              om.status,i.status identity_status,i.suspended_at,om.last_revoked_at
@@ -453,7 +457,6 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
         }
         if (m.status !== "VERIFIED") return { status: 200 as const, body: { source: "postgresql", syntheticData: false, replay: true, status: "REVOKED" } };
         if (m.role_name === "super_admin") {
-          await client.query("select pg_advisory_xact_lock(82026011)");
           const count = await client.query<{ count: string }>(
             `select count(*)::text count from organization_memberships om join roles r on r.id=om.role_id
              join identities i on i.id=om.identity_id where r.name='super_admin' and om.status='VERIFIED'
