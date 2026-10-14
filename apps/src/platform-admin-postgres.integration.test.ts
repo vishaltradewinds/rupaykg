@@ -94,13 +94,21 @@ test("PostgreSQL Super Admin suspension revokes sessions and blocks subsequent a
     assert.equal(reactivated.statusCode, 200, reactivated.body);
     assert.equal(reactivated.json().suspended, false);
 
-    const chain = await pool.query<{ action: string; event_hash: string; previous_hash: string | null }>(
-      "select action,event_hash,previous_hash from audit_events where actor_identity_id=$1 and target_id=$2 and action in ('IDENTITY_SUSPENDED','IDENTITY_REACTIVATED') order by created_at asc, id asc",
+    const chain = await pool.query<{ action: string; event_hash: string; previous_hash: string | null; expected_previous_hash: string | null }>(
+      `select e.action,e.event_hash,e.previous_hash,
+         (select p.event_hash from audit_events p
+          where (p.created_at,p.id)<(e.created_at,e.id)
+          order by p.created_at desc,p.id desc limit 1) as expected_previous_hash
+       from audit_events e
+       where e.actor_identity_id=$1 and e.target_id=$2
+         and e.action in ('IDENTITY_SUSPENDED','IDENTITY_REACTIVATED')
+       order by e.created_at asc,e.id asc`,
       [actorId, targetId],
     );
     assert.equal(chain.rows.length, 2, "both lifecycle changes should be audited");
     assert.ok(chain.rows[0]?.event_hash && chain.rows[1]?.event_hash, "both audit events need hashes");
-    assert.equal(chain.rows[1]?.previous_hash, chain.rows[0]?.event_hash, "reactivation must link to the immediately preceding suspension event");
+    assert.equal(chain.rows[0]?.previous_hash, chain.rows[0]?.expected_previous_hash, "suspension must link to the immediately preceding global audit event");
+    assert.equal(chain.rows[1]?.previous_hash, chain.rows[1]?.expected_previous_hash, "reactivation must link to the immediately preceding global audit event");
   } finally {
     await app.close();
     // This test is permitted only against an explicitly designated disposable test database.
