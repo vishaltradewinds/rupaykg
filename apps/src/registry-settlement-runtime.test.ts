@@ -71,6 +71,18 @@ describe("registry and settlement runtime acceptance", () => {
     assert.equal(response.status, 403); assert.equal((await body(response)).code, "HIGH_RISK_PERMISSION_REQUIRED");
   });
 
+  it("fails closed when persisted Mirror Node verification is absent", async () => {
+    if (!pool) return;
+    await pool.query("update mrv_provenance_events set mirror_node_verified_at=null where activity_id=$1 and verification_id=$2", [activityId, verificationId]);
+    try {
+      const response = await request("/api/v1/credentials", { method: "POST", body: JSON.stringify({ activityId, trustRootId: "runtime-root-missing-mirror-" + suffix, verificationId, issuerOrganizationId: ownerOrgId, quantity: 100, unit: "kg" }) }, actorToken, ownerOrgId);
+      assert.equal(response.status, 409);
+      assert.equal((await body(response)).code, "MIRROR_NODE_VERIFICATION_REQUIRED");
+    } finally {
+      await pool.query("update mrv_provenance_events set mirror_node_verified_at=clock_timestamp() where activity_id=$1 and verification_id=$2", [activityId, verificationId]);
+    }
+  });
+
   it("issues and activates only after verified evidence and approved independent verification", async () => {
     if (!pool) return;
     const response = await request("/api/v1/credentials", { method: "POST", body: JSON.stringify({ activityId, trustRootId: `runtime-root-${suffix}`, verificationId, issuerOrganizationId: ownerOrgId, quantity: 100, unit: "kg" }) }, actorToken, ownerOrgId);
