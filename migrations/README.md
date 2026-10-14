@@ -57,3 +57,7 @@ A credential in `RETIRED` state cannot be used to create a settlement. A credent
 ## Guardian/Hedera registry acceptance migration
 
 Migration `083_mrv_mirror_node_registry_gate.sql` adds the persisted `mirror_node_verified_at` acceptance marker and tightens the PostgreSQL credential-issuance trigger. A Guardian `VERIFIED` result and Hedera `CONSENSUS_CONFIRMED` response are not sufficient by themselves; the exact anchored payload must also be successfully verified through Mirror Node. Existing provenance rows remain ineligible until that verification is performed. The application route rechecks the same payload against Mirror Node before issuing a credential, and the database trigger independently requires the persisted verification marker.
+
+## Platform-admin audit chain head
+
+Migration `084_platform_audit_chain_head.sql` bootstraps a singleton authoritative audit-chain head from existing audit history. Platform-admin audit appends lock that row inside the same transaction, use its `last_event_hash` as the predecessor, insert the new event, and advance the head atomically. This makes append order independent of transaction-start timestamps and random UUID ordering. A failed transaction rolls back both the event and head update.
