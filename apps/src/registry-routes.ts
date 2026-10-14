@@ -22,8 +22,9 @@ export async function registerRegistryRoutes(app:FastifyInstance,pool:Pool|null)
     if(!canActForOrganization(auth,issuerOrganizationId))return reply.code(403).send({error:"Issuer organization access denied",code:"ORG_FORBIDDEN"});
     if(!await canPerformHighRiskActionInDatabase(pool,auth,issuerOrganizationId,"ISSUE_CREDENTIAL"))return reply.code(403).send({error:"Explicit ISSUE_CREDENTIAL permission is required",code:"HIGH_RISK_PERMISSION_REQUIRED"});
     try{return reply.code(201).send({source:"postgresql",syntheticData:false,credential:await tx(pool,async c=>{
-      const v=await c.query<{evidence_id:string;decision:string}>("select evidence_id,decision from verifications where id=$1 for update",[verificationId]);
+      const v=await c.query<{evidence_id:string;decision:string;activity_id:string}>("select evidence_id,decision,activity_id from verifications where id=$1 for update",[verificationId]);
       if(!v.rows[0]||v.rows[0].decision!=="APPROVED")throw Object.assign(new Error("Approved verification required"),{code:"VERIFICATION_REQUIRED"});
+      if(v.rows[0].activity_id!==activityId)throw Object.assign(new Error("Verification is not bound to the requested activity"),{code:"EVIDENCE_MISMATCH"});
       const e=await c.query<{activity_id:string|null;status:string;acceptance_fixture:string|null}>("select activity_id,status,metadata->>'acceptanceFixture' as acceptance_fixture from evidence where id=$1 for update",[v.rows[0].evidence_id]);
       if(!e.rows[0]||e.rows[0].status!=="VERIFIED"||e.rows[0].activity_id!==activityId)throw Object.assign(new Error("Verification is not bound to verified activity evidence"),{code:"EVIDENCE_MISMATCH"});
       const a=await c.query<{organization_id:string;status:string;acceptance_fixture:string|null}>("select organization_id,status,metadata->>'acceptanceFixture' as acceptance_fixture from activities where id=$1 for update",[activityId]);
