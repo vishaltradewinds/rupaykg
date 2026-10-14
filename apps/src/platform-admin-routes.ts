@@ -340,6 +340,197 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
     }
   });
 
+  app.post("/api/v1/admin/access-change-requests", async (request, reply) => {
+    const context = await authorize(request, reply, pool, "admin:users");
+    if (!context || !pool) return;
+    const body = bodyOf(request);
+    const requestType = text(body, "requestType");
+    const identityId = text(body, "identityId");
+    const organizationId = text(body, "organizationId");
+    const roleId = text(body, "roleId");
+    const membershipId = text(body, "membershipId");
+    const reason = text(body, "reason");
+    if (!["GRANT_RESERVED_ROLE", "RESTORE_SUPER_ADMIN"].includes(requestType ?? "")) {
+      return routeError(reply, 400, "requestType must be GRANT_RESERVED_ROLE or RESTORE_SUPER_ADMIN", "ACCESS_CHANGE_TYPE_INVALID");
+    }
+    if (!validReason(reason)) return routeError(reply, 400, "A reason of 8–1000 characters is required", "ADMIN_REASON_REQUIRED");
+    if (requestType === "GRANT_RESERVED_ROLE" && (!identityId || !UUID.test(identityId) || !organizationId || !UUID.test(organizationId) || !roleId || !UUID.test(roleId))) {
+      return routeError(reply, 400, "Valid identityId, organizationId and roleId are required for a role grant", "ACCESS_CHANGE_INPUT_INVALID");
+    }
+    if (requestType === "RESTORE_SUPER_ADMIN" && (!membershipId || !UUID.test(membershipId))) {
+      return routeError(reply, 400, "A valid membershipId is required for Super Admin restoration", "ACCESS_CHANGE_INPUT_INVALID");
+    }
+    try {
+      const result = await transaction(pool, async (client) => {
+        let target: { identity_id: string; organization_id: string; role_id: string; role_name: string; identity_status: string; suspended_at: Date | null; organization_status: string; role_organization_id: string; membership_id: string | null };
+        if (requestType === "GRANT_RESERVED_ROLE") {
+          const selected = await client.query<{ identity_status: string; suspended_at: Date | null; organization_status: string; role_name: string; role_organization_id: string }>(
+            `select i.status identity_status,i.suspended_at,o.status organization_status,r.name role_name,r.organization_id role_organization_id
+             from identities i cross join organizations o join roles r on r.organization_id=o.id
+             where i.id=$1 and o.id=$2 and r.id=$3 for update of i,o,r`,
+            [identityId, organizationId, roleId],
+          );
+          const row = selected.rows[0];
+          if (!row) return { status: 404 as const, body: { error: "Identity, organization or role not found", code: "ACCESS_CHANGE_TARGET_NOT_FOUND" } };
+          if (!RESERVED_ROLES.has(row.role_name) || row.role_organization_id !== organizationId) return { status: 409 as const, body: { error: "Dual control is only available for a reserved platform role belonging to the selected organization", code: "RESERVED_ROLE_REQUIRED" } };
+          if (identityId === context.auth.identityId) return { status: 409 as const, body: { error: "You cannot request privileged access for yourself", code: "SELF_ROLE_CHANGE_FORBIDDEN" } };
+          if (row.identity_status !== "VERIFIED" || row.suspended_at) return { status: 409 as const, body: { error: "Target identity must be verified and active", code: "IDENTITY_NOT_ACTIVE" } };
+          if (row.organization_status !== "VERIFIED") return { status: 409 as const, body: { error: "Target organization must be verified", code: "ORGANIZATION_NOT_VERIFIED" } };
+          const prior = await client.query<{ id: string; status: string; last_revoked_at: Date | null }>(
+            "select id,status,last_revoked_at from organization_memberships where identity_id=$1 and organization_id=$2 and role_id=$3 for update",
+            [identityId, organizationId, roleId],
+          );
+          if (prior.rows[0]) return { status: 409 as const, body: { error: prior.rows[0].status === "VERIFIED" ? "This privileged membership already exists" : "Previously revoked memberships must use the explicit restoration request", code: "PRIVILEGED_MEMBERSHIP_EXISTS" } };
+          target = { identity_id: identityId, organization_id: organizationId, role_id: roleId, role_name: row.role_name, identity_status: row.identity_status, suspended_at: row.suspended_at, organization_status: row.organization_status, role_organization_id: row.role_organization_id, membership_id: null };
+        } else {
+          const selected = await client.query<{ identity_id: string; organization_id: string; role_id: string; role_name: string; identity_status: string; suspended_at: Date | null; organization_status: string; role_organization_id: string; status: string; last_revoked_at: Date | null }>(
+            `select om.identity_id,om.organization_id,om.role_id,r.name role_name,i.status identity_status,i.suspended_at,o.status organization_status,r.organization_id role_organization_id,om.status,om.last_revoked_at
+             from organization_memberships om join identities i on i.id=om.identity_id join organizations o on o.id=om.organization_id join roles r on r.id=om.role_id
+             where om.id=$1 for update of om,i,o,r`,
+            [membershipId],
+          );
+          const row = selected.rows[0];
+          if (!row) return { status: 404 as const, body: { error: "Membership not found", code: "MEMBERSHIP_NOT_FOUND" } };
+          if (row.role_name !== "super_admin" || row.status !== "REJECTED" || !row.last_revoked_at) return { status: 409 as const, body: { error: "Only a previously revoked Super Admin membership can be restored through dual control", code: "SUPER_ADMIN_RESTORE_NOT_ELIGIBLE" } };
+          if (row.identity_id === context.auth.identityId) return { status: 409 as const, body: { error: "You cannot request privileged access restoration for yourself", code: "SELF_ROLE_CHANGE_FORBIDDEN" } };
+          if (row.identity_status !== "VERIFIED" || row.suspended_at || row.organization_status !== "VERIFIED") return { status: 409 as const, body: { error: "Target identity and organization must be verified and active", code: "ACCESS_CHANGE_TARGET_INACTIVE" } };
+          target = { identity_id: row.identity_id, organization_id: row.organization_id, role_id: row.role_id, role_name: row.role_name, identity_status: row.identity_status, suspended_at: row.suspended_at, organization_status: row.organization_status, role_organization_id: row.role_organization_id, membership_id: membershipId };
+        }
+        const pending = await client.query(
+          "select id from platform_access_change_requests where status='PENDING' and request_type=$1 and target_identity_id=$2 and coalesce(membership_id,role_id)=$3 limit 1",
+          [requestType, target.identity_id, target.membership_id ?? target.role_id],
+        );
+        if (pending.rows[0]) return { status: 409 as const, body: { error: "A matching privileged access request is already pending", code: "ACCESS_CHANGE_ALREADY_PENDING" } };
+        const requestHash = hash(JSON.stringify({ requestType, identityId: target.identity_id, organizationId: target.organization_id, roleId: target.role_id, membershipId: target.membership_id, requesterIdentityId: context.auth.identityId, reason }));
+        const inserted = await client.query<{ id: string }>(
+          `insert into platform_access_change_requests(request_type,target_identity_id,organization_id,role_id,membership_id,requester_identity_id,reason,request_hash)
+           values($1,$2,$3,$4,$5,$6,$7,$8) returning id`,
+          [requestType, target.identity_id, target.organization_id, target.role_id, target.membership_id, context.auth.identityId, reason, requestHash],
+        );
+        const id = inserted.rows[0]!.id;
+        await audit(client, request, context.auth.identityId, "PLATFORM_ACCESS_CHANGE_REQUESTED", "platform_access_change_request", id,
+          { requestType, targetIdentityId: target.identity_id, organizationId: target.organization_id, roleId: target.role_id, membershipId: target.membership_id, requestHash, reason }, target.organization_id);
+        return { status: 201 as const, body: { source: "postgresql", syntheticData: false, request: { id, requestType, status: "PENDING", requestHash } } };
+      });
+      return reply.code(result.status).send(result.body);
+    } catch (error) {
+      request.log.error(error);
+      if ((error as { code?: string }).code === "23505") return routeError(reply, 409, "A matching privileged access request is already pending", "ACCESS_CHANGE_ALREADY_PENDING");
+      return routeError(reply, 503, "Privileged access request could not be recorded", "ACCESS_CHANGE_REQUEST_UNAVAILABLE");
+    }
+  });
+
+  app.get("/api/v1/admin/access-change-requests", async (request, reply) => {
+    const context = await authorize(request, reply, pool, "admin:users");
+    if (!context || !pool) return;
+    const query = request.query as Record<string, unknown>;
+    const status = typeof query.status === "string" ? query.status : "PENDING";
+    if (!["PENDING", "APPROVED", "REJECTED", "ALL"].includes(status)) return routeError(reply, 400, "status must be PENDING, APPROVED, REJECTED or ALL", "ACCESS_CHANGE_STATUS_INVALID");
+    try {
+      const result = await pool.query(
+        `select q.id,q.request_type,q.target_identity_id,i.display_name target_display_name,q.organization_id,o.name organization_name,q.role_id,r.name role_name,q.membership_id,q.requester_identity_id,requester.display_name requester_display_name,q.approver_identity_id,approver.display_name approver_display_name,q.status,q.reason,q.decision_reason,q.request_hash,q.created_at,q.decided_at,q.applied_at
+         from platform_access_change_requests q
+         join identities i on i.id=q.target_identity_id join organizations o on o.id=q.organization_id join roles r on r.id=q.role_id
+         join identities requester on requester.id=q.requester_identity_id left join identities approver on approver.id=q.approver_identity_id
+         where ($1='ALL' or q.status=$1) order by q.created_at desc limit 100`,
+        [status],
+      );
+      return { source: "postgresql", syntheticData: false, requests: result.rows };
+    } catch (error) {
+      request.log.error(error);
+      return routeError(reply, 503, "Privileged access request queue unavailable", "ACCESS_CHANGE_QUEUE_UNAVAILABLE");
+    }
+  });
+
+  const decideAccessChange = async (request: FastifyRequest, reply: FastifyReply, decision: "APPROVED" | "REJECTED") => {
+    const context = await authorize(request, reply, pool, "admin:users");
+    if (!context || !pool) return;
+    const { requestId } = request.params as { requestId: string };
+    const reason = text(bodyOf(request), "reason");
+    if (!UUID.test(requestId)) return routeError(reply, 400, "A valid requestId is required", "ACCESS_CHANGE_ID_INVALID");
+    if (!validReason(reason)) return routeError(reply, 400, "A decision reason of 8–1000 characters is required", "ADMIN_REASON_REQUIRED");
+    try {
+      const result = await transaction(pool, async (client) => {
+        const selected = await client.query<{ id: string; request_type: string; target_identity_id: string; organization_id: string; role_id: string; membership_id: string | null; requester_identity_id: string; status: string; reason: string }>(
+          "select id,request_type,target_identity_id,organization_id,role_id,membership_id,requester_identity_id,status,reason from platform_access_change_requests where id=$1 for update",
+          [requestId],
+        );
+        const change = selected.rows[0];
+        if (!change) return { status: 404 as const, body: { error: "Access change request not found", code: "ACCESS_CHANGE_NOT_FOUND" } };
+        if (change.status !== "PENDING") return { status: 409 as const, body: { error: "Access change request has already been decided", code: "ACCESS_CHANGE_ALREADY_DECIDED" } };
+        if (change.requester_identity_id === context.auth.identityId) return { status: 409 as const, body: { error: "A different Super Admin must decide this request", code: "DUAL_CONTROL_SELF_APPROVAL_FORBIDDEN" } };
+        const authorities = await client.query<{ requester_active: boolean; approver_active: boolean }>(
+          `select
+             exists(select 1 from organization_memberships om join roles r on r.id=om.role_id join identities i on i.id=om.identity_id
+                    where om.identity_id=$1 and om.status='VERIFIED' and r.name='super_admin' and i.status='VERIFIED' and i.suspended_at is null) requester_active,
+             exists(select 1 from organization_memberships om join roles r on r.id=om.role_id join identities i on i.id=om.identity_id
+                    where om.identity_id=$2 and om.status='VERIFIED' and r.name='super_admin' and i.status='VERIFIED' and i.suspended_at is null) approver_active`,
+          [change.requester_identity_id, context.auth.identityId],
+        );
+        if (!authorities.rows[0]?.requester_active || !authorities.rows[0]?.approver_active) return { status: 403 as const, body: { error: "Requester and approver must both remain active Super Admins", code: "DUAL_CONTROL_AUTHORITY_REQUIRED" } };
+        if (decision === "REJECTED") {
+          await client.query(
+            "update platform_access_change_requests set status='REJECTED',approver_identity_id=$2,decision_reason=$3,decided_at=clock_timestamp() where id=$1",
+            [requestId, context.auth.identityId, reason],
+          );
+          await audit(client, request, context.auth.identityId, "PLATFORM_ACCESS_CHANGE_REJECTED", "platform_access_change_request", requestId,
+            { requestType: change.request_type, requesterIdentityId: change.requester_identity_id, decisionReason: reason }, change.organization_id);
+          return { status: 200 as const, body: { source: "postgresql", syntheticData: false, requestId, status: "REJECTED" } };
+        }
+
+        const target = await client.query<{ identity_status: string; suspended_at: Date | null; organization_status: string; role_name: string; role_organization_id: string }>(
+          `select i.status identity_status,i.suspended_at,o.status organization_status,r.name role_name,r.organization_id role_organization_id
+           from identities i cross join organizations o join roles r on r.organization_id=o.id
+           where i.id=$1 and o.id=$2 and r.id=$3 for update of i,o,r`,
+          [change.target_identity_id, change.organization_id, change.role_id],
+        );
+        const targetRow = target.rows[0];
+        if (!targetRow || !RESERVED_ROLES.has(targetRow.role_name) || targetRow.role_organization_id !== change.organization_id) return { status: 409 as const, body: { error: "Reserved role or organization binding changed after request", code: "ACCESS_CHANGE_TARGET_CHANGED" } };
+        if (targetRow.identity_status !== "VERIFIED" || targetRow.suspended_at || targetRow.organization_status !== "VERIFIED") return { status: 409 as const, body: { error: "Target identity and organization must remain verified and active", code: "ACCESS_CHANGE_TARGET_INACTIVE" } };
+        let membershipId: string;
+        if (change.request_type === "GRANT_RESERVED_ROLE") {
+          const existing = await client.query<{ id: string; status: string; last_revoked_at: Date | null }>(
+            "select id,status,last_revoked_at from organization_memberships where identity_id=$1 and organization_id=$2 and role_id=$3 for update",
+            [change.target_identity_id, change.organization_id, change.role_id],
+          );
+          if (existing.rows[0]) return { status: 409 as const, body: { error: "Membership state changed; submit a new request for the current state", code: "ACCESS_CHANGE_MEMBERSHIP_CHANGED" } };
+          const inserted = await client.query<{ id: string }>(
+            "insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED') returning id",
+            [change.target_identity_id, change.organization_id, change.role_id],
+          );
+          membershipId = inserted.rows[0]!.id;
+        } else {
+          const existing = await client.query<{ id: string; identity_id: string; organization_id: string; role_id: string; status: string; last_revoked_at: Date | null }>(
+            `select om.id,om.identity_id,om.organization_id,om.role_id,om.status,om.last_revoked_at
+             from organization_memberships om where om.id=$1 for update`,
+            [change.membership_id],
+          );
+          const membership = existing.rows[0];
+          if (!membership || membership.identity_id !== change.target_identity_id || membership.organization_id !== change.organization_id || membership.role_id !== change.role_id || membership.status !== "REJECTED" || !membership.last_revoked_at || targetRow.role_name !== "super_admin") {
+            return { status: 409 as const, body: { error: "Super Admin membership state changed; submit a new request", code: "ACCESS_CHANGE_MEMBERSHIP_CHANGED" } };
+          }
+          await client.query("update organization_memberships set status='VERIFIED' where id=$1", [change.membership_id]);
+          membershipId = change.membership_id!;
+        }
+        await client.query(
+          "update platform_access_change_requests set status='APPROVED',approver_identity_id=$2,decision_reason=$3,decided_at=clock_timestamp(),applied_at=clock_timestamp() where id=$1",
+          [requestId, context.auth.identityId, reason],
+        );
+        const action = change.request_type === "RESTORE_SUPER_ADMIN" ? "SUPER_ADMIN_RESTORED_DUAL_CONTROL" : "RESERVED_ROLE_GRANTED_DUAL_CONTROL";
+        await audit(client, request, context.auth.identityId, action, "organization_membership", membershipId,
+          { requestId, requestType: change.request_type, requesterIdentityId: change.requester_identity_id, approverIdentityId: context.auth.identityId, reason, decisionReason: reason }, change.organization_id);
+        return { status: 200 as const, body: { source: "postgresql", syntheticData: false, requestId, membershipId, status: "APPROVED", applied: true } };
+      });
+      return reply.code(result.status).send(result.body);
+    } catch (error) {
+      request.log.error(error);
+      return routeError(reply, 503, "Privileged access decision failed", "ACCESS_CHANGE_DECISION_UNAVAILABLE");
+    }
+  };
+
+  app.post("/api/v1/admin/access-change-requests/:requestId/approve", async (request, reply) => decideAccessChange(request, reply, "APPROVED"));
+  app.post("/api/v1/admin/access-change-requests/:requestId/reject", async (request, reply) => decideAccessChange(request, reply, "REJECTED"));
+
   app.get("/api/v1/admin/memberships", async (request, reply) => {
     const context = await authorize(request, reply, pool, "admin:users");
     if (!context || !pool) return;
