@@ -30,6 +30,7 @@ begin
            and q.role_id=new.role_id
            and q.status='APPROVED'
            and q.applied_at is not null
+           and q.applied_at >= new.created_at
            and q.requester_identity_id <> q.approver_identity_id
            and q.requester_identity_id <> q.target_identity_id
            and q.approver_identity_id <> q.target_identity_id
