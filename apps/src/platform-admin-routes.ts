@@ -458,7 +458,7 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
         if (m.status !== "VERIFIED") return { status: 200 as const, body: { source: "postgresql", syntheticData: false, replay: true, status: "REVOKED" } };
         if (m.role_name === "super_admin") {
           const count = await client.query<{ count: string }>(
-            `select count(*)::text count from organization_memberships om join roles r on r.id=om.role_id
+            `select count(distinct om.identity_id)::text count from organization_memberships om join roles r on r.id=om.role_id
              join identities i on i.id=om.identity_id where r.name='super_admin' and om.status='VERIFIED'
              and i.status='VERIFIED' and i.suspended_at is null`,
           );
