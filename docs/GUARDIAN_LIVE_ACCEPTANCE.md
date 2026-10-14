@@ -52,7 +52,8 @@ The official open-source Guardian distribution includes an `mrv-sender` service.
     - `mrvStatus=VERIFIED`;
     - integrity hash.
 11. Confirm the persisted provenance record is `GUARDIAN VERIFIED + CONSENSUS CONFIRMED`.
-12. Confirm only then that the downstream registry/value lifecycle marks the record eligible.
+12. Confirm the authenticated `GET /api/v1/mrv/hedera/verify/:consensusTimestamp` response reports `verified=true` and persists `mirror_node_verified_at` for that exact provenance row.
+13. Confirm the downstream registry/value lifecycle remains ineligible until that persisted Mirror Node verification exists; credential issuance rechecks the exact payload against Mirror Node and fails closed if verification cannot be repeated.
 
 ## Negative acceptance cases
 
