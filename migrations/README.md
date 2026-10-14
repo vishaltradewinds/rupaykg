@@ -65,3 +65,7 @@ Migration `084_platform_audit_chain_head.sql` bootstraps a singleton authoritati
 ## Reserved-role dual control
 
 Migration `085_platform_access_dual_control.sql` records requests to grant reserved platform roles or restore a revoked Super Admin membership. The request and decision are separately authenticated, require distinct active Super Admin identities, revalidate the target and role at decision time, apply the membership change in the same transaction as approval, and append a hash-linked audit event. Ordinary membership grant and restoration routes remain blocked for reserved roles.
+
+## Two-person privileged access changes
+
+Migration `085_platform_access_dual_control.sql` records explicit requests for reserved platform-role grants and restoration of revoked Super Admin memberships. The API permits a different active Super Admin to approve or reject the request; approval revalidates the target identity, organization, role, and membership state and applies the change in the same transaction as the decision and audit event. Requesters cannot approve their own requests. Existing direct grant/restoration endpoints remain fail-closed for reserved roles.
