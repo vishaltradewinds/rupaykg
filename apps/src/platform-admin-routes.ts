@@ -381,7 +381,7 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
             [identityId, organizationId, roleId],
           );
           if (prior.rows[0]) return { status: 409 as const, body: { error: prior.rows[0].status === "VERIFIED" ? "This privileged membership already exists" : "Previously revoked memberships must use the explicit restoration request", code: "PRIVILEGED_MEMBERSHIP_EXISTS" } };
-          target = { identity_id: identityId, organization_id: organizationId, role_id: roleId, role_name: row.role_name, identity_status: row.identity_status, suspended_at: row.suspended_at, organization_status: row.organization_status, role_organization_id: row.role_organization_id, membership_id: null };
+          target = { identity_id: identityId!, organization_id: organizationId!, role_id: roleId!, role_name: row.role_name, identity_status: row.identity_status, suspended_at: row.suspended_at, organization_status: row.organization_status, role_organization_id: row.role_organization_id, membership_id: null };
         } else {
           const selected = await client.query<{ identity_id: string; organization_id: string; role_id: string; role_name: string; identity_status: string; suspended_at: Date | null; organization_status: string; role_organization_id: string; status: string; last_revoked_at: Date | null }>(
             `select om.identity_id,om.organization_id,om.role_id,r.name role_name,i.status identity_status,i.suspended_at,o.status organization_status,r.organization_id role_organization_id,om.status,om.last_revoked_at
