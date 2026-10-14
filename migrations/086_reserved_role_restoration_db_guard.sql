@@ -1,12 +1,16 @@
--- Reserved-role restoration must use the audited two-person approval workflow.
--- Normal non-reserved onboarding retains the existing approved-application guard.
+-- Enforce dual control for reserved-role INSERT grants and UPDATE restorations.
+-- Normal non-reserved onboarding retains the approved-stakeholder-application guard.
 create or replace function prevent_direct_membership_activation()
 returns trigger language plpgsql as $guard$
 declare
   role_name text;
   dual_control_approved boolean := false;
+  access_request_type text;
 begin
-  if new.status <> 'VERIFIED' or old.status = 'VERIFIED' then
+  if new.status <> 'VERIFIED' then
+    return new;
+  end if;
+  if TG_OP = 'UPDATE' and old.status = 'VERIFIED' then
     return new;
   end if;
 
@@ -15,20 +19,26 @@ begin
    where r.id = new.role_id and r.organization_id = new.organization_id;
 
   if role_name in ('super_admin','platform_admin') then
+    access_request_type := case when TG_OP = 'INSERT' then 'GRANT_RESERVED_ROLE' else 'RESTORE_RESERVED_ROLE' end;
+
     select exists (
       select 1
         from platform_access_change_requests q
         join identities requester on requester.id=q.requester_identity_id
         join identities approver on approver.id=q.approver_identity_id
-       where q.request_type='RESTORE_RESERVED_ROLE'
-         and q.membership_id=old.id
+       where q.request_type=access_request_type
          and q.target_identity_id=new.identity_id
          and q.organization_id=new.organization_id
          and q.role_id=new.role_id
+         and (
+           (TG_OP = 'INSERT' and q.membership_id is null)
+           or
+           (TG_OP = 'UPDATE' and q.membership_id=old.id
+             and old.last_revoked_at is not null
+             and q.created_at > old.last_revoked_at)
+         )
          and q.status='APPROVED'
          and q.applied_at is not null
-         and old.last_revoked_at is not null
-         and q.created_at > old.last_revoked_at
          and q.requester_identity_id <> q.approver_identity_id
          and q.requester_identity_id <> q.target_identity_id
          and q.approver_identity_id <> q.target_identity_id
@@ -72,5 +82,5 @@ $guard$;
 
 drop trigger if exists stakeholder_membership_application_guard on organization_memberships;
 create trigger stakeholder_membership_application_guard
-before update of status on organization_memberships
+before insert or update of status on organization_memberships
 for each row execute function prevent_direct_membership_activation();
