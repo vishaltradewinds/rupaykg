@@ -174,7 +174,7 @@ test("PostgreSQL serializes concurrent Super Admin revocations and preserves one
       payload: { status: "REVOKED", reason: "Concurrent revocation integration test" },
     });
     const before = await pool.query<{ count: string }>(
-      `select count(*)::text count from organization_memberships om
+      `select count(distinct om.identity_id)::text count from organization_memberships om
        join roles r on r.id=om.role_id join identities i on i.id=om.identity_id
        where r.name='super_admin' and om.status='VERIFIED' and i.status='VERIFIED' and i.suspended_at is null`,
     );
@@ -189,7 +189,7 @@ test("PostgreSQL serializes concurrent Super Admin revocations and preserves one
     assert.ok(successes <= Math.min(2, activeBefore - 1), "concurrent revocations must never remove the last active Super Admin");
 
     const active = await pool.query<{ count: string }>(
-      `select count(*)::text count from organization_memberships om
+      `select count(distinct om.identity_id)::text count from organization_memberships om
        join roles r on r.id=om.role_id join identities i on i.id=om.identity_id
        where r.name='super_admin' and om.status='VERIFIED' and i.status='VERIFIED' and i.suspended_at is null`,
     );
