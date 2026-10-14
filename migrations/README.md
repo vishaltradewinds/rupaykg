@@ -70,3 +70,8 @@ Migration `085_platform_access_dual_control.sql` records requests to grant reser
 ## Reserved-role restoration guard
 
 Migration `086_reserved_role_restoration_db_guard.sql` protects status reactivation of a revoked `super_admin` or `platform_admin` membership. It requires a matching approved dual-control request, a different requester and approver, a target distinct from both, active Super Admin authority for requester and approver, and a request created after the revocation. Ordinary reserved-role grant/restoration APIs remain blocked; new grants are applied only by the authenticated dual-control workflow. Initial Super Admin bootstrap is an out-of-band privileged provisioning step and is not exposed through the ordinary API.
+
+
+## Acceptance fixture registry exclusion
+
+Migration `087_acceptance_fixture_registry_exclusion.sql` prevents activities or evidence explicitly marked with `metadata.acceptanceFixture=true` from backing credentials in value-bearing states. It also binds the database gate to the exact activity, verification, and evidence tuple. The MRV API reports acceptance fixtures as not registry eligible even after real Guardian/Hedera/Mirror Node verification. External anchoring proves message integrity and consensus; it does not validate the underlying activity as a real eligible carbon project.
