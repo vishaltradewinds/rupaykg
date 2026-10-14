@@ -105,7 +105,7 @@ Reserved platform-role grants and restoration of revoked reserved-role membershi
 - `GET /api/v1/admin/access-change-requests` to review the request queue.
 - `POST /api/v1/admin/access-change-requests/:requestId/approve` or `/reject` for a distinct active Super Admin to decide.
 - The approval transaction revalidates both administrators, the target identity, organization, reserved role, and membership state before applying the change.
-- Requester self-approval is rejected; request, decision, and applied change are written to the platform audit chain.
+- Requester self-approval and target-identity approval are rejected; the requester, approver, and target must be three distinct identities. Request, decision, and applied change are written to the platform audit chain.
 
 Acceptance still requires authenticated browser testing with two separate authorized Super Admin identities, including self-approval rejection, approval, rejection, replay/duplicate decision, stale target state, and audit-chain continuity. A successful CI run alone is not production certification.
 
