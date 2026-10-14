@@ -229,6 +229,7 @@ test("identity suspension revokes active sessions and records an audit event tra
   assert.ok(statements.some(sql => sql.includes("update identities set suspended_at=now()")));
   assert.ok(statements.some(sql => sql.includes("update identity_sessions set revoked_at=now()")));
   assert.ok(statements.some(sql => sql.includes("insert into audit_events")));
+  assert.ok(statements.some(sql => sql.includes("select event_hash from audit_events order by id desc limit 1")), "audit-chain predecessor must follow event insertion order, not transaction-start timestamps");
   assert.equal(statements.filter(sql => sql.trim().toLowerCase() === "commit").length, 1);
   await app.close();
 });
