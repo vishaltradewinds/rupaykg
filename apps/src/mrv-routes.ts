@@ -7,7 +7,7 @@ import { registerStatutoryRoutes } from "./statutory-routes.js";
 
 type Reply = { code: (status: number) => { send: (body: unknown) => unknown } };
 type Request = { body: unknown; params: Record<string, string>; log: { error: (error: unknown) => void } };
-type ExistingProvenanceRow = { activity_id: string; verification_id: string; evidence_id: string; guardian_policy_id: string; guardian_execution_id: string | null; guardian_status: string; hcs_status: string; hcs_topic_id: string | null; hcs_transaction_id: string | null; hcs_consensus_timestamp: string | null; integrity_hash: string; [key: string]: unknown };
+type ExistingProvenanceRow = { activity_id: string; verification_id: string; evidence_id: string; guardian_policy_id: string; guardian_execution_id: string | null; guardian_status: string; hcs_status: string; hcs_topic_id: string | null; hcs_transaction_id: string | null; hcs_consensus_timestamp: string | null; mirror_node_verified_at: Date | string | null; integrity_hash: string; [key: string]: unknown };
 const bodyOf = (r: Request): Record<string, unknown> => r.body && typeof r.body === "object" ? r.body as Record<string, unknown> : {};
 const str = (b: Record<string, unknown>, k: string): string | null => typeof b[k] === "string" && b[k].trim() ? b[k].trim() : null;
 
@@ -117,7 +117,7 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
           source: "postgresql+guardian+hedera", syntheticData: false, replay: true,
           guardian: { status: "VERIFIED", executionId: existing.guardian_execution_id, policyId: existing.guardian_policy_id, message: "Reused persisted Guardian execution; no duplicate provider submission." },
           hedera: { status: "CONSENSUS_CONFIRMED", transactionId: existing.hcs_transaction_id, consensusTimestamp: existing.hcs_consensus_timestamp, topicId: existing.hcs_topic_id, network: hederaStatus().network, integrityHash: existing.integrity_hash, message: "Reused persisted HCS anchor; no duplicate consensus message submitted." },
-          provenance: existing, eligibleForRegistry: true,
+          provenance: existing, eligibleForRegistry: Boolean(existing.mirror_node_verified_at),
         });
       }
 
@@ -126,7 +126,7 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
 
       const anchor = await submitHcsAnchor({ schema: "rupaykg:mrv:v1", activityId, verificationId, evidenceId, guardianPolicyId: policyId, guardianExecutionId: guardian.executionId, mrvStatus: "VERIFIED", methodologyCode, quantity, unit, metadata: { guardianStatus: guardian.status } });
       const persisted = await pool.query(`insert into mrv_provenance_events(activity_id,verification_id,evidence_id,guardian_policy_id,guardian_execution_id,guardian_status,hcs_status,hcs_topic_id,hcs_transaction_id,hcs_consensus_timestamp,integrity_hash,methodology_code,metadata) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) on conflict(activity_id,verification_id,integrity_hash) do update set guardian_execution_id=excluded.guardian_execution_id,guardian_status=excluded.guardian_status,hcs_status=excluded.hcs_status,hcs_transaction_id=excluded.hcs_transaction_id,hcs_consensus_timestamp=excluded.hcs_consensus_timestamp,metadata=excluded.metadata returning *`, [activityId, verificationId, evidenceId, policyId, guardian.executionId, guardian.status, anchor.status, anchor.topicId || null, anchor.transactionId, anchor.consensusTimestamp, anchor.integrityHash, methodologyCode || null, JSON.stringify({ guardian: guardian.raw ?? null })]);
-      return reply.code(anchor.status === "CONSENSUS_CONFIRMED" ? 201 : 503).send({ source: "postgresql+guardian+hedera", syntheticData: false, guardian, hedera: anchor, provenance: persisted.rows[0], eligibleForRegistry: anchor.status === "CONSENSUS_CONFIRMED" });
+      return reply.code(anchor.status === "CONSENSUS_CONFIRMED" ? 201 : 503).send({ source: "postgresql+guardian+hedera", syntheticData: false, guardian, hedera: anchor, provenance: persisted.rows[0], eligibleForRegistry: false });
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Authoritative MRV submission unavailable", code: "MRV_UNAVAILABLE", syntheticData: false }); }
     finally {
       if (lockClient) {
@@ -145,7 +145,7 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
       if (!await requirePermission(pool, auth, owner.rows[0].organization_id, ["guardian:read"])) return reply.code(403).send({ error: "Guardian read permission required", code: "MRV_PERMISSION_REQUIRED" });
       if (!await activityInAuthorizedGeography(pool, auth, activityId, owner.rows[0].organization_id)) return reply.code(403).send({ error: "Activity geography is outside organization authorization scope", code: "GEOGRAPHY_FORBIDDEN" });
       const rows = await pool.query("select * from mrv_provenance_events where activity_id=$1 order by created_at desc", [activityId]);
-      return { source: "postgresql", syntheticData: false, eligibleForRegistry: rows.rows.some(r => r.guardian_status === "VERIFIED" && r.hcs_status === "CONSENSUS_CONFIRMED"), provenance: rows.rows };
+      return { source: "postgresql", syntheticData: false, eligibleForRegistry: rows.rows.some(r => r.guardian_status === "VERIFIED" && r.hcs_status === "CONSENSUS_CONFIRMED" && r.mirror_node_verified_at != null), provenance: rows.rows };
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "MRV provenance unavailable", syntheticData: false }); }
   });
 
@@ -153,8 +153,8 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
     const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
     const timestamp = (request.params as { consensusTimestamp: string }).consensusTimestamp;
     try {
-      const provenance = await pool.query<{ activity_id: string; verification_id: string; evidence_id: string; guardian_execution_id: string; integrity_hash: string; hcs_topic_id: string | null }>(
-        "select activity_id, verification_id, evidence_id, guardian_execution_id, integrity_hash, hcs_topic_id from mrv_provenance_events where hcs_consensus_timestamp=$1 order by created_at desc limit 1",
+      const provenance = await pool.query<{ id: string; activity_id: string; verification_id: string; evidence_id: string; guardian_execution_id: string; integrity_hash: string; hcs_topic_id: string | null; mirror_node_verified_at: Date | null }>(
+        "select id, activity_id, verification_id, evidence_id, guardian_execution_id, integrity_hash, hcs_topic_id, mirror_node_verified_at from mrv_provenance_events where hcs_consensus_timestamp=$1 order by created_at desc limit 1",
         [timestamp],
       );
       const row = provenance.rows[0];
@@ -164,7 +164,13 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
       if (!owner.rows[0] || !canActForOrganization(auth, owner.rows[0].organization_id)) return reply.code(403).send({ error: "Organization access denied", code: "ORG_FORBIDDEN" });
       if (!await requirePermission(pool, auth, owner.rows[0].organization_id, ["guardian:read"])) return reply.code(403).send({ error: "Guardian read permission required", code: "MRV_PERMISSION_REQUIRED" });
       if (!await activityInAuthorizedGeography(pool, auth, row.activity_id, owner.rows[0].organization_id)) return reply.code(403).send({ error: "Activity geography is outside organization authorization scope", code: "GEOGRAPHY_FORBIDDEN" });
-      return { source: "hedera-mirror-node", syntheticData: false, ...(await verifyHcsMessage(timestamp, row.hcs_topic_id, row.integrity_hash, row.activity_id, row.verification_id, row.evidence_id, row.guardian_execution_id)) };
+      const verification = await verifyHcsMessage(timestamp, row.hcs_topic_id, row.integrity_hash, row.activity_id, row.verification_id, row.evidence_id, row.guardian_execution_id);
+      if (!verification.verified) return { source: "hedera-mirror-node", syntheticData: false, ...verification, eligibleForRegistry: false };
+      const persisted = await pool.query<{ mirror_node_verified_at: Date }>(
+        "update mrv_provenance_events set mirror_node_verified_at=clock_timestamp() where id=$1 returning mirror_node_verified_at",
+        [row.id],
+      );
+      return { source: "hedera-mirror-node", syntheticData: false, ...verification, eligibleForRegistry: true, persistedVerificationAt: persisted.rows[0]?.mirror_node_verified_at ?? null };
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Hedera mirror-node verification unavailable", code: "HCS_VERIFY_UNAVAILABLE", syntheticData: false }); }
   });
 
