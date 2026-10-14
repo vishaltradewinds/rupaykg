@@ -54,7 +54,7 @@ begin
            select 1 from organization_memberships om
            join roles r on r.id=om.role_id
            join organizations o on o.id=om.organization_id and o.status='VERIFIED'
-           where om.identity_id=q.requester_identity_id and om.status='VERIFIED'
+           where om.identity_id=q.requester_identity_id and om.organization_id=q.organization_id and om.status='VERIFIED'
              and r.name='super_admin'
              and exists (select 1 from jsonb_array_elements_text(r.permissions) as permission(value) where permission.value='admin:users')
          )
@@ -62,7 +62,7 @@ begin
            select 1 from organization_memberships om
            join roles r on r.id=om.role_id
            join organizations o on o.id=om.organization_id and o.status='VERIFIED'
-           where om.identity_id=q.approver_identity_id and om.status='VERIFIED'
+           where om.identity_id=q.approver_identity_id and om.organization_id=q.organization_id and om.status='VERIFIED'
              and r.name='super_admin'
              and exists (select 1 from jsonb_array_elements_text(r.permissions) as permission(value) where permission.value='admin:users')
          )
