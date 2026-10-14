@@ -97,6 +97,13 @@ begin
     return new;
   end if;
 
+  -- Preserve the existing non-reserved INSERT behavior; this migration adds the
+  -- database-level INSERT guard specifically for reserved roles. Normal onboarding
+  -- approval remains enforced when a non-reserved membership is activated by UPDATE.
+  if TG_OP = 'INSERT' then
+    return new;
+  end if;
+
   if not exists (
     select 1 from stakeholder_applications sa
      where sa.identity_id=new.identity_id
