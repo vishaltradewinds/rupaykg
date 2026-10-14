@@ -8,6 +8,32 @@ import { registerPlatformAdminRoutes } from "./platform-admin-routes.js";
 const enabled = process.env.RUPAYKG_RUN_DB_INTEGRATION_TESTS === "1" && Boolean(process.env.DATABASE_URL);
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
 
+/**
+ * Bootstrap a reserved-role membership only inside a single transaction on the
+ * explicitly disposable integration database. Production authorization paths
+ * and the database guard remain enabled for all assertions after fixture setup.
+ */
+async function bootstrapReservedMembership(pool: Pool, identityId: string, organizationId: string, roleId: string): Promise<string> {
+  const client = await pool.connect();
+  try {
+    await client.query("begin");
+    await client.query("set local session_replication_role = 'replica'");
+    const result = await client.query<{ id: string }>(
+      "insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED') returning id",
+      [identityId, organizationId, roleId],
+    );
+    await client.query("commit");
+    const id = result.rows[0]?.id;
+    if (!id) throw new Error("TEST_FIXTURE_MEMBERSHIP_INSERT_FAILED");
+    return id;
+  } catch (error) {
+    await client.query("rollback");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 test("PostgreSQL Super Admin suspension revokes sessions and blocks subsequent authentication", { skip: !enabled }, async (t) => {
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
   const app = Fastify({ logger: false });
@@ -42,11 +68,7 @@ test("PostgreSQL Super Admin suspension revokes sessions and blocks subsequent a
       [organizationId, JSON.stringify(["dashboard:read", "admin:users", "admin:roles", "admin:security"])],
     );
     roleId = role.rows[0]!.id;
-    const membership = await pool.query<{ id: string }>(
-      "insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED') returning id",
-      [actorId, organizationId, roleId],
-    );
-    membershipId = membership.rows[0]!.id;
+    membershipId = await bootstrapReservedMembership(pool, actorId, organizationId, roleId);
     await pool.query(
       "insert into identity_sessions(identity_id,expires_at,token_hash) values($1,now()+interval '1 hour',$2),($3,now()+interval '1 hour',$4)",
       [actorId, hash(actorToken), targetId, hash(targetToken)],
@@ -168,14 +190,8 @@ test("PostgreSQL requires two distinct active Super Admins for reserved-role gra
       "insert into roles(organization_id,name,permissions,geography_scope) values($1,'platform_admin',$2::jsonb,'[]') returning id",
       [organizationId, JSON.stringify(["admin:users"])],
     )).rows[0]!.id;
-    requesterMembershipId = (await pool.query<{ id: string }>(
-      "insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED') returning id",
-      [requesterId, organizationId, superAdminRoleId],
-    )).rows[0]!.id;
-    approverMembershipId = (await pool.query<{ id: string }>(
-      "insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED') returning id",
-      [approverId, organizationId, superAdminRoleId],
-    )).rows[0]!.id;
+    requesterMembershipId = await bootstrapReservedMembership(pool, requesterId, organizationId, superAdminRoleId);
+    approverMembershipId = await bootstrapReservedMembership(pool, approverId, organizationId, superAdminRoleId);
     await pool.query(
       "insert into identity_sessions(identity_id,expires_at,token_hash) values($1,now()+interval '1 hour',$2),($3,now()+interval '1 hour',$4)",
       [requesterId, hash(requesterToken), approverId, hash(approverToken)],
@@ -319,11 +335,7 @@ test("PostgreSQL serializes concurrent Super Admin revocations and preserves one
     );
     roleId = role.rows[0]!.id;
     for (const identityId of actorIds) {
-      const membership = await pool.query<{ id: string }>(
-        "insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED') returning id",
-        [identityId, organizationId, roleId],
-      );
-      membershipIds.push(membership.rows[0]!.id);
+      membershipIds.push(await bootstrapReservedMembership(pool, identityId, organizationId, roleId));
     }
 
     const revoke = (actorIndex: number, targetIndex: number) => app.inject({
