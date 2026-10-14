@@ -316,17 +316,11 @@ test("PostgreSQL serializes concurrent Super Admin revocations and preserves one
     assert.equal(activeBefore - Number(active.rows[0]?.count ?? 0), successes, "active admin count must match successful revocations");
   } finally {
     await app.close();
-    if (actorIds.length && membershipIds.length) {
-      await pool.query(
-        "delete from audit_events where actor_identity_id = any($1::uuid[]) and target_id = any($2::uuid[]) and action='MEMBERSHIP_REVOKED'",
-        [actorIds, membershipIds],
-      );
-    }
+    // Keep the append-only audit records and their actor/organization foreign-key targets.
+    // This test runs only against a disposable PostgreSQL database.
     if (actorIds.length) await pool.query("delete from identity_sessions where identity_id = any($1::uuid[])", [actorIds]);
     if (membershipIds.length) await pool.query("delete from organization_memberships where id = any($1::uuid[])", [membershipIds]);
     if (roleId) await pool.query("delete from roles where id=$1", [roleId]);
-    if (actorIds.length) await pool.query("delete from identities where id = any($1::uuid[])", [actorIds]);
-    if (organizationId) await pool.query("delete from organizations where id=$1", [organizationId]);
     await pool.end();
   }
 });
