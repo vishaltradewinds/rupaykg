@@ -54,7 +54,20 @@ begin
     old.activity_id,old.verification_id,old.evidence_id,old.guardian_execution_id,old.guardian_status,
     old.hcs_status,old.hcs_topic_id,old.hcs_transaction_id,old.hcs_consensus_timestamp,old.integrity_hash
   ) then
+    if exists (
+      select 1 from credentials c
+       where c.activity_id=old.activity_id and c.verification_id=old.verification_id
+    ) then
+      raise exception 'MRV_PROVENANCE_IMMUTABLE_AFTER_CREDENTIAL_ISSUANCE';
+    end if;
     new.mirror_node_verified_at := null;
+  end if;
+  if old.mirror_node_verified_at is not null and new.mirror_node_verified_at is null
+     and exists (
+       select 1 from credentials c
+        where c.activity_id=old.activity_id and c.verification_id=old.verification_id
+     ) then
+    raise exception 'MIRROR_NODE_PROOF_IMMUTABLE_AFTER_CREDENTIAL_ISSUANCE';
   end if;
   return new;
 end;
