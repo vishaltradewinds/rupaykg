@@ -110,6 +110,12 @@ begin
     return new;
   end if;
 
+  -- Preserve the existing contract for ordinary membership inserts; the onboarding
+  -- application guard historically applies to status transitions, not initial inserts.
+  if TG_OP = 'INSERT' then
+    return new;
+  end if;
+
   if not exists (
     select 1 from stakeholder_applications sa
      where sa.identity_id=new.identity_id
