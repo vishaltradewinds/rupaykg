@@ -61,3 +61,7 @@ Migration `083_mrv_mirror_node_registry_gate.sql` adds the persisted `mirror_nod
 ## Platform-admin audit chain head
 
 Migration `084_platform_audit_chain_head.sql` bootstraps a singleton authoritative audit-chain head from existing audit history. Platform-admin audit appends lock that row inside the same transaction, use its `last_event_hash` as the predecessor, insert the new event, and advance the head atomically. This makes append order independent of transaction-start timestamps and random UUID ordering. A failed transaction rolls back both the event and head update.
+
+## Reserved-role dual control
+
+Migration `085_platform_access_dual_control.sql` records requests to grant reserved platform roles or restore a revoked Super Admin membership. The request and decision are separately authenticated, require distinct active Super Admin identities, revalidate the target and role at decision time, apply the membership change in the same transaction as approval, and append a hash-linked audit event. Ordinary membership grant and restoration routes remain blocked for reserved roles.
