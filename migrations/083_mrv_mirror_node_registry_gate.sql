@@ -42,3 +42,25 @@ drop trigger if exists credentials_require_guardian_hcs_mrv on credentials;
 create trigger credentials_require_guardian_hcs_mrv
 before insert on credentials
 for each row execute function require_guardian_hcs_mrv_for_credential();
+
+-- Any mutation of the anchored provenance tuple invalidates prior Mirror Node verification.
+create or replace function clear_mrv_mirror_verification_on_anchor_change()
+returns trigger language plpgsql as $$
+begin
+  if row(
+    new.activity_id,new.verification_id,new.evidence_id,new.guardian_execution_id,new.guardian_status,
+    new.hcs_status,new.hcs_topic_id,new.hcs_transaction_id,new.hcs_consensus_timestamp,new.integrity_hash
+  ) is distinct from row(
+    old.activity_id,old.verification_id,old.evidence_id,old.guardian_execution_id,old.guardian_status,
+    old.hcs_status,old.hcs_topic_id,old.hcs_transaction_id,old.hcs_consensus_timestamp,old.integrity_hash
+  ) then
+    new.mirror_node_verified_at := null;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists mrv_anchor_change_clears_mirror_verification on mrv_provenance_events;
+create trigger mrv_anchor_change_clears_mirror_verification
+before update on mrv_provenance_events
+for each row execute function clear_mrv_mirror_verification_on_anchor_change();
