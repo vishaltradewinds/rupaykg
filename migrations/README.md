@@ -60,7 +60,7 @@ Migration `083_mrv_mirror_node_registry_gate.sql` adds the persisted `mirror_nod
 
 ## Platform-admin audit chain head
 
-Migration `084_platform_audit_chain_head.sql` bootstraps a singleton authoritative audit-chain head from existing audit history. Platform-admin audit appends lock that row inside the same transaction, use its `last_event_hash` as the predecessor, insert the new event, and advance the head atomically. This makes append order independent of transaction-start timestamps and random UUID ordering. A failed transaction rolls back both the event and head update.
+Migration `084_platform_audit_chain_head.sql` bootstraps a singleton authoritative audit-chain head from existing audit history. Platform-admin audit appends lock that row inside the same transaction, use its `last_event_hash` as the predecessor, insert the new event, and advance the head atomically. This makes append order independent of transaction-start timestamps and random UUID ordering. Migration bootstrap requires exactly one terminal event in existing audit history and fails closed if the chain is branched/disconnected, requiring explicit reconciliation rather than guessing a head. A failed transaction rolls back both the event and head update.
 
 ## Reserved-role dual control
 
