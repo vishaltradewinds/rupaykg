@@ -1,7 +1,7 @@
 -- Explicit two-person approval for platform-reserved role grants and Super Admin restoration.
 create table if not exists platform_access_change_requests (
   id uuid primary key default gen_random_uuid(),
-  request_type text not null check (request_type in ('GRANT_RESERVED_ROLE','RESTORE_SUPER_ADMIN')),
+  request_type text not null check (request_type in ('GRANT_RESERVED_ROLE','RESTORE_RESERVED_ROLE')),
   target_identity_id uuid not null references identities(id),
   organization_id uuid not null references organizations(id),
   role_id uuid not null references roles(id),
@@ -17,7 +17,7 @@ create table if not exists platform_access_change_requests (
   applied_at timestamptz,
   constraint platform_access_change_request_shape check (
     (request_type = 'GRANT_RESERVED_ROLE' and membership_id is null)
-    or (request_type = 'RESTORE_SUPER_ADMIN' and membership_id is not null)
+    or (request_type = 'RESTORE_RESERVED_ROLE' and membership_id is not null)
   ),
   constraint platform_access_change_distinct_approver check (
     approver_identity_id is null or approver_identity_id <> requester_identity_id
