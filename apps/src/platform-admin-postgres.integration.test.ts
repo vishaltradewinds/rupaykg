@@ -181,6 +181,15 @@ test("PostgreSQL requires two distinct active Super Admins for reserved-role gra
       [requesterId, hash(requesterToken), approverId, hash(approverToken)],
     );
 
+    await assert.rejects(
+      pool.query(
+        "insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED')",
+        [targetId, organizationId, reservedRoleId],
+      ),
+      /RESERVED_ROLE_REQUIRES_DUAL_CONTROL/,
+      "PostgreSQL must block a direct reserved-role grant that bypasses the two-person request",
+    );
+
     const requested = await app.inject({
       method: "POST",
       url: "/api/v1/admin/access-change-requests",
