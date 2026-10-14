@@ -127,7 +127,7 @@ test("PostgreSQL Super Admin suspension revokes sessions and blocks subsequent a
 
 test("PostgreSQL requires two distinct active Super Admins for reserved-role grants and restoration", { skip: !enabled }, async () => {
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-  const app = Fastify({ logger: false });
+  const app = Fastify({ logger: { level: "error" } });
   await registerPlatformAdminRoutes(app, pool);
   const suffix = randomBytes(8).toString("hex");
   const requesterToken = randomBytes(32).toString("base64url");
