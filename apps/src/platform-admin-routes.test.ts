@@ -140,6 +140,46 @@ test("membership grant cannot be used for self-escalation", async () => {
   await app.close();
 });
 
+test("dual-control access requests cannot be approved by their requester", async () => {
+  const pool = {
+    query: async (sql: string) => {
+      if (sql.includes("from identity_sessions")) return { rows: [{ identity_id: identityId }] };
+      if (sql.includes("from organization_memberships") && sql.includes("where identity_id")) return { rows: [{ organization_id: organizationId, role_id: roleId, status: "VERIFIED" }] };
+      if (sql.includes("r.name = 'super_admin'")) return { rows: [{ ok: true }] };
+      throw new Error("Unexpected pool SQL in dual-control self-approval test: " + sql);
+    },
+    connect: async () => ({
+      query: async (sql: string) => {
+        if (/^(begin|commit|rollback)$/i.test(sql.trim())) return { rows: [], rowCount: 0 };
+        if (sql.includes("from platform_access_change_requests where id=$1 for update")) return { rows: [{
+          id: "423e4567-e89b-42d3-a456-426614174000",
+          request_type: "GRANT_RESERVED_ROLE",
+          target_identity_id: "523e4567-e89b-42d3-a456-426614174000",
+          organization_id: organizationId,
+          role_id: roleId,
+          membership_id: null,
+          requester_identity_id: identityId,
+          status: "PENDING",
+          reason: "Test privileged access request",
+        }], rowCount: 1 };
+        throw new Error("Unexpected client SQL in dual-control self-approval test: " + sql);
+      },
+      release: () => undefined,
+    }),
+  } as unknown as Pool;
+  const app = Fastify({ logger: false });
+  await registerPlatformAdminRoutes(app, pool);
+  const response = await app.inject({
+    method: "POST",
+    url: "/api/v1/admin/access-change-requests/423e4567-e89b-42d3-a456-426614174000/approve",
+    headers: { authorization: "Bearer test-session", "x-rupaykg-organization-id": organizationId },
+    payload: { reason: "Requester cannot approve own change" },
+  });
+  assert.equal(response.statusCode, 409);
+  assert.equal(response.json().code, "DUAL_CONTROL_SELF_APPROVAL_FORBIDDEN");
+  await app.close();
+});
+
 test("the last active Super Admin membership cannot be revoked", async () => {
   const pool = {
     query: async (sql: string) => {
