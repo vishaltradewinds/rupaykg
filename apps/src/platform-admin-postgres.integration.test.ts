@@ -231,34 +231,13 @@ test("PostgreSQL requires two distinct active Super Admins for reserved-role gra
     assert.equal(duplicateDecision.json().code, "ACCESS_CHANGE_ALREADY_DECIDED");
   } finally {
     await app.close();
-    if (requestId || targetMembershipId) {
-      const ids = [requestId, targetMembershipId].filter(Boolean);
-      const events = await pool.query<{ id: string; previous_hash: string | null }>(
-        "select id,previous_hash from audit_events where target_id=any($1::uuid[]) and action in ('PLATFORM_ACCESS_CHANGE_REQUESTED','RESERVED_ROLE_GRANTED_DUAL_CONTROL') order by created_at,id",
-        [ids],
-      );
-      const head = await pool.query<{ last_event_id: string | null }>(
-        "select last_event_id from platform_audit_chain_head where singleton=true",
-      );
-      if (events.rows.some(event => event.id === head.rows[0]?.last_event_id)) {
-        const predecessorHash = events.rows[0]?.previous_hash ?? null;
-        const predecessor = predecessorHash
-          ? await pool.query<{ id: string }>("select id from audit_events where event_hash=$1 limit 1", [predecessorHash])
-          : { rows: [] as Array<{ id: string }> };
-        await pool.query(
-          "update platform_audit_chain_head set last_event_id=$1,last_event_hash=$2,updated_at=clock_timestamp() where singleton=true",
-          [predecessor.rows[0]?.id ?? null, predecessorHash],
-        );
-      }
-      if (events.rows.length) await pool.query("delete from audit_events where id=any($1::uuid[])", [events.rows.map(event => event.id)]);
-    }
+    // Keep hash-linked audit events append-only; delete only disposable authorization fixtures.
     if (requestId) await pool.query("delete from platform_access_change_requests where id=$1", [requestId]);
     if (targetMembershipId) await pool.query("delete from organization_memberships where id=$1", [targetMembershipId]);
     if (requesterMembershipId || approverMembershipId) await pool.query("delete from organization_memberships where id=any($1::uuid[])", [[requesterMembershipId, approverMembershipId].filter(Boolean)]);
     if (requesterId || approverId) await pool.query("delete from identity_sessions where identity_id=any($1::uuid[])", [[requesterId, approverId].filter(Boolean)]);
     if (superAdminRoleId || reservedRoleId) await pool.query("delete from roles where id=any($1::uuid[])", [[superAdminRoleId, reservedRoleId].filter(Boolean)]);
-    if (requesterId || approverId || targetId) await pool.query("delete from identities where id=any($1::uuid[])", [[requesterId, approverId, targetId].filter(Boolean)]);
-    if (organizationId) await pool.query("delete from organizations where id=$1", [organizationId]);
+    // Audit actor and organization foreign keys require these fixture rows to remain in the disposable DB.
     await pool.end();
   }
 });
