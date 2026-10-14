@@ -1,3 +1,24 @@
+-- Refuse rollout if an acceptance fixture already backs a value-bearing credential.
+-- Do not silently rewrite historical registry state; require a separate audited review.
+do $
+begin
+  if exists (
+    select 1
+      from credentials c
+      join activities a on a.id = c.activity_id
+      left join verifications v on v.id = c.verification_id
+      left join evidence e on e.id = v.evidence_id and e.activity_id = a.id
+     where c.status in ('ISSUED','ACTIVE','TRANSFERRED','RETIRED')
+       and (
+         a.metadata->>'acceptanceFixture' = 'true'
+         or e.metadata->>'acceptanceFixture' = 'true'
+       )
+  ) then
+    raise exception 'ACCEPTANCE_FIXTURE_CREDENTIAL_REQUIRES_MANUAL_REVIEW: a value-bearing credential is backed by acceptance fixture data';
+  end if;
+end;
+$;
+
 -- Acceptance fixtures are useful for proving the external trust rail, but must never
 -- become carbon-credit registry assets. Enforce this at the database boundary.
 create or replace function require_guardian_hcs_mrv_for_credential()
