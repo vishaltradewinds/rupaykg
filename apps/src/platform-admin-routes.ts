@@ -512,6 +512,10 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
             [change.target_identity_id, change.organization_id, change.role_id],
           );
           membershipId = inserted.rows[0]!.id;
+          await client.query(
+            "update platform_access_change_requests set status='APPROVED',approver_identity_id=$2,decision_reason=$3,decided_at=clock_timestamp(),applied_at=clock_timestamp() where id=$1",
+            [requestId, context.auth.identityId, reason],
+          );
         } else {
           const existing = await client.query<{ id: string; identity_id: string; organization_id: string; role_id: string; status: string; last_revoked_at: Date | null }>(
             `select om.id,om.identity_id,om.organization_id,om.role_id,om.status,om.last_revoked_at
@@ -522,13 +526,16 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
           if (!membership || membership.identity_id !== change.target_identity_id || membership.organization_id !== change.organization_id || membership.role_id !== change.role_id || membership.status !== "REJECTED" || !membership.last_revoked_at || !RESERVED_ROLES.has(targetRow.role_name)) {
             return { status: 409 as const, body: { error: "Reserved-role membership state changed; submit a new request", code: "ACCESS_CHANGE_MEMBERSHIP_CHANGED" } };
           }
+          // The database trigger requires a completed, matching two-person approval before
+          // it permits a reserved membership to transition back to VERIFIED. If the update
+          // fails, this status change rolls back with the enclosing transaction.
+          await client.query(
+            "update platform_access_change_requests set status='APPROVED',approver_identity_id=$2,decision_reason=$3,decided_at=clock_timestamp(),applied_at=clock_timestamp() where id=$1",
+            [requestId, context.auth.identityId, reason],
+          );
           await client.query("update organization_memberships set status='VERIFIED' where id=$1", [change.membership_id]);
           membershipId = change.membership_id!;
         }
-        await client.query(
-          "update platform_access_change_requests set status='APPROVED',approver_identity_id=$2,decision_reason=$3,decided_at=clock_timestamp(),applied_at=clock_timestamp() where id=$1",
-          [requestId, context.auth.identityId, reason],
-        );
         const action = change.request_type === "RESTORE_RESERVED_ROLE" ? "RESERVED_ROLE_RESTORED_DUAL_CONTROL" : "RESERVED_ROLE_GRANTED_DUAL_CONTROL";
         await audit(client, request, context.auth.identityId, action, "organization_membership", membershipId,
           { requestId, requestType: change.request_type, requesterIdentityId: change.requester_identity_id, approverIdentityId: context.auth.identityId, reason, decisionReason: reason }, change.organization_id);
