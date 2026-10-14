@@ -150,6 +150,137 @@ test("PostgreSQL Super Admin suspension revokes sessions and blocks subsequent a
 });
 
 
+test("PostgreSQL requires two distinct active Super Admins for reserved-role grants", { skip: !enabled }, async () => {
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  const app = Fastify({ logger: false });
+  await registerPlatformAdminRoutes(app, pool);
+  const suffix = randomBytes(8).toString("hex");
+  const requesterToken = randomBytes(32).toString("base64url");
+  const approverToken = randomBytes(32).toString("base64url");
+  let organizationId = "";
+  let requesterId = "";
+  let approverId = "";
+  let targetId = "";
+  let superAdminRoleId = "";
+  let reservedRoleId = "";
+  let requesterMembershipId = "";
+  let approverMembershipId = "";
+  let targetMembershipId = "";
+  let requestId = "";
+  try {
+    organizationId = (await pool.query<{ id: string }>(
+      "insert into organizations(name,organization_type,status) values($1,'test_fixture','VERIFIED') returning id",
+      ["TEST-DUAL-CONTROL-" + suffix],
+    )).rows[0]!.id;
+    requesterId = (await pool.query<{ id: string }>(
+      "insert into identities(external_subject,display_name,email,status) values($1,$2,$3,'VERIFIED') returning id",
+      ["dual-requester:" + suffix, "Dual Control Requester " + suffix, "dual-requester-" + suffix + "@example.invalid"],
+    )).rows[0]!.id;
+    approverId = (await pool.query<{ id: string }>(
+      "insert into identities(external_subject,display_name,email,status) values($1,$2,$3,'VERIFIED') returning id",
+      ["dual-approver:" + suffix, "Dual Control Approver " + suffix, "dual-approver-" + suffix + "@example.invalid"],
+    )).rows[0]!.id;
+    targetId = (await pool.query<{ id: string }>(
+      "insert into identities(external_subject,display_name,email,status) values($1,$2,$3,'VERIFIED') returning id",
+      ["dual-target:" + suffix, "Dual Control Target " + suffix, "dual-target-" + suffix + "@example.invalid"],
+    )).rows[0]!.id;
+    superAdminRoleId = (await pool.query<{ id: string }>(
+      "insert into roles(organization_id,name,permissions,geography_scope) values($1,'super_admin',$2::jsonb,'[]') returning id",
+      [organizationId, JSON.stringify(["admin:users", "admin:roles", "admin:security"])],
+    )).rows[0]!.id;
+    reservedRoleId = (await pool.query<{ id: string }>(
+      "insert into roles(organization_id,name,permissions,geography_scope) values($1,'platform_admin',$2::jsonb,'[]') returning id",
+      [organizationId, JSON.stringify(["admin:users"])],
+    )).rows[0]!.id;
+    requesterMembershipId = (await pool.query<{ id: string }>(
+      "insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED') returning id",
+      [requesterId, organizationId, superAdminRoleId],
+    )).rows[0]!.id;
+    approverMembershipId = (await pool.query<{ id: string }>(
+      "insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED') returning id",
+      [approverId, organizationId, superAdminRoleId],
+    )).rows[0]!.id;
+    await pool.query(
+      "insert into identity_sessions(identity_id,expires_at,token_hash) values($1,now()+interval '1 hour',$2),($3,now()+interval '1 hour',$4)",
+      [requesterId, hash(requesterToken), approverId, hash(approverToken)],
+    );
+
+    const requested = await app.inject({
+      method: "POST",
+      url: "/api/v1/admin/access-change-requests",
+      headers: { authorization: "Bearer " + requesterToken, "x-rupaykg-organization-id": organizationId },
+      payload: { requestType: "GRANT_RESERVED_ROLE", identityId: targetId, organizationId, roleId: reservedRoleId, reason: "Approved need for platform administration" },
+    });
+    assert.equal(requested.statusCode, 201, requested.body);
+    requestId = requested.json().request.id as string;
+
+    const selfApproval = await app.inject({
+      method: "POST",
+      url: "/api/v1/admin/access-change-requests/" + requestId + "/approve",
+      headers: { authorization: "Bearer " + requesterToken, "x-rupaykg-organization-id": organizationId },
+      payload: { reason: "Attempted self approval must fail" },
+    });
+    assert.equal(selfApproval.statusCode, 409, selfApproval.body);
+    assert.equal(selfApproval.json().code, "DUAL_CONTROL_SELF_APPROVAL_FORBIDDEN");
+
+    const approved = await app.inject({
+      method: "POST",
+      url: "/api/v1/admin/access-change-requests/" + requestId + "/approve",
+      headers: { authorization: "Bearer " + approverToken, "x-rupaykg-organization-id": organizationId },
+      payload: { reason: "Independent second-admin review completed" },
+    });
+    assert.equal(approved.statusCode, 200, approved.body);
+    assert.equal(approved.json().applied, true);
+    assert.equal(approved.json().status, "APPROVED");
+    targetMembershipId = approved.json().membershipId as string;
+
+    const membership = await pool.query<{ status: string }>(
+      "select status from organization_memberships where id=$1 and identity_id=$2 and role_id=$3",
+      [targetMembershipId, targetId, reservedRoleId],
+    );
+    assert.equal(membership.rows[0]?.status, "VERIFIED", "approval must apply the reserved role grant in the same transaction");
+    const duplicateDecision = await app.inject({
+      method: "POST",
+      url: "/api/v1/admin/access-change-requests/" + requestId + "/approve",
+      headers: { authorization: "Bearer " + approverToken, "x-rupaykg-organization-id": organizationId },
+      payload: { reason: "Repeated approval should be rejected" },
+    });
+    assert.equal(duplicateDecision.statusCode, 409);
+    assert.equal(duplicateDecision.json().code, "ACCESS_CHANGE_ALREADY_DECIDED");
+  } finally {
+    await app.close();
+    if (requestId || targetMembershipId) {
+      const ids = [requestId, targetMembershipId].filter(Boolean);
+      const events = await pool.query<{ id: string; previous_hash: string | null }>(
+        "select id,previous_hash from audit_events where target_id=any($1::uuid[]) and action in ('PLATFORM_ACCESS_CHANGE_REQUESTED','RESERVED_ROLE_GRANTED_DUAL_CONTROL') order by created_at,id",
+        [ids],
+      );
+      const head = await pool.query<{ last_event_id: string | null }>(
+        "select last_event_id from platform_audit_chain_head where singleton=true",
+      );
+      if (events.rows.some(event => event.id === head.rows[0]?.last_event_id)) {
+        const predecessorHash = events.rows[0]?.previous_hash ?? null;
+        const predecessor = predecessorHash
+          ? await pool.query<{ id: string }>("select id from audit_events where event_hash=$1 limit 1", [predecessorHash])
+          : { rows: [] as Array<{ id: string }> };
+        await pool.query(
+          "update platform_audit_chain_head set last_event_id=$1,last_event_hash=$2,updated_at=clock_timestamp() where singleton=true",
+          [predecessor.rows[0]?.id ?? null, predecessorHash],
+        );
+      }
+      if (events.rows.length) await pool.query("delete from audit_events where id=any($1::uuid[])", [events.rows.map(event => event.id)]);
+    }
+    if (requestId) await pool.query("delete from platform_access_change_requests where id=$1", [requestId]);
+    if (targetMembershipId) await pool.query("delete from organization_memberships where id=$1", [targetMembershipId]);
+    if (requesterMembershipId || approverMembershipId) await pool.query("delete from organization_memberships where id=any($1::uuid[])", [[requesterMembershipId, approverMembershipId].filter(Boolean)]);
+    if (requesterId || approverId) await pool.query("delete from identity_sessions where identity_id=any($1::uuid[])", [[requesterId, approverId].filter(Boolean)]);
+    if (superAdminRoleId || reservedRoleId) await pool.query("delete from roles where id=any($1::uuid[])", [[superAdminRoleId, reservedRoleId].filter(Boolean)]);
+    if (requesterId || approverId || targetId) await pool.query("delete from identities where id=any($1::uuid[])", [[requesterId, approverId, targetId].filter(Boolean)]);
+    if (organizationId) await pool.query("delete from organizations where id=$1", [organizationId]);
+    await pool.end();
+  }
+});
+
 test("PostgreSQL serializes concurrent Super Admin revocations and preserves one active administrator", { skip: !enabled }, async (t) => {
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
   const app = Fastify({ logger: false });
