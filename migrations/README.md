@@ -60,12 +60,9 @@ Migration `083_mrv_mirror_node_registry_gate.sql` adds the persisted `mirror_nod
 
 ## Platform-admin audit chain head
 
-Migration `084_platform_audit_chain_head.sql` bootstraps a singleton authoritative audit-chain head from existing audit history. Platform-admin audit appends lock that row inside the same transaction, use its `last_event_hash` as the predecessor, insert the new event, and advance the head atomically. This makes append order independent of transaction-start timestamps and random UUID ordering. Migration bootstrap requires exactly one terminal event in existing audit history and fails closed if the chain is branched/disconnected, requiring explicit reconciliation rather than guessing a head. A failed transaction rolls back both the event and head update.
+Migration `084_platform_audit_chain_head.sql` bootstraps a singleton chain head using the latest existing audit row as a migration-time anchor. Older audit writers do not all participate in the platform-admin chain, so the bootstrap is not a certification of the entire historical audit table. After cutover, platform-admin appends lock the head row inside the same transaction, use its hash as the predecessor, insert the event, and advance the head atomically. Append order therefore does not depend on transaction-start timestamps or random UUID ordering. A failed transaction rolls back both event and head update. Audit events are append-only; tests must not delete them or rewind the head.
 
 ## Reserved-role dual control
 
 Migration `085_platform_access_dual_control.sql` records requests to grant reserved platform roles or restore a revoked Super Admin membership. The request and decision are separately authenticated, require distinct active Super Admin identities, revalidate the target and role at decision time, apply the membership change in the same transaction as approval, and append a hash-linked audit event. Ordinary membership grant and restoration routes remain blocked for reserved roles.
 
-## Two-person privileged access changes
-
-Migration `085_platform_access_dual_control.sql` records explicit requests for reserved platform-role grants and restoration of revoked Super Admin memberships. The API permits a different active Super Admin to approve or reject the request; approval revalidates the target identity, organization, role, and membership state and applies the change in the same transaction as the decision and audit event. Requesters cannot approve their own requests. Existing direct grant/restoration endpoints remain fail-closed for reserved roles.
