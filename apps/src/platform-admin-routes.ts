@@ -103,7 +103,7 @@ async function audit(
   // Serialize this route's hash-linked audit writes to avoid concurrent branches.
   await client.query("select pg_advisory_xact_lock(82026010)");
   const prior = await client.query<{ event_hash: string }>(
-    "select event_hash from audit_events order by id desc limit 1",
+    "select event_hash from audit_events order by created_at desc, id desc limit 1",
   );
   const previousHash = prior.rows[0]?.event_hash ?? null;
   const event = {
@@ -118,8 +118,8 @@ async function audit(
   };
   const eventHash = hash(JSON.stringify(event));
   await client.query(
-    `insert into audit_events(actor_identity_id,organization_id,action,target_type,target_id,request_id,previous_hash,event_hash,payload)
-     values($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+    `insert into audit_events(actor_identity_id,organization_id,action,target_type,target_id,request_id,previous_hash,event_hash,payload,created_at)
+     values($1,$2,$3,$4,$5,$6,$7,$8,$9,clock_timestamp())`,
     [actorId, organizationId, action, targetType, targetId, request.id, previousHash, eventHash, JSON.stringify(payload)],
   );
 }
