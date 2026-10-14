@@ -276,6 +276,47 @@ test("identity suspension revokes active sessions and records an audit event tra
   await app.close();
 });
 
+test("platform_admin membership cannot be restored through the generic membership endpoint", async () => {
+  const pool = {
+    query: async (sql: string) => {
+      if (sql.includes("from identity_sessions")) return { rows: [{ identity_id: identityId }] };
+      if (sql.includes("from organization_memberships") && sql.includes("where identity_id")) return { rows: [{ organization_id: organizationId, role_id: roleId, status: "VERIFIED" }] };
+      if (sql.includes("r.name = 'super_admin'")) return { rows: [{ ok: true }] };
+      throw new Error("Unexpected pool SQL in reserved-role restore test: " + sql);
+    },
+    connect: async () => ({
+      query: async (sql: string) => {
+        if (/^(begin|commit|rollback)$/i.test(sql.trim())) return { rows: [], rowCount: 0 };
+        if (sql.includes("where om.id=$1 for update")) return { rows: [{
+          id: "423e4567-e89b-42d3-a456-426614174000",
+          identity_id: "523e4567-e89b-42d3-a456-426614174000",
+          organization_id: organizationId,
+          organization_status: "VERIFIED",
+          role_id: roleId,
+          role_name: "platform_admin",
+          status: "REJECTED",
+          identity_status: "VERIFIED",
+          suspended_at: null,
+          last_revoked_at: new Date(),
+        }] };
+        throw new Error("Unexpected client SQL in reserved-role restore test: " + sql);
+      },
+      release: () => undefined,
+    }),
+  } as unknown as Pool;
+  const app = Fastify({ logger: false });
+  await registerPlatformAdminRoutes(app, pool);
+  const response = await app.inject({
+    method: "PATCH",
+    url: "/api/v1/admin/memberships/423e4567-e89b-42d3-a456-426614174000/status",
+    headers: { authorization: "Bearer test-session", "x-rupaykg-organization-id": organizationId },
+    payload: { status: "VERIFIED", reason: "Attempted reserved role restoration" },
+  });
+  assert.equal(response.statusCode, 409);
+  assert.equal(response.json().code, "RESERVED_ROLE_RESTORE_BLOCKED");
+  await app.close();
+});
+
 test("platform-reserved administrators cannot be suspended through the generic identity action", async () => {
   const statements: string[] = [];
   const pool = {
