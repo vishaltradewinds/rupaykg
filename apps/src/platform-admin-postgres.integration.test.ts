@@ -168,7 +168,7 @@ test("PostgreSQL serializes concurrent Super Admin revocations and preserves one
     const responses = await Promise.all([revoke(0, 1), revoke(1, 0)]);
     const statuses = responses.map((response) => response.statusCode).sort((a, b) => a - b);
     assert.equal(statuses.filter((status) => status === 200).length, 1, "exactly one revocation should succeed");
-    assert.ok([409, 403].includes(statuses[1]!), "the competing request must be blocked by last-admin protection or lose authority after the first commit");
+    assert.ok([409, 403].includes(statuses[1]!), `the competing request must be blocked by last-admin protection or lose authority after the first commit; statuses=${statuses.join(",")}; responses=${responses.map((response) => response.body).join(" | ")}`);
 
     const active = await pool.query<{ count: string }>(
       `select count(*)::text count from organization_memberships om
