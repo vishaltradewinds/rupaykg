@@ -6,12 +6,18 @@ declare
   role_name text;
   dual_control_approved boolean := false;
   access_request_type text;
+  target_membership_id uuid;
+  previous_revoked_at timestamptz;
 begin
   if new.status <> 'VERIFIED' then
     return new;
   end if;
-  if TG_OP = 'UPDATE' and old.status = 'VERIFIED' then
-    return new;
+  if TG_OP = 'UPDATE' then
+    if old.status = 'VERIFIED' then
+      return new;
+    end if;
+    target_membership_id := old.id;
+    previous_revoked_at := old.last_revoked_at;
   end if;
 
   select r.name into role_name
@@ -39,9 +45,9 @@ begin
          and (
            (TG_OP = 'INSERT' and q.membership_id is null)
            or
-           (TG_OP = 'UPDATE' and q.membership_id=old.id
-             and old.last_revoked_at is not null
-             and q.created_at > old.last_revoked_at)
+           (TG_OP = 'UPDATE' and q.membership_id=target_membership_id
+             and previous_revoked_at is not null
+             and q.created_at > previous_revoked_at)
          )
          and q.status='APPROVED'
          and q.applied_at is not null
