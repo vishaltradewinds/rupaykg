@@ -17,11 +17,14 @@ async function bootstrapReservedMembership(pool: Pool, identityId: string, organ
   const client = await pool.connect();
   try {
     await client.query("begin");
-    await client.query("set local session_replication_role = 'replica'");
+    // Disable only the application lifecycle guard for deterministic Super Admin
+    // fixture setup. Keep foreign-key and all other PostgreSQL triggers active.
+    await client.query("alter table organization_memberships disable trigger stakeholder_membership_application_guard");
     const result = await client.query<{ id: string }>(
       "insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED') returning id",
       [identityId, organizationId, roleId],
     );
+    await client.query("alter table organization_memberships enable trigger stakeholder_membership_application_guard");
     await client.query("commit");
     const id = result.rows[0]?.id;
     if (!id) throw new Error("TEST_FIXTURE_MEMBERSHIP_INSERT_FAILED");
