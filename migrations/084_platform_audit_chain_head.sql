@@ -12,7 +12,7 @@ create table if not exists platform_audit_chain_head (
 );
 
 -- Do not guess a chain head if pre-existing audit history is branched or disconnected.
-do $
+do $audit$
 declare
   existing_events bigint;
   terminal_events bigint;
@@ -30,7 +30,7 @@ begin
     end if;
   end if;
 end;
-$;
+$audit$;
 
 insert into platform_audit_chain_head(singleton, last_event_id, last_event_hash)
 select true, e.id, e.event_hash
