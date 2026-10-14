@@ -13,8 +13,8 @@ begin
       select 1
         from evidence e
         join verifications v on v.evidence_id = e.id
-       where e.id = v.evidence_id
-         and e.activity_id = new.activity_id
+       where e.activity_id = new.activity_id
+         and v.activity_id = new.activity_id
          and v.id = new.verification_id
          and e.metadata->>'acceptanceFixture' = 'true'
     ) then
@@ -25,8 +25,11 @@ begin
       select 1
         from mrv_provenance_events m
         join verifications v on v.id = new.verification_id
+        join evidence e on e.id = m.evidence_id
        where m.activity_id = new.activity_id
          and m.verification_id = new.verification_id
+         and v.activity_id = m.activity_id
+         and e.activity_id = m.activity_id
          and m.evidence_id = v.evidence_id
          and v.evidence_id = m.evidence_id
          and m.guardian_status = 'VERIFIED'
