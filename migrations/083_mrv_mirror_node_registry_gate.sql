@@ -59,6 +59,7 @@ begin
     if exists (
       select 1 from credentials c
        where c.activity_id=old.activity_id and c.verification_id=old.verification_id
+         and c.status in ('ISSUED','ACTIVE','TRANSFERRED','RETIRED')
     ) then
       raise exception 'MRV_PROVENANCE_IMMUTABLE_AFTER_CREDENTIAL_ISSUANCE';
     end if;
@@ -68,6 +69,7 @@ begin
      and exists (
        select 1 from credentials c
         where c.activity_id=old.activity_id and c.verification_id=old.verification_id
+         and c.status in ('ISSUED','ACTIVE','TRANSFERRED','RETIRED')
      ) then
     raise exception 'MIRROR_NODE_PROOF_IMMUTABLE_AFTER_CREDENTIAL_ISSUANCE';
   end if;
