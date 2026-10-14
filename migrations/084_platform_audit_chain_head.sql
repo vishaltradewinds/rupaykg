@@ -2,7 +2,7 @@
 -- The row lock, rather than created_at or random UUID ordering, defines the authoritative append order.
 create table if not exists platform_audit_chain_head (
   singleton boolean primary key default true check (singleton),
-  last_event_id uuid references audit_events(id),
+  last_event_id uuid,
   last_event_hash text,
   updated_at timestamptz not null default clock_timestamp(),
   constraint platform_audit_chain_head_hash_pair check (
