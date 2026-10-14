@@ -655,7 +655,7 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
         const m = selected.rows[0];
         if (!m) return { status: 404 as const, body: { error: "Membership not found", code: "MEMBERSHIP_NOT_FOUND" } };
         if (m.identity_id === context.auth.identityId && m.role_name === "super_admin") return { status: 409 as const, body: { error: "You cannot modify your own Super Admin membership", code: "SELF_ROLE_CHANGE_FORBIDDEN" } };
-        if (m.role_name === "super_admin" && requestedStatus === "VERIFIED") return { status: 409 as const, body: { error: "Super Admin restoration requires a separate dual-control workflow", code: "RESERVED_ROLE_RESTORE_BLOCKED" } };
+        if (RESERVED_ROLES.has(m.role_name) && requestedStatus === "VERIFIED") return { status: 409 as const, body: { error: "Reserved platform-role restoration requires a separate approved workflow", code: "RESERVED_ROLE_RESTORE_BLOCKED" } };
         if (requestedStatus === "VERIFIED") {
           if (m.status === "VERIFIED") return { status: 200 as const, body: { source: "postgresql", syntheticData: false, replay: true, status: "VERIFIED" } };
           if (m.status !== "REJECTED" || !m.last_revoked_at) return { status: 409 as const, body: { error: "Only a previously revoked membership can be restored", code: "MEMBERSHIP_RESTORE_FORBIDDEN" } };
