@@ -307,6 +307,23 @@ test("PostgreSQL serializes concurrent Super Admin revocations and preserves one
     );
     assert.ok(Number(active.rows[0]?.count ?? 0) >= 1, "at least one active Super Admin must remain after racing revocations");
     assert.equal(activeBefore - Number(active.rows[0]?.count ?? 0), successes, "active admin count must match successful revocations");
+    const revocationEvents = await pool.query<{ id: string; target_id: string; event_hash: string; previous_hash: string | null }>(
+      "select id,target_id,event_hash,previous_hash from audit_events where target_id=any($1::uuid[]) and action='MEMBERSHIP_REVOKED' order by created_at,id",
+      [membershipIds],
+    );
+    assert.equal(revocationEvents.rows.length, successes, "every successful concurrent revocation must append exactly one audit event");
+    if (revocationEvents.rows.length === 2) {
+      assert.ok(
+        revocationEvents.rows.some(event => event.previous_hash === revocationEvents.rows.find(other => other.id !== event.id)?.event_hash),
+        "the two concurrent platform-admin audit appends must form one continuous chain",
+      );
+    }
+    const head = await pool.query<{ last_event_id: string | null; last_event_hash: string | null }>(
+      "select last_event_id,last_event_hash from platform_audit_chain_head where singleton=true",
+    );
+    const lastRevocation = revocationEvents.rows.at(-1);
+    assert.equal(head.rows[0]?.last_event_id, lastRevocation?.id, "audit head must reflect the last committed concurrent revocation");
+    assert.equal(head.rows[0]?.last_event_hash, lastRevocation?.event_hash, "audit head hash must match the last concurrent revocation");
   } finally {
     await app.close();
     // Keep the append-only audit records and their actor/organization foreign-key targets.
