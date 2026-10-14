@@ -165,7 +165,7 @@ test("the last active Super Admin membership cannot be revoked", async () => {
           suspended_at: null,
           last_revoked_at: null,
         }] };
-        if (sql.includes("count(*)::text count from organization_memberships")) return { rows: [{ count: "1" }] };
+        if (sql.includes("count(distinct om.identity_id)::text count from organization_memberships")) return { rows: [{ count: "1" }] };
         if (sql.includes("pg_advisory_xact_lock")) return { rows: [] };
         throw new Error(`Unexpected client SQL in last-admin test: ${sql}`);
       },
