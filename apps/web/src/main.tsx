@@ -74,6 +74,8 @@ function SuperAdminGovernance({token,actorIdentityId}:{token:string;actorIdentit
    setSelectedRoleId(previous=>roleResult.roles.some(r=>r.id===previous)?previous:(roleResult.roles.find(r=>!r.reserved)?.id??roleResult.roles[0]?.id??""));
    setGrantIdentityId(previous=>identityResult.identities.some(i=>i.id===previous)?previous:(identityResult.identities.find(i=>!i.suspended&&i.status==="VERIFIED"&&i.id!==actorIdentityId)?.id??""));
    setGrantRoleId(previous=>roleResult.roles.some(r=>r.id===previous&&!r.reserved&&r.permissions.every(p=>roleResult.safeEditablePermissions.includes(p)))?previous:(roleResult.roles.find(r=>!r.reserved&&r.permissions.every(p=>roleResult.safeEditablePermissions.includes(p)))?.id??""));
+   setReservedRoleId(previous=>roleResult.roles.some(r=>r.id===previous&&r.reserved)?previous:(roleResult.roles.find(r=>r.reserved)?.id??""));
+   setRestoreMembershipId(previous=>membershipResult.memberships.some(m=>m.id===previous&&m.role_name==="super_admin"&&m.status==="REJECTED"&&Boolean(m.last_revoked_at)&&m.identity_id!==actorIdentityId)?previous:(membershipResult.memberships.find(m=>m.role_name==="super_admin"&&m.status==="REJECTED"&&Boolean(m.last_revoked_at)&&m.identity_id!==actorIdentityId)?.id??""));
   }catch(e){setError(e instanceof Error?e.message:"Administrative data could not be loaded");}
   finally{setBusy(false);}
  }
@@ -89,6 +91,8 @@ function SuperAdminGovernance({token,actorIdentityId}:{token:string;actorIdentit
  const selectedRole=roles.find(r=>r.id===selectedRoleId);
  const roleLocked=Boolean(selectedRole&&(selectedRole.reserved||selectedRole.permissions.some(p=>!safePermissions.includes(p))));
  const grantRole=roles.find(r=>r.id===grantRoleId);
+ const reservedRole=roles.find(r=>r.id===reservedRoleId&&r.reserved);
+ const restoreMembership=memberships.find(m=>m.id===restoreMembershipId&&m.role_name==="super_admin"&&m.status==="REJECTED"&&Boolean(m.last_revoked_at));
  return <section className="admin-governance"><div className="section-heading"><div><p className="eyebrow">IDENTITY & ACCESS GOVERNANCE</p><h2>Administrative workbench</h2></div><button className="secondary" disabled={busy} onClick={()=>void load()}>{busy?"Working…":"Refresh all"}</button></div>
   <p className="admin-boundary">Every mutation requires a reason and writes an audit event in the same PostgreSQL transaction. Platform-reserved roles cannot be granted here. High-risk permission changes are deliberately locked for a separate governed workflow.</p>
   {error&&<p className="error" role="alert">{error}</p>}{message&&<p className="notice" role="status">{message}</p>}
@@ -103,7 +107,7 @@ function SuperAdminGovernance({token,actorIdentityId}:{token:string;actorIdentit
     {selectedRole&&<><small>Role ID: {selectedRole.id} · Organization ID: {selectedRole.organization_id}</small><p className="admin-boundary">{roleLocked?"LOCKED: reserved or contains high-risk permissions. Use a separately approved workflow.":"Only the low-risk permissions listed below can be edited here."}</p><div className="admin-permission-list">{safePermissions.map(p=><label key={p}><input type="checkbox" checked={selectedPermissions.includes(p)} disabled={busy||roleLocked} onChange={e=>setSelectedPermissions(previous=>e.target.checked?[...previous,p]:previous.filter(x=>x!==p))}/><span>{p}</span></label>)}</div><button disabled={busy||roleLocked||!selectedRole} onClick={()=>void mutate(`/api/v1/admin/roles/${selectedRole.id}/permissions`,"PATCH",{permissions:selectedPermissions})}>Save permission changes</button></>}
    </section>
    <section className="admin-management-panel"><div className="section-heading"><div><p className="eyebrow">MEMBERSHIP GOVERNANCE</p><h3>Grant verified access</h3></div></div>
-    <label>Verified identity<select value={grantIdentityId} onChange={e=>setGrantIdentityId(e.target.value)}><option value="">Select identity</option>{identities.filter(i=>i.status==="VERIFIED"&&!i.suspended).map(i=><option key={i.id} value={i.id}>{i.display_name} · {i.email??i.id}</option>)}</select></label>
+    <label>Verified identity<select value={grantIdentityId} onChange={e=>setGrantIdentityId(e.target.value)}><option value="">Select identity</option>{identities.filter(i=>i.status==="VERIFIED"&&!i.suspended&&i.id!==actorIdentityId).map(i=><option key={i.id} value={i.id}>{i.display_name} · {i.email??i.id}</option>)}</select></label>
     <label>Organization role<select value={grantRoleId} onChange={e=>setGrantRoleId(e.target.value)}><option value="">Select role</option>{roles.filter(r=>!r.reserved&&r.permissions.every(p=>safePermissions.includes(p))).map(r=><option key={r.id} value={r.id}>{r.organization_name} · {r.name}</option>)}</select></label>
     <p className="admin-boundary">Access can only be granted to a verified, active identity and a verified organization. Existing pending applications cannot be bypassed. Super Admin / Platform Admin assignments require a separate dual-control process.</p>
     <button disabled={busy||!grantIdentityId||!grantRole} onClick={()=>void mutate("/api/v1/admin/memberships","POST",{identityId:grantIdentityId,organizationId:grantRole?.organization_id,roleId:grantRoleId})}>Grant membership</button>
