@@ -240,6 +240,11 @@ test("PostgreSQL requires two distinct active Super Admins for reserved-role gra
       payload: { status: "REVOKED", reason: "Revoke role before restoration acceptance" },
     });
     assert.equal(revoked.statusCode, 200, revoked.body);
+    await assert.rejects(
+      pool.query("update organization_memberships set status='VERIFIED' where id=$1", [targetMembershipId]),
+      /RESERVED_ROLE_REQUIRES_DUAL_CONTROL/,
+      "PostgreSQL must block direct restoration without an approved two-person request",
+    );
 
     const restoreRequested = await app.inject({
       method: "POST",
