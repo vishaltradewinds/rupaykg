@@ -507,15 +507,17 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
             [change.target_identity_id, change.organization_id, change.role_id],
           );
           if (existing.rows[0]) return { status: 409 as const, body: { error: "Membership state changed; submit a new request for the current state", code: "ACCESS_CHANGE_MEMBERSHIP_CHANGED" } };
+          // Mark the approval within this transaction before INSERT so the database trigger can
+          // verify the matching two-person request. If the membership insert fails, the approval rolls back.
+          await client.query(
+            "update platform_access_change_requests set status='APPROVED',approver_identity_id=$2,decision_reason=$3,decided_at=clock_timestamp(),applied_at=clock_timestamp() where id=$1",
+            [requestId, context.auth.identityId, reason],
+          );
           const inserted = await client.query<{ id: string }>(
             "insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED') returning id",
             [change.target_identity_id, change.organization_id, change.role_id],
           );
           membershipId = inserted.rows[0]!.id;
-          await client.query(
-            "update platform_access_change_requests set status='APPROVED',approver_identity_id=$2,decision_reason=$3,decided_at=clock_timestamp(),applied_at=clock_timestamp() where id=$1",
-            [requestId, context.auth.identityId, reason],
-          );
         } else {
           const existing = await client.query<{ id: string; identity_id: string; organization_id: string; role_id: string; status: string; last_revoked_at: Date | null }>(
             `select om.id,om.identity_id,om.organization_id,om.role_id,om.status,om.last_revoked_at
