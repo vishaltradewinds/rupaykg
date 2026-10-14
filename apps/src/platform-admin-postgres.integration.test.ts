@@ -125,7 +125,7 @@ test("PostgreSQL Super Admin suspension revokes sessions and blocks subsequent a
 });
 
 
-test("PostgreSQL requires two distinct active Super Admins for reserved-role grants", { skip: !enabled }, async () => {
+test("PostgreSQL requires two distinct active Super Admins for reserved-role grants and restoration", { skip: !enabled }, async () => {
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
   const app = Fastify({ logger: false });
   await registerPlatformAdminRoutes(app, pool);
@@ -142,6 +142,7 @@ test("PostgreSQL requires two distinct active Super Admins for reserved-role gra
   let approverMembershipId = "";
   let targetMembershipId = "";
   let requestId = "";
+  let restoreRequestId = "";
   try {
     organizationId = (await pool.query<{ id: string }>(
       "insert into organizations(name,organization_type,status) values($1,'test_fixture','VERIFIED') returning id",
@@ -222,10 +223,41 @@ test("PostgreSQL requires two distinct active Super Admins for reserved-role gra
     });
     assert.equal(duplicateDecision.statusCode, 409);
     assert.equal(duplicateDecision.json().code, "ACCESS_CHANGE_ALREADY_DECIDED");
+
+    const revoked = await app.inject({
+      method: "PATCH",
+      url: "/api/v1/admin/memberships/" + targetMembershipId + "/status",
+      headers: { authorization: "Bearer " + approverToken, "x-rupaykg-organization-id": organizationId },
+      payload: { status: "REVOKED", reason: "Revoke role before restoration acceptance" },
+    });
+    assert.equal(revoked.statusCode, 200, revoked.body);
+
+    const restoreRequested = await app.inject({
+      method: "POST",
+      url: "/api/v1/admin/access-change-requests",
+      headers: { authorization: "Bearer " + requesterToken, "x-rupaykg-organization-id": organizationId },
+      payload: { requestType: "RESTORE_RESERVED_ROLE", membershipId: targetMembershipId, reason: "Restore platform administrator after review" },
+    });
+    assert.equal(restoreRequested.statusCode, 201, restoreRequested.body);
+    restoreRequestId = restoreRequested.json().request.id as string;
+
+    const restored = await app.inject({
+      method: "POST",
+      url: "/api/v1/admin/access-change-requests/" + restoreRequestId + "/approve",
+      headers: { authorization: "Bearer " + approverToken, "x-rupaykg-organization-id": organizationId },
+      payload: { reason: "Independent restoration approval completed" },
+    });
+    assert.equal(restored.statusCode, 200, restored.body);
+    assert.equal(restored.json().applied, true);
+    const restoredMembership = await pool.query<{ status: string }>(
+      "select status from organization_memberships where id=$1",
+      [targetMembershipId],
+    );
+    assert.equal(restoredMembership.rows[0]?.status, "VERIFIED", "reserved-role restoration must apply only after a second-admin approval");
   } finally {
     await app.close();
     // Keep hash-linked audit events append-only; delete only disposable authorization fixtures.
-    if (requestId) await pool.query("delete from platform_access_change_requests where id=$1", [requestId]);
+    if (requestId || restoreRequestId) await pool.query("delete from platform_access_change_requests where id=any($1::uuid[])", [[requestId, restoreRequestId].filter(Boolean)]);
     if (targetMembershipId) await pool.query("delete from organization_memberships where id=$1", [targetMembershipId]);
     if (requesterMembershipId || approverMembershipId) await pool.query("delete from organization_memberships where id=any($1::uuid[])", [[requesterMembershipId, approverMembershipId].filter(Boolean)]);
     if (requesterId || approverId) await pool.query("delete from identity_sessions where identity_id=any($1::uuid[])", [[requesterId, approverId].filter(Boolean)]);
