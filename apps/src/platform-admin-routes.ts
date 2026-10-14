@@ -391,7 +391,7 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
           );
           const row = selected.rows[0];
           if (!row) return { status: 404 as const, body: { error: "Membership not found", code: "MEMBERSHIP_NOT_FOUND" } };
-          if (!RESERVED_ROLES.has(row.role_name) || row.status !== "REJECTED" || !row.last_revoked_at) return { status: 409 as const, body: { error: "Only a previously revoked reserved platform-role membership can be restored through dual control", code: "RESERVED_ROLE_RESTORE_NOT_ELIGIBLE" } };
+          if (!RESERVED_ROLES.has(row.role_name) || row.role_organization_id !== row.organization_id || row.status !== "REJECTED" || !row.last_revoked_at) return { status: 409 as const, body: { error: "Only a previously revoked reserved platform-role membership with a valid organization binding can be restored through dual control", code: "RESERVED_ROLE_RESTORE_NOT_ELIGIBLE" } };
           if (row.identity_id === context.auth.identityId) return { status: 409 as const, body: { error: "You cannot request privileged access restoration for yourself", code: "SELF_ROLE_CHANGE_FORBIDDEN" } };
           if (row.identity_status !== "VERIFIED" || row.suspended_at || row.organization_status !== "VERIFIED") return { status: 409 as const, body: { error: "Target identity and organization must be verified and active", code: "ACCESS_CHANGE_TARGET_INACTIVE" } };
           target = { identity_id: row.identity_id, organization_id: row.organization_id, role_id: row.role_id, role_name: row.role_name, identity_status: row.identity_status, suspended_at: row.suspended_at, organization_status: row.organization_status, role_organization_id: row.role_organization_id, membership_id: membershipId };
@@ -459,6 +459,7 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
         if (!change) return { status: 404 as const, body: { error: "Access change request not found", code: "ACCESS_CHANGE_NOT_FOUND" } };
         if (change.status !== "PENDING") return { status: 409 as const, body: { error: "Access change request has already been decided", code: "ACCESS_CHANGE_ALREADY_DECIDED" } };
         if (change.requester_identity_id === context.auth.identityId) return { status: 409 as const, body: { error: "A different Super Admin must decide this request", code: "DUAL_CONTROL_SELF_APPROVAL_FORBIDDEN" } };
+        if (change.target_identity_id === context.auth.identityId) return { status: 409 as const, body: { error: "The target identity cannot approve its own privileged access change", code: "DUAL_CONTROL_TARGET_APPROVAL_FORBIDDEN" } };
         const expectedRequestHash = hash(JSON.stringify({
           requestType: change.request_type,
           identityId: change.target_identity_id,
