@@ -44,6 +44,21 @@ async function activityInAuthorizedGeography(pool: Pool, auth: AuthContext, acti
   return membership.rows[0]?.ok === true;
 }
 
+/**
+ * Acceptance fixtures may exercise the real external trust rail, but they are
+ * never evidence of a real carbon project and must not be presented as registry eligible.
+ */
+async function isAcceptanceFixture(pool: Pool, activityId: string): Promise<boolean> {
+  const result = await pool.query<{ is_fixture: boolean }>(
+    `select
+       exists(select 1 from activities a where a.id=$1 and a.metadata->>'acceptanceFixture'='true')
+       or exists(select 1 from evidence e where e.activity_id=$1 and e.metadata->>'acceptanceFixture'='true')
+       as is_fixture`,
+    [activityId],
+  );
+  return result.rows[0]?.is_fixture === true;
+}
+
 export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null): Promise<void> {
   app.get("/api/v1/mrv/status", async (request, reply) => {
     const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
@@ -113,11 +128,14 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
         return integrityHash({ schema: "rupaykg:mrv:v1", activityId, verificationId, evidenceId, guardianPolicyId: policyId, guardianExecutionId: record.guardian_execution_id, mrvStatus: "VERIFIED", methodologyCode, quantity, unit, metadata: { guardianStatus: "VERIFIED" } }) === record.integrity_hash;
       });
       if (existing?.guardian_execution_id && existing.hcs_topic_id && existing.hcs_transaction_id && existing.hcs_consensus_timestamp) {
+        const acceptanceFixture = await isAcceptanceFixture(pool, activityId);
         return reply.code(200).send({
           source: "postgresql+guardian+hedera", syntheticData: false, replay: true,
           guardian: { status: "VERIFIED", executionId: existing.guardian_execution_id, policyId: existing.guardian_policy_id, message: "Reused persisted Guardian execution; no duplicate provider submission." },
           hedera: { status: "CONSENSUS_CONFIRMED", transactionId: existing.hcs_transaction_id, consensusTimestamp: existing.hcs_consensus_timestamp, topicId: existing.hcs_topic_id, network: hederaStatus().network, integrityHash: existing.integrity_hash, message: "Reused persisted HCS anchor; no duplicate consensus message submitted." },
-          provenance: existing, eligibleForRegistry: Boolean(existing.mirror_node_verified_at),
+          provenance: existing,
+          eligibleForRegistry: !acceptanceFixture && Boolean(existing.mirror_node_verified_at),
+          ...(acceptanceFixture ? { registryEligibilityReason: "ACCEPTANCE_FIXTURE_NOT_REGISTRY_ELIGIBLE" } : {}),
         });
       }
 
@@ -145,7 +163,14 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
       if (!await requirePermission(pool, auth, owner.rows[0].organization_id, ["guardian:read"])) return reply.code(403).send({ error: "Guardian read permission required", code: "MRV_PERMISSION_REQUIRED" });
       if (!await activityInAuthorizedGeography(pool, auth, activityId, owner.rows[0].organization_id)) return reply.code(403).send({ error: "Activity geography is outside organization authorization scope", code: "GEOGRAPHY_FORBIDDEN" });
       const rows = await pool.query("select * from mrv_provenance_events where activity_id=$1 order by created_at desc", [activityId]);
-      return { source: "postgresql", syntheticData: false, eligibleForRegistry: rows.rows.some(r => r.guardian_status === "VERIFIED" && r.hcs_status === "CONSENSUS_CONFIRMED" && r.mirror_node_verified_at != null), provenance: rows.rows };
+      const acceptanceFixture = await isAcceptanceFixture(pool, activityId);
+      return {
+        source: "postgresql",
+        syntheticData: false,
+        eligibleForRegistry: !acceptanceFixture && rows.rows.some(r => r.guardian_status === "VERIFIED" && r.hcs_status === "CONSENSUS_CONFIRMED" && r.mirror_node_verified_at != null),
+        ...(acceptanceFixture ? { registryEligibilityReason: "ACCEPTANCE_FIXTURE_NOT_REGISTRY_ELIGIBLE" } : {}),
+        provenance: rows.rows,
+      };
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "MRV provenance unavailable", syntheticData: false }); }
   });
 
@@ -171,7 +196,15 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
         [row.id, timestamp, row.hcs_topic_id, row.integrity_hash, row.guardian_execution_id],
       );
       if (!persisted.rows[0]?.mirror_node_verified_at) return { source: "hedera-mirror-node", syntheticData: false, verified: false, eligibleForRegistry: false, error: "MRV provenance changed during Mirror Node verification; retry against the current record" };
-      return { source: "hedera-mirror-node", syntheticData: false, ...verification, eligibleForRegistry: true, persistedVerificationAt: persisted.rows[0].mirror_node_verified_at };
+      const acceptanceFixture = await isAcceptanceFixture(pool, row.activity_id);
+      return {
+        source: "hedera-mirror-node",
+        syntheticData: false,
+        ...verification,
+        eligibleForRegistry: !acceptanceFixture,
+        ...(acceptanceFixture ? { registryEligibilityReason: "ACCEPTANCE_FIXTURE_NOT_REGISTRY_ELIGIBLE" } : {}),
+        persistedVerificationAt: persisted.rows[0].mirror_node_verified_at,
+      };
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Hedera mirror-node verification unavailable", code: "HCS_VERIFY_UNAVAILABLE", syntheticData: false }); }
   });
 
