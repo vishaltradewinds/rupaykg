@@ -55,6 +55,10 @@ The official open-source Guardian distribution includes an `mrv-sender` service.
 12. Confirm the authenticated `GET /api/v1/mrv/hedera/verify/:consensusTimestamp` response reports `verified=true` and persists `mirror_node_verified_at` for that exact provenance row.
 13. Confirm the downstream registry/value lifecycle remains ineligible until that persisted Mirror Node verification exists; credential issuance requires that persisted verification marker for the exact provenance row and fails closed if it is absent. The database trigger independently requires the same marker.
 
+## Acceptance-fixture boundary
+
+The optional `RUPAYKG_ACCEPTANCE_SEED_ON_START=true` dataset is a test fixture. It may be used to exercise the real external Guardian/Hedera/Mirror Node integration, but it is not evidence of a real waste activity or a carbon-credit project. Activities/evidence marked `metadata.acceptanceFixture=true` must remain ineligible for registry issuance even when external anchoring succeeds. PostgreSQL independently rejects any credential transition into a value-bearing state for these fixtures; MRV API responses must also report `eligibleForRegistry=false`.
+
 ## Negative acceptance cases
 
 The live gate is not passed unless all of these remain fail-closed:
