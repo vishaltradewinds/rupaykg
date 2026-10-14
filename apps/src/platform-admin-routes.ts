@@ -451,13 +451,23 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
     if (!validReason(reason)) return routeError(reply, 400, "A decision reason of 8–1000 characters is required", "ADMIN_REASON_REQUIRED");
     try {
       const result = await transaction(pool, async (client) => {
-        const selected = await client.query<{ id: string; request_type: string; target_identity_id: string; organization_id: string; role_id: string; membership_id: string | null; requester_identity_id: string; status: string; reason: string }>(
-          "select id,request_type,target_identity_id,organization_id,role_id,membership_id,requester_identity_id,status,reason from platform_access_change_requests where id=$1 for update",
+        const selected = await client.query<{ id: string; request_type: string; target_identity_id: string; organization_id: string; role_id: string; membership_id: string | null; requester_identity_id: string; status: string; reason: string; request_hash: string }>(
+          "select id,request_type,target_identity_id,organization_id,role_id,membership_id,requester_identity_id,status,reason,request_hash from platform_access_change_requests where id=$1 for update",
           [requestId],
         );
         const change = selected.rows[0];
         if (!change) return { status: 404 as const, body: { error: "Access change request not found", code: "ACCESS_CHANGE_NOT_FOUND" } };
         if (change.status !== "PENDING") return { status: 409 as const, body: { error: "Access change request has already been decided", code: "ACCESS_CHANGE_ALREADY_DECIDED" } };
+        const expectedRequestHash = hash(JSON.stringify({
+          requestType: change.request_type,
+          identityId: change.target_identity_id,
+          organizationId: change.organization_id,
+          roleId: change.role_id,
+          membershipId: change.membership_id,
+          requesterIdentityId: change.requester_identity_id,
+          reason: change.reason,
+        }));
+        if (expectedRequestHash !== change.request_hash) return { status: 409 as const, body: { error: "Access request contents no longer match their recorded integrity hash", code: "ACCESS_CHANGE_INTEGRITY_MISMATCH" } };
         if (change.requester_identity_id === context.auth.identityId) return { status: 409 as const, body: { error: "A different Super Admin must decide this request", code: "DUAL_CONTROL_SELF_APPROVAL_FORBIDDEN" } };
         const authorities = await client.query<{ requester_active: boolean; approver_active: boolean }>(
           `select
