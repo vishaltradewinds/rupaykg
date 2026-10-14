@@ -67,7 +67,7 @@ function SuperAdminGovernance({token,actorIdentityId}:{token:string;actorIdentit
    ]);
    setIdentities(identityResult.identities);setRoles(roleResult.roles);setMemberships(membershipResult.memberships);setEvents(auditResult.auditEvents);setSafePermissions(roleResult.safeEditablePermissions);setAccessRequests(accessRequestResult.requests);
    setSelectedRoleId(previous=>roleResult.roles.some(r=>r.id===previous)?previous:(roleResult.roles.find(r=>!r.reserved)?.id??roleResult.roles[0]?.id??""));
-   setGrantIdentityId(previous=>identityResult.identities.some(i=>i.id===previous)?previous:(identityResult.identities.find(i=>!i.suspended&&i.status==="VERIFIED")?.id??""));
+   setGrantIdentityId(previous=>identityResult.identities.some(i=>i.id===previous)?previous:(identityResult.identities.find(i=>!i.suspended&&i.status==="VERIFIED"&&i.id!==actorIdentityId)?.id??""));
    setGrantRoleId(previous=>roleResult.roles.some(r=>r.id===previous&&!r.reserved&&r.permissions.every(p=>roleResult.safeEditablePermissions.includes(p)))?previous:(roleResult.roles.find(r=>!r.reserved&&r.permissions.every(p=>roleResult.safeEditablePermissions.includes(p)))?.id??""));
   }catch(e){setError(e instanceof Error?e.message:"Administrative data could not be loaded");}
   finally{setBusy(false);}
