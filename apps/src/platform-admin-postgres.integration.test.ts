@@ -95,7 +95,7 @@ test("PostgreSQL Super Admin suspension revokes sessions and blocks subsequent a
     assert.equal(reactivated.json().suspended, false);
 
     const chain = await pool.query<{ action: string; event_hash: string; previous_hash: string | null }>(
-      "select action,event_hash,previous_hash from audit_events where actor_identity_id=$1 and target_id=$2 and action in ('IDENTITY_SUSPENDED','IDENTITY_REACTIVATED') order by id asc",
+      "select action,event_hash,previous_hash from audit_events where actor_identity_id=$1 and target_id=$2 and action in ('IDENTITY_SUSPENDED','IDENTITY_REACTIVATED') order by created_at asc, id asc",
       [actorId, targetId],
     );
     assert.equal(chain.rows.length, 2, "both lifecycle changes should be audited");
