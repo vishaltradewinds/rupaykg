@@ -109,6 +109,13 @@ describe("registry and settlement runtime acceptance", () => {
       assert.equal(provenanceBody.eligibleForRegistry, false, "MRV API must never present acceptance fixture evidence as registry eligible");
       assert.equal(provenanceBody.registryEligibilityReason, "ACCEPTANCE_FIXTURE_NOT_REGISTRY_ELIGIBLE");
 
+      const apiIssuance = await request("/api/v1/credentials", {
+        method: "POST",
+        body: JSON.stringify({ activityId, trustRootId: "runtime-root-fixture-api-" + suffix, verificationId, issuerOrganizationId: ownerOrgId, quantity: 1, unit: "kg" }),
+      }, actorToken, ownerOrgId);
+      assert.equal(apiIssuance.status, 409);
+      assert.equal((await body(apiIssuance)).code, "ACCEPTANCE_FIXTURE_NOT_REGISTRY_ELIGIBLE");
+
       const pending = await pool.query<{ id: string }>(
         "insert into credentials(activity_id,issuer_organization_id,trust_root_id,status,verification_id,quantity,unit,issued_at) values($1,$2,$3,'ELIGIBLE',$4,1,'kg',now()) returning id",
         [activityId, ownerOrgId, "runtime-root-acceptance-fixture-" + suffix, verificationId],
