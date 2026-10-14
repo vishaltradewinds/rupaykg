@@ -182,7 +182,7 @@ test("PostgreSQL serializes concurrent Super Admin revocations and preserves one
     await app.close();
     if (actorIds.length && membershipIds.length) {
       await pool.query(
-        "delete from audit_events where actor_identity_id = any($1::uuid[]) and target_id = any($2::text[]) and action='MEMBERSHIP_REVOKED'",
+        "delete from audit_events where actor_identity_id = any($1::uuid[]) and target_id = any($2::uuid[]) and action='MEMBERSHIP_REVOKED'",
         [actorIds, membershipIds],
       );
     }
