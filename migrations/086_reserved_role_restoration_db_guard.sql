@@ -18,6 +18,12 @@ begin
     from roles r
    where r.id = new.role_id and r.organization_id = new.organization_id;
 
+  -- Preserve the existing onboarding lifecycle for ordinary memberships: this trigger's new
+  -- INSERT coverage exists only to prevent direct reserved-role grants.
+  if TG_OP = 'INSERT' and coalesce(role_name, '') not in ('super_admin','platform_admin') then
+    return new;
+  end if;
+
   if role_name in ('super_admin','platform_admin') then
     access_request_type := case when TG_OP = 'INSERT' then 'GRANT_RESERVED_ROLE' else 'RESTORE_RESERVED_ROLE' end;
 
