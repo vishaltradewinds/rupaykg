@@ -47,6 +47,10 @@ function SuperAdminGovernance({token,actorIdentityId}:{token:string;actorIdentit
  const [memberships,setMemberships]=useState<AdminMembership[]>([]);
  const [events,setEvents]=useState<AdminAuditEvent[]>([]);
  const [safePermissions,setSafePermissions]=useState<string[]>([]);
+ const [accessRequests,setAccessRequests]=useState<AccessChangeRequest[]>([]);
+ const [reservedRoleId,setReservedRoleId]=useState("");
+ const [restoreMembershipId,setRestoreMembershipId]=useState("");
+ const [accessRequestType,setAccessRequestType]=useState<"GRANT_RESERVED_ROLE"|"RESTORE_SUPER_ADMIN">("GRANT_RESERVED_ROLE");
  const [search,setSearch]=useState("");
  const [selectedRoleId,setSelectedRoleId]=useState("");
  const [selectedPermissions,setSelectedPermissions]=useState<string[]>([]);
@@ -63,7 +67,8 @@ function SuperAdminGovernance({token,actorIdentityId}:{token:string;actorIdentit
     api<{identities:AdminIdentity[]}>(`/api/v1/admin/identities?search=${encodeURIComponent(search)}&limit=50`,token),
     api<AdminRolesResponse>("/api/v1/admin/roles",token),
     api<{memberships:AdminMembership[]}>("/api/v1/admin/memberships",token),
-    api<{auditEvents:AdminAuditEvent[]}>("/api/v1/admin/audit-events?limit=50",token)
+    api<{auditEvents:AdminAuditEvent[]}>("/api/v1/admin/audit-events?limit=50",token),
+    api<{requests:AccessChangeRequest[]}>("/api/v1/admin/access-change-requests?status=PENDING",token)
    ]);
    setIdentities(identityResult.identities);setRoles(roleResult.roles);setMemberships(membershipResult.memberships);setEvents(auditResult.auditEvents);setSafePermissions(roleResult.safeEditablePermissions);setAccessRequests(accessRequestResult.requests);
    setSelectedRoleId(previous=>roleResult.roles.some(r=>r.id===previous)?previous:(roleResult.roles.find(r=>!r.reserved)?.id??roleResult.roles[0]?.id??""));
