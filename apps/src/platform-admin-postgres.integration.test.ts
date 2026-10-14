@@ -113,3 +113,83 @@ test("PostgreSQL Super Admin suspension revokes sessions and blocks subsequent a
     await pool.end();
   }
 });
+
+
+test("PostgreSQL serializes concurrent Super Admin revocations and preserves one active administrator", { skip: !enabled }, async (t) => {
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  const app = Fastify({ logger: false });
+  await registerPlatformAdminRoutes(app, pool);
+  const suffix = randomBytes(8).toString("hex");
+  const tokenA = randomBytes(32).toString("base64url");
+  const tokenB = randomBytes(32).toString("base64url");
+  const actorIds: string[] = [];
+  const membershipIds: string[] = [];
+  let organizationId = "";
+  let roleId = "";
+  try {
+    const org = await pool.query<{ id: string }>(
+      "insert into organizations(name,organization_type,status) values($1,'test_fixture','VERIFIED') returning id",
+      [`TEST-CONCURRENT-ADMIN-${suffix}`],
+    );
+    organizationId = org.rows[0]!.id;
+    for (const [index, token] of [tokenA, tokenB].entries()) {
+      const identity = await pool.query<{ id: string }>(
+        "insert into identities(external_subject,display_name,email,status) values($1,$2,$3,'VERIFIED') returning id",
+        [`test-concurrent-admin:${suffix}:${index}`, `Test Concurrent Admin ${suffix} ${index}`, `test-concurrent-admin-${suffix}-${index}@example.invalid`],
+      );
+      actorIds.push(identity.rows[0]!.id);
+      await pool.query(
+        "insert into identity_sessions(identity_id,expires_at,token_hash) values($1,now()+interval '1 hour',$2)",
+        [identity.rows[0]!.id, hash(token)],
+      );
+    }
+    const role = await pool.query<{ id: string }>(
+      "insert into roles(organization_id,name,permissions,geography_scope) values($1,'super_admin',$2::jsonb,'[]') returning id",
+      [organizationId, JSON.stringify(["dashboard:read", "admin:users", "admin:roles", "admin:security"])],
+    );
+    roleId = role.rows[0]!.id;
+    for (const identityId of actorIds) {
+      const membership = await pool.query<{ id: string }>(
+        "insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED') returning id",
+        [identityId, organizationId, roleId],
+      );
+      membershipIds.push(membership.rows[0]!.id);
+    }
+
+    const revoke = (actorIndex: number, targetIndex: number) => app.inject({
+      method: "PATCH",
+      url: `/api/v1/admin/memberships/${membershipIds[targetIndex]}/status`,
+      headers: {
+        authorization: `Bearer ${[tokenA, tokenB][actorIndex]}`,
+        "x-rupaykg-organization-id": organizationId,
+      },
+      payload: { status: "REVOKED", reason: "Concurrent revocation integration test" },
+    });
+    const responses = await Promise.all([revoke(0, 1), revoke(1, 0)]);
+    const statuses = responses.map((response) => response.statusCode).sort((a, b) => a - b);
+    assert.deepEqual(statuses, [200, 409], "exactly one revocation should succeed while the other is rejected as last-admin protection");
+
+    const active = await pool.query<{ count: string }>(
+      `select count(*)::text count from organization_memberships om
+       join roles r on r.id=om.role_id join identities i on i.id=om.identity_id
+       where r.name='super_admin' and om.status='VERIFIED' and i.status='VERIFIED' and i.suspended_at is null
+         and om.organization_id=$1`,
+      [organizationId],
+    );
+    assert.equal(Number(active.rows[0]?.count ?? 0), 1, "one active Super Admin must remain after racing revocations");
+  } finally {
+    await app.close();
+    if (actorIds.length && membershipIds.length) {
+      await pool.query(
+        "delete from audit_events where actor_identity_id = any($1::uuid[]) and target_id = any($2::text[]) and action='MEMBERSHIP_REVOKED'",
+        [actorIds, membershipIds],
+      );
+    }
+    if (actorIds.length) await pool.query("delete from identity_sessions where identity_id = any($1::uuid[])", [actorIds]);
+    if (membershipIds.length) await pool.query("delete from organization_memberships where id = any($1::uuid[])", [membershipIds]);
+    if (roleId) await pool.query("delete from roles where id=$1", [roleId]);
+    if (actorIds.length) await pool.query("delete from identities where id = any($1::uuid[])", [actorIds]);
+    if (organizationId) await pool.query("delete from organizations where id=$1", [organizationId]);
+    await pool.end();
+  }
+});
