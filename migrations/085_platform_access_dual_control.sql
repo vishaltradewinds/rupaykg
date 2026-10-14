@@ -15,6 +15,10 @@ create table if not exists platform_access_change_requests (
   created_at timestamptz not null default clock_timestamp(),
   decided_at timestamptz,
   applied_at timestamptz,
+  constraint platform_access_change_request_shape check (
+    (request_type = 'GRANT_RESERVED_ROLE' and membership_id is null)
+    or (request_type = 'RESTORE_SUPER_ADMIN' and membership_id is not null)
+  ),
   constraint platform_access_change_distinct_approver check (
     approver_identity_id is null or approver_identity_id <> requester_identity_id
   ),
