@@ -321,7 +321,7 @@ test("PostgreSQL serializes concurrent Super Admin revocations and preserves one
     const head = await pool.query<{ last_event_id: string | null; last_event_hash: string | null }>(
       "select last_event_id,last_event_hash from platform_audit_chain_head where singleton=true",
     );
-    const lastRevocation = revocationEvents.rows.at(-1);
+    const lastRevocation = revocationEvents.rows[revocationEvents.rows.length - 1];
     assert.equal(head.rows[0]?.last_event_id, lastRevocation?.id, "audit head must reflect the last committed concurrent revocation");
     assert.equal(head.rows[0]?.last_event_hash, lastRevocation?.event_hash, "audit head hash must match the last concurrent revocation");
   } finally {
