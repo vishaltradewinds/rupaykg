@@ -1,7 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type { Pool, PoolClient } from "pg";
 import { authenticate, canActForOrganization, canPerformHighRiskActionInDatabase, hasOrganizationPermission, type AuthContext } from "./auth.js";
-import { verifyHcsMessage } from "./hedera-anchor.js";
 
 type Reply={code:(status:number)=>{send:(body:unknown)=>unknown}};
 type Request={body:unknown;params:Record<string,string>;log:{error:(error:unknown)=>void}};
@@ -29,8 +28,8 @@ export async function registerRegistryRoutes(app:FastifyInstance,pool:Pool|null)
       if(!e.rows[0]||e.rows[0].status!=="VERIFIED"||e.rows[0].activity_id!==activityId)throw Object.assign(new Error("Verification is not bound to verified activity evidence"),{code:"EVIDENCE_MISMATCH"});
       const a=await c.query<{organization_id:string;status:string}>("select organization_id,status from activities where id=$1 for update",[activityId]);
       if(!a.rows[0]||a.rows[0].organization_id!==issuerOrganizationId||a.rows[0].status!=="COMPLETED")throw Object.assign(new Error("Completed activity owned by issuer is required"),{code:"ACTIVITY_NOT_ELIGIBLE"});
-      const provenance=await c.query<{id:string;guardian_execution_id:string;hcs_topic_id:string;hcs_consensus_timestamp:string;integrity_hash:string}>(
-        `select m.id,m.guardian_execution_id,m.hcs_topic_id,m.hcs_consensus_timestamp,m.integrity_hash
+      const provenance=await c.query<{id:string;guardian_execution_id:string;hcs_topic_id:string;hcs_consensus_timestamp:string;integrity_hash:string;mirror_node_verified_at:Date}>(
+        `select m.id,m.guardian_execution_id,m.hcs_topic_id,m.hcs_consensus_timestamp,m.integrity_hash,m.mirror_node_verified_at
            from mrv_provenance_events m
            join verifications v on v.id=m.verification_id and v.evidence_id=m.evidence_id
           where m.activity_id=$1 and m.verification_id=$2 and m.evidence_id=$3
@@ -45,12 +44,10 @@ export async function registerRegistryRoutes(app:FastifyInstance,pool:Pool|null)
         [activityId,verificationId,v.rows[0].evidence_id]);
       const proof=provenance.rows[0];
       if(!proof)throw Object.assign(new Error("Guardian, Hedera consensus and persisted Mirror Node verification are required before credential issuance"),{code:"MIRROR_NODE_VERIFICATION_REQUIRED"});
-      const mirror=await verifyHcsMessage(proof.hcs_consensus_timestamp,proof.hcs_topic_id,proof.integrity_hash,activityId,verificationId,v.rows[0].evidence_id,proof.guardian_execution_id);
-      if(!mirror.verified)throw Object.assign(new Error("Current Mirror Node verification could not confirm the exact MRV provenance; credential issuance is blocked"),{code:"MIRROR_NODE_REVALIDATION_FAILED"});
       const existing=await c.query("select id from credentials where activity_id=$1 and verification_id=$2",[activityId,verificationId]);if(existing.rows[0])throw Object.assign(new Error("Credential already exists for verification"),{code:"CREDENTIAL_EXISTS"});
       const inserted=await c.query("insert into credentials(activity_id,issuer_organization_id,trust_root_id,status,verification_id,quantity,unit,issued_at) values($1,$2,$3,'ISSUED',$4,$5,$6,now()) returning *",[activityId,issuerOrganizationId,trustRootId,verificationId,quantity,unit]);
       await c.query("insert into registry_events(credential_id,event_type,from_owner_id,to_owner_id,verification_id,recorded_by_identity_id,event_hash) values($1,'ISSUED',null,$2,$3,$4,$5)",[inserted.rows[0].id,issuerOrganizationId,verificationId,auth.identityId,`issue:${inserted.rows[0].id}:${verificationId}`]);return inserted.rows[0]
-    })})}catch(error){request.log.error(error);const code=(error as {code?:string}).code;if(code==="HIGH_RISK_PERMISSION_REQUIRED")return reply.code(403).send({error:(error as Error).message,code});if(["VERIFICATION_REQUIRED","EVIDENCE_MISMATCH","ACTIVITY_NOT_ELIGIBLE","CREDENTIAL_EXISTS","MIRROR_NODE_VERIFICATION_REQUIRED"].includes(code??""))return reply.code(409).send({error:(error as Error).message,code});if(code==="MIRROR_NODE_REVALIDATION_FAILED")return reply.code(503).send({error:(error as Error).message,code,syntheticData:false});return reply.code(503).send({error:"Credential issuance unavailable",syntheticData:false})}
+    })})}catch(error){request.log.error(error);const code=(error as {code?:string}).code;if(code==="HIGH_RISK_PERMISSION_REQUIRED")return reply.code(403).send({error:(error as Error).message,code});if(["VERIFICATION_REQUIRED","EVIDENCE_MISMATCH","ACTIVITY_NOT_ELIGIBLE","CREDENTIAL_EXISTS","MIRROR_NODE_VERIFICATION_REQUIRED"].includes(code??""))return reply.code(409).send({error:(error as Error).message,code});return reply.code(503).send({error:"Credential issuance unavailable",syntheticData:false})}
   });
 
   app.post("/api/v1/credentials/:credentialId/activate",async(request,reply)=>{
