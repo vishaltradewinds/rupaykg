@@ -99,9 +99,9 @@ Guardian/Hedera provenance does not itself constitute CPCB registration, an EPR 
 
 ## Platform-admin dual-control acceptance
 
-Reserved platform-role grants and revoked Super Admin restoration are not permitted through ordinary membership endpoints. The separate database-backed workflow uses:
+Reserved platform-role grants and restoration of revoked reserved-role memberships are not permitted through ordinary membership endpoints. The separate database-backed workflow uses:
 
-- `POST /api/v1/admin/access-change-requests` to request `GRANT_RESERVED_ROLE` or `RESTORE_SUPER_ADMIN`.
+- `POST /api/v1/admin/access-change-requests` to request `GRANT_RESERVED_ROLE` or `RESTORE_RESERVED_ROLE` for a verified `super_admin` or `platform_admin` role.
 - `GET /api/v1/admin/access-change-requests` to review the request queue.
 - `POST /api/v1/admin/access-change-requests/:requestId/approve` or `/reject` for a distinct active Super Admin to decide.
 - The approval transaction revalidates both administrators, the target identity, organization, reserved role, and membership state before applying the change.
