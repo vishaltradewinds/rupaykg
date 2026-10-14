@@ -79,15 +79,32 @@ test("PostgreSQL Super Admin suspension revokes sessions and blocks subsequent a
     });
     assert.equal(rejected.statusCode, 401, "suspended identity must fail authentication");
     const audit = await pool.query<{ id: string; event_hash: string; previous_hash: string | null }>(
-      "select id,event_hash,previous_hash from audit_events where actor_identity_id=$1 and target_id=$2 and action='IDENTITY_SUSPENDED' order by created_at desc limit 1",
+      "select id,event_hash,previous_hash from audit_events where actor_identity_id=$1 and target_id=$2 and action='IDENTITY_SUSPENDED' order by id desc limit 1",
       [actorId, targetId],
     );
     auditId = audit.rows[0]?.id ?? "";
     assert.ok(audit.rows[0]?.event_hash, "suspension should have an audit event");
+
+    const reactivated = await app.inject({
+      method: "POST",
+      url: "/api/v1/admin/identities/" + targetId + "/reactivate",
+      headers: { authorization: "Bearer " + actorToken, "x-rupaykg-organization-id": organizationId },
+      payload: { reason: "Verified security review permits reactivation" },
+    });
+    assert.equal(reactivated.statusCode, 200, reactivated.body);
+    assert.equal(reactivated.json().suspended, false);
+
+    const chain = await pool.query<{ action: string; event_hash: string; previous_hash: string | null }>(
+      "select action,event_hash,previous_hash from audit_events where actor_identity_id=$1 and target_id=$2 and action in ('IDENTITY_SUSPENDED','IDENTITY_REACTIVATED') order by id asc",
+      [actorId, targetId],
+    );
+    assert.equal(chain.rows.length, 2, "both lifecycle changes should be audited");
+    assert.ok(chain.rows[0]?.event_hash && chain.rows[1]?.event_hash, "both audit events need hashes");
+    assert.equal(chain.rows[1]?.previous_hash, chain.rows[0]?.event_hash, "reactivation must link to the immediately preceding suspension event");
   } finally {
     await app.close();
     // This test is permitted only against an explicitly designated disposable test database.
-    if (auditId) await pool.query("delete from audit_events where id=$1", [auditId]);
+    if (actorId && targetId) await pool.query("delete from audit_events where actor_identity_id=$1 and target_id=$2 and action in ('IDENTITY_SUSPENDED','IDENTITY_REACTIVATED')", [actorId, targetId]);
     if (actorId || targetId) await pool.query("delete from identity_sessions where identity_id = any($1::uuid[])", [[actorId, targetId].filter(Boolean)]);
     if (membershipId) await pool.query("delete from organization_memberships where id=$1", [membershipId]);
     if (roleId) await pool.query("delete from roles where id=$1", [roleId]);
