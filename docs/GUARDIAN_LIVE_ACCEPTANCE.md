@@ -97,6 +97,18 @@ Do **not** commit operator private keys, API bearer tokens, VC private keys, or 
 
 Guardian/Hedera provenance does not itself constitute CPCB registration, an EPR certificate, environmental approval, SEBI acceptance, or any other statutory approval. RupayKG may retain and report authoritative external references when actually issued by the competent authority, but must not fabricate them from internal MRV state.
 
+## Platform-admin dual-control acceptance
+
+Reserved platform-role grants and revoked Super Admin restoration are not permitted through ordinary membership endpoints. The separate database-backed workflow uses:
+
+- `POST /api/v1/admin/access-change-requests` to request `GRANT_RESERVED_ROLE` or `RESTORE_SUPER_ADMIN`.
+- `GET /api/v1/admin/access-change-requests` to review the request queue.
+- `POST /api/v1/admin/access-change-requests/:requestId/approve` or `/reject` for a distinct active Super Admin to decide.
+- The approval transaction revalidates both administrators, the target identity, organization, reserved role, and membership state before applying the change.
+- Requester self-approval is rejected; request, decision, and applied change are written to the platform audit chain.
+
+Acceptance still requires authenticated browser testing with two separate authorized Super Admin identities, including self-approval rejection, approval, rejection, replay/duplicate decision, stale target state, and audit-chain continuity. A successful CI run alone is not production certification.
+
 ## Deployment gate
 
 Cloud Run deployment remains the final step. The production deployment gate is:
