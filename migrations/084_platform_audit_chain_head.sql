@@ -11,10 +11,34 @@ create table if not exists platform_audit_chain_head (
   )
 );
 
+-- Do not guess a chain head if pre-existing audit history is branched or disconnected.
+do $
+declare
+  existing_events bigint;
+  terminal_events bigint;
+begin
+  select count(*) into existing_events from audit_events;
+  if existing_events > 0 then
+    select count(*) into terminal_events
+      from audit_events e
+     where not exists (
+       select 1 from audit_events successor
+        where successor.previous_hash = e.event_hash
+     );
+    if terminal_events <> 1 then
+      raise exception 'PLATFORM_AUDIT_CHAIN_RECONCILIATION_REQUIRED: expected exactly one terminal audit event, found %', terminal_events;
+    end if;
+  end if;
+end;
+$;
+
 insert into platform_audit_chain_head(singleton, last_event_id, last_event_hash)
 select true, e.id, e.event_hash
   from audit_events e
- order by e.created_at desc, e.id desc
+ where not exists (
+   select 1 from audit_events successor
+    where successor.previous_hash = e.event_hash
+ )
  limit 1
 on conflict (singleton) do nothing;
 
