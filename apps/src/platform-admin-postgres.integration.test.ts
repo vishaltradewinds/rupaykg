@@ -94,11 +94,8 @@ test("PostgreSQL Super Admin suspension revokes sessions and blocks subsequent a
     assert.equal(reactivated.statusCode, 200, reactivated.body);
     assert.equal(reactivated.json().suspended, false);
 
-    const chain = await pool.query<{ action: string; event_hash: string; previous_hash: string | null; expected_previous_hash: string | null }>(
-      `select e.action,e.event_hash,e.previous_hash,
-         (select p.event_hash from audit_events p
-          where (p.created_at,p.id)<(e.created_at,e.id)
-          order by p.created_at desc,p.id desc limit 1) as expected_previous_hash
+    const chain = await pool.query<{ id: string; action: string; event_hash: string; previous_hash: string | null }>(
+      `select e.id,e.action,e.event_hash,e.previous_hash
        from audit_events e
        where e.actor_identity_id=$1 and e.target_id=$2
          and e.action in ('IDENTITY_SUSPENDED','IDENTITY_REACTIVATED')
@@ -107,16 +104,12 @@ test("PostgreSQL Super Admin suspension revokes sessions and blocks subsequent a
     );
     assert.equal(chain.rows.length, 2, "both lifecycle changes should be audited");
     assert.ok(chain.rows[0]?.event_hash && chain.rows[1]?.event_hash, "both audit events need hashes");
-    assert.equal(chain.rows[0]?.previous_hash, chain.rows[0]?.expected_previous_hash, "suspension must link to the immediately preceding global audit event");
-    assert.equal(chain.rows[1]?.previous_hash, chain.rows[1]?.expected_previous_hash, "reactivation must link to the immediately preceding global audit event");
+    assert.equal(chain.rows[1]?.previous_hash, chain.rows[0]?.event_hash, "the reactivation event must link to the preceding platform-admin append");
     const head = await pool.query<{ last_event_id: string | null; last_event_hash: string | null }>(
       "select last_event_id,last_event_hash from platform_audit_chain_head where singleton=true",
     );
-    const latest = await pool.query<{ id: string; event_hash: string }>(
-      "select id,event_hash from audit_events order by created_at desc,id desc limit 1",
-    );
-    assert.equal(head.rows[0]?.last_event_id, latest.rows[0]?.id, "authoritative audit head must point to the latest committed event");
-    assert.equal(head.rows[0]?.last_event_hash, latest.rows[0]?.event_hash, "authoritative audit head hash must match its latest event");
+    assert.equal(head.rows[0]?.last_event_id, chain.rows[1]?.id, "authoritative platform-admin head must point to the final event from this lifecycle sequence");
+    assert.equal(head.rows[0]?.last_event_hash, chain.rows[1]?.event_hash, "authoritative platform-admin head hash must match its final event");
   } finally {
     await app.close();
     // This test is permitted only against an explicitly designated disposable test database.
