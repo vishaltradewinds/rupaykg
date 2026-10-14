@@ -24,10 +24,11 @@ export async function registerRegistryRoutes(app:FastifyInstance,pool:Pool|null)
     try{return reply.code(201).send({source:"postgresql",syntheticData:false,credential:await tx(pool,async c=>{
       const v=await c.query<{evidence_id:string;decision:string}>("select evidence_id,decision from verifications where id=$1 for update",[verificationId]);
       if(!v.rows[0]||v.rows[0].decision!=="APPROVED")throw Object.assign(new Error("Approved verification required"),{code:"VERIFICATION_REQUIRED"});
-      const e=await c.query<{activity_id:string|null;status:string}>("select activity_id,status from evidence where id=$1 for update",[v.rows[0].evidence_id]);
+      const e=await c.query<{activity_id:string|null;status:string;acceptance_fixture:string|null}>("select activity_id,status,metadata->>'acceptanceFixture' as acceptance_fixture from evidence where id=$1 for update",[v.rows[0].evidence_id]);
       if(!e.rows[0]||e.rows[0].status!=="VERIFIED"||e.rows[0].activity_id!==activityId)throw Object.assign(new Error("Verification is not bound to verified activity evidence"),{code:"EVIDENCE_MISMATCH"});
-      const a=await c.query<{organization_id:string;status:string}>("select organization_id,status from activities where id=$1 for update",[activityId]);
+      const a=await c.query<{organization_id:string;status:string;acceptance_fixture:string|null}>("select organization_id,status,metadata->>'acceptanceFixture' as acceptance_fixture from activities where id=$1 for update",[activityId]);
       if(!a.rows[0]||a.rows[0].organization_id!==issuerOrganizationId||a.rows[0].status!=="COMPLETED")throw Object.assign(new Error("Completed activity owned by issuer is required"),{code:"ACTIVITY_NOT_ELIGIBLE"});
+      if(a.rows[0]?.acceptance_fixture==="true"||e.rows[0]?.acceptance_fixture==="true")throw Object.assign(new Error("Acceptance fixture activity/evidence cannot be used for registry credential issuance"),{code:"ACCEPTANCE_FIXTURE_NOT_REGISTRY_ELIGIBLE"});
       const provenance=await c.query<{id:string;guardian_execution_id:string;hcs_topic_id:string;hcs_consensus_timestamp:string;integrity_hash:string;mirror_node_verified_at:Date}>(
         `select m.id,m.guardian_execution_id,m.hcs_topic_id,m.hcs_consensus_timestamp,m.integrity_hash,m.mirror_node_verified_at
            from mrv_provenance_events m
@@ -47,7 +48,7 @@ export async function registerRegistryRoutes(app:FastifyInstance,pool:Pool|null)
       const existing=await c.query("select id from credentials where activity_id=$1 and verification_id=$2",[activityId,verificationId]);if(existing.rows[0])throw Object.assign(new Error("Credential already exists for verification"),{code:"CREDENTIAL_EXISTS"});
       const inserted=await c.query("insert into credentials(activity_id,issuer_organization_id,trust_root_id,status,verification_id,quantity,unit,issued_at) values($1,$2,$3,'ISSUED',$4,$5,$6,now()) returning *",[activityId,issuerOrganizationId,trustRootId,verificationId,quantity,unit]);
       await c.query("insert into registry_events(credential_id,event_type,from_owner_id,to_owner_id,verification_id,recorded_by_identity_id,event_hash) values($1,'ISSUED',null,$2,$3,$4,$5)",[inserted.rows[0].id,issuerOrganizationId,verificationId,auth.identityId,`issue:${inserted.rows[0].id}:${verificationId}`]);return inserted.rows[0]
-    })})}catch(error){request.log.error(error);const code=(error as {code?:string}).code;if(code==="HIGH_RISK_PERMISSION_REQUIRED")return reply.code(403).send({error:(error as Error).message,code});if(["VERIFICATION_REQUIRED","EVIDENCE_MISMATCH","ACTIVITY_NOT_ELIGIBLE","CREDENTIAL_EXISTS","MIRROR_NODE_VERIFICATION_REQUIRED"].includes(code??""))return reply.code(409).send({error:(error as Error).message,code});return reply.code(503).send({error:"Credential issuance unavailable",syntheticData:false})}
+    })})}catch(error){request.log.error(error);const code=(error as {code?:string}).code;if(code==="HIGH_RISK_PERMISSION_REQUIRED")return reply.code(403).send({error:(error as Error).message,code});if(["VERIFICATION_REQUIRED","EVIDENCE_MISMATCH","ACTIVITY_NOT_ELIGIBLE","CREDENTIAL_EXISTS","MIRROR_NODE_VERIFICATION_REQUIRED","ACCEPTANCE_FIXTURE_NOT_REGISTRY_ELIGIBLE"].includes(code??""))return reply.code(409).send({error:(error as Error).message,code});return reply.code(503).send({error:"Credential issuance unavailable",syntheticData:false})}
   });
 
   app.post("/api/v1/credentials/:credentialId/activate",async(request,reply)=>{
