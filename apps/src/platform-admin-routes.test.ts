@@ -206,9 +206,9 @@ test("identity suspension revokes active sessions and records an audit event tra
         if (sql.includes("r.name in ('super_admin','platform_admin')")) return { rows: [{ ok: false }] };
         if (sql.includes("update identities set suspended_at=now()")) return { rows: [], rowCount: 1 };
         if (sql.includes("update identity_sessions set revoked_at=now()")) return { rows: [], rowCount: 2 };
-        if (sql.includes("pg_advisory_xact_lock")) return { rows: [] };
-        if (sql.includes("select event_hash from audit_events")) return { rows: [] };
-        if (sql.includes("insert into audit_events")) return { rows: [], rowCount: 1 };
+        if (sql.includes("select last_event_hash from platform_audit_chain_head")) return { rows: [{ last_event_hash: null }], rowCount: 1 };
+        if (sql.includes("insert into audit_events")) return { rows: [{ id: "623e4567-e89b-42d3-a456-426614174000" }], rowCount: 1 };
+        if (sql.includes("update platform_audit_chain_head")) return { rows: [], rowCount: 1 };
         throw new Error(`Unexpected client SQL in identity-suspension test: ${sql}`);
       },
       release: () => undefined,
@@ -229,7 +229,9 @@ test("identity suspension revokes active sessions and records an audit event tra
   assert.ok(statements.some(sql => sql.includes("update identities set suspended_at=now()")));
   assert.ok(statements.some(sql => sql.includes("update identity_sessions set revoked_at=now()")));
   assert.ok(statements.some(sql => sql.includes("insert into audit_events")));
-  assert.ok(statements.some(sql => sql.includes("select event_hash from audit_events order by created_at desc, id desc limit 1")), "audit-chain predecessor must follow event insertion order, not transaction-start timestamps");
+  assert.ok(statements.some(sql => sql.includes("select last_event_hash from platform_audit_chain_head where singleton=true for update")), "audit append must lock the authoritative chain head");
+  assert.ok(statements.some(sql => sql.includes("update platform_audit_chain_head set last_event_id=$1,last_event_hash=$2")), "audit append must atomically advance the chain head");
+  assert.ok(statements.some(sql => sql.includes("returning id")), "audit append must capture the inserted event ID");
   assert.equal(statements.filter(sql => sql.trim().toLowerCase() === "commit").length, 1);
   await app.close();
 });
