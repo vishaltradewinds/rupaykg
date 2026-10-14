@@ -462,9 +462,11 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
         const authorities = await client.query<{ requester_active: boolean; approver_active: boolean }>(
           `select
              exists(select 1 from organization_memberships om join roles r on r.id=om.role_id join identities i on i.id=om.identity_id join organizations o on o.id=om.organization_id and o.status='VERIFIED'
-                    where om.identity_id=$1 and om.status='VERIFIED' and r.name='super_admin' and i.status='VERIFIED' and i.suspended_at is null) requester_active,
+                    where om.identity_id=$1 and om.status='VERIFIED' and r.name='super_admin' and i.status='VERIFIED' and i.suspended_at is null
+                      and exists(select 1 from jsonb_array_elements_text(r.permissions) p where p='admin:users')) requester_active,
              exists(select 1 from organization_memberships om join roles r on r.id=om.role_id join identities i on i.id=om.identity_id join organizations o on o.id=om.organization_id and o.status='VERIFIED'
-                    where om.identity_id=$2 and om.status='VERIFIED' and r.name='super_admin' and i.status='VERIFIED' and i.suspended_at is null) approver_active`,
+                    where om.identity_id=$2 and om.status='VERIFIED' and r.name='super_admin' and i.status='VERIFIED' and i.suspended_at is null
+                      and exists(select 1 from jsonb_array_elements_text(r.permissions) p where p='admin:users')) approver_active`,
           [change.requester_identity_id, context.auth.identityId],
         );
         if (!authorities.rows[0]?.requester_active || !authorities.rows[0]?.approver_active) return { status: 403 as const, body: { error: "Requester and approver must both remain active Super Admins", code: "DUAL_CONTROL_AUTHORITY_REQUIRED" } };
