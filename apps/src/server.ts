@@ -1,7 +1,7 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import fastifyStatic from "@fastify/static";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { Pool, type PoolClient, type PoolConfig } from "pg";
 import { authenticate, bearerChallenge, canActForOrganization, hasOrganizationPermission, type AuthContext } from "./auth.js";
@@ -13,6 +13,7 @@ import { registerWorkspaceRoutes } from "./workspace-routes.js";
 import { registerBwgRoutes } from "./bwg-routes.js";
 import { registerIntelligenceRoutes } from "./intelligence-routes.js";
 import { registerMrvRoutes } from "./mrv-routes.js";
+import { registerPlatformAdminRoutes } from "./platform-admin-routes.js";
 
 const app = Fastify({ logger: true });
 const allowedOrigins = process.env.RUPAYKG_ALLOWED_ORIGINS?.split(",").map(origin => origin.trim()).filter(Boolean) ?? [];
@@ -41,17 +42,34 @@ app.get("/api/v1/overview", async (request, reply) => {
   const auth = await requireAuth(request, reply); if (!auth || !pool) return;
   try {
     const organizationIds = auth.activeOrganizationId ? [auth.activeOrganizationId] : [...new Set(auth.memberships.map(m => m.organization_id))];
-    if (!organizationIds.length) return { source: "postgresql", syntheticData: false, counts: { activities: 0, measurements: 0, evidence: 0, approvedVerifications: 0, openObligations: 0, issuedOrActiveCredentials: 0, settledTransactions: 0 } };
-    const [activities, measurements, evidence, verifications, obligations, credentials, settlements] = await Promise.all([
-      query<{ count: string }>("select count(*)::text as count from activities a where a.organization_id = any($1::uuid[]) and a.geography_id is not null and exists (select 1 from organization_memberships om where om.organization_id=a.organization_id and om.identity_id=$2 and om.status='VERIFIED' and organization_has_geography_scope(om.organization_id,a.geography_id))", [organizationIds, auth.identityId]),
-      query<{ count: string }>("select count(*)::text as count from measurements m join activities a on a.id=m.activity_id where a.organization_id = any($1::uuid[]) and a.geography_id is not null and exists (select 1 from organization_memberships om where om.organization_id=a.organization_id and om.identity_id=$2 and om.status='VERIFIED' and organization_has_geography_scope(om.organization_id,a.geography_id))", [organizationIds, auth.identityId]),
-      query<{ count: string }>("select count(*)::text as count from evidence e join activities a on a.id=e.activity_id where a.organization_id = any($1::uuid[]) and a.geography_id is not null and exists (select 1 from organization_memberships om where om.organization_id=a.organization_id and om.identity_id=$2 and om.status='VERIFIED' and organization_has_geography_scope(om.organization_id,a.geography_id))", [organizationIds, auth.identityId]),
-      query<{ count: string }>("select count(*)::text as count from verifications v join activities a on a.id=v.activity_id where a.organization_id = any($1::uuid[]) and a.geography_id is not null and exists (select 1 from organization_memberships om where om.organization_id=a.organization_id and om.identity_id=$2 and om.status='VERIFIED' and organization_has_geography_scope(om.organization_id,a.geography_id)) and v.decision = 'APPROVED'", [organizationIds, auth.identityId]),
-      query<{ count: string }>("select count(*)::text as count from obligations where organization_id = any($1::uuid[]) and status = 'OPEN'", [organizationIds]),
-      query<{ count: string }>("select count(*)::text as count from credentials where issuer_organization_id = any($1::uuid[]) and status in ('ISSUED','ACTIVE','TRANSFERRED','RETIRED')", [organizationIds]),
-      query<{ count: string }>("select count(*)::text as count from settlements where (payer_id = any($1::uuid[]) or payee_id = any($1::uuid[])) and status = 'SETTLED'", [organizationIds]),
+    if (!organizationIds.length) return { source: "postgresql", syntheticData: false, counts: { activities: null, measurements: null, evidence: null, approvedVerifications: null, openObligations: null, issuedOrActiveCredentials: null, settledTransactions: null } };
+    const permittedIds = async (permissions: string[]) => {
+      const ids: string[] = [];
+      for (const organizationId of organizationIds) if (await hasOrganizationPermission(pool!, auth, organizationId, permissions)) ids.push(organizationId);
+      return ids;
+    };
+    const [operationsIds, mrvIds, complianceIds, registryIds, settlementIds] = await Promise.all([
+      permittedIds(["waste:read"]), permittedIds(["evidence:upload", "evidence:review", "guardian:read"]),
+      permittedIds(["reports:read", "swm:read", "epr:read", "audit:read"]),
+      permittedIds(["registry:read", "credits:read"]),
+      permittedIds(["credits:read", "settlement:authorize", "settlement:settle", "AUTHORIZE_SETTLEMENT", "SETTLE_FUNDS"]),
     ]);
-    return { source: "postgresql", syntheticData: false, counts: { activities: Number(activities[0]?.count ?? 0), measurements: Number(measurements[0]?.count ?? 0), evidence: Number(evidence[0]?.count ?? 0), approvedVerifications: Number(verifications[0]?.count ?? 0), openObligations: Number(obligations[0]?.count ?? 0), issuedOrActiveCredentials: Number(credentials[0]?.count ?? 0), settledTransactions: Number(settlements[0]?.count ?? 0) } };
+    const activityIds = [...new Set([...operationsIds, ...mrvIds])];
+    const countFor = async (sql: string, ids: string[], identityScoped = false): Promise<number | null> => {
+      if (!ids.length) return null;
+      const rows = await query<{ count: string }>(sql, identityScoped ? [ids, auth.identityId] : [ids]);
+      return Number(rows[0]?.count ?? 0);
+    };
+    const [activities, measurements, evidence, verifications, obligations, credentials, settlements] = await Promise.all([
+      countFor("select count(*)::text as count from activities a where a.organization_id = any($1::uuid[]) and a.geography_id is not null and exists (select 1 from organization_memberships om where om.organization_id=a.organization_id and om.identity_id=$2 and om.status='VERIFIED' and organization_has_geography_scope(om.organization_id,a.geography_id))", activityIds, true),
+      countFor("select count(*)::text as count from measurements m join activities a on a.id=m.activity_id where a.organization_id = any($1::uuid[]) and a.geography_id is not null and exists (select 1 from organization_memberships om where om.organization_id=a.organization_id and om.identity_id=$2 and om.status='VERIFIED' and organization_has_geography_scope(om.organization_id,a.geography_id))", mrvIds, true),
+      countFor("select count(*)::text as count from evidence e join activities a on a.id=e.activity_id where a.organization_id = any($1::uuid[]) and a.geography_id is not null and exists (select 1 from organization_memberships om where om.organization_id=a.organization_id and om.identity_id=$2 and om.status='VERIFIED' and organization_has_geography_scope(om.organization_id,a.geography_id))", mrvIds, true),
+      countFor("select count(*)::text as count from verifications v join activities a on a.id=v.activity_id where a.organization_id = any($1::uuid[]) and a.geography_id is not null and exists (select 1 from organization_memberships om where om.organization_id=a.organization_id and om.identity_id=$2 and om.status='VERIFIED' and organization_has_geography_scope(om.organization_id,a.geography_id)) and v.decision = 'APPROVED'", mrvIds, true),
+      countFor("select count(*)::text as count from obligations where organization_id = any($1::uuid[]) and status = 'OPEN'", complianceIds),
+      countFor("select count(*)::text as count from credentials where issuer_organization_id = any($1::uuid[]) and status in ('ISSUED','ACTIVE','TRANSFERRED','RETIRED')", registryIds),
+      countFor("select count(*)::text as count from settlements where (payer_id = any($1::uuid[]) or payee_id = any($1::uuid[])) and status = 'SETTLED'", settlementIds),
+    ]);
+    return { source: "postgresql", syntheticData: false, counts: { activities, measurements, evidence, approvedVerifications: verifications, openObligations: obligations, issuedOrActiveCredentials: credentials, settledTransactions: settlements } };
   } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Authoritative overview unavailable", syntheticData: false }); }
 });
 app.get("/api/v1/regulatory/sources", async (_request, reply) => { try { return { source: "postgresql", syntheticData: false, sources: await query("select id, authority, title, instrument, reference, published_on, effective_from, jurisdiction, source_url, verified_on, status, affected_module, notes from regulatory_sources order by effective_from desc nulls last, published_on desc") }; } catch (error) { return reply.code(503).send({ error: "Regulatory source catalog unavailable", syntheticData: false }); } });
@@ -78,6 +96,7 @@ await registerWorkspaceRoutes(app, pool);
 await registerBwgRoutes(app, pool);
 await registerIntelligenceRoutes(app, pool);
 await registerMrvRoutes(app, pool);
+await registerPlatformAdminRoutes(app, pool);
 
-if (existsSync(webRoot)) app.get("/*", async (_request, reply) => reply.sendFile("index.html"));
+if (existsSync(webRoot)) app.get("/*", async (_request, reply) => reply.type("text/html; charset=utf-8").send(readFileSync(resolve(webRoot, "index.html"), "utf8")));
 const port = Number(process.env.PORT ?? 3000); const host = process.env.HOST ?? "0.0.0.0"; await app.listen({ port, host });

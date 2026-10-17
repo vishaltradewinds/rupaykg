@@ -20,7 +20,8 @@
   },
   "overrides": {
     "protobufjs": "8.8.0",
-    "ws": "8.21.0"
+    "ws": "8.21.0",
+    "@grpc/grpc-js": "1.14.6"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

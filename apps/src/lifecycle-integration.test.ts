@@ -29,7 +29,7 @@ test("production lifecycle integration gate", { skip: !url }, async () => {
     // CI cannot call live Guardian/Hedera credentials. This fixture represents the
     // authoritative, already-confirmed provenance boundary enforced by production SQL.
     await c.query(
-      "insert into mrv_provenance_events(activity_id,verification_id,evidence_id,guardian_policy_id,guardian_execution_id,guardian_status,hcs_status,hcs_topic_id,hcs_transaction_id,hcs_consensus_timestamp,integrity_hash,metadata) values($1,$2,$3,'integration-policy','integration-guardian','VERIFIED','CONSENSUS_CONFIRMED','0.0.123','integration-tx','integration-consensus','integration-hash','{\"testFixture\":true}')",
+      "insert into mrv_provenance_events(activity_id,verification_id,evidence_id,guardian_policy_id,guardian_execution_id,guardian_status,hcs_status,hcs_topic_id,hcs_transaction_id,hcs_consensus_timestamp,integrity_hash,metadata,mirror_node_verified_at) values($1,$2,$3,'integration-policy','integration-guardian','VERIFIED','CONSENSUS_CONFIRMED','0.0.123','integration-tx','integration-consensus','integration-hash','{\"testFixture\":true}',clock_timestamp())",
       [activity, verification, evidence]
     );
 

@@ -40,7 +40,7 @@ before(async () => {
     await c.query("insert into organization_geography_scopes(organization_id,geography_id) values($1,$2)", [ownerOrgId, geographyId]);
     actorId = (await c.query<{ id: string }>("insert into identities(external_subject,display_name) values($1,$2) returning id", [`runtime-registry-actor-${suffix}`, "Registry Runtime Actor"])).rows[0]!.id;
     verifierId = (await c.query<{ id: string }>("insert into identities(external_subject,display_name) values($1,$2) returning id", [`runtime-registry-verifier-${suffix}`, "Registry Runtime Verifier"])).rows[0]!.id;
-    const actorRole = (await c.query<{ id: string }>("insert into roles(organization_id,name,permissions) values($1,$2,$3::jsonb) returning id", [ownerOrgId, `REGISTRY-OPERATOR-${suffix}`, JSON.stringify(["ISSUE_CREDENTIAL","TRANSFER_CREDENTIAL","RETIRE_CREDENTIAL","AUTHORIZE_SETTLEMENT","SETTLE_FUNDS","settlement:authorize","settlement:settle"])] )).rows[0]!.id;
+    const actorRole = (await c.query<{ id: string }>("insert into roles(organization_id,name,permissions) values($1,$2,$3::jsonb) returning id", [ownerOrgId, `REGISTRY-OPERATOR-${suffix}`, JSON.stringify(["ISSUE_CREDENTIAL","TRANSFER_CREDENTIAL","RETIRE_CREDENTIAL","AUTHORIZE_SETTLEMENT","SETTLE_FUNDS","settlement:authorize","settlement:settle","guardian:read"])] )).rows[0]!.id;
     const verifierRole = (await c.query<{ id: string }>("insert into roles(organization_id,name,permissions) values($1,$2,'[\"VERIFY_EVIDENCE\"]') returning id", [ownerOrgId, `REGISTRY-VERIFIER-${suffix}`])).rows[0]!.id;
     await c.query("insert into roles(organization_id,name,permissions) values($1,$2,$3::jsonb)", [destinationOrgId, `SETTLEMENT-PARTY-${suffix}`, JSON.stringify(["settlement:authorize","settlement:settle"])]);
     await c.query("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED'),($4,$2,$5,'VERIFIED')", [actorId, ownerOrgId, actorRole, verifierId, verifierRole]);
@@ -50,7 +50,7 @@ before(async () => {
     const measurementId = (await c.query<{ id: string }>("insert into measurements(activity_id,value,unit,method,source,measured_at,quality_status) values($1,100,'kg','WEIGHBRIDGE','FIELD',now(),'VERIFIED') returning id", [activityId])).rows[0]!.id;
     evidenceId = (await c.query<{ id: string }>("insert into evidence(activity_id,measurement_id,evidence_type,status,captured_at,content_hash) values($1,$2,'WEIGHBRIDGE_RECORD','VERIFIED',now(),$3) returning id", [activityId, measurementId, `runtime-${suffix}`])).rows[0]!.id;
     verificationId = (await c.query<{ id: string }>("insert into verifications(evidence_id,activity_id,verifier_identity_id,decision,scope,rationale) values($1,$2,$3,'APPROVED','runtime','independent runtime acceptance') returning id", [evidenceId, activityId, verifierId])).rows[0]!.id;
-    await c.query("insert into mrv_provenance_events(activity_id,verification_id,evidence_id,guardian_policy_id,guardian_execution_id,guardian_status,hcs_status,hcs_topic_id,hcs_transaction_id,hcs_consensus_timestamp,integrity_hash,metadata) values($1,$2,$3,'runtime-policy','runtime-guardian','VERIFIED','CONSENSUS_CONFIRMED','0.0.123',$4,$5,$6,'{\"testFixture\":true}')", [activityId, verificationId, evidenceId, `runtime-tx-${suffix}`, `runtime-consensus-${suffix}`, `runtime-hash-${suffix}`]);
+    await c.query("insert into mrv_provenance_events(activity_id,verification_id,evidence_id,guardian_policy_id,guardian_execution_id,guardian_status,hcs_status,hcs_topic_id,hcs_transaction_id,hcs_consensus_timestamp,integrity_hash,metadata,mirror_node_verified_at) values($1,$2,$3,'runtime-policy','runtime-guardian','VERIFIED','CONSENSUS_CONFIRMED','0.0.123',$4,$5,$6,'{\"testFixture\":true}',clock_timestamp())", [activityId, verificationId, evidenceId, `runtime-tx-${suffix}`, `runtime-consensus-${suffix}`, `runtime-hash-${suffix}`]);
     await c.query("commit");
   } catch (error) { await c.query("rollback"); throw error; } finally { c.release(); }
   server = spawn(process.execPath, ["dist/src/server.js"], { cwd: process.cwd(), env: { ...process.env, PORT: String(port), HOST: "127.0.0.1", DATABASE_URL: databaseUrl, DATABASE_SSL: "false" }, stdio: ["ignore", "ignore", "pipe"] });
@@ -69,6 +69,88 @@ describe("registry and settlement runtime acceptance", () => {
     await pool.query("insert into identity_sessions(identity_id,expires_at,token_hash) values($1,now()+interval '1 hour',$2)", [deniedIdentity, hash(deniedToken)]);
     const response = await request("/api/v1/credentials", { method: "POST", body: JSON.stringify({ activityId, trustRootId: `runtime-root-${suffix}`, verificationId, issuerOrganizationId: ownerOrgId, quantity: 100, unit: "kg" }) }, deniedToken, ownerOrgId);
     assert.equal(response.status, 403); assert.equal((await body(response)).code, "HIGH_RISK_PERMISSION_REQUIRED");
+  });
+
+  it("fails closed when persisted Mirror Node verification is absent", async () => {
+    if (!pool) return;
+    await pool.query("update mrv_provenance_events set mirror_node_verified_at=null where activity_id=$1 and verification_id=$2", [activityId, verificationId]);
+    try {
+      const response = await request("/api/v1/credentials", { method: "POST", body: JSON.stringify({ activityId, trustRootId: "runtime-root-missing-mirror-" + suffix, verificationId, issuerOrganizationId: ownerOrgId, quantity: 100, unit: "kg" }) }, actorToken, ownerOrgId);
+      assert.equal(response.status, 409);
+      assert.equal((await body(response)).code, "MIRROR_NODE_VERIFICATION_REQUIRED");
+      const pendingCredential = await pool.query<{ id: string }>(
+        "insert into credentials(activity_id,issuer_organization_id,trust_root_id,status,verification_id,quantity,unit,issued_at) values($1,$2,$3,'ELIGIBLE',$4,1,'kg',now()) returning id",
+        [activityId, ownerOrgId, "runtime-root-db-trigger-" + suffix, verificationId],
+      );
+      try {
+        await assert.rejects(
+          pool.query("update credentials set status='ISSUED' where id=$1", [pendingCredential.rows[0]!.id]),
+          /CREDENTIAL_MRV_REQUIRED/,
+        );
+      } finally {
+        await pool.query("delete from credentials where id=$1", [pendingCredential.rows[0]!.id]);
+      }
+    } finally {
+      await pool.query("update mrv_provenance_events set mirror_node_verified_at=clock_timestamp() where activity_id=$1 and verification_id=$2", [activityId, verificationId]);
+    }
+  });
+
+  it("blocks acceptance fixture evidence from becoming a registry credential", async () => {
+    if (!pool) return;
+    await pool.query(
+      "update evidence set metadata=coalesce(metadata,'{}'::jsonb) || jsonb_build_object('acceptanceFixture',true) where id=$1",
+      [evidenceId],
+    );
+    let pendingCredentialId = "";
+    try {
+      const provenanceResponse = await request(`/api/v1/mrv/provenance/${activityId}`, {}, actorToken, ownerOrgId);
+      assert.equal(provenanceResponse.status, 200);
+      const provenanceBody = await body(provenanceResponse);
+      assert.equal(provenanceBody.eligibleForRegistry, false, "MRV API must never present acceptance fixture evidence as registry eligible");
+      assert.equal(provenanceBody.registryEligibilityReason, "ACCEPTANCE_FIXTURE_NOT_REGISTRY_ELIGIBLE");
+
+      const apiIssuance = await request("/api/v1/credentials", {
+        method: "POST",
+        body: JSON.stringify({ activityId, trustRootId: "runtime-root-fixture-api-" + suffix, verificationId, issuerOrganizationId: ownerOrgId, quantity: 1, unit: "kg" }),
+      }, actorToken, ownerOrgId);
+      assert.equal(apiIssuance.status, 409);
+      assert.equal((await body(apiIssuance)).code, "ACCEPTANCE_FIXTURE_NOT_REGISTRY_ELIGIBLE");
+
+      const pending = await pool.query<{ id: string }>(
+        "insert into credentials(activity_id,issuer_organization_id,trust_root_id,status,verification_id,quantity,unit,issued_at) values($1,$2,$3,'ELIGIBLE',$4,1,'kg',now()) returning id",
+        [activityId, ownerOrgId, "runtime-root-acceptance-fixture-" + suffix, verificationId],
+      );
+      pendingCredentialId = pending.rows[0]!.id;
+      await assert.rejects(
+        pool.query("update credentials set status='ISSUED' where id=$1", [pendingCredentialId]),
+        /ACCEPTANCE_FIXTURE_NOT_REGISTRY_ELIGIBLE/,
+        "database must prevent acceptance fixture evidence from backing an issued credential",
+      );
+    } finally {
+      if (pendingCredentialId) await pool.query("delete from credentials where id=$1", [pendingCredentialId]);
+      await pool.query(
+        "update evidence set metadata=coalesce(metadata,'{}'::jsonb) - 'acceptanceFixture' where id=$1",
+        [evidenceId],
+      );
+    }
+  });
+
+  it("invalidates persisted Mirror Node proof when the anchored provenance tuple changes", async () => {
+    if (!pool) return;
+    const original = await pool.query<{ hcs_transaction_id: string }>(
+      "select hcs_transaction_id from mrv_provenance_events where activity_id=$1 and verification_id=$2",
+      [activityId, verificationId],
+    );
+    const originalTransactionId = original.rows[0]?.hcs_transaction_id;
+    assert.ok(originalTransactionId);
+    await pool.query("update mrv_provenance_events set hcs_transaction_id=$1 where activity_id=$2 and verification_id=$3", ["changed-anchor-" + suffix, activityId, verificationId]);
+    const invalidated = await pool.query<{ mirror_node_verified_at: Date | null }>(
+      "select mirror_node_verified_at from mrv_provenance_events where activity_id=$1 and verification_id=$2",
+      [activityId, verificationId],
+    );
+    assert.equal(invalidated.rows[0]?.mirror_node_verified_at, null, "anchor mutation must invalidate prior Mirror Node verification");
+    await pool.query("update mrv_provenance_events set hcs_transaction_id=$1 where activity_id=$2 and verification_id=$3", [originalTransactionId, activityId, verificationId]);
+    await pool.query("update mrv_provenance_events set mirror_node_verified_at=clock_timestamp() where activity_id=$1 and verification_id=$2", [activityId, verificationId]);
   });
 
   it("issues and activates only after verified evidence and approved independent verification", async () => {

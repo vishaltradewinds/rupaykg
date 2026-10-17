@@ -52,7 +52,12 @@ The official open-source Guardian distribution includes an `mrv-sender` service.
     - `mrvStatus=VERIFIED`;
     - integrity hash.
 11. Confirm the persisted provenance record is `GUARDIAN VERIFIED + CONSENSUS CONFIRMED`.
-12. Confirm only then that the downstream registry/value lifecycle marks the record eligible.
+12. Confirm the authenticated `GET /api/v1/mrv/hedera/verify/:consensusTimestamp` response reports `verified=true` and persists `mirror_node_verified_at` for that exact provenance row.
+13. Confirm the downstream registry/value lifecycle remains ineligible until that persisted Mirror Node verification exists; credential issuance requires that persisted verification marker for the exact provenance row and fails closed if it is absent. The database trigger independently requires the same marker.
+
+## Acceptance-fixture boundary
+
+The optional `RUPAYKG_ACCEPTANCE_SEED_ON_START=true` dataset is a test fixture. It may be used to exercise the real external Guardian/Hedera/Mirror Node integration, but it is not evidence of a real waste activity or a carbon-credit project. Activities/evidence marked `metadata.acceptanceFixture=true` must remain ineligible for registry issuance even when external anchoring succeeds. PostgreSQL independently rejects any credential transition into a value-bearing state for these fixtures; MRV API responses must also report `eligibleForRegistry=false`.
 
 ## Negative acceptance cases
 
@@ -95,6 +100,18 @@ Do **not** commit operator private keys, API bearer tokens, VC private keys, or 
 ## Statutory boundary
 
 Guardian/Hedera provenance does not itself constitute CPCB registration, an EPR certificate, environmental approval, SEBI acceptance, or any other statutory approval. RupayKG may retain and report authoritative external references when actually issued by the competent authority, but must not fabricate them from internal MRV state.
+
+## Platform-admin dual-control acceptance
+
+Reserved platform-role grants and restoration of revoked reserved-role memberships are not permitted through ordinary membership endpoints. The separate database-backed workflow uses:
+
+- `POST /api/v1/admin/access-change-requests` to request `GRANT_RESERVED_ROLE` or `RESTORE_RESERVED_ROLE` for a verified `super_admin` or `platform_admin` role.
+- `GET /api/v1/admin/access-change-requests` to review the request queue.
+- `POST /api/v1/admin/access-change-requests/:requestId/approve` or `/reject` for a distinct active Super Admin to decide.
+- The approval transaction revalidates both administrators, the target identity, organization, reserved role, and membership state before applying the change.
+- Requester self-approval and target-identity approval are rejected; the requester, approver, and target must be three distinct identities. Request, decision, and applied change are written to the platform audit chain.
+
+Acceptance still requires authenticated browser testing with two separate authorized Super Admin identities, including self-approval rejection, approval, rejection, replay/duplicate decision, stale target state, and audit-chain continuity. A successful CI run alone is not production certification.
 
 ## Deployment gate
 

@@ -56,7 +56,7 @@ before(async () => {
     [evidence, activity, verifier],
   )).rows[0]!.id;
   await pool.query(
-    "insert into mrv_provenance_events(activity_id,verification_id,evidence_id,guardian_policy_id,guardian_execution_id,guardian_status,hcs_status,hcs_topic_id,hcs_transaction_id,hcs_consensus_timestamp,integrity_hash,metadata) values($1,$2,$3,$4,$5,'VERIFIED','CONSENSUS_CONFIRMED','0.0.123',$6,now(),$7,$8::jsonb)",
+    "insert into mrv_provenance_events(activity_id,verification_id,evidence_id,guardian_policy_id,guardian_execution_id,guardian_status,hcs_status,hcs_topic_id,hcs_transaction_id,hcs_consensus_timestamp,integrity_hash,metadata,mirror_node_verified_at) values($1,$2,$3,$4,$5,'VERIFIED','CONSENSUS_CONFIRMED','0.0.123',$6,now(),$7,$8::jsonb,clock_timestamp())",
     [
       activity,
       verification,
@@ -98,7 +98,7 @@ after(async () => {
 });
 
 describe("settlement reconciliation invariants", () => {
-  it("runs against PostgreSQL in CI", () => {
+  it("runs against PostgreSQL in CI", { skip: !pool }, () => {
     assert.ok(pool, "DATABASE_URL is required for settlement integration tests");
     assert.match(settlementId, /^[0-9a-f-]{36}$/i);
   });

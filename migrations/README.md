@@ -53,3 +53,25 @@ An organization may have explicit verified geography roots. When roots exist, ac
 A settlement may enter `SETTLED` only when the authoritative settlement record contains an external settlement reference, an external-authority confirmation timestamp, and a reconciliation reference. These fields cannot be cleared after confirmation. Internal workflow transitions alone must never be treated as proof that funds moved.
 
 A credential in `RETIRED` state cannot be used to create a settlement. A credential cannot be retired while it has an open settlement (`CREATED`, `AUTHORIZED`, `EXECUTING`, or `RECONCILING`). These lifecycle constraints are enforced at the PostgreSQL boundary rather than relying only on HTTP route behavior.
+
+## Guardian/Hedera registry acceptance migration
+
+Migration `083_mrv_mirror_node_registry_gate.sql` adds the persisted `mirror_node_verified_at` acceptance marker and tightens the PostgreSQL credential-issuance trigger. A Guardian `VERIFIED` result and Hedera `CONSENSUS_CONFIRMED` response are not sufficient by themselves; the exact anchored payload must also be successfully verified through Mirror Node. Existing provenance rows remain ineligible until that verification is performed. The authenticated Mirror Node verification endpoint checks the exact payload/hash and persists the marker only if the anchored tuple has not changed during verification. Credential issuance requires that persisted marker, and PostgreSQL independently checks it on inserts and transitions into value-bearing credential states.
+
+## Platform-admin audit chain head
+
+Migration `084_platform_audit_chain_head.sql` bootstraps a singleton chain head using the latest existing audit row as a migration-time anchor. Older audit writers do not all participate in the platform-admin chain, so the bootstrap is not a certification of the entire historical audit table. After cutover, platform-admin appends lock the head row inside the same transaction, use its hash as the predecessor, insert the event, and advance the head atomically. Append order therefore does not depend on transaction-start timestamps or random UUID ordering. A failed transaction rolls back both event and head update. Audit events are append-only; tests must not delete them or rewind the head.
+
+## Reserved-role dual control
+
+Migration `085_platform_access_dual_control.sql` records requests to grant reserved platform roles or restore a revoked reserved-role membership. The request and decision are separately authenticated, require distinct active Super Admin requester and approver identities, prohibit the target identity from approving its own change, revalidate the target and role at decision time, apply the membership change in the same transaction as approval, and append a hash-linked audit event. Ordinary membership grant and restoration routes remain blocked for reserved roles.
+
+
+## Reserved-role restoration guard
+
+Migration `086_reserved_role_restoration_db_guard.sql` protects status reactivation of a revoked `super_admin` or `platform_admin` membership. It requires a matching approved dual-control request, a different requester and approver, a target distinct from both, active Super Admin authority for requester and approver, and a request created after the revocation. Ordinary reserved-role grant/restoration APIs remain blocked; new grants are applied only by the authenticated dual-control workflow. Initial Super Admin bootstrap is an out-of-band privileged provisioning step and is not exposed through the ordinary API.
+
+
+## Acceptance fixture registry exclusion
+
+Migration `087_acceptance_fixture_registry_exclusion.sql` prevents activities or evidence explicitly marked with `metadata.acceptanceFixture=true` from backing credentials in value-bearing states. It also binds the database gate to the exact activity, verification, and evidence tuple. The MRV API reports acceptance fixtures as not registry eligible even after real Guardian/Hedera/Mirror Node verification. External anchoring proves message integrity and consensus; it does not validate the underlying activity as a real eligible carbon project.
