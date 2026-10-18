@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { canClaimIssuedCarbonCredit, type ExternalIssuanceEvidence } from "./market-mechanisms.js";
 export * from "./market-mechanisms.js";
 
 type CarbonInput = {
@@ -106,7 +107,20 @@ export function sha256Canonical(value: unknown): string {
   return createHash("sha256").update(canonicalize(value)).digest("hex");
 }
 
+/**
+ * The baseline-minus-project helper is a generic arithmetic utility, not an
+ * implementation of an official methodology. Official BEE CCTS methodology
+ * and tool identifiers must use a reviewed, method-specific adapter.
+ */
+export function isGenericCalculationMethodAllowed(methodologyCode: string): boolean {
+  const normalized = methodologyCode.trim().toUpperCase();
+  return normalized.length > 0 && !/^BM/.test(normalized);
+}
+
 export function calculateEmissionReduction(input: CarbonInput): CarbonResult {
+  if (!isGenericCalculationMethodAllowed(input.methodologyCode)) {
+    throw new Error("Official BEE CCTS methodologies/tools require a reviewed method-specific calculation adapter");
+  }
   for (const [key, value] of Object.entries(input)) {
     if (typeof value === "number" && (!Number.isFinite(value) || value < 0)) throw new Error(`${key} must be a finite non-negative number`);
   }
@@ -146,6 +160,7 @@ export function calculateBmWa03001(input: BmWa03001Input): BmWa03001Result {
   ] };
 }
 
-export function isIssuableCarbonValue(status: string, verificationCount: number): boolean {
-  return status === "CALCULATED_PENDING_VERIFICATION" && verificationCount > 0;
+export function isIssuableCarbonValue(status: string, issuanceEvidence?: ExternalIssuanceEvidence): boolean {
+  // A completed calculation or a count of internal reviews is never proof of CCC issuance.
+  return status === "ISSUED" && canClaimIssuedCarbonCredit("ISSUED", issuanceEvidence);
 }

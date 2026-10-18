@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { BM_WA03001_PARAMETER_DICTIONARY, calculateBmWa03001, calculateEmissionReduction, evaluateBmWa03001Applicability, isIssuableCarbonValue, sha256Canonical, validateBmWa03001Input } from "./index.js";
+import { BM_WA03001_PARAMETER_DICTIONARY, calculateBmWa03001, calculateEmissionReduction, evaluateBmWa03001Applicability, isGenericCalculationMethodAllowed, isIssuableCarbonValue, sha256Canonical, validateBmWa03001Input } from "./index.js";
 
 test("calculates a methodology-versioned result without issuing a credential", () => {
   const result = calculateEmissionReduction({ activityId: "activity-1", methodologyCode: "CCTS-OFFSET", methodologyVersion: "2026-01", baselineTco2e: 100, projectTco2e: 65, leakageTco2e: 5, uncertaintyTco2e: 2 });
@@ -11,8 +11,20 @@ test("calculates a methodology-versioned result without issuing a credential", (
   assert.equal(result.trace.length, 3);
   assert.equal(result.trace[0].equationId, "CARBON.GROSS_REDUCTION.V1");
   assert.equal(result.trace[2].result, 30);
-  assert.equal(isIssuableCarbonValue(result.status, 0), false);
-  assert.equal(isIssuableCarbonValue(result.status, 1), true);
+  const authorityEvidence = {
+    authorityName: "Bureau of Energy Efficiency",
+    officialSourceUrl: "https://beeindia.gov.in/",
+    issuanceReference: "USER-REPORTED-REF-001",
+    artifactSha256: "a".repeat(64),
+    verificationStatus: "VERIFIED" as const,
+    verificationRecordId: "verification-record-001",
+    verifiedAt: "2026-10-18T17:00:00Z",
+  };
+  assert.equal(isIssuableCarbonValue(result.status, authorityEvidence), false);
+  assert.equal(isIssuableCarbonValue("ISSUED", undefined), false);
+  assert.equal(isIssuableCarbonValue("ISSUED", { ...authorityEvidence, verificationStatus: "UNVERIFIED" }), false);
+  assert.equal(isIssuableCarbonValue("ISSUED", { ...authorityEvidence, artifactSha256: "not-a-hash" }), false);
+  assert.equal(isIssuableCarbonValue("ISSUED", authorityEvidence), true);
 });
 
 test("canonical hashing is deterministic regardless of object key order", () => {
@@ -67,4 +79,31 @@ test("BM WA03.001 applicability gate rejects the wrong sector", () => {
 
 test("BM WA03.001 rejects invalid oxidation factors", () => {
   assert.throws(() => calculateBmWa03001({ fch4ProjectTch4: 1, fch4BaselineTch4: 0, gwpCh4Tco2ePerTch4: 29.8, projectEmissionsTco2e: 0, leakageTco2e: 0, oxidationFactor: 1.1 }));
+});
+
+
+test("official BEE CCTS methods and tools cannot use generic baseline/project arithmetic", () => {
+  for (const code of ["BM EN01.001", "BM IN02.001", "BM WA03.001", "BM WA03.002", "BM WA03.003", "BM-T-011", "BMT-T-AR-0006"]) {
+    assert.equal(isGenericCalculationMethodAllowed(code), false, code);
+    assert.throws(() => calculateEmissionReduction({
+      activityId: "activity-1",
+      methodologyCode: code,
+      methodologyVersion: "1.0",
+      baselineTco2e: 100,
+      projectTco2e: 65,
+      leakageTco2e: 0,
+    }), /method-specific calculation adapter/);
+  }
+  assert.equal(isGenericCalculationMethodAllowed("RUPAYKG_GENERIC_BASELINE_DELTA_V1"), true);
+});
+
+test("empty methodology identifiers cannot enter generic calculator", () => {
+  assert.equal(isGenericCalculationMethodAllowed("  "), false);
+  assert.throws(() => calculateEmissionReduction({
+    activityId: "activity-1",
+    methodologyCode: " ",
+    methodologyVersion: "1.0",
+    baselineTco2e: 100,
+    projectTco2e: 65,
+  }), /method-specific calculation adapter/);
 });

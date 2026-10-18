@@ -154,3 +154,27 @@ RupayKg's governing objective is cross-sector: BWGs and CPCB SWM workflows are o
 - This is the first registry foundation only. It does not claim the methodologies' equations, monitoring plans, tools, baselines, eligibility rules, or calculations are implemented. CCC issuance remains an external official outcome and must never be fabricated or inferred from local MRV.
 
 Next implementation sequence: retrieve/hash all official methodology and tool documents; build reviewed method-specific requirement specifications; connect shared operational evidence without duplicate ledgers; implement/test adapters one at a time; add project-level applicability decisions; then verification workflow and official CCC reconciliation. Production remains HOLD until the corresponding release gates and live acceptance are evidenced.
+
+
+## 10. CCC issuance evidence guard checkpoint — 2026-10-18
+
+During the cross-sector review, the existing carbon helper `isIssuableCarbonValue` was found to return true for `CALCULATED_PENDING_VERIFICATION` whenever an internal verification count was positive. That conflated an internal review count with official issuance evidence and was unsafe for RupayKg's Government of India CCC objective.
+
+- Fix branch: `fix/carbon-issuance-authority-gate`.
+- `isIssuableCarbonValue` now requires the state `ISSUED` plus a structured evidence object.
+- `canClaimIssuedCarbonCredit` now requires verified evidence metadata: authority name, official HTTPS source URL, issuance reference, SHA-256 artifact hash, verification record ID, and timestamp.
+- Tests cover pending-calculation rejection, absent/unverified evidence, invalid source/hash, and successful predicate evaluation only for complete evidence.
+- Specification: `docs/CCC_ISSUANCE_EVIDENCE_GATE.md`.
+- Important: this pure-domain predicate is not authorization. Only a trusted server-side verification flow may create verified evidence; client-controlled status writes must remain prohibited. This change does not verify any actual certificate and does not connect to a government registry.
+
+Next gate: audit API write paths and database permissions to ensure only trusted server-side verification can set issuance state/evidence; then implement official source reconciliation only when a documented, authorized interface/process is available.
+
+
+## 11. Generic carbon-calculation route guard — 2026-10-18
+
+The cross-sector review found that `POST /api/v1/carbon/calculations` called generic baseline-minus-project arithmetic for any registered methodology version, without executing that methodology's versioned rules. This is unsafe for official CCTS methods.
+
+- The API route now rejects official BEE-style `BM ...` and `BM-...` methodology/tool identifiers with `METHODOLOGY_ADAPTER_NOT_VALIDATED` before calculating.
+- The carbon domain's generic calculator also rejects those identifiers, so callers cannot bypass the API guard by invoking the shared function directly.
+- Regression tests cover representative Energy, Industry, Waste, and Forestry method/tool identifiers.
+- This is a conservative gate. Method-specific adapters must be wired explicitly and reviewed before they can calculate under their own equation; generic arithmetic must never stand in for an official method.
