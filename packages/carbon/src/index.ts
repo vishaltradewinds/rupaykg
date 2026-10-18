@@ -153,13 +153,21 @@ export type BmWa03001ToolStatus = "CURRENT_APPROVED_VERSION_CONFIRMED" | "NOT_CO
 export type BmWa03001ReadinessInput = BmWa03001ApplicabilityInput & {
   landfillSiteType: "SOLID_WASTE_DISPOSAL_SITE" | "OTHER" | "UNRESOLVED";
   containsBiodegradableOrganicMatter: boolean | null;
-  recoveredGasUse: "FLARING_ONLY" | "POWER_OR_HEAT" | "OTHER_NON_FLARING_USE" | "UNRESOLVED";
+  recoveredGasUse: "FLARING_ONLY" | "POWER_GENERATION" | "HEAT_GENERATION" | "OTHER_NON_FLARING_USE" | "UNRESOLVED";
+  methaneQuantificationPath: "FLOW_AND_METHANE_MEASUREMENT" | "ELECTRICITY_GENERATION_EQUATION_6" | "UNRESOLVED";
   additionalityPath: "POSITIVE_LIST_BM_T_012" | "BM_T_001" | "UNRESOLVED";
   projectBoundaryDefined: boolean | null;
   flowMetersCalibrated: boolean | null;
+  samplingAndGasAnalyserCalibrated: boolean | null;
   continuousFlowMetering: boolean | null;
   methaneMeasurementMethod: "CONTINUOUS_ANALYSER" | "PERIODIC_90_10" | "OTHER" | "UNRESOLVED";
   flowAndMethaneHumidityBasisAligned: boolean | null;
+  gasFlowIsNormalized: boolean | null;
+  gasTemperaturePressureEvidence: boolean | null;
+  electricityGenerationEvidence: boolean | null;
+  equipmentEfficiencyEvidence: boolean | null;
+  landfillGasOnlyPowerEvidence: boolean | null;
+  startupFuelWithinLimit: boolean | null;
   baselineAndAdditionalityEvidence: boolean | null;
   toolStatuses: Partial<Record<"BM-T-001" | "BM-T-002" | "BM-T-003" | "BM-T-004" | "BM-T-006" | "BM-T-011" | "BM-T-012", BmWa03001ToolStatus>>;
 };
@@ -185,27 +193,44 @@ export function evaluateBmWa03001Readiness(input: BmWa03001ReadinessInput): BmWa
   if (input.reducesOrganicWasteRecycling) disqualifiers.push("Project must not reduce organic-waste recycling.");
   if (input.managementDeliberatelyChangedToIncreaseMethane && !input.changeWasRequiredForTechnicalOrRegulatoryReasons) disqualifiers.push("Management must not be deliberately changed to increase methane unless technically or regulatorily required.");
   if (input.landfillSiteType === "OTHER") disqualifiers.push("Activity is not at a solid waste disposal site/landfill.");
-  if (input.landfillSiteType === "UNRESOLVED") unresolved.push("Solid waste disposal site and project boundary evidence are unresolved.");
+  if (input.landfillSiteType === "UNRESOLVED") unresolved.push("Solid waste disposal site evidence is unresolved.");
   if (input.containsBiodegradableOrganicMatter === false) disqualifiers.push("Site waste does not contain biodegradable organic matter.");
   if (input.containsBiodegradableOrganicMatter === null) unresolved.push("Biodegradable organic matter content is not evidenced.");
+
   const scopes = input.recoveredGasUse === "FLARING_ONLY"
     ? ["03: Waste handling and disposal"]
-    : input.recoveredGasUse === "POWER_OR_HEAT" || input.recoveredGasUse === "OTHER_NON_FLARING_USE"
-      ? ["03: Waste handling and disposal", "01: Energy"]
-      : [];
-  if (input.recoveredGasUse === "UNRESOLVED") unresolved.push("Recovered landfill-gas use (flaring only versus non-flaring use) is unresolved.");
+    : ["03: Waste handling and disposal", "01: Energy"];
+  if (input.recoveredGasUse === "UNRESOLVED") unresolved.push("Recovered landfill-gas use is unresolved; sectoral scopes cannot be finalized.");
   if (input.projectBoundaryDefined !== true) unresolved.push("The physical/geographical landfill project boundary is not confirmed.");
-  if (input.flowMetersCalibrated !== true) unresolved.push("Flow-meter maintenance, testing and calibration evidence is missing.");
-  if (input.continuousFlowMetering !== true) unresolved.push("Continuous flow-meter measurement and accumulated-volume records are not confirmed.");
-  if (input.methaneMeasurementMethod !== "CONTINUOUS_ANALYSER" && input.methaneMeasurementMethod !== "PERIODIC_90_10") unresolved.push("Methane concentration monitoring must use a continuous analyser or periodic measurement meeting the 90/10 confidence/precision requirement.");
-  if (input.flowAndMethaneHumidityBasisAligned !== true) unresolved.push("Flow and methane concentration measurement humidity basis/location alignment is not confirmed.");
   if (input.baselineAndAdditionalityEvidence !== true) unresolved.push("Baseline and additionality evidence has not been confirmed.");
+
+  if (input.recoveredGasUse === "POWER_GENERATION") {
+    if (input.landfillGasOnlyPowerEvidence !== true) unresolved.push("Evidence must establish that only project-recovered landfill gas (apart from permitted start-up fuel) powers the equipment.");
+    if (input.startupFuelWithinLimit !== true) unresolved.push("Start-up fuel use must be evidenced against the methodology's 1% energy-basis limit.");
+  }
+
+  const useElectricityEquation = input.methaneQuantificationPath === "ELECTRICITY_GENERATION_EQUATION_6";
+  if (input.methaneQuantificationPath === "UNRESOLVED") unresolved.push("Methane quantification path is unresolved.");
+  if (useElectricityEquation && input.recoveredGasUse !== "POWER_GENERATION") unresolved.push("Equation 6 is available only for recovered-methane power-generation projects.");
+  if (useElectricityEquation) {
+    if (input.electricityGenerationEvidence !== true) unresolved.push("Monitored electricity generation evidence required by Equation 6 is missing.");
+    if (input.equipmentEfficiencyEvidence !== true) unresolved.push("Equipment efficiency evidence required by Equation 6 is missing.");
+  } else {
+    if (input.flowMetersCalibrated !== true) unresolved.push("Flow-meter maintenance, testing and calibration evidence is missing.");
+    if (input.samplingAndGasAnalyserCalibrated !== true) unresolved.push("Sampling-device and gas-analyser maintenance, testing and calibration evidence is missing.");
+    if (input.continuousFlowMetering !== true) unresolved.push("Continuous flow-meter measurement and accumulated-volume records are not confirmed.");
+    if (input.methaneMeasurementMethod !== "CONTINUOUS_ANALYSER" && input.methaneMeasurementMethod !== "PERIODIC_90_10") unresolved.push("Methane concentration monitoring must use a continuous analyser or periodic measurement meeting the 90/10 confidence/precision requirement.");
+    if (input.flowAndMethaneHumidityBasisAligned !== true) unresolved.push("Flow and methane concentration measurement humidity basis/location alignment is not confirmed.");
+    if (input.gasFlowIsNormalized === null) unresolved.push("Whether gas-flow readings are normalized is unresolved.");
+    if (input.gasFlowIsNormalized === false && input.gasTemperaturePressureEvidence !== true) unresolved.push("Gas temperature and pressure evidence is required when flow is not normalized.");
+  }
+
   const requiredTools = ["BM-T-001", "BM-T-002", "BM-T-003", "BM-T-004", "BM-T-006", "BM-T-011"];
   if (input.additionalityPath === "UNRESOLVED") {
     unresolved.push("Additionality path is unresolved: confirm the positive-list pathway or the BM-T-001 pathway.");
   } else if (input.additionalityPath === "POSITIVE_LIST_BM_T_012") {
     requiredTools.push("BM-T-012");
-    unresolved.push("BM-T-012 is referenced by BM WA03.001 v1.0 but is absent from the BEE approved-tools register snapshot checked 2026-10-18; its current approved status must be resolved before relying on this pathway.");
+    unresolved.push("BM-T-012 is referenced by BM WA03.001 v1.0 but absent from the BEE approved-tools register snapshot checked 2026-10-18; resolve its current status before relying on this pathway.");
   }
   for (const tool of requiredTools) {
     if (input.toolStatuses[tool as keyof typeof input.toolStatuses] !== "CURRENT_APPROVED_VERSION_CONFIRMED") {
