@@ -26,3 +26,10 @@ This does not connect to BEE, the Indian Carbon Market registry, or any governme
 - `ISSUED` without evidence fails closed.
 - Unverified evidence, malformed artifact hash, non-HTTPS source, or missing verification record fails closed.
 - Only complete, explicitly verified evidence can pass this domain predicate.
+
+
+## Generic-calculation restriction discovered in the same review
+
+The API's generic baseline-minus-project arithmetic endpoint previously accepted any registered methodology version and did not execute the registered method's rules. The endpoint now rejects official BEE-style `BM ...` and `BM-...` identifiers with `METHODOLOGY_ADAPTER_NOT_VALIDATED`. The carbon domain calculator independently rejects those identifiers too. They must be routed to reviewed method-specific adapters, even when a separate adapter exists elsewhere in the codebase; the generic endpoint does not silently substitute its own equation.
+
+This is a conservative release gate. It does not mean all official adapters are absent; it means the generic endpoint is not permitted to claim that it executed one.
