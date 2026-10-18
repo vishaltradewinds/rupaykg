@@ -180,3 +180,14 @@
 - PR #20 is merged: https://github.com/vishaltradewinds/rupaykg/pull/20. Its head passed CI run #1288 (run ID `39145478594`), including dependency audit, migration validation/execution, typecheck, build, browser smoke test, PostgreSQL acceptance tests and production container build. User-entered CPCB registration references are now recorded as `USER_REPORTED_UNVERIFIED` with persisted status `NOT_ASSERTED` until an authorized verification process exists.
 - The official CPCB helpdesk contact was verified and added to the inquiry draft. The inquiry remains unsent.
 - Production remains HOLD pending written authorization/contract for any CPCB machine interface, verified official status evidence, and independent Guardian/WA03.001 acceptance.
+
+
+## Update — CPCB registration trust hardening merged (2026-10-18 16:40 UTC)
+
+- PR #22 merged into `main` as squash commit `d0011e370bfe37c4bcbf52f2b4572d2722c4cc34`: https://github.com/vishaltradewinds/rupaykg/pull/22.
+- CI run #1294 (run ID `39145870103`) passed dependency audit, migration validation/execution, typecheck, build, browser smoke test, database-backed tests and production container build.
+- The generic EPR applicability upsert now persists CPCB registration status as `NOT_ASSERTED` and preserves user-provided references only as `USER_REPORTED_UNVERIFIED`; the dedicated external-registration route follows the same fail-closed boundary.
+- PR #19 and PR #20 are merged with successful CI runs. Documentation PR #21 is merged. Original PR #18 is closed as superseded.
+- The official CPCB user guide confirms applicant and authority-controlled steps, including OTP/CAPTCHA, payment/submission, review, correction, appeal and certificate download. RupayKg must not impersonate those actions or report official portal status without source evidence: https://swmp.cpcb.gov.in/en/user-guide.
+- Current code and documentation work is merged, but the overall CPCB integration is **not production-ready**: no written interface authorization/contract or sandbox evidence is available in the reviewed repository; the CPCB inquiry draft is unsent; Guardian authenticated session and live WA03.001 MRV/Hedera/Mirror Node acceptance remain independent blockers.
+- No live CPCB login, OTP/CAPTCHA, payment, application submission, official status update, certificate action or production deployment was performed. Production release remains **HOLD**.
