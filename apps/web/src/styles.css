@@ -60,3 +60,20 @@
 .admin-record-list pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:10px;color:#a9b9ad}
 @media(max-width:900px){.admin-management-grid{grid-template-columns:1fr}}
 @media(max-width:560px){.admin-management-panel{padding:12px}.admin-permission-list{grid-template-columns:1fr}.admin-search{grid-template-columns:1fr}.admin-inline-actions button{flex:1}}
+
+
+.cpcb-swm-readiness{margin:1.5rem 0;padding:1.25rem;border:1px solid var(--border, #d5dbe4);border-radius:1rem;background:var(--panel, rgba(127,127,127,.04));display:grid;gap:1rem}
+.cpcb-swm-readiness h3{margin:.25rem 0}
+.cpcb-swm-readiness>label,.cpcb-swm-readiness label{display:grid;gap:.4rem;min-width:0}
+.cpcb-swm-readiness input,.cpcb-swm-readiness select{width:100%;min-width:0;box-sizing:border-box}
+.cpcb-swm-input-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,13rem),1fr));gap:.8rem}
+.cpcb-swm-result{border:1px solid var(--border, #d5dbe4);border-radius:.75rem;padding:1rem;display:grid;gap:.4rem}
+.cpcb-swm-result strong{font-size:1.05rem}
+.cpcb-swm-result p,.cpcb-swm-result small{margin:0;overflow-wrap:anywhere}
+.cpcb-swm-checklist{display:grid;gap:.6rem}
+.cpcb-swm-checklist article{display:flex;gap:1rem;align-items:flex-start;justify-content:space-between;padding:.8rem;border:1px solid var(--border, #d5dbe4);border-radius:.65rem}
+.cpcb-swm-checklist article div{display:grid;gap:.25rem;min-width:0}
+.cpcb-swm-checklist small{opacity:.8;overflow-wrap:anywhere}
+.cpcb-swm-checklist span{font-size:.75rem;font-weight:700;white-space:nowrap}
+.cpcb-swm-readiness a{overflow-wrap:anywhere}
+@media(max-width:560px){.cpcb-swm-readiness{padding:.85rem}.cpcb-swm-checklist article{display:grid}.cpcb-swm-checklist span{white-space:normal}}
