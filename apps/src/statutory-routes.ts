@@ -12,6 +12,16 @@ const nonNegative = (body: Record<string, unknown>, key: string): number | null 
   return Number.isFinite(value) && value >= 0 ? value : null;
 };
 
+export type ExternalRegistrationReport = {
+  reference: string;
+  persistedStatus: "NOT_ASSERTED";
+  trustState: "USER_REPORTED_UNVERIFIED";
+};
+export function normalizeExternalRegistrationReport(reference: string | null, status: string | null): ExternalRegistrationReport | null {
+  if (!reference || status !== "REGISTERED_EXTERNALLY") return null;
+  return { reference, persistedStatus: "NOT_ASSERTED", trustState: "USER_REPORTED_UNVERIFIED" };
+}
+
 async function authFor(request: Request, reply: Reply, pool: Pool | null): Promise<AuthContext | null> {
   if (!pool) { reply.code(503).send({ error: "Database unavailable", code: "DATABASE_UNAVAILABLE" }); return null; }
   try {
@@ -153,17 +163,31 @@ export async function registerStatutoryRoutes(app: FastifyInstance, pool: Pool |
     const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
     const body = bodyOf(request as never);
     const id = (request.params as { id: string }).id;
-    const reference = text(body, "cpcbRegistrationReference");
-    const status = text(body, "cpcbRegistrationStatus");
-    if (!reference || status !== "REGISTERED_EXTERNALLY") return reply.code(400).send({ error: "An externally issued CPCB registration reference is required to record REGISTERED_EXTERNALLY", code: "EXTERNAL_REGISTRATION_REFERENCE_REQUIRED" });
+    const report = normalizeExternalRegistrationReport(text(body, "cpcbRegistrationReference"), text(body, "cpcbRegistrationStatus"));
+    if (!report) return reply.code(400).send({ error: "A CPCB registration reference and cpcbRegistrationStatus=REGISTERED_EXTERNALLY are required to record a user-reported reference", code: "EXTERNAL_REGISTRATION_REFERENCE_REQUIRED" });
     const organization = await pool.query<{ organization_id: string }>("select organization_id from organization_epr_applicability where id=$1", [id]);
     const organizationId = organization.rows[0]?.organization_id;
     if (!organizationId || !canActForOrganization(auth, organizationId)) return reply.code(403).send({ error: "Organization access denied", code: "ORG_FORBIDDEN" });
     if (!await hasOrganizationPermission(pool, auth, organizationId, ["epr:manage", "audit:execute"])) return reply.code(403).send({ error: "EPR management permission required", code: "STATUTORY_EPR_WRITE_REQUIRED" });
     try {
-      const result = await pool.query("update organization_epr_applicability set cpcb_registration_status='REGISTERED_EXTERNALLY',cpcb_registration_reference=$2,determined_by_identity_id=$3,determined_at=now() where id=$1 returning *", [id, reference, auth.identityId]);
+      const result = await pool.query(
+        `update organization_epr_applicability
+           set cpcb_registration_status=$4,
+               cpcb_registration_reference=$2,
+               basis=coalesce(basis,'{}'::jsonb) || jsonb_build_object(
+                 'cpcb_registration_reference_trust_state',$5,
+                 'cpcb_registration_reference_reported_at',now()
+               ),
+               determined_by_identity_id=$3,determined_at=now()
+         where id=$1 returning *`,
+        [id, report.reference, auth.identityId, report.persistedStatus, report.trustState],
+      );
       if (!result.rows[0]) return reply.code(404).send({ error: "EPR applicability record not found", code: "EPR_RECORD_NOT_FOUND" });
-      return { source: "postgresql", syntheticData: false, applicability: result.rows[0], statutoryBoundary: "EXTERNAL_REFERENCE_RECORDED_NOT_ISSUED_BY_RUPAYKG" };
+      return {
+        source: "postgresql", syntheticData: false, applicability: result.rows[0],
+        statutoryBoundary: "USER_REPORTED_UNVERIFIED_NOT_AUTHORITY_VERIFIED",
+        externalRegistrationState: report.trustState,
+      };
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "External EPR registration reference could not be recorded", code: "EPR_EXTERNAL_STATUS_UNAVAILABLE", syntheticData: false }); }
   });
 }
