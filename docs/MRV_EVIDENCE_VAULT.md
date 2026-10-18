@@ -6,6 +6,7 @@
 ## API
 
 - `POST /api/v1/evidence-vault/upload`: authenticated evidence upload.
+- `GET /api/v1/evidence-vault?activityId=...`: list artifact versions for one authorized activity.
 - `GET /api/v1/evidence-vault/:evidenceId`: download a stored evidence artifact.
 - `POST /api/v1/evidence-vault/:evidenceId/review`: append a review decision.
 
@@ -23,4 +24,4 @@ A reviewer other than the uploader must supply APPROVED or REJECTED plus a ratio
 
 ## Test and release gates
 
-Unit tests cover file name sanitization, canonical base64/size limits, media-type signatures and JSON validity. CI must also pass migration validation/execution, typecheck, build, API tests, browser smoke, database acceptance, and production container build. Production remains HOLD until tenant/geography authorization, backup/restore, storage capacity, and real pilot acceptance are independently verified.
+The MRV & Evidence workspace exposes the upload form, version list, download and review actions. Unit tests cover file name sanitization, canonical base64/size limits, media-type signatures and JSON validity. CI must also pass migration validation/execution, typecheck, build, API tests, browser smoke, database acceptance, and production container build. Production remains HOLD until tenant/geography authorization, backup/restore, storage capacity, and real pilot acceptance are independently verified.

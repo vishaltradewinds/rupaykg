@@ -190,3 +190,17 @@ Next implementation slice adds a bounded evidence-file vault shared by stakehold
 - Upload/download/review require authenticated organization membership, applicable permission, and activity geography scope. Client input cannot mark evidence VERIFIED. Review is an append-only decision tied to the exact version and existing `verifications` record. Self-review is blocked so the uploader cannot approve their own evidence. Download rechecks stored byte length and SHA-256 before returning the file.
 - Unit tests: `apps/src/evidence-vault-routes.test.ts`; design/release gates: `docs/MRV_EVIDENCE_VAULT.md`.
 - This remains a CI-reviewed implementation slice, not production certification. Storage capacity, malware scanning, backup/restore, encryption-at-rest posture, retention/deletion policy and live tenant-isolation acceptance must be established before production scale.
+
+
+## 13. Evidence vault workspace integration — 2026-10-18
+
+PR #30 merged the bounded evidence vault backend after migration, typecheck, build, browser smoke, test/DB acceptance, and production-container checks passed: https://github.com/vishaltradewinds/rupaykg/pull/30 (merge commit `77f84e35621b42191be2ff1ad345cbab895f69c4`). The post-merge CI run is tracked at https://github.com/vishaltradewinds/rupaykg/actions/runs/39152365460.
+
+The next slice adds a user-facing Evidence Vault panel to the shared MRV workspace:
+- Select an existing authorized activity, evidence type, source reference and measurement period.
+- Upload bounded evidence file; see version, SHA-256, review state and source metadata.
+- List stored versions for the selected activity; download with server-side hash re-check.
+- Review other users' evidence with a rationale, subject to backend permission and geography checks; uploader self-review is blocked.
+- No claim of statutory acceptance, ACVA verification, project eligibility or CCC issuance is made.
+
+Branch/PR: `feature/evidence-vault-workspace-ui` / PR pending CI. No live deployment or production database migration has been performed. Keep production HOLD until PR CI passes and storage backup/restore, malware scanning, retention, capacity and pilot acceptance are addressed.

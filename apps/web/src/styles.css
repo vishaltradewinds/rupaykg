@@ -84,3 +84,23 @@
 .cpcb-swm-checklist article label{display:grid;gap:.25rem;min-width:10rem}
 .cpcb-swm-actions button{max-width:100%}
 .cpcb-swm-readiness textarea{width:100%;min-height:5rem;box-sizing:border-box}
+
+.evidence-vault-panel{margin:1.5rem 0;padding:1.25rem;border:1px solid var(--border,#d5dbe4);border-radius:1rem;background:var(--panel,rgba(127,127,127,.04));display:grid;gap:1rem;min-width:0}
+.evidence-vault-panel h2,.evidence-vault-panel h3{margin:.2rem 0}
+.evidence-vault-note{margin:0;opacity:.82;font-size:.9rem;line-height:1.5}
+.evidence-vault-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,14rem),1fr));gap:.8rem;align-items:end}
+.evidence-vault-form label{display:grid;gap:.4rem;min-width:0;font-size:.85rem}
+.evidence-vault-form input,.evidence-vault-form select,.evidence-vault-form button,.evidence-vault-form textarea,.evidence-vault-actions textarea{box-sizing:border-box;width:100%;min-width:0}
+.evidence-vault-form input,.evidence-vault-form select,.evidence-vault-actions textarea{padding:.65rem;border:1px solid var(--border,#d5dbe4);border-radius:.5rem;background:var(--input,transparent);color:inherit}
+.evidence-vault-form small{font-size:.72rem;opacity:.78;line-height:1.4}
+.evidence-vault-form button{padding:.75rem}
+.evidence-vault-notice{padding:.75rem;border:1px solid #4f8b66;border-radius:.6rem;overflow-wrap:anywhere}
+.evidence-vault-list{display:grid;gap:.75rem;min-width:0}
+.evidence-vault-list>.section-heading{display:flex;align-items:center;justify-content:space-between;gap:.8rem;flex-wrap:wrap;margin:0}
+.evidence-vault-list>article{display:grid;grid-template-columns:minmax(0,1fr) minmax(12rem,.7fr);gap:1rem;padding:.85rem;border:1px solid var(--border,#d5dbe4);border-radius:.7rem;min-width:0}
+.evidence-vault-list>article>div:first-child{display:grid;gap:.35rem;min-width:0}
+.evidence-vault-list article strong,.evidence-vault-list article small{overflow-wrap:anywhere}
+.evidence-vault-list article small{font-size:.75rem;opacity:.8;line-height:1.45}
+.evidence-vault-actions{display:grid;gap:.5rem;align-content:start;min-width:0}
+.evidence-vault-actions textarea{min-height:4rem;padding:.6rem;border:1px solid var(--border,#d5dbe4);border-radius:.5rem;background:var(--input,transparent);color:inherit}
+@media(max-width:640px){.evidence-vault-panel{padding:.85rem}.evidence-vault-list>article{grid-template-columns:1fr}.evidence-vault-actions{grid-template-columns:1fr}}
