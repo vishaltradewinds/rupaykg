@@ -177,4 +177,6 @@
 - Corrected head CI run #1284 (run ID `39145231762`) has now passed: dependency audit, migration validation and execution, typecheck, build, browser smoke test, test suite including disposable PostgreSQL acceptance, and production container build.
 - PR #19 was merged into `main` as squash commit `bcd67e3cfde7293d3528dc4933d05c23589d40a7`: https://github.com/vishaltradewinds/rupaykg/pull/19. This merges only the narrow Urban/Rural MRV workspace filter; it does not complete CPCB synchronization or certify production.
 - Documentation PR #18 remains draft/open: https://github.com/vishaltradewinds/rupaykg/pull/18. No CPCB login, OTP, CAPTCHA, payment, application submission, official status update, or deployment was performed.
-- Production remains HOLD pending written authorization/contract for any CPCB machine interface, resolution of the external-registration trust gap, and independent Guardian/WA03.001 acceptance.
+- Opened PR #20 to close the external-registration trust gap: https://github.com/vishaltradewinds/rupaykg/pull/20. It stores user-entered registration references as `USER_REPORTED_UNVERIFIED` with persisted status `NOT_ASSERTED`; CI run #1288 (run ID `39145478594`) is queued. Keep the PR draft until CI and review pass.
+- The official CPCB helpdesk contact was verified and added to the inquiry draft. The inquiry remains unsent.
+- Production remains HOLD pending written authorization/contract for any CPCB machine interface, verified official status evidence, and independent Guardian/WA03.001 acceptance.
