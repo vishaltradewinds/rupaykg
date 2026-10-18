@@ -63,3 +63,22 @@ $$;
 create trigger evidence_artifact_reviews_append_only
 before update or delete on evidence_artifact_reviews
 for each row execute function prevent_evidence_artifact_review_mutation();
+
+-- Keep the canonical evidence pointer/hash bound to the immutable stored version.
+create or replace function prevent_evidence_vault_pointer_mutation()
+returns trigger language plpgsql as $$
+begin
+  if exists (select 1 from evidence_artifact_versions v where v.evidence_id = old.id)
+     and (new.activity_id is distinct from old.activity_id
+       or new.evidence_type is distinct from old.evidence_type
+       or new.content_uri is distinct from old.content_uri
+       or new.content_hash is distinct from old.content_hash
+       or new.metadata is distinct from old.metadata) then
+    raise exception 'vault-backed evidence provenance is immutable; upload a new version instead';
+  end if;
+  return new;
+end;
+$$;
+create trigger evidence_vault_pointer_immutable
+before update on evidence
+for each row execute function prevent_evidence_vault_pointer_mutation();
