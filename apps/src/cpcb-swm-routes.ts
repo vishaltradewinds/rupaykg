@@ -42,6 +42,28 @@ function safeChecklist(value: unknown): ChecklistItem[] | null {
   }
   return result;
 }
+function safeObservations(value: unknown): boolean {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const record = value as Record<string, unknown>;
+  const keys = ["floorAreaM2", "waterConsumptionLitresPerDay", "wasteGenerationKgPerDay"];
+  if (Object.keys(record).some(key => !keys.includes(key))) return false;
+  for (const key of keys) {
+    const raw = record[key];
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return false;
+    const observation = raw as Record<string, unknown>;
+    if (!(observation.value === null || (typeof observation.value === "number" && Number.isFinite(observation.value) && observation.value >= 0))) return false;
+    if (typeof observation.unit !== "string" || observation.unit.length > 32) return false;
+    for (const field of ["sourceReference", "periodStart", "periodEnd"]) {
+      const fieldValue = observation[field];
+      if (fieldValue !== undefined && fieldValue !== null && typeof fieldValue !== "string") return false;
+      if (typeof fieldValue === "string" && fieldValue.length > 500) return false;
+    }
+    if (typeof observation.periodStart === "string" && observation.periodStart && !validDate(observation.periodStart)) return false;
+    if (typeof observation.periodEnd === "string" && observation.periodEnd && !validDate(observation.periodEnd)) return false;
+    if (typeof observation.periodStart === "string" && typeof observation.periodEnd === "string" && observation.periodStart && observation.periodEnd && observation.periodStart > observation.periodEnd) return false;
+  }
+  return true;
+}
 function hashEvent(value: unknown): string { return createHash("sha256").update(JSON.stringify(value)).digest("hex"); }
 async function writeAudit(client: PoolClient, identityId: string, organizationId: string, action: string, targetId: string, payload: unknown, requestId: string) {
   const prior = await client.query<{ event_hash: string }>("select event_hash from audit_events where organization_id=$1 order by created_at desc, id desc limit 1 for update", [organizationId]);
@@ -76,7 +98,7 @@ export async function registerCpcbSwmRoutes(app: FastifyInstance, pool: Pool | n
     const sourceReference = text(body, "cpcbStatusSourceReference", 500);
     const dueDate = body.dueDate === null || body.dueDate === "" || body.dueDate === undefined ? null : validDate(body.dueDate) ? body.dueDate : "INVALID";
     const notes = body.notes === undefined || body.notes === null ? null : text(body, "notes", 4000);
-    if (!validStakeholder(stakeholderType) || !title || !checklist || !observations || typeof observations !== "object" || Array.isArray(observations) || (geographyId && !UUID.test(geographyId)) || dueDate === "INVALID" || (body.notes !== undefined && body.notes !== null && body.notes !== "" && notes === null)) return reply.code(400).send({ error: "Invalid stakeholder type, title, geography, checklist, eligibility observations, due date or notes", code: "SWM_WORKSPACE_INVALID" });
+    if (!validStakeholder(stakeholderType) || !title || !checklist || !safeObservations(observations) || (geographyId && !UUID.test(geographyId)) || dueDate === "INVALID" || (body.notes !== undefined && body.notes !== null && body.notes !== "" && notes === null)) return reply.code(400).send({ error: "Invalid stakeholder type, title, geography, checklist, eligibility observations, due date or notes", code: "SWM_WORKSPACE_INVALID" });
     try {
       if (geographyId) {
         const allowed = await pool.query<{ ok: boolean }>("select exists(select 1 from organization_memberships om where om.identity_id=$1 and om.organization_id=$2 and om.status='VERIFIED' and organization_has_geography_scope(om.organization_id,$3::uuid)) ok", [auth.identityId, organizationId, geographyId]);
