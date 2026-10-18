@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { canClaimIssuedCarbonCredit, type ExternalIssuanceEvidence } from "./market-mechanisms.js";
 export * from "./market-mechanisms.js";
 
 type CarbonInput = {
@@ -146,6 +147,7 @@ export function calculateBmWa03001(input: BmWa03001Input): BmWa03001Result {
   ] };
 }
 
-export function isIssuableCarbonValue(status: string, verificationCount: number): boolean {
-  return status === "CALCULATED_PENDING_VERIFICATION" && verificationCount > 0;
+export function isIssuableCarbonValue(status: string, issuanceEvidence?: ExternalIssuanceEvidence): boolean {
+  // A completed calculation or a count of internal reviews is never proof of CCC issuance.
+  return status === "ISSUED" && canClaimIssuedCarbonCredit("ISSUED", issuanceEvidence);
 }
