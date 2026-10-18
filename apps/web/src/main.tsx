@@ -84,7 +84,7 @@ function CpcbSwmReadiness({token,organizationId}:{token:string;organizationId:st
   setSource(obs.floorAreaM2?.sourceReference??obs.waterConsumptionLitresPerDay?.sourceReference??obs.wasteGenerationKgPerDay?.sourceReference??"");
   setPeriodStart(obs.floorAreaM2?.periodStart??obs.waterConsumptionLitresPerDay?.periodStart??obs.wasteGenerationKgPerDay?.periodStart??"");
   setPeriodEnd(obs.floorAreaM2?.periodEnd??obs.waterConsumptionLitresPerDay?.periodEnd??obs.wasteGenerationKgPerDay?.periodEnd??"");
-  setChecklistState(Object.fromEntries((record.checklist??[]).map(item=>[item.key,["PROVIDED_UNVERIFIED","NOT_APPLICABLE","REJECTED","EXPIRED","UNRESOLVED"].includes(item.status)?item.status:"MISSING"])));
+  setChecklistState(Object.fromEntries((record.checklist??[]).map(item=>[item.key,["PROVIDED_UNVERIFIED","NOT_APPLICABLE","REJECTED","EXPIRED","UNRESOLVED"].includes(item.status)?item.status:"MISSING"])) as Record<string,"MISSING"|"PROVIDED_UNVERIFIED"|"NOT_APPLICABLE"|"REJECTED"|"EXPIRED"|"UNRESOLVED">);
   setMessage("Loaded saved preparation record. CPCB status remains user-reported and unverified.");setError("");
  }
  async function save(){
