@@ -39,7 +39,7 @@ type CpcbSwmWorkspaceRecord = {
  id:string; stakeholder_type:SwmStakeholderType; title:string; geography_id?:string|null;
  eligibility_observations:Record<string,{value:number|null;unit:string;sourceReference?:string|null;periodStart?:string|null;periodEnd?:string|null}>;
  checklist:Array<{key:string;label:string;status:string;officialRequirement:string}>;
- cpcb_application_reference?:string|null;cpcb_status_source_reference?:string|null;cpcb_reported_status?:CpcbReportedStatus;local_workflow_stage?:SwmLocalStage;
+ cpcb_application_reference?:string|null;cpcb_status_source_reference?:string|null;cpcb_status_note?:string|null;cpcb_reported_status?:CpcbReportedStatus;local_workflow_stage?:SwmLocalStage;
  status_history?:Array<{id:string;previousReportedStatus:CpcbReportedStatus;reportedStatus:CpcbReportedStatus;sourceReference?:string|null;statusNote?:string|null;actorIdentityId:string;recordedAt:string}>;
  due_date?:string|null;notes?:string|null;
 };
@@ -88,7 +88,7 @@ function CpcbSwmReadiness({token,organizationId}:{token:string;organizationId:st
  useEffect(()=>{void load();},[token,organizationId]);
  function openRecord(record:CpcbSwmWorkspaceRecord){
   setSavedId(record.id);setStakeholder(record.stakeholder_type);setTitle(record.title);setGeographyId(record.geography_id??"");
-  setApplicationReference(record.cpcb_application_reference??"");setStatusSourceReference(record.cpcb_status_source_reference??"");setReportedStatus(record.cpcb_reported_status??"NOT_REPORTED");setLocalStage(record.local_workflow_stage??"LOCAL_PREPARATION");setStatusNote("");
+  setApplicationReference(record.cpcb_application_reference??"");setStatusSourceReference(record.cpcb_status_source_reference??"");setReportedStatus(record.cpcb_reported_status??"NOT_REPORTED");setLocalStage(record.local_workflow_stage??"LOCAL_PREPARATION");setStatusNote(record.cpcb_status_note??"");
   setDueDate(record.due_date?String(record.due_date).slice(0,10):"");setNotes(record.notes??"");
   const obs=record.eligibility_observations??{};
   setArea(obs.floorAreaM2?.value===null||obs.floorAreaM2?.value===undefined?"":String(obs.floorAreaM2.value));
