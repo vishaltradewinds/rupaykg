@@ -11,8 +11,20 @@ test("calculates a methodology-versioned result without issuing a credential", (
   assert.equal(result.trace.length, 3);
   assert.equal(result.trace[0].equationId, "CARBON.GROSS_REDUCTION.V1");
   assert.equal(result.trace[2].result, 30);
-  assert.equal(isIssuableCarbonValue(result.status, 0), false);
-  assert.equal(isIssuableCarbonValue(result.status, 1), true);
+  const authorityEvidence = {
+    authorityName: "Bureau of Energy Efficiency",
+    officialSourceUrl: "https://beeindia.gov.in/",
+    issuanceReference: "USER-REPORTED-REF-001",
+    artifactSha256: "a".repeat(64),
+    verificationStatus: "VERIFIED" as const,
+    verificationRecordId: "verification-record-001",
+    verifiedAt: "2026-10-18T17:00:00Z",
+  };
+  assert.equal(isIssuableCarbonValue(result.status, authorityEvidence), false);
+  assert.equal(isIssuableCarbonValue("ISSUED", undefined), false);
+  assert.equal(isIssuableCarbonValue("ISSUED", { ...authorityEvidence, verificationStatus: "UNVERIFIED" }), false);
+  assert.equal(isIssuableCarbonValue("ISSUED", { ...authorityEvidence, artifactSha256: "not-a-hash" }), false);
+  assert.equal(isIssuableCarbonValue("ISSUED", authorityEvidence), true);
 });
 
 test("canonical hashing is deterministic regardless of object key order", () => {
