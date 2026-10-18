@@ -152,4 +152,6 @@ We will not automate portal submissions or access protected workflows without th
 Regards,  
 RupayKg Team
 
-**Status of draft:** prepared for review only; not sent and no recipient address has been assumed.
+**Official portal helpdesk shown on the CPCB portal:** swmportal.cpcb@gov.in (the current portal page also renders this address in obfuscated form). Source: https://swmp.cpcb.gov.in/en and https://swm.cpcb.gov.in/.
+
+**Status of draft:** prepared for review only; not sent. Contact address was verified from the official portal page, but sending remains a separate action and has not been performed.
