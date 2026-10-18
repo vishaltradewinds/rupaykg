@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { operatingContextGeographyKinds } from "./workspace-routes.js";
 
 test("urban operating context only includes municipal geography kinds", () => {
-  assert.deepEqual(operatingContextGeographyKinds("urban"), ["ULB", "WARD", "LOCALITY"]);
+  assert.deepEqual(operatingContextGeographyKinds("urban"), ["ULB", "WARD"]);
+  assert.equal(operatingContextGeographyKinds("urban").includes("LOCALITY"), false);
   assert.equal(operatingContextGeographyKinds("urban").includes("GRAM_PANCHAYAT"), false);
   assert.equal(operatingContextGeographyKinds("urban").includes("VILLAGE"), false);
 });
