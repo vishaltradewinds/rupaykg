@@ -77,3 +77,10 @@
 .cpcb-swm-checklist span{font-size:.75rem;font-weight:700;white-space:nowrap}
 .cpcb-swm-readiness a{overflow-wrap:anywhere}
 @media(max-width:560px){.cpcb-swm-readiness{padding:.85rem}.cpcb-swm-checklist article{display:grid}.cpcb-swm-checklist span{white-space:normal}}
+
+
+.cpcb-swm-saved,.cpcb-swm-actions{display:flex;gap:.75rem;align-items:end;flex-wrap:wrap}
+.cpcb-swm-saved label{flex:1;min-width:min(100%,16rem)}
+.cpcb-swm-checklist article label{display:grid;gap:.25rem;min-width:10rem}
+.cpcb-swm-actions button{max-width:100%}
+.cpcb-swm-readiness textarea{width:100%;min-height:5rem;box-sizing:border-box}
