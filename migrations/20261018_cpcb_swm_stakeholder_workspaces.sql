@@ -10,7 +10,7 @@ create table cpcb_swm_stakeholder_workspaces (
   cpcb_application_reference text,
   cpcb_status_claim text not null default 'USER_REPORTED_UNVERIFIED' check (cpcb_status_claim = 'USER_REPORTED_UNVERIFIED'),
   cpcb_status_source_reference text,
-  cpcb_status_observed_at timestamptz,
+  cpcb_status_reference_recorded_at timestamptz,
   due_date date,
   notes text,
   created_by_identity_id uuid not null references identities(id),
