@@ -22,6 +22,27 @@ export function normalizeExternalRegistrationReport(reference: string | null, st
   return { reference, persistedStatus: "NOT_ASSERTED", trustState: "USER_REPORTED_UNVERIFIED" };
 }
 
+export function normalizeEprRegistrationInput(reference: string | null, reportedStatus: string | null, basisInput: unknown): {
+  reference: string | null;
+  persistedStatus: "NOT_ASSERTED";
+  basis: Record<string, unknown>;
+} {
+  let basis: Record<string, unknown> = {};
+  if (basisInput && typeof basisInput === "object" && !Array.isArray(basisInput)) basis = { ...(basisInput as Record<string, unknown>) };
+  else if (typeof basisInput === "string") {
+    try {
+      const parsed: unknown = JSON.parse(basisInput);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) basis = { ...(parsed as Record<string, unknown>) };
+    } catch { /* Invalid JSON remains rejected by the existing database validation path. */ }
+  }
+  if (reference || reportedStatus === "REGISTERED_EXTERNALLY") {
+    basis.cpcb_registration_reference_trust_state = "USER_REPORTED_UNVERIFIED";
+    basis.cpcb_registration_reference_reported_at = new Date().toISOString();
+    if (reportedStatus) basis.cpcb_registration_status_reported_by_user = reportedStatus;
+  }
+  return { reference, persistedStatus: "NOT_ASSERTED", basis };
+}
+
 async function authFor(request: Request, reply: Reply, pool: Pool | null): Promise<AuthContext | null> {
   if (!pool) { reply.code(503).send({ error: "Database unavailable", code: "DATABASE_UNAVAILABLE" }); return null; }
   try {
@@ -142,20 +163,21 @@ export async function registerStatutoryRoutes(app: FastifyInstance, pool: Pool |
     if (!await evidenceBindingValid(pool, organizationId, evidenceId, verificationId)) return reply.code(400).send({ error: "Evidence and verification must be supplied together and be verified, approved, and organization/geography scoped", code: "STATUTORY_EVIDENCE_BINDING_INVALID" });
     const metadata = schemeRow.rows[0].metadata ?? {};
     const metadataRule = typeof metadata.rule_reference === "string" ? metadata.rule_reference : null;
+    const registrationInput = normalizeEprRegistrationInput(text(body, "cpcbRegistrationReference"), text(body, "cpcbRegistrationStatus"), body.basis);
     try {
       const result = await pool.query(
         `insert into organization_epr_applicability
           (organization_id,scheme,rule_reference,applicability_status,basis,cpcb_registration_status,cpcb_registration_reference,evidence_id,verification_id,determination_note,determined_by_identity_id,determined_at)
-         values($1,$2,coalesce($3,$4),$5,coalesce($6::jsonb,'{}'),$7,$8,$9,$10,$11,$12,now())
+         values($1,$2,coalesce($3,$4),$5,$6::jsonb,$7,$8,$9,$10,$11,$12,$13,now())
          on conflict(organization_id,scheme) do update set
            rule_reference=excluded.rule_reference,applicability_status=excluded.applicability_status,basis=excluded.basis,
            cpcb_registration_status=excluded.cpcb_registration_status,cpcb_registration_reference=excluded.cpcb_registration_reference,
            evidence_id=excluded.evidence_id,verification_id=excluded.verification_id,determination_note=excluded.determination_note,
            determined_by_identity_id=excluded.determined_by_identity_id,determined_at=excluded.determined_at
          returning *`,
-        [organizationId, scheme, text(body, "ruleReference"), metadataRule, status, typeof body.basis === "string" ? body.basis : JSON.stringify(body.basis ?? {}), text(body, "cpcbRegistrationStatus") || "NOT_ASSERTED", text(body, "cpcbRegistrationReference"), evidenceId, verificationId, text(body, "determinationNote"), auth.identityId],
+        [organizationId, scheme, text(body, "ruleReference"), metadataRule, status, JSON.stringify(registrationInput.basis), registrationInput.persistedStatus, registrationInput.reference, evidenceId, verificationId, text(body, "determinationNote"), auth.identityId],
       );
-      return reply.code(201).send({ source: "postgresql", syntheticData: false, applicability: result.rows[0], scheme: schemeRow.rows[0], statutoryBoundary: "INTERNAL_APPLICABILITY_PREPARATION_ONLY", cpcbExternalStatus: result.rows[0]?.cpcb_registration_status });
+      return reply.code(201).send({ source: "postgresql", syntheticData: false, applicability: result.rows[0], scheme: schemeRow.rows[0], statutoryBoundary: "INTERNAL_APPLICABILITY_PREPARATION_ONLY", cpcbExternalStatus: result.rows[0]?.cpcb_registration_status, externalRegistrationState: registrationInput.reference ? "USER_REPORTED_UNVERIFIED" : "NOT_ASSERTED" });
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "EPR applicability could not be persisted", code: "EPR_WRITE_UNAVAILABLE", syntheticData: false }); }
   });
 
