@@ -254,7 +254,7 @@ type EvidenceArtifactItem={evidence_id:string;series_id:string;artifact_version_
 function EvidenceVaultPanel({token,activities,identityId}:{token:string;activities:unknown[];identityId:string}){
  const [activityId,setActivityId]=useState(""),[evidenceType,setEvidenceType]=useState("WASTE_WEIGHT_TICKET"),[sourceReference,setSourceReference]=useState(""),[periodStart,setPeriodStart]=useState(""),[periodEnd,setPeriodEnd]=useState(""),[file,setFile]=useState<File|null>(null),[items,setItems]=useState<EvidenceArtifactItem[]>([]),[rationales,setRationales]=useState<Record<string,string>>({}),[busy,setBusy]=useState(false),[error,setError]=useState(""),[notice,setNotice]=useState("");
  const choices=useMemo(()=>activities.filter((x):x is Record<string,unknown>=>Boolean(x&&typeof x==="object"&&typeof (x as Record<string,unknown>).id==="string")), [activities]);
- useEffect(()=>{if(!activityId&&choices[0]?.id)setActivityId(String(choices[0].id));},[activityId,choices]);
+ useEffect(()=>{if(!choices.some(a=>String(a.id)===activityId))setActivityId(choices[0]?.id?String(choices[0].id):"");},[activityId,choices]);
  async function loadArtifacts(id=activityId){if(!id)return;try{const result=await api<{data:{artifacts:EvidenceArtifactItem[]}}>("/api/v1/evidence-vault?activityId="+encodeURIComponent(id),token);setItems(result.data.artifacts??[]);}catch(e){setItems([]);setError(e instanceof Error?e.message:"Evidence list could not be loaded");}}
  useEffect(()=>{setError("");setNotice("");if(activityId)void loadArtifacts(activityId);else setItems([]);},[activityId,token]);
  async function upload(){
