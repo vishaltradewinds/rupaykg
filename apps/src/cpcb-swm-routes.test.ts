@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { initialSwmChecklist } from "../../packages/domain/src/cpcb-swm.js";
+import { initialSwmChecklist } from "@rupaykg/domain";
 import { safeChecklist, safeObservations, isCpcbReportedStatus, isSwmLocalStage } from "./cpcb-swm-routes.js";
 
 const baseChecklist = initialSwmChecklist("BWG").map(item => ({
