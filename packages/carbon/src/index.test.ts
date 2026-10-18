@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { BM_WA03001_PARAMETER_DICTIONARY, calculateBmWa03001, calculateEmissionReduction, evaluateBmWa03001Applicability, isGenericCalculationMethodAllowed, isIssuableCarbonValue, sha256Canonical, validateBmWa03001Input } from "./index.js";
+import { BM_WA03001_PARAMETER_DICTIONARY, calculateBmWa03001, calculateEmissionReduction, evaluateBmWa03001Applicability, evaluateBmWa03001Readiness, isGenericCalculationMethodAllowed, isIssuableCarbonValue, sha256Canonical, validateBmWa03001Input, type BmWa03001ReadinessInput } from "./index.js";
 
 test("calculates a methodology-versioned result without issuing a credential", () => {
   const result = calculateEmissionReduction({ activityId: "activity-1", methodologyCode: "CCTS-OFFSET", methodologyVersion: "2026-01", baselineTco2e: 100, projectTco2e: 65, leakageTco2e: 5, uncertaintyTco2e: 2 });
@@ -106,4 +106,64 @@ test("empty methodology identifiers cannot enter generic calculator", () => {
     baselineTco2e: 100,
     projectTco2e: 65,
   }), /method-specific calculation adapter/);
+});
+
+function completeBmWa03001ReadinessInput(overrides: Partial<BmWa03001ReadinessInput> = {}): BmWa03001ReadinessInput {
+  const toolStatuses = Object.fromEntries(["BM-T-001","BM-T-002","BM-T-003","BM-T-004","BM-T-006","BM-T-011"].map(code => [code,"CURRENT_APPROVED_VERSION_CONFIRMED"])) as BmWa03001ReadinessInput["toolStatuses"];
+  return {
+    sector: "Waste Handling and Disposal",
+    activity: "Capture and combust methane from a landfill containing biodegradable organic matter",
+    reducesOrganicWasteRecycling: false,
+    managementDeliberatelyChangedToIncreaseMethane: false,
+    changeWasRequiredForTechnicalOrRegulatoryReasons: false,
+    landfillSiteType: "SOLID_WASTE_DISPOSAL_SITE",
+    containsBiodegradableOrganicMatter: true,
+    recoveredGasUse: "FLARING_ONLY",
+    additionalityPath: "BM_T_001",
+    projectBoundaryDefined: true,
+    flowMetersCalibrated: true,
+    continuousFlowMetering: true,
+    methaneMeasurementMethod: "CONTINUOUS_ANALYSER",
+    flowAndMethaneHumidityBasisAligned: true,
+    baselineAndAdditionalityEvidence: true,
+    toolStatuses,
+    ...overrides,
+  };
+}
+
+test("BM WA03.001 full readiness is conditional and returns required sectoral scope and tools", () => {
+  const result = evaluateBmWa03001Readiness(completeBmWa03001ReadinessInput());
+  assert.equal(result.status, "ELIGIBLE_FOR_FURTHER_ASSESSMENT");
+  assert.deepEqual(result.requiredSectoralScopes, ["03: Waste handling and disposal"]);
+  assert.deepEqual(result.requiredTools, ["BM-T-001","BM-T-002","BM-T-003","BM-T-004","BM-T-006","BM-T-011"]);
+  assert.equal(result.source.version, "1.0");
+  assert.match(result.source.url, /BM%20WA03\.001\.pdf/);
+});
+
+test("BM WA03.001 requires both Waste and Energy scopes when recovered gas is used beyond flaring", () => {
+  const result = evaluateBmWa03001Readiness(completeBmWa03001ReadinessInput({ recoveredGasUse: "POWER_OR_HEAT" }));
+  assert.deepEqual(result.requiredSectoralScopes, ["03: Waste handling and disposal", "01: Energy"]);
+  assert.equal(result.status, "ELIGIBLE_FOR_FURTHER_ASSESSMENT");
+});
+
+test("BM WA03.001 fails closed when current tool approval or monitoring evidence is unresolved", () => {
+  const toolStatuses = { ...completeBmWa03001ReadinessInput().toolStatuses, "BM-T-011": "NOT_CONFIRMED" as const };
+  const result = evaluateBmWa03001Readiness(completeBmWa03001ReadinessInput({ toolStatuses, flowMetersCalibrated: null, baselineAndAdditionalityEvidence: null }));
+  assert.equal(result.status, "UNRESOLVED");
+  assert.ok(result.reasons.some(reason => reason.includes("BM-T-011")));
+  assert.ok(result.reasons.some(reason => reason.includes("calibration")));
+  assert.ok(result.reasons.some(reason => reason.includes("baseline and additionality")));
+});
+
+test("BM WA03.001 positive-list pathway remains unresolved while referenced BM-T-012 is absent from current BEE register", () => {
+  const result = evaluateBmWa03001Readiness(completeBmWa03001ReadinessInput({ additionalityPath: "POSITIVE_LIST_BM_T_012" }));
+  assert.equal(result.status, "UNRESOLVED");
+  assert.ok(result.requiredTools.includes("BM-T-012"));
+  assert.ok(result.reasons.some(reason => reason.includes("BM-T-012") && reason.includes("absent")));
+});
+
+test("BM WA03.001 returns INELIGIBLE for a known disqualifier rather than an unresolved green status", () => {
+  const result = evaluateBmWa03001Readiness(completeBmWa03001ReadinessInput({ reducesOrganicWasteRecycling: true }));
+  assert.equal(result.status, "INELIGIBLE");
+  assert.ok(result.reasons.some(reason => reason.includes("must not reduce organic-waste recycling")));
 });
