@@ -122,6 +122,7 @@ Source: SWM Rules, 2026 and CPCB SWM portal/user guide. Recheck amendments, norm
 - CI run #1322 passed: migration validation and database migration execution, typecheck, build, browser smoke, tests including disposable PostgreSQL acceptance, and production container build.
 - Improvements include separate local workflow stage vs user-reported CPCB status, status/source/note history, independent provenance for each BWG eligibility measure, strict validation on POST and PATCH, canonical server-side checklist enforcement, and explicit organization-header preservation.
 - Conformance remains PARTIAL. Still missing: real document upload/versioning, versioned application packet and self-declaration, dedicated correction/amendment/appeal/grievance/event case records, linked four-stream custody chain and reporting preparation, route-level authorization/tenant-isolation tests, production deployment verification and pilot acceptance.
+- Follow-up PR #27 merged as commit `5617e49876ac7959a302e1dd47c22e6fdf777be5`; CI #1327 passed. The API workspace now explicitly declares `@rupaykg/domain` and the lockfile is synchronized.
 - No CPCB API has been confirmed or used; no OTP/CAPTCHA, payment, official submission or certificate action was performed. Production remains HOLD.
 
 ## 8. Current verified state and next actions
