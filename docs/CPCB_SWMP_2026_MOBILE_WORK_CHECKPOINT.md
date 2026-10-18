@@ -60,3 +60,12 @@
 - Current repo review shows internal BWG assessment and statutory applicability routes, plus separate Guardian/Hedera MRV support. These are not equivalent to CPCB application submission, official status synchronization, return submission, or official certificate exchange.
 - This remains a documentation/specification change only. No application code, database schema/migration, local working tree, live service, or deployment was changed. Local tests have not been run for this update. PR #18 remains draft and unmerged.
 - Next code step when the PC/local tree is available: inspect actual migrations and tests, map each matrix row to existing entities, correct external-registration trust state, then implement a minimal additive workflow mirror with source evidence, versioned states and tests. Do not create duplicate schema before inspection. Keep release HOLD until tests, authorized interface confirmation and separate Guardian/WA03.001 acceptance gates pass.
+
+
+## Update — Urban/Rural governance symmetry restored (2026-10-18)
+
+- User-confirmed doctrine: RupayKg is one platform with two distinct governance rails; Urban is municipal/ULB → ward → generator/collector/facility, while Rural is Gram Panchayat / District Panchayat → village / block → producer/aggregator/facility. Do not collapse these into one generic local-body workflow.
+- Updated `docs/CPCB_SWMP_2026_WORKFLOW_CONFORMANCE_MATRIX.md` in commit `8adb1cd4e24afbeb7a3b47e014b7601b856e620d` to separate Urban authority workflow, Rural authority workflow, and shared safeguards.
+- Urban operating evidence emphasizes frequent collection, ward/route/vehicle/scale records, four-stream segregation and facility reconciliation. Rural operating evidence emphasizes village collection points, seasonal supply, producer/FPO/SHG participation, aggregation, quality/inventory, consolidated logistics and village-cluster reconciliation.
+- Important boundary: rural biomass, crop residue, animal waste, biochar, compost, biogas and carbon activities are not automatically CPCB SWM 2026/EBWGR records. Cross-link only when legal scope, waste/material classification, authority, destination and evidence match.
+- Urban/Rural symmetry means equal traceability, auditability, permissions, grievance handling and fail-closed evidence standards—not identical screens or assumptions. No application code, schema, tests, live portal, Guardian service or deployment was changed.
