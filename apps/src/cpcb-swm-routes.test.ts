@@ -1,13 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { safeChecklist, safeObservations } from "./cpcb-swm-routes.js";
+import { initialSwmChecklist } from "@rupaykg/domain";
+import { safeChecklist, safeObservations, isCpcbReportedStatus, isSwmLocalStage } from "./cpcb-swm-routes.js";
 
-const baseChecklist = [{
-  key: "water_consumption_bill",
-  label: "Water consumption bill",
-  status: "PROVIDED_UNVERIFIED",
-  officialRequirement: "GUIDE_LISTED",
-}];
+const baseChecklist = initialSwmChecklist("BWG").map(item => ({
+  ...item,
+  status: item.key === "water_consumption_bill" ? "PROVIDED_UNVERIFIED" : "MISSING",
+}));
 
 const baseObservations = {
   floorAreaM2: { value: null, unit: "m2", sourceReference: "", periodStart: "", periodEnd: "" },
@@ -15,17 +14,23 @@ const baseObservations = {
   wasteGenerationKgPerDay: { value: 100, unit: "kg/day", sourceReference: "evidence://weighbridge", periodStart: "2026-09-01", periodEnd: "2026-09-30" },
 };
 
-test("CPCB SWM checklist accepts unverified evidence states", () => {
-  assert.equal(safeChecklist(baseChecklist)?.[0]?.status, "PROVIDED_UNVERIFIED");
+test("CPCB SWM checklist accepts canonical BWG checklist with unverified evidence states", () => {
+  assert.equal(safeChecklist(baseChecklist, "BWG")?.find(item => item.key === "water_consumption_bill")?.status, "PROVIDED_UNVERIFIED");
 });
 
 test("CPCB SWM checklist rejects client-supplied verification", () => {
-  assert.equal(safeChecklist([{ ...baseChecklist[0], status: "VERIFIED" }]), null);
+  assert.equal(safeChecklist(baseChecklist.map(item => item.key === "water_consumption_bill" ? { ...item, status: "VERIFIED" } : item), "BWG"), null);
 });
 
-test("CPCB SWM checklist rejects duplicate keys and unknown states", () => {
-  assert.equal(safeChecklist([baseChecklist[0], baseChecklist[0]]), null);
-  assert.equal(safeChecklist([{ ...baseChecklist[0], status: "CPCB_APPROVED" }]), null);
+test("CPCB SWM checklist rejects duplicate keys, unknown states and client-invented requirements", () => {
+  assert.equal(safeChecklist([...baseChecklist, baseChecklist[0]!], "BWG"), null);
+  assert.equal(safeChecklist(baseChecklist.map(item => item.key === "water_consumption_bill" ? { ...item, status: "CPCB_APPROVED" } : item), "BWG"), null);
+  assert.equal(safeChecklist(baseChecklist.map(item => item.key === "water_consumption_bill" ? { ...item, officialRequirement: "GUIDE_LISTED", label: "Invented official requirement" } : item), "BWG"), null);
+});
+
+test("CPCB SWM checklist requires the canonical items for the selected stakeholder", () => {
+  assert.equal(safeChecklist(baseChecklist.slice(0, 1), "BWG"), null);
+  assert.equal(safeChecklist(baseChecklist, "ULB"), null);
 });
 
 test("CPCB SWM observation payload permits unresolved draft values with explicit units", () => {
@@ -41,4 +46,17 @@ test("CPCB SWM observation payload rejects negative, non-finite and invalid-peri
 test("CPCB SWM observation payload rejects unexpected keys and reversed periods", () => {
   assert.equal(safeObservations({ ...baseObservations, invented: {} }), false);
   assert.equal(safeObservations({ ...baseObservations, floorAreaM2: { ...baseObservations.floorAreaM2, periodStart: "2026-10-01", periodEnd: "2026-09-01" } }), false);
+});
+
+test("reported CPCB status accepts only the documented user-reported state set", () => {
+  assert.equal(isCpcbReportedStatus("UNDER_REVIEW"), true);
+  assert.equal(isCpcbReportedStatus("APPROVED"), true);
+  assert.equal(isCpcbReportedStatus("CPCB_VERIFIED"), false);
+  assert.equal(isCpcbReportedStatus("SUBMITTED_TO_CPCB"), false);
+});
+
+test("local workflow stages are separate from reported CPCB statuses", () => {
+  assert.equal(isSwmLocalStage("CORRECTION_PREPARATION"), true);
+  assert.equal(isSwmLocalStage("APPROVED"), false);
+  assert.equal(isSwmLocalStage("INTEGRATED_API_SYNCED"), false);
 });
