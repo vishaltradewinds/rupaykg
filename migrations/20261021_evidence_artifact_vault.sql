@@ -66,7 +66,7 @@ for each row execute function prevent_evidence_artifact_review_mutation();
 
 -- Keep the canonical evidence pointer/hash bound to the immutable stored version.
 create or replace function prevent_evidence_vault_pointer_mutation()
-returns trigger language plpgsql as $
+returns trigger language plpgsql as $$
 begin
   if exists (select 1 from evidence_artifact_versions v where v.evidence_id = old.id) then
     if new.activity_id is distinct from old.activity_id
