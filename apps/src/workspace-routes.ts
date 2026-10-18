@@ -14,6 +14,11 @@ export type OperatingContextRail = "urban" | "rural";
 export function operatingContextGeographyKinds(context: OperatingContextRail): readonly string[] {
   return context === "urban" ? ["ULB", "WARD"] : ["GRAM_PANCHAYAT", "VILLAGE", "CLUSTER"];
 }
+export function operatingContextSqlClause(context: OperatingContextRail | undefined, parameterIndex: number): string {
+  if (!context) return "";
+  if (!Number.isInteger(parameterIndex) || parameterIndex < 2) throw new RangeError("Context SQL parameter index must be an integer >= 2");
+  return ` and exists (select 1 from geography context_geo where context_geo.id=a.geography_id and context_geo.kind::text = any(${parameterIndex}::text[]))`;
+}
 function requestedOperatingContext(request: { query: unknown }): { context?: OperatingContextRail; invalid: boolean } {
   const q = request.query && typeof request.query === "object" ? request.query as Record<string, unknown> : {};
   const raw = q.context;
@@ -65,9 +70,7 @@ export async function registerWorkspaceRoutes(app: FastifyInstance, pool: Pool |
       if (geographyId) params.push(geographyId);
       if (contextRequest.context) params.push(operatingContextGeographyKinds(contextRequest.context));
       const geographyClause = geoClause(geographyId, "a.geography_id");
-      const contextClause = contextRequest.context
-        ? ` and exists (select 1 from geography context_geo where context_geo.id=a.geography_id and context_geo.kind::text = any($${params.length}::text[]))`
-        : "";
+      const contextClause = operatingContextSqlClause(contextRequest.context, params.length);
       const scopeClause = " and organization_has_geography_scope(a.organization_id,a.geography_id)";
       const [activities, measurements, evidence, verifications] = await Promise.all([
         pool.query(`select a.id,a.activity_type,a.status,a.occurred_at,a.created_at,a.geography_id,g.name as geography_name,g.kind::text as geography_kind from activities a left join geography g on g.id=a.geography_id where a.organization_id=any($1::uuid[])${scopeClause}${geographyClause}${contextClause} order by a.created_at desc limit 100`, params),
