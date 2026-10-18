@@ -148,6 +148,79 @@ export function evaluateBmWa03001Applicability(input: BmWa03001ApplicabilityInpu
   return { eligible: reasons.length === 0, reasons };
 }
 
+
+export type BmWa03001ToolStatus = "CURRENT_APPROVED_VERSION_CONFIRMED" | "NOT_CONFIRMED";
+export type BmWa03001ReadinessInput = BmWa03001ApplicabilityInput & {
+  landfillSiteType: "SOLID_WASTE_DISPOSAL_SITE" | "OTHER" | "UNRESOLVED";
+  containsBiodegradableOrganicMatter: boolean | null;
+  recoveredGasUse: "FLARING_ONLY" | "POWER_OR_HEAT" | "OTHER_NON_FLARING_USE" | "UNRESOLVED";
+  additionalityPath: "POSITIVE_LIST_BM_T_012" | "BM_T_001" | "UNRESOLVED";
+  projectBoundaryDefined: boolean | null;
+  flowMetersCalibrated: boolean | null;
+  continuousFlowMetering: boolean | null;
+  methaneMeasurementMethod: "CONTINUOUS_ANALYSER" | "PERIODIC_90_10" | "OTHER" | "UNRESOLVED";
+  flowAndMethaneHumidityBasisAligned: boolean | null;
+  baselineAndAdditionalityEvidence: boolean | null;
+  toolStatuses: Partial<Record<"BM-T-001" | "BM-T-002" | "BM-T-003" | "BM-T-004" | "BM-T-006" | "BM-T-011" | "BM-T-012", BmWa03001ToolStatus>>;
+};
+
+export type BmWa03001ReadinessResult = {
+  status: "INELIGIBLE" | "UNRESOLVED" | "ELIGIBLE_FOR_FURTHER_ASSESSMENT";
+  requiredSectoralScopes: string[];
+  requiredTools: string[];
+  reasons: string[];
+  source: { url: string; version: "1.0"; publicationDate: "2025-03-27" };
+};
+
+/**
+ * Full first-pass readiness gate grounded in BEE BM WA03.001 v1.0.
+ * This is not formal CCTS eligibility or a substitute for ACVA validation.
+ * Required tool status must be confirmed against current official documents.
+ */
+export function evaluateBmWa03001Readiness(input: BmWa03001ReadinessInput): BmWa03001ReadinessResult {
+  const disqualifiers: string[] = [];
+  const unresolved: string[] = [];
+  if (input.sector.trim().toLowerCase() !== "waste handling and disposal") disqualifiers.push("Sector must be Waste Handling and Disposal.");
+  if (!input.activity.trim()) disqualifiers.push("Project activity description is required.");
+  if (input.reducesOrganicWasteRecycling) disqualifiers.push("Project must not reduce organic-waste recycling.");
+  if (input.managementDeliberatelyChangedToIncreaseMethane && !input.changeWasRequiredForTechnicalOrRegulatoryReasons) disqualifiers.push("Management must not be deliberately changed to increase methane unless technically or regulatorily required.");
+  if (input.landfillSiteType === "OTHER") disqualifiers.push("Activity is not at a solid waste disposal site/landfill.");
+  if (input.landfillSiteType === "UNRESOLVED") unresolved.push("Solid waste disposal site and project boundary evidence are unresolved.");
+  if (input.containsBiodegradableOrganicMatter === false) disqualifiers.push("Site waste does not contain biodegradable organic matter.");
+  if (input.containsBiodegradableOrganicMatter === null) unresolved.push("Biodegradable organic matter content is not evidenced.");
+  const scopes = input.recoveredGasUse === "FLARING_ONLY"
+    ? ["03: Waste handling and disposal"]
+    : input.recoveredGasUse === "POWER_OR_HEAT" || input.recoveredGasUse === "OTHER_NON_FLARING_USE"
+      ? ["03: Waste handling and disposal", "01: Energy"]
+      : [];
+  if (input.recoveredGasUse === "UNRESOLVED") unresolved.push("Recovered landfill-gas use (flaring only versus non-flaring use) is unresolved.");
+  if (input.projectBoundaryDefined !== true) unresolved.push("The physical/geographical landfill project boundary is not confirmed.");
+  if (input.flowMetersCalibrated !== true) unresolved.push("Flow-meter maintenance, testing and calibration evidence is missing.");
+  if (input.continuousFlowMetering !== true) unresolved.push("Continuous flow-meter measurement and accumulated-volume records are not confirmed.");
+  if (input.methaneMeasurementMethod !== "CONTINUOUS_ANALYSER" && input.methaneMeasurementMethod !== "PERIODIC_90_10") unresolved.push("Methane concentration monitoring must use a continuous analyser or periodic measurement meeting the 90/10 confidence/precision requirement.");
+  if (input.flowAndMethaneHumidityBasisAligned !== true) unresolved.push("Flow and methane concentration measurement humidity basis/location alignment is not confirmed.");
+  if (input.baselineAndAdditionalityEvidence !== true) unresolved.push("Baseline and additionality evidence has not been confirmed.");
+  const requiredTools = ["BM-T-001", "BM-T-002", "BM-T-003", "BM-T-004", "BM-T-006", "BM-T-011"];
+  if (input.additionalityPath === "UNRESOLVED") {
+    unresolved.push("Additionality path is unresolved: confirm the positive-list pathway or the BM-T-001 pathway.");
+  } else if (input.additionalityPath === "POSITIVE_LIST_BM_T_012") {
+    requiredTools.push("BM-T-012");
+    unresolved.push("BM-T-012 is referenced by BM WA03.001 v1.0 but is absent from the BEE approved-tools register snapshot checked 2026-10-18; its current approved status must be resolved before relying on this pathway.");
+  }
+  for (const tool of requiredTools) {
+    if (input.toolStatuses[tool as keyof typeof input.toolStatuses] !== "CURRENT_APPROVED_VERSION_CONFIRMED") {
+      unresolved.push("Current approved version and applicable use of " + tool + " are not confirmed.");
+    }
+  }
+  return {
+    status: disqualifiers.length ? "INELIGIBLE" : unresolved.length ? "UNRESOLVED" : "ELIGIBLE_FOR_FURTHER_ASSESSMENT",
+    requiredSectoralScopes: scopes,
+    requiredTools,
+    reasons: [...disqualifiers, ...unresolved],
+    source: { url: BM_WA03001_SOURCE.reference, version: "1.0", publicationDate: "2025-03-27" },
+  };
+}
+
 export function calculateBmWa03001(input: BmWa03001Input): BmWa03001Result {
   validateBmWa03001Input(input);
   const methaneDelta = input.fch4ProjectTch4 - input.fch4BaselineTch4;
