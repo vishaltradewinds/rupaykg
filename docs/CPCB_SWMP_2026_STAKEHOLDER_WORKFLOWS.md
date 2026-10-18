@@ -178,3 +178,15 @@ The cross-sector review found that `POST /api/v1/carbon/calculations` called gen
 - The carbon domain's generic calculator also rejects those identifiers, so callers cannot bypass the API guard by invoking the shared function directly.
 - Regression tests cover representative Energy, Industry, Waste, and Forestry method/tool identifiers.
 - This is a conservative gate. Method-specific adapters must be wired explicitly and reviewed before they can calculate under their own equation; generic arithmetic must never stand in for an official method.
+
+
+## 12. Cross-sector MRV evidence vault — 2026-10-18
+
+Next implementation slice adds a bounded evidence-file vault shared by stakeholder workflows; it is not BWG-only and does not replace the operational waste/resource-flow ledger.
+
+- New routes: `POST /api/v1/evidence-vault/upload`, `GET /api/v1/evidence-vault/:evidenceId`, and `POST /api/v1/evidence-vault/:evidenceId/review`.
+- New migration: `migrations/20261021_evidence_artifact_vault.sql`; it creates logical evidence series, immutable version records with bytes and SHA-256, and append-only review events.
+- Files are limited to 5 MiB and allowlisted PDF/JPEG/PNG/CSV/plain-text/JSON; signature/content checks reject obvious media mismatches. The API stores bytes in PostgreSQL `bytea` for this bounded initial implementation.
+- Upload/download/review require authenticated organization membership, applicable permission, and activity geography scope. Client input cannot mark evidence VERIFIED. Review is an append-only decision tied to the exact version and existing `verifications` record. Self-review is blocked so the uploader cannot approve their own evidence. Download rechecks stored byte length and SHA-256 before returning the file.
+- Unit tests: `apps/src/evidence-vault-routes.test.ts`; design/release gates: `docs/MRV_EVIDENCE_VAULT.md`.
+- This remains a CI-reviewed implementation slice, not production certification. Storage capacity, malware scanning, backup/restore, encryption-at-rest posture, retention/deletion policy and live tenant-isolation acceptance must be established before production scale.
