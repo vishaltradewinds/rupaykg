@@ -4,7 +4,7 @@
 **Scope:** Repository source review of RupayKg's stakeholder dashboard and CPCB SWM BWG applicant workflow.  
 **Authoritative comparison:** CPCB's current SWM 2026 BWG user guide, read on 2026-10-18: https://swmp.cpcb.gov.in/en/user-guide  
 **Current portal:** https://swm.cpcb.gov.in/  
-**Status:** Source-level audit. Not a live production test, legal certification, or CPCB integration test.
+**Status:** Source-level audit plus implementation changes on branch `audit/cpcb-bwg-dashboard-conformance`. Not a live production test, legal certification, or CPCB integration test.
 
 ## Executive finding
 
@@ -39,7 +39,7 @@ The existing generic dashboard also shows records from domain workspaces as a ge
 
 Official guide evidence: BWG prerequisites and registration sections 2–5; correction section 6; approval/certificate section 7; rejection, amendment and Level 1 appeal sections 8–9; dashboard section 10; grievances and event intimation sections 11–12. Source: https://swmp.cpcb.gov.in/en/user-guide.
 
-## Source-level defects / risks identified
+## Source-level defects / risks identified at the start of this audit
 
 1. **Measurement provenance is shared across distinct observations.** The BWG UI has one source reference and one measurement period for floor area, water consumption and daily waste generation. These may have different sources and periods. This can falsely associate evidence with a value.
 2. **No CPCB status can be tracked.** The database intentionally fixes cpcb_status_claim to USER_REPORTED_UNVERIFIED, but there is no separate cpcb_reported_status field. Users can store a source reference but not the actual status they observed. No status history exists.
@@ -48,6 +48,42 @@ Official guide evidence: BWG prerequisites and registration sections 2–5; corr
 5. **Organization header consistency needs hardening.** The UI component receives an organization ID but the shared API helper always overwrites an explicitly supplied organization header with localStorage's active organization. This can cause confusing wrong-scope requests when organization selection changes. Server authorization still applies, but the client request should be consistent and explicit.
 6. **No end-to-end acceptance tests are shown for the SWM endpoints' authentication, tenant isolation, status transitions or audit history.** Existing tests cover input validators and CI covers build/migrations/general tests; that is not equivalent to route-level security acceptance.
 7. **No live deployment evidence.** A green CI run validates the branch in CI, not the live production environment.
+
+## Changes implemented on the audit branch
+
+- Added a separate local workflow stage (preparation, eligibility, documents, ready for user submission, submission reported, follow-up, correction/amendment/appeal preparation, grievance/event preparation, unresolved/closed).
+- Added a separate CPCB status selected by the user (Draft, Under Review, Correction Requested, Approved, Rejected) with the immutable meaning USER_REPORTED_UNVERIFIED. Status changes, source-reference changes and status-note changes are appended to a history table; this is not an official CPCB sync.
+- Split floor-area, water-consumption and waste-generation evidence references and periods so each observation retains its own provenance.
+- Applied strict observation validation to both create and update endpoints.
+- Enforced the canonical server-side checklist for the selected stakeholder; a client cannot invent a checklist item or mark it GUIDE_LISTED.
+- Made explicit organization headers on SWM calls survive the shared API helper instead of being overwritten by localStorage's active organization.
+- Added validator tests for canonical BWG checklist, invalid status values, local-stage/status separation, bad observations and spoofed checklist labels.
+
+These changes are code-level work only until CI passes and the branch is reviewed/merged. They do not add document upload, a real CPCB portal draft, official status verification, fee/payment, submission, certificate issuance, grievances or event-intimation submission.
+
+## Updated audit posture
+
+| Finding | Status after this branch's changes |
+|---|---|
+| Shared provenance for three eligibility measures | Addressed in UI state and saved observation structure; verify through CI and round-trip tests |
+| No reported CPCB status or history | Addressed with user-reported status plus append-only history; still not independently verified |
+| Weaker PATCH observation validation | Addressed by applying the same strict validator |
+| Client-controlled checklist source labels | Addressed by comparing against canonical stakeholder checklist |
+| Organization header mismatch | Addressed for SWM UI calls and made the shared helper preserve explicit headers |
+| Route-level auth/tenant isolation acceptance | Still open; helper tests are not a substitute for end-to-end API tests |
+| Live deployment / real pilot | Still open; no live environment was changed |
+
+## Remaining BWG workflow gaps (blocking full conformance)
+
+1. Structured applicant organization and authorized-person details for pre-populating a preparation packet.
+2. Actual file upload/storage, content hash, file metadata, revisioning, and independent document-review states.
+3. A versioned application preparation packet and explicit self-declaration review; CPCB draft creation and submission remain user-controlled.
+4. A proper receipt/certificate artifact record (issuer, date, reference, scope, source, hash, verification status) without generating a substitute certificate.
+5. Separate case records for authority correction request, incorrect-detail rejection, EC non-compliance rejection, amendment, Level 1 appeal, grievance and event intimation, each with user-controlled hand-off and versioned evidence.
+6. Link BWG daily four-stream generation/segregation, collection, handover, transport and facility receipt/processing using existing operational records; do not duplicate the waste ledger.
+7. Validated annual-return and EBWGR reconciliation preparation using the exact current official form/schema and applicable effective-dated rules.
+8. End-to-end tests for unauthenticated requests, wrong permission, cross-organization access, geography scope, source/history transactions, concurrency and failure rollback.
+9. CI validation, reviewed PR merge, migration deployment through the approved release process, non-production acceptance, and a controlled pilot.
 
 ## Required implementation order
 
