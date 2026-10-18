@@ -249,6 +249,54 @@ function SuperAdminGovernance({token,actorIdentityId}:{token:string;actorIdentit
  </section>;
 }
 
+
+type EvidenceArtifactItem={evidence_id:string;series_id:string;artifact_version_id:string;version_number:number;file_name:string;media_type:string;size_bytes:number;sha256:string;status:string;evidence_type:string;source_reference?:string|null;measurement_period_start?:string|null;measurement_period_end?:string|null;uploaded_by_identity_id:string;created_at:string};
+function EvidenceVaultPanel({token,activities,identityId}:{token:string;activities:unknown[];identityId:string}){
+ const [activityId,setActivityId]=useState(""),[evidenceType,setEvidenceType]=useState("WASTE_WEIGHT_TICKET"),[sourceReference,setSourceReference]=useState(""),[periodStart,setPeriodStart]=useState(""),[periodEnd,setPeriodEnd]=useState(""),[file,setFile]=useState<File|null>(null),[items,setItems]=useState<EvidenceArtifactItem[]>([]),[rationales,setRationales]=useState<Record<string,string>>({}),[busy,setBusy]=useState(false),[error,setError]=useState(""),[notice,setNotice]=useState("");
+ const choices=useMemo(()=>activities.filter((x):x is Record<string,unknown>=>Boolean(x&&typeof x==="object"&&typeof (x as Record<string,unknown>).id==="string")), [activities]);
+ useEffect(()=>{if(!activityId&&choices[0]?.id)setActivityId(String(choices[0].id));},[activityId,choices]);
+ async function loadArtifacts(id=activityId){if(!id)return;try{const result=await api<{data:{artifacts:EvidenceArtifactItem[]}}>("/api/v1/evidence-vault?activityId="+encodeURIComponent(id),token);setItems(result.data.artifacts??[]);}catch(e){setItems([]);setError(e instanceof Error?e.message:"Evidence list could not be loaded");}}
+ useEffect(()=>{setError("");setNotice("");if(activityId)void loadArtifacts(activityId);else setItems([]);},[activityId,token]);
+ async function upload(){
+  if(!activityId||!file){setError("Select an activity and a file first.");return;}
+  if(file.size<1||file.size>5*1024*1024){setError("Evidence files must be between 1 byte and 5 MiB.");return;}
+  setBusy(true);setError("");setNotice("");
+  try{
+   const dataUrl=await new Promise<string>((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>typeof reader.result==="string"?resolve(reader.result):reject(new Error("File could not be read"));reader.onerror=()=>reject(new Error("File could not be read"));reader.readAsDataURL(file);});
+   const contentBase64=dataUrl.slice(dataUrl.indexOf(",")+1);
+   const ext=file.name.split(".").pop()?.toLowerCase()??"";
+   const inferred:Record<string,string>={pdf:"application/pdf",jpg:"image/jpeg",jpeg:"image/jpeg",png:"image/png",csv:"text/csv",txt:"text/plain",json:"application/json"};
+   const mediaType=file.type||inferred[ext]||"application/octet-stream";
+   const result=await api<{data:{evidenceId:string;versionNumber:number;sha256:string;fileName:string}}>("/api/v1/evidence-vault/upload",token,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({activityId,evidenceType,fileName:file.name,mediaType,contentBase64,sourceReference:sourceReference.trim()||undefined,measurementPeriodStart:periodStart||undefined,measurementPeriodEnd:periodEnd||undefined})});
+   setNotice("Evidence stored as version "+result.data.versionNumber+" · SHA-256 "+result.data.sha256);setFile(null);const input=document.getElementById("evidence-vault-file") as HTMLInputElement|null;if(input)input.value="";await loadArtifacts(activityId);
+  }catch(e){setError(e instanceof Error?e.message:"Evidence upload failed");}finally{setBusy(false);}
+ }
+ async function download(item:EvidenceArtifactItem){
+  setBusy(true);setError("");
+  try{const headers=new Headers({Accept:"application/octet-stream",Authorization:"Bearer "+token});const org=activeOrganizationId();if(org)headers.set("x-rupaykg-organization-id",org);const response=await fetch("/api/v1/evidence-vault/"+encodeURIComponent(item.evidence_id),{headers});if(!response.ok){const body=await response.json().catch(()=>({}));throw new Error(body?.error??"Download failed");}const blob=await response.blob(),url=URL.createObjectURL(blob),anchor=document.createElement("a");anchor.href=url;anchor.download=item.file_name;document.body.appendChild(anchor);anchor.click();anchor.remove();window.setTimeout(()=>URL.revokeObjectURL(url),1000);}catch(e){setError(e instanceof Error?e.message:"Evidence download failed");}finally{setBusy(false);}
+ }
+ async function review(item:EvidenceArtifactItem,decision:"APPROVED"|"REJECTED"){
+  const rationale=rationales[item.evidence_id]?.trim()??"";if(rationale.length<5){setError("Enter a review rationale of at least 5 characters.");return;}
+  setBusy(true);setError("");setNotice("");
+  try{await api("/api/v1/evidence-vault/"+encodeURIComponent(item.evidence_id)+"/review",token,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({decision,rationale})});setNotice("Review recorded: "+decision);await loadArtifacts(activityId);}catch(e){setError(e instanceof Error?e.message:"Review failed");}finally{setBusy(false);}
+ }
+ return <section className="evidence-vault-panel"><div className="section-heading"><div><p className="eyebrow">SHARED MRV INFRASTRUCTURE</p><h2>Evidence vault</h2></div><span>Versioned · SHA-256 · Review-gated</span></div><p className="evidence-vault-note">Attach source documents to an existing operational activity. Uploading evidence does not mean it is verified, methodology-eligible or creditable. Maximum file size: 5 MiB.</p>
+  <div className="evidence-vault-form">
+   <label>Activity<select value={activityId} onChange={e=>setActivityId(e.target.value)}><option value="">Select activity</option>{choices.map((a,i)=><option key={String(a.id)} value={String(a.id)}>{String(a.activity_type??"Activity")} · {String(a.id).slice(0,8)} · {String(a.status??"")}</option>)}</select></label>
+   <label>Evidence type<input value={evidenceType} maxLength={100} onChange={e=>setEvidenceType(e.target.value)} placeholder="e.g. WASTE_WEIGHT_TICKET"/></label>
+   <label>Source reference (optional)<input value={sourceReference} maxLength={500} onChange={e=>setSourceReference(e.target.value)} placeholder="Document number, meter ID, weighbridge slip…"/></label>
+   <label>Measurement period start<input type="date" value={periodStart} onChange={e=>setPeriodStart(e.target.value)}/></label>
+   <label>Measurement period end<input type="date" min={periodStart||undefined} value={periodEnd} onChange={e=>setPeriodEnd(e.target.value)}/></label>
+   <label>Evidence file<input id="evidence-vault-file" type="file" accept=".pdf,.jpg,.jpeg,.png,.csv,.txt,.json,application/pdf,image/jpeg,image/png,text/csv,text/plain,application/json" onChange={e=>setFile(e.target.files?.[0]??null)}/><small>PDF, JPEG, PNG, CSV, TXT or JSON. Signature/content checks are performed server-side.</small></label>
+   <button disabled={busy||!activityId||!file} onClick={()=>void upload()}>{busy?"Working…":"Upload evidence"}</button>
+  </div>
+  {error&&<p className="error">{error}</p>}{notice&&<p className="evidence-vault-notice">{notice}</p>}
+  <div className="evidence-vault-list"><div className="section-heading"><h3>Stored artifact versions</h3><button disabled={busy||!activityId} onClick={()=>void loadArtifacts()}>Refresh</button></div>{!choices.length&&<p className="empty">No activities are available in this workspace scope. Create/capture an activity before attaching evidence.</p>}{choices.length>0&&!items.length&&<p className="empty">No stored file artifacts for this activity yet.</p>}
+   {items.map(item=><article key={item.artifact_version_id}><div><strong>{item.file_name} · v{item.version_number}</strong><small>{item.evidence_type} · {item.media_type} · {Math.ceil(item.size_bytes/1024)} KiB · {item.status}</small><small>SHA-256: {item.sha256}</small><small>Source: {item.source_reference||"Not supplied"} · Period: {item.measurement_period_start||"—"} to {item.measurement_period_end||"—"}</small></div><div className="evidence-vault-actions"><button disabled={busy} onClick={()=>void download(item)}>Download</button>{item.uploaded_by_identity_id!==identityId&&item.status!=="VERIFIED"&&item.status!=="REJECTED"&&<><textarea aria-label={"Review rationale for "+item.file_name} value={rationales[item.evidence_id]??""} onChange={e=>setRationales(old=>({...old,[item.evidence_id]:e.target.value}))} placeholder="Review rationale…"/><button disabled={busy} onClick={()=>void review(item,"APPROVED")}>Approve evidence</button><button disabled={busy} onClick={()=>void review(item,"REJECTED")}>Reject evidence</button></>}</div></article>)}
+  </div>
+ </section>;
+}
+
 function App(){
  const [adminOverview,setAdminOverview]=useState<PlatformOverview|null>(null);
  const [mode,setMode]=useState<"signin"|"register">("signin"),[email,setEmail]=useState(""),[password,setPassword]=useState(""),[name,setName]=useState(""),[token,setToken]=useState(""),[me,setMe]=useState<Me|null>(null),[orgId,setOrgId]=useState(activeOrganizationId()),[healthState,setHealthState]=useState<Health|null>(null),[overview,setOverview]=useState<Overview|null>(null),[data,setData]=useState<Partial<Record<WorkspaceKey,Workspace>>>({}),[loading,setLoading]=useState(false),[selected,setSelected]=useState<WorkspaceKey>("resource-flows"),[error,setError]=useState(""),[message,setMessage]=useState(""),[landingTab,setLandingTab]=useState<"overview"|"stakeholders"|"journey"|"trust">("overview"),[mrvStatus,setMrvStatus]=useState<MrvStatus|null>(null),[mrvProvenance,setMrvProvenance]=useState<MrvProvenance[]>([]),[mrvMirrorResults,setMrvMirrorResults]=useState<Record<string,MrvMirrorResult>>({});
