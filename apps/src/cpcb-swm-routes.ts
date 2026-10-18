@@ -25,7 +25,7 @@ async function authFor(request: Request, reply: Reply, pool: Pool | null): Promi
   try { const auth = await authenticate(request as never, pool); if (!auth) { reply.code(401).send(bearerChallenge()); return null; } return auth; }
   catch (error) { request.log.error(error); reply.code(503).send({ error: "Authentication service unavailable", code: "AUTH_UNAVAILABLE", syntheticData: false }); return null; }
 }
-function safeChecklist(value: unknown): ChecklistItem[] | null {
+export function safeChecklist(value: unknown): ChecklistItem[] | null {
   if (!Array.isArray(value) || value.length > 100) return null;
   const result: ChecklistItem[] = [];
   const keys = new Set<string>();
@@ -42,7 +42,7 @@ function safeChecklist(value: unknown): ChecklistItem[] | null {
   }
   return result;
 }
-function safeObservations(value: unknown): boolean {
+export function safeObservations(value: unknown): boolean {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const record = value as Record<string, unknown>;
   const keys = ["floorAreaM2", "waterConsumptionLitresPerDay", "wasteGenerationKgPerDay"];
