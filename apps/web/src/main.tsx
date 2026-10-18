@@ -33,26 +33,39 @@ const workspaces:WorkspaceDef[]=[
 const lifecycle=[["GENERATION","Physical activity captured"],["AGGREGATION","Collection / consolidation"],["MEASUREMENT","Quantity and method recorded"],["TRANSPORT","Movement evidence"],["PROCESSING","Intake and processing"],["EVIDENCE","Authoritative evidence"],["VERIFICATION","Independent verification"],["VALUE_ELIGIBLE","Verified value may proceed"],["CERTIFIED","Credential / certification"],["REGISTERED","Registry state"],["TRANSFERRED","Transfer / retirement"],["SETTLED","Reconciled settlement"],["REPORTED","ESG / regulatory reporting"]] as const;
 
 
+type CpcbReportedStatus="NOT_REPORTED"|"DRAFT"|"UNDER_REVIEW"|"CORRECTION_REQUESTED"|"APPROVED"|"REJECTED";
+type SwmLocalStage="LOCAL_PREPARATION"|"ELIGIBILITY_REVIEW"|"DOCUMENTS_PENDING"|"READY_FOR_USER_SUBMISSION"|"SUBMISSION_REPORTED"|"UNDER_REVIEW_FOLLOW_UP"|"CORRECTION_PREPARATION"|"AMENDMENT_PREPARATION"|"LEVEL_1_APPEAL_PREPARATION"|"GRIEVANCE_PREPARATION"|"EVENT_INTIMATION_PREPARATION"|"CLOSED_LOCAL"|"UNRESOLVED";
 type CpcbSwmWorkspaceRecord = {
  id:string; stakeholder_type:SwmStakeholderType; title:string; geography_id?:string|null;
  eligibility_observations:Record<string,{value:number|null;unit:string;sourceReference?:string|null;periodStart?:string|null;periodEnd?:string|null}>;
  checklist:Array<{key:string;label:string;status:string;officialRequirement:string}>;
- cpcb_application_reference?:string|null;cpcb_status_source_reference?:string|null;due_date?:string|null;notes?:string|null;
+ cpcb_application_reference?:string|null;cpcb_status_source_reference?:string|null;cpcb_reported_status?:CpcbReportedStatus;local_workflow_stage?:SwmLocalStage;
+ status_history?:Array<{id:string;previousReportedStatus:CpcbReportedStatus;reportedStatus:CpcbReportedStatus;sourceReference?:string|null;statusNote?:string|null;actorIdentityId:string;recordedAt:string}>;
+ due_date?:string|null;notes?:string|null;
 };
 function CpcbSwmReadiness({token,organizationId}:{token:string;organizationId:string}){
  const [stakeholder,setStakeholder]=useState<SwmStakeholderType>("BWG");
  const [area,setArea]=useState("");
  const [water,setWater]=useState("");
  const [waste,setWaste]=useState("");
- const [source,setSource]=useState("");
- const [periodStart,setPeriodStart]=useState("");
- const [periodEnd,setPeriodEnd]=useState("");
+ const [areaSource,setAreaSource]=useState("");
+ const [waterSource,setWaterSource]=useState("");
+ const [wasteSource,setWasteSource]=useState("");
+ const [areaPeriodStart,setAreaPeriodStart]=useState("");
+ const [areaPeriodEnd,setAreaPeriodEnd]=useState("");
+ const [waterPeriodStart,setWaterPeriodStart]=useState("");
+ const [waterPeriodEnd,setWaterPeriodEnd]=useState("");
+ const [wastePeriodStart,setWastePeriodStart]=useState("");
+ const [wastePeriodEnd,setWastePeriodEnd]=useState("");
  const [title,setTitle]=useState("");
  const [geographyId,setGeographyId]=useState("");
  const [dueDate,setDueDate]=useState("");
  const [notes,setNotes]=useState("");
  const [applicationReference,setApplicationReference]=useState("");
  const [statusSourceReference,setStatusSourceReference]=useState("");
+ const [reportedStatus,setReportedStatus]=useState<CpcbReportedStatus>("NOT_REPORTED");
+ const [localStage,setLocalStage]=useState<SwmLocalStage>("LOCAL_PREPARATION");
+ const [statusNote,setStatusNote]=useState("");
  const [checklistState,setChecklistState]=useState<Record<string,"MISSING"|"PROVIDED_UNVERIFIED"|"NOT_APPLICABLE"|"REJECTED"|"EXPIRED"|"UNRESOLVED">>({});
  const [records,setRecords]=useState<CpcbSwmWorkspaceRecord[]>([]);
  const [savedId,setSavedId]=useState("");
@@ -61,29 +74,30 @@ function CpcbSwmReadiness({token,organizationId}:{token:string;organizationId:st
  const [message,setMessage]=useState("");
  const num=(value:string)=>value.trim()===""?null:Number(value);
  const assessment=assessBwgEligibility({
-  floorAreaM2:{value:num(area),unit:"m2",sourceReference:source,periodStart,periodEnd},
-  waterConsumptionLitresPerDay:{value:num(water),unit:"L/day",sourceReference:source,periodStart,periodEnd},
-  wasteGenerationKgPerDay:{value:num(waste),unit:"kg/day",sourceReference:source,periodStart,periodEnd},
+  floorAreaM2:{value:num(area),unit:"m2",sourceReference:areaSource,periodStart:areaPeriodStart,periodEnd:areaPeriodEnd},
+  waterConsumptionLitresPerDay:{value:num(water),unit:"L/day",sourceReference:waterSource,periodStart:waterPeriodStart,periodEnd:waterPeriodEnd},
+  wasteGenerationKgPerDay:{value:num(waste),unit:"kg/day",sourceReference:wasteSource,periodStart:wastePeriodStart,periodEnd:wastePeriodEnd},
  });
  const checklist=initialSwmChecklist(stakeholder).map(item=>({...item,status:checklistState[item.key]??item.status}));
  async function load(){
   setBusy(true);setError("");
-  try{const result=await api<{workspaces:CpcbSwmWorkspaceRecord[]}>("/api/v1/cpcb-swm/workspaces",token);setRecords(result.workspaces);}
+  try{const result=await api<{workspaces:CpcbSwmWorkspaceRecord[]}>("/api/v1/cpcb-swm/workspaces",token,{headers:{"x-rupaykg-organization-id":organizationId}});setRecords(result.workspaces);}
   catch(e){setError(e instanceof Error?e.message:"Saved CPCB SWM workspaces could not be loaded");}
   finally{setBusy(false);}
  }
  useEffect(()=>{void load();},[token,organizationId]);
  function openRecord(record:CpcbSwmWorkspaceRecord){
   setSavedId(record.id);setStakeholder(record.stakeholder_type);setTitle(record.title);setGeographyId(record.geography_id??"");
-  setApplicationReference(record.cpcb_application_reference??"");setStatusSourceReference(record.cpcb_status_source_reference??"");
+  setApplicationReference(record.cpcb_application_reference??"");setStatusSourceReference(record.cpcb_status_source_reference??"");setReportedStatus(record.cpcb_reported_status??"NOT_REPORTED");setLocalStage(record.local_workflow_stage??"LOCAL_PREPARATION");setStatusNote("");
   setDueDate(record.due_date?String(record.due_date).slice(0,10):"");setNotes(record.notes??"");
   const obs=record.eligibility_observations??{};
   setArea(obs.floorAreaM2?.value===null||obs.floorAreaM2?.value===undefined?"":String(obs.floorAreaM2.value));
   setWater(obs.waterConsumptionLitresPerDay?.value===null||obs.waterConsumptionLitresPerDay?.value===undefined?"":String(obs.waterConsumptionLitresPerDay.value));
   setWaste(obs.wasteGenerationKgPerDay?.value===null||obs.wasteGenerationKgPerDay?.value===undefined?"":String(obs.wasteGenerationKgPerDay.value));
-  setSource(obs.floorAreaM2?.sourceReference??obs.waterConsumptionLitresPerDay?.sourceReference??obs.wasteGenerationKgPerDay?.sourceReference??"");
-  setPeriodStart(obs.floorAreaM2?.periodStart??obs.waterConsumptionLitresPerDay?.periodStart??obs.wasteGenerationKgPerDay?.periodStart??"");
-  setPeriodEnd(obs.floorAreaM2?.periodEnd??obs.waterConsumptionLitresPerDay?.periodEnd??obs.wasteGenerationKgPerDay?.periodEnd??"");
+  setAreaSource(obs.floorAreaM2?.sourceReference??"");setWaterSource(obs.waterConsumptionLitresPerDay?.sourceReference??"");setWasteSource(obs.wasteGenerationKgPerDay?.sourceReference??"");
+  setAreaPeriodStart(obs.floorAreaM2?.periodStart??"");setAreaPeriodEnd(obs.floorAreaM2?.periodEnd??"");
+  setWaterPeriodStart(obs.waterConsumptionLitresPerDay?.periodStart??"");setWaterPeriodEnd(obs.waterConsumptionLitresPerDay?.periodEnd??"");
+  setWastePeriodStart(obs.wasteGenerationKgPerDay?.periodStart??"");setWastePeriodEnd(obs.wasteGenerationKgPerDay?.periodEnd??"");
   setChecklistState(Object.fromEntries((record.checklist??[]).map(item=>[item.key,["PROVIDED_UNVERIFIED","NOT_APPLICABLE","REJECTED","EXPIRED","UNRESOLVED"].includes(item.status)?item.status:"MISSING"])) as Record<string,"MISSING"|"PROVIDED_UNVERIFIED"|"NOT_APPLICABLE"|"REJECTED"|"EXPIRED"|"UNRESOLVED">);
   setMessage("Loaded saved preparation record. CPCB status remains user-reported and unverified.");setError("");
  }
@@ -91,13 +105,13 @@ function CpcbSwmReadiness({token,organizationId}:{token:string;organizationId:st
   if(!title.trim()){setError("Enter a title for this preparation record.");return;}
   setBusy(true);setError("");setMessage("");
   const eligibilityObservations={
-   floorAreaM2:{value:num(area),unit:"m2",sourceReference:source,periodStart,periodEnd},
-   waterConsumptionLitresPerDay:{value:num(water),unit:"L/day",sourceReference:source,periodStart,periodEnd},
-   wasteGenerationKgPerDay:{value:num(waste),unit:"kg/day",sourceReference:source,periodStart,periodEnd},
+   floorAreaM2:{value:num(area),unit:"m2",sourceReference:areaSource,periodStart:areaPeriodStart,periodEnd:areaPeriodEnd},
+   waterConsumptionLitresPerDay:{value:num(water),unit:"L/day",sourceReference:waterSource,periodStart:waterPeriodStart,periodEnd:waterPeriodEnd},
+   wasteGenerationKgPerDay:{value:num(waste),unit:"kg/day",sourceReference:wasteSource,periodStart:wastePeriodStart,periodEnd:wastePeriodEnd},
   };
-  const body={stakeholderType:stakeholder,title:title.trim(),geographyId:geographyId.trim()||null,eligibilityObservations,checklist,cpcbApplicationReference:applicationReference.trim()||null,cpcbStatusSourceReference:statusSourceReference.trim()||null,dueDate:dueDate||null,notes:notes.trim()||null};
+  const body={stakeholderType:stakeholder,title:title.trim(),geographyId:geographyId.trim()||null,eligibilityObservations,checklist,cpcbApplicationReference:applicationReference.trim()||null,cpcbStatusSourceReference:statusSourceReference.trim()||null,cpcbReportedStatus:reportedStatus,localWorkflowStage:localStage,statusNote:statusNote.trim()||null,dueDate:dueDate||null,notes:notes.trim()||null};
   try{
-   const result=await api<{workspace:CpcbSwmWorkspaceRecord}>(savedId?"/api/v1/cpcb-swm/workspaces/"+savedId:"/api/v1/cpcb-swm/workspaces",token,{method:savedId?"PATCH":"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+   const result=await api<{workspace:CpcbSwmWorkspaceRecord}>(savedId?"/api/v1/cpcb-swm/workspaces/"+savedId:"/api/v1/cpcb-swm/workspaces",token,{method:savedId?"PATCH":"POST",headers:{"Content-Type":"application/json","x-rupaykg-organization-id":organizationId},body:JSON.stringify(body)});
    setSavedId(result.workspace.id);setMessage("Preparation record saved in RupayKg. Any CPCB application/status reference remains USER_REPORTED_UNVERIFIED.");await load();
   }catch(e){setError(e instanceof Error?e.message:"Preparation record could not be saved");}
   finally{setBusy(false);}
@@ -112,22 +126,33 @@ function CpcbSwmReadiness({token,organizationId}:{token:string;organizationId:st
   <label>Authorized geography ID (optional)<input value={geographyId} onChange={e=>setGeographyId(e.target.value)} placeholder="Use a geography ID assigned to your verified organization"/></label>
   {stakeholder==="BWG"&&<><h3>BWG threshold pre-check</h3><p>Any one threshold qualifies for this pre-check: 20,000 m² floor area, 40,000 litres/day water consumption, or 100 kg/day waste generation. Provide a source reference and measurement period; missing or unsourced values remain unresolved.</p>
    <div className="cpcb-swm-input-grid"><label>Floor area (m²)<input inputMode="decimal" type="number" min="0" value={area} onChange={e=>setArea(e.target.value)} placeholder="e.g. 20000"/></label><label>Water consumption (litres/day)<input inputMode="decimal" type="number" min="0" value={water} onChange={e=>setWater(e.target.value)} placeholder="e.g. 40000"/></label><label>Waste generation (kg/day)<input inputMode="decimal" type="number" min="0" value={waste} onChange={e=>setWaste(e.target.value)} placeholder="e.g. 100"/></label></div>
-   <label>Measurement evidence/source reference<input value={source} onChange={e=>setSource(e.target.value)} placeholder="Document ID or controlled evidence reference"/></label>
-   <div className="cpcb-swm-input-grid"><label>Measurement period start<input type="date" value={periodStart} onChange={e=>setPeriodStart(e.target.value)}/></label><label>Measurement period end<input type="date" value={periodEnd} onChange={e=>setPeriodEnd(e.target.value)}/></label></div>
+   <div className="cpcb-swm-input-grid"><label>Floor-area evidence reference<input value={areaSource} onChange={e=>setAreaSource(e.target.value)} placeholder="Building plan / property-tax document"/></label><label>Floor-area period start<input type="date" value={areaPeriodStart} onChange={e=>setAreaPeriodStart(e.target.value)}/></label><label>Floor-area period end<input type="date" value={areaPeriodEnd} onChange={e=>setAreaPeriodEnd(e.target.value)}/></label></div>
+   <div className="cpcb-swm-input-grid"><label>Water-bill evidence reference<input value={waterSource} onChange={e=>setWaterSource(e.target.value)} placeholder="Water bill reference"/></label><label>Water measurement period start<input type="date" value={waterPeriodStart} onChange={e=>setWaterPeriodStart(e.target.value)}/></label><label>Water measurement period end<input type="date" value={waterPeriodEnd} onChange={e=>setWaterPeriodEnd(e.target.value)}/></label></div>
+   <div className="cpcb-swm-input-grid"><label>Waste-generation evidence reference<input value={wasteSource} onChange={e=>setWasteSource(e.target.value)} placeholder="Waste log / measurement reference"/></label><label>Waste measurement period start<input type="date" value={wastePeriodStart} onChange={e=>setWastePeriodStart(e.target.value)}/></label><label>Waste measurement period end<input type="date" value={wastePeriodEnd} onChange={e=>setWastePeriodEnd(e.target.value)}/></label></div>
    <article className="cpcb-swm-result"><strong>{assessment.status.replaceAll("_"," ")}</strong><p>{assessment.qualifyingCriteria.length?("Qualifying evidence-backed threshold(s): "+assessment.qualifyingCriteria.join(", ")):assessment.status==="NOT_ELIGIBLE_PRECHECK"?"No threshold met by the complete sourced observations.":"Provide valid values, units, source reference and period; incomplete evidence stays unresolved."}</p>{assessment.missingOrInvalid.length>0&&<small>Gaps: {assessment.missingOrInvalid.join(" · ")}</small>}<small>Readiness aid only — CPCB makes the official determination.</small></article>
   </>}
   <h3>Stakeholder evidence checklist</h3><p>Mark only whether a document/reference has been provided. RupayKg does not let the applicant self-verify evidence.</p>
   <div className="cpcb-swm-checklist">{checklist.map(item=><article key={item.key}><div><strong>{item.label}</strong><small>{item.officialRequirement.replaceAll("_"," ")}</small></div><label>Status<select value={item.status} onChange={e=>setChecklistState(p=>({...p,[item.key]:e.target.value as "MISSING"|"PROVIDED_UNVERIFIED"|"NOT_APPLICABLE"|"REJECTED"|"EXPIRED"|"UNRESOLVED"}))}><option value="MISSING">Missing</option><option value="PROVIDED_UNVERIFIED">Provided — unverified</option><option value="NOT_APPLICABLE">Not applicable</option><option value="REJECTED">Rejected</option><option value="EXPIRED">Expired</option><option value="UNRESOLVED">Unresolved</option></select></label></article>)}</div>
-  <div className="cpcb-swm-input-grid"><label>CPCB application reference (optional)<input value={applicationReference} onChange={e=>setApplicationReference(e.target.value)} placeholder="User-entered reference only"/></label><label>Reference/evidence source for CPCB status (optional)<input value={statusSourceReference} onChange={e=>setStatusSourceReference(e.target.value)} placeholder="Acknowledgement/document reference"/></label><label>Follow-up due date (optional)<input type="date" value={dueDate} onChange={e=>setDueDate(e.target.value)}/></label></div>
+  <div className="cpcb-swm-input-grid">
+   <label>RupayKg local workflow stage<select value={localStage} onChange={e=>setLocalStage(e.target.value as SwmLocalStage)}><option value="LOCAL_PREPARATION">Local preparation</option><option value="ELIGIBILITY_REVIEW">Eligibility review</option><option value="DOCUMENTS_PENDING">Documents pending</option><option value="READY_FOR_USER_SUBMISSION">Ready for user-controlled CPCB submission</option><option value="SUBMISSION_REPORTED">Submission reported by user</option><option value="UNDER_REVIEW_FOLLOW_UP">Follow up while under review</option><option value="CORRECTION_PREPARATION">Prepare response to correction request</option><option value="AMENDMENT_PREPARATION">Prepare amendment after rejection</option><option value="LEVEL_1_APPEAL_PREPARATION">Prepare Level 1 appeal</option><option value="GRIEVANCE_PREPARATION">Prepare grievance</option><option value="EVENT_INTIMATION_PREPARATION">Prepare event intimation</option><option value="CLOSED_LOCAL">Close local preparation</option><option value="UNRESOLVED">Unresolved / needs review</option></select></label>
+   <label>Status currently shown by CPCB (user-reported only)<select value={reportedStatus} onChange={e=>setReportedStatus(e.target.value as CpcbReportedStatus)}><option value="NOT_REPORTED">Not recorded</option><option value="DRAFT">Draft</option><option value="UNDER_REVIEW">Under Review</option><option value="CORRECTION_REQUESTED">Correction Requested</option><option value="APPROVED">Approved</option><option value="REJECTED">Rejected</option></select></label>
+   <label>CPCB status evidence/reference{reportedStatus!=="NOT_REPORTED"?" (required)":" (optional)"}<input value={statusSourceReference} onChange={e=>setStatusSourceReference(e.target.value)} placeholder="Acknowledgement / downloaded certificate / dated portal record"/></label>
+  </div>
+  {reportedStatus!=="NOT_REPORTED"&&<label>Note about the status evidence<input value={statusNote} onChange={e=>setStatusNote(e.target.value)} maxLength={1000} placeholder="What did you observe and when? No passwords or OTPs"/></label>}
+  <p className="admin-boundary">CPCB status is always USER_REPORTED_UNVERIFIED in RupayKg. A selected status is not independently verified or transmitted to CPCB.</p>
+  <h3>Portal status history</h3>
+  {(()=>{const selected=records.find(r=>r.id===savedId);const history=selected?.status_history??[];return history.length?<div className="cpcb-swm-checklist">{history.map(item=><article key={item.id}><div><strong>{item.previousReportedStatus.replaceAll("_"," ")} → {item.reportedStatus.replaceAll("_"," ")}</strong><small>{new Date(item.recordedAt).toLocaleString()} · source: {item.sourceReference??"not provided"}</small>{item.statusNote&&<small>{item.statusNote}</small>}</div><span>USER-REPORTED / UNVERIFIED</span></article>)}</div>:<p className="empty">No reported status changes recorded yet.</p>;})()}
+
+  <div className="cpcb-swm-input-grid"><label>CPCB application reference (optional)<input value={applicationReference} onChange={e=>setApplicationReference(e.target.value)} placeholder="User-entered reference only"/></label><label>Follow-up due date (optional)<input type="date" value={dueDate} onChange={e=>setDueDate(e.target.value)}/></label></div>
   <label>Working notes<textarea value={notes} onChange={e=>setNotes(e.target.value)} maxLength={4000} placeholder="Open questions, gaps, responsible person, next step"/></label>
-  <div className="cpcb-swm-actions"><button disabled={busy} onClick={()=>void save()}>{busy?"Saving…":savedId?"Update saved preparation":"Save preparation record"}</button><button className="secondary" disabled={busy} onClick={()=>{setSavedId("");setTitle("");setGeographyId("");setArea("");setWater("");setWaste("");setSource("");setPeriodStart("");setPeriodEnd("");setApplicationReference("");setStatusSourceReference("");setDueDate("");setNotes("");setChecklistState({});setMessage("");setError("");}}>New record</button></div>
+  <div className="cpcb-swm-actions"><button disabled={busy} onClick={()=>void save()}>{busy?"Saving…":savedId?"Update saved preparation":"Save preparation record"}</button><button className="secondary" disabled={busy} onClick={()=>{setSavedId("");setTitle("");setGeographyId("");setArea("");setWater("");setWaste("");setAreaSource("");setWaterSource("");setWasteSource("");setAreaPeriodStart("");setAreaPeriodEnd("");setWaterPeriodStart("");setWaterPeriodEnd("");setWastePeriodStart("");setWastePeriodEnd("");setApplicationReference("");setStatusSourceReference("");setReportedStatus("NOT_REPORTED");setLocalStage("LOCAL_PREPARATION");setStatusNote("");setDueDate("");setNotes("");setChecklistState({});setMessage("");setError("");}}>New record</button></div>
   <p><a href="https://swmp.cpcb.gov.in/en/user-guide" target="_blank" rel="noreferrer">Open the official CPCB SWM user guide</a> · <a href="https://swm.cpcb.gov.in/" target="_blank" rel="noreferrer">Open the official CPCB SWM portal</a></p>
  </section>;
 }
 
 class ApiError extends Error{status:number;constructor(message:string,status:number){super(message);this.status=status;}}
 function activeOrganizationId(){return localStorage.getItem("rupaykg.activeOrganizationId")??"";}
-async function api<T>(path:string,token="",init:RequestInit={}):Promise<T>{const headers=new Headers(init.headers);headers.set("Accept","application/json");if(token)headers.set("Authorization",`Bearer ${token}`);const org=activeOrganizationId();if(token&&org)headers.set("x-rupaykg-organization-id",org);const r=await fetch(path,{...init,headers});const b=await r.json().catch(()=>({}));if(!r.ok)throw new ApiError(b?.error??`Request failed (${r.status})`,r.status);return b as T;}
+async function api<T>(path:string,token="",init:RequestInit={}):Promise<T>{const headers=new Headers(init.headers);headers.set("Accept","application/json");if(token)headers.set("Authorization",`Bearer ${token}`);const org=activeOrganizationId();if(token&&org&&!headers.has("x-rupaykg-organization-id"))headers.set("x-rupaykg-organization-id",org);const r=await fetch(path,{...init,headers});const b=await r.json().catch(()=>({}));if(!r.ok)throw new ApiError(b?.error??`Request failed (${r.status})`,r.status);return b as T;}
 function display(v:unknown){if(v===null||v===undefined||v==="")return "—";return typeof v==="object"?JSON.stringify(v):String(v)}
 
 type AdminIdentity={id:string;display_name:string;email?:string|null;status:string;suspended:boolean;created_at:string;suspended_at?:string|null;last_suspension_reason?:string|null;verified_memberships:number;active_sessions:number};
