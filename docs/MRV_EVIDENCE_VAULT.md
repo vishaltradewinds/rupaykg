@@ -19,7 +19,7 @@ This bounded database-backed store is a functional foundation, not a claim of la
 
 ## Review semantics
 
-A reviewer must supply APPROVED or REJECTED plus a rationale. The decision is recorded in append-only `evidence_artifact_reviews` and the existing `verifications` table; the linked evidence status is updated within the same transaction. A reviewed artifact is not re-reviewed in place; upload a new version and review that version. A successful review proves only that an authorized RupayKg reviewer recorded a decision; it does not imply ACVA validation, CCTS approval, or CCC issuance.
+A reviewer other than the uploader must supply APPROVED or REJECTED plus a rationale. Self-review is rejected. The decision is recorded in append-only `evidence_artifact_reviews` and the existing `verifications` table; the linked evidence status is updated within the same transaction. A reviewed artifact is not re-reviewed in place; upload a new version and review that version. A successful review proves only that an authorized RupayKg reviewer recorded a decision; it does not imply ACVA validation, CCTS approval, or CCC issuance.
 
 ## Test and release gates
 
