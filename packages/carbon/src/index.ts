@@ -114,7 +114,7 @@ export function sha256Canonical(value: unknown): string {
  */
 export function isGenericCalculationMethodAllowed(methodologyCode: string): boolean {
   const normalized = methodologyCode.trim().toUpperCase();
-  return normalized.length > 0 && !/^BM(?:\s|-)/.test(normalized);
+  return normalized.length > 0 && !/^BM/.test(normalized);
 }
 
 export function calculateEmissionReduction(input: CarbonInput): CarbonResult {
