@@ -4,6 +4,7 @@ export * from "./resource-flows.js";
 export * from "./field-operations.js";
 export * from "./geography.js";
 export * from "./cpcb-swm.js";
+export * from "./ccts-methodologies.js";
 
 export const STATUS = {
   VERIFIED: "VERIFIED",
