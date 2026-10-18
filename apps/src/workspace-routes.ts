@@ -10,6 +10,17 @@ async function requireAuth(app: FastifyInstance, pool: Pool | null, request: Par
 function orgIds(auth: AuthContext): string[] { return auth.activeOrganizationId ? [auth.activeOrganizationId] : [...new Set(auth.memberships.map((m) => m.organization_id))]; }
 function result<T>(data: T) { return { source: "postgresql", syntheticData: false, data }; }
 function requestedGeography(request: { query: unknown }): string | null { const q = request.query && typeof request.query === "object" ? request.query as Record<string, unknown> : {}; return typeof q.geographyId === "string" && q.geographyId.trim() ? q.geographyId.trim() : null; }
+export type OperatingContextRail = "urban" | "rural";
+export function operatingContextGeographyKinds(context: OperatingContextRail): readonly string[] {
+  return context === "urban" ? ["ULB", "WARD", "LOCALITY"] : ["GRAM_PANCHAYAT", "VILLAGE", "CLUSTER"];
+}
+function requestedOperatingContext(request: { query: unknown }): { context?: OperatingContextRail; invalid: boolean } {
+  const q = request.query && typeof request.query === "object" ? request.query as Record<string, unknown> : {};
+  const raw = q.context;
+  if (raw === undefined || raw === null || raw === "") return { invalid: false };
+  if (raw === "urban" || raw === "rural") return { context: raw, invalid: false };
+  return { invalid: true };
+}
 async function authorizeGeography(pool: Pool, auth: AuthContext, geographyId: string): Promise<boolean> {
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(geographyId)) return false;
   const check = await pool.query<{ ok: boolean }>(`select exists (select 1 from organization_memberships om where om.identity_id=$1 and om.status='VERIFIED' and ($3::uuid is null or om.organization_id=$3::uuid) and organization_has_geography_scope(om.organization_id,$2)) as ok`, [auth.identityId, geographyId, auth.activeOrganizationId ?? null]);
@@ -43,8 +54,29 @@ export async function registerWorkspaceRoutes(app: FastifyInstance, pool: Pool |
   });
 
   app.get("/api/v1/workspaces/mrv", async (request, reply) => {
-    const auth=await requireAuth(app,pool,request,reply);if(!auth||!pool)return;const ids=orgIds(auth);if(!ids.length)return result({activities:[],measurements:[],evidence:[],verifications:[]});const geographyId=requestedGeography(request);if(geographyId&&!await authorizeGeography(pool,auth,geographyId))return reply.code(403).send({error:"Geography outside organization authorization scope",code:"GEOGRAPHY_FORBIDDEN"});
-    try{const params:unknown[]=[ids];if(geographyId)params.push(geographyId);const clause=geoClause(geographyId,"a.geography_id");const scopeClause=" and organization_has_geography_scope(a.organization_id,a.geography_id)";const [activities,measurements,evidence,verifications]=await Promise.all([pool.query(`select a.id,a.activity_type,a.status,a.occurred_at,a.created_at,a.geography_id,g.name as geography_name from activities a left join geography g on g.id=a.geography_id where a.organization_id=any($1::uuid[])${scopeClause}${clause} order by a.created_at desc limit 100`,params),pool.query(`select m.id,m.activity_id,m.value,m.unit,m.method,m.source,m.measured_at,m.quality_status from measurements m join activities a on a.id=m.activity_id where a.organization_id=any($1::uuid[])${scopeClause}${clause} order by m.measured_at desc limit 100`,params),pool.query(`select e.id,e.activity_id,e.measurement_id,e.evidence_type,e.status,e.captured_at,e.content_uri,e.content_hash from evidence e join activities a on a.id=e.activity_id where a.organization_id=any($1::uuid[])${scopeClause}${clause} order by e.captured_at desc limit 100`,params),pool.query(`select v.id,v.evidence_id,v.activity_id,v.verifier_identity_id,v.decision,v.scope,v.rationale,v.decided_at from verifications v join evidence e on e.id=v.evidence_id join activities a on a.id=e.activity_id where a.organization_id=any($1::uuid[])${scopeClause}${clause} order by v.decided_at desc limit 100`,params)]);return result({activities:activities.rows,measurements:measurements.rows,evidence:evidence.rows,verifications:verifications.rows});}catch(error){request.log.error(error);return reply.code(503).send({error:"MRV workspace unavailable",syntheticData:false});}
+    const auth = await requireAuth(pool, request, reply); if (!auth || !pool) return;
+    const ids = orgIds(auth); if (!ids.length) return result({ activities: [], measurements: [], evidence: [], verifications: [] });
+    const geographyId = requestedGeography(request);
+    if (geographyId && !await authorizeGeography(pool, auth, geographyId)) return reply.code(403).send({ error: "Geography outside organization authorization scope", code: "GEOGRAPHY_FORBIDDEN" });
+    const contextRequest = requestedOperatingContext(request);
+    if (contextRequest.invalid) return reply.code(400).send({ error: "Context must be urban or rural", code: "INVALID_OPERATING_CONTEXT", syntheticData: false });
+    try {
+      const params: unknown[] = [ids];
+      if (geographyId) params.push(geographyId);
+      if (contextRequest.context) params.push(operatingContextGeographyKinds(contextRequest.context));
+      const geographyClause = geoClause(geographyId, "a.geography_id");
+      const contextClause = contextRequest.context
+        ? ` and exists (select 1 from geography context_geo where context_geo.id=a.geography_id and context_geo.kind::text = any($${params.length}::text[]))`
+        : "";
+      const scopeClause = " and organization_has_geography_scope(a.organization_id,a.geography_id)";
+      const [activities, measurements, evidence, verifications] = await Promise.all([
+        pool.query(`select a.id,a.activity_type,a.status,a.occurred_at,a.created_at,a.geography_id,g.name as geography_name,g.kind::text as geography_kind from activities a left join geography g on g.id=a.geography_id where a.organization_id=any($1::uuid[])${scopeClause}${geographyClause}${contextClause} order by a.created_at desc limit 100`, params),
+        pool.query(`select m.id,m.activity_id,m.value,m.unit,m.method,m.source,m.measured_at,m.quality_status from measurements m join activities a on a.id=m.activity_id where a.organization_id=any($1::uuid[])${scopeClause}${geographyClause}${contextClause} order by m.measured_at desc limit 100`, params),
+        pool.query(`select e.id,e.activity_id,e.measurement_id,e.evidence_type,e.status,e.captured_at,e.content_uri,e.content_hash from evidence e join activities a on a.id=e.activity_id where a.organization_id=any($1::uuid[])${scopeClause}${geographyClause}${contextClause} order by e.captured_at desc limit 100`, params),
+        pool.query(`select v.id,v.evidence_id,v.activity_id,v.verifier_identity_id,v.decision,v.scope,v.rationale,v.decided_at from verifications v join evidence e on e.id=v.evidence_id join activities a on a.id=e.activity_id where a.organization_id=any($1::uuid[])${scopeClause}${geographyClause}${contextClause} order by v.decided_at desc limit 100`, params),
+      ]);
+      return result({ activities: activities.rows, measurements: measurements.rows, evidence: evidence.rows, verifications: verifications.rows, ...(contextRequest.context ? { operatingContext: contextRequest.context, geographyKinds: operatingContextGeographyKinds(contextRequest.context) } : {}) });
+    } catch (error) { request.log.error(error); return reply.code(503).send({ error: "MRV workspace unavailable", syntheticData: false }); }
   });
 
   app.post("/api/v1/evidence/:evidenceId/verification", async (request, reply) => {
