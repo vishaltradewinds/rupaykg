@@ -17,7 +17,7 @@ export function sanitizeEvidenceFileName(value:string):string|null {
  return !name||name.length>180||name==="."||name===".."?null:name;
 }
 export function decodeEvidenceBase64(value:string):Buffer|null {
- if(!value||value.length>Math.ceil(MAX_BYTES*4/3)+8||!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value))return null;
+ if(!value||value.length>Math.ceil(MAX_BYTES*4/3)+8||value.length%4!==0||/[^A-Za-z0-9+/=]/.test(value))return null;
  const bytes=Buffer.from(value,"base64");
  return !bytes.length||bytes.length>MAX_BYTES||bytes.toString("base64")!==value?null:bytes;
 }
