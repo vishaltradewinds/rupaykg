@@ -87,7 +87,7 @@ export async function registerCpcbSwmRoutes(app: FastifyInstance, pool: Pool | n
         await client.query("begin");
         const rows = await client.query("insert into cpcb_swm_stakeholder_workspaces(organization_id,geography_id,stakeholder_type,title,eligibility_observations,checklist,cpcb_application_reference,cpcb_status_claim,cpcb_status_source_reference,cpcb_status_observed_at,due_date,notes,created_by_identity_id,updated_by_identity_id) values($1,$2,$3,$4,$5::jsonb,$6::jsonb,$7,'USER_REPORTED_UNVERIFIED',$8,case when $8 is not null then now() else null end,$9,$10,$11,$11) returning *", [organizationId, geographyId || null, stakeholderType, title, JSON.stringify(observations), JSON.stringify(checklist), applicationReference, sourceReference, dueDate, notes, auth.identityId]);
         const workspace = rows.rows[0] as { id: string };
-        await writeAudit(client, auth.identityId, organizationId, "CPCB_SWM_WORKSPACE_CREATED", workspace.id, { stakeholderType, title, checklistItems: checklist.length, cpcbStatusClaim: "USER_REPORTED_UNVERIFIED" }, (request as never as Request).id);
+        await writeAudit(client, auth.identityId, organizationId, "CPCB_SWM_WORKSPACE_CREATED", workspace.id, { stakeholderType, title, checklistItems: checklist.length, cpcbStatusClaim: "USER_REPORTED_UNVERIFIED" }, (request as never as Request).id ?? "request-id-unavailable");
         await client.query("commit");
         return reply.code(201).send({ source: "postgresql", syntheticData: false, workspace: rows.rows[0] });
       } catch (error) { await client.query("rollback"); throw error; } finally { client.release(); }
@@ -117,7 +117,7 @@ export async function registerCpcbSwmRoutes(app: FastifyInstance, pool: Pool | n
         const prior = await client.query("select id from cpcb_swm_stakeholder_workspaces where id=$1 and organization_id=$2 for update", [id, organizationId]);
         if (!prior.rows[0]) { await client.query("rollback"); return reply.code(404).send({ error: "Stakeholder workspace not found", code: "SWM_WORKSPACE_NOT_FOUND" }); }
         const rows = await client.query("update cpcb_swm_stakeholder_workspaces set geography_id=$1,stakeholder_type=$2,title=$3,eligibility_observations=$4::jsonb,checklist=$5::jsonb,cpcb_application_reference=$6,cpcb_status_source_reference=$7,cpcb_status_observed_at=case when $7 is not null then now() else null end,due_date=$8,notes=$9,updated_by_identity_id=$10,updated_at=now() where id=$11 and organization_id=$12 returning *", [geographyId || null, stakeholderType, title, JSON.stringify(observations), JSON.stringify(checklist), applicationReference, sourceReference, dueDate, notes, auth.identityId, id, organizationId]);
-        await writeAudit(client, auth.identityId, organizationId, "CPCB_SWM_WORKSPACE_UPDATED", id, { stakeholderType, title, checklistItems: checklist.length, cpcbStatusClaim: "USER_REPORTED_UNVERIFIED" }, (request as never as Request).id);
+        await writeAudit(client, auth.identityId, organizationId, "CPCB_SWM_WORKSPACE_UPDATED", id, { stakeholderType, title, checklistItems: checklist.length, cpcbStatusClaim: "USER_REPORTED_UNVERIFIED" }, (request as never as Request).id ?? "request-id-unavailable");
         await client.query("commit");
         return { source: "postgresql", syntheticData: false, workspace: rows.rows[0] };
       } catch (error) { await client.query("rollback"); throw error; } finally { client.release(); }
