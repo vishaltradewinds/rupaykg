@@ -77,7 +77,6 @@ export async function registerCpcbSwmRoutes(app: FastifyInstance, pool: Pool | n
     const dueDate = body.dueDate === null || body.dueDate === "" || body.dueDate === undefined ? null : validDate(body.dueDate) ? body.dueDate : "INVALID";
     const notes = body.notes === undefined || body.notes === null ? null : text(body, "notes", 4000);
     if (!validStakeholder(stakeholderType) || !title || !checklist || !observations || typeof observations !== "object" || Array.isArray(observations) || (geographyId && !UUID.test(geographyId)) || dueDate === "INVALID" || (body.notes !== undefined && body.notes !== null && body.notes !== "" && notes === null)) return reply.code(400).send({ error: "Invalid stakeholder type, title, geography, checklist, eligibility observations, due date or notes", code: "SWM_WORKSPACE_INVALID" });
-    if (checklist.some(item => item.status === "VERIFIED" as never)) return reply.code(400).send({ error: "Client-supplied VERIFIED evidence status is not permitted", code: "SWM_EVIDENCE_VERIFICATION_FORBIDDEN" });
     try {
       if (geographyId) {
         const allowed = await pool.query<{ ok: boolean }>("select exists(select 1 from organization_memberships om where om.identity_id=$1 and om.organization_id=$2 and om.status='VERIFIED' and organization_has_geography_scope(om.organization_id,$3::uuid)) ok", [auth.identityId, organizationId, geographyId]);
