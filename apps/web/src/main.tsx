@@ -53,7 +53,7 @@ function CpcbSwmReadiness({token,organizationId}:{token:string;organizationId:st
  const [notes,setNotes]=useState("");
  const [applicationReference,setApplicationReference]=useState("");
  const [statusSourceReference,setStatusSourceReference]=useState("");
- const [checklistState,setChecklistState]=useState<Record<string,"MISSING"|"PROVIDED_UNVERIFIED"|"NOT_APPLICABLE">>({});
+ const [checklistState,setChecklistState]=useState<Record<string,"MISSING"|"PROVIDED_UNVERIFIED"|"NOT_APPLICABLE"|"REJECTED"|"EXPIRED"|"UNRESOLVED">>({});
  const [records,setRecords]=useState<CpcbSwmWorkspaceRecord[]>([]);
  const [savedId,setSavedId]=useState("");
  const [busy,setBusy]=useState(false);
@@ -84,7 +84,7 @@ function CpcbSwmReadiness({token,organizationId}:{token:string;organizationId:st
   setSource(obs.floorAreaM2?.sourceReference??obs.waterConsumptionLitresPerDay?.sourceReference??obs.wasteGenerationKgPerDay?.sourceReference??"");
   setPeriodStart(obs.floorAreaM2?.periodStart??obs.waterConsumptionLitresPerDay?.periodStart??obs.wasteGenerationKgPerDay?.periodStart??"");
   setPeriodEnd(obs.floorAreaM2?.periodEnd??obs.waterConsumptionLitresPerDay?.periodEnd??obs.wasteGenerationKgPerDay?.periodEnd??"");
-  setChecklistState(Object.fromEntries((record.checklist??[]).map(item=>[item.key,item.status==="PROVIDED_UNVERIFIED"||item.status==="NOT_APPLICABLE"?item.status:"MISSING"])));
+  setChecklistState(Object.fromEntries((record.checklist??[]).map(item=>[item.key,["PROVIDED_UNVERIFIED","NOT_APPLICABLE","REJECTED","EXPIRED","UNRESOLVED"].includes(item.status)?item.status:"MISSING"])));
   setMessage("Loaded saved preparation record. CPCB status remains user-reported and unverified.");setError("");
  }
  async function save(){
@@ -117,7 +117,7 @@ function CpcbSwmReadiness({token,organizationId}:{token:string;organizationId:st
    <article className="cpcb-swm-result"><strong>{assessment.status.replaceAll("_"," ")}</strong><p>{assessment.qualifyingCriteria.length?("Qualifying evidence-backed threshold(s): "+assessment.qualifyingCriteria.join(", ")):assessment.status==="NOT_ELIGIBLE_PRECHECK"?"No threshold met by the complete sourced observations.":"Provide valid values, units, source reference and period; incomplete evidence stays unresolved."}</p>{assessment.missingOrInvalid.length>0&&<small>Gaps: {assessment.missingOrInvalid.join(" · ")}</small>}<small>Readiness aid only — CPCB makes the official determination.</small></article>
   </>}
   <h3>Stakeholder evidence checklist</h3><p>Mark only whether a document/reference has been provided. RupayKg does not let the applicant self-verify evidence.</p>
-  <div className="cpcb-swm-checklist">{checklist.map(item=><article key={item.key}><div><strong>{item.label}</strong><small>{item.officialRequirement.replaceAll("_"," ")}</small></div><label>Status<select value={item.status} onChange={e=>setChecklistState(p=>({...p,[item.key]:e.target.value as "MISSING"|"PROVIDED_UNVERIFIED"|"NOT_APPLICABLE"}))}><option value="MISSING">Missing</option><option value="PROVIDED_UNVERIFIED">Provided — unverified</option><option value="NOT_APPLICABLE">Not applicable</option></select></label></article>)}</div>
+  <div className="cpcb-swm-checklist">{checklist.map(item=><article key={item.key}><div><strong>{item.label}</strong><small>{item.officialRequirement.replaceAll("_"," ")}</small></div><label>Status<select value={item.status} onChange={e=>setChecklistState(p=>({...p,[item.key]:e.target.value as "MISSING"|"PROVIDED_UNVERIFIED"|"NOT_APPLICABLE"|"REJECTED"|"EXPIRED"|"UNRESOLVED"}))}><option value="MISSING">Missing</option><option value="PROVIDED_UNVERIFIED">Provided — unverified</option><option value="NOT_APPLICABLE">Not applicable</option><option value="REJECTED">Rejected</option><option value="EXPIRED">Expired</option><option value="UNRESOLVED">Unresolved</option></select></label></article>)}</div>
   <div className="cpcb-swm-input-grid"><label>CPCB application reference (optional)<input value={applicationReference} onChange={e=>setApplicationReference(e.target.value)} placeholder="User-entered reference only"/></label><label>Reference/evidence source for CPCB status (optional)<input value={statusSourceReference} onChange={e=>setStatusSourceReference(e.target.value)} placeholder="Acknowledgement/document reference"/></label><label>Follow-up due date (optional)<input type="date" value={dueDate} onChange={e=>setDueDate(e.target.value)}/></label></div>
   <label>Working notes<textarea value={notes} onChange={e=>setNotes(e.target.value)} maxLength={4000} placeholder="Open questions, gaps, responsible person, next step"/></label>
   <div className="cpcb-swm-actions"><button disabled={busy} onClick={()=>void save()}>{busy?"Saving…":savedId?"Update saved preparation":"Save preparation record"}</button><button className="secondary" disabled={busy} onClick={()=>{setSavedId("");setTitle("");setGeographyId("");setArea("");setWater("");setWaste("");setSource("");setPeriodStart("");setPeriodEnd("");setApplicationReference("");setStatusSourceReference("");setDueDate("");setNotes("");setChecklistState({});setMessage("");setError("");}}>New record</button></div>
