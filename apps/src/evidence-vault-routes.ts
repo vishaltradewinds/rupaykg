@@ -81,6 +81,7 @@ export async function registerEvidenceVaultRoutes(app:FastifyInstance,pool:Pool|
   const row=q.rows[0];if(!row||!row.geography_id||!canActForOrganization(auth,row.organization_id))return reply.code(404).send({error:"Evidence not found",code:"EVIDENCE_NOT_FOUND"});
   const g=await pool.query<{ok:boolean}>("select organization_has_geography_scope($1::uuid,$2::uuid) ok",[row.organization_id,row.geography_id]);
   if(!g.rows[0]?.ok||!await hasOrganizationPermission(pool,auth,row.organization_id,["evidence:read","evidence:upload","evidence:review"]))return reply.code(403).send({error:"Evidence read permission required",code:"EVIDENCE_READ_FORBIDDEN"});
+  if(row.content.length!==row.size_bytes||createHash("sha256").update(row.content).digest("hex")!==row.sha256)return reply.code(503).send({error:"Stored evidence integrity check failed",code:"EVIDENCE_INTEGRITY_FAILED"});
   reply.header("Content-Disposition",'attachment; filename="'+row.file_name.replace(/["\\\r\n]/g,"_")+'"');reply.header("X-Content-Type-Options","nosniff");reply.header("X-Evidence-SHA256",row.sha256);reply.header("X-Evidence-Version",String(row.version_number));return reply.type(row.media_type).send(row.content);
  });
  app.post("/api/v1/evidence-vault/:evidenceId/review",async(request,reply)=>{
