@@ -61,3 +61,11 @@ test("stakeholder checklists distinguish guide-listed from rule-derived requirem
   const localBody = initialSwmChecklist("ULB");
   assert.ok(localBody.some(item => item.key === "certificate_issuance_boundary"));
 });
+
+test("calendar-invalid dates are rejected rather than normalized by the runtime", () => {
+  const result = assessBwgEligibility(inputs({
+    floorAreaM2: observation(10, "m2", "evidence://area", "2026-02-31", "2026-03-01"),
+  }));
+  assert.equal(result.status, "UNRESOLVED");
+  assert.ok(result.missingOrInvalid.includes("floorAreaM2:PERIOD_INVALID"));
+});
