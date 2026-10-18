@@ -119,12 +119,20 @@ function completeBmWa03001ReadinessInput(overrides: Partial<BmWa03001ReadinessIn
     landfillSiteType: "SOLID_WASTE_DISPOSAL_SITE",
     containsBiodegradableOrganicMatter: true,
     recoveredGasUse: "FLARING_ONLY",
+    methaneQuantificationPath: "FLOW_AND_METHANE_MEASUREMENT",
     additionalityPath: "BM_T_001",
     projectBoundaryDefined: true,
     flowMetersCalibrated: true,
+    samplingAndGasAnalyserCalibrated: true,
     continuousFlowMetering: true,
     methaneMeasurementMethod: "CONTINUOUS_ANALYSER",
     flowAndMethaneHumidityBasisAligned: true,
+    gasFlowIsNormalized: true,
+    gasTemperaturePressureEvidence: null,
+    electricityGenerationEvidence: null,
+    equipmentEfficiencyEvidence: null,
+    landfillGasOnlyPowerEvidence: null,
+    startupFuelWithinLimit: null,
     baselineAndAdditionalityEvidence: true,
     toolStatuses,
     ...overrides,
@@ -141,14 +149,14 @@ test("BM WA03.001 full readiness is conditional and returns required sectoral sc
 });
 
 test("BM WA03.001 requires both Waste and Energy scopes when recovered gas is used beyond flaring", () => {
-  const result = evaluateBmWa03001Readiness(completeBmWa03001ReadinessInput({ recoveredGasUse: "POWER_OR_HEAT" }));
+  const result = evaluateBmWa03001Readiness(completeBmWa03001ReadinessInput({ recoveredGasUse: "POWER_GENERATION" }));
   assert.deepEqual(result.requiredSectoralScopes, ["03: Waste handling and disposal", "01: Energy"]);
   assert.equal(result.status, "ELIGIBLE_FOR_FURTHER_ASSESSMENT");
 });
 
 test("BM WA03.001 fails closed when current tool approval or monitoring evidence is unresolved", () => {
   const toolStatuses = { ...completeBmWa03001ReadinessInput().toolStatuses, "BM-T-011": "NOT_CONFIRMED" as const };
-  const result = evaluateBmWa03001Readiness(completeBmWa03001ReadinessInput({ toolStatuses, flowMetersCalibrated: null, baselineAndAdditionalityEvidence: null }));
+  const result = evaluateBmWa03001Readiness(completeBmWa03001ReadinessInput({ toolStatuses, flowMetersCalibrated: null, samplingAndGasAnalyserCalibrated: null, baselineAndAdditionalityEvidence: null }));
   assert.equal(result.status, "UNRESOLVED");
   assert.ok(result.reasons.some(reason => reason.includes("BM-T-011")));
   assert.ok(result.reasons.some(reason => reason.includes("calibration")));
@@ -166,4 +174,33 @@ test("BM WA03.001 returns INELIGIBLE for a known disqualifier rather than an unr
   const result = evaluateBmWa03001Readiness(completeBmWa03001ReadinessInput({ reducesOrganicWasteRecycling: true }));
   assert.equal(result.status, "INELIGIBLE");
   assert.ok(result.reasons.some(reason => reason.includes("must not reduce organic-waste recycling")));
+});
+
+test("BM WA03.001 permits the electricity-generation methane calculation path only with its required evidence", () => {
+  const result = evaluateBmWa03001Readiness(completeBmWa03001ReadinessInput({
+    recoveredGasUse: "POWER_GENERATION",
+    methaneQuantificationPath: "ELECTRICITY_GENERATION_EQUATION_6",
+    electricityGenerationEvidence: true,
+    equipmentEfficiencyEvidence: true,
+    landfillGasOnlyPowerEvidence: true,
+    startupFuelWithinLimit: true,
+  }));
+  assert.equal(result.status, "ELIGIBLE_FOR_FURTHER_ASSESSMENT");
+  assert.deepEqual(result.requiredSectoralScopes, ["03: Waste handling and disposal", "01: Energy"]);
+});
+
+test("BM WA03.001 does not allow Equation 6 for a flaring-only project", () => {
+  const result = evaluateBmWa03001Readiness(completeBmWa03001ReadinessInput({
+    methaneQuantificationPath: "ELECTRICITY_GENERATION_EQUATION_6",
+    electricityGenerationEvidence: true,
+    equipmentEfficiencyEvidence: true,
+  }));
+  assert.equal(result.status, "UNRESOLVED");
+  assert.ok(result.reasons.some(reason => reason.includes("only for recovered-methane power-generation")));
+});
+
+test("BM WA03.001 requires gas temperature and pressure when the flow meter does not normalize flow", () => {
+  const result = evaluateBmWa03001Readiness(completeBmWa03001ReadinessInput({ gasFlowIsNormalized: false }));
+  assert.equal(result.status, "UNRESOLVED");
+  assert.ok(result.reasons.some(reason => reason.includes("temperature and pressure")));
 });
