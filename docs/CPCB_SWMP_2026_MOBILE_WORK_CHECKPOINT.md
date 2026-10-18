@@ -69,3 +69,13 @@
 - Urban operating evidence emphasizes frequent collection, ward/route/vehicle/scale records, four-stream segregation and facility reconciliation. Rural operating evidence emphasizes village collection points, seasonal supply, producer/FPO/SHG participation, aggregation, quality/inventory, consolidated logistics and village-cluster reconciliation.
 - Important boundary: rural biomass, crop residue, animal waste, biochar, compost, biogas and carbon activities are not automatically CPCB SWM 2026/EBWGR records. Cross-link only when legal scope, waste/material classification, authority, destination and evidence match.
 - Urban/Rural symmetry means equal traceability, auditability, permissions, grievance handling and fail-closed evidence standards—not identical screens or assumptions. No application code, schema, tests, live portal, Guardian service or deployment was changed.
+
+
+## Update — source-level Urban/Rural context audit (2026-10-18)
+
+- Inspected current frontend and migration source on the dedicated branch.
+- Existing UI context modules are present: `operating-context.ts`, `operating-context-selector.ts`, `operating-context-experience.ts`, `operating-context-bridge.ts`, and `operating-workflow-experience.ts`.
+- Important gap: `operating-workflow-experience.ts` requests the same `/api/v1/workspaces/mrv` dataset in both contexts and chooses `activities[0]`. The selected context changes labels/descriptions, but this code does not itself filter the dataset by verified geography kind or jurisdiction. This is a source-level finding, not proof of every backend behavior.
+- Existing geography schema already defines `ULB`, `WARD`, `GRAM_PANCHAYAT`, `VILLAGE` and `CLUSTER`, plus source-versioned geography reference fields. Reuse these after confirming organization/geography bindings; do not create duplicate hierarchy tables.
+- Updated the conformance matrix in commit `dcbf9e9689c62748328b2cc6a2d0d670fba2a974` to record this gap and require verified organization/geography scoping, cross-context leakage tests, and fail-closed handling of ambiguous jurisdictions.
+- No application code, schema, test results, local working tree, live service or deployment changed. Next safe engineering step is to inspect the actual workspace endpoint and authorization/geography joins, then implement and test a server-enforced context filter. Do not rely on browser localStorage as a security or jurisdiction boundary.
