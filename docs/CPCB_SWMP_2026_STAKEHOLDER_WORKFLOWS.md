@@ -203,4 +203,13 @@ The next slice adds a user-facing Evidence Vault panel to the shared MRV workspa
 - Review other users' evidence with a rationale, subject to backend permission and geography checks; uploader self-review is blocked.
 - No claim of statutory acceptance, ACVA verification, project eligibility or CCC issuance is made.
 
-Branch/PR: `feature/evidence-vault-workspace-ui` / PR pending CI. No live deployment or production database migration has been performed. Keep production HOLD until PR CI passes and storage backup/restore, malware scanning, retention, capacity and pilot acceptance are addressed.
+Branch/PR: `feature/evidence-vault-workspace-ui` / PR #31 merged as `f061eb7847171cd57248a68768c99826a9a943a6`; CI run #1352 passed. No live deployment or production database migration has been performed. Keep production HOLD until storage backup/restore, malware scanning, retention, capacity and pilot acceptance are addressed.
+
+
+## 14. Evidence vault implementation status update — 2026-10-18
+
+- PR #30 backend vault merged at `77f84e35621b42191be2ff1ad345cbab895f69c4`; post-merge CI #1351 passed.
+- PR #31 MRV workspace UI/list endpoint merged at `f061eb7847171cd57248a68768c99826a9a943a6`; branch CI #1352 passed; post-merge CI #1353 is running at checkpoint time.
+- Evidence vault is implemented in code for bounded files, versioning, hash validation, source/period metadata, scoped access and dual-control review.
+- No live deployment, production database migration, real pilot upload, or operational backup/restore/malware/retention acceptance has been performed. Production stays HOLD.
+- Next engineering gates: end-to-end API authorization integration tests for evidence upload/list/download/review; UI/API acceptance tests; storage operational controls; then methodology-specific eligibility and MRV adapters from the official BEE documents. Do not treat registry presence as implementation or eligibility.
