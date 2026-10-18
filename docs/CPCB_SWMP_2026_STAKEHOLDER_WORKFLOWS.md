@@ -139,3 +139,18 @@ Source: SWM Rules, 2026 and CPCB SWM portal/user guide. Recheck amendments, norm
 - No inquiry has been sent and no API authorization has been received.
 
 **Next engineering step:** inspect the existing migrations, domain models, workspace APIs and frontend state; implement Slice 1 as a reviewed, additive feature on this branch, with a migration, authorization, audit trail, tests and a dedicated mobile-first UI. Do not report the platform as CPCB-ready until that implementation and its gates are actually verified.
+
+
+## 9. Cross-sector Carbon OS / CCTS registry checkpoint — 2026-10-18
+
+RupayKg's governing objective is cross-sector: BWGs and CPCB SWM workflows are one stakeholder module among many, not the platform's organising principle. Shared services must support evidence, project-specific methodology eligibility, versioned MRV calculations, independent validation/verification, and authoritative CCC lifecycle reconciliation.
+
+- Official BEE source register: https://beeindia.gov.in/view_content.php?lang=1&lid=571 (page states last updated 2026-07-07; rechecked 2026-10-18).
+- New domain registry: `packages/domain/src/ccts-methodologies.ts` and tests `packages/domain/src/ccts-methodologies.test.ts`.
+- The snapshot records the 12 methodologies and 17 tools listed by BEE. The forestry tool identifier `BMT-T-AR-0006` is preserved exactly as rendered in the source register and must be reconciled to the underlying official PDF before use.
+- New migration: `migrations/20261020_ccts_methodology_registry.sql` creates a source/version-aware registry table and seeds the published snapshot. All entries start `REGISTRY_ONLY`; official method approval does not mean RupayKg has implemented it.
+- New design/release gate: `docs/CCTS_METHODOLOGY_REGISTRY_FOUNDATION.md`.
+- Domain helper `cctsMethodologyReadiness` returns `UNRESOLVED` for every listed method until project-specific applicability and a reviewed calculation adapter are independently validated. This intentionally fails closed.
+- This is the first registry foundation only. It does not claim the methodologies' equations, monitoring plans, tools, baselines, eligibility rules, or calculations are implemented. CCC issuance remains an external official outcome and must never be fabricated or inferred from local MRV.
+
+Next implementation sequence: retrieve/hash all official methodology and tool documents; build reviewed method-specific requirement specifications; connect shared operational evidence without duplicate ledgers; implement/test adapters one at a time; add project-level applicability decisions; then verification workflow and official CCC reconciliation. Production remains HOLD until the corresponding release gates and live acceptance are evidenced.
