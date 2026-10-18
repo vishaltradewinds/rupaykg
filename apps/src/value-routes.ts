@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type { Pool, PoolClient } from "pg";
-import { calculateEmissionReduction, sha256Canonical } from "@rupaykg/carbon";
+import { calculateEmissionReduction, isGenericCalculationMethodAllowed, sha256Canonical } from "@rupaykg/carbon";
 import { assessEprObligation } from "@rupaykg/compliance";
 import { classifyMetric } from "@rupaykg/esg";
 import { authenticate, canActForOrganization, hasOrganizationPermission, type AuthContext } from "./auth.js";
@@ -40,6 +40,7 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
       if (!evidenceRow.content_hash && !evidenceRow.content_uri) return reply.code(409).send({ error: "Evidence must have a content hash or authoritative content URI", code: "EVIDENCE_PROVENANCE_REQUIRED" });
       const method = await pool.query<{ id: string; rules: unknown; governance_status: string }>("select id, rules, governance_status from methodology_versions where methodology_code = $1 and version = $2", [methodologyCode, methodologyVersion]);
       if (!method.rows[0]) return reply.code(409).send({ error: "Methodology version is not registered", code: "METHODOLOGY_NOT_REGISTERED" });
+      if (!isGenericCalculationMethodAllowed(methodologyCode)) return reply.code(409).send({ error: "Official BEE CCTS methodologies require a reviewed, method-specific calculation adapter; generic baseline/project arithmetic is blocked", code: "METHODOLOGY_ADAPTER_NOT_VALIDATED" });
       const result = calculateEmissionReduction({ activityId, methodologyCode, methodologyVersion, baselineTco2e, projectTco2e, leakageTco2e, uncertaintyTco2e });
       const dataset = { activityId, evidence: { id: evidenceId, contentHash: evidenceRow.content_hash, contentUri: evidenceRow.content_uri, status: evidenceRow.status }, normalizedInputs: result.normalizedInputs };
       const datasetHash = sha256Canonical(dataset);
