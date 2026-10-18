@@ -69,12 +69,22 @@ test("evidence vault enforces tenant scope, versioned storage, integrity and ind
     assert.equal(upload.statusCode, 201, upload.body);
     const uploaded = upload.json().data as { evidenceId: string; seriesId: string; artifactVersionId: string; versionNumber: number; sha256: string };
     assert.equal(uploaded.versionNumber, 1);
-    assert.equal(uploaded.sha256, hash(bytes.toString("binary")) === "" ? "" : createHash("sha256").update(bytes).digest("hex"));
+    assert.equal(uploaded.sha256, createHash("sha256").update(bytes).digest("hex"));
+
+    const secondBytes = Buffer.from("%PDF-1.7\\nCorrected MRV evidence fixture\\n");
+    const secondUpload = await app.inject({
+      method: "POST", url: "/api/v1/evidence-vault/upload", headers: headers(uploaderToken),
+      payload: { activityId: activity.rows[0]!.id, seriesId: uploaded.seriesId, evidenceType: "WASTE_WEIGHT_TICKET", fileName: "weight-ticket-corrected.pdf", mediaType: "application/pdf", contentBase64: secondBytes.toString("base64"), sourceReference: "TEST-SLIP-CORRECTED-"+suffix, measurementPeriodStart: "2026-10-01", measurementPeriodEnd: "2026-10-31" },
+    });
+    assert.equal(secondUpload.statusCode, 201, secondUpload.body);
+    const second = secondUpload.json().data as { evidenceId: string; versionNumber: number };
+    assert.equal(second.versionNumber, 2);
 
     const list = await app.inject({ method: "GET", url: "/api/v1/evidence-vault?activityId="+activity.rows[0]!.id, headers: headers(uploaderToken) });
     assert.equal(list.statusCode, 200, list.body);
-    assert.equal(list.json().data.artifacts.length, 1);
-    assert.equal(list.json().data.artifacts[0].evidence_id, uploaded.evidenceId);
+    assert.equal(list.json().data.artifacts.length, 2);
+    assert.ok(list.json().data.artifacts.some((item: {evidence_id:string}) => item.evidence_id===uploaded.evidenceId));
+    assert.ok(list.json().data.artifacts.some((item: {evidence_id:string;version_number:number}) => item.evidence_id===second.evidenceId&&item.version_number===2));
 
     const download = await app.inject({ method: "GET", url: "/api/v1/evidence-vault/"+uploaded.evidenceId, headers: headers(uploaderToken) });
     assert.equal(download.statusCode, 200, download.body);
