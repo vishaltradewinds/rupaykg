@@ -168,7 +168,7 @@ export async function registerStatutoryRoutes(app: FastifyInstance, pool: Pool |
       const result = await pool.query(
         `insert into organization_epr_applicability
           (organization_id,scheme,rule_reference,applicability_status,basis,cpcb_registration_status,cpcb_registration_reference,evidence_id,verification_id,determination_note,determined_by_identity_id,determined_at)
-         values($1,$2,coalesce($3,$4),$5,$6::jsonb,$7,$8,$9,$10,$11,$12,$13,now())
+         values($1,$2,coalesce($3,$4),$5,$6::jsonb,$7,$8,$9,$10,$11,$12,now())
          on conflict(organization_id,scheme) do update set
            rule_reference=excluded.rule_reference,applicability_status=excluded.applicability_status,basis=excluded.basis,
            cpcb_registration_status=excluded.cpcb_registration_status,cpcb_registration_reference=excluded.cpcb_registration_reference,
