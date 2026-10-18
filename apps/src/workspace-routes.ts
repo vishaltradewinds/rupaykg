@@ -54,7 +54,7 @@ export async function registerWorkspaceRoutes(app: FastifyInstance, pool: Pool |
   });
 
   app.get("/api/v1/workspaces/mrv", async (request, reply) => {
-    const auth = await requireAuth(pool, request, reply); if (!auth || !pool) return;
+    const auth = await requireAuth(app, pool, request, reply); if (!auth || !pool) return;
     const ids = orgIds(auth); if (!ids.length) return result({ activities: [], measurements: [], evidence: [], verifications: [] });
     const geographyId = requestedGeography(request);
     if (geographyId && !await authorizeGeography(pool, auth, geographyId)) return reply.code(403).send({ error: "Geography outside organization authorization scope", code: "GEOGRAPHY_FORBIDDEN" });
