@@ -86,7 +86,27 @@ export const CARBON_VALUE_STATES = [
 
 export type CarbonValueState = typeof CARBON_VALUE_STATES[number];
 
+/**
+ * Evidence that an external authority's issuance record was independently checked.
+ * Populate only from an authenticated authoritative source or a documented review
+ * record; a user-entered reference by itself is not verification.
+ */
+export type ExternalIssuanceEvidence = {
+  authorityName: string;
+  officialSourceUrl: string;
+  issuanceReference: string;
+  artifactSha256: string;
+  verificationStatus: "VERIFIED" | "UNVERIFIED";
+  verificationRecordId: string;
+  verifiedAt: string;
+};
+
 /** Internal value state is never an assertion of external government issuance. */
-export function canClaimIssuedCarbonCredit(state: CarbonValueState, externalIssuanceReference?: string | null): boolean {
-  return state === "ISSUED" && Boolean(externalIssuanceReference?.trim());
+export function canClaimIssuedCarbonCredit(state: CarbonValueState, evidence?: ExternalIssuanceEvidence | null): boolean {
+  if (state !== "ISSUED" || !evidence || evidence.verificationStatus !== "VERIFIED") return false;
+  if (!evidence.authorityName.trim() || !evidence.issuanceReference.trim() || !evidence.verificationRecordId.trim()) return false;
+  if (!/^https:\/\//i.test(evidence.officialSourceUrl.trim())) return false;
+  if (!/^[a-f0-9]{64}$/i.test(evidence.artifactSha256.trim())) return false;
+  if (!evidence.verifiedAt.trim() || !Number.isFinite(Date.parse(evidence.verifiedAt))) return false;
+  return true;
 }
