@@ -168,3 +168,13 @@ During the cross-sector review, the existing carbon helper `isIssuableCarbonValu
 - Important: this pure-domain predicate is not authorization. Only a trusted server-side verification flow may create verified evidence; client-controlled status writes must remain prohibited. This change does not verify any actual certificate and does not connect to a government registry.
 
 Next gate: audit API write paths and database permissions to ensure only trusted server-side verification can set issuance state/evidence; then implement official source reconciliation only when a documented, authorized interface/process is available.
+
+
+## 11. Generic carbon-calculation route guard — 2026-10-18
+
+The cross-sector review found that `POST /api/v1/carbon/calculations` called generic baseline-minus-project arithmetic for any registered methodology version, without executing that methodology's versioned rules. This is unsafe for official CCTS methods.
+
+- The API route now rejects official BEE-style `BM ...` and `BM-...` methodology/tool identifiers with `METHODOLOGY_ADAPTER_NOT_VALIDATED` before calculating.
+- The carbon domain's generic calculator also rejects those identifiers, so callers cannot bypass the API guard by invoking the shared function directly.
+- Regression tests cover representative Energy, Industry, Waste, and Forestry method/tool identifiers.
+- This is a conservative gate. Method-specific adapters must be wired explicitly and reviewed before they can calculate under their own equation; generic arithmetic must never stand in for an official method.
