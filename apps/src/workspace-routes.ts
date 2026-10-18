@@ -12,7 +12,7 @@ function result<T>(data: T) { return { source: "postgresql", syntheticData: fals
 function requestedGeography(request: { query: unknown }): string | null { const q = request.query && typeof request.query === "object" ? request.query as Record<string, unknown> : {}; return typeof q.geographyId === "string" && q.geographyId.trim() ? q.geographyId.trim() : null; }
 export type OperatingContextRail = "urban" | "rural";
 export function operatingContextGeographyKinds(context: OperatingContextRail): readonly string[] {
-  return context === "urban" ? ["ULB", "WARD", "LOCALITY"] : ["GRAM_PANCHAYAT", "VILLAGE", "CLUSTER"];
+  return context === "urban" ? ["ULB", "WARD"] : ["GRAM_PANCHAYAT", "VILLAGE", "CLUSTER"];
 }
 function requestedOperatingContext(request: { query: unknown }): { context?: OperatingContextRail; invalid: boolean } {
   const q = request.query && typeof request.query === "object" ? request.query as Record<string, unknown> : {};
