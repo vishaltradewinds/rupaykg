@@ -55,7 +55,7 @@ export async function registerCpcbSwmRoutes(app: FastifyInstance, pool: Pool | n
     const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
     const organizationId = auth.activeOrganizationId;
     if (!organizationId || !canActForOrganization(auth, organizationId)) return reply.code(403).send({ error: "Select a verified organization", code: "ORG_FORBIDDEN" });
-    if (!await hasOrganizationPermission(pool, auth, organizationId, ["swm:read", "waste:read", "reports:read"])) return reply.code(403).send({ error: "CPCB SWM workspace read permission required", code: "SWM_READ_FORBIDDEN" });
+    if (!await hasOrganizationPermission(pool, auth, organizationId, ["swm:read", "waste:read", "reports:read", "epr:read", "audit:read"])) return reply.code(403).send({ error: "CPCB SWM workspace read permission required", code: "SWM_READ_FORBIDDEN" });
     try {
       const rows = await pool.query("select id,organization_id,geography_id,stakeholder_type,title,eligibility_observations,checklist,cpcb_application_reference,cpcb_status_claim,cpcb_status_source_reference,cpcb_status_reference_recorded_at,due_date,notes,created_by_identity_id,updated_by_identity_id,created_at,updated_at from cpcb_swm_stakeholder_workspaces where organization_id=$1 order by updated_at desc limit 100", [organizationId]);
       return { source: "postgresql", syntheticData: false, workspaces: rows.rows };
