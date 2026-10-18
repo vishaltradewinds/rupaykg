@@ -17,7 +17,7 @@ export function operatingContextGeographyKinds(context: OperatingContextRail): r
 export function operatingContextSqlClause(context: OperatingContextRail | undefined, parameterIndex: number): string {
   if (!context) return "";
   if (!Number.isInteger(parameterIndex) || parameterIndex < 2) throw new RangeError("Context SQL parameter index must be an integer >= 2");
-  return ` and exists (select 1 from geography context_geo where context_geo.id=a.geography_id and context_geo.kind::text = any(${parameterIndex}::text[]))`;
+  return " and exists (select 1 from geography context_geo where context_geo.id=a.geography_id and context_geo.kind::text = any($" + parameterIndex + "::text[]))";
 }
 function requestedOperatingContext(request: { query: unknown }): { context?: OperatingContextRail; invalid: boolean } {
   const q = request.query && typeof request.query === "object" ? request.query as Record<string, unknown> : {};
