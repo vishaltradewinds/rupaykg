@@ -3,6 +3,7 @@ export * from "./regulatory.js";
 export * from "./resource-flows.js";
 export * from "./field-operations.js";
 export * from "./geography.js";
+export * from "./cpcb-swm.js";
 
 export const STATUS = {
   VERIFIED: "VERIFIED",
