@@ -191,3 +191,30 @@
 - The official CPCB user guide confirms applicant and authority-controlled steps, including OTP/CAPTCHA, payment/submission, review, correction, appeal and certificate download. RupayKg must not impersonate those actions or report official portal status without source evidence: https://swmp.cpcb.gov.in/en/user-guide.
 - Current code and documentation work is merged, but the overall CPCB integration is **not production-ready**: no written interface authorization/contract or sandbox evidence is available in the reviewed repository; the CPCB inquiry draft is unsent; Guardian authenticated session and live WA03.001 MRV/Hedera/Mirror Node acceptance remain independent blockers.
 - No live CPCB login, OTP/CAPTCHA, payment, application submission, official status update, certificate action or production deployment was performed. Production release remains **HOLD**.
+
+
+## Update — official API discovery (2026-10-18)
+
+### Findings
+- The public SWM portal pages reviewed expose applicant workflows, acknowledgements, user guide and helpdesk contact, but no public SWM API specification, developer onboarding guide or SWM sandbox was found. This means API availability for RupayKg remains **UNCONFIRMED**, not proven absent.
+- CPCB's official tender page listed a November 2025 procurement titled **“Procurement of API Integration Service Provider”**. The official tender document describes the **Common Consent Management Portal** and integrations with government databases such as PAN, Aadhaar, GST and MSME. This is evidence that CPCB has an official procurement route for API development, but it is **not evidence** that an SWM portal API exists or that this tender's scope includes SWM.
+- CPCB's official tender notice identifies DH-IT Shri P. Jagan and phone **011-43102296**. CPCB's official telephone directory lists the IT Division and the contact email **jagan.cpcb@gov.in**. The SWM portal helpdesk is **swmportal.cpcb@gov.in**. Verify current responsibility and contact details before sending.
+- API Setu provides official API discovery and controlled access facilities, and India's Open API policy describes publishing-organization documentation, authentication and authorization. No listing for this particular SWM API was established in this review.
+
+### Official-only route to obtain an API
+1. Ask the SWM Portal Nodal Officer/helpdesk to confirm whether a supported SWM API, private integration interface, or government-system integration gateway exists, and whether third-party compliance platforms may apply.
+2. Ask CPCB IT Division to route the request to the SWM portal's product owner, technical owner and contracted system integrator, if applicable.
+3. Request the official API catalogue/specification (OpenAPI/Swagger or equivalent), exact supported use cases and data fields, permitted read/write operations, identity and authorization model, consent/legal basis, data-sharing agreement, security/audit requirements, rate limits, versioning/deprecation policy, sandbox credentials/test data, certification/UAT criteria and production onboarding steps.
+4. Ask whether the API is published through API Setu or another government gateway, and whether the applicant must be a government entity, an authorized service provider, an empanelled vendor, or a participant under an MoU/contract.
+5. Obtain written confirmation that RupayKg is authorized for the named organization, use case, fields and operations. Only then design and test a connector against the official specification and sandbox.
+6. If CPCB says no API or third-party access is available, ask for the formally permitted alternative and restrictions. Do not reverse-engineer private endpoints, scrape protected data, reuse browser session tokens, bypass OTP/CAPTCHA, or automate protected portal submissions.
+
+### Evidence and status
+- Official SWM portal: https://swm.cpcb.gov.in/
+- Official SWM user guide: https://swmp.cpcb.gov.in/en/user-guide
+- Official CPCB tender listing: https://cpcb.nic.in/tender.php
+- Official API-integration tender document (scope is Common Consent Management Portal, not proven SWM): https://cpcb.nic.in/openpdffile_tend.php?id=VGVuZGVyRmlsZXMvOTQzXzE3NjM3MjY1NjBfbWVkaWFwaG90bzIzNzUyLnBkZg%3D%3D
+- Government API Setu: https://apisetu.gov.in/
+- Government of India Open API policy: https://docs.apisetu.gov.in/document-central/api-policy/Policy%20Statement.html
+- No email has been sent; no CPCB response, API access, sandbox, credentials or authorization is claimed.
+- Production remains **HOLD** until written scope-specific authorization and independent Guardian/WA03.001 acceptance pass.
