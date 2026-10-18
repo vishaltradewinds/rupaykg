@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { decodeEvidenceBase64, evidencePayloadMatchesMediaType, sanitizeEvidenceFileName } from "./evidence-vault-routes.js";
 
 test("evidence filenames are normalized and cannot retain path traversal", () => {
-  assert.equal(sanitizeEvidenceFileName("../../meter-reading.pdf"), "__/__/meter-reading.pdf");
+  assert.equal(sanitizeEvidenceFileName("../../meter-reading.pdf"), "_.._meter-reading.pdf");
   assert.equal(sanitizeEvidenceFileName("   "), null);
   assert.equal(sanitizeEvidenceFileName("x".repeat(181)), null);
 });
