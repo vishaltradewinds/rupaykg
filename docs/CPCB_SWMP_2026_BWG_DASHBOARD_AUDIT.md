@@ -4,7 +4,7 @@
 **Scope:** Repository source review of RupayKg's stakeholder dashboard and CPCB SWM BWG applicant workflow.  
 **Authoritative comparison:** CPCB's current SWM 2026 BWG user guide, read on 2026-10-18: https://swmp.cpcb.gov.in/en/user-guide  
 **Current portal:** https://swm.cpcb.gov.in/  
-**Status:** Source-level audit plus implementation changes on branch `audit/cpcb-bwg-dashboard-conformance`. Not a live production test, legal certification, or CPCB integration test.
+**Status:** Source-level audit and workflow improvements merged to main via PR #26 (commit `8b5b9071d47e0d35355d083c0e70e979873e26e5`); CI #1322 passed. Not a live production test, legal certification, or CPCB integration test.
 
 ## Executive finding
 
@@ -59,7 +59,7 @@ Official guide evidence: BWG prerequisites and registration sections 2–5; corr
 - Made explicit organization headers on SWM calls survive the shared API helper instead of being overwritten by localStorage's active organization.
 - Added validator tests for canonical BWG checklist, invalid status values, local-stage/status separation, bad observations and spoofed checklist labels.
 
-These changes are code-level work only until CI passes and the branch is reviewed/merged. They do not add document upload, a real CPCB portal draft, official status verification, fee/payment, submission, certificate issuance, grievances or event-intimation submission.
+These changes are merged code-level work; CI #1322 passed migration validation, typecheck/build, browser smoke, tests including disposable PostgreSQL acceptance, and production container build. They do not add document upload, a real CPCB portal draft, official status verification, fee/payment, submission, certificate issuance, grievances or event-intimation submission.
 
 ## Updated audit posture
 
