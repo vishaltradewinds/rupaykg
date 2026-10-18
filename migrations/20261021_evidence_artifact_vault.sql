@@ -87,7 +87,7 @@ begin
   end if;
   return new;
 end;
-$;
+$$;
 create trigger evidence_vault_pointer_immutable
 before update on evidence
 for each row execute function prevent_evidence_vault_pointer_mutation();
