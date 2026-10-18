@@ -17,6 +17,7 @@ alter table cpcb_swm_stakeholder_workspaces
       'CLOSED_LOCAL',
       'UNRESOLVED'
     )),
+  add column cpcb_status_note text,
   add column cpcb_reported_status text not null default 'NOT_REPORTED'
     check (cpcb_reported_status in (
       'NOT_REPORTED',
