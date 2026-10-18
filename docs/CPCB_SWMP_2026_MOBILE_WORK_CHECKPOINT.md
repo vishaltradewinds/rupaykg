@@ -49,3 +49,14 @@
 - Guardian authenticated session remains unresolved.
 - Real WA03.001 live MRV + Hedera/Mirror Node persisted acceptance remains unverified.
 - Production certification/release remains **HOLD**.
+
+
+## Update — exact portal workflow alignment (2026-10-18)
+
+- Rechecked the live official portal and current published user guide: https://swmp.cpcb.gov.in/en and https://swmp.cpcb.gov.in/en/user-guide.
+- Added docs/CPCB_SWMP_2026_WORKFLOW_CONFORMANCE_MATRIX.md on this branch (commit 9e1ec0bc95676bfe0f0b534f5e7791cf361eedc9). It spells out the BWG applicant journey, Waste Facility journey, ULB/DP/GP authority review, DM amendment/appeal path, SPCB/PCC oversight, grievance/event-intimation workflows, recurring reporting duties, evidence states and implementation gates.
+- The matrix is explicit about what is shown in the portal guide versus what needs official confirmation. No API, field schema or machine interface is assumed.
+- Code review identified a concrete trust gap in apps/src/statutory-routes.ts: the external-registration route accepts a user-supplied reference and REGISTERED_EXTERNALLY status without independently verifying it against an official source. This should remain USER_REPORTED/UNVERIFIED until evidence verification is implemented and tested.
+- Current repo review shows internal BWG assessment and statutory applicability routes, plus separate Guardian/Hedera MRV support. These are not equivalent to CPCB application submission, official status synchronization, return submission, or official certificate exchange.
+- This remains a documentation/specification change only. No application code, database schema/migration, local working tree, live service, or deployment was changed. Local tests have not been run for this update. PR #18 remains draft and unmerged.
+- Next code step when the PC/local tree is available: inspect actual migrations and tests, map each matrix row to existing entities, correct external-registration trust state, then implement a minimal additive workflow mirror with source evidence, versioned states and tests. Do not create duplicate schema before inspection. Keep release HOLD until tests, authorized interface confirmation and separate Guardian/WA03.001 acceptance gates pass.
