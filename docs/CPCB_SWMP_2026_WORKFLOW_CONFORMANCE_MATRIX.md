@@ -48,18 +48,29 @@ The official user guide is the source for portal screens/actions. The SWM Rules,
 7. On APPROVED, capture the official registration certificate and its verified scope/validity. On rejection, preserve reason and follow portal's amendment or Level 1 appeal path; guide says amendment/appeal is reviewed by DM.
 8. Support facility dashboard, grievance and event-intimation workflows exactly as applicant lane A. Do not treat facility approval as proof of each later waste receipt or processing batch.
 
-### C. ULB / District Panchayat / Gram Panchayat — authority lane
+### C1. Urban authority rail — ULB → Ward → generator/collector/facility
 
-The portal manual describes authority accounts and jurisdictional review. RupayKg must not impersonate authority users or perform decisions.
+- Urban governance is anchored to the competent Urban Local Body (Municipal Corporation, Municipal Council or Nagar Panchayat) and its wards. Do not substitute Gram Panchayat or village hierarchy in an urban tenant.
+- The CPCB portal ULB role covers jurisdictional review of BWG and waste-facility applications, official approve/correction/reject actions with remarks, dashboard visibility, grievances and event intimations as defined by the portal.
+- RupayKg's urban operational workflow should connect generator/site → ward and collection route → collector/vehicle → transfer/MRF or registered facility → receipt/processing evidence → ward/ULB reconciliation. Treat daily/high-frequency collection, route/vehicle/scale evidence, four-stream segregation, facility capacity and ward-level exceptions as urban operating concerns; use only fields and duties applicable to the actual service and rules.
+- ULB review, field verification, regulatory decisions and official EBWGR certificate issuance remain authority-controlled. RupayKg can prepare evidence and reconcile quantities but cannot issue the official certificate or claim that a portal decision occurred without official evidence.
 
-- Authority account onboarding/login and user permissions remain within CPCB's portal process.
-- Review BWG/facility applications within assigned jurisdiction.
-- The guide describes authority actions including approve, correction requested, reject with a rejection category and remarks, and optional inspection evidence/geolocation/site photos/videos.
-- Preserve official decision, reviewer/authority identity as displayed, jurisdiction, remarks, decision time and supplied supporting evidence.
-- Dashboard must distinguish BWG registration status and facility-wise registration status.
-- Grievances assigned to authority users can be reviewed/responded to within the official portal; event intimation can be submitted and tracked there.
-- Only expose an authority-side workflow to RupayKg if a participating authority has explicitly authorized it and its role/data permissions are established. Otherwise offer read-only evidence/reporting support.
+### C2. Rural authority rail — Gram Panchayat / District Panchayat → village / block
 
+- Rural governance is anchored to the actual Rural Local Body (Gram Panchayat and/or District Panchayat as applicable to the CPCB portal role and jurisdiction). Preserve the hierarchy Gram Panchayat → village, with District Panchayat / district-level oversight where applicable. Do not route rural cases through a ULB or ward by default.
+- The official CPCB guide explicitly provides separate Gram Panchayat and District Panchayat account/workflow roles. Rural Local Body registration is reviewed by the District Magistrate; the applicable role's exact screens, fields and hand-offs must follow the current portal guide, not an urban assumption.
+- RupayKg's rural operational workflow should connect farmer/household/FPO/SHG or other verified source → village collection/aggregation point → weigh/quality and custody evidence → rural carrier or bulk aggregator → eligible processor/biomass buyer → receipt/processing evidence → Gram Panchayat/village-cluster reconciliation and payout where contracted.
+- Rural dashboards should emphasize village and collection-centre inventory, seasonal availability, dispersed pickup, aggregation, moisture/quality where relevant, transport consolidation, producer/FPO participation and village-level exceptions. Crop residue, biomass, animal waste, biochar, compost, biogas and carbon activities are RupayKg rural modules only where the material, activity and claim are lawful and eligible; do not automatically label every biomass movement as CPCB SWM 2026 compliance or EBWGR evidence.
+- The CPCB SWM 2026 rural-local-body workflow and any separate biomass/carbon programme must be cross-linked only where the legal scope, waste stream, receiving party, authority and evidence chain match. Keep separate regulatory classifications and registries where they do not match.
+
+### C3. Shared authority safeguards and symmetry
+
+- Urban and rural rails must have equal evidence integrity, auditability, exception handling, role-based access, grievance/event tracking and fail-closed status semantics. Symmetry means equivalent governance quality, not identical screens, metrics or collection methods.
+- Authority account onboarding, login, jurisdiction and permissions remain within CPCB's portal process. RupayKg must not impersonate authority users or perform official decisions.
+- Preserve official decision, reviewer/authority identity as displayed, jurisdiction, remarks, decision time and supplied supporting evidence. Dashboard values must identify their source and last-confirmed timestamp.
+- Expose an authority-side workflow in RupayKg only when the participating authority has explicitly authorized it and role/data permissions are established. Otherwise offer readiness, evidence, reporting and reconciliation support only.
+- Never infer a local body's jurisdiction from a place name alone; require a verified organization/jurisdiction mapping and retain its source.
+ 
 ### D. District Magistrate (DM) — appeal/amendment lane
 
 - The guide describes DM onboarding through the appropriate department/CPCB and jurisdiction mapping.
