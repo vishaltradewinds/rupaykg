@@ -1,7 +1,7 @@
 # CPCB SWM 2026 — RupayKg Stakeholder Workflows and Implementation Acceptance
 
 **Prepared:** 2026-10-18  
-**Status:** Implementation specification and resume checkpoint; not evidence of completed application code, legal certification, or CPCB integration.  
+**Status:** First functional stakeholder-readiness slice implemented and merged; further operational workflows, live deployment, legal certification, and CPCB integration remain unverified / incomplete.  
 **Repository:** `vishaltradewinds/rupaykg`  
 **Branch:** `feature/cpcb-swm-stakeholder-workflows`  
 **Authoritative portal guide:** https://swmp.cpcb.gov.in/en/user-guide  
@@ -113,7 +113,10 @@ Source: SWM Rules, 2026 and CPCB SWM portal/user guide. Recheck amendments, norm
 
 ## 7. Current verified state and next actions
 
-- Repository already has general workspaces for Operations, MRV & Evidence, Compliance & EPR, Registry and reporting, plus role/geography checks and a BWG-named compatibility route module. The existing BWG route module currently registers EPR-return routes and EPR obligations; its name alone does not establish that CPCB SWM stakeholder workflows are implemented.
+- Existing general workspaces include Operations, MRV & Evidence, Compliance & EPR, Registry and reporting. The existing BWG-named compatibility route module registers EPR-return routes and EPR obligations; its name alone did not establish CPCB SWM workflow support.
+- **Implemented and merged in PR #25:** `docs/CPCB_SWMP_2026_STAKEHOLDER_WORKFLOWS.md`; domain helper `packages/domain/src/cpcb-swm.ts`; domain tests `packages/domain/src/cpcb-swm.test.ts`; migration `migrations/20261018_cpcb_swm_stakeholder_workspaces.sql`; authenticated API `apps/src/cpcb-swm-routes.ts`; API validation tests `apps/src/cpcb-swm-routes.test.ts`; compliance-workspace UI and mobile styles in `apps/web/src/main.tsx` and `apps/web/src/styles.css`.
+- The first slice persists stakeholder preparation records, BWG sourced-observation pre-check data, checklist states, optional user-entered CPCB references, due dates and notes. API enforces verified organization membership, read/write permission and geography scope; state-changing writes create audit events. User-provided CPCB references remain `USER_REPORTED_UNVERIFIED`; applicants cannot self-mark checklist evidence `VERIFIED`.
+- **PR #25 merged** to `main` as commit `6b8dc1616e465080df7c2eb7164c85d896ce25c8`. Latest CI run #1319 passed migration validation, database migration execution, typecheck, production build, browser smoke test, tests including disposable PostgreSQL acceptance, and production container build. This verifies CI behavior only; it does not establish that the production service has been deployed or that a live pilot has been accepted.
 - Existing documentation: `docs/CPCB_SWMP_2026_MRV_MAPPING.md`, `docs/CPCB_SWMP_2026_WORKFLOW_CONFORMANCE_MATRIX.md`, `docs/CPCB_SWMP_2026_MOBILE_WORK_CHECKPOINT.md`.
 - API discovery checkpoint: PR #24, https://github.com/vishaltradewinds/rupaykg/pull/24 (merged). It documents official API discovery and keeps production on HOLD.
 - Official CPCB SWM guide: https://swmp.cpcb.gov.in/en/user-guide
