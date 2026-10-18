@@ -113,6 +113,19 @@ Source: SWM Rules, 2026 and CPCB SWM portal/user guide. Recheck amendments, norm
 
 ## 7. Current verified state and next actions
 
+### BWG dashboard audit checkpoint — 2026-10-18
+
+- Official CPCB SWM 2026 BWG guide reviewed: https://swmp.cpcb.gov.in/en/user-guide.
+- Audit report: [docs/CPCB_SWMP_2026_BWG_DASHBOARD_AUDIT.md](https://github.com/vishaltradewinds/rupaykg/blob/main/docs/CPCB_SWMP_2026_BWG_DASHBOARD_AUDIT.md).
+- PR #26 merged: https://github.com/vishaltradewinds/rupaykg/pull/26.
+- Merge commit: `8b5b9071d47e0d35355d083c0e70e979873e26e5`.
+- CI run #1322 passed: migration validation and database migration execution, typecheck, build, browser smoke, tests including disposable PostgreSQL acceptance, and production container build.
+- Improvements include separate local workflow stage vs user-reported CPCB status, status/source/note history, independent provenance for each BWG eligibility measure, strict validation on POST and PATCH, canonical server-side checklist enforcement, and explicit organization-header preservation.
+- Conformance remains PARTIAL. Still missing: real document upload/versioning, versioned application packet and self-declaration, dedicated correction/amendment/appeal/grievance/event case records, linked four-stream custody chain and reporting preparation, route-level authorization/tenant-isolation tests, production deployment verification and pilot acceptance.
+- No CPCB API has been confirmed or used; no OTP/CAPTCHA, payment, official submission or certificate action was performed. Production remains HOLD.
+
+## 8. Current verified state and next actions
+
 - Existing general workspaces include Operations, MRV & Evidence, Compliance & EPR, Registry and reporting. The existing BWG-named compatibility route module registers EPR-return routes and EPR obligations; its name alone did not establish CPCB SWM workflow support.
 - **Implemented and merged in PR #25:** `docs/CPCB_SWMP_2026_STAKEHOLDER_WORKFLOWS.md`; domain helper `packages/domain/src/cpcb-swm.ts`; domain tests `packages/domain/src/cpcb-swm.test.ts`; migration `migrations/20261018_cpcb_swm_stakeholder_workspaces.sql`; authenticated API `apps/src/cpcb-swm-routes.ts`; API validation tests `apps/src/cpcb-swm-routes.test.ts`; compliance-workspace UI and mobile styles in `apps/web/src/main.tsx` and `apps/web/src/styles.css`.
 - The first slice persists stakeholder preparation records, BWG sourced-observation pre-check data, checklist states, optional user-entered CPCB references, due dates and notes. API enforces verified organization membership, read/write permission and geography scope; state-changing writes create audit events. User-provided CPCB references remain `USER_REPORTED_UNVERIFIED`; applicants cannot self-mark checklist evidence `VERIFIED`.
