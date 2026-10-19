@@ -1,6 +1,6 @@
 # AI-Assisted Unstructured Log Intake — Safe Middleware Boundary
 
-**Status:** Feature-branch implementation scaffold. The endpoint is not a production AI integration until an approved extraction provider is configured and the release gates below pass.
+**Status:** Feature-branch implementation with an opt-in OpenAI-compatible provider adapter. No provider is selected or contacted unless server-side base URL and model settings are explicitly configured. This is not production-certified.
 
 ## Data flow
 
@@ -47,12 +47,12 @@ The API validates the provider output server-side. The confidence value is model
 
 ## Fail-closed behaviour
 
-- The current server registration does not configure a provider. The endpoint therefore captures the original source and returns `AI_PROVIDER_NOT_CONFIGURED`; it does not pretend AI extraction ran.
+- Provider configuration is opt-in through `RUPAYKG_AI_BASE_URL` and `RUPAYKG_AI_MODEL`. With either missing/invalid, the endpoint captures the original source and returns `AI_PROVIDER_NOT_CONFIGURED`; it does not pretend AI extraction ran.
 - Provider failure returns an error with the source evidence ID retained.
 - Invalid model output returns `AI_EXTRACTION_SCHEMA_INVALID`; it is not stored as a valid proposal.
 - Schema-valid output is still `SCHEMA_VALIDATED_NOT_FACT_VERIFIED` and `PENDING_HUMAN_REVIEW`.
 - No automatic measurement insert/update, activity completion, verification approval, carbon calculation, credit creation, Guardian submission or Hedera anchoring occurs.
-- Raw logs are untrusted data. The future provider adapter must delimit them as data, ignore instructions embedded in logs, request schema-constrained output, use a fixed/versioned prompt, set provider timeouts, avoid logging raw content, and never have direct database credentials or mutation tools.
+- The adapter sends logs as JSON data and explicitly instructs the model to ignore embedded instructions; it requests JSON output, pins provider/model/prompt identifiers in proposal metadata, uses a 20-second timeout, caps provider input at 20,000 characters and provider response bytes at 128 KiB, and does not log raw content. Remote providers require HTTPS; plain HTTP is accepted only for loopback development endpoints. The adapter has no database credentials or mutation tools.
 - The source log limit is 1 MiB. The evidence vault's established file-size limit remains 5 MiB.
 
 ## Required next gates
