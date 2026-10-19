@@ -47,12 +47,12 @@ The API validates the provider output server-side. The confidence value is model
 
 ## Fail-closed behaviour
 
-- Provider configuration is opt-in through `RUPAYKG_AI_BASE_URL` and `RUPAYKG_AI_MODEL`. With either missing/invalid, the endpoint captures the original source and returns `AI_PROVIDER_NOT_CONFIGURED`; it does not pretend AI extraction ran.
+- Provider configuration is opt-in through `RUPAYKG_AI_BASE_URL`, `RUPAYKG_AI_MODEL`, and a valid encrypted runtime prompt (`RUPAYKG_AI_PROMPT_CIPHERTEXT` plus `RUPAYKG_AI_PROMPT_KEY_HEX`). If any are missing/invalid, the endpoint captures the original source and returns `AI_PROVIDER_NOT_CONFIGURED`; it does not pretend AI extraction ran.
 - Provider failure returns an error with the source evidence ID retained.
 - Invalid model output returns `AI_EXTRACTION_SCHEMA_INVALID`; it is not stored as a valid proposal.
 - Schema-valid output is still `SCHEMA_VALIDATED_NOT_FACT_VERIFIED` and `PENDING_HUMAN_REVIEW`.
 - No automatic measurement insert/update, activity completion, verification approval, carbon calculation, credit creation, Guardian submission or Hedera anchoring occurs.
-- The adapter sends logs as JSON data and explicitly instructs the model to ignore embedded instructions; it requests JSON output, pins provider/model/prompt identifiers in proposal metadata, uses a 20-second timeout, caps provider input at 20,000 characters and provider response bytes at 128 KiB, and does not log raw content. Remote providers require HTTPS; plain HTTP is accepted only for loopback development endpoints. The adapter has no database credentials or mutation tools.
+- The adapter sends logs as JSON data and the encrypted runtime prompt instructs the model to ignore embedded instructions; it requests JSON output, pins provider/model/prompt identifiers in proposal metadata, uses a 20-second timeout, caps provider input at 20,000 characters and provider response bytes at 128 KiB, and does not log raw content. Remote providers require HTTPS; plain HTTP is accepted only for loopback development endpoints. The adapter has no database credentials or mutation tools.
 - The source log limit is 1 MiB. The evidence vault's established file-size limit remains 5 MiB.
 
 ## Required next gates
@@ -63,3 +63,18 @@ The API validates the provider output server-side. The confidence value is model
 4. Add a human-review queue that compares every extracted field against the original artifact and requires an authorized reviewer before any domain measurement is created.
 5. Add prompt-injection, oversized-input, Unicode, data leakage and cross-organization isolation tests.
 6. Keep Guardian/Hedera trust gates separate. A database hash is an integrity aid, not proof of Hedera consensus. The existing Shakti production gate still requires live Guardian VERIFIED → Hedera consensus → Mirror Node verification and persisted provenance.
+
+
+## Protected runtime prompt configuration
+
+The extraction system prompt is no longer embedded in the provider source. The provider is disabled unless the operator supplies a valid AES-256-GCM encrypted prompt and a 32-byte key through runtime configuration:
+
+- `RUPAYKG_AI_PROMPT_CIPHERTEXT`: `v1:<12-byte-IV-hex>:<16-byte-auth-tag-hex>:<ciphertext-hex>`
+- `RUPAYKG_AI_PROMPT_KEY_HEX`: 32-byte key represented as 64 hexadecimal characters
+- `RUPAYKG_AI_PROMPT_VERSION`: version identifier persisted with the proposal
+
+Use a private prompt file stored outside the repository and `scripts/encrypt-ai-prompt.mjs` to create the ciphertext. Configure the key and ciphertext using the deployment's runtime secret mechanism; where supported, keep them under separate access controls. Never commit either value, the plaintext prompt, or a key-generation output. Rotate the key and ciphertext together when the prompt changes, and increment the prompt version. The utility writes only the ciphertext payload to standard output.
+
+AES-GCM authenticates encrypted configuration at rest/in transit between secret stores and the process; it does not protect against a compromised runtime, a person authorized to inspect process memory, or a deployment administrator who can access both key and ciphertext. JavaScript cannot guarantee secure zeroization of strings. Assigning `null` or requesting garbage collection is not a reliable memory wipe, so this implementation makes no such claim. This is defense-in-depth, not a guarantee that prompts are impossible to copy.
+
+The encrypted prompt must be operator-authored and reviewed against the strict output schema. It must not embed claims that schema-valid data is fact-verified, CPCB-approved, or sufficient to issue credits. No inference provider is configured by this code change, and no prompt secret or model is deployed automatically.
