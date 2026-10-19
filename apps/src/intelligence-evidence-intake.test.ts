@@ -26,6 +26,8 @@ test("accepts a well-formed extraction only as a review-only proposal", () => {
 test("rejects type hallucinations instead of coercing numeric strings", () => {
   assert.equal(validateWasteLogExtraction({ ...valid, quantity: "125.5" }), null);
   assert.equal(validateWasteLogExtraction({ ...valid, confidence: "0.9" }), null);
+  assert.equal(validateWasteLogExtraction({ ...valid, quantity: 12, unit: null }), null);
+  assert.equal(validateWasteLogExtraction({ ...valid, quantity: null, unit: "kg" }), null);
 });
 
 test("rejects unknown keys, invalid units and out-of-range confidence", () => {
