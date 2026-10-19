@@ -45,6 +45,7 @@ export async function registerIntelligenceRoutes(
     if (!UUID.test(activityId) || !rawLog.trim()) {
       return reply.code(400).send({ error: "Valid activityId and non-empty rawLog are required", code: "AI_INTAKE_FIELDS_REQUIRED" });
     }
+    if (rawLog.includes("\u0000") || rawLog.includes("\ufffd")) return reply.code(400).send({ error: "rawLog must be valid text without NUL or replacement characters", code: "AI_INTAKE_SOURCE_INVALID_TEXT" });
     if (Buffer.byteLength(rawLog, "utf8") > MAX_LOG_BYTES) {
       return reply.code(413).send({ error: "rawLog exceeds 1 MiB", code: "AI_INTAKE_SOURCE_TOO_LARGE" });
     }
