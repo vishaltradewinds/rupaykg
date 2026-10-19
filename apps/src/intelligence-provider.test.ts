@@ -33,7 +33,7 @@ function testPromptConfig(): { RUPAYKG_AI_PROMPT_CIPHERTEXT: string; RUPAYKG_AI_
 }
 
 function withProviderEnv<T>(values: Record<string, string | undefined>, run: () => Promise<T>): Promise<T> {
-  const configured = { ...testPromptConfig(), ...values };
+  const configured: Record<string, string | undefined> = { ...testPromptConfig(), ...values };
   const previous = new Map(envNames.map((name) => [name, process.env[name]]));
   for (const name of envNames) {
     if (configured[name] === undefined) delete process.env[name];
