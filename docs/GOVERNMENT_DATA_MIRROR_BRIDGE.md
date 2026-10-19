@@ -33,7 +33,7 @@ Configure:
 - `RUPAYKG_GOV_BRIDGE_HMAC_SECRET`
 - `RUPAYKG_GOV_BRIDGE_AUTHORITY_CODES`: comma-separated allow-listed authority codes.
 
-The endpoint enforces a 1 MiB request limit, bounded record count/length, timestamp freshness, constant-time HMAC comparison, authority allow-list, and idempotency by authority + batch ID. Reuse of a batch ID with different content returns conflict. Accepted payloads are persisted in `gov_bridge_inbox` and return HTTP 202; repeat delivery of the same batch is idempotent.
+The endpoint enforces a 1 MiB request limit, bounded record count/length, timestamp freshness, constant-time HMAC comparison, authority allow-list, and idempotency by authority + batch ID. Reuse of a batch ID with different content returns conflict. Accepted payloads are persisted in `async_mirror_inbox` and return HTTP 202; repeat delivery of the same batch is idempotent.
 
 ## What happens after receipt
 
