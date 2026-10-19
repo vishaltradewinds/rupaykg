@@ -29,14 +29,21 @@ test("production config rejects missing or unsafe production requirements", () =
     [{ ...baseEnv, NODE_ENV: "development" }, /NODE_ENV must be production/],
     [{ ...baseEnv, DATABASE_URL: "postgresql://localhost/rupaykg" }, /must not target localhost/],
     [{ ...baseEnv, DATABASE_SSL: "false" }, /DATABASE_SSL must be require/],
-    [{ ...baseEnv, DATABASE_CA_CERT: "" }, /DATABASE_CA_CERT must contain a PEM certificate/],
+    [{ ...baseEnv, DATABASE_CA_CERT: "not-a-certificate" }, /DATABASE_CA_CERT must contain a PEM certificate when provided/],
     [{ ...baseEnv, RUPAYKG_AUTH_MODE: "session" }, /RUPAYKG_AUTH_MODE must be real/],
     [{ ...baseEnv, RUPAYKG_AUTH_MODE: "" }, /RUPAYKG_AUTH_MODE must be real/],
     [{ ...baseEnv, RUPAYKG_ALLOWED_ORIGINS: "http://app.rupaykg.example" }, /origin must use HTTPS/],
     [{ ...baseEnv, RUPAYKG_ALLOWED_ORIGINS: "https://app.rupaykg.example/path" }, /must not contain path/],
     [{ ...baseEnv, RUPAYKG_SYNTHETIC_DATA: "true" }, /synthetic data is forbidden/],
     [{ ...baseEnv, VITE_RUPAYKG_SESSION_TOKEN: "not-allowed" }, /VITE_RUPAYKG_SESSION_TOKEN must not be provided/],
+    [{ ...baseEnv, DATABASE_URL: "postgresql://db.example.com/rupaykg?sslmode=require" }, /remove PostgreSQL SSL query parameters/],
   ] as const;
 
   for (const [env, expected] of cases) assert.throws(() => readProductionConfig(env), expected);
+});
+
+test("production config allows the system trusted CA store when no custom CA is supplied", () => {
+  const config = readProductionConfig({ ...baseEnv, DATABASE_CA_CERT: "" });
+  assert.equal(config.databaseSsl, "require");
+  assert.equal(config.databaseCaCert, "");
 });

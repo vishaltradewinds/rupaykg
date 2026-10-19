@@ -37,16 +37,36 @@ describe("production configuration", () => {
     assert.throws(() => readProductionConfig({ ...valid, DATABASE_URL: "" }), /DATABASE_URL is required/);
   });
 
-  it("fails closed for local database targets", () => {
-    assert.throws(() => readProductionConfig({ ...valid, DATABASE_URL: "postgresql://localhost:5432/rupaykg" }), /must not target localhost/);
+  it("fails closed for local database targets including IPv6 and trailing-dot aliases", () => {
+    for (const DATABASE_URL of [
+      "postgresql://localhost:5432/rupaykg",
+      "postgresql://localhost.:5432/rupaykg",
+      "postgresql://127.0.0.1:5432/rupaykg",
+      "postgresql://[::1]:5432/rupaykg",
+    ]) {
+      assert.throws(() => readProductionConfig({ ...valid, DATABASE_URL }), /must not target localhost/, DATABASE_URL);
+    }
   });
 
   it("requires TLS database configuration", () => {
     assert.throws(() => readProductionConfig({ ...valid, DATABASE_SSL: "false" }), /DATABASE_SSL must be require/);
   });
 
-  it("requires a production CA certificate for PostgreSQL TLS", () => {
-    assert.throws(() => readProductionConfig({ ...valid, DATABASE_CA_CERT: "" }), /DATABASE_CA_CERT must contain a PEM certificate/);
+  it("allows the system trusted CA store when no custom CA is supplied", () => {
+    const config = readProductionConfig({ ...valid, DATABASE_CA_CERT: "" });
+    assert.equal(config.databaseSsl, "require");
+    assert.equal(config.databaseCaCert, "");
+  });
+
+  it("rejects malformed custom CA material", () => {
+    assert.throws(() => readProductionConfig({ ...valid, DATABASE_CA_CERT: "not-a-certificate" }), /DATABASE_CA_CERT must contain a PEM certificate when provided/);
+  });
+
+  it("rejects SSL query parameters that could override certificate verification", () => {
+    assert.throws(
+      () => readProductionConfig({ ...valid, DATABASE_URL: "postgresql://prod.example.invalid:5432/rupaykg?sslmode=require" }),
+      /remove PostgreSQL SSL query parameters/,
+    );
   });
 
   it("requires real authentication", () => {
