@@ -201,10 +201,15 @@ export function evaluateBmWa03002Applicability(input: BmWa03002ApplicabilityInpu
   if (input.sector.trim().toLowerCase() !== "waste handling and disposal") failures.push("sector must be Waste Handling and Disposal");
   if (!input.activity.trim()) unresolved.push("activity description is required");
   if (input.reducesOrganicWasteRecycling === true) failures.push("project activity must not reduce organic-waste recycling");
+  else if (input.reducesOrganicWasteRecycling === null) unresolved.push("effect on organic-waste recycling is unresolved");
   if (input.combinedWithAnotherApprovedMethodology === true) failures.push("BM WA03.002 is not applicable in combination with another approved methodology");
+  else if (input.combinedWithAnotherApprovedMethodology === null) unresolved.push("combination with another approved methodology is unresolved");
   if (input.managementDeliberatelyChangedToIncreaseMethane === true) failures.push("SWDS management must not be deliberately changed to increase methane generation");
+  else if (input.managementDeliberatelyChangedToIncreaseMethane === null) unresolved.push("whether SWDS management was changed to increase methane is unresolved");
   if (input.baselineScenarioConfirmed !== true) unresolved.push("the methodology's required baseline scenario has not been confirmed");
+  const allowedEndUses = new Set(["FLARING", "ELECTRICITY", "HEAT_ALLOWED_EQUIPMENT", "NATURAL_GAS_NETWORK", "DEDICATED_PIPELINE", "TRUCKED_COMPRESSED_OR_LIQUEFIED_LFG"]);
   if (!Array.isArray(input.endUses) || input.endUses.length === 0) unresolved.push("at least one permitted landfill-gas end use must be evidenced");
+  else if (input.endUses.some((use) => !allowedEndUses.has(use))) failures.push("one or more landfill-gas end uses are not supported by the current screen");
 
   if (input.capturePath === "NEW_CAPTURE_SYSTEM") {
     if (input.noPriorCaptureSystemInstalledOrPlanned === null) unresolved.push("absence of a prior or planned capture system is unresolved");
