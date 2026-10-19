@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { credentialDisclosure } from "./registry-routes.js";
 
 const credentialTransitions: Record<string, string[]> = {
   ELIGIBLE: ["ISSUED"],
@@ -42,4 +43,11 @@ test("settlement lifecycle requires authorization, execution and reconciliation"
 test("terminal registry and settlement states cannot transition", () => {
   assert.equal(canTransition(credentialTransitions, "RETIRED", "ACTIVE"), false);
   assert.equal(canTransition(settlementTransitions, "SETTLED", "FAILED"), false);
+});
+
+
+test("registry disclosure never represents an internal MRV credential as an official CCC", () => {
+  assert.equal(credentialDisclosure.credentialOrigin, "RUPAYKG_INTERNAL_MRV");
+  assert.equal(credentialDisclosure.officialCcc, false);
+  assert.match(credentialDisclosure.disclosure, /not an official Carbon Credit Certificate/);
 });
