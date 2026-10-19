@@ -16,6 +16,7 @@ import { registerIntelligenceRoutes } from "./intelligence-routes.js";
 import { createConfiguredWasteLogExtractionProvider } from "./intelligence-provider.js";
 import { registerMrvRoutes } from "./mrv-routes.js";
 import { registerEvidenceVaultRoutes } from "./evidence-vault-routes.js";
+import { registerGovBridgeRoutes } from "./gov-bridge-routes.js";
 import { registerPlatformAdminRoutes } from "./platform-admin-routes.js";
 
 const app = Fastify({ logger: true });
@@ -101,6 +102,7 @@ await registerCpcbSwmRoutes(app, pool);
 await registerIntelligenceRoutes(app, pool, createConfiguredWasteLogExtractionProvider());
 await registerMrvRoutes(app, pool);
 await registerEvidenceVaultRoutes(app, pool);
+await registerGovBridgeRoutes(app, pool);
 await registerPlatformAdminRoutes(app, pool);
 
 if (existsSync(webRoot)) app.get("/*", async (_request, reply) => reply.type("text/html; charset=utf-8").send(readFileSync(resolve(webRoot, "index.html"), "utf8")));
