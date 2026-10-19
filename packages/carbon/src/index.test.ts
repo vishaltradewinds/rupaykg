@@ -204,3 +204,27 @@ test("BM WA03.002 existing-system pathway requires historical data when gas cann
   assert.equal(result.screeningStatus, "FAIL");
   assert.ok(result.reasons.some(reason => reason.includes("historical capture data is required")));
 });
+
+
+test("BM WA03.002 screen does not treat missing safeguards as false", () => {
+  const result = evaluateBmWa03002Applicability({
+    sector: "Waste Handling and Disposal",
+    activity: "Capture landfill gas",
+    capturePath: "NEW_CAPTURE_SYSTEM",
+    noPriorCaptureSystemInstalledOrPlanned: true,
+    increasedRecoveryRateOrChangedUse: null,
+    preProjectUse: "UNKNOWN",
+    capturedAmountCanBeSeparatedFromExistingSystem: null,
+    existingSystemEfficiencyImpactedByProject: null,
+    historicalCaptureDataAvailable: null,
+    endUses: ["FLARING"],
+    reducesOrganicWasteRecycling: null,
+    combinedWithAnotherApprovedMethodology: null,
+    managementDeliberatelyChangedToIncreaseMethane: null,
+    baselineScenarioConfirmed: true,
+  });
+  assert.equal(result.screeningStatus, "UNRESOLVED");
+  assert.ok(result.reasons.some(reason => reason.includes("recycling is unresolved")));
+  assert.ok(result.reasons.some(reason => reason.includes("combination with another")));
+  assert.ok(result.reasons.some(reason => reason.includes("increase methane is unresolved")));
+});
