@@ -228,3 +228,27 @@ test("BM WA03.002 screen does not treat missing safeguards as false", () => {
   assert.ok(result.reasons.some(reason => reason.includes("combination with another")));
   assert.ok(result.reasons.some(reason => reason.includes("increase methane is unresolved")));
 });
+
+
+test("BM WA03.002 screen rejects malformed runtime inputs without throwing", () => {
+  const result = evaluateBmWa03002Applicability({
+    sector: null as never,
+    activity: null as never,
+    capturePath: "NEW_CAPTURE_SYSTEM",
+    noPriorCaptureSystemInstalledOrPlanned: true,
+    increasedRecoveryRateOrChangedUse: null,
+    preProjectUse: "UNKNOWN",
+    capturedAmountCanBeSeparatedFromExistingSystem: null,
+    existingSystemEfficiencyImpactedByProject: null,
+    historicalCaptureDataAvailable: null,
+    endUses: null as never,
+    reducesOrganicWasteRecycling: false,
+    combinedWithAnotherApprovedMethodology: false,
+    managementDeliberatelyChangedToIncreaseMethane: false,
+    baselineScenarioConfirmed: true,
+  });
+  assert.equal(result.screeningStatus, "FAIL");
+  assert.ok(result.reasons.some(reason => reason.includes("sector")));
+  assert.ok(result.reasons.some(reason => reason.includes("activity description")));
+  assert.ok(result.reasons.some(reason => reason.includes("end use")));
+});
