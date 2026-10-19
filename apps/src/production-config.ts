@@ -30,8 +30,11 @@ function productionDatabaseUrl(value: string): string {
 }
 
 function productionCaCert(value: string): string {
-  if (value.includes("BEGIN CERTIFICATE") && value.includes("END CERTIFICATE")) return value;
-  throw new Error("PRODUCTION_CONFIG_INVALID: DATABASE_CA_CERT must contain a PEM certificate for external PostgreSQL TLS");
+  // An explicit CA is optional: Node can validate against its trusted CA store.
+  // If one is supplied, reject malformed material rather than silently ignoring it.
+  if (!value) return "";
+  if (value.includes("-----BEGIN CERTIFICATE-----") && value.includes("-----END CERTIFICATE-----")) return value;
+  throw new Error("PRODUCTION_CONFIG_INVALID: DATABASE_CA_CERT must contain a PEM certificate when provided");
 }
 
 function origins(value: string): string[] {
