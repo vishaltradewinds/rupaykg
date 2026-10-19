@@ -17,7 +17,15 @@ export function sanitizeEvidenceFileName(value:string):string|null {
  return !name||name.length>180||name==="."||name===".."?null:name;
 }
 export function decodeEvidenceBase64(value:string):Buffer|null {
- if(!value||value.length>Math.ceil(MAX_BYTES*4/3)+8||value.length%4!==0||/[^A-Za-z0-9+/=]/.test(value))return null;
+ // Bound the encoded input before scanning it; a regex over multi-megabyte
+ // strings can throw RangeError on some Node/V8 builds instead of rejecting it.
+ const maxEncodedLength=Math.ceil(MAX_BYTES/3)*4;
+ if(!value||value.length>maxEncodedLength||value.length%4!==0)return null;
+ for(let i=0;i<value.length;i++){
+  const c=value.charCodeAt(i);
+  const valid=(c>=65&&c<=90)||(c>=97&&c<=122)||(c>=48&&c<=57)||c===43||c===47||c===61;
+  if(!valid)return null;
+ }
  const bytes=Buffer.from(value,"base64");
  return !bytes.length||bytes.length>MAX_BYTES||bytes.toString("base64")!==value?null:bytes;
 }
