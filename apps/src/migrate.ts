@@ -3,14 +3,30 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
+import { readProductionConfig } from "./production-config.js";
 
-const databaseUrl = process.env.DATABASE_URL;
+// In production, validate the entire runtime contract before the first database
+// connection or schema mutation. The API server and migration runner must share
+// the same database target and certificate-verification policy.
+const productionConfig = process.env.NODE_ENV === "production" ? readProductionConfig() : null;
+const databaseUrl = productionConfig?.databaseUrl ?? process.env.DATABASE_URL;
 if (!databaseUrl) throw new Error("DATABASE_URL is required");
+
+const ssl = productionConfig
+  ? productionConfig.databaseSsl === "false"
+    ? undefined
+    : {
+        rejectUnauthorized: true,
+        ...(productionConfig.databaseCaCert ? { ca: productionConfig.databaseCaCert } : {}),
+      }
+  : process.env.DATABASE_SSL === "false"
+    ? undefined
+    : { rejectUnauthorized: false };
 
 const pool = new Pool({
   connectionString: databaseUrl,
   max: 1,
-  ssl: process.env.DATABASE_SSL === "false" ? undefined : { rejectUnauthorized: false },
+  ...(ssl ? { ssl } : {}),
 });
 
 try {
