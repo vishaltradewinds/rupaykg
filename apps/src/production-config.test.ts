@@ -49,6 +49,13 @@ describe("production configuration", () => {
     assert.throws(() => readProductionConfig({ ...valid, DATABASE_CA_CERT: "" }), /DATABASE_CA_CERT must contain a PEM certificate/);
   });
 
+  it("rejects SSL query parameters that could override certificate verification", () => {
+    assert.throws(
+      () => readProductionConfig({ ...valid, DATABASE_URL: "postgresql://prod.example.invalid:5432/rupaykg?sslmode=require" }),
+      /remove PostgreSQL SSL query parameters/,
+    );
+  });
+
   it("requires real authentication", () => {
     assert.throws(() => readProductionConfig({ ...valid, RUPAYKG_AUTH_MODE: "demo" }), /RUPAYKG_AUTH_MODE must be real/);
   });
