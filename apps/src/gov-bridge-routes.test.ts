@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
-import { verifyGovBridgeSignature } from "./gov-bridge-routes.js";
+import { verifyGovBridgeSignature } from "./async-mirror-routes.js";
 
 const secret = "test-only-secret-with-at-least-thirty-two-characters";
 const body = JSON.stringify({ batchMetadata: { authorityCode: "MH-PCB" }, rawDataLogs: ["sample record"] });
