@@ -198,8 +198,8 @@ export function evaluateBmWa03001Applicability(input: BmWa03001ApplicabilityInpu
 export function evaluateBmWa03002Applicability(input: BmWa03002ApplicabilityInput): BmWa03002ApplicabilityResult {
   const failures: string[] = [];
   const unresolved: string[] = [];
-  if (input.sector.trim().toLowerCase() !== "waste handling and disposal") failures.push("sector must be Waste Handling and Disposal");
-  if (!input.activity.trim()) unresolved.push("activity description is required");
+  if (typeof input.sector !== "string" || input.sector.trim().toLowerCase() !== "waste handling and disposal") failures.push("sector must be Waste Handling and Disposal");
+  if (typeof input.activity !== "string" || !input.activity.trim()) unresolved.push("activity description is required");
   if (input.reducesOrganicWasteRecycling === true) failures.push("project activity must not reduce organic-waste recycling");
   else if (input.reducesOrganicWasteRecycling === null) unresolved.push("effect on organic-waste recycling is unresolved");
   if (input.combinedWithAnotherApprovedMethodology === true) failures.push("BM WA03.002 is not applicable in combination with another approved methodology");
@@ -208,8 +208,9 @@ export function evaluateBmWa03002Applicability(input: BmWa03002ApplicabilityInpu
   else if (input.managementDeliberatelyChangedToIncreaseMethane === null) unresolved.push("whether SWDS management was changed to increase methane is unresolved");
   if (input.baselineScenarioConfirmed !== true) unresolved.push("the methodology's required baseline scenario has not been confirmed");
   const allowedEndUses = new Set(["FLARING", "ELECTRICITY", "HEAT_ALLOWED_EQUIPMENT", "NATURAL_GAS_NETWORK", "DEDICATED_PIPELINE", "TRUCKED_COMPRESSED_OR_LIQUEFIED_LFG"]);
-  if (!Array.isArray(input.endUses) || input.endUses.length === 0) unresolved.push("at least one permitted landfill-gas end use must be evidenced");
-  else if (input.endUses.some((use) => !allowedEndUses.has(use))) failures.push("one or more landfill-gas end uses are not supported by the current screen");
+  const endUses = Array.isArray(input.endUses) ? input.endUses : [];
+  if (endUses.length === 0) unresolved.push("at least one permitted landfill-gas end use must be evidenced");
+  else if (endUses.some((use) => typeof use !== "string" || !allowedEndUses.has(use))) failures.push("one or more landfill-gas end uses are not supported by the current screen");
 
   if (input.capturePath === "NEW_CAPTURE_SYSTEM") {
     if (input.noPriorCaptureSystemInstalledOrPlanned === null) unresolved.push("absence of a prior or planned capture system is unresolved");
@@ -229,7 +230,7 @@ export function evaluateBmWa03002Applicability(input: BmWa03002ApplicabilityInpu
     failures.push("capture pathway is not supported by BM WA03.002");
   }
 
-  const usesBeyondFlaring = input.endUses.some((use) => use !== "FLARING");
+  const usesBeyondFlaring = endUses.some((use) => use !== "FLARING");
   const requiredSectoralScopes = usesBeyondFlaring
     ? ["03: Waste handling and disposal", "01: Energy"]
     : ["03: Waste handling and disposal"];
