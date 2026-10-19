@@ -195,3 +195,22 @@ Use stable IDs, referential integrity, source hashes and timestamps. Do not stor
 - Terms: https://swmp.cpcb.gov.in/en/terms-and-conditions
 - Privacy: https://swmp.cpcb.gov.in/en/privacy-policy
 - Cookie policy: https://swmp.cpcb.gov.in/en/cookie-policy
+
+
+## 14. Additional Gazette-derived requirements to model explicitly
+
+The Gazette review confirms the central portal is intended as more than an application inbox. Rule 16 describes a central repository for registration and annual returns, national/state/district data on generation, collection, processing and landfilling, public-domain dashboards, sanitary-landfill and legacy-dumpsite details, separate modules for obligated entities, source-linked orders/guidelines, received/sorted/forwarded waste flows and audits of collection, treatment, processing, recycling and disposal entities. RupayKg should support this data lineage and reporting architecture, but must not claim that its own dashboards satisfy the CPCB portal duty.
+
+Additional data/reporting dimensions to include in discovery:
+- Local-body waste generation and collection by ward, source category and waste stream; district/state aggregation must reconcile to site-level records.
+- Collection, transport, secondary storage, sorting, processing, recycling, disposal and landfill flows, including quantities received, sorted, sent to processors, rejects/residues and tipping fees where required.
+- Facility infrastructure inventory: operating and planned capacities, land area, distance/proximity constraints, technology type, site status, and landfill/legacy dumpsite inventory.
+- RDF capacity, production, quality, availability, dispatch and industrial offtake; cement/co-processing destination and evidence of receipt/use.
+- Rural local-body planning: ward-wise waste estimates and projections, collection/transport plan, infrastructure maps, markets/community assets, garbage-vulnerable points, litter hotspots, waste ingress points into drains/water bodies and clean-up schedules.
+- Waste picker/informal worker database at ward level, with recognition/integration of individuals or representative organisations, consent and appropriate privacy controls.
+- Environmental compensation: track alleged non-compliance, authority, rule/guideline basis, notices, response, decision, amount, payment evidence and appeal. Only the competent SPCB/PCC (or authority empowered by the rules) can make the official levy/decision; RupayKg must not auto-impose a statutory penalty.
+- Reporting and audit trail for facility operations, downstream transfers, environmental monitoring and independent audits. The Gazette contemplates public data and audit information; privacy/security review must determine which fields can be public and which must be restricted.
+
+## 15. Gazette-to-platform traceability gate
+
+Before any module is called legally complete, create a row for every applicable Gazette clause and relevant official amendment with: exact clause/sub-rule/schedule; source file URL and checksum; effective date; obligated actor; trigger; required action; required data/evidence; due date/frequency; reviewing/enforcing authority; exception/exclusion; reporting destination; test case; product module; owner; reviewer; implementation state. This document is the ecosystem map, not that clause-by-clause register. The clause register must be created and reviewed as the next regulatory engineering task.
