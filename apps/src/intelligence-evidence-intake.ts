@@ -36,8 +36,17 @@ const recordTypes = new Set<string>(WASTE_LOG_RECORD_TYPES);
 const streams = new Set<string>(WASTE_STREAMS);
 
 function validIsoDateTime(value: string): boolean {
-  return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/.test(value)
-    && !Number.isNaN(Date.parse(value));
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,3})?(Z|([+-])(\d{2}):(\d{2}))$/.exec(value);
+  if (!match) return false;
+
+  const [, , , , hour, minute, second, , , offsetHour, offsetMinute] = match;
+  const datePart = value.slice(0, 10);
+  const parsedDate = new Date(datePart + "T00:00:00.000Z");
+  if (Number.isNaN(parsedDate.getTime()) || parsedDate.toISOString().slice(0, 10) !== datePart) return false;
+
+  if (Number(hour) > 23 || Number(minute) > 59 || Number(second) > 59) return false;
+  if (offsetHour !== undefined && (Number(offsetHour) > 23 || Number(offsetMinute) > 59)) return false;
+  return !Number.isNaN(Date.parse(value));
 }
 
 /**
