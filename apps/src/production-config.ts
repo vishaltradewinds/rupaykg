@@ -20,7 +20,10 @@ function productionDatabaseUrl(value: string): string {
   let parsed: URL;
   try { parsed = new URL(value); } catch { throw new Error("PRODUCTION_CONFIG_INVALID: DATABASE_URL must be a valid PostgreSQL URL"); }
   if (parsed.protocol !== "postgres:" && parsed.protocol !== "postgresql:") throw new Error("PRODUCTION_CONFIG_INVALID: DATABASE_URL must use postgres:// or postgresql://");
-  if (["localhost", "127.0.0.1", "::1"].includes(parsed.hostname.toLowerCase())) throw new Error("PRODUCTION_CONFIG_INVALID: production DATABASE_URL must not target localhost");
+  // Normalize URL hostname syntax so IPv6 brackets and a DNS trailing dot
+  // cannot bypass the local-database prohibition.
+  const hostname = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, "").replace(/\.$/, "");
+  if (["localhost", "127.0.0.1", "::1"].includes(hostname)) throw new Error("PRODUCTION_CONFIG_INVALID: production DATABASE_URL must not target localhost");
   // node-postgres can let SSL query parameters in the connection string override
   // the explicit ssl object. Keep TLS policy in one validated place instead.
   if (["sslmode", "sslcert", "sslkey", "sslrootcert"].some((key) => parsed.searchParams.has(key))) {
