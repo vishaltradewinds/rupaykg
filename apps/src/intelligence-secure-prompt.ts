@@ -17,8 +17,11 @@ export function loadConfiguredSystemPrompt(): string | undefined {
 
   const parts = encoded.split(":");
   if (parts.length !== 4 || parts[0] !== "v1") return undefined;
-  const [, ivHex, tagHex, ciphertextHex] = parts;
-  if (!/^[0-9a-fA-F]{24}$/.test(ivHex) || !/^[0-9a-fA-F]{32}$/.test(tagHex)
+  const ivHex = parts[1];
+  const tagHex = parts[2];
+  const ciphertextHex = parts[3];
+  if (typeof ivHex !== "string" || typeof tagHex !== "string" || typeof ciphertextHex !== "string"
+    || !/^[0-9a-fA-F]{24}$/.test(ivHex) || !/^[0-9a-fA-F]{32}$/.test(tagHex)
     || !/^(?:[0-9a-fA-F]{2})+$/.test(ciphertextHex) || ciphertextHex.length / 2 > MAX_PROMPT_BYTES) {
     return undefined;
   }
