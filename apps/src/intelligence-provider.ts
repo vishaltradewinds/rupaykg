@@ -55,6 +55,8 @@ export function createConfiguredWasteLogExtractionProvider(): WasteLogExtraction
   try {
     endpoint = new URL(baseUrl);
     if (endpoint.protocol !== "http:" && endpoint.protocol !== "https:") return undefined;
+    const loopbackHost = endpoint.hostname === "localhost" || endpoint.hostname === "127.0.0.1" || endpoint.hostname === "[::1]";
+    if (endpoint.protocol === "http:" && !loopbackHost) return undefined;
     if (endpoint.username || endpoint.password || endpoint.hash || endpoint.search) return undefined;
   } catch {
     return undefined;
