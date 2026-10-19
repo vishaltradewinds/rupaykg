@@ -80,6 +80,17 @@ This is an implementation of the core equation only. It does **not** claim to im
 
 The official BEE methodology specifies GWPCH4 = **29.8 tCO2e/tCH4** in its monitoring parameter table and describes monitored landfill-gas flow, methane fraction, temperature and pressure requirements. Those monitored inputs must be evidence-backed in production; they must not be silently fabricated by the calculation package.
 
+## 5A. BM WA03.002 applicability screen — not a calculation adapter
+
+The current BEE source identifies **BM WA03.002 — Flaring or use of landfill gas, Version 1.0**, publication date **27 March 2025**:
+https://www.beeindia.gov.in/WriteReadData/RTF1984/RTF-PDF-a0e3f856720a5c57_1776061241.pdf
+
+The Carbon package now exposes `evaluateBmWa03002Applicability()`. It screens the published scope and selected conditions: new capture-system pathway versus an improvement to an existing system; pre-project gas use and historical capture data where required; permitted end-use categories; no reduction in organic-waste recycling; no combination with another approved methodology; no deliberate change to increase methane; and explicit baseline confirmation. It returns `PASS_FOR_FURTHER_REVIEW`, `UNRESOLVED`, or `FAIL` and always sets `productionEligible: false`. A screening pass is not a project eligibility decision, a calculation, ACVA validation, or issuance evidence.
+
+The methodology PDF references tools **BM-T-001, BM-T-002, BM-T-003, BM-T-004, BM-T-005, BM-T-006, BM-T-007, BM-T-011 and BM-T-012**. BM-T-007 and BM-T-012 are not present in the currently captured BEE approved-tools register snapshot. This is a **dependency reconciliation blocker**, not permission to assume an old or unlisted version. The adapter therefore exposes the tool dependencies and keeps `dependencyReconciliationRequired: true` until current authoritative tool versions and source documents are reconciled.
+
+The required sectoral scopes also differ by use: flaring-only requires Waste Handling and Disposal; use of landfill gas for other purposes requires both Waste Handling and Disposal and Energy. This screening function does not calculate emission reductions or replace any referenced tool.
+
 ## 6. Independent reconciliation
 
 For each production methodology, maintain at least one independently reviewable reference calculation containing:
