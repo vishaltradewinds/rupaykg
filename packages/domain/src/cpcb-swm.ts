@@ -1,4 +1,4 @@
-export type SwmStakeholderType = "BWG" | "WASTE_FACILITY" | "ULB" | "DISTRICT_PANCHAYAT" | "GRAM_PANCHAYAT" | "COLLECTOR_TRANSPORTER" | "PROCESSOR";
+export type SwmStakeholderType = "BWG" | "WASTE_FACILITY" | "ULB" | "DISTRICT_PANCHAYAT" | "GRAM_PANCHAYAT" | "COLLECTOR_TRANSPORTER" | "PROCESSOR" | "SPCB_PCC" | "DISTRICT_MAGISTRATE" | "REGIONAL_OFFICER" | "CPCB_CENTRAL";
 
 export type EvidenceReadinessStatus =
   | "MISSING"
@@ -132,6 +132,34 @@ export function initialSwmChecklist(stakeholder: SwmStakeholderType): SwmCheckli
         item("collection_transport_records", "Collection and transport quantity records", "RULE_DERIVED"),
         item("registered_destination_records", "Delivery to registered processing facilities", "RULE_DERIVED"),
         item("certificate_issuance_boundary", "Official EBWGR certificates issued only by competent local body", "RULE_DERIVED"),
+      ];
+    case "SPCB_PCC":
+      return [
+        item("official_onboarding_reference", "CPCB-authorized SPCB/PCC nodal-officer onboarding evidence", "GUIDE_LISTED"),
+        item("state_jurisdiction", "Verified State/UT jurisdiction mapping", "GUIDE_LISTED"),
+        item("authorized_officer_identity", "Authorized nodal officer identity and official contact details", "GUIDE_LISTED"),
+        item("regional_officer_delegations", "Regional Officer accounts created only by authorized SPCB/PCC user management", "GUIDE_LISTED"),
+        item("authority_actions_audit", "Role-scoped review, Level 2 facility appeal and grievance action audit", "RULE_DERIVED"),
+      ];
+    case "DISTRICT_MAGISTRATE":
+      return [
+        item("official_onboarding_reference", "UDD/RDD or CPCB onboarding request and confirmation", "GUIDE_LISTED"),
+        item("district_jurisdiction", "Verified State, district name and district code", "GUIDE_LISTED"),
+        item("authorized_officer_identity", "Authorized District Magistrate identity and official contact details", "GUIDE_LISTED"),
+        item("delegated_local_body_users", "Local-body users provisioned only through authorized user management", "GUIDE_LISTED"),
+        item("appeal_decision_audit", "Level 1 appeal decisions, comments and evidence audit", "RULE_DERIVED"),
+      ];
+    case "REGIONAL_OFFICER":
+      return [
+        item("spcb_pcc_parent", "Verified parent SPCB/PCC and state jurisdiction", "GUIDE_LISTED"),
+        item("authorized_user_provisioning", "Evidence of creation by authorized SPCB/PCC user management", "GUIDE_LISTED"),
+        item("assigned_scope", "Explicitly assigned region and permitted actions", "NEEDS_OFFICIAL_CONFIRMATION"),
+      ];
+    case "CPCB_CENTRAL":
+      return [
+        item("official_onboarding_reference", "Authorized CPCB central account provisioning evidence", "NEEDS_OFFICIAL_CONFIRMATION"),
+        item("assigned_scope", "Explicit central role, jurisdiction and permitted actions", "NEEDS_OFFICIAL_CONFIRMATION"),
+        item("data_access_authorization", "Documented authority for any data access or exchange", "NEEDS_OFFICIAL_CONFIRMATION"),
       ];
     case "COLLECTOR_TRANSPORTER":
       return [

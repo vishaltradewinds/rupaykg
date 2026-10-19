@@ -69,3 +69,16 @@ test("calendar-invalid dates are rejected rather than normalized by the runtime"
   assert.equal(result.status, "UNRESOLVED");
   assert.ok(result.missingOrInvalid.includes("floorAreaM2:PERIOD_INVALID"));
 });
+
+
+test("CPCB authority onboarding roles are distinct from public self-registration categories", () => {
+  const spcb = initialSwmChecklist("SPCB_PCC");
+  assert.ok(spcb.some(item => item.key === "official_onboarding_reference"));
+  assert.ok(spcb.some(item => item.key === "regional_officer_delegations"));
+  const dm = initialSwmChecklist("DISTRICT_MAGISTRATE");
+  assert.ok(dm.some(item => item.key === "district_jurisdiction"));
+  const ro = initialSwmChecklist("REGIONAL_OFFICER");
+  assert.ok(ro.some(item => item.key === "authorized_user_provisioning"));
+  const cpcb = initialSwmChecklist("CPCB_CENTRAL");
+  assert.ok(cpcb.every(item => item.officialRequirement === "NEEDS_OFFICIAL_CONFIRMATION"));
+});
