@@ -45,8 +45,14 @@ describe("production configuration", () => {
     assert.throws(() => readProductionConfig({ ...valid, DATABASE_SSL: "false" }), /DATABASE_SSL must be require/);
   });
 
-  it("requires a production CA certificate for PostgreSQL TLS", () => {
-    assert.throws(() => readProductionConfig({ ...valid, DATABASE_CA_CERT: "" }), /DATABASE_CA_CERT must contain a PEM certificate/);
+  it("allows the system trusted CA store when no custom CA is supplied", () => {
+    const config = readProductionConfig({ ...valid, DATABASE_CA_CERT: "" });
+    assert.equal(config.databaseSsl, "require");
+    assert.equal(config.databaseCaCert, "");
+  });
+
+  it("rejects malformed custom CA material", () => {
+    assert.throws(() => readProductionConfig({ ...valid, DATABASE_CA_CERT: "not-a-certificate" }), /DATABASE_CA_CERT must contain a PEM certificate when provided/);
   });
 
   it("rejects SSL query parameters that could override certificate verification", () => {
