@@ -168,3 +168,47 @@ test("rejects a successful HTTP response with an invalid completion envelope", a
     await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
   }
 });
+
+
+test("refuses provider redirects instead of forwarding inference requests", async () => {
+  let redirectedRequests = 0;
+  const target = createServer((_request, response) => {
+    redirectedRequests += 1;
+    response.writeHead(200, { "content-type": "application/json" });
+    response.end(JSON.stringify({ choices: [{ message: { content: "{}" } }] }));
+  });
+  await new Promise<void>((resolve, reject) => {
+    target.once("error", reject);
+    target.listen(0, "127.0.0.1", resolve);
+  });
+  const targetAddress = target.address();
+  assert.ok(targetAddress && typeof targetAddress === "object");
+  const redirector = createServer((_request, response) => {
+    response.writeHead(302, { location: `http://127.0.0.1:${targetAddress.port}/capture` });
+    response.end();
+  });
+  await new Promise<void>((resolve, reject) => {
+    redirector.once("error", reject);
+    redirector.listen(0, "127.0.0.1", resolve);
+  });
+  const redirectAddress = redirector.address();
+  assert.ok(redirectAddress && typeof redirectAddress === "object");
+  try {
+    await withProviderEnv({
+      RUPAYKG_AI_BASE_URL: `http://127.0.0.1:${redirectAddress.port}/v1`,
+      RUPAYKG_AI_MODEL: "test-model",
+    }, async () => {
+      const provider = createConfiguredWasteLogExtractionProvider();
+      assert.ok(provider);
+      await assert.rejects(
+        provider.extract({ rawLog: "source log", activityId: "activity-test" }),
+      );
+      assert.equal(redirectedRequests, 0);
+    });
+  } finally {
+    await Promise.all([
+      new Promise<void>((resolve, reject) => redirector.close((error) => error ? reject(error) : resolve())),
+      new Promise<void>((resolve, reject) => target.close((error) => error ? reject(error) : resolve())),
+    ]);
+  }
+});
