@@ -4,7 +4,7 @@ import { authenticate, canActForOrganization, canPerformHighRiskActionInDatabase
 
 type Reply={code:(status:number)=>{send:(body:unknown)=>unknown}};
 type Request={body:unknown;params:Record<string,string>;log:{error:(error:unknown)=>void}};
-const credentialDisclosure={credentialOrigin:"RUPAYKG_INTERNAL_MRV",officialCcc:false,disclosure:"Internal RupayKg MRV credential only; not an official Carbon Credit Certificate or government registry instrument."} as const;
+export const credentialDisclosure={credentialOrigin:"RUPAYKG_INTERNAL_MRV",officialCcc:false,disclosure:"Internal RupayKg MRV credential only; not an official Carbon Credit Certificate or government registry instrument."} as const;
 const bodyOf=(r:Request):Record<string,unknown>=>r.body&&typeof r.body==="object"?r.body as Record<string,unknown>:{};
 const str=(b:Record<string,unknown>,k:string):string|null=>typeof b[k]==="string"&&b[k].trim()?b[k].trim():null;
 const positive=(b:Record<string,unknown>,k:string):number|null=>{const n=Number(b[k]);return Number.isFinite(n)&&n>0?n:null};
