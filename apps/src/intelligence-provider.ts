@@ -65,7 +65,8 @@ export function createConfiguredWasteLogExtractionProvider(): WasteLogExtraction
   const providerId = configuredValue("RUPAYKG_AI_PROVIDER_ID") ?? "openai-compatible";
   const promptVersion = configuredValue("RUPAYKG_AI_PROMPT_VERSION") ?? "waste-log-extraction-v1";
   const apiKey = configuredValue("RUPAYKG_AI_API_KEY");
-  const url = new URL(`${endpoint.toString().replace(/\\/+$/, "")}/chat/completions`);
+  const endpointText = endpoint.toString();
+  const url = new URL((endpointText.endsWith("/") ? endpointText.slice(0, -1) : endpointText) + "/chat/completions");
 
   return {
     providerId,
