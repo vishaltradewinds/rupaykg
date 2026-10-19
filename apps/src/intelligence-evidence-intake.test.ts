@@ -48,3 +48,13 @@ test("allows missing measurements only when explicitly null, never as invented z
   assert.equal(result.quantity, null);
   assert.equal(result.unit, null);
 });
+
+
+test("rejects impossible calendar dates and out-of-range clock fields", () => {
+  assert.equal(validateWasteLogExtraction({ ...valid, observedAt: "2026-02-31T08:30:00Z" }), null);
+  assert.equal(validateWasteLogExtraction({ ...valid, observedAt: "2026-13-01T08:30:00Z" }), null);
+  assert.equal(validateWasteLogExtraction({ ...valid, observedAt: "2026-10-19T24:30:00Z" }), null);
+  assert.equal(validateWasteLogExtraction({ ...valid, observedAt: "2026-10-19T08:60:00Z" }), null);
+  assert.equal(validateWasteLogExtraction({ ...valid, observedAt: "2026-10-19T08:30:00+25:00" }), null);
+  assert.ok(validateWasteLogExtraction({ ...valid, observedAt: "2024-02-29T08:30:00Z" }));
+});
