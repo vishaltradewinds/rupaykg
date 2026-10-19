@@ -51,6 +51,7 @@ export function validateWasteLogExtraction(value: unknown): ValidatedWasteLogExt
   if (typeof row.recordType !== "string" || !recordTypes.has(row.recordType)) return null;
   if (row.observedAt !== null && (typeof row.observedAt !== "string" || !validIsoDateTime(row.observedAt))) return null;
   if (row.quantity !== null && (typeof row.quantity !== "number" || !Number.isFinite(row.quantity) || row.quantity < 0)) return null;
+  if ((row.quantity === null) !== (row.unit === null)) return null;
   if (row.unit !== null && (typeof row.unit !== "string" || !row.unit.trim() || row.unit.length > 40)) return null;
   if (row.wasteStream !== null && (typeof row.wasteStream !== "string" || !streams.has(row.wasteStream))) return null;
   if (row.facilityReference !== null && (typeof row.facilityReference !== "string" || row.facilityReference.length > 240)) return null;
