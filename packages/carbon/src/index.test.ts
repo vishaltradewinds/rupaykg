@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { BM_WA03001_PARAMETER_DICTIONARY, calculateBmWa03001, calculateEmissionReduction, evaluateBmWa03001Applicability, isGenericCalculationMethodAllowed, isIssuableCarbonValue, sha256Canonical, validateBmWa03001Input } from "./index.js";
+import { BM_WA03001_PARAMETER_DICTIONARY, BM_WA03002_SOURCE, calculateBmWa03001, calculateEmissionReduction, evaluateBmWa03001Applicability, evaluateBmWa03002Applicability, isGenericCalculationMethodAllowed, isIssuableCarbonValue, sha256Canonical, validateBmWa03001Input } from "./index.js";
 
 test("calculates a methodology-versioned result without issuing a credential", () => {
   const result = calculateEmissionReduction({ activityId: "activity-1", methodologyCode: "CCTS-OFFSET", methodologyVersion: "2026-01", baselineTco2e: 100, projectTco2e: 65, leakageTco2e: 5, uncertaintyTco2e: 2 });
@@ -106,4 +106,149 @@ test("empty methodology identifiers cannot enter generic calculator", () => {
     baselineTco2e: 100,
     projectTco2e: 65,
   }), /method-specific calculation adapter/);
+});
+
+
+test("BM WA03.002 screens a supported new capture-and-flare project without claiming production eligibility", () => {
+  const result = evaluateBmWa03002Applicability({
+    sector: "Waste Handling and Disposal",
+    activity: "Capture and flare landfill gas",
+    capturePath: "NEW_CAPTURE_SYSTEM",
+    noPriorCaptureSystemInstalledOrPlanned: true,
+    increasedRecoveryRateOrChangedUse: null,
+    preProjectUse: "UNKNOWN",
+    capturedAmountCanBeSeparatedFromExistingSystem: null,
+    existingSystemEfficiencyImpactedByProject: null,
+    historicalCaptureDataAvailable: null,
+    endUses: ["FLARING"],
+    reducesOrganicWasteRecycling: false,
+    combinedWithAnotherApprovedMethodology: false,
+    managementDeliberatelyChangedToIncreaseMethane: false,
+    baselineScenarioConfirmed: true,
+  });
+  assert.equal(result.methodologyCode, "BM WA03.002");
+  assert.equal(result.methodologyVersion, "1.0");
+  assert.equal(result.screeningStatus, "PASS_FOR_FURTHER_REVIEW");
+  assert.deepEqual(result.requiredSectoralScopes, ["03: Waste handling and disposal"]);
+  assert.equal(result.productionEligible, false);
+  assert.equal(result.dependencyReconciliationRequired, true);
+  assert.deepEqual(result.requiredTools, BM_WA03002_SOURCE.requiredTools);
+});
+
+test("BM WA03.002 screen fails for restricted recycling, mixed-methodology, and methane-increase conditions", () => {
+  const result = evaluateBmWa03002Applicability({
+    sector: "Waste Handling and Disposal",
+    activity: "Capture and use landfill gas",
+    capturePath: "NEW_CAPTURE_SYSTEM",
+    noPriorCaptureSystemInstalledOrPlanned: true,
+    increasedRecoveryRateOrChangedUse: null,
+    preProjectUse: "UNKNOWN",
+    capturedAmountCanBeSeparatedFromExistingSystem: null,
+    existingSystemEfficiencyImpactedByProject: null,
+    historicalCaptureDataAvailable: null,
+    endUses: ["ELECTRICITY"],
+    reducesOrganicWasteRecycling: true,
+    combinedWithAnotherApprovedMethodology: true,
+    managementDeliberatelyChangedToIncreaseMethane: true,
+    baselineScenarioConfirmed: true,
+  });
+  assert.equal(result.screeningStatus, "FAIL");
+  assert.equal(result.productionEligible, false);
+  assert.ok(result.reasons.some(reason => reason.includes("recycling")));
+  assert.ok(result.reasons.some(reason => reason.includes("combination")));
+  assert.ok(result.reasons.some(reason => reason.includes("increase methane")));
+  assert.deepEqual(result.requiredSectoralScopes, ["03: Waste handling and disposal", "01: Energy"]);
+});
+
+test("BM WA03.002 screen remains unresolved when existing-system evidence is missing", () => {
+  const result = evaluateBmWa03002Applicability({
+    sector: "Waste Handling and Disposal",
+    activity: "Improve existing landfill-gas capture",
+    capturePath: "EXISTING_SYSTEM_IMPROVEMENT",
+    noPriorCaptureSystemInstalledOrPlanned: null,
+    increasedRecoveryRateOrChangedUse: true,
+    preProjectUse: "UNKNOWN",
+    capturedAmountCanBeSeparatedFromExistingSystem: false,
+    existingSystemEfficiencyImpactedByProject: false,
+    historicalCaptureDataAvailable: null,
+    endUses: ["NATURAL_GAS_NETWORK"],
+    reducesOrganicWasteRecycling: false,
+    combinedWithAnotherApprovedMethodology: false,
+    managementDeliberatelyChangedToIncreaseMethane: false,
+    baselineScenarioConfirmed: false,
+  });
+  assert.equal(result.screeningStatus, "UNRESOLVED");
+  assert.ok(result.reasons.some(reason => reason.includes("pre-project")));
+  assert.ok(result.reasons.some(reason => reason.includes("historical capture data")));
+  assert.ok(result.reasons.some(reason => reason.includes("baseline scenario")));
+  assert.deepEqual(result.requiredSectoralScopes, ["03: Waste handling and disposal", "01: Energy"]);
+});
+
+test("BM WA03.002 existing-system pathway requires historical data when gas cannot be separated and efficiency is unaffected", () => {
+  const result = evaluateBmWa03002Applicability({
+    sector: "Waste Handling and Disposal",
+    activity: "Improve existing landfill-gas capture",
+    capturePath: "EXISTING_SYSTEM_IMPROVEMENT",
+    noPriorCaptureSystemInstalledOrPlanned: null,
+    increasedRecoveryRateOrChangedUse: true,
+    preProjectUse: "VENTED_OR_FLARED_NOT_USED",
+    capturedAmountCanBeSeparatedFromExistingSystem: false,
+    existingSystemEfficiencyImpactedByProject: false,
+    historicalCaptureDataAvailable: false,
+    endUses: ["FLARING"],
+    reducesOrganicWasteRecycling: false,
+    combinedWithAnotherApprovedMethodology: false,
+    managementDeliberatelyChangedToIncreaseMethane: false,
+    baselineScenarioConfirmed: true,
+  });
+  assert.equal(result.screeningStatus, "FAIL");
+  assert.ok(result.reasons.some(reason => reason.includes("historical capture data is required")));
+});
+
+
+test("BM WA03.002 screen does not treat missing safeguards as false", () => {
+  const result = evaluateBmWa03002Applicability({
+    sector: "Waste Handling and Disposal",
+    activity: "Capture landfill gas",
+    capturePath: "NEW_CAPTURE_SYSTEM",
+    noPriorCaptureSystemInstalledOrPlanned: true,
+    increasedRecoveryRateOrChangedUse: null,
+    preProjectUse: "UNKNOWN",
+    capturedAmountCanBeSeparatedFromExistingSystem: null,
+    existingSystemEfficiencyImpactedByProject: null,
+    historicalCaptureDataAvailable: null,
+    endUses: ["FLARING"],
+    reducesOrganicWasteRecycling: null,
+    combinedWithAnotherApprovedMethodology: null,
+    managementDeliberatelyChangedToIncreaseMethane: null,
+    baselineScenarioConfirmed: true,
+  });
+  assert.equal(result.screeningStatus, "UNRESOLVED");
+  assert.ok(result.reasons.some(reason => reason.includes("recycling is unresolved")));
+  assert.ok(result.reasons.some(reason => reason.includes("combination with another")));
+  assert.ok(result.reasons.some(reason => reason.includes("increase methane is unresolved")));
+});
+
+
+test("BM WA03.002 screen rejects malformed runtime inputs without throwing", () => {
+  const result = evaluateBmWa03002Applicability({
+    sector: null as never,
+    activity: null as never,
+    capturePath: "NEW_CAPTURE_SYSTEM",
+    noPriorCaptureSystemInstalledOrPlanned: true,
+    increasedRecoveryRateOrChangedUse: null,
+    preProjectUse: "UNKNOWN",
+    capturedAmountCanBeSeparatedFromExistingSystem: null,
+    existingSystemEfficiencyImpactedByProject: null,
+    historicalCaptureDataAvailable: null,
+    endUses: null as never,
+    reducesOrganicWasteRecycling: false,
+    combinedWithAnotherApprovedMethodology: false,
+    managementDeliberatelyChangedToIncreaseMethane: false,
+    baselineScenarioConfirmed: true,
+  });
+  assert.equal(result.screeningStatus, "FAIL");
+  assert.ok(result.reasons.some(reason => reason.includes("sector")));
+  assert.ok(result.reasons.some(reason => reason.includes("activity description")));
+  assert.ok(result.reasons.some(reason => reason.includes("end use")));
 });

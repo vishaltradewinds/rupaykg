@@ -53,6 +53,48 @@ export const BM_WA03001_SOURCE = {
   equationId: "BM.WA03.001.EQ4.V1",
 } as const;
 
+export type BmWa03002CapturePath = "NEW_CAPTURE_SYSTEM" | "EXISTING_SYSTEM_IMPROVEMENT";
+export type BmWa03002PreProjectUse = "VENTED_OR_FLARED_NOT_USED" | "USED" | "UNKNOWN";
+export type BmWa03002EndUse = "FLARING" | "ELECTRICITY" | "HEAT_ALLOWED_EQUIPMENT" | "NATURAL_GAS_NETWORK" | "DEDICATED_PIPELINE" | "TRUCKED_COMPRESSED_OR_LIQUEFIED_LFG";
+
+export type BmWa03002ApplicabilityInput = {
+  sector: string;
+  activity: string;
+  capturePath: BmWa03002CapturePath;
+  noPriorCaptureSystemInstalledOrPlanned: boolean | null;
+  increasedRecoveryRateOrChangedUse: boolean | null;
+  preProjectUse: BmWa03002PreProjectUse;
+  capturedAmountCanBeSeparatedFromExistingSystem: boolean | null;
+  existingSystemEfficiencyImpactedByProject: boolean | null;
+  historicalCaptureDataAvailable: boolean | null;
+  endUses: readonly BmWa03002EndUse[];
+  reducesOrganicWasteRecycling: boolean | null;
+  combinedWithAnotherApprovedMethodology: boolean | null;
+  managementDeliberatelyChangedToIncreaseMethane: boolean | null;
+  baselineScenarioConfirmed: boolean | null;
+};
+
+export const BM_WA03002_SOURCE = {
+  reference: "https://www.beeindia.gov.in/WriteReadData/RTF1984/RTF-PDF-a0e3f856720a5c57_1776061241.pdf",
+  publicationDate: "2025-03-27",
+  version: "1.0",
+  sector: "Waste Handling and Disposal",
+  title: "Flaring or use of landfill gas",
+  requiredTools: ["BM-T-001", "BM-T-002", "BM-T-003", "BM-T-004", "BM-T-005", "BM-T-006", "BM-T-007", "BM-T-011", "BM-T-012"],
+  dependencyReconciliationRequired: true,
+} as const;
+
+export type BmWa03002ApplicabilityResult = {
+  methodologyCode: "BM WA03.002";
+  methodologyVersion: "1.0";
+  screeningStatus: "PASS_FOR_FURTHER_REVIEW" | "UNRESOLVED" | "FAIL";
+  reasons: string[];
+  requiredSectoralScopes: string[];
+  requiredTools: readonly string[];
+  dependencyReconciliationRequired: true;
+  productionEligible: false;
+};
+
 export type BmWa03001Result = {
   methodologyCode: "BM WA03.001";
   methodologyVersion: "1.0";
@@ -146,6 +188,63 @@ export function evaluateBmWa03001Applicability(input: BmWa03001ApplicabilityInpu
   if (input.reducesOrganicWasteRecycling) reasons.push("project must not reduce organic-waste recycling");
   if (input.managementDeliberatelyChangedToIncreaseMethane && !input.changeWasRequiredForTechnicalOrRegulatoryReasons) reasons.push("SWDS management must not be deliberately changed to increase methane generation unless required for technical or regulatory reasons");
   return { eligible: reasons.length === 0, reasons };
+}
+
+/**
+ * Screens BM WA03.002 against its published scope/applicability conditions.
+ * This is not a full methodology calculation, project eligibility decision, or ACVA validation.
+ * Required tools and their currently approved versions must be reconciled before production use.
+ */
+export function evaluateBmWa03002Applicability(input: BmWa03002ApplicabilityInput): BmWa03002ApplicabilityResult {
+  const failures: string[] = [];
+  const unresolved: string[] = [];
+  if (typeof input.sector !== "string" || input.sector.trim().toLowerCase() !== "waste handling and disposal") failures.push("sector must be Waste Handling and Disposal");
+  if (typeof input.activity !== "string" || !input.activity.trim()) unresolved.push("activity description is required");
+  if (input.reducesOrganicWasteRecycling === true) failures.push("project activity must not reduce organic-waste recycling");
+  else if (input.reducesOrganicWasteRecycling === null) unresolved.push("effect on organic-waste recycling is unresolved");
+  if (input.combinedWithAnotherApprovedMethodology === true) failures.push("BM WA03.002 is not applicable in combination with another approved methodology");
+  else if (input.combinedWithAnotherApprovedMethodology === null) unresolved.push("combination with another approved methodology is unresolved");
+  if (input.managementDeliberatelyChangedToIncreaseMethane === true) failures.push("SWDS management must not be deliberately changed to increase methane generation");
+  else if (input.managementDeliberatelyChangedToIncreaseMethane === null) unresolved.push("whether SWDS management was changed to increase methane is unresolved");
+  if (input.baselineScenarioConfirmed !== true) unresolved.push("the methodology's required baseline scenario has not been confirmed");
+  const allowedEndUses = new Set(["FLARING", "ELECTRICITY", "HEAT_ALLOWED_EQUIPMENT", "NATURAL_GAS_NETWORK", "DEDICATED_PIPELINE", "TRUCKED_COMPRESSED_OR_LIQUEFIED_LFG"]);
+  const endUses = Array.isArray(input.endUses) ? input.endUses : [];
+  if (endUses.length === 0) unresolved.push("at least one permitted landfill-gas end use must be evidenced");
+  else if (endUses.some((use) => typeof use !== "string" || !allowedEndUses.has(use))) failures.push("one or more landfill-gas end uses are not supported by the current screen");
+
+  if (input.capturePath === "NEW_CAPTURE_SYSTEM") {
+    if (input.noPriorCaptureSystemInstalledOrPlanned === null) unresolved.push("absence of a prior or planned capture system is unresolved");
+    else if (!input.noPriorCaptureSystemInstalledOrPlanned) failures.push("new-system pathway requires no prior or planned capture system before the project");
+  } else if (input.capturePath === "EXISTING_SYSTEM_IMPROVEMENT") {
+    if (input.increasedRecoveryRateOrChangedUse === null) unresolved.push("effect of the investment on recovery rate or gas use is unresolved");
+    else if (!input.increasedRecoveryRateOrChangedUse) failures.push("existing-system pathway requires increased recovery or changed use");
+    if (input.preProjectUse === "UNKNOWN") unresolved.push("pre-project captured-gas use is unresolved");
+    else if (input.preProjectUse !== "VENTED_OR_FLARED_NOT_USED") failures.push("existing-system pathway requires gas to have been vented or flared and not used before the project");
+    if (input.capturedAmountCanBeSeparatedFromExistingSystem === null) unresolved.push("separability of existing-system captured gas is unresolved");
+    else if (!input.capturedAmountCanBeSeparatedFromExistingSystem && input.existingSystemEfficiencyImpactedByProject === null) unresolved.push("existing-system efficiency impact is unresolved");
+    else if (!input.capturedAmountCanBeSeparatedFromExistingSystem && input.existingSystemEfficiencyImpactedByProject === false) {
+      if (input.historicalCaptureDataAvailable === null) unresolved.push("historical capture data availability is unresolved");
+      else if (!input.historicalCaptureDataAvailable) failures.push("historical capture data is required when existing-system gas cannot be separated and system efficiency is not impacted");
+    }
+  } else {
+    failures.push("capture pathway is not supported by BM WA03.002");
+  }
+
+  const usesBeyondFlaring = endUses.some((use) => use !== "FLARING");
+  const requiredSectoralScopes = usesBeyondFlaring
+    ? ["03: Waste handling and disposal", "01: Energy"]
+    : ["03: Waste handling and disposal"];
+  const screeningStatus = failures.length > 0 ? "FAIL" : unresolved.length > 0 ? "UNRESOLVED" : "PASS_FOR_FURTHER_REVIEW";
+  return {
+    methodologyCode: "BM WA03.002",
+    methodologyVersion: "1.0",
+    screeningStatus,
+    reasons: [...failures, ...unresolved],
+    requiredSectoralScopes,
+    requiredTools: BM_WA03002_SOURCE.requiredTools,
+    dependencyReconciliationRequired: true,
+    productionEligible: false,
+  };
 }
 
 export function calculateBmWa03001(input: BmWa03001Input): BmWa03001Result {
