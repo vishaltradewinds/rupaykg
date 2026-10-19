@@ -54,6 +54,17 @@ test("provider remains disabled unless base URL and model are explicitly configu
   });
 });
 
+test("provider remains disabled when encrypted prompt configuration is absent", async () => {
+  await withProviderEnv({
+    RUPAYKG_AI_BASE_URL: "http://127.0.0.1:11434/v1",
+    RUPAYKG_AI_MODEL: "already-installed-model",
+    RUPAYKG_AI_PROMPT_CIPHERTEXT: "",
+    RUPAYKG_AI_PROMPT_KEY_HEX: "",
+  }, async () => {
+    assert.equal(createConfiguredWasteLogExtractionProvider(), undefined);
+  });
+});
+
 test("provider parses OpenAI-compatible JSON response and labels the configured model", async () => {
   const server = createServer(async (request, response) => {
     let body = "";
