@@ -100,3 +100,71 @@ test("provider rejects oversized input before sending it to a provider", async (
     );
   });
 });
+
+
+test("refuses plaintext HTTP for non-loopback provider endpoints", async () => {
+  await withProviderEnv({
+    RUPAYKG_AI_BASE_URL: "http://inference.example.com/v1",
+    RUPAYKG_AI_MODEL: "model-id",
+  }, async () => {
+    assert.equal(createConfiguredWasteLogExtractionProvider(), undefined);
+  });
+});
+
+test("maps provider HTTP errors without exposing provider response bodies", async () => {
+  const server = createServer((_request, response) => {
+    response.writeHead(503, { "content-type": "application/json" });
+    response.end(JSON.stringify({ error: "sensitive-provider-internal-detail" }));
+  });
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", resolve);
+  });
+  const address = server.address();
+  assert.ok(address && typeof address === "object");
+  try {
+    await withProviderEnv({
+      RUPAYKG_AI_BASE_URL: `http://127.0.0.1:${address.port}/v1`,
+      RUPAYKG_AI_MODEL: "test-model",
+    }, async () => {
+      const provider = createConfiguredWasteLogExtractionProvider();
+      assert.ok(provider);
+      await assert.rejects(
+        provider.extract({ rawLog: "source log", activityId: "activity-test" }),
+        (error: unknown) => error instanceof Error
+          && error.message.includes("HTTP 503")
+          && !error.message.includes("sensitive-provider-internal-detail"),
+      );
+    });
+  } finally {
+    await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+  }
+});
+
+test("rejects a successful HTTP response with an invalid completion envelope", async () => {
+  const server = createServer((_request, response) => {
+    response.writeHead(200, { "content-type": "application/json" });
+    response.end(JSON.stringify({ choices: [] }));
+  });
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", resolve);
+  });
+  const address = server.address();
+  assert.ok(address && typeof address === "object");
+  try {
+    await withProviderEnv({
+      RUPAYKG_AI_BASE_URL: `http://127.0.0.1:${address.port}/v1`,
+      RUPAYKG_AI_MODEL: "test-model",
+    }, async () => {
+      const provider = createConfiguredWasteLogExtractionProvider();
+      assert.ok(provider);
+      await assert.rejects(
+        provider.extract({ rawLog: "source log", activityId: "activity-test" }),
+        /no completion choice/,
+      );
+    });
+  } finally {
+    await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+  }
+});
