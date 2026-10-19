@@ -37,7 +37,7 @@ Initial official sources to reconcile and version-lock:
 - **Official Gazette / applicable legislation and rules:** use the canonical Gazette or government department publication for the exact instrument and amendment, not a blog or secondary summary.
 - **CCTS registry and verification requirements:** confirm current official BEE / Grid Controller of India / ICM Registry documentation and current accredited verification-agency scope before implementing a production decision.
 
-The links above are entry points, not a substitute for collecting the exact applicable instrument. A source is not “locked” until the actual relevant document/version is stored and reviewed. Do not infer that a BEE-listed methodology is automatically applicable to a particular project.
+The Solid Waste Management Rules, 2026 were notified in the Gazette and came into force on 1 April 2026. The official CPCB portal describes coverage across urban and rural local bodies and entities within their jurisdictions. The precise obligation must still be resolved against the relevant rule, schedule, role and facts. Official Gazette notification: https://egazette.gov.in/WriteReadData/2026/269620.pdf. The links above are entry points, not a substitute for collecting the exact applicable instrument. A source is not “locked” until the actual relevant document/version is stored and reviewed. Do not infer that a BEE-listed methodology is automatically applicable to a particular project.
 
 ### Source-control statuses
 
@@ -49,20 +49,20 @@ Every supersession must preserve the previous source and explain whether existin
 
 The BEE register checked for this baseline lists 12 approved methodology codes across waste, agriculture, forestry, energy and industry. The list below is a **coverage checklist**, not a claim that the methodologies are implemented, applicable to every project or approved for production use. Confirm exact titles, versions, tools and current status against the current official documents before enabling any adapter.
 
-| Methodology code | Sector grouping | Required engineering work | Initial status |
+| Methodology code | Official methodology title (verify captured version before implementation) | Sector | Required engineering work | Initial status |
 |---|---|---|---|
-| BM WA03.001 | Waste / landfill methane | Complete source-locked method, parameter and tool mapping; independently reconcile equations and monitoring | Partial implementation; production eligibility unproven |
-| BM WA03.002 | Waste / landfill gas | Reconcile applicability and every referenced tool, including BM-T-007 and BM-T-012, against official current sources | Screening exists; production eligibility must remain false until proven |
-| BM WA03.003 | Waste / compressed biogas | Capture approved method, feedstock boundary, methane/energy measurements, leakage and monitoring rules | Not yet evidenced as production-ready |
-| BM AG04.001 | Agriculture | Capture exact official title, applicability, baseline, activity data, uncertainty and monitoring | Not yet evidenced as production-ready |
-| BM AG04.002 | Agriculture | Same controls; separate versioned adapter and test set | Not yet evidenced as production-ready |
-| BM FR05.001 | Forestry | Land eligibility, boundary, baseline, monitoring, leakage, permanence/reversal and safeguards as required by the source | Not yet evidenced as production-ready |
-| BM FR05.002 | Forestry | Separate source-locked adapter and independent regression suite | Not yet evidenced as production-ready |
-| BM EN01.001 | Energy | Exact source capture; eligibility, metering, baseline and monitoring adapter | Not yet evidenced as production-ready |
-| BM EN01.002 | Energy | Exact source capture; eligibility, metering, baseline and monitoring adapter | Not yet evidenced as production-ready |
-| BM EN01.003 | Energy | Exact source capture; eligibility, metering, baseline and monitoring adapter | Not yet evidenced as production-ready |
-| BM IN02.001 | Industry | Exact source capture; boundary, baseline, activity data and independent reconciliation | Not yet evidenced as production-ready |
-| BM IN02.002 | Industry | Separate source-locked adapter and regression suite | Not yet evidenced as production-ready |
+| BM WA03.001 | Landfill methane recovery | Waste handling and disposal | Complete source-locked method, parameter and tool mapping; independently reconcile equations and monitoring | Partial implementation; production eligibility unproven |
+| BM WA03.002 | Flaring or use of landfill gas | Waste handling and disposal | Reconcile applicability and every referenced tool, including BM-T-007 and BM-T-012, against official current sources | Screening exists; production eligibility must remain false until proven |
+| BM WA03.003 | Production of Compressed Bio-gas (CBG) | Waste handling and disposal | Capture approved method, feedstock boundary, methane/energy measurements, leakage and monitoring rules | Not yet evidenced as production-ready |
+| BM AG04.001 | Methane recovery from livestock and manure management at households and small farms | Agriculture | Capture exact official title, applicability, baseline, activity data, uncertainty and monitoring | Not yet evidenced as production-ready |
+| BM AG04.002 | Emission reduction through improved management practices in rice cultivation | Agriculture | Same controls; separate versioned adapter and test set | Not yet evidenced as production-ready |
+| BM FR05.001 | Afforestation and reforestation of degraded mangrove habitats | Forestry | Land eligibility, boundary, baseline, monitoring, leakage, permanence/reversal and safeguards as required by the source | Not yet evidenced as production-ready |
+| BM FR05.002 | Afforestation and reforestation of lands except wetlands | Forestry | Separate source-locked adapter and independent regression suite | Not yet evidenced as production-ready |
+| BM EN01.001 | Grid-connected electricity generation from renewable sources | Energy | Exact source capture; eligibility, metering, baseline and monitoring adapter | Not yet evidenced as production-ready |
+| BM EN01.002 | Hydrogen production from electrolysis of water | Energy | Exact source capture; eligibility, metering, baseline and monitoring adapter | Not yet evidenced as production-ready |
+| BM EN01.003 | Electricity and Heat Generation from Biomass | Energy | Exact source capture; eligibility, metering, baseline and monitoring adapter | Not yet evidenced as production-ready |
+| BM IN02.001 | Energy efficiency and fuel switching measures for industrial facilities | Industries | Exact source capture; boundary, baseline, activity data and independent reconciliation | Not yet evidenced as production-ready |
+| BM IN02.002 | Hydrogen production using methane extracted from biogas | Industries | Separate source-locked adapter and regression suite | Not yet evidenced as production-ready |
 
 Do not enable a method merely to increase catalogue coverage. Where the official register or source document is ambiguous, record the ambiguity and obtain authoritative clarification.
 
