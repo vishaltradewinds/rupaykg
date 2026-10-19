@@ -82,6 +82,9 @@ export function createConfiguredWasteLogExtractionProvider(): WasteLogExtraction
       try {
         const response = await fetch(url, {
           method: "POST",
+          // Never follow provider redirects: they can redirect authenticated requests
+          // to an unintended host or downgrade the transport.
+          redirect: "error",
           signal: controller.signal,
           headers: {
             "content-type": "application/json",
