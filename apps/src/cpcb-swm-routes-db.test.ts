@@ -69,6 +69,14 @@ test("CPCB SWM workspace routes enforce permissions and persist only user-report
     assert.equal(absentMapping.rows[0]?.count, 0, "no organization-to-stakeholder mapping must fail closed");
 
     await pool.query("update organizations set verification_status='VERIFIED',verified_at=now(),verified_by_identity_id=$2 where id=$1", [organizationId, identityId]);
+    await assert.rejects(
+      pool.query(
+        "insert into organization_stakeholder_authorizations(organization_id,stakeholder_type,status,evidence_reference,evidence_sha256,verified_by_identity_id,verified_at) values($1,'BWG','VERIFIED','synthetic://bypass-attempt',$2,$3,now())",
+        [organizationId, hash("synthetic bypass attempt"), identityId],
+      ),
+      /STAKEHOLDER_AUTHORIZATION_REQUIRES_DUAL_CONTROL/,
+      "database must reject a verified mapping without an approved dual-control request",
+    );
     const requesterId = randomUUID();
     await pool.query("insert into identities(id,display_name) values($1,$2)", [requesterId, "Synthetic independent requester " + suffix]);
     const approvalRequest = await pool.query<{ id: string }>(
