@@ -467,7 +467,7 @@ test("stakeholder authorization VERIFY requires a distinct active approver and w
           status: "PENDING", evidence_reference: evidenceReference, evidence_sha256: evidenceSha256,
           request_reason: requestReason, request_hash: requestHash, requested_by_identity_id: requesterId, expires_at: null,
         }], rowCount: 1 };
-        if (sql.includes("as requester_active")) return { rows: [{ requester_active: true, approver_active: true }], rowCount: 1 };
+        if (sql.includes("requester_active")) return { rows: [{ requester_active: true, approver_active: true }], rowCount: 1 };
         if (sql.includes("select status,verification_status from organizations")) return { rows: [{ status: "VERIFIED", verification_status: "VERIFIED" }], rowCount: 1 };
         if (sql.includes("select id,status from organization_stakeholder_authorizations")) return { rows: [], rowCount: 0 };
         if (sql.includes("insert into organization_stakeholder_authorizations")) return { rows: [{ id: authorizationId }], rowCount: 1 };
@@ -480,7 +480,7 @@ test("stakeholder authorization VERIFY requires a distinct active approver and w
       release: () => undefined,
     }),
   } as unknown as Pool;
-  const app = Fastify({ logger: true });
+  const app = Fastify({ logger: false });
   await registerPlatformAdminRoutes(app, pool);
   const response = await app.inject({
     method: "POST",
@@ -526,7 +526,7 @@ test("stakeholder authorization REVOKE requires independent approval and appends
           status: "PENDING", evidence_reference: evidenceReference, evidence_sha256: evidenceSha256,
           request_reason: requestReason, request_hash: requestHash, requested_by_identity_id: requesterId, expires_at: null,
         }], rowCount: 1 };
-        if (sql.includes("as requester_active")) return { rows: [{ requester_active: true, approver_active: true }], rowCount: 1 };
+        if (sql.includes("requester_active")) return { rows: [{ requester_active: true, approver_active: true }], rowCount: 1 };
         if (sql.includes("select status,verification_status from organizations")) return { rows: [{ status: "VERIFIED", verification_status: "VERIFIED" }], rowCount: 1 };
         if (sql.includes("select id,status from organization_stakeholder_authorizations")) return { rows: [{ id: authorizationId, status: "VERIFIED" }], rowCount: 1 };
         if (sql.includes("update organization_stakeholder_authorizations set status='REVOKED'")) return { rows: [], rowCount: 1 };
@@ -539,7 +539,7 @@ test("stakeholder authorization REVOKE requires independent approval and appends
       release: () => undefined,
     }),
   } as unknown as Pool;
-  const app = Fastify({ logger: true });
+  const app = Fastify({ logger: false });
   await registerPlatformAdminRoutes(app, pool);
   const response = await app.inject({
     method: "POST",
