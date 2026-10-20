@@ -788,7 +788,7 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
     if (!["PENDING", "APPROVED", "REJECTED", "ALL"].includes(status)) return routeError(reply, 400, "status must be PENDING, APPROVED, REJECTED or ALL", "STAKEHOLDER_AUTHORIZATION_STATUS_INVALID");
     try {
       const result = await pool.query(
-        `select q.id,q.organization_id,o.name organization_name,q.stakeholder_type,q.status,q.evidence_reference,q.evidence_sha256,
+        `select q.id,q.organization_id,o.name organization_name,q.stakeholder_type,q.request_action,q.status,q.evidence_reference,q.evidence_sha256,
           q.request_reason,q.request_hash,q.requested_by_identity_id,requester.display_name requester_display_name,
           q.decided_by_identity_id,decider.display_name decider_display_name,q.decision_reason,q.expires_at,q.created_at,q.decided_at,q.applied_at
          from organization_stakeholder_authorization_requests q
@@ -850,7 +850,7 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
         if (decision === "REJECTED") {
           await client.query("update organization_stakeholder_authorization_requests set status='REJECTED',decided_by_identity_id=$2,decision_reason=$3,decided_at=clock_timestamp() where id=$1", [requestId, context.auth.identityId, decisionReason]);
           await audit(client, request, context.auth.identityId, "STAKEHOLDER_AUTHORIZATION_REJECTED", "organization_stakeholder_authorization_request", requestId,
-            { organizationId: item.organization_id, stakeholderType: item.stakeholder_type, requesterIdentityId: item.requested_by_identity_id, decisionReason }, item.organization_id);
+            { organizationId: item.organization_id, stakeholderType: item.stakeholder_type, requestAction: item.request_action, requesterIdentityId: item.requested_by_identity_id, decisionReason }, item.organization_id);
           return { status: 200 as const, body: { source: "postgresql", syntheticData: false, requestId, status: "REJECTED", applied: false } };
         }
         const existingMapping = await client.query<{ id: string; status: string }>(
