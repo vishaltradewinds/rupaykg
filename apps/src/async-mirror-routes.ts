@@ -25,7 +25,9 @@ function isObject(value: unknown): value is Record<string, unknown> {
 
 function parseBatch(value: unknown): BridgeBatch | null {
   if (!isObject(value) || !isObject(value.batchMetadata) || !Array.isArray(value.rawDataLogs)) return null;
+  if (Object.keys(value).some((key) => !["batchMetadata", "rawDataLogs"].includes(key))) return null;
   const metadata = value.batchMetadata;
+  if (Object.keys(metadata).some((key) => !["authorityCode", "municipalCode", "syncWindowTimestamp", "batchId"].includes(key))) return null;
   const authorityCode = typeof metadata.authorityCode === "string" ? metadata.authorityCode.trim().toUpperCase() : "";
   const municipalCode = typeof metadata.municipalCode === "string" ? metadata.municipalCode.trim().toUpperCase() : "";
   const syncWindowTimestamp = typeof metadata.syncWindowTimestamp === "string" ? metadata.syncWindowTimestamp : "";
