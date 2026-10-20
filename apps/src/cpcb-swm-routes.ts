@@ -82,10 +82,37 @@ export function safeObservations(value: unknown): boolean {
 }
 function hashEvent(value: unknown): string { return createHash("sha256").update(JSON.stringify(value)).digest("hex"); }
 async function writeAudit(client: PoolClient, identityId: string, organizationId: string, action: string, targetId: string, payload: unknown, requestId: string) {
-  const prior = await client.query<{ event_hash: string }>("select event_hash from audit_events where organization_id=$1 order by created_at desc, id desc limit 1 for update", [organizationId]);
-  const previousHash = prior.rows[0]?.event_hash ?? null;
-  const event = { identityId, organizationId, action, targetId, payload, requestId, previousHash, at: new Date().toISOString() };
-  await client.query("insert into audit_events(actor_identity_id,organization_id,action,target_type,target_id,request_id,previous_hash,event_hash,payload) values($1,$2,$3,'cpcb_swm_stakeholder_workspace',$4,$5,$6,$7,$8::jsonb)", [identityId, organizationId, action, targetId, requestId, previousHash, hashEvent(event), JSON.stringify(payload)]);
+  // Use the same locked global chain head as platform-admin audit writes. Locking only
+  // the newest organization event can fork the chain under concurrent requests and
+  // bypass the authoritative chain head.
+  const prior = await client.query<{ last_event_hash: string | null }>(
+    "select last_event_hash from platform_audit_chain_head where singleton=true for update",
+  );
+  if (prior.rowCount !== 1) throw new Error("PLATFORM_AUDIT_CHAIN_HEAD_MISSING");
+  const previousHash = prior.rows[0]?.last_event_hash ?? null;
+  const event = {
+    actorIdentityId: identityId,
+    action,
+    targetType: "cpcb_swm_stakeholder_workspace",
+    targetId,
+    organizationId,
+    requestId,
+    payload,
+    previousHash,
+  };
+  const eventHash = hashEvent(event);
+  const inserted = await client.query<{ id: string }>(
+    `insert into audit_events(actor_identity_id,organization_id,action,target_type,target_id,request_id,previous_hash,event_hash,payload,created_at)
+     values($1,$2,$3,'cpcb_swm_stakeholder_workspace',$4,$5,$6,$7,$8::jsonb,clock_timestamp())
+     returning id`,
+    [identityId, organizationId, action, targetId, requestId, previousHash, eventHash, JSON.stringify(payload)],
+  );
+  const eventId = inserted.rows[0]?.id;
+  if (!eventId) throw new Error("PLATFORM_AUDIT_EVENT_INSERT_FAILED");
+  await client.query(
+    "update platform_audit_chain_head set last_event_id=$1,last_event_hash=$2,updated_at=clock_timestamp() where singleton=true",
+    [eventId, eventHash],
+  );
 }
 
 export async function registerCpcbSwmRoutes(app: FastifyInstance, pool: Pool | null): Promise<void> {
