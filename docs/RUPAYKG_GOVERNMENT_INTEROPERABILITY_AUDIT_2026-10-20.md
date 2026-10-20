@@ -280,3 +280,13 @@ The readiness endpoint is a platform-operational signal, not a security certific
 - CI run #1532 passed on code head `424fae0233035954c9441c204fa396e8ee0c275c`: dependency audit (0 production dependency vulnerabilities reported), migration validation/application, typecheck, build, browser smoke test, PostgreSQL acceptance tests and production-container build. Run: https://github.com/vishaltradewinds/rupaykg/actions/runs/39431690572.
 
 This narrows timestamp ambiguity in field-device provenance. It does not validate the truth of a measured quantity or grant official MRV status. Production remains unchanged and PR #41 remains draft/unmerged/undeployed.
+
+
+## 13. Field-sync sequence validation — 2026-10-20 13:43 UTC
+
+- The compatibility endpoint `POST /api/v1/operations/sync` no longer silently substitutes a current timestamp when a caller supplies an invalid `clientSequence`/`sequence`. Explicit values must be positive safe integers; invalid values return HTTP 400 `INVALID_CLIENT_SEQUENCE`.
+- Legacy clients that omit the sequence still use the compatibility fallback. New integrations should send a stable positive per-device sequence to preserve collision detection and offline reconciliation semantics.
+- Runtime acceptance now asserts that an explicit malformed sequence is rejected before the field-sync intake route is invoked.
+- CI run #1535 passed end-to-end on code head `2a13676b8a125f79d22ca697f2945799969c3b76`: dependency audit, migration validation/application, typecheck, build, browser smoke test, PostgreSQL acceptance tests and production-container build. Run: https://github.com/vishaltradewinds/rupaykg/actions/runs/39432120027.
+
+This prevents silently replacing malformed client metadata with an unrelated server time. The compatibility fallback for omitted sequence values remains documented and should be removed only with a versioned API contract change. Production remains unchanged; PR #41 remains draft/unmerged/undeployed.
