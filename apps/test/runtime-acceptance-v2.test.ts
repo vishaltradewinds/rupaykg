@@ -119,7 +119,7 @@ after(async () => {
 describe("runtime acceptance", () => {
   it("fails readiness without authoritative PostgreSQL", async () => {
     if (!pool) return;
-    const response = await fetch(`http://127.0.0.1:${port + 1}/health`);
+    const response = await fetch(`http://127.0.0.1:${port + 10}/health`);
     const result = await body(response);
     assert.equal(response.status, 503); assert.equal(result.status, "DEGRADED"); assert.equal(result.database, "UNAVAILABLE"); assert.equal(result.syntheticData, false);
   });
