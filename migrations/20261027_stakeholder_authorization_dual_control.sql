@@ -6,6 +6,7 @@ create table if not exists organization_stakeholder_authorization_requests (
     'BWG','WASTE_FACILITY','ULB','DISTRICT_PANCHAYAT','GRAM_PANCHAYAT',
     'COLLECTOR_TRANSPORTER','PROCESSOR'
   )),
+  request_action text not null default 'VERIFY' check (request_action in ('VERIFY','REVOKE')),
   status text not null default 'PENDING' check (status in ('PENDING','APPROVED','REJECTED')),
   evidence_reference text not null check (length(trim(evidence_reference)) between 1 and 1000),
   evidence_sha256 text not null check (evidence_sha256 ~ '^[0-9a-f]{64}$'),
@@ -41,7 +42,7 @@ begin
   if new.approval_request_id is null then
     raise exception 'STAKEHOLDER_AUTHORIZATION_REQUIRES_DUAL_CONTROL';
   end if;
-  select id, organization_id, stakeholder_type, status, evidence_reference, evidence_sha256, requested_by_identity_id,
+  select id, organization_id, stakeholder_type, request_action, status, evidence_reference, evidence_sha256, requested_by_identity_id,
          decided_by_identity_id, applied_at, expires_at
     into approval
     from organization_stakeholder_authorization_requests
@@ -50,6 +51,7 @@ begin
   if not found
      or approval.organization_id <> new.organization_id
      or approval.stakeholder_type <> new.stakeholder_type
+     or approval.request_action <> 'VERIFY'
      or approval.evidence_reference <> new.evidence_reference
      or approval.evidence_sha256 <> new.evidence_sha256
      or approval.expires_at is distinct from new.expires_at
