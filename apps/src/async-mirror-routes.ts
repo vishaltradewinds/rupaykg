@@ -80,7 +80,7 @@ function parseAuthorityCredentials(value: string): Record<string, AuthorityCrede
     if (credentials[authorityCode]) return null;
     credentials[authorityCode] = {
       secret,
-      municipalCodes: [...new Set(rawMunicipalCodes.map((code: string) => code.trim().toUpperCase()))],
+      municipalCodes: [...new Set(rawMunicipalCodes.map((code) => String(code).trim().toUpperCase()))],
     };
   }
   return credentials;
