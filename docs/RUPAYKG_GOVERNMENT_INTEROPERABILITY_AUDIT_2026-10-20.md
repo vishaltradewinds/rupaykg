@@ -248,3 +248,16 @@ This addendum records later engineering work and supersedes earlier branch/CI-he
 4. Wire and verify monitoring/alert delivery in a controlled environment with an accountable human escalation owner.
 5. Finish the independent security review, backup/restore, retention/privacy, and production change-control evidence.
 6. Keep official API and real Guardian/Hedera/Mirror Node acceptance as separate, explicitly authorized gates. Production remains HOLD until the relevant Shakti approvals and evidence are recorded.
+
+
+## 10. AI intake rate-limit ledger hardening — 2026-10-20 13:27 UTC
+
+A follow-up review found that a new unique idempotency key could create a PROCESSING ledger row before the rate limiter rejected the request. The source evidence and model call were blocked, but a rate-limited caller could still leave an empty durable job row for each denied unique key.
+
+**Fix applied:** If a newly created job is denied by the fixed-window rate limiter before source evidence is stored, the route deletes that empty job only when its ID and lease token still match, its status is PROCESSING, and `source_evidence_id IS NULL`. Existing retry jobs are marked retryable instead. This preserves lease fencing and prevents denied unique keys from accumulating empty job records.
+
+**Acceptance evidence:** Added a disposable-PostgreSQL integration test that submits ten synthetic requests, confirms the eleventh is rejected with HTTP 429, confirms the provider is not invoked for the denied request, and asserts the job ledger contains only the ten permitted requests. Test cleanup also removes its per-fixture rate-limit counters.
+
+CI run #1525 passed end-to-end on commit `056437963e542fd8fe06116a3f15bf6a46005e33`: dependency audit, migration validation/application in disposable PostgreSQL, typecheck, production build, browser smoke test, full test suite including PostgreSQL acceptance, and production-container build. Run: https://github.com/vishaltradewinds/rupaykg/actions/runs/39430154562.
+
+This is a code/test improvement only. No production database or runtime configuration was changed. PR #41 remains draft, unmerged and undeployed; staging, operational ownership, independent security review and Shakti release gates remain open.
