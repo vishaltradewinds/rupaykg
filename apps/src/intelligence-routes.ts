@@ -27,7 +27,11 @@ const MAX_LOG_BYTES = 1024 * 1024;
 /** Atomic cross-instance fixed-window limiter; returns false once 10 attempts are consumed. */
 export async function consumeAiIntakeRateLimit(pool: Pool, identityId: string, organizationId: string): Promise<boolean> {
   const result = await pool.query<{ request_count: number }>(
-    `insert into ai_intake_rate_limits (identity_id, organization_id, window_start, request_count)
+    `with cleanup as (
+       delete from ai_intake_rate_limits
+        where window_start < clock_timestamp() - interval '48 hours'
+     )
+     insert into ai_intake_rate_limits (identity_id, organization_id, window_start, request_count)
      values ($1, $2, date_trunc('minute', clock_timestamp()), 1)
      on conflict (identity_id, organization_id, window_start)
      do update set request_count = ai_intake_rate_limits.request_count + 1
