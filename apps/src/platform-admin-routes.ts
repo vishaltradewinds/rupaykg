@@ -725,13 +725,14 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
     const body = bodyOf(request);
     const organizationId = text(body, "organizationId");
     const stakeholderType = text(body, "stakeholderType");
+    const requestAction = text(body, "action") ?? "VERIFY";
     const evidenceReference = text(body, "evidenceReference");
     const evidenceSha256 = text(body, "evidenceSha256");
     const reason = text(body, "reason");
     const expiresAtRaw = text(body, "expiresAt");
     const allowedTypes = ["BWG", "WASTE_FACILITY", "ULB", "DISTRICT_PANCHAYAT", "GRAM_PANCHAYAT", "COLLECTOR_TRANSPORTER", "PROCESSOR"];
     if (!organizationId || !UUID.test(organizationId) || !stakeholderType || !allowedTypes.includes(stakeholderType)
-      || !evidenceReference || evidenceReference.length > 1000 || !evidenceSha256 || !/^[0-9a-f]{64}$/.test(evidenceSha256)
+      || !["VERIFY", "REVOKE"].includes(requestAction) || !evidenceReference || evidenceReference.length > 1000 || !evidenceSha256 || !/^[0-9a-f]{64}$/.test(evidenceSha256)
       || !validReason(reason) || (expiresAtRaw && !Number.isFinite(Date.parse(expiresAtRaw)))) {
       return routeError(reply, 400, "Valid organization, stakeholder type, evidence reference, SHA-256, reason and optional expiry are required", "STAKEHOLDER_AUTHORIZATION_INPUT_INVALID");
     }
@@ -748,27 +749,28 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
           "select status from organization_stakeholder_authorizations where organization_id=$1 and stakeholder_type=$2 for update",
           [organizationId, stakeholderType],
         );
-        if (existing.rows[0]?.status === "VERIFIED") return { status: 409 as const, body: { error: "A verified mapping already exists; revoke it through a governed process before replacing it", code: "STAKEHOLDER_AUTHORIZATION_ALREADY_VERIFIED" } };
+        if (requestAction === "VERIFY" && existing.rows[0]?.status === "VERIFIED") return { status: 409 as const, body: { error: "A verified mapping already exists; revoke it through a governed process before replacing it", code: "STAKEHOLDER_AUTHORIZATION_ALREADY_VERIFIED" } };
+        if (requestAction === "REVOKE" && existing.rows[0]?.status !== "VERIFIED") return { status: 409 as const, body: { error: "Only a currently verified mapping can be submitted for revocation", code: "STAKEHOLDER_AUTHORIZATION_NOT_VERIFIED" } };
         const pending = await client.query(
           "select id from organization_stakeholder_authorization_requests where organization_id=$1 and stakeholder_type=$2 and status='PENDING' limit 1",
           [organizationId, stakeholderType],
         );
         if (pending.rows[0]) return { status: 409 as const, body: { error: "A matching stakeholder authorization request is already pending", code: "STAKEHOLDER_AUTHORIZATION_ALREADY_PENDING" } };
         const requestHash = hash(JSON.stringify({
-          organizationId, stakeholderType, evidenceReference, evidenceSha256,
+          organizationId, stakeholderType, requestAction, evidenceReference, evidenceSha256,
           requestReason: reason, requesterIdentityId: context.auth.identityId,
           expiresAt: expiresAt ? expiresAt.toISOString() : null,
         }));
         const inserted = await client.query<{ id: string }>(
           `insert into organization_stakeholder_authorization_requests
-            (organization_id,stakeholder_type,evidence_reference,evidence_sha256,request_reason,request_hash,requested_by_identity_id,expires_at)
-           values($1,$2,$3,$4,$5,$6,$7,$8) returning id`,
-          [organizationId, stakeholderType, evidenceReference, evidenceSha256, reason, requestHash, context.auth.identityId, expiresAt],
+            (organization_id,stakeholder_type,request_action,evidence_reference,evidence_sha256,request_reason,request_hash,requested_by_identity_id,expires_at)
+           values($1,$2,$3,$4,$5,$6,$7,$8,$9) returning id`,
+          [organizationId, stakeholderType, requestAction, evidenceReference, evidenceSha256, reason, requestHash, context.auth.identityId, expiresAt],
         );
         const id = inserted.rows[0]!.id;
         await audit(client, request, context.auth.identityId, "STAKEHOLDER_AUTHORIZATION_REQUESTED", "organization_stakeholder_authorization_request", id,
-          { organizationId, stakeholderType, evidenceReference, evidenceSha256, requestHash, reason, expiresAt: expiresAt?.toISOString() ?? null }, organizationId);
-        return { status: 201 as const, body: { source: "postgresql", syntheticData: false, request: { id, organizationId, stakeholderType, status: "PENDING", requestHash } } };
+          { organizationId, stakeholderType, requestAction, evidenceReference, evidenceSha256, requestHash, reason, expiresAt: expiresAt?.toISOString() ?? null }, organizationId);
+        return { status: 201 as const, body: { source: "postgresql", syntheticData: false, request: { id, organizationId, stakeholderType, action: requestAction, status: "PENDING", requestHash } } };
       });
       return reply.code(result.status).send(result.body);
     } catch (error) {
@@ -812,10 +814,10 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
     try {
       const result = await transaction(pool, async (client) => {
         const selected = await client.query<{
-          id: string; organization_id: string; stakeholder_type: string; status: string; evidence_reference: string;
+          id: string; organization_id: string; stakeholder_type: string; request_action: string; status: string; evidence_reference: string;
           evidence_sha256: string; request_reason: string; request_hash: string; requested_by_identity_id: string; expires_at: Date | null;
         }>(
-          "select id,organization_id,stakeholder_type,status,evidence_reference,evidence_sha256,request_reason,request_hash,requested_by_identity_id,expires_at from organization_stakeholder_authorization_requests where id=$1 for update",
+          "select id,organization_id,stakeholder_type,request_action,status,evidence_reference,evidence_sha256,request_reason,request_hash,requested_by_identity_id,expires_at from organization_stakeholder_authorization_requests where id=$1 for update",
           [requestId],
         );
         const item = selected.rows[0];
@@ -824,7 +826,7 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
         if (item.requested_by_identity_id === context.auth.identityId) return { status: 409 as const, body: { error: "A different Super Admin must decide this request", code: "STAKEHOLDER_AUTHORIZATION_SELF_APPROVAL_FORBIDDEN" } };
         const expiry = item.expires_at ? new Date(item.expires_at).toISOString() : null;
         const expectedHash = hash(JSON.stringify({
-          organizationId: item.organization_id, stakeholderType: item.stakeholder_type,
+          organizationId: item.organization_id, stakeholderType: item.stakeholder_type, requestAction: item.request_action,
           evidenceReference: item.evidence_reference, evidenceSha256: item.evidence_sha256,
           requestReason: item.request_reason, requesterIdentityId: item.requested_by_identity_id, expiresAt: expiry,
         }));
@@ -851,12 +853,19 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
             { organizationId: item.organization_id, stakeholderType: item.stakeholder_type, requesterIdentityId: item.requested_by_identity_id, decisionReason }, item.organization_id);
           return { status: 200 as const, body: { source: "postgresql", syntheticData: false, requestId, status: "REJECTED", applied: false } };
         }
-        const existingMapping = await client.query<{ status: string }>(
-          "select status from organization_stakeholder_authorizations where organization_id=$1 and stakeholder_type=$2 for update",
+        const existingMapping = await client.query<{ id: string; status: string }>(
+          "select id,status from organization_stakeholder_authorizations where organization_id=$1 and stakeholder_type=$2 for update",
           [item.organization_id, item.stakeholder_type],
         );
-        if (existingMapping.rows[0]?.status === "VERIFIED") return { status: 409 as const, body: { error: "A verified stakeholder mapping already exists; revoke it through a governed process before replacing it", code: "STAKEHOLDER_AUTHORIZATION_ALREADY_VERIFIED" } };
+        if (item.request_action === "REVOKE" && existingMapping.rows[0]?.status !== "VERIFIED") return { status: 409 as const, body: { error: "Verified mapping state changed; submit a new revocation request", code: "STAKEHOLDER_AUTHORIZATION_STATE_CHANGED" } };
+        if (item.request_action === "VERIFY" && existingMapping.rows[0]?.status === "VERIFIED") return { status: 409 as const, body: { error: "A verified stakeholder mapping already exists; revoke it through a governed process before replacing it", code: "STAKEHOLDER_AUTHORIZATION_ALREADY_VERIFIED" } };
         await client.query("update organization_stakeholder_authorization_requests set status='APPROVED',decided_by_identity_id=$2,decision_reason=$3,decided_at=clock_timestamp(),applied_at=clock_timestamp() where id=$1", [requestId, context.auth.identityId, decisionReason]);
+        if (item.request_action === "REVOKE") {
+          await client.query("update organization_stakeholder_authorizations set status='REVOKED',updated_at=clock_timestamp() where id=$1", [existingMapping.rows[0]!.id]);
+          await audit(client, request, context.auth.identityId, "STAKEHOLDER_AUTHORIZATION_REVOKED", "organization_stakeholder_authorization", existingMapping.rows[0]!.id,
+            { requestId, organizationId: item.organization_id, stakeholderType: item.stakeholder_type, requesterIdentityId: item.requested_by_identity_id, approverIdentityId: context.auth.identityId, evidenceReference: item.evidence_reference, evidenceSha256: item.evidence_sha256, decisionReason }, item.organization_id);
+          return { status: 200 as const, body: { source: "postgresql", syntheticData: false, requestId, authorizationId: existingMapping.rows[0]!.id, status: "REVOKED", applied: true } };
+        }
         const mapping = await client.query<{ id: string }>(
           `insert into organization_stakeholder_authorizations
             (organization_id,stakeholder_type,status,evidence_reference,evidence_sha256,verification_note,verified_by_identity_id,verified_at,expires_at,approval_request_id)
@@ -869,7 +878,7 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
            returning id`,
           [item.organization_id, item.stakeholder_type, item.evidence_reference, item.evidence_sha256, decisionReason, context.auth.identityId, item.expires_at, requestId],
         );
-        if (!mapping.rows[0]) return { status: 409 as const, body: { error: "A verified stakeholder mapping already exists", code: "STAKEHOLDER_AUTHORIZATION_ALREADY_VERIFIED" } };
+        if (!mapping.rows[0]) throw new Error("STAKEHOLDER_AUTHORIZATION_ALREADY_VERIFIED");
         await audit(client, request, context.auth.identityId, "STAKEHOLDER_AUTHORIZATION_APPROVED", "organization_stakeholder_authorization", mapping.rows[0].id,
           { requestId, organizationId: item.organization_id, stakeholderType: item.stakeholder_type, requesterIdentityId: item.requested_by_identity_id, approverIdentityId: context.auth.identityId, evidenceReference: item.evidence_reference, evidenceSha256: item.evidence_sha256, expiresAt: expiry, decisionReason }, item.organization_id);
         return { status: 200 as const, body: { source: "postgresql", syntheticData: false, requestId, authorizationId: mapping.rows[0].id, status: "APPROVED", applied: true } };
