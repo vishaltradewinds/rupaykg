@@ -35,7 +35,7 @@ export function canonicalGovBridgeHash(value: unknown): string {
 }
 
 function validRfc3339Timestamp(value: string): boolean {
-  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\\.(\d{1,3}))?(Z|([+-])(\d{2}):(\d{2}))$/.exec(value);
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?(Z|([+-])(\d{2}):(\d{2}))$/.exec(value);
   if (!match) return false;
   const [, year, month, day, hour, minute, second, , , , offsetHour, offsetMinute] = match;
   const datePart = `${year}-${month}-${day}`;
