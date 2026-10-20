@@ -118,7 +118,7 @@ test("registered inbox route allow-lists authority and persists accepted batches
       const body = validBatch();
       const denied = await app.inject({ method: "POST", url: "/api/v1/bridge/gov/inbox", headers: signedHeaders(body), payload: body });
       assert.equal(denied.statusCode, 403);
-      assert.equal(denied.json().code, "GOV_BRIDGE_AUTHORITY_FORBIDDEN");
+      assert.equal(denied.json().code, "GOV_BRIDGE_MUNICIPAL_SCOPE_FORBIDDEN");
       assert.equal(queryCount, 0);
     });
 
