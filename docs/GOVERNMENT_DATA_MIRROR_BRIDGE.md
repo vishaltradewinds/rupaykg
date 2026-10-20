@@ -29,11 +29,24 @@ Headers:
 
 For this initial bridge adapter, the sender computes HMAC-SHA256 over the UTF-8 bytes of `<timestampHeader>.<JSON.stringify(parsedPayload)>`, using a randomly generated shared secret of at least 32 characters. Sender and receiver must use the same JSON serialization convention. Timestamps older than five minutes are rejected. Use a secret manager; never place the secret in source control or client-side code.
 
-Configure:
-- `RUPAYKG_GOV_BRIDGE_HMAC_SECRET`
-- `RUPAYKG_GOV_BRIDGE_AUTHORITY_CODES`: comma-separated allow-listed authority codes.
+Configure `RUPAYKG_GOV_BRIDGE_AUTHORITY_CREDENTIALS` as a JSON object mapping each authority code to its own unique secret and permitted municipal codes. Example shape (use real random secrets only in the deployment secret manager; never copy example values):
 
-The endpoint enforces a 1 MiB request limit, bounded record count/length, timestamp freshness, constant-time HMAC comparison, authority allow-list, and idempotency by authority + batch ID. Reuse of a batch ID with different content returns conflict. Accepted payloads are persisted in `async_mirror_inbox` and return HTTP 202; repeat delivery of the same batch is idempotent.
+```json
+{
+  "MH-PCB": {
+    "secret": "<unique-random-secret-at-least-32-characters>",
+    "municipalCodes": ["MCGM-MUM"]
+  },
+  "MPPCB": {
+    "secret": "<different-unique-random-secret-at-least-32-characters>",
+    "municipalCodes": ["BHOPAL-MUNI"]
+  }
+}
+```
+
+The old single shared-secret and comma-separated authority allow-list variables are no longer accepted by the active inbox route. Each request's claimed authority selects its own key; the signature must validate with that authority's key, and the municipality must be in that credential's explicit scope. Unknown authorities, invalid configuration, and out-of-scope municipalities fail closed. Provision one secret per authority, rotate/revoke independently, and never commit secrets to source control.
+
+The endpoint enforces a 1 MiB request limit, bounded record count/length, timestamp freshness, constant-time HMAC comparison, authority-specific credentials, municipal scope, and idempotency by authority + batch ID. Reuse of a batch ID with different content returns conflict. Accepted payloads are persisted in `async_mirror_inbox` and return HTTP 202; repeat delivery of the same batch is idempotent. The current HMAC is over the sender's JSON serialization of the parsed payload, so the sender must preserve the agreed serialization convention; a canonical-JSON hash improvement remains a separate compatibility gate.
 
 ## What happens after receipt
 
