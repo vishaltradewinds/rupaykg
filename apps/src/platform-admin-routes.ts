@@ -851,6 +851,11 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
             { organizationId: item.organization_id, stakeholderType: item.stakeholder_type, requesterIdentityId: item.requested_by_identity_id, decisionReason }, item.organization_id);
           return { status: 200 as const, body: { source: "postgresql", syntheticData: false, requestId, status: "REJECTED", applied: false } };
         }
+        const existingMapping = await client.query<{ status: string }>(
+          "select status from organization_stakeholder_authorizations where organization_id=$1 and stakeholder_type=$2 for update",
+          [item.organization_id, item.stakeholder_type],
+        );
+        if (existingMapping.rows[0]?.status === "VERIFIED") return { status: 409 as const, body: { error: "A verified stakeholder mapping already exists; revoke it through a governed process before replacing it", code: "STAKEHOLDER_AUTHORIZATION_ALREADY_VERIFIED" } };
         await client.query("update organization_stakeholder_authorization_requests set status='APPROVED',decided_by_identity_id=$2,decision_reason=$3,decided_at=clock_timestamp(),applied_at=clock_timestamp() where id=$1", [requestId, context.auth.identityId, decisionReason]);
         const mapping = await client.query<{ id: string }>(
           `insert into organization_stakeholder_authorizations
