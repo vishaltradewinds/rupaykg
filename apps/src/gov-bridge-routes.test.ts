@@ -163,7 +163,7 @@ test("registered inbox route replays an identical batch and rejects a reused ID 
       });
       assert.equal(replay.statusCode, 202);
       assert.equal(replay.json().replay, true);
-      assert.equal(replay.json().status, "RECEIVED");
+      assert.equal(replay.json().status, "RECEIVED_NOT_PROCESSED");
 
       const altered = { ...original, rawDataLogs: ["A different waste record with the same batch identifier"] };
       const conflict = await app.inject({
