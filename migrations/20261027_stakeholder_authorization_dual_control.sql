@@ -52,6 +52,7 @@ begin
      or approval.stakeholder_type <> new.stakeholder_type
      or approval.evidence_reference <> new.evidence_reference
      or approval.evidence_sha256 <> new.evidence_sha256
+     or approval.expires_at is distinct from new.expires_at
      or approval.status <> 'APPROVED'
      or approval.applied_at is null
      or approval.requested_by_identity_id = approval.decided_by_identity_id
