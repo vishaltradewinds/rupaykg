@@ -1,3 +1,4 @@
+import { createHash, randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import type { Pool } from "pg";
 import { canActForOrganization } from "./auth.js";
@@ -84,10 +85,73 @@ export async function registerIntelligenceRoutes(
         return reply.code(403).send({ error: "Evidence upload permission required", code: "EVIDENCE_UPLOAD_FORBIDDEN" });
       }
 
+      const idempotencyKey = request.headers["idempotency-key"];
+      if (typeof idempotencyKey !== "string" || !idempotencyKey.trim() || idempotencyKey.length > 200 || /[\\r\\n\\u0000]/.test(idempotencyKey)) {
+        return reply.code(400).send({ error: "A valid Idempotency-Key header (1-200 characters) is required", code: "AI_INTAKE_IDEMPOTENCY_KEY_REQUIRED" });
+      }
+      const requestSha256 = createHash("sha256").update(JSON.stringify({ activityId, rawLog, sourceReference })).digest("hex");
+      const jobIdentity = auth.identityId;
+      const jobOrganization = row.organization_id;
+      const insertJob = await pool.query<{ id: string; lease_token: string }>(
+        `insert into ai_evidence_intake_jobs(identity_id,organization_id,idempotency_key,request_sha256)
+         values($1,$2,$3,$4) on conflict(identity_id,organization_id,idempotency_key) do nothing
+         returning id, lease_token`,
+        [jobIdentity, jobOrganization, idempotencyKey, requestSha256],
+      );
+      let jobId = insertJob.rows[0]?.id;
+      let leaseToken = insertJob.rows[0]?.lease_token;
+      let existingSourceId: string | null = null;
+      if (!jobId) {
+        const existing = await pool.query<{
+          id: string; request_sha256: string; status: string; source_evidence_id: string | null;
+          response_json: unknown; lease_expires_at: Date | string; lease_token: string;
+        }>(
+          `select id, request_sha256, status, source_evidence_id, response_json, lease_expires_at, lease_token
+             from ai_evidence_intake_jobs
+            where identity_id=$1 and organization_id=$2 and idempotency_key=$3`,
+          [jobIdentity, jobOrganization, idempotencyKey],
+        );
+        const prior = existing.rows[0];
+        if (!prior) return reply.code(503).send({ error: "Idempotency ledger unavailable", code: "AI_INTAKE_IDEMPOTENCY_UNAVAILABLE" });
+        if (prior.request_sha256 !== requestSha256) {
+          return reply.code(409).send({ error: "Idempotency-Key was already used for different request content", code: "AI_INTAKE_IDEMPOTENCY_CONFLICT" });
+        }
+        if (prior.status === "COMPLETED" && prior.response_json && typeof prior.response_json === "object") {
+          return reply.code(200).send({ ...(prior.response_json as Record<string, unknown>), idempotentReplay: true });
+        }
+        const takeover = await pool.query<{ id: string; lease_token: string; source_evidence_id: string | null }>(
+          `update ai_evidence_intake_jobs
+              set status='PROCESSING', attempt_count=least(attempt_count+1,100),
+                  lease_token=$4::uuid, lease_expires_at=now()+interval '5 minutes',
+                  updated_at=now(), last_error_code=null
+            where id=$1 and request_sha256=$2
+              and (status='RETRYABLE_FAILED' or (status='PROCESSING' and lease_expires_at < now()))
+            returning id, lease_token, source_evidence_id`,
+          [prior.id, requestSha256, idempotencyKey, randomUUID()],
+        );
+        if (!takeover.rows[0]) {
+          return reply.code(202).send({ jobId: prior.id, status: "PROCESSING", retryAfterSeconds: 5, authoritativeMutation: false });
+        }
+        jobId = takeover.rows[0].id;
+        leaseToken = takeover.rows[0].lease_token;
+        existingSourceId = takeover.rows[0].source_evidence_id;
+      }
+
+      const markRetryable = async (errorCode: string) => {
+        if (!jobId || !leaseToken) return;
+        await pool.query(
+          `update ai_evidence_intake_jobs set status='RETRYABLE_FAILED', last_error_code=$3,
+             lease_expires_at=now(), updated_at=now()
+            where id=$1 and lease_token=$2::uuid and status='PROCESSING'`,
+          [jobId, leaseToken, errorCode],
+        );
+      };
+
       // Database-backed fixed-window limit is shared across API instances. Count attempts before
       // evidence persistence/provider calls so clients cannot bypass the limit by retrying failures.
       const allowed = await consumeAiIntakeRateLimit(pool, auth.identityId, row.organization_id);
       if (!allowed) {
+        await markRetryable("AI_INTAKE_RATE_LIMITED");
         return reply.code(429).send({
           error: "Evidence intake rate limit exceeded; retry after the current minute window",
           code: "AI_INTAKE_RATE_LIMITED",
@@ -97,24 +161,48 @@ export async function registerIntelligenceRoutes(
       }
 
       // Preserve the original log first. Model output is never a replacement for source evidence.
-      const sourceClient = await pool.connect();
       let source: Awaited<ReturnType<typeof persistEvidenceArtifact>>;
-      try {
-        await sourceClient.query("begin");
-        source = await persistEvidenceArtifact({
-          client: sourceClient, activityId, organizationId: row.organization_id, identityId: auth.identityId,
-          evidenceType: "AI_SOURCE_LOG", fileName: "source-log.txt", mediaType: "text/plain",
-          bytes: Buffer.from(rawLog, "utf8"), sourceReference,
-          metadata: { intakeType: "AI_ASSISTED_UNSTRUCTURED_LOG", trustLevel: "UNTRUSTED_SOURCE", extractionStatus: "NOT_STARTED" },
-        });
-        await sourceClient.query("commit");
-      } catch (error) {
-        await sourceClient.query("rollback").catch(() => undefined);
-        request.log.error({ errorType: error instanceof Error ? error.name : "unknown" }, "AI intake source evidence persistence failed");
-        return reply.code(503).send({ error: "Source evidence could not be stored", code: "EVIDENCE_VAULT_UNAVAILABLE" });
-      } finally { sourceClient.release(); }
+      if (existingSourceId) {
+        const stored = await pool.query<{ evidence_id: string; artifact_version_id: string; series_id: string; version_number: number; sha256: string; size_bytes: number }>(
+          `select e.id evidence_id, v.id artifact_version_id, v.series_id, v.version_number, v.sha256, v.size_bytes
+             from evidence e join evidence_artifact_versions v on v.evidence_id=e.id
+            where e.id=$1 and e.activity_id=$2 and e.evidence_type='AI_SOURCE_LOG'
+            order by v.version_number desc limit 1`,
+          [existingSourceId, activityId],
+        );
+        const s = stored.rows[0];
+        if (!s) {
+          await markRetryable("AI_INTAKE_SOURCE_RECOVERY_FAILED");
+          return reply.code(503).send({ error: "Previously captured source evidence could not be recovered", code: "AI_INTAKE_SOURCE_RECOVERY_FAILED", authoritativeMutation: false });
+        }
+        source = { evidenceId: s.evidence_id, artifactVersionId: s.artifact_version_id, seriesId: s.series_id, versionNumber: Number(s.version_number), sha256: s.sha256, sizeBytes: Number(s.size_bytes) };
+      } else {
+        const sourceClient = await pool.connect();
+        try {
+          await sourceClient.query("begin");
+          source = await persistEvidenceArtifact({
+            client: sourceClient, activityId, organizationId: row.organization_id, identityId: auth.identityId,
+            evidenceType: "AI_SOURCE_LOG", fileName: "source-log.txt", mediaType: "text/plain",
+            bytes: Buffer.from(rawLog, "utf8"), sourceReference,
+            metadata: { intakeType: "AI_ASSISTED_UNSTRUCTURED_LOG", trustLevel: "UNTRUSTED_SOURCE", extractionStatus: "NOT_STARTED" },
+          });
+          const linked = await sourceClient.query(
+            `update ai_evidence_intake_jobs set source_evidence_id=$3, updated_at=now()
+              where id=$1 and lease_token=$2::uuid and status='PROCESSING'`,
+            [jobId, leaseToken, source.evidenceId],
+          );
+          if (linked.rowCount !== 1) throw new Error("AI intake job lease lost before source commit");
+          await sourceClient.query("commit");
+        } catch (error) {
+          await sourceClient.query("rollback").catch(() => undefined);
+          await markRetryable("EVIDENCE_VAULT_UNAVAILABLE");
+          request.log.error({ errorType: error instanceof Error ? error.name : "unknown" }, "AI intake source evidence persistence failed");
+          return reply.code(503).send({ error: "Source evidence could not be stored", code: "EVIDENCE_VAULT_UNAVAILABLE" });
+        } finally { sourceClient.release(); }
+      }
 
       if (!extractionProvider) {
+        await markRetryable("AI_PROVIDER_NOT_CONFIGURED");
         return reply.code(503).send({
           error: "Source log captured; no extraction provider is configured",
           code: "AI_PROVIDER_NOT_CONFIGURED",
@@ -128,6 +216,7 @@ export async function registerIntelligenceRoutes(
       try {
         untrustedOutput = await extractionProvider.extract({ rawLog, activityId });
       } catch (error) {
+        await markRetryable("AI_EXTRACTION_FAILED");
         request.log.error({ providerId: extractionProvider.providerId, errorType: error instanceof Error ? error.name : "unknown" }, "AI extraction provider failed");
         return reply.code(502).send({
           error: "Source log captured, but extraction failed",
@@ -139,6 +228,7 @@ export async function registerIntelligenceRoutes(
       }
       const extraction = validateWasteLogExtraction(untrustedOutput);
       if (!extraction) {
+        await markRetryable("AI_EXTRACTION_SCHEMA_INVALID");
         return reply.code(422).send({
           error: "Source log captured; model output failed strict schema validation",
           code: "AI_EXTRACTION_SCHEMA_INVALID",
@@ -166,8 +256,7 @@ export async function registerIntelligenceRoutes(
             reviewStatus: "PENDING_HUMAN_REVIEW",
           },
         });
-        await proposalClient.query("commit");
-        return reply.code(201).send({
+        const responseBody = {
           source: "postgresql", syntheticData: false,
           data: {
             sourceEvidenceId: source.evidenceId,
@@ -181,9 +270,20 @@ export async function registerIntelligenceRoutes(
             guardianSubmission: false,
             carbonCreditCreated: false,
           },
-        });
+        };
+        const completed = await proposalClient.query(
+          `update ai_evidence_intake_jobs
+              set status='COMPLETED', proposal_evidence_id=$3, response_json=$4::jsonb,
+                  completed_at=now(), updated_at=now(), lease_expires_at=now(), last_error_code=null
+            where id=$1 and lease_token=$2::uuid and status='PROCESSING'`,
+          [jobId, leaseToken, proposal.evidenceId, JSON.stringify(responseBody)],
+        );
+        if (completed.rowCount !== 1) throw new Error("AI intake job lease lost before completion");
+        await proposalClient.query("commit");
+        return reply.code(201).send({ ...responseBody, jobId });
       } catch (error) {
         await proposalClient.query("rollback").catch(() => undefined);
+        await markRetryable("EVIDENCE_VAULT_UNAVAILABLE");
         request.log.error({ errorType: error instanceof Error ? error.name : "unknown" }, "AI intake proposal persistence failed");
         return reply.code(503).send({
           error: "Source log captured, but extraction proposal could not be stored",
