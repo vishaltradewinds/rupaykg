@@ -45,6 +45,7 @@ async function createFixture(pool: Pool): Promise<Fixture> {
 
 async function cleanFixture(pool: Pool, fixture: Fixture): Promise<void> {
   await pool.query("delete from ai_evidence_intake_jobs where identity_id=$1 and organization_id=$2", [fixture.identityId, fixture.organizationId]).catch(() => undefined);
+  await pool.query("delete from ai_intake_rate_limits where identity_id=$1 and organization_id=$2", [fixture.identityId, fixture.organizationId]).catch(() => undefined);
   await pool.query(
     `delete from evidence_artifact_versions where series_id in
        (select id from evidence_artifact_series where organization_id=$1 and activity_id=$2)`,
@@ -219,6 +220,50 @@ test("AI intake recovers after Fastify instance restart using the durable idempo
     await firstApp?.close().catch(() => undefined);
     await restartedApp?.close().catch(() => undefined);
     await cleanFixture(pool, fixture);
+    await pool.end();
+  }
+});
+
+
+test("AI intake rate limit does not leave empty durable jobs for denied unique keys", {
+  skip: !enabled ? "requires CI disposable PostgreSQL and applied migrations" : false,
+}, async () => {
+  const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: process.env.DATABASE_SSL === "true" ? { rejectUnauthorized: false } : undefined,
+    max: 8,
+  });
+  let providerCalls = 0;
+  try {
+    await withIntakeServer(pool, {
+      providerId: "synthetic-rate-limit-provider", modelId: "fixture-model", promptVersion: "fixture-v1",
+      extract: async () => { providerCalls += 1; return validExtraction; },
+    }, async (app, fixture) => {
+      for (let i = 0; i < 10; i += 1) {
+        const response = await app.inject({
+          method: "POST",
+          url: "/api/v1/intelligence/evidence-intake",
+          headers: { authorization: `Bearer ${fixture.token}`, "idempotency-key": `rate-limit-${i}-${randomUUID()}` },
+          payload: payload(fixture, `Synthetic rate-limit fixture ${i}`),
+        });
+        assert.equal(response.statusCode, 201, response.body);
+      }
+      const denied = await app.inject({
+        method: "POST",
+        url: "/api/v1/intelligence/evidence-intake",
+        headers: { authorization: `Bearer ${fixture.token}`, "idempotency-key": `rate-limit-denied-${randomUUID()}` },
+        payload: payload(fixture, "Synthetic request beyond rate limit"),
+      });
+      assert.equal(denied.statusCode, 429);
+      assert.equal(denied.json().code, "AI_INTAKE_RATE_LIMITED");
+      const jobs = await pool.query<{ count: string }>(
+        "select count(*)::text count from ai_evidence_intake_jobs where identity_id=$1 and organization_id=$2",
+        [fixture.identityId, fixture.organizationId],
+      );
+      assert.equal(jobs.rows[0]?.count, "10", "rate-limited new request must not persist an empty job row");
+      assert.equal(providerCalls, 10, "rate-limited request must not invoke inference");
+    });
+  } finally {
     await pool.end();
   }
 });
