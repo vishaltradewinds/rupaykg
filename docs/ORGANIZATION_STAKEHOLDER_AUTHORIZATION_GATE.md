@@ -11,9 +11,11 @@ CPCB SWM workspace create and update operations require both:
 
 The mapping is exact: an authorization for `BWG` does not authorize `PROCESSOR`, `ULB`, or any other stakeholder type. No default mapping is seeded and `organizations.organization_type` alone is not treated as sufficient evidence. Missing, pending, revoked, or expired mappings return HTTP 403 `SWM_STAKEHOLDER_AUTHORIZATION_REQUIRED` before persistence.
 
-## Approval controls and remaining gap
+## Approval controls
 
-The table intentionally has no public self-service route that can mark a mapping verified. This PR does not create an approval API or infer legal organization types from names, user declarations, or organization_type strings. The authorized review workflow must be specified and implemented with appropriate independent reviewer permissions, evidence validation, audit logging, revocation, expiry, and dual-control checks before real mappings are created.
+The platform-admin API now provides a two-person workflow: `POST /api/v1/admin/stakeholder-authorization-requests` creates a pending evidence-backed request; `GET /api/v1/admin/stakeholder-authorization-requests` lists the queue; and `POST /api/v1/admin/stakeholder-authorization-requests/:requestId/approve` or `/reject` records the independent decision. Requester and approver must be different active Super Admin identities with `admin:users`; the target organization must remain verified; the request hash, evidence reference and SHA-256 are checked; expiry is enforced; and the decision plus mapping write and hash-linked audit event occur in one transaction.
+
+Migration `20261027_stakeholder_authorization_dual_control.sql` adds the durable request ledger and a PostgreSQL trigger that rejects any VERIFIED mapping without a matching approved request and distinct requester/approver. This protects against accidental route-level bypass. A rejected request does not create a mapping. Existing verified mappings are not automatically generated or grandfathered by this migration. This workflow records internal platform authorization only; the authority, evidence acceptance policy and operational review still require independent governance approval under Shakti Standards.
 
 A `VERIFIED` platform mapping is an internal authorization decision only. It does not mean the organization is registered with CPCB, approved under the Solid Waste Management Rules, accredited by BEE, or eligible for carbon credit issuance. Government portal acceptance and statutory status must continue to be represented separately as user-reported-unverified unless confirmed through an authorized official integration.
 
