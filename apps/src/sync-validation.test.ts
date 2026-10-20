@@ -34,3 +34,28 @@ test("requires the authoritative conflict-resolution field name", () => {
   assert.equal(legacy.ok, false);
   if (!legacy.ok) assert.equal(legacy.code, "INVALID_RESOLUTION");
 });
+
+
+test("field-sync capture timestamps require a valid timezone-bearing RFC 3339 value", () => {
+  const base = {
+    idempotencyKey: "op-timestamp",
+    deviceId: "550e8400-e29b-41d4-a716-446655440000",
+    clientSequence: 7,
+    payload: { operation: "MEASUREMENT", value: 42 },
+  };
+  assert.equal(validateSyncEnvelope({ ...base, capturedAt: "2026-10-20T10:15:30Z" }).ok, true);
+  assert.equal(validateSyncEnvelope({ ...base, capturedAt: "2026-10-20T10:15:30.123+05:30" }).ok, true);
+
+  for (const capturedAt of [
+    "2026-10-20 10:15:30",
+    "2026-10-20T10:15:30",
+    "2026-02-30T10:15:30Z",
+    "2026-10-20T25:15:30Z",
+    "2026-10-20T10:61:30Z",
+    "2026-10-20T10:15:30+05",
+  ]) {
+    const result = validateSyncEnvelope({ ...base, capturedAt });
+    assert.equal(result.ok, false, `expected invalid timestamp to be rejected: ${capturedAt}`);
+    if (!result.ok) assert.equal(result.code, "INVALID_CAPTURE_TIME");
+  }
+});
