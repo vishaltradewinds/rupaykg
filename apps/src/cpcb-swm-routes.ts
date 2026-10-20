@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { hashPlatformAuditEventV2 } from "./platform-audit-hash.js";
 import type { FastifyInstance } from "fastify";
 import type { Pool, PoolClient } from "pg";
 import { authenticate, bearerChallenge, canActForOrganization, hasOrganizationPermission, type AuthContext } from "./auth.js";
@@ -80,7 +80,6 @@ export function safeObservations(value: unknown): boolean {
   }
   return true;
 }
-function hashEvent(value: unknown): string { return createHash("sha256").update(JSON.stringify(value)).digest("hex"); }
 async function writeAudit(client: PoolClient, identityId: string, organizationId: string, action: string, targetId: string, payload: unknown, requestId: string) {
   // Use the same locked global chain head as platform-admin audit writes. Locking only
   // the newest organization event can fork the chain under concurrent requests and
@@ -100,10 +99,10 @@ async function writeAudit(client: PoolClient, identityId: string, organizationId
     payload,
     previousHash,
   };
-  const eventHash = hashEvent(event);
+  const eventHash = hashPlatformAuditEventV2(event);
   const inserted = await client.query<{ id: string }>(
-    `insert into audit_events(actor_identity_id,organization_id,action,target_type,target_id,request_id,previous_hash,event_hash,payload,created_at)
-     values($1,$2,$3,'cpcb_swm_stakeholder_workspace',$4,$5,$6,$7,$8::jsonb,clock_timestamp())
+    `insert into audit_events(actor_identity_id,organization_id,action,target_type,target_id,request_id,previous_hash,event_hash,payload,hash_version,created_at)
+     values($1,$2,$3,'cpcb_swm_stakeholder_workspace',$4,$5,$6,$7,$8::jsonb,2,clock_timestamp())
      returning id`,
     [identityId, organizationId, action, targetId, requestId, previousHash, eventHash, JSON.stringify(payload)],
   );
