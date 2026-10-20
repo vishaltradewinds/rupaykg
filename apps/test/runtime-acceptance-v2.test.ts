@@ -83,11 +83,20 @@ before(async () => {
   server = spawn(process.execPath, ["dist/src/server.js"], { cwd: process.cwd(), env: { ...process.env, PORT: String(port), HOST: "127.0.0.1", DATABASE_URL: databaseUrl, DATABASE_SSL: "false" }, stdio: ["ignore", "ignore", "pipe"] });
   capture(server, "server");
   await waitFor(`${baseUrl}/health`, 200, server);
+  const readinessResponse = await request("/health/ready");
+  assert.equal(readinessResponse.status, 200);
+  const readinessBody = await body(readinessResponse);
+  assert.equal(readinessBody.status, "READY");
+  assert.equal(readinessBody.schema, "READY");
+  assert.equal(readinessBody.auditChain, "SEEDED");
 
   const noDbPort = String(port + 10);
   noDbServer = spawn(process.execPath, ["dist/src/server.js"], { cwd: process.cwd(), env: { ...process.env, PORT: noDbPort, HOST: "127.0.0.1", DATABASE_URL: "", DATABASE_SSL: "false" }, stdio: ["ignore", "ignore", "pipe"] });
   capture(noDbServer, "noDb");
   await waitFor(`http://127.0.0.1:${noDbPort}/health`, 503, noDbServer);
+  const noDbReadiness = await fetch(`http://127.0.0.1:${noDbPort}/health/ready`);
+  assert.equal(noDbReadiness.status, 503);
+  assert.equal((await body(noDbReadiness)).status, "NOT_READY");
 });
 
 after(async () => {
