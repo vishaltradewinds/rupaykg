@@ -48,8 +48,10 @@ begin
     from organization_stakeholder_authorization_requests
    where id = new.approval_request_id
    for update;
-  if not found
-     or approval.organization_id <> new.organization_id
+  if not found then
+    raise exception 'STAKEHOLDER_AUTHORIZATION_DUAL_CONTROL_MISMATCH';
+  end if;
+  if approval.organization_id <> new.organization_id
      or approval.stakeholder_type <> new.stakeholder_type
      or approval.request_action <> 'VERIFY'
      or approval.evidence_reference <> new.evidence_reference
