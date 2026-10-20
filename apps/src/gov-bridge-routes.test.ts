@@ -9,7 +9,7 @@ const secret = "test-only-secret-with-at-least-thirty-two-characters";
 const now = Date.parse("2026-10-19T10:00:00Z");
 const timestamp = String(now);
 
-function signedHeaders(body: unknown, secretValue = secret, timestampValue = timestamp) {
+function signedHeaders(body: unknown, secretValue = secret, timestampValue = String(Date.now())) {
   const serialized = JSON.stringify(body);
   const signature = "sha256=" + createHmac("sha256", secretValue)
     .update(timestampValue + "." + serialized, "utf8").digest("hex");
