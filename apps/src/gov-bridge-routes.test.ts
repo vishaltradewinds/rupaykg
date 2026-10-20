@@ -313,3 +313,26 @@ test("government inbox rejects ambiguous or invalid sync-window timestamps befor
     else process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CREDENTIALS = previousCredentials;
   }
 });
+
+
+test("government inbox rejects reused secrets across authority credentials", async () => {
+  const previousCredentials = process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CREDENTIALS;
+  process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CREDENTIALS = JSON.stringify({
+    "MH-PCB": { secret, municipalCodes: ["MCGM-MUM"] },
+    "MPPCB": { secret, municipalCodes: ["BHOPAL-MUNI"] },
+  });
+  try {
+    await withRoute({ query: async () => ({ rows: [] }) } as unknown as Pool, async (app) => {
+      const body = validBatch();
+      const response = await app.inject({
+        method: "POST", url: "/api/v1/bridge/gov/inbox",
+        headers: signedHeaders(body), payload: body,
+      });
+      assert.equal(response.statusCode, 503);
+      assert.equal(response.json().code, "GOV_BRIDGE_NOT_CONFIGURED");
+    });
+  } finally {
+    if (previousCredentials === undefined) delete process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CREDENTIALS;
+    else process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CREDENTIALS = previousCredentials;
+  }
+});
