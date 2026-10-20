@@ -151,3 +151,71 @@ test("registered inbox route allow-lists authority and persists accepted batches
     else process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CODES = previousCodes;
   }
 });
+
+
+test("registered inbox route replays an identical batch and rejects a reused ID with changed content", async () => {
+  const previousSecret = process.env.RUPAYKG_GOV_BRIDGE_HMAC_SECRET;
+  const previousCodes = process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CODES;
+  process.env.RUPAYKG_GOV_BRIDGE_HMAC_SECRET = secret;
+  process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CODES = "MH-PCB";
+  const { createHash } = await import("node:crypto");
+  const original = validBatch();
+  const originalHash = createHash("sha256").update(JSON.stringify(original), "utf8").digest("hex");
+  const pool = {
+    query: async (sql: string) => {
+      if (sql.trimStart().toLowerCase().startsWith("insert")) return { rows: [] };
+      return { rows: [{ id: "7f3f9b26-4d15-4f4f-8ed4-0c94e2e6b5f1", payload_sha256: originalHash, status: "RECEIVED" }] };
+    },
+  } as unknown as Pool;
+  try {
+    await withRoute(pool, async (app) => {
+      const replay = await app.inject({
+        method: "POST", url: "/api/v1/bridge/gov/inbox",
+        headers: signedHeaders(original), payload: original,
+      });
+      assert.equal(replay.statusCode, 202);
+      assert.equal(replay.json().replay, true);
+      assert.equal(replay.json().status, "RECEIVED");
+
+      const altered = { ...original, rawDataLogs: ["A different waste record with the same batch identifier"] };
+      const conflict = await app.inject({
+        method: "POST", url: "/api/v1/bridge/gov/inbox",
+        headers: signedHeaders(altered), payload: altered,
+      });
+      assert.equal(conflict.statusCode, 409);
+      assert.equal(conflict.json().code, "GOV_BRIDGE_BATCH_ID_REUSED");
+    });
+  } finally {
+    if (previousSecret === undefined) delete process.env.RUPAYKG_GOV_BRIDGE_HMAC_SECRET;
+    else process.env.RUPAYKG_GOV_BRIDGE_HMAC_SECRET = previousSecret;
+    if (previousCodes === undefined) delete process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CODES;
+    else process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CODES = previousCodes;
+  }
+});
+
+test("registered inbox route returns a safe service error when persistence fails", async () => {
+  const previousSecret = process.env.RUPAYKG_GOV_BRIDGE_HMAC_SECRET;
+  const previousCodes = process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CODES;
+  process.env.RUPAYKG_GOV_BRIDGE_HMAC_SECRET = secret;
+  process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CODES = "MH-PCB";
+  const pool = {
+    query: async () => { throw new Error("test database outage"); },
+  } as unknown as Pool;
+  try {
+    await withRoute(pool, async (app) => {
+      const body = validBatch();
+      const response = await app.inject({
+        method: "POST", url: "/api/v1/bridge/gov/inbox",
+        headers: signedHeaders(body), payload: body,
+      });
+      assert.equal(response.statusCode, 503);
+      assert.equal(response.json().code, "GOV_BRIDGE_INBOX_UNAVAILABLE");
+      assert.equal(response.json().error, "Bridge inbox persistence unavailable");
+    });
+  } finally {
+    if (previousSecret === undefined) delete process.env.RUPAYKG_GOV_BRIDGE_HMAC_SECRET;
+    else process.env.RUPAYKG_GOV_BRIDGE_HMAC_SECRET = previousSecret;
+    if (previousCodes === undefined) delete process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CODES;
+    else process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CODES = previousCodes;
+  }
+});
