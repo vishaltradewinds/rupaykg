@@ -11,7 +11,7 @@ test("alert webhook configuration fails closed for non-HTTPS or credential-beari
 });
 
 test("alert webhook sends only bounded operational metadata and treats non-2xx as failure", async () => {
-  const captured: { url: string; body?: Record<string, unknown>; redirect?: RequestRedirect } = { url: "" };
+  const captured: { url: string; body?: Record<string, unknown>; redirect?: RequestRedirect | undefined } = { url: "" };
   const result = await deliverOperationalAlert("https://monitor.example/alert", "attention_required", {
     quarantined: 2,
     expiredLeases: 1,
