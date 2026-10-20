@@ -240,3 +240,40 @@ test("registered inbox route rejects unknown root and metadata fields before per
     else process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CREDENTIALS = previousCredentials;
   }
 });
+
+
+test("government inbox binds signatures to the claimed authority and municipal scope", async () => {
+  const previousCredentials = process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CREDENTIALS;
+  const authoritySecret = "mh-pcb-test-secret-with-at-least-32-characters";
+  const otherAuthoritySecret = "mp-pcb-test-secret-with-at-least-32-characters";
+  process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CREDENTIALS = JSON.stringify({
+    "MH-PCB": { secret: authoritySecret, municipalCodes: ["MCGM-MUM"] },
+    "MPPCB": { secret: otherAuthoritySecret, municipalCodes: ["BHOPAL-MUNI"] },
+  });
+  const pool = {
+    query: async () => ({ rows: [{ id: "7f3f9b26-4d15-4f4f-8ed4-0c94e2e6b5f1", payload_sha256: "0".repeat(64) }] }),
+  } as unknown as Pool;
+  try {
+    await withRoute(pool, async (app) => {
+      const claimedOtherAuthority = validBatch();
+      claimedOtherAuthority.batchMetadata.authorityCode = "MPPCB";
+      const wrongAuthoritySignature = await app.inject({
+        method: "POST", url: "/api/v1/bridge/gov/inbox",
+        headers: signedHeaders(claimedOtherAuthority, authoritySecret), payload: claimedOtherAuthority,
+      });
+      assert.equal(wrongAuthoritySignature.statusCode, 401);
+      assert.equal(wrongAuthoritySignature.json().code, "GOV_BRIDGE_SIGNATURE_INVALID");
+
+      const wrongMunicipality = validBatch("b5e74bb0-b3a1-4fd7-ae67-c3c2a68d56ab", "BHOPAL-MUNI");
+      const wrongMunicipalitySignature = await app.inject({
+        method: "POST", url: "/api/v1/bridge/gov/inbox",
+        headers: signedHeaders(wrongMunicipality, authoritySecret), payload: wrongMunicipality,
+      });
+      assert.equal(wrongMunicipalitySignature.statusCode, 403);
+      assert.equal(wrongMunicipalitySignature.json().code, "GOV_BRIDGE_MUNICIPAL_SCOPE_FORBIDDEN");
+    });
+  } finally {
+    if (previousCredentials === undefined) delete process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CREDENTIALS;
+    else process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CREDENTIALS = previousCredentials;
+  }
+});
