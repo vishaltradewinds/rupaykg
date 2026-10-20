@@ -110,6 +110,14 @@ The existing test file primarily tests checklist, observation and status validat
 
 **Required:** Add route-level tests using a PostgreSQL integration fixture for unauthorized organization/geography, malformed input, user-reported versus source-confirmed statuses, update history, concurrent writes and rollback.
 
+### G-11 — Medium: CPCB workspace stakeholder type is not bound to the verified organization type
+
+**Affected:** `apps/src/cpcb-swm-routes.ts`, onboarding organization types in `apps/src/auth-routes.ts`.
+
+The workspace handler validates that `stakeholderType` is in a known list, but the reviewed handler does not compare it with the organization's verified `organization_type` or approved stakeholder role. The saved status is explicitly `USER_REPORTED_UNVERIFIED`, so this does not by itself confer official authority; however, it can create misleading internal workspaces where a generator account labels its record as a ULB, District Panchayat or other authority.
+
+**Required fix:** Define and approve a mapping between verified RupayKg organization types/roles and CPCB stakeholder categories. If a user is tracking another party, model that party as a separately verified linked stakeholder instead of relabeling the user's organization. Authority-only workflows must require verified role and geographic jurisdiction. Do not invent mappings where onboarding semantics are ambiguous.
+
 ### G-09 — Medium: live Guardian/Hedera acceptance is separate and not proven by source inspection
 **Affected:** `apps/src/mrv-routes.ts`, `apps/src/guardian-mrv.ts`, `apps/src/hedera-anchor.ts`.
 
