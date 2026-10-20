@@ -60,31 +60,63 @@ export function verifyGovBridgeSignature(
   return supplied.length === expected.length && timingSafeEqual(supplied, expected);
 }
 
+type AuthorityCredential = { secret: string; municipalCodes: string[] };
+
+function parseAuthorityCredentials(value: string): Record<string, AuthorityCredential> | null {
+  if (!value.trim()) return null;
+  let parsed: unknown;
+  try { parsed = JSON.parse(value); } catch { return null; }
+  if (!isObject(parsed) || !Object.keys(parsed).length) return null;
+
+  const credentials: Record<string, AuthorityCredential> = Object.create(null) as Record<string, AuthorityCredential>;
+  for (const [rawCode, rawCredential] of Object.entries(parsed)) {
+    const authorityCode = rawCode.trim().toUpperCase();
+    if (!CODE.test(authorityCode) || !isObject(rawCredential)
+      || Object.keys(rawCredential).some((key) => !["secret", "municipalCodes"].includes(key))) return null;
+    const secret = typeof rawCredential.secret === "string" ? rawCredential.secret : "";
+    const rawMunicipalCodes = rawCredential.municipalCodes;
+    if (secret.length < 32 || !Array.isArray(rawMunicipalCodes) || rawMunicipalCodes.length < 1
+      || !rawMunicipalCodes.every((code) => typeof code === "string" && CODE.test(code.trim().toUpperCase()))) return null;
+    if (credentials[authorityCode]) return null;
+    credentials[authorityCode] = {
+      secret,
+      municipalCodes: [...new Set(rawMunicipalCodes.map((code: string) => code.trim().toUpperCase()))],
+    };
+  }
+  return credentials;
+}
+
+function claimedAuthorityCode(value: unknown): string | null {
+  if (!isObject(value) || !isObject(value.batchMetadata)) return null;
+  const code = value.batchMetadata.authorityCode;
+  return typeof code === "string" && CODE.test(code.trim().toUpperCase()) ? code.trim().toUpperCase() : null;
+}
+
 export async function registerAsyncMirrorRoutes(app: FastifyInstance, pool: Pool | null): Promise<void> {
   app.post("/api/v1/bridge/gov/inbox", { bodyLimit: 1400 * 1024 }, async (request, reply) => {
     if (!pool) return reply.code(503).send({ error: "Bridge inbox unavailable", code: "DATABASE_UNAVAILABLE" });
-    const secret = process.env.RUPAYKG_GOV_BRIDGE_HMAC_SECRET ?? "";
-    if (secret.length < 32) return reply.code(503).send({ error: "Asynchronous mirror is not configured", code: "GOV_BRIDGE_NOT_CONFIGURED" });
+    const credentials = parseAuthorityCredentials(process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CREDENTIALS ?? "");
+    if (!credentials) return reply.code(503).send({ error: "Authority-specific government bridge credentials are not configured correctly", code: "GOV_BRIDGE_NOT_CONFIGURED" });
 
     const timestampHeader = request.headers["x-rupaykg-timestamp"];
     const signatureHeader = request.headers["x-rupaykg-signature"];
     const timestamp = Array.isArray(timestampHeader) ? timestampHeader[0] : timestampHeader;
     const signature = Array.isArray(signatureHeader) ? signatureHeader[0] : signatureHeader;
     const serializedBody = JSON.stringify(request.body ?? null);
-    if (!verifyGovBridgeSignature(secret, timestamp, signature, serializedBody)) {
-      return reply.code(401).send({ error: "Invalid or expired bridge signature", code: "GOV_BRIDGE_SIGNATURE_INVALID" });
-    }
-
     if (Buffer.byteLength(serializedBody, "utf8") > MAX_BATCH_BYTES) {
       return reply.code(413).send({ error: "Bridge batch exceeds 1 MiB", code: "GOV_BRIDGE_BATCH_TOO_LARGE" });
     }
+
+    const authorityCode = claimedAuthorityCode(request.body);
+    const credential = authorityCode ? credentials[authorityCode] : undefined;
+    if (!credential || !verifyGovBridgeSignature(credential.secret, timestamp, signature, serializedBody)) {
+      return reply.code(401).send({ error: "Invalid or expired bridge signature", code: "GOV_BRIDGE_SIGNATURE_INVALID" });
+    }
+
     const batch = parseBatch(request.body);
     if (!batch) return reply.code(400).send({ error: "Bridge batch schema is invalid", code: "GOV_BRIDGE_BATCH_INVALID" });
-
-    const allowedCodes = (process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CODES ?? "")
-      .split(",").map((code) => code.trim().toUpperCase()).filter(Boolean);
-    if (!allowedCodes.includes(batch.batchMetadata.authorityCode)) {
-      return reply.code(403).send({ error: "Authority code is not allow-listed", code: "GOV_BRIDGE_AUTHORITY_FORBIDDEN" });
+    if (!credential.municipalCodes.includes(batch.batchMetadata.municipalCode)) {
+      return reply.code(403).send({ error: "Municipal code is outside this authority credential's permitted scope", code: "GOV_BRIDGE_MUNICIPAL_SCOPE_FORBIDDEN" });
     }
 
     const payloadSha256 = createHash("sha256").update(serializedBody, "utf8").digest("hex");
