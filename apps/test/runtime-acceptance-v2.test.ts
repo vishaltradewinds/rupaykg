@@ -5,7 +5,8 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { Pool } from "pg";
 
 const databaseUrl = process.env.DATABASE_URL;
-const port = Number(process.env.RUNTIME_ACCEPTANCE_PORT ?? 43127);
+// Isolate concurrent Node test workers: the fixed default collided with other runtime acceptance servers in CI.
+const port = Number(process.env.RUNTIME_ACCEPTANCE_PORT ?? (40000 + (process.pid % 15000)));
 const baseUrl = `http://127.0.0.1:${port}`;
 const pool = databaseUrl ? new Pool({ connectionString: databaseUrl, max: 4 }) : null;
 const suffix = randomUUID();
