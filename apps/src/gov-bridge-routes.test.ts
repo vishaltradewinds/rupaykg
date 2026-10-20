@@ -131,7 +131,7 @@ test("registered inbox route allow-lists authority and persists accepted batches
       const body = validBatch();
       const response = await app.inject({ method: "POST", url: "/api/v1/bridge/gov/inbox", headers: signedHeaders(body), payload: body });
       assert.equal(response.statusCode, 202);
-      assert.equal(response.json().status, "RECEIVED_FOR_ASYNCHRONOUS_PROCESSING");
+      assert.equal(response.json().status, "RECEIVED_NOT_PROCESSED");
       assert.equal(response.json().sourceDatabaseWrite, false);
       assert.equal(response.json().authoritativeMrvMutation, false);
       assert.equal(response.json().aiProcessingStarted, false);
