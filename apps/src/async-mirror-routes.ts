@@ -23,6 +23,29 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
 
+function canonicalJson(value: unknown): string {
+  if (value === null || typeof value !== "object") return JSON.stringify(value) ?? "null";
+  if (Array.isArray(value)) return "[" + value.map(canonicalJson).join(",") + "]";
+  const object = value as Record<string, unknown>;
+  return "{" + Object.keys(object).sort().map((key) => JSON.stringify(key) + ":" + canonicalJson(object[key])).join(",") + "}";
+}
+
+export function canonicalGovBridgeHash(value: unknown): string {
+  return createHash("sha256").update(canonicalJson(value), "utf8").digest("hex");
+}
+
+function validRfc3339Timestamp(value: string): boolean {
+  const match = /^(\\d{4})-(\\d{2})-(\\d{2})T(\\d{2}):(\\d{2}):(\\d{2})(?:\\.(\\d{1,3}))?(Z|([+-])(\\d{2}):(\\d{2}))$/.exec(value);
+  if (!match) return false;
+  const [, year, month, day, hour, minute, second, , , , offsetHour, offsetMinute] = match;
+  const datePart = `${year}-${month}-${day}`;
+  const date = new Date(datePart + "T00:00:00.000Z");
+  if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== datePart) return false;
+  if (Number(hour) > 23 || Number(minute) > 59 || Number(second) > 59) return false;
+  if (offsetHour !== undefined && (Number(offsetHour) > 23 || Number(offsetMinute) > 59)) return false;
+  return Number.isFinite(Date.parse(value));
+}
+
 function parseBatch(value: unknown): BridgeBatch | null {
   if (!isObject(value) || !isObject(value.batchMetadata) || !Array.isArray(value.rawDataLogs)) return null;
   if (Object.keys(value).some((key) => !["batchMetadata", "rawDataLogs"].includes(key))) return null;
@@ -33,7 +56,7 @@ function parseBatch(value: unknown): BridgeBatch | null {
   const syncWindowTimestamp = typeof metadata.syncWindowTimestamp === "string" ? metadata.syncWindowTimestamp : "";
   const batchId = typeof metadata.batchId === "string" ? metadata.batchId : "";
   const timestamp = Date.parse(syncWindowTimestamp);
-  if (!CODE.test(authorityCode) || !CODE.test(municipalCode) || !UUID.test(batchId)
+  if (!validRfc3339Timestamp(syncWindowTimestamp) || !CODE.test(authorityCode) || !CODE.test(municipalCode) || !UUID.test(batchId)
     || !Number.isFinite(timestamp) || Math.abs(Date.now() - timestamp) > 7 * 24 * 60 * 60 * 1000
     || value.rawDataLogs.length < 1 || value.rawDataLogs.length > MAX_RECORDS) return null;
   const rawDataLogs = value.rawDataLogs;
@@ -119,7 +142,7 @@ export async function registerAsyncMirrorRoutes(app: FastifyInstance, pool: Pool
       return reply.code(403).send({ error: "Municipal code is outside this authority credential's permitted scope", code: "GOV_BRIDGE_MUNICIPAL_SCOPE_FORBIDDEN" });
     }
 
-    const payloadSha256 = createHash("sha256").update(serializedBody, "utf8").digest("hex");
+    const payloadSha256 = canonicalGovBridgeHash(batch);
     try {
       const inserted = await pool.query<{ id: string; payload_sha256: string }>(
         `insert into async_mirror_inbox
