@@ -1,4 +1,5 @@
 import test from "node:test";
+import { createHash } from "node:crypto";
 import assert from "node:assert/strict";
 import Fastify from "fastify";
 import type { Pool } from "pg";
@@ -434,5 +435,123 @@ test("stakeholder authorization request cannot be approved by its requester", as
   });
   assert.equal(response.statusCode, 409);
   assert.equal(response.json().code, "STAKEHOLDER_AUTHORIZATION_SELF_APPROVAL_FORBIDDEN");
+  await app.close();
+});
+
+
+test("stakeholder authorization VERIFY requires a distinct active approver and writes the mapping in the audited transaction", async () => {
+  const requesterId = "523e4567-e89b-42d3-a456-426614174000";
+  const requestId = "623e4567-e89b-42d3-a456-426614174000";
+  const authorizationId = "723e4567-e89b-42d3-a456-426614174000";
+  const evidenceReference = "synthetic://stakeholder-proof";
+  const evidenceSha256 = "a".repeat(64);
+  const requestReason = "Synthetic verification request";
+  const requestHash = createHash("sha256").update(JSON.stringify({
+    organizationId, stakeholderType: "BWG", requestAction: "VERIFY", evidenceReference,
+    evidenceSha256, requestReason, requesterIdentityId: requesterId, expiresAt: null,
+  })).digest("hex");
+  const statements: string[] = [];
+  const pool = {
+    query: async (sql: string) => {
+      if (sql.includes("from identity_sessions")) return { rows: [{ identity_id: identityId }] };
+      if (sql.includes("from organization_memberships") && sql.includes("where identity_id")) return { rows: [{ organization_id: organizationId, role_id: roleId, status: "VERIFIED" }] };
+      if (sql.includes("r.name = 'super_admin'")) return { rows: [{ ok: true }] };
+      throw new Error("Unexpected pool SQL in stakeholder approval test: " + sql);
+    },
+    connect: async () => ({
+      query: async (sql: string) => {
+        statements.push(sql);
+        if (/^(begin|commit|rollback)$/i.test(sql.trim())) return { rows: [], rowCount: 1 };
+        if (sql.includes("from organization_stakeholder_authorization_requests where id=$1 for update")) return { rows: [{
+          id: requestId, organization_id: organizationId, stakeholder_type: "BWG", request_action: "VERIFY",
+          status: "PENDING", evidence_reference: evidenceReference, evidence_sha256: evidenceSha256,
+          request_reason: requestReason, request_hash: requestHash, requested_by_identity_id: requesterId, expires_at: null,
+        }], rowCount: 1 };
+        if (sql.includes("as requester_active")) return { rows: [{ requester_active: true, approver_active: true }], rowCount: 1 };
+        if (sql.includes("select status,verification_status from organizations")) return { rows: [{ status: "VERIFIED", verification_status: "VERIFIED" }], rowCount: 1 };
+        if (sql.includes("select id,status from organization_stakeholder_authorizations")) return { rows: [], rowCount: 0 };
+        if (sql.includes("insert into organization_stakeholder_authorizations")) return { rows: [{ id: authorizationId }], rowCount: 1 };
+        if (sql.includes("select last_event_hash from platform_audit_chain_head")) return { rows: [{ last_event_hash: null }], rowCount: 1 };
+        if (sql.includes("insert into audit_events")) return { rows: [{ id: "823e4567-e89b-42d3-a456-426614174000" }], rowCount: 1 };
+        if (sql.includes("update platform_audit_chain_head")) return { rows: [], rowCount: 1 };
+        if (sql.includes("update organization_stakeholder_authorization_requests set status='APPROVED'")) return { rows: [], rowCount: 1 };
+        throw new Error("Unexpected client SQL in stakeholder approval test: " + sql);
+      },
+      release: () => undefined,
+    }),
+  } as unknown as Pool;
+  const app = Fastify({ logger: false });
+  await registerPlatformAdminRoutes(app, pool);
+  const response = await app.inject({
+    method: "POST",
+    url: `/api/v1/admin/stakeholder-authorization-requests/${requestId}/approve`,
+    headers: { authorization: "Bearer test-session", "x-rupaykg-organization-id": organizationId },
+    payload: { reason: "Evidence reviewed and approved" },
+  });
+  assert.equal(response.statusCode, 200, response.body);
+  assert.equal(response.json().authorizationId, authorizationId);
+  assert.equal(response.json().status, "APPROVED");
+  assert.ok(statements.some(sql => sql.includes("insert into organization_stakeholder_authorizations")));
+  assert.ok(statements.some(sql => sql.includes("insert into audit_events")));
+  assert.ok(statements.some(sql => sql.includes("update platform_audit_chain_head")));
+  assert.equal(statements.filter(sql => sql.trim().toLowerCase() === "commit").length, 1);
+  await app.close();
+});
+
+test("stakeholder authorization REVOKE requires independent approval and appends an audit event", async () => {
+  const requesterId = "523e4567-e89b-42d3-a456-426614174000";
+  const requestId = "623e4567-e89b-42d3-a456-426614174000";
+  const authorizationId = "723e4567-e89b-42d3-a456-426614174000";
+  const evidenceReference = "synthetic://revocation-proof";
+  const evidenceSha256 = "c".repeat(64);
+  const requestReason = "Synthetic revocation request";
+  const requestHash = createHash("sha256").update(JSON.stringify({
+    organizationId, stakeholderType: "BWG", requestAction: "REVOKE", evidenceReference,
+    evidenceSha256, requestReason, requesterIdentityId: requesterId, expiresAt: null,
+  })).digest("hex");
+  const statements: string[] = [];
+  const pool = {
+    query: async (sql: string) => {
+      if (sql.includes("from identity_sessions")) return { rows: [{ identity_id: identityId }] };
+      if (sql.includes("from organization_memberships") && sql.includes("where identity_id")) return { rows: [{ organization_id: organizationId, role_id: roleId, status: "VERIFIED" }] };
+      if (sql.includes("r.name = 'super_admin'")) return { rows: [{ ok: true }] };
+      throw new Error("Unexpected pool SQL in stakeholder revocation test: " + sql);
+    },
+    connect: async () => ({
+      query: async (sql: string) => {
+        statements.push(sql);
+        if (/^(begin|commit|rollback)$/i.test(sql.trim())) return { rows: [], rowCount: 1 };
+        if (sql.includes("from organization_stakeholder_authorization_requests where id=$1 for update")) return { rows: [{
+          id: requestId, organization_id: organizationId, stakeholder_type: "BWG", request_action: "REVOKE",
+          status: "PENDING", evidence_reference: evidenceReference, evidence_sha256: evidenceSha256,
+          request_reason: requestReason, request_hash: requestHash, requested_by_identity_id: requesterId, expires_at: null,
+        }], rowCount: 1 };
+        if (sql.includes("as requester_active")) return { rows: [{ requester_active: true, approver_active: true }], rowCount: 1 };
+        if (sql.includes("select status,verification_status from organizations")) return { rows: [{ status: "VERIFIED", verification_status: "VERIFIED" }], rowCount: 1 };
+        if (sql.includes("select id,status from organization_stakeholder_authorizations")) return { rows: [{ id: authorizationId, status: "VERIFIED" }], rowCount: 1 };
+        if (sql.includes("update organization_stakeholder_authorizations set status='REVOKED'")) return { rows: [], rowCount: 1 };
+        if (sql.includes("select last_event_hash from platform_audit_chain_head")) return { rows: [{ last_event_hash: null }], rowCount: 1 };
+        if (sql.includes("insert into audit_events")) return { rows: [{ id: "823e4567-e89b-42d3-a456-426614174000" }], rowCount: 1 };
+        if (sql.includes("update platform_audit_chain_head")) return { rows: [], rowCount: 1 };
+        if (sql.includes("update organization_stakeholder_authorization_requests set status='APPROVED'")) return { rows: [], rowCount: 1 };
+        throw new Error("Unexpected client SQL in stakeholder revocation test: " + sql);
+      },
+      release: () => undefined,
+    }),
+  } as unknown as Pool;
+  const app = Fastify({ logger: false });
+  await registerPlatformAdminRoutes(app, pool);
+  const response = await app.inject({
+    method: "POST",
+    url: `/api/v1/admin/stakeholder-authorization-requests/${requestId}/approve`,
+    headers: { authorization: "Bearer test-session", "x-rupaykg-organization-id": organizationId },
+    payload: { reason: "Independent revocation approved" },
+  });
+  assert.equal(response.statusCode, 200, response.body);
+  assert.equal(response.json().authorizationId, authorizationId);
+  assert.equal(response.json().status, "REVOKED");
+  assert.ok(statements.some(sql => sql.includes("update organization_stakeholder_authorizations set status='REVOKED'")));
+  assert.ok(statements.some(sql => sql.includes("insert into audit_events")));
+  assert.equal(statements.filter(sql => sql.trim().toLowerCase() === "commit").length, 1);
   await app.close();
 });
