@@ -55,6 +55,43 @@ async function canWriteActivity(client: Pool | PoolClient, auth: AuthContext, ac
 async function canWriteGeography(client: Pool | PoolClient, auth: AuthContext, organizationId: string, geographyId: string): Promise<boolean> { if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(geographyId)) return false; const result = await client.query<{ ok: boolean }>(`select exists(select 1 from organization_memberships om where om.identity_id=$1 and om.organization_id=$2 and om.status='VERIFIED' and organization_has_geography_scope(om.organization_id,$3)) as ok`, [auth.identityId, organizationId, geographyId]); return result.rows[0]?.ok === true; }
 
 app.get("/health", async (_request, reply) => { let database: "AVAILABLE" | "UNAVAILABLE" = "UNAVAILABLE"; if (pool) { try { await pool.query("select 1"); database = "AVAILABLE"; } catch {} } const healthy = database === "AVAILABLE"; return reply.code(healthy ? 200 : 503).send({ status: healthy ? "READY" : "DEGRADED", database, syntheticData: false }); });
+
+// Readiness is stricter than liveness: a reachable PostgreSQL socket is not enough
+// if a release is missing required platform tables or the audit-chain anchor row.
+app.get("/health/ready", async (_request, reply) => {
+  if (!pool) return reply.code(503).send({ status: "NOT_READY", database: "UNAVAILABLE", schema: "UNKNOWN", syntheticData: false });
+  try {
+    const result = await pool.query<{
+      identities: boolean; memberships: boolean; evidenceVault: boolean; aiJobs: boolean;
+      governmentInbox: boolean; stakeholderAuthorization: boolean; auditEvents: boolean; auditChainHead: boolean;
+    }>(`select
+      to_regclass('public.identities') is not null as identities,
+      to_regclass('public.organization_memberships') is not null as memberships,
+      to_regclass('public.evidence_artifact_versions') is not null as "evidenceVault",
+      to_regclass('public.ai_evidence_intake_jobs') is not null as "aiJobs",
+      to_regclass('public.async_mirror_inbox') is not null as "governmentInbox",
+      to_regclass('public.organization_stakeholder_authorization_requests') is not null as "stakeholderAuthorization",
+      to_regclass('public.audit_events') is not null as "auditEvents",
+      to_regclass('public.platform_audit_chain_head') is not null as "auditChainHead"`);
+    const checks = result.rows[0];
+    if (!checks) return reply.code(503).send({ status: "NOT_READY", database: "AVAILABLE", schema: "UNKNOWN", syntheticData: false });
+    const schemaReady = Object.values(checks).every(Boolean);
+    const anchor = schemaReady
+      ? await pool.query<{ seeded: boolean }>("select exists(select 1 from platform_audit_chain_head where singleton=true) as seeded")
+      : null;
+    const auditChainSeeded = anchor?.rows[0]?.seeded === true;
+    const ready = schemaReady && auditChainSeeded;
+    return reply.code(ready ? 200 : 503).send({
+      status: ready ? "READY" : "NOT_READY",
+      database: "AVAILABLE",
+      schema: schemaReady ? "READY" : "INCOMPLETE",
+      auditChain: auditChainSeeded ? "SEEDED" : "UNAVAILABLE",
+      syntheticData: false,
+    });
+  } catch {
+    return reply.code(503).send({ status: "NOT_READY", database: "UNAVAILABLE", schema: "UNKNOWN", syntheticData: false });
+  }
+});
 app.get("/api/v1/status", async () => ({ service: "rupaykg-api", version: "0.1.0", sourceOfTruth: "postgresql", syntheticData: false }));
 app.get("/api/v1/overview", async (request, reply) => {
   const auth = await requireAuth(request, reply); if (!auth || !pool) return;
