@@ -193,3 +193,37 @@ The worker records only **internal structural validation**. `VALIDATED` is not a
 ## 7. Follow-up remediation — AI intake rate limiting
 
 Migration `20261024_ai_intake_rate_limits.sql` adds a database-backed fixed-window counter keyed by identity, organization and minute. `consumeAiIntakeRateLimit()` uses an atomic PostgreSQL upsert and permits at most 10 attempts per identity/organization/minute across API instances; requests over the limit return HTTP 429 before source evidence persistence or provider invocation. The table stores counters only, not source logs, prompts, or model output. Automated tests cover SQL shape, scope keys and deny-on-cap behavior. Counter rows older than 48 hours are cleaned during limiter calls. This does not provide idempotency, durable inference jobs, or monitoring by itself. The migration is not applied to production.
+
+## 8. Superseding status addendum — 2026-10-20 12:34 UTC
+
+This addendum supersedes earlier status statements in this report wherever they conflict with the evidence below. The historical findings above are retained as audit history, not as a claim that every original finding remains unfixed.
+
+### Exact review head and automated evidence
+
+- Review branch: `intelligence/ai-evidence-intake-middleware`.
+- Audited head at addendum time: `640f6d6656d74aebdc401ea1d8a2c8ae83de72e7`.
+- PR #41 remains **open, draft, unmerged and undeployed**: https://github.com/vishaltradewinds/rupaykg/pull/41.
+- GitHub Actions run #1484 completed successfully on this head. The workflow reported success for dependency audit, migration validation, migration execution, typecheck, build, browser smoke test, disposable PostgreSQL acceptance tests, production-container build and cleanup.
+- Branch validation reports 96 migrations and 78 schema objects. The isolated disposable PostgreSQL API suite passed 144 tests (0 failed, 0 skipped); the focused CPCB route database test also passed. These are engineering test results, not production acceptance.
+
+### G-11 update — stakeholder authorization gate implemented; reviewer governance still open
+
+Commit `640f6d6656d74aebdc401ea1d8a2c8ae83de72e7` adds `migrations/20261026_organization_stakeholder_authorization.sql`, the `organization_stakeholder_authorizations` table, a fail-closed authorization check in `apps/src/cpcb-swm-routes.ts`, PostgreSQL acceptance coverage, and `docs/ORGANIZATION_STAKEHOLDER_AUTHORIZATION_GATE.md`.
+
+CPCB SWM workspace create/update now requires both a RupayKg organization with `verification_status='VERIFIED'` and an exact stakeholder-type mapping whose status is `VERIFIED`, with reviewer identity, verification timestamp, and a non-expired authorization. Missing or mismatched authorization is denied; a BWG mapping does not authorize a PROCESSOR workspace. No stakeholder mappings are seeded automatically. Tests cover missing mapping, non-persistence on denial, and stakeholder-type mismatch.
+
+**Remaining gap:** the reviewer approval/dual-control workflow, reviewer eligibility and separation-of-duties policy, evidence acceptance criteria, revocation process, and independent governance approval have not been completed or operationally validated. This gate is internal RupayKg authorization only. It is not CPCB registration, statutory approval, BEE accreditation, ACVA verification, or government confirmation.
+
+### Other open gates remain open
+
+- The isolated Neon staging branch `br-spring-hill-b4544vz5` still contains inherited inbox records including 8 expired `PROCESSING` leases, plus 1 each in `RETRY`, `RECEIVED`, `QUARANTINED`, and `VALIDATED`. No payloads were inspected and no rows were changed. Worker acceptance remains blocked until an approved, non-destructive triage/isolation procedure is agreed and tested.
+- The opt-in worker scheduler is not configured or enabled in production. External log drain, alert destination, escalation ownership and on-call verification remain unproven.
+- No authorized CPCB/BEE/Indian Carbon Market API contract, sandbox or production credentials have been verified. No official submission/acceptance or CCC issuance is demonstrated.
+- Real Guardian execution, Hedera consensus for the existing configured topic/account (`0.0.10121000` as specified in the project checkpoint), Mirror Node retrieval and matching integrity hash remain unverified. Do not create a replacement topic/account/key to satisfy this gate.
+- Production migrations/deployment and explicit production change approval remain separate gates. This PR has not been merged or deployed; migrations added on this branch must not be applied to production as part of this audit update.
+
+### Updated release decision
+
+**HOLD — engineering CI is green, but production certification/release is not authorized.** Keep PR #41 draft, unmerged and undeployed. Next safe order: (1) design and test reviewer approval/dual control using existing auth and audit-chain patterns; (2) prepare a clean disposable PostgreSQL worker acceptance environment and test runner/retry/quarantine lifecycle without mutating inherited staging rows; (3) establish alert delivery and named operational ownership; (4) obtain official authority integration authorization and schemas; (5) perform authorized live Guardian/Hedera/Mirror Node acceptance on existing configuration; and (6) complete independent review and Shakti release gates.
+
+No official government record was changed and no carbon credit was issued as part of this work.
