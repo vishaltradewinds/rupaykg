@@ -120,4 +120,30 @@ await registerAsyncMirrorRoutes(app, pool);
 await registerPlatformAdminRoutes(app, pool);
 
 if (existsSync(webRoot)) app.get("/*", async (_request, reply) => reply.type("text/html; charset=utf-8").send(readFileSync(resolve(webRoot, "index.html"), "utf8")));
+
+let shutdownStarted = false;
+async function shutdown(signal: string): Promise<void> {
+  if (shutdownStarted) return;
+  shutdownStarted = true;
+  app.log.info({ signal }, "RupayKg API graceful shutdown started");
+  const forceExit = setTimeout(() => {
+    app.log.error({ signal, timeoutMs: 10_000 }, "RupayKg API graceful shutdown timed out");
+    process.exit(1);
+  }, 10_000);
+  forceExit.unref();
+  try {
+    await app.close();
+    if (pool) await pool.end();
+    clearTimeout(forceExit);
+    app.log.info({ signal }, "RupayKg API graceful shutdown completed");
+    process.exitCode = 0;
+  } catch (error) {
+    clearTimeout(forceExit);
+    app.log.error({ signal, errorType: error instanceof Error ? error.name : "unknown" }, "RupayKg API graceful shutdown failed");
+    process.exitCode = 1;
+  }
+}
+process.once("SIGTERM", () => { void shutdown("SIGTERM"); });
+process.once("SIGINT", () => { void shutdown("SIGINT"); });
+
 const port = Number(process.env.PORT ?? 3000); const host = process.env.HOST ?? "0.0.0.0"; await app.listen({ port, host });
