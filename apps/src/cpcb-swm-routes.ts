@@ -115,6 +115,13 @@ async function writeAudit(client: PoolClient, identityId: string, organizationId
   );
 }
 
+async function hasVerifiedStakeholderAuthorization(pool: Pool, organizationId: string, stakeholderType: Stakeholder): Promise<boolean> {
+  const result = await pool.query<{ ok: boolean }>(
+    "select exists (select 1 from organizations o join organization_stakeholder_authorizations a on a.organization_id=o.id where o.id=$1 and o.verification_status='VERIFIED' and a.stakeholder_type=$2 and a.status='VERIFIED' and a.verified_by_identity_id is not null and a.verified_at is not null and (a.expires_at is null or a.expires_at > now())) as ok",
+    [organizationId, stakeholderType],
+  );
+  return result.rows[0]?.ok === true;
+}
 export async function registerCpcbSwmRoutes(app: FastifyInstance, pool: Pool | null): Promise<void> {
   app.get("/api/v1/cpcb-swm/workspaces", async (request, reply) => {
     const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
@@ -145,6 +152,7 @@ export async function registerCpcbSwmRoutes(app: FastifyInstance, pool: Pool | n
     const dueDate = body.dueDate === null || body.dueDate === "" || body.dueDate === undefined ? null : validDate(body.dueDate) ? body.dueDate : "INVALID";
     const notes = body.notes === undefined || body.notes === null ? null : text(body, "notes", 4000);
     if (!validStakeholder(stakeholderType) || !title || !checklist || !safeObservations(observations) || !isCpcbReportedStatus(reportedStatus) || !isSwmLocalStage(localStage) || (reportedStatus !== "NOT_REPORTED" && !sourceReference) || (geographyId && !UUID.test(geographyId)) || dueDate === "INVALID" || (body.notes !== undefined && body.notes !== null && body.notes !== "" && notes === null) || (body.statusNote !== undefined && body.statusNote !== null && body.statusNote !== "" && statusNote === null)) return reply.code(400).send({ error: "Invalid stakeholder type, title, geography, canonical checklist, observations, workflow stage, reported status, status source, due date or notes", code: "SWM_WORKSPACE_INVALID" });
+    if (!validStakeholder(stakeholderType) || !await hasVerifiedStakeholderAuthorization(pool, organizationId, stakeholderType)) { return reply.code(403).send({ error: "Verified organization-to-stakeholder authorization required", code: "SWM_STAKEHOLDER_AUTHORIZATION_REQUIRED", syntheticData: false }); }
     try {
       if (geographyId) {
         const allowed = await pool.query<{ ok: boolean }>("select exists(select 1 from organization_memberships om where om.identity_id=$1 and om.organization_id=$2 and om.status='VERIFIED' and organization_has_geography_scope(om.organization_id,$3::uuid)) ok", [auth.identityId, organizationId, geographyId]);
@@ -181,6 +189,7 @@ export async function registerCpcbSwmRoutes(app: FastifyInstance, pool: Pool | n
     const dueDate = body.dueDate === null || body.dueDate === "" || body.dueDate === undefined ? null : validDate(body.dueDate) ? body.dueDate : "INVALID";
     const notes = body.notes === undefined || body.notes === null ? null : text(body, "notes", 4000);
     if (!validStakeholder(stakeholderType) || !title || !checklist || !safeObservations(observations) || !isCpcbReportedStatus(reportedStatus) || !isSwmLocalStage(localStage) || (reportedStatus !== "NOT_REPORTED" && !sourceReference) || (geographyId && !UUID.test(geographyId)) || dueDate === "INVALID" || (body.notes !== undefined && body.notes !== null && body.notes !== "" && notes === null) || (body.statusNote !== undefined && body.statusNote !== null && body.statusNote !== "" && statusNote === null)) return reply.code(400).send({ error: "Invalid stakeholder type, title, geography, canonical checklist, observations, workflow stage, reported status, status source, due date or notes", code: "SWM_WORKSPACE_INVALID" });
+    if (!validStakeholder(stakeholderType) || !await hasVerifiedStakeholderAuthorization(pool, organizationId, stakeholderType)) { return reply.code(403).send({ error: "Verified organization-to-stakeholder authorization required", code: "SWM_STAKEHOLDER_AUTHORIZATION_REQUIRED", syntheticData: false }); }
     try {
       if (geographyId) {
         const allowed = await pool.query<{ ok: boolean }>("select exists(select 1 from organization_memberships om where om.identity_id=$1 and om.organization_id=$2 and om.status='VERIFIED' and organization_has_geography_scope(om.organization_id,$3::uuid)) ok", [auth.identityId, organizationId, geographyId]);

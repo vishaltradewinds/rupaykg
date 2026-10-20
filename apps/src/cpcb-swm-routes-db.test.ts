@@ -62,6 +62,26 @@ test("CPCB SWM workspace routes enforce permissions and persist only user-report
     });
     assert.equal(invalidClaim.statusCode, 400, invalidClaim.body);
 
+    const missingMapping = await app.inject({ method: "POST", url: "/api/v1/cpcb-swm/workspaces", headers, payload });
+    assert.equal(missingMapping.statusCode, 403, missingMapping.body);
+    assert.equal(missingMapping.json().code, "SWM_STAKEHOLDER_AUTHORIZATION_REQUIRED");
+    const absentMapping = await pool.query("select count(*)::int count from organization_stakeholder_authorizations where organization_id=$1", [organizationId]);
+    assert.equal(absentMapping.rows[0]?.count, 0, "no organization-to-stakeholder mapping must fail closed");
+
+    await pool.query("update organizations set verification_status='VERIFIED',verified_at=now(),verified_by_identity_id=$2 where id=$1", [organizationId, identityId]);
+    await pool.query(
+      "insert into organization_stakeholder_authorizations(organization_id,stakeholder_type,status,evidence_reference,evidence_sha256,verified_by_identity_id,verified_at) values($1,'BWG','VERIFIED','synthetic://organization-type-approval',$2,$3,now())",
+      [organizationId, hash("synthetic organization stakeholder authorization"), identityId],
+    );
+    const wrongStakeholderPayload = {
+      ...payload,
+      stakeholderType: "PROCESSOR",
+      checklist: initialSwmChecklist("PROCESSOR").map(item => ({ ...item, status: "MISSING" })),
+    };
+    const wrongStakeholder = await app.inject({ method: "POST", url: "/api/v1/cpcb-swm/workspaces", headers, payload: wrongStakeholderPayload });
+    assert.equal(wrongStakeholder.statusCode, 403, wrongStakeholder.body);
+    assert.equal(wrongStakeholder.json().code, "SWM_STAKEHOLDER_AUTHORIZATION_REQUIRED");
+
     const created = await app.inject({ method: "POST", url: "/api/v1/cpcb-swm/workspaces", headers, payload });
     assert.equal(created.statusCode, 201, created.body);
     assert.equal(created.json().workspace.cpcb_status_claim, "USER_REPORTED_UNVERIFIED");
