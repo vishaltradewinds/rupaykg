@@ -20,11 +20,11 @@ function signedHeaders(body: unknown, secretValue = secret, timestampValue = Str
   };
 }
 
-function validBatch(batchId = "b5e74bb0-b3a1-4fd7-ae67-c3c2a68d56ab") {
+function validBatch(batchId = "b5e74bb0-b3a1-4fd7-ae67-c3c2a68d56ab", municipalCode = "MCGM-MUM") {
   return {
     batchMetadata: {
       authorityCode: "MH-PCB",
-      municipalCode: "MCGM-MUM",
+      municipalCode,
       syncWindowTimestamp: "2026-10-19T02:30:00Z",
       batchId,
     },
@@ -76,10 +76,8 @@ test("registered inbox route fails closed when database is unavailable", async (
 });
 
 test("registered inbox route rejects missing configuration and invalid signatures", async () => {
-  const previousSecret = process.env.RUPAYKG_GOV_BRIDGE_HMAC_SECRET;
-  const previousCodes = process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CODES;
-  process.env.RUPAYKG_GOV_BRIDGE_HMAC_SECRET = "";
-  process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CODES = "MH-PCB";
+  const previousCredentials = process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CREDENTIALS;
+  process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CREDENTIALS = "";
   try {
     await withRoute({ query: async () => ({ rows: [] }) } as unknown as Pool, async (app) => {
       const body = validBatch();
@@ -88,7 +86,7 @@ test("registered inbox route rejects missing configuration and invalid signature
       assert.equal(notConfigured.json().code, "GOV_BRIDGE_NOT_CONFIGURED");
     });
 
-    process.env.RUPAYKG_GOV_BRIDGE_HMAC_SECRET = secret;
+    process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CREDENTIALS = JSON.stringify({ "MH-PCB": { secret, municipalCodes: ["MCGM-MUM"] } });
     await withRoute({ query: async () => ({ rows: [] }) } as unknown as Pool, async (app) => {
       const response = await app.inject({
         method: "POST",
@@ -100,18 +98,14 @@ test("registered inbox route rejects missing configuration and invalid signature
       assert.equal(response.json().code, "GOV_BRIDGE_SIGNATURE_INVALID");
     });
   } finally {
-    if (previousSecret === undefined) delete process.env.RUPAYKG_GOV_BRIDGE_HMAC_SECRET;
-    else process.env.RUPAYKG_GOV_BRIDGE_HMAC_SECRET = previousSecret;
-    if (previousCodes === undefined) delete process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CODES;
-    else process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CODES = previousCodes;
+    if (previousCredentials === undefined) delete process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CREDENTIALS;
+    else process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CREDENTIALS = previousCredentials;
   }
 });
 
 test("registered inbox route allow-lists authority and persists accepted batches as non-authoritative intake", async () => {
-  const previousSecret = process.env.RUPAYKG_GOV_BRIDGE_HMAC_SECRET;
-  const previousCodes = process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CODES;
-  process.env.RUPAYKG_GOV_BRIDGE_HMAC_SECRET = secret;
-  process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CODES = "MPPCB";
+  const previousCredentials = process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CREDENTIALS;
+  process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CREDENTIALS = JSON.stringify({ "MH-PCB": { secret, municipalCodes: ["OTHER-MUNICIPALITY"] } });
   let queryCount = 0;
   const pool = {
     query: async () => {
@@ -128,7 +122,7 @@ test("registered inbox route allow-lists authority and persists accepted batches
       assert.equal(queryCount, 0);
     });
 
-    process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CODES = "MH-PCB";
+    process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CREDENTIALS = JSON.stringify({ "MH-PCB": { secret, municipalCodes: ["MCGM-MUM"] } });
     const serialized = JSON.stringify(validBatch());
     const payloadHash = await import("node:crypto").then(({ createHash }) => createHash("sha256").update(serialized, "utf8").digest("hex"));
     const acceptingPool = {
@@ -145,19 +139,15 @@ test("registered inbox route allow-lists authority and persists accepted batches
       assert.equal(response.json().guardianSubmission, false);
     });
   } finally {
-    if (previousSecret === undefined) delete process.env.RUPAYKG_GOV_BRIDGE_HMAC_SECRET;
-    else process.env.RUPAYKG_GOV_BRIDGE_HMAC_SECRET = previousSecret;
-    if (previousCodes === undefined) delete process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CODES;
-    else process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CODES = previousCodes;
+    if (previousCredentials === undefined) delete process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CREDENTIALS;
+    else process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CREDENTIALS = previousCredentials;
   }
 });
 
 
 test("registered inbox route replays an identical batch and rejects a reused ID with changed content", async () => {
-  const previousSecret = process.env.RUPAYKG_GOV_BRIDGE_HMAC_SECRET;
-  const previousCodes = process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CODES;
-  process.env.RUPAYKG_GOV_BRIDGE_HMAC_SECRET = secret;
-  process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CODES = "MH-PCB";
+  const previousCredentials = process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CREDENTIALS;
+  process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CREDENTIALS = JSON.stringify({ "MH-PCB": { secret, municipalCodes: ["MCGM-MUM"] } });
   const { createHash } = await import("node:crypto");
   const original = validBatch();
   const originalHash = createHash("sha256").update(JSON.stringify(original), "utf8").digest("hex");
@@ -186,18 +176,14 @@ test("registered inbox route replays an identical batch and rejects a reused ID 
       assert.equal(conflict.json().code, "GOV_BRIDGE_BATCH_ID_REUSED");
     });
   } finally {
-    if (previousSecret === undefined) delete process.env.RUPAYKG_GOV_BRIDGE_HMAC_SECRET;
-    else process.env.RUPAYKG_GOV_BRIDGE_HMAC_SECRET = previousSecret;
-    if (previousCodes === undefined) delete process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CODES;
-    else process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CODES = previousCodes;
+    if (previousCredentials === undefined) delete process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CREDENTIALS;
+    else process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CREDENTIALS = previousCredentials;
   }
 });
 
 test("registered inbox route returns a safe service error when persistence fails", async () => {
-  const previousSecret = process.env.RUPAYKG_GOV_BRIDGE_HMAC_SECRET;
-  const previousCodes = process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CODES;
-  process.env.RUPAYKG_GOV_BRIDGE_HMAC_SECRET = secret;
-  process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CODES = "MH-PCB";
+  const previousCredentials = process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CREDENTIALS;
+  process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CREDENTIALS = JSON.stringify({ "MH-PCB": { secret, municipalCodes: ["MCGM-MUM"] } });
   const pool = {
     query: async () => { throw new Error("test database outage"); },
   } as unknown as Pool;
@@ -213,19 +199,15 @@ test("registered inbox route returns a safe service error when persistence fails
       assert.equal(response.json().error, "Bridge inbox persistence unavailable");
     });
   } finally {
-    if (previousSecret === undefined) delete process.env.RUPAYKG_GOV_BRIDGE_HMAC_SECRET;
-    else process.env.RUPAYKG_GOV_BRIDGE_HMAC_SECRET = previousSecret;
-    if (previousCodes === undefined) delete process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CODES;
-    else process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CODES = previousCodes;
+    if (previousCredentials === undefined) delete process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CREDENTIALS;
+    else process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CREDENTIALS = previousCredentials;
   }
 });
 
 
 test("registered inbox route rejects unknown root and metadata fields before persistence", async () => {
-  const previousSecret = process.env.RUPAYKG_GOV_BRIDGE_HMAC_SECRET;
-  const previousCodes = process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CODES;
-  process.env.RUPAYKG_GOV_BRIDGE_HMAC_SECRET = secret;
-  process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CODES = "MH-PCB";
+  const previousCredentials = process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CREDENTIALS;
+  process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CREDENTIALS = JSON.stringify({ "MH-PCB": { secret, municipalCodes: ["MCGM-MUM"] } });
   let queryCount = 0;
   const pool = {
     query: async () => { queryCount += 1; return { rows: [] }; },
@@ -254,9 +236,7 @@ test("registered inbox route rejects unknown root and metadata fields before per
       assert.equal(queryCount, 0);
     });
   } finally {
-    if (previousSecret === undefined) delete process.env.RUPAYKG_GOV_BRIDGE_HMAC_SECRET;
-    else process.env.RUPAYKG_GOV_BRIDGE_HMAC_SECRET = previousSecret;
-    if (previousCodes === undefined) delete process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CODES;
-    else process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CODES = previousCodes;
+    if (previousCredentials === undefined) delete process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CREDENTIALS;
+    else process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CREDENTIALS = previousCredentials;
   }
 });
