@@ -24,6 +24,20 @@ export type WasteLogExtractionProvider = {
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const MAX_LOG_BYTES = 1024 * 1024;
 
+/** Atomic cross-instance fixed-window limiter; returns false once 10 attempts are consumed. */
+export async function consumeAiIntakeRateLimit(pool: Pool, identityId: string, organizationId: string): Promise<boolean> {
+  const result = await pool.query<{ request_count: number }>(
+    `insert into ai_intake_rate_limits (identity_id, organization_id, window_start, request_count)
+     values ($1, $2, date_trunc('minute', clock_timestamp()), 1)
+     on conflict (identity_id, organization_id, window_start)
+     do update set request_count = ai_intake_rate_limits.request_count + 1
+     where ai_intake_rate_limits.request_count < 10
+     returning request_count`,
+    [identityId, organizationId],
+  );
+  return result.rows.length === 1;
+}
+
 export async function registerIntelligenceRoutes(
   app: FastifyInstance,
   pool: Pool | null,
@@ -68,16 +82,8 @@ export async function registerIntelligenceRoutes(
 
       // Database-backed fixed-window limit is shared across API instances. Count attempts before
       // evidence persistence/provider calls so clients cannot bypass the limit by retrying failures.
-      const limit = await pool.query<{ request_count: number }>(
-        `insert into ai_intake_rate_limits (identity_id, organization_id, window_start, request_count)
-         values ($1, $2, date_trunc('minute', clock_timestamp()), 1)
-         on conflict (identity_id, organization_id, window_start)
-         do update set request_count = ai_intake_rate_limits.request_count + 1
-         where ai_intake_rate_limits.request_count < 10
-         returning request_count`,
-        [auth.identityId, row.organization_id],
-      );
-      if (!limit.rows[0]) {
+      const allowed = await consumeAiIntakeRateLimit(pool, auth.identityId, row.organization_id);
+      if (!allowed) {
         return reply.code(429).send({
           error: "Evidence intake rate limit exceeded; retry after the current minute window",
           code: "AI_INTAKE_RATE_LIMITED",
