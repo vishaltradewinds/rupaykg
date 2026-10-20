@@ -92,6 +92,7 @@ function parseAuthorityCredentials(value: string): Record<string, AuthorityCrede
   if (!isObject(parsed) || !Object.keys(parsed).length) return null;
 
   const credentials: Record<string, AuthorityCredential> = Object.create(null) as Record<string, AuthorityCredential>;
+  const seenSecrets = new Set<string>();
   for (const [rawCode, rawCredential] of Object.entries(parsed)) {
     const authorityCode = rawCode.trim().toUpperCase();
     if (!CODE.test(authorityCode) || !isObject(rawCredential)
@@ -100,7 +101,8 @@ function parseAuthorityCredentials(value: string): Record<string, AuthorityCrede
     const rawMunicipalCodes = rawCredential.municipalCodes;
     if (secret.length < 32 || !Array.isArray(rawMunicipalCodes) || rawMunicipalCodes.length < 1
       || !rawMunicipalCodes.every((code) => typeof code === "string" && CODE.test(code.trim().toUpperCase()))) return null;
-    if (credentials[authorityCode]) return null;
+    if (credentials[authorityCode] || seenSecrets.has(secret)) return null;
+    seenSecrets.add(secret);
     credentials[authorityCode] = {
       secret,
       municipalCodes: [...new Set(rawMunicipalCodes.map((code) => String(code).trim().toUpperCase()))],
