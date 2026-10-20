@@ -36,6 +36,7 @@ export async function deliverOperationalAlert(
         details,
       }),
       signal: AbortSignal.timeout(5000),
+      redirect: "error",
     });
     return { delivered: response.ok, statusCode: response.status, errorClass: response.ok ? null : "WEBHOOK_HTTP_ERROR" };
   } catch (error) {
