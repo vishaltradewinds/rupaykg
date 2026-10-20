@@ -290,3 +290,23 @@ This narrows timestamp ambiguity in field-device provenance. It does not validat
 - CI run #1535 passed end-to-end on code head `2a13676b8a125f79d22ca697f2945799969c3b76`: dependency audit, migration validation/application, typecheck, build, browser smoke test, PostgreSQL acceptance tests and production-container build. Run: https://github.com/vishaltradewinds/rupaykg/actions/runs/39432120027.
 
 This prevents silently replacing malformed client metadata with an unrelated server time. The compatibility fallback for omitted sequence values remains documented and should be removed only with a versioned API contract change. Production remains unchanged; PR #41 remains draft/unmerged/undeployed.
+
+
+## Resume checkpoint — 2026-10-20 13:44 UTC
+
+Repository: `vishaltradewinds/rupaykg`; PR #41: https://github.com/vishaltradewinds/rupaykg/pull/41; branch `intelligence/ai-evidence-intake-middleware`. PR remains draft, open, unmerged and undeployed.
+
+Latest code commit: `2a13676b8a125f79d22ca697f2945799969c3b76`. Latest code CI run #1535: https://github.com/vishaltradewinds/rupaykg/actions/runs/39432120027. It completed dependency installation, production dependency audit, migration validation/application in disposable CI PostgreSQL, typecheck, build, browser smoke test, full tests including PostgreSQL acceptance, and production-container build; final job completion was being checked at checkpoint time. Previous fully verified green CI run #1532: https://github.com/vishaltradewinds/rupaykg/actions/runs/39431690572.
+
+Changes since prior checkpoint:
+- Strict timezone-bearing RFC 3339 validation for field-sync capture timestamps, with tests for valid UTC/offset timestamps and invalid timezone/calendar/time values.
+- API operation sync endpoint now rejects an explicitly supplied invalid `clientSequence` with HTTP 400 / `INVALID_CLIENT_SEQUENCE` instead of silently replacing it with the current timestamp. Added runtime acceptance assertion.
+- Prior changes remain: AI evidence-intake durable idempotency and rate-limit ledger cleanup; stakeholder authorization dual control; optional HTTPS alert webhook with redirects disabled; direct-start production config validation; graceful shutdown; schema-aware `/health/ready`; async worker DB acceptance tests; runtime acceptance port collision fix; audit documentation.
+
+Latest audit document path: `docs/RUPAYKG_GOVERNMENT_INTEROPERABILITY_AUDIT_2026-10-20.md`. It has entries covering AI intake rate-limit ledger hardening, graceful shutdown/readiness, and strict field-sync timestamps. It was updated after CI #1532 and before the newest operation-sequence validation commit, so add a fresh note about commit `2a13676...` and CI #1535 when resuming.
+
+Important boundaries: no production deployment/migration/scheduler/webhook activation; do not mutate inherited staging worker rows; preserve existing Guardian/Hedera configuration and account/topic `0.0.10121000`; never claim official government integration, accredited verification, CCTS compliance or Carbon Credit Certificate issuance without external evidence. PR #41 must stay draft/unmerged until applicable gates pass.
+
+Outstanding gates: (1) confirm CI #1535 final conclusion and exact head status; (2) isolated clean staging tests for worker restart/retry/quarantine, audit-chain concurrency/rollback and authorization history without touching inherited records; (3) configure and verify alert delivery with named on-call owner/escalation; (4) independent security, backup/restore, retention/privacy and change-control evidence; (5) authorized official CPCB/BEE/Indian Carbon Market integration contracts/sandbox/credentials; (6) real Guardian execution + Hedera consensus/Mirror Node verification using existing account/topic; (7) methodology-by-methodology CCTS validation, accredited independent verification and official registry issuance; (8) Shakti release approval. Production remains HOLD.
+
+Resume instructions: start by checking CI #1535 at the URL above and fetch current PR head; update this checkpoint with the result, then continue the next engineering/staging gate. Do not stop at status reporting when tools permit concrete work; do not falsely mark the full project finished because CI is green.
