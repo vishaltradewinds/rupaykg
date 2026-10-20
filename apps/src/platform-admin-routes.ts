@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { Pool, PoolClient } from "pg";
 import { authenticate, type AuthContext } from "./auth.js";
+import { hashPlatformAuditEventV2 } from "./platform-audit-hash.js";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const SAFE_PERMISSIONS = new Set([
@@ -116,10 +117,10 @@ async function audit(
     payload,
     previousHash,
   };
-  const eventHash = hash(JSON.stringify(event));
+  const eventHash = hashPlatformAuditEventV2(event);
   const inserted = await client.query<{ id: string }>(
-    `insert into audit_events(actor_identity_id,organization_id,action,target_type,target_id,request_id,previous_hash,event_hash,payload,created_at)
-     values($1,$2,$3,$4,$5,$6,$7,$8,$9,clock_timestamp())
+    `insert into audit_events(actor_identity_id,organization_id,action,target_type,target_id,request_id,previous_hash,event_hash,payload,hash_version,created_at)
+     values($1,$2,$3,$4,$5,$6,$7,$8,$9,2,clock_timestamp())
      returning id`,
     [actorId, organizationId, action, targetType, targetId, request.id, previousHash, eventHash, JSON.stringify(payload)],
   );
