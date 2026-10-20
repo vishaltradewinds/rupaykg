@@ -75,3 +75,12 @@ Migration `086_reserved_role_restoration_db_guard.sql` protects status reactivat
 ## Acceptance fixture registry exclusion
 
 Migration `087_acceptance_fixture_registry_exclusion.sql` prevents activities or evidence explicitly marked with `metadata.acceptanceFixture=true` from backing credentials in value-bearing states. It also binds the database gate to the exact activity, verification, and evidence tuple. The MRV API reports acceptance fixtures as not registry eligible even after real Guardian/Hedera/Mirror Node verification. External anchoring proves message integrity and consensus; it does not validate the underlying activity as a real eligible carbon project.
+
+
+## Government inbox worker (migration `20261023_async_mirror_worker_leases.sql`)
+
+The government bridge inbox now has a one-shot worker runner exposed as `npm run worker:gov-inbox -w @rupaykg/api` after the API workspace has been built. Schedule it through the deployment platform's authenticated job/cron facility; do not expose the runner as a public HTTP route. The job uses the same validated production database configuration and emits aggregate counts only.
+
+The worker claims a bounded batch with PostgreSQL `FOR UPDATE SKIP LOCKED`, uses a lease token as a fencing condition on state updates, applies capped exponential retry for transient errors, quarantines exhausted work, and offers read-only reconciliation counts. A structural validation result is recorded as `VALIDATED`, not as official government acceptance or verified MRV. Invalid payloads are recorded as `REJECTED`; neither status changes authoritative MRV measurements, submits to Guardian/Hedera, or creates a carbon credit.
+
+**Deployment gate:** this commit adds the worker and invocation command, but does not create a live scheduler or run it against production data. Configure a scheduled job only after the migration is applied to the target database and its least-privilege access, logs, alerting, retry behavior and rollback have been verified in staging. Do not configure an authority source until CPCB's official integration contract and authorization are confirmed.
