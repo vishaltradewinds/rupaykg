@@ -86,7 +86,7 @@ export async function registerIntelligenceRoutes(
       }
 
       const idempotencyKey = request.headers["idempotency-key"];
-      if (typeof idempotencyKey !== "string" || !idempotencyKey.trim() || idempotencyKey.length > 200 || /[\\r\\n\\u0000]/.test(idempotencyKey)) {
+      if (typeof idempotencyKey !== "string" || !idempotencyKey.trim() || idempotencyKey.length > 200 || /[\r\n\u0000]/.test(idempotencyKey)) {
         return reply.code(400).send({ error: "A valid Idempotency-Key header (1-200 characters) is required", code: "AI_INTAKE_IDEMPOTENCY_KEY_REQUIRED" });
       }
       const requestSha256 = createHash("sha256").update(JSON.stringify({ activityId, rawLog, sourceReference })).digest("hex");
