@@ -41,6 +41,10 @@ The configured provider returns a strict proposal object:
 
 The API validates the provider output server-side. The confidence value is model-reported metadata, not a calibrated probability or proof.
 
+## Durable idempotency and recovery
+
+Migration `20261025_ai_evidence_intake_jobs.sql` adds a database-backed ledger keyed by authenticated identity, organization, and `Idempotency-Key`. The ledger stores a request hash, status, lease token/expiry, attempt count, source/proposal evidence IDs, and completed response JSON—not raw source text. A matching key with different request content returns a conflict; completed submissions replay the response; an active lease returns processing status; retryable/expired jobs may be reclaimed with a new fencing token. Source evidence ID is linked inside the source-evidence transaction, and proposal persistence plus job completion are committed together. The lease is five minutes; provider timeout must remain below that limit until lease renewal is implemented.
+
 ## Persistence design
 
 `apps/src/evidence-vault-store.ts` extracts the transactional artifact persistence primitive shared by the existing evidence upload route and AI intake route. The route does not write directly to measurements, carbon calculations, EPR lifecycle tables or certificates. Source and proposal are separate immutable/versioned evidence artifacts. The proposal references the source evidence ID in its metadata.
