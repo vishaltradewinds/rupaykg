@@ -90,6 +90,19 @@ before(async () => {
   assert.equal(readinessBody.schema, "READY");
   assert.equal(readinessBody.auditChain, "SEEDED");
 
+  const invalidSequence = await request("/api/v1/operations/sync", {
+    method: "POST",
+    body: JSON.stringify({
+      idempotencyKey: `invalid-sequence-${suffix}`,
+      deviceId: verifiedDeviceId,
+      capturedAt: new Date().toISOString(),
+      payload: { operationType: "RECORD_WASTE" },
+      clientSequence: "not-a-sequence",
+    }),
+  }, actorToken);
+  assert.equal(invalidSequence.status, 400);
+  assert.equal((await body(invalidSequence)).code, "INVALID_CLIENT_SEQUENCE");
+
   const noDbPort = String(port + 10);
   noDbServer = spawn(process.execPath, ["dist/src/server.js"], { cwd: process.cwd(), env: { ...process.env, PORT: noDbPort, HOST: "127.0.0.1", DATABASE_URL: "", DATABASE_SSL: "false" }, stdio: ["ignore", "ignore", "pipe"] });
   capture(noDbServer, "noDb");
