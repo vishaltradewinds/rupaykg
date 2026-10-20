@@ -98,6 +98,7 @@ export async function registerIntelligenceRoutes(
          returning id, lease_token`,
         [jobIdentity, jobOrganization, idempotencyKey, requestSha256],
       );
+      const createdJob = Boolean(insertJob.rows[0]);
       let jobId = insertJob.rows[0]?.id;
       let leaseToken = insertJob.rows[0]?.lease_token;
       let existingSourceId: string | null = null;
@@ -151,7 +152,17 @@ export async function registerIntelligenceRoutes(
       // evidence persistence/provider calls so clients cannot bypass the limit by retrying failures.
       const allowed = await consumeAiIntakeRateLimit(pool, auth.identityId, row.organization_id);
       if (!allowed) {
-        await markRetryable("AI_INTAKE_RATE_LIMITED");
+        if (createdJob && jobId && leaseToken) {
+          // Do not let rate-limited requests fill the durable job ledger with empty rows.
+          await pool.query(
+            `delete from ai_evidence_intake_jobs
+              where id=$1 and lease_token=$2::uuid and status='PROCESSING'
+                and source_evidence_id is null`,
+            [jobId, leaseToken],
+          );
+        } else {
+          await markRetryable("AI_INTAKE_RATE_LIMITED");
+        }
         return reply.code(429).send({
           error: "Evidence intake rate limit exceeded; retry after the current minute window",
           code: "AI_INTAKE_RATE_LIMITED",
