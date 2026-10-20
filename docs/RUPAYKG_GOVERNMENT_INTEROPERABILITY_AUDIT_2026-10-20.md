@@ -261,3 +261,13 @@ A follow-up review found that a new unique idempotency key could create a PROCES
 CI run #1525 passed end-to-end on commit `056437963e542fd8fe06116a3f15bf6a46005e33`: dependency audit, migration validation/application in disposable PostgreSQL, typecheck, production build, browser smoke test, full test suite including PostgreSQL acceptance, and production-container build. Run: https://github.com/vishaltradewinds/rupaykg/actions/runs/39430154562.
 
 This is a code/test improvement only. No production database or runtime configuration was changed. PR #41 remains draft, unmerged and undeployed; staging, operational ownership, independent security review and Shakti release gates remain open.
+
+
+## 11. API lifecycle/readiness hardening — 2026-10-20 13:32 UTC
+
+- Added graceful SIGTERM/SIGINT handling to the API server: stop accepting requests, close Fastify, close the PostgreSQL pool, and enforce a bounded 10-second shutdown timeout. Timeout and shutdown failures are logged without request payloads or secrets.
+- Added `GET /health/ready`, distinct from the existing liveness/connectivity `/health` endpoint. Readiness requires the core identity/membership, evidence vault, AI intake jobs, government inbox, stakeholder authorization, audit events, and audit-chain-head tables plus a seeded audit-chain singleton row. Missing DB/schema/anchor returns HTTP 503 and a non-sensitive readiness status.
+- Runtime acceptance now checks ready status on a migrated disposable PostgreSQL instance and confirms a no-database instance returns 503 for readiness.
+- CI run #1529 passed end-to-end on code head `dcca9ac6ee1a6606013a987299046511936e8c68`: dependency audit, migration validation/application, typecheck, build, browser smoke test, full PostgreSQL acceptance suite and production-container build. Run: https://github.com/vishaltradewinds/rupaykg/actions/runs/39431034419.
+
+The readiness endpoint is a platform-operational signal, not a security certification or proof of official integrations. Production remains unchanged; PR #41 remains draft, unmerged and undeployed.
