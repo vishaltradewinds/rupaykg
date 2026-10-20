@@ -257,6 +257,7 @@ export async function registerIntelligenceRoutes(
           },
         });
         const responseBody = {
+          jobId,
           source: "postgresql", syntheticData: false,
           data: {
             sourceEvidenceId: source.evidenceId,
@@ -280,7 +281,7 @@ export async function registerIntelligenceRoutes(
         );
         if (completed.rowCount !== 1) throw new Error("AI intake job lease lost before completion");
         await proposalClient.query("commit");
-        return reply.code(201).send({ ...responseBody, jobId });
+        return reply.code(201).send(responseBody);
       } catch (error) {
         await proposalClient.query("rollback").catch(() => undefined);
         await markRetryable("EVIDENCE_VAULT_UNAVAILABLE");
