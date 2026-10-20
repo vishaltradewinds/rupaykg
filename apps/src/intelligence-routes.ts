@@ -122,12 +122,12 @@ export async function registerIntelligenceRoutes(
         const takeover = await pool.query<{ id: string; lease_token: string; source_evidence_id: string | null }>(
           `update ai_evidence_intake_jobs
               set status='PROCESSING', attempt_count=least(attempt_count+1,100),
-                  lease_token=$4::uuid, lease_expires_at=now()+interval '5 minutes',
+                  lease_token=$3::uuid, lease_expires_at=now()+interval '5 minutes',
                   updated_at=now(), last_error_code=null
             where id=$1 and request_sha256=$2
               and (status='RETRYABLE_FAILED' or (status='PROCESSING' and lease_expires_at < now()))
             returning id, lease_token, source_evidence_id`,
-          [prior.id, requestSha256, idempotencyKey, randomUUID()],
+          [prior.id, requestSha256, randomUUID()],
         );
         if (!takeover.rows[0]) {
           return reply.code(202).send({ jobId: prior.id, status: "PROCESSING", retryAfterSeconds: 5, authoritativeMutation: false });
