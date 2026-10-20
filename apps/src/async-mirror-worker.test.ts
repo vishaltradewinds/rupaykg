@@ -34,9 +34,9 @@ test("worker claims a bounded batch and marks structurally valid payloads as int
   const { pool, statements } = fakePool([row]);
   const result = await runGovernmentInboxWorker(pool);
   assert.deepEqual(result, { claimed: 1, validated: 1, rejected: 0, retried: 0, quarantined: 0 });
-  assert.match(statements[1].sql, /for update skip locked/i);
-  assert.match(statements[2].sql, /lease_token=\$2/i);
-  assert.match(statements[2].sql, /status='VALIDATED'/i);
+  assert.match(statements[1]!.sql, /for update skip locked/i);
+  assert.match(statements[2]!.sql, /lease_token=\$2/i);
+  assert.match(statements[2]!.sql, /status='VALIDATED'/i);
 });
 
 test("worker rejects metadata mismatch without retrying deterministic validation failures", async () => {
@@ -49,12 +49,12 @@ test("worker retries transient errors and quarantines an exhausted attempt", asy
   const { pool, statements } = fakePool([{ ...row, attempts: 1 }]);
   const retry = await runGovernmentInboxWorker(pool, async () => { throw new Error("temporary outage"); }, { maxAttempts: 3 });
   assert.equal(retry.retried, 1);
-  assert.match(statements[2].sql, /next_attempt_at=case when \$3='RETRY'/i);
+  assert.match(statements[2]!.sql, /next_attempt_at=case when \$3='RETRY'/i);
 
   const exhaustedPool = fakePool([{ ...row, attempts: 3 }]);
   const exhausted = await runGovernmentInboxWorker(exhaustedPool.pool, async () => { throw new Error("still unavailable"); }, { maxAttempts: 3 });
   assert.equal(exhausted.quarantined, 1);
-  assert.match(exhaustedPool.statements[2].sql, /quarantined_at=case when \$3='QUARANTINED'/i);
+  assert.match(exhaustedPool.statements[2]!.sql, /quarantined_at=case when \$3='QUARANTINED'/i);
 });
 
 test("structural validator rejects unknown fields", async () => {
@@ -78,5 +78,5 @@ test("reconciliation reports unresolved statuses and expired leases read-only", 
     oldestUnresolvedAt: "2026-10-20T08:00:00Z",
   });
   assert.equal(statements.length, 2);
-  assert.match(statements[0].sql, /group by status/i);
+  assert.match(statements[0]!.sql, /group by status/i);
 });
