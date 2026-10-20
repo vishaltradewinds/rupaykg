@@ -69,9 +69,17 @@ test("CPCB SWM workspace routes enforce permissions and persist only user-report
     assert.equal(absentMapping.rows[0]?.count, 0, "no organization-to-stakeholder mapping must fail closed");
 
     await pool.query("update organizations set verification_status='VERIFIED',verified_at=now(),verified_by_identity_id=$2 where id=$1", [organizationId, identityId]);
+    const requesterId = randomUUID();
+    await pool.query("insert into identities(id,display_name) values($1,$2)", [requesterId, "Synthetic independent requester " + suffix]);
+    const approvalRequest = await pool.query<{ id: string }>(
+      `insert into organization_stakeholder_authorization_requests
+        (organization_id,stakeholder_type,status,evidence_reference,evidence_sha256,request_reason,request_hash,requested_by_identity_id,decided_by_identity_id,decision_reason,decided_at,applied_at)
+       values($1,'BWG','APPROVED','synthetic://organization-type-approval',$2,'Synthetic test-only approval fixture',$3,$4,$5,'Synthetic independent test decision',now(),now()) returning id`,
+      [organizationId, hash("synthetic organization stakeholder authorization"), hash("synthetic dual-control test request"), requesterId, identityId],
+    );
     await pool.query(
-      "insert into organization_stakeholder_authorizations(organization_id,stakeholder_type,status,evidence_reference,evidence_sha256,verified_by_identity_id,verified_at) values($1,'BWG','VERIFIED','synthetic://organization-type-approval',$2,$3,now())",
-      [organizationId, hash("synthetic organization stakeholder authorization"), identityId],
+      "insert into organization_stakeholder_authorizations(organization_id,stakeholder_type,status,evidence_reference,evidence_sha256,verified_by_identity_id,verified_at,approval_request_id) values($1,'BWG','VERIFIED','synthetic://organization-type-approval',$2,$3,now(),$4)",
+      [organizationId, hash("synthetic organization stakeholder authorization"), identityId, approvalRequest.rows[0]!.id],
     );
     const wrongStakeholderPayload = {
       ...payload,
