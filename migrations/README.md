@@ -84,3 +84,8 @@ The government bridge inbox now has a one-shot worker runner exposed as `npm run
 The worker claims a bounded batch with PostgreSQL `FOR UPDATE SKIP LOCKED`, uses a lease token as a fencing condition on state updates, applies capped exponential retry for transient errors, quarantines exhausted work, and offers read-only reconciliation counts. A structural validation result is recorded as `VALIDATED`, not as official government acceptance or verified MRV. Invalid payloads are recorded as `REJECTED`; neither status changes authoritative MRV measurements, submits to Guardian/Hedera, or creates a carbon credit.
 
 **Deployment gate:** this commit adds the worker and invocation command, but does not create a live scheduler or run it against production data. Configure a scheduled job only after the migration is applied to the target database and its least-privilege access, logs, alerting, retry behavior and rollback have been verified in staging. Do not configure an authority source until CPCB's official integration contract and authorization are confirmed.
+
+
+## AI evidence-intake rate limit (migration `20261024_ai_intake_rate_limits.sql`)
+
+The AI evidence-intake route uses a PostgreSQL-backed fixed-window counter keyed by identity, organization and database minute. The atomic upsert permits at most 10 attempts per identity/organization/minute across multiple API instances; over-limit requests receive HTTP 429 before evidence persistence or model-provider invocation. Counters contain no source payloads. This migration is not part of production's currently applied migration set; apply only through the reviewed migration process after staging validation. Rate limiting is not idempotency, job persistence, or monitoring.
