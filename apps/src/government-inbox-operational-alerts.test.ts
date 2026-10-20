@@ -11,23 +11,22 @@ test("alert webhook configuration fails closed for non-HTTPS or credential-beari
 });
 
 test("alert webhook sends only bounded operational metadata and treats non-2xx as failure", async () => {
-  let capturedUrl = "";
-  let capturedBody: Record<string, unknown> | null = null;
+  const captured: { url: string; body?: Record<string, unknown> } = { url: "" };
   const result = await deliverOperationalAlert("https://monitor.example/alert", "attention_required", {
     quarantined: 2,
     expiredLeases: 1,
   }, async (input, init) => {
-    capturedUrl = String(input);
-    capturedBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+    captured.url = String(input);
+    captured.body = JSON.parse(String(init?.body)) as Record<string, unknown>;
     return new Response("", { status: 202 });
   });
-  assert.equal(capturedUrl, "https://monitor.example/alert");
+  assert.equal(captured.url, "https://monitor.example/alert");
   assert.equal(result.delivered, true);
   assert.equal(result.statusCode, 202);
-  assert.equal(capturedBody?.event, "attention_required");
-  assert.equal(capturedBody?.officialGovernmentSubmission, false);
-  assert.deepEqual(capturedBody?.details, { quarantined: 2, expiredLeases: 1 });
-  assert.equal(JSON.stringify(capturedBody).includes("payload"), false);
+  assert.equal(captured.body?.event, "attention_required");
+  assert.equal(captured.body?.officialGovernmentSubmission, false);
+  assert.deepEqual(captured.body?.details, { quarantined: 2, expiredLeases: 1 });
+  assert.equal(JSON.stringify(captured.body).includes("payload"), false);
 
   const rejected = await deliverOperationalAlert("https://monitor.example/alert", "tick_failed", {}, async () => new Response("", { status: 503 }));
   assert.equal(rejected.delivered, false);
