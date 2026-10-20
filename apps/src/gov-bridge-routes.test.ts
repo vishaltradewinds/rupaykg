@@ -219,3 +219,44 @@ test("registered inbox route returns a safe service error when persistence fails
     else process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CODES = previousCodes;
   }
 });
+
+
+test("registered inbox route rejects unknown root and metadata fields before persistence", async () => {
+  const previousSecret = process.env.RUPAYKG_GOV_BRIDGE_HMAC_SECRET;
+  const previousCodes = process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CODES;
+  process.env.RUPAYKG_GOV_BRIDGE_HMAC_SECRET = secret;
+  process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CODES = "MH-PCB";
+  let queryCount = 0;
+  const pool = {
+    query: async () => { queryCount += 1; return { rows: [] }; },
+  } as unknown as Pool;
+  try {
+    await withRoute(pool, async (app) => {
+      const withRootExtra = { ...validBatch(), verified: true };
+      const rootResponse = await app.inject({
+        method: "POST", url: "/api/v1/bridge/gov/inbox",
+        headers: signedHeaders(withRootExtra), payload: withRootExtra,
+      });
+      assert.equal(rootResponse.statusCode, 400);
+      assert.equal(rootResponse.json().code, "GOV_BRIDGE_BATCH_INVALID");
+
+      const valid = validBatch();
+      const withMetadataExtra = {
+        ...valid,
+        batchMetadata: { ...valid.batchMetadata, sourceIsGovernmentVerified: true },
+      };
+      const metadataResponse = await app.inject({
+        method: "POST", url: "/api/v1/bridge/gov/inbox",
+        headers: signedHeaders(withMetadataExtra), payload: withMetadataExtra,
+      });
+      assert.equal(metadataResponse.statusCode, 400);
+      assert.equal(metadataResponse.json().code, "GOV_BRIDGE_BATCH_INVALID");
+      assert.equal(queryCount, 0);
+    });
+  } finally {
+    if (previousSecret === undefined) delete process.env.RUPAYKG_GOV_BRIDGE_HMAC_SECRET;
+    else process.env.RUPAYKG_GOV_BRIDGE_HMAC_SECRET = previousSecret;
+    if (previousCodes === undefined) delete process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CODES;
+    else process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CODES = previousCodes;
+  }
+});
