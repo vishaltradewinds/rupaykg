@@ -83,7 +83,7 @@ before(async () => {
   capture(server, "server");
   await waitFor(`${baseUrl}/health`, 200, server);
 
-  const noDbPort = String(port + 1);
+  const noDbPort = String(port + 10);
   noDbServer = spawn(process.execPath, ["dist/src/server.js"], { cwd: process.cwd(), env: { ...process.env, PORT: noDbPort, HOST: "127.0.0.1", DATABASE_URL: "", DATABASE_SSL: "false" }, stdio: ["ignore", "ignore", "pipe"] });
   capture(noDbServer, "noDb");
   await waitFor(`http://127.0.0.1:${noDbPort}/health`, 503, noDbServer);
