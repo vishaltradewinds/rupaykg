@@ -166,3 +166,59 @@ test("AI intake HTTP retries a provider failure without duplicating original sou
     await pool.end();
   }
 });
+
+
+test("AI intake recovers after Fastify instance restart using the durable idempotency ledger", {
+  skip: !enabled ? "requires CI disposable PostgreSQL and applied migrations" : false,
+}, async () => {
+  const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: process.env.DATABASE_SSL === "true" ? { rejectUnauthorized: false } : undefined,
+    max: 8,
+  });
+  const fixture = await createFixture(pool);
+  let firstApp: ReturnType<typeof Fastify> | undefined;
+  let restartedApp: ReturnType<typeof Fastify> | undefined;
+  try {
+    firstApp = Fastify();
+    await registerIntelligenceRoutes(firstApp, pool, {
+      providerId: "synthetic-restart-failure", modelId: "fixture-model", promptVersion: "fixture-v1",
+      extract: async () => { throw new Error("synthetic failure before simulated restart"); },
+    });
+    await firstApp.ready();
+    const first = await post(firstApp, fixture, payload(fixture));
+    assert.equal(first.statusCode, 502);
+    assert.ok(first.json().sourceEvidenceId);
+    const sourceEvidenceId = first.json().sourceEvidenceId as string;
+
+    // Close the first HTTP application instance, retaining only the database ledger.
+    await firstApp.close();
+    firstApp = undefined;
+
+    restartedApp = Fastify();
+    await registerIntelligenceRoutes(restartedApp, pool, {
+      providerId: "synthetic-restart-recovery", modelId: "fixture-model", promptVersion: "fixture-v1",
+      extract: async () => validExtraction,
+    });
+    await restartedApp.ready();
+    const recovered = await post(restartedApp, fixture, payload(fixture));
+    assert.equal(recovered.statusCode, 201);
+    assert.equal(recovered.json().data.sourceEvidenceId, sourceEvidenceId);
+    assert.equal(recovered.json().data.reviewStatus, "PENDING_HUMAN_REVIEW");
+    assert.equal(recovered.json().data.authoritativeMutation, false);
+
+    const counts = await pool.query<{ source_count: string; proposal_count: string }>(
+      `select count(*) filter(where evidence_type='AI_SOURCE_LOG')::text source_count,
+              count(*) filter(where evidence_type='AI_EXTRACTION_PROPOSAL')::text proposal_count
+         from evidence where activity_id=$1`,
+      [fixture.activityId],
+    );
+    assert.equal(counts.rows[0]!.source_count, "1", "restart recovery must reuse original source evidence");
+    assert.equal(counts.rows[0]!.proposal_count, "1", "restart recovery must persist one proposal");
+  } finally {
+    await firstApp?.close().catch(() => undefined);
+    await restartedApp?.close().catch(() => undefined);
+    await cleanFixture(pool, fixture);
+    await pool.end();
+  }
+});
