@@ -157,7 +157,7 @@ export async function registerAsyncMirrorRoutes(app: FastifyInstance, pool: Pool
       );
       if (inserted.rows[0]) {
         return reply.code(202).send({
-          status: "RECEIVED_FOR_ASYNCHRONOUS_PROCESSING",
+          status: "RECEIVED_NOT_PROCESSED",
           queueId: inserted.rows[0].id,
           batchId: batch.batchMetadata.batchId,
           payloadSha256,
