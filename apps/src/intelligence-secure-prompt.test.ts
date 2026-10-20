@@ -41,9 +41,13 @@ test("fails closed when prompt configuration is absent, malformed or tampered", 
   withPromptEnv({}, () => assert.equal(loadConfiguredSystemPrompt(), undefined));
   const key = randomBytes(32);
   const encrypted = encryptPrompt("test prompt", key);
+  const parts = encrypted.split(":");
+  const ciphertext = parts[3]!;
+  const tamperedCiphertext = (ciphertext[0] === "0" ? "1" : "0") + ciphertext.slice(1);
+  const tampered = [...parts.slice(0, 3), tamperedCiphertext].join(":");
   withPromptEnv({
     RUPAYKG_AI_PROMPT_KEY_HEX: key.toString("hex"),
-    RUPAYKG_AI_PROMPT_CIPHERTEXT: encrypted.slice(0, -2) + "ff",
+    RUPAYKG_AI_PROMPT_CIPHERTEXT: tampered,
   }, () => assert.equal(loadConfiguredSystemPrompt(), undefined));
   withPromptEnv({
     RUPAYKG_AI_PROMPT_KEY_HEX: "not-a-key",
