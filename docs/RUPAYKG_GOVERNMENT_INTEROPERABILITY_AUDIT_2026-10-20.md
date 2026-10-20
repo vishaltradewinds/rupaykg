@@ -271,3 +271,12 @@ This is a code/test improvement only. No production database or runtime configur
 - CI run #1529 passed end-to-end on code head `dcca9ac6ee1a6606013a987299046511936e8c68`: dependency audit, migration validation/application, typecheck, build, browser smoke test, full PostgreSQL acceptance suite and production-container build. Run: https://github.com/vishaltradewinds/rupaykg/actions/runs/39431034419.
 
 The readiness endpoint is a platform-operational signal, not a security certification or proof of official integrations. Production remains unchanged; PR #41 remains draft, unmerged and undeployed.
+
+
+## 12. Field-sync timestamp contract hardening — 2026-10-20 13:38 UTC
+
+- Field-sync envelope validation now requires a timezone-bearing RFC 3339 capture timestamp, with calendar/time component validation rather than relying on permissive `Date.parse()` alone.
+- Unit tests accept UTC and offset-bearing timestamps and reject missing zones, impossible calendar dates, out-of-range time components and incomplete offsets.
+- CI run #1532 passed on code head `424fae0233035954c9441c204fa396e8ee0c275c`: dependency audit (0 production dependency vulnerabilities reported), migration validation/application, typecheck, build, browser smoke test, PostgreSQL acceptance tests and production-container build. Run: https://github.com/vishaltradewinds/rupaykg/actions/runs/39431690572.
+
+This narrows timestamp ambiguity in field-device provenance. It does not validate the truth of a measured quantity or grant official MRV status. Production remains unchanged and PR #41 remains draft/unmerged/undeployed.
