@@ -394,3 +394,45 @@ test("platform-reserved administrators cannot be suspended through the generic i
   assert.ok(!statements.some(sql => sql.includes("update identities set suspended_at=now()")));
   await app.close();
 });
+
+
+test("stakeholder authorization request cannot be approved by its requester", async () => {
+  const pool = {
+    query: async (sql: string) => {
+      if (sql.includes("from identity_sessions")) return { rows: [{ identity_id: identityId }] };
+      if (sql.includes("from organization_memberships") && sql.includes("where identity_id")) return { rows: [{ organization_id: organizationId, role_id: roleId, status: "VERIFIED" }] };
+      if (sql.includes("r.name = 'super_admin'")) return { rows: [{ ok: true }] };
+      throw new Error("Unexpected pool SQL in stakeholder dual-control test: " + sql);
+    },
+    connect: async () => ({
+      query: async (sql: string) => {
+        if (/^(begin|commit|rollback)$/i.test(sql.trim())) return { rows: [], rowCount: 0 };
+        if (sql.includes("from organization_stakeholder_authorization_requests where id=$1 for update")) return { rows: [{
+          id: "623e4567-e89b-42d3-a456-426614174000",
+          organization_id: organizationId,
+          stakeholder_type: "BWG",
+          status: "PENDING",
+          evidence_reference: "synthetic://test-evidence",
+          evidence_sha256: "a".repeat(64),
+          request_reason: "Synthetic authorization request",
+          request_hash: "b".repeat(64),
+          requested_by_identity_id: identityId,
+          expires_at: null,
+        }], rowCount: 1 };
+        throw new Error("Unexpected client SQL in stakeholder dual-control test: " + sql);
+      },
+      release: () => undefined,
+    }),
+  } as unknown as Pool;
+  const app = Fastify({ logger: false });
+  await registerPlatformAdminRoutes(app, pool);
+  const response = await app.inject({
+    method: "POST",
+    url: "/api/v1/admin/stakeholder-authorization-requests/623e4567-e89b-42d3-a456-426614174000/approve",
+    headers: { authorization: "Bearer test-session", "x-rupaykg-organization-id": organizationId },
+    payload: { reason: "Requester cannot approve own mapping" },
+  });
+  assert.equal(response.statusCode, 409);
+  assert.equal(response.json().code, "STAKEHOLDER_AUTHORIZATION_SELF_APPROVAL_FORBIDDEN");
+  await app.close();
+});
