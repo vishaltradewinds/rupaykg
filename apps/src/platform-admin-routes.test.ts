@@ -480,7 +480,7 @@ test("stakeholder authorization VERIFY requires a distinct active approver and w
       release: () => undefined,
     }),
   } as unknown as Pool;
-  const app = Fastify({ logger: false });
+  const app = Fastify({ logger: true });
   await registerPlatformAdminRoutes(app, pool);
   const response = await app.inject({
     method: "POST",
@@ -539,7 +539,7 @@ test("stakeholder authorization REVOKE requires independent approval and appends
       release: () => undefined,
     }),
   } as unknown as Pool;
-  const app = Fastify({ logger: false });
+  const app = Fastify({ logger: true });
   await registerPlatformAdminRoutes(app, pool);
   const response = await app.inject({
     method: "POST",
