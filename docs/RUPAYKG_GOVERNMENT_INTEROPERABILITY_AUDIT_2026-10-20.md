@@ -154,8 +154,8 @@ These are committed to the review branch only. They do not enable a government e
 | Audit-chain integrity | Concurrent CPCB/device/admin appends serialize; rollback does not advance head; verifier can recompute hashes | Code updated; DB acceptance pending |
 | CPCB official API | Written authorization, documented schema, sandbox, credentials, source-specific acceptance test | Not provided / not verified |
 | CPCB workflow | Applicant and authority lanes, corrections, appeals, grievances, events and reporting periods mapped to official evidence | Partial; incomplete |
-| Durable inbox processing | Worker, lease/retry/dead-letter/quarantine/reconciliation tests | Not implemented |
-| AI extraction operations | Rate limiting, idempotency, durable jobs, retention and monitoring | Not implemented |
+| Durable inbox processing | Worker, lease/retry/quarantine/reconciliation, real PostgreSQL concurrency/lease-recovery tests | Worker and unit tests added; staging SQL transitions/append-only history validated; concurrent runtime recovery pending |
+| AI extraction operations | Rate limiting, idempotency, durable jobs, retention and monitoring | DB-backed 10-attempt/identity/organization/minute rate limit added with tests; idempotency, durable jobs, retention and monitoring pending |
 | MRV / Guardian / Hedera | Real execution + consensus + Mirror Node evidence on existing configuration | Not verified in this audit |
 | CCTS/CCC issuance | Applicable approved methodology, accredited verification, official ICM Registry evidence | Not proven by this platform audit |
 | Production operations | Deployment health, TLS, secret manager, backups, retention, incident response and rollback | Separate acceptance gate |
@@ -164,10 +164,10 @@ These are committed to the review branch only. They do not enable a government e
 
 **Release decision: HOLD. Do not merge or deploy this branch as a certified government integration.**
 
-1. Run and repair CI for the exact latest branch head.
+1. Run and repair CI for the exact latest branch head, including the new rate-limit migration and tests.
 2. Add PostgreSQL integration tests for the new audit-chain writer paths and CPCB workspace authorization/status history.
 3. Implement the durable inbox worker and reconciliation/quarantine path.
-4. Implement route-level rate limits/idempotency and durable job tracking for AI intake.
+4. Rate limiting is implemented as a PostgreSQL-backed fixed-window control; next implement idempotency and durable job tracking for AI intake.
 5. Obtain written CPCB/source-authority API authorization and schemas before building any live connector.
 6. Validate SWM reporting periods and applicable requirements against current official rules/norms and competent jurisdiction.
 7. Complete real Guardian/Hedera/Mirror Node acceptance using the existing configuration.
@@ -188,3 +188,8 @@ No government system was accessed with credentials, no official submission was m
 The worker records only **internal structural validation**. `VALIDATED` is not a CPCB filing acknowledgement, official authority decision, verified MRV measurement, CCTS validation/verification, CCC issuance, or Guardian/Hedera submission. The worker has no code path to mutate authoritative MRV or send an external transaction.
 
 **Deployment is not yet complete:** CI must pass on the final commit; the migration must be applied and tested on a controlled staging database; concurrency/lease recovery must be exercised against real PostgreSQL; and an authorized scheduler must be configured and monitored. No production scheduler has been configured and no production data has been processed by this change. CPCB authorization/API contract and live Guardian/Hedera/Mirror Node acceptance remain separate release gates.
+
+
+## 7. Follow-up remediation — AI intake rate limiting
+
+Migration `20261024_ai_intake_rate_limits.sql` adds a database-backed fixed-window counter keyed by identity, organization and minute. `consumeAiIntakeRateLimit()` uses an atomic PostgreSQL upsert and permits at most 10 attempts per identity/organization/minute across API instances; requests over the limit return HTTP 429 before source evidence persistence or provider invocation. The table stores counters only, not source logs, prompts, or model output. Automated tests cover SQL shape, scope keys and deny-on-cap behavior. This does not provide idempotency, durable inference jobs, or retention/monitoring by itself. The migration is not applied to production.
