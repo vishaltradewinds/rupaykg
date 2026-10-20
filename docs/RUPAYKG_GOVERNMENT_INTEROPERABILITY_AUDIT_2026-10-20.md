@@ -227,3 +227,24 @@ CPCB SWM workspace create/update now requires both a RupayKg organization with `
 **HOLD — engineering CI is green, but production certification/release is not authorized.** Keep PR #41 draft, unmerged and undeployed. Next safe order: (1) design and test reviewer approval/dual control using existing auth and audit-chain patterns; (2) prepare a clean disposable PostgreSQL worker acceptance environment and test runner/retry/quarantine lifecycle without mutating inherited staging rows; (3) establish alert delivery and named operational ownership; (4) obtain official authority integration authorization and schemas; (5) perform authorized live Guardian/Hedera/Mirror Node acceptance on existing configuration; and (6) complete independent review and Shakti release gates.
 
 No official government record was changed and no carbon credit was issued as part of this work.
+
+
+## 9. Engineering continuation addendum — 2026-10-20 13:20 UTC
+
+This addendum records later engineering work and supersedes earlier branch/CI-head statements where they differ.
+
+- The operational worker now supports an optional `RUPAYKG_ALERT_WEBHOOK_URL`. Only HTTPS URLs are accepted; URL userinfo and fragments are rejected; redirects are disabled; requests time out after five seconds; response bodies and URLs are not logged. Alerts contain aggregate counts/error classes only. Unit tests cover configuration rejection, success, non-2xx response, network failure, and redirect policy.
+- The worker scheduler emits an explicit `alert_delivery_not_configured` event if no webhook is configured. A delivery result only proves the endpoint response, not that a person received or acknowledged an alert. Human on-call ownership, escalation, and monitoring of webhook failures remain open operational gates.
+- `apps/src/server.ts` now invokes the validated production configuration when launched directly with `NODE_ENV=production`, rather than relying only on `production-server.ts` to validate and propagate the TLS/auth/origin contract. This is an accidental-bypass safeguard, not a replacement for deployment access controls.
+- The PR description was refreshed to reflect current changes and release blockers.
+- CI run #1517 passed all workflow steps on commit `a7ab2ab6ca54b50194f042c19016bdb3c0563c1c`. The latest subsequent startup-guard and alert-redirect hardening commits are under CI run #1520: https://github.com/vishaltradewinds/rupaykg/actions/runs/39429470239. Do not claim those later commits validated until that run passes on the exact current head.
+- PR #41 remains open, draft, unmerged and undeployed. No production migration, worker schedule, webhook endpoint, government connection, or Guardian/Hedera transaction was activated.
+
+### Updated immediate order
+
+1. Confirm CI #1520 passes on the exact current head; repair any failures and rerun.
+2. Complete an isolated, synthetic-only worker lifecycle test with clean disposable PostgreSQL, including restart/retry/quarantine and no unintended record claims.
+3. Verify audit-chain serialization/rollback and CPCB authorization/status-history behaviour in PostgreSQL.
+4. Wire and verify monitoring/alert delivery in a controlled environment with an accountable human escalation owner.
+5. Finish the independent security review, backup/restore, retention/privacy, and production change-control evidence.
+6. Keep official API and real Guardian/Hedera/Mirror Node acceptance as separate, explicitly authorized gates. Production remains HOLD until the relevant Shakti approvals and evidence are recorded.
