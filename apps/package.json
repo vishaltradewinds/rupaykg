@@ -9,6 +9,7 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "migrate": "tsx src/migrate.ts",
+    "worker:gov-inbox": "node dist/src/government-inbox-worker-runner.js",
     "test": "npm run build && node --test \"dist/**/*.test.js\""
   },
   "dependencies": {
