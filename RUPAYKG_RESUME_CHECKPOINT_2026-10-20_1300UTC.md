@@ -53,3 +53,13 @@
 
 ## Truthful status
 Engineering work is progressing, but the audit and production release remain **IN PROGRESS / HOLD**. The internal stakeholder mapping workflow is not CPCB registration, statutory approval, BEE accreditation, CCTS verification or an official Carbon Credit Certificate. The inbox worker's VALIDATED state is structural intake validation only.
+
+
+## Resume addendum — 2026-10-20 13:05 UTC
+- Latest code HEAD after this addendum's source changes: `bfc0dbbe8bd12413ed26a88174d05e6c7a927ea3`.
+- Added `request_action=VERIFY|REVOKE` to stakeholder authorization requests. A REVOKE request now requires separate approval, then sets the matching VERIFIED mapping to REVOKED and appends a hash-linked audit event. The DB trigger permits a VERIFIED mapping only when its linked approval request action is VERIFY and binds the approved evidence hash/reference and expiry.
+- Added route tests for successful VERIFY approval and REVOKE approval, in addition to self-approval denial. These tests use mocked database interactions; the disposable PostgreSQL test covers DB-level trigger rejection and approved synthetic mapping insertion.
+- Fixed a flaky secure-prompt tampering test: it previously replaced the final ciphertext byte with `ff`, which could accidentally leave the byte unchanged. It now deterministically flips the first ciphertext hex digit.
+- Added disposable PostgreSQL worker test for retry/recovery/quarantine and append-only event evidence. Run #1498's test stage failed because the old nondeterministic secure-prompt tampering fixture returned plaintext; this is a test-fixture issue, not evidence that production prompt decryption is bypassed. The deterministic fix is included in subsequent commits.
+- CI run #1508: https://github.com/vishaltradewinds/rupaykg/actions/runs/39426914412 — in progress on HEAD `bfc0dbbe8bd12413ed26a88174d05e6c7a927ea3`. Verify full test stage and container build before claiming latest HEAD is green.
+- Production certification remains HOLD. No production migration, deployment, scheduler enablement, or official government submission was performed.
