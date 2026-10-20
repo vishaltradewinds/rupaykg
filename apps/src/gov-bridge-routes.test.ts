@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
 import Fastify from "fastify";
 import type { Pool } from "pg";
-import { registerAsyncMirrorRoutes, verifyGovBridgeSignature } from "./async-mirror-routes.js";
+import { canonicalGovBridgeHash, registerAsyncMirrorRoutes, verifyGovBridgeSignature } from "./async-mirror-routes.js";
 
 const secret = "test-only-secret-with-at-least-thirty-two-characters";
 const now = Date.parse("2026-10-19T10:00:00Z");
@@ -123,8 +123,7 @@ test("registered inbox route allow-lists authority and persists accepted batches
     });
 
     process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CREDENTIALS = JSON.stringify({ "MH-PCB": { secret, municipalCodes: ["MCGM-MUM"] } });
-    const serialized = JSON.stringify(validBatch());
-    const payloadHash = await import("node:crypto").then(({ createHash }) => createHash("sha256").update(serialized, "utf8").digest("hex"));
+    const payloadHash = canonicalGovBridgeHash(validBatch());
     const acceptingPool = {
       query: async () => ({ rows: [{ id: "7f3f9b26-4d15-4f4f-8ed4-0c94e2e6b5f1", payload_sha256: payloadHash }] }),
     } as unknown as Pool;
@@ -148,9 +147,8 @@ test("registered inbox route allow-lists authority and persists accepted batches
 test("registered inbox route replays an identical batch and rejects a reused ID with changed content", async () => {
   const previousCredentials = process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CREDENTIALS;
   process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CREDENTIALS = JSON.stringify({ "MH-PCB": { secret, municipalCodes: ["MCGM-MUM"] } });
-  const { createHash } = await import("node:crypto");
   const original = validBatch();
-  const originalHash = createHash("sha256").update(JSON.stringify(original), "utf8").digest("hex");
+  const originalHash = canonicalGovBridgeHash(original);
   const pool = {
     query: async (sql: string) => {
       if (sql.trimStart().toLowerCase().startsWith("insert")) return { rows: [] };
@@ -271,6 +269,44 @@ test("government inbox binds signatures to the claimed authority and municipal s
       });
       assert.equal(wrongMunicipalitySignature.statusCode, 403);
       assert.equal(wrongMunicipalitySignature.json().code, "GOV_BRIDGE_MUNICIPAL_SCOPE_FORBIDDEN");
+    });
+  } finally {
+    if (previousCredentials === undefined) delete process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CREDENTIALS;
+    else process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CREDENTIALS = previousCredentials;
+  }
+});
+
+
+test("canonical batch hash is independent of JSON property ordering", () => {
+  const first = {
+    batchMetadata: { authorityCode: "MH-PCB", municipalCode: "MCGM-MUM", syncWindowTimestamp: "2026-10-19T02:30:00Z", batchId: "b5e74bb0-b3a1-4fd7-ae67-c3c2a68d56ab" },
+    rawDataLogs: ["Waste collection record from authorized source"],
+  };
+  const reordered = {
+    rawDataLogs: ["Waste collection record from authorized source"],
+    batchMetadata: { batchId: "b5e74bb0-b3a1-4fd7-ae67-c3c2a68d56ab", syncWindowTimestamp: "2026-10-19T02:30:00Z", municipalCode: "MCGM-MUM", authorityCode: "MH-PCB" },
+  };
+  assert.equal(canonicalGovBridgeHash(first), canonicalGovBridgeHash(reordered));
+});
+
+test("government inbox rejects ambiguous or invalid sync-window timestamps before persistence", async () => {
+  const previousCredentials = process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CREDENTIALS;
+  process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CREDENTIALS = JSON.stringify({ "MH-PCB": { secret, municipalCodes: ["MCGM-MUM"] } });
+  let queryCount = 0;
+  const pool = { query: async () => { queryCount += 1; return { rows: [] }; } } as unknown as Pool;
+  try {
+    await withRoute(pool, async (app) => {
+      for (const syncWindowTimestamp of ["2026-10-19 02:30:00", "2026-02-31T02:30:00Z", "2026-10-19T02:30:00"]) {
+        const body = validBatch();
+        body.batchMetadata.syncWindowTimestamp = syncWindowTimestamp;
+        const response = await app.inject({
+          method: "POST", url: "/api/v1/bridge/gov/inbox",
+          headers: signedHeaders(body), payload: body,
+        });
+        assert.equal(response.statusCode, 400);
+        assert.equal(response.json().code, "GOV_BRIDGE_BATCH_INVALID");
+      }
+      assert.equal(queryCount, 0);
     });
   } finally {
     if (previousCredentials === undefined) delete process.env.RUPAYKG_GOV_BRIDGE_AUTHORITY_CREDENTIALS;
