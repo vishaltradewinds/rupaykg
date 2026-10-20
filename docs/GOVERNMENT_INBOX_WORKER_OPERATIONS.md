@@ -26,7 +26,9 @@ The scheduler emits structured JSON to stdout:
 - tick_failed: emitted when a tick fails; it includes the error class, never payloads.
 - shutdown_started and shutdown_completed: process lifecycle evidence.
 
-These are log signals only. No external log drain, pager, notification destination, service supervisor, or production scheduler has been configured by this change. A real operations owner must wire these signals into the chosen monitoring platform and verify delivery before production activation.
+By default, these remain log signals only. An optional `RUPAYKG_ALERT_WEBHOOK_URL` enables HTTPS POST delivery for `attention_required` and `tick_failed` events. The endpoint must use HTTPS and must not include URL userinfo or a fragment. Requests have a 5-second timeout and contain only aggregate operational details/error classes; they never contain inbox payloads, evidence, tokens, or credentials. Non-2xx responses and delivery errors are recorded as structured metadata without logging the URL or response body. If the variable is unset, the scheduler emits `alert_delivery_not_configured`; it does not pretend an alert was delivered.
+
+Webhook delivery is a transport capability, not proof that an alert reaches a human. Before production activation, configure an approved endpoint, test delivery and failure behavior, and document a named on-call owner and escalation path. The scheduler and webhook remain disabled unless explicitly configured.
 
 ## Minimum release gates before production activation
 
