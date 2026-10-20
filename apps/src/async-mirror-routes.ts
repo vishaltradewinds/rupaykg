@@ -178,7 +178,7 @@ export async function registerAsyncMirrorRoutes(app: FastifyInstance, pool: Pool
         return reply.code(409).send({ error: "Batch ID was already used with different content", code: "GOV_BRIDGE_BATCH_ID_REUSED" });
       }
       return reply.code(202).send({
-        status: row.status,
+        status: row.status === "RECEIVED" ? "RECEIVED_NOT_PROCESSED" : row.status,
         queueId: row.id,
         batchId: batch.batchMetadata.batchId,
         payloadSha256,
