@@ -22,8 +22,9 @@ However, source code and existing conformance documentation do **not** demonstra
 ## 2. Official workflow and authority mapping
 
 Primary sources reviewed:
-- CPCB SWM 2026 portal: https://swmp.cpcb.gov.in/en
-- CPCB SWM 2026 user guide: https://swmp.cpcb.gov.in/en/user-guide
+- CPCB SWM 2026 portal homepage currently surfaced by CPCB: https://swm.cpcb.gov.in/
+- CPCB SWM 2026 user guide referenced in prior workflow mapping: https://swmp.cpcb.gov.in/en/user-guide
+- **Host verification gate:** confirm the canonical production hostname, API/export contract and authentication onboarding with CPCB before enabling any connector. Do not infer an API from the public web UI.
 - SWM Rules, 2026: https://swm.cpcb.gov.in/images/solid-waste-management-rules-2026.pdf
 - BEE — Indian Carbon Market/CCTS framework: https://beeindia.gov.in/show_content.php?lang=1&level=1&lid=294&ls_id=189
 - BEE — published list of Accredited Carbon Verification Agencies: https://beeindia.gov.in/view_content.php?lang=1&lid=568
@@ -84,7 +85,7 @@ Previously, `Date.parse()` alone accepted a wider set of date strings than a str
 ### G-05 — High: no complete official CPCB portal integration demonstrated
 **Affected:** `apps/src/cpcb-swm-routes.ts`, `apps/src/statutory-routes.ts`, `apps/src/epr-return-routes.ts`, current conformance documentation.
 
-The reviewed CPCB workspace supports local preparation and status claims; it does not implement the full official application, submission receipt, authority decision, correction, appeal, grievance, event-intimation and certificate lifecycle. A user-supplied status or reference must not become portal-confirmed by itself.
+The reviewed CPCB workspace supports local preparation and status claims; it does not implement the full official application, submission receipt, authority decision, correction, appeal, grievance, event-intimation and certificate lifecycle. The existing workflow documentation references `swmp.cpcb.gov.in`, while CPCB's current public portal search result resolves to `swm.cpcb.gov.in`; both are CPCB subdomains, but the canonical production host and any API endpoint must be confirmed with CPCB before integration. A user-supplied status or reference must not become portal-confirmed by itself.
 
 **Fix approach / release boundary:** Do not invent endpoints, scrape authenticated portal screens, automate CAPTCHA/OTP, replay user credentials or submit forms without authorization. Until CPCB provides a written API/export contract and onboarding, keep the product as preparation, evidence reconciliation, and user-controlled hand-off. Add a distinct evidence-backed state for source-confirmed portal facts only after an authorized reviewer or approved machine interface verifies them.
 
