@@ -41,7 +41,7 @@ begin
   if new.approval_request_id is null then
     raise exception 'STAKEHOLDER_AUTHORIZATION_REQUIRES_DUAL_CONTROL';
   end if;
-  select id, organization_id, stakeholder_type, status, requested_by_identity_id,
+  select id, organization_id, stakeholder_type, status, evidence_reference, evidence_sha256, requested_by_identity_id,
          decided_by_identity_id, applied_at, expires_at
     into approval
     from organization_stakeholder_authorization_requests
@@ -50,6 +50,8 @@ begin
   if not found
      or approval.organization_id <> new.organization_id
      or approval.stakeholder_type <> new.stakeholder_type
+     or approval.evidence_reference <> new.evidence_reference
+     or approval.evidence_sha256 <> new.evidence_sha256
      or approval.status <> 'APPROVED'
      or approval.applied_at is null
      or approval.requested_by_identity_id = approval.decided_by_identity_id
@@ -62,6 +64,6 @@ begin
 end $$;
 drop trigger if exists organization_stakeholder_authorization_dual_control on organization_stakeholder_authorizations;
 create trigger organization_stakeholder_authorization_dual_control
-before insert or update of status, organization_id, stakeholder_type, verified_by_identity_id, verified_at, approval_request_id
+before insert or update of status, organization_id, stakeholder_type, evidence_reference, evidence_sha256, verification_note, verified_by_identity_id, verified_at, expires_at, approval_request_id
 on organization_stakeholder_authorizations
 for each row execute function enforce_stakeholder_authorization_dual_control();
