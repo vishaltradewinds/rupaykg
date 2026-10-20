@@ -18,6 +18,20 @@ import { registerMrvRoutes } from "./mrv-routes.js";
 import { registerEvidenceVaultRoutes } from "./evidence-vault-routes.js";
 import { registerAsyncMirrorRoutes } from "./async-mirror-routes.js";
 import { registerPlatformAdminRoutes } from "./platform-admin-routes.js";
+import { readProductionConfig } from "./production-config.js";
+
+// Prevent direct execution of this lower-level entry point from bypassing the
+// same production contract enforced by production-server.ts. This is an
+// operational safety guard, not a replacement for deployment access controls.
+if (process.env.NODE_ENV === "production") {
+  const config = readProductionConfig();
+  process.env.DATABASE_URL = config.databaseUrl;
+  process.env.DATABASE_SSL = config.databaseSsl;
+  process.env.DATABASE_CA_CERT = config.databaseCaCert;
+  process.env.RUPAYKG_ALLOWED_ORIGINS = config.allowedOrigins.join(",");
+  process.env.RUPAYKG_AUTH_MODE = config.authMode;
+  process.env.RUPAYKG_SYNTHETIC_DATA = String(config.syntheticData);
+}
 
 const app = Fastify({ logger: true });
 const allowedOrigins = process.env.RUPAYKG_ALLOWED_ORIGINS?.split(",").map(origin => origin.trim()).filter(Boolean) ?? [];
