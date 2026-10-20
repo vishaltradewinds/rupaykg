@@ -66,6 +66,26 @@ export async function registerIntelligenceRoutes(
         return reply.code(403).send({ error: "Evidence upload permission required", code: "EVIDENCE_UPLOAD_FORBIDDEN" });
       }
 
+      // Database-backed fixed-window limit is shared across API instances. Count attempts before
+      // evidence persistence/provider calls so clients cannot bypass the limit by retrying failures.
+      const limit = await pool.query<{ request_count: number }>(
+        `insert into ai_intake_rate_limits (identity_id, organization_id, window_start, request_count)
+         values ($1, $2, date_trunc('minute', clock_timestamp()), 1)
+         on conflict (identity_id, organization_id, window_start)
+         do update set request_count = ai_intake_rate_limits.request_count + 1
+         where ai_intake_rate_limits.request_count < 10
+         returning request_count`,
+        [auth.identityId, row.organization_id],
+      );
+      if (!limit.rows[0]) {
+        return reply.code(429).send({
+          error: "Evidence intake rate limit exceeded; retry after the current minute window",
+          code: "AI_INTAKE_RATE_LIMITED",
+          retryAfterSeconds: 60,
+          authoritativeMutation: false,
+        });
+      }
+
       // Preserve the original log first. Model output is never a replacement for source evidence.
       const sourceClient = await pool.connect();
       let source: Awaited<ReturnType<typeof persistEvidenceArtifact>>;
