@@ -174,3 +174,17 @@ These are committed to the review branch only. They do not enable a government e
 8. Complete independent security review and Shakti production gates before release.
 
 No government system was accessed with credentials, no official submission was made, no official status was altered, and no carbon credit was issued by this work.
+
+
+## 6. Follow-up remediation — durable intake worker
+
+**Added on the review branch after the initial audit:**
+
+- `apps/src/async-mirror-worker.ts`: bounded PostgreSQL `FOR UPDATE SKIP LOCKED` claims, lease tokens/fencing checks, structural payload validation, deterministic rejection, bounded exponential retry, quarantine after exhausted attempts, and read-only status/age/expired-lease reconciliation.
+- `apps/src/government-inbox-worker-runner.ts` and API workspace script `worker:gov-inbox`: one-shot runner using the validated production configuration; aggregate-only logs; no source payload logging.
+- `migrations/20261023_async_mirror_worker_leases.sql`: lease, retry, quarantine and internal validation-summary fields/indexes.
+- `apps/src/async-mirror-worker.test.ts`: tests for claims, validation, rejection, retry/quarantine and reconciliation.
+
+The worker records only **internal structural validation**. `VALIDATED` is not a CPCB filing acknowledgement, official authority decision, verified MRV measurement, CCTS validation/verification, CCC issuance, or Guardian/Hedera submission. The worker has no code path to mutate authoritative MRV or send an external transaction.
+
+**Deployment is not yet complete:** CI must pass on the final commit; the migration must be applied and tested on a controlled staging database; concurrency/lease recovery must be exercised against real PostgreSQL; and an authorized scheduler must be configured and monitored. No production scheduler has been configured and no production data has been processed by this change. CPCB authorization/API contract and live Guardian/Hedera/Mirror Node acceptance remain separate release gates.
