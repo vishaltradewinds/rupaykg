@@ -11,16 +11,18 @@ test("alert webhook configuration fails closed for non-HTTPS or credential-beari
 });
 
 test("alert webhook sends only bounded operational metadata and treats non-2xx as failure", async () => {
-  const captured: { url: string; body?: Record<string, unknown> } = { url: "" };
+  const captured: { url: string; body?: Record<string, unknown>; redirect?: RequestRedirect } = { url: "" };
   const result = await deliverOperationalAlert("https://monitor.example/alert", "attention_required", {
     quarantined: 2,
     expiredLeases: 1,
   }, async (input, init) => {
     captured.url = String(input);
+    captured.redirect = init?.redirect;
     captured.body = JSON.parse(String(init?.body)) as Record<string, unknown>;
     return new Response("", { status: 202 });
   });
   assert.equal(captured.url, "https://monitor.example/alert");
+  assert.equal(captured.redirect, "error", "webhook redirects must not forward operational data to another host");
   assert.equal(result.delivered, true);
   assert.equal(result.statusCode, 202);
   assert.equal(captured.body?.event, "attention_required");
