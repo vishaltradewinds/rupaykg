@@ -60,7 +60,7 @@ test("government jurisdiction crosswalk API scopes requests and rejects unauthor
     const artifact = evidenceUpload.json().data as { artifactVersionId: string; sha256: string };
     const payload = {
       organizationId, geographyId, activityId, authorityCode: "SYNTHETIC_AUTHORITY", municipalCode: "MUNI-" + suffix,
-      sourceVersion: "synthetic-source-v1", evidenceReference: "db://evidence-vault/" + artifact.artifactVersionId,
+      sourceVersion: "synthetic-source-v1", sourceSnapshotId, evidenceReference: "db://evidence-vault/" + artifact.artifactVersionId,
       evidenceSha256: artifact.sha256, reason: "Synthetic integration test mapping request",
     };
     const outOfScope = await app.inject({

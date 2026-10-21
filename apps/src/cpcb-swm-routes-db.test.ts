@@ -51,14 +51,20 @@ test("CPCB SWM workspace routes enforce permissions and persist only user-report
     const geography = await pool.query<{ id: string }>("select id from geography where kind='CLUSTER' and code='RUPAYKG-ACCEPTANCE-V1'");
     assert.ok(geography.rows[0]?.id, "opt-in acceptance geography fixture must be installed");
     const geographyId = geography.rows[0]!.id;
+    const crosswalkSourceSnapshotId = randomUUID();
+    const bypassHash = hash("synthetic unapproved geography crosswalk");
+    await pool.query(
+      "insert into authoritative_source_snapshots(id,authority_code,source_owner,dataset_code,source_url,source_version,scope_kind,content_sha256,record_count,accepted_record_count,unresolved_record_count,validation_status,usage_terms_reference,retrieved_at,retrieved_by_identity_id,reviewed_by_identity_id,reviewed_at) values($1,'SYNTHETIC_AUTHORITY','Synthetic integration fixture','CPCB_SWMP_TEST_SOURCE','https://example.invalid/cpcb-swmp-test-source','v1','OTHER',$2,1,1,0,'APPROVED','synthetic://test-fixture-terms',now(),$3,$3,now())",
+      [crosswalkSourceSnapshotId, bypassHash, identityId],
+    );
     await assert.rejects(
       pool.query(
         `insert into government_jurisdiction_crosswalks
-          (authority_code,municipal_code,source_version,organization_id,geography_id,evidence_reference,evidence_sha256,
+          (authority_code,municipal_code,source_version,source_snapshot_id,organization_id,geography_id,evidence_reference,evidence_sha256,
            requested_by_identity_id,approved_by_identity_id,approval_reason,status,effective_from,verified_at)
-         values('SYNTHETIC_AUTHORITY','SYNTHETIC-MUNICIPAL-CODE','v1',$1,$2,'synthetic://unapproved-crosswalk',$3,
-           $4,$4,'Synthetic direct approval bypass attempt','VERIFIED',now(),now())`,
-        [organizationId, geographyId, hash("synthetic unapproved geography crosswalk"), identityId],
+         values('SYNTHETIC_AUTHORITY','SYNTHETIC-MUNICIPAL-CODE','v1',$1,$2,$3,'synthetic://unapproved-crosswalk',$4,
+           $5,$5,'Synthetic direct approval bypass attempt','VERIFIED',now(),now())`,
+        [crosswalkSourceSnapshotId, organizationId, geographyId, bypassHash, identityId],
       ),
       /GOVERNMENT_CROSSWALK_(?:SOURCE_SNAPSHOT_REQUIRED|REQUIRES_DUAL_CONTROL|EVIDENCE_UNBOUND)/,
       "database must reject a VERIFIED government geography crosswalk that lacks bound vault evidence or an approved dual-control request",
