@@ -213,3 +213,12 @@ Branch/PR: `feature/evidence-vault-workspace-ui` / PR #31 merged as `f061eb78471
 - Evidence vault is implemented in code for bounded files, versioning, hash validation, source/period metadata, scoped access and dual-control review.
 - No live deployment, production database migration, real pilot upload, or operational backup/restore/malware/retention acceptance has been performed. Production stays HOLD.
 - Next engineering gates: end-to-end API authorization integration tests for evidence upload/list/download/review; UI/API acceptance tests; storage operational controls; then methodology-specific eligibility and MRV adapters from the official BEE documents. Do not treat registry presence as implementation or eligibility.
+
+
+## 8. Governed stakeholder taxonomy (2026-10-21)
+
+The supported stakeholder-code registry is stored in `swm_stakeholder_taxonomy`, with stable code, display label, supported checklist profile, governance state, source reference/version, effective dates and review metadata. The existing seven platform classes are seeded as `BASELINE_SUPPORTED` for backward compatibility. This is a platform preparation classification, not official registration or a grant of authority.
+
+The API resolves stakeholder codes from the registry instead of maintaining a second hard-coded allowlist. Workspace and organization authorization/dual-control records reference the same registry. New classes can reuse a supported checklist profile only after explicit registry addition and source/version/effective-date review; `APPROVED` entries require source SHA-256 and named reviewer metadata. Adding a new checklist profile still requires coordinated domain code, tests and migration work.
+
+Taxonomy membership does not grant organization-to-stakeholder authorization, geography access, statutory applicability, CPCB registration or permission to submit to an official system.

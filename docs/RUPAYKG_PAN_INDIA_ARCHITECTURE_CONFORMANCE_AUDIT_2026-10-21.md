@@ -133,3 +133,10 @@ The batch review found that evidence upload/list/download/review paths used the 
 The evidence-vault route is being updated to use `organization_has_explicit_geography_scope` for activity context, evidence download, and evidence review. The PostgreSQL integration fixture now assigns an explicit verified geography root for the positive path and adds negative upload/list assertions for a validly authenticated but unscoped organization. The legacy helper remains unchanged for older workflows.
 
 Validation is pending for the combined commit. This change does not itself prove national geography data coverage, and production remains on hold pending the existing release gates.
+
+
+## 10. Governed SWM stakeholder taxonomy batch (2026-10-21)
+
+The hard-coded SWM stakeholder list was replaced by a database-backed, effective-dated taxonomy registry. Migration `20261103_swm_stakeholder_taxonomy_registry.sql` seeds the seven existing codes as `BASELINE_SUPPORTED` and replaces duplicated workspace/organization authorization CHECK lists with foreign keys to the same registry. API routes resolve an effective registry row and map it to a supported checklist profile; unknown or retired classes fail closed. The baseline seed is not evidence of official registration or nationwide role equivalence.
+
+Validation is pending for the combined commit. Next connected work remains source-versioned jurisdiction crosswalk coverage and versioned jurisdiction-specific statutory applicability with multi-jurisdiction acceptance. Production release remains on hold.

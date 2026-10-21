@@ -2,14 +2,13 @@ import { hashPlatformAuditEventV2 } from "./platform-audit-hash.js";
 import type { FastifyInstance } from "fastify";
 import type { Pool, PoolClient } from "pg";
 import { authenticate, bearerChallenge, canActForOrganization, hasOrganizationPermission, type AuthContext } from "./auth.js";
-import { initialSwmChecklist } from "@rupaykg/domain";
+import { initialSwmChecklist, type SwmStakeholderType } from "@rupaykg/domain";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const STAKEHOLDERS = ["BWG", "WASTE_FACILITY", "ULB", "DISTRICT_PANCHAYAT", "GRAM_PANCHAYAT", "COLLECTOR_TRANSPORTER", "PROCESSOR"] as const;
 const EVIDENCE_STATUSES = ["MISSING", "PROVIDED_UNVERIFIED", "REJECTED", "EXPIRED", "NOT_APPLICABLE", "UNRESOLVED"] as const;
 const REPORTED_STATUSES = ["NOT_REPORTED", "DRAFT", "UNDER_REVIEW", "CORRECTION_REQUESTED", "APPROVED", "REJECTED"] as const;
 const LOCAL_STAGES = ["LOCAL_PREPARATION", "ELIGIBILITY_REVIEW", "DOCUMENTS_PENDING", "READY_FOR_USER_SUBMISSION", "SUBMISSION_REPORTED", "UNDER_REVIEW_FOLLOW_UP", "CORRECTION_PREPARATION", "AMENDMENT_PREPARATION", "LEVEL_1_APPEAL_PREPARATION", "GRIEVANCE_PREPARATION", "EVENT_INTIMATION_PREPARATION", "CLOSED_LOCAL", "UNRESOLVED"] as const;
-type Stakeholder = typeof STAKEHOLDERS[number];
+type Stakeholder = SwmStakeholderType;
 type ChecklistStatus = typeof EVIDENCE_STATUSES[number];
 type ChecklistItem = { key: string; label: string; status: ChecklistStatus; officialRequirement: "GUIDE_LISTED" | "RULE_DERIVED" | "NEEDS_OFFICIAL_CONFIRMATION" };
 type Reply = { code: (status: number) => { send: (body: unknown) => unknown } };
@@ -20,7 +19,6 @@ const text = (body: Record<string, unknown>, key: string, max = 2000): string | 
   return typeof value === "string" && value.trim() && value.trim().length <= max ? value.trim() : null;
 };
 const bodyOf = (request: Request): Record<string, unknown> => request.body && typeof request.body === "object" ? request.body as Record<string, unknown> : {};
-const validStakeholder = (value: unknown): value is Stakeholder => typeof value === "string" && (STAKEHOLDERS as readonly string[]).includes(value);
 const validDate = (value: unknown): value is string => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
 
 async function authFor(request: Request, reply: Reply, pool: Pool | null): Promise<AuthContext | null> {
@@ -28,6 +26,16 @@ async function authFor(request: Request, reply: Reply, pool: Pool | null): Promi
   try { const auth = await authenticate(request as never, pool); if (!auth) { reply.code(401).send(bearerChallenge()); return null; } return auth; }
   catch (error) { request.log.error(error); reply.code(503).send({ error: "Authentication service unavailable", code: "AUTH_UNAVAILABLE", syntheticData: false }); return null; }
 }
+export async function resolveStakeholderTaxonomy(pool: Pool, value: unknown): Promise<{ code: string; checklistProfile: Stakeholder } | null> {
+  if (typeof value !== "string" || !/^[A-Z][A-Z0-9_]{1,79}$/.test(value)) return null;
+  const result = await pool.query<{ code: string; checklist_profile: Stakeholder }>(
+    "select code,checklist_profile from swm_stakeholder_taxonomy where code=$1 and governance_status in ('BASELINE_SUPPORTED','APPROVED') and effective_from <= current_date and (effective_to is null or effective_to >= current_date)",
+    [value],
+  );
+  const row = result.rows[0];
+  return row ? { code: row.code, checklistProfile: row.checklist_profile } : null;
+}
+
 export function safeChecklist(value: unknown, stakeholder: Stakeholder): ChecklistItem[] | null {
   if (!Array.isArray(value) || value.length > 100) return null;
   const result: ChecklistItem[] = [];
@@ -114,7 +122,7 @@ async function writeAudit(client: PoolClient, identityId: string, organizationId
   );
 }
 
-async function hasVerifiedStakeholderAuthorization(pool: Pool, organizationId: string, stakeholderType: Stakeholder): Promise<boolean> {
+async function hasVerifiedStakeholderAuthorization(pool: Pool, organizationId: string, stakeholderType: string): Promise<boolean> {
   const result = await pool.query<{ ok: boolean }>(
     "select exists (select 1 from organizations o join organization_stakeholder_authorizations a on a.organization_id=o.id where o.id=$1 and o.verification_status='VERIFIED' and a.stakeholder_type=$2 and a.status='VERIFIED' and a.verified_by_identity_id is not null and a.verified_at is not null and (a.expires_at is null or a.expires_at > now())) as ok",
     [organizationId, stakeholderType],
@@ -139,19 +147,22 @@ export async function registerCpcbSwmRoutes(app: FastifyInstance, pool: Pool | n
     if (!organizationId || !canActForOrganization(auth, organizationId)) return reply.code(403).send({ error: "Select a verified organization", code: "ORG_FORBIDDEN" });
     if (!await hasOrganizationPermission(pool, auth, organizationId, ["waste:record"])) return reply.code(403).send({ error: "Waste-recording permission required to save stakeholder preparation", code: "SWM_WRITE_FORBIDDEN" });
     const stakeholderType = body.stakeholderType;
+    let taxonomy: { code: string; checklistProfile: Stakeholder } | null = null;
+    try { taxonomy = await resolveStakeholderTaxonomy(pool, stakeholderType); }
+    catch (error) { request.log.error(error); return reply.code(503).send({ error: "Stakeholder taxonomy unavailable", code: "SWM_TAXONOMY_UNAVAILABLE", syntheticData: false }); }
     const title = text(body, "title", 240);
     const reportedStatus = body.cpcbReportedStatus === undefined ? "NOT_REPORTED" : body.cpcbReportedStatus;
     const localStage = body.localWorkflowStage === undefined ? "LOCAL_PREPARATION" : body.localWorkflowStage;
     const statusNote = text(body, "statusNote", 1000);
     const geographyId = text(body, "geographyId", 64);
-    const checklist = validStakeholder(stakeholderType) ? safeChecklist(body.checklist, stakeholderType) : null;
+    const checklist = taxonomy ? safeChecklist(body.checklist, taxonomy.checklistProfile) : null;
     const observations = body.eligibilityObservations;
     const applicationReference = text(body, "cpcbApplicationReference", 240);
     const sourceReference = text(body, "cpcbStatusSourceReference", 500);
     const dueDate = body.dueDate === null || body.dueDate === "" || body.dueDate === undefined ? null : validDate(body.dueDate) ? body.dueDate : "INVALID";
     const notes = body.notes === undefined || body.notes === null ? null : text(body, "notes", 4000);
-    if (!validStakeholder(stakeholderType) || !title || !checklist || !safeObservations(observations) || !isCpcbReportedStatus(reportedStatus) || !isSwmLocalStage(localStage) || (reportedStatus !== "NOT_REPORTED" && !sourceReference) || (!geographyId || !UUID.test(geographyId)) || dueDate === "INVALID" || (body.notes !== undefined && body.notes !== null && body.notes !== "" && notes === null) || (body.statusNote !== undefined && body.statusNote !== null && body.statusNote !== "" && statusNote === null)) return reply.code(400).send({ error: "Invalid stakeholder type, title, required geography, canonical checklist, observations, workflow stage, reported status, status source, due date or notes", code: "SWM_WORKSPACE_INVALID" });
-    if (!validStakeholder(stakeholderType) || !await hasVerifiedStakeholderAuthorization(pool, organizationId, stakeholderType)) { return reply.code(403).send({ error: "Verified organization-to-stakeholder authorization required", code: "SWM_STAKEHOLDER_AUTHORIZATION_REQUIRED", syntheticData: false }); }
+    if (!taxonomy || !title || !checklist || !safeObservations(observations) || !isCpcbReportedStatus(reportedStatus) || !isSwmLocalStage(localStage) || (reportedStatus !== "NOT_REPORTED" && !sourceReference) || (!geographyId || !UUID.test(geographyId)) || dueDate === "INVALID" || (body.notes !== undefined && body.notes !== null && body.notes !== "" && notes === null) || (body.statusNote !== undefined && body.statusNote !== null && body.statusNote !== "" && statusNote === null)) return reply.code(400).send({ error: "Invalid stakeholder type, title, required geography, canonical checklist, observations, workflow stage, reported status, status source, due date or notes", code: "SWM_WORKSPACE_INVALID" });
+    if (!taxonomy || !await hasVerifiedStakeholderAuthorization(pool, organizationId, taxonomy.code)) { return reply.code(403).send({ error: "Verified organization-to-stakeholder authorization required", code: "SWM_STAKEHOLDER_AUTHORIZATION_REQUIRED", syntheticData: false }); }
     try {
       const allowed = await pool.query<{ ok: boolean }>(
         "select exists(select 1 from organization_memberships om where om.identity_id=$1 and om.organization_id=$2 and om.status='VERIFIED' and exists(select 1 from organization_geography_scopes s where s.organization_id=om.organization_id and s.status='VERIFIED') and organization_has_geography_scope(om.organization_id,$3::uuid)) ok",
@@ -181,15 +192,18 @@ export async function registerCpcbSwmRoutes(app: FastifyInstance, pool: Pool | n
     if (!UUID.test(id)) return reply.code(400).send({ error: "Invalid workspace ID", code: "SWM_WORKSPACE_ID_INVALID" });
     if (!await hasOrganizationPermission(pool, auth, organizationId, ["waste:record"])) return reply.code(403).send({ error: "Waste-recording permission required to update stakeholder preparation", code: "SWM_WRITE_FORBIDDEN" });
     const stakeholderType = body.stakeholderType, title = text(body, "title", 240), geographyId = text(body, "geographyId", 64);
+    let taxonomy: { code: string; checklistProfile: Stakeholder } | null = null;
+    try { taxonomy = await resolveStakeholderTaxonomy(pool, stakeholderType); }
+    catch (error) { request.log.error(error); return reply.code(503).send({ error: "Stakeholder taxonomy unavailable", code: "SWM_TAXONOMY_UNAVAILABLE", syntheticData: false }); }
     const reportedStatus = body.cpcbReportedStatus === undefined ? "NOT_REPORTED" : body.cpcbReportedStatus;
     const localStage = body.localWorkflowStage === undefined ? "LOCAL_PREPARATION" : body.localWorkflowStage;
     const statusNote = text(body, "statusNote", 1000);
-    const checklist = validStakeholder(stakeholderType) ? safeChecklist(body.checklist, stakeholderType) : null, observations = body.eligibilityObservations;
+    const checklist = taxonomy ? safeChecklist(body.checklist, taxonomy.checklistProfile) : null, observations = body.eligibilityObservations;
     const applicationReference = text(body, "cpcbApplicationReference", 240), sourceReference = text(body, "cpcbStatusSourceReference", 500);
     const dueDate = body.dueDate === null || body.dueDate === "" || body.dueDate === undefined ? null : validDate(body.dueDate) ? body.dueDate : "INVALID";
     const notes = body.notes === undefined || body.notes === null ? null : text(body, "notes", 4000);
-    if (!validStakeholder(stakeholderType) || !title || !checklist || !safeObservations(observations) || !isCpcbReportedStatus(reportedStatus) || !isSwmLocalStage(localStage) || (reportedStatus !== "NOT_REPORTED" && !sourceReference) || (!geographyId || !UUID.test(geographyId)) || dueDate === "INVALID" || (body.notes !== undefined && body.notes !== null && body.notes !== "" && notes === null) || (body.statusNote !== undefined && body.statusNote !== null && body.statusNote !== "" && statusNote === null)) return reply.code(400).send({ error: "Invalid stakeholder type, title, required geography, canonical checklist, observations, workflow stage, reported status, status source, due date or notes", code: "SWM_WORKSPACE_INVALID" });
-    if (!validStakeholder(stakeholderType) || !await hasVerifiedStakeholderAuthorization(pool, organizationId, stakeholderType)) { return reply.code(403).send({ error: "Verified organization-to-stakeholder authorization required", code: "SWM_STAKEHOLDER_AUTHORIZATION_REQUIRED", syntheticData: false }); }
+    if (!taxonomy || !title || !checklist || !safeObservations(observations) || !isCpcbReportedStatus(reportedStatus) || !isSwmLocalStage(localStage) || (reportedStatus !== "NOT_REPORTED" && !sourceReference) || (!geographyId || !UUID.test(geographyId)) || dueDate === "INVALID" || (body.notes !== undefined && body.notes !== null && body.notes !== "" && notes === null) || (body.statusNote !== undefined && body.statusNote !== null && body.statusNote !== "" && statusNote === null)) return reply.code(400).send({ error: "Invalid stakeholder type, title, required geography, canonical checklist, observations, workflow stage, reported status, status source, due date or notes", code: "SWM_WORKSPACE_INVALID" });
+    if (!taxonomy || !await hasVerifiedStakeholderAuthorization(pool, organizationId, taxonomy.code)) { return reply.code(403).send({ error: "Verified organization-to-stakeholder authorization required", code: "SWM_STAKEHOLDER_AUTHORIZATION_REQUIRED", syntheticData: false }); }
     try {
       const allowed = await pool.query<{ ok: boolean }>(
         "select exists(select 1 from organization_memberships om where om.identity_id=$1 and om.organization_id=$2 and om.status='VERIFIED' and exists(select 1 from organization_geography_scopes s where s.organization_id=om.organization_id and s.status='VERIFIED') and organization_has_geography_scope(om.organization_id,$3::uuid)) ok",

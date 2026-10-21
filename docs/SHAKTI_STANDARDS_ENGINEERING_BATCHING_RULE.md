@@ -51,3 +51,8 @@ For RupayKg, this rule must be applied alongside **Pan-India by Design**. Relate
 ## Active batch example — RupayKg evidence-vault scope
 
 A related security correction is grouped into one batch across route authorization, disposable-PostgreSQL integration coverage and the architecture audit. It changes all evidence-vault geography decisions together, adds a positive explicit-scope fixture and negative unscoped-tenant assertions, and records the limitation. Full CI is to run only after this combined batch is committed; no production data or deployment is involved.
+
+
+## Batch record — governed stakeholder taxonomy
+
+This batch groups API registry lookup, a single source-of-truth taxonomy table, database foreign keys for workspace and dual-control authorization records, resolver regression tests and operating/audit documentation. Full CI and disposable PostgreSQL migration acceptance must run against the combined commit. The taxonomy baseline does not grant authorization or official standing.
