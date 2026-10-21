@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import type { Pool } from "pg";
-import { reconcileGovernmentInbox, runGovernmentInboxWorker, validateGovernmentInboxPayload } from "./async-mirror-worker.js";
+import { isValidSyncWindowTimestamp, reconcileGovernmentInbox, runGovernmentInboxWorker, validateGovernmentInboxPayload } from "./async-mirror-worker.js";
 
 function fakePool(rows: unknown[]) {
   const statements: Array<{ sql: string; values: unknown[] }> = [];
@@ -79,4 +79,12 @@ test("reconciliation reports unresolved statuses and expired leases read-only", 
   });
   assert.equal(statements.length, 2);
   assert.match(statements[0]!.sql, /group by status/i);
+});
+
+
+test("government inbox timestamp validation checks actual calendar and clock values", () => {
+  assert.equal(isValidSyncWindowTimestamp("2026-02-30T02:30:00Z"), false);
+  assert.equal(isValidSyncWindowTimestamp("2024-02-29T02:30:00Z"), true);
+  assert.equal(isValidSyncWindowTimestamp("2026-10-19T24:00:00Z"), false);
+  assert.equal(isValidSyncWindowTimestamp("2026-10-19T02:30:00+05:30"), true);
 });
