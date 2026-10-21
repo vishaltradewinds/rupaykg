@@ -370,3 +370,14 @@ No production deployment, production migration, official submission, official st
 - The canonical v2 field-device audit-writer change is included in the tested code head.
 
 **Release status remains HOLD.** Passing CI is not clean staging acceptance, an official government API authorization, live Guardian/Hedera/Mirror Node verification, accredited CCTS verification, official registry issuance, or Shakti release approval. Production was not deployed or migrated and no official submission or credit issuance occurred.
+
+
+## 13. Follow-up hardening — strict numeric and reporting-period inputs (2026-10-21)
+
+A follow-up source audit found API inputs that were converted with JavaScript `Number(...)`, which can silently coerce numeric strings into measurements. The EPR return, statutory applicability, registry settlement/credential, and MRV/ESG input validators now accept only finite JSON number values in the permitted range. Optional statutory numeric fields retain their existing omitted/null/empty behavior; non-empty invalid values are rejected. Fractional positive measured quantities remain valid where the contract permits them.
+
+The EPR return and BWG reporting-period routes now require real ISO calendar dates in `YYYY-MM-DD` form, rejecting impossible dates and timestamp/date-format substitutions. Regression tests cover numeric strings, non-finite values, zero/negative values, valid fractions, impossible dates, and leap days.
+
+Validation evidence: GitHub Actions CI run #1568 passed on commit `87789f0941ace1d3aeb8211374c67783a6beb44c` (dependency audit, migration validation/execution in disposable CI PostgreSQL, TypeScript typecheck, build, browser smoke test, tests including disposable PostgreSQL acceptance, and production-container build).
+
+This is engineering hardening, not external certification. The PR remains draft and unmerged. Render's live RupayKg service is configured to deploy from `main`; this feature branch has not been deployed. Read-only service diagnostics on 2026-10-21 returned no error/fatal logs for the inspected interval. No production migration/deploy, official submission, live Guardian/Hedera transaction, or carbon-credit issuance was performed. Staging lifecycle acceptance and external approvals/API contracts remain independent release gates.
