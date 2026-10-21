@@ -64,6 +64,10 @@ test("government jurisdiction crosswalk API scopes requests and rejects unauthor
     assert.equal(requestResponse.json().status, "PENDING");
     requestId = requestResponse.json().requestId;
 
+    const unauthorizedQueue = await app.inject({ method: "GET", url: "/api/v1/government/jurisdiction-crosswalk/requests", headers });
+    assert.equal(unauthorizedQueue.statusCode, 403, unauthorizedQueue.body);
+    assert.equal(unauthorizedQueue.json().code, "GOVERNMENT_CROSSWALK_APPROVAL_FORBIDDEN");
+
     const unauthorizedDecision = await app.inject({
       method: "POST", url: "/api/v1/government/jurisdiction-crosswalk/requests/" + requestId + "/decision",
       headers, payload: { decision: "APPROVE", reason: "Attempted unauthorized approval is forbidden" },
