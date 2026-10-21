@@ -137,3 +137,8 @@ A regulatory rule cannot be marked `APPROVED` unless its source snapshot is alre
 ## Approved source snapshot immutability (migration `20261107_approved_source_snapshot_immutability.sql`)
 
 Once an authoritative source snapshot is approved, its source owner, dataset/version, URL, jurisdiction scope, publication/retrieval and effective dates, content hash, coverage counts, usage-terms reference, and reviewer provenance cannot be rewritten. Corrected source material must be captured as a new snapshot/version. Lifecycle status and explanatory notes remain separately mutable; retiring a snapshot is not itself proof that every historical rule or filing is invalid. This protects source provenance from silent edits and does not establish nationwide coverage or legal approval.
+
+
+## Crosswalk request expiry immutability (migration `20261108_crosswalk_request_expiry_immutability.sql`)
+
+A crosswalk request's `expires_at` cannot be changed after creation, including in the same update that approves or rejects the request. The API rejects expired approvals with `GOVERNMENT_CROSSWALK_REQUEST_EXPIRED`; the database trigger prevents extending an expired request to bypass that check. Submit a new evidence-backed request instead. This is an internal integrity control, not official authority approval.
