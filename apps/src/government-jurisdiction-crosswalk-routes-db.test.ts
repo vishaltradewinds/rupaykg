@@ -187,7 +187,7 @@ test("government jurisdiction crosswalk API scopes requests and rejects unauthor
       `insert into government_jurisdiction_crosswalk_requests
         (authority_code,municipal_code,source_version,source_snapshot_id,organization_id,geography_id,activity_id,effective_from,evidence_reference,evidence_sha256,request_reason,request_hash,requested_by_identity_id,expires_at)
        values($1,$2,$3,$4,$5,$6,$7,now(),$8,$9,$10,$11,$12,now()-interval '1 second') returning id`,
-      [payload.authorityCode, "EXPIRED-" + suffix, payload.sourceVersion, sourceSnapshotId, organizationId, geographyId, activityId,
+      [payload.authorityCode, "EXPIRED-" + suffix.toUpperCase(), payload.sourceVersion, sourceSnapshotId, organizationId, geographyId, activityId,
         payload.evidenceReference, payload.evidenceSha256, "Synthetic expired crosswalk request", hash("expired-request-" + suffix), requesterId],
     );
     expiredRequestId = expiredRequest.rows[0]?.id ?? null;
