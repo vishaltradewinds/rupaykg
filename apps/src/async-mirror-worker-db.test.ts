@@ -118,6 +118,13 @@ test("government inbox worker persists retry recovery, quarantine and append-onl
 
     // A mapping must not resolve new government inbox data when its bound source snapshot is retired.
     await pool.query("update authoritative_source_snapshots set validation_status='RETIRED' where id=$1", [expectedCrosswalk.sourceSnapshotId]);
+    const retiredSnapshot = await pool.query<{ validation_status: string }>("select validation_status from authoritative_source_snapshots where id=$1", [expectedCrosswalk.sourceSnapshotId]);
+    assert.equal(retiredSnapshot.rows[0]?.validation_status, "RETIRED", "fixture source snapshot must be retired before worker execution");
+    const matchingApprovedSnapshot = await pool.query<{ count: string }>(
+      "select count(*)::text as count from government_jurisdiction_crosswalks c join authoritative_source_snapshots s on s.id=c.source_snapshot_id and s.validation_status='APPROVED' where c.authority_code=$1 and c.municipal_code='TEST-MUNI' and c.status='VERIFIED'",
+      [recoverable.authorityCode],
+    );
+    assert.equal(matchingApprovedSnapshot.rows[0]?.count, "0", "retired snapshot must not join as approved for this mapping");
     const retiredBatchId = randomUUID();
     const retiredTimestamp = new Date().toISOString();
     const retiredPayload = {
