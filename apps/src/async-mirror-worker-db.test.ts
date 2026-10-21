@@ -17,6 +17,43 @@ test("government inbox worker persists retry recovery, quarantine and append-onl
     max: 4,
   });
   const suffix = randomUUID();
+  const provisionCrosswalk = async (authorityCode: string, municipalCode: string, timestamp: string) => {
+    const organizationId = randomUUID();
+    const requesterId = randomUUID();
+    const approverId = randomUUID();
+    const geographyId = randomUUID();
+    const evidenceReference = "synthetic://worker-crosswalk/" + authorityCode;
+    const evidenceSha256 = sha("synthetic worker crosswalk evidence " + authorityCode);
+    const reason = "Synthetic worker crosswalk acceptance fixture";
+    const requestHash = sha(JSON.stringify({ authorityCode, municipalCode, organizationId, geographyId, evidenceSha256 }));
+    await pool.query("insert into organizations(id,name,organization_type) values($1,$2,'TEST_FIXTURE')", [organizationId, "Worker crosswalk " + authorityCode]);
+    await pool.query("insert into identities(id,display_name) values($1,$2),($3,$4)", [requesterId, "Worker crosswalk requester " + authorityCode, approverId, "Worker crosswalk approver " + authorityCode]);
+    await pool.query("insert into geography(id,kind,code,name,source,source_version) values($1,'CLUSTER',$2,$3,'Synthetic worker fixture','v1')", [geographyId, "WORKER-GEO-" + authorityCode, "Worker crosswalk geography " + authorityCode]);
+    await pool.query("insert into organization_geography_scopes(organization_id,geography_id,status) values($1,$2,'VERIFIED')", [organizationId, geographyId]);
+    const request = await pool.query<{ id: string }>(
+      `insert into government_jurisdiction_crosswalk_requests
+        (authority_code,municipal_code,source_version,organization_id,geography_id,evidence_reference,evidence_sha256,request_reason,request_hash,requested_by_identity_id)
+       values($1,$2,'synthetic-source-v1',$3,$4,$5,$6,$7,$8,$9) returning id`,
+      [authorityCode, municipalCode, organizationId, geographyId, evidenceReference, evidenceSha256, reason, requestHash, requesterId],
+    );
+    const requestId = request.rows[0]!.id;
+    const decisionReason = "Independent synthetic fixture approval";
+    await pool.query(
+      `update government_jurisdiction_crosswalk_requests
+          set status='APPROVED',decided_by_identity_id=$2,decision_reason=$3,decided_at=now(),applied_at=now()
+        where id=$1`,
+      [requestId, approverId, decisionReason],
+    );
+    const effectiveFrom = new Date(Date.parse(timestamp) - 24 * 60 * 60 * 1000);
+    await pool.query(
+      `insert into government_jurisdiction_crosswalks
+        (authority_code,municipal_code,source_version,organization_id,geography_id,status,evidence_reference,evidence_sha256,
+         requested_by_identity_id,approved_by_identity_id,approval_reason,approval_request_id,effective_from,verified_at)
+       values($1,$2,'synthetic-source-v1',$3,$4,'VERIFIED',$5,$6,$7,$8,$9,$10,$11,now())`,
+      [authorityCode, municipalCode, organizationId, geographyId, evidenceReference, evidenceSha256, requesterId, approverId, decisionReason, requestId, effectiveFrom],
+    );
+  };
+
   const makeRow = async (authorityCode: string, shouldQuarantine = false) => {
     const batchId = randomUUID();
     const syncWindowTimestamp = new Date().toISOString();
@@ -33,6 +70,7 @@ test("government inbox worker persists retry recovery, quarantine and append-onl
   };
   try {
     const recoverable = await makeRow("TST-" + suffix.slice(0, 8));
+    await provisionCrosswalk(recoverable.authorityCode, "TEST-MUNI", new Date().toISOString());
     const first = await runGovernmentInboxWorker(pool, async () => { throw new Error("SyntheticTransientFailure"); }, { batchSize: 10, maxAttempts: 3 });
     assert.ok(first.retried >= 1, "transient validator failure must be persisted as RETRY");
     const retryRow = await pool.query<{ status: string; attempts: number; lease_token: string | null }>(
