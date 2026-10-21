@@ -140,3 +140,10 @@ Validation is pending for the combined commit. This change does not itself prove
 The hard-coded SWM stakeholder list was replaced by a database-backed, effective-dated taxonomy registry. Migration `20261103_swm_stakeholder_taxonomy_registry.sql` seeds the seven existing codes as `BASELINE_SUPPORTED` and replaces duplicated workspace/organization authorization CHECK lists with foreign keys to the same registry. API routes resolve an effective registry row and map it to a supported checklist profile; unknown or retired classes fail closed. The baseline seed is not evidence of official registration or nationwide role equivalence.
 
 Validation is pending for the combined commit. Next connected work remains source-versioned jurisdiction crosswalk coverage and versioned jurisdiction-specific statutory applicability with multi-jurisdiction acceptance. Production release remains on hold.
+
+
+## 11. Source snapshot and regulatory rule-version foundation (2026-10-21)
+
+Migration `20261104_source_snapshot_and_regulatory_rule_versions.sql` adds a provenance manifest for authoritative source snapshots and an effective-dated `regulatory_rule_versions` table linked to an approved source snapshot. BWG assessments now consult an approved, effective India-wide SWM_BWG rule version and its validated threshold payload. If no approved source snapshot/rule version exists—or the payload is malformed—the assessment is persisted as `UNDER_REVIEW` with `RULE_VERSION_REQUIRED`; the historic 20,000 m² / 40,000 L/day / 100 kg/day figures are retained only as an explicitly unverified internal baseline, not used to assert applicability.
+
+No national LGD snapshot or approved rule version has been ingested/seeded. Crosswalk source-snapshot enforcement and full jurisdiction-specific rule administration remain next steps. This schema and fail-closed assessment path are not proof of Pan-India coverage or legal certification.

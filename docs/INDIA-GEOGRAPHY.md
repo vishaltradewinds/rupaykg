@@ -50,3 +50,10 @@ The domain package provides a development/test starter hierarchy profile, but hi
 - **Office of the Registrar General & Census Commissioner, India, Census 2011 concepts and definitions:** https://censusindia.gov.in/nada/index.php/catalog/115/study-description — useful for the Census-specific distinction between town and village concepts. Census classification and LGD administrative/local-body records serve different purposes and must not be silently conflated.
 
 These are source-discovery references, not an assertion that live records have been imported, that an API is available, or that the 2011 Census definitions are the applicable current rule for every programme. For each integration, retain the retrieved document/data snapshot, retrieval date, version or effective dates when supplied, content hash, usage terms, and review approval. If the source does not provide a stable version, record that limitation explicitly.
+
+
+## Source snapshot and coverage manifest (2026-10-21)
+
+The database now has an `authoritative_source_snapshots` manifest for recording the source owner, dataset code, source URL/version, jurisdiction scope, effective dates, retrieval timestamp, content SHA-256, record counts, usage-terms reference, and review state. An entry cannot be marked `APPROVED` without retrieved bytes, a content hash, complete counts, a usage-terms reference and named review metadata. No nationwide LGD snapshot is seeded by the migration; this is a data contract, not proof of ingestion or coverage.
+
+For a real import, capture the exact official download artifact and its usage terms, record the source's from/to date range and state/entity scope, reconcile record counts, test codes/parent edges/duplicates and ambiguous mappings, and retain unresolved rows. Census classifications, LGD administrative records and programme-specific jurisdictions must remain distinct.

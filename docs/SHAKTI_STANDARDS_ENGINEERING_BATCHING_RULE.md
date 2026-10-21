@@ -56,3 +56,8 @@ A related security correction is grouped into one batch across route authorizati
 ## Batch record — governed stakeholder taxonomy
 
 This batch groups API registry lookup, a single source-of-truth taxonomy table, database foreign keys for workspace and dual-control authorization records, resolver regression tests and operating/audit documentation. Full CI and disposable PostgreSQL migration acceptance must run against the combined commit. The taxonomy baseline does not grant authorization or official standing.
+
+
+## Batch record — source lineage and versioned statutory applicability
+
+The batch groups source-snapshot provenance, effective-dated regulatory rule versions, BWG route selection of an approved effective rule, fail-closed status when no approved version exists, and regression tests for malformed or absent threshold payloads. Full CI must validate the combined migration and code. The absence of imported source snapshots is recorded as a real gap, not filled with synthetic national data.
