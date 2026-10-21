@@ -140,6 +140,11 @@ test("CPCB SWM workspace routes enforce permissions and persist only user-report
       ["TEST-OUTSIDE-" + suffix, "Synthetic out-of-scope geography " + suffix],
     );
     outsideGeographyId = outsideGeography.rows[0]!.id;
+    const strictScopeOutsideRoot = await pool.query<{ ok: boolean }>(
+      "select organization_has_explicit_geography_scope($1,$2) as ok",
+      [organizationId, outsideGeographyId],
+    );
+    assert.equal(strictScopeOutsideRoot.rows[0]?.ok, false, "strict helper must reject unrelated geographies even when a root exists");
     await assert.rejects(
       pool.query(
         "insert into cpcb_swm_stakeholder_workspaces(organization_id,geography_id,stakeholder_type,title,created_by_identity_id,updated_by_identity_id) values($1,$2,'BWG',$3,$4,$4)",
