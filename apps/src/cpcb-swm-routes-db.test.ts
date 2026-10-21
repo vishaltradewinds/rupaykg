@@ -24,6 +24,7 @@ test("CPCB SWM workspace routes enforce permissions and persist only user-report
   const organizationId = randomUUID();
   const roleId = randomUUID();
   let workspaceId = "";
+  let outsideGeographyId = "";
   try {
     await registerCpcbSwmRoutes(app, pool);
     await app.ready();
@@ -35,6 +36,15 @@ test("CPCB SWM workspace routes enforce permissions and persist only user-report
       [identityId, organizationId, roleId]);
     await pool.query("insert into identity_sessions(identity_id,expires_at,token_hash) values($1,now()+interval '1 hour',$2)",
       [identityId, hash(token)]);
+
+    await assert.rejects(
+      pool.query(
+        "insert into cpcb_swm_stakeholder_workspaces(organization_id,stakeholder_type,title,created_by_identity_id,updated_by_identity_id) values($1,'BWG',$2,$3,$3)",
+        [organizationId, "Direct database null geography attempt " + suffix, identityId],
+      ),
+      /SWM_WORKSPACE_GEOGRAPHY_REQUIRED/,
+      "database trigger must reject direct insertion without geography",
+    );
 
     const headers = { authorization: "Bearer " + token, "x-rupaykg-organization-id": organizationId };
     const geography = await pool.query<{ id: string }>("select id from geography where kind='CLUSTER' and code='RUPAYKG-ACCEPTANCE-V1'");
@@ -118,6 +128,7 @@ test("CPCB SWM workspace routes enforce permissions and persist only user-report
       "insert into geography(kind,code,name,source,source_version) values('CLUSTER',$1,$2,'RupayKG synthetic integration test','v1') returning id",
       ["TEST-OUTSIDE-" + suffix, "Synthetic out-of-scope geography " + suffix],
     );
+    outsideGeographyId = outsideGeography.rows[0]!.id;
     const outOfScope = await app.inject({
       method: "POST", url: "/api/v1/cpcb-swm/workspaces", headers,
       payload: { ...payload, geographyId: outsideGeography.rows[0]!.id },
@@ -158,6 +169,8 @@ test("CPCB SWM workspace routes enforce permissions and persist only user-report
     await app.close();
     if (workspaceId) await pool.query("delete from cpcb_swm_status_history where workspace_id=$1", [workspaceId]).catch(() => undefined);
     if (workspaceId) await pool.query("delete from cpcb_swm_stakeholder_workspaces where id=$1", [workspaceId]).catch(() => undefined);
+    await pool.query("delete from organization_geography_scopes where organization_id=$1", [organizationId]).catch(() => undefined);
+    if (outsideGeographyId) await pool.query("delete from geography where id=$1", [outsideGeographyId]).catch(() => undefined);
     await pool.query("delete from identity_sessions where identity_id=$1", [identityId]).catch(() => undefined);
     await pool.query("delete from organization_memberships where identity_id=$1 and organization_id=$2", [identityId, organizationId]).catch(() => undefined);
     await pool.query("delete from roles where id=$1", [roleId]).catch(() => undefined);
