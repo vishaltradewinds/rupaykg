@@ -105,7 +105,7 @@ export async function registerGovernmentJurisdictionCrosswalkRoutes(app: Fastify
       || (body.activityId !== undefined && body.activityId !== null && activityId === null)
       || (activityId !== null && !UUID.test(activityId))
       || !authorityCode || !CODE.test(authorityCode) || !municipalCode || !CODE.test(municipalCode)
-      || !sourceVersion || !evidenceReference || !evidenceSha256 || !SHA256.test(evidenceSha256)
+      || !sourceVersion || !sourceSnapshotId || !UUID.test(sourceSnapshotId) || !evidenceReference || !evidenceSha256 || !SHA256.test(evidenceSha256)
       || (effectiveFromInput !== null && !validCanonicalTimestamp(effectiveFromInput))
       || !reason || reason.length < 8) {
       return error(reply, 400, "Valid organizationId, geographyId, authorityCode, municipalCode, sourceVersion, approved sourceSnapshotId, evidence reference/SHA-256 and reason are required", "GOVERNMENT_CROSSWALK_REQUEST_INVALID");

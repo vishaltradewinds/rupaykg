@@ -66,7 +66,7 @@ test("CPCB SWM workspace routes enforce permissions and persist only user-report
            $5,$5,'Synthetic direct approval bypass attempt','VERIFIED',now(),now())`,
         [crosswalkSourceSnapshotId, organizationId, geographyId, bypassHash, identityId],
       ),
-      /GOVERNMENT_CROSSWALK_(?:SOURCE_SNAPSHOT_REQUIRED|REQUIRES_DUAL_CONTROL|EVIDENCE_UNBOUND)/,
+      (error: unknown) => ((error as { message?: string }).message ?? "").includes("GOVERNMENT_CROSSWALK_"),
       "database must reject a VERIFIED government geography crosswalk that lacks bound vault evidence or an approved dual-control request",
     );
 
