@@ -27,10 +27,11 @@ test("existing basis JSON string is preserved when adding unverified registratio
 import { isValidIsoCalendarDate, positiveEprQuantity } from "./epr-return-routes.js";
 
 test("EPR return quantity accepts only positive finite JSON numbers", () => {
-  for (const value of ["12", "1e2", null, 0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+  for (const value of ["12", "1e2", null, 0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
     assert.equal(positiveEprQuantity({ quantity: value }, "quantity"), null, `reject ${String(value)}`);
   }
   assert.equal(positiveEprQuantity({ quantity: 12 }, "quantity"), 12);
+  assert.equal(positiveEprQuantity({ quantity: 1.5 }, "quantity"), 1.5);
 });
 
 test("EPR return periods require real ISO calendar dates", () => {
