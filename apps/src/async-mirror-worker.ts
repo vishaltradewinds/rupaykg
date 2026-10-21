@@ -26,6 +26,7 @@ type ClaimedInboxRow = {
   authority_code: string;
   municipal_code: string;
   batch_id: string;
+  sync_window_timestamp: Date | string;
   payload: unknown;
   payload_sha256: string;
   attempts: number;
@@ -145,22 +146,40 @@ export async function runGovernmentInboxWorker(
        from candidates
       where inbox.id=candidates.id
      returning inbox.id, inbox.authority_code, inbox.municipal_code, inbox.batch_id,
-               inbox.payload, inbox.payload_sha256, inbox.attempts, inbox.lease_token`,
+               inbox.sync_window_timestamp, inbox.payload, inbox.payload_sha256, inbox.attempts, inbox.lease_token`,
     [batchSize, leaseSeconds, maxAttempts],
   );
 
   const result = { claimed: claimed.rows.length, validated: 0, rejected: 0, retried: 0, quarantined: 0 };
   for (const row of claimed.rows) {
     try {
-      const outcome = canonicalGovBridgeHash(row.payload) !== row.payload_sha256
-        ? { valid: false, errorCode: "BATCH_PAYLOAD_HASH_MISMATCH" }
-        : await validate({
+      let outcome: GovernmentInboxValidation;
+      if (canonicalGovBridgeHash(row.payload) !== row.payload_sha256) {
+        outcome = { valid: false, errorCode: "BATCH_PAYLOAD_HASH_MISMATCH" };
+      } else {
+        outcome = await validate({
           id: row.id,
           authorityCode: row.authority_code,
           municipalCode: row.municipal_code,
           batchId: row.batch_id,
           payload: row.payload,
         });
+        if (outcome.valid) {
+          const metadata = row.payload && typeof row.payload === "object" && !Array.isArray(row.payload)
+            ? (row.payload as Record<string, unknown>).batchMetadata
+            : undefined;
+          const syncWindowTimestamp = metadata && typeof metadata === "object" && !Array.isArray(metadata)
+            ? (metadata as Record<string, unknown>).syncWindowTimestamp
+            : undefined;
+          const payloadTimestampMs = typeof syncWindowTimestamp === "string" ? Date.parse(syncWindowTimestamp) : Number.NaN;
+          const databaseTimestampMs = row.sync_window_timestamp instanceof Date
+            ? row.sync_window_timestamp.getTime()
+            : Date.parse(row.sync_window_timestamp);
+          if (!Number.isFinite(payloadTimestampMs) || !Number.isFinite(databaseTimestampMs) || payloadTimestampMs !== databaseTimestampMs) {
+            outcome = { valid: false, errorCode: "BATCH_TIMESTAMP_DATABASE_MISMATCH" };
+          }
+        }
+      }
       if (outcome.valid) {
         const updated = await pool.query(
           `update async_mirror_inbox
