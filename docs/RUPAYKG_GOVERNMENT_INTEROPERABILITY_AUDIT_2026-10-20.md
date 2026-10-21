@@ -360,3 +360,13 @@ No production deployment, production migration, official submission, official st
 - Fixed the field-device writer to use shared `hashPlatformAuditEventV2` canonical recursive JSON hashing and explicitly persist `hash_version=2`. The writer continues to lock and advance the shared `platform_audit_chain_head` in the same transaction. CI passed after this change.
 
 **Disposition remains unchanged:** engineering CI is green; production/release certification is HOLD. Real staging concurrency/rollback evidence, alert ownership and delivery, official government API authorization, live Guardian/Hedera/Mirror Node proof, method-specific accredited verification and official registry evidence, and Shakti production approval remain external/operational gates. No production mutation or official submission was performed.
+
+
+## 12. Canonical audit-hash regression test and latest CI — 2026-10-21 07:40 UTC
+
+- Code/test head `9d792b69261b0f4592a11c4d30cc3e8ffe924807` passed GitHub Actions [run #1554](https://github.com/vishaltradewinds/rupaykg/actions/runs/39563420238).
+- The test suite now includes a regression check that a version-2 audit hash can be independently reproduced from row-shaped event data even when nested JSON object key order differs after JSONB normalization.
+- Latest CI test groups: 156 + 22 + 2 + 29 + 1 + 2 = **212 passed, 0 failed, 0 skipped**. Dependency audit, migration validation/application on disposable CI PostgreSQL, typecheck, build, browser smoke, PostgreSQL acceptance, production-container build and cleanup all passed.
+- The canonical v2 field-device audit-writer change is included in the tested code head.
+
+**Release status remains HOLD.** Passing CI is not clean staging acceptance, an official government API authorization, live Guardian/Hedera/Mirror Node verification, accredited CCTS verification, official registry issuance, or Shakti release approval. Production was not deployed or migrated and no official submission or credit issuance occurred.
