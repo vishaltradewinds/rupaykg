@@ -64,6 +64,28 @@ test("government inbox worker persists retry recovery, quarantine and append-onl
     assert.ok(quarantineRow.rows[0]?.quarantined_at);
     assert.equal(quarantineRow.rows[0]?.lease_token, null);
 
+    // Existing rows that have already exhausted their retry budget must be swept
+    // into quarantine before the claim query can leave them stranded indefinitely.
+    const exhaustedRetry = await makeRow("STL-" + suffix.slice(0, 8));
+    await pool.query(
+      "update async_mirror_inbox set status='RETRY', attempts=3, next_attempt_at=now()-interval '1 second' where id=$1",
+      [exhaustedRetry.id],
+    );
+    const expiredProcessing = await makeRow("EXP-" + suffix.slice(0, 8));
+    await pool.query(
+      "update async_mirror_inbox set status='PROCESSING', attempts=3, lease_until=now()-interval '1 second' where id=$1",
+      [expiredProcessing.id],
+    );
+    await runGovernmentInboxWorker(pool, undefined, { batchSize: 10, maxAttempts: 3 });
+    const swept = await pool.query<{ id: string; status: string; quarantined_at: Date | null; lease_token: string | null }>(
+      "select id,status,quarantined_at,lease_token from async_mirror_inbox where id = any($1::uuid[])",
+      [[exhaustedRetry.id, expiredProcessing.id]],
+    );
+    assert.equal(swept.rows.length, 2);
+    assert.ok(swept.rows.every(item => item.status === "QUARANTINED"));
+    assert.ok(swept.rows.every(item => item.quarantined_at));
+    assert.ok(swept.rows.every(item => item.lease_token === null));
+
     const events = await pool.query<{ to_status: string; attempt: number; payload_sha256: string }>(
       "select to_status,attempt,payload_sha256 from async_mirror_inbox_events where inbox_id=$1 order by id", [recoverable.id],
     );
