@@ -6,10 +6,10 @@ type Reply = { code: (status: number) => { send: (body: unknown) => unknown } };
 type Request = { body: unknown; params: Record<string, string>; log: { error: (error: unknown) => void } };
 const bodyOf = (request: Request): Record<string, unknown> => request.body && typeof request.body === "object" ? request.body as Record<string, unknown> : {};
 const text = (body: Record<string, unknown>, key: string): string | null => typeof body[key] === "string" && body[key].trim() ? body[key].trim() : null;
-const nonNegative = (body: Record<string, unknown>, key: string): number | null | undefined => {
+export const nonNegativeEprInput = (body: Record<string, unknown>, key: string): number | null | undefined => {
   if (body[key] === undefined || body[key] === null || body[key] === "") return undefined;
-  const value = Number(body[key]);
-  return Number.isFinite(value) && value >= 0 ? value : null;
+  const value = body[key];
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
 };
 
 export type ExternalRegistrationReport = {
@@ -122,9 +122,9 @@ export async function registerStatutoryRoutes(app: FastifyInstance, pool: Pool |
     const organizationId = text(body, "organizationId") || auth.activeOrganizationId || auth.memberships[0]?.organization_id || null;
     if (!organizationId || !canActForOrganization(auth, organizationId)) return reply.code(403).send({ error: "No verified membership for organization", code: "ORG_FORBIDDEN" });
     if (!await hasOrganizationPermission(pool, auth, organizationId, ["swm:manage", "audit:execute", "reports:export"])) return reply.code(403).send({ error: "BWG applicability assessment permission required", code: "STATUTORY_WRITE_REQUIRED" });
-    const floorArea = nonNegative(body, "floorAreaSqM");
-    const water = nonNegative(body, "waterConsumptionLpd");
-    const waste = nonNegative(body, "solidWasteKgpd");
+    const floorArea = nonNegativeEprInput(body, "floorAreaSqM");
+    const water = nonNegativeEprInput(body, "waterConsumptionLpd");
+    const waste = nonNegativeEprInput(body, "solidWasteKgpd");
     if (floorArea === null || water === null || waste === null) return reply.code(400).send({ error: "BWG measurements must be non-negative numbers", code: "INVALID_BWG_MEASUREMENTS" });
     const evidenceId = text(body, "evidenceId");
     const verificationId = text(body, "verificationId");
