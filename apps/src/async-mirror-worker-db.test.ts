@@ -22,15 +22,24 @@ test("government inbox worker persists retry recovery, quarantine and append-onl
     const requesterId = randomUUID();
     const approverId = randomUUID();
     const geographyId = randomUUID();
-    const evidenceReference = "synthetic://worker-crosswalk/" + authorityCode;
-    const evidenceSha256 = sha("synthetic worker crosswalk evidence " + authorityCode);
     const reason = "Synthetic worker crosswalk acceptance fixture";
     const effectiveFrom = new Date(Date.parse(timestamp) - 24 * 60 * 60 * 1000);
-    const requestHash = sha(JSON.stringify({ authorityCode, municipalCode, organizationId, geographyId, evidenceSha256, effectiveFrom }));
     await pool.query("insert into organizations(id,name,organization_type) values($1,$2,'TEST_FIXTURE')", [organizationId, "Worker crosswalk " + authorityCode]);
     await pool.query("insert into identities(id,display_name) values($1,$2),($3,$4)", [requesterId, "Worker crosswalk requester " + authorityCode, approverId, "Worker crosswalk approver " + authorityCode]);
     await pool.query("insert into geography(id,kind,code,name,source,source_version) values($1,'CLUSTER',$2,$3,'Synthetic worker fixture','v1')", [geographyId, "WORKER-GEO-" + authorityCode, "Worker crosswalk geography " + authorityCode]);
     await pool.query("insert into organization_geography_scopes(organization_id,geography_id,status) values($1,$2,'VERIFIED')", [organizationId, geographyId]);
+    const activityId = randomUUID();
+    await pool.query("insert into activities(id,organization_id,geography_id,activity_type,status) values($1,$2,$3,'WASTE_WEIGHT_MEASUREMENT','COMPLETED')", [activityId, organizationId, geographyId]);
+    const uploaderBytes = Buffer.from("Synthetic reviewed worker crosswalk evidence " + authorityCode);
+    const evidenceSha256 = sha(uploaderBytes);
+    const evidenceId = randomUUID();
+    const seriesId = randomUUID();
+    const artifactVersionId = randomUUID();
+    await pool.query("insert into evidence_artifact_series(id,organization_id,activity_id,evidence_type,created_by_identity_id) values($1,$2,$3,'CROSSWALK_SOURCE_RECORD',$4)", [seriesId, organizationId, activityId, requesterId]);
+    await pool.query("insert into evidence(id,activity_id,evidence_type,status,captured_at,content_uri,content_hash,metadata) values($1,$2,'CROSSWALK_SOURCE_RECORD','VERIFIED',now(),$3,$4,$5::jsonb)", [evidenceId, activityId, "db://evidence-vault/" + artifactVersionId, evidenceSha256, JSON.stringify({ source: "synthetic test fixture" })]);
+    await pool.query("insert into evidence_artifact_versions(id,series_id,evidence_id,version_number,file_name,media_type,size_bytes,sha256,content,uploaded_by_identity_id,source_reference) values($1,$2,$3,1,'worker-crosswalk.txt','text/plain',$4,$5,$6,$7,$8)", [artifactVersionId, seriesId, evidenceId, uploaderBytes.length, evidenceSha256, uploaderBytes, requesterId, "synthetic://worker-crosswalk/" + authorityCode]);
+    const evidenceReference = "db://evidence-vault/" + artifactVersionId;
+    const requestHash = sha(JSON.stringify({ authorityCode, municipalCode, organizationId, geographyId, evidenceSha256, effectiveFrom }));
     const request = await pool.query<{ id: string }>(
       `insert into government_jurisdiction_crosswalk_requests
         (authority_code,municipal_code,source_version,organization_id,geography_id,effective_from,evidence_reference,evidence_sha256,request_reason,request_hash,requested_by_identity_id)
