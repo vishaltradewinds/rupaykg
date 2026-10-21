@@ -20,7 +20,7 @@ function fakePool(rows: unknown[], crosswalkRows?: unknown[]) {
 }
 
 const rowPayload = {
-    batchMetadata: { authorityCode: "MH-PCB", municipalCode: "MCGM-MUM", batchId: "b5e74bb0-b3a1-4fd7-ae67-c3c2a68d56ab", syncWindowTimestamp: "2026-10-19T02:30:00Z" },
+    batchMetadata: { authorityCode: "MH-PCB", municipalCode: "MCGM-MUM", batchId: "b5e74bb0-b3a1-4fd7-ae67-c3c2a68d56ab", syncWindowTimestamp: "2026-10-19T02:30:00Z", sourceVersion: "synthetic-v1" },
     rawDataLogs: ["Waste collection record from authorized source"],
   };
 
