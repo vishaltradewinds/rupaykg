@@ -29,6 +29,7 @@ test("government jurisdiction crosswalk API scopes requests and rejects unauthor
   const outsideGeographyId = randomUUID();
   const requesterToken = randomBytes(32).toString("base64url");
   let requestId: string | null = null;
+  let expiredRequestId: string | null = null;
   let sourceSnapshotId: string | null = null;
 
   try {
@@ -168,15 +169,25 @@ test("government jurisdiction crosswalk API scopes requests and rejects unauthor
     assert.equal(pending.rows[0]?.status, "PENDING", "unauthorized decisions must not mutate the request");
 
     // Expired requests must fail closed at the API boundary, with no status change.
-    await pool.query("update government_jurisdiction_crosswalk_requests set expires_at=now()-interval '1 second' where id=$1", [requestId]);
+    // Insert a synthetic expired pending request directly because the lifecycle trigger intentionally
+    // prevents editing request fields after creation; the route must still enforce expiry at decision time.
+    const expiredRequest = await pool.query<{ id: string }>(
+      `insert into government_jurisdiction_crosswalk_requests
+        (authority_code,municipal_code,source_version,source_snapshot_id,organization_id,geography_id,activity_id,effective_from,evidence_reference,evidence_sha256,request_reason,request_hash,requested_by_identity_id,expires_at)
+       values($1,$2,$3,$4,$5,$6,$7,now(),$8,$9,$10,$11,$12,now()-interval '1 second') returning id`,
+      [payload.authorityCode, "EXPIRED-" + suffix, payload.sourceVersion, sourceSnapshotId, organizationId, geographyId, activityId,
+        payload.evidenceReference, payload.evidenceSha256, "Synthetic expired crosswalk request", hash("expired-request-" + suffix), requesterId],
+    );
+    expiredRequestId = expiredRequest.rows[0]?.id ?? null;
+    assert.ok(expiredRequestId, "expired request fixture must be created");
     const expiredApproval = await app.inject({
-      method: "POST", url: "/api/v1/government/jurisdiction-crosswalk/requests/" + requestId + "/decision",
+      method: "POST", url: "/api/v1/government/jurisdiction-crosswalk/requests/" + expiredRequestId + "/decision",
       headers: { authorization: "Bearer " + approverToken, "x-rupaykg-organization-id": organizationId },
       payload: { decision: "APPROVE", reason: "Expired request must be resubmitted" },
     });
     assert.equal(expiredApproval.statusCode, 409, expiredApproval.body);
     assert.equal(expiredApproval.json().code, "GOVERNMENT_CROSSWALK_REQUEST_EXPIRED");
-    const stillPending = await pool.query<{ status: string }>("select status from government_jurisdiction_crosswalk_requests where id=$1", [requestId]);
+    const stillPending = await pool.query<{ status: string }>("select status from government_jurisdiction_crosswalk_requests where id=$1", [expiredRequestId]);
     assert.equal(stillPending.rows[0]?.status, "PENDING", "expired approval attempts must not mutate the request");
 
     const listed = await app.inject({ method: "GET", url: "/api/v1/government/jurisdiction-crosswalks", headers });
@@ -184,7 +195,7 @@ test("government jurisdiction crosswalk API scopes requests and rejects unauthor
     assert.equal(listed.json().crosswalks.length, 0, "pending requests must not appear as verified crosswalks");
   } finally {
     await app.close();
-    if (requestId) await pool.query("delete from government_jurisdiction_crosswalk_requests where id=$1", [requestId]).catch(() => undefined);
+    if (requestId || expiredRequestId) await pool.query("delete from government_jurisdiction_crosswalk_requests where id=any($1::uuid[])", [[requestId, expiredRequestId].filter(Boolean)]).catch(() => undefined);
     if (sourceSnapshotId) await pool.query("delete from authoritative_source_snapshots where id=$1", [sourceSnapshotId]).catch(() => undefined);
     await pool.query("delete from organization_geography_scopes where organization_id=$1", [organizationId]).catch(() => undefined);
     await pool.query("delete from identity_sessions where identity_id=any($1::uuid[])", [[requesterId, approverId]]).catch(() => undefined);
