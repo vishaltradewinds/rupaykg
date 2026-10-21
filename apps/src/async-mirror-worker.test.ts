@@ -10,6 +10,7 @@ function fakePool(rows: unknown[]) {
     query: async (sql: string, values: unknown[] = []) => {
       statements.push({ sql, values });
       if (sql.includes("returning inbox.id")) return { rows, rowCount: rows.length };
+      if (sql.includes("from government_jurisdiction_crosswalks c")) return { rows: [{ id: "crosswalk-id", organization_id: "organization-id", geography_id: "geography-id", activity_id: null, source_version: "synthetic-v1" }], rowCount: 1 };
       if (sql.includes("group by status")) return { rows };
       if (sql.includes("lease_until < now()")) return { rows: [{ count: "2" }] };
       return { rows: [], rowCount: 1 };
@@ -38,10 +39,10 @@ const row = {
 test("worker claims a bounded batch and marks structurally valid payloads as internal-only validated", async () => {
   const { pool, statements } = fakePool([row]);
   const result = await runGovernmentInboxWorker(pool);
-  assert.deepEqual(result, { claimed: 1, validated: 1, rejected: 0, retried: 0, quarantined: 0 });
+  assert.deepEqual(result, { claimed: 1, validated: 1, rejected: 0, unresolved: 0, retried: 0, quarantined: 0 });
   assert.match(statements[1]!.sql, /for update skip locked/i);
-  assert.match(statements[2]!.sql, /lease_token=\$2/i);
-  assert.match(statements[2]!.sql, /status='VALIDATED'/i);
+  assert.match(statements[3]!.sql, /lease_token=\$2/i);
+  assert.match(statements[3]!.sql, /status='VALIDATED'/i);
 });
 
 test("worker rejects metadata mismatch without retrying deterministic validation failures", async () => {
