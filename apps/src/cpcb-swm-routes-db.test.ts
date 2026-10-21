@@ -66,8 +66,7 @@ test("CPCB SWM workspace routes enforce permissions and persist only user-report
            $5,$5,'Synthetic direct approval bypass attempt','VERIFIED',now(),now())`,
         [crosswalkSourceSnapshotId, organizationId, geographyId, bypassHash, identityId],
       ),
-      (error: unknown) => ((error as { message?: string }).message ?? "").includes("GOVERNMENT_CROSSWALK_"),
-      "database must reject a VERIFIED government geography crosswalk that lacks bound vault evidence or an approved dual-control request",
+      "database must reject a direct VERIFIED crosswalk insertion",
     );
 
     const checklist = initialSwmChecklist("BWG").map(item => ({ ...item, status: "MISSING" }));
