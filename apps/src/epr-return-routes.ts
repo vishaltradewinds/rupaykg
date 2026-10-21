@@ -9,8 +9,11 @@ function requiredString(body: Record<string, unknown>, key: string): string | nu
   return typeof body[key] === "string" && body[key].trim() ? body[key].trim() : null;
 }
 export function positiveEprQuantity(body: Record<string, unknown>, key: string): number | null {
-  const value = Number(body[key]);
-  return Number.isFinite(value) && value > 0 ? value : null;
+  const value = body[key];
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null;
+}
+export function isValidIsoCalendarDate(value: string): boolean {
+  return /^\\d{4}-\\d{2}-\\d{2}$/.test(value) && !Number.isNaN(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
 }
 async function authFor(request: Parameters<typeof authenticate>[0], reply: { code: (status: number) => { send: (body: unknown) => unknown } }, pool: Pool | null): Promise<AuthContext | null> {
   if (!pool) { reply.code(503).send({ error: "Authoritative API unavailable", code: "DATABASE_UNAVAILABLE", syntheticData: false }); return null; }
