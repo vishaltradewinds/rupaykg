@@ -38,6 +38,21 @@ function boundedInteger(value: number | undefined, fallback: number, min: number
   return Number.isInteger(value) && value! >= min && value! <= max ? value! : fallback;
 }
 
+/** Strict calendar/time validation; Date.parse alone normalizes some impossible dates. */
+export function isValidSyncWindowTimestamp(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  const match = /^(\\d{4})-(\\d{2})-(\\d{2})T(\\d{2}):(\\d{2}):(\\d{2})(?:\\.(\\d{1,3}))?(Z|([+-])(\\d{2}):(\\d{2}))$/.exec(value);
+  if (!match) return false;
+  const year = Number(match[1]), month = Number(match[2]), day = Number(match[3]);
+  const hour = Number(match[4]), minute = Number(match[5]), second = Number(match[6]);
+  const zone = match[8], offsetHour = match[10], offsetMinute = match[11];
+  const calendar = new Date(Date.UTC(year, month - 1, day));
+  if (calendar.getUTCFullYear() !== year || calendar.getUTCMonth() !== month - 1 || calendar.getUTCDate() !== day) return false;
+  if (hour > 23 || minute > 59 || second > 59) return false;
+  if (zone !== "Z" && (Number(offsetHour) > 23 || Number(offsetMinute) > 59)) return false;
+  return Number.isFinite(Date.parse(value));
+}
+
 /**
  * Structural checks only. A successful result means the signed batch is
  * internally well-formed; it is not an official filing, verified MRV record,
@@ -64,8 +79,7 @@ export async function validateGovernmentInboxPayload(input: {
   if (metadata.authorityCode !== input.authorityCode || metadata.municipalCode !== input.municipalCode || metadata.batchId !== input.batchId) {
     return fail("BATCH_DATABASE_METADATA_MISMATCH");
   }
-  if (typeof metadata.syncWindowTimestamp !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/.test(metadata.syncWindowTimestamp)
-    || !Number.isFinite(Date.parse(metadata.syncWindowTimestamp))) return fail("BATCH_TIMESTAMP_INVALID");
+  if (!isValidSyncWindowTimestamp(metadata.syncWindowTimestamp)) return fail("BATCH_TIMESTAMP_INVALID");
   if (payload.rawDataLogs.length < 1 || payload.rawDataLogs.length > 1000
     || !payload.rawDataLogs.every((entry) => typeof entry === "string" && entry.trim().length >= 5 && entry.length <= 20_000 && !entry.includes("\u0000"))) {
     return fail("BATCH_RECORDS_INVALID");
