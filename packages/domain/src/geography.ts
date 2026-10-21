@@ -10,7 +10,7 @@ export type GeographyMode = "URBAN" | "RURAL";
  * India does not have one universally valid hierarchy across all states, local
  * bodies and datasets. Callers handling authoritative geography must provide a
  * hierarchy validated against that source/version instead of treating the
- * default map below as a legal or nationwide authority.
+ * starter map below as a legal or nationwide authority.
  */
 export type GeographyHierarchy = Partial<Record<GeographyKind, readonly GeographyKind[]>>;
 
@@ -26,14 +26,14 @@ export function geographyMode(kind: GeographyKind): GeographyMode | "NATIONAL" |
 }
 
 /**
- * Validate one edge against a supplied, source-versioned hierarchy.
- * The default preserves the platform's starter profile for existing callers;
- * nationwide production flows must pass an explicitly validated hierarchy.
+ * Validate one edge against an explicitly supplied, source-versioned hierarchy.
+ * Requiring the profile at the call site prevents accidental use of a starter
+ * hierarchy for authoritative Pan-India decisions.
  */
 export function isValidChild(
   parent: GeographyKind,
   child: GeographyKind,
-  hierarchy: GeographyHierarchy = DEFAULT_GEOGRAPHY_HIERARCHY,
+  hierarchy: GeographyHierarchy,
 ): boolean {
   return hierarchy[parent]?.includes(child) ?? false;
 }
