@@ -123,7 +123,18 @@ test("CPCB SWM workspace routes enforce permissions and persist only user-report
     assert.equal(unscopedOrganization.statusCode, 403, unscopedOrganization.body);
     assert.equal(unscopedOrganization.json().code, "GEOGRAPHY_FORBIDDEN", "an organization with no verified geography root must fail closed");
 
+    const strictScopeBeforeProvisioning = await pool.query<{ ok: boolean }>(
+      "select organization_has_explicit_geography_scope($1,$2) as ok",
+      [organizationId, geographyId],
+    );
+    assert.equal(strictScopeBeforeProvisioning.rows[0]?.ok, false, "strict helper must not inherit the legacy no-root allow fallback");
+
     await pool.query("insert into organization_geography_scopes(organization_id,geography_id,status) values($1,$2,'VERIFIED')", [organizationId, geographyId]);
+    const strictScopeInsideRoot = await pool.query<{ ok: boolean }>(
+      "select organization_has_explicit_geography_scope($1,$2) as ok",
+      [organizationId, geographyId],
+    );
+    assert.equal(strictScopeInsideRoot.rows[0]?.ok, true, "strict helper must authorize a geography under an explicit verified root");
     const outsideGeography = await pool.query<{ id: string }>(
       "insert into geography(kind,code,name,source,source_version) values('CLUSTER',$1,$2,'RupayKG synthetic integration test','v1') returning id",
       ["TEST-OUTSIDE-" + suffix, "Synthetic out-of-scope geography " + suffix],
