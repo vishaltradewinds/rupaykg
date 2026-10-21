@@ -390,3 +390,12 @@ The field-operation sync path was also hardened after the route-wide scan found 
 Regression tests cover numeric-string rejection, positive fractional measurements, impossible timestamps, missing timezones, invalid hour/offset values, and valid leap-day/timezone examples. GitHub Actions run #1572 passed on `8ef247d6556dd5a9a37e9033d2eb90edab0f6142`, including dependency audit, migration validation and disposable PostgreSQL migration, typecheck, build, browser smoke test, full tests/PostgreSQL acceptance, and production-container build.
 
 The audit status remains engineering PASS / release HOLD. Render's existing RupayKg service points to `main`; no feature-branch deployment or production data mutation was performed. The PR remains draft and unmerged pending independent staging, alert ownership/destination, external API/credential, Guardian/Hedera, and statutory verification/issuance gates.
+
+
+## 15. Government inbox worker boundary and retry hardening (2026-10-21)
+
+The strict sync-window timestamp validator now has regression coverage for impossible calendar dates, invalid hour/minute/second values, fractional-second precision limits, missing timezones, valid positive/negative offsets, and invalid offset hour/minute boundaries. CI run #1577 passed on `c997f73d99c26052c1104550e893a77c1dd0a345`.
+
+A follow-up queue review found that records already at the retry limit could remain in `RECEIVED` or `RETRY`, because the quarantine sweep only considered expired `PROCESSING` leases. The worker now quarantines exhausted unclaimed rows as well as exhausted processing rows with expired or missing lease expiry. Regression coverage was added for this boundary. CI run #1579 passed on `eb2b0a1987155c3a19c2f53286fb15535a36917f`, including dependency audit, migration validation/application in disposable CI PostgreSQL, typecheck, build, browser smoke, PostgreSQL acceptance tests, production-container build, and cleanup.
+
+This remains an internal engineering validation result. No inherited staging inbox rows were changed; no production deployment/migration, official submission, Guardian/Hedera transaction, accredited verification, or credit issuance was performed. PR #41 remains draft and unmerged. Release stays HOLD pending isolated staging evidence, verified alert/on-call routing, authorized official API contracts and credentials, live Guardian/Hedera/Mirror Node evidence, applicable methodology/accredited verification/registry evidence, and Shakti approval.
