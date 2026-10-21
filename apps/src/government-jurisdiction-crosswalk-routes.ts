@@ -268,6 +268,9 @@ export async function registerGovernmentJurisdictionCrosswalkRoutes(app: Fastify
     } catch (cause) {
       await client.query("rollback").catch(() => undefined);
       const message = (cause as { message?: string }).message ?? "";
+      if (message.includes("GOVERNMENT_CROSSWALK_EVIDENCE_NOT_VERIFIED")) {
+        return error(reply, 409, "Crosswalk evidence must be independently reviewed before approval", "GOVERNMENT_CROSSWALK_EVIDENCE_NOT_VERIFIED");
+      }
       if (message.includes("GOVERNMENT_CROSSWALK_DUAL_CONTROL_MISMATCH") || message.includes("GOVERNMENT_CROSSWALK_VERIFICATION_INVALID")) {
         return error(reply, 409, "Crosswalk approval failed database integrity checks", "GOVERNMENT_CROSSWALK_INTEGRITY_FAILED");
       }
