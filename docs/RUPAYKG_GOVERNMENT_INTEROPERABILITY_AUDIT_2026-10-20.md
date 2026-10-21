@@ -455,3 +455,10 @@ Read-only Render inspection confirmed the existing `rupaykg` web service at `htt
 8. Shakti release approval and controlled deployment/rollback plan.
 
 **Decision: ENGINEERING CI PASS for the verified code head; PRODUCTION RELEASE HOLD.** The PR remains draft and unmerged. The live service, official submission, Guardian/Hedera, accredited verification and credit issuance gates remain unclaimed until evidence is actually produced.
+
+
+## 19. Fundamental product rule: pan-India by design (2026-10-21)
+
+The platform's permanent scope is pan-India digital infrastructure—not a pilot product. A pilot such as the Jabalpur/Kathonda context is a bounded validation environment only and must not define the platform's geography, core data model or business logic. Nationwide design requires multi-tenant and jurisdiction boundaries; configurable, versioned central/state/local requirements; reusable organization/site/activity onboarding; methodology-specific applicability; authority-specific integration adapters; evidence lineage; low-bandwidth and language-aware access; measured scale and resilience; and jurisdiction-by-jurisdiction acceptance. Unmapped or unauthorized records fail closed.
+
+The full binding rule and implementation consequences are maintained in [RUPAYKG_FUNDAMENTAL_RULE_PAN_INDIA.md](RUPAYKG_FUNDAMENTAL_RULE_PAN_INDIA.md). Pan-India intent is mandatory now; operational readiness across India must be proven through evidence and authorized acceptance and must not be inferred from a single pilot or CI pass.
