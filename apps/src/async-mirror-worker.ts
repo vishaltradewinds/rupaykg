@@ -3,6 +3,7 @@ import { canonicalGovBridgeHash } from "./government-inbox-hash.js";
 
 export type GovernmentInboxValidation = {
   valid: boolean;
+  state?: "UNRESOLVED";
   errorCode?: string;
   summary?: Record<string, unknown>;
 };
@@ -110,7 +111,7 @@ export async function runGovernmentInboxWorker(
   pool: Pool,
   validate: GovernmentInboxValidator = validateGovernmentInboxPayload,
   options: GovernmentInboxWorkerOptions = {},
-): Promise<{ claimed: number; validated: number; rejected: number; retried: number; quarantined: number }> {
+): Promise<{ claimed: number; validated: number; rejected: number; unresolved: number; retried: number; quarantined: number }> {
   const batchSize = boundedInteger(options.batchSize, DEFAULT_BATCH_SIZE, 1, 100);
   const leaseSeconds = boundedInteger(options.leaseSeconds, DEFAULT_LEASE_SECONDS, 15, 900);
   const maxAttempts = boundedInteger(options.maxAttempts, DEFAULT_MAX_ATTEMPTS, 1, 20);
@@ -150,7 +151,7 @@ export async function runGovernmentInboxWorker(
     [batchSize, leaseSeconds, maxAttempts],
   );
 
-  const result = { claimed: claimed.rows.length, validated: 0, rejected: 0, retried: 0, quarantined: 0 };
+  const result = { claimed: claimed.rows.length, validated: 0, rejected: 0, unresolved: 0, retried: 0, quarantined: 0 };
   for (const row of claimed.rows) {
     try {
       let outcome: GovernmentInboxValidation;
@@ -181,6 +182,61 @@ export async function runGovernmentInboxWorker(
         }
       }
       if (outcome.valid) {
+        const mapped = await pool.query<{
+          id: string; organization_id: string; geography_id: string; activity_id: string | null; source_version: string;
+        }>(
+          `select c.id,c.organization_id,c.geography_id,c.activity_id,c.source_version
+             from government_jurisdiction_crosswalks c
+            where c.authority_code=$1 and c.municipal_code=$2 and c.status='VERIFIED'
+              and c.effective_from <= $3::timestamptz
+              and (c.effective_to is null or c.effective_to > $3::timestamptz)
+              and organization_has_explicit_geography_scope(c.organization_id,c.geography_id)
+              and (c.activity_id is null or exists (
+                select 1 from activities a where a.id=c.activity_id
+                  and a.organization_id=c.organization_id and a.geography_id=c.geography_id
+              ))
+            order by c.effective_from desc
+            limit 2`,
+          [row.authority_code, row.municipal_code, row.sync_window_timestamp],
+        );
+        if (mapped.rows.length !== 1) {
+          outcome = {
+            valid: false,
+            state: "UNRESOLVED",
+            errorCode: mapped.rows.length === 0 ? "GOVERNMENT_CROSSWALK_NOT_FOUND" : "GOVERNMENT_CROSSWALK_AMBIGUOUS",
+            summary: {
+              validation: "UNRESOLVED",
+              reason: mapped.rows.length === 0 ? "NO_VERIFIED_JURISDICTION_CROSSWALK" : "MULTIPLE_VERIFIED_JURISDICTION_CROSSWALKS",
+              authorityCode: row.authority_code,
+              municipalCode: row.municipal_code,
+              officialAcceptance: false,
+              authoritativeMrvMutation: false,
+              guardianSubmission: false,
+            },
+          };
+        } else {
+          const mapping = mapped.rows[0]!;
+          outcome = {
+            ...outcome,
+            summary: {
+              ...(outcome.summary ?? {}),
+              validation: "STRUCTURAL_AND_JURISDICTION_CROSSWALK_RESOLVED",
+              jurisdictionCrosswalk: {
+                id: mapping.id,
+                organizationId: mapping.organization_id,
+                geographyId: mapping.geography_id,
+                activityId: mapping.activity_id,
+                sourceVersion: mapping.source_version,
+              },
+              domainBinding: "NOT_PERFORMED",
+              officialAcceptance: false,
+              authoritativeMrvMutation: false,
+              guardianSubmission: false,
+            },
+          };
+        }
+      }
+      if (outcome.valid) {
         const updated = await pool.query(
           `update async_mirror_inbox
               set status='VALIDATED', processed_at=now(), lease_token=null, lease_until=null,
@@ -189,6 +245,15 @@ export async function runGovernmentInboxWorker(
           [row.id, row.lease_token, JSON.stringify(outcome.summary ?? {})],
         );
         if ((updated.rowCount ?? 0) === 1) result.validated += 1;
+      } else if (outcome.state === "UNRESOLVED") {
+        const updated = await pool.query(
+          `update async_mirror_inbox
+              set status='UNRESOLVED', processed_at=now(), lease_token=null, lease_until=null,
+                  next_attempt_at=null, last_error_code=$3, validation_summary=$4::jsonb
+            where id=$1 and status='PROCESSING' and lease_token=$2`,
+          [row.id, row.lease_token, outcome.errorCode ?? "GOVERNMENT_CROSSWALK_UNRESOLVED", JSON.stringify(outcome.summary ?? {})],
+        );
+        if ((updated.rowCount ?? 0) === 1) result.unresolved += 1;
       } else {
         const code = (outcome.errorCode ?? "PAYLOAD_VALIDATION_REJECTED").replace(/[^A-Z0-9_.-]/gi, "_").slice(0, 100);
         const updated = await pool.query(
