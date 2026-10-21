@@ -8,7 +8,7 @@ function bodyOf(request: { body: unknown }): Record<string, unknown> {
 function requiredString(body: Record<string, unknown>, key: string): string | null {
   return typeof body[key] === "string" && body[key].trim() ? body[key].trim() : null;
 }
-function positiveNumber(body: Record<string, unknown>, key: string): number | null {
+export function positiveEprQuantity(body: Record<string, unknown>, key: string): number | null {
   const value = Number(body[key]);
   return Number.isFinite(value) && value > 0 ? value : null;
 }
@@ -49,11 +49,11 @@ export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool |
     const periodStart = requiredString(body, "periodStart");
     const periodEnd = requiredString(body, "periodEnd");
     const returnType = requiredString(body, "returnType");
-    const reportedQuantity = positiveNumber(body, "reportedQuantity");
+    const reportedQuantity = positiveEprQuantity(body, "reportedQuantity");
     if (!organizationId || !schemeId || !obligationId || !periodStart || !periodEnd || !returnType || reportedQuantity === null) return reply.code(400).send({ error: "organizationId, schemeId, obligationId, periodStart, periodEnd, returnType and positive reportedQuantity are required", code: "INVALID_EPR_RETURN" });
     if (!canAct(auth, organizationId)) return reply.code(403).send({ error: "Verified organization membership required", code: "ORG_FORBIDDEN" });
     if (!await hasOrganizationPermission(pool, auth, organizationId, ["epr:manage"])) return reply.code(403).send({ error: "EPR management permission required", code: "EPR_RETURN_WRITE_FORBIDDEN" });
-    if (!validIsoDate(periodStart) || !validIsoDate(periodEnd) || periodStart > periodEnd) return reply.code(400).send({ error: "periodStart and periodEnd must be real ISO calendar dates with periodEnd on or after periodStart", code: "INVALID_PERIOD" });
+    if (!isValidIsoCalendarDate(periodStart) || !isValidIsoCalendarDate(periodEnd) || periodStart > periodEnd) return reply.code(400).send({ error: "periodStart and periodEnd must be real ISO calendar dates with periodEnd on or after periodStart", code: "INVALID_PERIOD" });
     try {
       const rows = await pool.query(`insert into epr_returns(scheme_id,organization_id,obligation_id,period_start,period_end,return_type,reported_quantity,status) select $1,$2,$3,$4::date,$5::date,$6,$7,'DRAFT' where exists(select 1 from epr_schemes where id=$1 and status='VERIFIED') and exists(select 1 from epr_obligations eo join obligations o on o.id=eo.obligation_id where eo.id=$3 and eo.scheme_id=$1 and eo.obligated_organization_id=$2 and eo.status in ('OPEN','ELIGIBLE') and o.period_start <= $5::date and o.period_end >= $4::date) returning *`, [schemeId, organizationId, obligationId, periodStart, periodEnd, returnType, reportedQuantity]);
       if (!rows.rows[0]) return reply.code(409).send({ error: "Verified EPR scheme and matching open/eligible obligation are required", code: "EPR_RETURN_NOT_ELIGIBLE" });
