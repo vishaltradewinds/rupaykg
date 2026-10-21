@@ -10,6 +10,7 @@ create table if not exists government_jurisdiction_crosswalk_requests (
   organization_id uuid not null references organizations(id),
   geography_id uuid not null references geography(id),
   activity_id uuid references activities(id),
+  effective_from timestamptz not null default now(),
   evidence_reference text not null check (length(trim(evidence_reference)) between 1 and 1000),
   evidence_sha256 text not null check (evidence_sha256 ~ '^[0-9a-f]{64}$'),
   request_reason text not null check (length(trim(request_reason)) between 8 and 1000),
@@ -93,6 +94,7 @@ begin
      or new.organization_id is distinct from old.organization_id
      or new.geography_id is distinct from old.geography_id
      or new.activity_id is distinct from old.activity_id
+     or new.effective_from is distinct from old.effective_from
      or new.evidence_reference is distinct from old.evidence_reference
      or new.evidence_sha256 is distinct from old.evidence_sha256
      or new.request_reason is distinct from old.request_reason
@@ -129,7 +131,7 @@ begin
     end if;
     select id, authority_code, municipal_code, source_version, organization_id, geography_id, activity_id,
            evidence_reference, evidence_sha256, status, requested_by_identity_id, decided_by_identity_id,
-           decision_reason, applied_at, expires_at
+           decision_reason, applied_at, expires_at, effective_from
       into approval
       from government_jurisdiction_crosswalk_requests
      where id = new.approval_request_id
@@ -141,6 +143,7 @@ begin
        or approval.organization_id is distinct from new.organization_id
        or approval.geography_id is distinct from new.geography_id
        or approval.activity_id is distinct from new.activity_id
+       or approval.effective_from is distinct from new.effective_from
        or approval.evidence_reference is distinct from new.evidence_reference
        or approval.evidence_sha256 is distinct from new.evidence_sha256
        or approval.status is distinct from 'APPROVED'
