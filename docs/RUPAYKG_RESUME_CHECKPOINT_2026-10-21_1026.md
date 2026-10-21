@@ -114,3 +114,12 @@ RupayKg is Pan-India by design. Jabalpur/Kathonda is a validation site only. Pre
 - Latest verified changes include exact source-version resolution, evidence-vault artifact/hash/tenant/activity binding, database enforcement that VERIFIED mappings require independently VERIFIED evidence, and regression tests for wrong source version, unbound evidence, expired mappings, and revoked mappings.
 - Keep PR #41 open, draft, unmerged and undeployed. This engineering CI pass is not Pan-India production certification and does not prove official government API access, statutory acceptance, accredited MRV verification, Guardian/Hedera consensus, or carbon-credit issuance.
 - Remaining work: add explicit wrong-tenant/wrong-activity/ambiguous mapping acceptance cases; finish repository-wide geography authorization and Urban/Rural applicability audit; prove clean isolated staging restart/retry/quarantine and operational alert ownership; verify official integration contracts and approvals when available. Preserve Pan-India scope; Jabalpur/Kathonda is only a validation site.
+
+
+## Resume update — 2026-10-21 10:56 UTC
+
+- Added PostgreSQL acceptance cases that reject reusing an evidence-vault artifact from another activity and reject a valid artifact owned by another organization, even when the reference and SHA-256 are otherwise valid.
+- Current code/test head: `5310890fa55a74e5acd084c6ad0763733e871594`.
+- GitHub Actions run #1680 passed: https://github.com/vishaltradewinds/rupaykg/actions/runs/39588167799. Dependency audit, migration validation/application, typecheck, build, browser smoke test, disposable PostgreSQL acceptance, production-container build and cleanup all succeeded on this head.
+- Current evidence-binding acceptance coverage now includes unbound reference, wrong activity, wrong tenant, and verified-crosswalk evidence review requirement. Inbox worker acceptance covers exact source-version match, wrong version unresolved, expired mapping unresolved, revoked mapping unresolved, retry recovery and quarantine.
+- PR #41 remains open/draft/unmerged/undeployed. Production and Shakti certification remain HOLD pending remaining Pan-India governance, operational staging, and external official-integration/approval gates.
