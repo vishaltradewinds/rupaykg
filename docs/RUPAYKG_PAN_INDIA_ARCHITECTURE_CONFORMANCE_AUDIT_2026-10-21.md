@@ -91,3 +91,13 @@ The CPCB SWM workspace gap identified above has now been addressed in code on th
 - The PostgreSQL integration test now covers missing geography, unscoped organization rejection, unrelated geography rejection, successful creation with an explicit scope, and direct database insertion without geography. It uses the explicitly synthetic acceptance geography fixture and cleans up its temporary scope and unrelated geography.
 
 **Verification state:** changes are committed to PR #41; CI has been triggered but has not yet been confirmed green for the final code/test/migration head. This fix closes the identified CPCB SWM workspace gap only. Other call sites using the legacy geography helper still require inventory and risk-specific tests before a global policy change is safe.
+
+## 7. Second remediation — strict scope for high-impact workflows (2026-10-21)
+
+The legacy helper's no-root compatibility fallback is now isolated from the high-impact workflows reviewed in this pass:
+
+- New migration `20261030_explicit_geography_scope.sql` adds `organization_has_explicit_geography_scope(organization_id, geography_id)`. It requires at least one verified geography root and confirms the requested geography falls under that root; it deliberately leaves the legacy helper unchanged for older, lower-risk flows pending their own backfill and classification.
+- MRV activity authorization, EPR return evidence authorization, statutory evidence binding, and value-layer activity/evidence/jurisdiction checks now call the strict helper.
+- The PostgreSQL CPCB SWM acceptance test now checks that the strict helper rejects an organization with no roots, accepts an in-scope geography after explicit scope provisioning, and rejects an unrelated geography.
+
+**Status:** source changes and integration assertions are committed to the feature branch. The latest CI run for this expanded set is pending at the time of this edit; no deployment or production migration has been performed. This is a targeted high-impact call-site pass, not yet proof that every repository call site has been classified or that all nationwide geography data and crosswalks are complete.
