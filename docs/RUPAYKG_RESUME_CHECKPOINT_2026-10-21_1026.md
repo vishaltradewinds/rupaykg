@@ -66,3 +66,31 @@ Inspect the worker result contract and test setup before deciding whether the te
 1. Recheck Actions/status for commit `9fe15bbb1fcd8d2970fe8bab459ee94c10165c76`; if no workflow starts, inspect PR/branch synchronization and arrange a supported CI run without merging/deploying.
 2. If the acceptance suite passes, continue the remaining Pan-India audit: crosswalk negative cases (wrong source version, expired/revoked and ambiguous mapping), broader geography authorization call-site inventory, jurisdiction-specific versioned applicability rules, and multi-jurisdiction/Urban-Rural/tenant-isolation coverage.
 3. Keep all real government identifiers evidence-backed; never manufacture LGD/authority IDs. Do not mutate inherited staging inbox rows.
+
+
+## Resume update — 2026-10-21 10:47 UTC
+
+### Confirmed progress since the earlier checkpoint
+- Corrected the asynchronous government inbox worker test to assert the real exact-source-version crosswalk resolution result and to retain synthetic organization/geography/source-version assertions.
+- Inbox payloads now require an explicit `sourceVersion`; the worker matches the exact version in the approved crosswalk. A wrong version remains `UNRESOLVED`, with official acceptance, authoritative MRV mutation, and Guardian submission explicitly false.
+- Crosswalk request API now requires `evidenceReference` to resolve to an immutable `db://evidence-vault/<artifact-version-uuid>` artifact, with a matching SHA-256 and organization/activity scope. Unbound references are rejected before a request is persisted.
+- Added database-level evidence-binding triggers for both crosswalk requests and crosswalk records. A VERIFIED crosswalk must have a matching vault artifact and its evidence status must be independently `VERIFIED`; application checks are not the only enforcement layer.
+- Updated disposable PostgreSQL fixtures to use vault-backed evidence, and regression coverage to reject unbound evidence.
+- Updated the CPCB SWM database acceptance fixture to preserve its original dual-control test while meeting the new evidence-binding invariant.
+
+### Latest verification
+- Current branch head at this update: `554e806a57013a07788df66eedcf941b6dd4b98c`.
+- GitHub Actions run #1673: https://github.com/vishaltradewinds/rupaykg/actions/runs/39587109042
+- At checkpoint update time, dependency audit, migration validation/application, typecheck, build, browser smoke test, and disposable PostgreSQL acceptance all passed; production-container build was still running. Recheck the final run conclusion before treating this gate as fully green.
+- Earlier runs #1669–#1672 failed while the new evidence-binding invariant exposed an outdated direct-insert test fixture; the fixture was corrected and the latest run’s full test/acceptance step now passes.
+
+### Remaining gates — do not release
+1. Confirm run #1673 completes successfully, including production-container build.
+2. Add/verify regression cases for expired, revoked, ambiguous, wrong-tenant, and wrong-activity mappings; ensure unresolved data never becomes authoritative.
+3. Complete repository-wide geography authorization and Urban/Rural governance rail inventory, then version jurisdiction-specific applicability rules using authoritative source evidence only.
+4. Demonstrate clean isolated staging worker restart/retry/quarantine, alert delivery with named on-call ownership, audit-chain concurrency/rollback, and authorization.
+5. Verify official CPCB/BEE/Indian Carbon Market integration contracts, credentials and approvals when supplied; do not infer access or simulate official acceptance.
+6. Keep PR #41 draft, unmerged and undeployed until all applicable Shakti gates have evidence and explicit approval.
+
+### Non-negotiable scope
+RupayKg is Pan-India by design. Jabalpur/Kathonda is a validation site only. Preserve distinct Urban (ULB/ward/locality) and Rural (Gram Panchayat/village/cluster) governance rails. Never fabricate official identifiers, claim external approval, or treat structural intake validation as official acceptance, statutory compliance, MRV verification, or credit issuance.
