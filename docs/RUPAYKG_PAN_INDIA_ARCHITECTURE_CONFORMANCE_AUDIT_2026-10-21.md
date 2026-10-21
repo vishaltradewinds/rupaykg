@@ -87,7 +87,7 @@ The CPCB SWM workspace gap identified above has now been addressed in code on th
 
 - `POST` and `PATCH` reject a missing or malformed `geographyId`.
 - Both routes require a verified organization membership, at least one explicit verified geography root for that organization, and proof that the requested geography is within that root's ancestry scope. The legacy helper's permissive unscoped fallback is therefore not sufficient to authorize these workspace writes.
-- Migration `20261029_cpcb_swm_workspace_geography_required.sql` rejects direct database inserts without geography and explicit attempts to clear a workspace's geography. It does not rewrite existing legacy NULL rows.
+- Migration `20261029_cpcb_swm_workspace_geography_required.sql` rejects direct database inserts without geography, without an explicit verified organization geography root, or outside that root; it also rejects explicit attempts to clear a workspace's geography. It does not rewrite existing legacy NULL rows.
 - The PostgreSQL integration test now covers missing geography, unscoped organization rejection, unrelated geography rejection, successful creation with an explicit scope, and direct database insertion without geography. It uses the explicitly synthetic acceptance geography fixture and cleans up its temporary scope and unrelated geography.
 
 **Verification state:** changes are committed to PR #41; CI has been triggered but has not yet been confirmed green for the final code/test/migration head. This fix closes the identified CPCB SWM workspace gap only. Other call sites using the legacy geography helper still require inventory and risk-specific tests before a global policy change is safe.
