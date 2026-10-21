@@ -85,10 +85,20 @@ async function evidenceBindingValid(pool: Pool, organizationId: string, evidence
   return result.rows[0]?.ok === true;
 }
 
-function bwgStatus(floorArea: number | null | undefined, water: number | null | undefined, waste: number | null | undefined): "UNKNOWN" | "UNDER_REVIEW" | "APPLICABLE" | "NOT_APPLICABLE" {
-  if (floorArea === null || water === null || waste === null) return "UNDER_REVIEW";
+export type BwgRuleThresholds = { floorAreaSqM: number; waterConsumptionLpd: number; solidWasteKgpd: number };
+export function parseBwgRuleThresholds(value: unknown): BwgRuleThresholds | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const thresholds = (value as Record<string, unknown>).thresholds;
+  if (!thresholds || typeof thresholds !== "object" || Array.isArray(thresholds)) return null;
+  const record = thresholds as Record<string, unknown>;
+  const values = [record.floorAreaSqM, record.waterConsumptionLpd, record.solidWasteKgpd];
+  if (!values.every(item => typeof item === "number" && Number.isFinite(item) && item > 0)) return null;
+  return { floorAreaSqM: values[0] as number, waterConsumptionLpd: values[1] as number, solidWasteKgpd: values[2] as number };
+}
+export function bwgStatus(floorArea: number | null | undefined, water: number | null | undefined, waste: number | null | undefined, thresholds: BwgRuleThresholds | null): "UNKNOWN" | "UNDER_REVIEW" | "APPLICABLE" | "NOT_APPLICABLE" {
+  if (!thresholds || floorArea === null || water === null || waste === null) return "UNDER_REVIEW";
   if (floorArea === undefined || water === undefined || waste === undefined) return "UNKNOWN";
-  return floorArea >= 20000 || water >= 40000 || waste >= 100 ? "APPLICABLE" : "NOT_APPLICABLE";
+  return floorArea >= thresholds.floorAreaSqM || water >= thresholds.waterConsumptionLpd || waste >= thresholds.solidWasteKgpd ? "APPLICABLE" : "NOT_APPLICABLE";
 }
 
 export async function registerStatutoryRoutes(app: FastifyInstance, pool: Pool | null): Promise<void> {
