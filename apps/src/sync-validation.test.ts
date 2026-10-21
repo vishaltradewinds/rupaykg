@@ -36,6 +36,21 @@ test("requires the authoritative conflict-resolution field name", () => {
 });
 
 
+test("field-sync client sequence requires a positive safe JSON integer", () => {
+  const base = {
+    idempotencyKey: "op-sequence",
+    deviceId: "550e8400-e29b-41d4-a716-446655440000",
+    capturedAt: "2026-10-20T10:15:30Z",
+    payload: { operation: "MEASUREMENT", value: 42 },
+  };
+  for (const clientSequence of ["1", "01", 1.5, 0, -1, Number.MAX_SAFE_INTEGER + 1, null]) {
+    const result = validateSyncEnvelope({ ...base, clientSequence });
+    assert.equal(result.ok, false, `expected invalid sequence to be rejected: ${String(clientSequence)}`);
+    if (!result.ok) assert.equal(result.code, "INVALID_ENVELOPE");
+  }
+  assert.equal(validateSyncEnvelope({ ...base, clientSequence: 1 }).ok, true);
+});
+
 test("field-sync capture timestamps require a valid timezone-bearing RFC 3339 value", () => {
   const base = {
     idempotencyKey: "op-timestamp",
