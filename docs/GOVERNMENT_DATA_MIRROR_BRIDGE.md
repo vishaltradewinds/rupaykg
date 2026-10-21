@@ -50,7 +50,11 @@ The endpoint enforces a 1 MiB request limit, bounded record count/length, strict
 
 ## What happens after receipt
 
-The inbox stores untrusted raw source data with a SHA-256 digest and a queue state. It does **not** yet run AI normalization, create evidence artifacts, map external facilities to RupayKg activities, create measurements, calculate emissions, issue credits, or submit anything to Guardian/Hedera. Those steps require a separate worker and approved, auditable authority/facility/activity mapping. Do not mark a batch PROCESSED until that worker and its retry/dead-letter/reconciliation controls are implemented and tested.
+A separate internal structural-validation worker is now implemented. It claims a bounded batch using PostgreSQL row locks and lease fencing, verifies the canonical payload hash against the stored digest, reconciles the payload sync timestamp against the database timestamp column, checks the schema and authority/municipality/batch metadata, and records internal status transitions in an append-only payload-free event history. Deterministic invalid records are rejected; transient processing failures are retried with bounded backoff and exhausted work is quarantined. A read-only reconciliation function reports unresolved queue states and expired leases.
+
+The worker's `VALIDATED` status means **structural intake validation only**. It is not official authority acceptance or verified MRV. The worker does **not** yet connect this bridge flow to approved authority/facility/activity mappings, turn bridge logs into Evidence Vault artifacts, create authoritative measurements, calculate emissions, issue credits, or submit anything to Guardian/Hedera. The separate AI evidence-intake flow also remains a review-proposal workflow; it must not be assumed to be automatically connected to government inbox records.
+
+The worker has passed GitHub Actions checks including disposable PostgreSQL acceptance tests for retry recovery, quarantine, append-only transition history, exhausted-row quarantine, payload-hash integrity, and timestamp consistency. A separate approved isolated-staging run is still required before release; it must not mutate inherited staging inbox rows.
 
 The batch's sync timestamp is source metadata, not proof of when the source record was originally created or independently verified. A SHA-256 digest supports integrity checks but is not a government signature, Guardian verification, Hedera consensus, or Mirror Node proof.
 
@@ -64,11 +68,13 @@ The batch's sync timestamp is source metadata, not proof of when the source reco
 
 ## Required next Shakti gates
 
-1. Confirm the exact authority, NAPIX/API Setu onboarding status, official API contract and permitted data scope.
-2. Implement and test a durable worker: row locking/claiming, bounded batches, retries/backoff, dead-letter status, replay protection, and operational metrics.
-3. Map source identifiers to existing RupayKg geography/organization/activity records without guessing; unmatched records remain quarantined.
-4. Preserve original payloads as Evidence Vault artifacts and keep normalized AI output as review-only proposals.
-5. Add route-level integration tests for signature rejection, allow-list denial, idempotency, duplicate batch ID with altered content, DB failures, queue recovery, and cross-authority isolation.
-6. Require authorized human review before authoritative measurements; maintain separate Guardian VERIFIED → Hedera consensus → Mirror Node verification gates before any credit/certificate claims.
+1. Independently verify the approved source authority, official API contract, sandbox, permitted data scope and credentials. Any submitted onboarding/API-access application is a separate status from approval, sandbox availability or production authorization.
+2. Run the worker lifecycle in an explicitly approved, isolated staging database: receipt, retry, recovery, exhausted-row quarantine, restart/lease recovery, concurrency/fencing and append-only event verification. Do not process or modify inherited staging inbox rows.
+3. Verify alert delivery to an approved destination and confirm a named on-call owner and escalation path. A successful webhook HTTP response is not human acknowledgement; the scheduler must remain disabled until operational ownership is proven.
+4. Map source identifiers to existing RupayKg geography/organization/facility/activity records without guessing; unmatched records remain quarantined. Keep this mapping auditable and require approved source-to-domain semantics.
+5. Connect authorized source records to Evidence Vault artifacts with original bytes/hash/provenance and reviewed normalized proposals. Do not infer measurements from free text without explicit mapping and human approval.
+6. Complete endpoint-level authorization, cross-authority isolation, audit-chain concurrency/rollback and operational monitoring evidence in staging. Unit tests and disposable CI PostgreSQL are necessary but not a substitute for staging evidence.
+7. Require authorized human review before authoritative measurements; maintain separate Guardian VERIFIED → Hedera HCS consensus → Mirror Node hash verification gates before any credit/certificate claims. Apply the relevant methodology, independent accredited verification and official registry issuance process.
+8. Obtain applicable Shakti release approval before production deployment or scheduler activation.
 
 No production service, government system, NAPIX gateway, AI provider, or Hedera workflow is activated by this change.
