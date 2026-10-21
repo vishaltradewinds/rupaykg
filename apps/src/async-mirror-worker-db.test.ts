@@ -17,7 +17,7 @@ test("government inbox worker persists retry recovery, quarantine and append-onl
     max: 4,
   });
   const suffix = randomUUID();
-  const provisionCrosswalk = async (authorityCode: string, municipalCode: string, timestamp: string) => {
+  const provisionCrosswalk = async (authorityCode: string, municipalCode: string, timestamp: string): Promise<{ organizationId: string; geographyId: string }> => {
     const organizationId = randomUUID();
     const requesterId = randomUUID();
     const approverId = randomUUID();
@@ -52,6 +52,7 @@ test("government inbox worker persists retry recovery, quarantine and append-onl
        values($1,$2,'synthetic-source-v1',$3,$4,'VERIFIED',$5,$6,$7,$8,$9,$10,$11,now())`,
       [authorityCode, municipalCode, organizationId, geographyId, evidenceReference, evidenceSha256, requesterId, approverId, decisionReason, requestId, effectiveFrom],
     );
+    return { organizationId, geographyId };
   };
 
   const makeRow = async (authorityCode: string, shouldQuarantine = false) => {
@@ -70,7 +71,7 @@ test("government inbox worker persists retry recovery, quarantine and append-onl
   };
   try {
     const recoverable = await makeRow("TST-" + suffix.slice(0, 8).toUpperCase());
-    await provisionCrosswalk(recoverable.authorityCode, "TEST-MUNI", new Date().toISOString());
+    const expectedCrosswalk = await provisionCrosswalk(recoverable.authorityCode, "TEST-MUNI", new Date().toISOString());
     const first = await runGovernmentInboxWorker(pool, async () => { throw new Error("SyntheticTransientFailure"); }, { batchSize: 10, maxAttempts: 3 });
     assert.ok(first.retried >= 1, "transient validator failure must be persisted as RETRY");
     const retryRow = await pool.query<{ status: string; attempts: number; lease_token: string | null }>(
@@ -90,8 +91,16 @@ test("government inbox worker persists retry recovery, quarantine and append-onl
     assert.equal(finalRow.rows[0]?.attempts, 2);
     assert.equal(finalRow.rows[0]?.lease_token, null);
     assert.equal(finalRow.rows[0]?.lease_until, null);
-    assert.equal(finalRow.rows[0]?.validation_summary.validation, "STRUCTURAL_ONLY");
+    assert.equal(finalRow.rows[0]?.validation_summary.validation, "STRUCTURAL_AND_JURISDICTION_CROSSWALK_RESOLVED");
     assert.equal(finalRow.rows[0]?.validation_summary.officialAcceptance, false);
+    assert.equal(finalRow.rows[0]?.validation_summary.authoritativeMrvMutation, false);
+    assert.equal(finalRow.rows[0]?.validation_summary.guardianSubmission, false);
+    const resolved = finalRow.rows[0]?.validation_summary.jurisdictionCrosswalk as Record<string, unknown> | undefined;
+    assert.ok(resolved, "a validated inbox row must expose the exact resolved crosswalk");
+    assert.equal(resolved.organizationId, expectedCrosswalk.organizationId);
+    assert.equal(resolved.geographyId, expectedCrosswalk.geographyId);
+    assert.equal(resolved.activityId, null);
+    assert.equal(resolved.sourceVersion, "synthetic-source-v1");
 
     const exhausted = await makeRow("QRT-" + suffix.slice(0, 8), true);
     const quarantined = await runGovernmentInboxWorker(pool, async () => { throw new Error("SyntheticExhaustedFailure"); }, { batchSize: 10, maxAttempts: 1 });
