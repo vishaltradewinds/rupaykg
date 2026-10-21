@@ -79,3 +79,15 @@ These are explicit architecture tasks, not grounds to claim the entire platform 
 The source review also found that the CPCB SWM workspace route accepts an omitted `geographyId` (the input validation checks it only when present) and persists it as `NULL`. The evidence-vault route itself rejects activities without geography, but the workspace route's optional geography means a local compliance workspace can exist without an explicit jurisdiction. Combined with the legacy unscoped-organization fallback in migration `012`, this is a concrete conformance gap for jurisdiction-bound workflows.
 
 **Required correction:** for jurisdiction-bound compliance and government workflow records, require a verified geography identifier and organization scope before create/update; reserve geography-free workspaces only for explicitly documented platform/national-level workflows with a distinct permission and audit reason. Add negative tests for missing geography and organizations with no configured scope. Preserve backwards compatibility through a measured backfill/migration plan rather than silently accepting unscoped records.
+
+
+## 6. Remediation implemented on the feature branch (CI pending)
+
+The CPCB SWM workspace gap identified above has now been addressed in code on this branch:
+
+- `POST` and `PATCH` reject a missing or malformed `geographyId`.
+- Both routes require a verified organization membership, at least one explicit verified geography root for that organization, and proof that the requested geography is within that root's ancestry scope. The legacy helper's permissive unscoped fallback is therefore not sufficient to authorize these workspace writes.
+- Migration `20261029_cpcb_swm_workspace_geography_required.sql` rejects direct database inserts without geography and explicit attempts to clear a workspace's geography. It does not rewrite existing legacy NULL rows.
+- The PostgreSQL integration test now covers missing geography, unscoped organization rejection, unrelated geography rejection, successful creation with an explicit scope, and direct database insertion without geography. It uses the explicitly synthetic acceptance geography fixture and cleans up its temporary scope and unrelated geography.
+
+**Verification state:** changes are committed to PR #41; CI has been triggered but has not yet been confirmed green for the final code/test/migration head. This fix closes the identified CPCB SWM workspace gap only. Other call sites using the legacy geography helper still require inventory and risk-specific tests before a global policy change is safe.
