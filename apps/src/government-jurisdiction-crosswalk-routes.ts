@@ -22,6 +22,10 @@ function error(reply: FastifyReply, status: number, message: string, code: strin
 function digest(value: unknown): string {
   return createHash("sha256").update(JSON.stringify(value)).digest("hex");
 }
+function validCanonicalTimestamp(value: string): boolean {
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) && date.toISOString() === value;
+}
 async function authFor(request: FastifyRequest, reply: FastifyReply, pool: Pool | null): Promise<AuthContext | null> {
   if (!pool) { error(reply, 503, "Database unavailable", "DATABASE_UNAVAILABLE"); return null; }
   try {
@@ -94,11 +98,14 @@ export async function registerGovernmentJurisdictionCrosswalkRoutes(app: Fastify
     const evidenceReference = text(body, "evidenceReference", 1000);
     const evidenceSha256 = text(body, "evidenceSha256", 64);
     const reason = text(body, "reason", 1000);
+    const effectiveFromInput = text(body, "effectiveFrom", 40);
+    const effectiveFrom = effectiveFromInput ?? new Date().toISOString();
     if (!organizationId || !UUID.test(organizationId) || !geographyId || !UUID.test(geographyId)
       || (body.activityId !== undefined && body.activityId !== null && activityId === null)
       || (activityId !== null && !UUID.test(activityId))
       || !authorityCode || !CODE.test(authorityCode) || !municipalCode || !CODE.test(municipalCode)
       || !sourceVersion || !evidenceReference || !evidenceSha256 || !SHA256.test(evidenceSha256)
+      || (effectiveFromInput !== null && !validCanonicalTimestamp(effectiveFromInput))
       || !reason || reason.length < 8) {
       return error(reply, 400, "Valid organizationId, geographyId, authorityCode, municipalCode, sourceVersion, evidence reference/SHA-256 and reason are required", "GOVERNMENT_CROSSWALK_REQUEST_INVALID");
     }
@@ -134,12 +141,12 @@ export async function registerGovernmentJurisdictionCrosswalkRoutes(app: Fastify
           return error(reply, 409, "Optional activity must belong to the same organization and geography", "GOVERNMENT_CROSSWALK_ACTIVITY_MISMATCH");
         }
       }
-      const requestHash = digest({ authorityCode, municipalCode, sourceVersion, organizationId, geographyId, activityId: activityId ?? null, evidenceReference, evidenceSha256, reason, requestedBy: auth.identityId });
+      const requestHash = digest({ authorityCode, municipalCode, sourceVersion, organizationId, geographyId, activityId: activityId ?? null, effectiveFrom, evidenceReference, evidenceSha256, reason, requestedBy: auth.identityId });
       const inserted = await client.query<{ id: string }>(
         `insert into government_jurisdiction_crosswalk_requests
-          (authority_code,municipal_code,source_version,organization_id,geography_id,activity_id,evidence_reference,evidence_sha256,request_reason,request_hash,requested_by_identity_id)
-         values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) returning id`,
-        [authorityCode, municipalCode, sourceVersion, organizationId, geographyId, activityId, evidenceReference, evidenceSha256, reason, requestHash, auth.identityId],
+          (authority_code,municipal_code,source_version,organization_id,geography_id,activity_id,effective_from,evidence_reference,evidence_sha256,request_reason,request_hash,requested_by_identity_id)
+         values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) returning id`,
+        [authorityCode, municipalCode, sourceVersion, organizationId, geographyId, activityId, effectiveFrom, evidenceReference, evidenceSha256, reason, requestHash, auth.identityId],
       );
       const id = inserted.rows[0]?.id;
       if (!id) throw new Error("GOVERNMENT_CROSSWALK_REQUEST_INSERT_FAILED");
@@ -167,7 +174,7 @@ export async function registerGovernmentJurisdictionCrosswalkRoutes(app: Fastify
     try {
       const rows = await pool.query(
         `select r.id,r.authority_code,r.municipal_code,r.source_version,r.organization_id,o.name organization_name,
-                r.geography_id,g.name geography_name,r.activity_id,r.evidence_reference,r.evidence_sha256,
+                r.geography_id,g.name geography_name,r.activity_id,r.effective_from,r.evidence_reference,r.evidence_sha256,
                 r.request_reason,r.request_hash,r.requested_by_identity_id,requester.display_name requested_by,
                 r.status,r.decided_by_identity_id,approver.display_name decided_by,r.decision_reason,r.expires_at,
                 r.created_at,r.decided_at,r.applied_at
@@ -205,10 +212,10 @@ export async function registerGovernmentJurisdictionCrosswalkRoutes(app: Fastify
       await client.query("begin");
       const found = await client.query<{
         id: string; authority_code: string; municipal_code: string; source_version: string; organization_id: string;
-        geography_id: string; activity_id: string | null; evidence_reference: string; evidence_sha256: string;
+        geography_id: string; activity_id: string | null; effective_from: Date | string; evidence_reference: string; evidence_sha256: string;
         requested_by_identity_id: string; status: string; expires_at: Date | string | null;
       }>(
-        `select id,authority_code,municipal_code,source_version,organization_id,geography_id,activity_id,evidence_reference,evidence_sha256,
+        `select id,authority_code,municipal_code,source_version,organization_id,geography_id,activity_id,effective_from,evidence_reference,evidence_sha256,
                 requested_by_identity_id,status,expires_at
            from government_jurisdiction_crosswalk_requests where id=$1 for update`,
         [requestId],
@@ -231,9 +238,9 @@ export async function registerGovernmentJurisdictionCrosswalkRoutes(app: Fastify
           `insert into government_jurisdiction_crosswalks
             (authority_code,municipal_code,source_version,organization_id,geography_id,activity_id,status,evidence_reference,evidence_sha256,
              requested_by_identity_id,approved_by_identity_id,approval_reason,approval_request_id,effective_from,verified_at)
-           values($1,$2,$3,$4,$5,$6,'VERIFIED',$7,$8,$9,$10,$11,$12,now(),now()) returning id`,
+           values($1,$2,$3,$4,$5,$6,'VERIFIED',$7,$8,$9,$10,$11,$12,$13,now()) returning id`,
           [row.authority_code, row.municipal_code, row.source_version, row.organization_id, row.geography_id, row.activity_id,
-            row.evidence_reference, row.evidence_sha256, row.requested_by_identity_id, auth.identityId, reason, requestId],
+            row.evidence_reference, row.evidence_sha256, row.requested_by_identity_id, auth.identityId, reason, requestId, row.effective_from],
         );
         crosswalkId = inserted.rows[0]?.id ?? null;
         if (!crosswalkId) throw new Error("GOVERNMENT_CROSSWALK_INSERT_FAILED");
