@@ -24,6 +24,7 @@ India
 ## Mandatory rules
 
 - **Source- and version-specific hierarchy:** validate parent-child edges against the relevant authoritative dataset and version. Do not treat `DEFAULT_GEOGRAPHY_HIERARCHY` in code as a universal India hierarchy or as authorization evidence.
+- **Explicit profile required by API:** `isValidChild(parent, child, hierarchy)` requires the caller to pass a hierarchy. The development/test starter profile is never silently selected by the function.
 - **Urban/rural separation:** preserve distinct urban and rural operating rails. A cross-rail edge must not be inferred from names, proximity or an AI suggestion.
 - **Effective-dated geography:** retain source version, effective period and lineage because administrative boundaries and codes can change.
 - **Authorization is separate:** a valid geography edge does not grant an organization access to that geography. Organization membership, explicit scope, activity ownership and permissions must be checked independently.
@@ -32,7 +33,7 @@ India
 
 ## Current implementation boundary
 
-The domain package supports a starter hierarchy profile and allows callers to supply a source-specific hierarchy map. This is a structural capability, not proof that authoritative nationwide datasets have been ingested, reconciled or validated. Before production use, each supported source profile needs documented provenance, version/effective dates, validation tests and review evidence. Programme-specific eligibility and regulatory applicability remain separate gates.
+The domain package provides a development/test starter hierarchy profile, but hierarchy validation requires an explicitly supplied profile. This compile-time/API safeguard prevents accidental fallback to the starter profile; it does not prove that caller-provided profiles are authoritative. Each production source profile still needs documented provenance, version/effective dates, validation tests and review evidence. This is a structural capability, not proof that authoritative nationwide datasets have been ingested, reconciled or validated. Programme-specific eligibility and regulatory applicability remain separate gates.
 
 ## Pan-India acceptance gates
 
