@@ -72,3 +72,10 @@ Migration `012_geography_authorization.sql` currently defines `organization_has_
 - Existing regulatory and methodology catalogues are foundations, but this review does not prove complete nationwide, effective-date-aware applicability and executable calculation coverage for every relevant scheme/activity/jurisdiction.
 
 These are explicit architecture tasks, not grounds to claim the entire platform is geographically incorrect. Preserve the existing hierarchy and registries while closing the fail-open scope path and proving the crosswalk.
+
+
+### Endpoint-level consequence
+
+The source review also found that the CPCB SWM workspace route accepts an omitted `geographyId` (the input validation checks it only when present) and persists it as `NULL`. The evidence-vault route itself rejects activities without geography, but the workspace route's optional geography means a local compliance workspace can exist without an explicit jurisdiction. Combined with the legacy unscoped-organization fallback in migration `012`, this is a concrete conformance gap for jurisdiction-bound workflows.
+
+**Required correction:** for jurisdiction-bound compliance and government workflow records, require a verified geography identifier and organization scope before create/update; reserve geography-free workspaces only for explicitly documented platform/national-level workflows with a distinct permission and audit reason. Add negative tests for missing geography and organizations with no configured scope. Preserve backwards compatibility through a measured backfill/migration plan rather than silently accepting unscoped records.
