@@ -45,6 +45,14 @@ test("worker rejects metadata mismatch without retrying deterministic validation
   assert.equal(result.rejected, 1);
 });
 
+test("worker quarantines exhausted unclaimed inbox rows instead of leaving them stuck", async () => {
+  const { pool, statements } = fakePool([]);
+  await runGovernmentInboxWorker(pool, undefined, { maxAttempts: 3 });
+  assert.match(statements[0]!.sql, /attempts >= \$1/i);
+  assert.match(statements[0]!.sql, /status in \('RECEIVED','RETRY'\)/i);
+  assert.match(statements[0]!.sql, /lease_until is null or lease_until < now\(\)/i);
+});
+
 test("worker retries transient errors and quarantines an exhausted attempt", async () => {
   const { pool, statements } = fakePool([{ ...row, attempts: 1 }]);
   const retry = await runGovernmentInboxWorker(pool, async () => { throw new Error("temporary outage"); }, { maxAttempts: 3 });
