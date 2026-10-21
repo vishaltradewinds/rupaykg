@@ -77,11 +77,14 @@ export async function validateGovernmentInboxPayload(input: {
   }
   if (Object.keys(payload).some((key) => !["batchMetadata", "rawDataLogs"].includes(key))) return fail("BATCH_UNKNOWN_FIELD");
   const metadata = payload.batchMetadata;
-  if (Object.keys(metadata).some((key) => !["authorityCode", "municipalCode", "syncWindowTimestamp", "batchId"].includes(key))) {
+  if (Object.keys(metadata).some((key) => !["authorityCode", "municipalCode", "syncWindowTimestamp", "sourceVersion", "batchId"].includes(key))) {
     return fail("BATCH_METADATA_UNKNOWN_FIELD");
   }
   if (metadata.authorityCode !== input.authorityCode || metadata.municipalCode !== input.municipalCode || metadata.batchId !== input.batchId) {
     return fail("BATCH_DATABASE_METADATA_MISMATCH");
+  }
+  if (typeof metadata.sourceVersion !== "string" || !metadata.sourceVersion.trim() || metadata.sourceVersion.length > 120) {
+    return fail("BATCH_SOURCE_VERSION_INVALID");
   }
   if (!isValidSyncWindowTimestamp(metadata.syncWindowTimestamp)) return fail("BATCH_TIMESTAMP_INVALID");
   if (payload.rawDataLogs.length < 1 || payload.rawDataLogs.length > 1000
@@ -190,6 +193,7 @@ export async function runGovernmentInboxWorker(
             where c.authority_code=$1 and c.municipal_code=$2 and c.status='VERIFIED'
               and c.effective_from <= $3::timestamptz
               and (c.effective_to is null or c.effective_to > $3::timestamptz)
+              and c.source_version = $4
               and organization_has_explicit_geography_scope(c.organization_id,c.geography_id)
               and (c.activity_id is null or exists (
                 select 1 from activities a where a.id=c.activity_id
@@ -197,7 +201,7 @@ export async function runGovernmentInboxWorker(
               ))
             order by c.effective_from desc
             limit 2`,
-          [row.authority_code, row.municipal_code, row.sync_window_timestamp],
+          [row.authority_code, row.municipal_code, row.sync_window_timestamp, (row.payload as { batchMetadata?: { sourceVersion?: unknown } })?.batchMetadata?.sourceVersion],
         );
         if (mapped.rows.length !== 1) {
           outcome = {
