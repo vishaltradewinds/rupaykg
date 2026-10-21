@@ -141,6 +141,21 @@ export async function registerGovernmentJurisdictionCrosswalkRoutes(app: Fastify
           return error(reply, 409, "Optional activity must belong to the same organization and geography", "GOVERNMENT_CROSSWALK_ACTIVITY_MISMATCH");
         }
       }
+      const evidence = await client.query<{ ok: boolean }>(
+        `select exists (
+           select 1 from evidence_artifact_versions v
+           join evidence_artifact_series s on s.id=v.series_id
+           where $1 = 'db://evidence-vault/' || v.id::text
+             and v.sha256 = $2
+             and s.organization_id = $3
+             and ($4::uuid is null or s.activity_id = $4::uuid)
+         ) as ok`,
+        [evidenceReference, evidenceSha256, organizationId, activityId],
+      );
+      if (evidence.rows[0]?.ok !== true) {
+        await client.query("rollback");
+        return error(reply, 422, "Crosswalk evidence must reference an immutable evidence-vault artifact with matching SHA-256 and tenant scope", "GOVERNMENT_CROSSWALK_EVIDENCE_UNBOUND");
+      }
       const requestHash = digest({ authorityCode, municipalCode, sourceVersion, organizationId, geographyId, activityId: activityId ?? null, effectiveFrom, evidenceReference, evidenceSha256, reason, requestedBy: auth.identityId });
       const inserted = await client.query<{ id: string }>(
         `insert into government_jurisdiction_crosswalk_requests
