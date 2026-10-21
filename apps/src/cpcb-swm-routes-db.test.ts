@@ -53,12 +53,12 @@ test("CPCB SWM workspace routes enforce permissions and persist only user-report
     const geographyId = geography.rows[0]!.id;
     await assert.rejects(
       pool.query(
-        `insert into government_geography_crosswalks
+        `insert into government_jurisdiction_crosswalks
           (authority_code,source_system,external_code,source_version,geography_id,evidence_reference,evidence_sha256,status,verified_by_identity_id,verified_at)
          values('SYNTHETIC_AUTHORITY','SYNTHETIC_TEST','SYNTHETIC-MUNICIPAL-CODE','v1',$1,'synthetic://unapproved-crosswalk',$2,'VERIFIED',$3,now())`,
         [geographyId, hash("synthetic unapproved geography crosswalk"), identityId],
       ),
-      /GOV_GEOGRAPHY_CROSSWALK_REQUIRES_DUAL_CONTROL/,
+      /GOVERNMENT_CROSSWALK_REQUIRES_DUAL_CONTROL/,
       "database must reject a VERIFIED government geography crosswalk without an approved dual-control request",
     );
 
