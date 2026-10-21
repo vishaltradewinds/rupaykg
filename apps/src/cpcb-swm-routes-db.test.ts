@@ -163,8 +163,8 @@ test("CPCB SWM workspace routes enforce permissions and persist only user-report
         "update government_jurisdiction_crosswalks set status='VERIFIED', approved_by_identity_id=$2, approval_reason='Synthetic same-actor attempt', verified_at=now() where id=$1",
         [crosswalkId, identityId],
       ),
-      /GOVERNMENT_CROSSWALK_VERIFICATION_INVALID/,
-      "crosswalk verification must reject same-actor approval",
+      /GOVERNMENT_CROSSWALK_REQUIRES_DUAL_CONTROL/,
+      "crosswalk verification must reject a direct VERIFIED update without an approved request",
     );
     const outsideGeography = await pool.query<{ id: string }>(
       "insert into geography(kind,code,name,source,source_version) values('CLUSTER',$1,$2,'RupayKG synthetic integration test','v1') returning id",
