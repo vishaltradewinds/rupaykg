@@ -46,3 +46,23 @@ Inspect the worker result contract and test setup before deciding whether the te
 - User has said official API/access applications have been applied. Treat that as user-reported application status, not proof of approval, sandbox contract, or usable credentials.
 - Continue using the existing PR and branch; do not create an unrelated branch or merge the draft PR.
 - Report actual code/CI work and blockers; never claim completion before CI and evidence support it.
+
+
+## Resume update — 2026-10-21 10:31 UTC
+
+### Completed since the 10:26 checkpoint
+- Investigated failed CI run #1661 using the actual PostgreSQL acceptance log and inspected the worker implementation and fixture.
+- Confirmed the worker had legitimately resolved the fixture's exact VERIFIED jurisdiction crosswalk; the test expectation `STRUCTURAL_ONLY` was stale, not a worker defect.
+- Updated `apps/src/async-mirror-worker-db.test.ts` in commit `9fe15bbb1fcd8d2970fe8bab459ee94c10165c76`.
+- The acceptance test now checks the resolved state and exact fixture organization/geography, nullable activity, source version, and continues asserting that official acceptance, MRV mutation and Guardian submission are false.
+- Commit: https://github.com/vishaltradewinds/rupaykg/commit/9fe15bbb1fcd8d2970fe8bab459ee94c10165c76
+
+### Verification status
+- CI run #1661 failure was confirmed to be this stale test assertion. Its migration validation, migration application, typecheck, build and browser smoke steps had passed; test failure prevented the production-container build.
+- The new commit currently has no reported combined status checks or associated PR workflow runs in the connector response. **Do not claim the correction passes CI until a new run is visible and green.**
+- PR #41 remains draft, unmerged and undeployed; production release remains HOLD.
+
+### Next action
+1. Recheck Actions/status for commit `9fe15bbb1fcd8d2970fe8bab459ee94c10165c76`; if no workflow starts, inspect PR/branch synchronization and arrange a supported CI run without merging/deploying.
+2. If the acceptance suite passes, continue the remaining Pan-India audit: crosswalk negative cases (wrong source version, expired/revoked and ambiguous mapping), broader geography authorization call-site inventory, jurisdiction-specific versioned applicability rules, and multi-jurisdiction/Urban-Rural/tenant-isolation coverage.
+3. Keep all real government identifiers evidence-backed; never manufacture LGD/authority IDs. Do not mutate inherited staging inbox rows.
