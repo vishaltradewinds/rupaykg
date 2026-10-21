@@ -350,3 +350,13 @@ This section supersedes earlier CI-status statements above where they conflict w
 CI does not close the following independent gates: clean controlled staging acceptance without modifying inherited inbox rows; real operational alert delivery with named on-call/escalation ownership; approved government API contracts and credentials; live Guardian execution plus Hedera consensus and Mirror Node hash comparison on the existing configuration; method-specific numerical reconciliation and accredited verification; official registry issuance evidence; and production operations/security/rollback approvals.
 
 No production deployment, production migration, official submission, official status change, live Guardian/Hedera transaction, or carbon-credit issuance was performed. PR #41 must remain draft, unmerged and undeployed until the applicable gates have real evidence and explicit approval.
+
+
+## 11. Superseding audit-chain remediation and CI addendum — 2026-10-21 07:37 UTC
+
+- Last code-changing review head: `77566556b119705f210461924ba48706aeda61d7`.
+- GitHub Actions [run #1552](https://github.com/vishaltradewinds/rupaykg/actions/runs/39563078131) passed on that exact head: dependency audit, migration validation/application on disposable CI PostgreSQL, typecheck, production build, browser smoke test, PostgreSQL acceptance, production-container build and cleanup. Reported test groups: 211 passed, 0 failed, 0 skipped.
+- Additional source-level audit found that field-device enrollment/verification audit events in `apps/src/sync-routes.ts` were still using the historical `JSON.stringify` hash format while writing payloads to PostgreSQL `jsonb`. Because JSONB does not preserve JavaScript object property order, that writer did not use the canonical independently recomputable hash format.
+- Fixed the field-device writer to use shared `hashPlatformAuditEventV2` canonical recursive JSON hashing and explicitly persist `hash_version=2`. The writer continues to lock and advance the shared `platform_audit_chain_head` in the same transaction. CI passed after this change.
+
+**Disposition remains unchanged:** engineering CI is green; production/release certification is HOLD. Real staging concurrency/rollback evidence, alert ownership and delivery, official government API authorization, live Guardian/Hedera/Mirror Node proof, method-specific accredited verification and official registry evidence, and Shakti production approval remain external/operational gates. No production mutation or official submission was performed.
