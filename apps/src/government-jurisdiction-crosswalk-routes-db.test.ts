@@ -26,6 +26,7 @@ test("government jurisdiction crosswalk API scopes requests and rejects unauthor
   const outsideGeographyId = randomUUID();
   const requesterToken = randomBytes(32).toString("base64url");
   let requestId: string | null = null;
+  let sourceSnapshotId: string | null = null;
 
   try {
     await registerGovernmentJurisdictionCrosswalkRoutes(app, pool);
@@ -58,6 +59,11 @@ test("government jurisdiction crosswalk API scopes requests and rejects unauthor
     });
     assert.equal(evidenceUpload.statusCode, 201, evidenceUpload.body);
     const artifact = evidenceUpload.json().data as { artifactVersionId: string; sha256: string };
+    sourceSnapshotId = randomUUID();
+    await pool.query(
+      "insert into authoritative_source_snapshots(id,authority_code,source_owner,dataset_code,source_url,source_version,scope_kind,content_sha256,record_count,accepted_record_count,unresolved_record_count,validation_status,usage_terms_reference,retrieved_at,retrieved_by_identity_id,reviewed_by_identity_id,reviewed_at) values($1,'SYNTHETIC_AUTHORITY','Synthetic integration fixture','SYNTHETIC_CROSSWALK_SOURCE','https://example.invalid/synthetic-crosswalk-source','synthetic-source-v1','OTHER',$2,1,1,0,'APPROVED','synthetic://test-fixture-terms',now(),$3,$3,now())",
+      [sourceSnapshotId, artifact.sha256, requesterId],
+    );
     const payload = {
       organizationId, geographyId, activityId, authorityCode: "SYNTHETIC_AUTHORITY", municipalCode: "MUNI-" + suffix,
       sourceVersion: "synthetic-source-v1", sourceSnapshotId, evidenceReference: "db://evidence-vault/" + artifact.artifactVersionId,
@@ -154,6 +160,7 @@ test("government jurisdiction crosswalk API scopes requests and rejects unauthor
   } finally {
     await app.close();
     if (requestId) await pool.query("delete from government_jurisdiction_crosswalk_requests where id=$1", [requestId]).catch(() => undefined);
+    if (sourceSnapshotId) await pool.query("delete from authoritative_source_snapshots where id=$1", [sourceSnapshotId]).catch(() => undefined);
     await pool.query("delete from organization_geography_scopes where organization_id=$1", [organizationId]).catch(() => undefined);
     await pool.query("delete from identity_sessions where identity_id=$1", [requesterId]).catch(() => undefined);
     await pool.query("delete from organization_memberships where organization_id=$1 and identity_id=$2", [organizationId, requesterId]).catch(() => undefined);
