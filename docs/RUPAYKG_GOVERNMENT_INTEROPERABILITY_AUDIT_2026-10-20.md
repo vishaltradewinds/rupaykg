@@ -330,3 +330,23 @@ This addendum supersedes prior CI-status statements above where they conflict wi
 Still not evidenced: controlled staging acceptance on a clean isolated database without touching inherited staging rows; audit-chain concurrent append/rollback verification beyond existing CI coverage; real alert delivery with a named on-call/escalation owner; official CPCB/BEE/Indian Carbon Market API authorization and sandbox; live Guardian execution and Hedera consensus/Mirror Node hash comparison on the existing configured account/topic; method-specific numerical reconciliation and independent accredited verification; official registry issuance evidence; operational privacy/retention, backups, incident response, rollback and explicit Shakti release approval.
 
 No production deployment, production migration, official submission, official status change, Guardian/Hedera transaction, or carbon-credit issuance was performed by this addendum. Keep the PR draft, unmerged and undeployed until the applicable gates are evidenced and approved.
+
+
+## 10. Superseding engineering status addendum — 2026-10-21 07:32 UTC
+
+This section supersedes earlier CI-status statements above where they conflict with the evidence below. Older findings are retained as historical audit trail.
+
+- Last code-changing review head validated: `4fade6201d0ae51ec3a20d84b15158c20ee4397d`.
+- GitHub Actions run [#1550](https://github.com/vishaltradewinds/rupaykg/actions/runs/39562471929) completed successfully on that exact code head.
+- The workflow passed dependency audit, migration validation and execution against disposable CI PostgreSQL, typecheck, application build, browser smoke test, PostgreSQL acceptance tests, production-container build and cleanup.
+- Test groups reported by CI: 155 + 22 + 2 + 29 + 1 + 2 = **211 passed, 0 failed, 0 skipped**.
+- New field-sync hardening requires `clientSequence` to be a positive safe JSON integer. Numeric strings, fractions, zero, negative values, unsafe integers and null are rejected rather than coerced. Tests also reject invalid timezone offset components `+25:00` and `+01:60` in field-sync timestamps.
+- The government bridge has equivalent timezone offset-boundary regression coverage.
+
+### Disposition
+
+**Engineering CI: PASS on the last code-changing head. Production release and Shakti certification: HOLD.**
+
+CI does not close the following independent gates: clean controlled staging acceptance without modifying inherited inbox rows; real operational alert delivery with named on-call/escalation ownership; approved government API contracts and credentials; live Guardian execution plus Hedera consensus and Mirror Node hash comparison on the existing configuration; method-specific numerical reconciliation and accredited verification; official registry issuance evidence; and production operations/security/rollback approvals.
+
+No production deployment, production migration, official submission, official status change, live Guardian/Hedera transaction, or carbon-credit issuance was performed. PR #41 must remain draft, unmerged and undeployed until the applicable gates have real evidence and explicit approval.
