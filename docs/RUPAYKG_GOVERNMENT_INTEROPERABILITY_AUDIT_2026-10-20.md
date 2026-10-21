@@ -422,3 +422,36 @@ The worker now also compares the payload's timezone-bearing `batchMetadata.syncW
 Validation evidence: CI run #1591 passed on `010ed34acdc145762bee07be502b684828bdb8aa`, including dependency audit, migration validation/application in disposable CI PostgreSQL, typecheck, build, browser smoke test, tests including PostgreSQL acceptance, production-container build, and cleanup.
 
 This remains an internal data-integrity control. It does not establish the truth of a source measurement, external authority acceptance, live Guardian/Hedera verification, methodology eligibility, accredited verification, or official credit issuance. The production release decision remains HOLD.
+
+
+## 18. Holistic platform review and release posture (2026-10-21)
+
+### Platform aim
+
+RupayKg is intended to provide evidence-first digital infrastructure for waste, EPR, MRV, environmental compliance and legitimate environmental-credit workflows. The target lifecycle is source evidence → identity/site/authority scope → statutory and methodology applicability → controlled calculations and provenance → human/independent verification → authorized government/registry processes → continuing audit and monitoring. Internal software state must never be represented as official acceptance or credit issuance.
+
+### Work evidenced in the current feature branch
+
+- Evidence-first AI intake remains a human-review proposal workflow; no automatic MRV mutation or credit decision.
+- Government bridge authentication and scope checks include per-authority HMAC secrets, municipal allow-listing, bounded payloads, idempotency/replay conflict handling and canonical payload hashing.
+- The structural worker has bounded claims, lease fencing, retry/quarantine, read-only reconciliation and append-only transition evidence.
+- The worker now verifies the stored canonical payload digest before validation and checks the payload's sync-window timestamp against the corresponding database column.
+- Input hardening covers numeric/date/time validation in EPR, statutory, registry, MRV/ESG and field-operation sync paths; audit hashing and dual-control stakeholder authorization protections are included elsewhere in this PR.
+- CI run #1591 passed on `010ed34acdc145762bee07be502b684828bdb8aa`, including disposable PostgreSQL acceptance, browser smoke, build and production-container build. CI run #1588 passed the preceding audit-document update. The later runbook/documentation commits are being validated separately.
+
+### Live service boundary
+
+Read-only Render inspection confirmed the existing `rupaykg` web service at `https://rupaykg.onrender.com` is configured to deploy from `main` with automatic deploys enabled; its latest live deployment observed in this review is commit `0ddcf6087620880e21ea60f954c9f05d6b759469` from 2026-10-20. The service is not running this feature branch. No branch switch, deploy, production migration, or production data mutation was performed. Preserve this boundary until release approval.
+
+### Remaining release gates
+
+1. Approved isolated staging lifecycle acceptance, including restart, retry, quarantine, fencing/concurrency and audit-chain behavior, without processing inherited staging rows.
+2. Verified alert delivery plus named on-call/escalation ownership before scheduler activation.
+3. Endpoint-level authorization and audit-chain concurrency/rollback evidence in staging.
+4. Independent confirmation of official CPCB/BEE/Indian Carbon Market API contracts, sandbox and credentials; application submission alone is not authorization.
+5. Approved mapping from source identifiers to existing organization/site/activity records and evidence-vault lineage, with unmatched records fail-closed.
+6. Live Guardian VERIFIED execution, Hedera HCS consensus and Mirror Node hash comparison using only the existing approved account/topic/configuration.
+7. Applicable methodology numerical reconciliation, independent accredited verification and official registry/issuance evidence.
+8. Shakti release approval and controlled deployment/rollback plan.
+
+**Decision: ENGINEERING CI PASS for the verified code head; PRODUCTION RELEASE HOLD.** The PR remains draft and unmerged. The live service, official submission, Guardian/Hedera, accredited verification and credit issuance gates remain unclaimed until evidence is actually produced.
