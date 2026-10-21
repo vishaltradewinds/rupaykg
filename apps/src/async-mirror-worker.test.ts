@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import type { Pool } from "pg";
 import { isValidSyncWindowTimestamp, reconcileGovernmentInbox, runGovernmentInboxWorker, validateGovernmentInboxPayload } from "./async-mirror-worker.js";
+import { canonicalGovBridgeHash } from "./government-inbox-hash.js";
 
 function fakePool(rows: unknown[]) {
   const statements: Array<{ sql: string; values: unknown[] }> = [];
@@ -17,15 +18,18 @@ function fakePool(rows: unknown[]) {
   return { pool: pool as unknown as Pool, statements };
 }
 
+const rowPayload = {
+    batchMetadata: { authorityCode: "MH-PCB", municipalCode: "MCGM-MUM", batchId: "b5e74bb0-b3a1-4fd7-ae67-c3c2a68d56ab", syncWindowTimestamp: "2026-10-19T02:30:00Z" },
+    rawDataLogs: ["Waste collection record from authorized source"],
+  };
+
 const row = {
   id: "3b6f2a54-8cb2-4d0a-ae11-99a13e68b2b4",
   authority_code: "MH-PCB",
   municipal_code: "MCGM-MUM",
   batch_id: "b5e74bb0-b3a1-4fd7-ae67-c3c2a68d56ab",
-  payload: {
-    batchMetadata: { authorityCode: "MH-PCB", municipalCode: "MCGM-MUM", batchId: "b5e74bb0-b3a1-4fd7-ae67-c3c2a68d56ab", syncWindowTimestamp: "2026-10-19T02:30:00Z" },
-    rawDataLogs: ["Waste collection record from authorized source"],
-  },
+  payload: rowPayload,
+  payload_sha256: canonicalGovBridgeHash(rowPayload),
   attempts: 1,
   lease_token: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
 };
@@ -40,9 +44,18 @@ test("worker claims a bounded batch and marks structurally valid payloads as int
 });
 
 test("worker rejects metadata mismatch without retrying deterministic validation failures", async () => {
-  const { pool } = fakePool([{ ...row, payload: { ...row.payload, batchMetadata: { ...row.payload.batchMetadata, municipalCode: "OTHER" } } }]);
+  const changedPayload = { ...row.payload as Record<string, any>, batchMetadata: { ...(row.payload as any).batchMetadata, municipalCode: "OTHER" } };
+  const { pool } = fakePool([{ ...row, payload: changedPayload, payload_sha256: canonicalGovBridgeHash(changedPayload) }]);
   const result = await runGovernmentInboxWorker(pool);
   assert.equal(result.rejected, 1);
+});
+
+test("worker rejects payload changes that do not match the stored canonical hash", async () => {
+  const changedPayload = { ...row.payload as Record<string, any>, rawDataLogs: ["Tampered source evidence record"] };
+  const { pool, statements } = fakePool([{ ...row, payload: changedPayload }]);
+  const result = await runGovernmentInboxWorker(pool);
+  assert.equal(result.rejected, 1);
+  assert.equal(statements[2]!.values[2], "BATCH_PAYLOAD_HASH_MISMATCH");
 });
 
 test("worker quarantines exhausted unclaimed inbox rows instead of leaving them stuck", async () => {
