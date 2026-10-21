@@ -37,9 +37,13 @@ test("CPCB SWM workspace routes enforce permissions and persist only user-report
       [identityId, hash(token)]);
 
     const headers = { authorization: "Bearer " + token, "x-rupaykg-organization-id": organizationId };
+    const geography = await pool.query<{ id: string }>("select id from geography where kind='CLUSTER' and code='RUPAYKG-ACCEPTANCE-V1'");
+    assert.ok(geography.rows[0]?.id, "opt-in acceptance geography fixture must be installed");
+    const geographyId = geography.rows[0]!.id;
     const checklist = initialSwmChecklist("BWG").map(item => ({ ...item, status: "MISSING" }));
     const payload = {
       stakeholderType: "BWG",
+      geographyId,
       title: "Synthetic BWG workspace " + suffix,
       checklist,
       eligibilityObservations: {
@@ -97,6 +101,29 @@ test("CPCB SWM workspace routes enforce permissions and persist only user-report
     const wrongStakeholder = await app.inject({ method: "POST", url: "/api/v1/cpcb-swm/workspaces", headers, payload: wrongStakeholderPayload });
     assert.equal(wrongStakeholder.statusCode, 403, wrongStakeholder.body);
     assert.equal(wrongStakeholder.json().code, "SWM_STAKEHOLDER_AUTHORIZATION_REQUIRED");
+
+    const missingGeography = await app.inject({
+      method: "POST", url: "/api/v1/cpcb-swm/workspaces", headers,
+      payload: { ...payload, geographyId: undefined },
+    });
+    assert.equal(missingGeography.statusCode, 400, missingGeography.body);
+    assert.equal(missingGeography.json().code, "SWM_WORKSPACE_INVALID");
+
+    const unscopedOrganization = await app.inject({ method: "POST", url: "/api/v1/cpcb-swm/workspaces", headers, payload });
+    assert.equal(unscopedOrganization.statusCode, 403, unscopedOrganization.body);
+    assert.equal(unscopedOrganization.json().code, "GEOGRAPHY_FORBIDDEN", "an organization with no verified geography root must fail closed");
+
+    await pool.query("insert into organization_geography_scopes(organization_id,geography_id,status) values($1,$2,'VERIFIED')", [organizationId, geographyId]);
+    const outsideGeography = await pool.query<{ id: string }>(
+      "insert into geography(kind,code,name,source,source_version) values('CLUSTER',$1,$2,'RupayKG synthetic integration test','v1') returning id",
+      ["TEST-OUTSIDE-" + suffix, "Synthetic out-of-scope geography " + suffix],
+    );
+    const outOfScope = await app.inject({
+      method: "POST", url: "/api/v1/cpcb-swm/workspaces", headers,
+      payload: { ...payload, geographyId: outsideGeography.rows[0]!.id },
+    });
+    assert.equal(outOfScope.statusCode, 403, outOfScope.body);
+    assert.equal(outOfScope.json().code, "GEOGRAPHY_FORBIDDEN", "verified geography root must not authorize unrelated geography");
 
     const created = await app.inject({ method: "POST", url: "/api/v1/cpcb-swm/workspaces", headers, payload });
     assert.equal(created.statusCode, 201, created.body);
