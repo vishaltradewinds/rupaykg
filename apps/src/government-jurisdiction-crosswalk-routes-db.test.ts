@@ -4,6 +4,7 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 import Fastify from "fastify";
 import { Pool } from "pg";
 import { registerGovernmentJurisdictionCrosswalkRoutes } from "./government-jurisdiction-crosswalk-routes.js";
+import { registerEvidenceVaultRoutes } from "./evidence-vault-routes.js";
 
 const enabled = process.env.RUPAYKG_RUN_DB_INTEGRATION_TESTS === "1" && Boolean(process.env.DATABASE_URL);
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
@@ -28,11 +29,12 @@ test("government jurisdiction crosswalk API scopes requests and rejects unauthor
 
   try {
     await registerGovernmentJurisdictionCrosswalkRoutes(app, pool);
+    await registerEvidenceVaultRoutes(app, pool);
     await app.ready();
     await pool.query("insert into organizations(id,name,organization_type) values($1,$2,'TEST_FIXTURE')", [organizationId, "Crosswalk integration " + suffix]);
     await pool.query("insert into identities(id,display_name) values($1,$2)", [requesterId, "Crosswalk requester " + suffix]);
     await pool.query("insert into roles(id,organization_id,name,permissions) values($1,$2,'CROSSWALK_MANAGER',$3::jsonb)", [
-      requesterRoleId, organizationId, JSON.stringify(["MANAGE_STAKEHOLDERS"]),
+      requesterRoleId, organizationId, JSON.stringify(["MANAGE_STAKEHOLDERS", "evidence:upload"]),
     ]);
     await pool.query("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED')", [
       requesterId, organizationId, requesterRoleId,
@@ -46,11 +48,20 @@ test("government jurisdiction crosswalk API scopes requests and rejects unauthor
     ]);
     await pool.query("insert into organization_geography_scopes(organization_id,geography_id,status) values($1,$2,'VERIFIED')", [organizationId, geographyId]);
 
+    const activityId = randomUUID();
+    await pool.query("insert into activities(id,organization_id,geography_id,activity_type,status) values($1,$2,$3,'WASTE_WEIGHT_MEASUREMENT','COMPLETED')", [activityId, organizationId, geographyId]);
     const headers = { authorization: "Bearer " + requesterToken, "x-rupaykg-organization-id": organizationId };
+    const evidenceBytes = Buffer.from("%PDF-1.7\\nSynthetic crosswalk evidence\\n");
+    const evidenceUpload = await app.inject({
+      method: "POST", url: "/api/v1/evidence-vault/upload", headers,
+      payload: { activityId, evidenceType: "CROSSWALK_SOURCE_RECORD", fileName: "crosswalk-source.pdf", mediaType: "application/pdf", contentBase64: evidenceBytes.toString("base64"), sourceReference: "SYNTHETIC-CROSSWALK-" + suffix },
+    });
+    assert.equal(evidenceUpload.statusCode, 201, evidenceUpload.body);
+    const artifact = evidenceUpload.json().data as { artifactVersionId: string; sha256: string };
     const payload = {
-      organizationId, geographyId, authorityCode: "SYNTHETIC_AUTHORITY", municipalCode: "MUNI-" + suffix,
-      sourceVersion: "synthetic-source-v1", evidenceReference: "synthetic://crosswalk-evidence/" + suffix,
-      evidenceSha256: hash("synthetic evidence " + suffix), reason: "Synthetic integration test mapping request",
+      organizationId, geographyId, activityId, authorityCode: "SYNTHETIC_AUTHORITY", municipalCode: "MUNI-" + suffix,
+      sourceVersion: "synthetic-source-v1", evidenceReference: "db://evidence-vault/" + artifact.artifactVersionId,
+      evidenceSha256: artifact.sha256, reason: "Synthetic integration test mapping request",
     };
     const outOfScope = await app.inject({
       method: "POST", url: "/api/v1/government/jurisdiction-crosswalk/requests", headers,
@@ -58,6 +69,10 @@ test("government jurisdiction crosswalk API scopes requests and rejects unauthor
     });
     assert.equal(outOfScope.statusCode, 403, outOfScope.body);
     assert.equal(outOfScope.json().code, "GEOGRAPHY_FORBIDDEN");
+
+    const unboundEvidence = await app.inject({ method: "POST", url: "/api/v1/government/jurisdiction-crosswalk/requests", headers, payload: { ...payload, evidenceReference: "synthetic://not-in-vault/" + suffix } });
+    assert.equal(unboundEvidence.statusCode, 422, unboundEvidence.body);
+    assert.equal(unboundEvidence.json().code, "GOVERNMENT_CROSSWALK_EVIDENCE_UNBOUND");
 
     const requestResponse = await app.inject({ method: "POST", url: "/api/v1/government/jurisdiction-crosswalk/requests", headers, payload });
     assert.equal(requestResponse.statusCode, 201, requestResponse.body);
