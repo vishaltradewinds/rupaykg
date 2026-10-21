@@ -150,12 +150,23 @@ test("CPCB SWM workspace routes enforce permissions and persist only user-report
     );
     assert.equal(strictScopeInsideRoot.rows[0]?.ok, true, "strict helper must authorize a geography under an explicit verified root");
 
+    const evidenceActivityId = randomUUID();
+    const evidenceId = randomUUID();
+    const evidenceSeriesId = randomUUID();
+    const evidenceArtifactVersionId = randomUUID();
+    const evidenceBytes = Buffer.from("Synthetic crosswalk database trigger fixture");
+    const evidenceSha256 = hash(evidenceBytes.toString());
+    const evidenceReference = "db://evidence-vault/" + evidenceArtifactVersionId;
+    await pool.query("insert into activities(id,organization_id,geography_id,activity_type,status) values($1,$2,$3,'WASTE_WEIGHT_MEASUREMENT','COMPLETED')", [evidenceActivityId, organizationId, geographyId]);
+    await pool.query("insert into evidence_artifact_series(id,organization_id,activity_id,evidence_type,created_by_identity_id) values($1,$2,$3,'CROSSWALK_SOURCE_RECORD',$4)", [evidenceSeriesId, organizationId, evidenceActivityId, identityId]);
+    await pool.query("insert into evidence(id,activity_id,evidence_type,status,captured_at,content_uri,content_hash,metadata) values($1,$2,'CROSSWALK_SOURCE_RECORD','VERIFIED',now(),$3,$4,'{}'::jsonb)", [evidenceId, evidenceActivityId, evidenceReference, evidenceSha256]);
+    await pool.query("insert into evidence_artifact_versions(id,series_id,evidence_id,version_number,file_name,media_type,size_bytes,sha256,content,uploaded_by_identity_id,source_reference) values($1,$2,$3,1,'crosswalk.txt','text/plain',$4,$5,$6,$7,'synthetic://crosswalk-test')", [evidenceArtifactVersionId, evidenceSeriesId, evidenceId, evidenceBytes.length, evidenceSha256, evidenceBytes, identityId]);
     const pendingCrosswalk = await pool.query<{ id: string }>(
       `insert into government_jurisdiction_crosswalks
         (authority_code,municipal_code,source_version,organization_id,geography_id,status,evidence_reference,evidence_sha256,requested_by_identity_id,effective_from)
-       values('TEST-AUTHORITY','TEST-MUNICIPAL','synthetic-v1',$1,$2,'PENDING','synthetic://crosswalk-test',$3,$4,now()-interval '1 day')
+       values('TEST-AUTHORITY','TEST-MUNICIPAL','synthetic-v1',$1,$2,'PENDING',$3,$4,$5,now()-interval '1 day')
        returning id`,
-      [organizationId, geographyId, hash("synthetic crosswalk evidence"), identityId],
+      [organizationId, geographyId, evidenceReference, evidenceSha256, identityId],
     );
     crosswalkId = pendingCrosswalk.rows[0]!.id;
     await assert.rejects(
