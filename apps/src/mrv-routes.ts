@@ -26,7 +26,7 @@ async function activityInAuthorizedGeography(pool: Pool, auth: AuthContext, acti
     `select exists(
        select 1 from activities a
        where a.id=$1 and a.organization_id=$2 and a.geography_id is not null
-         and organization_has_geography_scope(a.organization_id,a.geography_id)
+         and organization_has_explicit_geography_scope(a.organization_id,a.geography_id)
      ) as ok`,
     [activityId, organizationId],
   );
@@ -37,7 +37,7 @@ async function activityInAuthorizedGeography(pool: Pool, auth: AuthContext, acti
        join activities a on a.organization_id=om.organization_id
        where om.identity_id=$1 and om.organization_id=$2 and om.status='VERIFIED'
          and a.id=$3 and a.geography_id is not null
-         and organization_has_geography_scope(om.organization_id,a.geography_id)
+         and organization_has_explicit_geography_scope(om.organization_id,a.geography_id)
      ) as ok`,
     [auth.identityId, organizationId, activityId],
   );
