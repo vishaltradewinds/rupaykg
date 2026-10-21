@@ -413,3 +413,12 @@ The canonical JSON/SHA-256 implementation is now shared by the intake route and 
 Validation evidence: CI run #1587 passed on `517a4e1a05837a8953736032ba6ee0044183001c`, including dependency audit, migration validation/application against disposable PostgreSQL, typecheck, build, browser smoke, the test suite including PostgreSQL acceptance, production-container build, and cleanup. Intermediate commits before the test fixtures were aligned failed their tests as expected; the final commit's full CI run is the relevant passing evidence.
 
 The hash proves consistency with the stored intake hash, not source authenticity beyond the HMAC bridge, official authority acceptance, the truth of source measurements, or accredited MRV verification. PR #41 remains draft/unmerged. No production deploy/migration, inherited staging-row mutation, official submission, live Guardian/Hedera transaction, accredited verification, or credit issuance was performed. Release remains HOLD pending independent staging and external statutory/operational gates.
+
+
+## 17. Stored sync-window timestamp reconciliation (2026-10-21)
+
+The worker now also compares the payload's timezone-bearing `batchMetadata.syncWindowTimestamp` with the corresponding `async_mirror_inbox.sync_window_timestamp` database column after the payload hash matches and structural validation succeeds. Divergence is deterministically rejected as `BATCH_TIMESTAMP_DATABASE_MISMATCH`, preventing internally inconsistent timestamp metadata from being silently accepted. Unit regression coverage exercises this mismatch; the PostgreSQL acceptance fixture uses one shared timestamp value for both the payload and database column.
+
+Validation evidence: CI run #1591 passed on `010ed34acdc145762bee07be502b684828bdb8aa`, including dependency audit, migration validation/application in disposable CI PostgreSQL, typecheck, build, browser smoke test, tests including PostgreSQL acceptance, production-container build, and cleanup.
+
+This remains an internal data-integrity control. It does not establish the truth of a source measurement, external authority acceptance, live Guardian/Hedera verification, methodology eligibility, accredited verification, or official credit issuance. The production release decision remains HOLD.
