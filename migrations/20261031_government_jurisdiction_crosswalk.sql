@@ -53,7 +53,6 @@ begin
        or new.verified_at is null
        or new.verified_at > now()
        or (new.effective_to is not null and new.effective_to <= now())
-       or new.effective_from > now()
        or not organization_has_explicit_geography_scope(new.organization_id, new.geography_id) then
       raise exception 'GOVERNMENT_CROSSWALK_VERIFICATION_INVALID';
     end if;
