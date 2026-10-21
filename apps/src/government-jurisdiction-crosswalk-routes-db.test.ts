@@ -9,6 +9,20 @@ import { registerEvidenceVaultRoutes } from "./evidence-vault-routes.js";
 const enabled = process.env.RUPAYKG_RUN_DB_INTEGRATION_TESTS === "1" && Boolean(process.env.DATABASE_URL);
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
 
+async function bootstrapReservedMembership(pool: Pool, identityId: string, organizationId: string, roleId: string): Promise<void> {
+  const client = await pool.connect();
+  try {
+    await client.query("begin");
+    await client.query("alter table organization_memberships disable trigger stakeholder_membership_application_guard");
+    await client.query("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED')", [identityId, organizationId, roleId]);
+    await client.query("alter table organization_memberships enable trigger stakeholder_membership_application_guard");
+    await client.query("commit");
+  } catch (error) {
+    await client.query("rollback");
+    throw error;
+  } finally { client.release(); }
+}
+
 test("government jurisdiction crosswalk API scopes requests and rejects unauthorized decisions", {
   skip: !enabled ? "requires CI disposable PostgreSQL and applied migrations" : false,
 }, async () => {
@@ -51,9 +65,7 @@ test("government jurisdiction crosswalk API scopes requests and rejects unauthor
     await pool.query("insert into roles(id,organization_id,name,permissions) values($1,$2,'super_admin',$3::jsonb)", [
       approverRoleId, organizationId, JSON.stringify(["MANAGE_STAKEHOLDERS", "admin:system"]),
     ]);
-    await pool.query("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED')", [
-      approverId, organizationId, approverRoleId,
-    ]);
+    await bootstrapReservedMembership(pool, approverId, organizationId, approverRoleId);
     await pool.query("insert into identity_sessions(identity_id,expires_at,token_hash) values($1,now()+interval '1 hour',$2)", [
       approverId, hash(approverToken),
     ]);
