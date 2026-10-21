@@ -43,3 +43,32 @@ These are release/architecture gates, not claims that the current code already s
 - **HOLD:** Do not describe RupayKg as operationally ready across India, and do not infer statutory compliance, official API authorization, independent verification or credit issuance from code tests or a pilot.
 
 **Required next engineering sequence:** (1) inventory existing geography/organization/site/activity schemas and constraints across the repository; (2) design a backward-compatible jurisdiction and external-identifier crosswalk; (3) design a versioned applicability registry for rules/methodologies; (4) migrate the fixed stakeholder list safely where justified; (5) add multi-jurisdiction, isolation and pilot non-coupling tests; (6) validate in isolated staging; (7) record Shakti approval before any release.
+
+
+## 5. Expanded schema review — additional evidence and risk (2026-10-21)
+
+A wider tree-based review also inspected `docs/INDIA-GEOGRAPHY.md`, `docs/DOMAIN-MODEL.md`, `docs/STAKEHOLDER-ONBOARDING-HIERARCHY.md`, `packages/domain/src/geography.ts`, migrations `003`, `012`, `042`, `067`, `077`, and `20261020_ccts_methodology_registry.sql`.
+
+### Existing nationwide foundations (credit where supported)
+
+- The domain model already includes a geography hierarchy for country, state/UT, district, sub-district, urban and rural local geographies, and versioned external source metadata.
+- The repository documents source-versioned geography and says not to fabricate LGD records.
+- Organization geography scopes and recursive ancestry checks exist.
+- Hierarchical stakeholder onboarding includes local, district, state and platform approval steps.
+- Regulatory requirement catalogues, EPR scheme catalogues and a CCTS methodology registry exist. The methodology migration explicitly warns that registry presence is not implementation or eligibility.
+
+These are meaningful reusable foundations; the platform should extend them rather than create a parallel geography or methodology system.
+
+### High-priority conformance risk: unscoped organization fallback
+
+Migration `012_geography_authorization.sql` currently defines `organization_has_geography_scope` so that when an organization has **no verified geography roots**, the function returns `true`. The migration comment says this preserves legacy tenants. That compatibility behavior can undermine the pan-India rule's explicit jurisdiction-boundary requirement if a high-risk activity or evidence-verification path relies on the function without separately requiring an explicit scope.
+
+**Required correction:** inventory every call site and classify its risk; for high-risk operational writes, evidence verification, government intake and statutory/MRV workflows, require an explicit verified geography scope or a narrowly defined, audited national-level authorization. Do not globally flip the legacy function without migration/backfill analysis and regression tests. Add tests proving unscoped tenants cannot write/verify jurisdiction-bound records by default, and prove explicitly national-scoped tenants work only under a distinct reviewed authorization.
+
+### Remaining confirmed design gaps
+
+- The government mirror envelope currently carries `authorityCode` and `municipalCode`, while the core geography model supports a richer hierarchy. A verified crosswalk from these source identifiers to a versioned geography/site/activity record is not yet evidenced in the worker path.
+- Stakeholder type validation is a closed list in route code and authorization schema. The supported list covers important roles, but adding future eligible categories appears to require code/schema releases rather than a governed catalogue.
+- Existing regulatory and methodology catalogues are foundations, but this review does not prove complete nationwide, effective-date-aware applicability and executable calculation coverage for every relevant scheme/activity/jurisdiction.
+
+These are explicit architecture tasks, not grounds to claim the entire platform is geographically incorrect. Preserve the existing hierarchy and registries while closing the fail-open scope path and proving the crosswalk.
