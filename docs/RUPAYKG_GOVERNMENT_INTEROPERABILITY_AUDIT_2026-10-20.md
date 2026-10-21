@@ -310,3 +310,23 @@ Important boundaries: no production deployment/migration/scheduler/webhook activ
 Outstanding gates: (1) confirm CI #1535 final conclusion and exact head status; (2) isolated clean staging tests for worker restart/retry/quarantine, audit-chain concurrency/rollback and authorization history without touching inherited records; (3) configure and verify alert delivery with named on-call owner/escalation; (4) independent security, backup/restore, retention/privacy and change-control evidence; (5) authorized official CPCB/BEE/Indian Carbon Market integration contracts/sandbox/credentials; (6) real Guardian execution + Hedera consensus/Mirror Node verification using existing account/topic; (7) methodology-by-methodology CCTS validation, accredited independent verification and official registry issuance; (8) Shakti release approval. Production remains HOLD.
 
 Resume instructions: start by checking CI #1535 at the URL above and fetch current PR head; update this checkpoint with the result, then continue the next engineering/staging gate. Do not stop at status reporting when tools permit concrete work; do not falsely mark the full project finished because CI is green.
+
+
+## 9. Superseding engineering status addendum — 2026-10-21 07:26 UTC
+
+This addendum supersedes prior CI-status statements above where they conflict with the exact current review-head evidence. Historical findings remain as audit history.
+
+- Exact review head: `b46cf66d7d5b46a50714448ca1c85014036eec42`.
+- PR #41 remains open, draft, unmerged and undeployed: https://github.com/vishaltradewinds/rupaykg/pull/41.
+- GitHub Actions run #1547 completed successfully: https://github.com/vishaltradewinds/rupaykg/actions/runs/39561745252.
+- Successful gates included production dependency audit, migration validation, migration execution against disposable CI PostgreSQL, typecheck, production build, browser smoke test, disposable PostgreSQL acceptance tests, production-container build and cleanup.
+- The CI log reported test groups of 154, 22, 2, 29, 1 and 2 tests respectively: **210 passed, 0 failed, 0 skipped** across those reported groups. This is automated engineering evidence only, not production acceptance or independent assurance.
+- Added government-bridge regression cases rejecting timezone offsets `+25:00` and `+01:60` before inbox persistence. These run on the exact head above.
+
+### Current disposition
+
+**Engineering CI: PASS for the exact current review head. Production/release certification: HOLD.**
+
+Still not evidenced: controlled staging acceptance on a clean isolated database without touching inherited staging rows; audit-chain concurrent append/rollback verification beyond existing CI coverage; real alert delivery with a named on-call/escalation owner; official CPCB/BEE/Indian Carbon Market API authorization and sandbox; live Guardian execution and Hedera consensus/Mirror Node hash comparison on the existing configured account/topic; method-specific numerical reconciliation and independent accredited verification; official registry issuance evidence; operational privacy/retention, backups, incident response, rollback and explicit Shakti release approval.
+
+No production deployment, production migration, official submission, official status change, Guardian/Hedera transaction, or carbon-credit issuance was performed by this addendum. Keep the PR draft, unmerged and undeployed until the applicable gates are evidenced and approved.
