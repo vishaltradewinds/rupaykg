@@ -129,6 +129,14 @@ test("CPCB SWM workspace routes enforce permissions and persist only user-report
       ["TEST-OUTSIDE-" + suffix, "Synthetic out-of-scope geography " + suffix],
     );
     outsideGeographyId = outsideGeography.rows[0]!.id;
+    await assert.rejects(
+      pool.query(
+        "insert into cpcb_swm_stakeholder_workspaces(organization_id,geography_id,stakeholder_type,title,created_by_identity_id,updated_by_identity_id) values($1,$2,'BWG',$3,$4,$4)",
+        [organizationId, outsideGeographyId, "Direct database out-of-scope geography attempt " + suffix, identityId],
+      ),
+      /SWM_WORKSPACE_GEOGRAPHY_FORBIDDEN/,
+      "database trigger must reject direct insertion into unrelated geography",
+    );
     const outOfScope = await app.inject({
       method: "POST", url: "/api/v1/cpcb-swm/workspaces", headers,
       payload: { ...payload, geographyId: outsideGeography.rows[0]!.id },
