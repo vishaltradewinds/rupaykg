@@ -26,9 +26,11 @@ export function validateSyncEnvelope(body: Record<string, unknown>): SyncEnvelop
   const idempotencyKey = requiredString(body.idempotencyKey);
   const deviceId = requiredString(body.deviceId);
   const capturedAt = requiredString(body.capturedAt);
-  const clientSequence = Number(body.clientSequence);
+  // JSON protocol sequences must be numeric JSON values, not strings coerced by Number().
+  const clientSequence = body.clientSequence;
 
-  if (!idempotencyKey || !deviceId || !capturedAt || !Number.isSafeInteger(clientSequence) || clientSequence < 1 || body.payload === undefined) {
+  if (!idempotencyKey || !deviceId || !capturedAt || typeof clientSequence !== "number"
+    || !Number.isSafeInteger(clientSequence) || clientSequence < 1 || body.payload === undefined) {
     return { ok: false, code: "INVALID_ENVELOPE", error: "idempotencyKey, deviceId, positive integer clientSequence, capturedAt and payload are required" };
   }
   if (!isUuid(deviceId)) return { ok: false, code: "INVALID_DEVICE", error: "deviceId must be a field device UUID" };
