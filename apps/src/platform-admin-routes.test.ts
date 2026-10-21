@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import Fastify from "fastify";
 import type { Pool } from "pg";
 import { registerPlatformAdminRoutes } from "./platform-admin-routes.js";
+import { auditEventV2FromRow, hashPlatformAuditEventV2 } from "./platform-audit-hash.js";
 
 const identityId = "123e4567-e89b-42d3-a456-426614174000";
 const organizationId = "223e4567-e89b-42d3-a456-426614174000";
@@ -554,4 +555,25 @@ test("stakeholder authorization REVOKE requires independent approval and appends
   assert.ok(statements.some(sql => sql.includes("insert into audit_events")));
   assert.equal(statements.filter(sql => sql.trim().toLowerCase() === "commit").length, 1);
   await app.close();
+});
+
+
+test("canonical audit v2 hash is reproducible after JSONB object-key normalization", () => {
+  const row = {
+    actor_identity_id: identityId,
+    action: "FIELD_DEVICE_ENROLLED",
+    target_type: "field_device",
+    target_id: "device-test",
+    organization_id: organizationId,
+    request_id: "request-test",
+    payload: { z: 1, nested: { y: 2, x: 3 } },
+    previous_hash: "0".repeat(64),
+  };
+  const normalizedRow = {
+    ...row,
+    payload: { nested: { x: 3, y: 2 }, z: 1 },
+  };
+  const hash = hashPlatformAuditEventV2(auditEventV2FromRow(row));
+  assert.match(hash, /^[0-9a-f]{64}$/);
+  assert.equal(hashPlatformAuditEventV2(auditEventV2FromRow(normalizedRow)), hash);
 });
