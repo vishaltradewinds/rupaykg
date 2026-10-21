@@ -123,3 +123,13 @@ RupayKg is Pan-India by design. Jabalpur/Kathonda is a validation site only. Pre
 - GitHub Actions run #1680 passed: https://github.com/vishaltradewinds/rupaykg/actions/runs/39588167799. Dependency audit, migration validation/application, typecheck, build, browser smoke test, disposable PostgreSQL acceptance, production-container build and cleanup all succeeded on this head.
 - Current evidence-binding acceptance coverage now includes unbound reference, wrong activity, wrong tenant, and verified-crosswalk evidence review requirement. Inbox worker acceptance covers exact source-version match, wrong version unresolved, expired mapping unresolved, revoked mapping unresolved, retry recovery and quarantine.
 - PR #41 remains open/draft/unmerged/undeployed. Production and Shakti certification remain HOLD pending remaining Pan-India governance, operational staging, and external official-integration/approval gates.
+
+
+## Resume update — 2026-10-21 10:59 UTC
+
+- Added a worker unit regression test for ambiguous crosswalk candidates: if more than one currently eligible VERIFIED mapping is returned, the worker records `UNRESOLVED` with `GOVERNMENT_CROSSWALK_AMBIGUOUS`; it does not choose a mapping or assert official acceptance/MRV mutation/Guardian submission.
+- Latest code/test head: `4e68c85b7bbd60af50ed81956a573c64b1dc9930`.
+- GitHub Actions run #1682 passed end-to-end: https://github.com/vishaltradewinds/rupaykg/actions/runs/39588483576. Dependency audit, migration validation/application, typecheck, build, browser smoke test, disposable PostgreSQL acceptance, production-container build and cleanup all succeeded.
+- Current verified acceptance coverage: exact source-version matching; wrong version unresolved; expired and revoked mappings unresolved; ambiguous candidate set unresolved; evidence references must be real immutable vault artifacts with matching digest, organization and activity scope; unbound, cross-activity and cross-tenant evidence reuse is rejected; VERIFIED crosswalks require independently VERIFIED evidence.
+- PR #41 remains open, draft, unmerged and undeployed. Do not promote this CI pass into a claim of national operational certification or official government acceptance.
+- Next gates remain: repository-wide geography authorization and Urban/Rural rule-applicability inventory; stronger wrong-tenant/wrong-activity jurisdiction mapping tests; clean isolated staging restart/retry/quarantine and alert-owner evidence; official integration contracts, access and approvals; final independent security and release review.
