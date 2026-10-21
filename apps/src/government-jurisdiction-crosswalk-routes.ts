@@ -249,6 +249,10 @@ export async function registerGovernmentJurisdictionCrosswalkRoutes(app: Fastify
       const row = found.rows[0];
       if (!row) { await client.query("rollback"); return error(reply, 404, "Crosswalk request not found", "GOVERNMENT_CROSSWALK_REQUEST_NOT_FOUND"); }
       if (row.status !== "PENDING") { await client.query("rollback"); return error(reply, 409, "Crosswalk request already has a decision", "GOVERNMENT_CROSSWALK_ALREADY_DECIDED"); }
+      if (decision === "APPROVE" && row.expires_at !== null && new Date(row.expires_at).getTime() <= Date.now()) {
+        await client.query("rollback");
+        return error(reply, 409, "Expired crosswalk requests cannot be approved; submit a new evidence-backed request", "GOVERNMENT_CROSSWALK_REQUEST_EXPIRED");
+      }
       if (row.requested_by_identity_id === auth.identityId) { await client.query("rollback"); return error(reply, 403, "Requester cannot approve or reject their own crosswalk request", "GOVERNMENT_CROSSWALK_SELF_APPROVAL_FORBIDDEN"); }
       const status = decision === "APPROVE" ? "APPROVED" : "REJECTED";
       const updated = await client.query(
