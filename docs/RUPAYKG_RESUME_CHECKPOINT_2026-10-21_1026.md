@@ -104,3 +104,13 @@ RupayKg is Pan-India by design. Jabalpur/Kathonda is a validation site only. Pre
 - GitHub Actions run #1676: https://github.com/vishaltradewinds/rupaykg/actions/runs/39587595524. Migration validation/application, dependency audit, typecheck, build, browser smoke test and disposable PostgreSQL acceptance all passed. Production-container build was still running at this checkpoint update; recheck the final run conclusion before claiming the full gate passed.
 - The earlier complete run #1673 passed all steps, including production-container build, on the prior head. Run #1676 is the current verification for the additional expiry/revocation regression tests.
 - Release remains HOLD. PR #41 stays draft, unmerged and undeployed. Continue wrong-tenant/wrong-activity and ambiguous mapping tests, Pan-India Urban/Rural governance and geography authorization audit, and official integration/approval evidence gates.
+
+
+## Resume update — 2026-10-21 10:52 UTC
+
+- Added explicit API error mapping so a crosswalk approval blocked because evidence has not passed independent review returns HTTP 409 with `GOVERNMENT_CROSSWALK_EVIDENCE_NOT_VERIFIED`, rather than a generic service-unavailable response.
+- Current code head: `23d0d09e88eda2130f403a2832741808c5d004de`.
+- GitHub Actions run #1678 passed: https://github.com/vishaltradewinds/rupaykg/actions/runs/39587874260. Verified steps: dependency audit, migration validation/application in disposable PostgreSQL, typecheck, build, browser smoke test, all tests including PostgreSQL acceptance, production-container build, and cleanup.
+- Latest verified changes include exact source-version resolution, evidence-vault artifact/hash/tenant/activity binding, database enforcement that VERIFIED mappings require independently VERIFIED evidence, and regression tests for wrong source version, unbound evidence, expired mappings, and revoked mappings.
+- Keep PR #41 open, draft, unmerged and undeployed. This engineering CI pass is not Pan-India production certification and does not prove official government API access, statutory acceptance, accredited MRV verification, Guardian/Hedera consensus, or carbon-credit issuance.
+- Remaining work: add explicit wrong-tenant/wrong-activity/ambiguous mapping acceptance cases; finish repository-wide geography authorization and Urban/Rural applicability audit; prove clean isolated staging restart/retry/quarantine and operational alert ownership; verify official integration contracts and approvals when available. Preserve Pan-India scope; Jabalpur/Kathonda is only a validation site.
