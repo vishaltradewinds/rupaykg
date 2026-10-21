@@ -101,3 +101,9 @@ The legacy helper's no-root compatibility fallback is now isolated from the high
 - The PostgreSQL CPCB SWM acceptance test now checks that the strict helper rejects an organization with no roots, accepts an in-scope geography after explicit scope provisioning, and rejects an unrelated geography.
 
 **Status:** source changes and integration assertions are committed to the feature branch. The latest CI run for this expanded set is pending at the time of this edit; no deployment or production migration has been performed. This is a targeted high-impact call-site pass, not yet proof that every repository call site has been classified or that all nationwide geography data and crosswalks are complete.
+
+## 8. Versioned government jurisdiction crosswalk foundation (2026-10-21)
+
+Migration `20261031_government_jurisdiction_crosswalk.sql` now defines an evidence-backed mapping from external authority/municipal identifiers and source version to a RupayKg organization and canonical geography, with an optional activity binding. It is fail-closed by default (PENDING), requires a separate approving identity and evidence metadata before VERIFIED status, validates optional activity/organization/geography consistency, and prevents one source identifier/version from being verified to multiple destinations.
+
+**Important boundary:** this migration intentionally creates no real mappings and does not wire the government inbox worker to the crosswalk yet. The source code/contract and reviewer mandate must be verified first; the worker must later resolve exactly one currently effective VERIFIED mapping or quarantine the record. The core schema reviewed here does not establish a canonical site table, so this change does not fabricate a site identifier or use a polymorphic target ID. The crosswalk is an architecture foundation, not evidence of live CPCB integration or national data completeness.
