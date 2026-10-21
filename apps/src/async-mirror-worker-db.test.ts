@@ -141,9 +141,11 @@ test("government inbox worker persists retry recovery, quarantine and append-onl
     assert.equal(resolvedCrosswalk.rows.length, 1);
 
     // Expired mappings must not resolve a batch, even with the exact source version.
-    const expiredTimestamp = new Date().toISOString();
-    await pool.query("update government_jurisdiction_crosswalks set effective_to=$2 where id=$1", [
-      resolvedCrosswalk.rows[0]!.id, new Date(Date.parse(expiredTimestamp) - 1000),
+    // Keep the row valid at wall-clock time but expired at the test batch timestamp;
+    // the database correctly forbids changing a VERIFIED row to already expired now.
+    const expiredTimestamp = new Date(Date.now() + 120_000).toISOString();
+    await pool.query("update government_jurisdiction_crosswalks set effective_to=now()+make_interval(mins => 1) where id=$1", [
+      resolvedCrosswalk.rows[0]!.id,
     ]);
     const expiredBatchId = randomUUID();
     const expiredPayload = {
