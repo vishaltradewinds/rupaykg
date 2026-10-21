@@ -59,7 +59,7 @@ test("government inbox worker persists retry recovery, quarantine and append-onl
     const batchId = randomUUID();
     const syncWindowTimestamp = new Date().toISOString();
     const payload = {
-      batchMetadata: { authorityCode, municipalCode: "TEST-MUNI", batchId, syncWindowTimestamp },
+      batchMetadata: { authorityCode, municipalCode: "TEST-MUNI", batchId, syncWindowTimestamp, sourceVersion: "synthetic-source-v1" },
       rawDataLogs: ["Synthetic test-only waste intake record"],
     };
     const inserted = await pool.query<{ id: string }>(
@@ -101,6 +101,29 @@ test("government inbox worker persists retry recovery, quarantine and append-onl
     assert.equal(resolved.geographyId, expectedCrosswalk.geographyId);
     assert.equal(resolved.activityId, null);
     assert.equal(resolved.sourceVersion, "synthetic-source-v1");
+
+    // A different source version must not resolve merely because authority and municipality match.
+    const mismatchedVersionBatchId = randomUUID();
+    const mismatchedVersionTimestamp = new Date().toISOString();
+    const mismatchedVersionPayload = {
+      batchMetadata: { authorityCode: recoverable.authorityCode, municipalCode: "TEST-MUNI", batchId: mismatchedVersionBatchId,
+        syncWindowTimestamp: mismatchedVersionTimestamp, sourceVersion: "wrong-source-version" },
+      rawDataLogs: ["Synthetic wrong-version waste intake record"],
+    };
+    const mismatchedVersionInsert = await pool.query<{ id: string }>(
+      `insert into async_mirror_inbox(authority_code,municipal_code,batch_id,sync_window_timestamp,payload,payload_sha256,status,attempts,received_at)
+       values($1,'TEST-MUNI',$2,$3,$4::jsonb,$5,'RECEIVED',0,now() - interval '2 minutes') returning id`,
+      [recoverable.authorityCode, mismatchedVersionBatchId, mismatchedVersionTimestamp, JSON.stringify(mismatchedVersionPayload), sha(mismatchedVersionPayload)],
+    );
+    const mismatchedVersionId = mismatchedVersionInsert.rows[0]!.id;
+    const mismatchResult = await runGovernmentInboxWorker(pool, undefined, { batchSize: 10, maxAttempts: 3 });
+    assert.ok(mismatchResult.unresolved >= 1, "wrong source version must remain unresolved");
+    const mismatchRow = await pool.query<{ status: string; last_error_code: string | null; validation_summary: Record<string, unknown> }>(
+      "select status,last_error_code,validation_summary from async_mirror_inbox where id=$1", [mismatchedVersionId],
+    );
+    assert.equal(mismatchRow.rows[0]?.status, "UNRESOLVED");
+    assert.equal(mismatchRow.rows[0]?.last_error_code, "GOVERNMENT_CROSSWALK_NOT_FOUND");
+    assert.equal(mismatchRow.rows[0]?.validation_summary.officialAcceptance, false);
 
     const exhausted = await makeRow("QRT-" + suffix.slice(0, 8), true);
     const quarantined = await runGovernmentInboxWorker(pool, async () => { throw new Error("SyntheticExhaustedFailure"); }, { batchSize: 10, maxAttempts: 1 });
