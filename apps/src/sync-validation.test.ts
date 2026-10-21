@@ -68,6 +68,8 @@ test("field-sync capture timestamps require a valid timezone-bearing RFC 3339 va
     "2026-10-20T25:15:30Z",
     "2026-10-20T10:61:30Z",
     "2026-10-20T10:15:30+05",
+    "2026-10-20T10:15:30+25:00",
+    "2026-10-20T10:15:30+01:60",
   ]) {
     const result = validateSyncEnvelope({ ...base, capturedAt });
     assert.equal(result.ok, false, `expected invalid timestamp to be rejected: ${capturedAt}`);
