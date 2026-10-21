@@ -1,4 +1,5 @@
 import type { Pool } from "pg";
+import { canonicalGovBridgeHash } from "./government-inbox-hash.js";
 
 export type GovernmentInboxValidation = {
   valid: boolean;
@@ -26,6 +27,7 @@ type ClaimedInboxRow = {
   municipal_code: string;
   batch_id: string;
   payload: unknown;
+  payload_sha256: string;
   attempts: number;
   lease_token: string;
 };
@@ -143,20 +145,22 @@ export async function runGovernmentInboxWorker(
        from candidates
       where inbox.id=candidates.id
      returning inbox.id, inbox.authority_code, inbox.municipal_code, inbox.batch_id,
-               inbox.payload, inbox.attempts, inbox.lease_token`,
+               inbox.payload, inbox.payload_sha256, inbox.attempts, inbox.lease_token`,
     [batchSize, leaseSeconds, maxAttempts],
   );
 
   const result = { claimed: claimed.rows.length, validated: 0, rejected: 0, retried: 0, quarantined: 0 };
   for (const row of claimed.rows) {
     try {
-      const outcome = await validate({
-        id: row.id,
-        authorityCode: row.authority_code,
-        municipalCode: row.municipal_code,
-        batchId: row.batch_id,
-        payload: row.payload,
-      });
+      const outcome = canonicalGovBridgeHash(row.payload) !== row.payload_sha256
+        ? { valid: false, errorCode: "BATCH_PAYLOAD_HASH_MISMATCH" }
+        : await validate({
+          id: row.id,
+          authorityCode: row.authority_code,
+          municipalCode: row.municipal_code,
+          batchId: row.batch_id,
+          payload: row.payload,
+        });
       if (outcome.valid) {
         const updated = await pool.query(
           `update async_mirror_inbox
