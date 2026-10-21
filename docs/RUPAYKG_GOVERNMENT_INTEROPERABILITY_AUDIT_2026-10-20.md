@@ -402,3 +402,14 @@ This remains an internal engineering validation result. No inherited staging inb
 
 
 The database acceptance suite was then strengthened to exercise both an already-exhausted `RETRY` record and an exhausted `PROCESSING` record with an expired lease in disposable PostgreSQL, and assert that both become `QUARANTINED` with lease tokens cleared and quarantine timestamps set. CI run #1581 passed on `87d3871e5b587f00bc6ecbf07f28fd14dd10810e`, including the migration checks, typecheck, build, browser smoke, PostgreSQL acceptance suite, production-container build and cleanup. This is reproducible CI evidence; it is not a substitute for a separately approved isolated staging run.
+
+
+## 16. Intake-to-worker payload integrity verification (2026-10-21)
+
+The holistic review identified a trust-boundary gap: the bridge calculated and persisted a canonical payload hash at intake, but the worker did not recompute and compare that hash before structural validation. A payload changed after intake could therefore reach the structural validator without the worker detecting the mismatch.
+
+The canonical JSON/SHA-256 implementation is now shared by the intake route and worker. Before validating a claimed inbox row, the worker recomputes the hash from the stored payload and compares it with `payload_sha256`. A mismatch is deterministically rejected as `BATCH_PAYLOAD_HASH_MISMATCH`; it is not treated as validated. Regression tests cover tampered payloads, and the disposable PostgreSQL acceptance fixture now uses the same canonical hash convention.
+
+Validation evidence: CI run #1587 passed on `517a4e1a05837a8953736032ba6ee0044183001c`, including dependency audit, migration validation/application against disposable PostgreSQL, typecheck, build, browser smoke, the test suite including PostgreSQL acceptance, production-container build, and cleanup. Intermediate commits before the test fixtures were aligned failed their tests as expected; the final commit's full CI run is the relevant passing evidence.
+
+The hash proves consistency with the stored intake hash, not source authenticity beyond the HMAC bridge, official authority acceptance, the truth of source measurements, or accredited MRV verification. PR #41 remains draft/unmerged. No production deploy/migration, inherited staging-row mutation, official submission, live Guardian/Hedera transaction, accredited verification, or credit issuance was performed. Release remains HOLD pending independent staging and external statutory/operational gates.
