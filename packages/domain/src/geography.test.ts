@@ -32,3 +32,29 @@ test("urban and rural branches cannot cross at leaf levels", () => {
   assert.equal(isValidChild("WARD", "CLUSTER"), false);
   assert.equal(isValidChild("LOCALITY", "CLUSTER"), false);
 });
+
+test("additional India geography kinds are classified without collapsing urban and rural rails", () => {
+  assert.equal(geographyMode("BLOCK"), "ADMINISTRATIVE");
+  assert.equal(geographyMode("TALUK"), "ADMINISTRATIVE");
+  assert.equal(geographyMode("TEHSIL"), "ADMINISTRATIVE");
+  assert.equal(geographyMode("HABITATION"), "RURAL");
+  assert.equal(isValidChild("BLOCK", "GRAM_PANCHAYAT"), true);
+  assert.equal(isValidChild("GRAM_PANCHAYAT", "HABITATION"), true);
+});
+
+test("source-specific hierarchy can override the starter profile without changing global defaults", () => {
+  const sourceVersionedHierarchy = {
+    COUNTRY: ["STATE_UT"],
+    STATE_UT: ["DISTRICT"],
+    DISTRICT: ["BLOCK"],
+    BLOCK: ["GRAM_PANCHAYAT"],
+    GRAM_PANCHAYAT: ["VILLAGE"],
+  } as const;
+
+  assert.equal(isValidChild("DISTRICT", "BLOCK", sourceVersionedHierarchy), true);
+  assert.equal(isValidChild("DISTRICT", "SUB_DISTRICT", sourceVersionedHierarchy), false);
+  assert.equal(isValidChild("BLOCK", "GRAM_PANCHAYAT", sourceVersionedHierarchy), true);
+  // The custom profile is supplied per call; it does not silently mutate defaults.
+  assert.equal(isValidChild("DISTRICT", "BLOCK"), true);
+  assert.equal(isValidChild("ULB", "VILLAGE", sourceVersionedHierarchy), false);
+});
