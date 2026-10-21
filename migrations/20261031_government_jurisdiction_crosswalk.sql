@@ -69,7 +69,7 @@ create table if not exists government_jurisdiction_crosswalks (
 -- If an authority identifier is ambiguous, it must remain unresolved rather than fan out silently.
 create unique index if not exists government_jurisdiction_crosswalk_verified_unique_idx
   on government_jurisdiction_crosswalks(authority_code, municipal_code, source_version)
-  where status = 'VERIFIED';
+  where status = 'VERIFIED' and effective_to is null;
 
 create index if not exists government_jurisdiction_crosswalk_org_geo_idx
   on government_jurisdiction_crosswalks(organization_id, geography_id, status);
