@@ -192,6 +192,11 @@ test("government jurisdiction crosswalk API scopes requests and rejects unauthor
     );
     expiredRequestId = expiredRequest.rows[0]?.id ?? null;
     assert.ok(expiredRequestId, "expired request fixture must be created");
+    await assert.rejects(
+      pool.query("update government_jurisdiction_crosswalk_requests set expires_at=now()+interval '1 day',status='APPROVED',decided_by_identity_id=$2,decision_reason=$3,decided_at=now(),applied_at=now() where id=$1", [expiredRequestId, approverId, "Attempt to revive expired request"]),
+      (error: unknown) => typeof error === "object" && error !== null && "message" in error && String((error as { message: unknown }).message).includes("GOVERNMENT_CROSSWALK_EXPIRY_IMMUTABLE"),
+      "database must prevent extending expiry while approving a request",
+    );
     const expiredApproval = await app.inject({
       method: "POST", url: "/api/v1/government/jurisdiction-crosswalk/requests/" + expiredRequestId + "/decision",
       headers: { authorization: "Bearer " + approverToken, "x-rupaykg-organization-id": organizationId },
