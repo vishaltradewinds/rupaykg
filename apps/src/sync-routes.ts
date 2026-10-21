@@ -3,6 +3,7 @@ import type { FastifyInstance } from "fastify";
 import type { Pool, PoolClient } from "pg";
 import { authenticate, bearerChallenge, hasOrganizationPermission } from "./auth.js";
 import { validateConflictResolution, validateSyncEnvelope } from "./sync-validation.js";
+import { hashPlatformAuditEventV2 } from "./platform-audit-hash.js";
 
 type AuthContext = Awaited<ReturnType<typeof authenticate>>;
 type OperationPayload = Record<string, unknown> & { operationType?: string };
@@ -16,8 +17,8 @@ async function writeAuditEvent(client: PoolClient, actorIdentityId: string, orga
   if (prior.rowCount !== 1) throw new Error("PLATFORM_AUDIT_CHAIN_HEAD_MISSING");
   const previousHash = prior.rows[0]?.last_event_hash ?? null;
   const event = { actorIdentityId, action, targetType, targetId, organizationId, requestId, payload, previousHash };
-  const eventHash = payloadHash(event);
-  const inserted = await client.query<{ id: string }>("insert into audit_events(actor_identity_id,organization_id,action,target_type,target_id,request_id,previous_hash,event_hash,payload,created_at) values($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,clock_timestamp()) returning id", [actorIdentityId, organizationId, action, targetType, targetId, requestId, previousHash, eventHash, JSON.stringify(payload)]);
+  const eventHash = hashPlatformAuditEventV2(event);
+  const inserted = await client.query<{ id: string }>("insert into audit_events(actor_identity_id,organization_id,action,target_type,target_id,request_id,previous_hash,event_hash,payload,hash_version,created_at) values($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,2,clock_timestamp()) returning id", [actorIdentityId, organizationId, action, targetType, targetId, requestId, previousHash, eventHash, JSON.stringify(payload)]);
   const eventId = inserted.rows[0]?.id;
   if (!eventId) throw new Error("PLATFORM_AUDIT_EVENT_INSERT_FAILED");
   await client.query("update platform_audit_chain_head set last_event_id=$1,last_event_hash=$2,updated_at=clock_timestamp() where singleton=true", [eventId, eventHash]);
