@@ -25,6 +25,7 @@ test("CPCB SWM workspace routes enforce permissions and persist only user-report
   const roleId = randomUUID();
   let workspaceId = "";
   let outsideGeographyId = "";
+  let crosswalkId = "";
   try {
     await registerCpcbSwmRoutes(app, pool);
     await app.ready();
@@ -135,6 +136,23 @@ test("CPCB SWM workspace routes enforce permissions and persist only user-report
       [organizationId, geographyId],
     );
     assert.equal(strictScopeInsideRoot.rows[0]?.ok, true, "strict helper must authorize a geography under an explicit verified root");
+
+    const pendingCrosswalk = await pool.query<{ id: string }>(
+      `insert into government_jurisdiction_crosswalks
+        (authority_code,municipal_code,source_version,organization_id,geography_id,status,evidence_reference,evidence_sha256,requested_by_identity_id,effective_from)
+       values('TEST-AUTHORITY','TEST-MUNICIPAL','synthetic-v1',$1,$2,'PENDING','synthetic://crosswalk-test',$3,$4,now()-interval '1 day')
+       returning id`,
+      [organizationId, geographyId, hash("synthetic crosswalk evidence"), identityId],
+    );
+    crosswalkId = pendingCrosswalk.rows[0]!.id;
+    await assert.rejects(
+      pool.query(
+        "update government_jurisdiction_crosswalks set status='VERIFIED', approved_by_identity_id=$2, approval_reason='Synthetic same-actor attempt', verified_at=now() where id=$1",
+        [crosswalkId, identityId],
+      ),
+      /GOVERNMENT_CROSSWALK_VERIFICATION_INVALID/,
+      "crosswalk verification must reject same-actor approval",
+    );
     const outsideGeography = await pool.query<{ id: string }>(
       "insert into geography(kind,code,name,source,source_version) values('CLUSTER',$1,$2,'RupayKG synthetic integration test','v1') returning id",
       ["TEST-OUTSIDE-" + suffix, "Synthetic out-of-scope geography " + suffix],
@@ -194,6 +212,7 @@ test("CPCB SWM workspace routes enforce permissions and persist only user-report
     if (workspaceId) await pool.query("delete from cpcb_swm_status_history where workspace_id=$1", [workspaceId]).catch(() => undefined);
     if (workspaceId) await pool.query("delete from cpcb_swm_stakeholder_workspaces where id=$1", [workspaceId]).catch(() => undefined);
     await pool.query("delete from organization_geography_scopes where organization_id=$1", [organizationId]).catch(() => undefined);
+    if (crosswalkId) await pool.query("delete from government_jurisdiction_crosswalks where id=$1", [crosswalkId]).catch(() => undefined);
     if (outsideGeographyId) await pool.query("delete from geography where id=$1", [outsideGeographyId]).catch(() => undefined);
     await pool.query("delete from identity_sessions where identity_id=$1", [identityId]).catch(() => undefined);
     await pool.query("delete from organization_memberships where identity_id=$1 and organization_id=$2", [identityId, organizationId]).catch(() => undefined);
