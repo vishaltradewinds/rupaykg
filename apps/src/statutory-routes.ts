@@ -78,7 +78,7 @@ async function evidenceBindingValid(pool: Pool, organizationId: string, evidence
          and v.decision='APPROVED'
          and (e.content_hash is not null or e.content_uri is not null)
          and a.geography_id is not null
-         and organization_has_geography_scope(a.organization_id,a.geography_id)
+         and organization_has_explicit_geography_scope(a.organization_id,a.geography_id)
      ) ok`,
     [organizationId, evidenceId, verificationId],
   );
