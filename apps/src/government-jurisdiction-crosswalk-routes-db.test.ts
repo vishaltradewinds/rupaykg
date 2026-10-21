@@ -74,6 +74,39 @@ test("government jurisdiction crosswalk API scopes requests and rejects unauthor
     assert.equal(unboundEvidence.statusCode, 422, unboundEvidence.body);
     assert.equal(unboundEvidence.json().code, "GOVERNMENT_CROSSWALK_EVIDENCE_UNBOUND");
 
+    // A real vault artifact for the same tenant but another activity must not be reusable
+    // to assert evidence for the requested activity.
+    const otherActivityId = randomUUID();
+    await pool.query("insert into activities(id,organization_id,geography_id,activity_type,status) values($1,$2,$3,'WASTE_WEIGHT_MEASUREMENT','COMPLETED')", [otherActivityId, organizationId, geographyId]);
+    const wrongActivity = await app.inject({
+      method: "POST", url: "/api/v1/government/jurisdiction-crosswalk/requests", headers,
+      payload: { ...payload, activityId: otherActivityId },
+    });
+    assert.equal(wrongActivity.statusCode, 422, wrongActivity.body);
+    assert.equal(wrongActivity.json().code, "GOVERNMENT_CROSSWALK_EVIDENCE_UNBOUND");
+
+    // A valid immutable artifact belonging to another tenant must not bind to this tenant's request.
+    const foreignOrganizationId = randomUUID();
+    const foreignGeographyId = randomUUID();
+    const foreignActivityId = randomUUID();
+    const foreignEvidenceId = randomUUID();
+    const foreignSeriesId = randomUUID();
+    const foreignArtifactVersionId = randomUUID();
+    const foreignBytes = Buffer.from("Synthetic evidence owned by a different tenant");
+    const foreignSha256 = hash(foreignBytes.toString());
+    await pool.query("insert into organizations(id,name,organization_type) values($1,$2,'TEST_FIXTURE')", [foreignOrganizationId, "Foreign evidence tenant " + suffix]);
+    await pool.query("insert into geography(id,kind,code,name,source,source_version) values($1,'CLUSTER',$2,$3,'Synthetic foreign fixture','v1')", [foreignGeographyId, "FOREIGN-GEO-" + suffix, "Foreign evidence geography " + suffix]);
+    await pool.query("insert into activities(id,organization_id,geography_id,activity_type,status) values($1,$2,$3,'WASTE_WEIGHT_MEASUREMENT','COMPLETED')", [foreignActivityId, foreignOrganizationId, foreignGeographyId]);
+    await pool.query("insert into evidence_artifact_series(id,organization_id,activity_id,evidence_type,created_by_identity_id) values($1,$2,$3,'CROSSWALK_SOURCE_RECORD',$4)", [foreignSeriesId, foreignOrganizationId, foreignActivityId, requesterId]);
+    await pool.query("insert into evidence(id,activity_id,evidence_type,status,captured_at,content_uri,content_hash,metadata) values($1,$2,'CROSSWALK_SOURCE_RECORD','CAPTURED',now(),$3,$4,'{}'::jsonb)", [foreignEvidenceId, foreignActivityId, "db://evidence-vault/" + foreignArtifactVersionId, foreignSha256]);
+    await pool.query("insert into evidence_artifact_versions(id,series_id,evidence_id,version_number,file_name,media_type,size_bytes,sha256,content,uploaded_by_identity_id,source_reference) values($1,$2,$3,1,'foreign-evidence.txt','text/plain',$4,$5,$6,$7,'synthetic://foreign-tenant')", [foreignArtifactVersionId, foreignSeriesId, foreignEvidenceId, foreignBytes.length, foreignSha256, foreignBytes, requesterId]);
+    const wrongTenant = await app.inject({
+      method: "POST", url: "/api/v1/government/jurisdiction-crosswalk/requests", headers,
+      payload: { ...payload, evidenceReference: "db://evidence-vault/" + foreignArtifactVersionId, evidenceSha256: foreignSha256 },
+    });
+    assert.equal(wrongTenant.statusCode, 422, wrongTenant.body);
+    assert.equal(wrongTenant.json().code, "GOVERNMENT_CROSSWALK_EVIDENCE_UNBOUND");
+
     const requestResponse = await app.inject({ method: "POST", url: "/api/v1/government/jurisdiction-crosswalk/requests", headers, payload });
     assert.equal(requestResponse.statusCode, 201, requestResponse.body);
     assert.equal(requestResponse.json().status, "PENDING");
