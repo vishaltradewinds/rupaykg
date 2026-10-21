@@ -114,3 +114,45 @@ comment on table government_geography_crosswalk_requests is
   'Pending/approved/rejected two-person requests for mapping an external government geography identifier to a canonical source-versioned geography record. Evidence is required; approvals are not official government authorization.';
 comment on table government_geography_crosswalks is
   'Evidence-backed external-to-canonical geography crosswalk. No official source identifiers are seeded by this migration; VERIFIED mappings require distinct requester and approver and an exact approved request.';
+
+-- Requests are immutable after creation except for one PENDING -> APPROVED/REJECTED decision.
+-- Privileged route authorization must still verify the active platform approver before this transition.
+create or replace function enforce_government_geography_crosswalk_request_lifecycle()
+returns trigger language plpgsql as $$
+begin
+  if TG_OP = 'INSERT' then
+    if new.status <> 'PENDING' or new.decided_by_identity_id is not null
+       or new.decided_at is not null or new.applied_at is not null then
+      raise exception 'GOV_GEOGRAPHY_CROSSWALK_REQUEST_MUST_START_PENDING';
+    end if;
+    return new;
+  end if;
+  if old.status <> 'PENDING' or new.status not in ('APPROVED','REJECTED')
+     or new.id is distinct from old.id
+     or new.authority_code is distinct from old.authority_code
+     or new.source_system is distinct from old.source_system
+     or new.external_code is distinct from old.external_code
+     or new.source_version is distinct from old.source_version
+     or new.geography_id is distinct from old.geography_id
+     or new.evidence_reference is distinct from old.evidence_reference
+     or new.evidence_sha256 is distinct from old.evidence_sha256
+     or new.request_reason is distinct from old.request_reason
+     or new.request_hash is distinct from old.request_hash
+     or new.requested_by_identity_id is distinct from old.requested_by_identity_id
+     or new.created_at is distinct from old.created_at
+     or new.decided_by_identity_id is null
+     or new.decided_by_identity_id = new.requested_by_identity_id
+     or new.decided_at is null
+     or length(trim(coalesce(new.decision_reason,''))) < 8
+     or (new.status='APPROVED' and new.applied_at is null)
+     or (new.status='REJECTED' and new.applied_at is not null) then
+    raise exception 'GOV_GEOGRAPHY_CROSSWALK_REQUEST_LIFECYCLE_INVALID';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists government_geography_crosswalk_request_lifecycle on government_geography_crosswalk_requests;
+create trigger government_geography_crosswalk_request_lifecycle
+before insert or update on government_geography_crosswalk_requests
+for each row execute function enforce_government_geography_crosswalk_request_lifecycle();
