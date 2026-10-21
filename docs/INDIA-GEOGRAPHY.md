@@ -1,21 +1,43 @@
 # India Geography Model
 
-The model must support India without assuming one fixed administrative hierarchy.
+RupayKg must support Pan-India operations without assuming that every state, local body, source registry or programme uses one identical administrative hierarchy.
+
+## Supported normalized geography kinds
+
+- National and administrative: country, state/UT, district, sub-district, block, taluk and tehsil.
+- Urban operating rails: urban local body (ULB), ward and locality.
+- Rural operating rails: Gram Panchayat, village, habitation and cluster.
+
+These are platform-level normalized kinds. They are not a claim that every kind exists in every state, that each parent-child edge is universally valid, or that this taxonomy replaces an authority's legal jurisdiction.
+
+## Design principle
 
 ```text
 India
   -> State / Union Territory
      -> District
-        -> Sub-district / Block / Taluk / Tehsil
-           -> Local operating jurisdiction
-              -> Urban: Municipal Corporation / Municipality / Nagar Panchayat / Ward / locality
-              -> Rural: Gram Panchayat / village / habitation / cluster
+        -> Source-specific administrative path
+           -> Urban: ULB / ward / locality, where supported by that source
+           -> Rural: Gram Panchayat / village / habitation / cluster, where supported by that source
 ```
 
-## Rules
-- Geography is versioned because administrative boundaries can change.
-- Every operational record may carry an effective geography scope.
-- Rural and urban infrastructure can differ while using common domain entities.
-- A record may reference source geography and destination geography.
-- Permissions are scoped by organization and geography.
-- LGD or another authoritative government geography source must be treated as an external authority, not fabricated platform data.
+## Mandatory rules
+
+- **Source- and version-specific hierarchy:** validate parent-child edges against the relevant authoritative dataset and version. Do not treat `DEFAULT_GEOGRAPHY_HIERARCHY` in code as a universal India hierarchy or as authorization evidence.
+- **Urban/rural separation:** preserve distinct urban and rural operating rails. A cross-rail edge must not be inferred from names, proximity or an AI suggestion.
+- **Effective-dated geography:** retain source version, effective period and lineage because administrative boundaries and codes can change.
+- **Authorization is separate:** a valid geography edge does not grant an organization access to that geography. Organization membership, explicit scope, activity ownership and permissions must be checked independently.
+- **No invented government records:** LGD or another applicable authoritative government source is an external authority. Do not fabricate codes, jurisdictions, approval or a synchronization status.
+- **Fail closed:** if the source, version, jurisdiction edge or organization scope cannot be verified, keep the mapping unresolved and block authoritative mutation or official submission.
+
+## Current implementation boundary
+
+The domain package supports a starter hierarchy profile and allows callers to supply a source-specific hierarchy map. This is a structural capability, not proof that authoritative nationwide datasets have been ingested, reconciled or validated. Before production use, each supported source profile needs documented provenance, version/effective dates, validation tests and review evidence. Programme-specific eligibility and regulatory applicability remain separate gates.
+
+## Pan-India acceptance gates
+
+1. Inventory the authoritative geography sources and their permitted usage for each integration.
+2. Validate source-specific hierarchies and codes for representative states/UTs and urban/rural paths.
+3. Test stale, missing, conflicting, cross-tenant and cross-jurisdiction records fail closed.
+4. Demonstrate source updates, boundary changes, effective dating and audit lineage.
+5. Approve the supported coverage matrix before claiming a geography or programme is production-ready.
