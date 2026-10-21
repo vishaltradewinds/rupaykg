@@ -107,6 +107,23 @@ test("government jurisdiction crosswalk API scopes requests and rejects unauthor
     assert.equal(wrongTenant.statusCode, 422, wrongTenant.body);
     assert.equal(wrongTenant.json().code, "GOVERNMENT_CROSSWALK_EVIDENCE_UNBOUND");
 
+    // Mapping targets are tenant-bound independently of evidence binding.
+    const foreignTarget = await app.inject({
+      method: "POST", url: "/api/v1/government/jurisdiction-crosswalk/requests", headers,
+      payload: { ...payload, organizationId: foreignOrganizationId, geographyId: foreignGeographyId },
+    });
+    assert.equal(foreignTarget.statusCode, 403, foreignTarget.body);
+    assert.equal(foreignTarget.json().code, "GOVERNMENT_CROSSWALK_FORBIDDEN");
+
+    // An activity from another tenant cannot be mapped to this tenant's geography,
+    // even when the submitted organization and geography are otherwise authorized.
+    const foreignActivityTarget = await app.inject({
+      method: "POST", url: "/api/v1/government/jurisdiction-crosswalk/requests", headers,
+      payload: { ...payload, activityId: foreignActivityId },
+    });
+    assert.equal(foreignActivityTarget.statusCode, 409, foreignActivityTarget.body);
+    assert.equal(foreignActivityTarget.json().code, "GOVERNMENT_CROSSWALK_ACTIVITY_MISMATCH");
+
     const requestResponse = await app.inject({ method: "POST", url: "/api/v1/government/jurisdiction-crosswalk/requests", headers, payload });
     assert.equal(requestResponse.statusCode, 201, requestResponse.body);
     assert.equal(requestResponse.json().status, "PENDING");
