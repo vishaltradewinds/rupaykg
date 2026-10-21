@@ -53,6 +53,23 @@ test("worker keeps structurally valid but unmapped batches unresolved", async ()
   assert.equal(statements[3]!.values[2], "GOVERNMENT_CROSSWALK_NOT_FOUND");
 });
 
+test("worker keeps ambiguous crosswalk candidates unresolved instead of choosing one", async () => {
+  const candidates = [
+    { id: "crosswalk-a", organization_id: "organization-a", geography_id: "geography-a", activity_id: null, source_version: "synthetic-v1" },
+    { id: "crosswalk-b", organization_id: "organization-b", geography_id: "geography-b", activity_id: null, source_version: "synthetic-v1" },
+  ];
+  const { pool, statements } = fakePool([row], candidates);
+  const result = await runGovernmentInboxWorker(pool);
+  assert.deepEqual(result, { claimed: 1, validated: 0, rejected: 0, unresolved: 1, retried: 0, quarantined: 0 });
+  assert.match(statements[3]!.sql, /status='UNRESOLVED'/i);
+  assert.equal(statements[3]!.values[2], "GOVERNMENT_CROSSWALK_AMBIGUOUS");
+  const summary = JSON.parse(String(statements[3]!.values[3])) as Record<string, unknown>;
+  assert.equal(summary.reason, "MULTIPLE_VERIFIED_JURISDICTION_CROSSWALKS");
+  assert.equal(summary.officialAcceptance, false);
+  assert.equal(summary.authoritativeMrvMutation, false);
+  assert.equal(summary.guardianSubmission, false);
+});
+
 test("worker rejects metadata mismatch without retrying deterministic validation failures", async () => {
   const changedPayload = { ...row.payload as Record<string, any>, batchMetadata: { ...(row.payload as any).batchMetadata, municipalCode: "OTHER" } };
   const { pool } = fakePool([{ ...row, payload: changedPayload, payload_sha256: canonicalGovBridgeHash(changedPayload) }]);
