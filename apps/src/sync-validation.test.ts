@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { validateConflictResolution, validateSyncEnvelope } from "./sync-validation.js";
+import { isValidRfc3339Timestamp, validateConflictResolution, validateSyncEnvelope } from "./sync-validation.js";
+import { positiveSyncNumber, validSyncDateValue } from "./sync-routes.js";
 
 test("accepts a valid field-sync envelope", () => {
   const result = validateSyncEnvelope({
@@ -75,4 +76,23 @@ test("field-sync capture timestamps require a valid timezone-bearing RFC 3339 va
     assert.equal(result.ok, false, `expected invalid timestamp to be rejected: ${capturedAt}`);
     if (!result.ok) assert.equal(result.code, "INVALID_CAPTURE_TIME");
   }
+});
+
+test("field operation measurements reject numeric strings and invalid timestamps", () => {
+  for (const value of ["42", "1e2", null, true, 0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+    assert.equal(positiveSyncNumber({ value }, "value"), null);
+  }
+  assert.equal(positiveSyncNumber({ value: 42 }, "value"), 42);
+  assert.equal(positiveSyncNumber({ value: 0.25 }, "value"), 0.25);
+  for (const value of ["2026-02-30T10:00:00Z", "2026-10-21", "2026-10-21T10:00:00", "2026-10-21T25:00:00Z", ""]) {
+    assert.equal(validSyncDateValue({ capturedAt: value }, "capturedAt"), null);
+  }
+  assert.equal(validSyncDateValue({ capturedAt: "2026-10-21T10:00:00+05:30" }, "capturedAt"), "2026-10-21T10:00:00+05:30");
+});
+
+test("RFC3339 timestamp validator rejects impossible calendar dates and timezone offsets", () => {
+  assert.equal(isValidRfc3339Timestamp("2026-02-30T10:00:00Z"), false);
+  assert.equal(isValidRfc3339Timestamp("2026-10-21T10:00:00+25:00"), false);
+  assert.equal(isValidRfc3339Timestamp("2026-10-21T10:00:00+01:60"), false);
+  assert.equal(isValidRfc3339Timestamp("2024-02-29T10:00:00Z"), true);
 });
