@@ -8,7 +8,7 @@ const sha = (value: string) => createHash("sha256").update(value).digest("hex");
 
 test("approved source snapshots are immutable and regulatory rules reject unsupported source scope", { skip: !enabled }, async () => {
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-  const suffix = randomBytes(8).toString("hex");
+  const suffix = randomBytes(8).toString("hex").toUpperCase();
   let identityId = "";
   const snapshotIds: string[] = [];
   const ruleIds: string[] = [];
