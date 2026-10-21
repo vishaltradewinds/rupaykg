@@ -95,6 +95,7 @@ export async function registerGovernmentJurisdictionCrosswalkRoutes(app: Fastify
     const evidenceSha256 = text(body, "evidenceSha256", 64);
     const reason = text(body, "reason", 1000);
     if (!organizationId || !UUID.test(organizationId) || !geographyId || !UUID.test(geographyId)
+      || (body.activityId !== undefined && body.activityId !== null && activityId === null)
       || (activityId !== null && !UUID.test(activityId))
       || !authorityCode || !CODE.test(authorityCode) || !municipalCode || !CODE.test(municipalCode)
       || !sourceVersion || !evidenceReference || !evidenceSha256 || !SHA256.test(evidenceSha256)
@@ -151,6 +152,40 @@ export async function registerGovernmentJurisdictionCrosswalkRoutes(app: Fastify
       request.log.error(cause);
       return error(reply, 503, "Unable to create crosswalk request", "GOVERNMENT_CROSSWALK_REQUEST_UNAVAILABLE");
     } finally { client.release(); }
+  });
+
+  app.get("/api/v1/government/jurisdiction-crosswalk/requests", async (request, reply) => {
+    const auth = await authFor(request, reply, pool); if (!auth || !pool) return;
+    if (!await requireSuperAdmin(pool, auth.identityId)) {
+      return error(reply, 403, "An active Super Admin with platform-management permission is required to review crosswalk requests", "GOVERNMENT_CROSSWALK_APPROVAL_FORBIDDEN");
+    }
+    const query = request.query && typeof request.query === "object" ? request.query as Record<string, unknown> : {};
+    const status = typeof query.status === "string" ? query.status : "PENDING";
+    if (!["PENDING", "APPROVED", "REJECTED", "ALL"].includes(status)) {
+      return error(reply, 400, "status must be PENDING, APPROVED, REJECTED or ALL", "GOVERNMENT_CROSSWALK_QUERY_INVALID");
+    }
+    try {
+      const rows = await pool.query(
+        `select r.id,r.authority_code,r.municipal_code,r.source_version,r.organization_id,o.name organization_name,
+                r.geography_id,g.name geography_name,r.activity_id,r.evidence_reference,r.evidence_sha256,
+                r.request_reason,r.request_hash,r.requested_by_identity_id,requester.display_name requested_by,
+                r.status,r.decided_by_identity_id,approver.display_name decided_by,r.decision_reason,r.expires_at,
+                r.created_at,r.decided_at,r.applied_at
+           from government_jurisdiction_crosswalk_requests r
+           join organizations o on o.id=r.organization_id
+           join geography g on g.id=r.geography_id
+           join identities requester on requester.id=r.requested_by_identity_id
+           left join identities approver on approver.id=r.decided_by_identity_id
+          where ($1='ALL' or r.status=$1)
+          order by case when r.status='PENDING' then 0 else 1 end, r.created_at asc
+          limit 200`,
+        [status],
+      );
+      return { source: "postgresql", syntheticData: false, requests: rows.rows };
+    } catch (cause) {
+      request.log.error(cause);
+      return error(reply, 503, "Crosswalk review queue unavailable", "GOVERNMENT_CROSSWALK_QUEUE_UNAVAILABLE");
+    }
   });
 
   app.post("/api/v1/government/jurisdiction-crosswalk/requests/:requestId/decision", async (request, reply) => {
