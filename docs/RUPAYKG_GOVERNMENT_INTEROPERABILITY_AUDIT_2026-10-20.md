@@ -381,3 +381,12 @@ The EPR return and BWG reporting-period routes now require real ISO calendar dat
 Validation evidence: GitHub Actions CI run #1568 passed on commit `87789f0941ace1d3aeb8211374c67783a6beb44c` (dependency audit, migration validation/execution in disposable CI PostgreSQL, TypeScript typecheck, build, browser smoke test, tests including disposable PostgreSQL acceptance, and production-container build).
 
 This is engineering hardening, not external certification. The PR remains draft and unmerged. Render's live RupayKg service is configured to deploy from `main`; this feature branch has not been deployed. Read-only service diagnostics on 2026-10-21 returned no error/fatal logs for the inspected interval. No production migration/deploy, official submission, live Guardian/Hedera transaction, or carbon-credit issuance was performed. Staging lifecycle acceptance and external approvals/API contracts remain independent release gates.
+
+
+## 14. Follow-up hardening — field-operation sync inputs (2026-10-21)
+
+The field-operation sync path was also hardened after the route-wide scan found permissive numeric coercion and date parsing for measurement/evidence timestamps. Sync operation quantities and measured values now require finite positive JSON numbers; operation timestamps require valid timezone-bearing RFC 3339 timestamps using the shared validator already applied to sync envelopes. This prevents values such as numeric strings, date-only strings, missing timezones, impossible calendar dates, and invalid offsets from entering through operation payloads.
+
+Regression tests cover numeric-string rejection, positive fractional measurements, impossible timestamps, missing timezones, invalid hour/offset values, and valid leap-day/timezone examples. GitHub Actions run #1572 passed on `8ef247d6556dd5a9a37e9033d2eb90edab0f6142`, including dependency audit, migration validation and disposable PostgreSQL migration, typecheck, build, browser smoke test, full tests/PostgreSQL acceptance, and production-container build.
+
+The audit status remains engineering PASS / release HOLD. Render's existing RupayKg service points to `main`; no feature-branch deployment or production data mutation was performed. The PR remains draft and unmerged pending independent staging, alert ownership/destination, external API/credential, Guardian/Hedera, and statutory verification/issuance gates.
