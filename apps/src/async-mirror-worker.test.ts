@@ -28,6 +28,7 @@ const row = {
   authority_code: "MH-PCB",
   municipal_code: "MCGM-MUM",
   batch_id: "b5e74bb0-b3a1-4fd7-ae67-c3c2a68d56ab",
+  sync_window_timestamp: new Date("2026-10-19T02:30:00Z"),
   payload: rowPayload,
   payload_sha256: canonicalGovBridgeHash(rowPayload),
   attempts: 1,
@@ -56,6 +57,13 @@ test("worker rejects payload changes that do not match the stored canonical hash
   const result = await runGovernmentInboxWorker(pool);
   assert.equal(result.rejected, 1);
   assert.equal(statements[2]!.values[2], "BATCH_PAYLOAD_HASH_MISMATCH");
+});
+
+test("worker rejects payload/database sync-window timestamp divergence", async () => {
+  const { pool, statements } = fakePool([{ ...row, sync_window_timestamp: new Date("2026-10-20T02:30:00Z") }]);
+  const result = await runGovernmentInboxWorker(pool);
+  assert.equal(result.rejected, 1);
+  assert.equal(statements[2]!.values[2], "BATCH_TIMESTAMP_DATABASE_MISMATCH");
 });
 
 test("worker quarantines exhausted unclaimed inbox rows instead of leaving them stuck", async () => {
