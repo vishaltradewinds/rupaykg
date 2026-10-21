@@ -132,3 +132,8 @@ If no mapping exists or more than one mapping matches the batch's effective time
 ## Regulatory rule source-scope gate (migration `20261106_regulatory_rule_source_gate.sql`)
 
 A regulatory rule cannot be marked `APPROVED` unless its source snapshot is already `APPROVED`, its source jurisdiction is compatible with the rule jurisdiction (a national source may support a narrower rule; narrower or unrelated sources may not silently support broader rules), and the rule's effective period fits within the source snapshot's effective period. Non-national jurisdiction scope codes must match exactly unless a separate reviewed crosswalk establishes a supported relationship. This is an internal provenance control, not a legal determination, statutory approval, or evidence that the source dataset is complete for India. Do not seed nationwide rules or snapshots without verified source material, coverage counts, usage terms, and named review.
+
+
+## Approved source snapshot immutability (migration `20261107_approved_source_snapshot_immutability.sql`)
+
+Once an authoritative source snapshot is approved, its source owner, dataset/version, URL, jurisdiction scope, publication/retrieval and effective dates, content hash, coverage counts, usage-terms reference, and reviewer provenance cannot be rewritten. Corrected source material must be captured as a new snapshot/version. Lifecycle status and explanatory notes remain separately mutable; retiring a snapshot is not itself proof that every historical rule or filing is invalid. This protects source provenance from silent edits and does not establish nationwide coverage or legal approval.
