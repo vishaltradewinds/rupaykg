@@ -39,13 +39,13 @@ function validIsoDateTime(value: string): boolean {
   const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,3})?(Z|([+-])(\d{2}):(\d{2}))$/.exec(value);
   if (!match) return false;
 
-  // Capture indexes are explicit: 10 = offset hour, 11 = offset minute.
-  // Avoid accidentally validating the sign character as the offset hour.
+  // Capture indexes are explicit: 9 = offset hour, 10 = offset minute.
+  // The timezone and sign are groups 7 and 8, respectively.
   const hour = match[4];
   const minute = match[5];
   const second = match[6];
-  const offsetHour = match[10];
-  const offsetMinute = match[11];
+  const offsetHour = match[9];
+  const offsetMinute = match[10];
   const datePart = value.slice(0, 10);
   const parsedDate = new Date(datePart + "T00:00:00.000Z");
   if (Number.isNaN(parsedDate.getTime()) || parsedDate.toISOString().slice(0, 10) !== datePart) return false;
