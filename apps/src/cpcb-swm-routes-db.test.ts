@@ -167,10 +167,10 @@ test("CPCB SWM workspace routes enforce permissions and persist only user-report
     await pool.query("insert into evidence_artifact_versions(id,series_id,evidence_id,version_number,file_name,media_type,size_bytes,sha256,content,uploaded_by_identity_id,source_reference) values($1,$2,$3,1,'crosswalk.txt','text/plain',$4,$5,$6,$7,'synthetic://crosswalk-test')", [evidenceArtifactVersionId, evidenceSeriesId, evidenceId, evidenceBytes.length, evidenceSha256, evidenceBytes, identityId]);
     const pendingCrosswalk = await pool.query<{ id: string }>(
       `insert into government_jurisdiction_crosswalks
-        (authority_code,municipal_code,source_version,organization_id,geography_id,status,evidence_reference,evidence_sha256,requested_by_identity_id,effective_from)
-       values('TEST-AUTHORITY','TEST-MUNICIPAL','synthetic-v1',$1,$2,'PENDING',$3,$4,$5,now()-interval '1 day')
+        (authority_code,municipal_code,source_version,source_snapshot_id,organization_id,geography_id,status,evidence_reference,evidence_sha256,requested_by_identity_id,effective_from)
+       values('SYNTHETIC_AUTHORITY','TEST-MUNICIPAL','v1',$1,$2,$3,'PENDING',$4,$5,$6,now()-interval '1 day')
        returning id`,
-      [organizationId, geographyId, evidenceReference, evidenceSha256, identityId],
+      [crosswalkSourceSnapshotId, organizationId, geographyId, evidenceReference, evidenceSha256, identityId],
     );
     crosswalkId = pendingCrosswalk.rows[0]!.id;
     await assert.rejects(
