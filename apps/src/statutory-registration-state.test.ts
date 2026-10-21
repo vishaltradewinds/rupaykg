@@ -39,6 +39,8 @@ test("BWG applicability uses the thresholds from a validated rule-version payloa
   assert.deepEqual(thresholds, { floorAreaSqM: 20000, waterConsumptionLpd: 40000, solidWasteKgpd: 100 });
   assert.equal(bwgStatus(20000, 1000, 1, thresholds), "APPLICABLE");
   assert.equal(bwgStatus(100, 100, 1, thresholds), "NOT_APPLICABLE");
+  assert.equal(bwgStatus(20000, undefined, undefined, thresholds), "APPLICABLE", "one verified qualifying criterion is sufficient under OR semantics");
+  assert.equal(bwgStatus(100, undefined, undefined, thresholds), "UNKNOWN", "missing non-qualifying measurements cannot prove ineligibility");
   assert.equal(parseBwgRuleThresholds({ thresholds: { floorAreaSqM: "20000", waterConsumptionLpd: 40000, solidWasteKgpd: 100 } }), null);
   assert.equal(parseBwgRuleThresholds({ thresholds: { floorAreaSqM: 0, waterConsumptionLpd: 40000, solidWasteKgpd: 100 } }), null);
   assert.equal(parseBwgRuleThresholds({}), null);

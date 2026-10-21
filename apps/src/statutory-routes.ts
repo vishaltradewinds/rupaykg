@@ -97,8 +97,11 @@ export function parseBwgRuleThresholds(value: unknown): BwgRuleThresholds | null
 }
 export function bwgStatus(floorArea: number | null | undefined, water: number | null | undefined, waste: number | null | undefined, thresholds: BwgRuleThresholds | null): "UNKNOWN" | "UNDER_REVIEW" | "APPLICABLE" | "NOT_APPLICABLE" {
   if (!thresholds || floorArea === null || water === null || waste === null) return "UNDER_REVIEW";
+  if ((floorArea !== undefined && floorArea >= thresholds.floorAreaSqM)
+    || (water !== undefined && water >= thresholds.waterConsumptionLpd)
+    || (waste !== undefined && waste >= thresholds.solidWasteKgpd)) return "APPLICABLE";
   if (floorArea === undefined || water === undefined || waste === undefined) return "UNKNOWN";
-  return floorArea >= thresholds.floorAreaSqM || water >= thresholds.waterConsumptionLpd || waste >= thresholds.solidWasteKgpd ? "APPLICABLE" : "NOT_APPLICABLE";
+  return "NOT_APPLICABLE";
 }
 
 export async function registerStatutoryRoutes(app: FastifyInstance, pool: Pool | null): Promise<void> {

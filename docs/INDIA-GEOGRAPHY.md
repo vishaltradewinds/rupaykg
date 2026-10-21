@@ -57,3 +57,10 @@ These are source-discovery references, not an assertion that live records have b
 The database now has an `authoritative_source_snapshots` manifest for recording the source owner, dataset code, source URL/version, jurisdiction scope, effective dates, retrieval timestamp, content SHA-256, record counts, usage-terms reference, and review state. An entry cannot be marked `APPROVED` without retrieved bytes, a content hash, complete counts, a usage-terms reference and named review metadata. No nationwide LGD snapshot is seeded by the migration; this is a data contract, not proof of ingestion or coverage.
 
 For a real import, capture the exact official download artifact and its usage terms, record the source's from/to date range and state/entity scope, reconcile record counts, test codes/parent edges/duplicates and ambiguous mappings, and retain unresolved rows. Census classifications, LGD administrative records and programme-specific jurisdictions must remain distinct.
+
+
+## Crosswalk snapshot binding (2026-10-21)
+
+New crosswalk requests and verified mappings must reference an `APPROVED` source snapshot whose authority code, source version and effective period match the request. A source-version string typed by a user is no longer sufficient. The database enforces the binding as well as the API. The disposable integration test uses a clearly synthetic approved fixture solely to exercise this boundary; it is not national geography evidence.
+
+No real LGD snapshot has been registered or approved in this change. Import, source terms review, per-state/UT coverage reconciliation, and urban/rural hierarchy validation remain necessary before any nationwide coverage claim.

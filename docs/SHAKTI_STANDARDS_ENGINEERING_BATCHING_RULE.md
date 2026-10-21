@@ -61,3 +61,8 @@ This batch groups API registry lookup, a single source-of-truth taxonomy table, 
 ## Batch record — source lineage and versioned statutory applicability
 
 The batch groups source-snapshot provenance, effective-dated regulatory rule versions, BWG route selection of an approved effective rule, fail-closed status when no approved version exists, and regression tests for malformed or absent threshold payloads. Full CI must validate the combined migration and code. The absence of imported source snapshots is recorded as a real gap, not filled with synthetic national data.
+
+
+## Batch record — enforce crosswalk source provenance
+
+The follow-up batch links source snapshot manifests to jurisdiction crosswalk requests and verified mappings, validates authority/version/effective-date consistency in API and database, adds negative integration assertions for absent/mismatched snapshots, and corrects BWG threshold OR semantics. Full validation must run on the final combined commit; the synthetic source snapshot exists only in disposable test fixtures.

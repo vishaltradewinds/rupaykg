@@ -73,6 +73,11 @@ test("government jurisdiction crosswalk API scopes requests and rejects unauthor
     const unboundEvidence = await app.inject({ method: "POST", url: "/api/v1/government/jurisdiction-crosswalk/requests", headers, payload: { ...payload, evidenceReference: "synthetic://not-in-vault/" + suffix } });
     assert.equal(unboundEvidence.statusCode, 422, unboundEvidence.body);
     assert.equal(unboundEvidence.json().code, "GOVERNMENT_CROSSWALK_EVIDENCE_UNBOUND");
+    const missingSnapshot = await app.inject({ method: "POST", url: "/api/v1/government/jurisdiction-crosswalk/requests", headers, payload: { ...payload, sourceSnapshotId: undefined } });
+    assert.equal(missingSnapshot.statusCode, 400, missingSnapshot.body);
+    const mismatchedSnapshot = await app.inject({ method: "POST", url: "/api/v1/government/jurisdiction-crosswalk/requests", headers, payload: { ...payload, authorityCode: "OTHER_AUTHORITY" } });
+    assert.equal(mismatchedSnapshot.statusCode, 409, mismatchedSnapshot.body);
+    assert.equal(mismatchedSnapshot.json().code, "GOVERNMENT_CROSSWALK_SOURCE_SNAPSHOT_REQUIRED");
 
     // A real vault artifact for the same tenant but another activity must not be reusable
     // to assert evidence for the requested activity.

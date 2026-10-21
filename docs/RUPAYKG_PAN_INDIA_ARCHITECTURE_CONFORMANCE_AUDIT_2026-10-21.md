@@ -147,3 +147,10 @@ Validation is pending for the combined commit. Next connected work remains sourc
 Migration `20261104_source_snapshot_and_regulatory_rule_versions.sql` adds a provenance manifest for authoritative source snapshots and an effective-dated `regulatory_rule_versions` table linked to an approved source snapshot. BWG assessments now consult an approved, effective India-wide SWM_BWG rule version and its validated threshold payload. If no approved source snapshot/rule version exists—or the payload is malformed—the assessment is persisted as `UNDER_REVIEW` with `RULE_VERSION_REQUIRED`; the historic 20,000 m² / 40,000 L/day / 100 kg/day figures are retained only as an explicitly unverified internal baseline, not used to assert applicability.
 
 No national LGD snapshot or approved rule version has been ingested/seeded. Crosswalk source-snapshot enforcement and full jurisdiction-specific rule administration remain next steps. This schema and fail-closed assessment path are not proof of Pan-India coverage or legal certification.
+
+
+## 12. Crosswalk source snapshot binding and BWG OR semantics (2026-10-21)
+
+Migration `20261105_crosswalk_snapshot_binding.sql` binds crosswalk requests and verified mappings to an approved source snapshot manifest matching the authority code, source version and effective date. Both the API and PostgreSQL enforce the requirement; missing or mismatched snapshots remain unresolved/fail closed. Integration acceptance now creates an explicitly synthetic snapshot fixture and tests missing/mismatched snapshot rejection. This fixture is not evidence of real source ingestion.
+
+The versioned BWG assessment helper now follows the official portal's OR semantics: one known qualifying criterion is sufficient when an approved rule version exists; missing non-qualifying criteria remain UNKNOWN rather than forcing a negative conclusion. With no approved versioned rule/source snapshot, the result remains UNDER_REVIEW. CI validation for this combined follow-up batch is pending.
