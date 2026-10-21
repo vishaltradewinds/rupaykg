@@ -134,6 +134,54 @@ test("government inbox worker persists retry recovery, quarantine and append-onl
     assert.equal(mismatchRow.rows[0]?.last_error_code, "GOVERNMENT_CROSSWALK_NOT_FOUND");
     assert.equal(mismatchRow.rows[0]?.validation_summary.officialAcceptance, false);
 
+    const resolvedCrosswalk = await pool.query<{ id: string }>(
+      "select id from government_jurisdiction_crosswalks where authority_code=$1 and municipal_code='TEST-MUNI' and organization_id=$2 and source_version='synthetic-source-v1' and status='VERIFIED'",
+      [recoverable.authorityCode, expectedCrosswalk.organizationId],
+    );
+    assert.equal(resolvedCrosswalk.rows.length, 1);
+
+    // Expired mappings must not resolve a batch, even with the exact source version.
+    const expiredTimestamp = new Date().toISOString();
+    await pool.query("update government_jurisdiction_crosswalks set effective_to=$2 where id=$1", [
+      resolvedCrosswalk.rows[0]!.id, new Date(Date.parse(expiredTimestamp) - 1000),
+    ]);
+    const expiredBatchId = randomUUID();
+    const expiredPayload = {
+      batchMetadata: { authorityCode: recoverable.authorityCode, municipalCode: "TEST-MUNI", batchId: expiredBatchId,
+        syncWindowTimestamp: expiredTimestamp, sourceVersion: "synthetic-source-v1" },
+      rawDataLogs: ["Synthetic expired-crosswalk waste intake record"],
+    };
+    const expiredInsert = await pool.query<{ id: string }>(
+      "insert into async_mirror_inbox(authority_code,municipal_code,batch_id,sync_window_timestamp,payload,payload_sha256,status,attempts,received_at) values($1,'TEST-MUNI',$2,$3,$4::jsonb,$5,'RECEIVED',0,now()-interval '2 minutes') returning id",
+      [recoverable.authorityCode, expiredBatchId, expiredTimestamp, JSON.stringify(expiredPayload), sha(expiredPayload)],
+    );
+    await runGovernmentInboxWorker(pool, undefined, { batchSize: 10, maxAttempts: 3 });
+    const expiredRow = await pool.query<{ status: string; last_error_code: string | null }>(
+      "select status,last_error_code from async_mirror_inbox where id=$1", [expiredInsert.rows[0]!.id],
+    );
+    assert.equal(expiredRow.rows[0]?.status, "UNRESOLVED");
+    assert.equal(expiredRow.rows[0]?.last_error_code, "GOVERNMENT_CROSSWALK_NOT_FOUND");
+
+    // Revoked mappings must not resolve future batches.
+    await pool.query("update government_jurisdiction_crosswalks set status='REVOKED', effective_to=null, revoked_at=now() where id=$1", [resolvedCrosswalk.rows[0]!.id]);
+    const revokedTimestamp = new Date().toISOString();
+    const revokedBatchId = randomUUID();
+    const revokedPayload = {
+      batchMetadata: { authorityCode: recoverable.authorityCode, municipalCode: "TEST-MUNI", batchId: revokedBatchId,
+        syncWindowTimestamp: revokedTimestamp, sourceVersion: "synthetic-source-v1" },
+      rawDataLogs: ["Synthetic revoked-crosswalk waste intake record"],
+    };
+    const revokedInsert = await pool.query<{ id: string }>(
+      "insert into async_mirror_inbox(authority_code,municipal_code,batch_id,sync_window_timestamp,payload,payload_sha256,status,attempts,received_at) values($1,'TEST-MUNI',$2,$3,$4::jsonb,$5,'RECEIVED',0,now()-interval '2 minutes') returning id",
+      [recoverable.authorityCode, revokedBatchId, revokedTimestamp, JSON.stringify(revokedPayload), sha(revokedPayload)],
+    );
+    await runGovernmentInboxWorker(pool, undefined, { batchSize: 10, maxAttempts: 3 });
+    const revokedRow = await pool.query<{ status: string; last_error_code: string | null }>(
+      "select status,last_error_code from async_mirror_inbox where id=$1", [revokedInsert.rows[0]!.id],
+    );
+    assert.equal(revokedRow.rows[0]?.status, "UNRESOLVED");
+    assert.equal(revokedRow.rows[0]?.last_error_code, "GOVERNMENT_CROSSWALK_NOT_FOUND");
+
     const exhausted = await makeRow("QRT-" + suffix.slice(0, 8), true);
     const quarantined = await runGovernmentInboxWorker(pool, async () => { throw new Error("SyntheticExhaustedFailure"); }, { batchSize: 10, maxAttempts: 1 });
     assert.ok(quarantined.quarantined >= 1, "exhausted work must be quarantined");
