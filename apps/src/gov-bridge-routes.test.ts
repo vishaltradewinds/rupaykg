@@ -26,6 +26,7 @@ function validBatch(batchId = "b5e74bb0-b3a1-4fd7-ae67-c3c2a68d56ab", municipalC
       authorityCode: "MH-PCB",
       municipalCode,
       syncWindowTimestamp: "2026-10-19T02:30:00Z",
+      sourceVersion: "synthetic-source-v1",
       batchId,
     },
     rawDataLogs: ["Waste collection record from authorized source"],
@@ -279,12 +280,12 @@ test("government inbox binds signatures to the claimed authority and municipal s
 
 test("canonical batch hash is independent of JSON property ordering", () => {
   const first = {
-    batchMetadata: { authorityCode: "MH-PCB", municipalCode: "MCGM-MUM", syncWindowTimestamp: "2026-10-19T02:30:00Z", batchId: "b5e74bb0-b3a1-4fd7-ae67-c3c2a68d56ab" },
+    batchMetadata: { authorityCode: "MH-PCB", municipalCode: "MCGM-MUM", syncWindowTimestamp: "2026-10-19T02:30:00Z", sourceVersion: "synthetic-source-v1", batchId: "b5e74bb0-b3a1-4fd7-ae67-c3c2a68d56ab" },
     rawDataLogs: ["Waste collection record from authorized source"],
   };
   const reordered = {
     rawDataLogs: ["Waste collection record from authorized source"],
-    batchMetadata: { batchId: "b5e74bb0-b3a1-4fd7-ae67-c3c2a68d56ab", syncWindowTimestamp: "2026-10-19T02:30:00Z", municipalCode: "MCGM-MUM", authorityCode: "MH-PCB" },
+    batchMetadata: { batchId: "b5e74bb0-b3a1-4fd7-ae67-c3c2a68d56ab", sourceVersion: "synthetic-source-v1", syncWindowTimestamp: "2026-10-19T02:30:00Z", municipalCode: "MCGM-MUM", authorityCode: "MH-PCB" },
   };
   assert.equal(canonicalGovBridgeHash(first), canonicalGovBridgeHash(reordered));
 });
