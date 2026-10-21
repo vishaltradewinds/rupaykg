@@ -296,7 +296,13 @@ test("government inbox rejects ambiguous or invalid sync-window timestamps befor
   const pool = { query: async () => { queryCount += 1; return { rows: [] }; } } as unknown as Pool;
   try {
     await withRoute(pool, async (app) => {
-      for (const syncWindowTimestamp of ["2026-10-19 02:30:00", "2026-02-31T02:30:00Z", "2026-10-19T02:30:00"]) {
+      for (const syncWindowTimestamp of [
+        "2026-10-19 02:30:00",
+        "2026-02-31T02:30:00Z",
+        "2026-10-19T02:30:00",
+        "2026-10-19T02:30:00+25:00",
+        "2026-10-19T02:30:00+01:60",
+      ]) {
         const body = validBatch();
         body.batchMetadata.syncWindowTimestamp = syncWindowTimestamp;
         const response = await app.inject({
