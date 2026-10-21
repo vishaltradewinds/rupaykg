@@ -16,6 +16,7 @@ type BridgeBatch = {
     authorityCode: string;
     municipalCode: string;
     syncWindowTimestamp: string;
+    sourceVersion: string;
     batchId: string;
   };
   rawDataLogs: string[];
@@ -43,19 +44,20 @@ function parseBatch(value: unknown): BridgeBatch | null {
   if (!isObject(value) || !isObject(value.batchMetadata) || !Array.isArray(value.rawDataLogs)) return null;
   if (Object.keys(value).some((key) => !["batchMetadata", "rawDataLogs"].includes(key))) return null;
   const metadata = value.batchMetadata;
-  if (Object.keys(metadata).some((key) => !["authorityCode", "municipalCode", "syncWindowTimestamp", "batchId"].includes(key))) return null;
+  if (Object.keys(metadata).some((key) => !["authorityCode", "municipalCode", "syncWindowTimestamp", "sourceVersion", "batchId"].includes(key))) return null;
   const authorityCode = typeof metadata.authorityCode === "string" ? metadata.authorityCode.trim().toUpperCase() : "";
   const municipalCode = typeof metadata.municipalCode === "string" ? metadata.municipalCode.trim().toUpperCase() : "";
   const syncWindowTimestamp = typeof metadata.syncWindowTimestamp === "string" ? metadata.syncWindowTimestamp : "";
+  const sourceVersion = typeof metadata.sourceVersion === "string" ? metadata.sourceVersion.trim() : "";
   const batchId = typeof metadata.batchId === "string" ? metadata.batchId : "";
   const timestamp = Date.parse(syncWindowTimestamp);
-  if (!validRfc3339Timestamp(syncWindowTimestamp) || !CODE.test(authorityCode) || !CODE.test(municipalCode) || !UUID.test(batchId)
+  if (!validRfc3339Timestamp(syncWindowTimestamp) || !CODE.test(authorityCode) || !CODE.test(municipalCode) || sourceVersion.length < 1 || sourceVersion.length > 120 || !UUID.test(batchId)
     || !Number.isFinite(timestamp) || Math.abs(Date.now() - timestamp) > 7 * 24 * 60 * 60 * 1000
     || value.rawDataLogs.length < 1 || value.rawDataLogs.length > MAX_RECORDS) return null;
   const rawDataLogs = value.rawDataLogs;
   if (!rawDataLogs.every((entry) => typeof entry === "string" && entry.trim().length >= 5
     && entry.length <= MAX_RECORD_CHARS && !entry.includes("\u0000"))) return null;
-  return { batchMetadata: { authorityCode, municipalCode, syncWindowTimestamp, batchId }, rawDataLogs: rawDataLogs as string[] };
+  return { batchMetadata: { authorityCode, municipalCode, syncWindowTimestamp, sourceVersion, batchId }, rawDataLogs: rawDataLogs as string[] };
 }
 
 export function verifyGovBridgeSignature(
