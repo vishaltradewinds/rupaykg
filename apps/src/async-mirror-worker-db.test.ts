@@ -69,7 +69,7 @@ test("government inbox worker persists retry recovery, quarantine and append-onl
     return { id: inserted.rows[0]!.id, authorityCode, batchId, shouldQuarantine };
   };
   try {
-    const recoverable = await makeRow("TST-" + suffix.slice(0, 8));
+    const recoverable = await makeRow("TST-" + suffix.slice(0, 8).toUpperCase());
     await provisionCrosswalk(recoverable.authorityCode, "TEST-MUNI", new Date().toISOString());
     const first = await runGovernmentInboxWorker(pool, async () => { throw new Error("SyntheticTransientFailure"); }, { batchSize: 10, maxAttempts: 3 });
     assert.ok(first.retried >= 1, "transient validator failure must be persisted as RETRY");
