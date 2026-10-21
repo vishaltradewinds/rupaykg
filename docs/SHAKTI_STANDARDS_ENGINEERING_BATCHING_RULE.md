@@ -46,3 +46,8 @@ A batch is complete only when:
 For RupayKg, this rule must be applied alongside **Pan-India by Design**. Related jurisdiction/geography, stakeholder taxonomy, organization authorization, statutory applicability, evidence lineage and government-worker changes should be audited as connected workstreams and implemented in coherent safe batches. The starter geography profile is not national authority data; taxonomy expansion must not weaken database constraints or authorization; official API access and live Guardian/Hedera/Mirror Node proof must not be fabricated. National readiness remains unproven until supported by jurisdiction coverage, multi-tenant and operational evidence.
 
 **Golden rule:** One Shakti Standard, many project-specific operating systems. Batch coherent engineering work; validate the final state; release only on evidence.
+
+
+## Active batch example — RupayKg evidence-vault scope
+
+A related security correction is grouped into one batch across route authorization, disposable-PostgreSQL integration coverage and the architecture audit. It changes all evidence-vault geography decisions together, adds a positive explicit-scope fixture and negative unscoped-tenant assertions, and records the limitation. Full CI is to run only after this combined batch is committed; no production data or deployment is involved.

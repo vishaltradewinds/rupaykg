@@ -48,7 +48,7 @@ async function activityContext(pool:Pool,auth:AuthContext,id:string):Promise<{or
  if(!UUID.test(id))return null;
  const r=await pool.query<{organization_id:string;geography_id:string|null}>("select organization_id,geography_id from activities where id=$1",[id]);
  const a=r.rows[0];if(!a||!a.geography_id||!canActForOrganization(auth,a.organization_id))return null;
- const scope=await pool.query<{ok:boolean}>("select organization_has_geography_scope($1::uuid,$2::uuid) ok",[a.organization_id,a.geography_id]);
+ const scope=await pool.query<{ok:boolean}>("select organization_has_explicit_geography_scope($1::uuid,$2::uuid) ok",[a.organization_id,a.geography_id]);
  return scope.rows[0]?.ok?{organization_id:a.organization_id,geography_id:a.geography_id}:null;
 }
 export async function registerEvidenceVaultRoutes(app:FastifyInstance,pool:Pool|null):Promise<void>{
@@ -97,7 +97,7 @@ export async function registerEvidenceVaultRoutes(app:FastifyInstance,pool:Pool|
   const auth=await authFor(request as never,reply,pool);if(!auth||!pool)return;const id=(request.params as {evidenceId:string}).evidenceId;if(!UUID.test(id))return reply.code(400).send({error:"Invalid evidenceId",code:"EVIDENCE_ID_INVALID"});
   const q=await pool.query<{organization_id:string;geography_id:string|null;artifact_id:string;version_number:number;file_name:string;media_type:string;size_bytes:number;sha256:string;content:Buffer;status:string;source_reference:string|null;measurement_period_start:string|null;measurement_period_end:string|null}>("select a.organization_id,a.geography_id,v.id artifact_id,v.version_number,v.file_name,v.media_type,v.size_bytes,v.sha256,v.content,e.status::text status,v.source_reference,v.measurement_period_start::text,v.measurement_period_end::text from evidence e join activities a on a.id=e.activity_id join evidence_artifact_versions v on v.evidence_id=e.id where e.id=$1",[id]);
   const row=q.rows[0];if(!row||!row.geography_id||!canActForOrganization(auth,row.organization_id))return reply.code(404).send({error:"Evidence not found",code:"EVIDENCE_NOT_FOUND"});
-  const g=await pool.query<{ok:boolean}>("select organization_has_geography_scope($1::uuid,$2::uuid) ok",[row.organization_id,row.geography_id]);
+  const g=await pool.query<{ok:boolean}>("select organization_has_explicit_geography_scope($1::uuid,$2::uuid) ok",[row.organization_id,row.geography_id]);
   if(!g.rows[0]?.ok||!await hasOrganizationPermission(pool,auth,row.organization_id,["evidence:read","evidence:upload","evidence:review"]))return reply.code(403).send({error:"Evidence read permission required",code:"EVIDENCE_READ_FORBIDDEN"});
   if(row.content.length!==row.size_bytes||createHash("sha256").update(row.content).digest("hex")!==row.sha256)return reply.code(503).send({error:"Stored evidence integrity check failed",code:"EVIDENCE_INTEGRITY_FAILED"});
   reply.header("Content-Disposition",'attachment; filename="'+row.file_name.replace(/["\\\r\n]/g,"_")+'"');reply.header("X-Content-Type-Options","nosniff");reply.header("X-Evidence-SHA256",row.sha256);reply.header("X-Evidence-Version",String(row.version_number));return reply.type(row.media_type).send(row.content);
@@ -109,7 +109,7 @@ export async function registerEvidenceVaultRoutes(app:FastifyInstance,pool:Pool|
   const client=await pool.connect();try{await client.query("begin");
    const q=await client.query<{organization_id:string;activity_id:string;geography_id:string|null;status:string;artifact_id:string;uploaded_by_identity_id:string}>("select a.organization_id,a.id activity_id,a.geography_id,e.status::text status,v.id artifact_id,v.uploaded_by_identity_id from evidence e join activities a on a.id=e.activity_id join evidence_artifact_versions v on v.evidence_id=e.id where e.id=$1 for update of e",[id]),row=q.rows[0];
    if(!row||!row.geography_id||!canActForOrganization(auth,row.organization_id)){await client.query("rollback");return reply.code(404).send({error:"Evidence not found",code:"EVIDENCE_NOT_FOUND"});}
-   const g=await client.query<{ok:boolean}>("select organization_has_geography_scope($1::uuid,$2::uuid) ok",[row.organization_id,row.geography_id]);
+   const g=await client.query<{ok:boolean}>("select organization_has_explicit_geography_scope($1::uuid,$2::uuid) ok",[row.organization_id,row.geography_id]);
    if(!g.rows[0]?.ok||!await hasOrganizationPermission(client,auth,row.organization_id,["evidence:review"])||!await canVerifyEvidence(client,auth.identityId,id)){await client.query("rollback");return reply.code(403).send({error:"Evidence review permission and geography scope required",code:"EVIDENCE_REVIEW_FORBIDDEN"});}
    if(row.status==="VERIFIED"||row.status==="REJECTED"){await client.query("rollback");return reply.code(409).send({error:"Reviewed evidence is immutable; upload a new version",code:"EVIDENCE_ALREADY_REVIEWED"});}
    if(row.uploaded_by_identity_id===auth.identityId){await client.query("rollback");return reply.code(403).send({error:"Evidence uploader cannot review their own artifact",code:"EVIDENCE_SELF_REVIEW_FORBIDDEN"});}

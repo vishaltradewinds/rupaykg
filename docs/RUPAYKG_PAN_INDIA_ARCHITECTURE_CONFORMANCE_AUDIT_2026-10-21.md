@@ -124,3 +124,12 @@ An authenticated API workflow now creates crosswalk requests for organization me
 The repository now records the mandatory [Shakti Standards engineering batching rule](SHAKTI_STANDARDS_ENGINEERING_BATCHING_RULE.md): audit related dependencies and risks first, implement coherent safe changes together, then run the comprehensive validation suite against the final combined commit. Targeted checks remain permitted or necessary for security-sensitive, destructive, or high-risk changes; they must not become needless full-suite cycles after every minor edit. If the final suite fails, fix root causes in a coherent follow-up batch and rerun the affected checks plus required full gates.
 
 This rule changes the engineering workflow, not the release criteria. It does not authorize production changes, weaken fail-closed controls, or convert green CI into certification. The current known gaps in jurisdiction/source coverage, governed stakeholder taxonomy, worker lifecycle staging evidence, named alert escalation, official integration authorization, live Guardian/Hedera/Mirror Node proof, independent verification and formal release approval remain open until separately evidenced.
+
+
+## 8. Evidence-vault geography authorization hardening (2026-10-21)
+
+The batch review found that evidence upload/list/download/review paths used the legacy `organization_has_geography_scope` helper. That helper intentionally returns true when an organization has no verified geography roots for backwards compatibility. High-impact evidence operations must not inherit that fallback.
+
+The evidence-vault route is being updated to use `organization_has_explicit_geography_scope` for activity context, evidence download, and evidence review. The PostgreSQL integration fixture now assigns an explicit verified geography root for the positive path and adds negative upload/list assertions for a validly authenticated but unscoped organization. The legacy helper remains unchanged for older workflows.
+
+Validation is pending for the combined commit. This change does not itself prove national geography data coverage, and production remains on hold pending the existing release gates.
