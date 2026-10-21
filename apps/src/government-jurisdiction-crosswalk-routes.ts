@@ -132,14 +132,6 @@ export async function registerGovernmentJurisdictionCrosswalkRoutes(app: Fastify
         await client.query("rollback");
         return error(reply, 409, "Crosswalk target must be a canonical source-versioned geography record", "GOVERNMENT_CROSSWALK_TARGET_UNVERSIONED");
       }
-      const snapshot = await client.query<{ ok: boolean }>(
-        "select exists(select 1 from authoritative_source_snapshots where id=$1 and authority_code=$2 and source_version=$3 and validation_status='APPROVED' and (effective_from is null or effective_from <= $4::date) and (effective_to is null or effective_to >= $4::date)) as ok",
-        [sourceSnapshotId, authorityCode, sourceVersion, effectiveFrom],
-      );
-      if (snapshot.rows[0]?.ok !== true) {
-        await client.query("rollback");
-        return error(reply, 409, "An approved source snapshot with matching authority, version and effective date is required", "GOVERNMENT_CROSSWALK_SOURCE_SNAPSHOT_REQUIRED");
-      }
       if (activityId) {
         const activity = await client.query<{ ok: boolean }>(
           "select exists(select 1 from activities where id=$1 and organization_id=$2 and geography_id=$3) as ok",
@@ -165,6 +157,14 @@ export async function registerGovernmentJurisdictionCrosswalkRoutes(app: Fastify
         await client.query("rollback");
         return error(reply, 422, "Crosswalk evidence must reference an immutable evidence-vault artifact with matching SHA-256 and tenant scope", "GOVERNMENT_CROSSWALK_EVIDENCE_UNBOUND");
       }
+      const snapshot = await client.query<{ ok: boolean }>(
+        "select exists(select 1 from authoritative_source_snapshots where id=$1 and authority_code=$2 and source_version=$3 and validation_status='APPROVED' and (effective_from is null or effective_from <= $4::date) and (effective_to is null or effective_to >= $4::date)) as ok",
+        [sourceSnapshotId, authorityCode, sourceVersion, effectiveFrom],
+      );
+      if (snapshot.rows[0]?.ok !== true) {
+        await client.query("rollback");
+        return error(reply, 409, "An approved source snapshot with matching authority, version and effective date is required", "GOVERNMENT_CROSSWALK_SOURCE_SNAPSHOT_REQUIRED");
+      }
       const requestHash = digest({ authorityCode, municipalCode, sourceVersion, sourceSnapshotId, organizationId, geographyId, activityId: activityId ?? null, effectiveFrom, evidenceReference, evidenceSha256, reason, requestedBy: auth.identityId });
       const inserted = await client.query<{ id: string }>(
         `insert into government_jurisdiction_crosswalk_requests
@@ -179,6 +179,8 @@ export async function registerGovernmentJurisdictionCrosswalkRoutes(app: Fastify
       return reply.code(201).send({ source: "postgresql", syntheticData: false, status: "PENDING", requestId: id, requestHash });
     } catch (cause) {
       await client.query("rollback").catch(() => undefined);
+      const message = (cause as { message?: string }).message ?? "";
+      if (message.includes("GOVERNMENT_CROSSWALK_SOURCE_SNAPSHOT")) return error(reply, 409, "Crosswalk request requires a matching approved source snapshot", "GOVERNMENT_CROSSWALK_SOURCE_SNAPSHOT_REQUIRED");
       if ((cause as { code?: string }).code === "23505") return error(reply, 409, "An equivalent pending crosswalk request already exists", "GOVERNMENT_CROSSWALK_REQUEST_DUPLICATE");
       request.log.error(cause);
       return error(reply, 503, "Unable to create crosswalk request", "GOVERNMENT_CROSSWALK_REQUEST_UNAVAILABLE");
@@ -197,7 +199,7 @@ export async function registerGovernmentJurisdictionCrosswalkRoutes(app: Fastify
     }
     try {
       const rows = await pool.query(
-        `select r.id,r.authority_code,r.municipal_code,r.source_version,r.organization_id,o.name organization_name,
+        `select r.id,r.authority_code,r.municipal_code,r.source_version,r.source_snapshot_id,r.organization_id,o.name organization_name,
                 r.geography_id,g.name geography_name,r.activity_id,r.effective_from,r.evidence_reference,r.evidence_sha256,
                 r.request_reason,r.request_hash,r.requested_by_identity_id,requester.display_name requested_by,
                 r.status,r.decided_by_identity_id,approver.display_name decided_by,r.decision_reason,r.expires_at,
@@ -277,6 +279,9 @@ export async function registerGovernmentJurisdictionCrosswalkRoutes(app: Fastify
     } catch (cause) {
       await client.query("rollback").catch(() => undefined);
       const message = (cause as { message?: string }).message ?? "";
+      if (message.includes("GOVERNMENT_CROSSWALK_SOURCE_SNAPSHOT")) {
+        return error(reply, 409, "Crosswalk approval requires a matching approved source snapshot", "GOVERNMENT_CROSSWALK_SOURCE_SNAPSHOT_REQUIRED");
+      }
       if (message.includes("GOVERNMENT_CROSSWALK_EVIDENCE_NOT_VERIFIED")) {
         return error(reply, 409, "Crosswalk evidence must be independently reviewed before approval", "GOVERNMENT_CROSSWALK_EVIDENCE_NOT_VERIFIED");
       }
@@ -298,7 +303,7 @@ export async function registerGovernmentJurisdictionCrosswalkRoutes(app: Fastify
     }
     try {
       const rows = await pool.query(
-        `select id,authority_code,municipal_code,source_version,organization_id,geography_id,activity_id,status,
+        `select id,authority_code,municipal_code,source_version,source_snapshot_id,organization_id,geography_id,activity_id,status,
                 evidence_reference,evidence_sha256,requested_by_identity_id,approved_by_identity_id,approval_reason,
                 approval_request_id,effective_from,effective_to,created_at,verified_at,revoked_at
            from government_jurisdiction_crosswalks where organization_id=$1 order by created_at desc limit 500`,

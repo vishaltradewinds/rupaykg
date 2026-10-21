@@ -39,12 +39,17 @@ test("government inbox worker persists retry recovery, quarantine and append-onl
     await pool.query("insert into evidence(id,activity_id,evidence_type,status,captured_at,content_uri,content_hash,metadata) values($1,$2,'CROSSWALK_SOURCE_RECORD','VERIFIED',now(),$3,$4,$5::jsonb)", [evidenceId, activityId, "db://evidence-vault/" + artifactVersionId, evidenceSha256, JSON.stringify({ source: "synthetic test fixture" })]);
     await pool.query("insert into evidence_artifact_versions(id,series_id,evidence_id,version_number,file_name,media_type,size_bytes,sha256,content,uploaded_by_identity_id,source_reference) values($1,$2,$3,1,'worker-crosswalk.txt','text/plain',$4,$5,$6,$7,$8)", [artifactVersionId, seriesId, evidenceId, uploaderBytes.length, evidenceSha256, uploaderBytes, requesterId, "synthetic://worker-crosswalk/" + authorityCode]);
     const evidenceReference = "db://evidence-vault/" + artifactVersionId;
-    const requestHash = sha(JSON.stringify({ authorityCode, municipalCode, organizationId, geographyId, evidenceSha256, effectiveFrom }));
+    const sourceSnapshotId = randomUUID();
+    await pool.query(
+      "insert into authoritative_source_snapshots(id,authority_code,source_owner,dataset_code,source_url,source_version,scope_kind,content_sha256,record_count,accepted_record_count,unresolved_record_count,validation_status,usage_terms_reference,retrieved_at,retrieved_by_identity_id,reviewed_by_identity_id,reviewed_at) values($1,$2,$2,$3,'https://example.invalid/worker-crosswalk-source','synthetic-source-v1','OTHER',$4,1,1,0,'APPROVED','synthetic://worker-fixture-terms',now(),$5,$6,now())",
+      [sourceSnapshotId, authorityCode, "WORKER_SOURCE_" + authorityCode, evidenceSha256, requesterId, approverId],
+    );
+    const requestHash = sha(JSON.stringify({ authorityCode, municipalCode, sourceVersion: "synthetic-source-v1", sourceSnapshotId, organizationId, geographyId, evidenceSha256, effectiveFrom }));
     const request = await pool.query<{ id: string }>(
       `insert into government_jurisdiction_crosswalk_requests
-        (authority_code,municipal_code,source_version,organization_id,geography_id,effective_from,evidence_reference,evidence_sha256,request_reason,request_hash,requested_by_identity_id)
-       values($1,$2,'synthetic-source-v1',$3,$4,$5,$6,$7,$8,$9,$10) returning id`,
-      [authorityCode, municipalCode, organizationId, geographyId, effectiveFrom, evidenceReference, evidenceSha256, reason, requestHash, requesterId],
+        (authority_code,municipal_code,source_version,source_snapshot_id,organization_id,geography_id,effective_from,evidence_reference,evidence_sha256,request_reason,request_hash,requested_by_identity_id)
+       values($1,$2,'synthetic-source-v1',$3,$4,$5,$6,$7,$8,$9,$10,$11) returning id`,
+      [authorityCode, municipalCode, sourceSnapshotId, organizationId, geographyId, effectiveFrom, evidenceReference, evidenceSha256, reason, requestHash, requesterId],
     );
     const requestId = request.rows[0]!.id;
     const decisionReason = "Independent synthetic fixture approval";
@@ -56,10 +61,10 @@ test("government inbox worker persists retry recovery, quarantine and append-onl
     );
     await pool.query(
       `insert into government_jurisdiction_crosswalks
-        (authority_code,municipal_code,source_version,organization_id,geography_id,status,evidence_reference,evidence_sha256,
+        (authority_code,municipal_code,source_version,source_snapshot_id,organization_id,geography_id,status,evidence_reference,evidence_sha256,
          requested_by_identity_id,approved_by_identity_id,approval_reason,approval_request_id,effective_from,verified_at)
-       values($1,$2,'synthetic-source-v1',$3,$4,'VERIFIED',$5,$6,$7,$8,$9,$10,$11,now())`,
-      [authorityCode, municipalCode, organizationId, geographyId, evidenceReference, evidenceSha256, requesterId, approverId, decisionReason, requestId, effectiveFrom],
+       values($1,$2,'synthetic-source-v1',$3,$4,$5,'VERIFIED',$6,$7,$8,$9,$10,$11,$12,now())`,
+      [authorityCode, municipalCode, sourceSnapshotId, organizationId, geographyId, evidenceReference, evidenceSha256, requesterId, approverId, decisionReason, requestId, effectiveFrom],
     );
     return { organizationId, geographyId };
   };
