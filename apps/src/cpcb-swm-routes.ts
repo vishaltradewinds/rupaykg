@@ -150,13 +150,14 @@ export async function registerCpcbSwmRoutes(app: FastifyInstance, pool: Pool | n
     const sourceReference = text(body, "cpcbStatusSourceReference", 500);
     const dueDate = body.dueDate === null || body.dueDate === "" || body.dueDate === undefined ? null : validDate(body.dueDate) ? body.dueDate : "INVALID";
     const notes = body.notes === undefined || body.notes === null ? null : text(body, "notes", 4000);
-    if (!validStakeholder(stakeholderType) || !title || !checklist || !safeObservations(observations) || !isCpcbReportedStatus(reportedStatus) || !isSwmLocalStage(localStage) || (reportedStatus !== "NOT_REPORTED" && !sourceReference) || (geographyId && !UUID.test(geographyId)) || dueDate === "INVALID" || (body.notes !== undefined && body.notes !== null && body.notes !== "" && notes === null) || (body.statusNote !== undefined && body.statusNote !== null && body.statusNote !== "" && statusNote === null)) return reply.code(400).send({ error: "Invalid stakeholder type, title, geography, canonical checklist, observations, workflow stage, reported status, status source, due date or notes", code: "SWM_WORKSPACE_INVALID" });
+    if (!validStakeholder(stakeholderType) || !title || !checklist || !safeObservations(observations) || !isCpcbReportedStatus(reportedStatus) || !isSwmLocalStage(localStage) || (reportedStatus !== "NOT_REPORTED" && !sourceReference) || (!geographyId || !UUID.test(geographyId)) || dueDate === "INVALID" || (body.notes !== undefined && body.notes !== null && body.notes !== "" && notes === null) || (body.statusNote !== undefined && body.statusNote !== null && body.statusNote !== "" && statusNote === null)) return reply.code(400).send({ error: "Invalid stakeholder type, title, required geography, canonical checklist, observations, workflow stage, reported status, status source, due date or notes", code: "SWM_WORKSPACE_INVALID" });
     if (!validStakeholder(stakeholderType) || !await hasVerifiedStakeholderAuthorization(pool, organizationId, stakeholderType)) { return reply.code(403).send({ error: "Verified organization-to-stakeholder authorization required", code: "SWM_STAKEHOLDER_AUTHORIZATION_REQUIRED", syntheticData: false }); }
     try {
-      if (geographyId) {
-        const allowed = await pool.query<{ ok: boolean }>("select exists(select 1 from organization_memberships om where om.identity_id=$1 and om.organization_id=$2 and om.status='VERIFIED' and organization_has_geography_scope(om.organization_id,$3::uuid)) ok", [auth.identityId, organizationId, geographyId]);
-        if (!allowed.rows[0]?.ok) return reply.code(403).send({ error: "Geography outside verified organization scope", code: "GEOGRAPHY_FORBIDDEN" });
-      }
+      const allowed = await pool.query<{ ok: boolean }>(
+        "select exists(select 1 from organization_memberships om where om.identity_id=$1 and om.organization_id=$2 and om.status='VERIFIED' and exists(select 1 from organization_geography_scopes s where s.organization_id=om.organization_id and s.status='VERIFIED') and organization_has_geography_scope(om.organization_id,$3::uuid)) ok",
+        [auth.identityId, organizationId, geographyId],
+      );
+      if (!allowed.rows[0]?.ok) return reply.code(403).send({ error: "An explicit verified organization geography scope is required and must include the requested geography", code: "GEOGRAPHY_FORBIDDEN" });
       const client = await pool.connect();
       try {
         await client.query("begin");
@@ -187,13 +188,14 @@ export async function registerCpcbSwmRoutes(app: FastifyInstance, pool: Pool | n
     const applicationReference = text(body, "cpcbApplicationReference", 240), sourceReference = text(body, "cpcbStatusSourceReference", 500);
     const dueDate = body.dueDate === null || body.dueDate === "" || body.dueDate === undefined ? null : validDate(body.dueDate) ? body.dueDate : "INVALID";
     const notes = body.notes === undefined || body.notes === null ? null : text(body, "notes", 4000);
-    if (!validStakeholder(stakeholderType) || !title || !checklist || !safeObservations(observations) || !isCpcbReportedStatus(reportedStatus) || !isSwmLocalStage(localStage) || (reportedStatus !== "NOT_REPORTED" && !sourceReference) || (geographyId && !UUID.test(geographyId)) || dueDate === "INVALID" || (body.notes !== undefined && body.notes !== null && body.notes !== "" && notes === null) || (body.statusNote !== undefined && body.statusNote !== null && body.statusNote !== "" && statusNote === null)) return reply.code(400).send({ error: "Invalid stakeholder type, title, geography, canonical checklist, observations, workflow stage, reported status, status source, due date or notes", code: "SWM_WORKSPACE_INVALID" });
+    if (!validStakeholder(stakeholderType) || !title || !checklist || !safeObservations(observations) || !isCpcbReportedStatus(reportedStatus) || !isSwmLocalStage(localStage) || (reportedStatus !== "NOT_REPORTED" && !sourceReference) || (!geographyId || !UUID.test(geographyId)) || dueDate === "INVALID" || (body.notes !== undefined && body.notes !== null && body.notes !== "" && notes === null) || (body.statusNote !== undefined && body.statusNote !== null && body.statusNote !== "" && statusNote === null)) return reply.code(400).send({ error: "Invalid stakeholder type, title, required geography, canonical checklist, observations, workflow stage, reported status, status source, due date or notes", code: "SWM_WORKSPACE_INVALID" });
     if (!validStakeholder(stakeholderType) || !await hasVerifiedStakeholderAuthorization(pool, organizationId, stakeholderType)) { return reply.code(403).send({ error: "Verified organization-to-stakeholder authorization required", code: "SWM_STAKEHOLDER_AUTHORIZATION_REQUIRED", syntheticData: false }); }
     try {
-      if (geographyId) {
-        const allowed = await pool.query<{ ok: boolean }>("select exists(select 1 from organization_memberships om where om.identity_id=$1 and om.organization_id=$2 and om.status='VERIFIED' and organization_has_geography_scope(om.organization_id,$3::uuid)) ok", [auth.identityId, organizationId, geographyId]);
-        if (!allowed.rows[0]?.ok) return reply.code(403).send({ error: "Geography outside verified organization scope", code: "GEOGRAPHY_FORBIDDEN" });
-      }
+      const allowed = await pool.query<{ ok: boolean }>(
+        "select exists(select 1 from organization_memberships om where om.identity_id=$1 and om.organization_id=$2 and om.status='VERIFIED' and exists(select 1 from organization_geography_scopes s where s.organization_id=om.organization_id and s.status='VERIFIED') and organization_has_geography_scope(om.organization_id,$3::uuid)) ok",
+        [auth.identityId, organizationId, geographyId],
+      );
+      if (!allowed.rows[0]?.ok) return reply.code(403).send({ error: "An explicit verified organization geography scope is required and must include the requested geography", code: "GEOGRAPHY_FORBIDDEN" });
       const client = await pool.connect();
       try {
         await client.query("begin");
