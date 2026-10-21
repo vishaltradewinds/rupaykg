@@ -4,13 +4,13 @@ import type { Pool } from "pg";
 import { isValidSyncWindowTimestamp, reconcileGovernmentInbox, runGovernmentInboxWorker, validateGovernmentInboxPayload } from "./async-mirror-worker.js";
 import { canonicalGovBridgeHash } from "./government-inbox-hash.js";
 
-function fakePool(rows: unknown[]) {
+function fakePool(rows: unknown[], crosswalkRows?: unknown[]) {
   const statements: Array<{ sql: string; values: unknown[] }> = [];
   const pool = {
     query: async (sql: string, values: unknown[] = []) => {
       statements.push({ sql, values });
       if (sql.includes("returning inbox.id")) return { rows, rowCount: rows.length };
-      if (sql.includes("from government_jurisdiction_crosswalks c")) return { rows: [{ id: "crosswalk-id", organization_id: "organization-id", geography_id: "geography-id", activity_id: null, source_version: "synthetic-v1" }], rowCount: 1 };
+      if (sql.includes("from government_jurisdiction_crosswalks c")) return { rows: crosswalkRows ?? [{ id: "crosswalk-id", organization_id: "organization-id", geography_id: "geography-id", activity_id: null, source_version: "synthetic-v1" }], rowCount: (crosswalkRows ?? [{}]).length };
       if (sql.includes("group by status")) return { rows };
       if (sql.includes("lease_until < now()")) return { rows: [{ count: "2" }] };
       return { rows: [], rowCount: 1 };
@@ -43,6 +43,14 @@ test("worker claims a bounded batch and marks structurally valid payloads as int
   assert.match(statements[1]!.sql, /for update skip locked/i);
   assert.match(statements[3]!.sql, /lease_token=\$2/i);
   assert.match(statements[3]!.sql, /status='VALIDATED'/i);
+});
+
+test("worker keeps structurally valid but unmapped batches unresolved", async () => {
+  const { pool, statements } = fakePool([row], []);
+  const result = await runGovernmentInboxWorker(pool);
+  assert.deepEqual(result, { claimed: 1, validated: 0, rejected: 0, unresolved: 1, retried: 0, quarantined: 0 });
+  assert.match(statements[3]!.sql, /status='UNRESOLVED'/i);
+  assert.equal(statements[3]!.values[2], "GOVERNMENT_CROSSWALK_NOT_FOUND");
 });
 
 test("worker rejects metadata mismatch without retrying deterministic validation failures", async () => {
