@@ -1,11 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
+import { canonicalGovBridgeHash } from "./government-inbox-hash.js";
 import { Pool } from "pg";
 import { runGovernmentInboxWorker } from "./async-mirror-worker.js";
 
 const enabled = process.env.RUPAYKG_RUN_DB_INTEGRATION_TESTS === "1" && Boolean(process.env.DATABASE_URL);
-const sha = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
+const sha = canonicalGovBridgeHash;
 
 test("government inbox worker persists retry recovery, quarantine and append-only transition evidence in disposable PostgreSQL", {
   skip: !enabled ? "requires CI disposable PostgreSQL and applied migrations" : false,
