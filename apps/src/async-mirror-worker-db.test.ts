@@ -19,14 +19,15 @@ test("government inbox worker persists retry recovery, quarantine and append-onl
   const suffix = randomUUID();
   const makeRow = async (authorityCode: string, shouldQuarantine = false) => {
     const batchId = randomUUID();
+    const syncWindowTimestamp = new Date().toISOString();
     const payload = {
-      batchMetadata: { authorityCode, municipalCode: "TEST-MUNI", batchId, syncWindowTimestamp: new Date().toISOString() },
+      batchMetadata: { authorityCode, municipalCode: "TEST-MUNI", batchId, syncWindowTimestamp },
       rawDataLogs: ["Synthetic test-only waste intake record"],
     };
     const inserted = await pool.query<{ id: string }>(
       `insert into async_mirror_inbox(authority_code,municipal_code,batch_id,sync_window_timestamp,payload,payload_sha256,status,attempts,received_at)
-       values($1,'TEST-MUNI',$2,now(),$3::jsonb,$4,'RECEIVED',0,now() - interval '2 minutes') returning id`,
-      [authorityCode, batchId, JSON.stringify(payload), sha(payload)],
+       values($1,'TEST-MUNI',$2,$3,$4::jsonb,$5,'RECEIVED',0,now() - interval '2 minutes') returning id`,
+      [authorityCode, batchId, syncWindowTimestamp, JSON.stringify(payload), sha(payload)],
     );
     return { id: inserted.rows[0]!.id, authorityCode, batchId, shouldQuarantine };
   };
