@@ -35,8 +35,8 @@ async function authFor(request: FastifyRequest, reply: FastifyReply, pool: Pool 
   }
 }
 async function requireCrosswalkManager(pool: Pool, auth: AuthContext, organizationId: string): Promise<boolean> {
-  return canActForOrganization(auth, organizationId)
-    && hasOrganizationPermission(pool, auth, organizationId, ["MANAGE_STAKEHOLDERS", "admin:system"]);
+  if (!canActForOrganization(auth, organizationId)) return false;
+  return await hasOrganizationPermission(pool, auth, organizationId, ["MANAGE_STAKEHOLDERS", "admin:system"]);
 }
 async function requireSuperAdmin(pool: Pool, identityId: string): Promise<boolean> {
   const result = await pool.query<{ ok: boolean }>(
