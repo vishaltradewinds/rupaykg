@@ -10,7 +10,7 @@ function isUuid(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
-function validRfc3339Timestamp(value: string): boolean {
+export function isValidRfc3339Timestamp(value: string): boolean {
   const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?(Z|([+-])(\d{2}):(\d{2}))$/.exec(value);
   if (!match) return false;
   const [, year, month, day, hour, minute, second, , , , offsetHour, offsetMinute] = match;
@@ -34,7 +34,7 @@ export function validateSyncEnvelope(body: Record<string, unknown>): SyncEnvelop
     return { ok: false, code: "INVALID_ENVELOPE", error: "idempotencyKey, deviceId, positive integer clientSequence, capturedAt and payload are required" };
   }
   if (!isUuid(deviceId)) return { ok: false, code: "INVALID_DEVICE", error: "deviceId must be a field device UUID" };
-  if (!validRfc3339Timestamp(capturedAt)) return { ok: false, code: "INVALID_CAPTURE_TIME", error: "capturedAt must be a valid timezone-bearing RFC 3339 timestamp" };
+  if (!isValidRfc3339Timestamp(capturedAt)) return { ok: false, code: "INVALID_CAPTURE_TIME", error: "capturedAt must be a valid timezone-bearing RFC 3339 timestamp" };
   if (body.payload === null || typeof body.payload !== "object") return { ok: false, code: "INVALID_PAYLOAD", error: "payload must be a JSON object or array" };
 
   return { ok: true, idempotencyKey, deviceId, clientSequence, capturedAt, payload: body.payload as Record<string, unknown> | unknown[] };
