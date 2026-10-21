@@ -7,6 +7,15 @@ begin
   if new.geography_id is null then
     raise exception 'SWM_WORKSPACE_GEOGRAPHY_REQUIRED';
   end if;
+  if not exists (
+    select 1 from organization_geography_scopes s
+     where s.organization_id = new.organization_id and s.status = 'VERIFIED'
+  ) then
+    raise exception 'SWM_WORKSPACE_GEOGRAPHY_SCOPE_REQUIRED';
+  end if;
+  if not organization_has_geography_scope(new.organization_id, new.geography_id) then
+    raise exception 'SWM_WORKSPACE_GEOGRAPHY_FORBIDDEN';
+  end if;
   return new;
 end;
 $$;
@@ -17,4 +26,4 @@ before insert or update of geography_id on cpcb_swm_stakeholder_workspaces
 for each row execute function enforce_cpcb_swm_workspace_geography();
 
 comment on function enforce_cpcb_swm_workspace_geography() is
-  'Fail closed for new or explicitly changed CPCB SWM workspace geography; legacy null rows are not silently rewritten.';
+  'Fail closed for new or explicitly changed CPCB SWM workspace geography and organization scope; legacy null rows are not silently rewritten.';
