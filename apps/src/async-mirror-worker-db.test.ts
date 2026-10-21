@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { canonicalGovBridgeHash } from "./government-inbox-hash.js";
 import { Pool } from "pg";
 import { runGovernmentInboxWorker } from "./async-mirror-worker.js";
@@ -31,7 +31,7 @@ test("government inbox worker persists retry recovery, quarantine and append-onl
     const activityId = randomUUID();
     await pool.query("insert into activities(id,organization_id,geography_id,activity_type,status) values($1,$2,$3,'WASTE_WEIGHT_MEASUREMENT','COMPLETED')", [activityId, organizationId, geographyId]);
     const uploaderBytes = Buffer.from("Synthetic reviewed worker crosswalk evidence " + authorityCode);
-    const evidenceSha256 = sha(uploaderBytes);
+    const evidenceSha256 = createHash("sha256").update(uploaderBytes).digest("hex");
     const evidenceId = randomUUID();
     const seriesId = randomUUID();
     const artifactVersionId = randomUUID();
