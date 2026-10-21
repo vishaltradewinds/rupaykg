@@ -43,3 +43,13 @@ test("terminal registry and settlement states cannot transition", () => {
   assert.equal(canTransition(credentialTransitions, "RETIRED", "ACTIVE"), false);
   assert.equal(canTransition(settlementTransitions, "SETTLED", "FAILED"), false);
 });
+
+import { positiveRegistryInput } from "./registry-routes.js";
+
+test("registry quantities and settlement amounts reject string coercion", () => {
+  for (const value of ["12", "1e2", null, 0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+    assert.equal(positiveRegistryInput({ amount: value }, "amount"), null);
+  }
+  assert.equal(positiveRegistryInput({ amount: 12 }, "amount"), 12);
+  assert.equal(positiveRegistryInput({ amount: 0.5 }, "amount"), 0.5);
+});
