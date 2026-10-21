@@ -6,7 +6,7 @@ type Reply={code:(status:number)=>{send:(body:unknown)=>unknown}};
 type Request={body:unknown;params:Record<string,string>;log:{error:(error:unknown)=>void}};
 const bodyOf=(r:Request):Record<string,unknown>=>r.body&&typeof r.body==="object"?r.body as Record<string,unknown>:{};
 const str=(b:Record<string,unknown>,k:string):string|null=>typeof b[k]==="string"&&b[k].trim()?b[k].trim():null;
-const positive=(b:Record<string,unknown>,k:string):number|null=>{const n=Number(b[k]);return Number.isFinite(n)&&n>0?n:null};
+export const positiveRegistryInput=(b:Record<string,unknown>,k:string):number|null=>{const n=b[k];return typeof n==="number"&&Number.isFinite(n)&&n>0?n:null};
 async function authFor(r:Request,reply:Reply,pool:Pool|null):Promise<AuthContext|null>{
   if(!pool){reply.code(503).send({error:"Database unavailable",code:"DATABASE_UNAVAILABLE"});return null}
   try{const auth=await authenticate(r as never,pool);if(!auth){reply.code(401).send({error:"Authenticated session required",code:"AUTH_REQUIRED"});return null}return auth}
@@ -17,7 +17,7 @@ async function tx<T>(pool:Pool,fn:(client:PoolClient)=>Promise<T>):Promise<T>{co
 export async function registerRegistryRoutes(app:FastifyInstance,pool:Pool|null):Promise<void>{
   app.post("/api/v1/credentials",async(request,reply)=>{
     const auth=await authFor(request as never,reply,pool);if(!auth||!pool)return;const b=bodyOf(request as never);
-    const activityId=str(b,"activityId"),trustRootId=str(b,"trustRootId"),verificationId=str(b,"verificationId"),issuerOrganizationId=str(b,"issuerOrganizationId"),quantity=positive(b,"quantity"),unit=str(b,"unit");
+    const activityId=str(b,"activityId"),trustRootId=str(b,"trustRootId"),verificationId=str(b,"verificationId"),issuerOrganizationId=str(b,"issuerOrganizationId"),quantity=positiveRegistryInput(b,"quantity"),unit=str(b,"unit");
     if(!activityId||!trustRootId||!verificationId||!issuerOrganizationId||quantity===null||!unit)return reply.code(400).send({error:"activityId, trustRootId, verificationId, issuerOrganizationId, positive quantity and unit are required"});
     if(!canActForOrganization(auth,issuerOrganizationId))return reply.code(403).send({error:"Issuer organization access denied",code:"ORG_FORBIDDEN"});
     if(!await canPerformHighRiskActionInDatabase(pool,auth,issuerOrganizationId,"ISSUE_CREDENTIAL"))return reply.code(403).send({error:"Explicit ISSUE_CREDENTIAL permission is required",code:"HIGH_RISK_PERMISSION_REQUIRED"});
@@ -71,7 +71,7 @@ export async function registerRegistryRoutes(app:FastifyInstance,pool:Pool|null)
   });
 
   app.post("/api/v1/settlements",async(request,reply)=>{
-    const auth=await authFor(request as never,reply,pool);if(!auth||!pool)return;const b=bodyOf(request as never);const credentialId=str(b,"credentialId"),payerId=str(b,"payerId"),payeeId=str(b,"payeeId"),currency=str(b,"currency"),amount=positive(b,"amount");if(!credentialId||!payerId||!payeeId||amount===null||!currency||currency.length!==3)return reply.code(400).send({error:"credentialId, payerId, payeeId, positive amount and 3-letter currency are required"});
+    const auth=await authFor(request as never,reply,pool);if(!auth||!pool)return;const b=bodyOf(request as never);const credentialId=str(b,"credentialId"),payerId=str(b,"payerId"),payeeId=str(b,"payeeId"),currency=str(b,"currency"),amount=positiveRegistryInput(b,"amount");if(!credentialId||!payerId||!payeeId||amount===null||!currency||currency.length!==3)return reply.code(400).send({error:"credentialId, payerId, payeeId, positive amount and 3-letter currency are required"});
     if(payerId===payeeId)return reply.code(400).send({error:"Payer and payee must be distinct organizations",code:"SETTLEMENT_PARTIES_INVALID"});
     if(!canActForOrganization(auth,payerId)||!canActForOrganization(auth,payeeId))return reply.code(403).send({error:"Settlement requires verified access to both payer and payee organizations",code:"SETTLEMENT_PARTIES_FORBIDDEN"});
     if(!await hasOrganizationPermission(pool,auth,payerId,["settlement:authorize"])||!await hasOrganizationPermission(pool,auth,payeeId,["settlement:authorize"]))return reply.code(403).send({error:"Explicit settlement:authorize permission is required for both settlement parties",code:"SETTLEMENT_CREATE_FORBIDDEN"});
