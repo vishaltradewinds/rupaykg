@@ -116,7 +116,11 @@ export async function runGovernmentInboxWorker(
     `update async_mirror_inbox
         set status='QUARANTINED', quarantined_at=now(), lease_token=null, lease_until=null,
             last_error_code=coalesce(last_error_code, 'WORKER_ATTEMPTS_EXHAUSTED')
-      where status='PROCESSING' and lease_until < now() and attempts >= $1`,
+      where attempts >= $1
+        and (
+          status in ('RECEIVED','RETRY')
+          or (status='PROCESSING' and (lease_until is null or lease_until < now()))
+        )`,
     [maxAttempts],
   );
 
