@@ -82,10 +82,10 @@ test("government inbox worker persists retry recovery, quarantine and append-onl
 
     await pool.query("update async_mirror_inbox set next_attempt_at=now()-interval '1 second' where id=$1", [recoverable.id]);
     const recovered = await runGovernmentInboxWorker(pool, undefined, { batchSize: 10, maxAttempts: 3 });
-    assert.ok(recovered.validated >= 1, "retry must recover into internal VALIDATED state");
-    const finalRow = await pool.query<{ status: string; attempts: number; lease_token: string | null; lease_until: Date | null; validation_summary: Record<string, unknown> }>(
-      "select status,attempts,lease_token,lease_until,validation_summary from async_mirror_inbox where id=$1", [recoverable.id],
+    const finalRow = await pool.query<{ status: string; attempts: number; lease_token: string | null; lease_until: Date | null; validation_summary: Record<string, unknown>; last_error_code: string | null }>(
+      "select status,attempts,lease_token,lease_until,validation_summary,last_error_code from async_mirror_inbox where id=$1", [recoverable.id],
     );
+    assert.ok(recovered.validated >= 1, `retry must recover into internal VALIDATED state; result=${JSON.stringify(recovered)} row=${JSON.stringify(finalRow.rows[0])}`);
     assert.equal(finalRow.rows[0]?.status, "VALIDATED");
     assert.equal(finalRow.rows[0]?.attempts, 2);
     assert.equal(finalRow.rows[0]?.lease_token, null);
