@@ -1,4 +1,6 @@
-import { createHash, createHmac, timingSafeEqual } from "node:crypto";
+import { createHmac, timingSafeEqual } from "node:crypto";
+import { canonicalGovBridgeHash } from "./government-inbox-hash.js";
+export { canonicalGovBridgeHash } from "./government-inbox-hash.js";
 import type { FastifyInstance } from "fastify";
 import type { Pool } from "pg";
 
@@ -23,16 +25,7 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
 
-function canonicalJson(value: unknown): string {
-  if (value === null || typeof value !== "object") return JSON.stringify(value) ?? "null";
-  if (Array.isArray(value)) return "[" + value.map(canonicalJson).join(",") + "]";
-  const object = value as Record<string, unknown>;
-  return "{" + Object.keys(object).sort().map((key) => JSON.stringify(key) + ":" + canonicalJson(object[key])).join(",") + "}";
-}
 
-export function canonicalGovBridgeHash(value: unknown): string {
-  return createHash("sha256").update(canonicalJson(value), "utf8").digest("hex");
-}
 
 function validRfc3339Timestamp(value: string): boolean {
   const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?(Z|([+-])(\d{2}):(\d{2}))$/.exec(value);
