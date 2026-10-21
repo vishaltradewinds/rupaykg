@@ -94,3 +94,13 @@ Inspect the worker result contract and test setup before deciding whether the te
 
 ### Non-negotiable scope
 RupayKg is Pan-India by design. Jabalpur/Kathonda is a validation site only. Preserve distinct Urban (ULB/ward/locality) and Rural (Gram Panchayat/village/cluster) governance rails. Never fabricate official identifiers, claim external approval, or treat structural intake validation as official acceptance, statutory compliance, MRV verification, or credit issuance.
+
+
+## Resume update — 2026-10-21 10:51 UTC
+
+- Added disposable PostgreSQL regression coverage proving that a crosswalk with the exact authority/municipality/source version is still not resolved when it is expired at the batch's sync-window timestamp or has been revoked.
+- The expiry fixture keeps the crosswalk valid at database wall-clock time while making it expired relative to the batch timestamp; the database intentionally rejects attempts to update a VERIFIED mapping to an already-expired timestamp.
+- Current code/test head: `f9d4685c70ca48f02a9b3ab8cc479d8e3fe00dea`.
+- GitHub Actions run #1676: https://github.com/vishaltradewinds/rupaykg/actions/runs/39587595524. Migration validation/application, dependency audit, typecheck, build, browser smoke test and disposable PostgreSQL acceptance all passed. Production-container build was still running at this checkpoint update; recheck the final run conclusion before claiming the full gate passed.
+- The earlier complete run #1673 passed all steps, including production-container build, on the prior head. Run #1676 is the current verification for the additional expiry/revocation regression tests.
+- Release remains HOLD. PR #41 stays draft, unmerged and undeployed. Continue wrong-tenant/wrong-activity and ambiguous mapping tests, Pan-India Urban/Rural governance and geography authorization audit, and official integration/approval evidence gates.
