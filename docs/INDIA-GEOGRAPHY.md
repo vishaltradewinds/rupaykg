@@ -41,3 +41,11 @@ The domain package supports a starter hierarchy profile and allows callers to su
 3. Test stale, missing, conflicting, cross-tenant and cross-jurisdiction records fail closed.
 4. Demonstrate source updates, boundary changes, effective dating and audit lineage.
 5. Approve the supported coverage matrix before claiming a geography or programme is production-ready.
+
+## Official source starting points (reviewed 2026-10-21)
+
+- **Local Government Directory (LGD), Ministry of Panchayati Raj:** https://lgdirectory.gov.in/demo/downloadDirectory.do — exposes separate directory downloads for districts, sub-districts, villages, PRI local bodies, ULBs, wards, Gram Panchayat-to-village mappings and development blocks. Use the specific entity and date range required; do not assume the directory's existence means RupayKg has API permission or an approved integration.
+- **LGD village/Gram Panchayat mapping report:** https://lgdirectory.gov.in/staging/rptConsolidateVillageGramPanchayat.do — official lookup/report for village-to-Gram Panchayat and ULB mappings.
+- **Office of the Registrar General & Census Commissioner, India, Census 2011 concepts and definitions:** https://censusindia.gov.in/nada/index.php/catalog/115/study-description — useful for the Census-specific distinction between town and village concepts. Census classification and LGD administrative/local-body records serve different purposes and must not be silently conflated.
+
+These are source-discovery references, not an assertion that live records have been imported, that an API is available, or that the 2011 Census definitions are the applicable current rule for every programme. For each integration, retain the retrieved document/data snapshot, retrieval date, version or effective dates when supplied, content hash, usage terms, and review approval. If the source does not provide a stable version, record that limitation explicitly.
