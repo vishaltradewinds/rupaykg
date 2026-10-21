@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import type { Pool, PoolClient } from "pg";
 import { authenticate, bearerChallenge, hasOrganizationPermission } from "./auth.js";
-import { validateConflictResolution, validateSyncEnvelope } from "./sync-validation.js";
+import { isValidRfc3339Timestamp, validateConflictResolution, validateSyncEnvelope } from "./sync-validation.js";
 import { hashPlatformAuditEventV2 } from "./platform-audit-hash.js";
 
 type AuthContext = Awaited<ReturnType<typeof authenticate>>;
@@ -24,8 +24,8 @@ async function writeAuditEvent(client: PoolClient, actorIdentityId: string, orga
   await client.query("update platform_audit_chain_head set last_event_id=$1,last_event_hash=$2,updated_at=clock_timestamp() where singleton=true", [eventId, eventHash]);
 }
 function stringValue(payload: OperationPayload, key: string): string | null { const value = payload[key]; return typeof value === "string" && value.trim() ? value.trim() : null; }
-function positiveNumber(payload: OperationPayload, key: string): number | null { const value = Number(payload[key]); return Number.isFinite(value) && value > 0 ? value : null; }
-function dateValue(payload: OperationPayload, key: string): string | null { const value = stringValue(payload, key); return value && !Number.isNaN(Date.parse(value)) ? value : null; }
+export function positiveSyncNumber(payload: OperationPayload, key: string): number | null { const value = payload[key]; return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null; }
+export function validSyncDateValue(payload: OperationPayload, key: string): string | null { const value = stringValue(payload, key); return value && isValidRfc3339Timestamp(value) ? value : null; }
 
 async function requireFieldDevice(pool: Pool, auth: NonNullable<AuthContext>, deviceId: string): Promise<{ id: string } | null> { const result = await pool.query<{ id: string }>(`select id from field_devices where id = $1 and identity_id = $2 and status = 'VERIFIED'`, [deviceId, auth.identityId]); return result.rows[0] ?? null; }
 async function nextServerCursor(client: PoolClient, deviceId: string): Promise<number> { await client.query(`insert into field_sync_cursors (device_id, acknowledged_cursor) values ($1, 0) on conflict (device_id) do nothing`, [deviceId]); const cursor = await client.query<{ acknowledged_cursor: string }>(`select acknowledged_cursor from field_sync_cursors where device_id = $1 for update`, [deviceId]); const next = Number(cursor.rows[0]?.acknowledged_cursor ?? 0) + 1; await client.query(`update field_sync_cursors set acknowledged_cursor = $2, updated_at = now() where device_id = $1`, [deviceId, next]); return next; }
@@ -38,7 +38,7 @@ async function applyOperation(client: PoolClient, auth: NonNullable<AuthContext>
   const operationType = stringValue(payload, "operationType");
   if (!operationType) throw Object.assign(new Error("operationType is required"), { code: "INVALID_OPERATION" });
   if (operationType === "ACTIVITY_CREATE") {
-    const organizationId = stringValue(payload, "organizationId"); const activityType = stringValue(payload, "activityType"); const occurredAt = dateValue(payload, "occurredAt"); const geographyId = stringValue(payload, "geographyId");
+    const organizationId = stringValue(payload, "organizationId"); const activityType = stringValue(payload, "activityType"); const occurredAt = validSyncDateValue(payload, "occurredAt"); const geographyId = stringValue(payload, "geographyId");
     if (!organizationId || !activityType || (payload.occurredAt !== undefined && !occurredAt) || !geographyId || !isUuid(geographyId)) throw Object.assign(new Error("ACTIVITY_CREATE requires organizationId, activityType, valid optional occurredAt and an authorized geographyId"), { code: "INVALID_OPERATION" });
     if (!await verifiedOrganizationAccess(client, identityId, organizationId)) throw Object.assign(new Error("No verified membership for activity organization"), { code: "OPERATION_FORBIDDEN" });
     if (!await hasOrganizationPermission(client, auth, organizationId, ["waste:record"])) throw Object.assign(new Error("Waste recording permission required for activity creation"), { code: "OPERATION_FORBIDDEN" });
@@ -46,7 +46,7 @@ async function applyOperation(client: PoolClient, auth: NonNullable<AuthContext>
     const result = await client.query<{ id: string }>(`insert into activities (organization_id, actor_identity_id, geography_id, activity_type, status, occurred_at, metadata) values ($1,$2,$3,$4,'DRAFT',$5,$6) returning id`, [organizationId, identityId, geographyId, activityType, occurredAt, payload.metadata ?? {}]); return { entityType: "activity", entityId: result.rows[0]!.id };
   }
   if (operationType === "MEASUREMENT_CREATE") {
-    const activityId = stringValue(payload, "activityId"); const value = positiveNumber(payload, "value"); const unit = stringValue(payload, "unit"); const method = stringValue(payload, "method"); const source = stringValue(payload, "source"); const measuredAt = dateValue(payload, "measuredAt");
+    const activityId = stringValue(payload, "activityId"); const value = positiveSyncNumber(payload, "value"); const unit = stringValue(payload, "unit"); const method = stringValue(payload, "method"); const source = stringValue(payload, "source"); const measuredAt = validSyncDateValue(payload, "measuredAt");
     if (!activityId || !isUuid(activityId) || value === null || !unit || !method || !source || !measuredAt) throw Object.assign(new Error("MEASUREMENT_CREATE requires activityId, positive value, unit, method, source and valid measuredAt"), { code: "INVALID_OPERATION" });
     const activity = await client.query<{ organization_id: string }>(`select a.organization_id from activities a where a.id = $1`, [activityId]); const organizationId = activity.rows[0]?.organization_id;
     if (!organizationId || !await hasOrganizationPermission(client, auth, organizationId, ["waste:record"])) throw Object.assign(new Error("Waste recording permission required for measurement creation"), { code: "OPERATION_FORBIDDEN" });
@@ -54,7 +54,7 @@ async function applyOperation(client: PoolClient, auth: NonNullable<AuthContext>
     const result = await client.query<{ id: string }>(`insert into measurements (activity_id, value, unit, method, source, measured_at, metadata) values ($1,$2,$3,$4,$5,$6,$7) returning id`, [activityId, value, unit, method, source, measuredAt, payload.metadata ?? {}]); return { entityType: "measurement", entityId: result.rows[0]!.id };
   }
   if (operationType === "EVIDENCE_CREATE") {
-    const activityId = stringValue(payload, "activityId"); const evidenceType = stringValue(payload, "evidenceType"); const capturedAt = dateValue(payload, "capturedAt"); const contentUri = stringValue(payload, "contentUri"); const contentHash = stringValue(payload, "contentHash"); const measurementId = payload.measurementId == null ? null : stringValue(payload, "measurementId");
+    const activityId = stringValue(payload, "activityId"); const evidenceType = stringValue(payload, "evidenceType"); const capturedAt = validSyncDateValue(payload, "capturedAt"); const contentUri = stringValue(payload, "contentUri"); const contentHash = stringValue(payload, "contentHash"); const measurementId = payload.measurementId == null ? null : stringValue(payload, "measurementId");
     if (!activityId || !isUuid(activityId) || !evidenceType || !capturedAt || (!contentUri && !contentHash) || (measurementId && !isUuid(measurementId))) throw Object.assign(new Error("EVIDENCE_CREATE requires activityId, evidenceType, valid capturedAt and contentUri or contentHash"), { code: "INVALID_OPERATION" });
     const activity = await client.query<{ organization_id: string }>(`select a.organization_id from activities a where a.id = $1`, [activityId]); const organizationId = activity.rows[0]?.organization_id;
     if (!organizationId || !await hasOrganizationPermission(client, auth, organizationId, ["evidence:upload"])) throw Object.assign(new Error("Evidence upload permission required"), { code: "OPERATION_FORBIDDEN" });
@@ -63,7 +63,7 @@ async function applyOperation(client: PoolClient, auth: NonNullable<AuthContext>
     const result = await client.query<{ id: string }>(`insert into evidence (activity_id, measurement_id, evidence_type, captured_at, content_uri, content_hash, metadata, captured_by_identity_id) values ($1,$2,$3,$4,$5,$6,$7,$8) returning id`, [activityId, measurementId, evidenceType, capturedAt, contentUri, contentHash, payload.metadata ?? {}, identityId]); return { entityType: "evidence", entityId: result.rows[0]!.id };
   }
   if (operationType === "RESOURCE_FLOW_CREATE") {
-    const organizationId = stringValue(payload, "organizationId"); const originType = stringValue(payload, "originType"); const resourceForm = stringValue(payload, "resourceForm"); const materialCode = stringValue(payload, "materialCode"); const quantity = positiveNumber(payload, "quantity"); const unit = stringValue(payload, "unit"); const sourceGeographyId = payload.sourceGeographyId == null ? null : stringValue(payload, "sourceGeographyId"); const destinationGeographyId = payload.destinationGeographyId == null ? null : stringValue(payload, "destinationGeographyId");
+    const organizationId = stringValue(payload, "organizationId"); const originType = stringValue(payload, "originType"); const resourceForm = stringValue(payload, "resourceForm"); const materialCode = stringValue(payload, "materialCode"); const quantity = positiveSyncNumber(payload, "quantity"); const unit = stringValue(payload, "unit"); const sourceGeographyId = payload.sourceGeographyId == null ? null : stringValue(payload, "sourceGeographyId"); const destinationGeographyId = payload.destinationGeographyId == null ? null : stringValue(payload, "destinationGeographyId");
     if (!organizationId || !originType || !resourceForm || !materialCode || quantity === null || !unit || (sourceGeographyId && !isUuid(sourceGeographyId)) || (destinationGeographyId && !isUuid(destinationGeographyId))) throw Object.assign(new Error("RESOURCE_FLOW_CREATE requires organizationId, originType, resourceForm, materialCode, positive quantity and unit"), { code: "INVALID_OPERATION" });
     if (!await verifiedOrganizationAccess(client, identityId, organizationId)) throw Object.assign(new Error("No verified membership for resource-flow organization"), { code: "OPERATION_FORBIDDEN" });
     if (!await hasOrganizationPermission(client, auth, organizationId, ["waste:record"])) throw Object.assign(new Error("Waste recording permission required for resource-flow creation"), { code: "OPERATION_FORBIDDEN" });
