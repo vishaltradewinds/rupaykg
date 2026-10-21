@@ -18,6 +18,7 @@ import { registerMrvRoutes } from "./mrv-routes.js";
 import { registerEvidenceVaultRoutes } from "./evidence-vault-routes.js";
 import { registerAsyncMirrorRoutes } from "./async-mirror-routes.js";
 import { registerPlatformAdminRoutes } from "./platform-admin-routes.js";
+import { registerGovernmentJurisdictionCrosswalkRoutes } from "./government-jurisdiction-crosswalk-routes.js";
 import { readProductionConfig } from "./production-config.js";
 
 // Prevent direct execution of this lower-level entry point from bypassing the
@@ -165,6 +166,7 @@ await registerMrvRoutes(app, pool);
 await registerEvidenceVaultRoutes(app, pool);
 await registerAsyncMirrorRoutes(app, pool);
 await registerPlatformAdminRoutes(app, pool);
+await registerGovernmentJurisdictionCrosswalkRoutes(app, pool);
 
 if (existsSync(webRoot)) app.get("/*", async (_request, reply) => reply.type("text/html; charset=utf-8").send(readFileSync(resolve(webRoot, "index.html"), "utf8")));
 
