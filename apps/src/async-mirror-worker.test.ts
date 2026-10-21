@@ -82,9 +82,24 @@ test("reconciliation reports unresolved statuses and expired leases read-only", 
 });
 
 
-test("government inbox timestamp validation checks actual calendar and clock values", () => {
-  assert.equal(isValidSyncWindowTimestamp("2026-02-30T02:30:00Z"), false);
-  assert.equal(isValidSyncWindowTimestamp("2024-02-29T02:30:00Z"), true);
-  assert.equal(isValidSyncWindowTimestamp("2026-10-19T24:00:00Z"), false);
-  assert.equal(isValidSyncWindowTimestamp("2026-10-19T02:30:00+05:30"), true);
+test("government inbox timestamp validation checks calendar, clock, precision, and timezone boundaries", () => {
+  const cases: Array<[string, boolean]> = [
+    ["2026-02-30T02:30:00Z", false],
+    ["2026-13-01T02:30:00Z", false],
+    ["2024-02-29T02:30:00Z", true],
+    ["2026-10-19T24:00:00Z", false],
+    ["2026-10-19T02:60:00Z", false],
+    ["2026-10-19T02:30:60Z", false],
+    ["2026-10-19T02:30:00.123Z", true],
+    ["2026-10-19T02:30:00.1234Z", false],
+    ["2026-10-19T02:30:00", false],
+    ["2026-10-19T02:30:00+05:30", true],
+    ["2026-10-19T02:30:00-04:00", true],
+    ["2026-10-19T02:30:00+25:00", false],
+    ["2026-10-19T02:30:00+01:60", false],
+    ["2026-10-19T02:30:00+24:00", false],
+  ];
+  for (const [timestamp, expected] of cases) {
+    assert.equal(isValidSyncWindowTimestamp(timestamp), expected, timestamp);
+  }
 });
