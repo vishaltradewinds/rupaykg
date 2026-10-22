@@ -113,6 +113,20 @@ export async function registerGovernmentJurisdictionCrosswalkRoutes(app: Fastify
       || !reason || reason.length < 8) {
       return error(reply, 400, "Valid organizationId, geographyId, authorityCode, municipalCode, sourceVersion, approved sourceSnapshotId, evidence reference/SHA-256 and reason are required", "GOVERNMENT_CROSSWALK_REQUEST_INVALID");
     }
+    const requestHash = digest({
+      organizationId,
+      geographyId: geographyId.toLowerCase(),
+      activityId,
+      authorityCode,
+      municipalCode,
+      externalIdentifierType,
+      sourceVersion,
+      sourceSnapshotId,
+      effectiveFrom,
+      evidenceReference,
+      evidenceSha256,
+      reason,
+    });
     if (!await requireCrosswalkManager(pool, auth, organizationId)) {
       return error(reply, 403, "Verified organization membership and stakeholder-management permission are required", "GOVERNMENT_CROSSWALK_FORBIDDEN");
     }
@@ -180,7 +194,23 @@ export async function registerGovernmentJurisdictionCrosswalkRoutes(app: Fastify
               and gs.checksum = snap.content_sha256
             where snap.id = $1
               and snap.validation_status = 'APPROVED'
-              and snap.content_sha256 ~ '^[0-9a-f]{64}
+              and snap.content_sha256 ~ '^[0-9a-f]{64}$'
+              and gs.status = 'VERIFIED'`,
+          [sourceSnapshotId],
+        );
+        if (source.rows.length !== 1) {
+          await client.query("rollback");
+          return error(reply, 409, "External identifier resolution requires exactly one verified geography source bound to the approved snapshot", "GEOGRAPHY_SOURCE_SNAPSHOT_BINDING_REQUIRED");
+        }
+        const resolved = await client.query<{ geography_id: string | null }>(
+          "select resolve_verified_geography_external_identifier($1,$2,$3,$4::date)::text as geography_id",
+          [source.rows[0]!.id, externalIdentifierType, municipalCode, effectiveFrom],
+        );
+        if (resolved.rows[0]?.geography_id?.toLowerCase() !== geographyId.toLowerCase()) {
+          await client.query("rollback");
+          return error(reply, 409, "External identifier does not resolve to the requested canonical geography for this source and effective date", "GEOGRAPHY_EXTERNAL_IDENTIFIER_MISMATCH");
+        }
+      }
       const inserted = await client.query<{ id: string }>(
         `insert into government_jurisdiction_crosswalk_requests
           (authority_code,municipal_code,source_version,source_snapshot_id,organization_id,geography_id,activity_id,effective_from,evidence_reference,evidence_sha256,request_reason,request_hash,requested_by_identity_id)
