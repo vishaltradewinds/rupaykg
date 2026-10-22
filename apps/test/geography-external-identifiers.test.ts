@@ -68,6 +68,10 @@ describe("versioned geography external identifier registry", () => {
       [sourceId, alias],
     );
     assert.equal(old.rows[0]?.geography_id, firstGeographyId);
+    await assert.rejects(
+      pool.query("update geography_external_identifiers set geography_id=$1 where id=$2", [secondGeographyId, first]),
+      /GEOGRAPHY_EXTERNAL_IDENTIFIER_VERIFIED_IMMUTABLE/,
+    );
     const current = await pool.query<{ geography_id: string | null }>(
       "select resolve_verified_geography_external_identifier($1,'LGD_CODE',$2,'2026-02-01') as geography_id",
       [sourceId, alias],
@@ -84,6 +88,10 @@ describe("versioned geography external identifier registry", () => {
       [sourceId, alias],
     );
     assert.equal(retired.rows[0]?.geography_id, null);
+    await assert.rejects(
+      pool.query("update geography_external_identifiers set status='VERIFIED' where id=$1", [second]),
+      /GEOGRAPHY_EXTERNAL_IDENTIFIER_RETIRED_TERMINAL/,
+    );
   });
 
   it("rejects overlapping verified periods but accepts a subsequent non-overlapping version", async () => {
