@@ -32,6 +32,7 @@ describe("geography alias migration contract (database-independent)", () => {
 describe("government crosswalk geography resolver integration contract", () => {
   it("binds optional external identifiers to the exact approved source snapshot and canonical geography", () => {
     assert.ok(crosswalkRouteSource.includes("externalIdentifierType"));
+    assert.ok(crosswalkRouteSource.includes("body.externalIdentifierType !== undefined && body.externalIdentifierType !== null && externalIdentifierType === null"));
     assert.ok(crosswalkRouteSource.includes("gs.source_uri = snap.source_url"));
     assert.ok(crosswalkRouteSource.includes("gs.source_version = snap.source_version"));
     assert.ok(crosswalkRouteSource.includes("gs.checksum = snap.content_sha256"));
