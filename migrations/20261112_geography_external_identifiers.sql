@@ -27,7 +27,7 @@ create table if not exists geography_external_identifiers (
       and source_reference_uri is not null
       and source_reference_uri ~ '^https://'
       and source_checksum is not null
-      and source_checksum ~ '^[0-9a-f]{64}
+      and source_checksum ~ '^[0-9a-f]{64}$'
     )
   ),
   unique (source_id, identifier_type, external_identifier, valid_from)
