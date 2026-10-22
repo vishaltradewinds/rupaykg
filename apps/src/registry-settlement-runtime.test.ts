@@ -193,6 +193,10 @@ describe("registry and settlement runtime acceptance", () => {
   it("requires current-owner transfer permission and permits governed retirement", async () => {
     if (!pool) return;
     if (settlementId) await pool.query("update settlements set status='FAILED' where id=$1", [settlementId]);
+    const retryAfterFailure = await request("/api/v1/settlements", { method: "POST", body: JSON.stringify({ credentialId, payerId: ownerOrgId, payeeId: destinationOrgId, amount: 75, currency: "INR", externalReference: `payment-retry-after-failure-${suffix}` }) }, actorToken, ownerOrgId);
+    assert.equal(retryAfterFailure.status, 201, "a terminal FAILED settlement must not reserve the credential/party tuple");
+    const failedRetryId = (await body(retryAfterFailure)).settlement.id;
+    await pool.query("update settlements set status='FAILED' where id=$1", [failedRetryId]);
     const denied = await request(`/api/v1/credentials/${credentialId}/transfer`, { method: "POST", body: JSON.stringify({ toOwnerId: destinationOrgId }) }, verifierToken, ownerOrgId); assert.equal(denied.status, 403); assert.equal((await body(denied)).code, "HIGH_RISK_PERMISSION_REQUIRED");
     const transferred = await request(`/api/v1/credentials/${credentialId}/transfer`, { method: "POST", body: JSON.stringify({ toOwnerId: destinationOrgId }) }, actorToken, ownerOrgId); assert.equal(transferred.status, 200); assert.equal((await body(transferred)).registryEvent.event_type, "TRANSFERRED");
     const staleOwnerTransfer = await request(`/api/v1/credentials/${credentialId}/transfer`, { method: "POST", body: JSON.stringify({ toOwnerId: ownerOrgId }) }, actorToken, ownerOrgId); assert.equal(staleOwnerTransfer.status, 403); assert.equal((await body(staleOwnerTransfer)).code, "ORG_FORBIDDEN");
