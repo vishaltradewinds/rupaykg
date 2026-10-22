@@ -157,3 +157,8 @@ The settlement confirmation API is intentionally fail-closed while no independen
 ## Failed settlement terminal-state correction (2026-11-10 migration sequence)
 
 Migration `20261110_failed_settlement_terminal_for_retirement.sql` aligns the database retirement guard with the API: a settlement in `FAILED` is terminal and no longer treated as an open settlement that blocks credential retirement. `CREATED`, `AUTHORIZED`, `EXECUTING`, and `RECONCILING` remain open; `SETTLED`, `CANCELLED`, and `FAILED` are terminal for this guard. This does not make a failed settlement evidence that funds moved.
+
+
+## CPCB SWM strict geography guard (2026-11-11 migration sequence)
+
+Migration `20261111_cpcb_swm_strict_geography_guard.sql` aligns the PostgreSQL trigger with the strict helper used by the CPCB SWM API routes. Inserts and geography changes require an explicit verified organization geography root and a requested geography within that root. The legacy geography helper remains available for lower-risk legacy workflows; this migration does not globally change its semantics.
