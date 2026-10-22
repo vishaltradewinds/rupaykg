@@ -41,7 +41,7 @@ describe("government crosswalk geography resolver integration contract", () => {
     assert.ok(crosswalkRouteSource.includes("GEOGRAPHY_EXTERNAL_IDENTIFIER_MISMATCH"));
     assert.ok(crosswalkRouteSource.includes("const requestHash = digest({"));
     assert.ok(crosswalkRouteSource.includes("source.rows.length !== 1"));
-    assert.ok(crosswalkRouteSource.includes("snap.content_sha256 ~ '^[0-9a-f]{64}  });
+    assert.ok(crosswalkRouteSource.includes("snap.content_sha256 ~ '^[0-9a-f]{64}$'"));
 });
 
 const databaseUrl = process.env.DATABASE_URL;
