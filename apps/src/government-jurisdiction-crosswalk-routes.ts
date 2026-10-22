@@ -106,6 +106,7 @@ export async function registerGovernmentJurisdictionCrosswalkRoutes(app: Fastify
       || (body.activityId !== undefined && body.activityId !== null && activityId === null)
       || (activityId !== null && !UUID.test(activityId))
       || !authorityCode || !CODE.test(authorityCode) || !municipalCode || !CODE.test(municipalCode)
+      || (body.externalIdentifierType !== undefined && body.externalIdentifierType !== null && externalIdentifierType === null)
       || (externalIdentifierType !== null && !/^[A-Z][A-Z0-9_]{1,63}$/.test(externalIdentifierType))
       || !sourceVersion || !sourceSnapshotId || !UUID.test(sourceSnapshotId) || !evidenceReference || !evidenceSha256 || !SHA256.test(evidenceSha256)
       || (effectiveFromInput !== null && !validCanonicalTimestamp(effectiveFromInput))
