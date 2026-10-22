@@ -213,6 +213,30 @@ test("government inbox worker persists retry recovery, quarantine and append-onl
     assert.equal(retiredRow.rows[0]?.status, "UNRESOLVED");
     assert.equal(retiredRow.rows[0]?.last_error_code, "GOVERNMENT_CROSSWALK_NOT_FOUND");
 
+    // Defense in depth: mutating a manifest after crosswalk verification must not
+    // leave the mapping trusted merely because its status still says APPROVED.
+    const mutatedAuthority = "MUT-" + suffix.slice(0, 8).toUpperCase();
+    const mutatedFixture = await provisionCrosswalk(mutatedAuthority, "MUT-MUNI", new Date().toISOString());
+    await pool.query("update authoritative_source_snapshots set source_version='mutated-source-v2' where id=$1", [mutatedFixture.sourceSnapshotId]);
+    const mutatedTimestamp = new Date().toISOString();
+    const mutatedBatchId = randomUUID();
+    const mutatedPayload = {
+      batchMetadata: { authorityCode: mutatedAuthority, municipalCode: "MUT-MUNI", batchId: mutatedBatchId,
+        syncWindowTimestamp: mutatedTimestamp, sourceVersion: "synthetic-source-v1" },
+      rawDataLogs: ["Synthetic source-manifest mismatch record"],
+    };
+    const mutatedInsert = await pool.query<{ id: string }>(
+      `insert into async_mirror_inbox(authority_code,municipal_code,batch_id,sync_window_timestamp,payload,payload_sha256,status,attempts,received_at)
+       values($1,'MUT-MUNI',$2,$3,$4::jsonb,$5,'RECEIVED',0,now()-interval '2 minutes') returning id`,
+      [mutatedAuthority, mutatedBatchId, mutatedTimestamp, JSON.stringify(mutatedPayload), sha(mutatedPayload)],
+    );
+    await runGovernmentInboxWorker(pool, undefined, { batchSize: 10, maxAttempts: 3 });
+    const mutatedRow = await pool.query<{ status: string; last_error_code: string | null }>(
+      "select status,last_error_code from async_mirror_inbox where id=$1", [mutatedInsert.rows[0]!.id],
+    );
+    assert.equal(mutatedRow.rows[0]?.status, "UNRESOLVED");
+    assert.equal(mutatedRow.rows[0]?.last_error_code, "GOVERNMENT_CROSSWALK_NOT_FOUND");
+
     const exhausted = await makeRow("QRT-" + suffix.slice(0, 8), true);
     const quarantined = await runGovernmentInboxWorker(pool, async () => { throw new Error("SyntheticExhaustedFailure"); }, { batchSize: 10, maxAttempts: 1 });
     assert.ok(quarantined.quarantined >= 1, "exhausted work must be quarantined");
