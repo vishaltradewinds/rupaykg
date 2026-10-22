@@ -1,6 +1,8 @@
 -- Pan-India source identifiers are aliases, not primary keys. Preserve provenance and effective
 -- dates so state/local authority code changes do not rewrite RupayKg's canonical geography IDs.
 -- No jurisdiction records are seeded here: ingest only from a reviewed official source snapshot.
+-- btree_gist makes source/type/code equality participate in the temporal exclusion constraint.
+create extension if not exists btree_gist;
 create table if not exists geography_external_identifiers (
   id uuid primary key default gen_random_uuid(),
   source_id uuid not null references geography_sources(id),
@@ -29,39 +31,20 @@ create index if not exists geography_external_identifiers_geography_idx
 create index if not exists geography_external_identifiers_lookup_idx
   on geography_external_identifiers(source_id, identifier_type, external_identifier, status);
 
--- Prevent two concurrently reviewed mappings from assigning the same source identifier
--- to overlapping effective periods. The transaction advisory lock serializes checks per alias.
-create or replace function prevent_overlapping_verified_geography_identifier()
-returns trigger language plpgsql as $$
-begin
-  if new.status = 'VERIFIED' then
-    perform pg_advisory_xact_lock(hashtextextended(
-      new.source_id::text || '|' || new.identifier_type || '|' || new.external_identifier, 0
-    ));
-    if exists (
-      select 1
-      from geography_external_identifiers existing
-      where existing.id <> new.id
-        and existing.source_id = new.source_id
-        and existing.identifier_type = new.identifier_type
-        and existing.external_identifier = new.external_identifier
-        and existing.status = 'VERIFIED'
-        and daterange(existing.valid_from, existing.valid_to, '[]')
-            && daterange(new.valid_from, new.valid_to, '[]')
-    ) then
-      raise exception 'GEOGRAPHY_EXTERNAL_IDENTIFIER_EFFECTIVE_PERIOD_OVERLAP'
-        using errcode = '23514';
-    end if;
-  end if;
-  return new;
-end;
-$$;
-
+-- Database exclusion constraints (rather than application-only checks) reject overlapping verified
+-- effective periods even when two independent transactions attempt the same alias concurrently.
 drop trigger if exists geography_external_identifier_no_overlap on geography_external_identifiers;
-create trigger geography_external_identifier_no_overlap
-before insert or update of source_id, identifier_type, external_identifier, valid_from, valid_to, status
-on geography_external_identifiers
-for each row execute function prevent_overlapping_verified_geography_identifier();
+drop function if exists prevent_overlapping_verified_geography_identifier();
+alter table geography_external_identifiers
+  drop constraint if exists geography_external_identifier_effective_period_excl;
+alter table geography_external_identifiers
+  add constraint geography_external_identifier_effective_period_excl
+  exclude using gist (
+    source_id with =,
+    identifier_type with =,
+    external_identifier with =,
+    daterange(valid_from, valid_to, '[]') with &&
+  ) where (status = 'VERIFIED');
 
 comment on table geography_external_identifiers is
   'Versioned, provenance-bound external geography identifiers; canonical geography IDs remain internal and stable.';
