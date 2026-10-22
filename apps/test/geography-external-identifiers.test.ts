@@ -103,7 +103,7 @@ describe("versioned geography external identifier registry", () => {
     );
     await assert.rejects(
       pool.query(
-        "insert into geography_external_identifiers(source_id,geography_id,identifier_type,external_identifier,valid_from,valid_to,status,source_checksum,reviewed_by_identity_id,reviewed_at) values($1,$2,'LGD_CODE',$3,'2025-12-01','2026-01-31','VERIFIED',$4,$5,now())",
+        "insert into geography_external_identifiers(source_id,geography_id,identifier_type,external_identifier,valid_from,valid_to,status,source_reference_uri,source_checksum,reviewed_by_identity_id,reviewed_at) values($1,$2,'LGD_CODE',$3,'2025-12-01','2026-01-31','VERIFIED','https://example.invalid/alias-source',$4,$5,now())",
         [sourceId, secondGeographyId, alias, "b".repeat(64), reviewerId],
       ),
       /geography_external_identifier_effective_period_excl/,
