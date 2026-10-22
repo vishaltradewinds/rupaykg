@@ -36,6 +36,7 @@ async function createFixture(pool: Pool): Promise<Fixture> {
   await pool.query("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED')",
     [fixture.identityId, fixture.organizationId, fixture.roleId]);
   await pool.query("insert into geography(id,kind,name) values($1,'STATE_UT',$2)", [fixture.geographyId, "AI intake synthetic geography"]);
+  await pool.query("insert into organization_geography_scopes(organization_id,geography_id,status) values($1,$2,'VERIFIED')", [fixture.organizationId, fixture.geographyId]);
   await pool.query("insert into activities(id,organization_id,actor_identity_id,geography_id,activity_type) values($1,$2,$3,$4,$5)",
     [fixture.activityId, fixture.organizationId, fixture.identityId, fixture.geographyId, "WASTE_MEASUREMENT"]);
   await pool.query("insert into identity_sessions(identity_id,expires_at,token_hash) values($1,now()+interval '1 hour',$2)",
