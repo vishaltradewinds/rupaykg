@@ -46,5 +46,28 @@ alter table geography_external_identifiers
     daterange(valid_from, valid_to, '[]') with &&
   ) where (status = 'VERIFIED');
 
+-- A resolver must never use PENDING, REJECTED or RETIRED aliases. The caller supplies the
+-- target date and the exact source manifest; no fuzzy or cross-source fallback is permitted.
+create or replace function resolve_verified_geography_external_identifier(
+  p_source_id uuid,
+  p_identifier_type text,
+  p_external_identifier text,
+  p_as_of date
+) returns uuid
+language sql stable as $
+  select geography_id
+  from geography_external_identifiers
+  where source_id = p_source_id
+    and identifier_type = p_identifier_type
+    and external_identifier = p_external_identifier
+    and status = 'VERIFIED'
+    and valid_from <= p_as_of
+    and (valid_to is null or valid_to >= p_as_of)
+  limit 1;
+$;
+
+comment on function resolve_verified_geography_external_identifier(uuid,text,text,date) is
+  'Exact, source-bound, effective-date resolver for verified external geography identifiers; no fuzzy matching or fallback is permitted.';
+
 comment on table geography_external_identifiers is
   'Versioned, provenance-bound external geography identifiers; canonical geography IDs remain internal and stable.';

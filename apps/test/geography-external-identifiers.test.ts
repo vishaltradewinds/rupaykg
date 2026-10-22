@@ -52,6 +52,40 @@ describe("versioned geography external identifier registry", () => {
     );
   });
 
+  it("resolves only an exact verified alias for its source and effective date", async () => {
+    if (!pool) return;
+    const alias = `RESOLVE-${suffix}`;
+    const first = (await pool.query<{ id: string }>(
+      "insert into geography_external_identifiers(source_id,geography_id,identifier_type,external_identifier,valid_from,valid_to,status,source_checksum,reviewed_by_identity_id,reviewed_at) values($1,$2,'LGD_CODE',$3,'2025-01-01','2025-12-31','VERIFIED',$4,$5,now()) returning id",
+      [sourceId, firstGeographyId, alias, "d".repeat(64), reviewerId],
+    )).rows[0]!.id;
+    const second = (await pool.query<{ id: string }>(
+      "insert into geography_external_identifiers(source_id,geography_id,identifier_type,external_identifier,valid_from,status,source_checksum,reviewed_by_identity_id,reviewed_at) values($1,$2,'LGD_CODE',$3,'2026-01-01','VERIFIED',$4,$5,now()) returning id",
+      [sourceId, secondGeographyId, alias, "e".repeat(64), reviewerId],
+    )).rows[0]!.id;
+    const old = await pool.query<{ geography_id: string | null }>(
+      "select resolve_verified_geography_external_identifier($1,'LGD_CODE',$2,'2025-06-01') as geography_id",
+      [sourceId, alias],
+    );
+    assert.equal(old.rows[0]?.geography_id, firstGeographyId);
+    const current = await pool.query<{ geography_id: string | null }>(
+      "select resolve_verified_geography_external_identifier($1,'LGD_CODE',$2,'2026-02-01') as geography_id",
+      [sourceId, alias],
+    );
+    assert.equal(current.rows[0]?.geography_id, secondGeographyId);
+    const wrongSource = await pool.query<{ geography_id: string | null }>(
+      "select resolve_verified_geography_external_identifier($1,'LGD_CODE',$2,'2026-02-01') as geography_id",
+      [randomUUID(), alias],
+    );
+    assert.equal(wrongSource.rows[0]?.geography_id, null);
+    await pool.query("update geography_external_identifiers set status='RETIRED' where id=$1", [second]);
+    const retired = await pool.query<{ geography_id: string | null }>(
+      "select resolve_verified_geography_external_identifier($1,'LGD_CODE',$2,'2026-02-01') as geography_id",
+      [sourceId, alias],
+    );
+    assert.equal(retired.rows[0]?.geography_id, null);
+  });
+
   it("rejects overlapping verified periods but accepts a subsequent non-overlapping version", async () => {
     if (!pool) return;
     const alias = `ALIAS-${suffix}`;
