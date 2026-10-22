@@ -192,6 +192,10 @@ export async function runGovernmentInboxWorker(
              from government_jurisdiction_crosswalks c
              join authoritative_source_snapshots s on s.id=c.source_snapshot_id
                and s.validation_status='APPROVED'
+               and s.authority_code=c.authority_code
+               and s.source_version=c.source_version
+               and (s.effective_from is null or $3::timestamptz::date >= s.effective_from)
+               and (s.effective_to is null or $3::timestamptz::date <= s.effective_to)
             where c.authority_code=$1 and c.municipal_code=$2 and c.status='VERIFIED'
               and c.effective_from <= $3::timestamptz
               and (c.effective_to is null or c.effective_to > $3::timestamptz)
