@@ -162,7 +162,13 @@ export async function registerGovernmentJurisdictionCrosswalkRoutes(app: Fastify
       }
       const snapshot = await client.query<{ ok: boolean }>(
         "select exists(select 1 from authoritative_source_snapshots where id=$1 and authority_code=$2 and source_version=$3 and validation_status='APPROVED' and (effective_from is null or effective_from <= $4::date) and (effective_to is null or effective_to >= $4::date)) as ok",
-        [sourceSnapsho      // Optional source-specific alias resolution is fail-closed and never fuzzy-matches.
+        [sourceSnapshotId, authorityCode, sourceVersion, effectiveFrom],
+      );
+      if (snapshot.rows[0]?.ok !== true) {
+        await client.query("rollback");
+        return error(reply, 409, "An approved source snapshot with matching authority, version and effective date is required", "GOVERNMENT_CROSSWALK_SOURCE_SNAPSHOT_REQUIRED");
+      }
+      // Optional source-specific alias resolution is fail-closed and never fuzzy-matches.
       if (externalIdentifierType !== null) {
         const source = await client.query<{ id: string }>(
           `select gs.id
@@ -193,12 +199,6 @@ export async function registerGovernmentJurisdictionCrosswalkRoutes(app: Fastify
           await client.query("rollback");
           return error(reply, 409, "External identifier does not resolve to the requested canonical geography for this source and effective date", "GEOGRAPHY_EXTERNAL_IDENTIFIER_MISMATCH");
         }
-      }
-tId, authorityCode, sourceVersion, effectiveFrom],
-      );
-      if (snapshot.rows[0]?.ok !== true) {
-        await client.query("rollback");
-        return error(reply, 409, "An approved source snapshot with matching authority, version and effective date is required", "GOVERNMENT_CROSSWALK_SOURCE_SNAPSHOT_REQUIRED");
       }
       const requestHash = digest({ authorityCode, municipalCode, externalIdentifierType, sourceVersion, sourceSnapshotId, organizationId, geographyId, activityId: activityId ?? null, effectiveFrom, evidenceReference, evidenceSha256, reason, requestedBy: auth.identityId });
       const inserted = await client.query<{ id: string }>(
