@@ -152,3 +152,8 @@ An approved source snapshot's `authority_code` is part of its immutable provenan
 ## External settlement confirmation gate
 
 The settlement confirmation API is intentionally fail-closed while no independently authenticated external settlement confirmation adapter is configured. Caller-supplied confirmation/reconciliation reference strings are not proof that funds moved; the API leaves the record in `RECONCILING` and does not set `external_confirmed_at` or `SETTLED`. Do not enable settlement finalization until a trusted provider adapter validates the provider event and reconciliation evidence, with its own integration tests and operational controls.
+
+
+## Failed settlement terminal-state correction (2026-11-10 migration sequence)
+
+Migration `20261110_failed_settlement_terminal_for_retirement.sql` aligns the database retirement guard with the API: a settlement in `FAILED` is terminal and no longer treated as an open settlement that blocks credential retirement. `CREATED`, `AUTHORIZED`, `EXECUTING`, and `RECONCILING` remain open; `SETTLED`, `CANCELLED`, and `FAILED` are terminal for this guard. This does not make a failed settlement evidence that funds moved.
