@@ -56,11 +56,11 @@ describe("versioned geography external identifier registry", () => {
     if (!pool) return;
     const alias = `RESOLVE-${suffix}`;
     const first = (await pool.query<{ id: string }>(
-      "insert into geography_external_identifiers(source_id,geography_id,identifier_type,external_identifier,valid_from,valid_to,status,source_checksum,reviewed_by_identity_id,reviewed_at) values($1,$2,'LGD_CODE',$3,'2025-01-01','2025-12-31','VERIFIED',$4,$5,now()) returning id",
+      "insert into geography_external_identifiers(source_id,geography_id,identifier_type,external_identifier,valid_from,valid_to,status,source_reference_uri,source_checksum,reviewed_by_identity_id,reviewed_at) values($1,$2,'LGD_CODE',$3,'2025-01-01','2025-12-31','VERIFIED','https://example.invalid/alias-source',$4,$5,now()) returning id",
       [sourceId, firstGeographyId, alias, "d".repeat(64), reviewerId],
     )).rows[0]!.id;
     const second = (await pool.query<{ id: string }>(
-      "insert into geography_external_identifiers(source_id,geography_id,identifier_type,external_identifier,valid_from,status,source_checksum,reviewed_by_identity_id,reviewed_at) values($1,$2,'LGD_CODE',$3,'2026-01-01','VERIFIED',$4,$5,now()) returning id",
+      "insert into geography_external_identifiers(source_id,geography_id,identifier_type,external_identifier,valid_from,status,source_reference_uri,source_checksum,reviewed_by_identity_id,reviewed_at) values($1,$2,'LGD_CODE',$3,'2026-01-01','VERIFIED','https://example.invalid/alias-source',$4,$5,now()) returning id",
       [sourceId, secondGeographyId, alias, "e".repeat(64), reviewerId],
     )).rows[0]!.id;
     const old = await pool.query<{ geography_id: string | null }>(
@@ -98,7 +98,7 @@ describe("versioned geography external identifier registry", () => {
     if (!pool) return;
     const alias = `ALIAS-${suffix}`;
     await pool.query(
-      "insert into geography_external_identifiers(source_id,geography_id,identifier_type,external_identifier,valid_from,valid_to,status,source_checksum,reviewed_by_identity_id,reviewed_at) values($1,$2,'LGD_CODE',$3,'2025-01-01','2025-12-31','VERIFIED',$4,$5,now())",
+      "insert into geography_external_identifiers(source_id,geography_id,identifier_type,external_identifier,valid_from,valid_to,status,source_reference_uri,source_checksum,reviewed_by_identity_id,reviewed_at) values($1,$2,'LGD_CODE',$3,'2025-01-01','2025-12-31','VERIFIED','https://example.invalid/alias-source',$4,$5,now())",
       [sourceId, firstGeographyId, alias, "a".repeat(64), reviewerId],
     );
     await assert.rejects(
@@ -109,7 +109,7 @@ describe("versioned geography external identifier registry", () => {
       /geography_external_identifier_effective_period_excl/,
     );
     const next = await pool.query<{ id: string }>(
-      "insert into geography_external_identifiers(source_id,geography_id,identifier_type,external_identifier,valid_from,status,source_checksum,reviewed_by_identity_id,reviewed_at) values($1,$2,'LGD_CODE',$3,'2026-01-01','VERIFIED',$4,$5,now()) returning id",
+      "insert into geography_external_identifiers(source_id,geography_id,identifier_type,external_identifier,valid_from,status,source_reference_uri,source_checksum,reviewed_by_identity_id,reviewed_at) values($1,$2,'LGD_CODE',$3,'2026-01-01','VERIFIED','https://example.invalid/alias-source',$4,$5,now()) returning id",
       [sourceId, secondGeographyId, alias, "c".repeat(64), reviewerId],
     );
     assert.ok(next.rows[0]?.id);
