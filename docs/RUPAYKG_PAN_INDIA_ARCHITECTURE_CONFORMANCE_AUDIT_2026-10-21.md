@@ -159,3 +159,8 @@ The versioned BWG assessment helper now follows the official portal's OR semanti
 ## Follow-up remediation — CPCB SWM route strict-scope consistency (2026-10-22)
 
 The POST and PATCH route checks in `apps/src/cpcb-swm-routes.ts` previously combined a verified-root existence check with the legacy `organization_has_geography_scope` helper. That was more restrictive than the legacy fallback alone, but duplicated the strict-scope contract and risked future drift. Both high-impact write paths now call `organization_has_explicit_geography_scope` directly, matching MRV, EPR evidence, evidence-vault, and database trigger controls. This change does not change the legacy helper globally and does not grant any organization a new geography. CI and disposable-PostgreSQL integration coverage for the combined branch head remain required.
+
+
+## Follow-up remediation — evidence-verifier tenant and geography binding (2026-10-22)
+
+Review of `apps/src/auth.ts` found that `canVerifyEvidence` used the legacy geography helper and did not explicitly bind the verifier's organization membership to the activity's owning organization. The query now requires `om.organization_id = a.organization_id` and `organization_has_explicit_geography_scope` before an identity with the canonical high-risk permission can verify evidence. Unit coverage asserts both SQL predicates and rejects the legacy helper. This is a defense-in-depth correction; database integration tests and CI on the combined head are still required before the batch is validated.
