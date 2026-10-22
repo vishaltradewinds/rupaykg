@@ -14,6 +14,7 @@
 |---|---|---|
 | Product intent | Root README calls RupayKg a nationwide platform for urban and rural resource flows; the fundamental rule now states pan-India by design | **Aligned at intent/documentation level** |
 | Geography authorization | Evidence verification uses organization geography scope; CPCB workspace accepts a geography identifier and organization-scoped operations | **Useful control present; hierarchy and national coverage not proven** |
+| External geography identifiers | Migration `20261112_geography_external_identifiers.sql` adds versioned source aliases with effective dates, reviewer/source-checksum provenance, and overlap rejection | **Schema foundation only**: no official national dataset is ingested, no aliases are seeded, and existing routing does not yet consume the registry |
 | Government inbox identity | Inbox contract requires `authorityCode` and `municipalCode`; database persists those fields and scopes HMAC credentials/allow-listing | **Fail-closed intake controls present; normalized state/district/ULB hierarchy and crosswalk are not evidenced here** |
 | Stakeholder taxonomy | CPCB routes and authorization migrations use a closed list: BWG, waste facility, ULB, district/gram panchayat, collector/transporter and processor | **Extensibility gap**: a new stakeholder class currently appears to require coordinated code/schema changes; no reviewed evidence of an administratively governed taxonomy registry |
 | Jurisdiction-specific rules | The reviewed source set does not demonstrate a complete, versioned national/state/local applicability registry for all relevant EPR, statutory, MRV and crediting routes | **Not proven; required architecture work** |
@@ -169,3 +170,8 @@ Review of `apps/src/auth.ts` found that `canVerifyEvidence` used the legacy geog
 ## Follow-up remediation — settlement confirmation must be independently verified (2026-10-22)
 
 The existing `/api/v1/settlements/:settlementId/confirm` accepted caller-provided strings and set `external_confirmed_at=now()` and `status='SETTLED'` without querying an external provider. This incorrectly elevated user claims into financial truth. The route now authenticates and authorizes the caller and validates the settlement lifecycle, but fails closed with `EXTERNAL_CONFIRMATION_ADAPTER_UNAVAILABLE` without changing the settlement. It remains `RECONCILING` until a trusted external confirmation adapter is implemented and verified. Terminal `FAILED` settlements no longer block credential retirement as if they were still open. Integration tests assert the no-mutation fail-closed behavior.
+
+
+## 5. Follow-on implementation note (2026-10-22)
+
+A new migration adds `geography_external_identifiers` as a versioned alias layer over the existing canonical `geography` table. It deliberately does not seed synthetic LGD/state/district/local-body codes and does not change runtime resolution. The migration prevents overlapping VERIFIED effective periods for a source/type/external-code tuple, including concurrent review attempts. This closes part of the data-model gap only; the national readiness gate still requires official source snapshots, source-specific ingestion and reconciliation, reviewed crosswalks, resolver integration, multi-jurisdiction fixtures, completeness reporting and evidence that every supported jurisdiction was actually checked.
