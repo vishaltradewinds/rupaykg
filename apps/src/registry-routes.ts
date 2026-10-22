@@ -113,5 +113,5 @@ export async function registerRegistryRoutes(app:FastifyInstance,pool:Pool|null)
       if(code==="INVALID_TRANSITION"||code==="EXTERNAL_REFERENCE_REQUIRED")return reply.code(409).send({error:(error as Error).message,code});
       request.log.error(error);return reply.code(503).send({error:"Settlement confirmation unavailable",syntheticData:false});
     }
-  });;
+  });
 }

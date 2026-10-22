@@ -185,7 +185,7 @@ describe("registry and settlement runtime acceptance", () => {
     const immutable = await pool.query("update settlements set external_confirmed_at=null where id=$1", [settlementId]).then(() => null).catch(error => error); assert.ok(immutable instanceof Error);
     const reauthorize = await request(`/api/v1/settlements/${settlementId}/authorize`, { method: "POST", body: JSON.stringify({ authorizationReference: `auth-repeat-${suffix}` }) }, actorToken, ownerOrgId); assert.equal(reauthorize.status, 409);
     const resettle = await request(`/api/v1/settlements/${settlementId}/settle`, { method: "POST", body: JSON.stringify({ externalReference: `payment-repeat-${suffix}` }) }, actorToken, ownerOrgId); assert.equal(resettle.status, 409);
-    const reconfirm = await request(`/api/v1/settlements/${settlementId}/confirm`, { method: "POST", body: JSON.stringify({ confirmationReference: `bank-confirm-repeat-${suffix}`, reconciliationReference: `recon-repeat-${suffix}` }) }, actorToken, ownerOrgId); assert.equal(reconfirm.status, 409);
+    const reconfirmAfterUnverifiedClaim = await request(`/api/v1/settlements/${settlementId}/confirm`, { method: "POST", body: JSON.stringify({ confirmationReference: `caller-claim-again-${suffix}`, reconciliationReference: `caller-recon-again-${suffix}` }) }, actorToken, ownerOrgId); assert.equal(reconfirmAfterUnverifiedClaim.status, 503); assert.equal((await body(reconfirmAfterUnverifiedClaim)).code, "EXTERNAL_CONFIRMATION_ADAPTER_UNAVAILABLE");
 
 
   });
