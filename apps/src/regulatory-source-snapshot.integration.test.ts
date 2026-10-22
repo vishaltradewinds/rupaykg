@@ -89,8 +89,13 @@ test("approved source snapshots are immutable and regulatory rules reject unsupp
     );
     await assert.rejects(
       pool.query("update authoritative_source_snapshots set validation_status='APPROVED' where id=$1", [nationalSnapshotId]),
-      /RETIRED_SOURCE_SNAPSHOT_CANNOT_BE_REAPPROVED/,
+      /RETIRED_SOURCE_SNAPSHOT_STATUS_IMMUTABLE/,
       "retired snapshots must not be revived; corrected source data needs a new version",
+    );
+    await assert.rejects(
+      pool.query("update authoritative_source_snapshots set validation_status='REJECTED' where id=$1", [nationalSnapshotId]),
+      /RETIRED_SOURCE_SNAPSHOT_STATUS_IMMUTABLE/,
+      "retirement must be terminal; changing to another status must not permit later re-approval",
     );
   } finally {
     if (ruleIds.length) await pool.query("delete from regulatory_rule_versions where id = any($1::uuid[])", [ruleIds]);

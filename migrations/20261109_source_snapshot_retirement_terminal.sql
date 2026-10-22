@@ -3,8 +3,11 @@
 create or replace function enforce_approved_source_snapshot_immutability()
 returns trigger language plpgsql as $$
 begin
-  if old.validation_status = 'RETIRED' and new.validation_status = 'APPROVED' then
-    raise exception 'RETIRED_SOURCE_SNAPSHOT_CANNOT_BE_REAPPROVED';
+  if old.validation_status = 'RETIRED' and new.validation_status <> 'RETIRED' then
+    raise exception 'RETIRED_SOURCE_SNAPSHOT_STATUS_IMMUTABLE';
+  end if;
+  if old.validation_status = 'APPROVED' and new.validation_status not in ('APPROVED','RETIRED') then
+    raise exception 'APPROVED_SOURCE_SNAPSHOT_INVALID_TRANSITION';
   end if;
 
   if old.validation_status in ('APPROVED','RETIRED') and (
