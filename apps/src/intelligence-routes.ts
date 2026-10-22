@@ -78,7 +78,7 @@ export async function registerIntelligenceRoutes(
         return reply.code(403).send({ error: "Activity outside active organization scope", code: "AI_INTAKE_SCOPE_FORBIDDEN" });
       }
       const geography = await pool.query<{ ok: boolean }>(
-        "select organization_has_geography_scope($1::uuid,$2::uuid) as ok", [row.organization_id, row.geography_id],
+        "select organization_has_explicit_geography_scope($1::uuid,$2::uuid) as ok", [row.organization_id, row.geography_id],
       );
       if (!geography.rows[0]?.ok) return reply.code(403).send({ error: "Activity geography outside authorized scope", code: "AI_INTAKE_GEOGRAPHY_FORBIDDEN" });
       if (!await hasOrganizationPermission(pool, auth, row.organization_id, ["evidence:upload"])) {
@@ -328,7 +328,7 @@ export async function registerIntelligenceRoutes(
            select 1 from organization_memberships om
             where om.identity_id=$1 and om.status='VERIFIED'
               and ($3::uuid is null or om.organization_id=$3::uuid)
-              and organization_has_geography_scope(om.organization_id,$2)
+              and organization_has_explicit_geography_scope(om.organization_id,$2)
          ) as ok`,
         [auth.identityId, geographyId, auth.activeOrganizationId ?? null],
       );
@@ -345,7 +345,7 @@ export async function registerIntelligenceRoutes(
         from activities a
         left join geography g on g.id = a.geography_id
         where a.organization_id = any($1::uuid[])
-          and organization_has_geography_scope(a.organization_id, a.geography_id)
+          and organization_has_explicit_geography_scope(a.organization_id, a.geography_id)
           ${geographyClause}
         order by a.created_at desc limit 100`, params);
       const findings = rows.rows.map((row) => ({
