@@ -164,3 +164,8 @@ The POST and PATCH route checks in `apps/src/cpcb-swm-routes.ts` previously comb
 ## Follow-up remediation — evidence-verifier tenant and geography binding (2026-10-22)
 
 Review of `apps/src/auth.ts` found that `canVerifyEvidence` used the legacy geography helper and did not explicitly bind the verifier's organization membership to the activity's owning organization. The query now requires `om.organization_id = a.organization_id` and `organization_has_explicit_geography_scope` before an identity with the canonical high-risk permission can verify evidence. Unit coverage asserts both SQL predicates and rejects the legacy helper. This is a defense-in-depth correction; database integration tests and CI on the combined head are still required before the batch is validated.
+
+
+## Follow-up remediation — settlement confirmation must be independently verified (2026-10-22)
+
+The existing `/api/v1/settlements/:settlementId/confirm` accepted caller-provided strings and set `external_confirmed_at=now()` and `status='SETTLED'` without querying an external provider. This incorrectly elevated user claims into financial truth. The route now authenticates and authorizes the caller and validates the settlement lifecycle, but fails closed with `EXTERNAL_CONFIRMATION_ADAPTER_UNAVAILABLE` without changing the settlement. It remains `RECONCILING` until a trusted external confirmation adapter is implemented and verified. Terminal `FAILED` settlements no longer block credential retirement as if they were still open. Integration tests assert the no-mutation fail-closed behavior.

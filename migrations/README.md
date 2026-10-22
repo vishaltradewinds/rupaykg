@@ -147,3 +147,8 @@ A crosswalk request's `expires_at` cannot be changed after creation, including i
 ## Source snapshot authority identity and terminal retirement (migration `20261109_source_snapshot_retirement_terminal.sql`)
 
 An approved source snapshot's `authority_code` is part of its immutable provenance. Approved snapshots may remain approved or be retired; they cannot be downgraded to rejected or another status. Retired snapshots are immutable and terminal, and cannot be re-approved or moved to another status. Corrected or replaced data must be recorded as a new source snapshot/version with its own review. Worker resolution additionally requires the bound snapshot to remain APPROVED for new inbox batches. Integration coverage checks authority-code tampering, post-retirement tampering and re-approval attempts. These are internal provenance controls, not official authority approval or proof of dataset completeness.
+
+
+## External settlement confirmation gate
+
+The settlement confirmation API is intentionally fail-closed while no independently authenticated external settlement confirmation adapter is configured. Caller-supplied confirmation/reconciliation reference strings are not proof that funds moved; the API leaves the record in `RECONCILING` and does not set `external_confirmed_at` or `SETTLED`. Do not enable settlement finalization until a trusted provider adapter validates the provider event and reconciliation evidence, with its own integration tests and operational controls.
