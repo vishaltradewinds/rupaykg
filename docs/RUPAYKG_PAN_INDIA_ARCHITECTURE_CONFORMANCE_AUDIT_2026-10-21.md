@@ -186,3 +186,34 @@ The optional external-identifier resolver is connected to the government jurisdi
 CI run [#1774](https://github.com/vishaltradewinds/rupaykg/actions/runs/39801530174) completed successfully for commit `220048c130619fc0f12b34b8cc9061cc77cf3f2d`. The run passed production dependency audit, migration validation, API migrations, TypeScript typecheck, build, production-web browser smoke test, test suite including disposable PostgreSQL acceptance, and production container build. This verifies the repository's configured CI gates for this commit; it is not a nationwide load/resilience test, independent security certification, legal approval, official integration verification, or production release approval.
 
 The run caught a synthetic fixture case-normalization defect in the preceding commit; the fixture now uses uppercase identifiers consistently with the API. The corrected test suite passed. PR #41 remains unmerged and undeployed. The national-data/crosswalk completeness, official source onboarding, government adapter authorization, live external settlement confirmation, Guardian/Hedera/Mirror Node evidence, accredited verification, production operations/DR evidence, and formal Shakti release approval gates remain open.
+
+
+## 6. Strict geography authorization call-site review — 2026-10-22
+
+### Verified from current branch source
+
+The following high-impact modules explicitly call `organization_has_explicit_geography_scope` or enforce an equivalent verified organization-root check in the reviewed source:
+
+- Evidence Vault: upload/activity context and evidence read/update access require an explicit verified geography scope.
+- MRV routes: activity and verification authorization requires explicit geography scope.
+- Value routes: activity access, jurisdiction selection, evidence eligibility, and credit evidence checks use explicit scope.
+- CPCB SWM workspace routes: workspace create/update checks verified membership and an explicit organization geography root.
+- EPR return submission: evidence must be organization-bound, geography-bound and within explicit scope.
+- Statutory applicability/reporting routes: evidence queries require explicit scope.
+- Government jurisdiction crosswalk: request target must be within explicit verified scope.
+- Async government mirror worker: mapping candidates require explicit geography scope and same-organization/activity/geography binding.
+
+The new regression test `apps/test/explicit-geography-scope.test.ts` verifies the strict helper's intended behavior in PostgreSQL: unscoped organizations fail closed; a verified in-scope geography passes; an out-of-scope geography fails closed. It also includes a database-independent migration contract test. CI run 39805281135 on commit `c776da04388c1064a613a39b3a1517d8bb7c1523` passed all pipeline steps, including dependency audit, migration validation, typecheck, build, browser smoke, disposable PostgreSQL acceptance and container build.
+
+### Remaining boundary — do not overstate closure
+
+The legacy `organization_has_geography_scope` helper in migration `012_geography_authorization.sql` deliberately returns true when an organization has no verified geography roots. Its activity and resource-flow triggers still call that legacy helper. Strict checks in several higher-risk API paths reduce exposure, but this review has not proven every API, background worker, direct database writer, import path or future route is covered. A global semantic flip is not safe without auditing every writer and adapting test/seed flows.
+
+**Next required gate:** enumerate all activity/resource-flow writers and all callers of the legacy helper, classify each by impact, add targeted fail-closed controls and regression tests for high-impact paths, and only then decide whether a compatibility migration/backfill is warranted. Existing legacy tenants must not receive implicit national authorization. No official national geography dataset or complete source reconciliation is established by these tests.
+
+### Release decision after this review
+
+- Strict geography helper behavior: **tested in CI**.
+- Several critical API paths: **source review indicates explicit scope checks**.
+- Universal enforcement across all writers/paths: **not yet proven**.
+- Nationwide coverage, official API authorization, full regulatory applicability, national-scale resilience, and independent Shakti certification: **still HOLD**.
