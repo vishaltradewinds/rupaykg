@@ -2,15 +2,22 @@ import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { Pool } from "pg";
 import { randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
+const existingPath = (candidates: string[]): string => {
+  const found = candidates
+    .map((candidate) => fileURLToPath(new URL(candidate, import.meta.url)))
+    .find((candidate) => existsSync(candidate));
+  if (!found) throw new Error(`Required contract source file not found: ${candidates.join(", ")}`);
+  return found;
+};
 const crosswalkRouteSource = readFileSync(
-  fileURLToPath(new URL("../src/government-jurisdiction-crosswalk-routes.ts", import.meta.url)),
+  existingPath(["../src/government-jurisdiction-crosswalk-routes.ts", "../../src/government-jurisdiction-crosswalk-routes.ts"]),
   "utf8",
 );
 const migrationSql = readFileSync(
-  fileURLToPath(new URL("../../migrations/20261112_geography_external_identifiers.sql", import.meta.url)),
+  existingPath(["../../migrations/20261112_geography_external_identifiers.sql", "../../../migrations/20261112_geography_external_identifiers.sql"]),
   "utf8",
 );
 
