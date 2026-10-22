@@ -45,6 +45,8 @@ test("government jurisdiction crosswalk API scopes requests and rejects unauthor
   let requestId: string | null = null;
   let expiredRequestId: string | null = null;
   let sourceSnapshotId: string | null = null;
+  let geographySourceId: string | null = null;
+  let aliasRequestId: string | null = null;
 
   try {
     await registerGovernmentJurisdictionCrosswalkRoutes(app, pool);
@@ -89,6 +91,14 @@ test("government jurisdiction crosswalk API scopes requests and rejects unauthor
     await pool.query(
       "insert into authoritative_source_snapshots(id,authority_code,source_owner,dataset_code,source_url,source_version,scope_kind,content_sha256,record_count,accepted_record_count,unresolved_record_count,validation_status,usage_terms_reference,retrieved_at,retrieved_by_identity_id,reviewed_by_identity_id,reviewed_at) values($1,'SYNTHETIC_AUTHORITY','Synthetic integration fixture','SYNTHETIC_CROSSWALK_SOURCE','https://example.invalid/synthetic-crosswalk-source','synthetic-source-v1','OTHER',$2,1,1,0,'APPROVED','synthetic://test-fixture-terms',now(),$3,$3,now())",
       [sourceSnapshotId, artifact.sha256, requesterId],
+    );
+    geographySourceId = (await pool.query<{ id: string }>(
+      "insert into geography_sources(source_name,source_uri,source_version,checksum,status) values($1,'https://example.invalid/synthetic-crosswalk-source','synthetic-source-v1',$2,'VERIFIED') returning id",
+      ["Synthetic crosswalk source " + suffix, artifact.sha256],
+    )).rows[0]!.id;
+    await pool.query(
+      "insert into geography_external_identifiers(source_id,geography_id,identifier_type,external_identifier,valid_from,status,source_reference_uri,source_checksum,reviewed_by_identity_id,reviewed_at) values($1,$2,'LGD_CODE',$3,'2020-01-01','VERIFIED','https://example.invalid/synthetic-alias-record',$4,$5,now()),($1,$6,'LGD_CODE',$7,'2020-01-01','VERIFIED','https://example.invalid/synthetic-alias-record',$4,$5,now())",
+      [geographySourceId, geographyId, "ALIAS-" + suffix, artifact.sha256, requesterId, outsideGeographyId, "MISMATCH-" + suffix],
     );
     const payload = {
       organizationId, geographyId, activityId, authorityCode: "SYNTHETIC_AUTHORITY", municipalCode: "MUNI-" + suffix,
@@ -161,6 +171,30 @@ test("government jurisdiction crosswalk API scopes requests and rejects unauthor
     assert.equal(foreignActivityTarget.statusCode, 409, foreignActivityTarget.body);
     assert.equal(foreignActivityTarget.json().code, "GOVERNMENT_CROSSWALK_ACTIVITY_MISMATCH");
 
+    // The optional alias path must bind the exact approved snapshot to one verified source.
+    const aliasRequest = await app.inject({
+      method: "POST", url: "/api/v1/government/jurisdiction-crosswalk/requests", headers,
+      payload: { ...payload, municipalCode: "ALIAS-" + suffix, externalIdentifierType: "LGD_CODE" },
+    });
+    assert.equal(aliasRequest.statusCode, 201, aliasRequest.body);
+    aliasRequestId = aliasRequest.json().requestId;
+
+    // An alias resolving to a different canonical geography must be rejected without fallback.
+    const mismatchedAlias = await app.inject({
+      method: "POST", url: "/api/v1/government/jurisdiction-crosswalk/requests", headers,
+      payload: { ...payload, municipalCode: "MISMATCH-" + suffix, externalIdentifierType: "LGD_CODE" },
+    });
+    assert.equal(mismatchedAlias.statusCode, 409, mismatchedAlias.body);
+    assert.equal(mismatchedAlias.json().code, "GEOGRAPHY_EXTERNAL_IDENTIFIER_MISMATCH");
+
+    // Supplying an identifier type without a bound verified source must fail closed.
+    const missingSourceBinding = await app.inject({
+      method: "POST", url: "/api/v1/government/jurisdiction-crosswalk/requests", headers,
+      payload: { ...payload, municipalCode: "UNBOUND-" + suffix, externalIdentifierType: "LGD_CODE" },
+    });
+    assert.equal(missingSourceBinding.statusCode, 409, missingSourceBinding.body);
+    assert.equal(missingSourceBinding.json().code, "GEOGRAPHY_SOURCE_SNAPSHOT_BINDING_REQUIRED");
+
     const requestResponse = await app.inject({ method: "POST", url: "/api/v1/government/jurisdiction-crosswalk/requests", headers, payload });
     assert.equal(requestResponse.statusCode, 201, requestResponse.body);
     assert.equal(requestResponse.json().status, "PENDING");
@@ -212,7 +246,9 @@ test("government jurisdiction crosswalk API scopes requests and rejects unauthor
     assert.equal(listed.json().crosswalks.length, 0, "pending requests must not appear as verified crosswalks");
   } finally {
     await app.close();
-    if (requestId || expiredRequestId) await pool.query("delete from government_jurisdiction_crosswalk_requests where id=any($1::uuid[])", [[requestId, expiredRequestId].filter(Boolean)]).catch(() => undefined);
+    if (requestId || expiredRequestId || aliasRequestId) await pool.query("delete from government_jurisdiction_crosswalk_requests where id=any($1::uuid[])", [[requestId, expiredRequestId, aliasRequestId].filter(Boolean)]).catch(() => undefined);
+    if (geographySourceId) await pool.query("delete from geography_external_identifiers where source_id=$1", [geographySourceId]).catch(() => undefined);
+    if (geographySourceId) await pool.query("delete from geography_sources where id=$1", [geographySourceId]).catch(() => undefined);
     if (sourceSnapshotId) await pool.query("delete from authoritative_source_snapshots where id=$1", [sourceSnapshotId]).catch(() => undefined);
     await pool.query("delete from organization_geography_scopes where organization_id=$1", [organizationId]).catch(() => undefined);
     await pool.query("delete from identity_sessions where identity_id=any($1::uuid[])", [[requesterId, approverId]]).catch(() => undefined);
