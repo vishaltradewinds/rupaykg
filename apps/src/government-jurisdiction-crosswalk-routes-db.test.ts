@@ -104,7 +104,7 @@ test("government jurisdiction crosswalk API scopes requests and rejects unauthor
     )).rows[0]!.id;
     await pool.query(
       "insert into geography_external_identifiers(source_id,geography_id,identifier_type,external_identifier,valid_from,status,source_reference_uri,source_checksum,reviewed_by_identity_id,reviewed_at) values($1,$2,'LGD_CODE',$3,'2020-01-01','VERIFIED','https://example.invalid/synthetic-alias-record',$4,$5,now()),($1,$6,'LGD_CODE',$7,'2020-01-01','VERIFIED','https://example.invalid/synthetic-alias-record',$4,$5,now())",
-      [geographySourceId, geographyId, "ALIAS-" + suffix, artifact.sha256, requesterId, outsideGeographyId, "MISMATCH-" + suffix],
+      [geographySourceId, geographyId, "ALIAS-" + suffix.toUpperCase(), artifact.sha256, requesterId, outsideGeographyId, "MISMATCH-" + suffix.toUpperCase()],
     );
     const payload = {
       organizationId, geographyId, activityId, authorityCode: "SYNTHETIC_AUTHORITY", municipalCode: "MUNI-" + suffix,
