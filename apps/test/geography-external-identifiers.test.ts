@@ -44,6 +44,40 @@ describe("government crosswalk geography resolver integration contract", () => {
 
 const databaseUrl = process.env.DATABASE_URL;
 const pool = databaseUrl ? new Pool({ connectionString: databaseUrl, max: 2 }) : null;
+const suffix = randomUUID();
+let sourceId = "";
+let firstGeographyId = "";
+let secondGeographyId = "";
+let reviewerId = "";
+
+before(async () => {
+  if (!pool) return;
+  sourceId = (await pool.query<{ id: string }>(
+    "insert into geography_sources(source_name,source_version,source_uri,checksum,status) values($1,$2,$3,$4,'VERIFIED') returning id",
+    [`geography-alias-test-${suffix}`, "v1", "https://example.invalid/test-fixture", "fixture-source-checksum"],
+  )).rows[0]!.id;
+  firstGeographyId = (await pool.query<{ id: string }>(
+    "insert into geography(kind,code,name,source,source_version) values('DISTRICT',$1,$2,'test-fixture','v1') returning id",
+    [`GEO-ALIAS-A-${suffix}`, `Alias Test Geography A ${suffix}`],
+  )).rows[0]!.id;
+  secondGeographyId = (await pool.query<{ id: string }>(
+    "insert into geography(kind,code,name,source,source_version) values('DISTRICT',$1,$2,'test-fixture','v1') returning id",
+    [`GEO-ALIAS-B-${suffix}`, `Alias Test Geography B ${suffix}`],
+  )).rows[0]!.id;
+  reviewerId = (await pool.query<{ id: string }>(
+    "insert into identities(external_subject,display_name) values($1,$2) returning id",
+    [`geography-alias-reviewer-${suffix}`, "Geography Alias Test Reviewer"],
+  )).rows[0]!.id;
+});
+
+after(async () => {
+  if (!pool) return;
+  if (sourceId) await pool.query("delete from geography_external_identifiers where source_id=$1", [sourceId]);
+  await pool.query("delete from geography where id = any($1::uuid[])", [[firstGeographyId, secondGeographyId].filter(Boolean)]);
+  if (sourceId) await pool.query("delete from geography_sources where id=$1", [sourceId]);
+  if (reviewerId) await pool.query("delete from identities where id=$1", [reviewerId]);
+  await pool.end();
+});
 describe("versioned geography external identifier registry", () => {
   it("requires reviewer and source checksum provenance for verified mappings", async () => {
     if (!pool) return;
