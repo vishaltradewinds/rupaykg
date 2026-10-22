@@ -179,7 +179,7 @@ A new migration adds `geography_external_identifiers` as a versioned alias layer
 
 ## Resolver integration checkpoint (2026-10-22)
 
-The optional external-identifier resolver is connected to the government jurisdiction crosswalk request route and covered by a database-independent source-contract test. This is code-path integration, not verified runtime integration: latest-head CI and disposable PostgreSQL migration tests remain pending. Official nationwide source ingestion, reconciled coverage metrics, and production-scale proof remain open Shakti gates.
+The optional external-identifier resolver is connected to the government jurisdiction crosswalk request route and covered by a database-independent source-contract test. Subsequent CI run #1774 passed the disposable PostgreSQL acceptance suite on the corrected code/test head; CI run #1775 then passed on the documentation-updated head. This verifies the configured integration tests, not official runtime integration or nationwide data completeness. Official nationwide source ingestion, reconciled coverage metrics, and production-scale proof remain open Shakti gates.
 
 ## Latest combined-head validation — 2026-10-22 15:07 UTC
 
