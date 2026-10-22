@@ -14,14 +14,19 @@ create table if not exists geography_external_identifiers (
   status text not null default 'PENDING'
     check (status in ('PENDING', 'VERIFIED', 'RETIRED', 'REJECTED')),
   source_reference_uri text check (source_reference_uri is null or source_reference_uri ~ '^https://'),
-  source_checksum text check (source_checksum is null or source_checksum ~ '^[0-9a-f]{64}
+  source_checksum text check (source_checksum is null or source_checksum ~ '^[0-9a-f]{64}$'),
   reviewed_by_identity_id uuid references identities(id),
   reviewed_at timestamptz,
   created_at timestamptz not null default now(),
   check (valid_to is null or valid_to >= valid_from),
   check (
     status <> 'VERIFIED'
-    or (reviewed_at is not null and reviewed_by_identity_id is not null and source_checksum ~ '^[0-9a-f]{64}
+    or (
+      reviewed_at is not null
+      and reviewed_by_identity_id is not null
+      and source_checksum is not null
+      and source_checksum ~ '^[0-9a-f]{64}$'
+    )
   ),
   unique (source_id, identifier_type, external_identifier, valid_from)
 );
