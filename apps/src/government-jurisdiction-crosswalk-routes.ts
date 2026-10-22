@@ -113,20 +113,6 @@ export async function registerGovernmentJurisdictionCrosswalkRoutes(app: Fastify
       || !reason || reason.length < 8) {
       return error(reply, 400, "Valid organizationId, geographyId, authorityCode, municipalCode, sourceVersion, approved sourceSnapshotId, evidence reference/SHA-256 and reason are required", "GOVERNMENT_CROSSWALK_REQUEST_INVALID");
     }
-    const requestHash = digest({
-      organizationId,
-      geographyId: geographyId.toLowerCase(),
-      activityId,
-      authorityCode,
-      municipalCode,
-      externalIdentifierType,
-      sourceVersion,
-      sourceSnapshotId,
-      effectiveFrom,
-      evidenceReference,
-      evidenceSha256,
-      reason,
-    });
     if (!await requireCrosswalkManager(pool, auth, organizationId)) {
       return error(reply, 403, "Verified organization membership and stakeholder-management permission are required", "GOVERNMENT_CROSSWALK_FORBIDDEN");
     }
@@ -176,14 +162,7 @@ export async function registerGovernmentJurisdictionCrosswalkRoutes(app: Fastify
       }
       const snapshot = await client.query<{ ok: boolean }>(
         "select exists(select 1 from authoritative_source_snapshots where id=$1 and authority_code=$2 and source_version=$3 and validation_status='APPROVED' and (effective_from is null or effective_from <= $4::date) and (effective_to is null or effective_to >= $4::date)) as ok",
-        [sourceSnapshotId, authorityCode, sourceVersion, effectiveFrom],
-      );
-      if (snapshot.rows[0]?.ok !== true) {
-        await client.query("rollback");
-        return error(reply, 409, "An approved source snapshot with matching authority, version and effective date is required", "GOVERNMENT_CROSSWALK_SOURCE_SNAPSHOT_REQUIRED");
-      }
-      // When callers supply an identifier type, bind it to a VERIFIED geography source that
-      // exactly matches the approved snapshot's URL, version and content hash. No fuzzy fallback.
+        [sourceSnapsho      // Optional source-specific alias resolution is fail-closed and never fuzzy-matches.
       if (externalIdentifierType !== null) {
         const source = await client.query<{ id: string }>(
           `select gs.id
@@ -193,17 +172,21 @@ export async function registerGovernmentJurisdictionCrosswalkRoutes(app: Fastify
               and gs.source_version = snap.source_version
               and gs.checksum = snap.content_sha256
             where snap.id = $1
+              and snap.authority_code = $2
+              and snap.source_version = $3
               and snap.validation_status = 'APPROVED'
               and snap.content_sha256 ~ '^[0-9a-f]{64}$'
-              and gs.status = 'VERIFIED'`,
-          [sourceSnapshotId],
+              and gs.status = 'VERIFIED'
+            order by gs.id
+            limit 2`,
+          [sourceSnapshotId, authorityCode, sourceVersion],
         );
         if (source.rows.length !== 1) {
           await client.query("rollback");
           return error(reply, 409, "External identifier resolution requires exactly one verified geography source bound to the approved snapshot", "GEOGRAPHY_SOURCE_SNAPSHOT_BINDING_REQUIRED");
         }
         const resolved = await client.query<{ geography_id: string | null }>(
-          "select resolve_verified_geography_external_identifier($1,$2,$3,$4::date)::text as geography_id",
+          "select resolve_verified_geography_external_identifier($1,$2,$3,$4::date) as geography_id",
           [source.rows[0]!.id, externalIdentifierType, municipalCode, effectiveFrom],
         );
         if (resolved.rows[0]?.geography_id?.toLowerCase() !== geographyId.toLowerCase()) {
@@ -211,178 +194,11 @@ export async function registerGovernmentJurisdictionCrosswalkRoutes(app: Fastify
           return error(reply, 409, "External identifier does not resolve to the requested canonical geography for this source and effective date", "GEOGRAPHY_EXTERNAL_IDENTIFIER_MISMATCH");
         }
       }
-      const inserted = await client.query<{ id: string }>(
-        `insert into government_jurisdiction_crosswalk_requests
-          (authority_code,municipal_code,source_version,source_snapshot_id,organization_id,geography_id,activity_id,effective_from,evidence_reference,evidence_sha256,request_reason,request_hash,requested_by_identity_id)
-         values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) returning id`,
-        [authorityCode, municipalCode, sourceVersion, sourceSnapshotId, organizationId, geographyId, activityId, effectiveFrom, evidenceReference, evidenceSha256, reason, requestHash, auth.identityId],
+tId, authorityCode, sourceVersion, effectiveFrom],
       );
-      const id = inserted.rows[0]?.id;
-      if (!id) throw new Error("GOVERNMENT_CROSSWALK_REQUEST_INSERT_FAILED");
-      await appendAudit(client, request, auth.identityId, organizationId, "GOVERNMENT_CROSSWALK_REQUESTED", id, { authorityCode, municipalCode, externalIdentifierType, sourceVersion, sourceSnapshotId, geographyId, activityId: activityId ?? null, evidenceSha256, requestHash });
-      await client.query("commit");
-      return reply.code(201).send({ source: "postgresql", syntheticData: false, status: "PENDING", requestId: id, requestHash });
-    } catch (cause) {
-      await client.query("rollback").catch(() => undefined);
-      const message = (cause as { message?: string }).message ?? "";
-      if (message.includes("GOVERNMENT_CROSSWALK_SOURCE_SNAPSHOT")) return error(reply, 409, "Crosswalk request requires a matching approved source snapshot", "GOVERNMENT_CROSSWALK_SOURCE_SNAPSHOT_REQUIRED");
-      if ((cause as { code?: string }).code === "23505") return error(reply, 409, "An equivalent pending crosswalk request already exists", "GOVERNMENT_CROSSWALK_REQUEST_DUPLICATE");
-      request.log.error(cause);
-      return error(reply, 503, "Unable to create crosswalk request", "GOVERNMENT_CROSSWALK_REQUEST_UNAVAILABLE");
-    } finally { client.release(); }
-  });
-
-  app.get("/api/v1/government/jurisdiction-crosswalk/requests", async (request, reply) => {
-    const auth = await authFor(request, reply, pool); if (!auth || !pool) return;
-    if (!await requireSuperAdmin(pool, auth.identityId)) {
-      return error(reply, 403, "An active Super Admin with platform-management permission is required to review crosswalk requests", "GOVERNMENT_CROSSWALK_APPROVAL_FORBIDDEN");
-    }
-    const query = request.query && typeof request.query === "object" ? request.query as Record<string, unknown> : {};
-    const status = typeof query.status === "string" ? query.status : "PENDING";
-    if (!["PENDING", "APPROVED", "REJECTED", "ALL"].includes(status)) {
-      return error(reply, 400, "status must be PENDING, APPROVED, REJECTED or ALL", "GOVERNMENT_CROSSWALK_QUERY_INVALID");
-    }
-    try {
-      const rows = await pool.query(
-        `select r.id,r.authority_code,r.municipal_code,r.source_version,r.source_snapshot_id,r.organization_id,o.name organization_name,
-                r.geography_id,g.name geography_name,r.activity_id,r.effective_from,r.evidence_reference,r.evidence_sha256,
-                r.request_reason,r.request_hash,r.requested_by_identity_id,requester.display_name requested_by,
-                r.status,r.decided_by_identity_id,approver.display_name decided_by,r.decision_reason,r.expires_at,
-                r.created_at,r.decided_at,r.applied_at
-           from government_jurisdiction_crosswalk_requests r
-           join organizations o on o.id=r.organization_id
-           join geography g on g.id=r.geography_id
-           join identities requester on requester.id=r.requested_by_identity_id
-           left join identities approver on approver.id=r.decided_by_identity_id
-          where ($1='ALL' or r.status=$1)
-          order by case when r.status='PENDING' then 0 else 1 end, r.created_at asc
-          limit 200`,
-        [status],
-      );
-      return { source: "postgresql", syntheticData: false, requests: rows.rows };
-    } catch (cause) {
-      request.log.error(cause);
-      return error(reply, 503, "Crosswalk review queue unavailable", "GOVERNMENT_CROSSWALK_QUEUE_UNAVAILABLE");
-    }
-  });
-
-  app.post("/api/v1/government/jurisdiction-crosswalk/requests/:requestId/decision", async (request, reply) => {
-    const auth = await authFor(request, reply, pool); if (!auth || !pool) return;
-    if (!await requireSuperAdmin(pool, auth.identityId)) {
-      return error(reply, 403, "An active Super Admin with stakeholder-management permission must decide this request", "GOVERNMENT_CROSSWALK_APPROVAL_FORBIDDEN");
-    }
-    const requestId = (request.params as { requestId: string }).requestId;
-    const body = bodyOf(request);
-    const decision = text(body, "decision", 16);
-    const reason = text(body, "reason", 1000);
-    if (!UUID.test(requestId) || !["APPROVE", "REJECT"].includes(decision ?? "") || !reason || reason.length < 8) {
-      return error(reply, 400, "Valid requestId, decision (APPROVE/REJECT) and decision reason are required", "GOVERNMENT_CROSSWALK_DECISION_INVALID");
-    }
-    const client = await pool.connect();
-    try {
-      await client.query("begin");
-      const found = await client.query<{
-        id: string; authority_code: string; municipal_code: string; source_version: string; organization_id: string;
-        geography_id: string; activity_id: string | null; source_snapshot_id: string; effective_from: Date | string; evidence_reference: string; evidence_sha256: string;
-        requested_by_identity_id: string; status: string; expires_at: Date | string | null;
-      }>(
-        `select id,authority_code,municipal_code,source_version,source_snapshot_id,organization_id,geography_id,activity_id,effective_from,evidence_reference,evidence_sha256,
-                requested_by_identity_id,status,expires_at
-           from government_jurisdiction_crosswalk_requests where id=$1 for update`,
-        [requestId],
-      );
-      const row = found.rows[0];
-      if (!row) { await client.query("rollback"); return error(reply, 404, "Crosswalk request not found", "GOVERNMENT_CROSSWALK_REQUEST_NOT_FOUND"); }
-      if (row.status !== "PENDING") { await client.query("rollback"); return error(reply, 409, "Crosswalk request already has a decision", "GOVERNMENT_CROSSWALK_ALREADY_DECIDED"); }
-      if (decision === "APPROVE" && row.expires_at !== null && new Date(row.expires_at).getTime() <= Date.now()) {
+      if (snapshot.rows[0]?.ok !== true) {
         await client.query("rollback");
-        return error(reply, 409, "Expired crosswalk requests cannot be approved; submit a new evidence-backed request", "GOVERNMENT_CROSSWALK_REQUEST_EXPIRED");
-      }
-      if (row.requested_by_identity_id === auth.identityId) { await client.query("rollback"); return error(reply, 403, "Requester cannot approve or reject their own crosswalk request", "GOVERNMENT_CROSSWALK_SELF_APPROVAL_FORBIDDEN"); }
-      const status = decision === "APPROVE" ? "APPROVED" : "REJECTED";
-      const updated = await client.query(
-        `update government_jurisdiction_crosswalk_requests
-            set status=$2,decided_by_identity_id=$3,decision_reason=$4,decided_at=now(),applied_at=case when $2='APPROVED' then now() else null end
-          where id=$1 and status='PENDING'`,
-        [requestId, status, auth.identityId, reason],
-      );
-      if (updated.rowCount !== 1) throw new Error("GOVERNMENT_CROSSWALK_DECISION_RACE");
-      let crosswalkId: string | null = null;
-      if (status === "APPROVED") {
-        const inserted = await client.query<{ id: string }>(
-          `insert into government_jurisdiction_crosswalks
-            (authority_code,municipal_code,source_version,source_snapshot_id,organization_id,geography_id,activity_id,status,evidence_reference,evidence_sha256,
-             requested_by_identity_id,approved_by_identity_id,approval_reason,approval_request_id,effective_from,verified_at)
-           values($1,$2,$3,$4,$5,$6,$7,'VERIFIED',$8,$9,$10,$11,$12,$13,$14,now()) returning id`,
-          [row.authority_code, row.municipal_code, row.source_version, row.source_snapshot_id, row.organization_id, row.geography_id, row.activity_id,
-            row.evidence_reference, row.evidence_sha256, row.requested_by_identity_id, auth.identityId, reason, requestId, row.effective_from],
-        );
-        crosswalkId = inserted.rows[0]?.id ?? null;
-        if (!crosswalkId) throw new Error("GOVERNMENT_CROSSWALK_INSERT_FAILED");
-      }
-      await appendAudit(client, request, auth.identityId, row.organization_id,
-        status === "APPROVED" ? "GOVERNMENT_CROSSWALK_APPROVED" : "GOVERNMENT_CROSSWALK_REJECTED",
-        crosswalkId ?? requestId, { requestId, decision: status, crosswalkId, reason });
-      await client.query("commit");
-      return reply.code(200).send({ source: "postgresql", syntheticData: false, status, requestId, crosswalkId });
-    } catch (cause) {
-      await client.query("rollback").catch(() => undefined);
-      const message = (cause as { message?: string }).message ?? "";
-      if (message.includes("GOVERNMENT_CROSSWALK_SOURCE_SNAPSHOT")) {
-        return error(reply, 409, "Crosswalk approval requires a matching approved source snapshot", "GOVERNMENT_CROSSWALK_SOURCE_SNAPSHOT_REQUIRED");
-      }
-      if (message.includes("GOVERNMENT_CROSSWALK_EVIDENCE_NOT_VERIFIED")) {
-        return error(reply, 409, "Crosswalk evidence must be independently reviewed before approval", "GOVERNMENT_CROSSWALK_EVIDENCE_NOT_VERIFIED");
-      }
-      if (message.includes("GOVERNMENT_CROSSWALK_DUAL_CONTROL_MISMATCH") || message.includes("GOVERNMENT_CROSSWALK_VERIFICATION_INVALID")) {
-        return error(reply, 409, "Crosswalk approval failed database integrity checks", "GOVERNMENT_CROSSWALK_INTEGRITY_FAILED");
-      }
-      if ((cause as { code?: string }).code === "23505") return error(reply, 409, "A verified mapping already exists for this authority/municipality/source version", "GOVERNMENT_CROSSWALK_MAPPING_CONFLICT");
-      request.log.error(cause);
-      return error(reply, 503, "Unable to decide crosswalk request", "GOVERNMENT_CROSSWALK_DECISION_UNAVAILABLE");
-    } finally { client.release(); }
-  });
-
-  app.get("/api/v1/government/jurisdiction-crosswalks", async (request, reply) => {
-    const auth = await authFor(request, reply, pool); if (!auth || !pool) return;
-    const organizationId = auth.activeOrganizationId;
-    if (!organizationId || !canActForOrganization(auth, organizationId)) return error(reply, 403, "Select a verified organization", "ORG_FORBIDDEN");
-    if (!await hasOrganizationPermission(pool, auth, organizationId, ["MANAGE_STAKEHOLDERS", "admin:system", "audit:read"])) {
-      return error(reply, 403, "Crosswalk management or audit-read permission is required", "GOVERNMENT_CROSSWALK_FORBIDDEN");
-    }
-    try {
-      const rows = await pool.query(
-        `select id,authority_code,municipal_code,source_version,source_snapshot_id,organization_id,geography_id,activity_id,status,
-                evidence_reference,evidence_sha256,requested_by_identity_id,approved_by_identity_id,approval_reason,
-                approval_request_id,effective_from,effective_to,created_at,verified_at,revoked_at
-           from government_jurisdiction_crosswalks where organization_id=$1 order by created_at desc limit 500`,
-        [organizationId],
-      );
-      return { source: "postgresql", syntheticData: false, crosswalks: rows.rows };
-    } catch (cause) {
-      request.log.error(cause);
-      return error(reply, 503, "Crosswalk listing unavailable", "GOVERNMENT_CROSSWALK_LIST_UNAVAILABLE");
-    }
-  });
-}
-
-              and gs.status = 'VERIFIED'
-            order by gs.id
-            limit 2`,
-          [sourceSnapshotId],
-        );
-        if (source.rowCount !== 1) {
-          await client.query("rollback");
-          return error(reply, 409, "External identifier resolution requires exactly one verified geography source matching the approved snapshot URL, version and SHA-256", "GEOGRAPHY_SOURCE_SNAPSHOT_BINDING_REQUIRED");
-        }
-        const resolved = await client.query<{ geography_id: string | null }>(
-          "select resolve_verified_geography_external_identifier($1,$2,$3,$4::date) as geography_id",
-          [source.rows[0]!.id, externalIdentifierType, municipalCode, effectiveFrom],
-        );
-        if (resolved.rows[0]?.geography_id !== geographyId) {
-          await client.query("rollback");
-          return error(reply, 409, "The source-bound verified external identifier does not resolve to the requested canonical geography", "GEOGRAPHY_EXTERNAL_IDENTIFIER_MISMATCH");
-        }
+        return error(reply, 409, "An approved source snapshot with matching authority, version and effective date is required", "GOVERNMENT_CROSSWALK_SOURCE_SNAPSHOT_REQUIRED");
       }
       const requestHash = digest({ authorityCode, municipalCode, externalIdentifierType, sourceVersion, sourceSnapshotId, organizationId, geographyId, activityId: activityId ?? null, effectiveFrom, evidenceReference, evidenceSha256, reason, requestedBy: auth.identityId });
       const inserted = await client.query<{ id: string }>(
@@ -393,7 +209,7 @@ export async function registerGovernmentJurisdictionCrosswalkRoutes(app: Fastify
       );
       const id = inserted.rows[0]?.id;
       if (!id) throw new Error("GOVERNMENT_CROSSWALK_REQUEST_INSERT_FAILED");
-      await appendAudit(client, request, auth.identityId, organizationId, "GOVERNMENT_CROSSWALK_REQUESTED", id, { authorityCode, municipalCode, sourceVersion, sourceSnapshotId, geographyId, activityId: activityId ?? null, evidenceSha256, requestHash });
+      await appendAudit(client, request, auth.identityId, organizationId, "GOVERNMENT_CROSSWALK_REQUESTED", id, { authorityCode, municipalCode, externalIdentifierType, sourceVersion, sourceSnapshotId, geographyId, activityId: activityId ?? null, evidenceSha256, requestHash });
       await client.query("commit");
       return reply.code(201).send({ source: "postgresql", syntheticData: false, status: "PENDING", requestId: id, requestHash });
     } catch (cause) {
