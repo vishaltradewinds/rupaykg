@@ -17,7 +17,7 @@ test("government inbox worker persists retry recovery, quarantine and append-onl
     max: 4,
   });
   const suffix = randomUUID();
-  const provisionCrosswalk = async (authorityCode: string, municipalCode: string, timestamp: string): Promise<{ organizationId: string; geographyId: string }> => {
+  const provisionCrosswalk = async (authorityCode: string, municipalCode: string, timestamp: string): Promise<{ organizationId: string; geographyId: string; sourceSnapshotId: string }> => {
     const organizationId = randomUUID();
     const requesterId = randomUUID();
     const approverId = randomUUID();
@@ -66,7 +66,7 @@ test("government inbox worker persists retry recovery, quarantine and append-onl
        values($1,$2,'synthetic-source-v1',$3,$4,$5,'VERIFIED',$6,$7,$8,$9,$10,$11,$12,now())`,
       [authorityCode, municipalCode, sourceSnapshotId, organizationId, geographyId, evidenceReference, evidenceSha256, requesterId, approverId, decisionReason, requestId, effectiveFrom],
     );
-    return { organizationId, geographyId };
+    return { organizationId, geographyId, sourceSnapshotId };
   };
 
   const makeRow = async (authorityCode: string, shouldQuarantine = false) => {
@@ -188,6 +188,30 @@ test("government inbox worker persists retry recovery, quarantine and append-onl
     );
     assert.equal(revokedRow.rows[0]?.status, "UNRESOLVED");
     assert.equal(revokedRow.rows[0]?.last_error_code, "GOVERNMENT_CROSSWALK_NOT_FOUND");
+
+    // Retiring a source snapshot must stop new inbox batches from resolving through
+    // mappings grounded in that snapshot. Historical validated rows remain unchanged.
+    const retiredAuthority = "RET-" + suffix.slice(0, 8).toUpperCase();
+    const retiredFixture = await provisionCrosswalk(retiredAuthority, "RET-MUNI", new Date().toISOString());
+    await pool.query("update authoritative_source_snapshots set validation_status='RETIRED' where id=$1", [retiredFixture.sourceSnapshotId]);
+    const retiredBatchId = randomUUID();
+    const retiredTimestamp = new Date().toISOString();
+    const retiredPayload = {
+      batchMetadata: { authorityCode: retiredAuthority, municipalCode: "RET-MUNI", batchId: retiredBatchId,
+        syncWindowTimestamp: retiredTimestamp, sourceVersion: "synthetic-source-v1" },
+      rawDataLogs: ["Synthetic retired-source waste intake record"],
+    };
+    const retiredInsert = await pool.query<{ id: string }>(
+      `insert into async_mirror_inbox(authority_code,municipal_code,batch_id,sync_window_timestamp,payload,payload_sha256,status,attempts,received_at)
+       values($1,'RET-MUNI',$2,$3,$4::jsonb,$5,'RECEIVED',0,now()-interval '2 minutes') returning id`,
+      [retiredAuthority, retiredBatchId, retiredTimestamp, JSON.stringify(retiredPayload), sha(retiredPayload)],
+    );
+    await runGovernmentInboxWorker(pool, undefined, { batchSize: 10, maxAttempts: 3 });
+    const retiredRow = await pool.query<{ status: string; last_error_code: string | null }>(
+      "select status,last_error_code from async_mirror_inbox where id=$1", [retiredInsert.rows[0]!.id],
+    );
+    assert.equal(retiredRow.rows[0]?.status, "UNRESOLVED");
+    assert.equal(retiredRow.rows[0]?.last_error_code, "GOVERNMENT_CROSSWALK_NOT_FOUND");
 
     const exhausted = await makeRow("QRT-" + suffix.slice(0, 8), true);
     const quarantined = await runGovernmentInboxWorker(pool, async () => { throw new Error("SyntheticExhaustedFailure"); }, { batchSize: 10, maxAttempts: 1 });
