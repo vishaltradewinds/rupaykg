@@ -154,3 +154,8 @@ No national LGD snapshot or approved rule version has been ingested/seeded. Cros
 Migration `20261105_crosswalk_snapshot_binding.sql` binds crosswalk requests and verified mappings to an approved source snapshot manifest matching the authority code, source version and effective date. Both the API and PostgreSQL enforce the requirement; missing or mismatched snapshots remain unresolved/fail closed. Integration acceptance now creates an explicitly synthetic snapshot fixture and tests missing/mismatched snapshot rejection. This fixture is not evidence of real source ingestion.
 
 The versioned BWG assessment helper now follows the official portal's OR semantics: one known qualifying criterion is sufficient when an approved rule version exists; missing non-qualifying criteria remain UNKNOWN rather than forcing a negative conclusion. With no approved versioned rule/source snapshot, the result remains UNDER_REVIEW. CI validation for this combined follow-up batch is pending.
+
+
+## Follow-up remediation — CPCB SWM route strict-scope consistency (2026-10-22)
+
+The POST and PATCH route checks in `apps/src/cpcb-swm-routes.ts` previously combined a verified-root existence check with the legacy `organization_has_geography_scope` helper. That was more restrictive than the legacy fallback alone, but duplicated the strict-scope contract and risked future drift. Both high-impact write paths now call `organization_has_explicit_geography_scope` directly, matching MRV, EPR evidence, evidence-vault, and database trigger controls. This change does not change the legacy helper globally and does not grant any organization a new geography. CI and disposable-PostgreSQL integration coverage for the combined branch head remain required.

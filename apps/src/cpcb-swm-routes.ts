@@ -165,7 +165,7 @@ export async function registerCpcbSwmRoutes(app: FastifyInstance, pool: Pool | n
     if (!taxonomy || !await hasVerifiedStakeholderAuthorization(pool, organizationId, taxonomy.code)) { return reply.code(403).send({ error: "Verified organization-to-stakeholder authorization required", code: "SWM_STAKEHOLDER_AUTHORIZATION_REQUIRED", syntheticData: false }); }
     try {
       const allowed = await pool.query<{ ok: boolean }>(
-        "select exists(select 1 from organization_memberships om where om.identity_id=$1 and om.organization_id=$2 and om.status='VERIFIED' and exists(select 1 from organization_geography_scopes s where s.organization_id=om.organization_id and s.status='VERIFIED') and organization_has_geography_scope(om.organization_id,$3::uuid)) ok",
+        "select exists(select 1 from organization_memberships om where om.identity_id=$1 and om.organization_id=$2 and om.status='VERIFIED' and exists(select 1 from organization_geography_scopes s where s.organization_id=om.organization_id and s.status='VERIFIED') and organization_has_explicit_geography_scope(om.organization_id,$3::uuid)) ok",
         [auth.identityId, organizationId, geographyId],
       );
       if (!allowed.rows[0]?.ok) return reply.code(403).send({ error: "An explicit verified organization geography scope is required and must include the requested geography", code: "GEOGRAPHY_FORBIDDEN" });
@@ -206,7 +206,7 @@ export async function registerCpcbSwmRoutes(app: FastifyInstance, pool: Pool | n
     if (!taxonomy || !await hasVerifiedStakeholderAuthorization(pool, organizationId, taxonomy.code)) { return reply.code(403).send({ error: "Verified organization-to-stakeholder authorization required", code: "SWM_STAKEHOLDER_AUTHORIZATION_REQUIRED", syntheticData: false }); }
     try {
       const allowed = await pool.query<{ ok: boolean }>(
-        "select exists(select 1 from organization_memberships om where om.identity_id=$1 and om.organization_id=$2 and om.status='VERIFIED' and exists(select 1 from organization_geography_scopes s where s.organization_id=om.organization_id and s.status='VERIFIED') and organization_has_geography_scope(om.organization_id,$3::uuid)) ok",
+        "select exists(select 1 from organization_memberships om where om.identity_id=$1 and om.organization_id=$2 and om.status='VERIFIED' and exists(select 1 from organization_geography_scopes s where s.organization_id=om.organization_id and s.status='VERIFIED') and organization_has_explicit_geography_scope(om.organization_id,$3::uuid)) ok",
         [auth.identityId, organizationId, geographyId],
       );
       if (!allowed.rows[0]?.ok) return reply.code(403).send({ error: "An explicit verified organization geography scope is required and must include the requested geography", code: "GEOGRAPHY_FORBIDDEN" });
