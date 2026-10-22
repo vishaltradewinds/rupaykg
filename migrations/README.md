@@ -162,3 +162,8 @@ Migration `20261110_failed_settlement_terminal_for_retirement.sql` aligns the da
 ## CPCB SWM strict geography guard (2026-11-11 migration sequence)
 
 Migration `20261111_cpcb_swm_strict_geography_guard.sql` aligns the PostgreSQL trigger with the strict helper used by the CPCB SWM API routes. Inserts and geography changes require an explicit verified organization geography root and a requested geography within that root. The legacy geography helper remains available for lower-risk legacy workflows; this migration does not globally change its semantics.
+
+
+## Pan-India geography identifier crosswalk foundation (2026-11-12 migration sequence)
+
+Migration `20261112_geography_external_identifiers.sql` adds a provenance-bound alias registry that maps an official source's identifier to a stable internal geography record without treating source codes as RupayKg primary keys. Each mapping carries its source version, identifier type, effective period, review identity/time and source checksum. Verified mappings with overlapping effective periods for the same source/type/code are rejected, with transaction-scoped advisory locking to serialize concurrent reviews. No official geography data is seeded by this migration, and existing routing does not automatically consume these aliases yet. Before production use, add official-source ingestion/reconciliation, reviewed snapshots, representative state/district/local-body coverage, resolver integration and migration-level integration tests. This is a schema foundation, not evidence of Pan-India coverage or government endorsement.
