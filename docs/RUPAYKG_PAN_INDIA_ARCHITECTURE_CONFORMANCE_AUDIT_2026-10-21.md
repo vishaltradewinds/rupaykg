@@ -180,3 +180,9 @@ A new migration adds `geography_external_identifiers` as a versioned alias layer
 ## Resolver integration checkpoint (2026-10-22)
 
 The optional external-identifier resolver is connected to the government jurisdiction crosswalk request route and covered by a database-independent source-contract test. This is code-path integration, not verified runtime integration: latest-head CI and disposable PostgreSQL migration tests remain pending. Official nationwide source ingestion, reconciled coverage metrics, and production-scale proof remain open Shakti gates.
+
+## Latest combined-head validation — 2026-10-22 15:07 UTC
+
+CI run [#1774](https://github.com/vishaltradewinds/rupaykg/actions/runs/39801530174) completed successfully for commit `220048c130619fc0f12b34b8cc9061cc77cf3f2d`. The run passed production dependency audit, migration validation, API migrations, TypeScript typecheck, build, production-web browser smoke test, test suite including disposable PostgreSQL acceptance, and production container build. This verifies the repository's configured CI gates for this commit; it is not a nationwide load/resilience test, independent security certification, legal approval, official integration verification, or production release approval.
+
+The run caught a synthetic fixture case-normalization defect in the preceding commit; the fixture now uses uppercase identifiers consistently with the API. The corrected test suite passed. PR #41 remains unmerged and undeployed. The national-data/crosswalk completeness, official source onboarding, government adapter authorization, live external settlement confirmation, Guardian/Hedera/Mirror Node evidence, accredited verification, production operations/DR evidence, and formal Shakti release approval gates remain open.
