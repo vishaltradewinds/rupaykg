@@ -14,6 +14,8 @@ const migrationSql = readFileSync(
 describe("geography alias migration contract (database-independent)", () => {
   it("keeps the migration structurally complete and provenance-gated", () => {
     assert.equal((migrationSql.match(/\$\$/g) ?? []).length, 4, "expected exactly two complete function bodies");
+    assert.equal((migrationSql.match(/create or replace function guard_geography_external_identifier_lifecycle/g) ?? []).length, 1, "lifecycle guard must be defined once");
+    assert.equal((migrationSql.match(/create or replace function resolve_verified_geography_external_identifier/g) ?? []).length, 1, "resolver must be defined once");
     assert.match(migrationSql, /source_reference_uri is not null/);
     assert.ok(migrationSql.includes("source_checksum ~ '^[0-9a-f]{64}$'"));
 const pool = databaseUrl ? new Pool({ connectionString: databaseUrl, max: 2 }) : null;
