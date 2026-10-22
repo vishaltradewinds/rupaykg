@@ -45,6 +45,7 @@ test("government jurisdiction crosswalk API scopes requests and rejects unauthor
   let requestId: string | null = null;
   let expiredRequestId: string | null = null;
   let sourceSnapshotId: string | null = null;
+  let unboundSnapshotId: string | null = null;
   let geographySourceId: string | null = null;
   let aliasRequestId: string | null = null;
 
@@ -91,6 +92,11 @@ test("government jurisdiction crosswalk API scopes requests and rejects unauthor
     await pool.query(
       "insert into authoritative_source_snapshots(id,authority_code,source_owner,dataset_code,source_url,source_version,scope_kind,content_sha256,record_count,accepted_record_count,unresolved_record_count,validation_status,usage_terms_reference,retrieved_at,retrieved_by_identity_id,reviewed_by_identity_id,reviewed_at) values($1,'SYNTHETIC_AUTHORITY','Synthetic integration fixture','SYNTHETIC_CROSSWALK_SOURCE','https://example.invalid/synthetic-crosswalk-source','synthetic-source-v1','OTHER',$2,1,1,0,'APPROVED','synthetic://test-fixture-terms',now(),$3,$3,now())",
       [sourceSnapshotId, artifact.sha256, requesterId],
+    );
+    unboundSnapshotId = randomUUID();
+    await pool.query(
+      "insert into authoritative_source_snapshots(id,authority_code,source_owner,dataset_code,source_url,source_version,scope_kind,content_sha256,record_count,accepted_record_count,unresolved_record_count,validation_status,usage_terms_reference,retrieved_at,retrieved_by_identity_id,reviewed_by_identity_id,reviewed_at) values($1,'SYNTHETIC_AUTHORITY','Synthetic integration fixture','SYNTHETIC_UNBOUND_SOURCE','https://example.invalid/unbound-source','synthetic-source-v1','OTHER',$2,1,1,0,'APPROVED','synthetic://test-fixture-terms',now(),$3,$3,now())",
+      [unboundSnapshotId, artifact.sha256, requesterId],
     );
     geographySourceId = (await pool.query<{ id: string }>(
       "insert into geography_sources(source_name,source_uri,source_version,checksum,status) values($1,'https://example.invalid/synthetic-crosswalk-source','synthetic-source-v1',$2,'VERIFIED') returning id",
@@ -190,7 +196,7 @@ test("government jurisdiction crosswalk API scopes requests and rejects unauthor
     // Supplying an identifier type without a bound verified source must fail closed.
     const missingSourceBinding = await app.inject({
       method: "POST", url: "/api/v1/government/jurisdiction-crosswalk/requests", headers,
-      payload: { ...payload, municipalCode: "UNBOUND-" + suffix, externalIdentifierType: "LGD_CODE" },
+      payload: { ...payload, sourceSnapshotId: unboundSnapshotId, municipalCode: "UNBOUND-" + suffix, externalIdentifierType: "LGD_CODE" },
     });
     assert.equal(missingSourceBinding.statusCode, 409, missingSourceBinding.body);
     assert.equal(missingSourceBinding.json().code, "GEOGRAPHY_SOURCE_SNAPSHOT_BINDING_REQUIRED");
@@ -249,7 +255,7 @@ test("government jurisdiction crosswalk API scopes requests and rejects unauthor
     if (requestId || expiredRequestId || aliasRequestId) await pool.query("delete from government_jurisdiction_crosswalk_requests where id=any($1::uuid[])", [[requestId, expiredRequestId, aliasRequestId].filter(Boolean)]).catch(() => undefined);
     if (geographySourceId) await pool.query("delete from geography_external_identifiers where source_id=$1", [geographySourceId]).catch(() => undefined);
     if (geographySourceId) await pool.query("delete from geography_sources where id=$1", [geographySourceId]).catch(() => undefined);
-    if (sourceSnapshotId) await pool.query("delete from authoritative_source_snapshots where id=$1", [sourceSnapshotId]).catch(() => undefined);
+    if (sourceSnapshotId || unboundSnapshotId) await pool.query("delete from authoritative_source_snapshots where id=any($1::uuid[])", [[sourceSnapshotId, unboundSnapshotId].filter(Boolean)]).catch(() => undefined);
     await pool.query("delete from organization_geography_scopes where organization_id=$1", [organizationId]).catch(() => undefined);
     await pool.query("delete from identity_sessions where identity_id=any($1::uuid[])", [[requesterId, approverId]]).catch(() => undefined);
     await pool.query("delete from organization_memberships where organization_id=$1 and identity_id=any($2::uuid[])", [organizationId, [requesterId, approverId]]).catch(() => undefined);
