@@ -5,12 +5,10 @@ import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-
 const crosswalkRouteSource = readFileSync(
   fileURLToPath(new URL("../src/government-jurisdiction-crosswalk-routes.ts", import.meta.url)),
   "utf8",
 );
-
 const migrationSql = readFileSync(
   fileURLToPath(new URL("../../migrations/20261112_geography_external_identifiers.sql", import.meta.url)),
   "utf8",
@@ -23,6 +21,27 @@ describe("geography alias migration contract (database-independent)", () => {
     assert.equal((migrationSql.match(/create or replace function resolve_verified_geography_external_identifier/g) ?? []).length, 1, "resolver must be defined once");
     assert.match(migrationSql, /source_reference_uri is not null/);
     assert.ok(migrationSql.includes("source_checksum ~ '^[0-9a-f]{64}$'"));
+    assert.match(migrationSql, /exclude using gist/i);
+    assert.match(migrationSql, /status = 'VERIFIED'/);
+    assert.match(migrationSql, /GEOGRAPHY_EXTERNAL_IDENTIFIER_VERIFIED_IMMUTABLE/);
+    assert.match(migrationSql, /GEOGRAPHY_EXTERNAL_IDENTIFIER_RETIRED_TERMINAL/);
+    assert.match(migrationSql, /resolve_verified_geography_external_identifier/);
+  });
+});
+
+describe("government crosswalk geography resolver integration contract", () => {
+  it("binds optional external identifiers to the exact approved source snapshot and canonical geography", () => {
+    assert.ok(crosswalkRouteSource.includes("externalIdentifierType"));
+    assert.ok(crosswalkRouteSource.includes("gs.source_uri = snap.source_url"));
+    assert.ok(crosswalkRouteSource.includes("gs.source_version = snap.source_version"));
+    assert.ok(crosswalkRouteSource.includes("gs.checksum = snap.content_sha256"));
+    assert.ok(crosswalkRouteSource.includes("resolve_verified_geography_external_identifier"));
+    assert.ok(crosswalkRouteSource.includes("GEOGRAPHY_SOURCE_SNAPSHOT_BINDING_REQUIRED"));
+    assert.ok(crosswalkRouteSource.includes("GEOGRAPHY_EXTERNAL_IDENTIFIER_MISMATCH"));
+  });
+});
+
+const databaseUrl = process.env.DATABASE_URL;
 const pool = databaseUrl ? new Pool({ connectionString: databaseUrl, max: 2 }) : null;
 const suffix = randomUUID();
 let sourceId = "";
