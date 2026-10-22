@@ -6,6 +6,11 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 
+const crosswalkRouteSource = readFileSync(
+  fileURLToPath(new URL("../src/government-jurisdiction-crosswalk-routes.ts", import.meta.url)),
+  "utf8",
+);
+
 const migrationSql = readFileSync(
   fileURLToPath(new URL("../../migrations/20261112_geography_external_identifiers.sql", import.meta.url)),
   "utf8",
@@ -52,6 +57,18 @@ after(async () => {
   if (sourceId) await pool.query("delete from geography_sources where id=$1", [sourceId]);
   if (reviewerId) await pool.query("delete from identities where id=$1", [reviewerId]);
   await pool.end();
+});
+
+describe("government crosswalk geography resolver integration contract", () => {
+  it("binds optional external identifiers to the exact approved source snapshot and canonical geography", () => {
+    assert.ok(crosswalkRouteSource.includes("externalIdentifierType"));
+    assert.ok(crosswalkRouteSource.includes("gs.source_uri = snap.source_url"));
+    assert.ok(crosswalkRouteSource.includes("gs.source_version = snap.source_version"));
+    assert.ok(crosswalkRouteSource.includes("gs.checksum = snap.content_sha256"));
+    assert.ok(crosswalkRouteSource.includes("resolve_verified_geography_external_identifier"));
+    assert.ok(crosswalkRouteSource.includes("GEOGRAPHY_SOURCE_SNAPSHOT_BINDING_REQUIRED"));
+    assert.ok(crosswalkRouteSource.includes("GEOGRAPHY_EXTERNAL_IDENTIFIER_MISMATCH"));
+  });
 });
 
 describe("versioned geography external identifier registry", () => {
