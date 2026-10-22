@@ -142,3 +142,8 @@ Once an authoritative source snapshot is approved, its source owner, dataset/ver
 ## Crosswalk request expiry immutability (migration `20261108_crosswalk_request_expiry_immutability.sql`)
 
 A crosswalk request's `expires_at` cannot be changed after creation, including in the same update that approves or rejects the request. The API rejects expired approvals with `GOVERNMENT_CROSSWALK_REQUEST_EXPIRED`; the database trigger prevents extending an expired request to bypass that check. Submit a new evidence-backed request instead. This is an internal integrity control, not official authority approval.
+
+
+## Source snapshot authority identity and terminal retirement (migration `20261109_source_snapshot_retirement_terminal.sql`)
+
+An approved source snapshot's `authority_code` is part of its immutable provenance. Retired snapshots remain immutable and cannot be re-approved; a corrected or replaced dataset must be recorded as a new source snapshot/version with its own review. Worker resolution additionally requires the bound snapshot to remain APPROVED for new inbox batches. Integration coverage checks authority-code tampering, post-retirement tampering and re-approval attempts. These are internal provenance controls, not official authority approval or proof of dataset completeness.

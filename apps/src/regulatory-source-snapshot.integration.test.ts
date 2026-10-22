@@ -75,6 +75,23 @@ test("approved source snapshots are immutable and regulatory rules reject unsupp
       /APPROVED_SOURCE_SNAPSHOT_PROVENANCE_IMMUTABLE/,
       "approved source content hash must not be rewritten",
     );
+    await assert.rejects(
+      pool.query("update authoritative_source_snapshots set authority_code='OTHER-AUTHORITY' where id=$1", [nationalSnapshotId]),
+      /APPROVED_SOURCE_SNAPSHOT_PROVENANCE_IMMUTABLE/,
+      "approved source authority identity must not be rewritten",
+    );
+
+    await pool.query("update authoritative_source_snapshots set validation_status='RETIRED' where id=$1", [nationalSnapshotId]);
+    await assert.rejects(
+      pool.query("update authoritative_source_snapshots set content_sha256=$2 where id=$1", [nationalSnapshotId, sha("tampered-after-retirement")]),
+      /APPROVED_SOURCE_SNAPSHOT_PROVENANCE_IMMUTABLE/,
+      "retired source provenance must remain immutable",
+    );
+    await assert.rejects(
+      pool.query("update authoritative_source_snapshots set validation_status='APPROVED' where id=$1", [nationalSnapshotId]),
+      /RETIRED_SOURCE_SNAPSHOT_CANNOT_BE_REAPPROVED/,
+      "retired snapshots must not be revived; corrected source data needs a new version",
+    );
   } finally {
     if (ruleIds.length) await pool.query("delete from regulatory_rule_versions where id = any($1::uuid[])", [ruleIds]);
     if (snapshotIds.length) await pool.query("delete from authoritative_source_snapshots where id = any($1::uuid[])", [snapshotIds]);
