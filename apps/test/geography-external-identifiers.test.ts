@@ -15,7 +15,7 @@ describe("geography alias migration contract (database-independent)", () => {
   it("keeps the migration structurally complete and provenance-gated", () => {
     assert.equal((migrationSql.match(/\$\$/g) ?? []).length, 4, "expected exactly two complete PL/pgSQL/SQL function bodies");
     assert.match(migrationSql, /source_reference_uri is not null/);
-    assert.match(migrationSql, /source_checksum ~ '\^\[0-9a-f\]\{64\}\
+    assert.ok(migrationSql.includes("source_checksum ~ '^[0-9a-f]{64}$'"));
 const pool = databaseUrl ? new Pool({ connectionString: databaseUrl, max: 2 }) : null;
 const suffix = randomUUID();
 let sourceId = "";
