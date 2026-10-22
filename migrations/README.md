@@ -156,7 +156,7 @@ The settlement confirmation API is intentionally fail-closed while no independen
 
 ## Failed settlement terminal-state correction (2026-11-10 migration sequence)
 
-Migration `20261110_failed_settlement_terminal_for_retirement.sql` aligns the database retirement guard with the API: a settlement in `FAILED` is terminal and no longer treated as an open settlement that blocks credential retirement. `CREATED`, `AUTHORIZED`, `EXECUTING`, and `RECONCILING` remain open; `SETTLED`, `CANCELLED`, and `FAILED` are terminal for this guard. This does not make a failed settlement evidence that funds moved.
+Migration `20261110_failed_settlement_terminal_for_retirement.sql` aligns the database retirement guard with the API: a settlement in `FAILED` is terminal and no longer treated as an open settlement that blocks credential retirement. `CREATED`, `AUTHORIZED`, `EXECUTING`, and `RECONCILING` remain open; `SETTLED`, `CANCELLED`, and `FAILED` are terminal for retirement and transfer guards and are excluded from active-settlement uniqueness. This does not make a failed settlement evidence that funds moved.
 
 
 ## CPCB SWM strict geography guard (2026-11-11 migration sequence)
