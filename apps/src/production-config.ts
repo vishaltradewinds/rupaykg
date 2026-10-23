@@ -20,7 +20,12 @@ function productionDatabaseUrl(value: string): { url: string; renderInternalData
   let parsed: URL;
   try { parsed = new URL(value); } catch { throw new Error("PRODUCTION_CONFIG_INVALID: DATABASE_URL must be a valid PostgreSQL URL"); }
   if (parsed.protocol !== "postgres:" && parsed.protocol !== "postgresql:") throw new Error("PRODUCTION_CONFIG_INVALID: DATABASE_URL must use postgres:// or postgresql://");
-  if (["localhost", "127.0.0.1", "::1"].includes(parsed.hostname.toLowerCase())) throw new Error("PRODUCTION_CONFIG_INVALID: production DATABASE_URL must not target localhost");
+  const hostname = parsed.hostname.toLowerCase();
+  // URL.hostname preserves brackets around IPv6 literals (for example "[::1]").
+  // Normalize that representation so IPv6 loopback cannot bypass the production
+  // database-target guard.
+  const normalizedHostname = hostname.startsWith("[") && hostname.endsWith("]") ? hostname.slice(1, -1) : hostname;
+  if (["localhost", "127.0.0.1", "::1"].includes(normalizedHostname)) throw new Error("PRODUCTION_CONFIG_INVALID: production DATABASE_URL must not target localhost");
 
   // Classify the original URL before stripping SSL query parameters; otherwise
   // removing sslmode would accidentally turn a TLS-required URL into the
