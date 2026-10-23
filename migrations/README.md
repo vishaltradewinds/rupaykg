@@ -172,3 +172,9 @@ Migration `20261112_geography_external_identifiers.sql` adds a provenance-bound 
 ## Government crosswalk resolver integration (2026-11-13 change)
 
 The government jurisdiction crosswalk request API can optionally accept `externalIdentifierType`. When supplied, the request must resolve `municipalCode` using the exact verified source identifier for which the approved source snapshot, geography source URL, source version and SHA-256 content checksum match. The resolver must return the same canonical geography ID submitted by the requester; absent, ambiguous, stale or mismatched aliases fail closed. Requests without this optional field continue through the existing evidence-backed, dual-control review path; they are not silently auto-mapped. This does not seed official aliases or establish nationwide coverage.
+
+## Strict Pan-India geography authorization
+
+Migration `012_geography_authorization.sql` retains the legacy `organization_has_geography_scope` no-root fallback for compatibility; that helper must not be treated as sufficient authorization for high-impact workflows. Migration `20261030_explicit_geography_scope.sql` adds `organization_has_explicit_geography_scope`, which requires a non-null requested geography, at least one VERIFIED organization geography root, and ancestry containment. The high-impact activity and resource-flow database guards in `20261114_strict_activity_geography.sql` and `20261113_strict_resource_flow_geography.sql` require explicit scope and reject missing geography on new or changed records. Existing rows are not rewritten by these guards and require a separately planned, evidence-backed backfill before any stronger read or release assertion.
+
+Regression acceptance must cover missing geography, an unscoped organization, a valid in-scope geography, and an unrelated geography. Run the PostgreSQL tests only against disposable CI/staging data; do not use cleanup that deletes or rewinds inherited production records.
