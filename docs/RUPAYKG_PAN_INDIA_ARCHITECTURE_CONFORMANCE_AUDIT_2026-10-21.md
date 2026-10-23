@@ -242,3 +242,24 @@ The last confirmed green CI run before this follow-up was run #1869 on commit `c
 - **Still gated:** live Guardian execution, Hedera consensus and Mirror Node hash verification; official carbon-market submission; independent accredited verification; formal Shakti approval.
 
 **Decision remains HOLD.** The changes strengthen internal boundaries, but neither a passing CI run nor the presence of a nationwide product rule proves operational Pan-India readiness or statutory certification.
+
+
+## 8. Follow-up validation evidence — 2026-10-23
+
+The latest branch head reviewed for this checkpoint is `564f7b2893f88d50945adc3dd47ff77c7126938d`. GitHub Actions CI run [#39900523513](https://github.com/vishaltradewinds/rupaykg/actions/runs/39900523513) completed successfully on that commit.
+
+The successful pipeline included production dependency audit, migration validation and application to disposable PostgreSQL, TypeScript typecheck, application build, production-web browser smoke test, tests including disposable PostgreSQL acceptance, and production-container build. This run includes the activity trigger boundary-column adjustment, the corresponding source-contract assertion update, and cross-tenant government-crosswalk fixture cleanup.
+
+### What this evidence proves
+
+- The current branch passes its configured CI pipeline at the recorded commit.
+- The strict activity and resource-flow geography regression checks pass within the configured test suite.
+- The migration set applies successfully in the disposable CI database, and the production container builds.
+
+### What it does not prove
+
+- CI is not a production deployment, production-database migration, nationwide load test, legal opinion, statutory approval, accredited verification, or Shakti certification.
+- Universal enforcement across every possible writer, administrative route, background worker, import, and direct SQL path remains an audit item until the repository-wide inventory is completed.
+- National geography dataset ingestion and reconciliation, all-jurisdiction rule coverage, official external API access, Guardian/Hedera/Mirror Node live evidence, disaster recovery, and measured Pan-India operating capacity remain separate release gates.
+
+**Updated release decision: internal CI gate PASS at commit `564f7b2893f88d50945adc3dd47ff77c7126938d`; Pan-India operational readiness and production release remain HOLD.** PR #41 remains draft, unmerged, and undeployed.
