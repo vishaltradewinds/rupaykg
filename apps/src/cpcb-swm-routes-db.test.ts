@@ -226,6 +226,30 @@ test("CPCB SWM workspace routes enforce permissions and persist only user-report
     assert.equal(listed.statusCode, 200, listed.body);
     assert.ok(listed.json().workspaces.some((workspace: { id: string }) => workspace.id === workspaceId));
 
+    // Simulate a jurisdiction-scope revocation/realignment without rewriting historical workspace data.
+    // The old workspace must disappear from list results, and a request to move it into the new scope
+    // must not bypass the check on its existing row.
+    await pool.query("delete from organization_geography_scopes where organization_id=$1", [organizationId]);
+    await pool.query(
+      "insert into organization_geography_scopes(organization_id,geography_id,status) values($1,$2,'VERIFIED')",
+      [organizationId, outsideGeographyId],
+    );
+    const afterScopeChange = await app.inject({ method: "GET", url: "/api/v1/cpcb-swm/workspaces", headers });
+    assert.equal(afterScopeChange.statusCode, 200, afterScopeChange.body);
+    assert.equal(
+      afterScopeChange.json().workspaces.some((workspace: { id: string }) => workspace.id === workspaceId),
+      false,
+      "workspace list must exclude a historical row whose geography is no longer in the active verified scope",
+    );
+    const staleRowUpdate = await app.inject({
+      method: "PATCH",
+      url: "/api/v1/cpcb-swm/workspaces/" + workspaceId,
+      headers,
+      payload: { ...payload, geographyId: outsideGeographyId },
+    });
+    assert.equal(staleRowUpdate.statusCode, 404, staleRowUpdate.body);
+    assert.equal(staleRowUpdate.json().code, "SWM_WORKSPACE_NOT_FOUND");
+
     const audit = await pool.query<{ action: string; event_hash: string | null }>(
       "select action,event_hash from audit_events where actor_identity_id=$1 and organization_id=$2 and target_id=$3",
       [identityId, organizationId, workspaceId],
