@@ -1,5 +1,15 @@
 const PRODUCTION_ENV = "production";
 
+/** Remove libpq SSL query options before passing a URL alongside an explicit Node TLS policy.
+ * node-postgres can otherwise let connection-string SSL options replace the supplied TLS object.
+ */
+export function normalizePostgresConnectionString(value: string): string {
+  let parsed: URL;
+  try { parsed = new URL(value); } catch { throw new Error("DATABASE_URL must be a valid PostgreSQL URL"); }
+  for (const key of ["sslmode", "sslcert", "sslkey", "sslrootcert", "sslpassword"]) parsed.searchParams.delete(key);
+  return parsed.toString();
+}
+
 export type ProductionConfig = {
   environment: "production";
   databaseUrl: string;
@@ -57,7 +67,7 @@ export function readProductionConfig(env: NodeJS.ProcessEnv = process.env): Prod
   if (!renderInternalDatabase && env.DATABASE_SSL !== "require") throw new Error("PRODUCTION_CONFIG_INVALID: DATABASE_SSL must be require");
   return {
     environment: "production",
-    databaseUrl,
+    databaseUrl: normalizePostgresConnectionString(databaseUrl),
     databaseSsl: renderInternalDatabase ? "false" : "require",
     databaseCaCert: renderInternalDatabase ? "" : productionCaCert(env.DATABASE_CA_CERT?.trim() ?? "", databaseUrl),
     allowedOrigins: origins(required(env, "RUPAYKG_ALLOWED_ORIGINS")),
