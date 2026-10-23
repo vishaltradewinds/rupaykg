@@ -14,7 +14,7 @@ function positiveNumber(body: Record<string, unknown>, key: string): number | nu
 }
 
 export function isIsoCalendarDate(value: string): boolean {
-  const match = /^(\\d{4})-(\\d{2})-(\\d{2})$/.exec(value);
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
   if (!match) return false;
   const year = Number(match[1]), month = Number(match[2]), day = Number(match[3]);
   if (year < 1 || month < 1 || month > 12 || day < 1) return false;
