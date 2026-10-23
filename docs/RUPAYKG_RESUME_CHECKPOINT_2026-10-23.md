@@ -28,9 +28,9 @@
 
 ## Current validation status
 
-- Exact latest code/test head `eceab05eca927cfdb25ffc655fcb1ff3411deea3` passed [Actions run #39905298723](https://github.com/vishaltradewinds/rupaykg/actions/runs/39905298723): migration validation, typecheck, build, browser smoke, disposable PostgreSQL acceptance, and production-container build.
+- Code/test head `eceab05eca927cfdb25ffc655fcb1ff3411deea3` passed [Actions run #39905298723](https://github.com/vishaltradewinds/rupaykg/actions/runs/39905298723): migration validation, typecheck, build, browser smoke, disposable PostgreSQL acceptance, and production-container build.
 - CI run [#1870](https://github.com/vishaltradewinds/rupaykg/actions/runs/39900233004) failed on checkpoint commit `f3278bb48f2931b8e9d927e1f254cbf624c36684`: the source-contract test still asserted the old migration comment (`existing rows are not rewritten`) after the trigger's compatibility policy was clarified. The failing assertion was corrected to match the new explicit policy (`unrelated legacy-row updates are not blocked`). The database integration checks for the activity guard themselves did not report a failing subtest in that run.
-- The activity guard, strict EPR registration/transfer guards, and the new submitted-EPR-return database guard are covered by the passing run above. A new full CI run is required after any subsequent code or documentation commit.
+- The activity guard, strict EPR registration/transfer guards, and the new submitted-EPR-return database guard are covered by the passing run above. The documentation-only follow-up is at commit `e1c0af799f268805a8b43bb1a26ba1d7d21fd76a`; obtain a fresh exact-head CI run before calling the entire current branch green.
 - Keep release gate closed until migration validation, typecheck, build, browser smoke, unit/integration tests with disposable PostgreSQL, and production-container build pass on the same final head.
 
 ## Remaining engineering sequence
