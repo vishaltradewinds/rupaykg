@@ -14,8 +14,8 @@ test("canonical audit append serializes concurrent writers and links every new r
   });
   const prefix = `audit-chain-test-${randomUUID()}`;
   try {
-    const baseline = await pool.query<{ started_at: Date; last_event_hash: string | null }>(
-      "select clock_timestamp() as started_at, last_event_hash from platform_audit_chain_head where singleton=true",
+    const baseline = await pool.query<{ started_at: string; last_event_hash: string | null }>(
+      "select clock_timestamp()::text as started_at, last_event_hash from platform_audit_chain_head where singleton=true",
     );
     assert.equal(baseline.rowCount, 1, "audit chain head must be initialized");
     const startedAt = baseline.rows[0]!.started_at;
