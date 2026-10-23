@@ -50,11 +50,11 @@ function sourceFor(fileName: string): string {
     `../src/${fileName}`,
     `../../src/${fileName}`,
   ].map((relative) => fileURLToPath(new URL(relative, import.meta.url))).find(existsSync);
-  if (!path) throw new Error(`High-impact route source not found: ${fileName}`);
+  if (!path) throw new Error(`Source file not found: ${fileName}`);
   return readFileSync(path, "utf8");
 }
 
-test("runtime source files never use the permissive legacy geography helper", () => {
+test("reviewed authorization-sensitive source files never use the permissive legacy geography helper", () => {
   for (const fileName of legacyFallbackForbiddenSourceFiles) {
     const source = sourceFor(fileName);
     assert.doesNotMatch(
