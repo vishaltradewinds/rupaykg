@@ -5,8 +5,8 @@ import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
 
 const migrationPath = [
-  "../../migrations/20261122_swm_rules_2026_landfill_schedule_controls.sql",
-  "../../../migrations/20261122_swm_rules_2026_landfill_schedule_controls.sql",
+  "../../migrations/20261125_swm_rules_2026_landfill_schedule_controls.sql",
+  "../../../migrations/20261125_swm_rules_2026_landfill_schedule_controls.sql",
 ].map((path) => fileURLToPath(new URL(path, import.meta.url))).find(existsSync);
 if (!migrationPath) throw new Error("SWM landfill/Schedule I migration not found");
 const sql = readFileSync(migrationPath, "utf8");
