@@ -30,9 +30,12 @@ test("migration runner serializes concurrent starts with a session advisory lock
 
 test("migration filename filter recognizes numbered SQL migration files", () => {
   const source = migrationRunnerSource();
-  const filter = source.match(/\\.filter\\(\\(name\\) => \/(.*?)\/\\.test\\(name\\)\\)/);
-  assert.ok(filter, "migration runner must expose its numbered SQL filename filter");
-  const pattern = new RegExp(filter[1]);
+  const line = source.split("\n").find((entry) => entry.includes(".filter((name) =>"));
+  assert.ok(line, "migration runner must expose its numbered SQL filename filter");
+  const start = line.indexOf("/") + 1;
+  const end = line.lastIndexOf("/.test(name)");
+  assert.ok(start > 0 && end > start, "migration filename filter must be a regex literal");
+  const pattern = new RegExp(line.slice(start, end));
   assert.equal(pattern.test("001_initial_schema.sql"), true);
   assert.equal(pattern.test("20261129_credential_descendant_scope.sql"), true);
   assert.equal(pattern.test("README.md"), false);
