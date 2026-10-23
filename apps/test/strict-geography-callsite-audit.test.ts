@@ -260,11 +260,11 @@ test("registry credential geography guard accepts only explicit verified-root de
   ].map((path) => fileURLToPath(new URL(path, import.meta.url))).find(existsSync);
   if (!migrationPath) throw new Error("Credential descendant geography migration not found");
   const migration = readFileSync(migrationPath, "utf8");
-  assert.match(migration, /create or replace function prevent_credential_out_of_scope_issue\\s*\\(/i);
-  assert.match(migration, /organization_has_explicit_geography_scope\\(new\\.issuer_organization_id, activity_geography_id\\)/i);
+  assert.match(migration, /create or replace function prevent_credential_out_of_scope_issue\s*\(/i);
+  assert.match(migration, /organization_has_explicit_geography_scope\(new\.issuer_organization_id, activity_geography_id\)/i);
   assert.doesNotMatch(
     migration,
-    /s\\.geography_id\\s*=\\s*activity_geography_id/i,
+    /s\.geography_id\s*=\s*activity_geography_id/i,
     "credential geography must follow the same verified-root descendant policy as other high-impact operations",
   );
 });
