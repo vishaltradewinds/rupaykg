@@ -33,6 +33,7 @@ test("activity database guard rejects missing, unscoped and out-of-scope geograp
     max: 2,
   });
   const organizationId = randomUUID();
+  const unscopedOrganizationId = randomUUID();
   const inScopeId = randomUUID();
   const outsideId = randomUUID();
   const suffix = randomUUID();
@@ -44,8 +45,9 @@ test("activity database guard rejects missing, unscoped and out-of-scope geograp
 
   try {
     await pool.query(
-      "insert into organizations(id,name,organization_type) values($1,$2,'TEST_FIXTURE')",
-      [organizationId, "Activity strict geography " + suffix],
+      "insert into organizations(id,name,organization_type) values($1,$2,'TEST_FIXTURE'),($3,$4,'TEST_FIXTURE')",
+      [organizationId, "Activity strict geography " + suffix,
+        unscopedOrganizationId, "Activity unscoped organization " + suffix],
     );
     await pool.query(
       "insert into geography(id,kind,code,name,source,source_version) values($1,'CLUSTER',$2,$3,'synthetic-test-fixture','v1'),($4,'CLUSTER',$5,$6,'synthetic-test-fixture','v1')",
@@ -61,15 +63,30 @@ test("activity database guard rejects missing, unscoped and out-of-scope geograp
       [organizationId, inScopeId],
     );
     const accepted = await insertActivity(inScopeId);
-    insertedActivityIds.push(accepted.rows[0]!.id);
+    const acceptedActivityId = accepted.rows[0]!.id;
+    insertedActivityIds.push(acceptedActivityId);
 
     await assert.rejects(insertActivity(outsideId), /ACTIVITY_GEOGRAPHY_FORBIDDEN/);
+
+    // The database must enforce the same boundary when an existing activity is reassigned.
+    await assert.rejects(
+      pool.query("update activities set geography_id=$2 where id=$1", [acceptedActivityId, outsideId]),
+      /ACTIVITY_GEOGRAPHY_FORBIDDEN/,
+    );
+    await assert.rejects(
+      pool.query("update activities set geography_id=null where id=$1", [acceptedActivityId]),
+      /ACTIVITY_GEOGRAPHY_REQUIRED/,
+    );
+    await assert.rejects(
+      pool.query("update activities set organization_id=$2 where id=$1", [acceptedActivityId, unscopedOrganizationId]),
+      /ACTIVITY_GEOGRAPHY_FORBIDDEN/,
+    );
   } finally {
     if (insertedActivityIds.length) {
       await pool.query("delete from activities where id=any($1::uuid[])", [insertedActivityIds]).catch(() => undefined);
     }
-    await pool.query("delete from organization_geography_scopes where organization_id=$1", [organizationId]).catch(() => undefined);
-    await pool.query("delete from organizations where id=$1", [organizationId]).catch(() => undefined);
+    await pool.query("delete from organization_geography_scopes where organization_id=any($1::uuid[])", [[organizationId, unscopedOrganizationId]]).catch(() => undefined);
+    await pool.query("delete from organizations where id=any($1::uuid[])", [[organizationId, unscopedOrganizationId]]).catch(() => undefined);
     await pool.query("delete from geography where id=any($1::uuid[])", [[inScopeId, outsideId]]).catch(() => undefined);
     await pool.end();
   }
