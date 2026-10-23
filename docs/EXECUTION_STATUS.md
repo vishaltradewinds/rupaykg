@@ -14,7 +14,7 @@ RupayKg is Pan-India digital MRV / waste-to-carbon and circular-economy infrastr
 ## Completed in the latest batch
 - Audited repository tree and major application, domain, migration, regulatory, deployment, test and Shakti-governance areas.
 - Corrected CPCB SWM workspace list and update queries to enforce explicit geography scope for the existing row.
-- Added regression coverage for the CPCB workspace read/update geography isolation.
+- Added source-level and disposable-PostgreSQL runtime regression coverage for CPCB workspace list/update geography isolation, including scope realignment.
 - Confirmed the final combined head passed configured CI: dependency audit, migration validation/application in disposable PostgreSQL, typecheck, build, browser smoke, automated tests and production-container build.
 - Added `docs/RUPAYKG_REPOSITORY_WIDE_AUDIT_2026-10-23.md` with evidence-backed findings, residual risks and prioritized next gates.
 
