@@ -66,6 +66,7 @@ begin
         or v_existing.activity_id <> NEW.activity_id
         or v_existing.evidence_id is distinct from NEW.evidence_id
         or v_existing.verification_id is distinct from NEW.verification_id
+        or (TG_OP = 'UPDATE' and OLD.recycler_organization_id is distinct from NEW.recycler_organization_id)
         or v_existing.claim_quantity <> NEW.quantity
         or v_existing.claim_unit <> NEW.unit
         or v_existing.framework_code <> v_framework_code
@@ -101,7 +102,7 @@ $$;
 
 drop trigger if exists epr_credit_environmental_claim on epr_credits;
 create trigger epr_credit_environmental_claim
-after insert or update of status, activity_id, evidence_id, verification_id, scheme_id, issuer_organization_id, quantity, unit
+after insert or update of status, activity_id, evidence_id, verification_id, scheme_id, issuer_organization_id, recycler_organization_id, quantity, unit
 on epr_credits
 for each row execute function record_epr_credit_value_claim();
 
