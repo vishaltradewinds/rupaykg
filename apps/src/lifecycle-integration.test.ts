@@ -28,8 +28,8 @@ test("production lifecycle integration gate", { skip: !url }, async () => {
     const otherOrg = (await c.query("insert into organizations(name,organization_type) values('integration-other-org','COLLECTOR') returning id")).rows[0].id;
     await c.query("insert into organization_geography_scopes(organization_id,geography_id,status) values($1,$2,'VERIFIED')", [otherOrg, geography]);
     const splitPermissionIdentity = (await c.query("insert into identities(external_subject,display_name) values('integration-split-permission','split permission') returning id")).rows[0].id;
-    const reviewOnlyRole = (await c.query("insert into roles(organization_id,name,permissions) values($1,'REVIEW_ONLY','[\\"evidence:review\\"]') returning id", [org])).rows[0].id;
-    const verifyOnlyRole = (await c.query("insert into roles(organization_id,name,permissions) values($1,'VERIFY_ONLY','[\\"VERIFY_EVIDENCE\\"]') returning id", [otherOrg])).rows[0].id;
+    const reviewOnlyRole = (await c.query("insert into roles(organization_id,name,permissions) values($1,'REVIEW_ONLY',$2) returning id", [org, JSON.stringify(["evidence:review"])] )).rows[0].id;
+    const verifyOnlyRole = (await c.query("insert into roles(organization_id,name,permissions) values($1,'VERIFY_ONLY',$2) returning id", [otherOrg, JSON.stringify(["VERIFY_EVIDENCE"])] )).rows[0].id;
     await c.query("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED'),($1,$4,$5,'VERIFIED')", [splitPermissionIdentity, org, reviewOnlyRole, otherOrg, verifyOnlyRole]);
     assert.equal(await canVerifyEvidence(c, splitPermissionIdentity, evidence), false);
 
