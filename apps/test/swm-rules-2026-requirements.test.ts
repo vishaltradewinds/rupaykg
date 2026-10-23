@@ -25,7 +25,7 @@ test("SWM 2026 operational requirement seed is evidence-first and fail-closed ab
   assert.match(migrationSql, /Rules 8 and 10 of S\.O\. 388\(E\)/);
   assert.match(migrationSql, /Only the local body is mandated to generate EBWGR certificates/i);
   assert.match(migrationSql, /must not mint or assert official certificates without verified external issuance/i);
-  assert.match(migrationSql, /https:\/\/www\.swm\.cpcb\.gov\.in\//);
+  assert.ok(migrationSql.includes("https://swmp.cpcb.gov.in/en/"));
   assert.match(migrationSql, /on conflict \(code\) do update/i);
 });
 
