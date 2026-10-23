@@ -149,6 +149,7 @@ test("government jurisdiction crosswalk API scopes requests and rejects unauthor
     const foreignSha256 = hash(foreignBytes.toString());
     await pool.query("insert into organizations(id,name,organization_type) values($1,$2,'TEST_FIXTURE')", [foreignOrganizationId, "Foreign evidence tenant " + suffix]);
     await pool.query("insert into geography(id,kind,code,name,source,source_version) values($1,'CLUSTER',$2,$3,'Synthetic foreign fixture','v1')", [foreignGeographyId, "FOREIGN-GEO-" + suffix, "Foreign evidence geography " + suffix]);
+    await pool.query("insert into organization_geography_scopes(organization_id,geography_id,status) values($1,$2,'VERIFIED')", [foreignOrganizationId, foreignGeographyId]);
     await pool.query("insert into activities(id,organization_id,geography_id,activity_type,status) values($1,$2,$3,'WASTE_WEIGHT_MEASUREMENT','COMPLETED')", [foreignActivityId, foreignOrganizationId, foreignGeographyId]);
     await pool.query("insert into evidence_artifact_series(id,organization_id,activity_id,evidence_type,created_by_identity_id) values($1,$2,$3,'CROSSWALK_SOURCE_RECORD',$4)", [foreignSeriesId, foreignOrganizationId, foreignActivityId, requesterId]);
     await pool.query("insert into evidence(id,activity_id,evidence_type,status,captured_at,content_uri,content_hash,metadata) values($1,$2,'CROSSWALK_SOURCE_RECORD','CAPTURED',now(),$3,$4,'{}'::jsonb)", [foreignEvidenceId, foreignActivityId, "db://evidence-vault/" + foreignArtifactVersionId, foreignSha256]);
