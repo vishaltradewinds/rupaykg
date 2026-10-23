@@ -48,6 +48,12 @@ test("government jurisdiction crosswalk API scopes requests and rejects unauthor
   let unboundSnapshotId: string | null = null;
   let geographySourceId: string | null = null;
   let aliasRequestId: string | null = null;
+  let foreignOrganizationId: string | null = null;
+  let foreignGeographyId: string | null = null;
+  let foreignActivityId: string | null = null;
+  let foreignEvidenceId: string | null = null;
+  let foreignSeriesId: string | null = null;
+  let foreignArtifactVersionId: string | null = null;
 
   try {
     await registerGovernmentJurisdictionCrosswalkRoutes(app, pool);
@@ -139,12 +145,12 @@ test("government jurisdiction crosswalk API scopes requests and rejects unauthor
     assert.equal(wrongActivity.json().code, "GOVERNMENT_CROSSWALK_EVIDENCE_UNBOUND");
 
     // A valid immutable artifact belonging to another tenant must not bind to this tenant's request.
-    const foreignOrganizationId = randomUUID();
-    const foreignGeographyId = randomUUID();
-    const foreignActivityId = randomUUID();
-    const foreignEvidenceId = randomUUID();
-    const foreignSeriesId = randomUUID();
-    const foreignArtifactVersionId = randomUUID();
+    foreignOrganizationId = randomUUID();
+    foreignGeographyId = randomUUID();
+    foreignActivityId = randomUUID();
+    foreignEvidenceId = randomUUID();
+    foreignSeriesId = randomUUID();
+    foreignArtifactVersionId = randomUUID();
     const foreignBytes = Buffer.from("Synthetic evidence owned by a different tenant");
     const foreignSha256 = hash(foreignBytes.toString());
     await pool.query("insert into organizations(id,name,organization_type) values($1,$2,'TEST_FIXTURE')", [foreignOrganizationId, "Foreign evidence tenant " + suffix]);
@@ -257,6 +263,13 @@ test("government jurisdiction crosswalk API scopes requests and rejects unauthor
     if (geographySourceId) await pool.query("delete from geography_external_identifiers where source_id=$1", [geographySourceId]).catch(() => undefined);
     if (geographySourceId) await pool.query("delete from geography_sources where id=$1", [geographySourceId]).catch(() => undefined);
     if (sourceSnapshotId || unboundSnapshotId) await pool.query("delete from authoritative_source_snapshots where id=any($1::uuid[])", [[sourceSnapshotId, unboundSnapshotId].filter(Boolean)]).catch(() => undefined);
+    if (foreignArtifactVersionId) await pool.query("delete from evidence_artifact_versions where id=$1", [foreignArtifactVersionId]).catch(() => undefined);
+    if (foreignEvidenceId) await pool.query("delete from evidence where id=$1", [foreignEvidenceId]).catch(() => undefined);
+    if (foreignSeriesId) await pool.query("delete from evidence_artifact_series where id=$1", [foreignSeriesId]).catch(() => undefined);
+    if (foreignActivityId) await pool.query("delete from activities where id=$1", [foreignActivityId]).catch(() => undefined);
+    if (foreignOrganizationId) await pool.query("delete from organization_geography_scopes where organization_id=$1", [foreignOrganizationId]).catch(() => undefined);
+    if (foreignOrganizationId) await pool.query("delete from organizations where id=$1", [foreignOrganizationId]).catch(() => undefined);
+    if (foreignGeographyId) await pool.query("delete from geography where id=$1", [foreignGeographyId]).catch(() => undefined);
     await pool.query("delete from organization_geography_scopes where organization_id=$1", [organizationId]).catch(() => undefined);
     await pool.query("delete from identity_sessions where identity_id=any($1::uuid[])", [[requesterId, approverId]]).catch(() => undefined);
     await pool.query("delete from organization_memberships where organization_id=$1 and identity_id=any($2::uuid[])", [organizationId, [requesterId, approverId]]).catch(() => undefined);
