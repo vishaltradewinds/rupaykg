@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { Pool } from "pg";
+import { normalizePostgresConnectionString } from "./production-config.js";
 
 /**
  * Creates one deterministic, idempotent live-acceptance dataset.
@@ -20,9 +21,14 @@ if (!databaseUrl) throw new Error("DATABASE_URL is required for acceptance seed"
 if (!sessionToken) throw new Error("RUPAYKG_ACCEPTANCE_SESSION_TOKEN is required for acceptance seed");
 
 const pool = new Pool({
-  connectionString: databaseUrl,
+  connectionString: normalizePostgresConnectionString(databaseUrl),
   max: 1,
-  ssl: process.env.DATABASE_SSL === "false" ? undefined : { rejectUnauthorized: false },
+  ssl: process.env.DATABASE_SSL === "false"
+    ? undefined
+    : {
+        rejectUnauthorized: true,
+        ...(process.env.DATABASE_CA_CERT?.includes("BEGIN CERTIFICATE") ? { ca: process.env.DATABASE_CA_CERT } : {}),
+      },
 });
 
 const tokenHash = createHash("sha256").update(sessionToken).digest("hex");
