@@ -1,71 +1,85 @@
 # RupayKg — SHAKTI Production Gate
 
-## Purpose
+## Purpose and non-negotiable rule
 
 This document is the production-control record for RupayKg under SHAKTI — Standard Operating Systems.
 
-**Rule:** RupayKg must satisfy all applicable SHAKTI gates before it can be treated as SHAKTI-certified for live production. SHAKTI certification does not replace independent statutory, regulatory, contractual, infrastructure-provider, or third-party approvals.
+**Objective:** RupayKg is intended to become a robust Pan-India Circular Economy Operating System, not merely a pilot or a demonstration. Build and verify real operating workflows before considering deployment.
 
-## Current verified baseline
+**Rule:** One Shakti Standard, many project-specific operating systems. All applicable gates must be evidenced before a release can be called production-ready or SHAKTI-certified. SHAKTI certification does not replace statutory, regulatory, contractual, infrastructure-provider, or third-party approvals.
+
+**Deployment is not the current objective.** The current objective is repository-wide audit, functional completeness, security, recoverability, test coverage, and end-to-end workflow verification.
+
+## Current verified baseline — 2026-10-23
 
 - Repository: `vishaltradewinds/rupaykg`
 - Default branch: `main`
-- Current deployed commit: `5c1c215c777b0e7f15a4b74168db5c0f9307fbd5`
-- Current commit: `docs: add production backup and rollback runbook`
 - Render service: `rupaykg`
-- Render URL: `https://rupaykg.onrender.com`
-- Render branch: `main`
-- Auto-deploy: enabled
-- Current Render deployment state: live
-- Latest observed production deployment: `dep-dans9ibm8hqs73cck110`
-- Latest observed startup state: PostgreSQL-backed health/readiness verified on the current live deployment; service listening; root request returned HTTP 200.
-- Acceptance fixture is being created at startup and is explicitly marked as a fixture.
+- Render service ID: `srv-daki4d7qj5pc73b8qksg`
+- Render service's latest observed deployment ID: `dep-dbbjqic9v7es73ffofmg`
+- Render deployment commit observed: `0ddcf6087620880e21ea60f954c9f05d6b759469`
+- Render PostgreSQL resource: `rupaykg-db` (`dpg-dakhdv95efls73e1974g-a`)
+- Latest observed database state: **suspended by billing**.
+- The public health endpoint and homepage could not be independently verified during the current audit. Render log retrieval returned HTTP 503. Therefore live readiness is **unverified**, not passed.
+- The historical CI run on commit `0ddcf6087620880e21ea60f954c9f05d6b759469` passed on 2026-10-19. This is historical evidence, not current-day production acceptance.
+- This file previously listed a different deployed commit (`5c1c215c777b0e7f15a4b74168db5c0f9307fbd5`) and a different deployment ID. That record conflicts with the latest observed Render control-plane metadata and must not be treated as the current deployment source of truth.
+- Production startup/TLS hardening is being developed in draft PR #43. The latest observed CI run on head `d3960516614d2b9b13e032c802e60814bb2c7ed7` passed the configured CI job, including dependency audit, migration validation, typecheck, build, browser smoke test, tests with disposable PostgreSQL acceptance, and container build. This validates the tested branch commit only; it does not prove live database recovery, production health, external integrations, regulatory approval, or Pan-India readiness.
+- PR #43 is not merged or deployed. No production database mutation or deployment was performed as part of this hardening work.
 
 ## SHAKTI gate status
 
 | Gate | Status | Evidence / condition |
 |---|---|---|
-| S01 Reality | PASS | Active repository, branch, deployed service and current commit verified. |
-| S02 Context | OPEN | Production context is documented; remaining external-service and operational context must be verified. |
-| S03 Need / purpose | PASS | RupayKg is the circular-economy/MRV production platform represented by the current repository. |
-| S04 Evidence | OPEN | CI/deployment evidence exists; authoritative external Guardian/Hedera evidence is still outstanding. |
-| S05 Understanding | OPEN | Production acceptance path is implemented, but external execution must be demonstrated. |
-| S06 Relevance | PASS | Current acceptance work is directly tied to the live-production gate. |
-| S07 Boundaries | OPEN | Applicable statutory, security, operational and external-service boundaries remain subject to final production evidence. |
-| S08 Options | OPEN | No final production-release decision until the remaining acceptance gates are resolved. |
-| S09 Feasibility | OPEN | Software deployment is live; complete production feasibility is not yet proven. |
-| S10 Validation | BLOCKED | No observed authoritative `CONSENSUS_CONFIRMED` / Mirror Node evidence in current Render logs. |
-| S11 Decision | BLOCKED | Do not declare production-ready or SHAKTI-certified. |
-| S12 Design | PASS/ONGOING | Current architecture and acceptance path exist; production hardening continues. |
-| S13 Production | PASS | Current main is deployed live on Render. |
-| S14 Verification | OPEN | CI/build/deploy evidence is not equivalent to complete live external verification. |
-| S15 Compliance & approvals | OPEN | Required external/statutory/operational approvals and evidence remain to be closed. |
-| S16 SHAKTI certification | BLOCKED | Certification cannot be issued while material gates remain open. |
-| S17 Live release | BLOCKED FOR PRODUCTION ACCEPTANCE | Service is technically live, but SHAKTI live-production acceptance is not complete. |
-| S18 Assurance | OPEN | Monitoring, backup/restore and rollback evidence remain to be demonstrated. |
-| S19 Learning | ACTIVE | Current acceptance findings are feeding the next production actions. |
+| S01 Reality | PARTIAL | Repository and Render control-plane resources inspected; service/database states do not currently establish live operation. |
+| S02 Context | OPEN | Real operational context, regional workflows, actors, infrastructure dependencies, and support model need full validation. |
+| S03 Need / purpose | PASS | Pan-India circular-economy operations, evidence-first MRV, EPR/ESG, and governed environmental data are the platform objective. |
+| S04 Evidence | OPEN | Code/CI evidence exists; production runtime and independent external evidence are incomplete. |
+| S05 Understanding | OPEN | A repository inventory and targeted audit exist; complete file-by-file and workflow-level audit is not yet complete. |
+| S06 Relevance | PASS | Current work directly addresses production startup, database security, and operational readiness. |
+| S07 Boundaries | OPEN | Applicable statutory requirements, methodology scope, security, privacy, financial/credit claims, and third-party constraints require evidence. |
+| S08 Options | OPEN | Recovery/provider options and alternative hosting/database options must be compared before any infrastructure change. |
+| S09 Feasibility | BLOCKED | Database is suspended; operational feasibility cannot be proven until safe recovery and end-to-end tests. |
+| S10 Validation | BLOCKED | Current production health, full workflows, and authoritative external verification have not been re-established. |
+| S11 Decision | BLOCKED | No production-readiness or SHAKTI certification claim. |
+| S12 Design | ONGOING | Architecture exists; security and workflow gaps are being audited and hardened. |
+| S13 Engineering | ONGOING | Draft PR #43 addresses startup ordering and shared PostgreSQL TLS policy. |
+| S14 Verification | PARTIAL | Latest PR-head CI passed configured checks; broader acceptance, recovery, multi-tenant, field/offline, and resilience tests remain. |
+| S15 Compliance & approvals | OPEN | Applicable legal/methodology requirements and required independent approvals must be mapped and evidenced. |
+| S16 SHAKTI certification | BLOCKED | Material gates remain open. |
+| S17 Deployment / live release | DEFERRED | Deployment is deliberately postponed until platform functionality and readiness are proven. |
+| S18 Assurance | OPEN | Backup existence, restore rehearsal, alert delivery, rate limiting, incident response, and rollback evidence remain to be demonstrated. |
+| S19 Learning | ACTIVE | Audit findings are being converted into code, tests, and explicit acceptance criteria. |
 
 ## P0 blockers
 
-1. Configure and successfully execute an authoritative production Guardian MRV verification.
-2. Securely configure production Hedera operator credentials.
-3. Use a real authenticated organization/activity/verification/evidence set for acceptance.
-4. Execute the live acceptance workflow against the deployed HTTPS service.
-5. Demonstrate the complete chain:
-   `Guardian VERIFIED -> Hedera CONSENSUS_CONFIRMED -> persisted provenance -> Mirror Node verification`.
-6. Complete production monitoring/alerting, backup/restore and rollback evidence before opening real production traffic.
+1. Recover or otherwise safely resolve the suspended database, after confirming data preservation and backup/recovery options. Do not delete/recreate the database as a shortcut.
+2. Complete a repository-wide audit of migrations, startup, authentication, organization/tenant isolation, authorization, evidence storage and integrity, MRV calculations, registry/settlement, and operational workflows.
+3. Verify the platform's real core workflows end-to-end using isolated/disposable data first, including negative and failure-path tests.
+4. Prove tenant isolation: an identity from one organization must not read or mutate another organization's records without explicit authorized scope.
+5. Prove evidence lifecycle: capture/upload, immutable hash/provenance, access control, review, correction/rejection, export, retention, and audit trace.
+6. Prove that internal MRV estimates or platform records are not represented as official credits, accredited verification, government approval, or external settlement unless authoritative evidence exists.
+7. Verify current official rules, methodology versions, applicability, required monitoring/parameters, calculations, uncertainty/leakage treatment, and approval/verification boundaries before operational carbon claims.
+8. Verify Guardian/Hedera only with real configured credentials and independent authoritative evidence. Required chain where applicable: `Guardian VERIFIED -> Hedera CONSENSUS_CONFIRMED -> persisted provenance -> Mirror Node verification`. A fixture or mock does not count as external proof.
+9. Verify backup/restore in an isolated environment, alert delivery, rate limiting, secret management/rotation, and recovery/rollback procedures.
+10. Demonstrate field-ready workflows for low-connectivity use, retries/idempotency, duplicate/conflict resolution, accessibility, multiple organizations and geographies, and support operations.
 
-## P1 hardening
+## P1 robustness work
 
-- Verify edge/API rate limiting and abuse protection.
-- Verify secret storage/rotation and absence of production secrets in client bundles.
-- Verify database backup retention and tested restore.
-- Verify staging/live separation and rollback procedure.
+- Reconcile deployment metadata and all operational documentation against observed provider state.
+- Establish repeatable CI checks for migration ordering/integrity, dependency vulnerabilities, type safety, builds, API contracts, security boundaries, and end-to-end workflows.
+- Add operational observability: structured logs, actionable alerts, health/readiness separation, correlation IDs, safe error messages, and incident playbooks.
+- Validate edge/API rate limits, abuse controls, upload size/type limits, and protection against replay or duplicate submissions.
+- Validate data export, auditability, retention/deletion rules, backup restoration, and migration rollback strategy.
+- Build and test staging/recovery environments without touching production data.
+- Validate multi-state and multi-ULB/district onboarding, language/accessibility, intermittent connectivity, and scale assumptions using explicit acceptance criteria.
 
-## SHAKTI release rule
+## Work and release rules
 
-A successful build, CI run, deployment, or HTTP 200 response is **not** sufficient for SHAKTI certification.
+- Do not merge PR #43 until its latest CI and code review are satisfactory.
+- Do not use production database access for exploratory tests or run destructive migrations to diagnose the billing suspension.
+- Do not change providers or migrate data until recovery options, data ownership, cost, security, compatibility, and rollback are assessed.
+- Do not claim official environmental credits, government integration, external consensus, certification, or compliance without authoritative evidence.
+- A successful build, CI run, deployment, or HTTP 200 response is **not** sufficient for production acceptance.
+- Deployment is the final gate, after functional, security, data-recovery, operational, regulatory, and external-integration evidence is complete.
 
-RupayKg becomes SHAKTI-certified for its defined production release only after every applicable gate is evidenced, all material blockers are closed, and required independent external approvals/evidence are satisfied.
-
-**Current certification decision: BLOCKED — evidence incomplete.**
+**Current decision: NOT PRODUCTION-READY / NOT SHAKTI-CERTIFIED. Engineering and verification continue; deployment is deferred.**
