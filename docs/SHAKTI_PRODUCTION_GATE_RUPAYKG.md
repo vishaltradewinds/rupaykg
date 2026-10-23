@@ -24,6 +24,7 @@ This document is the production-control record for RupayKg under SHAKTI — Stan
 - The historical CI run on commit `0ddcf6087620880e21ea60f954c9f05d6b759469` passed on 2026-10-19. This is historical evidence, not current-day production acceptance.
 - This file previously listed a different deployed commit (`5c1c215c777b0e7f15a4b74168db5c0f9307fbd5`) and a different deployment ID. That record conflicts with the latest observed Render control-plane metadata and must not be treated as the current deployment source of truth.
 - Production startup/TLS hardening is being developed in draft PR #43. GitHub Actions CI run #1921 (`39928536739`) passed on earlier head `03e43f7de1ae33831aace2a450bfb89400d584bf`, covering dependency audit, migration validation, disposable-PostgreSQL migration, typecheck, build, browser smoke test, acceptance tests, and production container build. Later changes add an IPv6-loopback rejection and regression test; the pass on the earlier SHA does not validate later changes. Before merge, verify a green CI result for the exact current PR head. CI does not prove live database recovery, production health, external integrations, regulatory approval, or Pan-India readiness.
+- PR #43 latest head `2c0fe2e20868525375c137ff38c99fa93141d730` passed CI run #1948 (`39936139122`) on 2026-10-23. The run passed dependency audit, migration validation, disposable-PostgreSQL migration, typecheck, build, browser smoke, tests including PostgreSQL acceptance, and production-container build. This is engineering evidence only; it does not establish live production recovery or readiness.
 - PR #43 is not merged or deployed. No production database mutation or deployment was performed as part of this hardening work.
 
 ## SHAKTI gate status
@@ -84,3 +85,26 @@ This document is the production-control record for RupayKg under SHAKTI — Stan
 - Deployment is the final gate, after functional, security, data-recovery, operational, regulatory, and external-integration evidence is complete.
 
 **Current decision: NOT PRODUCTION-READY / NOT SHAKTI-CERTIFIED. Engineering and verification continue; deployment is deferred.**
+
+
+## Repository audit addendum — 2026-10-23
+
+### Verified engineering gate
+- Exact PR head: `2c0fe2e20868525375c137ff38c99fa93141d730`.
+- GitHub Actions CI run #1948: `39936139122`, conclusion `success`.
+- Run: https://github.com/vishaltradewinds/rupaykg/actions/runs/39936139122
+- PR: https://github.com/vishaltradewinds/rupaykg/pull/43
+
+### Newly confirmed audit-chain gap — remains OPEN
+A targeted source review found that the platform does not yet have one consistently enforced, concurrency-safe audit chain across all writers:
+
+1. `apps/src/platform-admin-routes.ts` locks and advances the singleton `platform_audit_chain_head` for platform-admin audit writes.
+2. `apps/src/cpcb-swm-routes.ts` independently selects the latest organization audit event with `FOR UPDATE`. This is not the same serialization lock; an organization with no prior events has no row to lock, and concurrent first writes can race.
+3. `apps/src/sync-routes.ts` writes audit events directly without consistently setting `previous_hash` or advancing the singleton chain head.
+4. `migrations/050_field_sync_conflict_audit.sql` inserts audit events through a database trigger using an MD5-derived value, without advancing the shared chain head.
+5. `migrations/084_platform_audit_chain_head.sql` explicitly documents that older writers do not all participate in the platform-admin chain.
+
+**Impact:** audit rows exist, but the system must not be described as having a single complete, tamper-evident, globally ordered audit chain. A future hardening batch must inventory every application and database-trigger writer, define one canonical append contract and hash serialization, serialize appends transactionally, advance the chain head consistently, and add concurrent-writer plus legacy-event tests. Do not retrofit or rewrite historical audit rows without a reviewed migration and recovery plan.
+
+### Audit scope boundary
+The recursive Git tree inventory found 318 tracked files at this PR head. The review remains a repository inventory plus targeted source/migration review, not a claim that every file and every workflow has been fully audited. Remaining high-priority checks include backup/restore proof, tenant-isolation coverage across all routes, field/offline retry and conflict behavior, external Guardian/Hedera proof, MRV methodology applicability, and current production health after database recovery.
