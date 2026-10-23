@@ -12,7 +12,7 @@ select s.id,
        '["official_CPCB_or_MoEFCC_announcement","official_production_portal_URL","portal_terms_and_authorized_access_process","registration_workflow_evidence","annual_return_workflow_evidence","role_and_stakeholder_module_evidence","verification_timestamp","verifier_identity"]'::jsonb,
        'ONE_TIME_WITH_CONTINUOUS_ASSURANCE',
        'CPCB Centralised Solid Waste Management Portal',
-       'https://www.swm.cpcb.gov.in/',
+       'https://swmp.cpcb.gov.in/en/',
        'Official CPCB portal landing page verified on 23 October 2026. Production workflow behavior, applicable portal terms, and authorized integration/API access have not been independently verified for RupayKG. Do not infer that public portal availability grants API access; keep automated external integration blocked until workflow evidence and authorization are verified.'
 from regulatory_sources s
 where s.authority = 'Ministry of Environment, Forest and Climate Change'
