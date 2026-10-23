@@ -3,6 +3,38 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
+const legacyFallbackForbiddenSourceFiles = [
+  "async-mirror-routes.ts",
+  "async-mirror-worker.ts",
+  "auth-routes.ts",
+  "auth.ts",
+  "bwg-routes.ts",
+  "cpcb-swm-routes.ts",
+  "epr-return-routes.ts",
+  "evidence-vault-routes.ts",
+  "evidence-vault-store.ts",
+  "gov-bridge-routes.ts",
+  "government-inbox-operational-alerts.ts",
+  "government-inbox-worker-runner.ts",
+  "government-inbox-worker-scheduler.ts",
+  "government-jurisdiction-crosswalk-routes.ts",
+  "guardian-mrv.ts",
+  "hedera-anchor.ts",
+  "intelligence-evidence-intake.ts",
+  "intelligence-routes.ts",
+  "mrv-routes.ts",
+  "onboarding-hierarchy-routes.ts",
+  "platform-admin-routes.ts",
+  "production-config.ts",
+  "production-server.ts",
+  "registry-routes.ts",
+  "server.ts",
+  "statutory-routes.ts",
+  "sync-routes.ts",
+  "value-routes.ts",
+  "workspace-routes.ts",
+];
+
 const highImpactRouteFiles = [
   "mrv-routes.ts",
   "epr-return-routes.ts",
@@ -22,7 +54,7 @@ function sourceFor(fileName: string): string {
   return readFileSync(path, "utf8");
 }
 
-test("high-impact route call sites never use the permissive legacy geography helper", () => {
+test("runtime source files never use the permissive legacy geography helper", () => {
   for (const fileName of highImpactRouteFiles) {
     const source = sourceFor(fileName);
     assert.doesNotMatch(
