@@ -53,15 +53,16 @@ This document is the production-control record for RupayKg under SHAKTI — Stan
 ## P0 blockers
 
 1. Recover or otherwise safely resolve the suspended database, after confirming data preservation and backup/recovery options. Do not delete/recreate the database as a shortcut.
-2. Complete a repository-wide audit of migrations, startup, authentication, organization/tenant isolation, authorization, evidence storage and integrity, MRV calculations, registry/settlement, and operational workflows.
-3. Verify the platform's real core workflows end-to-end using isolated/disposable data first, including negative and failure-path tests.
-4. Prove tenant isolation: an identity from one organization must not read or mutate another organization's records without explicit authorized scope.
-5. Prove evidence lifecycle: capture/upload, immutable hash/provenance, access control, review, correction/rejection, export, retention, and audit trace.
-6. Prove that internal MRV estimates or platform records are not represented as official credits, accredited verification, government approval, or external settlement unless authoritative evidence exists.
-7. Verify current official rules, methodology versions, applicability, required monitoring/parameters, calculations, uncertainty/leakage treatment, and approval/verification boundaries before operational carbon claims.
-8. Verify Guardian/Hedera only with real configured credentials and independent authoritative evidence. Required chain where applicable: `Guardian VERIFIED -> Hedera CONSENSUS_CONFIRMED -> persisted provenance -> Mirror Node verification`. A fixture or mock does not count as external proof.
-9. Verify backup/restore in an isolated environment, alert delivery, rate limiting, secret management/rotation, and recovery/rollback procedures.
-10. Demonstrate field-ready workflows for low-connectivity use, retries/idempotency, duplicate/conflict resolution, accessibility, multiple organizations and geographies, and support operations.
+2. Review the database network exposure before recovery/release: Render currently reports its PostgreSQL IP allowlist as `0.0.0.0/0` (`everywhere`). Inventory any legitimate external clients first, then narrow access to the minimum required sources; prefer the same-region Render internal connection for the app. Do not change the allowlist blindly while the database is suspended.
+3. Complete a repository-wide audit of migrations, startup, authentication, organization/tenant isolation, authorization, evidence storage and integrity, MRV calculations, registry/settlement, and operational workflows.
+4. Verify the platform's real core workflows end-to-end using isolated/disposable data first, including negative and failure-path tests.
+5. Prove tenant isolation: an identity from one organization must not read or mutate another organization's records without explicit authorized scope.
+6. Prove evidence lifecycle: capture/upload, immutable hash/provenance, access control, review, correction/rejection, export, retention, and audit trace.
+7. Prove that internal MRV estimates or platform records are not represented as official credits, accredited verification, government approval, or external settlement unless authoritative evidence exists.
+8. Verify current official rules, methodology versions, applicability, required monitoring/parameters, calculations, uncertainty/leakage treatment, and approval/verification boundaries before operational carbon claims.
+9. Verify Guardian/Hedera only with real configured credentials and independent authoritative evidence. Required chain where applicable: `Guardian VERIFIED -> Hedera CONSENSUS_CONFIRMED -> persisted provenance -> Mirror Node verification`. A fixture or mock does not count as external proof.
+10. Verify backup/restore in an isolated environment, alert delivery, rate limiting, secret management/rotation, and recovery/rollback procedures.
+11. Demonstrate field-ready workflows for low-connectivity use, retries/idempotency, duplicate/conflict resolution, accessibility, multiple organizations and geographies, and support operations.
 
 ## P1 robustness work
 
