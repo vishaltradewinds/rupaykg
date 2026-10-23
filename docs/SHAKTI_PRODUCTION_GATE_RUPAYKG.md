@@ -23,7 +23,7 @@ This document is the production-control record for RupayKg under SHAKTI — Stan
 - The public health endpoint and homepage could not be independently verified during the current audit. Render log retrieval returned HTTP 503. Therefore live readiness is **unverified**, not passed.
 - The historical CI run on commit `0ddcf6087620880e21ea60f954c9f05d6b759469` passed on 2026-10-19. This is historical evidence, not current-day production acceptance.
 - This file previously listed a different deployed commit (`5c1c215c777b0e7f15a4b74168db5c0f9307fbd5`) and a different deployment ID. That record conflicts with the latest observed Render control-plane metadata and must not be treated as the current deployment source of truth.
-- Production startup/TLS hardening is being developed in draft PR #43. The latest observed CI run on head `d3960516614d2b9b13e032c802e60814bb2c7ed7` passed the configured CI job, including dependency audit, migration validation, typecheck, build, browser smoke test, tests with disposable PostgreSQL acceptance, and container build. This validates the tested branch commit only; it does not prove live database recovery, production health, external integrations, regulatory approval, or Pan-India readiness.
+- Production startup/TLS hardening is being developed in draft PR #43. GitHub Actions CI run #1921 (`39928536739`) completed successfully on head `03e43f7de1ae33831aace2a450bfb89400d584bf` on 2026-10-23. The configured job passed dependency audit, migration validation, migration against disposable PostgreSQL, typecheck, build, browser smoke test, tests including disposable PostgreSQL acceptance, and production container build. This validates that exact branch commit against configured checks only; it does not prove live database recovery, production health, external integrations, regulatory approval, or Pan-India readiness.
 - PR #43 is not merged or deployed. No production database mutation or deployment was performed as part of this hardening work.
 
 ## SHAKTI gate status
@@ -75,7 +75,7 @@ This document is the production-control record for RupayKg under SHAKTI — Stan
 
 ## Work and release rules
 
-- Do not merge PR #43 until its latest CI and code review are satisfactory.
+- PR #43's latest observed CI is green on head `03e43f7de1ae33831aace2a450bfb89400d584bf`; keep it draft and unmerged until focused code review confirms production startup/TLS behavior and all remaining release gates are handled.
 - Do not use production database access for exploratory tests or run destructive migrations to diagnose the billing suspension.
 - Do not change providers or migrate data until recovery options, data ownership, cost, security, compatibility, and rollback are assessed.
 - Do not claim official environmental credits, government integration, external consensus, certification, or compliance without authoritative evidence.
