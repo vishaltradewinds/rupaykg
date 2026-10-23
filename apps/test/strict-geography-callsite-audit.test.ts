@@ -107,12 +107,12 @@ test("submitted EPR returns require bound, approved, provenance-backed and expli
   ].map((path) => fileURLToPath(new URL(path, import.meta.url))).find(existsSync);
   if (!migrationPath) throw new Error("Strict EPR return evidence geography migration not found");
   const migration = readFileSync(migrationPath, "utf8");
-  assert.match(migration, /create or replace function enforce_epr_return_submission_evidence\\s*\\(/i);
-  assert.match(migration, /new\\.status in \\('SUBMITTED','ACCEPTED','COMPLETED'\\)/i);
-  assert.match(migration, /new\\.evidence_id is null or new\\.verification_id is null or new\\.obligation_id is null/i);
-  assert.match(migration, /v\\.evidence_id = e\\.id[\\s\\S]*?v\\.activity_id = a\\.id[\\s\\S]*?v\\.decision = 'APPROVED'/i);
-  assert.match(migration, /organization_has_explicit_geography_scope\\(a\\.organization_id, a\\.geography_id\\)/i);
-  assert.match(migration, /before insert or update of status, organization_id, scheme_id, obligation_id, period_start, period_end, evidence_id, verification_id[\\s\\S]*?on epr_returns/i);
+  assert.match(migration, /create or replace function enforce_epr_return_submission_evidence\s*\(/i);
+  assert.match(migration, /new\.status in \('SUBMITTED','ACCEPTED','COMPLETED'\)/i);
+  assert.match(migration, /new\.evidence_id is null or new\.verification_id is null or new\.obligation_id is null/i);
+  assert.match(migration, /v\.evidence_id = e\.id[\s\S]*?v\.activity_id = a\.id[\s\S]*?v\.decision = 'APPROVED'/i);
+  assert.match(migration, /organization_has_explicit_geography_scope\(a\.organization_id, a\.geography_id\)/i);
+  assert.match(migration, /before insert or update of status, organization_id, scheme_id, obligation_id, period_start, period_end, evidence_id, verification_id[\s\S]*?on epr_returns/i);
 });
 
 test("EPR geography guards are attached to the live PostgreSQL tables after migrations", {
