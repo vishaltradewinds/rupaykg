@@ -16,7 +16,7 @@ as $$
 declare
   v_previous_hash text;
   v_event_id uuid;
-  v_created_at timestamptz := clock_timestamp();
+  v_created_at timestamptz;
   v_event jsonb;
   v_event_hash text;
 begin
@@ -41,6 +41,10 @@ begin
   if not found then
     raise exception 'PLATFORM_AUDIT_CHAIN_HEAD_MISSING';
   end if;
+
+  -- Timestamp only after obtaining the serialization lock, so it cannot predate
+  -- the preceding event merely because this transaction waited for the head row.
+  v_created_at := clock_timestamp();
 
   v_event := jsonb_build_object(
     'actorIdentityId', p_actor_identity_id,
