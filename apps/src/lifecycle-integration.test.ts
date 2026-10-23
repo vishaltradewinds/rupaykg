@@ -16,7 +16,7 @@ test("production lifecycle integration gate", { skip: !url }, async () => {
     await c.query("insert into organization_geography_scopes(organization_id,geography_id,status) values($1,$2,'VERIFIED')", [org, geography]);
     const actor = (await c.query("insert into identities(external_subject,display_name) values('integration-actor','actor') returning id")).rows[0].id;
     const verifier = (await c.query("insert into identities(external_subject,display_name) values('integration-verifier','verifier') returning id")).rows[0].id;
-    const role = (await c.query("insert into roles(organization_id,name,permissions) values($1,'VERIFIER','[\"VERIFY_EVIDENCE\",\"ISSUE_CREDENTIAL\"]') returning id", [org])).rows[0].id;
+    const role = (await c.query("insert into roles(organization_id,name,permissions) values($1,'VERIFIER','[\"VERIFY_EVIDENCE\",\"ISSUE_CREDENTIAL\",\"TRANSFER_CREDENTIAL\"]') returning id", [org])).rows[0].id;
     await c.query("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED')", [verifier, org, role]);
 
     const activity = (await c.query("insert into activities(organization_id,actor_identity_id,geography_id,activity_type,status) values($1,$2,$3,'COLLECTION','SUBMITTED') returning id", [org, actor, geography])).rows[0].id;
