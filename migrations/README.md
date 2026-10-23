@@ -86,3 +86,14 @@ Migration `087_acceptance_fixture_registry_exclusion.sql` prevents activities or
 ## Registry transfer recipient legal verification
 
 Migration `088_registry_transfer_legal_verification.sql` tightens the database-enforced transfer recipient boundary. The legacy `organizations.status` field defaults to `VERIFIED` for compatibility and is not sufficient evidence of legal verification. A recipient must have `verification_status='VERIFIED'`, verifier identity and timestamp, a verified organization membership, and at least one verified organization-verification evidence record with a reference or content hash. This is platform-governed legal-verification evidence; it does not by itself prove statutory registration or external authority approval.
+
+
+## Canonical audit append and immutability (migrations 089–090)
+
+Migration `001_core.sql` enables PostgreSQL `pgcrypto`, which supplies the `digest(..., 'sha256')` function used by the canonical audit append function in migration 089. Fresh-database migration validation and the disposable PostgreSQL CI migration pass verify this prerequisite in the test environment; production extension availability and migration state still require direct operational verification before rollout.
+
+Migration `090_audit_events_append_only.sql` installs database triggers that reject row-level UPDATE and DELETE and statement-level TRUNCATE against `audit_events`. Canonical appends remain INSERT operations through `append_platform_audit_event`. Integration coverage verifies rejected UPDATE/DELETE operations leave a test audit row intact and checks that both triggers are enabled. It does not attempt a table-wide TRUNCATE in the shared test database.
+
+These triggers are defense-in-depth for ordinary database access. They are not a defense against a sufficiently privileged database administrator deliberately disabling triggers or modifying storage outside the normal database interface. For stronger assurance, production must also restrict database roles, preserve independent backups, and periodically verify restored data and chain continuity.
+
+The audit-writer inventory is still an explicit release gate: any application route, scheduled job, migration trigger, or operational script that directly inserts into `audit_events` bypasses the canonical chain and must be migrated or documented as a deliberately separate event stream. Do not claim complete post-cutover chain coverage until that inventory and transaction-boundary review are finished.
