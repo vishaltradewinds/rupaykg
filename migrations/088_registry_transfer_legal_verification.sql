@@ -43,6 +43,14 @@ begin
       raise exception 'Registry transfer destination requires verified organization evidence';
     end if;
 
+    if not exists (
+      select 1 from organization_memberships m
+       where m.organization_id = new.to_owner_id
+         and m.status = 'VERIFIED'
+    ) then
+      raise exception 'Registry transfer destination must have verified organization membership';
+    end if;
+
     if new.from_owner_id is not null and new.from_owner_id = new.to_owner_id then
       raise exception 'Registry transfer destination must differ from current owner';
     end if;
