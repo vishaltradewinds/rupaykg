@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { isIsoCalendarDate, isValidExternalReference } from "./epr-return-routes.js";
+import { eprReturnSubmissionState, isIsoCalendarDate, isValidExternalReference } from "./epr-return-routes.js";
 
 test("EPR period validation accepts real ISO calendar dates", () => {
   assert.equal(isIsoCalendarDate("2024-02-29"), true);
@@ -31,4 +31,12 @@ test("EPR external references must be nonempty and bounded", () => {
   assert.equal(isValidExternalReference(""), false);
   assert.equal(isValidExternalReference("   "), false);
   assert.equal(isValidExternalReference("x".repeat(2049)), false);
+});
+
+test("EPR return resubmission fails closed until rejected obligation accounting is reconciled", () => {
+  assert.equal(eprReturnSubmissionState("DRAFT"), "SUBMITTABLE");
+  assert.equal(eprReturnSubmissionState("REJECTED"), "RECONCILIATION_REQUIRED");
+  for (const status of ["SUBMITTED", "ACCEPTED", "COMPLETED", "CANCELLED", "UNKNOWN"]) {
+    assert.equal(eprReturnSubmissionState(status), "INVALID_STATE", status);
+  }
 });
