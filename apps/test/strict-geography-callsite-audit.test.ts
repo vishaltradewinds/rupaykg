@@ -252,3 +252,19 @@ test("live acceptance seed binds the activity to an explicit verified geography 
     "acceptance seed must establish the verified organization geography scope before inserting a geography-bound activity",
   );
 });
+
+test("registry credential geography guard accepts only explicit verified-root descendants", () => {
+  const migrationPath = [
+    "../../migrations/20261030_z_credential_descendant_scope.sql",
+    "../../../migrations/20261030_z_credential_descendant_scope.sql",
+  ].map((path) => fileURLToPath(new URL(path, import.meta.url))).find(existsSync);
+  if (!migrationPath) throw new Error("Credential descendant geography migration not found");
+  const migration = readFileSync(migrationPath, "utf8");
+  assert.match(migration, /create or replace function prevent_credential_out_of_scope_issue\\s*\\(/i);
+  assert.match(migration, /organization_has_explicit_geography_scope\\(new\\.issuer_organization_id, activity_geography_id\\)/i);
+  assert.doesNotMatch(
+    migration,
+    /s\\.geography_id\\s*=\\s*activity_geography_id/i,
+    "credential geography must follow the same verified-root descendant policy as other high-impact operations",
+  );
+});
