@@ -207,7 +207,7 @@ The new regression test `apps/test/explicit-geography-scope.test.ts` verifies th
 
 ### Remaining boundary — do not overstate closure
 
-The legacy `organization_has_geography_scope` helper in migration `012_geography_authorization.sql` deliberately returns true when an organization has no verified geography roots. Its activity and resource-flow triggers still call that legacy helper. Strict checks in several higher-risk API paths reduce exposure, but this review has not proven every API, background worker, direct database writer, import path or future route is covered. A global semantic flip is not safe without auditing every writer and adapting test/seed flows.
+The legacy `organization_has_geography_scope` helper in migration `012_geography_authorization.sql` deliberately returns true when an organization has no verified geography roots. The branch now has dedicated strict database guards for resource-flow endpoints (`20261113_strict_resource_flow_geography.sql`) and activity geography (`20261114_strict_activity_geography.sql`) that use `organization_has_explicit_geography_scope`. A subsequent strict EPR evidence migration (`20261115_strict_epr_evidence_geography.sql`) also replaces two high-impact evidence guards to require explicit scope. This narrows the known database-level exposure; it does not prove every writer, import path, direct SQL path, or future migration is covered. Strict checks in several higher-risk API paths reduce exposure, but this review has not proven every API, background worker, direct database writer, import path or future route is covered. A global semantic flip is not safe without auditing every writer and adapting test/seed flows.
 
 **Next required gate:** enumerate all activity/resource-flow writers and all callers of the legacy helper, classify each by impact, add targeted fail-closed controls and regression tests for high-impact paths, and only then decide whether a compatibility migration/backfill is warranted. Existing legacy tenants must not receive implicit national authorization. No official national geography dataset or complete source reconciliation is established by these tests.
 
@@ -217,3 +217,28 @@ The legacy `organization_has_geography_scope` helper in migration `012_geography
 - Several critical API paths: **source review indicates explicit scope checks**.
 - Universal enforcement across all writers/paths: **not yet proven**.
 - Nationwide coverage, official API authorization, full regulatory applicability, national-scale resilience, and independent Shakti certification: **still HOLD**.
+
+
+## 7. Follow-up database-boundary remediation — 2026-10-23
+
+### Changes present on PR #41
+
+- Resource-flow writes now have a database guard requiring at least one endpoint and requiring every supplied endpoint to be explicitly scoped to the organization.
+- Activity inserts and changes to `organization_id` / `geography_id` now require a non-null geography and explicit verified organization geography scope.
+- The activity trigger is deliberately limited to inserts and updates of the boundary columns. Unrelated updates to legacy rows are not blocked solely because those rows predate the strict guard; a separate evidence-backed backfill/remediation plan is still required for legacy records.
+- EPR external-registration and transfer evidence guards require evidence linked to an activity whose organization/geography scope is explicit.
+- A repository-level source-contract test inventories authorization-sensitive modules and rejects the permissive legacy helper in the listed high-impact paths.
+- Cross-tenant government-crosswalk integration fixtures now include teardown for the foreign tenant's evidence and geography records, avoiding synthetic test-data leakage into later assertions.
+
+### Validation status
+
+The last confirmed green CI run before this follow-up was run #1869 on commit `c8feb542af14d7b483fe1a5829c1cecf73b3c7f7`. The trigger-scope adjustment, test assertion, and cross-tenant fixture cleanup are newer changes and must be validated together on the latest branch head. Do not treat prior green CI as validation of these newer commits.
+
+### Remaining gaps / release decision
+
+- **Not proven:** every activity/resource-flow writer, import, worker, administrative route and direct database path enforces equivalent scope controls.
+- **Not proven:** canonical nationwide geography-source ingestion, source reconciliation and jurisdiction-by-jurisdiction completeness.
+- **Not proven:** complete versioned applicability of all state/local rules, official government API authorization, measured national scale, disaster recovery, low-bandwidth/mobile accessibility and staffed operational escalation.
+- **Still gated:** live Guardian execution, Hedera consensus and Mirror Node hash verification; official carbon-market submission; independent accredited verification; formal Shakti approval.
+
+**Decision remains HOLD.** The changes strengthen internal boundaries, but neither a passing CI run nor the presence of a nationwide product rule proves operational Pan-India readiness or statutory certification.
