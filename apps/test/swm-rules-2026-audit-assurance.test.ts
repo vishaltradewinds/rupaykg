@@ -19,6 +19,7 @@ const codes = [
 ];
 
 test("SWM audit and assurance requirements preserve rule references and external evidence boundaries", () => {
+  assert.ok(legacySql.includes("SWM-2026-LEGACY-DUMPSITE-QUARTERLY-RETURNS"));
   for (const code of codes) assert.ok(sql.includes(code), `missing ${code}`);
   assert.match(sql, /Rule 39\(5\)-\(6\) of S\.O\. 388\(E\)/);
   assert.match(sql, /Rule 39\(11\)-\(12\) of S\.O\. 388\(E\)/);
