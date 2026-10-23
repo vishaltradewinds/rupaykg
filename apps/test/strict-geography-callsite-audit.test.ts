@@ -14,7 +14,6 @@ const legacyFallbackForbiddenSourceFiles = [
   "epr-return-routes.ts",
   "evidence-vault-routes.ts",
   "evidence-vault-store.ts",
-  "evidence-vault-routes.ts",
   "gov-bridge-routes.ts",
   "government-inbox-operational-alerts.ts",
   "government-inbox-worker-runner.ts",
