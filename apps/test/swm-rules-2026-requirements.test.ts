@@ -25,7 +25,7 @@ test("SWM 2026 operational requirement seed is evidence-first and fail-closed ab
   assert.match(migrationSql, /Rules 8 and 10 of S\.O\. 388\(E\)/);
   assert.match(migrationSql, /Only the local body is mandated to generate EBWGR certificates/i);
   assert.match(migrationSql, /must not mint or assert official certificates without verified external issuance/i);
-  assert.match(migrationSql, /null::text/);
+  assert.match(migrationSql, /https:\/\/www\.swm\.cpcb\.gov\.in\//);
   assert.match(migrationSql, /on conflict \(code\) do update/i);
 });
 
@@ -60,7 +60,7 @@ test("SWM 2026 operational requirements are linked to the authoritative source a
       assert.equal(row.source_title, "Solid Waste Management Rules, 2026");
       assert.equal(row.source_reference, "S.O. 388(E)");
       assert.equal(row.status, "IN_FORCE");
-      assert.equal(row.external_url, null, "do not invent an unverified portal URL");
+      assert.equal(row.external_url, "https://www.swm.cpcb.gov.in/", "use the verified official CPCB portal landing page");
     }
   } finally {
     await pool.end();
