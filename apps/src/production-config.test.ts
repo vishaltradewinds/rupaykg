@@ -59,6 +59,16 @@ describe("production configuration", () => {
     assert.equal(config.databaseCaCert, valid.DATABASE_CA_CERT);
   });
 
+  it("does not classify a Render database URL with sslmode=require as an internal no-TLS connection", () => {
+    const config = readProductionConfig({
+      ...valid,
+      DATABASE_URL: "postgresql://dpg-example123:5432/rupaykg?sslmode=require",
+    });
+    assert.equal(config.databaseUrl, "postgresql://dpg-example123:5432/rupaykg");
+    assert.equal(config.databaseSsl, "require");
+    assert.equal(config.databaseCaCert, valid.DATABASE_CA_CERT);
+  });
+
   it("rejects sslmode=require as a substitute for a trusted CA certificate", () => {
     assert.throws(
       () => readProductionConfig({
