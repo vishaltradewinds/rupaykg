@@ -3,7 +3,22 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
-import { normalizePostgresConnectionString } from "./production-config.js";
+import { normalizePostgresConnectionString, readProductionConfig } from "./production-config.js";
+
+const migrationLockKey = 7301202601;
+
+// Production configuration must be validated before the migration runner can
+// connect to or mutate any database. CI/local migration runs keep their own
+// explicit DATABASE_URL/DATABASE_SSL contract.
+if (process.env.NODE_ENV === "production") {
+  const config = readProductionConfig();
+  process.env.DATABASE_URL = config.databaseUrl;
+  process.env.DATABASE_SSL = config.databaseSsl;
+  process.env.DATABASE_CA_CERT = config.databaseCaCert;
+  process.env.RUPAYKG_ALLOWED_ORIGINS = config.allowedOrigins.join(",");
+  process.env.RUPAYKG_AUTH_MODE = config.authMode;
+  process.env.RUPAYKG_SYNTHETIC_DATA = String(config.syntheticData);
+}
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) throw new Error("DATABASE_URL is required");
@@ -19,8 +34,15 @@ const pool = new Pool({
       },
 });
 
+const client = await pool.connect();
+let lockAcquired = false;
 try {
-  await pool.query(`
+  // A session-level advisory lock serializes startup migrations when more than
+  // one application instance starts at the same time.
+  await client.query("select pg_advisory_lock($1)", [migrationLockKey]);
+  lockAcquired = true;
+
+  await client.query(`
     create table if not exists schema_migrations (
       version text primary key,
       filename text not null,
@@ -35,12 +57,12 @@ try {
   const migrationDir = candidates.find((candidate) => existsSync(candidate));
   if (!migrationDir) throw new Error(`Migration directory not found. Checked: ${candidates.join(", ")}`);
   const files = (await readdir(migrationDir))
-    .filter((name) => /^\d+_.+\.sql$/.test(name))
+    .filter((name) => /^\\d+_.+\\.sql$/.test(name))
     .sort();
 
   for (const filename of files) {
     const version = filename.split("_", 1)[0];
-    const existing = await pool.query<{ version: string; filename: string }>(
+    const existing = await client.query<{ version: string; filename: string }>(
       "select version, filename from schema_migrations where version = $1",
       [version],
     );
@@ -52,7 +74,6 @@ try {
     }
 
     const sql = await readFile(path.join(migrationDir, filename), "utf8");
-    const client = await pool.connect();
     try {
       await client.query("begin");
       await client.query(sql);
@@ -65,12 +86,15 @@ try {
     } catch (error) {
       await client.query("rollback");
       throw new Error(`Migration ${filename} failed`, { cause: error });
-    } finally {
-      client.release();
     }
   }
 
   console.log(`Database migrations are current (${files.length} files).`);
 } finally {
-  await pool.end();
+  try {
+    if (lockAcquired) await client.query("select pg_advisory_unlock($1)", [migrationLockKey]);
+  } finally {
+    client.release();
+    await pool.end();
+  }
 }
