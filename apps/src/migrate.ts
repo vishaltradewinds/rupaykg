@@ -3,14 +3,20 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
+import { normalizePostgresConnectionString } from "./production-config.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) throw new Error("DATABASE_URL is required");
 
 const pool = new Pool({
-  connectionString: databaseUrl,
+  connectionString: normalizePostgresConnectionString(databaseUrl),
   max: 1,
-  ssl: process.env.DATABASE_SSL === "false" ? undefined : { rejectUnauthorized: false },
+  ssl: process.env.DATABASE_SSL === "false"
+    ? undefined
+    : {
+        rejectUnauthorized: true,
+        ...(process.env.DATABASE_CA_CERT?.includes("BEGIN CERTIFICATE") ? { ca: process.env.DATABASE_CA_CERT } : {}),
+      },
 });
 
 try {
