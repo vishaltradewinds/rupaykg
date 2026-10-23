@@ -15,7 +15,10 @@ export function databaseSslConfig(env: NodeJS.ProcessEnv = process.env): PoolCon
     };
   }
 
-  // Development/test compatibility only. The production entrypoint rejects
-  // missing/invalid TLS configuration before database access.
+  if (env.NODE_ENV === "production") {
+    throw new Error("PRODUCTION_CONFIG_INVALID: DATABASE_SSL must be normalized before database access");
+  }
+
+  // Development/test compatibility only.
   return { rejectUnauthorized: false };
 }
