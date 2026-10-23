@@ -18,7 +18,7 @@ test("activity database guard requires geography and explicit verified organizat
   assert.match(migrationSql, /ACTIVITY_GEOGRAPHY_REQUIRED/);
   assert.match(migrationSql, /organization_has_explicit_geography_scope\(new\.organization_id, new\.geography_id\)/);
   assert.match(migrationSql, /ACTIVITY_GEOGRAPHY_FORBIDDEN/);
-  assert.match(migrationSql, /before insert or update on activities/i);
+  assert.match(migrationSql, /before insert or update of organization_id, geography_id on activities/i);
   assert.match(migrationSql, /existing rows are not rewritten/i);
 });
 
