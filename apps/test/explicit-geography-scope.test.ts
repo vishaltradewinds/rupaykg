@@ -52,6 +52,12 @@ test("strict geography helper denies unscoped and out-of-scope organizations in 
     );
     assert.equal(unscoped.rows[0]?.allowed, false, "unscoped tenant must fail closed for strict paths");
 
+    const missingGeography = await pool.query<{ allowed: boolean }>(
+      "select organization_has_explicit_geography_scope($1,null::uuid) as allowed",
+      [organizationId],
+    );
+    assert.equal(missingGeography.rows[0]?.allowed, false, "missing geography must never pass strict authorization");
+
     await pool.query(
       "insert into organization_geography_scopes(organization_id,geography_id,status) values($1,$2,'VERIFIED')",
       [organizationId, inScopeId],
