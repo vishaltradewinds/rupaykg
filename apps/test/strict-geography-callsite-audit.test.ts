@@ -36,6 +36,7 @@ const legacyFallbackForbiddenSourceFiles = [
 ];
 
 const highImpactRouteFiles = [
+  "server.ts",
   "mrv-routes.ts",
   "epr-return-routes.ts",
   "statutory-routes.ts",
