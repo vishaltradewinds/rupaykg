@@ -77,10 +77,11 @@ test("high-impact route call sites use the strict geography helper", () => {
 });
 
 test("database EPR evidence guards require explicit verified geography scope", () => {
-  const migrationPath = fileURLToPath(new URL(
+  const migrationPath = [
     "../../migrations/20261115_strict_epr_evidence_geography.sql",
-    import.meta.url,
-  ));
+    "../../../migrations/20261115_strict_epr_evidence_geography.sql",
+  ].map((path) => fileURLToPath(new URL(path, import.meta.url))).find(existsSync);
+  if (!migrationPath) throw new Error("Strict EPR evidence geography migration not found");
   const migration = readFileSync(migrationPath, "utf8");
   assert.match(migration, /create or replace function enforce_epr_external_registration_evidence\s*\(/i);
   assert.match(migration, /create or replace function enforce_epr_transfer_evidence\s*\(/i);
