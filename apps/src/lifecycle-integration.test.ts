@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { Pool, type PoolClient } from "pg";
+import { canVerifyEvidence } from "./auth.js";
 
 const url = process.env.DATABASE_URL;
 
@@ -21,6 +22,17 @@ test("production lifecycle integration gate", { skip: !url }, async () => {
 
     const activity = (await c.query("insert into activities(organization_id,actor_identity_id,geography_id,activity_type,status) values($1,$2,$3,'COLLECTION','SUBMITTED') returning id", [org, actor, geography])).rows[0].id;
     const evidence = (await c.query("insert into evidence(activity_id,evidence_type,status,captured_at,content_hash) values($1,'FIELD','UNDER_REVIEW',now(),'integration') returning id", [activity])).rows[0].id;
+
+    // Regression: a verifier permission from a different organization must not be
+    // combined with this activity's geography scope and another role's review access.
+    const otherOrg = (await c.query("insert into organizations(name,organization_type) values('integration-other-org','COLLECTOR') returning id")).rows[0].id;
+    await c.query("insert into organization_geography_scopes(organization_id,geography_id,status) values($1,$2,'VERIFIED')", [otherOrg, geography]);
+    const splitPermissionIdentity = (await c.query("insert into identities(external_subject,display_name) values('integration-split-permission','split permission') returning id")).rows[0].id;
+    const reviewOnlyRole = (await c.query("insert into roles(organization_id,name,permissions) values($1,'REVIEW_ONLY','[\\"evidence:review\\"]') returning id", [org])).rows[0].id;
+    const verifyOnlyRole = (await c.query("insert into roles(organization_id,name,permissions) values($1,'VERIFY_ONLY','[\\"VERIFY_EVIDENCE\\"]') returning id", [otherOrg])).rows[0].id;
+    await c.query("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED'),($1,$4,$5,'VERIFIED')", [splitPermissionIdentity, org, reviewOnlyRole, otherOrg, verifyOnlyRole]);
+    assert.equal(await canVerifyEvidence(c, splitPermissionIdentity, evidence), false);
+
     await reject(c, () => c.query("insert into verifications(evidence_id,activity_id,verifier_identity_id,decision,scope) values($1,$2,$3,'APPROVED','integration')", [evidence, activity, actor]), /self-approve/);
     const verification = (await c.query("insert into verifications(evidence_id,activity_id,verifier_identity_id,decision,scope) values($1,$2,$3,'APPROVED','integration') returning id", [evidence, activity, verifier])).rows[0].id;
     await c.query("update evidence set status='VERIFIED' where id=$1", [evidence]);
