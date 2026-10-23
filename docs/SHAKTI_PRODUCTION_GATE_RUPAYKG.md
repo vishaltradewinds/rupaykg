@@ -23,7 +23,7 @@ This document is the production-control record for RupayKg under SHAKTI — Stan
 - The public health endpoint and homepage could not be independently verified during the current audit. Render log retrieval returned HTTP 503. Therefore live readiness is **unverified**, not passed.
 - The historical CI run on commit `0ddcf6087620880e21ea60f954c9f05d6b759469` passed on 2026-10-19. This is historical evidence, not current-day production acceptance.
 - This file previously listed a different deployed commit (`5c1c215c777b0e7f15a4b74168db5c0f9307fbd5`) and a different deployment ID. That record conflicts with the latest observed Render control-plane metadata and must not be treated as the current deployment source of truth.
-- Production startup/TLS hardening is being developed in draft PR #43. GitHub Actions CI run #1921 (`39928536739`) completed successfully on head `03e43f7de1ae33831aace2a450bfb89400d584bf` on 2026-10-23. The configured job passed dependency audit, migration validation, migration against disposable PostgreSQL, typecheck, build, browser smoke test, tests including disposable PostgreSQL acceptance, and production container build. This validates that exact branch commit against configured checks only; it does not prove live database recovery, production health, external integrations, regulatory approval, or Pan-India readiness.
+- Production startup/TLS hardening is being developed in draft PR #43. GitHub Actions CI run #1921 (`39928536739`) passed on earlier head `03e43f7de1ae33831aace2a450bfb89400d584bf`, covering dependency audit, migration validation, disposable-PostgreSQL migration, typecheck, build, browser smoke test, acceptance tests, and production container build. Later changes add an IPv6-loopback rejection and regression test; the pass on the earlier SHA does not validate later changes. Before merge, verify a green CI result for the exact current PR head. CI does not prove live database recovery, production health, external integrations, regulatory approval, or Pan-India readiness.
 - PR #43 is not merged or deployed. No production database mutation or deployment was performed as part of this hardening work.
 
 ## SHAKTI gate status
@@ -43,7 +43,7 @@ This document is the production-control record for RupayKg under SHAKTI — Stan
 | S11 Decision | BLOCKED | No production-readiness or SHAKTI certification claim. |
 | S12 Design | ONGOING | Architecture exists; security and workflow gaps are being audited and hardened. |
 | S13 Engineering | ONGOING | Draft PR #43 addresses startup ordering and shared PostgreSQL TLS policy. |
-| S14 Verification | PARTIAL | Latest PR-head CI passed configured checks; broader acceptance, recovery, multi-tenant, field/offline, and resilience tests remain. |
+| S14 Verification | PARTIAL | CI passed on an earlier PR head; current-head CI must be verified before merge. Broader recovery, multi-tenant, field/offline, and resilience tests remain. |
 | S15 Compliance & approvals | OPEN | Applicable legal/methodology requirements and required independent approvals must be mapped and evidenced. |
 | S16 SHAKTI certification | BLOCKED | Material gates remain open. |
 | S17 Deployment / live release | DEFERRED | Deployment is deliberately postponed until platform functionality and readiness are proven. |
@@ -76,7 +76,7 @@ This document is the production-control record for RupayKg under SHAKTI — Stan
 
 ## Work and release rules
 
-- PR #43's latest observed CI is green on head `03e43f7de1ae33831aace2a450bfb89400d584bf`; keep it draft and unmerged until focused code review confirms production startup/TLS behavior and all remaining release gates are handled.
+- Keep PR #43 draft and unmerged until CI is green for its exact current head, focused code review confirms production startup/TLS behavior, and all remaining release gates are handled.
 - Do not use production database access for exploratory tests or run destructive migrations to diagnose the billing suspension.
 - Do not change providers or migrate data until recovery options, data ownership, cost, security, compatibility, and rollback are assessed.
 - Do not claim official environmental credits, government integration, external consensus, certification, or compliance without authoritative evidence.
