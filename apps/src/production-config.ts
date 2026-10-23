@@ -62,6 +62,7 @@ function origins(value: string): string[] {
 export function readProductionConfig(env: NodeJS.ProcessEnv = process.env): ProductionConfig {
   if (env.NODE_ENV !== PRODUCTION_ENV) throw new Error("PRODUCTION_CONFIG_NOT_ACTIVE: NODE_ENV must be production");
   if (env.RUPAYKG_SYNTHETIC_DATA?.toLowerCase() === "true") throw new Error("PRODUCTION_CONFIG_INVALID: synthetic data is forbidden in production");
+  if (env.RUPAYKG_ACCEPTANCE_SEED_ON_START?.toLowerCase() === "true") throw new Error("PRODUCTION_CONFIG_INVALID: acceptance seed is forbidden in production");
   if (env.RUPAYKG_AUTH_MODE !== "real") throw new Error("PRODUCTION_CONFIG_INVALID: RUPAYKG_AUTH_MODE must be real");
   if (env.VITE_RUPAYKG_SESSION_TOKEN?.trim()) throw new Error("PRODUCTION_CONFIG_INVALID: VITE_RUPAYKG_SESSION_TOKEN must not be provided in production");
   const { url: databaseUrl, renderInternalDatabase } = productionDatabaseUrl(required(env, "DATABASE_URL"));
