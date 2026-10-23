@@ -17,7 +17,7 @@ test("SWM portal verification records the official landing page but fails closed
   assert.match(migrationSql, /six-month establishment window/i);
   assert.match(migrationSql, /deadline 1 October 2026/i);
   assert.match(migrationSql, /official_production_portal_URL/);
-  assert.match(migrationSql, /'https:\/\/www\.swm\.cpcb\.gov\.in\/'/i);
+  assert.ok(migrationSql.includes("https://swmp.cpcb.gov.in/en/"));
   assert.match(migrationSql, /authorized integration\/API access have not been independently verified/i);
   assert.match(migrationSql, /on conflict \(code\) do update/i);
 });
