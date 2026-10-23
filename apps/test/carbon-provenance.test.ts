@@ -16,6 +16,7 @@ test("carbon provenance is immutable in PostgreSQL", async (t) => {
   const activityId = randomUUID();
   const methodologyId = randomUUID();
   const calculationId = randomUUID();
+  const geographyId = randomUUID();
   const datasetHash = "a".repeat(64);
   const formulaHash = "b".repeat(64);
   const calculationHash = "c".repeat(64);
@@ -23,7 +24,6 @@ test("carbon provenance is immutable in PostgreSQL", async (t) => {
   try {
     await pool.query("begin");
     await pool.query("insert into organizations (id,name,organization_type) values ($1,$2,$3)", [organizationId, "Carbon Provenance Test Org", "TEST"]);
-    const geographyId = randomUUID();
     await pool.query("insert into geography(id,kind,code,name,source,source_version) values($1,'CLUSTER',$2,$3,'synthetic-test-fixture','v1')", [geographyId, "CARBON-" + organizationId, "Carbon provenance test geography"]);
     await pool.query("insert into organization_geography_scopes(organization_id,geography_id,status) values($1,$2,'VERIFIED')", [organizationId, geographyId]);
     await pool.query("insert into activities (id,organization_id,geography_id,activity_type) values ($1,$2,$3,$4)", [activityId, organizationId, geographyId, "CARBON_TEST"]);
@@ -56,7 +56,9 @@ test("carbon provenance is immutable in PostgreSQL", async (t) => {
     await pool.query("delete from carbon_calculations where id=$1", [calculationId]);
     await pool.query("delete from methodology_versions where id=$1", [methodologyId]);
     await pool.query("delete from activities where id=$1", [activityId]);
+    await pool.query("delete from organization_geography_scopes where organization_id=$1", [organizationId]);
     await pool.query("delete from organizations where id=$1", [organizationId]);
+    await pool.query("delete from geography where id=$1", [geographyId]);
     await pool.end();
   }
 });
