@@ -20,7 +20,7 @@ Latest branch evidence (2026-10-23): PR #41 branch `intelligence/ai-evidence-int
 | Authoritative database | GREEN | PostgreSQL is the business-state source of truth; clean CI migration and DB-backed tests pass. |
 | Lifecycle state model | GREEN | Current target defines authoritative lifecycle and value gates; lifecycle integration tests execute in CI. |
 | Organization authorization | GREEN | Verified membership required for protected organization operations; authorization tests pass. |
-| Geography authorization | AMBER | Explicit geography-scope helper and DB/API controls are tested; CPCB workspace list/update isolation was tightened and source-regression-tested on PR #41. Universal coverage across all legacy readers/writers/workers/import paths and national geography-source completeness are not yet proven. |
+| Geography authorization | AMBER | Explicit geography-scope helper and DB/API controls are tested; CPCB workspace list/update isolation was tightened and source- plus disposable-PostgreSQL runtime-regression-tested on PR #41. Universal coverage across all legacy readers/writers/workers/import paths and national geography-source completeness are not yet proven. |
 | Field-device enrollment | GREEN | Device must be verified and bound to authorized identity/org; pending-device runtime acceptance passes. |
 | Offline synchronization | GREEN | Envelopes carry identity, sequence/timestamp/idempotency data and are replay-aware; runtime replay and cross-identity rejection pass. |
 | MRV measurements | GREEN | Measurement writes require authorized activity geography; lifecycle runtime acceptance passes. |
