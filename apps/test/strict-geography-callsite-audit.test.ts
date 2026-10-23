@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { Pool } from "pg";
 
 const legacyFallbackForbiddenSourceFiles = [
   "async-mirror-routes.ts",
@@ -95,4 +96,60 @@ test("database EPR evidence guards require explicit verified geography scope", (
     /\borganization_has_geography_scope\s*\(/,
     "strict EPR evidence guards must not use the permissive legacy geography helper",
   );
+});
+
+test("EPR geography guards are attached to the live PostgreSQL tables after migrations", {
+  skip: !(process.env.RUPAYKG_RUN_DB_INTEGRATION_TESTS === "1" && process.env.DATABASE_URL)
+    ? "requires CI disposable PostgreSQL and applied migrations"
+    : false,
+}, async () => {
+  const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: process.env.DATABASE_SSL === "true" ? { rejectUnauthorized: false } : undefined,
+    max: 1,
+  });
+  try {
+    const result = await pool.query<{
+      table_name: string;
+      trigger_name: string;
+      function_name: string;
+      trigger_enabled: string;
+      trigger_definition: string;
+      function_definition: string;
+    }>(`
+      select c.relname as table_name,
+             t.tgname as trigger_name,
+             p.proname as function_name,
+             t.tgenabled as trigger_enabled,
+             pg_get_triggerdef(t.oid) as trigger_definition,
+             pg_get_functiondef(p.oid) as function_definition
+      from pg_trigger t
+      join pg_class c on c.oid = t.tgrelid
+      join pg_namespace n on n.oid = c.relnamespace
+      join pg_proc p on p.oid = t.tgfoid
+      where not t.tgisinternal
+        and n.nspname = 'public'
+        and ( (c.relname = 'organization_epr_applicability'
+               and t.tgname = 'epr_external_registration_evidence_guard')
+           or (c.relname = 'epr_credit_transfers'
+               and t.tgname = 'epr_transfer_evidence_guard') )
+      order by c.relname
+    `);
+    assert.equal(result.rows.length, 2, "both EPR evidence guards must be attached to their live tables");
+    for (const row of result.rows) {
+      assert.equal(row.trigger_enabled, "O", `${row.trigger_name} must be enabled`);
+      assert.match(row.trigger_definition, /before insert or update/i);
+      assert.match(row.function_definition, /organization_has_explicit_geography_scope/i);
+      assert.doesNotMatch(row.function_definition, /\borganization_has_geography_scope\s*\(/);
+    }
+    assert.deepEqual(
+      result.rows.map((row) => [row.table_name, row.function_name]),
+      [
+        ["epr_credit_transfers", "enforce_epr_transfer_evidence"],
+        ["organization_epr_applicability", "enforce_epr_external_registration_evidence"],
+      ],
+    );
+  } finally {
+    await pool.end();
+  }
 });
