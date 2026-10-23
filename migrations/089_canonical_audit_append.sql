@@ -55,7 +55,7 @@ begin
     'requestId', p_request_id,
     'payload', coalesce(p_payload, '{}'::jsonb),
     'previousHash', v_previous_hash,
-    'createdAt', v_created_at
+    'createdAt', to_char(v_created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')
   );
   v_event_hash := encode(digest(convert_to(v_event::text, 'UTF8'), 'sha256'), 'hex');
 
