@@ -30,9 +30,20 @@ test("evidence vault enforces tenant scope, versioned storage, integrity and ind
       "insert into geography(kind,name,source,source_version) values('STATE_UT',$1,'integration-test','fixture-v1') returning id",
       ["TEST-EVIDENCE-GEO-" + suffix],
     );
+    // High-impact evidence paths require an explicit verified geography root.
+    await pool.query(
+      "insert into organization_geography_scopes(organization_id,geography_id,status) values($1,$2,'VERIFIED')",
+      [organizationId, geography.rows[0]!.id],
+    );
     const activity = await pool.query<{ id: string }>(
       "insert into activities(organization_id,geography_id,activity_type,status) values($1,$2,'WASTE_WEIGHT_MEASUREMENT','COMPLETED') returning id",
       [organizationId, geography.rows[0]!.id],
+    );
+    // The strict activity database guard rejects creation without an explicit verified geography root.
+    await assert.rejects(
+      pool.query("insert into activities(organization_id,geography_id,activity_type,status) values($1,$2,'WASTE_WEIGHT_MEASUREMENT','COMPLETED') returning id",
+        [otherOrg.rows[0]!.id, geography.rows[0]!.id]),
+      /ACTIVITY_GEOGRAPHY_FORBIDDEN/,
     );
     const identities = await Promise.all([
       pool.query<{ id: string }>("insert into identities(external_subject,display_name,email,status) values($1,$2,$3,'VERIFIED') returning id", ["test-evidence-uploader:"+suffix,"Evidence Uploader","uploader-"+suffix+"@example.invalid"]),
@@ -62,6 +73,7 @@ test("evidence vault enforces tenant scope, versioned storage, integrity and ind
     );
     const headers = (token: string, orgId = organizationId) => ({ authorization: "Bearer " + token, "x-rupaykg-organization-id": orgId });
     const bytes = Buffer.from("%PDF-1.7\nMRV evidence fixture\n");
+    // The database guard now rejects unscoped activity creation before the evidence API can receive it.
     const upload = await app.inject({
       method: "POST", url: "/api/v1/evidence-vault/upload", headers: headers(uploaderToken),
       payload: { activityId: activity.rows[0]!.id, evidenceType: "WASTE_WEIGHT_TICKET", fileName: "weight-ticket.pdf", mediaType: "application/pdf", contentBase64: bytes.toString("base64"), sourceReference: "TEST-SLIP-"+suffix, measurementPeriodStart: "2026-10-01", measurementPeriodEnd: "2026-10-31" },

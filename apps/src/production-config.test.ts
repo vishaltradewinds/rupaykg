@@ -41,6 +41,13 @@ describe("production configuration", () => {
     assert.throws(() => readProductionConfig({ ...valid, DATABASE_URL: "postgresql://localhost:5432/rupaykg" }), /must not target localhost/);
   });
 
+  it("removes connection-string SSL options so the explicit TLS policy cannot be overridden", () => {
+    const config = readProductionConfig({ ...valid, DATABASE_URL: "postgresql://prod.example.invalid:5432/rupaykg?sslmode=require&sslrootcert=ignored" });
+    assert.equal(new URL(config.databaseUrl).searchParams.has("sslmode"), false);
+    assert.equal(new URL(config.databaseUrl).searchParams.has("sslrootcert"), false);
+    assert.equal(config.databaseSsl, "require");
+  });
+
   it("requires TLS database configuration", () => {
     assert.throws(() => readProductionConfig({ ...valid, DATABASE_SSL: "false" }), /DATABASE_SSL must be require/);
   });

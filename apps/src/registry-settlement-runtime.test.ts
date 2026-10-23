@@ -172,23 +172,31 @@ describe("registry and settlement runtime acceptance", () => {
     const settled = await request(`/api/v1/settlements/${settlementId}/settle`, { method: "POST", body: JSON.stringify({ externalReference: `payment-${suffix}` }) }, actorToken, ownerOrgId);
     assert.equal(settled.status, 200); assert.equal((await body(settled)).settlement.status, "RECONCILING");
     const premature = await pool.query("update settlements set status='SETTLED' where id=$1", [settlementId]).then(() => null).catch(error => error); assert.ok(premature instanceof Error);
-    const confirmed = await request(`/api/v1/settlements/${settlementId}/confirm`, { method: "POST", body: JSON.stringify({ confirmationReference: `bank-confirm-${suffix}`, reconciliationReference: `recon-${suffix}` }) }, actorToken, ownerOrgId); assert.equal(confirmed.status, 200); const confirmedBody = await body(confirmed); assert.equal(confirmedBody.settlement.status, "SETTLED"); assert.equal(confirmedBody.settlement.external_confirmed_at !== null, true); assert.equal(confirmedBody.settlement.reconciliation_reference, `recon-${suffix}`);
-    const immutable = await pool.query("update settlements set external_confirmed_at=null where id=$1", [settlementId]).then(() => null).catch(error => error); assert.ok(immutable instanceof Error);
+    const confirmed = await request(`/api/v1/settlements/${settlementId}/confirm`, { method: "POST", body: JSON.stringify({ confirmationReference: `caller-claim-${suffix}`, reconciliationReference: `caller-recon-${suffix}` }) }, actorToken, ownerOrgId);
+    assert.equal(confirmed.status, 503);
+    assert.equal((await body(confirmed)).code, "EXTERNAL_CONFIRMATION_ADAPTER_UNAVAILABLE");
+    const notSettled = await pool.query<{status:string;external_confirmed_at:Date|null;reconciliation_reference:string|null}>("select status,external_confirmed_at,reconciliation_reference from settlements where id=$1",[settlementId]);
+    assert.equal(notSettled.rows[0]?.status, "RECONCILING");
+    assert.equal(notSettled.rows[0]?.external_confirmed_at, null);
+    assert.equal(notSettled.rows[0]?.reconciliation_reference, null);
+    const reconfirm = await request(`/api/v1/settlements/${settlementId}/confirm`, { method: "POST", body: JSON.stringify({ confirmationReference: `caller-claim-repeat-${suffix}`, reconciliationReference: `caller-recon-repeat-${suffix}` }) }, actorToken, ownerOrgId);
+    assert.equal(reconfirm.status, 503);
+    assert.equal((await body(reconfirm)).code, "EXTERNAL_CONFIRMATION_ADAPTER_UNAVAILABLE");
+    // No confirmation was recorded; the database must leave confirmation fields unset.
     const reauthorize = await request(`/api/v1/settlements/${settlementId}/authorize`, { method: "POST", body: JSON.stringify({ authorizationReference: `auth-repeat-${suffix}` }) }, actorToken, ownerOrgId); assert.equal(reauthorize.status, 409);
     const resettle = await request(`/api/v1/settlements/${settlementId}/settle`, { method: "POST", body: JSON.stringify({ externalReference: `payment-repeat-${suffix}` }) }, actorToken, ownerOrgId); assert.equal(resettle.status, 409);
-    const reconfirm = await request(`/api/v1/settlements/${settlementId}/confirm`, { method: "POST", body: JSON.stringify({ confirmationReference: `bank-confirm-repeat-${suffix}`, reconciliationReference: `recon-repeat-${suffix}` }) }, actorToken, ownerOrgId); assert.equal(reconfirm.status, 409);
+    const reconfirmAfterUnverifiedClaim = await request(`/api/v1/settlements/${settlementId}/confirm`, { method: "POST", body: JSON.stringify({ confirmationReference: `caller-claim-again-${suffix}`, reconciliationReference: `caller-recon-again-${suffix}` }) }, actorToken, ownerOrgId); assert.equal(reconfirmAfterUnverifiedClaim.status, 503); assert.equal((await body(reconfirmAfterUnverifiedClaim)).code, "EXTERNAL_CONFIRMATION_ADAPTER_UNAVAILABLE");
 
-    const secondCreated = await request("/api/v1/settlements", { method: "POST", body: JSON.stringify({ credentialId, payerId: ownerOrgId, payeeId: destinationOrgId, amount: 500, currency: "INR", externalReference: `payment-second-${suffix}` }) }, actorToken, ownerOrgId);
-    assert.equal(secondCreated.status, 201); const secondSettlementId = (await body(secondCreated)).settlement.id;
-    const secondAuthorized = await request(`/api/v1/settlements/${secondSettlementId}/authorize`, { method: "POST", body: JSON.stringify({ authorizationReference: `auth-second-${suffix}` }) }, actorToken, ownerOrgId); assert.equal(secondAuthorized.status, 200);
-    const secondSettled = await request(`/api/v1/settlements/${secondSettlementId}/settle`, { method: "POST", body: JSON.stringify({ externalReference: `payment-second-${suffix}` }) }, actorToken, ownerOrgId); assert.equal(secondSettled.status, 200);
-    const duplicateConfirmation = await request(`/api/v1/settlements/${secondSettlementId}/confirm`, { method: "POST", body: JSON.stringify({ confirmationReference: `bank-confirm-${suffix}`, reconciliationReference: `recon-second-${suffix}` }) }, actorToken, ownerOrgId); assert.equal(duplicateConfirmation.status, 409); assert.equal((await body(duplicateConfirmation)).code, "CONFIRMATION_REFERENCE_EXISTS");
-    const duplicateReconciliation = await request(`/api/v1/settlements/${secondSettlementId}/confirm`, { method: "POST", body: JSON.stringify({ confirmationReference: `bank-confirm-second-${suffix}`, reconciliationReference: `recon-${suffix}` }) }, actorToken, ownerOrgId); assert.equal(duplicateReconciliation.status, 409); assert.equal((await body(duplicateReconciliation)).code, "RECONCILIATION_REFERENCE_EXISTS");
-    const secondConfirmed = await request(`/api/v1/settlements/${secondSettlementId}/confirm`, { method: "POST", body: JSON.stringify({ confirmationReference: `bank-confirm-second-${suffix}`, reconciliationReference: `recon-second-${suffix}` }) }, actorToken, ownerOrgId); assert.equal(secondConfirmed.status, 200); assert.equal((await body(secondConfirmed)).settlement.status, "SETTLED");
+
   });
 
   it("requires current-owner transfer permission and permits governed retirement", async () => {
     if (!pool) return;
+    if (settlementId) await pool.query("update settlements set status='FAILED' where id=$1", [settlementId]);
+    const retryAfterFailure = await request("/api/v1/settlements", { method: "POST", body: JSON.stringify({ credentialId, payerId: ownerOrgId, payeeId: destinationOrgId, amount: 75, currency: "INR", externalReference: `payment-retry-after-failure-${suffix}` }) }, actorToken, ownerOrgId);
+    assert.equal(retryAfterFailure.status, 201, "a terminal FAILED settlement must not reserve the credential/party tuple");
+    const failedRetryId = (await body(retryAfterFailure)).settlement.id;
+    await pool.query("update settlements set status='FAILED' where id=$1", [failedRetryId]);
     const denied = await request(`/api/v1/credentials/${credentialId}/transfer`, { method: "POST", body: JSON.stringify({ toOwnerId: destinationOrgId }) }, verifierToken, ownerOrgId); assert.equal(denied.status, 403); assert.equal((await body(denied)).code, "HIGH_RISK_PERMISSION_REQUIRED");
     const transferred = await request(`/api/v1/credentials/${credentialId}/transfer`, { method: "POST", body: JSON.stringify({ toOwnerId: destinationOrgId }) }, actorToken, ownerOrgId); assert.equal(transferred.status, 200); assert.equal((await body(transferred)).registryEvent.event_type, "TRANSFERRED");
     const staleOwnerTransfer = await request(`/api/v1/credentials/${credentialId}/transfer`, { method: "POST", body: JSON.stringify({ toOwnerId: ownerOrgId }) }, actorToken, ownerOrgId); assert.equal(staleOwnerTransfer.status, 403); assert.equal((await body(staleOwnerTransfer)).code, "ORG_FORBIDDEN");

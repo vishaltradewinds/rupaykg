@@ -5,7 +5,8 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { Pool } from "pg";
 
 const databaseUrl = process.env.DATABASE_URL;
-const port = Number(process.env.RUNTIME_ACCEPTANCE_PORT ?? 43127);
+// Isolate concurrent Node test workers: the fixed default collided with other runtime acceptance servers in CI.
+const port = Number(process.env.RUNTIME_ACCEPTANCE_PORT ?? (40000 + (process.pid % 15000)));
 const baseUrl = `http://127.0.0.1:${port}`;
 const pool = databaseUrl ? new Pool({ connectionString: databaseUrl, max: 4 }) : null;
 const suffix = randomUUID();
@@ -82,11 +83,33 @@ before(async () => {
   server = spawn(process.execPath, ["dist/src/server.js"], { cwd: process.cwd(), env: { ...process.env, PORT: String(port), HOST: "127.0.0.1", DATABASE_URL: databaseUrl, DATABASE_SSL: "false" }, stdio: ["ignore", "ignore", "pipe"] });
   capture(server, "server");
   await waitFor(`${baseUrl}/health`, 200, server);
+  const readinessResponse = await request("/health/ready");
+  assert.equal(readinessResponse.status, 200);
+  const readinessBody = await body(readinessResponse);
+  assert.equal(readinessBody.status, "READY");
+  assert.equal(readinessBody.schema, "READY");
+  assert.equal(readinessBody.auditChain, "SEEDED");
 
-  const noDbPort = String(port + 1);
+  const invalidSequence = await request("/api/v1/operations/sync", {
+    method: "POST",
+    body: JSON.stringify({
+      idempotencyKey: `invalid-sequence-${suffix}`,
+      deviceId: verifiedDeviceId,
+      capturedAt: new Date().toISOString(),
+      payload: { operationType: "RECORD_WASTE" },
+      clientSequence: "not-a-sequence",
+    }),
+  }, actorToken);
+  assert.equal(invalidSequence.status, 400);
+  assert.equal((await body(invalidSequence)).code, "INVALID_CLIENT_SEQUENCE");
+
+  const noDbPort = String(port + 10);
   noDbServer = spawn(process.execPath, ["dist/src/server.js"], { cwd: process.cwd(), env: { ...process.env, PORT: noDbPort, HOST: "127.0.0.1", DATABASE_URL: "", DATABASE_SSL: "false" }, stdio: ["ignore", "ignore", "pipe"] });
   capture(noDbServer, "noDb");
   await waitFor(`http://127.0.0.1:${noDbPort}/health`, 503, noDbServer);
+  const noDbReadiness = await fetch(`http://127.0.0.1:${noDbPort}/health/ready`);
+  assert.equal(noDbReadiness.status, 503);
+  assert.equal((await body(noDbReadiness)).status, "NOT_READY");
 });
 
 after(async () => {
@@ -118,7 +141,7 @@ after(async () => {
 describe("runtime acceptance", () => {
   it("fails readiness without authoritative PostgreSQL", async () => {
     if (!pool) return;
-    const response = await fetch(`http://127.0.0.1:${port + 1}/health`);
+    const response = await fetch(`http://127.0.0.1:${port + 10}/health`);
     const result = await body(response);
     assert.equal(response.status, 503); assert.equal(result.status, "DEGRADED"); assert.equal(result.database, "UNAVAILABLE"); assert.equal(result.syntheticData, false);
   });

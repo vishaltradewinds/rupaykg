@@ -10,12 +10,13 @@ type Reply = { code: (status: number) => { send: (body: unknown) => unknown } };
 type Request = { body: unknown; params: Record<string, string>; log: { error: (error: unknown) => void }; headers: Record<string, string | undefined> };
 function bodyOf(request: Request): Record<string, unknown> { return request.body && typeof request.body === "object" ? request.body as Record<string, unknown> : {}; }
 function str(body: Record<string, unknown>, key: string): string | null { return typeof body[key] === "string" && body[key].trim() ? body[key].trim() : null; }
-function nonNegative(body: Record<string, unknown>, key: string): number | null { const n = Number(body[key]); return Number.isFinite(n) && n >= 0 ? n : null; }
+export function nonNegativeValueInput(body: Record<string, unknown>, key: string): number | null { const n = body[key]; return typeof n === "number" && Number.isFinite(n) && n >= 0 ? n : null; }
+export function isValidIsoReportingDate(value: string): boolean { return /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value; }
 async function authFor(request: Request, reply: Reply, pool: Pool | null): Promise<AuthContext | null> { try { const auth = await authenticate(request as never, pool); if (!auth) { reply.code(401).send({ error: "Authenticated session required", code: "AUTH_REQUIRED" }); return null; } return auth; } catch (error) { request.log.error(error); reply.code(503).send({ error: "Authentication service unavailable", code: "AUTH_UNAVAILABLE" }); return null; } }
 async function activityAccess(client: Pool | PoolClient, activityId: string, identityId: string): Promise<{ organization_id: string; geography_id: string | null } | null> { const result = await client.query<{ organization_id: string; geography_id: string | null }>(`select a.organization_id, a.geography_id from activities a join organization_memberships om on om.organization_id = a.organization_id where a.id = $1 and om.identity_id = $2 and om.status = 'VERIFIED'`, [activityId, identityId]); return result.rows[0] ?? null; }
-async function assertActivityGeographyScope(client: Pool | PoolClient, geographyId: string | null, identityId: string): Promise<{ ok: boolean; code?: string }> { if (!geographyId) return { ok: false, code: "ACTIVITY_GEOGRAPHY_REQUIRED" }; const result = await client.query<{ ok: boolean }>(`select exists(select 1 from organization_memberships om where om.identity_id = $1 and om.status = 'VERIFIED' and organization_has_geography_scope(om.organization_id, $2)) as ok`, [identityId, geographyId]); return result.rows[0]?.ok === true ? { ok: true } : { ok: false, code: "GEOGRAPHY_FORBIDDEN" }; }
+async function assertActivityGeographyScope(client: Pool | PoolClient, geographyId: string | null, identityId: string): Promise<{ ok: boolean; code?: string }> { if (!geographyId) return { ok: false, code: "ACTIVITY_GEOGRAPHY_REQUIRED" }; const result = await client.query<{ ok: boolean }>(`select exists(select 1 from organization_memberships om where om.identity_id = $1 and om.status = 'VERIFIED' and organization_has_explicit_geography_scope(om.organization_id, $2)) as ok`, [identityId, geographyId]); return result.rows[0]?.ok === true ? { ok: true } : { ok: false, code: "GEOGRAPHY_FORBIDDEN" }; }
 async function hasValuePermission(pool: Pool, functionName: "can_assess_epr" | "can_write_esg", identityId: string, organizationId: string): Promise<boolean> { const result = await pool.query<{ ok: boolean }>(`select ${functionName}($1,$2) as ok`, [identityId, organizationId]); return result.rows[0]?.ok === true; }
-async function evidenceIsVerified(pool: Pool, evidenceId: string, organizationId: string): Promise<boolean> { const result = await pool.query<{ ok: boolean }>(`select exists(select 1 from evidence e join activities a on a.id=e.activity_id where e.id=$1 and a.organization_id=$2 and e.status='VERIFIED' and (e.content_hash is not null or e.content_uri is not null) and a.geography_id is not null and organization_has_geography_scope($2,a.geography_id)) as ok`, [evidenceId, organizationId]); return result.rows[0]?.ok === true; }
+async function evidenceIsVerified(pool: Pool, evidenceId: string, organizationId: string): Promise<boolean> { const result = await pool.query<{ ok: boolean }>(`select exists(select 1 from evidence e join activities a on a.id=e.activity_id where e.id=$1 and a.organization_id=$2 and e.status='VERIFIED' and (e.content_hash is not null or e.content_uri is not null) and a.geography_id is not null and organization_has_explicit_geography_scope($2,a.geography_id)) as ok`, [evidenceId, organizationId]); return result.rows[0]?.ok === true; }
 
 export async function registerValueRoutes(app: FastifyInstance, pool: Pool | null): Promise<void> {
   await registerAuthRoutes(app, pool);
@@ -23,8 +24,8 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
     const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
     const body = bodyOf(request as never);
     const activityId = str(body, "activityId"); const methodologyCode = str(body, "methodologyCode"); const methodologyVersion = str(body, "methodologyVersion"); const evidenceId = str(body, "evidenceId");
-    const baselineTco2e = nonNegative(body, "baselineTco2e"); const projectTco2e = nonNegative(body, "projectTco2e");
-    const leakageTco2e = nonNegative(body, "leakageTco2e"); const uncertaintyTco2e = nonNegative(body, "uncertaintyTco2e");
+    const baselineTco2e = nonNegativeValueInput(body, "baselineTco2e"); const projectTco2e = nonNegativeValueInput(body, "projectTco2e");
+    const leakageTco2e = nonNegativeValueInput(body, "leakageTco2e"); const uncertaintyTco2e = nonNegativeValueInput(body, "uncertaintyTco2e");
     if (!activityId || !methodologyCode || !methodologyVersion || !evidenceId || baselineTco2e === null || projectTco2e === null || leakageTco2e === null || uncertaintyTco2e === null) return reply.code(400).send({ error: "activityId, methodologyCode, methodologyVersion, evidenceId, baselineTco2e, projectTco2e, leakageTco2e and uncertaintyTco2e are required", code: "CARBON_INPUTS_REQUIRED" });
     try {
       const access = await activityAccess(pool, activityId, auth.identityId); if (!access) return reply.code(403).send({ error: "Activity access denied", code: "ACTIVITY_FORBIDDEN" });
@@ -64,9 +65,9 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
       if (!await hasValuePermission(pool, "can_assess_epr", auth.identityId, organizationId)) return reply.code(403).send({ error: "EPR assessment permission required", code: "EPR_ASSESS_FORBIDDEN" });
       const jurisdictionId = obligation.rows[0].jurisdiction_id;
       if (!jurisdictionId) return reply.code(409).send({ error: "EPR obligation must have an authorized jurisdiction before assessment", code: "OBLIGATION_JURISDICTION_REQUIRED" });
-      const jurisdiction = await pool.query<{ ok: boolean }>("select exists(select 1 from organization_memberships om where om.identity_id=$1 and om.organization_id=$2 and om.status='VERIFIED' and organization_has_geography_scope(om.organization_id,$3)) as ok", [auth.identityId, organizationId, jurisdictionId]);
+      const jurisdiction = await pool.query<{ ok: boolean }>("select exists(select 1 from organization_memberships om where om.identity_id=$1 and om.organization_id=$2 and om.status='VERIFIED' and organization_has_explicit_geography_scope(om.organization_id,$3)) as ok", [auth.identityId, organizationId, jurisdictionId]);
       if (jurisdiction.rows[0]?.ok !== true) return reply.code(403).send({ error: "Obligation jurisdiction is outside organization authorization scope", code: "GEOGRAPHY_FORBIDDEN" });
-      const evidence = await pool.query<{ evidence_id: string; verification_id: string; quantity: string }>(`select c.evidence_id, c.verification_id, c.quantity::text from epr_credits c join epr_obligations eo on eo.scheme_id = c.scheme_id and eo.obligated_organization_id = $1 join evidence e on e.id = c.evidence_id join verifications v on v.id = c.verification_id join activities a on a.id = e.activity_id where eo.obligation_id = $2 and c.status in ('ELIGIBLE','ISSUED','ACTIVE') and e.status = 'VERIFIED' and (e.content_hash is not null or e.content_uri is not null) and v.decision = 'APPROVED' and a.geography_id is not null and organization_has_geography_scope($1,a.geography_id) and (c.issuer_organization_id = $1 or c.recycler_organization_id = $1)`, [organizationId, obligationId]);
+      const evidence = await pool.query<{ evidence_id: string; verification_id: string; quantity: string }>(`select c.evidence_id, c.verification_id, c.quantity::text from epr_credits c join epr_obligations eo on eo.scheme_id = c.scheme_id and eo.obligated_organization_id = $1 join evidence e on e.id = c.evidence_id join verifications v on v.id = c.verification_id join activities a on a.id = e.activity_id where eo.obligation_id = $2 and c.status in ('ELIGIBLE','ISSUED','ACTIVE') and e.status = 'VERIFIED' and (e.content_hash is not null or e.content_uri is not null) and v.decision = 'APPROVED' and a.geography_id is not null and organization_has_explicit_geography_scope($1,a.geography_id) and (c.issuer_organization_id = $1 or c.recycler_organization_id = $1)`, [organizationId, obligationId]);
       const assessment = assessEprObligation(Number(obligation.rows[0].required_quantity ?? 0), evidence.rows.map(row => ({ evidenceId: row.evidence_id, verificationId: row.verification_id, approved: true, quantity: Number(row.quantity) })));
       await pool.query("update obligations set status = $2, required_quantity = $3 where id = $1", [obligationId, assessment.status, assessment.requiredQuantity]);
       return { source: "postgresql", syntheticData: false, assessment };
@@ -75,7 +76,7 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
 
   app.post("/api/v1/esg/reporting-periods/:periodId/metrics", async (request, reply) => {
     const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
-    const periodId = (request.params as { periodId: string }).periodId; const body = bodyOf(request as never); const metricCode = str(body, "metricCode"); const scope = str(body, "scope") as "1" | "2" | "3" | "IMPACT" | null; const unit = str(body, "unit"); const value = nonNegative(body, "value");
+    const periodId = (request.params as { periodId: string }).periodId; const body = bodyOf(request as never); const metricCode = str(body, "metricCode"); const scope = str(body, "scope") as "1" | "2" | "3" | "IMPACT" | null; const unit = str(body, "unit"); const value = nonNegativeValueInput(body, "value");
     if (!metricCode || !scope || !["1","2","3","IMPACT"].includes(scope) || !unit || value === null) return reply.code(400).send({ error: "metricCode, scope, unit and non-negative value are required" });
     try {
       const period = await pool.query<{ organization_id: string }>("select organization_id from esg_reporting_periods where id = $1", [periodId]);
@@ -88,7 +89,7 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
       const metric = { code: metricCode, scope, value, unit, ...(evidenceId ? { evidenceId } : {}), ...(verificationId ? { verificationId } : {}) };
       const state = classifyMetric(metric);
       if (evidenceId) {
-        const evidence = await pool.query<{ activity_id: string | null; status: string }>(`select e.activity_id, e.status from evidence e left join activities a on a.id=e.activity_id where e.id=$1 and a.organization_id=$2 and a.geography_id is not null and organization_has_geography_scope($2,a.geography_id)`, [evidenceId, organizationId]);
+        const evidence = await pool.query<{ activity_id: string | null; status: string }>(`select e.activity_id, e.status from evidence e left join activities a on a.id=e.activity_id where e.id=$1 and a.organization_id=$2 and a.geography_id is not null and organization_has_explicit_geography_scope($2,a.geography_id)`, [evidenceId, organizationId]);
         if (!evidence.rows[0]) return reply.code(403).send({ error: "Evidence is outside organization authorization scope", code: "EVIDENCE_FORBIDDEN" });
         if (evidence.rows[0].status !== "VERIFIED") return reply.code(409).send({ error: "Evidence must be verified before ESG metric recording", code: "EVIDENCE_NOT_VERIFIED" });
       }
@@ -131,11 +132,11 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
   app.post("/api/v1/bwg/profile", async (request, reply) => {
     const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
     const body = bodyOf(request as never); const organizationId = str(body, "organizationId"); const jurisdictionId = str(body, "jurisdictionId");
-    const floorArea = nonNegative(body, "floorAreaSqm"); const water = nonNegative(body, "waterConsumptionLpd"); const waste = nonNegative(body, "wasteGenerationKgDay"); const establishmentType = str(body, "establishmentType");
+    const floorArea = nonNegativeValueInput(body, "floorAreaSqm"); const water = nonNegativeValueInput(body, "waterConsumptionLpd"); const waste = nonNegativeValueInput(body, "wasteGenerationKgDay"); const establishmentType = str(body, "establishmentType");
     if (!organizationId || !jurisdictionId || floorArea === null || water === null || waste === null || !establishmentType) return reply.code(400).send({ error: "organizationId, jurisdictionId, floorAreaSqm, waterConsumptionLpd, wasteGenerationKgDay and establishmentType are required", code: "BWG_PROFILE_REQUIRED" });
     if (!canActForOrganization(auth, organizationId)) return reply.code(403).send({ error: "Organization access denied", code: "ORG_FORBIDDEN" });
     if (!await hasOrganizationPermission(pool, auth, organizationId, ["profile:update", "waste:record"])) return reply.code(403).send({ error: "Profile update and waste recording permissions are required", code: "BWG_PROFILE_FORBIDDEN" });
-    const geography = await pool.query<{ ok: boolean }>("select exists(select 1 from organization_memberships om where om.identity_id=$1 and om.organization_id=$2 and om.status='VERIFIED' and organization_has_geography_scope(om.organization_id,$3)) as ok", [auth.identityId, organizationId, jurisdictionId]);
+    const geography = await pool.query<{ ok: boolean }>("select exists(select 1 from organization_memberships om where om.identity_id=$1 and om.organization_id=$2 and om.status='VERIFIED' and organization_has_explicit_geography_scope(om.organization_id,$3)) as ok", [auth.identityId, organizationId, jurisdictionId]);
     if (geography.rows[0]?.ok !== true) return reply.code(403).send({ error: "Jurisdiction is outside organization authorization scope", code: "GEOGRAPHY_FORBIDDEN" });
     const criteria = { floorAreaSqm: floorArea >= 20000, waterConsumptionLpd: water >= 40000, wasteGenerationKgDay: waste >= 100 };
     const applicable = Object.values(criteria).some(Boolean);
@@ -149,7 +150,7 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
   app.post("/api/v1/bwg/reporting-periods", async (request, reply) => {
     const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
     const body = bodyOf(request as never); const organizationId = str(body, "organizationId"); const start = str(body, "periodStart"); const end = str(body, "periodEnd"); const basis = str(body, "reportingBasis");
-    if (!organizationId || !start || !end || !basis || Number.isNaN(Date.parse(start)) || Number.isNaN(Date.parse(end)) || start > end) return reply.code(400).send({ error: "organizationId, valid periodStart, periodEnd and reportingBasis are required", code: "BWG_PERIOD_REQUIRED" });
+    if (!organizationId || !start || !end || !basis || !isValidIsoReportingDate(start) || !isValidIsoReportingDate(end) || start > end) return reply.code(400).send({ error: "organizationId, valid periodStart, periodEnd and reportingBasis are required", code: "BWG_PERIOD_REQUIRED" });
     if (!canActForOrganization(auth, organizationId)) return reply.code(403).send({ error: "Organization access denied", code: "ORG_FORBIDDEN" });
     if (!await hasOrganizationPermission(pool, auth, organizationId, ["reports:read", "waste:record"])) return reply.code(403).send({ error: "Reporting and waste recording permissions are required", code: "BWG_PERIOD_FORBIDDEN" });
     try { const row = await pool.query("insert into bwg_reporting_periods (organization_id,period_start,period_end,reporting_basis) values ($1,$2,$3,$4) on conflict (organization_id,period_start,period_end,reporting_basis) do update set reporting_basis=excluded.reporting_basis returning *", [organizationId,start,end,basis]); return reply.code(201).send({ source: "postgresql", syntheticData: false, authoritativeMutation: true, period: row.rows[0] }); }
@@ -159,7 +160,7 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
   app.post("/api/v1/bwg/reporting-periods/:periodId/waste", async (request, reply) => {
     const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
     const periodId = (request.params as { periodId: string }).periodId; const body = bodyOf(request as never); const wasteStream = str(body, "wasteStream"); const unit = str(body, "unit");
-    const generated = nonNegative(body, "generatedQuantity"); const segregated = nonNegative(body, "segregatedQuantity") ?? 0; const channelized = nonNegative(body, "channelizedQuantity") ?? 0; const processed = nonNegative(body, "processedQuantity") ?? 0;
+    const generated = nonNegativeValueInput(body, "generatedQuantity"); const segregated = nonNegativeValueInput(body, "segregatedQuantity") ?? 0; const channelized = nonNegativeValueInput(body, "channelizedQuantity") ?? 0; const processed = nonNegativeValueInput(body, "processedQuantity") ?? 0;
     if (!wasteStream || !unit || generated === null || segregated > generated || channelized > generated || processed > channelized) return reply.code(400).send({ error: "wasteStream, unit, generatedQuantity and valid segregated/channelized/processed quantities are required", code: "BWG_WASTE_REQUIRED" });
     try {
       const period = await pool.query<{ organization_id: string }>("select organization_id from bwg_reporting_periods where id=$1", [periodId]); if (!period.rows[0]) return reply.code(404).send({ error: "BWG reporting period not found" });
@@ -175,7 +176,7 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
 
   app.post("/api/v1/bwg/reporting-periods/:periodId/epr", async (request, reply) => {
     const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
-    const periodId = (request.params as { periodId: string }).periodId; const body = bodyOf(request as never); const schemeId = str(body, "schemeId"); const categoryCode = str(body, "categoryCode"); const obligated = nonNegative(body, "obligatedQuantity"); const fulfilled = nonNegative(body, "fulfilledQuantity");
+    const periodId = (request.params as { periodId: string }).periodId; const body = bodyOf(request as never); const schemeId = str(body, "schemeId"); const categoryCode = str(body, "categoryCode"); const obligated = nonNegativeValueInput(body, "obligatedQuantity"); const fulfilled = nonNegativeValueInput(body, "fulfilledQuantity");
     if (!schemeId || !categoryCode || obligated === null || fulfilled === null) return reply.code(400).send({ error: "schemeId, categoryCode and non-negative obligated/fulfilled quantities are required", code: "BWG_EPR_REQUIRED" });
     try {
       const period = await pool.query<{ organization_id: string }>("select organization_id from bwg_reporting_periods where id=$1", [periodId]); if (!period.rows[0]) return reply.code(404).send({ error: "BWG reporting period not found" });
@@ -192,7 +193,7 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
 
   app.post("/api/v1/bwg/reporting-periods/:periodId/esg", async (request, reply) => {
     const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
-    const periodId = (request.params as { periodId: string }).periodId; const body = bodyOf(request as never); const metricCode = str(body, "metricCode"); const scope = str(body, "scope"); const unit = str(body, "unit"); const value = nonNegative(body, "value");
+    const periodId = (request.params as { periodId: string }).periodId; const body = bodyOf(request as never); const metricCode = str(body, "metricCode"); const scope = str(body, "scope"); const unit = str(body, "unit"); const value = nonNegativeValueInput(body, "value");
     if (!metricCode || !scope || !unit || value === null) return reply.code(400).send({ error: "metricCode, scope, unit and non-negative value are required", code: "BWG_ESG_REQUIRED" });
     try {
       const period = await pool.query<{ organization_id: string }>("select organization_id from bwg_reporting_periods where id=$1", [periodId]); if (!period.rows[0]) return reply.code(404).send({ error: "BWG reporting period not found" });

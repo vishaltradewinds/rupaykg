@@ -4,8 +4,9 @@
 **Status:** Repository alignment specification; not a claim of live CPCB integration or legal certification.  
 **Repository:** vishaltradewinds/rupaykg  
 **Branch:** docs/cpcb-swm-2026-mrv-mapping  
-**Authoritative portal guide:** https://swmp.cpcb.gov.in/en/user-guide  
-**Official portal:** https://swmp.cpcb.gov.in/en
+**Official CPCB portal homepage currently surfaced by CPCB search:** https://swm.cpcb.gov.in/  
+**User guide referenced in earlier workflow mapping:** https://swmp.cpcb.gov.in/en/user-guide  
+**Integration caution:** Both hosts appear under CPCB's government domain, but confirm the canonical production host, supported API/export contract, and source-authentication process directly with CPCB before configuring deep links or live integrations. Do not infer an API from the web UI.
 
 ## 1. Alignment objective
 

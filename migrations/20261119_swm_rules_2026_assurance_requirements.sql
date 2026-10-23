@@ -1,0 +1,6 @@
+-- Additional evidence requirements under Solid Waste Management Rules, 2026.
+-- These rows track evidence and do not make statutory determinations.
+insert into regulatory_requirements (regulatory_source_id,code,stakeholder_class,requirement_type,obligation,evidence_requirements,reporting_frequency,external_system,external_url,notes)
+select s.id,'SWM-2026-LEGACY-DUMPSITE-QUARTERLY-RETURNS','URBAN_OR_RURAL_LOCAL_BODY','LEGACY_WASTE_REMEDIATION_REPORTING','Track legacy dumpsite biomining/bioremediation progress and quarterly returns filed by the 30th of the month following each quarter.','["dumpsite_id","quarter_end","work_progress","quantity_biomined","quantity_bioremediated","portal_return_reference","local_body_publication_reference"]'::jsonb,'QUARTERLY_BY_30TH_OF_SUBSEQUENT_MONTH','CPCB Centralised Solid Waste Management Portal','https://swmp.cpcb.gov.in/en/','Rule 15(8) of S.O. 388(E). Record a filing only with external filing evidence.'
+from regulatory_sources s where s.title='Solid Waste Management Rules, 2026' and s.reference='S.O. 388(E)'
+on conflict (code) do update set obligation=excluded.obligation,evidence_requirements=excluded.evidence_requirements,reporting_frequency=excluded.reporting_frequency,external_url=excluded.external_url,notes=excluded.notes;
