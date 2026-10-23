@@ -268,3 +268,13 @@ test("registry credential geography guard accepts only explicit verified-root de
     "credential geography must follow the same verified-root descendant policy as other high-impact operations",
   );
 });
+
+
+test("BWG EPR obligation reads exclude unbound and out-of-scope jurisdictions", () => {
+  const source = sourceFor("bwg-routes.ts");
+  assert.match(
+    source,
+    /where eo\.obligated_organization_id=\$1 and o\.jurisdiction_id is not null and organization_has_explicit_geography_scope\(\$1,o\.jurisdiction_id\)/i,
+    "EPR obligation dashboard must expose only records bound to an explicitly authorized jurisdiction",
+  );
+});
