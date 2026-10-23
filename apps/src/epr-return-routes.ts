@@ -12,6 +12,20 @@ function positiveNumber(body: Record<string, unknown>, key: string): number | nu
   const value = Number(body[key]);
   return Number.isFinite(value) && value > 0 ? value : null;
 }
+
+export function isIsoCalendarDate(value: string): boolean {
+  const match = /^(\\d{4})-(\\d{2})-(\\d{2})$/.exec(value);
+  if (!match) return false;
+  const year = Number(match[1]), month = Number(match[2]), day = Number(match[3]);
+  if (year < 1 || month < 1 || month > 12 || day < 1) return false;
+  const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  return day <= days[month - 1]!;
+}
+
+export function isValidExternalReference(value: string): boolean {
+  return value.trim().length > 0 && value.trim().length <= 2048;
+}
 async function authFor(request: Parameters<typeof authenticate>[0], reply: { code: (status: number) => { send: (body: unknown) => unknown } }, pool: Pool | null): Promise<AuthContext | null> {
   if (!pool) { reply.code(503).send({ error: "Authoritative API unavailable", code: "DATABASE_UNAVAILABLE", syntheticData: false }); return null; }
   try {
@@ -53,7 +67,7 @@ export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool |
     if (!organizationId || !schemeId || !obligationId || !periodStart || !periodEnd || !returnType || reportedQuantity === null) return reply.code(400).send({ error: "organizationId, schemeId, obligationId, periodStart, periodEnd, returnType and positive reportedQuantity are required", code: "INVALID_EPR_RETURN" });
     if (!canAct(auth, organizationId)) return reply.code(403).send({ error: "Verified organization membership required", code: "ORG_FORBIDDEN" });
     if (!await hasOrganizationPermission(pool, auth, organizationId, ["epr:manage"])) return reply.code(403).send({ error: "EPR management permission required", code: "EPR_RETURN_WRITE_FORBIDDEN" });
-    if (Number.isNaN(Date.parse(periodStart)) || Number.isNaN(Date.parse(periodEnd)) || periodStart > periodEnd) return reply.code(400).send({ error: "Valid periodStart and periodEnd are required", code: "INVALID_PERIOD" });
+    if (!isIsoCalendarDate(periodStart) || !isIsoCalendarDate(periodEnd) || periodStart > periodEnd) return reply.code(400).send({ error: "periodStart and periodEnd must be real ISO calendar dates with end on or after start", code: "INVALID_PERIOD" });
     try {
       const rows = await pool.query(`insert into epr_returns(scheme_id,organization_id,obligation_id,period_start,period_end,return_type,reported_quantity,status) select $1,$2,$3,$4::date,$5::date,$6,$7,'DRAFT' where exists(select 1 from epr_schemes where id=$1 and status='VERIFIED') and exists(select 1 from epr_obligations eo join obligations o on o.id=eo.obligation_id where eo.id=$3 and eo.scheme_id=$1 and eo.obligated_organization_id=$2 and eo.status in ('OPEN','ELIGIBLE') and o.period_start <= $5::date and o.period_end >= $4::date) returning *`, [schemeId, organizationId, obligationId, periodStart, periodEnd, returnType, reportedQuantity]);
       if (!rows.rows[0]) return reply.code(409).send({ error: "Verified EPR scheme and matching open/eligible obligation are required", code: "EPR_RETURN_NOT_ELIGIBLE" });
@@ -105,7 +119,7 @@ export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool |
   app.post("/api/v1/epr/returns/:returnId/external-reference", async (request, reply) => {
     const auth = await authFor(request, reply, pool); if (!auth || !pool) return;
     const body = bodyOf(request); const externalReference = requiredString(body, "externalReference");
-    if (!externalReference) return reply.code(400).send({ error: "externalReference is required", code: "EXTERNAL_REFERENCE_REQUIRED" });
+    if (!externalReference || !isValidExternalReference(externalReference)) return reply.code(400).send({ error: "externalReference is required and must be at most 2048 characters", code: "EXTERNAL_REFERENCE_INVALID" });
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
