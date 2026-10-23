@@ -14,6 +14,7 @@ const legacyFallbackForbiddenSourceFiles = [
   "epr-return-routes.ts",
   "evidence-vault-routes.ts",
   "evidence-vault-store.ts",
+  "evidence-vault-routes.ts",
   "gov-bridge-routes.ts",
   "government-inbox-operational-alerts.ts",
   "government-inbox-worker-runner.ts",
@@ -43,6 +44,7 @@ const highImpactRouteFiles = [
   "statutory-routes.ts",
   "value-routes.ts",
   "cpcb-swm-routes.ts",
+  "evidence-vault-routes.ts",
   "sync-routes.ts",
   "workspace-routes.ts",
 ];
@@ -152,4 +154,18 @@ test("EPR geography guards are attached to the live PostgreSQL tables after migr
   } finally {
     await pool.end();
   }
+});
+
+
+test("evidence vault upload, read, download and review retain explicit geography and permission gates", () => {
+  const source = sourceFor("evidence-vault-routes.ts");
+  assert.match(source, /async function activityContext[\s\S]*?organization_has_explicit_geography_scope/);
+  assert.match(source, /\/api\/v1\/evidence-vault\/upload[\s\S]*?activityContext\(pool,auth,activityId\)/);
+  assert.match(source, /\/api\/v1\/evidence-vault[\s\S]*?activityContext\(pool,auth,activityId\)/);
+  assert.match(source, /\/api\/v1\/evidence-vault\/:evidenceId[\s\S]*?organization_has_explicit_geography_scope/);
+  assert.match(source, /\/api\/v1\/evidence-vault\/:evidenceId\/review[\s\S]*?organization_has_explicit_geography_scope/);
+  assert.match(source, /hasOrganizationPermission\(client,auth,row\.organization_id,\["evidence:review"\]\)/);
+  assert.match(source, /canVerifyEvidence\(client,auth\.identityId,id\)/);
+  assert.match(source, /for update of e/i);
+  assert.match(source, /await client\.query\("commit"\)/);
 });
