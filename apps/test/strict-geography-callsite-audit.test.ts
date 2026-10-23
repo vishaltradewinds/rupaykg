@@ -100,6 +100,21 @@ test("database EPR evidence guards require explicit verified geography scope", (
   );
 });
 
+test("submitted EPR returns require bound, approved, provenance-backed and explicitly scoped evidence", () => {
+  const migrationPath = [
+    "../../migrations/20261116_strict_epr_return_evidence_geography.sql",
+    "../../../migrations/20261116_strict_epr_return_evidence_geography.sql",
+  ].map((path) => fileURLToPath(new URL(path, import.meta.url))).find(existsSync);
+  if (!migrationPath) throw new Error("Strict EPR return evidence geography migration not found");
+  const migration = readFileSync(migrationPath, "utf8");
+  assert.match(migration, /create or replace function enforce_epr_return_submission_evidence\\s*\\(/i);
+  assert.match(migration, /new\\.status in \\('SUBMITTED','ACCEPTED','COMPLETED'\\)/i);
+  assert.match(migration, /new\\.evidence_id is null or new\\.verification_id is null or new\\.obligation_id is null/i);
+  assert.match(migration, /v\\.evidence_id = e\\.id[\\s\\S]*?v\\.activity_id = a\\.id[\\s\\S]*?v\\.decision = 'APPROVED'/i);
+  assert.match(migration, /organization_has_explicit_geography_scope\\(a\\.organization_id, a\\.geography_id\\)/i);
+  assert.match(migration, /before insert or update of status, organization_id, scheme_id, obligation_id, period_start, period_end, evidence_id, verification_id[\\s\\S]*?on epr_returns/i);
+});
+
 test("EPR geography guards are attached to the live PostgreSQL tables after migrations", {
   skip: !(process.env.RUPAYKG_RUN_DB_INTEGRATION_TESTS === "1" && process.env.DATABASE_URL)
     ? "requires CI disposable PostgreSQL and applied migrations"
@@ -134,10 +149,12 @@ test("EPR geography guards are attached to the live PostgreSQL tables after migr
         and ( (c.relname = 'organization_epr_applicability'
                and t.tgname = 'epr_external_registration_evidence_guard')
            or (c.relname = 'epr_credit_transfers'
-               and t.tgname = 'epr_transfer_evidence_guard') )
+               and t.tgname = 'epr_transfer_evidence_guard')
+           or (c.relname = 'epr_returns'
+               and t.tgname = 'epr_return_submission_evidence_guard') )
       order by c.relname
     `);
-    assert.equal(result.rows.length, 2, "both EPR evidence guards must be attached to their live tables");
+    assert.equal(result.rows.length, 3, "all EPR evidence guards must be attached to their live tables");
     for (const row of result.rows) {
       assert.equal(row.trigger_enabled, "O", `${row.trigger_name} must be enabled`);
       assert.match(row.trigger_definition, /before insert or update/i);
@@ -148,6 +165,7 @@ test("EPR geography guards are attached to the live PostgreSQL tables after migr
       result.rows.map((row) => [row.table_name, row.function_name]),
       [
         ["epr_credit_transfers", "enforce_epr_transfer_evidence"],
+        ["epr_returns", "enforce_epr_return_submission_evidence"],
         ["organization_epr_applicability", "enforce_epr_external_registration_evidence"],
       ],
     );
