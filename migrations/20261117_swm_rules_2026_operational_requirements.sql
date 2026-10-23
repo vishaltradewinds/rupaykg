@@ -17,7 +17,7 @@ join (values
     '["waste_stream","measured_quantity","handover_timestamp","authorized_collector_reference","evidence_reference"]',
     'PER_COLLECTION_OR_HANDOVER',
     'CPCB Centralised Solid Waste Management Portal',
-    'https://www.swm.cpcb.gov.in/',
+    'https://swmp.cpcb.gov.in/en/',
     'Rule 5 of S.O. 388(E). Applicability and any special category must be determined from the entity and current local-body directions; internal records are not official registration.'
   ),
   (
@@ -28,7 +28,7 @@ join (values
     '["local_body_registration_reference","assessment_basis","waste_stream_quantities","processor_registration_reference","local_body_exemption_if_applicable","ebwgr_certificate_reference","annual_return_reference","evidence_reference"]',
     'ON_EVENT_AND_ANNUAL_BY_JUNE_30',
     'CPCB Centralised Solid Waste Management Portal',
-    'https://www.swm.cpcb.gov.in/',
+    'https://swmp.cpcb.gov.in/en/',
     'Rule 6 of S.O. 388(E). New and existing bulk waste generators have different wet-waste processing provisions; do not infer applicability or exemption from threshold measurements alone.'
   ),
   (
@@ -39,7 +39,7 @@ join (values
     '["registration_reference","authorization_reference","waste_received_by_stream","waste_processed_by_stream","residual_waste_destination","quarterly_return_reference","annual_return_reference","verification_evidence"]',
     'QUARTERLY_BY_15TH_PLUS_ANNUAL_BY_JUNE_30',
     'CPCB Centralised Solid Waste Management Portal',
-    'https://www.swm.cpcb.gov.in/',
+    'https://swmp.cpcb.gov.in/en/',
     'Rule 7 of S.O. 388(E). Facility scope, authorization and required schedules must be validated against the applicable rules and competent authority.'
   ),
   (
@@ -50,7 +50,7 @@ join (values
     '["portal_registration_reference","authorized_concessionaire_reference","collection_quantity_by_stream","registered_processor_reference","return_reference","validation_decision","evidence_reference"]',
     'QUARTERLY_BY_15TH_PLUS_ANNUAL_BY_JUNE_30',
     'CPCB Centralised Solid Waste Management Portal',
-    'https://www.swm.cpcb.gov.in/',
+    'https://swmp.cpcb.gov.in/en/',
     'Rule 8 of S.O. 388(E). Reporting duties depend on the local-body/authorized-operator role; RupayKG must not represent an internal workflow as a portal filing.'
   ),
   (
@@ -61,7 +61,7 @@ join (values
     '["bulk_waste_generator_reference","waste_quantity_kg","registered_processor_reference","processor_received_processed_report","local_body_approval_reference","external_certificate_reference","portal_transaction_reference"]',
     'ON_VALIDATED_TRANSACTION',
     'CPCB Centralised Solid Waste Management Portal',
-    'https://www.swm.cpcb.gov.in/',
+    'https://swmp.cpcb.gov.in/en/',
     'Rules 8 and 10 of S.O. 388(E). Only the local body is mandated to generate EBWGR certificates on the centralised portal. RupayKG may record evidence and references but must not mint or assert official certificates without verified external issuance.'
   ),
   (
@@ -72,7 +72,7 @@ join (values
     '["local_body_registration_reference","quantity_received","quantity_sorted","registered_destination_reference","quarterly_report_reference","evidence_reference"]',
     'QUARTERLY_BY_15TH_OF_NEXT_QUARTER',
     'CPCB Centralised Solid Waste Management Portal',
-    'https://www.swm.cpcb.gov.in/',
+    'https://swmp.cpcb.gov.in/en/',
     'Rule 9 of S.O. 388(E). Keep waste-stream quantities and destination registrations traceable; internal evidence is not a statutory portal filing.'
   )
 ) as v(code,stakeholder_class,requirement_type,obligation,evidence_requirements,reporting_frequency,external_system,external_url,notes)
