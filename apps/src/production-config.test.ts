@@ -41,6 +41,10 @@ describe("production configuration", () => {
     assert.throws(() => readProductionConfig({ ...valid, DATABASE_URL: "postgresql://localhost:5432/rupaykg" }), /must not target localhost/);
   });
 
+  it("fails closed for IPv6 loopback database targets", () => {
+    assert.throws(() => readProductionConfig({ ...valid, DATABASE_URL: "postgresql://[::1]:5432/rupaykg" }), /must not target localhost/);
+  });
+
   it("requires TLS database configuration", () => {
     assert.throws(() => readProductionConfig({ ...valid, DATABASE_SSL: "false" }), /DATABASE_SSL must be require/);
   });
