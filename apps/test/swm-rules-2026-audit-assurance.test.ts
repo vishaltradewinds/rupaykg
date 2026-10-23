@@ -10,7 +10,10 @@ const migrationPath = [
 ].map((path) => fileURLToPath(new URL(path, import.meta.url))).find(existsSync);
 if (!migrationPath) throw new Error("SWM audit assurance migration not found");
 const sql = readFileSync(migrationPath, "utf8");
+const legacyMigrationPath = fileURLToPath(new URL("../../migrations/20261119_swm_rules_2026_assurance_requirements.sql", import.meta.url));
+const legacySql = readFileSync(legacyMigrationPath, "utf8");
 const codes = [
+  "SWM-2026-LEGACY-DUMPSITE-QUARTERLY-RETURNS",
   "SWM-2026-SPCB-FACILITY-ANNUAL-AUDIT",
   "SWM-2026-ORGANIC-MANURE-MONTHLY-TEST-REPORT",
   "SWM-2026-CPCB-PUBLIC-DASHBOARD-DATA",
