@@ -34,6 +34,12 @@ Migration `023` is intentionally absent from the current repository history; do 
 
 Migration files are intentionally ordered and each numbered migration must have one authoritative owner. Do not reintroduce duplicate numbered migrations containing the same tables or enums.
 
+## Canonical audit append rule (migration 089)
+
+Migration `089_canonical_audit_append.sql` introduces `append_platform_audit_event`. The function takes a row lock on the singleton chain head, constructs a canonical JSONB event from persisted audit fields, hashes its UTF-8 JSONB representation with SHA-256, inserts the audit row, and advances the head in the caller's transaction. Platform-admin, CPCB/SWM, field-device enrollment/verification, and the field-sync conflict trigger use this shared append path after migration 089. The business mutation and audit append must remain in the same transaction.
+
+The migration deliberately does not rewrite old audit rows. The pre-cutover head is an anchor, not proof that every historical event was linked. Any new audit writer must use the shared function; direct inserts into `audit_events` break the post-cutover completeness guarantee. The disposable PostgreSQL integration test checks concurrent append serialization, stored-field hash consistency, chain reachability, and head consistency. Do not claim the whole historical audit table is a single complete tamper-evident chain until legacy rows and all writers are independently reconciled.
+
 ## Production rule
 
 A migration runner must stop on the first error. Never silently continue after a partial schema application. Run against a controlled migration ledger in deployment infrastructure before accepting application traffic.
