@@ -20,6 +20,13 @@ describe("database SSL policy", () => {
     );
   });
 
+  it("fails closed when production database TLS was not normalized", () => {
+    assert.throws(
+      () => databaseSslConfig({ NODE_ENV: "production" } as NodeJS.ProcessEnv),
+      /DATABASE_SSL must be normalized before database access/,
+    );
+  });
+
   it("preserves the existing non-production fallback when no explicit policy is set", () => {
     assert.deepEqual(databaseSslConfig({} as NodeJS.ProcessEnv), { rejectUnauthorized: false });
   });
