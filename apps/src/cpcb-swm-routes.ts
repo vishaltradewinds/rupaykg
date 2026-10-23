@@ -61,14 +61,21 @@ export function isSwmLocalStage(value: unknown): value is typeof LOCAL_STAGES[nu
 export function safeObservations(value: unknown): boolean {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const record = value as Record<string, unknown>;
-  const keys = ["floorAreaM2", "waterConsumptionLitresPerDay", "wasteGenerationKgPerDay"];
+  const expectedUnits: Record<string, string> = {
+    floorAreaM2: "m2",
+    waterConsumptionLitresPerDay: "L/day",
+    wasteGenerationKgPerDay: "kg/day",
+  };
+  const keys = Object.keys(expectedUnits);
   if (Object.keys(record).some(key => !keys.includes(key))) return false;
   for (const key of keys) {
     const raw = record[key];
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) return false;
     const observation = raw as Record<string, unknown>;
     if (!(observation.value === null || (typeof observation.value === "number" && Number.isFinite(observation.value) && observation.value >= 0))) return false;
-    if (typeof observation.unit !== "string" || observation.unit.length > 32) return false;
+    // Units are part of the data contract; accepting arbitrary units can silently
+    // corrupt later aggregation or eligibility calculations.
+    if (typeof observation.unit !== "string" || observation.unit !== expectedUnits[key]) return false;
     for (const field of ["sourceReference", "periodStart", "periodEnd"]) {
       const fieldValue = observation[field];
       if (fieldValue !== undefined && fieldValue !== null && typeof fieldValue !== "string") return false;
