@@ -44,6 +44,10 @@ Verification requires a verified organization membership with an explicit `VERIF
 
 Receiving an offline envelope does not mutate authoritative business state. An envelope is applied only through an explicit authenticated application step. Supported operation types are deliberately allow-listed: `ACTIVITY_CREATE`, `MEASUREMENT_CREATE`, `EVIDENCE_CREATE`, and `RESOURCE_FLOW_CREATE`. The domain mutation and envelope status change commit in the same database transaction; failures roll back both.
 
+## Current solid-waste regulatory source
+
+Migration `20261116_swm_rules_2026_authoritative_source.sql` registers the official Solid Waste Management Rules, 2026 (S.O. 388(E)) as in force from 1 April 2026, using the Ministry's Gazette PDF. This source registration is not a complete rule-by-rule conformance claim. The next regulatory gate must map stakeholder-specific duties, deadlines, certificates, portal dependencies, evidence and effective periods against the Gazette before enabling any automated compliance determination. In particular, the Rules include a centralized online portal and distinct duties for bulk waste generators, local bodies, and waste-management operators; do not treat RupayKG's internal status as CPCB/ULB registration or external acceptance.
+
 ## Geography authorization rule
 
 An organization may have explicit verified geography roots. When roots exist, activities and resource flows are accepted only when their geography is the assigned root or a descendant of an assigned root. This is enforced in PostgreSQL so API and offline paths cannot bypass the authorization boundary. Organizations without configured geography roots remain governed by their existing organization-membership authorization until scopes are provisioned.
