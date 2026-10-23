@@ -49,6 +49,27 @@ describe("production configuration", () => {
     assert.throws(() => readProductionConfig({ ...valid, DATABASE_CA_CERT: "" }), /DATABASE_CA_CERT must contain a PEM certificate/);
   });
 
+  it("does not allow connection-string SSL parameters to override the verified TLS policy", () => {
+    const config = readProductionConfig({
+      ...valid,
+      DATABASE_URL: "postgresql://prod.example.invalid:5432/rupaykg?sslmode=require&application_name=rupaykg",
+    });
+    assert.equal(config.databaseUrl, "postgresql://prod.example.invalid:5432/rupaykg?application_name=rupaykg");
+    assert.equal(config.databaseSsl, "require");
+    assert.equal(config.databaseCaCert, valid.DATABASE_CA_CERT);
+  });
+
+  it("rejects sslmode=require as a substitute for a trusted CA certificate", () => {
+    assert.throws(
+      () => readProductionConfig({
+        ...valid,
+        DATABASE_URL: "postgresql://prod.example.invalid:5432/rupaykg?sslmode=require",
+        DATABASE_CA_CERT: "",
+      }),
+      /DATABASE_CA_CERT must contain a PEM certificate/,
+    );
+  });
+
   it("requires real authentication", () => {
     assert.throws(() => readProductionConfig({ ...valid, RUPAYKG_AUTH_MODE: "demo" }), /RUPAYKG_AUTH_MODE must be real/);
   });
