@@ -168,3 +168,18 @@ test("evidence vault upload, read, download and review retain explicit geography
   assert.match(source, /for update of e/i);
   assert.match(source, /await client\.query\("commit"\)/);
 });
+
+
+test("CPCB stakeholder workspace reads and updates enforce the row's explicit geography scope", () => {
+  const source = sourceFor("cpcb-swm-routes.ts");
+  assert.match(
+    source,
+    /from cpcb_swm_stakeholder_workspaces w where w\.organization_id=\$1 and w\.geography_id is not null and organization_has_explicit_geography_scope\(w\.organization_id,w\.geography_id\)/,
+    "workspace list must not expose rows outside the active organization's verified geography scopes",
+  );
+  assert.match(
+    source,
+    /select id,cpcb_reported_status,cpcb_status_source_reference,cpcb_status_note from cpcb_swm_stakeholder_workspaces where id=\$1 and organization_id=\$2 and geography_id is not null and organization_has_explicit_geography_scope\(organization_id,geography_id\) for update/i,
+    "workspace update must first lock only a row whose existing geography is in scope",
+  );
+});
