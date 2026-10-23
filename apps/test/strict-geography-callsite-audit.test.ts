@@ -102,8 +102,8 @@ test("database EPR evidence guards require explicit verified geography scope", (
 
 test("submitted EPR returns require bound, approved, provenance-backed and explicitly scoped evidence", () => {
   const migrationPath = [
-    "../../migrations/20261116_strict_epr_return_evidence_geography.sql",
-    "../../../migrations/20261116_strict_epr_return_evidence_geography.sql",
+    "../../migrations/20261126_strict_epr_return_evidence_geography.sql",
+    "../../../migrations/20261126_strict_epr_return_evidence_geography.sql",
   ].map((path) => fileURLToPath(new URL(path, import.meta.url))).find(existsSync);
   if (!migrationPath) throw new Error("Strict EPR return evidence geography migration not found");
   const migration = readFileSync(migrationPath, "utf8");
