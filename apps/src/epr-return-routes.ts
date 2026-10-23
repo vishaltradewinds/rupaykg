@@ -26,6 +26,12 @@ export function isIsoCalendarDate(value: string): boolean {
 export function isValidExternalReference(value: string): boolean {
   return value.trim().length > 0 && value.trim().length <= 2048;
 }
+
+export function eprReturnSubmissionState(status: string): "SUBMITTABLE" | "RECONCILIATION_REQUIRED" | "INVALID_STATE" {
+  if (status === "DRAFT") return "SUBMITTABLE";
+  if (status === "REJECTED") return "RECONCILIATION_REQUIRED";
+  return "INVALID_STATE";
+}
 async function authFor(request: Parameters<typeof authenticate>[0], reply: { code: (status: number) => { send: (body: unknown) => unknown } }, pool: Pool | null): Promise<AuthContext | null> {
   if (!pool) { reply.code(503).send({ error: "Authoritative API unavailable", code: "DATABASE_UNAVAILABLE", syntheticData: false }); return null; }
   try {
@@ -94,7 +100,9 @@ export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool |
       const row = current.rows[0];
       if (!row) { await client.query("ROLLBACK"); return reply.code(404).send({ error: "EPR return not found", code: "EPR_RETURN_NOT_FOUND" }); }
       if (!canAct(auth, row.organization_id) || !await hasOrganizationPermission(pool, auth, row.organization_id, ["epr:manage"])) { await client.query("ROLLBACK"); return reply.code(403).send({ error: "EPR management permission required", code: "EPR_RETURN_WRITE_FORBIDDEN" }); }
-      if (row.status !== "DRAFT" && row.status !== "REJECTED") { await client.query("ROLLBACK"); return reply.code(409).send({ error: `Return cannot be submitted from ${row.status}`, code: "INVALID_EPR_RETURN_STATE" }); }
+      const submissionState = eprReturnSubmissionState(row.status);
+      if (submissionState === "RECONCILIATION_REQUIRED") { await client.query("ROLLBACK"); return reply.code(409).send({ error: "Rejected EPR returns require obligation-balance reconciliation before resubmission", code: "EPR_RETURN_RECONCILIATION_REQUIRED" }); }
+      if (submissionState === "INVALID_STATE") { await client.query("ROLLBACK"); return reply.code(409).send({ error: `Return cannot be submitted from ${row.status}`, code: "INVALID_EPR_RETURN_STATE" }); }
       const obligation = await client.query(`select id,target_quantity,fulfilled_quantity,status from epr_obligations where id=$1 for update`, [row.obligation_id]);
       const obligationRow = obligation.rows[0];
       if (!obligationRow) { await client.query("ROLLBACK"); return reply.code(409).send({ error: "Bound EPR obligation not found", code: "OBLIGATION_NOT_FOUND" }); }
