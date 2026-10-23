@@ -75,3 +75,23 @@ test("high-impact route call sites use the strict geography helper", () => {
     );
   }
 });
+
+test("database EPR evidence guards require explicit verified geography scope", () => {
+  const migrationPath = fileURLToPath(new URL(
+    "../../migrations/20261115_strict_epr_evidence_geography.sql",
+    import.meta.url,
+  ));
+  const migration = readFileSync(migrationPath, "utf8");
+  assert.match(migration, /create or replace function enforce_epr_external_registration_evidence\s*\(/i);
+  assert.match(migration, /create or replace function enforce_epr_transfer_evidence\s*\(/i);
+  assert.equal(
+    (migration.match(/\borganization_has_explicit_geography_scope\s*\(/g) ?? []).length,
+    2,
+    "both EPR evidence guards must enforce explicit geography scope",
+  );
+  assert.doesNotMatch(
+    migration,
+    /\borganization_has_geography_scope\s*\(/,
+    "strict EPR evidence guards must not use the permissive legacy geography helper",
+  );
+});
