@@ -50,7 +50,7 @@ test("SWM portal launch verification gate is linked to the current official sour
     assert.equal(result.rows.length, 1);
     assert.equal(result.rows[0]?.source_title, "Solid Waste Management Rules, 2026");
     assert.equal(result.rows[0]?.source_reference, "S.O. 388(E)");
-    assert.equal(result.rows[0]?.external_url, "https://www.swm.cpcb.gov.in/");
+    assert.equal(result.rows[0]?.external_url, "https://swmp.cpcb.gov.in/en/");
     assert.equal(result.rows[0]?.status, "IN_FORCE");
     assert.match(result.rows[0]?.notes ?? "", /authorized integration\/API access have not been independently verified/i);
   } finally {
