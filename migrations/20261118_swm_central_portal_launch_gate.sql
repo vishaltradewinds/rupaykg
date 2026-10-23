@@ -13,7 +13,7 @@ select s.id,
        'ONE_TIME_WITH_CONTINUOUS_ASSURANCE',
        'CPCB Centralised Solid Waste Management Portal',
        'https://swmp.cpcb.gov.in/en/',
-       'Official CPCB portal landing page verified on 23 October 2026. Production workflow behavior, applicable portal terms, and authorized integration/API access have not been independently verified for RupayKG. Do not infer that public portal availability grants API access; keep automated external integration blocked until workflow evidence and authorization are verified.'
+       'Official CPCB portal landing page and public user manual verified on 23 October 2026. The manual documents registration and authority-review workflows for bulk waste generators, waste facilities, urban local bodies and district panchayats, including certificate download for approved applicants. Live transaction execution, annual-return workflow, applicable portal terms, and authorized integration/API access have not been independently verified for RupayKG. Do not infer that public portal availability grants API access; keep automated external integration blocked until remaining workflow evidence and authorization are verified.'
 from regulatory_sources s
 where s.authority = 'Ministry of Environment, Forest and Climate Change'
   and s.title = 'Solid Waste Management Rules, 2026'
