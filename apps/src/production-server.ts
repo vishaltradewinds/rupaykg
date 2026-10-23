@@ -12,4 +12,8 @@ process.env.RUPAYKG_ALLOWED_ORIGINS = config.allowedOrigins.join(",");
 process.env.RUPAYKG_AUTH_MODE = config.authMode;
 process.env.RUPAYKG_SYNTHETIC_DATA = String(config.syntheticData);
 
+// Validate and normalize production configuration before any database access.
+// Migrations and the optional acceptance fixture must use the same TLS policy as the API.
+await import("./migrate.js");
+await import("./acceptance-seed.js");
 await import("./server.js");
