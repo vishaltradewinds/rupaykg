@@ -1,6 +1,7 @@
 -- Fail-closed database guard for jurisdiction-bound activities.
--- Preserve existing rows for a separately planned backfill, but require explicit verified
--- organization geography scope for every new or changed activity record.
+-- Preserve existing rows for a separately planned backfill. New activities and changes to
+-- an activity's organization or geography require an explicit verified organization scope.
+-- Unrelated updates to legacy rows do not silently become blocked by this guard.
 create or replace function enforce_activity_geography_scope()
 returns trigger language plpgsql as $$
 begin
@@ -20,8 +21,8 @@ $$;
 
 drop trigger if exists activity_geography_scope_guard on activities;
 create trigger activity_geography_scope_guard
-before insert or update on activities
+before insert or update of organization_id, geography_id on activities
 for each row execute function enforce_activity_geography_scope();
 
 comment on function enforce_activity_geography_scope() is
-  'Fail-closed activity guard: new or changed activities require a geography within an explicit verified organization scope; existing rows are not rewritten.';
+  'Fail-closed activity guard: inserts and organization/geography changes require geography within an explicit verified organization scope; unrelated legacy-row updates are not blocked.';
