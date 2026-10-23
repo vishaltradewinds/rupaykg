@@ -104,6 +104,25 @@ test("canonical audit append serializes concurrent writers and links every new r
     assert.equal(cursor, snapshot.rows[0]?.head_hash ?? null, "chain traversal must reach the authoritative head");
     assert.equal(visited.size, snapshot.rows.length, "every newly written audit row must belong to the canonical chain");
     assert.equal(snapshot.rows.find(row => row.id === snapshot.rows[0]?.head_event_id)?.event_hash, snapshot.rows[0]?.head_hash, "head event ID/hash must match");
+
+    const protectedRow = snapshot.rows.find(row => row.request_id?.startsWith(prefix));
+    assert.ok(protectedRow, "a canonical audit row must exist for immutability checks");
+    await assert.rejects(
+      pool.query("update audit_events set payload = payload || '{\"tampered\":true}'::jsonb where id=$1", [protectedRow.id]),
+      /audit_events are append-only/i,
+      "audit rows must reject updates",
+    );
+    await assert.rejects(
+      pool.query("delete from audit_events where id=$1", [protectedRow.id]),
+      /audit_events are append-only/i,
+      "audit rows must reject deletion",
+    );
+    const guards = await pool.query<{ trigger_name: string }>(
+      "select tgname as trigger_name from pg_trigger where tgrelid='audit_events'::regclass and not tgisinternal and tgname in ('audit_events_append_only_row','audit_events_no_truncate') and tgenabled <> 'D'",
+    );
+    assert.equal(guards.rows.length, 2, "row mutation and truncate guards must both be enabled");
+    const intact = await pool.query<{ id: string }>("select id from audit_events where id=$1", [protectedRow.id]);
+    assert.equal(intact.rowCount, 1, "rejected mutation attempts must leave the audit row intact");
   } finally {
     await pool.end();
   }
