@@ -115,6 +115,46 @@ test("submitted EPR returns require bound, approved, provenance-backed and expli
   assert.match(migration, /before insert or update of status, organization_id, scheme_id, obligation_id, period_start, period_end, evidence_id, verification_id[\s\S]*?on epr_returns/i);
 });
 
+test("EPR value-claim trigger covers eligibility transitions and enforces scoped immutable provenance", () => {
+  const migrationPath = [
+    "../../migrations/20261127_strict_epr_credit_value_claims.sql",
+    "../../../migrations/20261127_strict_epr_credit_value_claims.sql",
+  ].map((path) => fileURLToPath(new URL(path, import.meta.url))).find(existsSync);
+  if (!migrationPath) throw new Error("Strict EPR credit value-claim migration not found");
+  const migration = readFileSync(migrationPath, "utf8");
+  assert.match(migration, /create or replace function record_epr_credit_value_claim\s*\(/i);
+  assert.match(migration, /after insert or update of status, activity_id, evidence_id, verification_id, scheme_id, issuer_organization_id, quantity, unit\s*on epr_credits/i);
+  assert.match(migration, /organization_has_explicit_geography_scope\s*\(\s*a\.organization_id,\s*a\.geography_id\s*\)/i);
+  assert.match(migration, /EPR_CREDIT_VALUE_CLAIM_IMMUTABLE/);
+  assert.match(migration, /v\.evidence_id\s*=\s*e\.id[\s\S]*?v\.activity_id\s*=\s*a\.id[\s\S]*?v\.decision\s*=\s*'APPROVED'/i);
+});
+
+test("EPR value-claim trigger is enabled in migrated PostgreSQL", {
+  skip: !(process.env.RUPAYKG_RUN_DB_INTEGRATION_TESTS === "1" && process.env.DATABASE_URL)
+    ? "requires CI disposable PostgreSQL and applied migrations"
+    : false,
+}, async () => {
+  const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: process.env.DATABASE_SSL === "true" ? { rejectUnauthorized: false } : undefined,
+    max: 1,
+  });
+  try {
+    const result = await pool.query<{
+      trigger_enabled: string;
+      trigger_definition: string;
+      function_definition: string;
+    }>("select t.tgenabled as trigger_enabled, pg_get_triggerdef(t.oid) as trigger_definition, pg_get_functiondef(p.oid) as function_definition from pg_trigger t join pg_class c on c.oid=t.tgrelid join pg_namespace n on n.oid=c.relnamespace join pg_proc p on p.oid=t.tgfoid where not t.tgisinternal and n.nspname='public' and c.relname='epr_credits' and t.tgname='epr_credit_environmental_claim'");
+    assert.equal(result.rows.length, 1, "one EPR value-claim trigger must be attached");
+    assert.equal(result.rows[0]?.trigger_enabled, "O", "EPR value-claim trigger must be enabled");
+    assert.match(result.rows[0]!.trigger_definition, /after insert or update of status, activity_id, evidence_id, verification_id, scheme_id, issuer_organization_id, quantity, unit/i);
+    assert.match(result.rows[0]!.function_definition, /organization_has_explicit_geography_scope/i);
+    assert.match(result.rows[0]!.function_definition, /EPR_CREDIT_VALUE_CLAIM_IMMUTABLE/);
+  } finally {
+    await pool.end();
+  }
+});
+
 test("EPR geography guards are attached to the live PostgreSQL tables after migrations", {
   skip: !(process.env.RUPAYKG_RUN_DB_INTEGRATION_TESTS === "1" && process.env.DATABASE_URL)
     ? "requires CI disposable PostgreSQL and applied migrations"
