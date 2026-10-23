@@ -13,14 +13,14 @@ A status must never be inferred from legacy documentation alone.
 
 ## Current evidence snapshot
 
-Latest confirmed green branch evidence before the current database-guard follow-up: PR #41 branch `intelligence/ai-evidence-intake-middleware`, commit `c8feb542af14d7b483fe1a5829c1cecf73b3c7f7`, passed GitHub Actions run [#1869](https://github.com/vishaltradewinds/rupaykg/actions/runs/39897495898). Newer activity-trigger and integration-fixture changes are awaiting CI on the current head; do not treat run #1869 as validation of those changes. CI success is not a new validation of `main` or the live deployment and does not replace external acceptance, nationwide coverage evidence, or production configuration.
+Latest confirmed green branch evidence: PR #41 branch `intelligence/ai-evidence-intake-middleware`, commit `eceab05eca927cfdb25ffc655fcb1ff3411deea3`, passed GitHub Actions run [#39905298723](https://github.com/vishaltradewinds/rupaykg/actions/runs/39905298723). The run includes migration validation, typecheck, application build, browser smoke, disposable PostgreSQL acceptance tests, and production-container build. CI success is not a validation of `main` or the live deployment and does not replace external acceptance, nationwide coverage evidence, or production configuration.
 
 | Domain | Current status | Acceptance evidence / remaining gate |
 |---|---|---|
 | Authoritative database | GREEN | PostgreSQL is the business-state source of truth; clean CI migration and DB-backed tests pass. |
 | Lifecycle state model | GREEN | Current target defines authoritative lifecycle and value gates; lifecycle integration tests execute in CI. |
 | Organization authorization | GREEN | Verified membership required for protected organization operations; authorization tests pass. |
-| Geography authorization | AMBER | Explicit-scope helper, strict resource-flow trigger, activity insert/boundary-update trigger, EPR evidence guards, and CPCB workspace isolation controls are present on PR #41. The latest activity-trigger refinement and cross-tenant test-fixture cleanup are awaiting CI on the current head. Universal coverage across all legacy readers/writers/workers/import paths and national geography-source completeness are not yet proven. |
+| Geography authorization | AMBER | Explicit-scope helper, strict resource-flow trigger, activity insert/boundary-update trigger, EPR registration/transfer guards, submitted EPR return evidence guard, and CPCB workspace isolation controls are present on PR #41 and pass the recorded exact-head CI run. Universal coverage across all legacy readers/writers/workers/import paths and national geography-source completeness are not yet proven. |
 | Field-device enrollment | GREEN | Device must be verified and bound to authorized identity/org; pending-device runtime acceptance passes. |
 | Offline synchronization | GREEN | Envelopes carry identity, sequence/timestamp/idempotency data and are replay-aware; runtime replay and cross-identity rejection pass. |
 | MRV measurements | GREEN | Measurement writes require authorized activity geography; lifecycle runtime acceptance passes. |

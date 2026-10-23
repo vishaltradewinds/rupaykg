@@ -263,3 +263,12 @@ The successful pipeline included production dependency audit, migration validati
 - National geography dataset ingestion and reconciliation, all-jurisdiction rule coverage, official external API access, Guardian/Hedera/Mirror Node live evidence, disaster recovery, and measured Pan-India operating capacity remain separate release gates.
 
 **Updated release decision: internal CI gate PASS at commit `564f7b2893f88d50945adc3dd47ff77c7126938d`; Pan-India operational readiness and production release remain HOLD.** PR #41 remains draft, unmerged, and undeployed.
+
+
+## 7. EPR return submission guard — 2026-10-23
+
+Migration `20261126_strict_epr_return_evidence_geography.sql` adds a database trigger for EPR return transitions to `SUBMITTED`, `ACCEPTED`, or `COMPLETED`. It requires a bound obligation matching the return's scheme and organization, an overlapping obligation period, verified provenance-backed evidence linked to an activity owned by the same organization, an approved verification linked to that same evidence and activity, and explicit verified geography scope. The trigger fires on inserts and updates to the compliance-boundary fields; draft preparation remains possible and unrelated updates to legacy rows are not broadly blocked.
+
+The source-contract and live-trigger acceptance checks were extended to cover the new EPR return guard. Exact-head CI passed at `eceab05eca927cfdb25ffc655fcb1ff3411deea3` in [Actions run #39905298723](https://github.com/vishaltradewinds/rupaykg/actions/runs/39905298723), including migration validation, typecheck, build, browser smoke, disposable PostgreSQL tests, and production-container build.
+
+This is evidence of internal database controls and CI only. It does not establish official EPR portal submission, statutory acceptance, nationwide jurisdiction coverage, or production readiness.

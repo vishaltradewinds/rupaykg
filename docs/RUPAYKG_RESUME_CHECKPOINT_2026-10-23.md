@@ -14,7 +14,7 @@
 - Branch: `intelligence/ai-evidence-intake-middleware`
 - PR: #41, `feat(intelligence): add evidence-first AI log intake middleware`
 - Base: `main`
-- Latest commit after the test-contract correction: `24b6c9fc60b805d51b50f1f1a5ae119d6537e4c7`
+- Latest verified commit at this checkpoint: `eceab05eca927cfdb25ffc655fcb1ff3411deea3`
 - PR remains open, draft, unmerged. No production migration or deployment was performed.
 
 ## Work completed in this continuation
@@ -28,9 +28,9 @@
 
 ## Current validation status
 
-- Last confirmed green run before these changes: [Actions run #1869](https://github.com/vishaltradewinds/rupaykg/actions/runs/39897495898), commit `c8feb542af14d7b483fe1a5829c1cecf73b3c7f7`.
+- Exact latest code/test head `eceab05eca927cfdb25ffc655fcb1ff3411deea3` passed [Actions run #39905298723](https://github.com/vishaltradewinds/rupaykg/actions/runs/39905298723): migration validation, typecheck, build, browser smoke, disposable PostgreSQL acceptance, and production-container build.
 - CI run [#1870](https://github.com/vishaltradewinds/rupaykg/actions/runs/39900233004) failed on checkpoint commit `f3278bb48f2931b8e9d927e1f254cbf624c36684`: the source-contract test still asserted the old migration comment (`existing rows are not rewritten`) after the trigger's compatibility policy was clarified. The failing assertion was corrected to match the new explicit policy (`unrelated legacy-row updates are not blocked`). The database integration checks for the activity guard themselves did not report a failing subtest in that run.
-- Newer code/test commits were pushed after the last confirmed green run. A full CI run for the exact latest branch head is required before treating this batch as validated.
+- The activity guard, strict EPR registration/transfer guards, and the new submitted-EPR-return database guard are covered by the passing run above. A new full CI run is required after any subsequent code or documentation commit.
 - Keep release gate closed until migration validation, typecheck, build, browser smoke, unit/integration tests with disposable PostgreSQL, and production-container build pass on the same final head.
 
 ## Remaining engineering sequence
@@ -38,6 +38,7 @@
 1. Check Actions for the exact latest branch head and inspect every failed/cancelled/in-progress job; do not infer a pass from an earlier commit.
 2. Fix all genuine failures and rerun CI after the batch is stable.
 3. Continue the universal geography-boundary audit across direct SQL writers, routes, background workers, imports, and admin operations. Existing source-contract test covers a defined high-impact file set, not every conceivable path.
+4. Audit other high-impact state transitions for direct-SQL bypasses and add database guards only where the domain contract is clear and backward-compatible.
 4. Review cross-tenant fixture cleanup and the strict activity trigger against actual disposable PostgreSQL behavior.
 5. Extend/update architecture conformance evidence only after the corresponding code and test evidence exists.
 6. Continue Pan-India requirements: canonical source-versioned national geography ingestion and reconciliation, multi-jurisdiction isolation, versioned jurisdiction-specific rule applicability, official adapter authorization/contracts, measured load/resilience, backup/restore, low-bandwidth/mobile accessibility, operational escalation and monitoring.
@@ -45,4 +46,4 @@
 
 ## Release posture
 
-**Engineering changes are in progress; latest changes are not yet validated. Pan-India operational readiness is NOT PROVEN. Shakti certification remains BLOCKED. PR #41 remains unmerged and undeployed.**
+**Current internal engineering batch PASS at commit `eceab05eca927cfdb25ffc655fcb1ff3411deea3` (Actions run #39905298723). Pan-India operational readiness is NOT PROVEN. Shakti certification remains BLOCKED. PR #41 remains unmerged and undeployed.**
