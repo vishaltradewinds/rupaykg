@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
 
 const legacyFallbackForbiddenSourceFiles = [
+  "acceptance-seed.ts",
   "async-mirror-routes.ts",
   "async-mirror-worker.ts",
   "auth-routes.ts",
@@ -181,5 +182,15 @@ test("CPCB stakeholder workspace reads and updates enforce the row's explicit ge
     source,
     /select id,cpcb_reported_status,cpcb_status_source_reference,cpcb_status_note from cpcb_swm_stakeholder_workspaces where id=\$1 and organization_id=\$2 and geography_id is not null and organization_has_explicit_geography_scope\(organization_id,geography_id\) for update/i,
     "workspace update must first lock only a row whose existing geography is in scope",
+  );
+});
+
+
+test("live acceptance seed binds the activity to an explicit verified geography before creation", () => {
+  const source = sourceFor("acceptance-seed.ts");
+  assert.match(
+    source,
+    /insert into organization_geography_scopes[\s\S]*?values \(\$1,\$2,'VERIFIED'\)[\s\S]*?insert into activities\([\s\S]*?organization_id, actor_identity_id, geography_id/,
+    "acceptance seed must establish the verified organization geography scope before inserting a geography-bound activity",
   );
 });
