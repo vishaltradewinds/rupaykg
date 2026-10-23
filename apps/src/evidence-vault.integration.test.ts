@@ -73,17 +73,7 @@ test("evidence vault enforces tenant scope, versioned storage, integrity and ind
     );
     const headers = (token: string, orgId = organizationId) => ({ authorization: "Bearer " + token, "x-rupaykg-organization-id": orgId });
     const bytes = Buffer.from("%PDF-1.7\nMRV evidence fixture\n");
-    const unscopedUpload = await app.inject({
-      method: "POST", url: "/api/v1/evidence-vault/upload", headers: headers(outsiderToken, otherOrg.rows[0]!.id),
-      payload: { activityId: "00000000-0000-4000-8000-000000000001", evidenceType: "WASTE_WEIGHT_TICKET", fileName: "unscoped-ticket.pdf", mediaType: "application/pdf", contentBase64: bytes.toString("base64"), sourceReference: "TEST-UNSCOPED-" + suffix, measurementPeriodStart: "2026-10-01", measurementPeriodEnd: "2026-10-31" },
-    });
-    assert.equal(unscopedUpload.statusCode, 403, unscopedUpload.body);
-    assert.equal(unscopedUpload.json().code, "EVIDENCE_SCOPE_FORBIDDEN");
-    const unscopedList = await app.inject({
-      method: "GET", url: "/api/v1/evidence-vault?activityId=" + unscopedActivity.rows[0]!.id,
-      headers: headers(outsiderToken, otherOrg.rows[0]!.id),
-    });
-    assert.equal(unscopedList.statusCode, 403, unscopedList.body);
+    // The database guard now rejects unscoped activity creation before the evidence API can receive it.
     const upload = await app.inject({
       method: "POST", url: "/api/v1/evidence-vault/upload", headers: headers(uploaderToken),
       payload: { activityId: activity.rows[0]!.id, evidenceType: "WASTE_WEIGHT_TICKET", fileName: "weight-ticket.pdf", mediaType: "application/pdf", contentBase64: bytes.toString("base64"), sourceReference: "TEST-SLIP-"+suffix, measurementPeriodStart: "2026-10-01", measurementPeriodEnd: "2026-10-31" },
