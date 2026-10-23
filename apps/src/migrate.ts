@@ -57,7 +57,7 @@ try {
   const migrationDir = candidates.find((candidate) => existsSync(candidate));
   if (!migrationDir) throw new Error(`Migration directory not found. Checked: ${candidates.join(", ")}`);
   const files = (await readdir(migrationDir))
-    .filter((name) => /^\\d+_.+\\.sql$/.test(name))
+    .filter((name) => /^\d+_.+\.sql$/.test(name))
     .sort();
 
   for (const filename of files) {
