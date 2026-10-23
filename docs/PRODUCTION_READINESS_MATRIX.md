@@ -13,14 +13,14 @@ A status must never be inferred from legacy documentation alone.
 
 ## Current evidence snapshot
 
-The canonical `main` branch has passed the full CI validation chain through GitHub Actions run **#315** on commit **`afdb0927a4aada0098279511768c660fb6c8598a`**: migration validation, clean PostgreSQL migration, typecheck, production build and the complete discovered test suite all passed. Run #315 also verifies the corrected compiled production CORS runtime acceptance test. Earlier CI run **#307** verified the production CORS allowlist and configuration changes, and run **#268** independently verified the carbon runtime-acceptance correction on commit **`6f5d91cf2dc90fc87c609383a602c66eedeecf8`**. These are repository/CI evidence only; they do not replace external acceptance or production configuration.
+Latest branch evidence (2026-10-23): PR #41 branch `intelligence/ai-evidence-intake-middleware`, commit `9cf1a7f40b3e6a280480b1e60dc2333656bdb7f4`, passed GitHub Actions run [#1860](https://github.com/vishaltradewinds/rupaykg/actions/runs/39896487040), including production dependency audit, migration validation/application on disposable PostgreSQL, typecheck, build, browser smoke, automated tests with PostgreSQL acceptance, and production-container build. This is the feature-branch result, not a new validation of `main` or of the live deployment. It also does not replace external acceptance, national coverage evidence, or production configuration. The current branch has since received documentation-only checkpoint commits; re-check CI for the exact latest head before using this matrix as a release record.
 
 | Domain | Current status | Acceptance evidence / remaining gate |
 |---|---|---|
 | Authoritative database | GREEN | PostgreSQL is the business-state source of truth; clean CI migration and DB-backed tests pass. |
 | Lifecycle state model | GREEN | Current target defines authoritative lifecycle and value gates; lifecycle integration tests execute in CI. |
 | Organization authorization | GREEN | Verified membership required for protected organization operations; authorization tests pass. |
-| Geography authorization | GREEN | Organization geography scope is checked server-side and exercised at runtime. |
+| Geography authorization | AMBER | Explicit geography-scope helper and DB/API controls are tested; CPCB workspace list/update isolation was tightened and source-regression-tested on PR #41. Universal coverage across all legacy readers/writers/workers/import paths and national geography-source completeness are not yet proven. |
 | Field-device enrollment | GREEN | Device must be verified and bound to authorized identity/org; pending-device runtime acceptance passes. |
 | Offline synchronization | GREEN | Envelopes carry identity, sequence/timestamp/idempotency data and are replay-aware; runtime replay and cross-identity rejection pass. |
 | MRV measurements | GREEN | Measurement writes require authorized activity geography; lifecycle runtime acceptance passes. |
