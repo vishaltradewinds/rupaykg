@@ -75,3 +75,8 @@ Migration `086_reserved_role_restoration_db_guard.sql` protects status reactivat
 ## Acceptance fixture registry exclusion
 
 Migration `087_acceptance_fixture_registry_exclusion.sql` prevents activities or evidence explicitly marked with `metadata.acceptanceFixture=true` from backing credentials in value-bearing states. It also binds the database gate to the exact activity, verification, and evidence tuple. The MRV API reports acceptance fixtures as not registry eligible even after real Guardian/Hedera/Mirror Node verification. External anchoring proves message integrity and consensus; it does not validate the underlying activity as a real eligible carbon project.
+
+
+## Registry transfer recipient legal verification
+
+Migration `088_registry_transfer_legal_verification.sql` tightens the database-enforced transfer recipient boundary. The legacy `organizations.status` field defaults to `VERIFIED` for compatibility and is not sufficient evidence of legal verification. A recipient must have `verification_status='VERIFIED'`, verifier identity and timestamp, and at least one verified organization-verification evidence record with a reference or content hash. This is platform-governed legal-verification evidence; it does not by itself prove statutory registration or external authority approval.
