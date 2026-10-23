@@ -38,7 +38,7 @@ This is evidence that the configured CI checks passed for this commit. It does n
 | Workers and operational resilience | Bounded worker leases/retries/quarantine, scheduler safeguards and optional webhook alert delivery have code/tests. | Clean isolated staging restart/retry/quarantine acceptance, verified alert delivery, named on-call/escalation, load tests, dead-letter operations, restore/DR and rollback evidence remain open. |
 | AI and model/provider boundaries | AI intake validates schema, records source logs, has bounded provider configuration/rate limits/idempotency, and does not directly approve evidence or mutate MRV/credit state. | Provider/privacy/data-retention terms, production keys, abuse testing, observability and human-review operations must be approved for the actual deployment. |
 | Web/mobile accessibility | A Vite/React UI, guided stakeholder journey, language selector and offline queue are present; CI builds and smoke-tests the web client. | Device-level ordinary-phone/low-bandwidth/accessibility/local-language acceptance and safe offline conflict recovery are not proven by a browser smoke test. |
-| Deployments and external trust rails | Render/Cloud Run configuration and production configuration checks exist. | Actual production DB TLS, secrets/rotation, current deployed SHA, backup/restore, Guardian VERIFIED → Hedera consensus → Mirror Node hash verification, and live operational monitoring must be independently demonstrated. Existing deployment documentation may be stale; verify live environment before relying on it. |
+| Deployments and external trust rails | Render/Cloud Run configuration and production configuration checks exist. The checked-in `render.yaml` explicitly sets `HEDERA_NETWORK=testnet` for the service named `rupaykg-production`. | This is a **production configuration gate**: do not represent mainnet anchoring as configured. Do not silently switch networks or create a replacement topic/account; first verify the intended environment, existing account/topic, credentials and approval. Actual production DB TLS, secrets/rotation, current deployed SHA, backup/restore, Guardian VERIFIED → Hedera consensus → Mirror Node hash verification, and live operational monitoring must be independently demonstrated. Existing deployment documentation may be stale; verify live environment before relying on it. |
 
 ## Changes completed in this audit cycle
 
@@ -46,6 +46,10 @@ This is evidence that the configured CI checks passed for this commit. It does n
 2. **CPCB update isolation:** update query locks only a row in the active organization whose existing geography is explicitly in scope; the requested new geography is separately checked before update.
 3. **Regression test:** `apps/test/strict-geography-callsite-audit.test.ts` asserts both conditions.
 4. **Validation:** the exact combined head passed CI run #1860. No production migration/deployment or PR merge was performed.
+
+### Additional release-critical configuration finding
+
+The checked-in Render manifest has `HEDERA_NETWORK=testnet` under the service named `rupaykg-production`. This is not proof of the live service's effective environment, but it is proof that the repository's declared deployment template defaults to testnet. Treat real production trust-rail acceptance as blocked until the environment target and existing approved account/topic are verified. Do not change it to mainnet by assumption: a network switch is an externally consequential configuration change and requires matching authorized credentials, topic provenance, cost/operational review and explicit approval.
 
 ## Pan-India architecture gaps to close next
 
