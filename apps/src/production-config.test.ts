@@ -92,6 +92,10 @@ describe("production configuration", () => {
     assert.throws(() => readProductionConfig({ ...valid, RUPAYKG_SYNTHETIC_DATA: "true" }), /synthetic data is forbidden/);
   });
 
+  it("forbids acceptance fixture seeding in production", () => {
+    assert.throws(() => readProductionConfig({ ...valid, RUPAYKG_ACCEPTANCE_SEED_ON_START: "true" }), /acceptance seed is forbidden in production/);
+  });
+
   it("forbids a client-bundled workspace session token in production", () => {
     assert.throws(() => readProductionConfig({ ...valid, VITE_RUPAYKG_SESSION_TOKEN: "secret" }), /VITE_RUPAYKG_SESSION_TOKEN must not be provided/);
   });
