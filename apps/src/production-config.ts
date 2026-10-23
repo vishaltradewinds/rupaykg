@@ -21,15 +21,18 @@ function productionDatabaseUrl(value: string): string {
   try { parsed = new URL(value); } catch { throw new Error("PRODUCTION_CONFIG_INVALID: DATABASE_URL must be a valid PostgreSQL URL"); }
   if (parsed.protocol !== "postgres:" && parsed.protocol !== "postgresql:") throw new Error("PRODUCTION_CONFIG_INVALID: DATABASE_URL must use postgres:// or postgresql://");
   if (["localhost", "127.0.0.1", "::1"].includes(parsed.hostname.toLowerCase())) throw new Error("PRODUCTION_CONFIG_INVALID: production DATABASE_URL must not target localhost");
-  return value;
+
+  // node-postgres connection-string SSL parameters can override the explicit
+  // Pool SSL object. Keep TLS policy in validated environment configuration only.
+  for (const key of ["sslmode", "sslrootcert", "sslcert", "sslkey", "sslpassword"]) {
+    parsed.searchParams.delete(key);
+  }
+  return parsed.toString();
 }
 
-function productionCaCert(value: string, databaseUrl: string): string {
+function productionCaCert(value: string): string {
   if (value.includes("BEGIN CERTIFICATE") && value.includes("END CERTIFICATE")) return value;
-  let parsed: URL;
-  try { parsed = new URL(databaseUrl); } catch { throw new Error("PRODUCTION_CONFIG_INVALID: DATABASE_URL must be a valid PostgreSQL URL"); }
-  if (parsed.searchParams.get("sslmode") === "require") return "";
-  throw new Error("PRODUCTION_CONFIG_INVALID: DATABASE_CA_CERT must contain a PEM certificate unless DATABASE_URL uses sslmode=require");
+  throw new Error("PRODUCTION_CONFIG_INVALID: DATABASE_CA_CERT must contain a PEM certificate for external PostgreSQL TLS");
 }
 
 function origins(value: string): string[] {
@@ -59,7 +62,7 @@ export function readProductionConfig(env: NodeJS.ProcessEnv = process.env): Prod
     environment: "production",
     databaseUrl,
     databaseSsl: renderInternalDatabase ? "false" : "require",
-    databaseCaCert: renderInternalDatabase ? "" : productionCaCert(env.DATABASE_CA_CERT?.trim() ?? "", databaseUrl),
+    databaseCaCert: renderInternalDatabase ? "" : productionCaCert(env.DATABASE_CA_CERT?.trim() ?? ""),
     allowedOrigins: origins(required(env, "RUPAYKG_ALLOWED_ORIGINS")),
     authMode: "real",
     syntheticData: false,
