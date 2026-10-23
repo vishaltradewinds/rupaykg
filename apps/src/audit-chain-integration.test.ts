@@ -61,7 +61,7 @@ test("canonical audit append serializes concurrent writers and links every new r
                 'requestId',e.request_id,
                 'payload',e.payload,
                 'previousHash',e.previous_hash,
-                'createdAt',e.created_at
+                'createdAt',to_char(e.created_at at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"')
               )::text,'UTF8'),'sha256'),'hex') as computed_hash
          from audit_events e cross join head h
         where e.created_at >= $1::timestamptz
