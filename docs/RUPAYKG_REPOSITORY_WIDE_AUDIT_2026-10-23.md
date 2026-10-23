@@ -73,3 +73,17 @@ The checked-in Render manifest has `HEDERA_NETWORK=testnet` under the service na
 - Shakti certification: **BLOCKED** until the applicable internal and independent external gates are closed.
 
 **Governing rule:** ONE SHAKTI STANDARD. MANY PROJECT-SPECIFIC OPERATING SYSTEMS.
+
+
+## Follow-up verification — strict activity geography guard (2026-10-23)
+
+- Current audited branch head: `88abd7dd8d3608c1485358213d05b6f06e059a8d`.
+- GitHub Actions CI run #39901122179 completed successfully on that exact head: https://github.com/vishaltradewinds/rupaykg/actions/runs/39901122179.
+- The strict activity migration `migrations/20261114_strict_activity_geography.sql` rejects activity inserts without a geography and rejects inserts whose geography is outside the organization's explicit verified scope.
+- The trigger is intentionally limited to inserts and updates of `organization_id` or `geography_id`. This avoids automatically blocking unrelated updates to historical rows that need a separately planned geography backfill. Route-level authorisation and other database constraints must still protect high-impact status changes; the trigger alone is not a substitute for a complete writer audit.
+- `apps/test/activity-strict-geography.test.ts` includes disposable-PostgreSQL acceptance coverage for missing, unscoped, in-scope and out-of-scope activity geography. The CI result is evidence that configured checks passed; it does not prove every production database, historical record, import path or worker is covered.
+- The static call-site audit explicitly forbids the permissive legacy geography helper in a defined list of authorization-sensitive files and checks key high-impact routes. It is a maintained inventory, not a proof that every repository writer/reader has been discovered. Continue comparing it against the complete source tree and migrations.
+
+### Remaining next action
+
+Continue the authorization-completeness inventory across every activity/resource-flow/evidence/MRV write path, including imports and background jobs; verify the database guard and API authorization agree under scope revocation and historical-row conditions; then update the evidence matrix with exact tests and any uncovered path. Do not globally alter legacy geography-helper semantics without a reviewed backfill and compatibility plan.
