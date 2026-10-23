@@ -55,7 +55,7 @@ function sourceFor(fileName: string): string {
 }
 
 test("runtime source files never use the permissive legacy geography helper", () => {
-  for (const fileName of highImpactRouteFiles) {
+  for (const fileName of legacyFallbackForbiddenSourceFiles) {
     const source = sourceFor(fileName);
     assert.doesNotMatch(
       source,
