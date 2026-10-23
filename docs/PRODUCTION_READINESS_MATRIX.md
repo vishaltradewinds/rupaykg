@@ -13,11 +13,20 @@ A status must never be inferred from legacy documentation alone.
 
 ## Current evidence snapshot
 
+### Production persistence incident — rechecked 2026-10-23
+
+- Render service `rupaykg` has a latest observed successful deployment from 2026-10-20, but that does not establish a working application while its configured Render PostgreSQL instance is suspended.
+- Render PostgreSQL `rupaykg-db` reports `status=suspended`, `suspended=suspended`, `suspenders=[billing]`, and `expiresAt=2026-10-15T09:59:25Z`. A read-only production SQL check could not connect.
+- The inspected Neon `rupaykg` candidates are schema-bearing but have zero rows across the checked core business tables. They are not validated production restores; no cutover or data mutation is authorized.
+- Required recovery gate: restore access to the original Render database through the account/billing owner or use a provider-supported recovery/export path; preserve a backup/snapshot before any migration or cutover; then verify row counts, migration ledger, referential integrity, application TLS/connectivity, and restore evidence. If recovery cannot be performed, record the data-loss risk explicitly before designing a replacement.
+- Release decision: production readiness RED / certification HOLD. This addendum is evidence tracking, not a database change or deployment.
+
+
 Latest confirmed green branch evidence: PR #41 branch `intelligence/ai-evidence-intake-middleware`, commit `eceab05eca927cfdb25ffc655fcb1ff3411deea3`, passed GitHub Actions run [#39905298723](https://github.com/vishaltradewinds/rupaykg/actions/runs/39905298723). The run includes migration validation, typecheck, application build, browser smoke, disposable PostgreSQL acceptance tests, and production-container build. CI success is not a validation of `main` or the live deployment and does not replace external acceptance, nationwide coverage evidence, or production configuration.
 
 | Domain | Current status | Acceptance evidence / remaining gate |
 |---|---|---|
-| Authoritative database | GREEN | PostgreSQL is the business-state source of truth; clean CI migration and DB-backed tests pass. |
+| Authoritative database / production data availability | RED | Render PostgreSQL `rupaykg-db` (`dpg-dakhdv95efls73e1974g-a`) is suspended by billing (status rechecked 2026-10-23; suspension recorded 2026-10-15), so production connectivity and stored business data cannot currently be verified. Inspected Neon candidates have zero rows in the core business tables and are not proven recovery sources. Do not switch databases, run production migrations, or certify until the original data is recovered/verified and connectivity is tested. Disposable CI PostgreSQL passing does not clear this production blocker. |
 | Lifecycle state model | GREEN | Current target defines authoritative lifecycle and value gates; lifecycle integration tests execute in CI. |
 | Organization authorization | GREEN | Verified membership required for protected organization operations; authorization tests pass. |
 | Geography authorization | AMBER | Explicit-scope helper, strict resource-flow trigger, activity insert/boundary-update trigger, EPR registration/transfer guards, submitted EPR return evidence guard, and CPCB workspace isolation controls are present on PR #41 and pass the recorded exact-head CI run. Universal coverage across all legacy readers/writers/workers/import paths and national geography-source completeness are not yet proven. |
