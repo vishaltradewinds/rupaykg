@@ -60,7 +60,7 @@ test("SWM 2026 operational requirements are linked to the authoritative source a
       assert.equal(row.source_title, "Solid Waste Management Rules, 2026");
       assert.equal(row.source_reference, "S.O. 388(E)");
       assert.equal(row.status, "IN_FORCE");
-      assert.equal(row.external_url, "https://www.swm.cpcb.gov.in/", "use the verified official CPCB portal landing page");
+      assert.equal(row.external_url, "https://swmp.cpcb.gov.in/en/", "use the verified official CPCB portal landing page");
     }
   } finally {
     await pool.end();
