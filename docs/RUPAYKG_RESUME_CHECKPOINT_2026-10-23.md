@@ -14,7 +14,7 @@
 - Branch: `intelligence/ai-evidence-intake-middleware`
 - PR: #41, `feat(intelligence): add evidence-first AI log intake middleware`
 - Base: `main`
-- Latest commit recorded when this checkpoint was written: `29dfc058011ee278e6c2e9b394d7804bc28b2a3f`
+- Latest commit after the test-contract correction: `24b6c9fc60b805d51b50f1f1a5ae119d6537e4c7`
 - PR remains open, draft, unmerged. No production migration or deployment was performed.
 
 ## Work completed in this continuation
@@ -29,7 +29,8 @@
 ## Current validation status
 
 - Last confirmed green run before these changes: [Actions run #1869](https://github.com/vishaltradewinds/rupaykg/actions/runs/39897495898), commit `c8feb542af14d7b483fe1a5829c1cecf73b3c7f7`.
-- Newer code/test commits were pushed after that green run. A full CI run for the exact latest branch head is required before treating this batch as validated.
+- CI run [#1870](https://github.com/vishaltradewinds/rupaykg/actions/runs/39900233004) failed on checkpoint commit `f3278bb48f2931b8e9d927e1f254cbf624c36684`: the source-contract test still asserted the old migration comment (`existing rows are not rewritten`) after the trigger's compatibility policy was clarified. The failing assertion was corrected to match the new explicit policy (`unrelated legacy-row updates are not blocked`). The database integration checks for the activity guard themselves did not report a failing subtest in that run.
+- Newer code/test commits were pushed after the last confirmed green run. A full CI run for the exact latest branch head is required before treating this batch as validated.
 - Keep release gate closed until migration validation, typecheck, build, browser smoke, unit/integration tests with disposable PostgreSQL, and production-container build pass on the same final head.
 
 ## Remaining engineering sequence
