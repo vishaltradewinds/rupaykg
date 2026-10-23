@@ -39,9 +39,11 @@ test("evidence vault enforces tenant scope, versioned storage, integrity and ind
       "insert into activities(organization_id,geography_id,activity_type,status) values($1,$2,'WASTE_WEIGHT_MEASUREMENT','COMPLETED') returning id",
       [organizationId, geography.rows[0]!.id],
     );
-    const unscopedActivity = await pool.query<{ id: string }>(
-      "insert into activities(organization_id,geography_id,activity_type,status) values($1,$2,'WASTE_WEIGHT_MEASUREMENT','COMPLETED') returning id",
-      [otherOrg.rows[0]!.id, geography.rows[0]!.id],
+    // The strict activity database guard rejects creation without an explicit verified geography root.
+    await assert.rejects(
+      pool.query("insert into activities(organization_id,geography_id,activity_type,status) values($1,$2,'WASTE_WEIGHT_MEASUREMENT','COMPLETED') returning id",
+        [otherOrg.rows[0]!.id, geography.rows[0]!.id]),
+      /ACTIVITY_GEOGRAPHY_FORBIDDEN/,
     );
     const identities = await Promise.all([
       pool.query<{ id: string }>("insert into identities(external_subject,display_name,email,status) values($1,$2,$3,'VERIFIED') returning id", ["test-evidence-uploader:"+suffix,"Evidence Uploader","uploader-"+suffix+"@example.invalid"]),
@@ -73,7 +75,7 @@ test("evidence vault enforces tenant scope, versioned storage, integrity and ind
     const bytes = Buffer.from("%PDF-1.7\nMRV evidence fixture\n");
     const unscopedUpload = await app.inject({
       method: "POST", url: "/api/v1/evidence-vault/upload", headers: headers(outsiderToken, otherOrg.rows[0]!.id),
-      payload: { activityId: unscopedActivity.rows[0]!.id, evidenceType: "WASTE_WEIGHT_TICKET", fileName: "unscoped-ticket.pdf", mediaType: "application/pdf", contentBase64: bytes.toString("base64"), sourceReference: "TEST-UNSCOPED-" + suffix, measurementPeriodStart: "2026-10-01", measurementPeriodEnd: "2026-10-31" },
+      payload: { activityId: "00000000-0000-4000-8000-000000000001", evidenceType: "WASTE_WEIGHT_TICKET", fileName: "unscoped-ticket.pdf", mediaType: "application/pdf", contentBase64: bytes.toString("base64"), sourceReference: "TEST-UNSCOPED-" + suffix, measurementPeriodStart: "2026-10-01", measurementPeriodEnd: "2026-10-31" },
     });
     assert.equal(unscopedUpload.statusCode, 403, unscopedUpload.body);
     assert.equal(unscopedUpload.json().code, "EVIDENCE_SCOPE_FORBIDDEN");
