@@ -14,12 +14,25 @@ test("canonical audit append serializes concurrent writers and links every new r
   });
   const prefix = `audit-chain-test-${randomUUID()}`;
   try {
-    const baseline = await pool.query<{ started_at: string; last_event_hash: string | null }>(
-      "select clock_timestamp()::text as started_at, last_event_hash from platform_audit_chain_head where singleton=true",
-    );
-    assert.equal(baseline.rowCount, 1, "audit chain head must be initialized");
-    const startedAt = baseline.rows[0]!.started_at;
-    const initialHash = baseline.rows[0]!.last_event_hash;
+    const baselineClient = await pool.connect();
+    let startedAt: string;
+    let initialHash: string | null;
+    try {
+      await baselineClient.query("begin");
+      const baseline = await baselineClient.query<{ last_event_hash: string | null }>(
+        "select last_event_hash from platform_audit_chain_head where singleton=true for update",
+      );
+      assert.equal(baseline.rowCount, 1, "audit chain head must be initialized");
+      initialHash = baseline.rows[0]!.last_event_hash;
+      const clock = await baselineClient.query<{ started_at: string }>("select clock_timestamp()::text as started_at");
+      startedAt = clock.rows[0]!.started_at;
+      await baselineClient.query("commit");
+    } catch (error) {
+      await baselineClient.query("rollback");
+      throw error;
+    } finally {
+      baselineClient.release();
+    }
 
     await Promise.all(Array.from({ length: 8 }, async (_, index) => {
       const client = await pool.connect();
