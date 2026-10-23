@@ -65,6 +65,7 @@ The checked-in Render manifest has `HEDERA_NETWORK=testnet` under the service na
 ## Release decision
 
 - PR #41 remains **open, draft, unmerged**.
+- Read-only Render inspection verified the configured service `rupaykg` is on `main`; latest observed live deploy is `dep-dbbjqic9v7es73ffofmg` at commit `0ddcf6087620880e21ea60f954c9f05d6b759469`. The PR branch is not the deployed branch. Effective runtime secrets/environment variables and current health response were not verified in this audit.
 - Production deployment/migration: **not performed by this audit cycle**.
 - Pan-India design intent: **mandatory and recorded**.
 - Pan-India operational readiness: **not proven**.
