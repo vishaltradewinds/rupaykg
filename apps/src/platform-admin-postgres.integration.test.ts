@@ -129,12 +129,19 @@ test("PostgreSQL Super Admin suspension revokes sessions and blocks subsequent a
     );
     assert.equal(chain.rows.length, 2, "both lifecycle changes should be audited");
     assert.ok(chain.rows[0]?.event_hash && chain.rows[1]?.event_hash, "both audit events need hashes");
-    assert.equal(chain.rows[1]?.previous_hash, chain.rows[0]?.event_hash, "the reactivation event must link to the preceding platform-admin append");
+    const predecessor = await pool.query(
+      "select 1 from audit_events where event_hash=$1 limit 1",
+      [chain.rows[1]?.previous_hash],
+    );
+    assert.equal(predecessor.rowCount, 1, "the reactivation event must link to an existing predecessor in the global chain");
     const head = await pool.query<{ last_event_id: string | null; last_event_hash: string | null }>(
       "select last_event_id,last_event_hash from platform_audit_chain_head where singleton=true",
     );
-    assert.equal(head.rows[0]?.last_event_id, chain.rows[1]?.id, "authoritative platform-admin head must point to the final event from this lifecycle sequence");
-    assert.equal(head.rows[0]?.last_event_hash, chain.rows[1]?.event_hash, "authoritative platform-admin head hash must match its final event");
+    const headEvent = await pool.query<{ event_hash: string }>(
+      "select event_hash from audit_events where id=$1",
+      [head.rows[0]?.last_event_id],
+    );
+    assert.equal(head.rows[0]?.last_event_hash, headEvent.rows[0]?.event_hash, "authoritative global chain head hash must match its referenced event");
   } finally {
     await app.close();
     // This test is permitted only against an explicitly designated disposable test database.
@@ -396,6 +403,108 @@ test("PostgreSQL serializes concurrent Super Admin revocations and preserves one
     if (actorIds.length) await pool.query("delete from identity_sessions where identity_id = any($1::uuid[])", [actorIds]);
     if (membershipIds.length) await pool.query("delete from organization_memberships where id = any($1::uuid[])", [membershipIds]);
     if (roleId) await pool.query("delete from roles where id=$1", [roleId]);
+    await pool.end();
+  }
+});
+
+
+test("PostgreSQL globally serializes concurrent audit appends and rolls back chain state atomically", { skip: !enabled }, async () => {
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  const prefix = "TEST-GLOBAL-AUDIT-" + randomBytes(8).toString("hex");
+  const rolledBackAction = prefix + "-ROLLBACK";
+  const appendedIds: string[] = [];
+  let rolledBackHash = "";
+  try {
+    const baseline = await pool.query<{ last_event_hash: string | null }>(
+      "select last_event_hash from platform_audit_chain_head where singleton=true",
+    );
+    assert.equal(baseline.rowCount, 1, "global chain head must exist before appends");
+    const baselineHash = baseline.rows[0]!.last_event_hash;
+
+    const client = await pool.connect();
+    try {
+      await client.query("begin");
+      const rolledBack = await client.query<{ id: string; event_hash: string }>(
+        "insert into audit_events(action,target_type,request_id,event_hash,payload) values($1,'test',$2,'caller-supplied-hash',$3::jsonb) returning id,event_hash",
+        [rolledBackAction, prefix + "-rollback-request", JSON.stringify({ test: true })],
+      );
+      rolledBackHash = rolledBack.rows[0]!.event_hash;
+      assert.notEqual(rolledBackHash, "caller-supplied-hash", "database trigger must override caller-supplied hashes");
+      await client.query("rollback");
+    } finally {
+      client.release();
+    }
+    const rolledBackCheck = await pool.query(
+      "select 1 from audit_events where action=$1 or event_hash=$2",
+      [rolledBackAction, rolledBackHash],
+    );
+    assert.equal(rolledBackCheck.rowCount, 0, "rolled-back event and its chain-head update must not persist");
+
+    const inserts = await Promise.all(Array.from({ length: 12 }, (_, index) =>
+      pool.query<{ id: string; event_hash: string; previous_hash: string | null }>(
+        "insert into audit_events(action,target_type,request_id,event_hash,payload) values($1,'test',$2,'caller-supplied-hash',$3::jsonb) returning id,event_hash,previous_hash",
+        [prefix + "-" + index, prefix + "-request-" + index, JSON.stringify({ index })],
+      ),
+    ));
+    for (const result of inserts) {
+      assert.equal(result.rowCount, 1);
+      assert.ok(result.rows[0]!.event_hash && result.rows[0]!.event_hash !== "caller-supplied-hash");
+      appendedIds.push(result.rows[0]!.id);
+    }
+
+    const canonicalHashes = await pool.query<{ event_hash: string; expected_hash: string }>(
+      `select event_hash,
+              encode(digest(convert_to(jsonb_build_object(
+                'id', id, 'actor_identity_id', actor_identity_id, 'organization_id', organization_id,
+                'action', action, 'target_type', target_type, 'target_id', target_id,
+                'request_id', request_id, 'payload', payload, 'created_at', created_at,
+                'previous_hash', previous_hash
+              )::text, 'UTF8'), 'sha256'), 'hex') as expected_hash
+         from audit_events where id=any($1::uuid[])`,
+      [appendedIds],
+    );
+    assert.equal(canonicalHashes.rows.length, appendedIds.length);
+    for (const row of canonicalHashes.rows) assert.equal(row.event_hash, row.expected_hash, "stored event hash must match canonical SHA-256 content");
+    const headSnapshot = await pool.query<{ last_event_id: string | null; last_event_hash: string | null }>("select last_event_id,last_event_hash from platform_audit_chain_head where singleton=true");
+    const chainRows = await pool.query<{ id: string; event_hash: string; previous_hash: string | null }>(
+      baselineHash ? "select id,event_hash,previous_hash from audit_events where previous_hash is not null" : "select id,event_hash,previous_hash from audit_events",
+    );
+    const byPreviousHash = new Map<string | null, { id: string; event_hash: string; previous_hash: string | null }>();
+    for (const row of chainRows.rows) {
+      if (baselineHash === null || row.previous_hash !== null) {
+        assert.equal(byPreviousHash.has(row.previous_hash), false, "each chain predecessor must have at most one successor");
+        byPreviousHash.set(row.previous_hash, row);
+      }
+    }
+    const head = await pool.query<{ last_event_id: string | null; last_event_hash: string | null }>(
+      "select last_event_id,last_event_hash from platform_audit_chain_head where singleton=true",
+    );
+    let cursorHash = baselineHash;
+    const visited = new Set<string>();
+    const reachedHead = baselineHash === headSnapshot.rows[0]!.last_event_hash;
+    let foundHead = reachedHead;
+    while (!foundHead) {
+      const next = byPreviousHash.get(cursorHash);
+      assert.ok(next, "global audit chain must have no gap between baseline and head");
+      assert.equal(visited.has(next.event_hash), false, "global audit chain must not cycle");
+      visited.add(next.event_hash);
+      cursorHash = next.event_hash;
+      foundHead = cursorHash === headSnapshot.rows[0]!.last_event_hash;
+      if (visited.size > chainRows.rows.length) assert.fail("global audit chain traversal exceeded row count");
+    }
+    for (const id of appendedIds) assert.ok(visited.has((await pool.query<{ event_hash: string }>("select event_hash from audit_events where id=$1", [id])).rows[0]!.event_hash), "every concurrent append must be linked into the global chain");
+    assert.equal(headSnapshot.rows[0]!.last_event_hash, cursorHash);
+    assert.ok(visited.size >= appendedIds.length, "the chain must contain all concurrent appends");
+    await assert.rejects(
+      pool.query("update audit_events set payload=payload where id=$1", [appendedIds[0]]),
+      /AUDIT_EVENTS_APPEND_ONLY/,
+    );
+    await assert.rejects(
+      pool.query("delete from audit_events where id=$1", [appendedIds[0]]),
+      /AUDIT_EVENTS_APPEND_ONLY/,
+    );
+  } finally {
+    // Append-only audit fixtures are retained intentionally; deleting them would break the chain.
     await pool.end();
   }
 });

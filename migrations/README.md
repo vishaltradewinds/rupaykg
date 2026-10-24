@@ -75,3 +75,8 @@ Migration `086_reserved_role_restoration_db_guard.sql` protects status reactivat
 ## Acceptance fixture registry exclusion
 
 Migration `087_acceptance_fixture_registry_exclusion.sql` prevents activities or evidence explicitly marked with `metadata.acceptanceFixture=true` from backing credentials in value-bearing states. It also binds the database gate to the exact activity, verification, and evidence tuple. The MRV API reports acceptance fixtures as not registry eligible even after real Guardian/Hedera/Mirror Node verification. External anchoring proves message integrity and consensus; it does not validate the underlying activity as a real eligible carbon project.
+
+
+## Global append-only audit chain
+
+Migration `088_global_audit_chain_enforcement.sql` moves audit-chain enforcement to PostgreSQL so every insert into `audit_events`—including CPCB SWM, field-device, and conflict-trigger writers—uses the same serialized SHA-256 chain. A `BEFORE INSERT` trigger locks the singleton chain head, overwrites caller-supplied predecessor/hash values using a canonical JSON representation, and an `AFTER INSERT` trigger advances the head in the same transaction. Any transaction rollback therefore rolls back both the event and head update. UPDATE and DELETE are rejected by the database. The chain starts at the migration-time anchor; this does not certify legacy rows written before migration 088 and does not assert that historical data was tamper-proof.

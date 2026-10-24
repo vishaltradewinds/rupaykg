@@ -61,3 +61,12 @@ After CI, inspect the actual run and head SHA before accepting the batch.
 ## Release decision
 
 **HOLD — engineering review only.** A successful build or CI run does not constitute production certification or regulatory approval. Deployment remains the final gate after the above evidence is reviewed.
+
+
+## Batch 2 — global audit-chain enforcement (engineering implementation; DB integration pending)
+
+- Added migration `088_global_audit_chain_enforcement.sql`. PostgreSQL now owns the canonical append path for all `audit_events` inserts: a `BEFORE INSERT` trigger locks the singleton head, sets `previous_hash`, computes SHA-256 over canonical JSONB fields, and an `AFTER INSERT` trigger advances the head in the same transaction.
+- The trigger deliberately overwrites caller-supplied hashes so older application writers and the field-sync conflict trigger cannot fork the global chain. UPDATE/DELETE attempts against audit rows fail closed.
+- Updated platform-admin application code to rely on the database-owned chain mechanism rather than calculating a competing hash and advancing the head a second time.
+- Added a PostgreSQL integration test for concurrent appends, caller-hash override, rollback atomicity, chain continuity, and append-only behavior. This test is opt-in and was skipped locally because no disposable PostgreSQL integration database was configured. It must run in CI against an isolated migrated test database before this batch can be accepted.
+- Scope boundary: migration 088 creates a globally serialized chain for new appends from the migration-time head. It does not retroactively certify legacy rows, prove historical tamper resistance, or establish production certification. Production remains HOLD; no production database was contacted or mutated.
