@@ -24,3 +24,13 @@ test("audit-chain cutover quiesces audit writers before taking the chain-head lo
   assert.ok(headLock >= 0, "migration must explicitly lock the chain head");
   assert.ok(auditLock < headLock, "audit relation lock must precede head lock to avoid lock inversion with in-flight INSERT triggers");
 });
+const migrationVerifierSource = readFileSync(fileURLToPath(new URL("../../src/verify-migration-state.ts", import.meta.url)), "utf8");
+
+test("migration-state verifier compares the full migration inventory in a read-only TLS-verified transaction", () => {
+  assert.match(migrationVerifierSource, /begin transaction isolation level repeatable read read only/i);
+  assert.match(migrationVerifierSource, /rejectUnauthorized: true/);
+  assert.match(migrationVerifierSource, /const missing =/);
+  assert.match(migrationVerifierSource, /const mismatched =/);
+  assert.match(migrationVerifierSource, /const unexpected =/);
+  assert.doesNotMatch(migrationVerifierSource, /\b(?:insert\s+into|update\s+[a-z_]+\s+set|delete\s+from|create\s+table|alter\s+table|drop\s+table)\b/i);
+});

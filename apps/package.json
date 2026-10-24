@@ -10,6 +10,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "migrate": "tsx src/migrate.ts",
     "verify:audit-chain": "tsx src/verify-audit-chain.ts",
+    "verify:migration-state": "tsx src/verify-migration-state.ts",
     "test": "npm run build && node --test \"dist/**/*.test.js\""
   },
   "dependencies": {
