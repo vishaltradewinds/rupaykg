@@ -3,6 +3,7 @@ const PRODUCTION_ENV = "production";
 export type ProductionConfig = {
   environment: "production";
   databaseUrl: string;
+  migrationDatabaseUrl: string;
   databaseSsl: "require" | "false";
   databaseCaCert: string;
   allowedOrigins: string[];
@@ -50,14 +51,33 @@ export function readProductionConfig(env: NodeJS.ProcessEnv = process.env): Prod
   if (env.RUPAYKG_AUTH_MODE !== "real") throw new Error("PRODUCTION_CONFIG_INVALID: RUPAYKG_AUTH_MODE must be real");
   if (env.VITE_RUPAYKG_SESSION_TOKEN?.trim()) throw new Error("PRODUCTION_CONFIG_INVALID: VITE_RUPAYKG_SESSION_TOKEN must not be provided in production");
   const databaseUrl = productionDatabaseUrl(required(env, "DATABASE_URL"));
+  const migrationDatabaseUrl = productionDatabaseUrl(required(env, "MIGRATION_DATABASE_URL"));
   const parsedDatabaseUrl = new URL(databaseUrl);
+  const parsedMigrationDatabaseUrl = new URL(migrationDatabaseUrl);
+  const decodeUser = (url: URL) => decodeURIComponent(url.username);
+  if (
+    parsedDatabaseUrl.hostname.toLowerCase() !== parsedMigrationDatabaseUrl.hostname.toLowerCase() ||
+    decodeURIComponent(parsedDatabaseUrl.pathname) !== decodeURIComponent(parsedMigrationDatabaseUrl.pathname)
+  ) {
+    throw new Error("PRODUCTION_CONFIG_INVALID: MIGRATION_DATABASE_URL must target the same database host and database name as DATABASE_URL");
+  }
+  if (!decodeUser(parsedMigrationDatabaseUrl) || decodeUser(parsedMigrationDatabaseUrl) === decodeUser(parsedDatabaseUrl)) {
+    throw new Error("PRODUCTION_CONFIG_INVALID: MIGRATION_DATABASE_URL must use a distinct non-empty database role");
+  }
   const renderInternalDatabase =
     /^dpg-[a-z0-9-]+$/i.test(parsedDatabaseUrl.hostname) &&
     !parsedDatabaseUrl.searchParams.get("sslmode");
+  const renderInternalMigrationDatabase =
+    /^dpg-[a-z0-9-]+$/i.test(parsedMigrationDatabaseUrl.hostname) &&
+    !parsedMigrationDatabaseUrl.searchParams.get("sslmode");
+  if (renderInternalDatabase !== renderInternalMigrationDatabase) {
+    throw new Error("PRODUCTION_CONFIG_INVALID: runtime and migration database connections must use the same TLS mode");
+  }
   if (!renderInternalDatabase && env.DATABASE_SSL !== "require") throw new Error("PRODUCTION_CONFIG_INVALID: DATABASE_SSL must be require");
   return {
     environment: "production",
     databaseUrl,
+    migrationDatabaseUrl,
     databaseSsl: renderInternalDatabase ? "false" : "require",
     databaseCaCert: renderInternalDatabase ? "" : productionCaCert(env.DATABASE_CA_CERT?.trim() ?? "", databaseUrl),
     allowedOrigins: origins(required(env, "RUPAYKG_ALLOWED_ORIGINS")),

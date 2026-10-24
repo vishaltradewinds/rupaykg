@@ -3,15 +3,19 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
+import { readProductionConfig } from "./production-config.js";
 
-const databaseUrl = process.env.DATABASE_URL;
+// Validate the complete production contract before any database connection or DDL.
+const productionConfig = process.env.NODE_ENV === "production" ? readProductionConfig() : null;
+const databaseUrl = productionConfig?.migrationDatabaseUrl ?? process.env.DATABASE_URL;
 if (!databaseUrl) throw new Error("DATABASE_URL is required");
+const databaseSsl = productionConfig?.databaseSsl ?? process.env.DATABASE_SSL;
+const databaseCaCert = productionConfig?.databaseCaCert ?? process.env.DATABASE_CA_CERT?.trim() ?? "";
+const ssl = databaseSsl === "false"
+  ? false
+  : { rejectUnauthorized: true, ...(databaseCaCert ? { ca: databaseCaCert } : {}) };
 
-const pool = new Pool({
-  connectionString: databaseUrl,
-  max: 1,
-  ssl: process.env.DATABASE_SSL === "false" ? undefined : { rejectUnauthorized: false },
-});
+const pool = new Pool({ connectionString: databaseUrl, max: 1, ssl });
 
 try {
   await pool.query(`

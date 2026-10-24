@@ -4,7 +4,8 @@ import { readProductionConfig } from "../src/production-config.js";
 
 const baseEnv = {
   NODE_ENV: "production",
-  DATABASE_URL: "postgresql://rupaykg:secret@db.example.com:5432/rupaykg",
+  DATABASE_URL: "postgresql://runtime_role:secret@db.example.com:5432/rupaykg",
+  MIGRATION_DATABASE_URL: "postgresql://migration_role:secret@db.example.com:5432/rupaykg",
   DATABASE_SSL: "require",
   DATABASE_CA_CERT: "-----BEGIN CERTIFICATE-----\nproduction-test-ca\n-----END CERTIFICATE-----",
   RUPAYKG_AUTH_MODE: "real",
@@ -16,6 +17,7 @@ test("production config accepts the fail-closed production contract", () => {
   assert.deepEqual(readProductionConfig(baseEnv), {
     environment: "production",
     databaseUrl: baseEnv.DATABASE_URL,
+    migrationDatabaseUrl: baseEnv.MIGRATION_DATABASE_URL,
     databaseSsl: "require",
     databaseCaCert: baseEnv.DATABASE_CA_CERT,
     allowedOrigins: ["https://app.rupaykg.example", "https://admin.rupaykg.example"],
