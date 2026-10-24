@@ -519,11 +519,27 @@ test("PostgreSQL globally serializes concurrent audit appends and rolls back cha
       /AUDIT_CHAIN_ANCHOR_IMMUTABLE/,
     );
     await assert.rejects(
+      pool.query("truncate table platform_audit_chain_anchor"),
+      /AUDIT_CHAIN_ANCHOR_IMMUTABLE/,
+    );
+    await assert.rejects(
+      pool.query("delete from platform_audit_chain_head where singleton=true"),
+      /AUDIT_CHAIN_HEAD_IMMUTABLE/,
+    );
+    await assert.rejects(
+      pool.query("truncate table platform_audit_chain_head"),
+      /AUDIT_CHAIN_HEAD_IMMUTABLE/,
+    );
+    await assert.rejects(
       pool.query("update audit_events set payload=payload where id=$1", [appendedIds[0]]),
       /AUDIT_EVENTS_APPEND_ONLY/,
     );
     await assert.rejects(
       pool.query("delete from audit_events where id=$1", [appendedIds[0]]),
+      /AUDIT_EVENTS_APPEND_ONLY/,
+    );
+    await assert.rejects(
+      pool.query("truncate table audit_events"),
       /AUDIT_EVENTS_APPEND_ONLY/,
     );
   } finally {

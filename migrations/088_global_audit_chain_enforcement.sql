@@ -108,6 +108,13 @@ create trigger audit_events_append_only_guard
 before update or delete on audit_events
 for each row execute function reject_audit_event_mutation();
 
+-- TRUNCATE is statement-level and does not fire row-level UPDATE/DELETE triggers.
+-- Block it explicitly as defense in depth; runtime must still be a non-owner.
+drop trigger if exists audit_events_truncate_guard on audit_events;
+create trigger audit_events_truncate_guard
+before truncate on audit_events
+for each statement execute function reject_audit_event_mutation();
+
 create or replace function reject_audit_chain_anchor_mutation()
 returns trigger
 language plpgsql
@@ -121,6 +128,30 @@ drop trigger if exists platform_audit_chain_anchor_immutable on platform_audit_c
 create trigger platform_audit_chain_anchor_immutable
 before update or delete on platform_audit_chain_anchor
 for each row execute function reject_audit_chain_anchor_mutation();
+
+drop trigger if exists platform_audit_chain_anchor_no_truncate on platform_audit_chain_anchor;
+create trigger platform_audit_chain_anchor_no_truncate
+before truncate on platform_audit_chain_anchor
+for each statement execute function reject_audit_chain_anchor_mutation();
+
+create or replace function reject_audit_chain_head_removal()
+returns trigger
+language plpgsql
+as $$
+begin
+  raise exception 'AUDIT_CHAIN_HEAD_IMMUTABLE';
+end;
+$$;
+
+drop trigger if exists platform_audit_chain_head_no_delete on platform_audit_chain_head;
+create trigger platform_audit_chain_head_no_delete
+before delete on platform_audit_chain_head
+for each row execute function reject_audit_chain_head_removal();
+
+drop trigger if exists platform_audit_chain_head_no_truncate on platform_audit_chain_head;
+create trigger platform_audit_chain_head_no_truncate
+before truncate on platform_audit_chain_head
+for each statement execute function reject_audit_chain_head_removal();
 
 -- Create a dedicated cutover event. This gives post-migration verification a
 -- stable root even when legacy rows contain multiple historical hash streams.
