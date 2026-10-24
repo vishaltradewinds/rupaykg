@@ -5,7 +5,9 @@ import Fastify from "fastify";
 import { Pool } from "pg";
 import { registerPlatformAdminRoutes } from "./platform-admin-routes.js";
 
-const enabled = process.env.RUPAYKG_RUN_DB_INTEGRATION_TESTS === "1" && Boolean(process.env.DATABASE_URL);
+const enabled = process.env.RUPAYKG_RUN_DB_INTEGRATION_TESTS === "1" && Boolean(process.env.RUPAYKG_TEST_DATABASE_URL ?? process.env.DATABASE_URL);
+const auditChainDatabaseUrl = process.env.RUPAYKG_TEST_DATABASE_URL ?? process.env.DATABASE_URL;
+const auditChainEnabled = process.env.RUPAYKG_RUN_DB_INTEGRATION_TESTS === "1" && Boolean(auditChainDatabaseUrl);
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
 
 /**
@@ -38,7 +40,7 @@ async function bootstrapReservedMembership(pool: Pool, identityId: string, organ
 }
 
 test("PostgreSQL Super Admin suspension revokes sessions and blocks subsequent authentication", { skip: !enabled }, async (t) => {
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  const pool = new Pool({ connectionString: process.env.RUPAYKG_TEST_DATABASE_URL ?? process.env.DATABASE_URL });
   const app = Fastify({ logger: false });
   await registerPlatformAdminRoutes(app, pool);
   const suffix = randomBytes(8).toString("hex");
@@ -158,7 +160,7 @@ test("PostgreSQL Super Admin suspension revokes sessions and blocks subsequent a
 
 
 test("PostgreSQL requires two distinct active Super Admins for reserved-role grants and restoration", { skip: !enabled }, async () => {
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  const pool = new Pool({ connectionString: process.env.RUPAYKG_TEST_DATABASE_URL ?? process.env.DATABASE_URL });
   const app = Fastify({ logger: { level: "error" } });
   await registerPlatformAdminRoutes(app, pool);
   const suffix = randomBytes(8).toString("hex");
@@ -312,7 +314,7 @@ test("PostgreSQL requires two distinct active Super Admins for reserved-role gra
 });
 
 test("PostgreSQL serializes concurrent Super Admin revocations and preserves one active administrator", { skip: !enabled }, async (t) => {
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  const pool = new Pool({ connectionString: process.env.RUPAYKG_TEST_DATABASE_URL ?? process.env.DATABASE_URL });
   const app = Fastify({ logger: false });
   await registerPlatformAdminRoutes(app, pool);
   const suffix = randomBytes(8).toString("hex");
@@ -408,8 +410,8 @@ test("PostgreSQL serializes concurrent Super Admin revocations and preserves one
 });
 
 
-test("PostgreSQL globally serializes concurrent audit appends and rolls back chain state atomically", { skip: !enabled }, async () => {
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+test("PostgreSQL globally serializes concurrent audit appends and rolls back chain state atomically", { skip: !auditChainEnabled }, async () => {
+  const pool = new Pool({ connectionString: process.env.RUPAYKG_TEST_DATABASE_URL ?? process.env.DATABASE_URL });
   const prefix = "TEST-GLOBAL-AUDIT-" + randomBytes(8).toString("hex");
   const rolledBackAction = prefix + "-ROLLBACK";
   const appendedIds: string[] = [];
@@ -467,7 +469,8 @@ test("PostgreSQL globally serializes concurrent audit appends and rolls back cha
     for (const row of canonicalHashes.rows) assert.equal(row.event_hash, row.expected_hash, "stored event hash must match canonical SHA-256 content");
     const headSnapshot = await pool.query<{ last_event_id: string | null; last_event_hash: string | null }>("select last_event_id,last_event_hash from platform_audit_chain_head where singleton=true");
     const chainRows = await pool.query<{ id: string; event_hash: string; previous_hash: string | null }>(
-      baselineHash ? "select id,event_hash,previous_hash from audit_events where previous_hash is not null" : "select id,event_hash,previous_hash from audit_events",
+      "with recursive chain as (select id,event_hash,previous_hash from audit_events where previous_hash is not distinct from $1 union select e.id,e.event_hash,e.previous_hash from audit_events e join chain c on e.previous_hash=c.event_hash) select id,event_hash,previous_hash from chain",
+      [baselineHash],
     );
     const byPreviousHash = new Map<string | null, { id: string; event_hash: string; previous_hash: string | null }>();
     for (const row of chainRows.rows) {
