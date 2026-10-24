@@ -4,7 +4,7 @@
 -- Refresh the migration-time anchor while writes to both tables are quiesced. Ordering is
 -- used only to select the legacy anchor; it does not certify the legacy chain order.
 -- Lock the head table first to match the app's historical head -> audit insert lock order.
-lock table platform_audit_chain_head in share row exclusive mode;
+lock table platform_audit_chain_head in exclusive mode;
 lock table audit_events in share row exclusive mode;
 
 create table if not exists platform_audit_chain_anchor (
