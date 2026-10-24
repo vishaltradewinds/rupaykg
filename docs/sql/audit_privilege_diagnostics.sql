@@ -67,8 +67,8 @@ select n.nspname as schema_name,
  order by n.nspname, p.oid::regprocedure::text, grantee;
 
 \echo '5. Recursive role memberships and role attributes for privilege-boundary identities'
-with recursive relevant_roles(role_oid, origin, role_path) as (
-  select r.oid, r.rolname, r.rolname::text
+with recursive relevant_roles(role_oid, origin, role_path_names) as (
+  select r.oid, r.rolname, array[r.rolname]::text[]
     from pg_roles r
    where r.rolname in (current_user, session_user)
       or r.oid in (
@@ -84,14 +84,14 @@ with recursive relevant_roles(role_oid, origin, role_path) as (
          where p.proname = 'append_platform_audit_event'
       )
   union all
-  select m.roleid, rr.origin, rr.role_path || ' -> ' || granted.rolname
+  select m.roleid, rr.origin, rr.role_path_names || granted.rolname
     from relevant_roles rr
     join pg_auth_members m on m.member = rr.role_oid
     join pg_roles granted on granted.oid = m.roleid
-   where rr.role_path not like '%' || granted.rolname || '%'
+   where not (granted.rolname = any(rr.role_path_names))
 )
 select distinct rr.origin as starting_identity,
-       rr.role_path as membership_path,
+       array_to_string(rr.role_path_names, ' -> ') as membership_path,
        r.rolname as role_name,
        r.rolcanlogin,
        r.rolsuper,
