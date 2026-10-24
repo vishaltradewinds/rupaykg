@@ -9,7 +9,7 @@ select current_database() as database_name,
        current_user as effective_user,
        current_setting('server_version') as server_version;
 
-\echo '2. Audit objects, owners, and relation privileges'
+\echo '2. Audit objects, owners, and effective relation privileges'
 select n.nspname as schema_name,
        c.relname as object_name,
        c.relkind as object_kind,
@@ -25,13 +25,22 @@ select n.nspname as schema_name,
    and n.nspname not in ('pg_catalog', 'information_schema')
  order by n.nspname, c.relname;
 
-\echo '3. Explicit and inherited grants for audit tables'
-select table_schema, table_name, grantee, privilege_type, is_grantable
-  from information_schema.role_table_grants
- where table_name in ('audit_events', 'platform_audit_chain_head')
- order by table_schema, table_name, grantee, privilege_type;
+\echo '3. Catalog-level relation ACLs, including PUBLIC and default ACLs'
+select n.nspname as schema_name,
+       c.relname as object_name,
+       pg_get_userbyid(c.relowner) as object_owner,
+       case when acl.grantee = 0 then 'PUBLIC'
+            else pg_get_userbyid(acl.grantee) end as grantee,
+       acl.privilege_type,
+       acl.is_grantable
+  from pg_class c
+  join pg_namespace n on n.oid = c.relnamespace
+ cross join lateral aclexplode(coalesce(c.relacl, acldefault('r', c.relowner))) acl
+ where c.relname in ('audit_events', 'platform_audit_chain_head')
+   and n.nspname not in ('pg_catalog', 'information_schema')
+ order by n.nspname, c.relname, grantee, acl.privilege_type;
 
-\echo '4. Canonical append function owner, security mode, execute grants, and fixed search_path'
+\echo '4. Canonical append function owner, security mode, ACLs, and fixed search_path'
 select n.nspname as schema_name,
        p.oid::regprocedure as function_signature,
        pg_get_userbyid(p.proowner) as function_owner,
@@ -44,32 +53,55 @@ select n.nspname as schema_name,
  where p.proname = 'append_platform_audit_event'
  order by n.nspname, p.oid::regprocedure::text;
 
-\echo '5. Role attributes and role memberships (inspect escalation paths)'
-select r.rolname,
+select n.nspname as schema_name,
+       p.oid::regprocedure as function_signature,
+       pg_get_userbyid(p.proowner) as function_owner,
+       case when acl.grantee = 0 then 'PUBLIC'
+            else pg_get_userbyid(acl.grantee) end as grantee,
+       acl.privilege_type,
+       acl.is_grantable
+  from pg_proc p
+  join pg_namespace n on n.oid = p.pronamespace
+ cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) acl
+ where p.proname = 'append_platform_audit_event'
+ order by n.nspname, p.oid::regprocedure::text, grantee;
+
+\echo '5. Recursive role memberships and role attributes for privilege-boundary identities'
+with recursive relevant_roles(role_oid, origin, role_path) as (
+  select r.oid, r.rolname, r.rolname::text
+    from pg_roles r
+   where r.rolname in (current_user, session_user)
+      or r.oid in (
+        select c.relowner
+          from pg_class c
+          join pg_namespace n on n.oid = c.relnamespace
+         where c.relname in ('audit_events', 'platform_audit_chain_head')
+           and n.nspname not in ('pg_catalog', 'information_schema')
+      )
+      or r.oid in (
+        select p.proowner
+          from pg_proc p
+         where p.proname = 'append_platform_audit_event'
+      )
+  union all
+  select m.roleid, rr.origin, rr.role_path || ' -> ' || granted.rolname
+    from relevant_roles rr
+    join pg_auth_members m on m.member = rr.role_oid
+    join pg_roles granted on granted.oid = m.roleid
+   where rr.role_path not like '%' || granted.rolname || '%'
+)
+select distinct rr.origin as starting_identity,
+       rr.role_path as membership_path,
+       r.rolname as role_name,
        r.rolcanlogin,
        r.rolsuper,
        r.rolcreatedb,
        r.rolcreaterole,
        r.rolinherit,
-       r.rolbypassrls,
-       member.rolname as member_of_role
-  from pg_roles r
-  left join pg_auth_members m on m.member = r.oid
-  left join pg_roles member on member.oid = m.roleid
- where r.rolname in (current_user, session_user)
-    or r.rolname in (
-      select pg_get_userbyid(c.relowner)
-        from pg_class c
-        join pg_namespace n on n.oid = c.relnamespace
-       where c.relname in ('audit_events', 'platform_audit_chain_head')
-         and n.nspname not in ('pg_catalog', 'information_schema')
-    )
-    or r.rolname in (
-      select pg_get_userbyid(p.proowner)
-        from pg_proc p
-       where p.proname = 'append_platform_audit_event'
-    )
- order by r.rolname, member.rolname;
+       r.rolbypassrls
+  from relevant_roles rr
+  join pg_roles r on r.oid = rr.role_oid
+ order by starting_identity, membership_path;
 
 \echo '6. Audit mutation triggers and their enabled state'
 select n.nspname as schema_name,
@@ -89,5 +121,6 @@ select n.nspname as schema_name,
 \echo '- Runtime role must not have direct INSERT on audit_events or privilege inherited from another role.'
 \echo '- Runtime role must not be able to assume the dedicated function-owner role.'
 \echo '- A SECURITY DEFINER function must have a distinct trusted owner and a fixed safe search_path.'
-\echo '- EXECUTE should be granted only to the intended runtime role(s); PUBLIC should not have EXECUTE.'
+\echo '- EXECUTE should be granted only to intended runtime role(s); PUBLIC should not have EXECUTE.'
+\echo '- Check all recursive membership paths, including roles with CREATEROLE, BYPASSRLS, or SUPERUSER.'
 \echo '- Superusers and database owners remain privileged trust boundaries; this report alone is not a security certification.'
