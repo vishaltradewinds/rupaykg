@@ -539,8 +539,8 @@ test("PostgreSQL globally serializes concurrent audit appends and rolls back cha
       /AUDIT_EVENTS_APPEND_ONLY/,
     );
     await assert.rejects(
-      pool.query("truncate table audit_events"),
-      /AUDIT_EVENTS_APPEND_ONLY/,
+      pool.query("truncate table audit_events cascade"),
+      /AUDIT_EVENTS_APPEND_ONLY|AUDIT_CHAIN_ANCHOR_IMMUTABLE/,
     );
   } finally {
     // Append-only audit fixtures are retained intentionally; deleting them would break the chain.
