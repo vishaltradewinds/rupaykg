@@ -137,7 +137,28 @@ select distinct rr.origin as starting_identity,
   join pg_roles r on r.oid = rr.role_oid
  order by starting_identity, membership_path;
 
-\echo '8. Audit mutation triggers and their enabled state'
+\echo '8. Role membership edges and PostgreSQL SET/INHERIT options'
+select member_role.rolname as member_role,
+       granted_role.rolname as granted_role,
+       m.admin_option,
+       m.inherit_option,
+       m.set_option
+  from pg_auth_members m
+  join pg_roles member_role on member_role.oid = m.member
+  join pg_roles granted_role on granted_role.oid = m.roleid
+ where member_role.rolcanlogin
+    or member_role.rolname in (current_user, session_user)
+    or granted_role.rolname in (current_user, session_user)
+    or granted_role.oid in (
+      select c.relowner from pg_class c
+      join pg_namespace n on n.oid = c.relnamespace
+      where c.relname in ('audit_events', 'platform_audit_chain_head')
+        and n.nspname not in ('pg_catalog', 'information_schema')
+    )
+    or granted_role.oid in (select p.proowner from pg_proc p where p.proname = 'append_platform_audit_event')
+ order by member_role.rolname, granted_role.rolname;
+
+\echo '9. Audit mutation triggers and their enabled state'
 select n.nspname as schema_name,
        c.relname as table_name,
        t.tgname as trigger_name,
