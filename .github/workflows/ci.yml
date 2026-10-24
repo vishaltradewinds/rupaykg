@@ -72,8 +72,10 @@ jobs:
           test -s /tmp/rupaykg-web-smoke.png
           echo "Chrome DOM exit: $dom_status; screenshot exit: $shot_status"
       - name: Prepare isolated PostgreSQL acceptance databases
+        env:
+          CI_ADMIN_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
         run: |
-          node -e 'const { Client } = require("pg"); (async () => { const client = new Client({ connectionString: "postgresql://postgres:postgres@localhost:5432/postgres" }); await client.connect(); try { await client.query("CREATE DATABASE rupaykg_baseline_test"); await client.query("CREATE DATABASE rupaykg_cpcb_test"); } finally { await client.end(); } })().catch((error) => { console.error(error); process.exitCode = 1; });'
+          node scripts/create-ci-test-databases.mjs
           DATABASE_URL=postgresql://postgres:postgres@localhost:5432/rupaykg_baseline_test npm run migrate -w @rupaykg/api
           DATABASE_URL=postgresql://postgres:postgres@localhost:5432/rupaykg_cpcb_test npm run migrate -w @rupaykg/api
       - name: Run tests including disposable PostgreSQL acceptance

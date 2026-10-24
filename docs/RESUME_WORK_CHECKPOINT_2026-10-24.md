@@ -1,7 +1,7 @@
-# RupayKg Shakti Resume Checkpoint — 2026-10-24
+# RupayKg Shakti Resume Checkpoint â€” 2026-10-24
 
 ## AIM
-Build RupayKg into a robust, operational, Pan-India Circular Economy Operating System for real organizations and waste flows, evidence-first MRV, EPR/ESG workflows, and independently verifiable environmental-credit processes—not a pilot-only/demo system.
+Build RupayKg into a robust, operational, Pan-India Circular Economy Operating System for real organizations and waste flows, evidence-first MRV, EPR/ESG workflows, and independently verifiable environmental-credit processesâ€”not a pilot-only/demo system.
 
 ## RULES / SHAKTI STANDARDS
 - Reconcile the authoritative repository and current evidence before acting.
@@ -27,10 +27,11 @@ Build RupayKg into a robust, operational, Pan-India Circular Economy Operating S
 - Production dependency audit after compatible updates: zero vulnerabilities. Fastify resolved to 5.12.7; `fast-uri` resolved to 3.1.9 and 4.2.3.
 - Browser smoke: local production preview returned HTTP 200; expected root/assets/stakeholder journey references were present; headless Chrome rendered RupayKG and produced a screenshot.
 - Production Docker image build passed after reproducibility hardening: Dockerfile and CI copy/use the committed lockfile with `npm ci`. Docker image build completed successfully; production dependency prune audited 177 packages and reported zero vulnerabilities.
+- GitHub Actions is configured to provision two dedicated PostgreSQL test databases for the BM-WA03.001 baseline and CPCB evidence API integration gates, migrate each before tests, and pass their URLs into the test step. The database-creation script was syntax-checked and exercised successfully against a disposable local PostgreSQL instance. CI for the latest pushed head remains the authoritative next verification.
 
 ## BLOCKERS / HOLD
 - Production Render PostgreSQL was last reported suspended for billing; the actual configured database target must be reconciled after the account owner restores access. No production database changes were made.
-- Trusted RupayKg JWT → Guardian-native VC bridge is NEXT but blocked on authorized issuer DID/key and Guardian sender/policy credentials. No secrets or identifiers were invented.
+- Trusted RupayKg JWT â†’ Guardian-native VC bridge is NEXT but blocked on authorized issuer DID/key and Guardian sender/policy credentials. No secrets or identifiers were invented.
 - Real Guardian VERIFIED execution, Hedera consensus, persisted provenance and Mirror Node verification remain NOT_STARTED. Production certification remains HOLD.
 
 ## NEXT ACTIONS
