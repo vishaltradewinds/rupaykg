@@ -112,3 +112,8 @@ The configuration fails closed if the migration URL is missing, uses the same da
 Local validation after this change: migration inventory validation passed (97 migrations / 79 schema objects); workspace typecheck passed; API tests 108 passed, 0 failed, 12 skipped because optional database/provider integration services were not configured locally. CI must still validate this commit.
 
 **Deployment blocker:** Render production environment must be configured with the correct two role-specific URLs before this code is released. Do not merge while auto-deploy on `main` is enabled unless the migration and runtime credentials have been securely provisioned and verified. No environment variables or database roles were changed by this engineering batch.
+### Audit-chain trigger privilege boundary - engineering follow-up
+
+Added migration `20261027_runtime_role_audit_chain_security_definer.sql`. The audit-chain insert/update-head and immutable-row guard functions now run as `SECURITY DEFINER` with a pinned `pg_catalog, public` search path; `CREATE` on `public` is revoked from `PUBLIC` to prevent object shadowing in that search path. This is required for an application role that can append audit events but cannot directly update the global chain head or modify the immutable anchor.
+
+Local validation: migration inventory validates at 98 migrations / 79 schema objects; workspace typecheck passed; API tests 109 passed, 0 failed, 12 skipped. These local tests include static checks for the new privilege boundary. PostgreSQL-backed tests must run in CI; local integration tests requiring isolated databases were skipped. This migration has not been applied to production.
