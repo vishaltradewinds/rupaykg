@@ -129,3 +129,8 @@ This is intentionally **not** “fixed” with a custom GUC guard or an unreview
 - The diagnostic script has not been executed against the production database. Effective production grants, owner separation, and role escalation paths therefore remain unverified.
 
 **Current decision unchanged:** NOT PRODUCTION-READY / NOT SHAKTI-CERTIFIED. PR #43 remains draft and unmerged; deployment remains deferred. The next security step requires an authorized, working TLS-capable database connection and review of actual role/grant output before any privilege migration is designed or applied.
+
+
+### Runtime health cross-check — 2026-10-24
+
+Render application logs show repeated `GET /health` requests returning HTTP 200 around 08:50–08:51 UTC. The `main` branch handler for `/health` runs `select 1` through its configured PostgreSQL pool and only returns 200 when that query succeeds. This conflicts with the Render control-plane state showing `rupaykg-db` suspended for billing. The observations must be reconciled: those health checks indicate a successful DB query for the service's configured connection at those timestamps, but do not prove it targets the expected database resource or that complete workflows work. The Render SQL diagnostic connection still fails with TLS-required / unexpected-EOF errors. No database changes were made.
