@@ -70,3 +70,11 @@ After CI, inspect the actual run and head SHA before accepting the batch.
 - Updated platform-admin application code to rely on the database-owned chain mechanism rather than calculating a competing hash and advancing the head a second time.
 - Added a PostgreSQL integration test for concurrent appends, caller-hash override, rollback atomicity, chain continuity, and append-only behavior. This test is opt-in and was skipped locally because no disposable PostgreSQL integration database was configured. It must run in CI against an isolated migrated test database before this batch can be accepted.
 - Scope boundary: migration 088 creates a globally serialized chain for new appends from the migration-time head. It does not retroactively certify legacy rows, prove historical tamper resistance, or establish production certification. Production remains HOLD; no production database was contacted or mutated.
+
+
+## Batch 3 — remove remaining alternate audit/startup paths
+
+- CPCB SWM route audit writes no longer query the latest organization event or compute a competing per-organization hash. They insert the event payload and let migration 088 own predecessor selection and hashing.
+- The API workspace `start` script now launches only the production server; it no longer invokes the optional acceptance-seed script.
+- The acceptance-seed script now refuses to run when `NODE_ENV=production` and verifies PostgreSQL TLS certificates by default, with optional `DATABASE_CA_CERT` support.
+- Added source-contract tests for production start behavior and acceptance-seed safety. This batch is engineering-only until typecheck, full tests, migration validation and exact-head CI complete. No seed script was run against any database.

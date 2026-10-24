@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+
 import type { FastifyInstance } from "fastify";
 import type { Pool, PoolClient } from "pg";
 import { authenticate, bearerChallenge, canActForOrganization, hasOrganizationPermission, type AuthContext } from "./auth.js";
@@ -80,12 +80,13 @@ export function safeObservations(value: unknown): boolean {
   }
   return true;
 }
-function hashEvent(value: unknown): string { return createHash("sha256").update(JSON.stringify(value)).digest("hex"); }
 async function writeAudit(client: PoolClient, identityId: string, organizationId: string, action: string, targetId: string, payload: unknown, requestId: string) {
-  const prior = await client.query<{ event_hash: string }>("select event_hash from audit_events where organization_id=$1 order by created_at desc, id desc limit 1 for update", [organizationId]);
-  const previousHash = prior.rows[0]?.event_hash ?? null;
-  const event = { identityId, organizationId, action, targetId, payload, requestId, previousHash, at: new Date().toISOString() };
-  await client.query("insert into audit_events(actor_identity_id,organization_id,action,target_type,target_id,request_id,previous_hash,event_hash,payload) values($1,$2,$3,'cpcb_swm_stakeholder_workspace',$4,$5,$6,$7,$8::jsonb)", [identityId, organizationId, action, targetId, requestId, previousHash, hashEvent(event), JSON.stringify(payload)]);
+  // PostgreSQL migration 088 owns predecessor selection and canonical hashing for every writer.
+  // Do not construct a per-organization chain here; it can race and fork the global chain.
+  await client.query(
+    "insert into audit_events(actor_identity_id,organization_id,action,target_type,target_id,request_id,payload) values($1,$2,$3,'cpcb_swm_stakeholder_workspace',$4,$5,$6::jsonb)",
+    [identityId, organizationId, action, targetId, requestId, JSON.stringify(payload)],
+  );
 }
 
 export async function registerCpcbSwmRoutes(app: FastifyInstance, pool: Pool | null): Promise<void> {

@@ -13,6 +13,9 @@ import { Pool } from "pg";
 if (process.env.RUPAYKG_ACCEPTANCE_SEED_ON_START !== "true") {
   process.exit(0);
 }
+if (process.env.NODE_ENV === "production") {
+  throw new Error("Acceptance fixture seeding is prohibited in production");
+}
 
 const databaseUrl = process.env.DATABASE_URL;
 const sessionToken = process.env.RUPAYKG_ACCEPTANCE_SESSION_TOKEN;
@@ -22,7 +25,7 @@ if (!sessionToken) throw new Error("RUPAYKG_ACCEPTANCE_SESSION_TOKEN is required
 const pool = new Pool({
   connectionString: databaseUrl,
   max: 1,
-  ssl: process.env.DATABASE_SSL === "false" ? undefined : { rejectUnauthorized: false },
+  ssl: process.env.DATABASE_SSL === "false" ? undefined : { rejectUnauthorized: true, ...(process.env.DATABASE_CA_CERT ? { ca: process.env.DATABASE_CA_CERT } : {}) },
 });
 
 const tokenHash = createHash("sha256").update(sessionToken).digest("hex");
