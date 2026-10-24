@@ -1,4 +1,4 @@
-# RupayKg Production Readiness Gate â€” 2026-10-24
+# RupayKg Production Readiness Gate Ã¢â‚¬â€ 2026-10-24
 
 ## AIM
 
@@ -63,11 +63,11 @@ These are point-in-time observations. Confirm the service-to-project mapping bef
 
 ## Engineering evidence
 
-- Latest successful CI before the current lock-order follow-up: run #2003 on commit f4c31462d6ff39b65ddc0bd3adc90d82082361c0.
-- Current change be0ff543cfe64883aca6feaadc117bf6b64ed50a fixes migration 088 lock ordering and adds a regression test. The migration now quiesces audit_events inserts before locking the chain head, avoiding the relation-lock/head-lock inversion with in-flight inserts.
-- Local validation before the current commit: 97 migrations / 79 schema objects validated; workspace typecheck passed; API 104 passed / 0 failed / 12 skipped; carbon 30 passed; compliance 2 passed; domain 29 passed; ESG 1 passed; intelligence 2 passed.
-- CI run #2004 for the current commit passed.
-- CI backup/restore rehearsal applies only to disposable CI PostgreSQL databases; it is not production backup/recovery evidence.
+- Latest fully successful CI: run #2010 on commit bef16a30a2ffffe13297339c7c050ff01dc872b3. Migration validation/application, migration inventory verifier, typecheck, build, browser smoke, disposable PostgreSQL acceptance, read-only audit-chain verification, backup/restore verification, and production container build all passed.
+- The read-only migration-state verifier compares all repository migration filenames/versions with schema_migrations and reports missing, mismatched, and unexpected entries. It uses a TLS-verified connection by default and a repeatable-read read-only transaction; it never applies migrations.
+- Migration 088 serializes global audit appends after quiescing writers, adds an immutable cutover anchor, blocks audit-event UPDATE/DELETE/TRUNCATE, and blocks deletion/truncation of the chain head and truncation of the anchor. CI acceptance tests passed, including the cascading TRUNCATE rejection test.
+- Local validation: 97 migrations / 79 schema objects; workspace typecheck passed; API 105 passed / 0 failed / 12 skipped; carbon 30 passed; compliance 2 passed; domain 29 passed; ESG 1 passed; intelligence 2 passed. The 12 local skips require optional integration services; the PostgreSQL acceptance suite runs in CI.
+- CI backup/restore rehearsal applies only to disposable CI PostgreSQL databases. It is not production backup/recovery evidence.
 
 ## Decision
 
@@ -76,7 +76,7 @@ Engineering validation: PASS for the tested branch/CI evidence.
 Production operational readiness: HOLD. Production certification: HOLD.
 
 No production database migration, data mutation, provider setting change, billing change, deployment, or external Guardian/Hedera/Mirror Node acceptance was performed during this review.
-## Additional database privilege finding — 2026-10-24
+## Additional database privilege finding - 2026-10-24
 
 A further read-only query against the candidate Neon database found that role rupaykg is the owner of audit_events, platform_audit_chain_head, and schema_migrations. The role can log in and has CREATEROLE, CREATEDB, and REPLICATION attributes. It also has UPDATE, DELETE, and TRUNCATE grants on the audit-event and chain-head tables.
 
@@ -91,4 +91,4 @@ This is a material least-privilege concern if this is the application's runtime 
 5. Exercise all required API workflows against an isolated database under the proposed runtime role, including audit writes, and test denied destructive operations.
 6. Only after a reviewed access matrix, backup/restore proof, service identity mapping, and approved change window, plan a production role transition. Do not change existing role grants or credentials speculatively.
 
-No role, grant, owner, trigger, schema, data, provider setting, or production deployment was changed.
+No production role, grant, owner, trigger, schema, data, provider setting, or deployment was changed. Branch migration/test code was updated and validated in CI.
