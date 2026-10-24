@@ -7,7 +7,7 @@ import { readProductionConfig } from "./production-config.js";
 
 // Validate the complete production contract before any database connection or DDL.
 const productionConfig = process.env.NODE_ENV === "production" ? readProductionConfig() : null;
-const databaseUrl = productionConfig?.databaseUrl ?? process.env.DATABASE_URL;
+const databaseUrl = productionConfig?.migrationDatabaseUrl ?? process.env.DATABASE_URL;
 if (!databaseUrl) throw new Error("DATABASE_URL is required");
 const databaseSsl = productionConfig?.databaseSsl ?? process.env.DATABASE_SSL;
 const databaseCaCert = productionConfig?.databaseCaCert ?? process.env.DATABASE_CA_CERT?.trim() ?? "";
