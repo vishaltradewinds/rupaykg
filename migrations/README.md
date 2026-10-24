@@ -97,3 +97,20 @@ Migration `090_audit_events_append_only.sql` installs database triggers that rej
 These triggers are defense-in-depth for ordinary database access. They are not a defense against a sufficiently privileged database administrator deliberately disabling triggers or modifying storage outside the normal database interface. For stronger assurance, production must also restrict database roles, preserve independent backups, and periodically verify restored data and chain continuity.
 
 The audit-writer inventory is still an explicit release gate: any application route, scheduled job, migration trigger, or operational script that directly inserts into `audit_events` bypasses the canonical chain and must be migrated or documented as a deliberately separate event stream. Do not claim complete post-cutover chain coverage until that inventory and transaction-boundary review are finished.
+
+
+## Database privilege gate for canonical audit writes — OPEN
+
+Migration 090 protects audit rows from ordinary UPDATE, DELETE and TRUNCATE, but it does **not** prohibit direct INSERTs. Migration 089's function is a convention until the deployed database privilege model makes it the only permitted append path. The repository's production configuration currently supplies one `DATABASE_URL`; it does not establish separate, verified runtime and function-owner database roles or prove the effective grants on the deployed database.
+
+Do not claim this gap is closed by adding a caller-controlled custom PostgreSQL setting (a role that can set the setting can normally spoof it), by making the function `SECURITY DEFINER` without a distinct trusted owner, or by revoking a table privilege from the table-owning runtime role. Those patterns do not establish the required boundary.
+
+**Required acceptance criteria before closing this gate:**
+
+1. Provision and verify a non-login, least-privilege owner for the canonical append function, distinct from the application runtime role.
+2. Make the function a carefully reviewed `SECURITY DEFINER` entry point with a fixed safe `search_path`, schema-qualified object references, and execute permissions limited to the intended runtime role.
+3. Ensure the runtime role does not own `audit_events`, cannot insert directly, cannot alter/disable audit triggers, and cannot assume the function-owner role. Revoke broad/default grants as appropriate and verify effective privileges, including inherited roles.
+4. Add PostgreSQL integration tests using the **same privilege topology as production**: canonical function append succeeds; direct INSERT fails; ordinary runtime cannot disable triggers or truncate; business mutation plus append rolls back atomically; concurrency and hash continuity remain valid.
+5. Record the exact deployed role/grant evidence and verify it after migration. If the managed database provider cannot support the needed role separation, document an approved alternative boundary before release.
+
+Until these conditions are implemented and tested, direct INSERT bypass protection remains an OPEN release gate. Do not introduce guessed role names or a production migration that assumes elevated role-creation privileges. Production database access and grants were not available in this repository-only audit.
