@@ -1,4 +1,4 @@
-﻿# RupayKg Production Readiness Gate — 2026-10-24
+# RupayKg Production Readiness Gate — 2026-10-24
 
 ## AIM
 
@@ -40,12 +40,12 @@ The strongest current candidate for the active database is Neon project rupaykg-
 
 Read-only SQL against that candidate reported:
 
-- Latest migration marker: 20261021; 91 migration records.
+- Latest migration marker: 20261021; 91 migration records. The repository has 97 SQL migrations; six are not applied on this candidate: 088_global_audit_chain_enforcement.sql and dated migrations 20261022 through 20261026.
 - platform_audit_chain_head exists with one row.
 - platform_audit_chain_anchor does not exist.
 - No non-internal triggers are attached to public.audit_events.
 - Counts at inspection time: identities 0, organizations 0, activities 0, evidence 0, audit events 0.
-- The migration-088 global audit chain is therefore not yet present on this candidate database.
+- The migration-088 global audit chain is therefore not yet present on this candidate database. The five unapplied dated migrations add CPCB evidence links, BM WA03.001 baseline records, BM WA03.001 reconciliations, baseline attestations, and BM-T-011 assessments; routes depending on these schema objects may fail or be unavailable until migration state is reconciled.
 - Neon project settings show public connections are allowed (block_public_connections=false) and no IP allowlist entries are configured.
 - Neon project history retention is 21,600 seconds (6 hours); the provider snapshot listing returned no snapshots.
 
