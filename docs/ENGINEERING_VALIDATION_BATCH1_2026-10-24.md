@@ -94,3 +94,8 @@ After CI, inspect the actual run and head SHA before accepting the batch.
 - It checks the immutable anchor record, cutover event, legacy predecessor pointer, canonical SHA-256 for each reachable event, cycles/forks, head reference consistency, reachability from anchor to head, and a conservative scan for events timestamped at/after the anchor that are not reachable.
 - It never runs migrations or writes data. It exits non-zero for failed checks and emits a JSON report suitable for controlled operations evidence. The timestamp-based orphan check is intentionally conservative and must be interpreted with the report's caveat; pre-cutover rows are not retroactively certified.
 - Added static tests to guard the verifier's read-only transaction and prohibit mutation/migration SQL in the verifier source. Next gate: typecheck/full tests, then CI on the exact commit. Do not point this tool at production until an operator has verified the target URL/host and supplied read-only credentials; this batch does not contact production.
+
+
+### Batch 5 CI wiring
+
+The CI workflow now runs the verifier after disposable PostgreSQL integration tests against `rupaykg_baseline_test`, using a read-only transaction and an explicitly local test-database URL. This turns the verifier from a compile/static-test-only artifact into an exercised SQL path in CI. The workflow change requires its own exact-head CI run before the batch is accepted.
