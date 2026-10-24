@@ -58,9 +58,11 @@ A credential in `RETIRED` state cannot be used to create a settlement. A credent
 
 Migration `083_mrv_mirror_node_registry_gate.sql` adds the persisted `mirror_node_verified_at` acceptance marker and tightens the PostgreSQL credential-issuance trigger. A Guardian `VERIFIED` result and Hedera `CONSENSUS_CONFIRMED` response are not sufficient by themselves; the exact anchored payload must also be successfully verified through Mirror Node. Existing provenance rows remain ineligible until that verification is performed. The authenticated Mirror Node verification endpoint checks the exact payload/hash and persists the marker only if the anchored tuple has not changed during verification. Credential issuance requires that persisted marker, and PostgreSQL independently checks it on inserts and transitions into value-bearing credential states.
 
-## Platform-admin audit chain head
+## Global audit chain
 
-Migration `084_platform_audit_chain_head.sql` bootstraps a singleton chain head using the latest existing audit row as a migration-time anchor. Older audit writers do not all participate in the platform-admin chain, so the bootstrap is not a certification of the entire historical audit table. After cutover, platform-admin appends lock the head row inside the same transaction, use its hash as the predecessor, insert the event, and advance the head atomically. Append order therefore does not depend on transaction-start timestamps or random UUID ordering. A failed transaction rolls back both event and head update. Audit events are append-only; tests must not delete them or rewind the head.
+Migration `084_platform_audit_chain_head.sql` introduced the singleton chain head. Migration `088_global_audit_chain_enforcement.sql` takes a short write lock on the head and audit table, then resets the migration-time anchor to the latest existing audit row. Timestamp/UUID ordering is used only to choose that historical anchor; it does not certify legacy chain order or retroactively prove historical tamper resistance.
+
+After migration 088, database triggers own the append contract for every `audit_events` writer. The BEFORE INSERT trigger serializes on the head row, replaces caller-supplied predecessor/hash values, and computes SHA-256 over canonical JSONB event data with UTC-normalized timestamps. The AFTER INSERT trigger advances the head in the same transaction. Append sequence therefore follows the locked head, not transaction-start timestamps or random UUID ordering. A rollback removes both the new event and head advance. UPDATE and DELETE against audit rows are rejected. Tests must not delete audit events or rewind the head.
 
 ## Reserved-role dual control
 
