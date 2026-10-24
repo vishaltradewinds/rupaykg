@@ -109,6 +109,6 @@ The production configuration now requires two distinct PostgreSQL connection URL
 
 The configuration fails closed if the migration URL is missing, uses the same database role, or targets a different host/database name. In production, the migration runner uses `MIGRATION_DATABASE_URL`; the application server continues to use `DATABASE_URL`. TLS mode is validated consistently for both connections. Non-production migration runs retain the existing `DATABASE_URL` fallback.
 
-Local validation after this change: migration inventory validation passed (97 migrations / 79 schema objects); workspace typecheck passed; API tests 107 passed, 0 failed, 12 skipped because optional database/provider integration services were not configured locally. CI must still validate this commit.
+Local validation after this change: migration inventory validation passed (97 migrations / 79 schema objects); workspace typecheck passed; API tests 108 passed, 0 failed, 12 skipped because optional database/provider integration services were not configured locally. CI must still validate this commit.
 
 **Deployment blocker:** Render production environment must be configured with the correct two role-specific URLs before this code is released. Do not merge while auto-deploy on `main` is enabled unless the migration and runtime credentials have been securely provisioned and verified. No environment variables or database roles were changed by this engineering batch.

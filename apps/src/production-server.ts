@@ -2,6 +2,9 @@ import { readProductionConfig } from "./production-config.js";
 
 const config = readProductionConfig();
 
+// The migration credential is only needed by migrate.ts. Do not leave it in the API process environment.
+delete process.env.MIGRATION_DATABASE_URL;
+
 // The authoritative server consumes the validated production contract.
 // Keep production-only configuration explicit here so TLS trust material is
 // actually propagated to the PostgreSQL client at runtime.

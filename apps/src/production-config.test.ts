@@ -77,3 +77,11 @@ describe("production configuration", () => {
     assert.throws(() => readProductionConfig({ ...valid, RUPAYKG_ALLOWED_ORIGINS: "https://app.rupaykg.example/path" }), /must not contain path/);
   });
 });
+
+describe("production runtime credential isolation", () => {
+  it("removes migration credentials before importing the API server", async () => {
+    const { readFile } = await import("node:fs/promises");
+    const source = await readFile(new URL("./production-server.js", import.meta.url), "utf8");
+    assert.ok(source.indexOf("delete process.env.MIGRATION_DATABASE_URL") < source.indexOf("await import(\"./server.js\")"));
+  });
+});
