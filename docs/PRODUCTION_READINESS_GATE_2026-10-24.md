@@ -69,6 +69,14 @@ These are point-in-time observations. Confirm the service-to-project mapping bef
 - Local validation: 97 migrations / 79 schema objects; workspace typecheck passed; API 105 passed / 0 failed / 12 skipped; carbon 30 passed; compliance 2 passed; domain 29 passed; ESG 1 passed; intelligence 2 passed. The 12 local skips require optional integration services; the PostgreSQL acceptance suite runs in CI.
 - CI backup/restore rehearsal applies only to disposable CI PostgreSQL databases. It is not production backup/recovery evidence.
 
+
+### Audit-writer transaction-boundary review
+
+- Application audit writers found in CPCB SWM workspace creation/update/evidence linking and field-device enrollment/verification append audit events through the same PostgreSQL client and transaction as the corresponding business mutation.
+- Platform administration routes use a shared transaction helper that commits business state and the audit insert together; errors roll back both.
+- The legacy field-sync conflict audit is database-triggered, so its audit insert participates in the originating transaction. Migration 088 adds one database-owned chain for every audit_events insert.
+- This code review does not prove runtime-role isolation or production execution. PostgreSQL acceptance tests for global ordering, rollback atomicity, immutable anchor/head and cascading truncate rejection passed in CI.
+
 ## Decision
 
 Engineering validation: PASS for the tested branch/CI evidence.
