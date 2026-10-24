@@ -78,3 +78,11 @@ After CI, inspect the actual run and head SHA before accepting the batch.
 - The API workspace `start` script now launches only the production server; it no longer invokes the optional acceptance-seed script.
 - The acceptance-seed script now refuses to run when `NODE_ENV=production` and verifies PostgreSQL TLS certificates by default, with optional `DATABASE_CA_CERT` support.
 - Added source-contract tests for production start behavior and acceptance-seed safety. This batch is engineering-only until typecheck, full tests, migration validation and exact-head CI complete. No seed script was run against any database.
+
+
+## Batch 4 — persist the audit cutover root
+
+- Strengthened migration 088 to persist a dedicated `AUDIT_CHAIN_CUTOVER_ANCHOR` event plus immutable `platform_audit_chain_anchor` metadata, including the legacy predecessor ID/hash. This gives operators and restore verification a stable root for the post-cutover chain without pretending that pre-cutover history is certified.
+- Migration locks the chain-head and audit tables in a consistent order, refreshes the legacy predecessor at cutover, installs the common triggers, then appends the cutover event and stores its root record in the same migration transaction.
+- Extended the disposable-PostgreSQL integration test to verify the persistent anchor, traverse from the anchor through the chain head, validate canonical hashes, and reject mutations to both audit events and the anchor record.
+- This batch still requires exact-head CI confirmation before acceptance. Production remains untouched and certification remains HOLD.

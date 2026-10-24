@@ -421,7 +421,17 @@ test("PostgreSQL globally serializes concurrent audit appends and rolls back cha
       "select last_event_hash from platform_audit_chain_head where singleton=true",
     );
     assert.equal(baseline.rowCount, 1, "global chain head must exist before appends");
-    const baselineHash = baseline.rows[0]!.last_event_hash;
+
+    const anchor = await pool.query<{ anchor_event_id: string; anchor_event_hash: string }>(
+      "select anchor_event_id,anchor_event_hash from platform_audit_chain_anchor where singleton=true",
+    );
+    assert.equal(anchor.rowCount, 1, "migration 088 must persist an immutable cutover anchor");
+    const anchorEvent = await pool.query<{ action: string; event_hash: string }>(
+      "select action,event_hash from audit_events where id=$1",
+      [anchor.rows[0]!.anchor_event_id],
+    );
+    assert.equal(anchorEvent.rows[0]?.action, "AUDIT_CHAIN_CUTOVER_ANCHOR");
+    assert.equal(anchorEvent.rows[0]?.event_hash, anchor.rows[0]!.anchor_event_hash);
 
     const client = await pool.connect();
     try {
@@ -469,12 +479,12 @@ test("PostgreSQL globally serializes concurrent audit appends and rolls back cha
     for (const row of canonicalHashes.rows) assert.equal(row.event_hash, row.expected_hash, "stored event hash must match canonical SHA-256 content");
     const headSnapshot = await pool.query<{ last_event_id: string | null; last_event_hash: string | null }>("select last_event_id,last_event_hash from platform_audit_chain_head where singleton=true");
     const chainRows = await pool.query<{ id: string; event_hash: string; previous_hash: string | null }>(
-      "with recursive chain as (select id,event_hash,previous_hash from audit_events where previous_hash is not distinct from $1 union select e.id,e.event_hash,e.previous_hash from audit_events e join chain c on e.previous_hash=c.event_hash) select id,event_hash,previous_hash from chain",
-      [baselineHash],
+      "with recursive chain as (select id,event_hash,previous_hash from audit_events where id=$1 union select e.id,e.event_hash,e.previous_hash from audit_events e join chain c on e.previous_hash=c.event_hash) select id,event_hash,previous_hash from chain",
+      [anchor.rows[0]!.anchor_event_id],
     );
     const byPreviousHash = new Map<string | null, { id: string; event_hash: string; previous_hash: string | null }>();
     for (const row of chainRows.rows) {
-      if (baselineHash === null || row.previous_hash !== null) {
+      if (row.id !== anchor.rows[0]!.anchor_event_id) {
         assert.equal(byPreviousHash.has(row.previous_hash), false, "each chain predecessor must have at most one successor");
         byPreviousHash.set(row.previous_hash, row);
       }
@@ -482,9 +492,11 @@ test("PostgreSQL globally serializes concurrent audit appends and rolls back cha
     const head = await pool.query<{ last_event_id: string | null; last_event_hash: string | null }>(
       "select last_event_id,last_event_hash from platform_audit_chain_head where singleton=true",
     );
-    let cursorHash = baselineHash;
+    const currentHeadEvent = await pool.query<{ event_hash: string }>("select event_hash from audit_events where id=$1", [head.rows[0]?.last_event_id]);
+    assert.equal(currentHeadEvent.rows[0]?.event_hash, head.rows[0]?.last_event_hash, "global head must reference an existing event with the same hash");
+    let cursorHash = anchor.rows[0]!.anchor_event_hash;
     const visited = new Set<string>();
-    const reachedHead = baselineHash === headSnapshot.rows[0]!.last_event_hash;
+    const reachedHead = anchor.rows[0]!.anchor_event_hash === headSnapshot.rows[0]!.last_event_hash;
     let foundHead = reachedHead;
     while (!foundHead) {
       const next = byPreviousHash.get(cursorHash);
@@ -498,6 +510,14 @@ test("PostgreSQL globally serializes concurrent audit appends and rolls back cha
     for (const id of appendedIds) assert.ok(visited.has((await pool.query<{ event_hash: string }>("select event_hash from audit_events where id=$1", [id])).rows[0]!.event_hash), "every concurrent append must be linked into the global chain");
     assert.equal(headSnapshot.rows[0]!.last_event_hash, cursorHash);
     assert.ok(visited.size >= appendedIds.length, "the chain must contain all concurrent appends");
+    await assert.rejects(
+      pool.query("update platform_audit_chain_anchor set captured_at=clock_timestamp() where singleton=true"),
+      /AUDIT_CHAIN_ANCHOR_IMMUTABLE/,
+    );
+    await assert.rejects(
+      pool.query("delete from platform_audit_chain_anchor where singleton=true"),
+      /AUDIT_CHAIN_ANCHOR_IMMUTABLE/,
+    );
     await assert.rejects(
       pool.query("update audit_events set payload=payload where id=$1", [appendedIds[0]]),
       /AUDIT_EVENTS_APPEND_ONLY/,

@@ -1,11 +1,24 @@
 -- Make every audit_events insert participate in one serialized SHA-256 chain.
--- The latest historical row remains a migration-time anchor only; this does not
+-- The latest historical row is linked to a dedicated cutover event; this does not
 -- retroactively certify legacy rows that were written by different mechanisms.
 -- Refresh the migration-time anchor while writes to both tables are quiesced. Ordering is
 -- used only to select the legacy anchor; it does not certify the legacy chain order.
 -- Lock the head table first to match the app's historical head -> audit insert lock order.
 lock table platform_audit_chain_head in share row exclusive mode;
 lock table audit_events in share row exclusive mode;
+
+create table if not exists platform_audit_chain_anchor (
+  singleton boolean primary key default true check (singleton),
+  anchor_event_id uuid not null references audit_events(id),
+  anchor_event_hash text not null,
+  legacy_anchor_event_id uuid references audit_events(id),
+  legacy_anchor_event_hash text,
+  captured_at timestamptz not null default clock_timestamp(),
+  constraint platform_audit_chain_anchor_legacy_pair check (
+    (legacy_anchor_event_id is null and legacy_anchor_event_hash is null)
+    or (legacy_anchor_event_id is not null and legacy_anchor_event_hash is not null)
+  )
+);
 
 update platform_audit_chain_head
    set last_event_id = (select id from audit_events order by created_at desc, id desc limit 1),
@@ -93,6 +106,54 @@ drop trigger if exists audit_events_append_only_guard on audit_events;
 create trigger audit_events_append_only_guard
 before update or delete on audit_events
 for each row execute function reject_audit_event_mutation();
+
+create or replace function reject_audit_chain_anchor_mutation()
+returns trigger
+language plpgsql
+as $$
+begin
+  raise exception 'AUDIT_CHAIN_ANCHOR_IMMUTABLE';
+end;
+$$;
+
+drop trigger if exists platform_audit_chain_anchor_immutable on platform_audit_chain_anchor;
+create trigger platform_audit_chain_anchor_immutable
+before update or delete on platform_audit_chain_anchor
+for each row execute function reject_audit_chain_anchor_mutation();
+
+-- Create a dedicated cutover event. This gives post-migration verification a
+-- stable root even when legacy rows contain multiple historical hash streams.
+do $$
+declare
+  legacy_event_id uuid;
+  legacy_event_hash text;
+  anchor_event_id uuid;
+  anchor_event_hash text;
+begin
+  select last_event_id, last_event_hash
+    into legacy_event_id, legacy_event_hash
+    from platform_audit_chain_head
+   where singleton = true;
+
+  insert into audit_events(action, target_type, request_id, payload)
+  values (
+    'AUDIT_CHAIN_CUTOVER_ANCHOR',
+    'audit_chain',
+    'migration-088-cutover',
+    jsonb_build_object(
+      'migration', '088_global_audit_chain_enforcement',
+      'legacy_anchor_event_id', legacy_event_id,
+      'legacy_anchor_event_hash', legacy_event_hash
+    )
+  )
+  returning id, event_hash into anchor_event_id, anchor_event_hash;
+
+  insert into platform_audit_chain_anchor(
+    singleton, anchor_event_id, anchor_event_hash, legacy_anchor_event_id, legacy_anchor_event_hash
+  )
+  values (true, anchor_event_id, anchor_event_hash, legacy_event_id, legacy_event_hash);
+end;
+$$;
 
 comment on table audit_events is
   'Append-only audit ledger. New rows are globally serialized and SHA-256 chained by database triggers. Legacy rows before migration 088 are not retroactively certified.';
