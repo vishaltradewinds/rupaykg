@@ -117,3 +117,15 @@ The canonical append function and append-only UPDATE/DELETE/TRUNCATE triggers ex
 This is intentionally **not** “fixed” with a custom GUC guard or an unreviewed `SECURITY DEFINER` function: without role separation, those would not prove a security boundary. The migration README now records the exact privilege topology and acceptance tests required to close this gate. Production role grants were not inspectable during this repository-only pass.
 
 **Release consequence:** audit-chain bypass protection remains OPEN. Before this gate can pass, provision and verify distinct least-privilege roles, restrict direct INSERT and role escalation, harden the function's owner/search path/execute grants, and run integration tests under the production-equivalent role topology. Do not merge or deploy on the strength of source-level convention alone.
+
+
+### Verification update — 2026-10-24 (PR head 40578451)
+
+- Latest observed PR branch commit: `40578451b92e3ebade9c86199be921344ca53c4e`.
+- GitHub Actions CI run #1977 (`40048332741`) completed with conclusion `success`: https://github.com/vishaltradewinds/rupaykg/actions/runs/40048332741
+- The commit improves the read-only SQL diagnostic at `docs/sql/audit_privilege_diagnostics.sql`: catalog-level relation ACLs include PUBLIC, and role membership paths are traversed recursively with cycle protection. This is a diagnostic improvement, not a privilege remediation.
+- Render control-plane inspection reconfirmed PostgreSQL `rupaykg-db` is `suspended` with `suspenders=[billing]`; its configured IP allowlist remains `0.0.0.0/0`. The web service is not marked suspended, but that alone does not prove it can serve functional requests.
+- An attempted read-only connection through the Render PostgreSQL query tool failed: connection attempts returned unexpected EOF and PostgreSQL reported `SSL/TLS required` for non-TLS attempts. No SQL diagnostic completed and no production data or grants were changed. The suspension and the connection error are separate observed obstacles; do not infer that fixing TLS alone will reactivate the database.
+- The diagnostic script has not been executed against the production database. Effective production grants, owner separation, and role escalation paths therefore remain unverified.
+
+**Current decision unchanged:** NOT PRODUCTION-READY / NOT SHAKTI-CERTIFIED. PR #43 remains draft and unmerged; deployment remains deferred. The next security step requires an authorized, working TLS-capable database connection and review of actual role/grant output before any privilege migration is designed or applied.
