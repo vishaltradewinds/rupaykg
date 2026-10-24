@@ -86,3 +86,11 @@ After CI, inspect the actual run and head SHA before accepting the batch.
 - Migration locks the chain-head and audit tables in a consistent order, refreshes the legacy predecessor at cutover, installs the common triggers, then appends the cutover event and stores its root record in the same migration transaction.
 - Extended the disposable-PostgreSQL integration test to verify the persistent anchor, traverse from the anchor through the chain head, validate canonical hashes, and reject mutations to both audit events and the anchor record.
 - This batch still requires exact-head CI confirmation before acceptance. Production remains untouched and certification remains HOLD.
+
+
+## Batch 5 — read-only audit-chain verifier
+
+- Added `npm run verify:audit-chain -w @rupaykg/api`, a standalone read-only verifier. It requires an explicitly configured `DATABASE_URL`, verifies TLS certificates by default (unless `DATABASE_SSL=false` is explicitly selected for an approved disposable/private-network target), and opens a PostgreSQL `REPEATABLE READ READ ONLY` transaction.
+- It checks the immutable anchor record, cutover event, legacy predecessor pointer, canonical SHA-256 for each reachable event, cycles/forks, head reference consistency, reachability from anchor to head, and a conservative scan for events timestamped at/after the anchor that are not reachable.
+- It never runs migrations or writes data. It exits non-zero for failed checks and emits a JSON report suitable for controlled operations evidence. The timestamp-based orphan check is intentionally conservative and must be interpreted with the report's caveat; pre-cutover rows are not retroactively certified.
+- Added static tests to guard the verifier's read-only transaction and prohibit mutation/migration SQL in the verifier source. Next gate: typecheck/full tests, then CI on the exact commit. Do not point this tool at production until an operator has verified the target URL/host and supplied read-only credentials; this batch does not contact production.

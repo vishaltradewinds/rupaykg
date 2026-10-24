@@ -9,6 +9,7 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "migrate": "tsx src/migrate.ts",
+    "verify:audit-chain": "tsx src/verify-audit-chain.ts",
     "test": "npm run build && node --test \"dist/**/*.test.js\""
   },
   "dependencies": {
