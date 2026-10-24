@@ -1,7 +1,17 @@
 -- Make every audit_events insert participate in one serialized SHA-256 chain.
 -- The latest historical row remains a migration-time anchor only; this does not
 -- retroactively certify legacy rows that were written by different mechanisms.
--- Every new append locks the singleton head until the transaction completes.
+-- Refresh the migration-time anchor while writes to both tables are quiesced. Ordering is
+-- used only to select the legacy anchor; it does not certify the legacy chain order.
+-- Lock the head table first to match the app's historical head -> audit insert lock order.
+lock table platform_audit_chain_head in share row exclusive mode;
+lock table audit_events in share row exclusive mode;
+
+update platform_audit_chain_head
+   set last_event_id = (select id from audit_events order by created_at desc, id desc limit 1),
+       last_event_hash = (select event_hash from audit_events order by created_at desc, id desc limit 1),
+       updated_at = clock_timestamp()
+ where singleton = true;
 
 create or replace function chain_audit_event_before_insert()
 returns trigger
