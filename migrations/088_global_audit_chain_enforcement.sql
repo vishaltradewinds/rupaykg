@@ -1,11 +1,12 @@
 -- Make every audit_events insert participate in one serialized SHA-256 chain.
 -- The latest historical row is linked to a dedicated cutover event; this does not
 -- retroactively certify legacy rows that were written by different mechanisms.
--- Refresh the migration-time anchor while writes to both tables are quiesced. Ordering is
--- used only to select the legacy anchor; it does not certify the legacy chain order.
--- Lock the head table first to match the app's historical head -> audit insert lock order.
-lock table platform_audit_chain_head in exclusive mode;
+-- Quiesce audit writes before locking the head. INSERT acquires a relation lock on
+-- audit_events before its BEFORE trigger locks the head row, so this order lets
+-- in-flight writers finish instead of creating a head/audit lock inversion.
+-- Ordering is used only to select the legacy anchor; it does not certify legacy order.
 lock table audit_events in share row exclusive mode;
+lock table platform_audit_chain_head in exclusive mode;
 
 create table if not exists platform_audit_chain_anchor (
   singleton boolean primary key default true check (singleton),

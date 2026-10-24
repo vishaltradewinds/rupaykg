@@ -15,3 +15,12 @@ test("audit-chain verifier does not issue database mutations or migrations", () 
   assert.doesNotMatch(verifierSource, /\b(?:insert\s+into|update\s+[a-z_]+\s+set|delete\s+from|create\s+table|alter\s+table|drop\s+table)\b/i);
   assert.doesNotMatch(verifierSource, /migrate\.ts/);
 });
+const auditChainMigration = readFileSync(fileURLToPath(new URL("../../../migrations/088_global_audit_chain_enforcement.sql", import.meta.url)), "utf8");
+
+test("audit-chain cutover quiesces audit writers before taking the chain-head lock", () => {
+  const auditLock = auditChainMigration.indexOf("lock table audit_events in share row exclusive mode;");
+  const headLock = auditChainMigration.indexOf("lock table platform_audit_chain_head in exclusive mode;");
+  assert.ok(auditLock >= 0, "migration must explicitly quiesce audit writes");
+  assert.ok(headLock >= 0, "migration must explicitly lock the chain head");
+  assert.ok(auditLock < headLock, "audit relation lock must precede head lock to avoid lock inversion with in-flight INSERT triggers");
+});
