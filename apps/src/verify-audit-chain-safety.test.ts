@@ -48,3 +48,13 @@ test("audit-chain trigger functions execute with a pinned privileged owner, not 
   }
   assert.match(runtimeRoleAuditMigration, /REVOKE CREATE ON SCHEMA public FROM PUBLIC/i);
 });
+
+test("migration-state verifier reports sanitized connection identity and TLS without credentials", () => {
+  assert.match(migrationVerifierSource, /current_database\(\) as database_name/);
+  assert.match(migrationVerifierSource, /current_user as connected_role/);
+  assert.match(migrationVerifierSource, /pg_stat_ssl/);
+  assert.match(migrationVerifierSource, /sanitizedEndpoint/);
+  assert.match(migrationVerifierSource, /Connection secrets are intentionally excluded/);
+  assert.match(migrationVerifierSource, /do not independently prove cloud project\/branch identity/);
+  assert.doesNotMatch(migrationVerifierSource, /password\s*:/i);
+});

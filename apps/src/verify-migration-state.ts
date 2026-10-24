@@ -15,6 +15,13 @@ function databaseConfig(): PoolConfig {
   return config;
 }
 
+function sanitizedEndpoint(): { host: string; port: number | null } {
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString) throw new Error("DATABASE_URL is required; this verifier never applies migrations.");
+  const parsed = new URL(connectionString);
+  return { host: parsed.hostname, port: parsed.port ? Number(parsed.port) : null };
+}
+
 async function main(): Promise<void> {
   const here = path.dirname(fileURLToPath(import.meta.url));
   const candidates = [path.resolve(here, "../../migrations"), path.resolve(here, "../../../migrations")];
@@ -40,8 +47,21 @@ async function main(): Promise<void> {
       const mismatched = [...expected].filter(([version, filename]) => applied.has(version) && applied.get(version) !== filename)
         .map(([version, filename]) => ({ version, expected: filename, actual: applied.get(version) }));
       const unexpected = [...applied].filter(([version]) => !expected.has(version)).map(([version, filename]) => ({ version, filename }));
+      const identity = await client.query<{
+        database_name: string;
+        connected_role: string;
+        server_port: number | null;
+        server_version: string;
+        tls_enabled: boolean | null;
+      }>(`select current_database() as database_name,
+                 current_user as connected_role,
+                 inet_server_port() as server_port,
+                 current_setting('server_version') as server_version,
+                 (select ssl from pg_stat_ssl where pid = pg_backend_pid()) as tls_enabled`);
+      const connection = identity.rows[0];
       const report = {
-        database: (await client.query<{ database_name: string }>("select current_database() as database_name")).rows[0]?.database_name ?? null,
+        endpoint: { ...sanitizedEndpoint(), database: connection?.database_name ?? null, role: connection?.connected_role ?? null },
+        server: { port: connection?.server_port ?? null, version: connection?.server_version ?? null, tlsEnabled: connection?.tls_enabled ?? null },
         expectedCount: expected.size,
         appliedCount: applied.size,
         missing,
@@ -49,6 +69,7 @@ async function main(): Promise<void> {
         unexpected,
         pass: missing.length === 0 && mismatched.length === 0 && unexpected.length === 0,
         readOnly: true,
+        note: "Endpoint hostname and database name do not independently prove cloud project/branch identity; verify provider project and branch in the provider console. Connection secrets are intentionally excluded.",
       };
       await client.query("rollback");
       console.log(JSON.stringify(report, null, 2));
