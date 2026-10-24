@@ -25,7 +25,26 @@ select n.nspname as schema_name,
    and n.nspname not in ('pg_catalog', 'information_schema')
  order by n.nspname, c.relname;
 
-\echo '3. Catalog-level relation ACLs, including PUBLIC and default ACLs'
+\echo '3. Effective relation privileges for every login role and the current session roles'
+select r.rolname as candidate_role,
+       r.rolcanlogin,
+       n.nspname as schema_name,
+       c.relname as object_name,
+       pg_get_userbyid(c.relowner) as object_owner,
+       has_table_privilege(r.rolname, c.oid, 'SELECT') as can_select,
+       has_table_privilege(r.rolname, c.oid, 'INSERT') as can_insert,
+       has_table_privilege(r.rolname, c.oid, 'UPDATE') as can_update,
+       has_table_privilege(r.rolname, c.oid, 'DELETE') as can_delete,
+       has_table_privilege(r.rolname, c.oid, 'TRUNCATE') as can_truncate
+  from pg_roles r
+ cross join pg_class c
+  join pg_namespace n on n.oid = c.relnamespace
+ where c.relname in ('audit_events', 'platform_audit_chain_head')
+   and n.nspname not in ('pg_catalog', 'information_schema')
+   and (r.rolcanlogin or r.rolname in (current_user, session_user))
+ order by r.rolname, n.nspname, c.relname;
+
+\\echo '4. Catalog-level relation ACLs, including PUBLIC and default ACLs'
 select n.nspname as schema_name,
        c.relname as object_name,
        pg_get_userbyid(c.relowner) as object_owner,
@@ -40,7 +59,7 @@ select n.nspname as schema_name,
    and n.nspname not in ('pg_catalog', 'information_schema')
  order by n.nspname, c.relname, grantee, acl.privilege_type;
 
-\echo '4. Canonical append function owner, security mode, ACLs, and fixed search_path'
+\echo '5. Canonical append function owner, security mode, ACLs, and fixed search_path'
 select n.nspname as schema_name,
        p.oid::regprocedure as function_signature,
        pg_get_userbyid(p.proowner) as function_owner,
@@ -66,11 +85,26 @@ select n.nspname as schema_name,
  where p.proname = 'append_platform_audit_event'
  order by n.nspname, p.oid::regprocedure::text, grantee;
 
-\echo '5. Recursive role memberships and role attributes for privilege-boundary identities'
+\echo '6. Effective function EXECUTE privilege for every login role'
+select r.rolname as candidate_role,
+       r.rolcanlogin,
+       n.nspname as schema_name,
+       p.oid::regprocedure as function_signature,
+       pg_get_userbyid(p.proowner) as function_owner,
+       p.prosecdef as security_definer,
+       has_function_privilege(r.rolname, p.oid, 'EXECUTE') as can_execute
+  from pg_roles r
+ cross join pg_proc p
+  join pg_namespace n on n.oid = p.pronamespace
+ where p.proname = 'append_platform_audit_event'
+   and (r.rolcanlogin or r.rolname in (current_user, session_user))
+ order by r.rolname, n.nspname, p.oid::regprocedure::text;
+
+\\echo '7. Recursive role memberships and role attributes for all login identities'
 with recursive relevant_roles(role_oid, origin, role_path_names) as (
   select r.oid, r.rolname, array[r.rolname]::text[]
     from pg_roles r
-   where r.rolname in (current_user, session_user)
+   where r.rolcanlogin or r.rolname in (current_user, session_user)
       or r.oid in (
         select c.relowner
           from pg_class c
@@ -103,7 +137,7 @@ select distinct rr.origin as starting_identity,
   join pg_roles r on r.oid = rr.role_oid
  order by starting_identity, membership_path;
 
-\echo '6. Audit mutation triggers and their enabled state'
+\echo '8. Audit mutation triggers and their enabled state'
 select n.nspname as schema_name,
        c.relname as table_name,
        t.tgname as trigger_name,
@@ -122,5 +156,5 @@ select n.nspname as schema_name,
 \echo '- Runtime role must not be able to assume the dedicated function-owner role.'
 \echo '- A SECURITY DEFINER function must have a distinct trusted owner and a fixed safe search_path.'
 \echo '- EXECUTE should be granted only to intended runtime role(s); PUBLIC should not have EXECUTE.'
-\echo '- Check all recursive membership paths, including roles with CREATEROLE, BYPASSRLS, or SUPERUSER.'
+\echo '- Review effective privilege rows and recursive membership paths for all login roles, including CREATEROLE, BYPASSRLS, and SUPERUSER.'
 \echo '- Superusers and database owners remain privileged trust boundaries; this report alone is not a security certification.'
