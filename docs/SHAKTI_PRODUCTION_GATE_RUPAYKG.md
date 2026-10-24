@@ -108,3 +108,12 @@ A targeted source review found that the platform does not yet have one consisten
 
 ### Audit scope boundary
 The recursive Git tree inventory found 318 tracked files at this PR head. The review remains a repository inventory plus targeted source/migration review, not a claim that every file and every workflow has been fully audited. Remaining high-priority checks include backup/restore proof, tenant-isolation coverage across all routes, field/offline retry and conflict behavior, external Guardian/Hedera proof, MRV methodology applicability, and current production health after database recovery.
+
+
+### Audit database privilege boundary — OPEN (follow-up, 2026-10-24)
+
+The canonical append function and append-only UPDATE/DELETE/TRUNCATE triggers exist, but migration 090 does not block direct INSERTs. Repository configuration does not define or prove a separate non-login function-owner role and restricted runtime role. Therefore the database can still permit an unchained direct insert if the runtime role has INSERT privilege.
+
+This is intentionally **not** “fixed” with a custom GUC guard or an unreviewed `SECURITY DEFINER` function: without role separation, those would not prove a security boundary. The migration README now records the exact privilege topology and acceptance tests required to close this gate. Production role grants were not inspectable during this repository-only pass.
+
+**Release consequence:** audit-chain bypass protection remains OPEN. Before this gate can pass, provision and verify distinct least-privilege roles, restrict direct INSERT and role escalation, harden the function's owner/search path/execute grants, and run integration tests under the production-equivalent role topology. Do not merge or deploy on the strength of source-level convention alone.
