@@ -89,5 +89,21 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/rupaykg_baseline_test
           DATABASE_SSL: "false"
         run: npm run verify:audit-chain -w @rupaykg/api
+      - name: Backup disposable audit-chain database
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/rupaykg_baseline_test
+        shell: bash
+        run: pg_dump --format=custom --no-owner --no-acl --file=/tmp/rupaykg-audit-chain.dump "$DATABASE_URL"
+      - name: Restore backup to a fresh disposable database and verify chain
+        env:
+          PGPASSWORD: postgres
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/rupaykg_audit_restore_test
+          DATABASE_SSL: "false"
+        shell: bash
+        run: |
+          set -euo pipefail
+          createdb --host=localhost --username=postgres rupaykg_audit_restore_test
+          pg_restore --exit-on-error --no-owner --no-acl --dbname="$DATABASE_URL" /tmp/rupaykg-audit-chain.dump
+          npm run verify:audit-chain -w @rupaykg/api
       - name: Build production container
         run: docker build --pull --tag rupaykg:ci .

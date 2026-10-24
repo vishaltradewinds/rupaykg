@@ -99,3 +99,8 @@ After CI, inspect the actual run and head SHA before accepting the batch.
 ### Batch 5 CI wiring
 
 The CI workflow now runs the verifier after disposable PostgreSQL integration tests against `rupaykg_baseline_test`, using a read-only transaction and an explicitly local test-database URL. This turns the verifier from a compile/static-test-only artifact into an exercised SQL path in CI. The workflow change requires its own exact-head CI run before the batch is accepted.
+
+
+### Batch 5 recovery rehearsal extension
+
+CI now creates a custom-format backup of the disposable audit-chain integration database, restores it into a fresh isolated PostgreSQL database, and runs the same read-only verifier against the restored copy. This checks chain evidence survives a logical backup/restore cycle in CI. It is not a substitute for provider-managed production backup/PITR testing, actual production recovery verification, or a separately approved production restore rehearsal.
