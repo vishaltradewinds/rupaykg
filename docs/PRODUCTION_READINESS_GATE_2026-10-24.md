@@ -1,4 +1,4 @@
-# RupayKg Production Readiness Gate Ã¢â‚¬â€ 2026-10-24
+# RupayKg Production Readiness Gate - 2026-10-24
 
 ## AIM
 
