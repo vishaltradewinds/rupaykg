@@ -14,6 +14,10 @@ import { registerBwgRoutes } from "./bwg-routes.js";
 import { registerCpcbSwmRoutes } from "./cpcb-swm-routes.js";
 import { registerIntelligenceRoutes } from "./intelligence-routes.js";
 import { registerMrvRoutes } from "./mrv-routes.js";
+import { registerBmWa03001BaselineRoutes } from "./bm-wa03001-baseline-routes.js";
+import { registerBmWa03001ReconciliationRoutes } from "./bm-wa03001-reconciliation-routes.js";
+import { registerBmWa03001BaselineAttestationRoutes } from "./bm-wa03001-baseline-attestation-routes.js";
+import { registerBmT011AssessmentRoutes } from "./bm-t-011-assessment-routes.js";
 import { registerEvidenceVaultRoutes } from "./evidence-vault-routes.js";
 import { registerPlatformAdminRoutes } from "./platform-admin-routes.js";
 
@@ -99,6 +103,10 @@ await registerBwgRoutes(app, pool);
 await registerCpcbSwmRoutes(app, pool);
 await registerIntelligenceRoutes(app, pool);
 await registerMrvRoutes(app, pool);
+await registerBmWa03001BaselineRoutes(app, pool);
+await registerBmWa03001ReconciliationRoutes(app, pool);
+await registerBmWa03001BaselineAttestationRoutes(app, pool);
+await registerBmT011AssessmentRoutes(app, pool);
 await registerEvidenceVaultRoutes(app, pool);
 await registerPlatformAdminRoutes(app, pool);
 

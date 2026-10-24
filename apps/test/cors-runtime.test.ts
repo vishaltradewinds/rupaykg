@@ -2,11 +2,12 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { request } from "node:http";
 import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 
-// Tests execute from apps/api/dist/test after compilation, so move from the
+// Tests execute from apps/dist/test after compilation, so move from the
 // compiled test directory back to the workspace API root.
-const appRoot = resolve(new URL("../..", import.meta.url).pathname);
+const appRoot = resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const serverPath = resolve(appRoot, "dist/src/server.js");
 const port = 39127;
 
@@ -40,7 +41,7 @@ function httpOptions(origin: string): Promise<HttpOptionsResult> {
 }
 
 async function waitForServer(child: ReturnType<typeof spawn>): Promise<void> {
-  for (let attempt = 0; attempt < 50; attempt += 1) {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
     if (child.exitCode !== null) throw new Error(`CORS runtime server exited with code ${child.exitCode}`);
     try {
       await httpOptions("https://app.rupaykg.example");

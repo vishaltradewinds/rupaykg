@@ -1,12 +1,12 @@
 FROM node:22-bookworm-slim AS build
 WORKDIR /app
 
-COPY package.json tsconfig.json ./
+COPY package.json package-lock.json tsconfig.json ./
 COPY apps ./apps
 COPY packages ./packages
 COPY migrations ./migrations
 COPY scripts ./scripts
-RUN npm install --no-audit --no-fund
+RUN npm ci --no-audit --no-fund
 RUN node scripts/validate-web-config.mjs
 RUN npm run build
 RUN npm prune --omit=dev
