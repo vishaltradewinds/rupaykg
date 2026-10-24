@@ -1,4 +1,4 @@
-# RupayKg Production Readiness Gate — 2026-10-24
+# RupayKg Production Readiness Gate â€” 2026-10-24
 
 ## AIM
 
@@ -76,3 +76,19 @@ Engineering validation: PASS for the tested branch/CI evidence.
 Production operational readiness: HOLD. Production certification: HOLD.
 
 No production database migration, data mutation, provider setting change, billing change, deployment, or external Guardian/Hedera/Mirror Node acceptance was performed during this review.
+## Additional database privilege finding — 2026-10-24
+
+A further read-only query against the candidate Neon database found that role rupaykg is the owner of audit_events, platform_audit_chain_head, and schema_migrations. The role can log in and has CREATEROLE, CREATEDB, and REPLICATION attributes. It also has UPDATE, DELETE, and TRUNCATE grants on the audit-event and chain-head tables.
+
+This is a material least-privilege concern if this is the application's runtime role. The service-to-database and runtime-role mapping has not yet been proven, so do not label this as a confirmed live-app credential finding. The owner can change table structure and triggers; simply revoking DML grants is not a sufficient boundary while the same role remains owner.
+
+### Required remediation design (not yet applied)
+
+1. Prove the actual runtime database role and target using provider configuration or a safe non-secret diagnostic.
+2. Introduce a dedicated non-owner application runtime role with only the table/sequence/function permissions needed by tested request paths.
+3. Keep schema ownership and migration privileges in a separate controlled migration role; do not give runtime role CREATEROLE, CREATEDB, or REPLICATION.
+4. Make append-only audit writes database-enforced under a dedicated privilege boundary; verify that runtime cannot update/delete/truncate events or alter/disable enforcement triggers.
+5. Exercise all required API workflows against an isolated database under the proposed runtime role, including audit writes, and test denied destructive operations.
+6. Only after a reviewed access matrix, backup/restore proof, service identity mapping, and approved change window, plan a production role transition. Do not change existing role grants or credentials speculatively.
+
+No role, grant, owner, trigger, schema, data, provider setting, or production deployment was changed.
