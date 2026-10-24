@@ -25,6 +25,19 @@ This batch addresses two concrete production-path issues found while reviewing P
 - No deployment, PR merge, live Guardian submission, Hedera write, or Mirror Node acceptance was performed.
 - This patch does not claim to complete the audit-writer inventory or prove chain continuity.
 
+## Audit-writer inventory — initial finding
+
+A source scan on the reviewed head found four production write paths into `audit_events`:
+
+- `apps/src/platform-admin-routes.ts`: locks and advances the singleton `platform_audit_chain_head` in the same transaction. This is the only writer found in this scan that participates in that global chain-head protocol.
+- `apps/src/cpcb-swm-routes.ts`: selects the latest event per organization using `ORDER BY created_at DESC, id DESC LIMIT 1 FOR UPDATE`, then inserts a SHA-256 event. This is not the singleton global chain; concurrent first/last writes can race, and timestamps/UUID order are not a safe chain sequence.
+- `apps/src/sync-routes.ts`: field-device enrollment and verification insert hashed audit rows without `previous_hash`, `request_id`, or updating the singleton chain head.
+- `migrations/050_field_sync_conflict_audit.sql`: the field-sync conflict trigger writes an MD5-derived event hash without linking it to the global chain head.
+
+Migration `084_platform_audit_chain_head.sql` explicitly documents that legacy writers do not all participate in its chain. Therefore the current implementation must **not** be described as one complete, globally chained audit ledger. The event table contains audit records, but integrity guarantees vary by writer.
+
+**Next high-priority engineering batch:** define one canonical transactional append contract (including strong deterministic hashing and chain-head locking), migrate all application and trigger writers to it, and add disposable-PostgreSQL tests for concurrent appends, rollback atomicity, duplicate/retry behavior, and post-restore chain verification. Preserve historical rows; do not rewrite or falsely certify the historical chain.
+
 ## Required validation
 
 The CI run on this exact branch/head must pass:
