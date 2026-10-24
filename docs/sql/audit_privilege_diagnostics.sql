@@ -44,7 +44,7 @@ select r.rolname as candidate_role,
    and (r.rolcanlogin or r.rolname in (current_user, session_user))
  order by r.rolname, n.nspname, c.relname;
 
-\\echo '4. Catalog-level relation ACLs, including PUBLIC and default ACLs'
+\echo '4. Catalog-level relation ACLs, including PUBLIC and default ACLs'
 select n.nspname as schema_name,
        c.relname as object_name,
        pg_get_userbyid(c.relowner) as object_owner,
@@ -100,7 +100,7 @@ select r.rolname as candidate_role,
    and (r.rolcanlogin or r.rolname in (current_user, session_user))
  order by r.rolname, n.nspname, p.oid::regprocedure::text;
 
-\\echo '7. Recursive role memberships and role attributes for all login identities'
+\echo '7. Recursive role memberships and role attributes for all login identities'
 with recursive relevant_roles(role_oid, origin, role_path_names) as (
   select r.oid, r.rolname, array[r.rolname]::text[]
     from pg_roles r
