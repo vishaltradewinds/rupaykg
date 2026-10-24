@@ -459,7 +459,7 @@ test("PostgreSQL globally serializes concurrent audit appends and rolls back cha
               encode(digest(convert_to(jsonb_build_object(
                 'id', id, 'actor_identity_id', actor_identity_id, 'organization_id', organization_id,
                 'action', action, 'target_type', target_type, 'target_id', target_id,
-                'request_id', request_id, 'payload', payload, 'created_at', created_at,
+                'request_id', request_id, 'payload', payload, 'created_at', to_char(created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
                 'previous_hash', previous_hash
               )::text, 'UTF8'), 'sha256'), 'hex') as expected_hash
          from audit_events where id=any($1::uuid[])`,

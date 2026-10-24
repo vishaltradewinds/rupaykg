@@ -33,7 +33,7 @@ begin
     'target_id', new.target_id,
     'request_id', new.request_id,
     'payload', new.payload,
-    'created_at', new.created_at,
+    'created_at', to_char(new.created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
     'previous_hash', new.previous_hash
   );
 
