@@ -547,3 +547,63 @@ test("PostgreSQL globally serializes concurrent audit appends and rolls back cha
     await pool.end();
   }
 });
+
+test("PostgreSQL least-privilege runtime role can append audit events but cannot mutate chain controls", { skip: !auditChainEnabled }, async () => {
+  const pool = new Pool({ connectionString: auditChainDatabaseUrl });
+  const roleName = "rupaykg_runtime_test_" + randomBytes(6).toString("hex");
+  const client = await pool.connect();
+  let roleCreated = false;
+  try {
+    await client.query(`create role "${roleName}" nologin`);
+    roleCreated = true;
+    await client.query(`grant usage on schema public to "${roleName}"`);
+    await client.query(`grant select, insert, update, delete on all tables in schema public to "${roleName}"`);
+    await client.query(`grant usage, select on all sequences in schema public to "${roleName}"`);
+    await client.query(`revoke create on schema public from "${roleName}"`);
+    await client.query(`revoke update, delete, truncate on table public.audit_events from "${roleName}"`);
+    await client.query(`revoke all privileges on table public.platform_audit_chain_head from "${roleName}"`);
+    await client.query(`grant select on table public.platform_audit_chain_head to "${roleName}"`);
+    await client.query(`revoke all privileges on table public.platform_audit_chain_anchor from "${roleName}"`);
+    await client.query(`grant select on table public.platform_audit_chain_anchor to "${roleName}"`);
+
+    await client.query("begin");
+    await client.query(`set local role "${roleName}"`);
+    const prefix = "TEST-LEAST-PRIVILEGE-AUDIT-" + randomBytes(8).toString("hex");
+    const inserted = await client.query<{ id: string; event_hash: string }>(
+      "insert into public.audit_events(action,target_type,request_id,payload) values($1,'test',$2,$3::jsonb) returning id,event_hash",
+      [prefix, prefix + "-request", JSON.stringify({ test: true })],
+    );
+    assert.ok(inserted.rows[0]?.event_hash, "runtime role must append through the database-owned chain trigger");
+
+    const denied = async (sql: string) => {
+      await client.query("savepoint privilege_probe");
+      await assert.rejects(client.query(sql), /permission denied/i, `runtime role must be denied: ${sql}`);
+      await client.query("rollback to savepoint privilege_probe");
+      await client.query("release savepoint privilege_probe");
+    };
+    await denied("update public.audit_events set action='tampered' where id='00000000-0000-0000-0000-000000000000'");
+    await denied("delete from public.audit_events where id='00000000-0000-0000-0000-000000000000'");
+    await denied("truncate table public.audit_events");
+    await denied("update public.platform_audit_chain_head set last_event_hash='tampered' where singleton=true");
+    await denied("update public.platform_audit_chain_anchor set anchor_event_hash='tampered' where singleton=true");
+    await denied("create table public.runtime_role_must_not_create(id integer)");
+
+    const head = await client.query<{ last_event_id: string | null; last_event_hash: string | null }>(
+      "select last_event_id,last_event_hash from public.platform_audit_chain_head where singleton=true",
+    );
+    assert.equal(head.rows[0]?.last_event_id, inserted.rows[0]!.id);
+    assert.equal(head.rows[0]?.last_event_hash, inserted.rows[0]!.event_hash);
+    await client.query("commit");
+  } catch (error) {
+    await client.query("rollback").catch(() => undefined);
+    throw error;
+  } finally {
+    await client.query("reset role").catch(() => undefined);
+    if (roleCreated) {
+      await client.query(`drop owned by "${roleName}"`).catch(() => undefined);
+      await client.query(`drop role "${roleName}"`).catch(() => undefined);
+    }
+    client.release();
+    await pool.end();
+  }
+});
