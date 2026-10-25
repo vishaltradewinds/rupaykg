@@ -53,7 +53,7 @@ test("two simultaneous migration runners serialize safely on a fresh disposable 
     const ledger = await pool.query<{ version: string; filename: string }>(
       "select version, filename from public.schema_migrations order by version",
     );
-    const files = (await readdir(migrationDir)).filter((name) => /^\\d+_.+\\.sql$/.test(name)).sort();
+    const files = (await readdir(migrationDir)).filter((name) => /^\d+_.+\.sql$/.test(name)).sort();
     assert.equal(ledger.rows.length, files.length, "every repository migration must be recorded exactly once");
     assert.deepEqual(
       ledger.rows.map((row) => row.filename),
