@@ -8,13 +8,13 @@ Identify the exact database used by the live RupayKg service and prove its migra
 
 ## Verified Render service state
 
-Inspection timestamp: 2026-10-25, around 12:26 UTC.
+Inspection timestamps: 2026-10-25, around 12:26 UTC and 13:14 UTC.
 
 - Workspace: `My Workspace` (`tea-dakh7k142hec73aj2kr0`).
 - Service: `rupaykg` (`srv-daki4d7qj5pc73b8qksg`), URL `https://rupaykg.onrender.com`.
 - Service is not suspended; tracks `main`; automatic deployment on commits is enabled.
 - Last known successful deployment: `dep-dbbjqic9v7es73ffofmg`, commit `0ddcf6087620880e21ea60f954c9f05d6b759469`, completed 2026-10-20 10:08:03 UTC.
-- Latest observed startup log: `Database migrations are current (91 files).` at 2026-10-25 09:00:18 UTC.
+- Latest startup log captured from the October 20 deployment: `Database migrations are current (91 files).` at 2026-10-20 10:07:46 UTC. The same deployment emitted PostgreSQL SSL-mode security warnings.
 - Repeated live `GET /health` requests returned HTTP 200 on 2026-10-25 around 12:22–12:26 UTC. The route performs `SELECT 1`; this proves the application can reach some database, not which provider project/branch it reaches.
 - Service IP allowlist is `0.0.0.0/0` (publicly reachable). This needs a separate threat-model and ingress review; do not change it during database identity discovery.
 
@@ -46,10 +46,10 @@ No automatic snapshot schedule or snapshot was listed for the `rupaykg-productio
 ## Engineering branch and CI
 
 - PR #46 remains open, draft, unmerged, and not deployed.
-- Last code-bearing head reviewed: `2833273e59436d8b5e3600b8e336c15f44218432`.
-- Exact-head CI run #40191612039 completed successfully for that code-bearing head at 2026-10-25 12:07:33 UTC. It passed dependency installation/audit, migration inventory and execution, ledger verification, typecheck/build, browser smoke, isolated PostgreSQL acceptance/concurrency tests, read-only audit-chain verification, disposable backup/restore verification, and production container build.
+- Last code-bearing head reviewed: `3051671d11b026d30219c209c9fce5af4756f18d`.
+- Exact-head CI run #40196038352 completed successfully for that code-bearing head at 2026-10-25 13:07:46 UTC: https://github.com/vishaltradewinds/rupaykg/actions/runs/40196038352. It passed dependency audit, migration inventory/execution and ledger verification, typecheck/build, browser smoke, isolated PostgreSQL acceptance/concurrency tests, read-only audit-chain verification, disposable backup/restore rehearsal, and production container build. It passed dependency installation/audit, migration inventory and execution, ledger verification, typecheck/build, browser smoke, isolated PostgreSQL acceptance/concurrency tests, read-only audit-chain verification, disposable backup/restore verification, and production container build.
 - This document is a new documentation-only commit after that CI run; its new head must receive its own CI result before the PR is eligible for review. All CI/disposable-database results validate only their tested commit and do not establish live production readiness.
-- PR #46 is a combined change set (132 commits, 87 files at the time of inspection), including inherited production configuration and MRV/CPCB changes. It is not an isolated migration-lock patch.
+- PR #46 is a combined change set (153 commits, 90 files at the time of this update), including inherited production configuration and MRV/CPCB changes. It is not an isolated migration-lock patch.
 - The deployed `main` source still contains the older hostname-based TLS exception; the PR branch removes it and requires TLS plus a PEM CA certificate. Do not deploy this change until provider-specific TLS requirements are verified for the actual live endpoint.
 
 ## Next gates — in order
@@ -66,3 +66,24 @@ No automatic snapshot schedule or snapshot was listed for the `rupaykg-productio
 ## Change record
 
 This batch performed read-only Render metadata/log/event/metrics checks and read-only SQL against unconfirmed Neon candidates. It added a PR discussion comment with the evidence. No production data, schema, roles, environment variables, billing, network allowlists, snapshots, or deployments were changed.
+
+
+## Confirmed workspace follow-up — 2026-10-25 13:14 UTC
+
+The user explicitly confirmed **My Workspace**. Render's workspace list independently returned `My Workspace` (`tea-dakh7k142hec73aj2kr0`), and all subsequent provider reads were scoped to that workspace.
+
+Fresh read-only checks confirm:
+
+- Service `rupaykg` remains not suspended, tracks `main`, and has auto-deploy enabled.
+- Latest successful/live deploy remains `dep-dbbjqic9v7es73ffofmg` on commit `0ddcf6087620880e21ea60f954c9f05d6b759469`, completed 2026-10-20 10:08:03 UTC.
+- The named `rupaykg-db` instance remains `suspended`, with `billing` listed as its suspender and an expiry timestamp of 2026-10-15 09:59:25 UTC.
+- Live logs show repeated `GET /health` requests receiving HTTP 200 through 2026-10-25 13:14 UTC. The current deployed source's `/health` route executes `SELECT 1` and returns 200 only if that query succeeds. This strongly indicates the service is reaching some database, but it does not identify the endpoint or prove application workflows are healthy.
+- A new read-only SQL attempt against the named Render database failed before the query ran. The connector reported `FATAL: SSL/TLS required (SQLSTATE 28000)` plus unexpected EOF. No SQL or data mutation occurred. Because the provider also reports the instance suspended, the connection failure is not sufficient to establish whether TLS configuration, suspension, or both are responsible.
+- Current Render metadata still lists `0.0.0.0/0` for both service and database IP allowlists. This is a verified public exposure posture requiring a separately planned network review.
+- The Render connector's service metadata does not expose environment-variable values or even a read-only list of configured variable names. No secret values were requested or changed.
+
+### Current conclusion
+
+**The authoritative database endpoint remains unidentified.** The named Render database is suspended, and none of the inspected Neon candidates is proven to be the live service target. The next hard gate is sanitized operator-side inspection of the Render service's `DATABASE_URL` and `MIGRATION_DATABASE_URL` metadata (provider/project, branch, hostname, database name, role name, TLS mode only). Do not paste passwords, full connection strings, tokens, or certificate contents into chat. Once the endpoint is confirmed, the migration ledger, roles/grants, audit chain, and backup/restore evidence can be checked against the correct database.
+
+No database, environment, billing, network, role, migration, or deployment changes were made during this follow-up. This documentation change itself requires a fresh exact-head CI run before the PR can be considered review-ready.
