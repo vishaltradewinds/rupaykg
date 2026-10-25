@@ -25,5 +25,6 @@ test("CPCB evidence-link API remains scoped and never claims official CPCB verif
   assert.match(source, /AUDIT_REQUEST_ID_REQUIRED/);
   assert.match(source, /writeAudit\(client,auth\.identityId,org,"CPCB_SWM_EVIDENCE_LINKED",link\.id,[\s\S]*?requestId\);/);
   assert.doesNotMatch(source, /request-id-unavailable/);
+  assert.equal((source.match(/AUDIT_REQUEST_ID_REQUIRED/g) ?? []).length, 3, "create, update and evidence-link writes must fail closed without a request ID");
   assert.match(source, /where l\.workspace_id=\$1 and l\.organization_id=\$2/);
 });
