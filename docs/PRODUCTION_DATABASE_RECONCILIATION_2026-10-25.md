@@ -87,3 +87,37 @@ Fresh read-only checks confirm:
 **The authoritative database endpoint remains unidentified.** The named Render database is suspended, and none of the inspected Neon candidates is proven to be the live service target. The next hard gate is sanitized operator-side inspection of the Render service's `DATABASE_URL` and `MIGRATION_DATABASE_URL` metadata (provider/project, branch, hostname, database name, role name, TLS mode only). Do not paste passwords, full connection strings, tokens, or certificate contents into chat. Once the endpoint is confirmed, the migration ledger, roles/grants, audit chain, and backup/restore evidence can be checked against the correct database.
 
 No database, environment, billing, network, role, migration, or deployment changes were made during this follow-up. This documentation change itself requires a fresh exact-head CI run before the PR can be considered review-ready.
+
+
+## Follow-up engineering integrity batch — 2026-10-25 13:42 UTC
+
+### Strict evidence-hash gates
+
+A wider source audit found additional paths that accepted any non-null content URI or hash instead of requiring a valid SHA-256 digest. The engineering branch now requires a lowercase 64-hex-character SHA-256 hash for evidence used by:
+
+- BM-T-011 annual assessment submission and independent review.
+- Statutory determinations that bind evidence to an approved verification.
+- Carbon value calculations and EPR-credit eligibility.
+- ESG metric recording.
+- Earlier BM WA03.001 baseline submission, independent decision, signed attestation, reconciliation, and Guardian MRV gates.
+
+Regression tests cover the newly tightened BM-T-011, statutory, value/EPR, and ESG metric gates. The runtime acceptance fixture was updated to use a real SHA-256 digest rather than the nonconforming placeholder `sha256:<uuid>`; strict production validation was not weakened to preserve a test fixture.
+
+### Audit-chain timestamp integrity
+
+Code review found that migration 088's audit-chain trigger preserved a caller-supplied `created_at` value. The read-only audit verifier uses the cutover timestamp to flag unlinked post-anchor events, so accepting backdated timestamps could weaken that anomaly check if an event were written outside the normal trigger path. Added migration `20261036_audit_chain_server_timestamp.sql` to make the trigger overwrite caller-supplied timestamps with `clock_timestamp()` before calculating the canonical SHA-256 event hash. The replacement function retains `SECURITY DEFINER` and pinned `search_path = pg_catalog, public`. A regression assertion checks timestamp overwrite ordering before hashing.
+
+### Exact-head engineering validation
+
+- Code-bearing head: `10883c529ee0ce41cf238ef1bc582b778cf78825`.
+- Exact-head CI run #40198696303 completed **SUCCESS** at 2026-10-25 13:42:27 UTC: https://github.com/vishaltradewinds/rupaykg/actions/runs/40198696303
+- Passed dependency audit, migration validation and execution, full ledger comparison, typecheck/build, browser smoke, disposable PostgreSQL acceptance/concurrency, read-only audit-chain verification, backup/restore rehearsal, and production container build.
+- This validates the tested engineering branch only. It does not identify the live production database or certify production data.
+
+### Production remains blocked
+
+The confirmed workspace is `My Workspace` (`tea-dakh7k142hec73aj2kr0`). Read-only Render metadata still shows the live service tracks `main` and the named `rupaykg-db` instance is suspended by billing. The live service IP allowlist and named database IP allowlist both remain `0.0.0.0/0`. The Render connector does not expose a read-only list of configured environment-variable names or values; direct SQL against the suspended named database fails before executing SQL with an SSL/TLS-required error and unexpected EOF.
+
+**Hard gate:** an authorized operator must inspect the Render service configuration locally and provide only sanitized metadata for `DATABASE_URL` and `MIGRATION_DATABASE_URL`: provider/project, branch, hostname, database name, role name, and TLS mode. Do not share passwords, full URLs, tokens, or certificate contents. After the authoritative endpoint is identified, rerun migration-state, privilege, audit-chain, and backup/recovery verification against that exact target. Do not resume the suspended database, repoint the service, change billing or network rules, merge, or deploy by inference.
+
+No production resources were changed during this engineering batch.
