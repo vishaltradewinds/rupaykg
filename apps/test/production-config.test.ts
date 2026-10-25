@@ -31,7 +31,7 @@ test("production config rejects missing or unsafe production requirements", () =
     [{ ...baseEnv, NODE_ENV: "development" }, /NODE_ENV must be production/],
     [{ ...baseEnv, DATABASE_URL: "postgresql://localhost/rupaykg" }, /must not target localhost/],
     [{ ...baseEnv, MIGRATION_DATABASE_URL: "postgresql://migration_role:secret@db.example.com:5433/rupaykg" }, /same database host, port, and database name/],
-    [{ ...baseEnv, DATABASE_SSL: "false" }, /DATABASE_SSL must be require/],
+    [{ ...baseEnv, DATABASE_URL: baseEnv.DATABASE_URL + "?sslmode=disable" }, /remove sslmode from the database URL/],\n    [{ ...baseEnv, MIGRATION_DATABASE_URL: baseEnv.MIGRATION_DATABASE_URL + "?sslrootcert=%2Ftmp%2Fca.pem" }, /remove sslrootcert from the database URL/],\n    [{ ...baseEnv, DATABASE_SSL: "false" }, /DATABASE_SSL must be require/],
     [{ ...baseEnv, DATABASE_CA_CERT: "" }, /DATABASE_CA_CERT must contain a PEM certificate/],
     [{ ...baseEnv, RUPAYKG_AUTH_MODE: "session" }, /RUPAYKG_AUTH_MODE must be real/],
     [{ ...baseEnv, RUPAYKG_AUTH_MODE: "" }, /RUPAYKG_AUTH_MODE must be real/],
