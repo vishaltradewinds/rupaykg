@@ -4,7 +4,6 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
 import { readProductionConfig } from "./production-config.js";
-import { findMigrationFilenameConflicts } from "./migration-inventory.js";
 
 // Validate the complete production contract before any database connection or DDL.
 const productionConfig = process.env.NODE_ENV === "production" ? readProductionConfig() : null;
@@ -20,13 +19,13 @@ const pool = new Pool({ connectionString: databaseUrl, max: 1, ssl });
 
 try {
   // Resolve and validate the complete local migration inventory before any DDL.
-  // Support both CI/source execution (/repo/apps/src) and production containers (/app/apps/dist/src).
   const here = path.dirname(fileURLToPath(import.meta.url));
   const candidates = [path.resolve(here, "../../migrations"), path.resolve(here, "../../../migrations")];
   const migrationDir = candidates.find((candidate) => existsSync(candidate));
   if (!migrationDir) throw new Error(`Migration directory not found. Checked: ${candidates.join(", ")}`);
+
   const files = (await readdir(migrationDir))
-    .filter((name) => /^\\d+_.+\\.sql$/.test(name))
+    .filter((name) => /^\d+_.+\.sql$/.test(name))
     .sort();
   const expected = new Map<string, string>();
   for (const filename of files) {
@@ -40,10 +39,13 @@ try {
   const ledgerExists = await pool.query<{ ledger: string | null }>(
     "select to_regclass('public.schema_migrations')::text as ledger",
   );
+  const applied = new Map<string, string>();
   if (ledgerExists.rows[0]?.ledger) {
     const ledger = await pool.query<{ version: string; filename: string }>(
       "select version, filename from public.schema_migrations order by version",
     );
+    for (const row of ledger.rows) applied.set(row.version, row.filename);
+
     const mismatched = ledger.rows.filter((row) => expected.has(row.version) && expected.get(row.version) !== row.filename);
     const unexpected = ledger.rows.filter((row) => !expected.has(row.version));
     if (mismatched.length || unexpected.length) {
@@ -51,7 +53,7 @@ try {
         ...mismatched.map((row) => `version ${row.version}: ledger=${row.filename}, repository=${expected.get(row.version)}`),
         ...unexpected.map((row) => `version ${row.version}: ledger filename ${row.filename} has no matching migration file`),
       ];
-      throw new Error("Migration preflight failed; no schema changes were made. Reconcile authoritative history first:\\n" + details.join("\\n"));
+      throw new Error("Migration preflight failed; no schema changes were made. Reconcile authoritative history first:\n" + details.join("\n"));
     }
   } else {
     await pool.query(`
@@ -74,10 +76,11 @@ try {
       await client.query("begin");
       await client.query(sql);
       await client.query(
-        "insert into schema_migrations(version, filename) values ($1, $2)",
+        "insert into public.schema_migrations(version, filename) values ($1, $2)",
         [version, filename],
       );
       await client.query("commit");
+      applied.set(version, filename);
       console.log(`Applied ${filename}`);
     } catch (error) {
       await client.query("rollback");
