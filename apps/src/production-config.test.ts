@@ -46,6 +46,7 @@ describe("production configuration", () => {
   it("requires migration credentials to use a different role on the same database", () => {
     assert.throws(() => readProductionConfig({ ...valid, MIGRATION_DATABASE_URL: valid.DATABASE_URL }), /distinct non-empty database role/);
     assert.throws(() => readProductionConfig({ ...valid, MIGRATION_DATABASE_URL: "postgresql://migration_role:secret@other.example.invalid:5432/rupaykg?sslmode=require" }), /same database host and database name/);
+    assert.throws(() => readProductionConfig({ ...valid, MIGRATION_DATABASE_URL: "postgresql://migration_role:secret@prod.example.invalid:5433/rupaykg?sslmode=require" }), /same database host, port, and database name/);
   });
 
   it("fails closed for local database targets", () => {
