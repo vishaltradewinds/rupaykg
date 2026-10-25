@@ -132,6 +132,9 @@ export async function registerSyncRoutes(app: FastifyInstance, pool: Pool | null
         await client.query("ROLLBACK");
         return reply.code(404).send({ error: "Open conflict not found for authenticated identity", code: "CONFLICT_NOT_FOUND" });
       }
+      // Set correlation BEFORE the UPDATE because the database audit trigger fires
+      // during that statement and must capture this request ID.
+      await client.query("select set_config('rupaykg.request_id', $1, true)", [request.id]);
       const updated = await client.query(
         `update field_sync_conflicts
             set resolution_status = $2, resolution_reason = $3,
@@ -143,9 +146,6 @@ export async function registerSyncRoutes(app: FastifyInstance, pool: Pool | null
       );
       const resolved = updated.rows[0];
       if (!resolved) throw new Error("FIELD_SYNC_CONFLICT_RESOLUTION_UPDATE_FAILED");
-      // The database trigger owns the canonical conflict-resolution audit event.
-      // Set request correlation transaction-locally so the trigger records it once.
-      await client.query("select set_config('rupaykg.request_id', $1, true)", [request.id]);
       await client.query("COMMIT");
       return reply.code(200).send({ source: "postgresql", syntheticData: false, authoritativeMutation: true, conflict: resolved });
     } catch (error) {
