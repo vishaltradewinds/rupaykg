@@ -1,9 +1,9 @@
-﻿import { Client } from "pg";
+import { Client } from "pg";
 
 const adminUrl = process.env.CI_ADMIN_DATABASE_URL;
 if (!adminUrl) throw new Error("CI_ADMIN_DATABASE_URL is required to prepare isolated test databases");
 
-const databases = ["rupaykg_baseline_test", "rupaykg_cpcb_test"];
+const databases = ["rupaykg_baseline_test", "rupaykg_cpcb_test", "rupaykg_migration_race_test"];
 const client = new Client({ connectionString: adminUrl });
 await client.connect();
 try {
