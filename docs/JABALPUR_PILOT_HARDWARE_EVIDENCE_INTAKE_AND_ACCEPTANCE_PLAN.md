@@ -13,6 +13,8 @@ The official IBBI corporate-process page lists an NCLT resolution-plan approval 
 
 This evidence establishes that Kathonda's documented primary operation is WtE mass incineration. It does **not** establish an active landfill-gas collection/recovery system within the proposed RupayKg project boundary. BEE BM WA03.001 is explicitly titled **Landfill Methane Recovery**. Therefore, do not treat the WA03.001 methane flow-meter/analyser list as a procurement specification for the WtE plant. A separate landfill-gas project would need its own verified boundary, evidence that gas is actually collected/recovered, and methodology eligibility. A proposed Bio-CNG project is not an operating asset until commissioning and eligibility are evidenced.
 
+BEE's approved-methodology list (last updated 7 July 2026) separately lists BM WA03.003, **Production of Compressed Bio-gas (CBG)**. The NGT order describes a proposed 100 TPD Bio-CNG project under CITIIS 2.0, but feasibility/DPR and final approval steps were still in progress at the time of that order. Treat BM WA03.003 as a possible future route to assess only if that separate project is formally approved, designed, commissioned and shown to meet the methodology. Do not treat the proposal as an operating asset or assume eligibility. Official list: https://beeindia.gov.in/view_content.php?lang=1&lid=571.
+
 Before selecting any methodology-specific hardware, obtain written confirmation from JMC/site management of:
 1. Exact project boundary and asset/site coordinates.
 2. Whether the intended project is WtE mass burning, legacy-waste/RDF processing, the proposed Bio-CNG plant, or a distinct landfill-gas recovery activity.
