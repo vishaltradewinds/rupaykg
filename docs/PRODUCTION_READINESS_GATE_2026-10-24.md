@@ -129,3 +129,28 @@ Added migration `20261027_runtime_role_audit_chain_security_definer.sql`. The au
 
 Local validation: migration inventory validates at 98 migrations / 79 schema objects; workspace typecheck passed; API tests 109 passed, 0 failed, 12 skipped. These local tests include static checks for the new privilege boundary. PostgreSQL-backed tests must run in CI; local integration tests requiring isolated databases were skipped. This migration has not been applied to production.
 The disposable-PostgreSQL integration suite now includes a least-privilege runtime-role acceptance test. It creates a temporary non-login role, grants ordinary table DML, restricts audit-event writes to append-only, grants read-only access to chain head/anchor, and verifies that the role can append an audit event while direct UPDATE/DELETE/TRUNCATE on the audit ledger, direct chain-head/anchor updates, and schema CREATE are denied. It also verifies that the SECURITY DEFINER trigger advances the chain head for the runtime insert. This test is gated to the disposable PostgreSQL integration environment and was skipped in local runs without that environment; CI is the authoritative execution gate.
+
+
+## Reconciliation addendum — 2026-10-25 08:00 UTC
+
+This addendum supersedes any earlier wording in this document that treated a Neon project as the "strongest current candidate" based on circumstantial signals. **Neither Neon project is currently verified as the live Render service's configured database target.** Matching database names, a matching migration count, compute activity, or a successful public health endpoint are not sufficient identity evidence.
+
+### Current safe decision
+- Render-managed PostgreSQL `rupaykg-db` remains reported as suspended for billing. No supported recovery/resume action is available through the current connector; the account owner must use the provider's supported billing/recovery path.
+- Neon candidate `rupaykg-production-fresh` (`steep-mud-79906940`, branch `br-restless-base-b44cip2h`) has a 91-row migration ledger through `20261021`, but the targeted expected-table checks found the BM WA03.001/BM-T-011/CPCB objects absent. It has no listed snapshots and no configured branch snapshot schedule.
+- Neon candidate `rupaykg` (`still-violet-61832250`, branch `br-soft-hill-b4817svc`) has zero migration-ledger rows and the same targeted expected-table gaps. A manual snapshot named `rupaykg-schema-baseline-2026-10-17` exists on that project; this is not proof it is production or a verified recovery point.
+- Do not restore, migrate, seed, or repoint either candidate until the live service-to-database mapping is verified using non-secret provider/project/branch/database/runtime-role/migration-role metadata and an approved backup/restore plan.
+- The latest reported successful CI run #2028 validates its tested commit only. It does not establish live database identity, recoverability, pilot acceptance, or Guardian/Hedera acceptance. The PR remains draft/unmerged; production remains HOLD.
+
+### Documentation reconciliation note
+Earlier sections contain migration-count statements from different inspection times (including 97 and 98 repository migrations and a 91-row candidate ledger). Do not treat those counts as interchangeable. Before any production migration, rerun the repository migration inventory against the exact current PR head and compare the complete filename/version inventory with the confirmed target's ledger in read-only mode. Record the exact commit SHA and timestamp with the result.
+
+### Next gates
+1. Owner resolves Render billing/suspension through the supported account process and confirms whether the existing database is recoverable.
+2. An authorized operator confirms the actual service database mapping without exposing secrets.
+3. Verify target schema, grants, migration inventory, audit chain, and backup/restore on the confirmed target.
+4. Complete isolated PostgreSQL acceptance and security tests, then obtain independent review.
+5. Complete authorized Guardian issuer/policy validation and live Guardian → Hedera consensus → persisted provenance → Mirror Node acceptance in an approved environment.
+6. Only after evidence and approvals are complete, consider merge and deployment.
+
+No production SQL writes, provider-setting changes, billing changes, database restore, external submission, merge, or deployment were performed for this addendum.
