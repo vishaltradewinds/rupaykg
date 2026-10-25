@@ -55,11 +55,13 @@ export function readProductionConfig(env: NodeJS.ProcessEnv = process.env): Prod
   const parsedDatabaseUrl = new URL(databaseUrl);
   const parsedMigrationDatabaseUrl = new URL(migrationDatabaseUrl);
   const decodeUser = (url: URL) => decodeURIComponent(url.username);
+  const effectivePort = (url: URL) => url.port || "5432";
   if (
     parsedDatabaseUrl.hostname.toLowerCase() !== parsedMigrationDatabaseUrl.hostname.toLowerCase() ||
+    effectivePort(parsedDatabaseUrl) !== effectivePort(parsedMigrationDatabaseUrl) ||
     decodeURIComponent(parsedDatabaseUrl.pathname) !== decodeURIComponent(parsedMigrationDatabaseUrl.pathname)
   ) {
-    throw new Error("PRODUCTION_CONFIG_INVALID: MIGRATION_DATABASE_URL must target the same database host and database name as DATABASE_URL");
+    throw new Error("PRODUCTION_CONFIG_INVALID: MIGRATION_DATABASE_URL must target the same database host, port, and database name as DATABASE_URL");
   }
   if (!decodeUser(parsedMigrationDatabaseUrl) || decodeUser(parsedMigrationDatabaseUrl) === decodeUser(parsedDatabaseUrl)) {
     throw new Error("PRODUCTION_CONFIG_INVALID: MIGRATION_DATABASE_URL must use a distinct non-empty database role");
