@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 
-const migrationPath = fileURLToPath(new URL("../../../migrations/20261022_cpcb_swm_evidence_links.sql", import.meta.url));
+const migrationPath = fileURLToPath(new URL("../../../migrations/20261029_cpcb_swm_evidence_links.sql", import.meta.url));
 const routePath = fileURLToPath(new URL("../../../apps/src/cpcb-swm-routes.ts", import.meta.url));
 
 test("CPCB evidence links enforce tenant and artifact-version consistency in PostgreSQL", async () => {
