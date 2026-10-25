@@ -30,6 +30,7 @@ test("production config rejects missing or unsafe production requirements", () =
   const cases = [
     [{ ...baseEnv, NODE_ENV: "development" }, /NODE_ENV must be production/],
     [{ ...baseEnv, DATABASE_URL: "postgresql://localhost/rupaykg" }, /must not target localhost/],
+    [{ ...baseEnv, MIGRATION_DATABASE_URL: "postgresql://migration_role:secret@db.example.com:5433/rupaykg" }, /same database host, port, and database name/],
     [{ ...baseEnv, DATABASE_SSL: "false" }, /DATABASE_SSL must be require/],
     [{ ...baseEnv, DATABASE_CA_CERT: "" }, /DATABASE_CA_CERT must contain a PEM certificate/],
     [{ ...baseEnv, RUPAYKG_AUTH_MODE: "session" }, /RUPAYKG_AUTH_MODE must be real/],
