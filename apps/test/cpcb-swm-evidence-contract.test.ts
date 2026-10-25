@@ -22,5 +22,8 @@ test("CPCB evidence-link API remains scoped and never claims official CPCB verif
   assert.match(source, /organization_has_geography_scope\(\$1::uuid,\$2::uuid\)/);
   assert.match(source, /officialCpcbStatus:"UNCHANGED"/);
   assert.match(source, /officialCpcbStatusChanged:false/);
+  assert.match(source, /AUDIT_REQUEST_ID_REQUIRED/);
+  assert.match(source, /writeAudit\(client,auth\.identityId,org,"CPCB_SWM_EVIDENCE_LINKED",link\.id,[\s\S]*?requestId\);/);
+  assert.doesNotMatch(source, /request-id-unavailable/);
   assert.match(source, /where l\.workspace_id=\$1 and l\.organization_id=\$2/);
 });
