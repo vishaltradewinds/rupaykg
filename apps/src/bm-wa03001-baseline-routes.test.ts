@@ -3,7 +3,8 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 
-const source = readFileSync(fileURLToPath(new URL("./bm-wa03001-baseline-routes.ts", import.meta.url)), "utf8");
+// Tests run from apps/dist/src; read the corresponding checked-in source file.
+const source = readFileSync(fileURLToPath(new URL("../../src/bm-wa03001-baseline-routes.ts", import.meta.url)), "utf8");
 
 test("BM WA03.001 baseline evidence must be verified and content-addressed", () => {
   assert.match(source, /status='VERIFIED' and \(content_hash is not null or content_uri is not null\)/);
