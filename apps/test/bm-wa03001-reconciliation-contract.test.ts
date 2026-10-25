@@ -15,7 +15,7 @@ test("BM WA03.001 reconciliation endpoint is connected and fail-closed", async (
   assert.match(route, /baseline\.status !== "APPROVED"/);
   assert.match(route, /BASELINE_HASH_MISMATCH/);
   assert.match(route, /status='VERIFIED'/);
-  assert.match(route, /content_hash is not null or content_uri is not null/);
+  assert.ok(route.includes("content_hash ~ '^[0-9a-f]{64}$'"));
   assert.match(route, /calculateBmWa03001ProjectMethaneFromFlow/);
   assert.match(route, /calculateBmWa03001\(/);
   assert.match(route, /BM_WA03001_GWP_CH4_TCO2E_PER_TCH4/);
