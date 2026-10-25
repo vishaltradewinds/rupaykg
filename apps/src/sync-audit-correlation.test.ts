@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 const routePath = fileURLToPath(new URL("../../../apps/src/sync-routes.ts", import.meta.url));
-const migrationPath = fileURLToPath(new URL("../../../migrations/20261028_field_sync_conflict_request_correlation.sql", import.meta.url));
+const migrationPath = fileURLToPath(new URL("../../../migrations/20261035_field_sync_conflict_request_correlation.sql", import.meta.url));
 const mrvRoutePath = fileURLToPath(new URL("../../../apps/src/mrv-routes.ts", import.meta.url));
 
 test("field-device audit events carry request correlation IDs", async () => {
