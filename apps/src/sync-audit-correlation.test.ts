@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 
-const routePath = fileURLToPath(new URL("./sync-routes.ts", import.meta.url));
+const routePath = fileURLToPath(new URL("../../../apps/src/sync-routes.ts", import.meta.url));
 
 test("field-device audit events carry request correlation IDs", async () => {
   const source = await readFile(routePath, "utf8");
