@@ -76,6 +76,8 @@ Vendor claims alone are insufficient. Missing official evidence means HOLD.
 
 ## Official source starting points
 
+- MeitY CRO FAQs (the order applies to notified product categories; verify the current schedule and exact model): https://www.meity.gov.in/writereaddata/files/Modified-FAQs-CRO.pdf
+
 - STQC IoT System Certification Scheme: https://stqc.gov.in/en/iot-system-certification-scheme-iotscs-0
 - STQC certified products: https://www.stqc.gov.in/certified-product
 - Department of Consumer Affairs Legal Metrology overview: https://consumeraffairs.gov.in/pages/legal-metrology-overview
