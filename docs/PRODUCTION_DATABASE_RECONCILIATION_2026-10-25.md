@@ -121,3 +121,17 @@ The confirmed workspace is `My Workspace` (`tea-dakh7k142hec73aj2kr0`). Read-onl
 **Hard gate:** an authorized operator must inspect the Render service configuration locally and provide only sanitized metadata for `DATABASE_URL` and `MIGRATION_DATABASE_URL`: provider/project, branch, hostname, database name, role name, and TLS mode. Do not share passwords, full URLs, tokens, or certificate contents. After the authoritative endpoint is identified, rerun migration-state, privilege, audit-chain, and backup/recovery verification against that exact target. Do not resume the suspended database, repoint the service, change billing or network rules, merge, or deploy by inference.
 
 No production resources were changed during this engineering batch.
+
+
+## Follow-up evidence ingestion and legal onboarding — 2026-10-25 13:51 UTC
+
+The next source audit found that evidence ingestion and legal onboarding could still accept arbitrary non-empty hash strings or URI-only evidence. The branch now also:
+
+- Requires field-sync `EVIDENCE_CREATE` to provide a lowercase 64-character SHA-256 digest at ingestion; a URI alone is no longer accepted as a substitute.
+- Validates legal onboarding document hashes at API intake and requires persisted legal evidence to have a valid SHA-256 digest before an authorized reviewer can mark the organization legally verified.
+- Updates the onboarding UI text and client-side validation to show the exact hash format.
+- Adds regression assertions for field-sync ingestion and the legal onboarding intake/verification gates.
+
+Validated code-bearing head: `03b1757f06c2cc046739309c019a97b8773d573b`. Exact-head CI run #40199312594 completed **SUCCESS** at 2026-10-25 13:51:00 UTC: https://github.com/vishaltradewinds/rupaykg/actions/runs/40199312594. The full workflow passed dependency audit, migration validation/execution and ledger comparison, typecheck/build, browser smoke, disposable PostgreSQL acceptance/concurrency, read-only audit-chain verification, backup/restore rehearsal, and production container build.
+
+The live production endpoint remains unidentified. These changes and CI runs do not authorize migration, production mutation, merge, or deployment.
