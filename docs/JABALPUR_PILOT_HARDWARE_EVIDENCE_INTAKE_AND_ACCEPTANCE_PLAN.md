@@ -53,6 +53,7 @@ Required site facts before instrument selection:
 
 Official methodology: https://beeindia.gov.in/sites/default/files/BM%20WA03.001.pdf
 BEE methodology list: https://beeindia.gov.in/view_content.php?lang=1&lid=571
+MeitY CRO FAQs (check notified category and exact-model scope; do not infer universal approval): https://www.meity.gov.in/writereaddata/files/Modified-FAQs-CRO.pdf
 
 ## 4. Exact-model approval gate
 
