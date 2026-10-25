@@ -1,12 +1,13 @@
-> **Live status refresh — 2026-10-25 11:00 UTC (read-only deployment and database-mapping review)**
+> **Live status refresh — 2026-10-25 11:12 UTC (deployment and production-contract audit)**
 >
-> - Exact PR #44 head `1152dd88d634bc90456adf63bb51af64337ea701` passed CI run #2086: https://github.com/vishaltradewinds/rupaykg/actions/runs/40186123408. This validates the engineering branch and disposable test resources only.
-> - Latest Render deployment remains commit `0ddcf6087620880e21ea60f954c9f05d6b759469`, completed 2026-10-20 10:08 UTC. The service is active, tracks `main`, and auto-deploys that branch; PR #44 is not live.
-> - Render account metadata lists one Render Postgres instance, `rupaykg-db` (`dpg-dakhdv95efls73e1974g-a`), as **suspended for billing**, with an expiry timestamp of 2026-10-15 and network allowlist `0.0.0.0/0`. This instance is a candidate only; service-to-database mapping is not exposed by current metadata and must not be assumed. Do not reactivate it or change its network policy without verified mapping, recovery evidence, and authorization.
-> - Runtime logs reported `Database migrations are current (91 files).` That message does not identify the connected database or certify the complete schema.
-> - Deployed `main` still differs from PR #44: its migration runner lacks the branch's complete inventory/ledger preflight, and its production startup command invokes the acceptance-seed script (guarded by an environment flag). PR #44 adds a production prohibition and removes that step from the production command.
-> - No deployment, merge, production migration, environment-variable change, database write, or database reactivation was performed.
-> - **Gate: PRODUCTION CERTIFICATION HOLD.** Next prerequisite is safe confirmation of the actual runtime/migration DB provider, project/branch, database name, hostname (redacted as appropriate), and runtime role—without sharing credentials. Then verify schema/ledger, audit-chain objects, least privilege, and recoverability on the confirmed target before any separately approved staging/release plan.
+> - Exact engineering head `ad31dfa4d877552ff91f9fa5e5b0614b4e7fcad7` passed CI run #2087: https://github.com/vishaltradewinds/rupaykg/actions/runs/40186716628. This covers the branch and disposable acceptance resources, not live production.
+> - Render service `rupaykg` is active, tracks `main`, and has auto-deploy enabled. Latest live deployment remains `0ddcf6087620880e21ea60f954c9f05d6b759469` (2026-10-20 10:08 UTC); PR #44 is not deployed.
+> - Read-only deployment logs show a failed start attempt at 10:04 UTC on 2026-10-20 with `PRODUCTION_CONFIG_INVALID: DATABASE_CA_CERT must contain a PEM certificate unless DATABASE_URL uses sslmode=require`, followed by a successful deployment at 10:08 UTC. This is a historical configuration failure, not proof of current failure; do not weaken TLS verification to silence it.
+> - Current `main` production contract validates `DATABASE_URL` but does not require a distinct migration identity. PR #44 requires `MIGRATION_DATABASE_URL`, checks it targets the same host/port/database with a distinct role, and removes the migration credential from the API process environment. This is an engineering improvement but cannot be activated without confirmed runtime values and migration-target verification.
+> - Render metadata lists `rupaykg-db` (`dpg-dakhdv95efls73e1974g-a`) as suspended for billing, expiry timestamp 2026-10-15, with allowlist `0.0.0.0/0`. Its mapping to the live service remains unconfirmed. Do not reactivate it or alter its network policy without mapping, backup/recovery proof, and authorization.
+> - `GET /health` returned HTTP 200 on 2026-10-25. This establishes route responsiveness only; it is not an end-to-end MRV, schema, audit-chain, or recovery certificate.
+> - No deployment, merge, production migration, environment change, database write, database reactivation, or TLS relaxation was performed.
+> - **Gate: PRODUCTION CERTIFICATION HOLD.** Next prerequisite is authoritative, redacted confirmation of runtime and migration database provider/project/branch, database host/name, and roles; then verify the confirmed target's ledger/schema, audit chain, permissions, and recovery path.
 >
 # RupayKg Production Readiness Gate - 2026-10-24
 
