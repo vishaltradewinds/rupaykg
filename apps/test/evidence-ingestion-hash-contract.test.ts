@@ -10,3 +10,11 @@ test("field-sync evidence ingestion requires a lowercase 64-character SHA-256 di
   assert.ok(route.includes("!contentHash || !/^[0-9a-f]{64}$/.test(contentHash)"));
   assert.ok(route.includes("a lowercase 64-character SHA-256 contentHash"));
 });
+
+test("legal onboarding evidence requires a SHA-256 digest before legal verification", async () => {
+  const route = await read("apps/src/onboarding-hierarchy-routes.ts");
+  const ui = await read("apps/web/src/main.tsx");
+  assert.ok(route.includes("contentHash&&!/^[0-9a-f]{64}$/.test(contentHash)"));
+  assert.ok(route.includes("and content_hash ~ '^[0-9a-f]{64}$'"));
+  assert.ok(ui.includes("Document content hash must be a lowercase 64-character SHA-256 digest."));
+});
