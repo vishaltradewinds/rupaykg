@@ -99,6 +99,67 @@ export async function registerSyncRoutes(app: FastifyInstance, pool: Pool | null
   });
 
   app.post("/api/v1/field-sync/conflicts/:conflictId/resolve", async (request, reply) => {
-    if (!pool) return reply.code(503).send({ error: "Field sync unavailable", code: "DATABASE_UNAVAILABLE", syntheticData: false }); let auth: AuthContext; try { auth = await authenticate(request, pool); if (!auth) return reply.code(401).send(bearerChallenge()); } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Authentication service unavailable", code: "AUTH_UNAVAILABLE" }); } const { conflictId } = request.params as { conflictId: string }; if (!isUuid(conflictId)) return reply.code(400).send({ error: "conflictId must be a UUID", code: "INVALID_CONFLICT" }); const validation = validateConflictResolution(bodyOf(request)); if (!validation.ok) return reply.code(400).send({ error: validation.error, code: validation.code }); try { const result = await pool.query(`update field_sync_conflicts c set resolution_status = $2, resolution_reason = $3, resolved_by_identity_id = $4, resolved_at = now() where c.id = $1 and c.resolution_status = 'OPEN' and exists (select 1 from field_sync_envelopes e where e.id = c.envelope_id and e.identity_id = $4) returning c.id, c.envelope_id, c.resolution_status, c.resolution_reason, c.resolved_by_identity_id, c.resolved_at`, [conflictId, validation.resolutionStatus, validation.resolutionReason, auth.identityId]); if (!result.rows[0]) return reply.code(404).send({ error: "Open conflict not found for authenticated identity", code: "CONFLICT_NOT_FOUND" }); return reply.code(200).send({ source: "postgresql", syntheticData: false, authoritativeMutation: false, conflict: result.rows[0] }); } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Conflict resolution unavailable", syntheticData: false }); }
+    if (!pool) return reply.code(503).send({ error: "Field sync unavailable", code: "DATABASE_UNAVAILABLE", syntheticData: false });
+    let auth: AuthContext;
+    try {
+      auth = await authenticate(request, pool);
+      if (!auth) return reply.code(401).send(bearerChallenge());
+    } catch (error) {
+      request.log.error(error);
+      return reply.code(503).send({ error: "Authentication service unavailable", code: "AUTH_UNAVAILABLE" });
+    }
+    const { conflictId } = request.params as { conflictId: string };
+    if (!isUuid(conflictId)) return reply.code(400).send({ error: "conflictId must be a UUID", code: "INVALID_CONFLICT" });
+    const validation = validateConflictResolution(bodyOf(request));
+    if (!validation.ok) return reply.code(400).send({ error: validation.error, code: validation.code });
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      const selected = await client.query<{
+        id: string; envelope_id: string; organization_id: string | null;
+        resolution_status: string;
+      }>(
+        `select c.id, c.envelope_id, d.organization_id, c.resolution_status
+           from field_sync_conflicts c
+           join field_sync_envelopes e on e.id = c.envelope_id
+           left join field_devices d on d.id = e.device_id
+          where c.id = $1 and e.identity_id = $2
+          for update of c`,
+        [conflictId, auth.identityId],
+      );
+      const conflict = selected.rows[0];
+      if (!conflict || conflict.resolution_status !== "OPEN") {
+        await client.query("ROLLBACK");
+        return reply.code(404).send({ error: "Open conflict not found for authenticated identity", code: "CONFLICT_NOT_FOUND" });
+      }
+      const updated = await client.query(
+        `update field_sync_conflicts
+            set resolution_status = $2, resolution_reason = $3,
+                resolved_by_identity_id = $4, resolved_at = now()
+          where id = $1 and resolution_status = 'OPEN'
+          returning id, envelope_id, resolution_status, resolution_reason,
+                    resolved_by_identity_id, resolved_at`,
+        [conflictId, validation.resolutionStatus, validation.resolutionReason, auth.identityId],
+      );
+      const resolved = updated.rows[0];
+      if (!resolved) throw new Error("FIELD_SYNC_CONFLICT_RESOLUTION_UPDATE_FAILED");
+      await client.query(
+        `insert into audit_events(actor_identity_id, organization_id, action, target_type, target_id, request_id, payload)
+         values ($1, $2, 'FIELD_SYNC_CONFLICT_RESOLVED', 'field_sync_conflict', $3, $4, $5)`,
+        [auth.identityId, conflict.organization_id, conflictId, request.id, {
+          envelopeId: conflict.envelope_id,
+          resolutionStatus: validation.resolutionStatus,
+          resolutionReason: validation.resolutionReason,
+        }],
+      );
+      await client.query("COMMIT");
+      return reply.code(200).send({ source: "postgresql", syntheticData: false, authoritativeMutation: true, conflict: resolved });
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      request.log.error(error);
+      return reply.code(503).send({ error: "Conflict resolution unavailable", code: "CONFLICT_RESOLUTION_UNAVAILABLE", syntheticData: false });
+    } finally {
+      client.release();
+    }
   });
 }
