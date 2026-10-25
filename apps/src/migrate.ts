@@ -19,38 +19,51 @@ const ssl = databaseSsl === "false"
 const pool = new Pool({ connectionString: databaseUrl, max: 1, ssl });
 
 try {
-  await pool.query(`
-    create table if not exists schema_migrations (
-      version text primary key,
-      filename text not null,
-      applied_at timestamptz not null default now()
-    )
-  `);
-
-  // Support both CI/source execution (/repo/apps/src) and the production
-  // container (/app/apps/dist/src). Never assume a single filesystem root.
+  // Resolve and validate the complete local migration inventory before any DDL.
+  // Support both CI/source execution (/repo/apps/src) and production containers (/app/apps/dist/src).
   const here = path.dirname(fileURLToPath(import.meta.url));
   const candidates = [path.resolve(here, "../../migrations"), path.resolve(here, "../../../migrations")];
   const migrationDir = candidates.find((candidate) => existsSync(candidate));
   if (!migrationDir) throw new Error(`Migration directory not found. Checked: ${candidates.join(", ")}`);
   const files = (await readdir(migrationDir))
-    .filter((name) => /^\d+_.+\.sql$/.test(name))
+    .filter((name) => /^\\d+_.+\\.sql$/.test(name))
     .sort();
-
-  // Preflight the entire inventory before applying any migration. Without this,
-  // a mismatch late in the sorted list can be discovered only after earlier
-  // migrations have already committed, leaving the deployment partially advanced.
-  const appliedResult = await pool.query<{ version: string; filename: string }>(
-    "select version, filename from schema_migrations",
-  );
-  const conflicts = findMigrationFilenameConflicts(files, appliedResult.rows);
-  if (conflicts.length > 0) {
-    const details = conflicts
-      .map(({ version, recorded, expected }) => `${version}: recorded ${recorded}; repository has ${expected}`)
-      .join("; ");
-    throw new Error(`Migration inventory preflight failed before applying migrations: ${details}`);
+  const expected = new Map<string, string>();
+  for (const filename of files) {
+    const version = filename.split("_", 1)[0]!;
+    const previous = expected.get(version);
+    if (previous) throw new Error(`Duplicate migration version ${version}: ${previous} and ${filename}`);
+    expected.set(version, filename);
   }
 
+  // Read-only full-ledger preflight. Any unexplained history stops the run before DDL.
+  const ledgerExists = await pool.query<{ ledger: string | null }>(
+    "select to_regclass('public.schema_migrations')::text as ledger",
+  );
+  if (ledgerExists.rows[0]?.ledger) {
+    const ledger = await pool.query<{ version: string; filename: string }>(
+      "select version, filename from public.schema_migrations order by version",
+    );
+    const mismatched = ledger.rows.filter((row) => expected.has(row.version) && expected.get(row.version) !== row.filename);
+    const unexpected = ledger.rows.filter((row) => !expected.has(row.version));
+    if (mismatched.length || unexpected.length) {
+      const details = [
+        ...mismatched.map((row) => `version ${row.version}: ledger=${row.filename}, repository=${expected.get(row.version)}`),
+        ...unexpected.map((row) => `version ${row.version}: ledger filename ${row.filename} has no matching migration file`),
+      ];
+      throw new Error("Migration preflight failed; no schema changes were made. Reconcile authoritative history first:\\n" + details.join("\\n"));
+    }
+  } else {
+    await pool.query(`
+      create table public.schema_migrations (
+        version text primary key,
+        filename text not null,
+        applied_at timestamptz not null default now()
+      )
+    `);
+  }
+
+  // The preflight passed; apply only migrations absent from the ledger.
   for (const filename of files) {
     const version = filename.split("_", 1)[0]!;
     if (applied.has(version)) continue;
