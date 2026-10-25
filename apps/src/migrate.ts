@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
 import { readProductionConfig } from "./production-config.js";
+import { findMigrationFilenameConflicts } from "./migration-inventory.js";
 
 // Validate the complete production contract before any database connection or DDL.
 const productionConfig = process.env.NODE_ENV === "production" ? readProductionConfig() : null;
@@ -46,11 +47,11 @@ try {
     );
     for (const row of ledger.rows) applied.set(row.version, row.filename);
 
-    const mismatched = ledger.rows.filter((row) => expected.has(row.version) && expected.get(row.version) !== row.filename);
+    const conflicts = findMigrationFilenameConflicts(files, ledger.rows);
     const unexpected = ledger.rows.filter((row) => !expected.has(row.version));
-    if (mismatched.length || unexpected.length) {
+    if (conflicts.length > 0 || unexpected.length > 0) {
       const details = [
-        ...mismatched.map((row) => `version ${row.version}: ledger=${row.filename}, repository=${expected.get(row.version)}`),
+        ...conflicts.map((row) => `version ${row.version}: ledger=${row.recorded}, repository=${row.expected}`),
         ...unexpected.map((row) => `version ${row.version}: ledger filename ${row.filename} has no matching migration file`),
       ];
       throw new Error("Migration preflight failed; no schema changes were made. Reconcile authoritative history first:\n" + details.join("\n"));
