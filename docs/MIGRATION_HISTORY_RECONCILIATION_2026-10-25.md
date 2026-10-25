@@ -2,38 +2,48 @@
 
 ## Status
 
-**HOLD: do not apply migrations to staging or production until the ledger conflict is resolved.**
+**Historical SQL source recovered; validation gate remains open until CI and disposable-database checks complete.**
 
-The migration runner derives identity from the numeric filename prefix and fails when a ledger version is already associated with a different filename. The currently inspected staging ledger records:
+The four migration files previously thought missing were located on the `intelligence/ai-evidence-intake-middleware` branch. Their Git blob identifiers match the files in the current Shakti engineering branch exactly:
 
 - `20261022_async_mirror_inbox.sql`
 - `20261023_async_mirror_worker_leases.sql`
 - `20261024_ai_intake_rate_limits.sql`
 - `20261025_ai_evidence_intake_jobs.sql`
 
-The current engineering branch instead contains different migrations using those same version prefixes. The historical filenames were not found at the inspected refs in this repository. Do not assume their SQL is empty or redundant.
+These exact blob matches establish source identity; they do not establish which database is production or prove the live schema is healthy.
 
-## Required forward-only recovery
+The current branch preserves those four historical version identities. New CPCB/BM/MRV work uses fresh identifiers `20261029` through `20261035`. Do not renumber applied migrations or change ledger rows to make the sequence contiguous.
 
-1. Capture read-only exports of the migration ledger and database catalog from each candidate database. Record provider project, branch, database, role, server version, TLS status, and the sanitized endpoint; never record credentials.
-2. Identify the actual runtime and migration database by inspecting deployment configuration metadata. Do not infer identity from the database name alone.
-3. Recover the four historical SQL files from Git object history, CI artifacts, container image/source archives, release bundles, or the system that originally applied them. Verify provenance and checksums.
-4. If original files cannot be recovered, reconstruct each migration from authoritative schema definitions and application history. Mark reconstructed files as reconstructions; do not claim they are original. Have an independent reviewer compare them against the live catalog and historical behavior.
-5. Restore the historical migration filenames and immutable contents as the canonical identity where evidence supports them. Assign the new CPCB/BM migrations fresh, unused migration identifiers that do not collide with any applied or historically reserved version.
-6. Keep the ledger filename identity check strict. Do not delete ledger rows, rename applied migrations, or add a bypass.
-7. In a disposable PostgreSQL database, test both (a) fresh installation from the complete canonical migration set and (b) upgrade from a representative snapshot of the historical ledger/schema.
-8. Verify table/function/trigger/constraint inventory, audit-chain anchor and triggers, append-only behavior, transaction rollback behavior, and runtime-role least privilege.
-9. Add regression tests for duplicate versions, missing files, unexpected ledger entries, filename mismatches, and the invariant that a failed preflight causes zero schema changes.
-10. Only after all checks pass, request review and explicit approval for a separately planned staging run. Production remains a separate gate.
+## Implemented engineering guard
 
-## Preflight acceptance criteria
+The migration runner now:
 
-The migration runner must enumerate and validate the complete local migration set and compare it to the complete existing ledger before applying any migration. Any mismatch, unexpected ledger version, or missing authoritative history must stop the run before DDL. A fresh database may create the ledger only after local inventory validation has passed. Each migration and its ledger record must commit atomically.
+1. Resolves and validates the complete local migration inventory before DDL.
+2. Rejects duplicate migration versions in the repository.
+3. Reads the existing migration ledger before applying migrations.
+4. Rejects ledger filename/version conflicts and unexplained ledger versions before applying any migration SQL.
+5. Records each migration in the ledger in the same transaction as its SQL.
+6. Keeps the identity check strict; no bypass or ledger rewrite was introduced.
 
-## Known evidence limitations
+Regression tests exercise filename conflicts, preserved identities/fresh versions, and the requirement that preflight precede SQL execution.
 
-The inspected database candidates are not yet proven to be the live service database. Missing audit-chain objects on a candidate do not prove the production service lacks them. Likewise, a healthy HTTP endpoint does not prove database readiness or end-to-end business workflow correctness.
+## Remaining validation
+
+1. Confirm the current exact-head CI run completes successfully, including migration validation, migration-state verification, type checking, build, browser smoke test, disposable PostgreSQL acceptance, audit-chain verification, backup/restore, and container build.
+2. If any check fails, fix it on the engineering branch and rerun CI.
+3. Review fresh-install and upgrade behavior against a representative historical schema/ledger. A fresh install alone is not enough to establish upgrade safety.
+4. Verify the actual runtime and migration database identity from provider project/branch metadata. Do not infer production identity from a database name alone.
+5. Verify table/function/trigger/constraint inventory, audit-chain anchor and triggers, append-only behavior, transaction rollback, and runtime-role least privilege.
+6. Only after these checks pass, request review and explicit approval for a separately planned staging run. Production remains a separate gate.
+
+## Safety boundaries
+
+- Do not run disputed migrations against staging or production before validation.
+- Do not delete or rewrite historical ledger rows.
+- Do not expose credentials or full connection strings in reports.
+- Do not merge or deploy based only on a green build or HTTP health endpoint.
 
 ## Gate
 
-Engineering investigation only. No database writes, migration execution, environment changes, or deployment authorized by this document.
+Engineering validation in progress. No production database writes, migration execution, environment changes, or deployment authorized by this document.
