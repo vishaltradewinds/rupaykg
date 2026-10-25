@@ -7,7 +7,9 @@ const baseEnv = {
   DATABASE_URL: "postgresql://runtime_role:secret@db.example.com:5432/rupaykg",
   MIGRATION_DATABASE_URL: "postgresql://migration_role:secret@db.example.com:5432/rupaykg",
   DATABASE_SSL: "require",
-  DATABASE_CA_CERT: "-----BEGIN CERTIFICATE-----\nproduction-test-ca\n-----END CERTIFICATE-----",
+  DATABASE_CA_CERT: "-----BEGIN CERTIFICATE----- 
+production-test-ca 
+-----END CERTIFICATE-----",
   RUPAYKG_AUTH_MODE: "real",
   RUPAYKG_ALLOWED_ORIGINS: "https://app.rupaykg.example,https://admin.rupaykg.example",
   RUPAYKG_SYNTHETIC_DATA: "false",
@@ -31,7 +33,9 @@ test("production config rejects missing or unsafe production requirements", () =
     [{ ...baseEnv, NODE_ENV: "development" }, /NODE_ENV must be production/],
     [{ ...baseEnv, DATABASE_URL: "postgresql://localhost/rupaykg" }, /must not target localhost/],
     [{ ...baseEnv, MIGRATION_DATABASE_URL: "postgresql://migration_role:secret@db.example.com:5433/rupaykg" }, /same database host, port, and database name/],
-    [{ ...baseEnv, DATABASE_URL: baseEnv.DATABASE_URL + "?sslmode=disable" }, /remove sslmode from the database URL/],\n    [{ ...baseEnv, MIGRATION_DATABASE_URL: baseEnv.MIGRATION_DATABASE_URL + "?sslrootcert=%2Ftmp%2Fca.pem" }, /remove sslrootcert from the database URL/],\n    [{ ...baseEnv, DATABASE_SSL: "false" }, /DATABASE_SSL must be require/],
+    [{ ...baseEnv, DATABASE_URL: baseEnv.DATABASE_URL + "?sslmode=disable" }, /remove sslmode from the database URL/], 
+    [{ ...baseEnv, MIGRATION_DATABASE_URL: baseEnv.MIGRATION_DATABASE_URL + "?sslrootcert=%2Ftmp%2Fca.pem" }, /remove sslrootcert from the database URL/], 
+    [{ ...baseEnv, DATABASE_SSL: "false" }, /DATABASE_SSL must be require/],
     [{ ...baseEnv, DATABASE_CA_CERT: "" }, /DATABASE_CA_CERT must contain a PEM certificate/],
     [{ ...baseEnv, RUPAYKG_AUTH_MODE: "session" }, /RUPAYKG_AUTH_MODE must be real/],
     [{ ...baseEnv, RUPAYKG_AUTH_MODE: "" }, /RUPAYKG_AUTH_MODE must be real/],
