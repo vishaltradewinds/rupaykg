@@ -42,7 +42,9 @@ test("MRV provenance persistence and audit event share one transaction", async (
   assert.match(route, /await persistClient\.query\("BEGIN"\)/);
   assert.match(route, /insert into mrv_provenance_events/);
   assert.match(route, /MRV_PROVENANCE_PERSISTED/);
-  assert.match(route, /auth\.identityId, row\.organization_id, provenance\.id, request\.id/);
+  assert.match(route, /auth\.identityId, row\.organization_id, provenance\.id, requestId/);
+  assert.match(route, /AUDIT_REQUEST_ID_REQUIRED/);
+  assert.ok(route.indexOf("AUDIT_REQUEST_ID_REQUIRED") < route.indexOf("executeGuardianMrv"), "request ID must be validated before provider side effects");
   assert.match(route, /await persistClient\.query\("COMMIT"\)/);
   assert.match(route, /await persistClient\.query\("ROLLBACK"\)/);
   assert.match(route, /persistClient\.release\(\)/);
