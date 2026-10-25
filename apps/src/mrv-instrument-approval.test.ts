@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { instrumentApprovalFailure, type MrvInstrumentApprovalEvidence } from "./mrv-instrument-approval.js";
+import { instrumentApprovalFailure, instrumentParameterFailure, type MrvInstrumentApprovalEvidence, type MrvInstrumentParameterSpec } from "./mrv-instrument-approval.js";
 
 const now = new Date("2026-10-25T12:00:00.000Z");
 const future = "2027-10-25T12:00:00.000Z";
@@ -124,4 +124,25 @@ test("expired or missing firmware support and security evidence block MRV", () =
   assert.match(instrumentApprovalFailure("OTHER", [gasObservation], [approvedInstrument({ security_evidence_sha256: "" })], now) ?? "", /firmware support or security lifecycle evidence/i);
   assert.match(instrumentApprovalFailure("OTHER", [gasObservation], [approvedInstrument({ firmware_version: null, firmware_support_until: null, security_review_status: "PENDING", security_not_applicable_reason: null })], now) ?? "", /lacks a written security-lifecycle rationale/i);
   assert.equal(instrumentApprovalFailure("OTHER", [gasObservation], [approvedInstrument({ firmware_version: null, firmware_support_until: null, security_review_status: "NOT_APPLICABLE_WITH_JUSTIFICATION", security_not_applicable_reason: "No firmware exists", security_evidence_reference: null, security_evidence_sha256: null, security_reviewed_at: null })], now), null);
+});
+
+
+test("instrument parameter specification enforces exact unit, range, accuracy metadata and resolution", () => {
+  const specs: MrvInstrumentParameterSpec[] = [{
+    instrument_code: "GAS-FLOW-01",
+    parameter_code: "gas_flow",
+    unit: "m3/h",
+    minimum_value: 0,
+    maximum_value: 500,
+    resolution: 0.1,
+    accuracy_absolute: 0.5,
+    accuracy_relative_percent: null,
+  }];
+  assert.equal(instrumentParameterFailure("GAS-FLOW-01", "gas_flow", "m3/h", 123.4, specs), null);
+  assert.match(instrumentParameterFailure("GAS-FLOW-01", "gas_flow", "L/min", 123.4, specs) ?? "", /no exact parameter\/unit specification/i);
+  assert.match(instrumentParameterFailure("GAS-FLOW-01", "gas_flow", "M3/h", 123.4, specs) ?? "", /no exact parameter\/unit specification/i);
+  assert.match(instrumentParameterFailure("GAS-FLOW-01", "gas_flow", "m3/h", 501, specs) ?? "", /outside the approved range/i);
+  assert.match(instrumentParameterFailure("GAS-FLOW-01", "gas_flow", "m3/h", 123.45, specs) ?? "", /exceeds the approved resolution/i);
+  assert.match(instrumentParameterFailure("GAS-FLOW-01", "gas_flow", "m3/h", Number.NaN, specs) ?? "", /finite number/i);
+  assert.match(instrumentParameterFailure("GAS-FLOW-01", "gas_flow", "m3/h", 1, [{ ...specs[0]!, accuracy_absolute: null, accuracy_relative_percent: null }]) ?? "", /invalid parameter specification/i);
 });

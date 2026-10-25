@@ -89,6 +89,103 @@ export async function registerMrvInstrumentRoutes(app: FastifyInstance, pool: Po
     }
   });
 
+  app.post("/api/v1/mrv/instruments/:instrumentId/parameter-specs", async (request, reply) => {
+    const auth = await authFor(request as never, reply, pool);
+    if (!auth || !pool) return;
+    const instrumentId = (request.params as { instrumentId: string }).instrumentId;
+    if (!uuid(instrumentId)) return reply.code(400).send({ error: "instrumentId must be a UUID", code: "MRV_INSTRUMENT_ID_INVALID" });
+    const body = bodyOf(request as never);
+    const rawSpecs = Array.isArray(body.specs) ? body.specs : null;
+    if (!rawSpecs || rawSpecs.length < 1 || rawSpecs.length > 50) {
+      return reply.code(400).send({ error: "specs must contain 1 to 50 parameter specifications", code: "MRV_PARAMETER_SPECS_INVALID" });
+    }
+    const specs: Array<{ parameterCode: string; unit: string; minimumValue: number; maximumValue: number; resolution: number; accuracyAbsolute: number | null; accuracyRelativePercent: number | null; accuracyBasis: string; uncertaintyUnit: string | null; sourceReference: string | null; sourceEvidenceArtifactVersionId: string }> = [];
+    for (const raw of rawSpecs) {
+      if (!raw || typeof raw !== "object" || Array.isArray(raw)) return reply.code(400).send({ error: "Each parameter specification must be an object", code: "MRV_PARAMETER_SPECS_INVALID" });
+      const spec = raw as Record<string, unknown>;
+      const parameterCode = stringValue(spec.parameterCode);
+      const unit = stringValue(spec.unit);
+      const minimumValue = typeof spec.minimumValue === "number" ? spec.minimumValue : Number.NaN;
+      const maximumValue = typeof spec.maximumValue === "number" ? spec.maximumValue : Number.NaN;
+      const resolution = typeof spec.resolution === "number" ? spec.resolution : Number.NaN;
+      const accuracyAbsolute = spec.accuracyAbsolute == null ? null : typeof spec.accuracyAbsolute === "number" ? spec.accuracyAbsolute : Number.NaN;
+      const accuracyRelativePercent = spec.accuracyRelativePercent == null ? null : typeof spec.accuracyRelativePercent === "number" ? spec.accuracyRelativePercent : Number.NaN;
+      const accuracyBasis = stringValue(spec.accuracyBasis);
+      const uncertaintyUnit = stringValue(spec.uncertaintyUnit);
+      const sourceReference = stringValue(spec.sourceReference);
+      const sourceEvidenceArtifactVersionId = stringValue(spec.sourceEvidenceArtifactVersionId);
+      if (!parameterCode || parameterCode.length > 100 || !unit || unit.length > 80
+        || !Number.isFinite(minimumValue) || !Number.isFinite(maximumValue) || minimumValue > maximumValue
+        || !Number.isFinite(resolution) || resolution <= 0
+        || (accuracyAbsolute !== null && (!Number.isFinite(accuracyAbsolute) || accuracyAbsolute < 0))
+        || (accuracyRelativePercent !== null && (!Number.isFinite(accuracyRelativePercent) || accuracyRelativePercent < 0))
+        || (accuracyAbsolute === null && accuracyRelativePercent === null)
+        || !accuracyBasis || accuracyBasis.length > 500
+        || (uncertaintyUnit !== null && (uncertaintyUnit.length > 80 || uncertaintyUnit !== unit))
+        || (sourceReference !== null && sourceReference.length > 1000)
+        || !sourceEvidenceArtifactVersionId || !uuid(sourceEvidenceArtifactVersionId)) {
+        return reply.code(400).send({ error: "Each spec requires parameterCode, unit, finite min/max with min<=max, positive resolution, non-negative absolute or relative accuracy, accuracyBasis and a valid sourceEvidenceArtifactVersionId", code: "MRV_PARAMETER_SPECS_INVALID" });
+      }
+      specs.push({ parameterCode, unit, minimumValue, maximumValue, resolution, accuracyAbsolute, accuracyRelativePercent, accuracyBasis, uncertaintyUnit, sourceReference, sourceEvidenceArtifactVersionId });
+    }
+    const duplicateKeys = new Set<string>();
+    for (const spec of specs) {
+      const key = `${spec.parameterCode.toLowerCase()}|${spec.unit.trim()}`;
+      if (duplicateKeys.has(key)) return reply.code(400).send({ error: "Duplicate parameterCode/unit specification", code: "MRV_PARAMETER_SPECS_DUPLICATE" });
+      duplicateKeys.add(key);
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query("begin");
+      const current = await client.query<{ organization_id: string; approval_status: string; measurement_instrument: boolean; supported_parameter_codes: string[] }>(
+        "select organization_id,approval_status,measurement_instrument,supported_parameter_codes from mrv_instruments where id=$1 for update",
+        [instrumentId],
+      );
+      const instrument = current.rows[0];
+      if (!instrument) { await client.query("rollback"); return reply.code(404).send({ error: "MRV instrument not found", code: "MRV_INSTRUMENT_NOT_FOUND" }); }
+      if (!await canManageInstrument(client as unknown as Pool, auth, instrument.organization_id)) { await client.query("rollback"); return reply.code(403).send({ error: "MRV instrument management permission required", code: "MRV_INSTRUMENT_PERMISSION_REQUIRED" }); }
+      if (instrument.approval_status !== "HOLD") { await client.query("rollback"); return reply.code(409).send({ error: "Parameter specifications can be changed only while the instrument is on HOLD; verified records are immutable", code: "MRV_PARAMETER_SPECS_IMMUTABLE" }); }
+      if (!instrument.measurement_instrument) { await client.query("rollback"); return reply.code(409).send({ error: "Non-measuring hardware cannot declare physical measurement specifications", code: "MRV_PARAMETER_SPECS_NOT_APPLICABLE" }); }
+      const supported = new Set(instrument.supported_parameter_codes.map((code) => code.trim().toLowerCase()));
+      if (specs.some((spec) => !supported.has(spec.parameterCode.toLowerCase()))) { await client.query("rollback"); return reply.code(409).send({ error: "Every parameter specification must match a declared supported parameter code", code: "MRV_PARAMETER_SPEC_UNSUPPORTED" }); }
+      await client.query("delete from mrv_instrument_parameter_specs where instrument_id=$1", [instrumentId]);
+      for (const spec of specs) {
+        await client.query(
+          "insert into mrv_instrument_parameter_specs(instrument_id,parameter_code,unit,minimum_value,maximum_value,resolution,accuracy_absolute,accuracy_relative_percent,accuracy_basis,uncertainty_unit,source_reference,source_evidence_artifact_version_id,created_by_identity_id) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)",
+          [instrumentId, spec.parameterCode, spec.unit, spec.minimumValue, spec.maximumValue, spec.resolution, spec.accuracyAbsolute, spec.accuracyRelativePercent, spec.accuracyBasis, spec.uncertaintyUnit, spec.sourceReference, spec.sourceEvidenceArtifactVersionId, auth.identityId],
+        );
+      }
+      await client.query("commit");
+      return reply.code(201).send({ source: "postgresql", syntheticData: false, instrumentId, specs });
+    } catch (error) {
+      await client.query("rollback").catch(() => undefined);
+      request.log.error(error);
+      return reply.code(409).send({ error: "Parameter specification write failed closed; verify the instrument state and specification values", code: "MRV_PARAMETER_SPECS_WRITE_BLOCKED", syntheticData: false });
+    } finally { client.release(); }
+  });
+
+  app.get("/api/v1/mrv/instruments/:instrumentId/parameter-specs", async (request, reply) => {
+    const auth = await authFor(request as never, reply, pool);
+    if (!auth || !pool) return;
+    const instrumentId = (request.params as { instrumentId: string }).instrumentId;
+    if (!uuid(instrumentId)) return reply.code(400).send({ error: "instrumentId must be a UUID", code: "MRV_INSTRUMENT_ID_INVALID" });
+    try {
+      const instrument = await pool.query<{ organization_id: string }>("select organization_id from mrv_instruments where id=$1", [instrumentId]);
+      const organizationId = instrument.rows[0]?.organization_id;
+      if (!organizationId) return reply.code(404).send({ error: "MRV instrument not found", code: "MRV_INSTRUMENT_NOT_FOUND" });
+      if (!await canReadInstruments(pool, auth, organizationId)) return reply.code(403).send({ error: "MRV instrument read permission required", code: "MRV_INSTRUMENT_PERMISSION_REQUIRED" });
+      const specs = await pool.query(
+        "select id,parameter_code,unit,minimum_value::text,maximum_value::text,resolution::text,accuracy_absolute::text,accuracy_relative_percent::text,accuracy_basis,uncertainty_unit,source_reference,source_evidence_artifact_version_id,created_by_identity_id,created_at from mrv_instrument_parameter_specs where instrument_id=$1 order by parameter_code,unit",
+        [instrumentId],
+      );
+      return { source: "postgresql", syntheticData: false, instrumentId, specs: specs.rows };
+    } catch (error) {
+      request.log.error(error);
+      return reply.code(503).send({ error: "MRV instrument parameter specifications unavailable", code: "MRV_PARAMETER_SPECS_UNAVAILABLE", syntheticData: false });
+    }
+  });
+
   app.post("/api/v1/mrv/instruments/:instrumentId/review", async (request, reply) => {
     const auth = await authFor(request as never, reply, pool);
     if (!auth || !pool) return;
@@ -123,21 +220,23 @@ export async function registerMrvInstrumentRoutes(app: FastifyInstance, pool: Po
       const verificationUrl = stringValue(body.meityVerificationUrl);
       const meityEvidenceReference = stringValue(body.meityEvidenceReference);
       const meityEvidenceSha256 = stringValue(body.meityEvidenceSha256);
+      const meityEvidenceArtifactVersionId = stringValue(body.meityEvidenceArtifactVersionId);
       const verifiedAt = stringValue(body.meityVerifiedAt);
       const validityBasis = stringValue(body.meityValidityBasis);
       const validUntil = stringValue(body.meityValidUntil);
       const calibrationRequired = body.calibrationRequired;
-      if (!certificateId || !issuer || !scope || !verificationUrl?.startsWith("https://") || !meityEvidenceReference || !/^[0-9a-f]{64}$/i.test(meityEvidenceSha256 ?? "") || !verifiedAt || Number.isNaN(Date.parse(verifiedAt))
+      if (!certificateId || !issuer || !scope || !verificationUrl?.startsWith("https://") || !meityEvidenceReference || !/^[0-9a-f]{64}$/i.test(meityEvidenceSha256 ?? "") || !meityEvidenceArtifactVersionId || !uuid(meityEvidenceArtifactVersionId) || !verifiedAt || Number.isNaN(Date.parse(verifiedAt))
         || !["VALID_UNTIL", "NO_EXPIRY_CONFIRMED"].includes(validityBasis ?? "")
         || (validityBasis === "VALID_UNTIL" && (!validUntil || Number.isNaN(Date.parse(validUntil)) || Date.parse(validUntil) <= Date.now()))
         || (validityBasis === "NO_EXPIRY_CONFIRMED" && validUntil !== null && validUntil !== undefined && validUntil !== "")
         || typeof calibrationRequired !== "boolean") {
-        return reply.code(400).send({ error: "VERIFIED requires exact-model MeitY certificate ID, issuer, scope, HTTPS official verification URL, stored evidence reference and SHA-256 evidence hash, verification timestamp, validity basis, and explicit calibrationRequired", code: "MRV_INSTRUMENT_APPROVAL_EVIDENCE_REQUIRED" });
+        return reply.code(400).send({ error: "VERIFIED requires exact-model MeitY certificate ID, issuer, scope, HTTPS official verification URL, stored evidence reference/hash and reviewed evidence-vault artifact-version UUID, verification timestamp, validity basis, and explicit calibrationRequired", code: "MRV_INSTRUMENT_APPROVAL_EVIDENCE_REQUIRED" });
       }
       const calibrationStatus = stringValue(body.calibrationStatus);
       const calibrationCertificateId = stringValue(body.calibrationCertificateId);
       const calibrationEvidenceReference = stringValue(body.calibrationEvidenceReference);
       const calibrationEvidenceSha256 = stringValue(body.calibrationEvidenceSha256);
+      const calibrationEvidenceArtifactVersionId = stringValue(body.calibrationEvidenceArtifactVersionId);
       const calibrationLab = stringValue(body.calibrationLab);
       const calibrationTraceability = stringValue(body.calibrationTraceability);
       const rawCalibrationUncertainty = body.calibrationUncertainty;
@@ -149,29 +248,30 @@ export async function registerMrvInstrumentRoutes(app: FastifyInstance, pool: Po
       const securityReviewStatus = stringValue(body.securityReviewStatus);
       const securityEvidenceReference = stringValue(body.securityEvidenceReference);
       const securityEvidenceSha256 = stringValue(body.securityEvidenceSha256);
+      const securityEvidenceArtifactVersionId = stringValue(body.securityEvidenceArtifactVersionId);
       const securityReviewedAt = stringValue(body.securityReviewedAt);
       const securityNotApplicableReason = stringValue(body.securityNotApplicableReason);
       if (calibrationRequired) {
-        if (calibrationStatus !== "VERIFIED" || !calibrationCertificateId || !calibrationEvidenceReference || !/^[0-9a-f]{64}$/i.test(calibrationEvidenceSha256 ?? "") || !calibrationLab || !calibrationTraceability
+        if (calibrationStatus !== "VERIFIED" || !calibrationCertificateId || !calibrationEvidenceReference || !/^[0-9a-f]{64}$/i.test(calibrationEvidenceSha256 ?? "") || !calibrationEvidenceArtifactVersionId || !uuid(calibrationEvidenceArtifactVersionId) || !calibrationLab || !calibrationTraceability
           || calibrationUncertainty === null || !Number.isFinite(calibrationUncertainty) || calibrationUncertainty < 0
           || !calibrationValidUntil || Number.isNaN(Date.parse(calibrationValidUntil)) || Date.parse(calibrationValidUntil) <= Date.now()) {
-          return reply.code(400).send({ error: "Measuring instrument requires current calibration certificate, stored evidence reference and SHA-256 evidence hash, lab, traceability, non-negative uncertainty and future validity", code: "MRV_INSTRUMENT_CALIBRATION_REQUIRED" });
+          return reply.code(400).send({ error: "Measuring instrument requires current calibration certificate, stored evidence reference/hash and reviewed evidence-vault artifact-version UUID, lab, traceability, non-negative uncertainty and future validity", code: "MRV_INSTRUMENT_CALIBRATION_REQUIRED" });
         }
-      } else if (calibrationStatus !== "NOT_APPLICABLE_WITH_JUSTIFICATION" || !calibrationNotRequiredReason) {
+      } else if (calibrationStatus !== "NOT_APPLICABLE_WITH_JUSTIFICATION" || !calibrationNotRequiredReason || calibrationEvidenceArtifactVersionId) {
         return reply.code(400).send({ error: "Non-measuring instrument requires a written calibration-not-required rationale", code: "MRV_INSTRUMENT_CALIBRATION_RATIONALE_REQUIRED" });
       }
       if (firmwareVersion) {
         if (!firmwareSupportUntil || Number.isNaN(Date.parse(firmwareSupportUntil)) || Date.parse(firmwareSupportUntil) <= Date.now()
-          || securityReviewStatus !== "VERIFIED" || !securityEvidenceReference || !/^[0-9a-f]{64}$/i.test(securityEvidenceSha256 ?? "")
+          || securityReviewStatus !== "VERIFIED" || !securityEvidenceReference || !/^[0-9a-f]{64}$/i.test(securityEvidenceSha256 ?? "") || !securityEvidenceArtifactVersionId || !uuid(securityEvidenceArtifactVersionId)
           || !securityReviewedAt || Number.isNaN(Date.parse(securityReviewedAt)) || Date.parse(securityReviewedAt) > Date.now()) {
-          return reply.code(400).send({ error: "Firmware-enabled instruments require current support, a stored security-review evidence reference/hash and review timestamp", code: "MRV_INSTRUMENT_SECURITY_EVIDENCE_REQUIRED" });
+          return reply.code(400).send({ error: "Firmware-enabled instruments require current support, a stored security-review evidence reference/hash, reviewed evidence-vault artifact-version UUID and review timestamp", code: "MRV_INSTRUMENT_SECURITY_EVIDENCE_REQUIRED" });
         }
-      } else if (firmwareSupportUntil || securityReviewStatus !== "NOT_APPLICABLE_WITH_JUSTIFICATION" || !securityNotApplicableReason) {
+      } else if (firmwareSupportUntil || securityReviewStatus !== "NOT_APPLICABLE_WITH_JUSTIFICATION" || !securityNotApplicableReason || securityEvidenceArtifactVersionId) {
         return reply.code(400).send({ error: "Instrument without firmware requires a written security-lifecycle not-applicable rationale", code: "MRV_INSTRUMENT_SECURITY_RATIONALE_REQUIRED" });
       }
       const update = await pool.query(
-        "update mrv_instruments set approval_status='VERIFIED',meity_certificate_id=$2,meity_issuer=$3,meity_certificate_scope=$4,meity_verification_url=$5,meity_evidence_reference=$6,meity_evidence_sha256=$7,meity_verified_at=$8,meity_validity_basis=$9,meity_valid_until=$10,calibration_required=$11,calibration_status=$12,calibration_certificate_id=$13,calibration_evidence_reference=$14,calibration_evidence_sha256=$15,calibration_lab=$16,calibration_traceability=$17,calibration_uncertainty=$18,calibration_valid_until=$19,calibration_not_required_reason=$20,firmware_version=$21,firmware_support_until=$22,security_review_status=$23,security_evidence_reference=$24,security_evidence_sha256=$25,security_reviewed_at=$26,security_not_applicable_reason=$27,reviewed_by_identity_id=$28,reviewed_at=now(),review_note=$29 where id=$1 returning *",
-        [instrumentId, certificateId, issuer, scope, verificationUrl, meityEvidenceReference, meityEvidenceSha256, verifiedAt, validityBasis, validityBasis === "VALID_UNTIL" ? validUntil : null, calibrationRequired, calibrationStatus, calibrationCertificateId, calibrationRequired ? calibrationEvidenceReference : null, calibrationRequired ? calibrationEvidenceSha256 : null, calibrationLab, calibrationTraceability, calibrationUncertainty, calibrationRequired ? calibrationValidUntil : null, calibrationNotRequiredReason, firmwareVersion, firmwareSupportUntil, securityReviewStatus, firmwareVersion ? securityEvidenceReference : null, firmwareVersion ? securityEvidenceSha256 : null, firmwareVersion ? securityReviewedAt : null, firmwareVersion ? null : securityNotApplicableReason, auth.identityId, note],
+        "update mrv_instruments set approval_status='VERIFIED',meity_certificate_id=$2,meity_issuer=$3,meity_certificate_scope=$4,meity_verification_url=$5,meity_evidence_reference=$6,meity_evidence_sha256=$7,meity_verified_at=$8,meity_validity_basis=$9,meity_valid_until=$10,calibration_required=$11,calibration_status=$12,calibration_certificate_id=$13,calibration_evidence_reference=$14,calibration_evidence_sha256=$15,calibration_lab=$16,calibration_traceability=$17,calibration_uncertainty=$18,calibration_valid_until=$19,calibration_not_required_reason=$20,firmware_version=$21,firmware_support_until=$22,security_review_status=$23,security_evidence_reference=$24,security_evidence_sha256=$25,security_reviewed_at=$26,security_not_applicable_reason=$27,reviewed_by_identity_id=$28,reviewed_at=now(),review_note=$29,meity_evidence_artifact_version_id=$30,calibration_evidence_artifact_version_id=$31,security_evidence_artifact_version_id=$32 where id=$1 returning *",
+        [instrumentId, certificateId, issuer, scope, verificationUrl, meityEvidenceReference, meityEvidenceSha256, verifiedAt, validityBasis, validityBasis === "VALID_UNTIL" ? validUntil : null, calibrationRequired, calibrationStatus, calibrationCertificateId, calibrationRequired ? calibrationEvidenceReference : null, calibrationRequired ? calibrationEvidenceSha256 : null, calibrationLab, calibrationTraceability, calibrationUncertainty, calibrationRequired ? calibrationValidUntil : null, calibrationNotRequiredReason, firmwareVersion, firmwareSupportUntil, securityReviewStatus, firmwareVersion ? securityEvidenceReference : null, firmwareVersion ? securityEvidenceSha256 : null, firmwareVersion ? securityReviewedAt : null, firmwareVersion ? null : securityNotApplicableReason, auth.identityId, note, meityEvidenceArtifactVersionId, calibrationRequired ? calibrationEvidenceArtifactVersionId : null, firmwareVersion ? securityEvidenceArtifactVersionId : null],
       );
       return { source: "postgresql", syntheticData: false, instrument: update.rows[0], message: "Exact-model evidence recorded. Human reviewer is responsible for confirming that the official source matches this exact model and scope." };
     } catch (error) {

@@ -3,7 +3,7 @@ import type { FastifyInstance } from "fastify";
 import type { Pool, PoolClient } from "pg";
 import { authenticate, bearerChallenge, hasOrganizationPermission } from "./auth.js";
 import { validateConflictResolution, validateSyncEnvelope } from "./sync-validation.js";
-import { instrumentApprovalFailure, type MrvInstrumentApprovalEvidence } from "./mrv-instrument-approval.js";
+import { instrumentApprovalFailure, instrumentParameterFailure, type MrvInstrumentApprovalEvidence, type MrvInstrumentParameterSpec } from "./mrv-instrument-approval.js";
 
 type AuthContext = Awaited<ReturnType<typeof authenticate>>;
 type OperationPayload = Record<string, unknown> & { operationType?: string };
@@ -47,6 +47,14 @@ async function applyOperation(client: PoolClient, auth: NonNullable<AuthContext>
     if (gateFailure) throw Object.assign(new Error(gateFailure), { code: "INSTRUMENT_NOT_APPROVED" });
     const instrumentId = instrument.rows[0]?.id;
     if (!instrumentId) throw Object.assign(new Error("Approved instrument record disappeared during measurement creation"), { code: "INSTRUMENT_NOT_APPROVED" });
+    const evidenceCurrent = await client.query<{ current: boolean }>("select mrv_instrument_evidence_is_current($1) as current", [instrumentId]);
+    if (evidenceCurrent.rows[0]?.current !== true) throw Object.assign(new Error("Instrument evidence-vault approval is no longer current"), { code: "INSTRUMENT_NOT_APPROVED" });
+    const parameterSpecs = await client.query<MrvInstrumentParameterSpec>(
+      "select parameter_code,unit,minimum_value::text,maximum_value::text,resolution::text,accuracy_absolute::text,accuracy_relative_percent::text from mrv_instrument_parameter_specs where instrument_id=$1",
+      [instrumentId],
+    );
+    const parameterFailure = instrumentParameterFailure(instrumentCode, parameterCode, unit, value, parameterSpecs.rows);
+    if (parameterFailure) throw Object.assign(new Error(parameterFailure), { code: "INSTRUMENT_NOT_APPROVED" });
     const result = await client.query<{ id: string }>(
       `insert into measurements (activity_id, value, unit, method, source, measured_at, metadata, mrv_instrument_id, parameter_code) values ($1,$2,$3,$4,$5,$6,$7,$8,$9) returning id`,
       [activityId, value, unit, method, source, measuredAt, payload.metadata ?? {}, instrumentId, parameterCode],

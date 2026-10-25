@@ -115,3 +115,40 @@ The sample is illustrative only. The `instrumentCode` and `parameterCode` must m
 - MeitY CRO FAQs: https://www.meity.gov.in/writereaddata/files/Modified-FAQs-CRO.pdf
 - BEE BM WA03.001 methodology: https://beeindia.gov.in/sites/default/files/BM%20WA03.001.pdf
 - BEE approved methodologies list: https://beeindia.gov.in/view_content.php?lang=1&lid=571
+
+
+## Evidence-vault binding (required for VERIFIED)
+
+The review payload must include exact evidence artifact-version IDs from the reviewed evidence vault:
+- `meityEvidenceArtifactVersionId` — required for every VERIFIED instrument.
+- `calibrationEvidenceArtifactVersionId` — required when calibration is required; must be absent when calibration is formally not applicable.
+- `securityEvidenceArtifactVersionId` — required for firmware-enabled instruments; must be absent when firmware is formally not applicable.
+
+The supplied SHA-256 value must match the referenced artifact version. PostgreSQL recomputes SHA-256 from the stored bytes, verifies byte length, checks the evidence row is VERIFIED, checks an APPROVED independent review exists, and requires the artifact to belong to the instrument's organization. A free-text reference or syntactically valid hash is not sufficient. Any mismatch fails closed.
+
+## Parameter specifications (required before measurement instruments can be VERIFIED)
+
+While an instrument is in HOLD, use `POST /api/v1/mrv/instruments/{instrumentId}/parameter-specs` with an organization-authorized reviewer. Example:
+
+```json
+{
+  "specs": [
+    {
+      "parameterCode": "gas_flow",
+      "unit": "m3/h",
+      "minimumValue": 0,
+      "maximumValue": 500,
+      "resolution": 0.1,
+      "accuracyAbsolute": 0.5,
+      "accuracyBasis": "Manufacturer datasheet accuracy at stated operating conditions",
+      "uncertaintyUnit": "m3/h",
+      "sourceReference": "Reviewed manufacturer datasheet artifact",
+      "sourceEvidenceArtifactVersionId": "<reviewed-evidence-artifact-version-uuid>"
+    }
+  ]
+}
+```
+
+Each supported measurement parameter must have at least one structured specification containing an exact canonical unit, minimum and maximum values, resolution, accuracy metadata, accuracy basis and a sourceEvidenceArtifactVersionId referencing a reviewed/approved same-organization vault artifact. Absolute accuracy and uncertainty are expressed in that exact unit; if uncertaintyUnit is supplied, it must exactly equal unit. Read the saved specifications with `GET /api/v1/mrv/instruments/{instrumentId}/parameter-specs`. No implicit unit conversion is performed. A verified instrument's specifications are immutable; a changed model or measurement specification requires a new instrument record and review.
+
+Direct and field-sync measurement ingestion, plus the MRV submission path, check the exact parameter/unit specification, range, resolution and accuracy metadata. PostgreSQL repeats the critical range/unit/resolution check at write time. Missing specifications, unit mismatch, out-of-range values or unsupported precision fail closed. These controls do not replace physical calibration, site acceptance, methodology eligibility or independent verification.

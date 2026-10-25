@@ -1,0 +1,419 @@
+-- Bind instrument approvals to reviewed, organization-scoped evidence-vault versions.
+-- Add explicit, immutable per-parameter measurement specifications.
+
+alter table mrv_instruments
+  add column if not exists meity_evidence_artifact_version_id uuid references evidence_artifact_versions(id) on delete restrict,
+  add column if not exists calibration_evidence_artifact_version_id uuid references evidence_artifact_versions(id) on delete restrict,
+  add column if not exists security_evidence_artifact_version_id uuid references evidence_artifact_versions(id) on delete restrict;
+
+create table mrv_instrument_parameter_specs (
+  id uuid primary key default gen_random_uuid(),
+  instrument_id uuid not null references mrv_instruments(id) on delete restrict,
+  parameter_code text not null check (btrim(parameter_code) <> ''),
+  unit text not null check (btrim(unit) <> ''),
+  minimum_value numeric(20,8) not null,
+  maximum_value numeric(20,8) not null,
+  resolution numeric(20,8) not null check (resolution >= 0.000001 and round(resolution,6) = resolution),
+  accuracy_absolute numeric(20,8) check (accuracy_absolute is null or accuracy_absolute >= 0),
+  accuracy_relative_percent numeric(12,8) check (accuracy_relative_percent is null or accuracy_relative_percent >= 0),
+  accuracy_basis text not null check (btrim(accuracy_basis) <> ''),
+  uncertainty_unit text,
+  source_reference text,
+  source_evidence_artifact_version_id uuid not null references evidence_artifact_versions(id) on delete restrict,
+  created_by_identity_id uuid not null references identities(id),
+  created_at timestamptz not null default now(),
+  check (minimum_value <= maximum_value),
+  check (round(minimum_value,6) = minimum_value and round(maximum_value,6) = maximum_value),
+  check (uncertainty_unit is null or uncertainty_unit = unit),
+  check (accuracy_absolute is not null or accuracy_relative_percent is not null)
+);
+
+create unique index mrv_instrument_parameter_specs_identity_idx
+  on mrv_instrument_parameter_specs(instrument_id, lower(btrim(parameter_code)), btrim(unit));
+
+create index mrv_instrument_parameter_specs_lookup_idx
+  on mrv_instrument_parameter_specs(instrument_id, lower(btrim(parameter_code)));
+
+create or replace function guard_mrv_instrument_parameter_spec_mutation()
+returns trigger language plpgsql as $$
+declare
+  status text;
+  instrument_organization_id uuid;
+  artifact_id uuid;
+begin
+  if tg_op = 'DELETE' then
+    select approval_status into status from mrv_instruments where id = old.instrument_id;
+  else
+    select approval_status, organization_id into status, instrument_organization_id
+      from mrv_instruments where id = new.instrument_id;
+  end if;
+  if status is null then
+    raise exception 'parameter specification instrument does not exist';
+  end if;
+  if status = 'VERIFIED' then
+    raise exception 'verified instrument parameter specifications are immutable; register a new instrument record for changed specifications';
+  end if;
+  if tg_op = 'DELETE' then return old; end if;
+
+  artifact_id := new.source_evidence_artifact_version_id;
+  if not exists (
+    select 1
+      from evidence_artifact_versions v
+      join evidence e on e.id = v.evidence_id
+      join evidence_artifact_series series on series.id = v.series_id
+     where v.id = artifact_id
+       and series.organization_id = instrument_organization_id
+       and e.status = 'VERIFIED'
+       and e.content_hash = v.sha256
+       and octet_length(v.content) = v.size_bytes
+       and encode(digest(v.content, 'sha256'), 'hex') = v.sha256
+       and exists (
+         select 1 from evidence_artifact_reviews r
+          where r.evidence_id=e.id and r.artifact_version_id=v.id
+            and r.reviewer_identity_id <> v.uploaded_by_identity_id
+            and r.id = (
+              select latest.id from evidence_artifact_reviews latest
+               where latest.evidence_id=e.id and latest.artifact_version_id=v.id
+               order by latest.created_at desc, latest.id desc limit 1
+            )
+            and r.decision='APPROVED'
+       )
+  ) then
+    raise exception 'parameter specification source must be a reviewed, verified same-organization evidence-vault artifact with matching recomputed SHA-256';
+  end if;
+  return new;
+end;
+$$;
+
+create trigger mrv_instrument_parameter_specs_guard
+before insert or update or delete on mrv_instrument_parameter_specs
+for each row execute function guard_mrv_instrument_parameter_spec_mutation();
+
+create or replace function guard_mrv_instrument_approval_completeness()
+returns trigger language plpgsql as $$
+declare
+  code text;
+begin
+  if new.approval_status = 'VERIFIED' and new.measurement_instrument then
+    foreach code in array new.supported_parameter_codes loop
+      if not exists (
+        select 1 from mrv_instrument_parameter_specs s
+         where s.instrument_id = new.id
+           and lower(btrim(s.parameter_code)) = lower(btrim(code))
+      ) then
+        raise exception 'VERIFIED instrument requires a structured unit/range/resolution/accuracy specification for every supported parameter';
+      end if;
+    end loop;
+  end if;
+  return new;
+end;
+$$;
+
+create trigger mrv_instrument_approval_parameter_completeness
+before update of approval_status on mrv_instruments
+for each row execute function guard_mrv_instrument_approval_completeness();
+
+create or replace function guard_mrv_instrument_evidence_vault_binding()
+returns trigger language plpgsql as $$
+begin
+  if new.approval_status <> 'VERIFIED' then return new; end if;
+
+  if not exists (
+    select 1
+      from evidence_artifact_versions v
+      join evidence e on e.id = v.evidence_id
+      join evidence_artifact_series s on s.id = v.series_id
+     where v.id = new.meity_evidence_artifact_version_id
+       and v.sha256 = lower(new.meity_evidence_sha256)
+       and octet_length(v.content) = v.size_bytes
+       and encode(digest(v.content, 'sha256'), 'hex') = v.sha256
+       and e.content_hash = v.sha256
+       and e.status = 'VERIFIED'
+       and s.organization_id = new.organization_id
+       and exists (
+         select 1 from evidence_artifact_reviews r
+          where r.evidence_id = e.id
+            and r.artifact_version_id = v.id
+            and r.reviewer_identity_id <> v.uploaded_by_identity_id
+            and r.id = (
+              select latest.id from evidence_artifact_reviews latest
+               where latest.evidence_id = e.id and latest.artifact_version_id = v.id
+               order by latest.created_at desc, latest.id desc limit 1
+            )
+            and r.decision = 'APPROVED'
+       )
+  ) then
+    raise exception 'MeitY evidence must resolve to an approved, verified same-organization evidence-vault artifact with matching recomputed SHA-256';
+  end if;
+
+  if new.calibration_required and not exists (
+    select 1
+      from evidence_artifact_versions v
+      join evidence e on e.id = v.evidence_id
+      join evidence_artifact_series s on s.id = v.series_id
+     where v.id = new.calibration_evidence_artifact_version_id
+       and v.sha256 = lower(new.calibration_evidence_sha256)
+       and octet_length(v.content) = v.size_bytes
+       and encode(digest(v.content, 'sha256'), 'hex') = v.sha256
+       and e.content_hash = v.sha256
+       and e.status = 'VERIFIED'
+       and s.organization_id = new.organization_id
+       and exists (
+         select 1 from evidence_artifact_reviews r
+          where r.evidence_id = e.id
+            and r.artifact_version_id = v.id
+            and r.reviewer_identity_id <> v.uploaded_by_identity_id
+            and r.id = (
+              select latest.id from evidence_artifact_reviews latest
+               where latest.evidence_id = e.id and latest.artifact_version_id = v.id
+               order by latest.created_at desc, latest.id desc limit 1
+            )
+            and r.decision = 'APPROVED'
+       )
+  ) then
+    raise exception 'Calibration evidence must resolve to an approved, verified same-organization evidence-vault artifact with matching recomputed SHA-256';
+  end if;
+
+  if new.firmware_version is not null and not exists (
+    select 1
+      from evidence_artifact_versions v
+      join evidence e on e.id = v.evidence_id
+      join evidence_artifact_series s on s.id = v.series_id
+     where v.id = new.security_evidence_artifact_version_id
+       and v.sha256 = lower(new.security_evidence_sha256)
+       and octet_length(v.content) = v.size_bytes
+       and encode(digest(v.content, 'sha256'), 'hex') = v.sha256
+       and e.content_hash = v.sha256
+       and e.status = 'VERIFIED'
+       and s.organization_id = new.organization_id
+       and exists (
+         select 1 from evidence_artifact_reviews r
+          where r.evidence_id = e.id
+            and r.artifact_version_id = v.id
+            and r.reviewer_identity_id <> v.uploaded_by_identity_id
+            and r.id = (
+              select latest.id from evidence_artifact_reviews latest
+               where latest.evidence_id = e.id and latest.artifact_version_id = v.id
+               order by latest.created_at desc, latest.id desc limit 1
+            )
+            and r.decision = 'APPROVED'
+       )
+  ) then
+    raise exception 'Security evidence must resolve to an approved, verified same-organization evidence-vault artifact with matching recomputed SHA-256';
+  end if;
+
+  if not new.calibration_required and new.calibration_evidence_artifact_version_id is not null then
+    raise exception 'calibration evidence artifact must be absent when calibration is explicitly not required';
+  end if;
+  if new.firmware_version is null and new.security_evidence_artifact_version_id is not null then
+    raise exception 'security evidence artifact must be absent when firmware security review is explicitly not applicable';
+  end if;
+
+  return new;
+end;
+$$;
+
+create trigger mrv_instrument_evidence_vault_binding_guard
+before insert or update on mrv_instruments
+for each row execute function guard_mrv_instrument_evidence_vault_binding();
+
+create or replace function guard_measurement_parameter_spec()
+returns trigger language plpgsql as $$
+declare
+  spec record;
+begin
+  if new.mrv_instrument_id is null then return new; end if;
+
+  select * into spec
+    from mrv_instrument_parameter_specs s
+   where s.instrument_id = new.mrv_instrument_id
+     and lower(btrim(s.parameter_code)) = lower(btrim(new.parameter_code))
+     and btrim(s.unit) = btrim(new.unit)
+   limit 1;
+
+  if not found then
+    raise exception 'measurement unit or parameter has no exact registered instrument specification';
+  end if;
+  if new.value < spec.minimum_value or new.value > spec.maximum_value then
+    raise exception 'measurement value is outside the registered instrument parameter range';
+  end if;
+  if abs((new.value / spec.resolution) - round(new.value / spec.resolution)) > 0.000001 then
+    raise exception 'measurement value precision exceeds the registered instrument resolution';
+  end if;
+  if spec.accuracy_absolute is null and spec.accuracy_relative_percent is null then
+    raise exception 'instrument parameter specification lacks accuracy metadata';
+  end if;
+
+  return new;
+end;
+$$;
+
+create trigger measurements_mrv_parameter_spec_guard
+before insert or update of value, unit, mrv_instrument_id, parameter_code
+on measurements
+for each row execute function guard_measurement_parameter_spec();
+
+
+create or replace function prevent_verified_instrument_artifact_substitution()
+returns trigger language plpgsql as $$
+begin
+  if old.approval_status = 'VERIFIED'
+     and (
+       new.meity_evidence_artifact_version_id is distinct from old.meity_evidence_artifact_version_id
+       or new.calibration_evidence_artifact_version_id is distinct from old.calibration_evidence_artifact_version_id
+       or new.security_evidence_artifact_version_id is distinct from old.security_evidence_artifact_version_id
+     ) then
+    raise exception 'verified instrument evidence artifact versions are immutable; register a new instrument record for changed evidence';
+  end if;
+  return new;
+end;
+$$;
+
+create trigger mrv_instrument_evidence_artifact_identity_immutable
+before update on mrv_instruments
+for each row execute function prevent_verified_instrument_artifact_substitution();
+
+
+-- Re-evaluate evidence-vault status and latest independent review at use time,
+-- not only when the instrument is first promoted to VERIFIED.
+create or replace function mrv_instrument_evidence_is_current(p_instrument_id uuid)
+returns boolean language sql stable as $$
+  select exists (
+    select 1
+      from mrv_instruments i
+     where i.id = p_instrument_id
+       and exists (
+         select 1
+           from evidence_artifact_versions v
+           join evidence e on e.id = v.evidence_id
+           join evidence_artifact_series s on s.id = v.series_id
+          where v.id = i.meity_evidence_artifact_version_id
+            and v.sha256 = lower(i.meity_evidence_sha256)
+            and octet_length(v.content) = v.size_bytes
+            and encode(digest(v.content, 'sha256'), 'hex') = v.sha256
+            and e.content_hash = v.sha256 and e.status = 'VERIFIED'
+            and s.organization_id = i.organization_id
+            and exists (
+              select 1 from evidence_artifact_reviews r
+               where r.evidence_id=e.id and r.artifact_version_id=v.id
+                 and r.reviewer_identity_id <> v.uploaded_by_identity_id
+                 and r.id = (select latest.id from evidence_artifact_reviews latest
+                              where latest.evidence_id=e.id and latest.artifact_version_id=v.id
+                              order by latest.created_at desc, latest.id desc limit 1)
+                 and r.decision='APPROVED'
+            )
+       )
+       and (
+         not i.calibration_required
+         or exists (
+           select 1
+             from evidence_artifact_versions v
+             join evidence e on e.id = v.evidence_id
+             join evidence_artifact_series s on s.id = v.series_id
+            where v.id = i.calibration_evidence_artifact_version_id
+              and v.sha256 = lower(i.calibration_evidence_sha256)
+              and octet_length(v.content) = v.size_bytes
+              and encode(digest(v.content, 'sha256'), 'hex') = v.sha256
+              and e.content_hash = v.sha256 and e.status = 'VERIFIED'
+              and s.organization_id = i.organization_id
+              and exists (
+                select 1 from evidence_artifact_reviews r
+                 where r.evidence_id=e.id and r.artifact_version_id=v.id
+                   and r.reviewer_identity_id <> v.uploaded_by_identity_id
+                   and r.id = (select latest.id from evidence_artifact_reviews latest
+                                where latest.evidence_id=e.id and latest.artifact_version_id=v.id
+                                order by latest.created_at desc, latest.id desc limit 1)
+                   and r.decision='APPROVED'
+              )
+         )
+       )
+       and (
+         i.firmware_version is null
+         or exists (
+           select 1
+             from evidence_artifact_versions v
+             join evidence e on e.id = v.evidence_id
+             join evidence_artifact_series s on s.id = v.series_id
+            where v.id = i.security_evidence_artifact_version_id
+              and v.sha256 = lower(i.security_evidence_sha256)
+              and octet_length(v.content) = v.size_bytes
+              and encode(digest(v.content, 'sha256'), 'hex') = v.sha256
+              and e.content_hash = v.sha256 and e.status = 'VERIFIED'
+              and s.organization_id = i.organization_id
+              and exists (
+                select 1 from evidence_artifact_reviews r
+                 where r.evidence_id=e.id and r.artifact_version_id=v.id
+                   and r.reviewer_identity_id <> v.uploaded_by_identity_id
+                   and r.id = (select latest.id from evidence_artifact_reviews latest
+                                where latest.evidence_id=e.id and latest.artifact_version_id=v.id
+                                order by latest.created_at desc, latest.id desc limit 1)
+                   and r.decision='APPROVED'
+              )
+         )
+       )
+       and not exists (
+         select 1 from mrv_instrument_parameter_specs ps
+          where ps.instrument_id = i.id
+            and not exists (
+              select 1
+                from evidence_artifact_versions v
+                join evidence e on e.id = v.evidence_id
+                join evidence_artifact_series s on s.id = v.series_id
+               where v.id = ps.source_evidence_artifact_version_id
+                 and s.organization_id = i.organization_id
+                 and octet_length(v.content) = v.size_bytes
+                 and encode(digest(v.content, 'sha256'), 'hex') = v.sha256
+                 and e.content_hash = v.sha256 and e.status = 'VERIFIED'
+                 and exists (
+                   select 1 from evidence_artifact_reviews r
+                    where r.evidence_id=e.id and r.artifact_version_id=v.id
+                      and r.reviewer_identity_id <> v.uploaded_by_identity_id
+                      and r.id = (select latest.id from evidence_artifact_reviews latest
+                                   where latest.evidence_id=e.id and latest.artifact_version_id=v.id
+                                   order by latest.created_at desc, latest.id desc limit 1)
+                      and r.decision='APPROVED'
+                 )
+            )
+       )
+  );
+$$;
+
+create or replace function guard_measurement_parameter_spec()
+returns trigger language plpgsql as $$
+declare
+  spec record;
+begin
+  if new.mrv_instrument_id is null then return new; end if;
+
+  if not mrv_instrument_evidence_is_current(new.mrv_instrument_id) then
+    raise exception 'instrument approval, calibration, security or parameter source evidence is no longer currently verified in the evidence vault';
+  end if;
+
+  select * into spec
+    from mrv_instrument_parameter_specs s
+   where s.instrument_id = new.mrv_instrument_id
+     and lower(btrim(s.parameter_code)) = lower(btrim(new.parameter_code))
+     and btrim(s.unit) = btrim(new.unit)
+   limit 1;
+
+  if not found then
+    raise exception 'measurement unit or parameter has no exact registered instrument specification';
+  end if;
+  if new.value < spec.minimum_value or new.value > spec.maximum_value then
+    raise exception 'measurement value is outside the registered instrument parameter range';
+  end if;
+  if abs((new.value / spec.resolution) - round(new.value / spec.resolution)) > 0.000001 then
+    raise exception 'measurement value precision exceeds the registered instrument resolution';
+  end if;
+  if spec.accuracy_absolute is null and spec.accuracy_relative_percent is null then
+    raise exception 'instrument parameter specification lacks accuracy metadata';
+  end if;
+
+  return new;
+end;
+$$;
+
+-- Review chronology must reflect actual append time even when several review
+-- events are written in one transaction; latest decision governs eligibility.
+alter table evidence_artifact_reviews
+  alter column created_at set default clock_timestamp();

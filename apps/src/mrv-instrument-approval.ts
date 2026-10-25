@@ -35,6 +35,53 @@ export interface MrvInstrumentApprovalEvidence {
   security_not_applicable_reason: string | null;
 }
 
+export interface MrvInstrumentParameterSpec {
+  instrument_code?: string;
+  parameter_code: string;
+  unit: string;
+  minimum_value: string | number;
+  maximum_value: string | number;
+  resolution: string | number;
+  accuracy_absolute: string | number | null;
+  accuracy_relative_percent: string | number | null;
+}
+
+export function instrumentParameterFailure(
+  instrumentCode: string,
+  parameterCode: string,
+  unit: string,
+  value: number,
+  specs: readonly MrvInstrumentParameterSpec[],
+): string | null {
+  if (!Number.isFinite(value)) return "Measurement value must be a finite number.";
+  if (!parameterCode.trim() || !unit.trim()) return "Measurement parameter code and unit are required.";
+  const spec = specs.find((candidate) =>
+    candidate.parameter_code.trim().toLowerCase() === parameterCode.trim().toLowerCase()
+    && candidate.unit.trim() === unit.trim()
+    && (!candidate.instrument_code || candidate.instrument_code === instrumentCode),
+  );
+  if (!spec) return `Instrument "${instrumentCode}" has no exact parameter/unit specification for "${parameterCode}" in "${unit}".`;
+  const minimum = Number(spec.minimum_value);
+  const maximum = Number(spec.maximum_value);
+  const resolution = Number(spec.resolution);
+  const absoluteAccuracy = spec.accuracy_absolute == null ? null : Number(spec.accuracy_absolute);
+  const relativeAccuracy = spec.accuracy_relative_percent == null ? null : Number(spec.accuracy_relative_percent);
+  if (!Number.isFinite(minimum) || !Number.isFinite(maximum) || minimum > maximum
+    || !Number.isFinite(resolution) || resolution <= 0
+    || (absoluteAccuracy !== null && (!Number.isFinite(absoluteAccuracy) || absoluteAccuracy < 0))
+    || (relativeAccuracy !== null && (!Number.isFinite(relativeAccuracy) || relativeAccuracy < 0))
+    || (absoluteAccuracy === null && relativeAccuracy === null)) {
+    return `Instrument "${instrumentCode}" has an invalid parameter specification.`;
+  }
+  if (value < minimum || value > maximum) {
+    return `Measurement from instrument "${instrumentCode}" is outside the approved range [${minimum}, ${maximum}] ${spec.unit}.`;
+  }
+  if (Math.abs(value / resolution - Math.round(value / resolution)) > 0.000001) {
+    return `Measurement from instrument "${instrumentCode}" exceeds the approved resolution ${resolution} ${spec.unit}.`;
+  }
+  return null;
+}
+
 function present(value: unknown): boolean {
   return typeof value === "string" && value.trim().length > 0;
 }

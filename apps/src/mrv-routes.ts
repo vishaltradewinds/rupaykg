@@ -4,7 +4,7 @@ import { authenticate, canActForOrganization, hasOrganizationPermission, type Au
 import { executeGuardianMrv, guardianStatus } from "./guardian-mrv.js";
 import { hederaStatus, integrityHash, submitHcsAnchor, verifyHcsMessage } from "./hedera-anchor.js";
 import { registerStatutoryRoutes } from "./statutory-routes.js";
-import { instrumentApprovalFailure, type MrvInstrumentApprovalEvidence } from "./mrv-instrument-approval.js";
+import { instrumentApprovalFailure, instrumentParameterFailure, type MrvInstrumentApprovalEvidence, type MrvInstrumentParameterSpec } from "./mrv-instrument-approval.js";
 
 type Reply = { code: (status: number) => { send: (body: unknown) => unknown } };
 type Request = { body: unknown; params: Record<string, string>; log: { error: (error: unknown) => void } };
@@ -120,6 +120,31 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
       );
       if (instrumentFailure) {
         return reply.code(409).send({ error: instrumentFailure, code: "MRV_INSTRUMENT_APPROVAL_REQUIRED", eligibleForRegistry: false, syntheticData: false });
+      }
+      const staleEvidenceInstruments = instrumentCodes.length
+        ? await pool.query<{ instrument_code: string }>(
+            "select instrument_code from mrv_instruments where organization_id=$1 and instrument_code=any($2::text[]) and not mrv_instrument_evidence_is_current(id)",
+            [row.organization_id, instrumentCodes],
+          )
+        : { rows: [] as Array<{ instrument_code: string }> };
+      if (staleEvidenceInstruments.rows.length) {
+        return reply.code(409).send({ error: "One or more MRV instruments reference missing, changed or no-longer-approved evidence-vault artifacts.", code: "MRV_INSTRUMENT_EVIDENCE_INVALID", eligibleForRegistry: false, syntheticData: false });
+      }
+      const parameterSpecs = instrumentCodes.length
+        ? await pool.query<MrvInstrumentParameterSpec>(
+            "select i.instrument_code,s.parameter_code,s.unit,s.minimum_value::text,s.maximum_value::text,s.resolution::text,s.accuracy_absolute::text,s.accuracy_relative_percent::text from mrv_instrument_parameter_specs s join mrv_instruments i on i.id=s.instrument_id where i.organization_id=$1 and i.instrument_code=any($2::text[])",
+            [row.organization_id, instrumentCodes],
+          )
+        : { rows: [] as MrvInstrumentParameterSpec[] };
+      for (const observation of observations.rows) {
+        const code = typeof observation.instrument_id === "string" ? observation.instrument_id.trim() : "";
+        const parameterCode = typeof observation.parameter_code === "string" ? observation.parameter_code.trim() : "";
+        const observationUnit = typeof observation.unit === "string" ? observation.unit.trim() : "";
+        const observedValue = observation.observed_value === null || observation.observed_value === undefined ? Number.NaN : Number(observation.observed_value);
+        const parameterFailure = instrumentParameterFailure(code, parameterCode, observationUnit, observedValue, parameterSpecs.rows);
+        if (parameterFailure) {
+          return reply.code(409).send({ error: parameterFailure, code: "MRV_PARAMETER_SPEC_REQUIRED", eligibleForRegistry: false, syntheticData: false });
+        }
       }
       const evidence = await pool.query("select id, evidence_type, content_uri, content_hash, captured_at, status, metadata from evidence where activity_id=$1 order by captured_at", [activityId]);
       const quantityRow = await pool.query<{ value: string | null; unit: string | null }>("select value::text value, unit from measurements where activity_id=$1 order by measured_at desc limit 1", [activityId]);

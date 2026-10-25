@@ -15,7 +15,7 @@ import { registerCpcbSwmRoutes } from "./cpcb-swm-routes.js";
 import { registerIntelligenceRoutes } from "./intelligence-routes.js";
 import { registerMrvRoutes } from "./mrv-routes.js";
 import { registerMrvInstrumentRoutes } from "./mrv-instrument-routes.js";
-import { instrumentApprovalFailure, type MrvInstrumentApprovalEvidence } from "./mrv-instrument-approval.js";
+import { instrumentApprovalFailure, instrumentParameterFailure, type MrvInstrumentApprovalEvidence, type MrvInstrumentParameterSpec } from "./mrv-instrument-approval.js";
 import { registerEvidenceVaultRoutes } from "./evidence-vault-routes.js";
 import { registerPlatformAdminRoutes } from "./platform-admin-routes.js";
 
@@ -118,6 +118,14 @@ app.post("/api/v1/activities/:activityId/measurements", async (request, reply) =
     if (gateFailure) return reply.code(409).send({ error: gateFailure, code: "INSTRUMENT_NOT_APPROVED", eligibleForMrv: false, syntheticData: false });
     const instrumentId = instrument.rows[0]?.id;
     if (!instrumentId) return reply.code(409).send({ error: "Approved instrument record is unavailable", code: "INSTRUMENT_NOT_APPROVED", eligibleForMrv: false, syntheticData: false });
+    const evidenceCurrent = await pool!.query<{ current: boolean }>("select mrv_instrument_evidence_is_current($1) as current", [instrumentId]);
+    if (evidenceCurrent.rows[0]?.current !== true) return reply.code(409).send({ error: "Instrument evidence-vault approval is no longer current", code: "MRV_INSTRUMENT_EVIDENCE_INVALID", eligibleForMrv: false, syntheticData: false });
+    const parameterSpecs = await pool!.query<MrvInstrumentParameterSpec>(
+      "select parameter_code,unit,minimum_value::text,maximum_value::text,resolution::text,accuracy_absolute::text,accuracy_relative_percent::text from mrv_instrument_parameter_specs where instrument_id=$1",
+      [instrumentId],
+    );
+    const parameterFailure = instrumentParameterFailure(instrumentCode, parameterCode, unit, value, parameterSpecs.rows);
+    if (parameterFailure) return reply.code(409).send({ error: parameterFailure, code: "MRV_PARAMETER_SPEC_REQUIRED", eligibleForMrv: false, syntheticData: false });
     const rows = await query(
       "insert into measurements(activity_id,value,unit,method,source,measured_at,mrv_instrument_id,parameter_code) values($1,$2,$3,$4,$5,$6,$7,$8) returning *",
       [activityId, value, unit, method, source, measuredAt, instrumentId, parameterCode],
