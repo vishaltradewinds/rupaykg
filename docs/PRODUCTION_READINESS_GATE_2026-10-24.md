@@ -1,3 +1,12 @@
+> **Live status refresh — 2026-10-25 10:45 UTC (read-only deployment-drift review)**
+>
+> - Latest Render deployment is still commit `0ddcf6087620880e21ea60f954c9f05d6b759469`, completed 2026-10-20 10:08 UTC; service `rupaykg` is active, tracks `main`, and auto-deploys commits on that branch.
+> - Render application logs at 2026-10-25 09:00 UTC report `Database migrations are current (91 files).` This runtime log does not identify the database provider project/branch and is not a complete schema certification.
+> - Comparison of deployed `main` with PR #44 branch confirms drift: the current `main` migration runner creates the ledger before full inventory validation and lacks the branch's full preflight for duplicate versions and unexplained ledger entries. The current `main` Docker command invokes `acceptance-seed.js` at startup, although the script is gated by `RUPAYKG_ACCEPTANCE_SEED_ON_START=true`; the PR branch additionally prohibits seeding when `NODE_ENV=production` and removes the seed step from its production container command.
+> - PR #44 exact-head CI run #2085 passed on `6d272b8157cbd0bbf6ba299b2882b383a88633ee`, but this commit is not deployed. CI validates the branch and disposable resources only.
+> - This finding was added to PR #44. No deployment, merge, production migration, provider configuration change, or database write was performed.
+> - **Gate: PRODUCTION CERTIFICATION HOLD.** Confirm the exact service-to-database mapping, inspect migration ledger/schema on the confirmed target, and complete recovery and least-privilege evidence before any separately approved release plan.
+>
 # RupayKg Production Readiness Gate - 2026-10-24
 
 > **Live status refresh — 2026-10-25 07:50 UTC**
