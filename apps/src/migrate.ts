@@ -36,18 +36,30 @@ try {
     .filter((name) => /^\d+_.+\.sql$/.test(name))
     .sort();
 
+  // Preflight the entire inventory before applying any migration. Without this,
+  // a mismatch late in the sorted list can be discovered only after earlier
+  // migrations have already committed, leaving the deployment partially advanced.
+  const appliedResult = await pool.query<{ version: string; filename: string }>(
+    "select version, filename from schema_migrations",
+  );
+  const applied = new Map(appliedResult.rows.map((row) => [row.version, row.filename]));
+  const conflicts = files.flatMap((filename) => {
+    const version = filename.split("_", 1)[0]!;
+    const recorded = applied.get(version);
+    return recorded && recorded !== filename
+      ? [{ version, recorded, expected: filename }]
+      : [];
+  });
+  if (conflicts.length > 0) {
+    const details = conflicts
+      .map(({ version, recorded, expected }) => `${version}: recorded ${recorded}; repository has ${expected}`)
+      .join("; ");
+    throw new Error(`Migration inventory preflight failed before applying migrations: ${details}`);
+  }
+
   for (const filename of files) {
-    const version = filename.split("_", 1)[0];
-    const existing = await pool.query<{ version: string; filename: string }>(
-      "select version, filename from schema_migrations where version = $1",
-      [version],
-    );
-    if (existing.rows[0]) {
-      if (existing.rows[0].filename !== filename) {
-        throw new Error(`Migration version ${version} is already recorded as ${existing.rows[0].filename}, not ${filename}`);
-      }
-      continue;
-    }
+    const version = filename.split("_", 1)[0]!;
+    if (applied.has(version)) continue;
 
     const sql = await readFile(path.join(migrationDir, filename), "utf8");
     const client = await pool.connect();
