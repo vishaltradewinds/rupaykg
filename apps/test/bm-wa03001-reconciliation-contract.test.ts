@@ -8,7 +8,7 @@ const read = (path: string) => readFile(new URL(path, root), "utf8");
 test("BM WA03.001 reconciliation endpoint is connected and fail-closed", async () => {
   const [route, migration, server] = await Promise.all([
     read("apps/src/bm-wa03001-reconciliation-routes.ts"),
-    read("migrations/20261024_bm_wa03001_reconciliations.sql"),
+    read("migrations/20261031_bm_wa03001_reconciliations.sql"),
     read("apps/src/server.ts"),
   ]);
   assert.match(server, /registerBmWa03001ReconciliationRoutes\(app, pool\)/);
