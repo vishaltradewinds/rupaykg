@@ -64,8 +64,13 @@ export async function registerMrvInstrumentRoutes(app: FastifyInstance, pool: Po
     const model = stringValue(body.model);
     const skuRevision = stringValue(body.skuRevision);
     const intendedUse = stringValue(body.intendedUse);
-    if (!organizationId || !uuid(organizationId) || !instrumentCode || !instrumentType || !manufacturer || !model || !skuRevision || !intendedUse) {
-      return reply.code(400).send({ error: "organizationId, instrumentCode, instrumentType, exact manufacturer/model/SKU revision and intendedUse are required", code: "MRV_INSTRUMENT_INVALID" });
+    const measurementInstrument = body.measurementInstrument;
+    const nonMeasurementReason = stringValue(body.nonMeasurementReason);
+    const rawSupportedCodes = Array.isArray(body.supportedParameterCodes) ? body.supportedParameterCodes : null;
+    const supportedCodes = rawSupportedCodes?.map((value) => typeof value === "string" ? value.trim() : "") ?? [];
+    const normalizedSupportedCodes = [...new Map(supportedCodes.map((code) => [code.toLowerCase(), code])).values()];
+    if (!organizationId || !uuid(organizationId) || !instrumentCode || !instrumentType || !manufacturer || !model || !skuRevision || !intendedUse || typeof measurementInstrument !== "boolean" || !rawSupportedCodes || rawSupportedCodes.length > 50 || supportedCodes.some((code) => !code || code.length > 100) || (measurementInstrument && normalizedSupportedCodes.length === 0) || (!measurementInstrument && (!nonMeasurementReason || normalizedSupportedCodes.length > 0))) {
+      return reply.code(400).send({ error: "organizationId, instrumentCode, instrumentType, exact manufacturer/model/SKU revision, intendedUse, measurementInstrument, and supportedParameterCodes are required; non-measuring devices require a written nonMeasurementReason", code: "MRV_INSTRUMENT_INVALID" });
     }
     if ([instrumentCode, instrumentType, manufacturer, model, skuRevision, intendedUse].some((value) => value.length > 240)) {
       return reply.code(400).send({ error: "Instrument identity fields must not exceed 240 characters", code: "MRV_INSTRUMENT_INVALID" });
@@ -73,8 +78,8 @@ export async function registerMrvInstrumentRoutes(app: FastifyInstance, pool: Po
     if (!await canManageInstrument(pool, auth, organizationId)) return reply.code(403).send({ error: "MRV instrument management permission required", code: "MRV_INSTRUMENT_PERMISSION_REQUIRED" });
     try {
       const result = await pool.query(
-        "insert into mrv_instruments (organization_id,instrument_code,instrument_type,manufacturer,model,sku_revision,intended_use,interface_protocol,firmware_version,firmware_support_until,registered_by_identity_id,approval_status) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'HOLD') returning *",
-        [organizationId, instrumentCode, instrumentType, manufacturer, model, skuRevision, intendedUse, stringValue(body.interfaceProtocol), stringValue(body.firmwareVersion), stringValue(body.firmwareSupportUntil), auth.identityId],
+        "insert into mrv_instruments (organization_id,instrument_code,instrument_type,manufacturer,model,sku_revision,intended_use,measurement_instrument,non_measurement_reason,supported_parameter_codes,interface_protocol,firmware_version,firmware_support_until,registered_by_identity_id,approval_status) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'HOLD') returning *",
+        [organizationId, instrumentCode, instrumentType, manufacturer, model, skuRevision, intendedUse, measurementInstrument, nonMeasurementReason, normalizedSupportedCodes, stringValue(body.interfaceProtocol), stringValue(body.firmwareVersion), stringValue(body.firmwareSupportUntil), auth.identityId],
       );
       return reply.code(201).send({ source: "postgresql", syntheticData: false, instrument: result.rows[0], message: "Instrument registered in HOLD. Exact-model MeitY and required calibration evidence must be reviewed before MRV eligibility." });
     } catch (error) {

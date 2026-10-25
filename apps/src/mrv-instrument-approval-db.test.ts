@@ -21,7 +21,7 @@ test("PostgreSQL enforces MRV instrument approval evidence and append-only decis
       [`mrv-instrument-test-${suffix}`, "MRV instrument test"],
     )).rows[0]!.id;
     const instrumentId = (await client.query<{ id: string; approval_status: string }>(
-      "insert into mrv_instruments(organization_id,instrument_code,instrument_type,manufacturer,model,sku_revision,intended_use,registered_by_identity_id) values($1,$2,'GAS_FLOW','Test Manufacturer','Flow Model 1','Rev A','Landfill methane recovery flow measurement',$3) returning id,approval_status",
+      "insert into mrv_instruments(organization_id,instrument_code,instrument_type,manufacturer,model,sku_revision,intended_use,supported_parameter_codes,registered_by_identity_id) values($1,$2,'GAS_FLOW','Test Manufacturer','Flow Model 1','Rev A','Landfill methane recovery flow measurement',array['gas_flow'],$3) returning id,approval_status",
       [organizationId, `FLOW-${suffix}`, identityId],
     )).rows[0]!;
     assert.equal(instrumentId.approval_status, "HOLD");
@@ -60,7 +60,7 @@ test("PostgreSQL enforces MRV instrument approval evidence and append-only decis
     ), /append-only/i);
 
     const gatewayId = (await client.query<{ id: string }>(
-      "insert into mrv_instruments(organization_id,instrument_code,instrument_type,manufacturer,model,sku_revision,intended_use,firmware_version,firmware_support_until,registered_by_identity_id) values($1,$2,'INDUSTRIAL_GATEWAY','Test Manufacturer','Gateway Model 1','Rev A','Authenticated MRV data transport','1.0.0',now()+interval '1 year',$3) returning id",
+      "insert into mrv_instruments(organization_id,instrument_code,instrument_type,manufacturer,model,sku_revision,intended_use,measurement_instrument,non_measurement_reason,supported_parameter_codes,firmware_version,firmware_support_until,registered_by_identity_id) values($1,$2,'INDUSTRIAL_GATEWAY','Test Manufacturer','Gateway Model 1','Rev A','Authenticated MRV data transport',false,'Gateway transports data but does not measure a physical parameter','{}','1.0.0',now()+interval '1 year',$3) returning id",
       [organizationId, `GATEWAY-${suffix}`, identityId],
     )).rows[0]!.id;
 

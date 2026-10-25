@@ -6,7 +6,7 @@ Scope: Organization-scoped physical instruments used as sources for MRV observat
 ## Core safety behavior
 
 - Registration always creates a candidate in `HOLD`.
-- A physical instrument is eligible only when its exact manufacturer/model/SKU revision, intended use, MeitY evidence, required calibration evidence, and firmware/security lifecycle review have been independently checked and the record is `VERIFIED`.
+- A physical instrument is eligible only when its exact manufacturer/model/SKU revision, intended use, supported parameter-code mapping, MeitY evidence, required calibration evidence, and firmware/security lifecycle review have been independently checked and the record is `VERIFIED`.
 - Every observation submitted through the MRV submission path must identify its source instrument. No-observation submissions, missing instrument IDs, unregistered instruments, non-VERIFIED status, expired evidence, or missing provenance fail closed with HTTP 409.
 - Field-device identity verification is separate. It is not proof of a gateway, sensor, meter, analyser or weighbridge's product approval.
 - The API records the reviewer attestation and evidence reference/hash; it does not independently certify that a MeitY certificate is genuine. The reviewer must verify the exact model and certificate scope against the official authority.
@@ -34,13 +34,16 @@ Example body (placeholder values only; do not treat them as an approved product)
   "model": "<exact model from nameplate>",
   "skuRevision": "<exact SKU/revision>",
   "intendedUse": "Landfill gas flow measurement",
+  "measurementInstrument": true,
+  "nonMeasurementReason": null,
+  "supportedParameterCodes": ["gas_flow"],
   "interfaceProtocol": "Modbus RTU",
   "firmwareVersion": "<exact firmware version, if present>",
   "firmwareSupportUntil": "<ISO-8601 timestamp, if known>"
 }
 ```
 
-Returns HTTP 201 with `approvalStatus: HOLD`. Registration is not approval. Duplicate instrument codes within an organization return HTTP 409.
+Returns HTTP 201 with `approvalStatus: HOLD`. Registration is not approval. Measurement instruments must declare at least one exact supported parameter code from the approved monitoring plan. Non-measuring hardware (for example, a gateway) must set `measurementInstrument: false`, provide a written `nonMeasurementReason`, and pass an empty `supportedParameterCodes` array; it cannot be used as the source instrument for a physical observation. Duplicate instrument codes within an organization return HTTP 409.
 
 ### Review a candidate
 

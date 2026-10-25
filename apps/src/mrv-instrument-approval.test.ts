@@ -4,10 +4,12 @@ import { instrumentApprovalFailure, type MrvInstrumentApprovalEvidence } from ".
 
 const now = new Date("2026-10-25T12:00:00.000Z");
 const future = "2027-10-25T12:00:00.000Z";
+const gasObservation = { instrument_id: "GAS-FLOW-01", parameter_code: "gas_flow" };
 
 function approvedInstrument(overrides: Partial<MrvInstrumentApprovalEvidence> = {}): MrvInstrumentApprovalEvidence {
   return {
     instrument_code: "GAS-FLOW-01",
+    supported_parameter_codes: ["gas_flow"],
     approval_status: "VERIFIED",
     meity_certificate_id: "MEITY-CERT-001",
     meity_issuer: "Official authority",
@@ -50,50 +52,67 @@ test("WA03.001 fails closed when observations are absent or lack an instrument I
 });
 
 test("instrument-linked MRV fails closed when the exact instrument is not registered", () => {
-  assert.match(instrumentApprovalFailure("OTHER", [{ instrument_id: "GAS-FLOW-01" }], [], now) ?? "", /not registered/i);
+  assert.match(instrumentApprovalFailure("OTHER", [gasObservation], [], now) ?? "", /not registered/i);
 });
 
-test("exact-model MeitY evidence and current calibration permit instrument-linked MRV", () => {
-  assert.equal(instrumentApprovalFailure("BM WA03.001", [{ instrument_id: "GAS-FLOW-01" }], [approvedInstrument()], now), null);
-  assert.equal(instrumentApprovalFailure("OTHER", [{ instrument_id: "GAS-FLOW-01" }], [approvedInstrument({ meity_validity_basis: "NO_EXPIRY_CONFIRMED", meity_valid_until: null })], now), null);
+test("exact-model MeitY evidence, supported parameter and current calibration permit instrument-linked MRV", () => {
+  assert.equal(instrumentApprovalFailure("BM WA03.001", [gasObservation], [approvedInstrument()], now), null);
+  assert.equal(instrumentApprovalFailure("OTHER", [gasObservation], [approvedInstrument({ meity_validity_basis: "NO_EXPIRY_CONFIRMED", meity_valid_until: null })], now), null);
+});
+
+test("instrument cannot be used for a parameter outside its approved mapping", () => {
+  assert.match(instrumentApprovalFailure("OTHER", [{ instrument_id: "GAS-FLOW-01", parameter_code: "methane_content" }], [approvedInstrument()], now) ?? "", /not registered for observation parameter/i);
+  assert.match(instrumentApprovalFailure("OTHER", [{ instrument_id: "GAS-FLOW-01" }], [approvedInstrument()], now) ?? "", /missing its parameter code/i);
 });
 
 test("HOLD or rejected instrument cannot enter MRV", () => {
-  assert.match(instrumentApprovalFailure("OTHER", [{ instrument_id: "GAS-FLOW-01" }], [approvedInstrument({ approval_status: "HOLD" })], now) ?? "", /not VERIFIED/i);
+  assert.match(instrumentApprovalFailure("OTHER", [gasObservation], [approvedInstrument({ approval_status: "HOLD" })], now) ?? "", /not VERIFIED/i);
 });
 
 test("expired MeitY approval and future-dated verification block MRV", () => {
-  assert.match(instrumentApprovalFailure("OTHER", [{ instrument_id: "GAS-FLOW-01" }], [approvedInstrument({ meity_valid_until: "2026-10-24T00:00:00.000Z" })], now) ?? "", /expired or unknown MeitY approval/i);
-  assert.match(instrumentApprovalFailure("OTHER", [{ instrument_id: "GAS-FLOW-01" }], [approvedInstrument({ meity_verified_at: "2026-10-26T00:00:00.000Z" })], now) ?? "", /lacks complete exact-model MeitY approval/i);
+  assert.match(instrumentApprovalFailure("OTHER", [gasObservation], [approvedInstrument({ meity_valid_until: "2026-10-24T00:00:00.000Z" })], now) ?? "", /expired or unknown MeitY approval/i);
+  assert.match(instrumentApprovalFailure("OTHER", [gasObservation], [approvedInstrument({ meity_verified_at: "2026-10-26T00:00:00.000Z" })], now) ?? "", /lacks complete exact-model MeitY approval/i);
 });
 
 test("missing certificate scope, evidence hash or non-HTTPS source blocks MRV", () => {
-  assert.match(instrumentApprovalFailure("OTHER", [{ instrument_id: "GAS-FLOW-01" }], [approvedInstrument({ meity_certificate_scope: "" })], now) ?? "", /lacks complete exact-model MeitY approval/i);
-  assert.match(instrumentApprovalFailure("OTHER", [{ instrument_id: "GAS-FLOW-01" }], [approvedInstrument({ meity_evidence_sha256: "" })], now) ?? "", /lacks complete exact-model MeitY approval/i);
-  assert.match(instrumentApprovalFailure("OTHER", [{ instrument_id: "GAS-FLOW-01" }], [approvedInstrument({ meity_evidence_reference: "" })], now) ?? "", /lacks complete exact-model MeitY approval/i);
-  assert.match(instrumentApprovalFailure("OTHER", [{ instrument_id: "GAS-FLOW-01" }], [approvedInstrument({ meity_verification_url: "http://vendor.example" })], now) ?? "", /lacks complete exact-model MeitY approval/i);
+  assert.match(instrumentApprovalFailure("OTHER", [gasObservation], [approvedInstrument({ meity_certificate_scope: "" })], now) ?? "", /lacks complete exact-model MeitY approval/i);
+  assert.match(instrumentApprovalFailure("OTHER", [gasObservation], [approvedInstrument({ meity_evidence_sha256: "" })], now) ?? "", /lacks complete exact-model MeitY approval/i);
+  assert.match(instrumentApprovalFailure("OTHER", [gasObservation], [approvedInstrument({ meity_evidence_reference: "" })], now) ?? "", /lacks complete exact-model MeitY approval/i);
+  assert.match(instrumentApprovalFailure("OTHER", [gasObservation], [approvedInstrument({ meity_verification_url: "http://vendor.example" })], now) ?? "", /lacks complete exact-model MeitY approval/i);
 });
 
 test("expired or incomplete calibration blocks MRV", () => {
-  assert.match(instrumentApprovalFailure("OTHER", [{ instrument_id: "GAS-FLOW-01" }], [approvedInstrument({ calibration_valid_until: "2026-10-24T00:00:00.000Z" })], now) ?? "", /expired required calibration/i);
-  assert.match(instrumentApprovalFailure("OTHER", [{ instrument_id: "GAS-FLOW-01" }], [approvedInstrument({ calibration_uncertainty: null })], now) ?? "", /expired required calibration/i);
-  assert.match(instrumentApprovalFailure("OTHER", [{ instrument_id: "GAS-FLOW-01" }], [approvedInstrument({ calibration_evidence_sha256: "" })], now) ?? "", /expired required calibration/i);
+  assert.match(instrumentApprovalFailure("OTHER", [gasObservation], [approvedInstrument({ calibration_valid_until: "2026-10-24T00:00:00.000Z" })], now) ?? "", /expired required calibration/i);
+  assert.match(instrumentApprovalFailure("OTHER", [gasObservation], [approvedInstrument({ calibration_uncertainty: null })], now) ?? "", /expired required calibration/i);
+  assert.match(instrumentApprovalFailure("OTHER", [gasObservation], [approvedInstrument({ calibration_evidence_sha256: "" })], now) ?? "", /expired required calibration/i);
 });
 
-test("non-measuring instrument still requires MeitY evidence and written calibration rationale", () => {
-  assert.equal(instrumentApprovalFailure("OTHER", [{ instrument_id: "EDGE-GW-01" }], [approvedInstrument({
+test("non-measuring instrument requires written calibration rationale and cannot back physical measurements", () => {
+  const nonMeasuring = approvedInstrument({
     instrument_code: "EDGE-GW-01",
+    supported_parameter_codes: [],
     calibration_required: false,
     calibration_status: "NOT_APPLICABLE_WITH_JUSTIFICATION",
     calibration_not_required_reason: "This gateway does not perform a physical measurement.",
     calibration_certificate_id: null,
+    calibration_evidence_reference: null,
+    calibration_evidence_sha256: null,
     calibration_lab: null,
     calibration_traceability: null,
     calibration_uncertainty: null,
     calibration_valid_until: null,
-  })], now), null);
-  assert.match(instrumentApprovalFailure("OTHER", [{ instrument_id: "EDGE-GW-01" }], [approvedInstrument({
+    firmware_version: null,
+    firmware_support_until: null,
+    security_review_status: "NOT_APPLICABLE_WITH_JUSTIFICATION",
+    security_evidence_reference: null,
+    security_evidence_sha256: null,
+    security_reviewed_at: null,
+    security_not_applicable_reason: "No firmware exists",
+  });
+  assert.match(instrumentApprovalFailure("OTHER", [{ instrument_id: "EDGE-GW-01", parameter_code: "gas_flow" }], [nonMeasuring], now) ?? "", /not registered for observation parameter/i);
+  assert.match(instrumentApprovalFailure("OTHER", [{ instrument_id: "EDGE-GW-01", parameter_code: "gas_flow" }], [approvedInstrument({
     instrument_code: "EDGE-GW-01",
+    supported_parameter_codes: [],
     calibration_required: false,
     calibration_status: "NOT_APPLICABLE_WITH_JUSTIFICATION",
     calibration_not_required_reason: null,
@@ -101,8 +120,8 @@ test("non-measuring instrument still requires MeitY evidence and written calibra
 });
 
 test("expired or missing firmware support and security evidence block MRV", () => {
-  assert.match(instrumentApprovalFailure("OTHER", [{ instrument_id: "GAS-FLOW-01" }], [approvedInstrument({ firmware_support_until: "2026-10-24T00:00:00.000Z" })], now) ?? "", /firmware support or security lifecycle evidence/i);
-  assert.match(instrumentApprovalFailure("OTHER", [{ instrument_id: "GAS-FLOW-01" }], [approvedInstrument({ security_evidence_sha256: "" })], now) ?? "", /firmware support or security lifecycle evidence/i);
-  assert.match(instrumentApprovalFailure("OTHER", [{ instrument_id: "GAS-FLOW-01" }], [approvedInstrument({ firmware_version: null, firmware_support_until: null, security_review_status: "PENDING", security_not_applicable_reason: null })], now) ?? "", /lacks a written security-lifecycle rationale/i);
-  assert.equal(instrumentApprovalFailure("OTHER", [{ instrument_id: "GAS-FLOW-01" }], [approvedInstrument({ firmware_version: null, firmware_support_until: null, security_review_status: "NOT_APPLICABLE_WITH_JUSTIFICATION", security_not_applicable_reason: "No firmware exists", security_evidence_reference: null, security_evidence_sha256: null, security_reviewed_at: null })], now), null);
+  assert.match(instrumentApprovalFailure("OTHER", [gasObservation], [approvedInstrument({ firmware_support_until: "2026-10-24T00:00:00.000Z" })], now) ?? "", /firmware support or security lifecycle evidence/i);
+  assert.match(instrumentApprovalFailure("OTHER", [gasObservation], [approvedInstrument({ security_evidence_sha256: "" })], now) ?? "", /firmware support or security lifecycle evidence/i);
+  assert.match(instrumentApprovalFailure("OTHER", [gasObservation], [approvedInstrument({ firmware_version: null, firmware_support_until: null, security_review_status: "PENDING", security_not_applicable_reason: null })], now) ?? "", /lacks a written security-lifecycle rationale/i);
+  assert.equal(instrumentApprovalFailure("OTHER", [gasObservation], [approvedInstrument({ firmware_version: null, firmware_support_until: null, security_review_status: "NOT_APPLICABLE_WITH_JUSTIFICATION", security_not_applicable_reason: "No firmware exists", security_evidence_reference: null, security_evidence_sha256: null, security_reviewed_at: null })], now), null);
 });

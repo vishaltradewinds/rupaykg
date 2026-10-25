@@ -10,6 +10,9 @@ create table mrv_instruments (
   model text not null,
   sku_revision text not null,
   intended_use text not null,
+  measurement_instrument boolean not null default true,
+  non_measurement_reason text,
+  supported_parameter_codes text[] not null default '{}'::text[] check (array_position(supported_parameter_codes, NULL::text) is null and array_position(supported_parameter_codes, '') is null),
   interface_protocol text,
   firmware_version text,
   firmware_support_until timestamptz,
@@ -93,6 +96,9 @@ begin
     or new.model is distinct from old.model
     or new.sku_revision is distinct from old.sku_revision
     or new.intended_use is distinct from old.intended_use
+    or new.measurement_instrument is distinct from old.measurement_instrument
+    or new.non_measurement_reason is distinct from old.non_measurement_reason
+    or new.supported_parameter_codes is distinct from old.supported_parameter_codes
     or new.metadata is distinct from old.metadata
     or new.evidence_bundle_hash is distinct from old.evidence_bundle_hash
     or new.interface_protocol is distinct from old.interface_protocol
@@ -164,6 +170,14 @@ begin
     if new.meity_validity_basis = 'NO_EXPIRY_CONFIRMED' and new.meity_valid_until is not null then
       raise exception 'no-expiry approval must not specify an expiry date';
     end if;
+    if new.measurement_instrument and cardinality(new.supported_parameter_codes) = 0 then
+      raise exception 'Measuring instrument requires explicitly reviewed supported parameter codes';
+    elsif not new.measurement_instrument and (nullif(btrim(new.non_measurement_reason), '') is null or cardinality(new.supported_parameter_codes) > 0) then
+      raise exception 'Non-measuring hardware requires a written reason and cannot declare physical measurement parameters';
+    end if;
+    if exists (select 1 from unnest(new.supported_parameter_codes) as parameter_code where btrim(parameter_code) = '') then
+      raise exception 'Supported parameter codes cannot contain blank values';
+    end if;
     if new.calibration_required then
       if new.calibration_status <> 'VERIFIED'
          or nullif(btrim(new.calibration_certificate_id), '') is null
@@ -202,7 +216,7 @@ begin
       new.id, new.organization_id, null, new.approval_status,
       new.registered_by_identity_id, 'Candidate registered; pending exact-model review',
       jsonb_build_object('instrumentCode', new.instrument_code, 'manufacturer', new.manufacturer,
-        'model', new.model, 'skuRevision', new.sku_revision)
+        'model', new.model, 'skuRevision', new.sku_revision, 'measurementInstrument', new.measurement_instrument, 'nonMeasurementReason', new.non_measurement_reason, 'supportedParameterCodes', new.supported_parameter_codes)
     );
   elsif new.approval_status is distinct from old.approval_status then
     insert into mrv_instrument_decisions(
@@ -213,6 +227,9 @@ begin
       new.reviewed_by_identity_id, new.review_note,
       jsonb_build_object('instrumentCode', new.instrument_code, 'manufacturer', new.manufacturer,
         'model', new.model, 'skuRevision', new.sku_revision,
+        'measurementInstrument', new.measurement_instrument,
+        'nonMeasurementReason', new.non_measurement_reason,
+        'supportedParameterCodes', new.supported_parameter_codes,
         'meityCertificateId', new.meity_certificate_id,
         'meityEvidenceReference', new.meity_evidence_reference,
         'meityEvidenceSha256', new.meity_evidence_sha256,

@@ -5,6 +5,7 @@ export interface MrvObservationInstrumentRef {
 
 export interface MrvInstrumentApprovalEvidence {
   instrument_code: string;
+  supported_parameter_codes: string[];
   approval_status: string;
   meity_certificate_id: string | null;
   meity_issuer: string | null;
@@ -133,6 +134,18 @@ export function instrumentApprovalFailure(
       || instrument.security_review_status !== "NOT_APPLICABLE_WITH_JUSTIFICATION"
       || !present(instrument.security_not_applicable_reason)) {
       return `Instrument "${code}" lacks a written security-lifecycle rationale for having no firmware.`;
+    }
+
+    const observationsForInstrument = observations.filter((observation) =>
+      typeof observation.instrument_id === "string" && observation.instrument_id.trim() === code,
+    );
+    for (const observation of observationsForInstrument) {
+      const parameterCode = typeof observation.parameter_code === "string" ? observation.parameter_code.trim() : "";
+      if (!parameterCode) return `Observation from instrument "${code}" is missing its parameter code.`;
+      const supportedCodes = Array.isArray(instrument.supported_parameter_codes) ? instrument.supported_parameter_codes : [];
+      if (!supportedCodes.some((supported) => supported.trim().toLowerCase() === parameterCode.toLowerCase())) {
+        return `Instrument "${code}" is not registered for observation parameter "${parameterCode}".`;
+      }
     }
   }
 
