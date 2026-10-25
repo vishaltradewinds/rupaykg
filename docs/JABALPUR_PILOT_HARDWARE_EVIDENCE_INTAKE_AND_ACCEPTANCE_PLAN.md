@@ -117,11 +117,22 @@ G7 — Authorized release decision recorded.
 
 Any failed or missing mandatory gate keeps the affected device/data path on HOLD. A successful software build is not hardware certification, field validation or regulatory approval.
 
-## 8. Current blockers
+## 8. Repository implementation findings from the authorized local checkout
+
+The relevant code paths were inspected on the workstation checkout `C:\\Users\\Vishal\\rupaykg-live`, branch `fix/guardian-hedera-gate-20261010`. That checkout has pre-existing uncommitted changes; they were preserved and not overwritten. These are findings from the inspected branch, not a claim that it is identical to the PR branch head.
+
+1. `migrations/007_resource_flow_mrv.sql` defines `mrv_observations.instrument_id`, `uncertainty`, `quality_status` and `metadata`, but the reviewed schema does not provide a model-specific MeitY approval/calibration register tied to the instrument identifier.
+2. `field_devices` enrollment/verification in `apps/src/sync-routes.ts` and migrations 003/016/017 is an identity and organization-binding control. The verification path can move a pending field device to VERIFIED after authorized management checks; that status does **not** prove the physical product's MeitY approval or measurement calibration.
+3. The reviewed measurement endpoint in `apps/src/server.ts` accepts a positive value, unit, method, free-text source and timestamp. It does not require an exact approved instrument record.
+4. `apps/src/mrv-routes.ts` forwards observations and evidence to Guardian, but the reviewed submission path does not explicitly join each non-null `instrument_id` to a model-specific hardware approval/calibration record before allowing the observation into the eligible MRV submission.
+
+**Engineering consequence:** the documentation gate is not yet enforced end-to-end in application/database logic. A follow-on implementation batch must add a model-specific instrument approval/evidence register, an authorized review workflow, immutable decision history, and an MRV eligibility guard for unverified/expired instruments. It must include migration and route tests, database integration tests, and backward-compatibility analysis before merge. Do not equate field-device identity verification with hardware approval. No implementation change was made in this batch because the existing checkout is on a separate branch with uncommitted work and the exact site instruments are not yet known.
+
+## 9. Current blockers
 
 1. No site-provided exact instrument inventory was found in the repository files checked for this batch.
 2. No exact model/certificate/calibration/manual bundle is available in the reviewed record.
-3. Repository code search returned no matching results for the searched MRV/hardware terms; this is not proof the code is absent. A full tree-level code audit and local test execution remain outstanding.
+3. The relevant local code paths were audited, but a full tree-wide audit and production database integration run remain outstanding.
 4. No hardware model is VERIFIED; no purchase, physical connection or deployment is authorized.
 
 Next action: request the operator's instrument packet, then reconcile every row against the existing repository schema and live interface documentation before coding or purchasing.
