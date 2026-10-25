@@ -54,7 +54,7 @@ export async function registerBmWa03001BaselineAttestationRoutes(app: FastifyIns
       };
       if (sha256Canonical(core) !== baseline.record_sha256) return reply.code(409).send({ error: "Baseline record integrity hash mismatch", code: "BASELINE_HASH_MISMATCH" });
       const evidence = await pool.query<{ count:string }>(
-        "select count(*)::text count from evidence where activity_id=$1 and id=any($2::uuid[]) and status='VERIFIED' and content_hash ~ '^[0-9a-f]{64}",
+        "select count(*)::text count from evidence where activity_id=$1 and id=any($2::uuid[]) and status='VERIFIED' and content_hash ~ '^[0-9a-f]{64}$'",
         [baseline.activity_id, baseline.evidence_ids]);
       if (Number(evidence.rows[0]?.count ?? 0) !== baseline.evidence_ids.length) return reply.code(409).send({ error: "Baseline evidence must remain VERIFIED with a valid SHA-256 content hash", code: "BASELINE_EVIDENCE_NOT_VERIFIED" });
       const existing = await pool.query<{ id:string }>("select id from bm_wa03001_baseline_attestations where baseline_record_id=$1", [baselineId]);
