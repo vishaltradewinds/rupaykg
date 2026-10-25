@@ -35,7 +35,7 @@ test("migration-state verifier compares the full migration inventory in a read-o
   assert.doesNotMatch(migrationVerifierSource, /\b(?:insert\s+into|update\s+[a-z_]+\s+set|delete\s+from|create\s+table|alter\s+table|drop\s+table)\b/i);
 });
 
-const runtimeRoleAuditMigration = readFileSync(fileURLToPath(new URL("../../../migrations/20261027_runtime_role_audit_chain_security_definer.sql", import.meta.url)), "utf8");
+const runtimeRoleAuditMigration = readFileSync(fileURLToPath(new URL("../../../migrations/20261034_runtime_role_audit_chain_security_definer.sql", import.meta.url)), "utf8");
 test("audit-chain trigger functions execute with a pinned privileged owner, not runtime table grants", () => {
   for (const functionName of [
     "chain_audit_event_before_insert",
