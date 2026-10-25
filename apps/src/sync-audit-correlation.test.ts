@@ -49,3 +49,21 @@ test("field-sync conflict resolution is atomic and request-correlated", async ()
   assert.match(migration, /nullif\(current_setting\('rupaykg\.request_id', true\), ''\)/);
   assert.match(migration, /FIELD_SYNC_CONFLICT_RESOLVED/);
 });
+
+test("authoritative field-sync application is request-correlated and atomic", async () => {
+  const source = await readFile(routePath, "utf8");
+  const routeStart = source.indexOf('app.post("/api/v1/field-sync/envelopes/:envelopeId/apply"');
+  assert.notEqual(routeStart, -1, "envelope-application route must exist");
+  const routeEnd = source.indexOf("\n  });", routeStart);
+  assert.notEqual(routeEnd, -1, "envelope-application route must terminate");
+  const route = source.slice(routeStart, routeEnd);
+
+  assert.match(route, /await client\.query\("BEGIN"\)/);
+  assert.match(route, /const applied = await applyOperation\(client, auth, row\.payload\)/);
+  assert.match(route, /FIELD_SYNC_OPERATION_APPLIED/);
+  assert.match(route, /applied\.organizationId, applied\.entityType, applied\.entityId, request\.id/);
+  assert.match(route, /payloadHash\(row\.payload\)/);
+  assert.match(route, /update field_sync_envelopes set status = 'APPLIED'/);
+  assert.match(route, /await client\.query\("COMMIT"\)/);
+  assert.match(route, /await client\.query\("ROLLBACK"\)/);
+});
