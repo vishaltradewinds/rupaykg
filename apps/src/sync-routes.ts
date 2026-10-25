@@ -143,15 +143,9 @@ export async function registerSyncRoutes(app: FastifyInstance, pool: Pool | null
       );
       const resolved = updated.rows[0];
       if (!resolved) throw new Error("FIELD_SYNC_CONFLICT_RESOLUTION_UPDATE_FAILED");
-      await client.query(
-        `insert into audit_events(actor_identity_id, organization_id, action, target_type, target_id, request_id, payload)
-         values ($1, $2, 'FIELD_SYNC_CONFLICT_RESOLVED', 'field_sync_conflict', $3, $4, $5)`,
-        [auth.identityId, conflict.organization_id, conflictId, request.id, {
-          envelopeId: conflict.envelope_id,
-          resolutionStatus: validation.resolutionStatus,
-          resolutionReason: validation.resolutionReason,
-        }],
-      );
+      // The database trigger owns the canonical conflict-resolution audit event.
+      // Set request correlation transaction-locally so the trigger records it once.
+      await client.query("select set_config('rupaykg.request_id', $1, true)", [request.id]);
       await client.query("COMMIT");
       return reply.code(200).send({ source: "postgresql", syntheticData: false, authoritativeMutation: true, conflict: resolved });
     } catch (error) {
