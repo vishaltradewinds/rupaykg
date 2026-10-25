@@ -1,5 +1,14 @@
 # RupayKg Production Readiness Gate - 2026-10-24
 
+> **Live status refresh — 2026-10-25 07:42 UTC**
+>
+> - Current PR #44 head: `ca924589bada2f402ab4e81ffe3b41a44dd0c8fc`.
+> - Exact-head CI run #2026: **SUCCESS** — https://github.com/vishaltradewinds/rupaykg/actions/runs/40173636785. All configured steps passed, including dependency audit, migration validation and state verification, typecheck/build, browser smoke, isolated PostgreSQL integration tests, read-only audit-chain verification, disposable backup/restore verification, and production-container build.
+> - This CI pass validates the tested branch commit only. It does not prove the live service's database mapping, production backup/restore, live Guardian/Hedera acceptance, or production certification.
+> - Render metadata rechecked 2026-10-25: web service `rupaykg` is not suspended and tracks `main` with auto-deploy enabled; Render Postgres `rupaykg-db` remains suspended for billing. Therefore do not assume that suspended Render Postgres is the active database, and do not infer the live target from database names alone.
+> - Guardian acceptance seed now requires an explicit non-empty `GUARDIAN_MRV_POLICY_ID` before opening its database pool; the plausible-looking fallback was removed and regression coverage added.
+> - PR #44 remains **open, draft, and unmerged**. Production certification remains **HOLD**. No production migration, data mutation, provider setting change, billing change, deployment, or live Guardian/Hedera submission was performed.
+>
 ## AIM
 
 Make RupayKg operational, secure, auditable, recoverable, and compliant before any production release. Production deployment remains the last gate.
