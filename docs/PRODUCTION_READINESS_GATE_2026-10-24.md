@@ -1,11 +1,12 @@
-> **Live status refresh — 2026-10-25 10:45 UTC (read-only deployment-drift review)**
+> **Live status refresh — 2026-10-25 11:00 UTC (read-only deployment and database-mapping review)**
 >
-> - Latest Render deployment is still commit `0ddcf6087620880e21ea60f954c9f05d6b759469`, completed 2026-10-20 10:08 UTC; service `rupaykg` is active, tracks `main`, and auto-deploys commits on that branch.
-> - Render application logs at 2026-10-25 09:00 UTC report `Database migrations are current (91 files).` This runtime log does not identify the database provider project/branch and is not a complete schema certification.
-> - Comparison of deployed `main` with PR #44 branch confirms drift: the current `main` migration runner creates the ledger before full inventory validation and lacks the branch's full preflight for duplicate versions and unexplained ledger entries. The current `main` Docker command invokes `acceptance-seed.js` at startup, although the script is gated by `RUPAYKG_ACCEPTANCE_SEED_ON_START=true`; the PR branch additionally prohibits seeding when `NODE_ENV=production` and removes the seed step from its production container command.
-> - PR #44 exact-head CI run #2085 passed on `6d272b8157cbd0bbf6ba299b2882b383a88633ee`, but this commit is not deployed. CI validates the branch and disposable resources only.
-> - This finding was added to PR #44. No deployment, merge, production migration, provider configuration change, or database write was performed.
-> - **Gate: PRODUCTION CERTIFICATION HOLD.** Confirm the exact service-to-database mapping, inspect migration ledger/schema on the confirmed target, and complete recovery and least-privilege evidence before any separately approved release plan.
+> - Exact PR #44 head `1152dd88d634bc90456adf63bb51af64337ea701` passed CI run #2086: https://github.com/vishaltradewinds/rupaykg/actions/runs/40186123408. This validates the engineering branch and disposable test resources only.
+> - Latest Render deployment remains commit `0ddcf6087620880e21ea60f954c9f05d6b759469`, completed 2026-10-20 10:08 UTC. The service is active, tracks `main`, and auto-deploys that branch; PR #44 is not live.
+> - Render account metadata lists one Render Postgres instance, `rupaykg-db` (`dpg-dakhdv95efls73e1974g-a`), as **suspended for billing**, with an expiry timestamp of 2026-10-15 and network allowlist `0.0.0.0/0`. This instance is a candidate only; service-to-database mapping is not exposed by current metadata and must not be assumed. Do not reactivate it or change its network policy without verified mapping, recovery evidence, and authorization.
+> - Runtime logs reported `Database migrations are current (91 files).` That message does not identify the connected database or certify the complete schema.
+> - Deployed `main` still differs from PR #44: its migration runner lacks the branch's complete inventory/ledger preflight, and its production startup command invokes the acceptance-seed script (guarded by an environment flag). PR #44 adds a production prohibition and removes that step from the production command.
+> - No deployment, merge, production migration, environment-variable change, database write, or database reactivation was performed.
+> - **Gate: PRODUCTION CERTIFICATION HOLD.** Next prerequisite is safe confirmation of the actual runtime/migration DB provider, project/branch, database name, hostname (redacted as appropriate), and runtime role—without sharing credentials. Then verify schema/ledger, audit-chain objects, least privilege, and recoverability on the confirmed target before any separately approved staging/release plan.
 >
 # RupayKg Production Readiness Gate - 2026-10-24
 
