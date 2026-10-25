@@ -83,10 +83,10 @@ export async function registerBmWa03001ReconciliationRoutes(app: FastifyInstance
           await client.query("rollback"); return reply.code(409).send({ error: "Persisted baseline integrity hash mismatch", code: "BASELINE_HASH_MISMATCH" });
         }
         const baselineEvidenceCheck = await client.query<{ count: string }>(
-          "select count(*)::text count from evidence where activity_id=$1 and id=any($2::uuid[]) and status='VERIFIED' and (content_hash is not null or content_uri is not null)",
+          "select count(*)::text count from evidence where activity_id=$1 and id=any($2::uuid[]) and status='VERIFIED' and content_hash ~ '^[0-9a-f]{64}$'",
           [activityId, baseline.evidence_ids]);
         if (Number(baselineEvidenceCheck.rows[0]?.count ?? 0) !== baseline.evidence_ids.length) {
-          await client.query("rollback"); return reply.code(409).send({ error: "Approved baseline evidence is no longer fully verified and content-addressed", code: "BASELINE_EVIDENCE_NOT_VERIFIED" });
+          await client.query("rollback"); return reply.code(409).send({ error: "Approved baseline evidence is no longer fully verified with a valid SHA-256 content hash", code: "BASELINE_EVIDENCE_NOT_VERIFIED" });
         }
         if (baseline.methodology_code !== "BM WA03.001" || baseline.methodology_version !== "1.0") {
           await client.query("rollback"); return reply.code(409).send({ error: "Unsupported methodology version", code: "METHODOLOGY_VERSION_UNSUPPORTED" });
@@ -100,10 +100,10 @@ export async function registerBmWa03001ReconciliationRoutes(app: FastifyInstance
           }
         }
         const evidenceCheck = await client.query<{ count: string }>(
-          "select count(*)::text count from evidence where activity_id=$1 and id=any($2::uuid[]) and status='VERIFIED' and (content_hash is not null or content_uri is not null)",
+          "select count(*)::text count from evidence where activity_id=$1 and id=any($2::uuid[]) and status='VERIFIED' and content_hash ~ '^[0-9a-f]{64}$'",
           [activityId, [...allEvidenceIds]]);
         if (Number(evidenceCheck.rows[0]?.count ?? 0) !== allEvidenceIds.size) {
-          await client.query("rollback"); return reply.code(409).send({ error: "Every monitoring evidence item must be VERIFIED, content-addressed, and belong to this activity", code: "MONITORING_EVIDENCE_NOT_VERIFIED" });
+          await client.query("rollback"); return reply.code(409).send({ error: "Every monitoring evidence item must be VERIFIED with a valid SHA-256 content hash and belong to this activity", code: "MONITORING_EVIDENCE_NOT_VERIFIED" });
         }
         const projectMethane = calculateBmWa03001ProjectMethaneFromFlow(periods as BmWa03001FlowPeriod[]);
         const reconciled = calculateBmWa03001({
