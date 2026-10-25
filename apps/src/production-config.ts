@@ -4,7 +4,7 @@ export type ProductionConfig = {
   environment: "production";
   databaseUrl: string;
   migrationDatabaseUrl: string;
-  databaseSsl: "require" | "false";
+  databaseSsl: "require";
   databaseCaCert: string;
   allowedOrigins: string[];
   authMode: "real";
@@ -70,22 +70,16 @@ export function readProductionConfig(env: NodeJS.ProcessEnv = process.env): Prod
   if (!decodeUser(parsedMigrationDatabaseUrl) || decodeUser(parsedMigrationDatabaseUrl) === decodeUser(parsedDatabaseUrl)) {
     throw new Error("PRODUCTION_CONFIG_INVALID: MIGRATION_DATABASE_URL must use a distinct non-empty database role");
   }
-  const renderInternalDatabase =
-    /^dpg-[a-z0-9-]+$/i.test(parsedDatabaseUrl.hostname) &&
-    !parsedDatabaseUrl.searchParams.get("sslmode");
-  const renderInternalMigrationDatabase =
-    /^dpg-[a-z0-9-]+$/i.test(parsedMigrationDatabaseUrl.hostname) &&
-    !parsedMigrationDatabaseUrl.searchParams.get("sslmode");
-  if (renderInternalDatabase !== renderInternalMigrationDatabase) {
-    throw new Error("PRODUCTION_CONFIG_INVALID: runtime and migration database connections must use the same TLS mode");
-  }
-  if (!renderInternalDatabase && env.DATABASE_SSL !== "require") throw new Error("PRODUCTION_CONFIG_INVALID: DATABASE_SSL must be require");
+  // Require verified TLS for every production PostgreSQL target, including Render's
+  // private/internal hostname form. Managed database endpoints can enforce TLS even
+  // when traffic stays on a private network; never infer that private means plaintext.
+  if (env.DATABASE_SSL !== "require") throw new Error("PRODUCTION_CONFIG_INVALID: DATABASE_SSL must be require");
   return {
     environment: "production",
     databaseUrl,
     migrationDatabaseUrl,
-    databaseSsl: renderInternalDatabase ? "false" : "require",
-    databaseCaCert: renderInternalDatabase ? "" : productionCaCert(env.DATABASE_CA_CERT?.trim() ?? ""),
+    databaseSsl: "require",
+    databaseCaCert: productionCaCert(env.DATABASE_CA_CERT?.trim() ?? ""),
     allowedOrigins: origins(required(env, "RUPAYKG_ALLOWED_ORIGINS")),
     authMode: "real",
     syntheticData: false,
