@@ -103,6 +103,8 @@ export async function registerCpcbSwmRoutes(app: FastifyInstance, pool: Pool | n
 
   app.post("/api/v1/cpcb-swm/workspaces", async (request, reply) => {
     const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
+    const requestId = (request as never as Request).id;
+    if (typeof requestId !== "string" || !requestId.trim()) return reply.code(503).send({ error: "Request correlation ID unavailable; refusing unaudited workspace creation", code: "AUDIT_REQUEST_ID_REQUIRED", syntheticData: false });
     const body = bodyOf(request as never), organizationId = auth.activeOrganizationId;
     if (!organizationId || !canActForOrganization(auth, organizationId)) return reply.code(403).send({ error: "Select a verified organization", code: "ORG_FORBIDDEN" });
     if (!await hasOrganizationPermission(pool, auth, organizationId, ["waste:record"])) return reply.code(403).send({ error: "Waste-recording permission required to save stakeholder preparation", code: "SWM_WRITE_FORBIDDEN" });
@@ -133,7 +135,7 @@ export async function registerCpcbSwmRoutes(app: FastifyInstance, pool: Pool | n
         if (reportedStatus !== "NOT_REPORTED") {
           await client.query("insert into cpcb_swm_status_history(workspace_id,organization_id,previous_reported_status,reported_status,source_reference,status_note,actor_identity_id) values($1,$2,'NOT_REPORTED',$3,$4,$5,$6)", [workspace.id, organizationId, reportedStatus, effectiveSourceReference, statusNote, auth.identityId]);
         }
-        await writeAudit(client, auth.identityId, organizationId, "CPCB_SWM_WORKSPACE_CREATED", workspace.id, { stakeholderType, title, checklistItems: checklist.length, cpcbReportedStatus: reportedStatus, localWorkflowStage: localStage, cpcbStatusClaim: "USER_REPORTED_UNVERIFIED" }, (request as never as Request).id ?? "request-id-unavailable");
+        await writeAudit(client, auth.identityId, organizationId, "CPCB_SWM_WORKSPACE_CREATED", workspace.id, { stakeholderType, title, checklistItems: checklist.length, cpcbReportedStatus: reportedStatus, localWorkflowStage: localStage, cpcbStatusClaim: "USER_REPORTED_UNVERIFIED" }, requestId);
         await client.query("commit");
         return reply.code(201).send({ source: "postgresql", syntheticData: false, workspace: rows.rows[0] });
       } catch (error) { await client.query("rollback"); throw error; } finally { client.release(); }
@@ -142,6 +144,8 @@ export async function registerCpcbSwmRoutes(app: FastifyInstance, pool: Pool | n
 
   app.patch("/api/v1/cpcb-swm/workspaces/:workspaceId", async (request, reply) => {
     const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
+    const requestId = (request as never as Request).id;
+    if (typeof requestId !== "string" || !requestId.trim()) return reply.code(503).send({ error: "Request correlation ID unavailable; refusing unaudited workspace update", code: "AUDIT_REQUEST_ID_REQUIRED", syntheticData: false });
     const body = bodyOf(request as never), organizationId = auth.activeOrganizationId, id = (request as never as Request).params.workspaceId ?? "";
     if (!organizationId || !canActForOrganization(auth, organizationId)) return reply.code(403).send({ error: "Select a verified organization", code: "ORG_FORBIDDEN" });
     if (!UUID.test(id)) return reply.code(400).send({ error: "Invalid workspace ID", code: "SWM_WORKSPACE_ID_INVALID" });
@@ -170,7 +174,7 @@ export async function registerCpcbSwmRoutes(app: FastifyInstance, pool: Pool | n
         if (prior.rows[0].cpcb_reported_status !== reportedStatus || prior.rows[0].cpcb_status_source_reference !== effectiveSourceReference || prior.rows[0].cpcb_status_note !== statusNote) {
           await client.query("insert into cpcb_swm_status_history(workspace_id,organization_id,previous_reported_status,reported_status,source_reference,status_note,actor_identity_id) values($1,$2,$3,$4,$5,$6,$7)", [id, organizationId, prior.rows[0].cpcb_reported_status, reportedStatus, effectiveSourceReference, statusNote, auth.identityId]);
         }
-        await writeAudit(client, auth.identityId, organizationId, "CPCB_SWM_WORKSPACE_UPDATED", id, { stakeholderType, title, checklistItems: checklist.length, cpcbReportedStatus: reportedStatus, localWorkflowStage: localStage, cpcbStatusClaim: "USER_REPORTED_UNVERIFIED" }, (request as never as Request).id ?? "request-id-unavailable");
+        await writeAudit(client, auth.identityId, organizationId, "CPCB_SWM_WORKSPACE_UPDATED", id, { stakeholderType, title, checklistItems: checklist.length, cpcbReportedStatus: reportedStatus, localWorkflowStage: localStage, cpcbStatusClaim: "USER_REPORTED_UNVERIFIED" }, requestId);
         await client.query("commit");
         return { source: "postgresql", syntheticData: false, workspace: rows.rows[0] };
       } catch (error) { await client.query("rollback"); throw error; } finally { client.release(); }
