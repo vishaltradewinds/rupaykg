@@ -88,7 +88,7 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
       const metric = { code: metricCode, scope, value, unit, ...(evidenceId ? { evidenceId } : {}), ...(verificationId ? { verificationId } : {}) };
       const state = classifyMetric(metric);
       if (evidenceId) {
-        const evidence = await pool.query<{ activity_id: string | null; status: string }>(`select e.activity_id, e.status, e.content_hash from evidence e left join activities a on a.id=e.activity_id where e.id=$1 and a.organization_id=$2 and a.geography_id is not null and organization_has_geography_scope($2,a.geography_id)`, [evidenceId, organizationId]);
+        const evidence = await pool.query<{ activity_id: string | null; status: string; content_hash: string | null }>(`select e.activity_id, e.status, e.content_hash from evidence e left join activities a on a.id=e.activity_id where e.id=$1 and a.organization_id=$2 and a.geography_id is not null and organization_has_geography_scope($2,a.geography_id)`, [evidenceId, organizationId]);
         if (!evidence.rows[0]) return reply.code(403).send({ error: "Evidence is outside organization authorization scope", code: "EVIDENCE_FORBIDDEN" });
         if (evidence.rows[0].status !== "VERIFIED" || typeof evidence.rows[0].content_hash !== "string" || !/^[0-9a-f]{64}$/.test(evidence.rows[0].content_hash)) return reply.code(409).send({ error: "ESG metric evidence must be VERIFIED with a valid SHA-256 content hash", code: "EVIDENCE_NOT_VERIFIED" });
       }
