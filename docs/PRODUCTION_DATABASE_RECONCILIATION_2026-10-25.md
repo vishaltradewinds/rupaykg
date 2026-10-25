@@ -46,9 +46,9 @@ No automatic snapshot schedule or snapshot was listed for the `rupaykg-productio
 ## Engineering branch and CI
 
 - PR #46 remains open, draft, unmerged, and not deployed.
-- Current head: `2833273e59436d8b5e3600b8e336c15f44218432`.
-- Exact-head CI run #40191612039 completed successfully at 2026-10-25 12:07:33 UTC. It passed dependency installation/audit, migration inventory and execution, ledger verification, typecheck/build, browser smoke, isolated PostgreSQL acceptance/concurrency tests, read-only audit-chain verification, disposable backup/restore verification, and production container build.
-- These are CI/disposable-database results only; they do not establish live production readiness.
+- Last code-bearing head reviewed: `2833273e59436d8b5e3600b8e336c15f44218432`.
+- Exact-head CI run #40191612039 completed successfully for that code-bearing head at 2026-10-25 12:07:33 UTC. It passed dependency installation/audit, migration inventory and execution, ledger verification, typecheck/build, browser smoke, isolated PostgreSQL acceptance/concurrency tests, read-only audit-chain verification, disposable backup/restore verification, and production container build.
+- This document is a new documentation-only commit after that CI run; its new head must receive its own CI result before the PR is eligible for review. All CI/disposable-database results validate only their tested commit and do not establish live production readiness.
 - PR #46 is a combined change set (132 commits, 87 files at the time of inspection), including inherited production configuration and MRV/CPCB changes. It is not an isolated migration-lock patch.
 - The deployed `main` source still contains the older hostname-based TLS exception; the PR branch removes it and requires TLS plus a PEM CA certificate. Do not deploy this change until provider-specific TLS requirements are verified for the actual live endpoint.
 
