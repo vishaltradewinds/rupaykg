@@ -20,3 +20,13 @@ test("explicit acceptance seeding is blocked in production and verifies database
   assert.match(seedSource, /DATABASE_CA_CERT/);
   assert.doesNotMatch(seedSource, /rejectUnauthorized: false/);
 });
+
+test("acceptance seeding requires an explicit Guardian policy ID before database access", () => {
+  assert.match(seedSource, /GUARDIAN_MRV_POLICY_ID\?\.trim\(\)/);
+  assert.match(seedSource, /if \(!guardianPolicyId\) throw new Error\("GUARDIAN_MRV_POLICY_ID is required/);
+  assert.doesNotMatch(seedSource, /GUARDIAN_MRV_POLICY_ID\s*\|\|\s*["']rupaykg:guardian-mrv:v1["']/);
+  assert.ok(
+    seedSource.indexOf("if (!guardianPolicyId)") < seedSource.indexOf("const pool = new Pool"),
+    "policy configuration must be checked before opening a database connection",
+  );
+});
