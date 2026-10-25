@@ -15,7 +15,7 @@ test("field-device audit events carry request correlation IDs", async () => {
   );
   assert.match(
     source,
-    /\[auth\.identityId, organizationId, device\.id, request\.id, \{ deviceId: device\.device_id, identityId: device\.identity_id, status: device\.status \}\]/,
+    /\[auth\.identityId, organizationId, device\.id, requestId, \{ deviceId: device\.device_id, identityId: device\.identity_id, status: device\.status \}\]/,
   );
 
   assert.match(
@@ -24,7 +24,7 @@ test("field-device audit events carry request correlation IDs", async () => {
   );
   assert.match(
     source,
-    /\[auth\.identityId, row\.organization_id, deviceId, request\.id, \{ deviceId: verifiedDevice\.device_id, identityId: verifiedDevice\.identity_id, status: verifiedDevice\.status \}\]/,
+    /\[auth\.identityId, row\.organization_id, deviceId, requestId, \{ deviceId: verifiedDevice\.device_id, identityId: verifiedDevice\.identity_id, status: verifiedDevice\.status \}\]/,
   );
 });
 
@@ -65,7 +65,7 @@ test("authoritative field-sync application is request-correlated and atomic", as
   assert.match(route, /await client\.query\("BEGIN"\)/);
   assert.match(route, /const applied = await applyOperation\(client, auth, row\.payload\)/);
   assert.match(route, /FIELD_SYNC_OPERATION_APPLIED/);
-  assert.match(route, /applied\.organizationId, applied\.entityType, applied\.entityId, request\.id/);
+  assert.match(route, /applied\.organizationId, applied\.entityType, applied\.entityId, requestId/);
   assert.match(route, /payloadHash\(row\.payload\)/);
   assert.match(route, /update field_sync_envelopes set status = 'APPLIED'/);
   assert.match(route, /await client\.query\("COMMIT"\)/);
@@ -75,9 +75,9 @@ test("authoritative field-sync application is request-correlated and atomic", as
 test("field-sync intake and sequence conflicts are request-correlated", async () => {
   const source = await readFile(routePath, "utf8");
   assert.match(source, /FIELD_SYNC_ENVELOPE_RECEIVED/);
-  assert.match(source, /device\.organization_id, insertedRow\.id, request\.id/);
+  assert.match(source, /device\.organization_id, insertedRow\.id, requestId/);
   assert.match(source, /FIELD_SYNC_SEQUENCE_CONFLICT/);
-  assert.match(source, /device\.organization_id, conflictRow\.id, request\.id/);
+  assert.match(source, /device\.organization_id, conflictRow\.id, requestId/);
   assert.match(source, /payloadHash: hash/);
   assert.match(source, /organization_id is not null/);
   const intakeStart = source.indexOf('app.post("/api/v1/field-sync/envelopes"');
@@ -89,4 +89,23 @@ test("field-sync intake and sequence conflicts are request-correlated", async ()
   assert.match(intake, /FIELD_SYNC_SEQUENCE_CONFLICT/);
   assert.match(intake, /await client\.query\("COMMIT"\)/);
   assert.match(intake, /await client\.query\("ROLLBACK"\)/);
+});
+
+test("all mutating field-device and field-sync routes fail closed without a request ID", async () => {
+  const source = await readFile(routePath, "utf8");
+  for (const routeName of [
+    'app.post("/api/v1/field-devices/enroll"',
+    'app.post("/api/v1/field-devices/:deviceId/verify"',
+    'app.post("/api/v1/field-sync/envelopes"',
+    'app.post("/api/v1/field-sync/envelopes/:envelopeId/apply"',
+    'app.post("/api/v1/field-sync/conflicts/:conflictId/resolve"',
+  ]) {
+    const start = source.indexOf(routeName);
+    assert.notEqual(start, -1, `route must exist: ${routeName}`);
+    const end = source.indexOf("\n  });", start);
+    assert.notEqual(end, -1, `route must terminate: ${routeName}`);
+    const route = source.slice(start, end);
+    assert.match(route, /requestIdOf\(request\)/);
+    assert.match(route, /AUDIT_REQUEST_ID_REQUIRED/);
+  }
 });
