@@ -7,9 +7,7 @@ const baseEnv = {
   DATABASE_URL: "postgresql://runtime_role:secret@db.example.com:5432/rupaykg",
   MIGRATION_DATABASE_URL: "postgresql://migration_role:secret@db.example.com:5432/rupaykg",
   DATABASE_SSL: "require",
-  DATABASE_CA_CERT: "-----BEGIN CERTIFICATE----- 
-production-test-ca 
------END CERTIFICATE-----",
+  DATABASE_CA_CERT: "-----BEGIN CERTIFICATE-----\nproduction-test-ca\n-----END CERTIFICATE-----",
   RUPAYKG_AUTH_MODE: "real",
   RUPAYKG_ALLOWED_ORIGINS: "https://app.rupaykg.example,https://admin.rupaykg.example",
   RUPAYKG_SYNTHETIC_DATA: "false",
