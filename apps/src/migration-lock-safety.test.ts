@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 test("migration runner serializes the complete preflight and DDL window", () => {
-  const source = readFileSync(fileURLToPath(new URL("./migrate.ts", import.meta.url)), "utf8");
+  const source = readFileSync(fileURLToPath(new URL("../../src/migrate.ts", import.meta.url)), "utf8");
   const acquire = source.indexOf("await lockClient.query(MIGRATION_LOCK_SQL)");
   const preflight = source.indexOf("select to_regclass('public.schema_migrations')::text as ledger");
   const apply = source.indexOf("const sql = await readFile(path.join(migrationDir, filename)");
