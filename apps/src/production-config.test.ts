@@ -7,9 +7,7 @@ const valid = {
   DATABASE_URL: "postgresql://runtime_role:runtime-secret@prod.example.invalid:5432/rupaykg",
   MIGRATION_DATABASE_URL: "postgresql://migration_role:migration-secret@prod.example.invalid:5432/rupaykg",
   DATABASE_SSL: "require",
-  DATABASE_CA_CERT: "-----BEGIN CERTIFICATE----- 
-production-test-ca 
------END CERTIFICATE-----",
+  DATABASE_CA_CERT: "-----BEGIN CERTIFICATE-----\nproduction-test-ca\n-----END CERTIFICATE-----",
   RUPAYKG_ALLOWED_ORIGINS: "https://app.rupaykg.example",
   RUPAYKG_AUTH_MODE: "real",
 } as const;
