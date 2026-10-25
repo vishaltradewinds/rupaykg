@@ -15,6 +15,7 @@ import { registerCpcbSwmRoutes } from "./cpcb-swm-routes.js";
 import { registerIntelligenceRoutes } from "./intelligence-routes.js";
 import { registerMrvRoutes } from "./mrv-routes.js";
 import { registerMrvInstrumentRoutes } from "./mrv-instrument-routes.js";
+import { instrumentApprovalFailure, type MrvInstrumentApprovalEvidence } from "./mrv-instrument-approval.js";
 import { registerEvidenceVaultRoutes } from "./evidence-vault-routes.js";
 import { registerPlatformAdminRoutes } from "./platform-admin-routes.js";
 
@@ -89,7 +90,44 @@ app.post("/api/v1/operations/sync", async (request, reply) => {
   try { const intake = await app.inject({ method: "POST", url: "/api/v1/field-sync/envelopes", headers: { authorization, "x-rupaykg-organization-id": organizationId, "content-type": "application/json" }, payload: { idempotencyKey, deviceId, clientSequence, capturedAt, payload } }); const intakeBody = intake.json() as Record<string, unknown>; if (intake.statusCode >= 400) return reply.code(intake.statusCode).send(intakeBody); const envelope = intakeBody.envelope as Record<string, unknown> | undefined; const envelopeId = typeof envelope?.id === "string" ? envelope.id : null; if (!envelopeId) return reply.code(503).send({ error: "Authoritative field sync envelope was not returned", code: "FIELD_SYNC_ENVELOPE_MISSING", syntheticData: false }); if (intakeBody.replay === true && envelope?.status === "APPLIED") return reply.code(200).send({ source: "postgresql", syntheticData: false, replay: true, authoritativeMutation: true, entityType: envelope.applied_entity_type, entityId: envelope.applied_entity_id, envelopeId }); const applied = await app.inject({ method: "POST", url: `/api/v1/field-sync/envelopes/${envelopeId}/apply`, headers: { authorization, "x-rupaykg-organization-id": organizationId, "content-type": "application/json" }, payload: {} }); return reply.code(applied.statusCode).send(applied.json()); } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Authoritative operation application unavailable", code: "OPERATION_SYNC_UNAVAILABLE", syntheticData: false }); }
 });
 app.post("/api/v1/resource-flows", async (request, reply) => { const auth = await requireAuth(request, reply); if (!auth) return; const body = bodyOf(request); const organizationId = requiredString(body,"organizationId"); const originType = requiredString(body,"originType"); const resourceForm = requiredString(body,"resourceForm"); const materialCode = requiredString(body,"materialCode"); const unit = requiredString(body,"unit"); const quantity = requiredPositiveNumber(body,"quantity"); if (!organizationId || !originType || !resourceForm || !materialCode || !unit || quantity === null) return reply.code(400).send({ error:"organizationId, originType, resourceForm, positive quantity and unit are required" }); if (!requireOrganization(auth,organizationId,reply)) return; try { if (!pool || !await hasOrganizationPermission(pool, auth, organizationId, ['waste:record'])) return reply.code(403).send({ error:"Waste recording permission required", code:"PERMISSION_FORBIDDEN" }); } catch (error) { request.log.error(error); return reply.code(503).send({ error:"Authorization service unavailable", code:"AUTHORIZATION_UNAVAILABLE" }); } const sourceGeographyId = requiredString(body,"sourceGeographyId"); const destinationGeographyId = requiredString(body,"destinationGeographyId"); if (!sourceGeographyId && !destinationGeographyId) return reply.code(400).send({ error:"At least one authorized sourceGeographyId or destinationGeographyId is required", code:"GEOGRAPHY_REQUIRED" }); try { if (sourceGeographyId && !await canWriteGeography(pool!,auth,organizationId,sourceGeographyId)) return reply.code(403).send({ error:"Source geography is outside organization authorization scope", code:"GEOGRAPHY_FORBIDDEN" }); if (destinationGeographyId && !await canWriteGeography(pool!,auth,organizationId,destinationGeographyId)) return reply.code(403).send({ error:"Destination geography is outside organization authorization scope", code:"GEOGRAPHY_FORBIDDEN" }); const rows = await query("insert into resource_flows (organization_id,origin_type,resource_form,material_code,declared_quantity,unit,source_geography_id,destination_geography_id) values($1,$2,$3,$4,$5,$6,$7,$8) returning *",[organizationId,originType,resourceForm,materialCode,quantity,unit,sourceGeographyId,destinationGeographyId]); return reply.code(201).send({source:"postgresql",syntheticData:false,resourceFlow:rows[0]}); } catch (error) { request.log.error(error); return reply.code(503).send({error:"Resource flow creation unavailable",syntheticData:false}); } });
-app.post("/api/v1/activities/:activityId/measurements", async (request, reply) => { const auth=await requireAuth(request,reply);if(!auth)return;const {activityId}=request.params as {activityId:string};const body=bodyOf(request);const value=requiredPositiveNumber(body,"value"),unit=requiredString(body,"unit"),method=requiredString(body,"method"),source=requiredString(body,"source"),measuredAt=requiredString(body,"measuredAt");if(value===null||!unit||!method||!source||!measuredAt||Number.isNaN(Date.parse(measuredAt)))return reply.code(400).send({error:"positive value, unit, method, source and valid measuredAt are required"});try{if(!await canWriteActivity(pool!,auth,activityId))return reply.code(403).send({error:"Activity is outside organization authorization scope or lacks waste recording permission",code:"ACTIVITY_FORBIDDEN"});const rows=await query("insert into measurements(activity_id,value,unit,method,source,measured_at) values($1,$2,$3,$4,$5,$6) returning *",[activityId,value,unit,method,source,measuredAt]);return reply.code(201).send({source:"postgresql",syntheticData:false,measurement:rows[0]});}catch(error){request.log.error(error);return reply.code(503).send({error:"Measurement recording unavailable",syntheticData:false});}});
+app.post("/api/v1/activities/:activityId/measurements", async (request, reply) => {
+  const auth = await requireAuth(request, reply);
+  if (!auth) return;
+  const { activityId } = request.params as { activityId: string };
+  const body = bodyOf(request);
+  const value = requiredPositiveNumber(body, "value");
+  const unit = requiredString(body, "unit");
+  const method = requiredString(body, "method");
+  const source = requiredString(body, "source");
+  const measuredAt = requiredString(body, "measuredAt");
+  const instrumentCode = requiredString(body, "instrumentCode");
+  const parameterCode = requiredString(body, "parameterCode");
+  if (value === null || !unit || !method || !source || !measuredAt || Number.isNaN(Date.parse(measuredAt)) || !instrumentCode || !parameterCode) {
+    return reply.code(400).send({ error: "positive value, unit, method, source, valid measuredAt, instrumentCode and parameterCode are required" });
+  }
+  try {
+    if (!await canWriteActivity(pool!, auth, activityId)) return reply.code(403).send({ error: "Activity is outside organization authorization scope or lacks waste recording permission", code: "ACTIVITY_FORBIDDEN" });
+    const activity = await pool!.query<{ organization_id: string }>("select organization_id from activities where id=$1", [activityId]);
+    const organizationId = activity.rows[0]?.organization_id;
+    if (!organizationId) return reply.code(404).send({ error: "Activity not found", code: "ACTIVITY_NOT_FOUND" });
+    const instrument = await pool!.query<MrvInstrumentApprovalEvidence & { id: string }>(
+      "select id,instrument_code,supported_parameter_codes,approval_status,meity_certificate_id,meity_issuer,meity_certificate_scope,meity_verification_url,meity_evidence_reference,meity_evidence_sha256,meity_verified_at,meity_validity_basis,meity_valid_until,calibration_required,calibration_status,calibration_certificate_id,calibration_evidence_reference,calibration_evidence_sha256,calibration_lab,calibration_traceability,calibration_uncertainty,calibration_valid_until,calibration_not_required_reason,firmware_version,firmware_support_until,security_review_status,security_evidence_reference,security_evidence_sha256,security_reviewed_at,security_not_applicable_reason from mrv_instruments where organization_id=$1 and instrument_code=$2",
+      [organizationId, instrumentCode],
+    );
+    const gateFailure = instrumentApprovalFailure(method, [{ instrument_id: instrumentCode, parameter_code: parameterCode }], instrument.rows, new Date());
+    if (gateFailure) return reply.code(409).send({ error: gateFailure, code: "INSTRUMENT_NOT_APPROVED", eligibleForMrv: false, syntheticData: false });
+    const instrumentId = instrument.rows[0]?.id;
+    if (!instrumentId) return reply.code(409).send({ error: "Approved instrument record is unavailable", code: "INSTRUMENT_NOT_APPROVED", eligibleForMrv: false, syntheticData: false });
+    const rows = await query(
+      "insert into measurements(activity_id,value,unit,method,source,measured_at,mrv_instrument_id,parameter_code) values($1,$2,$3,$4,$5,$6,$7,$8) returning *",
+      [activityId, value, unit, method, source, measuredAt, instrumentId, parameterCode],
+    );
+    return reply.code(201).send({ source: "postgresql", syntheticData: false, measurement: rows[0] });
+  } catch (error) {
+    request.log.error(error);
+    return reply.code(503).send({ error: "Measurement recording unavailable", syntheticData: false });
+  }
+});
 
 await registerOnboardingHierarchyRoutes(app, pool);
 await registerValueRoutes(app, pool);

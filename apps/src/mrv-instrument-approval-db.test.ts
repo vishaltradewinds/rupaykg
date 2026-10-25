@@ -11,6 +11,11 @@ test("PostgreSQL enforces MRV instrument approval evidence and append-only decis
   const client = await pool.connect();
   const suffix = randomUUID();
   try {
+    const measurementColumns = await client.query<{ column_name: string }>(
+      "select column_name from information_schema.columns where table_schema=current_schema() and table_name='measurements' and column_name in ('mrv_instrument_id','parameter_code')",
+    );
+    assert.deepEqual(new Set(measurementColumns.rows.map((row) => row.column_name)), new Set(["mrv_instrument_id", "parameter_code"]));
+
     await client.query("begin");
     const organizationId = (await client.query<{ id: string }>(
       "insert into organizations(name,organization_type) values($1,'COLLECTOR') returning id",
@@ -25,6 +30,16 @@ test("PostgreSQL enforces MRV instrument approval evidence and append-only decis
       [organizationId, `FLOW-${suffix}`, identityId],
     )).rows[0]!;
     assert.equal(instrumentId.approval_status, "HOLD");
+
+    const activityId = (await client.query<{ id: string }>(
+      "insert into activities(organization_id,actor_identity_id,activity_type,occurred_at) values($1,$2,'MRV_INSTRUMENT_TEST',now()) returning id",
+      [organizationId, identityId],
+    )).rows[0]!.id;
+
+    await rejectsInSavepoint(client, () => client.query(
+      "insert into measurements(activity_id,value,unit,method,source,measured_at,mrv_instrument_id,parameter_code) values($1,2,'m3/h','test','instrument test',now(),$2,'gas_flow')",
+      [activityId, instrumentId.id],
+    ), /not VERIFIED/i);
 
     const initialDecision = await client.query<{ count: string }>(
       "select count(*)::text as count from mrv_instrument_decisions where instrument_id=$1",
@@ -42,6 +57,17 @@ test("PostgreSQL enforces MRV instrument approval evidence and append-only decis
       [instrumentId.id, identityId, "a".repeat(64), "b".repeat(64)],
     );
     assert.equal(approved.rows[0]?.approval_status, "VERIFIED");
+
+    const validMeasurement = await client.query<{ id: string }>(
+      "insert into measurements(activity_id,value,unit,method,source,measured_at,mrv_instrument_id,parameter_code) values($1,2,'m3/h','test','instrument test',now(),$2,'gas_flow') returning id",
+      [activityId, instrumentId.id],
+    );
+    assert.ok(validMeasurement.rows[0]?.id);
+
+    await rejectsInSavepoint(client, () => client.query(
+      "insert into measurements(activity_id,value,unit,method,source,measured_at,mrv_instrument_id,parameter_code) values($1,2,'m3/h','test','instrument test',now(),$2,'methane_content')",
+      [activityId, instrumentId.id],
+    ), /not supported/i);
 
     const decisionCount = await client.query<{ count: string }>(
       "select count(*)::text as count from mrv_instrument_decisions where instrument_id=$1",

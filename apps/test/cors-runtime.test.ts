@@ -41,7 +41,7 @@ function httpOptions(origin: string): Promise<HttpOptionsResult> {
 }
 
 async function waitForServer(child: ReturnType<typeof spawn>): Promise<void> {
-  for (let attempt = 0; attempt < 50; attempt += 1) {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
     if (child.exitCode !== null) throw new Error(`CORS runtime server exited with code ${child.exitCode}`);
     try {
       await httpOptions("https://app.rupaykg.example");

@@ -79,6 +79,27 @@ A database guard rejects direct promotion to `VERIFIED` if the mandatory evidenc
 
 Requires organization-scoped read permission and returns append-only decision history with evidence snapshots.
 
+## Measurement ingestion
+
+Both the direct `POST /api/v1/activities/<activity-uuid>/measurements` endpoint and the sync `MEASUREMENT_CREATE` operation require `instrumentCode` and `parameterCode` in addition to value/unit/method/source/time. Each path resolves the instrument inside the activity's organization and runs the same exact-model approval, calibration, firmware/security and supported-parameter gate before writing. The measurement row stores `mrv_instrument_id` and `parameter_code`; the free-text `source` is descriptive only and is not proof of approval. An unregistered, expired, non-VERIFIED or out-of-scope instrument returns HTTP 409 with `eligibleForMrv: false`. Existing legacy measurement rows remain unlinked; they are not automatically promoted or backfilled as approved.
+
+Example payload for the existing sync envelope's `MEASUREMENT_CREATE` operation:
+
+```json
+{
+  "activityId": "<activity-uuid>",
+  "value": 123.45,
+  "unit": "m3/h",
+  "method": "continuous-flow-meter",
+  "source": "device telemetry channel 1",
+  "measuredAt": "<ISO-8601 timestamp>",
+  "instrumentCode": "SITE-DEVICE-001",
+  "parameterCode": "gas_flow"
+}
+```
+
+The sample is illustrative only. The `instrumentCode` and `parameterCode` must match a verified organization-scoped register entry; do not copy the placeholder values into production.
+
 ## Operational acceptance
 
 1. Obtain the actual instrument nameplate, manual, interface documentation and site measurement-point details.
