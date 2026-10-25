@@ -77,6 +77,8 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
 
   app.post("/api/v1/mrv/activities/:activityId/submit", async (request, reply) => {
     const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
+    const requestId = typeof request.id === "string" && request.id.trim() ? request.id : null;
+    if (!requestId) return reply.code(503).send({ error: "Request correlation ID unavailable; refusing unaudited MRV submission", code: "AUDIT_REQUEST_ID_REQUIRED", syntheticData: false });
     const activityId = (request.params as { activityId: string }).activityId;
     const body = bodyOf(request as never);
     const verificationId = str(body, "verificationId");
@@ -152,7 +154,7 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
         if (!provenance || typeof provenance.id !== "string") throw new Error("MRV_PROVENANCE_PERSISTENCE_FAILED");
         await persistClient.query(
           "insert into audit_events(actor_identity_id,organization_id,action,target_type,target_id,request_id,payload) values($1,$2,'MRV_PROVENANCE_PERSISTED','mrv_provenance_event',$3,$4,$5)",
-          [auth.identityId, row.organization_id, provenance.id, request.id, {
+          [auth.identityId, row.organization_id, provenance.id, requestId, {
             activityId, verificationId, evidenceId, guardianPolicyId: policyId,
             guardianExecutionId: guardian.executionId, guardianStatus: guardian.status,
             hcsStatus: anchor.status, hcsTopicId: anchor.topicId || null,
