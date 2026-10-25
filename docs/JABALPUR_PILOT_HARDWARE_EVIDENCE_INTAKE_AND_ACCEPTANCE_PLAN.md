@@ -5,6 +5,16 @@ Site: SITE-JBP-01 — Kathonda MSW Processing and Disposal Facility
 Purpose: Obtain real site evidence and define a testable instrument-to-MRV acceptance gate.
 Status: OPEN — site inventory and model-specific evidence not present in the reviewed repository paths. All hardware remains HOLD.
 
+## 0. Critical site-reality and methodology compatibility HOLD
+
+**Do not assume that Kathonda is a landfill-methane-recovery project.** A CPCB reply filed before the National Green Tribunal in O.A. 819/2024 describes the Kathonda facility as a mass-burning waste-to-energy plant processing approximately 600 tonnes/day with reported power-generation capacity of 1.15 MW. The same reply says the sanitary landfill constructed for the purpose was not being used properly and records that the WtE plant was under NCLT/resolution-officer oversight at the time of the report (25 September 2024). Official source: https://www.greentribunal.gov.in/sites/default/files/news_updates/REPLY%20BY%20CPCB%20IN%20OA%20NO.%20819%20of%202024%20NEWS%20ITEM%20TITLED%20JABALPUR%20KATHAUNDA%20PLANT%20MEIN%20KACHARA%20JALNE%20KE%20BAAD%20DUR%20DUR%20TAK%20FAIL%20RAHE%20DHOOL%20KE%20KAN.pdf
+
+This dated public record does not prove the site's current 2026 operating status or the exact proposed pilot boundary. It creates a material eligibility question because BEE BM WA03.001 is explicitly titled **Landfill Methane Recovery**. A mass-burning WtE or general waste-processing activity is not automatically eligible under that methodology. The methane flow-meter/analyser list below is not a procurement specification until the actual project activity is confirmed.
+
+Before selecting any methodology-specific hardware, obtain written confirmation from the site operator/Jabalpur Municipal Corporation of: (1) exact project boundary and asset/site coordinates; (2) whether an active landfill cell exists and whether landfill gas is actually collected/recovered; (3) whether gas collection, flaring or use equipment exists and is operating, with measurement points and existing instruments; (4) current operator/asset-control status and applicable authorizations; and (5) approved monitoring plan, baseline/project scenario, methodology version and BEE/CCTS eligibility basis.
+
+If the actual activity is WtE mass burning, waste processing, or electricity generation without landfill gas recovery, pause the BM WA03.001 hardware plan and revalidate methodology eligibility with the responsible program authority. Do not buy methane sensors based only on the site name. Status remains HOLD until this gate is closed.
+
 ## 1. Scope and non-negotiable controls
 
 This is an intake and test plan, not evidence that the site has any particular instrument and not an approval to buy, connect, or deploy hardware.
@@ -38,9 +48,9 @@ Please supply this packet for every existing device used to produce MRV data or 
 
 Evidence files should be named `SITE_DEVICEID_DOCUMENTTYPE_YYYY-MM-DD.ext`. Preserve original files and record a SHA-256 hash, received time, source and reviewer. Do not publish personal or sensitive site credentials.
 
-## 3. Measurement requirements to confirm before choosing equipment
+## 3. Measurement requirements — conditional on site eligibility
 
-For the selected BEE BM WA03.001 route, confirm the current methodology and site monitoring plan. The methodology requires continuous gas-flow measurement with accumulated-volume recording and direct methane-content measurement; measurement location and moisture/humidity basis must be compatible. Any periodic methane measurement option must meet the methodology's stated confidence/precision conditions. Do not add separate temperature or pressure sensors automatically if the selected instrument already supplies the required values.
+Only apply the following BM WA03.001 requirements after the site-reality/methodology compatibility gate above is passed. Confirm the current methodology and site monitoring plan. The methodology requires continuous gas-flow measurement with accumulated-volume recording and direct methane-content measurement; measurement location and moisture/humidity basis must be compatible. Any periodic methane measurement option must meet the methodology's stated confidence/precision conditions. Do not add separate temperature or pressure sensors automatically if the selected instrument already supplies the required values.
 
 Required site facts before instrument selection:
 1. Actual gas train and measurement points; gas composition and operating envelope.
@@ -117,22 +127,17 @@ G7 — Authorized release decision recorded.
 
 Any failed or missing mandatory gate keeps the affected device/data path on HOLD. A successful software build is not hardware certification, field validation or regulatory approval.
 
-## 8. Repository implementation findings from the authorized local checkout
+## 8. Current code enforcement status
 
-The relevant code paths were inspected on the workstation checkout `C:\\Users\\Vishal\\rupaykg-live`, branch `fix/guardian-hedera-gate-20261010`. That checkout has pre-existing uncommitted changes; they were preserved and not overwritten. These are findings from the inspected branch, not a claim that it is identical to the PR branch head.
+The default branch's previously reviewed MRV path did not bind observations to model-specific hardware approval. The proposed implementation is in [draft PR #49](https://github.com/vishaltradewinds/rupaykg/pull/49), with related register/API documentation and tests. That PR adds an organization-scoped instrument register, MeitY evidence reference/hash, calibration and firmware/security gates, measurement-role and supported-parameter mapping, append-only decision history, and an MRV submission guard. Its CI passed, but the PR remains draft and has not been merged; therefore the default branch must not yet be treated as having these controls.
 
-1. `migrations/007_resource_flow_mrv.sql` defines `mrv_observations.instrument_id`, `uncertainty`, `quality_status` and `metadata`, but the reviewed schema does not provide a model-specific MeitY approval/calibration register tied to the instrument identifier.
-2. `field_devices` enrollment/verification in `apps/src/sync-routes.ts` and migrations 003/016/017 is an identity and organization-binding control. The verification path can move a pending field device to VERIFIED after authorized management checks; that status does **not** prove the physical product's MeitY approval or measurement calibration.
-3. The reviewed measurement endpoint in `apps/src/server.ts` accepts a positive value, unit, method, free-text source and timestamp. It does not require an exact approved instrument record.
-4. `apps/src/mrv-routes.ts` forwards observations and evidence to Guardian, but the reviewed submission path does not explicitly join each non-null `instrument_id` to a model-specific hardware approval/calibration record before allowing the observation into the eligible MRV submission.
-
-**Engineering consequence:** the documentation gate is not yet enforced end-to-end in application/database logic. A follow-on implementation batch must add a model-specific instrument approval/evidence register, an authorized review workflow, immutable decision history, and an MRV eligibility guard for unverified/expired instruments. It must include migration and route tests, database integration tests, and backward-compatibility analysis before merge. Do not equate field-device identity verification with hardware approval. No implementation change was made in this batch because the existing checkout is on a separate branch with uncommitted work and the exact site instruments are not yet known.
+The implementation records evidence references and reviewer attestations; it does not independently authenticate certificate genuineness or retrieve/recompute hashes from the production evidence vault. Structured per-parameter range/unit/accuracy mapping and the actual evidence-store contract remain review gates. Field-device identity verification is not product approval. A successful software build is not hardware certification, field validation or regulatory approval.
 
 ## 9. Current blockers
 
-1. No site-provided exact instrument inventory was found in the repository files checked for this batch.
-2. No exact model/certificate/calibration/manual bundle is available in the reviewed record.
-3. The relevant local code paths were audited, but a full tree-wide audit and production database integration run remain outstanding.
-4. No hardware model is VERIFIED; no purchase, physical connection or deployment is authorized.
+1. **Site/process and methodology compatibility unresolved:** official CPCB/NGT material describes Kathonda as a mass-burning WtE facility and notes the sanitary landfill was not being used properly as of September 2024. Confirm current site state and the exact project boundary before treating BM WA03.001 as applicable.
+2. No site-provided exact instrument inventory/model/certificate/calibration/manual/firmware packet was found in the repository files checked for this batch.
+3. No hardware model is VERIFIED; no purchase, physical connection or deployment is authorized.
+4. Draft code PR #49 must complete review and be merged before the default branch has the proposed software gate; evidence-store and structured measurement-specification gates remain open.
 
-Next action: request the operator's instrument packet, then reconcile every row against the existing repository schema and live interface documentation before coding or purchasing.
+Next action: first obtain written site/operator confirmation of the real process, operating status, project boundary and methodology eligibility. Only then obtain the actual instrument packet and reconcile every model against official MeitY/other applicable approvals, calibration, firmware/security and interface evidence. Do not purchase or deploy until all relevant gates pass.
