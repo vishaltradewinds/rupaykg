@@ -150,7 +150,7 @@ describe("runtime acceptance", () => {
     const measuredAt = new Date().toISOString();
     const measurementApplied = await submitAndApply({ operationType: "MEASUREMENT_CREATE", activityId, value: 10, unit: "kg", method: "WEIGHBRIDGE", source: "FIELD", measuredAt }, actorToken, 2, `measurement-${suffix}`);
     const measurementId = measurementApplied.entityId as string;
-    const evidenceApplied = await submitAndApply({ operationType: "EVIDENCE_CREATE", activityId, evidenceType: "WEIGHBRIDGE_RECORD", capturedAt: measuredAt, contentHash: `sha256:${suffix}`, measurementId }, actorToken, 3, `evidence-${suffix}`);
+    const evidenceApplied = await submitAndApply({ operationType: "EVIDENCE_CREATE", activityId, evidenceType: "WEIGHBRIDGE_RECORD", capturedAt: measuredAt, contentHash: createHash("sha256").update(suffix).digest("hex"), measurementId }, actorToken, 3, `evidence-${suffix}`);
     evidenceId = evidenceApplied.entityId as string;
     const self = await request(`/api/v1/evidence/${evidenceId}/verification`, { method: "POST", body: JSON.stringify({ decision: "APPROVED", scope: "runtime" }) }, actorToken);
     assert.equal(self.status, 403);
