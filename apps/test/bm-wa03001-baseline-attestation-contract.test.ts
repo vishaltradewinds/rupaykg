@@ -8,7 +8,7 @@ const read = (path: string) => readFile(new URL(path, root), "utf8");
 test("baseline attestation bridge is signed, approved-only, scoped and fail-closed", async () => {
   const [route, migration, server] = await Promise.all([
     read("apps/src/bm-wa03001-baseline-attestation-routes.ts"),
-    read("migrations/20261025_bm_wa03001_baseline_attestations.sql"),
+    read("migrations/20261032_bm_wa03001_baseline_attestations.sql"),
     read("apps/src/server.ts"),
   ]);
   assert.match(server, /registerBmWa03001BaselineAttestationRoutes\(app, pool\)/);
