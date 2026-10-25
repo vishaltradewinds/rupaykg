@@ -34,7 +34,7 @@ test("MRV integrity hash is deterministic and key-order independent", () => {
 test("MRV provenance persistence and audit event share one transaction", async () => {
   const source = await readFile(fileURLToPath(new URL("../../../apps/src/mrv-routes.ts", import.meta.url)), "utf8");
   const submitStart = source.indexOf('app.post("/api/v1/mrv/activities/:activityId/submit"');
-  const submitEnd = source.indexOf('app.get("/api/v1/mrv/activities/:activityId/provenance"', submitStart);
+  const submitEnd = source.indexOf("\n  });", submitStart);
   assert.ok(submitStart >= 0 && submitEnd > submitStart, "MRV submission route must exist");
   const route = source.slice(submitStart, submitEnd);
 
