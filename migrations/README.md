@@ -1,5 +1,14 @@
 # Database migrations
 
+## Migration identity and legacy history (2026-10-25)
+
+The migration ledger records filenames as immutable identities, not merely numeric ordering. The historical migrations `20261022_async_mirror_inbox.sql`, `20261023_async_mirror_worker_leases.sql`, `20261024_ai_intake_rate_limits.sql`, and `20261025_ai_evidence_intake_jobs.sql` are preserved from the `intelligence/ai-evidence-intake-middleware` engineering branch because their exact filenames appear in the staging ledger. Do not replace or repurpose these version identities.
+
+The CPCB/BM WA03.001/MRV migrations introduced by the current Shakti batch therefore use fresh identifiers `20261029` through `20261035`. The missing numeric slots `20261026`–`20261028` are intentional; never renumber an already-applied migration merely to make the sequence contiguous. The migration runner preflights all repository filename/version conflicts before applying any individual migration. A conflict must be resolved by restoring the original migration source and assigning new identifiers to unapplied work, not by changing the database ledger or bypassing the fail-closed check.
+
+This source recovery preserves filename identity, but it does not prove that a particular database is the live production target or that its schema is healthy. Verify provider/project/branch identity and perform disposable-database replay and state verification before any production change.
+
+
 Apply migrations in filename order against a fresh PostgreSQL database:
 
 1. `001_core.sql` â€” authoritative core entities and lifecycle enums.
