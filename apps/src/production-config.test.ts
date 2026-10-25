@@ -7,7 +7,9 @@ const valid = {
   DATABASE_URL: "postgresql://runtime_role:runtime-secret@prod.example.invalid:5432/rupaykg",
   MIGRATION_DATABASE_URL: "postgresql://migration_role:migration-secret@prod.example.invalid:5432/rupaykg",
   DATABASE_SSL: "require",
-  DATABASE_CA_CERT: "-----BEGIN CERTIFICATE-----\nproduction-test-ca\n-----END CERTIFICATE-----",
+  DATABASE_CA_CERT: "-----BEGIN CERTIFICATE----- 
+production-test-ca 
+-----END CERTIFICATE-----",
   RUPAYKG_ALLOWED_ORIGINS: "https://app.rupaykg.example",
   RUPAYKG_AUTH_MODE: "real",
 } as const;
@@ -49,7 +51,12 @@ describe("production configuration", () => {
     assert.throws(() => readProductionConfig({ ...valid, MIGRATION_DATABASE_URL: "postgresql://migration_role:secret@prod.example.invalid:5433/rupaykg" }), /same database host, port, and database name/);
   });
 
-  it("rejects connection-string TLS overrides so the explicit TLS policy cannot be replaced", () => {\n    assert.throws(() => readProductionConfig({ ...valid, DATABASE_URL: valid.DATABASE_URL + "?sslmode=disable" }), /remove sslmode from the database URL/);\n    assert.throws(() => readProductionConfig({ ...valid, MIGRATION_DATABASE_URL: valid.MIGRATION_DATABASE_URL + "?sslrootcert=%2Ftmp%2Fca.pem" }), /remove sslrootcert from the database URL/);\n  });\n\n  it("fails closed for local database targets", () => {
+  it("rejects connection-string TLS overrides so the explicit TLS policy cannot be replaced", () => { 
+    assert.throws(() => readProductionConfig({ ...valid, DATABASE_URL: valid.DATABASE_URL + "?sslmode=disable" }), /remove sslmode from the database URL/); 
+    assert.throws(() => readProductionConfig({ ...valid, MIGRATION_DATABASE_URL: valid.MIGRATION_DATABASE_URL + "?sslrootcert=%2Ftmp%2Fca.pem" }), /remove sslrootcert from the database URL/); 
+  }); 
+ 
+  it("fails closed for local database targets", () => {
     assert.throws(() => readProductionConfig({ ...valid, DATABASE_URL: "postgresql://localhost:5432/rupaykg" }), /must not target localhost/);
   });
 
