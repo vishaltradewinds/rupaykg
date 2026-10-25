@@ -40,6 +40,10 @@ test("field-sync conflict resolution is atomic and request-correlated", async ()
   assert.match(route, /for update of c/);
   assert.match(route, /update field_sync_conflicts/);
   assert.match(route, /set_config\('rupaykg\.request_id', \$1, true\)/);
+  assert.ok(
+    route.indexOf("set_config('rupaykg.request_id'") < route.indexOf("update field_sync_conflicts"),
+    "request correlation must be set before the database audit trigger fires",
+  );
   assert.doesNotMatch(route, /insert into audit_events/, "database trigger must remain the sole audit-event writer");
   assert.match(route, /await client\.query\("COMMIT"\)/);
   assert.match(route, /await client\.query\("ROLLBACK"\)/);
