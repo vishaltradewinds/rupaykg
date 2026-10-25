@@ -76,7 +76,7 @@ async function evidenceBindingValid(pool: Pool, organizationId: string, evidence
        where e.id=$2 and a.organization_id=$1
          and e.status='VERIFIED'
          and v.decision='APPROVED'
-         and (e.content_hash is not null or e.content_uri is not null)
+         and e.content_hash ~ '^[0-9a-f]{64}$'
          and a.geography_id is not null
          and organization_has_geography_scope(a.organization_id,a.geography_id)
      ) ok`,
