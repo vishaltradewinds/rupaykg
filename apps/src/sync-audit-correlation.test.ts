@@ -5,6 +5,7 @@ import test from "node:test";
 
 const routePath = fileURLToPath(new URL("../../../apps/src/sync-routes.ts", import.meta.url));
 const migrationPath = fileURLToPath(new URL("../../../migrations/20261028_field_sync_conflict_request_correlation.sql", import.meta.url));
+const mrvRoutePath = fileURLToPath(new URL("../../../apps/src/mrv-routes.ts", import.meta.url));
 
 test("field-device audit events carry request correlation IDs", async () => {
   const source = await readFile(routePath, "utf8");
@@ -108,4 +109,21 @@ test("all mutating field-device and field-sync routes fail closed without a requ
     assert.match(route, /requestIdOf\(request\)/);
     assert.match(route, /AUDIT_REQUEST_ID_REQUIRED/);
   }
+});
+
+test("MRV submission fails closed without request correlation before provider side effects", async () => {
+  const source = await readFile(mrvRoutePath, "utf8");
+  const routeStart = source.indexOf('app.post("/api/v1/mrv/activities/:activityId/submit"');
+  assert.notEqual(routeStart, -1, "MRV submission route must exist");
+  const routeEnd = source.indexOf("\n  });", routeStart);
+  assert.notEqual(routeEnd, -1, "MRV submission route must terminate");
+  const route = source.slice(routeStart, routeEnd);
+  assert.match(route, /AUDIT_REQUEST_ID_REQUIRED/);
+  assert.match(route, /requestId/);
+  assert.ok(
+    route.indexOf("AUDIT_REQUEST_ID_REQUIRED") < route.indexOf("executeGuardianMrv"),
+    "request correlation must be validated before external Guardian/Hedera side effects",
+  );
+  assert.match(route, /MRV_PROVENANCE_PERSISTED/);
+  assert.match(route, /provenance\.id, requestId/);
 });
