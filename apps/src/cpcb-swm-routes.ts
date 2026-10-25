@@ -190,6 +190,8 @@ export async function registerCpcbSwmRoutes(app: FastifyInstance, pool: Pool | n
 
   app.post("/api/v1/cpcb-swm/workspaces/:workspaceId/evidence", async (request, reply) => {
     const auth=await authFor(request as never,reply,pool); if(!auth||!pool)return;
+    const requestId=(request as never as Request).id;
+    if(typeof requestId!=="string"||!requestId.trim())return reply.code(503).send({error:"Request correlation ID unavailable; refusing unaudited evidence link",code:"AUDIT_REQUEST_ID_REQUIRED",syntheticData:false});
     const org=auth.activeOrganizationId,id=(request as never as Request).params.workspaceId??"",body=bodyOf(request as never),evidenceId=text(body,"evidenceId",64),checklistKey=text(body,"checklistKey",80);
     if(!org||!canActForOrganization(auth,org))return reply.code(403).send({error:"Organization forbidden",code:"ORG_FORBIDDEN"});
     if(!UUID.test(id))return reply.code(400).send({error:"Invalid workspace ID",code:"SWM_WORKSPACE_ID_INVALID"});
@@ -211,7 +213,7 @@ export async function registerCpcbSwmRoutes(app: FastifyInstance, pool: Pool | n
       const lr=await client.query("insert into cpcb_swm_workspace_evidence(workspace_id,organization_id,evidence_id,artifact_version_id,checklist_key,linked_by_identity_id) values($1,$2,$3,$4,$5,$6) on conflict(workspace_id,evidence_id,checklist_key) do nothing returning id",[id,org,evidenceId,e.version_id,checklistKey,auth.identityId]);
       const link=lr.rows[0] as {id:string}|undefined;
       if(!link){await client.query("rollback");return reply.code(409).send({error:"Evidence already linked to checklist item",code:"SWM_EVIDENCE_ALREADY_LINKED"});}
-      await writeAudit(client,auth.identityId,org,"CPCB_SWM_EVIDENCE_LINKED",link.id,{workspaceId:id,evidenceId,artifactVersionId:e.version_id,checklistKey,evidenceStatus:e.status,officialCpcbStatusChanged:false},(request as never as Request).id??"request-id-unavailable");
+      await writeAudit(client,auth.identityId,org,"CPCB_SWM_EVIDENCE_LINKED",link.id,{workspaceId:id,evidenceId,artifactVersionId:e.version_id,checklistKey,evidenceStatus:e.status,officialCpcbStatusChanged:false},requestId);
       await client.query("commit");
       return reply.code(201).send({source:"postgresql",syntheticData:false,evidenceLink:{id:link.id,workspaceId:id,evidenceId,artifactVersionId:e.version_id,checklistKey,evidenceStatus:e.status,verificationStatus:e.status==="VERIFIED"?"INDEPENDENTLY_REVIEWED":e.status==="REJECTED"?"REJECTED":"PENDING_REVIEW",officialCpcbStatus:"UNCHANGED"}});
     }catch(error){await client.query("rollback").catch(()=>undefined);request.log.error(error);return reply.code(503).send({error:"Evidence link unavailable",code:"SWM_EVIDENCE_LINK_UNAVAILABLE",syntheticData:false});}finally{client.release();}
