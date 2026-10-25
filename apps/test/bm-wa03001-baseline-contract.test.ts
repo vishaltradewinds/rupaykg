@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 
-const migrationPath = fileURLToPath(new URL("../../../migrations/20261023_bm_wa03001_baseline_records.sql", import.meta.url));
+const migrationPath = fileURLToPath(new URL("../../../migrations/20261030_bm_wa03001_baseline_records.sql", import.meta.url));
 const routePath = fileURLToPath(new URL("../../../apps/src/bm-wa03001-baseline-routes.ts", import.meta.url));
 const serverPath = fileURLToPath(new URL("../../../apps/src/server.ts", import.meta.url));
 
