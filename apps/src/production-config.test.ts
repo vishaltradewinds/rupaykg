@@ -49,7 +49,7 @@ describe("production configuration", () => {
     assert.throws(() => readProductionConfig({ ...valid, MIGRATION_DATABASE_URL: "postgresql://migration_role:secret@prod.example.invalid:5433/rupaykg" }), /same database host, port, and database name/);
   });
 
-  it("rejects connection-string TLS overrides so the explicit TLS policy cannot be replaced", () => {\n    assert.throws(() => readProductionConfig({ ...valid, DATABASE_URL: valid.DATABASE_URL + "&sslmode=disable" }), /remove sslmode from the database URL/);\n    assert.throws(() => readProductionConfig({ ...valid, MIGRATION_DATABASE_URL: valid.MIGRATION_DATABASE_URL + "?sslrootcert=%2Ftmp%2Fca.pem" }), /remove sslrootcert from the database URL/);\n  });\n\n  it("fails closed for local database targets", () => {
+  it("rejects connection-string TLS overrides so the explicit TLS policy cannot be replaced", () => {\n    assert.throws(() => readProductionConfig({ ...valid, DATABASE_URL: valid.DATABASE_URL + "?sslmode=disable" }), /remove sslmode from the database URL/);\n    assert.throws(() => readProductionConfig({ ...valid, MIGRATION_DATABASE_URL: valid.MIGRATION_DATABASE_URL + "?sslrootcert=%2Ftmp%2Fca.pem" }), /remove sslrootcert from the database URL/);\n  });\n\n  it("fails closed for local database targets", () => {
     assert.throws(() => readProductionConfig({ ...valid, DATABASE_URL: "postgresql://localhost:5432/rupaykg" }), /must not target localhost/);
   });
 
