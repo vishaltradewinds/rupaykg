@@ -1,3 +1,13 @@
+> **Latest evidence refresh — 2026-10-25 11:38 UTC (CI + read-only Render audit)**
+>
+> - PR #46 head `d675edbada6460b9626f09b9ca1af6f48e5c307a` passed exact-head CI run #40188872007: https://github.com/vishaltradewinds/rupaykg/actions/runs/40188872007. All workflow steps passed, including migration inventory/ledger verification, typecheck/build, browser smoke, full tests with disposable PostgreSQL migration-concurrency coverage, read-only audit-chain verification, disposable backup/restore verification, and production container build. This is engineering/CI evidence only.
+> - PR #46 remains open, draft, unmerged, and targets `main`. It contains the migration-lock changes and the inherited PR #44 production-configuration changes; it is not an isolated lock-only patch.
+> - Read-only Render metadata confirms web service `rupaykg` tracks `main`, auto-deploy is enabled, and latest live deploy is still `0ddcf6087620880e21ea60f954c9f05d6b759469` from 2026-10-20 10:08 UTC. The tested PR head is not deployed.
+> - Render Postgres `rupaykg-db` (`dpg-dakhdv95efls73e1974g-a`) remains suspended for billing and has a provider expiry timestamp of 2026-10-15. The service and database share a Render environment ID, but this does not prove the running service's actual connection URL points to that database. No resume, billing, or database operation was attempted.
+> - Read-only application logs for 2026-10-24 through 2026-10-25 show repeated `GET /health` responses with HTTP 200; the error/fatal-level log query returned zero entries. This is not a DB identity check or proof of end-to-end MRV readiness.
+> - No merge, production deployment, production SQL write/migration, environment-variable change, TLS relaxation, billing change, or database reactivation was performed.
+> - **Decision: PRODUCTION CERTIFICATION HOLD.** Remaining blockers include authoritative runtime/migration DB mapping and role verification, confirmed target schema/migration ledger/audit chain, production-grade recovery evidence, least-privilege runtime access, and real pilot/external Guardian-Hedera-Mirror Node acceptance.
+>
 > **Live status refresh — 2026-10-25 11:12 UTC (deployment and production-contract audit)**
 >
 > - Exact engineering head `ad31dfa4d877552ff91f9fa5e5b0614b4e7fcad7` passed CI run #2087: https://github.com/vishaltradewinds/rupaykg/actions/runs/40186716628. This covers the branch and disposable acceptance resources, not live production.
