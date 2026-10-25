@@ -127,7 +127,7 @@ export async function registerBmWa03001BaselineRoutes(app: FastifyInstance, pool
       return reply.code(400).send({ error: "baselinePeriod, non-negative baselineFch4Tch4 and 1-50 unique evidence UUIDs are required", code: "BASELINE_INPUTS_INVALID" });
     }
     try {
-      if (!await evidenceIsVerifiedForActivity(pool, activityId, evidenceIds as string[])) return reply.code(409).send({ error: "Every baseline evidence item must be VERIFIED, content-addressed, and belong to this activity", code: "BASELINE_EVIDENCE_NOT_VERIFIED" });
+      if (!await evidenceIsVerifiedForActivity(pool, activityId, evidenceIds as string[])) return reply.code(409).send({ error: "Every baseline evidence item must be VERIFIED with a valid SHA-256 content hash and belong to this activity", code: "BASELINE_EVIDENCE_NOT_VERIFIED" });
       const core = { activityId, organizationId, methodologyCode: "BM WA03.001", methodologyVersion: "1.0", baselineFch4Tch4: value, baselinePeriod, evidenceIds: [...(evidenceIds as string[])].sort(), submittedByIdentityId: auth.identityId };
       const recordSha256 = hash(core);
       const result = await pool.query(
@@ -173,7 +173,7 @@ export async function registerBmWa03001BaselineRoutes(app: FastifyInstance, pool
       if (!await hasOrganizationPermission(client, auth, row.organization_id, ["projects:verify", "VERIFY_EVIDENCE"])) { await client.query("rollback"); return reply.code(403).send({ error: "Independent verification permission required", code: "BASELINE_APPROVAL_FORBIDDEN" }); }
       if (row.status !== "SUBMITTED") { await client.query("rollback"); return reply.code(409).send({ error: "Only a SUBMITTED baseline can receive a decision", code: "BASELINE_ALREADY_DECIDED" }); }
       if (row.submitted_by_identity_id === auth.identityId) { await client.query("rollback"); return reply.code(403).send({ error: "Baseline submitter cannot approve or reject their own record", code: "BASELINE_SEPARATION_OF_DUTIES" }); }
-      if (!await evidenceIsVerifiedForActivity(client, row.activity_id, row.evidence_ids)) { await client.query("rollback"); return reply.code(409).send({ error: "Baseline evidence is no longer fully verified and content-addressed for this activity", code: "BASELINE_EVIDENCE_NOT_VERIFIED" }); }
+      if (!await evidenceIsVerifiedForActivity(client, row.activity_id, row.evidence_ids)) { await client.query("rollback"); return reply.code(409).send({ error: "Baseline evidence is no longer fully verified with a valid SHA-256 content hash for this activity", code: "BASELINE_EVIDENCE_NOT_VERIFIED" }); }
       const core = { activityId: row.activity_id, organizationId: row.organization_id, methodologyCode: row.methodology_code, methodologyVersion: row.methodology_version, baselineFch4Tch4: Number(row.baseline_fch4_tch4), baselinePeriod: row.baseline_period, evidenceIds: [...row.evidence_ids].sort(), submittedByIdentityId: row.submitted_by_identity_id };
       if (hash(core) !== row.record_sha256) { await client.query("rollback"); return reply.code(409).send({ error: "Baseline record integrity hash mismatch", code: "BASELINE_HASH_MISMATCH" }); }
       const updated = await client.query(
