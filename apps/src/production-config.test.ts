@@ -62,6 +62,17 @@ describe("production configuration", () => {
     assert.throws(() => readProductionConfig({ ...valid, DATABASE_SSL: "false" }), /DATABASE_SSL must be require/);
   });
 
+  it("never disables TLS for a Render private PostgreSQL hostname", () => {
+    const config = readProductionConfig({
+      ...valid,
+      DATABASE_URL: "postgresql://runtime_role:runtime-secret@dpg-test-private-a:5432/rupaykg",
+      MIGRATION_DATABASE_URL: "postgresql://migration_role:migration-secret@dpg-test-private-a:5432/rupaykg",
+      DATABASE_SSL: "require",
+    });
+    assert.equal(config.databaseSsl, "require");
+    assert.equal(config.databaseCaCert, valid.DATABASE_CA_CERT);
+  });
+
   it("requires a production CA certificate for PostgreSQL TLS", () => {
     assert.throws(() => readProductionConfig({ ...valid, DATABASE_URL: "postgresql://runtime_role:runtime-secret@prod.example.invalid:5432/rupaykg", DATABASE_CA_CERT: "" }), /DATABASE_CA_CERT must contain a PEM certificate/);
   });
