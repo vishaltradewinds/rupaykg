@@ -1,12 +1,14 @@
 # RupayKg Production Readiness Gate - 2026-10-24
 
-> **Live status refresh — 2026-10-25 07:42 UTC**
+> **Live status refresh — 2026-10-25 07:50 UTC**
 >
-> - Current PR #44 head: `ca924589bada2f402ab4e81ffe3b41a44dd0c8fc`.
-> - Exact-head CI run #2026: **SUCCESS** — https://github.com/vishaltradewinds/rupaykg/actions/runs/40173636785. All configured steps passed, including dependency audit, migration validation and state verification, typecheck/build, browser smoke, isolated PostgreSQL integration tests, read-only audit-chain verification, disposable backup/restore verification, and production-container build.
-> - This CI pass validates the tested branch commit only. It does not prove the live service's database mapping, production backup/restore, live Guardian/Hedera acceptance, or production certification.
-> - Render metadata rechecked 2026-10-25: web service `rupaykg` is not suspended and tracks `main` with auto-deploy enabled; Render Postgres `rupaykg-db` remains suspended for billing. Therefore do not assume that suspended Render Postgres is the active database, and do not infer the live target from database names alone.
-> - Guardian acceptance seed now requires an explicit non-empty `GUARDIAN_MRV_POLICY_ID` before opening its database pool; the plausible-looking fallback was removed and regression coverage added.
+> - Current PR #44 head: `7f9aa7db951d88bea954e7d16eafc8f8c82f19c2`.
+> - Exact-head GitHub Actions CI run #2027: **SUCCESS** — https://github.com/vishaltradewinds/rupaykg/actions/runs/40173875619 (completed 2026-10-25 07:45:50 UTC). This run includes the latest documentation-only refresh and the exact branch head.
+> - The prior code-bearing head `ca924589bada2f402ab4e81ffe3b41a44dd0c8fc` also passed CI run #2026. No application-code changes were made after that code commit; the current head adds readiness evidence documentation.
+> - CI validates the tested branch commit only. It does not prove the live service's database mapping, production backup/restore, live Guardian/Hedera acceptance, or production certification.
+> - Render metadata rechecked 2026-10-25: web service `rupaykg` is not suspended and tracks `main` with auto-deploy enabled; Render Postgres `rupaykg-db` remains suspended for billing. The latest listed live deploy remains `0ddcf6087620880e21ea60f954c9f05d6b759469` from 2026-10-20. Do not assume the suspended Render Postgres is the active database, and do not infer the live target from database names alone.
+> - Read-only Render app logs show successful `GET /health` requests returning HTTP 200 on 2026-10-24. They do not expose a conclusive database target or prove pilot readiness.
+> - Guardian acceptance seed requires an explicit non-empty `GUARDIAN_MRV_POLICY_ID` before opening its database pool; the plausible-looking fallback was removed and regression coverage added.
 > - PR #44 remains **open, draft, and unmerged**. Production certification remains **HOLD**. No production migration, data mutation, provider setting change, billing change, deployment, or live Guardian/Hedera submission was performed.
 >
 ## AIM
