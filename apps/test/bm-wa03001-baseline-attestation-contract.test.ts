@@ -15,7 +15,17 @@ test("baseline attestation bridge is signed, approved-only, scoped and fail-clos
   assert.match(route, /baseline\.status !== "APPROVED"/);
   assert.match(route, /BASELINE_HASH_MISMATCH/);
   assert.match(route, /status='VERIFIED'/);
-  assert.match(route, /content_hash is not null or content_uri is not null/);
+  assert.ok(route.includes("content_hash ~ '^[0-9a-f]{64}
+  assert.match(route, /guardian:write/);
+  assert.match(route, /projects:verify/);
+  assert.match(route, /signBaselineAttestation/);
+  assert.match(route, /\.well-known\/rupaykg-baseline-jwks\.json/);
+  assert.match(route, /not a carbon-credit credential/);
+  assert.match(migration, /unique references bm_wa03001_baseline_records/);
+  assert.match(migration, /before update or delete/);
+  assert.match(migration, /append-only/);
+});
+"));
   assert.match(route, /guardian:write/);
   assert.match(route, /projects:verify/);
   assert.match(route, /signBaselineAttestation/);
