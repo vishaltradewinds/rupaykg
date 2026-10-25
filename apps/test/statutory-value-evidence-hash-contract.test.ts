@@ -18,3 +18,10 @@ test("value calculations and EPR credit eligibility require hash-valid evidence"
   assert.ok(route.includes("!evidenceRow.content_hash || !/^[0-9a-f]{64}$/.test(evidenceRow.content_hash)"));
   assert.doesNotMatch(route, /content_hash is not null or e\.content_uri is not null/i);
 });
+
+// ESG metrics are also evidence-bound and must not accept URI-only or malformed hashes.
+test("ESG metric recording rejects evidence without a valid SHA-256 hash", async () => {
+  const route = await read("apps/src/value-routes.ts");
+  assert.match(route, /ESG metric evidence must be VERIFIED with a valid SHA-256 content hash/);
+  assert.match(route, /select e\.activity_id, e\.status, e\.content_hash from evidence/);
+});
