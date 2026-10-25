@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 const routePath = fileURLToPath(new URL("../../../apps/src/sync-routes.ts", import.meta.url));
+const migrationPath = fileURLToPath(new URL("../../../migrations/20261028_field_sync_conflict_request_correlation.sql", import.meta.url));
 
 test("field-device audit events carry request correlation IDs", async () => {
   const source = await readFile(routePath, "utf8");
@@ -38,8 +39,13 @@ test("field-sync conflict resolution is atomic and request-correlated", async ()
   assert.match(route, /await client\.query\("BEGIN"\)/);
   assert.match(route, /for update of c/);
   assert.match(route, /update field_sync_conflicts/);
-  assert.match(route, /insert into audit_events[\s\S]*?request_id[\s\S]*?FIELD_SYNC_CONFLICT_RESOLVED/);
-  assert.match(route, /\[auth\.identityId, conflict\.organization_id, conflictId, request\.id,/);
+  assert.match(route, /set_config\('rupaykg\.request_id', \$1, true\)/);
+  assert.doesNotMatch(route, /insert into audit_events/, "database trigger must remain the sole audit-event writer");
   assert.match(route, /await client\.query\("COMMIT"\)/);
   assert.match(route, /await client\.query\("ROLLBACK"\)/);
+
+  const migration = await readFile(migrationPath, "utf8");
+  assert.match(migration, /request_id,[\s\S]*?event_hash/);
+  assert.match(migration, /nullif\(current_setting\('rupaykg\.request_id', true\), ''\)/);
+  assert.match(migration, /FIELD_SYNC_CONFLICT_RESOLVED/);
 });
