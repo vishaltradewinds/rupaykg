@@ -44,7 +44,7 @@ test("migration inventory accepts preserved identities and fresh unique versions
 test("runner checks all migration filename conflicts before the first migration can apply", () => {
   const source = readFileSync(fileURLToPath(new URL("../../src/migrate.ts", import.meta.url)), "utf8");
   const preflight = source.indexOf("if (conflicts.length > 0)");
-  const firstMigrationLoop = source.indexOf("for (const filename of files)");
+  const firstMigrationApply = source.indexOf("const sql = await readFile(path.join(migrationDir, filename)");
   assert.ok(preflight >= 0, "runner must reject detected conflicts");
-  assert.ok(firstMigrationLoop > preflight, "the complete conflict preflight must precede migration application");
+  assert.ok(firstMigrationApply > preflight, "the complete conflict preflight must precede migration application");
 });
