@@ -19,8 +19,10 @@ if (process.env.NODE_ENV === "production") {
 
 const databaseUrl = process.env.DATABASE_URL;
 const sessionToken = process.env.RUPAYKG_ACCEPTANCE_SESSION_TOKEN;
+const guardianPolicyId = process.env.GUARDIAN_MRV_POLICY_ID?.trim();
 if (!databaseUrl) throw new Error("DATABASE_URL is required for acceptance seed");
 if (!sessionToken) throw new Error("RUPAYKG_ACCEPTANCE_SESSION_TOKEN is required for acceptance seed");
+if (!guardianPolicyId) throw new Error("GUARDIAN_MRV_POLICY_ID is required; refusing to emit an unverified Guardian policy fallback");
 
 const pool = new Pool({
   connectionString: databaseUrl,
@@ -226,7 +228,7 @@ try {
     activityId,
     verificationId,
     evidenceId,
-    guardianPolicyId: process.env.GUARDIAN_MRV_POLICY_ID || "rupaykg:guardian-mrv:v1",
+    guardianPolicyId,
     methodologyCode: "WA03.001",
   }));
 } catch (error) {
