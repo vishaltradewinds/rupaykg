@@ -67,3 +67,22 @@ test("authoritative field-sync application is request-correlated and atomic", as
   assert.match(route, /await client\.query\("COMMIT"\)/);
   assert.match(route, /await client\.query\("ROLLBACK"\)/);
 });
+
+test("field-sync intake and sequence conflicts are request-correlated", async () => {
+  const source = await readFile(routePath, "utf8");
+  assert.match(source, /FIELD_SYNC_ENVELOPE_RECEIVED/);
+  assert.match(source, /device\.organization_id, insertedRow\.id, request\.id/);
+  assert.match(source, /FIELD_SYNC_SEQUENCE_CONFLICT/);
+  assert.match(source, /device\.organization_id, conflictRow\.id, request\.id/);
+  assert.match(source, /payloadHash: hash/);
+  assert.match(source, /organization_id is not null/);
+  const intakeStart = source.indexOf('app.post("/api/v1/field-sync/envelopes"');
+  const intakeEnd = source.indexOf('app.post("/api/v1/field-sync/envelopes/:envelopeId/apply"');
+  assert.ok(intakeStart >= 0 && intakeEnd > intakeStart, "intake route must exist");
+  const intake = source.slice(intakeStart, intakeEnd);
+  assert.match(intake, /await client\.query\("BEGIN"\)/);
+  assert.match(intake, /FIELD_SYNC_ENVELOPE_RECEIVED/);
+  assert.match(intake, /FIELD_SYNC_SEQUENCE_CONFLICT/);
+  assert.match(intake, /await client\.query\("COMMIT"\)/);
+  assert.match(intake, /await client\.query\("ROLLBACK"\)/);
+});
