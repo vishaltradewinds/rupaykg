@@ -14,6 +14,7 @@ import { registerBwgRoutes } from "./bwg-routes.js";
 import { registerCpcbSwmRoutes } from "./cpcb-swm-routes.js";
 import { registerIntelligenceRoutes } from "./intelligence-routes.js";
 import { registerMrvRoutes } from "./mrv-routes.js";
+import { registerMrvInstrumentRoutes } from "./mrv-instrument-routes.js";
 import { registerEvidenceVaultRoutes } from "./evidence-vault-routes.js";
 import { registerPlatformAdminRoutes } from "./platform-admin-routes.js";
 
@@ -99,6 +100,7 @@ await registerBwgRoutes(app, pool);
 await registerCpcbSwmRoutes(app, pool);
 await registerIntelligenceRoutes(app, pool);
 await registerMrvRoutes(app, pool);
+await registerMrvInstrumentRoutes(app, pool);
 await registerEvidenceVaultRoutes(app, pool);
 await registerPlatformAdminRoutes(app, pool);
 

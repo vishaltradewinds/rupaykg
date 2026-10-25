@@ -4,6 +4,7 @@ import { authenticate, canActForOrganization, hasOrganizationPermission, type Au
 import { executeGuardianMrv, guardianStatus } from "./guardian-mrv.js";
 import { hederaStatus, integrityHash, submitHcsAnchor, verifyHcsMessage } from "./hedera-anchor.js";
 import { registerStatutoryRoutes } from "./statutory-routes.js";
+import { instrumentApprovalFailure, type MrvInstrumentApprovalEvidence } from "./mrv-instrument-approval.js";
 
 type Reply = { code: (status: number) => { send: (body: unknown) => unknown } };
 type Request = { body: unknown; params: Record<string, string>; log: { error: (error: unknown) => void } };
@@ -105,6 +106,21 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
       if (row.activity_status !== "COMPLETED" || row.decision !== "APPROVED" || row.evidence_status !== "VERIFIED" || row.evidence_activity_id !== activityId) return reply.code(409).send({ error: "Completed activity, approved verification and VERIFIED evidence are required before Guardian MRV", code: "MRV_PRECONDITION_FAILED" });
 
       const observations = await pool.query("select id, parameter_code, observed_value, unit, method, instrument_id, observed_at, uncertainty, quality_status, metadata from mrv_observations where activity_id=$1 order by observed_at", [activityId]);
+      const instrumentCodes = [...new Set(observations.rows.map((observation) => typeof observation.instrument_id === "string" ? observation.instrument_id.trim() : "").filter(Boolean))];
+      const registeredInstruments = instrumentCodes.length
+        ? await pool.query<MrvInstrumentApprovalEvidence>(
+            "select instrument_code,approval_status,meity_certificate_id,meity_issuer,meity_certificate_scope,meity_verification_url,meity_evidence_reference,meity_evidence_sha256,meity_verified_at,meity_validity_basis,meity_valid_until,calibration_required,calibration_status,calibration_certificate_id,calibration_evidence_reference,calibration_evidence_sha256,calibration_lab,calibration_traceability,calibration_uncertainty,calibration_valid_until,calibration_not_required_reason,firmware_version,firmware_support_until,security_review_status,security_evidence_reference,security_evidence_sha256,security_reviewed_at,security_not_applicable_reason from mrv_instruments where organization_id=$1 and instrument_code=any($2::text[])",
+            [row.organization_id, instrumentCodes],
+          )
+        : { rows: [] as MrvInstrumentApprovalEvidence[] };
+      const instrumentFailure = instrumentApprovalFailure(
+        methodologyCode,
+        observations.rows.map((observation) => ({ instrument_id: typeof observation.instrument_id === "string" ? observation.instrument_id : null, parameter_code: typeof observation.parameter_code === "string" ? observation.parameter_code : null })),
+        registeredInstruments.rows,
+      );
+      if (instrumentFailure) {
+        return reply.code(409).send({ error: instrumentFailure, code: "MRV_INSTRUMENT_APPROVAL_REQUIRED", eligibleForRegistry: false, syntheticData: false });
+      }
       const evidence = await pool.query("select id, evidence_type, content_uri, content_hash, captured_at, status, metadata from evidence where activity_id=$1 order by captured_at", [activityId]);
       const quantityRow = await pool.query<{ value: string | null; unit: string | null }>("select value::text value, unit from measurements where activity_id=$1 order by measured_at desc limit 1", [activityId]);
       const quantity = quantityRow.rows[0]?.value ? Number(quantityRow.rows[0].value) : undefined;
