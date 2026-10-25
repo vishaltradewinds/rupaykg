@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
 import { readProductionConfig } from "./production-config.js";
+import { findMigrationFilenameConflicts } from "./migration-inventory.js";
 
 // Validate the complete production contract before any database connection or DDL.
 const productionConfig = process.env.NODE_ENV === "production" ? readProductionConfig() : null;
@@ -42,14 +43,7 @@ try {
   const appliedResult = await pool.query<{ version: string; filename: string }>(
     "select version, filename from schema_migrations",
   );
-  const applied = new Map(appliedResult.rows.map((row) => [row.version, row.filename]));
-  const conflicts = files.flatMap((filename) => {
-    const version = filename.split("_", 1)[0]!;
-    const recorded = applied.get(version);
-    return recorded && recorded !== filename
-      ? [{ version, recorded, expected: filename }]
-      : [];
-  });
+  const conflicts = findMigrationFilenameConflicts(files, appliedResult.rows);
   if (conflicts.length > 0) {
     const details = conflicts
       .map(({ version, recorded, expected }) => `${version}: recorded ${recorded}; repository has ${expected}`)
