@@ -2,7 +2,7 @@ import { readdir, readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { Pool } from "pg";
+import { Pool, type PoolClient } from "pg";
 import { readProductionConfig } from "./production-config.js";
 import { findMigrationFilenameConflicts } from "./migration-inventory.js";
 
@@ -16,9 +16,19 @@ const ssl = databaseSsl === "false"
   ? false
   : { rejectUnauthorized: true, ...(databaseCaCert ? { ca: databaseCaCert } : {}) };
 
-const pool = new Pool({ connectionString: databaseUrl, max: 1, ssl });
+// A dedicated session holds the advisory lock while the pool executes migration SQL.
+const pool = new Pool({ connectionString: databaseUrl, max: 2, ssl });
+const MIGRATION_LOCK_SQL = "select pg_advisory_lock(hashtext('rupaykg:migration-runner'))";
+const MIGRATION_UNLOCK_SQL = "select pg_advisory_unlock(hashtext('rupaykg:migration-runner'))";
+let lockClient: PoolClient | null = null;
+let lockAcquired = false;
 
 try {
+  lockClient = await pool.connect();
+  // Serialize preflight and all DDL across simultaneous application startups.
+  await lockClient.query(MIGRATION_LOCK_SQL);
+  lockAcquired = true;
+
   // Resolve and validate the complete local migration inventory before any DDL.
   const here = path.dirname(fileURLToPath(import.meta.url));
   const candidates = [path.resolve(here, "../../migrations"), path.resolve(here, "../../../migrations")];
@@ -93,5 +103,12 @@ try {
 
   console.log(`Database migrations are current (${files.length} files).`);
 } finally {
-  await pool.end();
+  try {
+    if (lockClient && lockAcquired) {
+      await lockClient.query(MIGRATION_UNLOCK_SQL);
+    }
+  } finally {
+    lockClient?.release();
+    await pool.end();
+  }
 }
