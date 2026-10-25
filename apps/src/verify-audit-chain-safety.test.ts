@@ -58,3 +58,13 @@ test("migration-state verifier reports sanitized connection identity and TLS wit
   assert.match(migrationVerifierSource, /do not independently prove cloud project\/branch identity/);
   assert.doesNotMatch(migrationVerifierSource, /password\s*:/i);
 });
+
+const auditTimestampMigration = readFileSync(fileURLToPath(new URL("../../../migrations/20261036_audit_chain_server_timestamp.sql", import.meta.url)), "utf8");
+
+test("audit-chain trigger overwrites caller-supplied timestamps before hashing", () => {
+  assert.match(auditTimestampMigration, /new\.created_at := clock_timestamp\(\);/);
+  assert.doesNotMatch(auditTimestampMigration, /new\.created_at := coalesce\(/i);
+  assert.match(auditTimestampMigration, /security definer/i);
+  assert.match(auditTimestampMigration, /set search_path = pg_catalog, public/i);
+  assert.ok(auditTimestampMigration.indexOf("new.created_at := clock_timestamp();") < auditTimestampMigration.indexOf("'created_at', to_char(new.created_at"));
+});
