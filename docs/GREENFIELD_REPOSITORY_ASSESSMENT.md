@@ -41,7 +41,19 @@ The seed's PostgreSQL client also disables TLS certificate validation when SSL i
 3. Inspect the exact current deployed image/commit and authorized environment metadata before claiming exposure or applying any change.
 4. Verify target database identity, data inventory, retention decisions, and backup/restore readiness before any data movement.
 
-## 4. Greenfield classification
+## 4. Authorized Render metadata checked on 2026-10-26
+
+The connected Render account metadata was read for the existing service and named database. No environment-variable values, credentials, or connection strings were retrieved.
+
+| Resource | Observed metadata | Consequence |
+|---|---|---|
+| Web service `rupaykg` (`srv-daki4d7qj5pc73b8qksg`) | Active/not suspended; follows `main`; Docker runtime; auto-deploy enabled; public URL `https://rupaykg.onrender.com`; metadata last updated 2026-10-20; IP allowlist `0.0.0.0/0`. | The service exists and is configured for public access. This does not prove its current runtime health, the exact deployed image behavior, or which database it uses. |
+| PostgreSQL `rupaykg-db` (`dpg-dakhdv95efls73e1974g-a`) | Suspended by billing; free plan; region Singapore; metadata reports expiry `2026-10-15T09:59:25.074303Z`; IP allowlist `0.0.0.0/0`. | Do not reactivate it or run SQL/migrations without explicit authorization and a confirmed retention/recovery decision. Its actual data contents and whether it is the service's active database target are unverified. |
+| Service environment | Service and database metadata share environment ID `evm-dakhdv15efls73e196u0`. | Shared environment membership is not proof that `DATABASE_URL` or `MIGRATION_DATABASE_URL` targets this database. |
+
+**Required next evidence:** an authorized operator should inspect the effective database target in Render and report only sanitized identifiers (provider/project, hostname, database name, role, TLS mode). Do not disclose passwords, complete URLs, tokens, private keys, or certificate contents. Separately confirm the database's retention/expiry status, backup availability, and tested restore path. Until then, source inventory and data migration remain blocked. No database was queried or changed during this metadata check.
+
+## 5. Greenfield classification
 
 The existing codebase is an implementation candidate, not the target specification. No blanket decision to preserve or discard the current schema is justified yet.
 
@@ -55,7 +67,7 @@ Use these labels during the full repository mapping:
 
 The next audit should inventory API routes, domain packages, database tables and triggers, permissions/tenant boundaries, UI journeys, tests, external integrations, device paths, deployment workflows, and regulatory source records against the greenfield baseline.
 
-## 5. Required gates before merge or production action
+## 6. Required gates before merge or production action
 
 - [ ] Review the greenfield baseline and repository assessment.
 - [ ] Trace all runtime startup paths, including Docker, workspace scripts, Render/build start commands, and any release hooks.
@@ -67,6 +79,6 @@ The next audit should inventory API routes, domain packages, database tables and
 - [ ] Complete independent security and compliance reviews.
 - [ ] Keep production certification OFF/HOLD until all applicable Shakti gates are evidenced and approved.
 
-## 6. Evidence limits
+## 7. Evidence limits
 
 This review did not connect to a database, run application tests locally, inspect secrets, verify the live database target, validate any MeitY device approval, exercise a real hardware integration, or establish legal/scheme approval. It did not change runtime code, production configuration, billing, networking, data, or certification state.
