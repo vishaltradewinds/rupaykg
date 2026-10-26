@@ -54,6 +54,31 @@ function canonical(value: unknown): string {
   return `{${keys.map(key => `${JSON.stringify(key)}:${canonical(object[key])}`).join(",")}}`;
 }
 
+/**
+ * Only anchor an activity quantity when a methodology-specific parameter code is explicit
+ * and exactly one already-validated observation matches it. No configured mapping means
+ * quantity/unit are omitted rather than inferred from an arbitrary latest measurement.
+ */
+export function explicitAnchorQuantity(
+  observations: unknown[],
+  quantityParameterCode?: string | null,
+): { quantity?: number; unit?: string } {
+  const target = quantityParameterCode?.trim().toLowerCase();
+  if (!target) return {};
+  const matches = observations.filter((value): value is Record<string, unknown> => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+    const row = value as Record<string, unknown>;
+    return typeof row.parameter_code === "string"
+      && row.parameter_code.trim().toLowerCase() === target;
+  });
+  if (matches.length !== 1) return {};
+  const row = matches[0]!;
+  const quantity = row.observed_value === null || row.observed_value === undefined ? Number.NaN : Number(row.observed_value);
+  const unit = typeof row.unit === "string" ? row.unit.trim() : "";
+  if (!Number.isFinite(quantity) || !unit) return {};
+  return { quantity, unit };
+}
+
 export function integrityHash(payload: AnchorPayload): string {
   return crypto.createHash("sha256").update(canonical(payload)).digest("hex");
 }
