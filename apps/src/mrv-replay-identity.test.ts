@@ -46,7 +46,7 @@ test("MRV observation identity includes quality status and canonicalized metadat
     metadata: { details: { a: 2, z: 1 }, source: "edge" },
   }];
   const changedQuality = [{ ...baseline[0], quality_status: "REJECTED" }];
-  const changedMetadata = [{ ...baseline[0], metadata: { ...baseline[0].metadata, source: "manual-override" } }];
+  const changedMetadata = [{ ...baseline[0]!, metadata: { source: "manual-override", details: { z: 1, a: 2 } } }];
   assert.equal(mrvObservationSetHash(baseline), mrvObservationSetHash(reorderedMetadata));
   assert.notEqual(mrvObservationSetHash(baseline), mrvObservationSetHash(changedQuality));
   assert.notEqual(mrvObservationSetHash(baseline), mrvObservationSetHash(changedMetadata));
