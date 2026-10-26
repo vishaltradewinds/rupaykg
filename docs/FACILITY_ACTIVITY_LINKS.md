@@ -17,5 +17,8 @@ The facility registry identifies operating locations; activities remain the auth
 - Link review events are append-only.
 - No legacy activity is backfilled. Uncertain ownership remains unassigned until a human with authority provides evidence and requests the link.
 
+## Resource-flow endpoint association
+The follow-on migration adds optional `source_facility_id` and `destination_facility_id` references to resource flows. Existing flows remain nullable/unassigned; no historical facility is inferred. When an endpoint is supplied, both API and database checks require the facility to be ACTIVE, belong to the flow organization, and match the exact source/destination geography. This associates a declared flow with operating sites; it does not by itself prove physical custody transfer, weighbridge accuracy, transport completion, or material receipt.
+
 ## Limitations and next gate
-This slice does not yet link resource-flow source/destination facilities, certify custody transfer, or determine methodology applicability. Those are separate additive work items requiring schema mapping, authorization, idempotency, reconciliation and regression tests. No hardware qualification, MeitY approval, statutory permit, MRV eligibility, production certification or deployment is implied.
+This slice does not yet certify custody transfer or determine methodology applicability. Further work must cover transport handoffs, custody reconciliation, idempotency/offline replay, evidence lineage and method-specific MRV controls. No hardware qualification, MeitY approval, statutory permit, MRV eligibility, production certification or deployment is implied.
