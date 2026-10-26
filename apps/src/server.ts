@@ -17,6 +17,7 @@ import { registerMrvRoutes } from "./mrv-routes.js";
 import { registerEvidenceVaultRoutes } from "./evidence-vault-routes.js";
 import { registerPlatformAdminRoutes } from "./platform-admin-routes.js";
 import { registerFacilityRoutes } from "./facility-routes.js";
+import { registerFacilityActivityLinkRoutes } from "./facility-activity-link-routes.js";
 
 const app = Fastify({ logger: true });
 const allowedOrigins = process.env.RUPAYKG_ALLOWED_ORIGINS?.split(",").map(origin => origin.trim()).filter(Boolean) ?? [];
@@ -93,6 +94,7 @@ app.post("/api/v1/activities/:activityId/measurements", async (request, reply) =
 
 await registerOnboardingHierarchyRoutes(app, pool);
 await registerFacilityRoutes(app, pool);
+await registerFacilityActivityLinkRoutes(app, pool);
 await registerValueRoutes(app, pool);
 await registerRegistryRoutes(app, pool);
 await registerSyncRoutes(app, pool);
