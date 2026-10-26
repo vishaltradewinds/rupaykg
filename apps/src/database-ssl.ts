@@ -45,3 +45,34 @@ export function readDatabaseSslSetting(env: NodeJS.ProcessEnv = process.env): Da
   }
   throw new Error("DATABASE_CA_CERT must contain a PEM certificate when DATABASE_SSL=require");
 }
+
+/**
+ * Return a sanitized connection string plus the single authoritative TLS
+ * configuration. node-postgres may otherwise let SSL query parameters in the
+ * URL override the explicitly supplied SSL object.
+ */
+export function readDatabaseConnectionOptions(env: NodeJS.ProcessEnv = process.env): {
+  connectionString: string;
+  ssl: DatabaseSslSetting;
+} {
+  const connectionString = env.DATABASE_URL;
+  if (!connectionString) throw new Error("DATABASE_URL is required");
+  const parsed = new URL(connectionString);
+  const ssl = readDatabaseSslSetting(env);
+  for (const key of [
+    "sslmode",
+    "sslrootcert",
+    "sslcert",
+    "sslkey",
+    "sslpassword",
+    "sslcrl",
+    "sslcrldir",
+    "sslsni",
+    "sslnegotiation",
+    "ssl_min_protocol_version",
+    "ssl_max_protocol_version",
+  ]) {
+    parsed.searchParams.delete(key);
+  }
+  return { connectionString: parsed.toString(), ssl };
+}
