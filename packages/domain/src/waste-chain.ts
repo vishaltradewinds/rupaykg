@@ -51,11 +51,11 @@ export const WASTE_STREAM_FAMILIES = [
 export type WasteStreamFamily = (typeof WASTE_STREAM_FAMILIES)[number];
 
 export type WasteTaxonomyRecord = {
-  code: WasteStreamFamily;
-  label: string;
-  examples: readonly string[];
-  taxonomyVersion: "IN-WASTE-1.0";
-  legalApplicability: "MUST_BE_ASSESSED";
+  readonly code: WasteStreamFamily;
+  readonly label: string;
+  readonly examples: readonly string[];
+  readonly taxonomyVersion: "IN-WASTE-1.0";
+  readonly legalApplicability: "MUST_BE_ASSESSED";
 };
 
 export const WASTE_TAXONOMY: readonly WasteTaxonomyRecord[] = [
