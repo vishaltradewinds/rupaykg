@@ -31,9 +31,8 @@ alter table chain_of_custody_links
     'COLLECTOR_RECEIPT',
     'AGGREGATOR_HANDOVER',
     'TRANSPORTER_ACCEPTANCE',
-    'TRANSPORT_DEPARTURE',
+    'TRANSPORT_DISPATCH',
     'TRANSPORT_CHECKPOINT',
-    'TRANSPORT_ARRIVAL',
     'PROCESSOR_RECEIPT',
     'PARTIAL_ACCEPTANCE',
     'REJECTION',
@@ -63,7 +62,7 @@ alter table chain_of_custody_links
       )
       and (
         event_type not in ('GENERATOR_HANDOVER','COLLECTOR_RECEIPT','AGGREGATOR_HANDOVER',
-          'TRANSPORTER_ACCEPTANCE','TRANSPORT_DEPARTURE','TRANSPORT_ARRIVAL',
+          'TRANSPORTER_ACCEPTANCE','TRANSPORT_DISPATCH',
           'PROCESSOR_RECEIPT','PARTIAL_ACCEPTANCE','REJECTION','QUANTITY_DISPUTE')
         or counterparty_organization_id is not null
       )
