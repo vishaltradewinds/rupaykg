@@ -56,6 +56,16 @@ export async function persistWasteCustodyEvent(
   if (!fromGeographyId && !toGeographyId) {
     throw fail("CUSTODY_GEOGRAPHY_REQUIRED", "At least one source or destination geography is required for custody provenance");
   }
+  const suppliedGeographies = [fromGeographyId, toGeographyId].filter((id): id is string => Boolean(id));
+  if (suppliedGeographies.length) {
+    const existingGeographies = await client.query<{ id: string }>(
+      "select id from geography where id = any($1::uuid[])",
+      [suppliedGeographies],
+    );
+    if (existingGeographies.rows.length !== suppliedGeographies.length) {
+      throw fail("CUSTODY_GEOGRAPHY_INVALID", "Every custody geography reference must exist");
+    }
+  }
   for (const geographyId of [fromGeographyId, toGeographyId]) {
     if (!geographyId) continue;
     const scoped = await client.query<{ ok: boolean }>(
@@ -291,7 +301,7 @@ export async function registerWasteCustodyRoutes(app: FastifyInstance, pool: Poo
       await client.query("rollback");
       const code = (error as { code?: string }).code ?? "CUSTODY_EVENT_FAILED";
       const message = (error as Error).message;
-      if (code === "OPERATION_FORBIDDEN" || code === "CUSTODY_PARTICIPANT_OUT_OF_CHAIN") return reply.code(403).send({ error: message, code });
+      if (code === "OPERATION_FORBIDDEN" || code === "CUSTODY_PARTICIPANT_OUT_OF_CHAIN" || code === "CUSTODY_EVIDENCE_SCOPE_INVALID") return reply.code(403).send({ error: message, code });
       if (code === "RESOURCE_FLOW_NOT_FOUND") return reply.code(404).send({ error: message, code });
       if (code === "IDEMPOTENCY_CONFLICT") return reply.code(409).send({ error: message, code });
       if (code.startsWith("CUSTODY_") || code.startsWith("INVALID_")) return reply.code(400).send({ error: message, code });
