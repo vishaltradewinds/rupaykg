@@ -197,3 +197,16 @@ Support English and configurable Indian-language labels, low bandwidth, small sc
 - Production hosting/database identity, recovery rehearsal and release approval.
 
 **Release posture:** engineering specification only. This document does not verify any participant or confer statutory registration, certificate, EPR credit, carbon credit, hardware approval or production readiness.
+
+
+## 12. Existing architecture reuse — required before coding
+
+The source audit is in [PAN_INDIA_WASTE_CHAIN_ARCHITECTURE_AUDIT.md](PAN_INDIA_WASTE_CHAIN_ARCHITECTURE_AUDIT.md). It confirms that RupayKg already has canonical organisations/identities/geography, hierarchical stakeholder applications, regulatory source/requirement catalogs, EPR scheme/obligation workflows, BWG/SWM preparation workspaces, and resource-flow/custody tables. Therefore the implementation must extend those components rather than introduce duplicate organisations, onboarding, compliance catalogs or waste ledgers.
+
+In particular:
+- Map the existing resource_flows and chain_of_custody_links writers/readers before deciding whether any new table is necessary.
+- Keep BWG preparation/status tracking separate from official CPCB application/decision status.
+- Treat existing collector-transporter and processor workspace types as a starting point only; define distinct operational permissions and scoped workflows without automatically granting legal authority.
+- Reconcile regulatory_sources, regulatory_requirements, epr_schemes and existing applicability controls before adding any catalogue.
+- Trace field-sync and MRV/evidence contracts before connecting new custody events to authoritative MRV.
+- PR #51 contains proposed MRV hardening but is currently unmerged; do not rely on it as a main-branch or production capability.
