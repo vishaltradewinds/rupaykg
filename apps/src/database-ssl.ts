@@ -2,14 +2,45 @@ import type { ConnectionOptions } from "node:tls";
 
 export type DatabaseSslSetting = false | (ConnectionOptions & { rejectUnauthorized: true });
 
+function legacyIpv4Number(part: string): number | null {
+  if (/^0x[0-9a-f]+$/i.test(part)) return Number.parseInt(part.slice(2), 16);
+  if (/^0[0-7]+$/.test(part) && part.length > 1) return Number.parseInt(part, 8);
+  if (/^\d+$/.test(part)) return Number.parseInt(part, 10);
+  return null;
+}
+
+/** Detect IPv4 addresses, including legacy numeric spellings that some URL/OS stacks accept. */
+function isIpv4Loopback(hostname: string): boolean {
+  const parts = hostname.split(".");
+  if (parts.length < 1 || parts.length > 4) return false;
+  const values = parts.map(legacyIpv4Number);
+  if (values.some((value) => value === null)) return false;
+  const octets = values as number[];
+  let address: number;
+
+  if (octets.length === 1) {
+    if (octets[0] > 0xffffffff) return false;
+    address = octets[0];
+  } else if (octets.length === 2) {
+    if (octets[0] > 255 || octets[1] > 0xffffff) return false;
+    address = octets[0] * 0x1000000 + octets[1];
+  } else if (octets.length === 3) {
+    if (octets[0] > 255 || octets[1] > 255 || octets[2] > 0xffff) return false;
+    address = octets[0] * 0x1000000 + octets[1] * 0x10000 + octets[2];
+  } else {
+    if (octets.some((value) => value > 255)) return false;
+    address = octets[0] * 0x1000000 + octets[1] * 0x10000 + octets[2] * 0x100 + octets[3];
+  }
+  return Math.floor(address / 0x1000000) === 127;
+}
+
 /**
  * Reject canonical and non-canonical loopback spellings for production DB
- * targets. URL parsing with an HTTP authority normalizes alternate IPv4
- * spellings such as 127.1 to their canonical dotted-quad form.
+ * targets, including localhost subdomains and legacy IPv4 numeric forms.
  */
 export function isLoopbackDatabaseHost(hostname: string): boolean {
   const host = hostname.toLowerCase().replace(/\.$/, "");
-  if (host === "localhost" || host.endsWith(".localhost")) return true;
+  if (host === "localhost" || host.endsWith(".localhost") || host === "[::1]" || host === "::1") return true;
 
   let normalized = host;
   try {
@@ -17,12 +48,8 @@ export function isLoopbackDatabaseHost(hostname: string): boolean {
   } catch {
     // Invalid/unsupported host forms are handled by the caller's URL validation.
   }
-
-  if (normalized === "[::1]") return true;
-  const octets = normalized.split(".");
-  return octets.length === 4 &&
-    octets[0] === "127" &&
-    octets.every((octet) => /^\d+$/.test(octet) && Number(octet) >= 0 && Number(octet) <= 255);
+  if (normalized === "[::1]" || normalized === "::1") return true;
+  return isIpv4Loopback(host) || isIpv4Loopback(normalized);
 }
 
 /**
