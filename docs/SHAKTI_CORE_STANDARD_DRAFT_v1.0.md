@@ -14,6 +14,10 @@ Shakti is a lifecycle assurance standard. It is intended to prevent a project fr
 
 This document is a controlled proposal. It does not claim legal certification, statutory approval, third-party approval, or formal organizational adoption.
 
+### Relationship to existing project controls
+
+This core draft is the proposed common standard, not a replacement for existing project-specific controls. For RupayKg, `docs/SHAKTI_PRODUCTION_GATE_RUPAYKG.md`, `docs/PRODUCTION_READINESS_MATRIX.md`, deployment/runbook documents and the applicable release PR remain important existing records. Until a reconciled version is formally approved, retain those records, do not treat this draft as overriding them, and resolve conflicting status vocabularies, architecture/provider references, commits, or evidence before release. The project matrix in this PR is a reconciliation aid, not an alternative source of production truth.
+
 ## 2. Mandatory lifecycle
 
 Every project shall maintain traceability across the following lifecycle. A gate may be marked not applicable only with a documented rationale and authorized approval; it must not silently disappear.
@@ -40,7 +44,7 @@ Every project shall maintain traceability across the following lifecycle. A gate
 
 ## 3. Gate states and semantics
 
-Every requirement and gate shall use exactly one state:
+Every requirement and gate shall use exactly one state. Existing project records may use legacy labels such as GREEN/AMBER/RED, OPEN, or NOT_IMPLEMENTED; these are not interchangeable with the states below. Each project must document a controlled mapping and migrate records without upgrading a status unless the evidence meets the new acceptance criterion:
 - **PASS:** The acceptance criterion is met and current, reviewable evidence is linked.
 - **FAIL:** Evidence demonstrates the criterion is not met.
 - **BLOCKED:** A prerequisite, dependency, approval or evidence item prevents a valid decision.
