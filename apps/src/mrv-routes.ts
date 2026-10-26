@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import type { Pool, PoolClient } from "pg";
 import { authenticate, canActForOrganization, hasOrganizationPermission, type AuthContext } from "./auth.js";
 import { executeGuardianMrv, guardianStatus } from "./guardian-mrv.js";
-import { hederaStatus, integrityHash, submitHcsAnchor, verifyHcsMessage } from "./hedera-anchor.js";
+import { explicitAnchorQuantity, hederaStatus, integrityHash, submitHcsAnchor, verifyHcsMessage } from "./hedera-anchor.js";
 import { registerStatutoryRoutes } from "./statutory-routes.js";
 import { instrumentApprovalFailure, instrumentParameterFailure, type MrvInstrumentApprovalEvidence, type MrvInstrumentParameterSpec } from "./mrv-instrument-approval.js";
 
@@ -166,9 +166,11 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
         }
       }
       const evidence = await pool.query("select id, evidence_type, content_uri, content_hash, captured_at, status, metadata from evidence where activity_id=$1 order by captured_at", [activityId]);
-      const quantityRow = await pool.query<{ value: string | null; unit: string | null }>("select value::text value, unit from measurements where activity_id=$1 order by measured_at desc limit 1", [activityId]);
-      const quantity = quantityRow.rows[0]?.value ? Number(quantityRow.rows[0].value) : undefined;
-      const unit = quantityRow.rows[0]?.unit || undefined;
+      // No methodology-specific activity-quantity parameter is configured yet.
+      // Never hash an arbitrary latest measurement (which could be unbound or unrelated).
+      // The optional anchor quantity is populated only when an explicit mapping selects
+      // exactly one observation from the already instrument/evidence/parameter-validated set.
+      const { quantity, unit } = explicitAnchorQuantity(observations.rows, null);
 
       // Reuse an exact, already-persisted external anchor on sequential retries.
       // Match the full payload hash so changed measurements/methodology cannot reuse stale provenance.
