@@ -100,7 +100,7 @@ export function validateWasteCustodyEvent(input: unknown): WasteCustodyValidatio
   if (value.quantityBasis === "MEASURED" && (!isNonBlank(value.measurementMethod) || !isNonBlank(value.instrumentId))) {
     return { ok: false, code: "CUSTODY_MEASUREMENT_PROVENANCE_REQUIRED", error: "Measured quantities require a method and instrument identifier" };
   }
-  if (!isNonBlank(value.occurredAt) || !/(?:Z|[+-]\\d{2}:\\d{2})$/i.test(value.occurredAt) || Number.isNaN(Date.parse(value.occurredAt))) {
+  if (!isNonBlank(value.occurredAt) || !/(?:Z|[+-]\d{2}:\d{2})$/i.test(value.occurredAt) || Number.isNaN(Date.parse(value.occurredAt))) {
     return { ok: false, code: "CUSTODY_EVENT_TIME_INVALID", error: "Event timestamp must be a valid ISO timestamp with an explicit timezone" };
   }
   for (const key of ["activityId", "fromGeographyId", "toGeographyId", "supersedesEventId"] as const) {
