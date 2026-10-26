@@ -25,7 +25,6 @@ An organisation has one canonical identity and may hold multiple roles, faciliti
    - Agriculture, horticulture, livestock, fisheries and food-processing sources.
    - Construction, demolition, renovation and infrastructure projects.
    - Healthcare, laboratory and other special-regulated generators under their separate legal regimes.
-   - Producers, importers and brand owners with EPR obligations where applicable.
 2. **Collectors, aggregators, collection centres and material recovery facilities**
    - Door-to-door/community collection; scrap dealer/kabadi; aggregation yard; sorting, baling or consolidation centre; authorised collection point; cooperative, SHG, FPO or informal-worker collective.
    - Distinguish collection/storage/sorting from processing; each activity can have separate eligibility and authorisation requirements.
@@ -41,6 +40,7 @@ An organisation has one canonical identity and may hold multiple roles, faciliti
 6. **Compliance and ecosystem participants**
    - ULB/RLB/Gram Panchayat/District Panchayat; SPCB/PCC-facing compliance team; EPR-obligated producer/importer/brand owner; verifier/auditor; methodology/programme administrator; approved platform support; insurer/financier/marketplace buyer.
    - These are separate capabilities, not a universal super-admin. Authorities are not presumed to be RupayKg users or to endorse the platform.
+   - EPR-obligated producers/importers/brand owners are classified by the applicable EPR scheme and business activity, not automatically as waste generators. Assign a generator role only for a declared generating activity and site; EPR status alone does not establish lot origin.
 
 ### 2.2 Required organisation profile
 
