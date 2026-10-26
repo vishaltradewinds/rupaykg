@@ -46,3 +46,25 @@ end; $$;
 create trigger resource_flow_facility_scope_guard
 before insert or update on resource_flows
 for each row execute function enforce_resource_flow_facility_scope();
+
+-- Keep facility geography aligned with all existing resource-flow endpoints.
+-- The earlier activity-link guard is replaced here after the endpoint columns exist.
+create or replace function prevent_facility_geography_change_with_open_activity_links()
+returns trigger language plpgsql as $$
+begin
+ if new.geography_id is distinct from old.geography_id then
+  if exists(
+   select 1 from facility_activity_links
+   where facility_id=old.id and status in ('PENDING','VERIFIED')
+  ) then
+   raise exception 'cannot change facility geography while pending or verified activity links exist';
+  end if;
+  if exists(
+   select 1 from resource_flows
+   where source_facility_id=old.id or destination_facility_id=old.id
+  ) then
+   raise exception 'cannot change facility geography while resource flows reference this facility';
+  end if;
+ end if;
+ return new;
+end; $$;
