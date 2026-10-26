@@ -104,6 +104,21 @@ test("PostgreSQL enforces MRV instrument approval evidence and append-only decis
     );
     assert.ok(validMeasurement.rows[0]?.id);
 
+    // The MRV submission query must be able to consume direct/field-sync measurements
+    // through the canonical instrument_code, not only mrv_observations rows.
+    const submissionReading = await client.query<{ id: string; parameter_code: string; observed_value: string; instrument_id: string }>(
+      `select m.id, m.parameter_code, m.value::text as observed_value, i.instrument_code as instrument_id
+         from measurements m join mrv_instruments i on i.id=m.mrv_instrument_id
+        where m.activity_id=$1 and m.mrv_instrument_id is not null and m.parameter_code is not null`,
+      [activityId],
+    );
+    assert.ok(submissionReading.rows.some((reading) =>
+      reading.id === validMeasurement.rows[0]?.id
+      && reading.parameter_code === "gas_flow"
+      && reading.observed_value === "2"
+      && reading.instrument_id === `FLOW-${suffix}`,
+    ));
+
     await client.query(
       "insert into evidence_artifact_reviews(evidence_id,artifact_version_id,reviewer_identity_id,decision,rationale) values($1,$2,$3,'REJECTED','Test rejection invalidates approval')",
       [meityArtifact.evidenceId, meityArtifact.id, reviewerIdentityId],
