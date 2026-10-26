@@ -53,9 +53,64 @@ export async function registerWorkspaceRoutes(app: FastifyInstance, pool: Pool |
   });
 
   app.get("/api/v1/workspaces/resource-flows", async (request, reply) => {
-    const auth = await requireAuth(app, pool, request, reply); if (!auth || !pool) return; const ids = orgIds(auth); if (!ids.length) return result({ resourceFlows: [] });
-    const geographyId = requestedGeography(request); if (geographyId && !await authorizeGeography(pool, auth, geographyId)) return reply.code(403).send({ error: "Geography outside organization authorization scope", code: "GEOGRAPHY_FORBIDDEN" });
-    try { const params: unknown[]=[ids]; if(geographyId)params.push(geographyId); const rows=await pool.query(`select rf.id,rf.organization_id,o.name as organization_name,rf.origin_type,rf.resource_form,rf.material_code,rf.declared_quantity,rf.unit,rf.status,rf.source_geography_id,sg.name as source_geography_name,rf.destination_geography_id,dg.name as destination_geography_name,rf.created_at from resource_flows rf join organizations o on o.id=rf.organization_id left join geography sg on sg.id=rf.source_geography_id left join geography dg on dg.id=rf.destination_geography_id where rf.organization_id=any($1::uuid[]) and (organization_has_geography_scope(rf.organization_id,rf.source_geography_id) or organization_has_geography_scope(rf.organization_id,rf.destination_geography_id))${geographyId?" and (rf.source_geography_id=$2 or rf.destination_geography_id=$2)":""} order by rf.created_at desc limit 100`,params); return result({resourceFlows:rows.rows}); } catch(error){request.log.error(error);return reply.code(503).send({error:"Resource-flow workspace unavailable",syntheticData:false});}
+    const auth = await requireAuth(app, pool, request, reply);
+    if (!auth || !pool) return;
+    const ids = orgIds(auth);
+    if (!ids.length || !auth.activeOrganizationId) return result({ resourceFlows: [] });
+    const geographyId = requestedGeography(request);
+    if (geographyId && !await authorizeGeography(pool, auth, geographyId)) {
+      return reply.code(403).send({ error: "Geography outside organization authorization scope", code: "GEOGRAPHY_FORBIDDEN" });
+    }
+    try {
+      const params: unknown[] = [ids, auth.activeOrganizationId];
+      if (geographyId) params.push(geographyId);
+      const rows = await pool.query(
+        `select distinct rf.id, rf.organization_id, o.name as organization_name,
+                rf.origin_type, rf.resource_form, rf.material_code, rf.declared_quantity,
+                rf.unit, rf.status, rf.source_geography_id, sg.name as source_geography_name,
+                rf.destination_geography_id, dg.name as destination_geography_name, rf.created_at
+           from resource_flows rf
+           join organizations o on o.id = rf.organization_id
+           left join geography sg on sg.id = rf.source_geography_id
+           left join geography dg on dg.id = rf.destination_geography_id
+          where (
+            rf.organization_id = any($1::uuid[])
+            or exists (
+              select 1 from chain_of_custody_links c
+               where c.resource_flow_id = rf.id
+                 and (c.actor_organization_id = $2::uuid or c.counterparty_organization_id = $2::uuid)
+            )
+          )
+            and (
+              organization_has_geography_scope($2::uuid, rf.source_geography_id)
+              or organization_has_geography_scope($2::uuid, rf.destination_geography_id)
+              or exists (
+                select 1 from chain_of_custody_links c
+                 where c.resource_flow_id = rf.id
+                   and (
+                     (c.from_geography_id is not null and organization_has_geography_scope($2::uuid, c.from_geography_id))
+                     or (c.to_geography_id is not null and organization_has_geography_scope($2::uuid, c.to_geography_id))
+                   )
+              )
+            )
+            ${geographyId ? `and (
+              rf.source_geography_id = $3::uuid
+              or rf.destination_geography_id = $3::uuid
+              or exists (
+                select 1 from chain_of_custody_links c
+                 where c.resource_flow_id = rf.id
+                   and (c.from_geography_id = $3::uuid or c.to_geography_id = $3::uuid)
+              )
+            )` : ""}
+          order by rf.created_at desc
+          limit 100`,
+        params,
+      );
+      return result({ resourceFlows: rows.rows });
+    } catch (error) {
+      request.log.error(error);
+      return reply.code(503).send({ error: "Resource-flow workspace unavailable", syntheticData: false });
+    }
   });
 
   app.get("/api/v1/workspaces/mrv", async (request, reply) => {
