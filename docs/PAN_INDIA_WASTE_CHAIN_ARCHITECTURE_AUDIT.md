@@ -22,6 +22,21 @@
 
 **Separate pending capability:** instrument-bound validation and related MRV hardening proposed in PR #51 remains open/unmerged as of this audit. Do not treat that branch as a main-branch or production capability.
 
+## A0 source-path trace (completed 26 October 2026)
+
+| Path | Source evidence | Finding for custody implementation |
+|---|---|---|
+| Authoritative resource-flow create | `apps/src/server.ts`, `POST /api/v1/resource-flows` | Writes `resource_flows` after authentication, `waste:record` permission, and source/destination geography checks. It creates no custody event or destination-organisation assignment. |
+| Resource-flow workspace read | `apps/src/workspace-routes.ts`, `GET /api/v1/workspaces/resource-flows` | Lists flows for verified organisation IDs and geography scope; no custody timeline, handover, receiver acceptance or dispute projection is present in this route. |
+| Offline resource-flow create | `apps/src/sync-routes.ts`, allow-listed `RESOURCE_FLOW_CREATE` operation | Applies the same canonical `resource_flows` table in the field-sync transaction after verified membership, `waste:record` permission and geography checks. It does not create custody links. |
+| Offline envelope/idempotency/conflicts | `migrations/009_field_sync.sql`, `011_field_sync_application.sql`, `033_field_sync_tenant_integrity.sql`, `034_operation_sync_device_binding.sql`, `050_field_sync_conflict_audit.sql`; `apps/src/sync-routes.ts` | Durable envelope, device binding, idempotency and conflict/audit mechanisms exist. They are an envelope layer, not a waste-specific custody state machine. New events must not bypass or weaken these controls. |
+| Canonical custody table | `migrations/007_resource_flow_mrv.sql`, `chain_of_custody_links` | The table currently holds flow, sequence, actor organisation, optional activity, positive quantity/unit, geography, timestamp and optional evidence. In this source inventory, no application writer/reader for this table was found; its sequence constraint alone does not implement acknowledgement, rejection, partial receipt or disputes. |
+| Domain model | `packages/domain/src/resource-flows.ts` | The `ChainOfCustodyLink` interface currently represents only from/to activity IDs, optional evidence and recorded time; it is not aligned with the persisted custody row or operational event lifecycle. |
+| Evidence | `apps/src/evidence-vault-routes.ts`, `migrations/20261021_evidence_artifact_vault.sql` | Evidence upload/read/review is activity, organisation and geography scoped. Reuse evidence references; do not build a second artifact store. |
+| Existing resource-flow UI | `apps/web/src/resource-flow-panel.ts` | The UI submits flow declarations to the authoritative create route. It is intake only, not a custody workflow or end-to-end chain trace. |
+
+**A0 decision:** implement custody as an additive, append-only event extension tied to existing `resource_flows`, with explicit flow-party assignment/authorization before cross-organisation writes. The current owner organisation plus geography scope is not sufficient by itself to authorize an unrelated transporter or receiver to append to a flow. Reuse existing field-sync envelopes for offline event delivery, and keep an event-level idempotency key and conflict-preserving acknowledgement model. Do not add API/migration behavior until this authorization boundary, legacy-row compatibility, append-only enforcement and disposable-PostgreSQL migration tests are included.
+
 ## 2. Confirmed product gaps to resolve
 
 1. **Stakeholder taxonomy is too coarse for operations.** The current CPCB workspace has a combined COLLECTOR_TRANSPORTER type and a PROCESSOR type. Pan-India workflows need distinct operational profiles for generator, collector/aggregator, transporter, sorting/MRF, recycler, treatment facility, downstream buyer, EPR obligated entity, local body and verifier. These are functional roles and must not automatically create legal permissions.
