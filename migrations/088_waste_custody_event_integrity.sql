@@ -101,6 +101,8 @@ begin
       from chain_of_custody_links
      where resource_flow_id = new.resource_flow_id;
     new.sequence_no := expected_sequence;
+    -- Server receipt time is distinct from the source-reported occurrence time.
+    new.recorded_at := clock_timestamp();
 
     select exists (
       select 1
