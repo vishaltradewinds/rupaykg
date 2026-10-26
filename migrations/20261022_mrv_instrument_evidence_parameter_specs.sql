@@ -76,8 +76,18 @@ begin
   if status is null then
     raise exception 'parameter specification instrument does not exist';
   end if;
-  if status = 'VERIFIED' then
-    raise exception 'verified instrument parameter specifications are immutable; register a new instrument record for changed specifications';
+  if tg_op = 'UPDATE' and exists (
+    select 1 from mrv_instrument_decisions d
+     where d.instrument_id = old.instrument_id and d.new_status = 'VERIFIED'
+  ) then
+    raise exception 'parameter specifications are immutable after first verification; register a new instrument record for changed specifications';
+  end if;
+  if status = 'VERIFIED' or exists (
+    select 1 from mrv_instrument_decisions d
+     where d.instrument_id = case when tg_op = 'DELETE' then old.instrument_id else new.instrument_id end
+       and d.new_status = 'VERIFIED'
+  ) then
+    raise exception 'parameter specifications are immutable after first verification; register a new instrument record for changed specifications';
   end if;
   if tg_op = 'DELETE' then return old; end if;
 
@@ -298,6 +308,70 @@ $$;
 create trigger mrv_instrument_evidence_artifact_identity_immutable
 before update on mrv_instruments
 for each row execute function prevent_verified_instrument_artifact_substitution();
+
+
+-- Preserve the exact instrument identity, approval inputs and evidence bindings
+-- permanently after the instrument has ever been verified, even after HOLD/EXPIRED/REJECTED.
+-- Status and review metadata may still change; altered physical identity/evidence requires
+-- a new instrument UUID so historical readings cannot be reinterpreted.
+create or replace function guard_ever_verified_instrument_identity_mutation()
+returns trigger language plpgsql as $
+begin
+  if exists (
+    select 1 from mrv_instrument_decisions d
+     where d.instrument_id = old.id and d.new_status = 'VERIFIED'
+  ) and (
+    new.organization_id is distinct from old.organization_id
+    or new.instrument_code is distinct from old.instrument_code
+    or new.instrument_type is distinct from old.instrument_type
+    or new.manufacturer is distinct from old.manufacturer
+    or new.model is distinct from old.model
+    or new.sku_revision is distinct from old.sku_revision
+    or new.intended_use is distinct from old.intended_use
+    or new.measurement_instrument is distinct from old.measurement_instrument
+    or new.non_measurement_reason is distinct from old.non_measurement_reason
+    or new.supported_parameter_codes is distinct from old.supported_parameter_codes
+    or new.metadata is distinct from old.metadata
+    or new.evidence_bundle_hash is distinct from old.evidence_bundle_hash
+    or new.interface_protocol is distinct from old.interface_protocol
+    or new.firmware_version is distinct from old.firmware_version
+    or new.firmware_support_until is distinct from old.firmware_support_until
+    or new.security_review_status is distinct from old.security_review_status
+    or new.security_evidence_reference is distinct from old.security_evidence_reference
+    or new.security_evidence_sha256 is distinct from old.security_evidence_sha256
+    or new.security_reviewed_at is distinct from old.security_reviewed_at
+    or new.security_not_applicable_reason is distinct from old.security_not_applicable_reason
+    or new.meity_certificate_id is distinct from old.meity_certificate_id
+    or new.meity_issuer is distinct from old.meity_issuer
+    or new.meity_certificate_scope is distinct from old.meity_certificate_scope
+    or new.meity_verification_url is distinct from old.meity_verification_url
+    or new.meity_evidence_reference is distinct from old.meity_evidence_reference
+    or new.meity_evidence_sha256 is distinct from old.meity_evidence_sha256
+    or new.meity_evidence_artifact_version_id is distinct from old.meity_evidence_artifact_version_id
+    or new.meity_verified_at is distinct from old.meity_verified_at
+    or new.meity_validity_basis is distinct from old.meity_validity_basis
+    or new.meity_valid_until is distinct from old.meity_valid_until
+    or new.calibration_required is distinct from old.calibration_required
+    or new.calibration_status is distinct from old.calibration_status
+    or new.calibration_certificate_id is distinct from old.calibration_certificate_id
+    or new.calibration_evidence_reference is distinct from old.calibration_evidence_reference
+    or new.calibration_evidence_sha256 is distinct from old.calibration_evidence_sha256
+    or new.calibration_evidence_artifact_version_id is distinct from old.calibration_evidence_artifact_version_id
+    or new.calibration_lab is distinct from old.calibration_lab
+    or new.calibration_traceability is distinct from old.calibration_traceability
+    or new.calibration_uncertainty is distinct from old.calibration_uncertainty
+    or new.calibration_valid_until is distinct from old.calibration_valid_until
+    or new.calibration_not_required_reason is distinct from old.calibration_not_required_reason
+  ) then
+    raise exception 'verified instrument identity and evidence are immutable after first verification; register a new instrument record for changed hardware or evidence';
+  end if;
+  return new;
+end;
+$;
+
+create trigger mrv_instrument_ever_verified_identity_guard
+before update on mrv_instruments
+for each row execute function guard_ever_verified_instrument_identity_mutation();
 
 
 -- Re-evaluate evidence-vault status and latest independent review at use time,
