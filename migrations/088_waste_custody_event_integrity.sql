@@ -93,8 +93,9 @@ begin
   -- Preserve legacy rows; only new typed custody events use the strict contract.
   if new.event_type is null then
     if tg_op = 'INSERT' then
-      return new;
+      raise exception 'new custody links must be typed events with complete provenance';
     end if;
+    -- Preserve legacy rows already present before this migration.
     return new;
   end if;
 
