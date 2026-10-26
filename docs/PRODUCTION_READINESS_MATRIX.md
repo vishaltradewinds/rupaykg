@@ -13,11 +13,11 @@ A status must never be inferred from legacy documentation alone.
 
 ## Current evidence snapshot
 
-The canonical `main` branch has passed the full CI validation chain through GitHub Actions run **#315** on commit **`afdb0927a4aada0098279511768c660fb6c8598a`**: migration validation, clean PostgreSQL migration, typecheck, production build and the complete discovered test suite all passed. Run #315 also verifies the corrected compiled production CORS runtime acceptance test. Earlier CI run **#307** verified the production CORS allowlist and configuration changes, and run **#268** independently verified the carbon runtime-acceptance correction on commit **`6f5d91cf2dc90fc87c609383a602c66eedeecf8`**. These are repository/CI evidence only; they do not replace external acceptance or production configuration.
+**Evidence snapshot: 2026-10-26.** The last known deployed `main` commit is `0ddcf6087620880e21ea60f954c9f05d6b759469` (2026-10-20). The live service currently returns HTTP 200 from `/health`, reports PostgreSQL as its source of truth and `syntheticData=false`, and returns HTTP 401 for the protected overview route without authentication. These checks establish reachability and fail-closed behavior only; they do not identify the exact database host or prove end-to-end operational acceptance. The current live responses also lack baseline browser security headers. PR #52 has passed its reported exact-head CI but is not merged/deployed; PR #53's production acceptance-seed isolation changes are still in CI review. CI evidence on a pull-request branch is not evidence that the same code is running in production.
 
 | Domain | Current status | Acceptance evidence / remaining gate |
 |---|---|---|
-| Authoritative database | GREEN | PostgreSQL is the business-state source of truth; clean CI migration and DB-backed tests pass. |
+| Authoritative database target | RED | The live API reports PostgreSQL, but the exact host/project/branch and runtime role are not authoritatively mapped. A Neon candidate shares all 26 live regulatory-source IDs, but matching records do not prove target identity. The candidate has zero rows in checked core operational tables and a manual snapshot; this is not proof of production-data loss or a verified production backup. |
 | Lifecycle state model | GREEN | Current target defines authoritative lifecycle and value gates; lifecycle integration tests execute in CI. |
 | Organization authorization | GREEN | Verified membership required for protected organization operations; authorization tests pass. |
 | Geography authorization | GREEN | Organization geography scope is checked server-side and exercised at runtime. |
@@ -40,11 +40,15 @@ The canonical `main` branch has passed the full CI validation chain through GitH
 | UI truthfulness | GREEN | UI consumes backend-authorized data and distinguishes authoritative state; frontend production build/typecheck and smoke checks pass through the workspace test chain. |
 | Regulatory source catalog | AMBER | Current catalog is PostgreSQL-backed and exact BEE source provenance corrections are recorded; maintained real regulatory/reference data still requires operational provisioning and ongoing verification. |
 | External carbon-market submission | AMBER | Must remain manual/controlled until an official external interface is actually connected and tested. |
-| Physical instrumentation | AMBER | Hardware/site integration is an external acceptance gate, not simulated. |
+| Physical instrumentation | RED | Current deployed measurement intake does not require an approved instrument ID and parameter binding. PR #49 adds the approval gate and PR #51 adds evidence-vault binding/specification controls; both remain unmerged. No actual site instrument is certified. |
 | External trust rails | NOT_VERIFIED | Legacy Hedera/VC capabilities are not assumed in the current repository without current implementation and live acceptance evidence. |
 | Production identity/role provisioning | AMBER | Requires controlled deployment-time provisioning with real identities and explicit permissions. |
-| Production PostgreSQL/TLS acceptance | AMBER | Production startup is fail-closed on PostgreSQL URL/TLS/auth/origin configuration and CI verifies the configuration contract, but the target managed PostgreSQL certificate chain and connection must be accepted in the actual deployment environment. |
+| Production PostgreSQL/TLS acceptance | RED | The service is reachable, but authoritative database mapping, runtime/migration role separation, recovery evidence and the actual target TLS chain are not verified. PR #46 proposes controls but is a broad draft and is not deployed. |
 | Runtime CORS policy | GREEN | Production entrypoint validates HTTPS origins and the authoritative Fastify runtime uses the explicit allowlist; CI run #315 executes the HTTP runtime regression. |
+| Production acceptance-fixture isolation | RED | The deployed Docker command and API start script invoke the acceptance-seed entrypoint. The script is opt-in, but the current production entrypoint does not itself forbid it if the opt-in environment variable is set. PR #53 removes the invocation and adds a production fail-closed guard; CI is pending. |
+| Baseline browser security headers | RED | Live responses omit HSTS, X-Content-Type-Options, X-Frame-Options, Referrer-Policy and Permissions-Policy. PR #52 passed its reported exact-head CI but is not deployed. |
+| Database recovery | RED | The original Render PostgreSQL is suspended for billing; no recovery/export or restore has been verified. The expiring Neon snapshot is only for an unconfirmed candidate database and is not an authoritative production backup. |
+| Real-world pilot and methodology | RED | No real-site end-to-end acceptance has been demonstrated. The Kathonda WtE evidence does not establish active landfill-methane recovery under BM WA03.001; site boundary and methodology eligibility remain unverified. |
 | Cloud Run | AMBER | Final deployment gate after production PostgreSQL/configuration, external acceptance and runtime acceptance. |
 
 ## Required production acceptance
