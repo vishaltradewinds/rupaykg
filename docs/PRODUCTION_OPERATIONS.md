@@ -53,8 +53,8 @@ Before a production rollback:
 - Protected `/api/v1/overview` without authentication: HTTP 401.
 - CORS probe: same-origin allowed; `https://evil.example` receives no `Access-Control-Allow-Origin`.
 - Live security headers remain incomplete: HSTS, X-Content-Type-Options, X-Frame-Options, Referrer-Policy and Permissions-Policy were absent in the observed responses. PR #52 is not deployed.
-- The exact live PostgreSQL host/project/branch/runtime role has not been authoritatively mapped. Do not run a backup command against an assumed target.
-- The original Render PostgreSQL is suspended for billing. No paid action is authorized. The manual Neon snapshot belongs to an unconfirmed candidate and is not a verified production backup.
+- The exact live PostgreSQL host/project/branch/runtime role has not been authoritatively mapped. Do not run a backup command against an assumed target. The checked Neon main/staging branches expose only an owner-level `rupaykg` role with CREATEDB, CREATEROLE, REPLICATION and BYPASSRLS privileges; do not use that role as the application runtime identity.
+- The original Render PostgreSQL is suspended for billing. No paid action is authorized. The user has confirmed this is a new app not yet proven in a real operating environment; no irreplaceable real-world business records have been identified, so historical data recovery is out of scope unless an inventory later proves otherwise. The manual Neon snapshot belongs to an unconfirmed candidate and is not a verified production backup.
 - Repository-local migration validation and workspace tests passed on the connected desktop's existing local branch; the test run skipped database integration cases that require `DATABASE_URL`. This is not a full production acceptance result.
 - PR #53's seed isolation guard passed exact-head CI run #2172 for current head `10ca7d8b623b85fd0cd3340f956ae4b8f620de41` but remains draft/unmerged/undeployed; no production code was changed or deployed by that work.
 - Guardian/Hedera live acceptance remains pending real authorized credentials and execution evidence.
