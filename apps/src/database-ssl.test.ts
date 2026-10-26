@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { readDatabaseSslSetting } from "./database-ssl.js";
+import { readDatabaseConnectionOptions, readDatabaseSslSetting } from "./database-ssl.js";
 
 describe("PostgreSQL TLS policy", () => {
   it("allows explicitly disabled TLS for a configured local/test database", () => {
@@ -28,6 +28,20 @@ describe("PostgreSQL TLS policy", () => {
     });
     assert.notEqual(ssl, false);
     if (ssl !== false) assert.equal(ssl.rejectUnauthorized, true);
+  });
+
+  it("removes URL SSL parameters so they cannot override the verified TLS object", () => {
+    const options = readDatabaseConnectionOptions({
+      DATABASE_URL: "postgresql://db.example.invalid:5432/rupaykg?sslmode=require&sslrootcert=%2Ftmp%2Froot.pem&application_name=rupaykg",
+      DATABASE_SSL: "require",
+      DATABASE_CA_CERT: "-----BEGIN CERTIFICATE-----\\nfixture-ca\\n-----END CERTIFICATE-----",
+    });
+    const parsed = new URL(options.connectionString);
+    assert.equal(parsed.searchParams.has("sslmode"), false);
+    assert.equal(parsed.searchParams.has("sslrootcert"), false);
+    assert.equal(parsed.searchParams.get("application_name"), "rupaykg");
+    assert.notEqual(options.ssl, false);
+    if (options.ssl !== false) assert.equal(options.ssl.rejectUnauthorized, true);
   });
 
   it("fails closed when TLS mode is missing", () => {
