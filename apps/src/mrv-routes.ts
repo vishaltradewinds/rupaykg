@@ -87,7 +87,7 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
     if (!verificationId || !evidenceId || !policyId) return reply.code(400).send({ error: "verificationId, evidenceId and guardianPolicyId (or GUARDIAN_MRV_POLICY_ID) are required" });
     let lockClient: PoolClient | null = null;
     let lockAcquired = false;
-    const idempotencyLockKey = [activityId, verificationId, evidenceId, policyId, methodologyCode ?? ""].join("|");
+    const idempotencyLockKey = `rupaykg:mrv-activity:${activityId}`;
     try {
       lockClient = await pool.connect();
       await lockClient.query("select pg_advisory_lock(hashtext($1))", [idempotencyLockKey]);
