@@ -18,7 +18,7 @@ describe("PostgreSQL TLS policy", () => {
     });
     assert.equal(ssl === false ? true : ssl.rejectUnauthorized, true);
     assert.notEqual(ssl, false);
-    if (ssl !== false) assert.match(ssl.ca, /BEGIN CERTIFICATE/);
+    if (ssl !== false) assert.match(String(ssl.ca), /BEGIN CERTIFICATE/);
   });
 
   it("keeps certificate verification enabled for sslmode=require using system trust", () => {
