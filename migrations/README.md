@@ -34,7 +34,7 @@ Migration `023` is intentionally absent from the current repository history; do 
 
 Migration files are intentionally ordered and each numbered migration must have one authoritative owner. Do not reintroduce duplicate numbered migrations containing the same tables or enums.
 
-Migration `088_waste_custody_event_integrity.sql` extends the existing `chain_of_custody_links` ledger with typed, idempotent custody-event provenance, server-assigned per-flow sequence numbers, separate occurrence and recording timestamps, measured-quantity provenance, reason/supersession references, evidence references, event hashes, and database-enforced append-only behavior for typed events. Legacy rows remain compatible; the migration does not add a parallel ledger or authorize any regulated activity. Route integration and PostgreSQL migration/integration tests are still required before operational use.
+Migration `088_waste_custody_event_integrity.sql` extends the existing `chain_of_custody_links` ledger with typed, idempotent custody-event provenance, server-assigned per-flow sequence numbers, separate occurrence and recording timestamps, measured-quantity provenance, reason/supersession references, evidence references, event hashes, and database-enforced append-only behavior for typed events. New untyped custody-link inserts are rejected; pre-existing legacy rows remain readable and are not retroactively rewritten. The online API and offline field-sync application are wired to the typed contract, but PostgreSQL migration execution and database-backed integration tests must pass before operational use. The migration does not add a parallel ledger or authorize any regulated activity.
 
 ## Production rule
 
