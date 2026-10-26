@@ -41,6 +41,14 @@ test("requires an explicit counterparty for handover and receipt events", () => 
   if (!result.ok) assert.equal(result.code, "CUSTODY_COUNTERPARTY_REQUIRED");
 });
 
+test("aggregator and transporter handovers require named counterparties", () => {
+  for (const eventType of ["AGGREGATOR_HANDOVER", "TRANSPORTER_ACCEPTANCE", "TRANSPORT_DISPATCH"]) {
+    const result = validateWasteCustodyEvent(valid({ eventType, counterpartyOrganizationId: undefined }));
+    assert.equal(result.ok, false);
+    if (!result.ok) assert.equal(result.code, "CUSTODY_COUNTERPARTY_REQUIRED");
+  }
+});
+
 test("measured quantities require method and instrument provenance", () => {
   const missing = validateWasteCustodyEvent(valid({ quantityBasis: "MEASURED" }));
   assert.equal(missing.ok, false);
