@@ -37,7 +37,7 @@ test("custody route persistence is idempotent and rejects organizations outside 
       return roleId;
     };
     const actorRole = await createMembership(actorOrg);
-    await createMembership(counterpartyOrg);
+    const counterpartyRole = await createMembership(counterpartyOrg);
     const geographyId = (await client.query<{ id: string }>(
       "insert into geography(kind, name) values ('STATE_UT', $1) returning id",
       [`custody-route-geography-${suffix}`],
@@ -73,6 +73,28 @@ test("custody route persistence is idempotent and rejects organizations outside 
     const replay = await persistWasteCustodyEvent(client, actorAuth, input);
     assert.equal(replay.replay, true);
     assert.equal(replay.entityId, first.entityId);
+    const correction = await persistWasteCustodyEvent(client, actorAuth, {
+      ...input,
+      idempotencyKey: `correction-${suffix}`,
+      eventType: "CORRECTION",
+      reasonCode: "SOURCE_FIX",
+      supersedesEventId: first.entityId,
+    });
+    const counterpartyAuth: AuthContext = {
+      identityId,
+      memberships: [{ organization_id: counterpartyOrg, role_id: counterpartyRole, status: "VERIFIED" }],
+      activeOrganizationId: counterpartyOrg,
+    };
+    const receipt = await persistWasteCustodyEvent(client, counterpartyAuth, {
+      ...input,
+      idempotencyKey: `receipt-${suffix}`,
+      eventType: "COLLECTOR_RECEIPT",
+      actorOrganizationId: counterpartyOrg,
+      counterpartyOrganizationId: actorOrg,
+      quantitySource: "collector receipt",
+    });
+    assert.equal(correction.sequenceNo, 1);
+    assert.equal(receipt.sequenceNo, 2);
     await assert.rejects(
       persistWasteCustodyEvent(client, actorAuth, { ...input, quantity: 99 }),
       (error: unknown) => (error as { code?: string }).code === "IDEMPOTENCY_CONFLICT",
