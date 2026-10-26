@@ -60,10 +60,38 @@ test("partial acceptance, rejection and disputes require reason codes", () => {
   }
 });
 
-test("corrections must supersede a prior event rather than overwrite history", () => {
-  const result = validateWasteCustodyEvent(valid({ eventType: "CORRECTION", supersedesEventId: undefined }));
-  assert.equal(result.ok, false);
-  if (!result.ok) assert.equal(result.code, "CUSTODY_SUPERSESSION_REQUIRED");
+test("weighment requires measured quantity with method and instrument provenance", () => {
+  const declared = validateWasteCustodyEvent(valid({ eventType: "WEIGHMENT_CAPTURED" }));
+  assert.equal(declared.ok, false);
+  if (!declared.ok) assert.equal(declared.code, "CUSTODY_WEIGHMENT_MUST_BE_MEASURED");
+  assert.equal(validateWasteCustodyEvent(valid({
+    eventType: "WEIGHMENT_CAPTURED",
+    quantityBasis: "MEASURED",
+    measurementMethod: "verified weighbridge",
+    instrumentId: "WB-UNIT-17",
+  })).ok, true);
+});
+
+test("corrections require a superseded event and a reason", () => {
+  const missingTarget = validateWasteCustodyEvent(valid({ eventType: "CORRECTION", reasonCode: "SOURCE_FIX" }));
+  assert.equal(missingTarget.ok, false);
+  if (!missingTarget.ok) assert.equal(missingTarget.code, "CUSTODY_SUPERSESSION_REQUIRED");
+  const missingReason = validateWasteCustodyEvent(valid({
+    eventType: "CORRECTION",
+    supersedesEventId: evidence,
+    reasonCode: undefined,
+  }));
+  assert.equal(missingReason.ok, false);
+  if (!missingReason.ok) assert.equal(missingReason.code, "CUSTODY_REASON_REQUIRED");
+});
+
+test("requires explicit timezone and bounded idempotency key", () => {
+  const noTimezone = validateWasteCustodyEvent(valid({ occurredAt: "2026-10-26T09:30:00" }));
+  assert.equal(noTimezone.ok, false);
+  if (!noTimezone.ok) assert.equal(noTimezone.code, "CUSTODY_EVENT_TIME_INVALID");
+  const oversizedKey = validateWasteCustodyEvent(valid({ idempotencyKey: "x".repeat(201) }));
+  assert.equal(oversizedKey.ok, false);
+  if (!oversizedKey.ok) assert.equal(oversizedKey.code, "CUSTODY_EVENT_IDENTITY_REQUIRED");
 });
 
 test("rejects non-positive quantities and invalid evidence references", () => {
