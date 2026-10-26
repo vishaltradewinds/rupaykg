@@ -13,6 +13,26 @@ type ExistingProvenanceRow = { activity_id: string; verification_id: string; evi
 const bodyOf = (r: Request): Record<string, unknown> => r.body && typeof r.body === "object" ? r.body as Record<string, unknown> : {};
 const str = (b: Record<string, unknown>, k: string): string | null => typeof b[k] === "string" && b[k].trim() ? b[k].trim() : null;
 
+export function normalizeMrvActivityId(value: string): string | null {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+    ? value.toLowerCase()
+    : null;
+}
+
+export function mrvObservationSetHash(rows: Array<Record<string, unknown>>): string {
+  const observationSet = rows.map((o) => ({
+    id: String(o.id ?? ""),
+    parameterCode: String(o.parameter_code ?? ""),
+    value: String(o.observed_value ?? ""),
+    unit: String(o.unit ?? ""),
+    method: String(o.method ?? ""),
+    instrumentId: String(o.instrument_id ?? ""),
+    observedAt: o.observed_at == null ? "" : new Date(o.observed_at as string | number | Date).toISOString(),
+    uncertainty: o.uncertainty == null ? null : String(o.uncertainty),
+  })).sort((a, b) => a.id.localeCompare(b.id));
+  return createHash("sha256").update(JSON.stringify(observationSet)).digest("hex");
+}
+
 async function authFor(request: Request, reply: Reply, pool: Pool | null): Promise<AuthContext | null> {
   if (!pool) { reply.code(503).send({ error: "Database unavailable", code: "DATABASE_UNAVAILABLE" }); return null; }
   try { const auth = await authenticate(request as never, pool); if (!auth) { reply.code(401).send({ error: "Authenticated session required", code: "AUTH_REQUIRED" }); return null; } return auth; }
@@ -80,9 +100,9 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
   app.post("/api/v1/mrv/activities/:activityId/submit", async (request, reply) => {
     const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
     const rawActivityId = (request.params as { activityId: string }).activityId;
-    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(rawActivityId)) return reply.code(400).send({ error: "Valid activityId UUID is required", code: "MRV_ACTIVITY_ID_INVALID" });
+    const activityId = normalizeMrvActivityId(rawActivityId);
+    if (!activityId) return reply.code(400).send({ error: "Valid activityId UUID is required", code: "MRV_ACTIVITY_ID_INVALID" });
     // Normalize UUID casing so equivalent PostgreSQL UUID spellings share one advisory lock.
-    const activityId = rawActivityId.toLowerCase();
     const body = bodyOf(request as never);
     const verificationId = str(body, "verificationId");
     const evidenceId = str(body, "evidenceId");
@@ -177,17 +197,7 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
       const { quantity, unit } = explicitAnchorQuantity(observations.rows, null);
       // Replay identity must include every validated reading, not just activity IDs.
       // Sort by stable reading ID so query ordering cannot change the digest.
-      const observationSet = observations.rows.map((o: Record<string, unknown>) => ({
-        id: String(o.id ?? ""),
-        parameterCode: String(o.parameter_code ?? ""),
-        value: String(o.observed_value ?? ""),
-        unit: String(o.unit ?? ""),
-        method: String(o.method ?? ""),
-        instrumentId: String(o.instrument_id ?? ""),
-        observedAt: o.observed_at == null ? "" : new Date(o.observed_at as string | number | Date).toISOString(),
-        uncertainty: o.uncertainty == null ? null : String(o.uncertainty),
-      })).sort((a, b) => a.id.localeCompare(b.id));
-      const observationSetHash = createHash("sha256").update(JSON.stringify(observationSet)).digest("hex");
+      const observationSetHash = mrvObservationSetHash(observations.rows as Array<Record<string, unknown>>);
 
       // Reuse an exact, already-persisted external anchor on sequential retries.
       // Match the full payload hash so changed measurements/methodology cannot reuse stale provenance.
