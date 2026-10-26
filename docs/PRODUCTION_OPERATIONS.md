@@ -12,7 +12,9 @@
 
 Free Render PostgreSQL does not provide Render-managed recovery/PITR. Use an external logical backup.
 
-From a trusted operator workstation, with the production external `DATABASE_URL` supplied through a secure secret mechanism:
+**Precondition:** this is a procedure template, not proof that the current live target can be backed up. First identify the authoritative live database and confirm the operator has permitted read access. The suspended Render database and the unconfirmed Neon candidate must not be conflated. Do not request, print, or commit credentials.
+
+From a trusted operator workstation, with the confirmed target's `DATABASE_URL` supplied through a secure secret mechanism:
 
 ```powershell
 $env:DATABASE_URL = "<PRODUCTION_DATABASE_URL>"
@@ -44,9 +46,15 @@ Before a production rollback:
 5. Verify `/health`, authentication, and critical API flows.
 6. Reconcile database state separately; never assume application rollback reverses migrations.
 
-## Current acceptance evidence
+## Current evidence snapshot — 2026-10-26
 
-- Local full test suite: **not currently re-verified on the 2026-09-20 checkpoint**; the prior 88/88 statement is historical evidence only.
-- Production `/health`: HTTP 200, database available, synthetic data false.
-- Production authentication without a session: HTTP 401, fail-closed.
-- Guardian/Hedera live acceptance remains pending real external credentials and execution evidence.
+- Production `/health`: HTTP 200.
+- Production `/api/v1/status`: reports PostgreSQL as source of truth and `syntheticData=false`.
+- Protected `/api/v1/overview` without authentication: HTTP 401.
+- CORS probe: same-origin allowed; `https://evil.example` receives no `Access-Control-Allow-Origin`.
+- Live security headers remain incomplete: HSTS, X-Content-Type-Options, X-Frame-Options, Referrer-Policy and Permissions-Policy were absent in the observed responses. PR #52 is not deployed.
+- The exact live PostgreSQL host/project/branch/runtime role has not been authoritatively mapped. Do not run a backup command against an assumed target.
+- The original Render PostgreSQL is suspended for billing. No paid action is authorized. The manual Neon snapshot belongs to an unconfirmed candidate and is not a verified production backup.
+- Repository-local migration validation and workspace tests passed on the connected desktop's existing local branch; the test run skipped database integration cases that require `DATABASE_URL`. This is not a full production acceptance result.
+- PR #53's seed isolation guard is still in CI review; no production code was changed or deployed by that work.
+- Guardian/Hedera live acceptance remains pending real authorized credentials and execution evidence.
