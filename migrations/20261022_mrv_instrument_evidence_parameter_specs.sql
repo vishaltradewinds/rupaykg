@@ -315,7 +315,7 @@ for each row execute function prevent_verified_instrument_artifact_substitution(
 -- Status and review metadata may still change; altered physical identity/evidence requires
 -- a new instrument UUID so historical readings cannot be reinterpreted.
 create or replace function guard_ever_verified_instrument_identity_mutation()
-returns trigger language plpgsql as $
+returns trigger language plpgsql as $function$
 begin
   if exists (
     select 1 from mrv_instrument_decisions d
@@ -367,7 +367,7 @@ begin
   end if;
   return new;
 end;
-$;
+$function$;
 
 create trigger mrv_instrument_ever_verified_identity_guard
 before update on mrv_instruments
