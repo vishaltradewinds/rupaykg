@@ -8,7 +8,7 @@ const FACILITY_STATUSES = ["ACTIVE","INACTIVE","SUSPENDED","CLOSED"] as const;
 const MEMBERSHIP_ROLES = ["MANAGER","OPERATOR","VIEWER","FACILITY_REVIEWER"] as const;
 type Reply = { code: (status: number) => { send: (body: unknown) => unknown } };
 type Request = { body: unknown; params: Record<string,string>; query: unknown; headers: Record<string,unknown>; log: { error: (error: unknown) => void } };
-type FacilityRow = { id:string; organization_id:string; facility_code:string; name:string; facility_type:string; operational_status:string; geography_id:string; address:unknown; process_profile:unknown; metadata:unknown; version:number; created_at:string; updated_at:string };
+type FacilityRow = { id:string; organization_id:string; facility_code:string; name:string; facility_type:string; operational_status:string; geography_id:string; address:unknown; process_profile:unknown; metadata:unknown; version:number; created_by_identity_id:string; updated_by_identity_id:string; created_at:string; updated_at:string };
 function bodyOf(r:Request):Record<string,unknown>{return r.body&&typeof r.body==="object"&&!Array.isArray(r.body)?r.body as Record<string,unknown>:{};}
 function stringValue(b:Record<string,unknown>,k:string,max=300):string|null{const v=b[k];return typeof v==="string"&&v.trim()&&v.trim().length<=max?v.trim():null;}
 function objectValue(b:Record<string,unknown>,k:string):Record<string,unknown>|null{const v=b[k];return v&&typeof v==="object"&&!Array.isArray(v)?v as Record<string,unknown>:null;}
@@ -85,7 +85,9 @@ export async function registerFacilityRoutes(app:FastifyInstance,pool:Pool|null)
     if(!(FACILITY_STATUSES as readonly string[]).includes(status??"")||!note)return reply.code(400).send({error:"Supported operationalStatus and review note are required",code:"FACILITY_REVIEW_INVALID"});
     const f=await facilityFor(pool,id);if(!f||f.organization_id!==auth.activeOrganizationId)return reply.code(404).send({error:"Facility not found",code:"FACILITY_NOT_FOUND"});
     if(!await canManage(pool,auth,f.organization_id))return reply.code(403).send({error:"facility:manage permission required",code:"FACILITY_PERMISSION_REQUIRED"});
+    if(status==="ACTIVE"&&f.created_by_identity_id===auth.identityId)return reply.code(403).send({error:"Facility creator cannot independently activate their own facility profile",code:"FACILITY_SELF_REVIEW_FORBIDDEN"});
     const c=await pool.connect();try{await c.query("begin");const current=await c.query<FacilityRow>("select * from facilities where id=$1 for update",[id]);const old=current.rows[0];if(!old){await c.query("rollback");return reply.code(404).send({error:"Facility not found",code:"FACILITY_NOT_FOUND"});}
+      if(status==="ACTIVE"&&old.created_by_identity_id===auth.identityId){await c.query("rollback");return reply.code(403).send({error:"Facility creator cannot independently activate their own facility profile",code:"FACILITY_SELF_REVIEW_FORBIDDEN"});}
       const updated=await c.query<FacilityRow>("update facilities set operational_status=$2,updated_by_identity_id=$3 where id=$1 returning *",[id,status,auth.identityId]);
       await addEvent(c,id,auth.identityId,"STATUS_REVIEWED",old.version,updated.rows[0]!.version,old.operational_status,status,note,{});
       await c.query("commit");return facilityResponse(updated.rows[0]!);
