@@ -73,6 +73,18 @@ test("typed custody events are sequenced, hashed, idempotent and append-only", a
     assert.match(eventId.event_hash, /^[0-9a-f]{64}$/);
     assert.notEqual(new Date(eventId.recorded_at).toISOString(), "2000-01-01T00:00:00.000Z");
 
+    await client.query("savepoint untyped_event");
+    await assert.rejects(
+      client.query(
+        `insert into chain_of_custody_links(
+          resource_flow_id, sequence_no, actor_organization_id, quantity, unit, recorded_at
+        ) values ($1, 0, $2, 1, 'kg', now())`,
+        [flowId, actorOrg],
+      ),
+      /new custody links must be typed events/i,
+    );
+    await client.query("rollback to savepoint untyped_event");
+
     await client.query("savepoint missing_quantity_basis");
     await assert.rejects(
       client.query(
