@@ -81,12 +81,13 @@ export async function registerFacilityRoutes(app:FastifyInstance,pool:Pool|null)
   app.post("/api/v1/facilities/:facilityId/review",async(request,reply)=>{
     const auth=await authFor(request as never,reply,pool);if(!auth||!pool)return;
     const id=(request.params as {facilityId:string}).facilityId;if(!UUID.test(id))return reply.code(400).send({error:"Invalid facility ID",code:"FACILITY_ID_INVALID"});
-    const b=bodyOf(request as never),status=stringValue(b,"operationalStatus",40),note=stringValue(b,"note",2000);
-    if(!(FACILITY_STATUSES as readonly string[]).includes(status??"")||!note)return reply.code(400).send({error:"Supported operationalStatus and review note are required",code:"FACILITY_REVIEW_INVALID"});
+    const b=bodyOf(request as never),status=stringValue(b,"operationalStatus",40),note=stringValue(b,"note",2000),expected=versionValue(b.expectedVersion);
+    if(!(FACILITY_STATUSES as readonly string[]).includes(status??"")||!note||!expected)return reply.code(400).send({error:"Supported operationalStatus, expectedVersion and review note are required",code:"FACILITY_REVIEW_INVALID"});
     const f=await facilityFor(pool,id);if(!f||f.organization_id!==auth.activeOrganizationId)return reply.code(404).send({error:"Facility not found",code:"FACILITY_NOT_FOUND"});
     if(!await canManage(pool,auth,f.organization_id))return reply.code(403).send({error:"facility:manage permission required",code:"FACILITY_PERMISSION_REQUIRED"});
     if(status==="ACTIVE"&&f.created_by_identity_id===auth.identityId)return reply.code(403).send({error:"Facility creator cannot independently activate their own facility profile",code:"FACILITY_SELF_REVIEW_FORBIDDEN"});
     const c=await pool.connect();try{await c.query("begin");const current=await c.query<FacilityRow>("select * from facilities where id=$1 for update",[id]);const old=current.rows[0];if(!old){await c.query("rollback");return reply.code(404).send({error:"Facility not found",code:"FACILITY_NOT_FOUND"});}
+      if(old.version!==expected){await c.query("rollback");return reply.code(409).send({error:"Facility profile version changed; reload before review",code:"FACILITY_VERSION_CONFLICT"});}
       if(status==="ACTIVE"&&old.created_by_identity_id===auth.identityId){await c.query("rollback");return reply.code(403).send({error:"Facility creator cannot independently activate their own facility profile",code:"FACILITY_SELF_REVIEW_FORBIDDEN"});}
       const updated=await c.query<FacilityRow>("update facilities set operational_status=$2,updated_by_identity_id=$3 where id=$1 returning *",[id,status,auth.identityId]);
       await addEvent(c,id,auth.identityId,"STATUS_REVIEWED",old.version,updated.rows[0]!.version,old.operational_status,status,note,{});
