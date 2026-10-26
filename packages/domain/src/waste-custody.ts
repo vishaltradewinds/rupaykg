@@ -72,6 +72,7 @@ function isStrictTimestamp(value: unknown): value is string {
   const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,9})?(Z|[+-]\d{2}:\d{2})$/.exec(value);
   if (!match) return false;
   const [, yearText, monthText, dayText, hourText, minuteText, secondText, zone] = match;
+  if (!yearText || !monthText || !dayText || !hourText || !minuteText || !secondText || !zone) return false;
   const year = Number(yearText), month = Number(monthText), day = Number(dayText);
   const hour = Number(hourText), minute = Number(minuteText), second = Number(secondText);
   if (year < 1 || month < 1 || month > 12 || hour > 23 || minute > 59 || second > 59) return false;
