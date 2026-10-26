@@ -33,6 +33,10 @@ From a checkout of the repository branch, use the repository's existing Node/npm
 
 No production database URL or secrets are required for these pure unit tests. Do not configure production credentials merely to run this simulation.
 
+## Live acceptance boundary
+
+This runbook covers offline unit tests only. The legacy `RUPAYKG_ACCEPTANCE_SEED_ON_START=true` seeder is disabled for authoritative MRV submission because its synthetic readings and evidence cannot satisfy real instrument-approval and evidence-vault requirements. Live Guardian/Hedera acceptance must use a real completed activity with independently approved verification, verified evidence, and explicitly instrument-bound readings. Never substitute synthetic data for this evidence.
+
 ## Safety boundary
 
 - Do not post these fixtures to a live or staging ingestion endpoint.
