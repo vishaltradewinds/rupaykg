@@ -32,6 +32,77 @@ begin
     return new;
   end if;
 
+  -- Serialize issuance against instrument status changes and evidence-vault review.
+  -- The review API locks the instrument row and the evidence row before appending a
+  -- review decision. Holding SHARE locks until this credential transaction commits
+  -- prevents a concurrent rejection from racing past the current-evidence check.
+  perform i.id
+    from mrv_instruments i
+   where i.id in (
+     select i2.id
+       from mrv_instruments i2
+       join mrv_observations mo
+         on mo.instrument_id = i2.instrument_code
+        and mo.activity_id = new.activity_id
+      where i2.organization_id = activity_org
+     union
+     select mm.mrv_instrument_id
+       from measurements mm
+      where mm.activity_id = new.activity_id
+        and mm.mrv_instrument_id is not null
+   )
+   order by i.id
+   for share;
+
+  perform e.id
+    from evidence e
+   where exists (
+     select 1
+       from evidence_artifact_versions v
+       join mrv_instruments i
+         on v.id in (i.meity_evidence_artifact_version_id,
+                     i.calibration_evidence_artifact_version_id,
+                     i.security_evidence_artifact_version_id)
+      where v.evidence_id = e.id
+        and i.organization_id = activity_org
+        and i.id in (
+          select i2.id
+            from mrv_instruments i2
+            join mrv_observations mo
+              on mo.instrument_id = i2.instrument_code
+             and mo.activity_id = new.activity_id
+           where i2.organization_id = activity_org
+          union
+          select mm.mrv_instrument_id
+            from measurements mm
+           where mm.activity_id = new.activity_id
+             and mm.mrv_instrument_id is not null
+        )
+   ) or exists (
+     select 1
+       from evidence_artifact_versions v
+       join mrv_instrument_parameter_specs ps
+         on ps.source_evidence_artifact_version_id = v.id
+       join mrv_instruments i on i.id = ps.instrument_id
+      where v.evidence_id = e.id
+        and i.organization_id = activity_org
+        and i.id in (
+          select i2.id
+            from mrv_instruments i2
+            join mrv_observations mo
+              on mo.instrument_id = i2.instrument_code
+             and mo.activity_id = new.activity_id
+           where i2.organization_id = activity_org
+          union
+          select mm.mrv_instrument_id
+            from measurements mm
+           where mm.activity_id = new.activity_id
+             and mm.mrv_instrument_id is not null
+        )
+   )
+   order by e.id
+   for share;
+
   if not exists (
        select 1 from mrv_observations mo where mo.activity_id = new.activity_id
      )
