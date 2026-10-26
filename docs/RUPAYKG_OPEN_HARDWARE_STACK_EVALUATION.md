@@ -42,6 +42,12 @@ A gateway's approval does not imply that an attached instrument is approved. The
 
 Reference gateway projects for design study only: [COG1](https://github.com/diegodemarco/cog1) and [Industrial IoT Gateway](https://github.com/alexandru-vrabete/Industrial_IoT_Gateway). They are not prequalified for RupayKg or a specific site.
 
+## 4.1 Mandatory MeitY approval rule
+
+RupayKg's hardware selection rule is a hard gate: **use only an exact hardware model for which the applicable MeitY approval/recognition is verified for the intended product and use, in addition to every other legally required approval.** A MeitY programme affiliation, domestic origin, open-source licence, generic manufacturer claim or approval for a different model/use does not satisfy this gate.
+
+If a measurement instrument, gateway, interface or board has no applicable MeitY approval scheme or no verifiable exact-model evidence, mark it **BLOCKED — MEITY APPROVAL NOT VERIFIED** and do not purchase, install or use it in the project. Do not silently substitute CE, FCC, OSHWA status, BIS registration, a laboratory certificate or another authority's approval for the required MeitY gate. Record the exact evidence and the authority/scope; escalate a genuine scheme-coverage gap for an explicit policy decision rather than bypassing the rule. Additional statutory/metrology/sector approvals remain mandatory where applicable.
+
 ## 4. Measurement hardware is a separate qualification stream
 
 Do not select a sensor before identifying the physical parameter, range, accuracy, resolution, response time, operating environment, calibration and methodology requirements.
