@@ -28,6 +28,20 @@ export function readDatabaseSslSetting(env: NodeJS.ProcessEnv = process.env): Da
     !parsed.searchParams.get("sslmode");
   if (renderInternalDatabase) return false;
 
+  // Direct migration/fixture commands must not bypass the production
+  // configuration contract by opting out of TLS or targeting loopback.
+  // The only production non-TLS exception is the provider-internal Render
+  // database path validated above.
+  if (env.NODE_ENV === "production") {
+    const hostname = parsed.hostname.toLowerCase();
+    if (["localhost", "127.0.0.1", "::1", "[::1]"].includes(hostname)) {
+      throw new Error("PRODUCTION_DATABASE_TARGET_FORBIDDEN: loopback host");
+    }
+    if (mode === "false") {
+      throw new Error("PRODUCTION_DATABASE_TLS_REQUIRED: TLS may be disabled only for the provider-internal Render database");
+    }
+  }
+
   if (mode === "false") return false;
   if (mode !== "require") {
     throw new Error("DATABASE_SSL must be explicitly set to require or false");
@@ -37,20 +51,12 @@ export function readDatabaseSslSetting(env: NodeJS.ProcessEnv = process.env): Da
   if (ca && ca.includes("BEGIN CERTIFICATE") && ca.includes("END CERTIFICATE")) {
     return { rejectUnauthorized: true, ca };
   }
-  // Match production-config.ts: sslmode=require may use the runtime's trusted
-  // system CA store when no custom CA is supplied, but certificate validation
-  // must remain enabled.
   if (parsed.searchParams.get("sslmode") === "require") {
     return { rejectUnauthorized: true };
   }
   throw new Error("DATABASE_CA_CERT must contain a PEM certificate when DATABASE_SSL=require");
 }
 
-/**
- * Return a sanitized connection string plus the single authoritative TLS
- * configuration. node-postgres may otherwise let SSL query parameters in the
- * URL override the explicitly supplied SSL object.
- */
 export function readDatabaseConnectionOptions(env: NodeJS.ProcessEnv = process.env): {
   connectionString: string;
   ssl: DatabaseSslSetting;
