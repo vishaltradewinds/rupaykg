@@ -262,15 +262,27 @@ test("PostgreSQL enforces MRV instrument approval evidence and append-only decis
     await rejectsInSavepoint(client, () => client.query(
       "insert into measurements(activity_id,value,unit,method,source,measured_at) values($1,3,'kg','test','late reading',now())",
       [activityId],
-    ), /MEASUREMENT_IMMUTABLE_AFTER_MRV_SUBMISSION/i);
+    ), /MRV_INPUT_IMMUTABLE_AFTER_SUBMISSION/i);
     await rejectsInSavepoint(client, () => client.query(
       "update measurements set value=3 where id=$1",
       [validMeasurement.rows[0]!.id],
-    ), /MEASUREMENT_IMMUTABLE_AFTER_MRV_SUBMISSION/i);
+    ), /MRV_INPUT_IMMUTABLE_AFTER_SUBMISSION/i);
     await rejectsInSavepoint(client, () => client.query(
       "delete from measurements where id=$1",
       [validMeasurement.rows[0]!.id],
-    ), /MEASUREMENT_IMMUTABLE_AFTER_MRV_SUBMISSION/i);
+    ), /MRV_INPUT_IMMUTABLE_AFTER_SUBMISSION/i);
+    await rejectsInSavepoint(client, () => client.query(
+      "insert into mrv_observations(activity_id,parameter_code,observed_value,unit,method,instrument_id,observed_at) values($1,'gas_flow',3,'m3/h','test', $2, now())",
+      [activityId, `FLOW-${suffix}`],
+    ), /MRV_INPUT_IMMUTABLE_AFTER_SUBMISSION/i);
+    await rejectsInSavepoint(client, () => client.query(
+      "update mrv_observations set observed_value=3 where activity_id=$1 and measurement_id=$2",
+      [activityId, validMeasurement.rows[0]!.id],
+    ), /MRV_INPUT_IMMUTABLE_AFTER_SUBMISSION/i);
+    await rejectsInSavepoint(client, () => client.query(
+      "delete from mrv_observations where activity_id=$1 and measurement_id=$2",
+      [activityId, validMeasurement.rows[0]!.id],
+    ), /MRV_INPUT_IMMUTABLE_AFTER_SUBMISSION/i);
 
     await client.query("rollback");
   } catch (error) {
