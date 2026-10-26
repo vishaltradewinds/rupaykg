@@ -11,7 +11,9 @@ create table facility_activity_links (
  review_note text,
  created_at timestamptz not null default now(),
  reviewed_at timestamptz,
- check ((status='VERIFIED' and reviewed_by_identity_id is not null and reviewed_at is not null and review_note is not null) or status<>'VERIFIED')
+ check ((status='PENDING' and reviewed_by_identity_id is null and reviewed_at is null and review_note is null)
+     or (status in ('VERIFIED','REJECTED') and reviewed_by_identity_id is not null and reviewed_at is not null and review_note is not null)),
+ check (status='PENDING' or reviewed_by_identity_id is distinct from created_by_identity_id)
 );
 create unique index facility_activity_one_open_link_per_activity on facility_activity_links(activity_id) where status in ('PENDING','VERIFIED');
 create index facility_activity_links_facility_idx on facility_activity_links(facility_id,status,created_at);
