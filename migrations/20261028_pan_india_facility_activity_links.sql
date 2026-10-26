@@ -71,7 +71,7 @@ begin
  return new;
 end; $$;
 create trigger facility_activity_link_scope_guard before insert or update on facility_activity_links for each row execute function enforce_facility_activity_link_scope();
-create or replace function prevent_facility_geography_change_with_open_activity_links() returns trigger language plpgsql as $
+create or replace function prevent_facility_geography_change_with_open_activity_links() returns trigger language plpgsql as $$
 begin
  if new.geography_id is distinct from old.geography_id and exists(
    select 1 from facility_activity_links where facility_id=old.id and status in ('PENDING','VERIFIED')
