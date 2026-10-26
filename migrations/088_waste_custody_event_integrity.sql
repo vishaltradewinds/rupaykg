@@ -84,6 +84,11 @@ declare
   prior_flow_id uuid;
   expected_sequence integer;
   membership_valid boolean;
+  flow_organization_id uuid;
+  latest_actor_organization_id uuid;
+  latest_counterparty_organization_id uuid;
+  superseded_actor_organization_id uuid;
+  superseded_event_type text;
 begin
   -- Preserve legacy rows; only new typed custody events use the strict contract.
   if new.event_type is null then
@@ -135,12 +140,31 @@ begin
       raise exception 'custody event counterparty organization does not exist';
     end if;
 
-    if new.supersedes_link_id is not null then
-      select resource_flow_id into prior_flow_id
+    if new.event_type = 'CORRECTION' then
+      select resource_flow_id, actor_organization_id, event_type
+        into prior_flow_id, superseded_actor_organization_id, superseded_event_type
         from chain_of_custody_links
        where id = new.supersedes_link_id;
-      if prior_flow_id is distinct from new.resource_flow_id then
-        raise exception 'custody correction must supersede an event in the same resource flow';
+      if prior_flow_id is distinct from new.resource_flow_id
+         or superseded_actor_organization_id is distinct from new.actor_organization_id
+         or superseded_event_type = 'CORRECTION' then
+        raise exception 'custody correction must supersede a non-correction event in the same flow from the same actor organization';
+      end if;
+    else
+      select organization_id into flow_organization_id
+        from resource_flows where id = new.resource_flow_id;
+      select actor_organization_id, counterparty_organization_id
+        into latest_actor_organization_id, latest_counterparty_organization_id
+        from chain_of_custody_links
+       where resource_flow_id = new.resource_flow_id and event_type is not null
+       order by sequence_no desc limit 1;
+      if not found then
+        if new.actor_organization_id is distinct from flow_organization_id then
+          raise exception 'first custody event must be recorded by the resource flow originating organization';
+        end if;
+      elsif new.actor_organization_id is distinct from latest_actor_organization_id
+         and new.actor_organization_id is distinct from latest_counterparty_organization_id then
+        raise exception 'custody event actor must be a participant in the latest handover';
       end if;
     end if;
 
