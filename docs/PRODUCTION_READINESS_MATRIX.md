@@ -49,7 +49,7 @@ A status must never be inferred from legacy documentation alone.
 | Baseline browser security headers | RED | Live responses omit HSTS, X-Content-Type-Options, X-Frame-Options, Referrer-Policy and Permissions-Policy. PR #52 passed its reported exact-head CI but is not deployed. |
 | Database recovery | RED | The original Render PostgreSQL is suspended for billing; no recovery/export or restore has been verified. The expiring Neon snapshot is only for an unconfirmed candidate database and is not an authoritative production backup. |
 | Real-world pilot and methodology | RED | No real-site end-to-end acceptance has been demonstrated. The Kathonda WtE evidence does not establish active landfill-methane recovery under BM WA03.001; site boundary and methodology eligibility remain unverified. |
-| Cloud Run | AMBER | Final deployment gate after production PostgreSQL/configuration, external acceptance and runtime acceptance. |
+| Render deployment/release | BLOCKED | Render currently serves the application, but release remains held until database identity/recovery, startup safety, security headers, runtime least privilege, hardware/methodology and real-pilot acceptance gates pass. A live service is not production certification. |
 
 ## Required production acceptance
 
