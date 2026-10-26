@@ -108,6 +108,7 @@ export function WasteCustodyPanel(props: {
   useEffect(() => {
     setQuantity(selectedFlow?.declared_quantity == null ? "" : String(selectedFlow.declared_quantity));
     setUnit(selectedFlow?.unit || "kg");
+    setQuantitySource("");
   }, [selectedFlow?.id]);
 
   async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -197,6 +198,7 @@ export function WasteCustodyPanel(props: {
       setMessage(`Event saved · sequence ${result.custodyEvent.sequenceNo} · SHA-256 ${result.custodyEvent.eventHash.slice(0, 16)}…`);
       setReasonCode("");
       setSupersedesEventId("");
+      setQuantitySource("");
       await refreshFlowData();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Custody event could not be saved");
