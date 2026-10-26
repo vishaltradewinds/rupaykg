@@ -15,7 +15,7 @@ begin
  if d_status <> 'VERIFIED' then
   raise exception 'facility device link requires an independently verified enrolled device';
  end if;
- if not exists(select 1 from organization_memberships om where om.organization_id=new.organization_id and om.identity_id=new.created_by_identity_id and om.status='VERIFIED') then
+ if tg_op='INSERT' and not exists(select 1 from organization_memberships om where om.organization_id=new.organization_id and om.identity_id=new.created_by_identity_id and om.status='VERIFIED') then
   raise exception 'facility device link requester must be a verified organization member';
  end if;
  if (tg_op='INSERT' or new.status='VERIFIED') and f_status<>'ACTIVE' then
