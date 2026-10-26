@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import type { Pool, PoolClient } from "pg";
 import { authenticate, bearerChallenge, hasOrganizationPermission } from "./auth.js";
-import { validateConflictResolution, validateSyncEnvelope } from "./sync-validation.js";
+import { validateConflictResolution, validateResourceFlowGeography, validateSyncEnvelope } from "./sync-validation.js";
 
 type AuthContext = Awaited<ReturnType<typeof authenticate>>;
 type OperationPayload = Record<string, unknown> & { operationType?: string };
@@ -51,7 +51,9 @@ async function applyOperation(client: PoolClient, auth: NonNullable<AuthContext>
   }
   if (operationType === "RESOURCE_FLOW_CREATE") {
     const organizationId = stringValue(payload, "organizationId"); const originType = stringValue(payload, "originType"); const resourceForm = stringValue(payload, "resourceForm"); const materialCode = stringValue(payload, "materialCode"); const quantity = positiveNumber(payload, "quantity"); const unit = stringValue(payload, "unit"); const sourceGeographyId = payload.sourceGeographyId == null ? null : stringValue(payload, "sourceGeographyId"); const destinationGeographyId = payload.destinationGeographyId == null ? null : stringValue(payload, "destinationGeographyId");
-    if (!organizationId || !originType || !resourceForm || !materialCode || quantity === null || !unit || (sourceGeographyId && !isUuid(sourceGeographyId)) || (destinationGeographyId && !isUuid(destinationGeographyId))) throw Object.assign(new Error("RESOURCE_FLOW_CREATE requires organizationId, originType, resourceForm, materialCode, positive quantity and unit"), { code: "INVALID_OPERATION" });
+    const geographyValidation = validateResourceFlowGeography(sourceGeographyId, destinationGeographyId);
+    if (!geographyValidation.ok) throw Object.assign(new Error(geographyValidation.error), { code: "INVALID_OPERATION" });
+    if (!organizationId || !originType || !resourceForm || !materialCode || quantity === null || !unit || (sourceGeographyId && !isUuid(sourceGeographyId)) || (destinationGeographyId && !isUuid(destinationGeographyId))) throw Object.assign(new Error("RESOURCE_FLOW_CREATE requires organizationId, originType, resourceForm, materialCode, positive quantity, unit and at least one geography"), { code: "INVALID_OPERATION" });
     if (!await verifiedOrganizationAccess(client, identityId, organizationId)) throw Object.assign(new Error("No verified membership for resource-flow organization"), { code: "OPERATION_FORBIDDEN" });
     if (!await hasOrganizationPermission(client, auth, organizationId, ["waste:record"])) throw Object.assign(new Error("Waste recording permission required for resource-flow creation"), { code: "OPERATION_FORBIDDEN" });
     if (sourceGeographyId && !await authorizedGeography(client, identityId, sourceGeographyId, organizationId)) throw Object.assign(new Error("Source geography is outside organization authorization scope"), { code: "OPERATION_FORBIDDEN" });
