@@ -26,6 +26,12 @@ test("production config accepts the fail-closed production contract", () => {
   });
 });
 
+test("production config uses verified system trust roots when a custom CA is not supplied", () => {
+  const config = readProductionConfig({ ...baseEnv, DATABASE_CA_CERT: "" });
+  assert.equal(config.databaseSsl, "require");
+  assert.equal(config.databaseCaCert, "");
+});
+
 test("production config rejects missing or unsafe production requirements", () => {
   const cases = [
     [{ ...baseEnv, NODE_ENV: "development" }, /NODE_ENV must be production/],
@@ -34,7 +40,7 @@ test("production config rejects missing or unsafe production requirements", () =
     [{ ...baseEnv, DATABASE_URL: baseEnv.DATABASE_URL + "?sslmode=disable" }, /remove sslmode from the database URL/], 
     [{ ...baseEnv, MIGRATION_DATABASE_URL: baseEnv.MIGRATION_DATABASE_URL + "?sslrootcert=%2Ftmp%2Fca.pem" }, /remove sslrootcert from the database URL/], 
     [{ ...baseEnv, DATABASE_SSL: "false" }, /DATABASE_SSL must be require/],
-    [{ ...baseEnv, DATABASE_CA_CERT: "" }, /DATABASE_CA_CERT must contain a PEM certificate/],
+    [{ ...baseEnv, DATABASE_CA_CERT: "not-a-certificate" }, /DATABASE_CA_CERT must be empty or contain a PEM certificate/],
     [{ ...baseEnv, RUPAYKG_AUTH_MODE: "session" }, /RUPAYKG_AUTH_MODE must be real/],
     [{ ...baseEnv, RUPAYKG_AUTH_MODE: "" }, /RUPAYKG_AUTH_MODE must be real/],
     [{ ...baseEnv, RUPAYKG_ALLOWED_ORIGINS: "http://app.rupaykg.example" }, /origin must use HTTPS/],
