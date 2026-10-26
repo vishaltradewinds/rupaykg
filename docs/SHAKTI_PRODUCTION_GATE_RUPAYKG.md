@@ -18,7 +18,7 @@ This document is the production-control record for RupayKg under SHAKTI — Stan
 - Current live responses omit HSTS, X-Content-Type-Options, X-Frame-Options, Referrer-Policy and Permissions-Policy.
 - The live application reports PostgreSQL but the exact host/project/branch/runtime role have not been authoritatively mapped. A Neon candidate has matching regulatory-source IDs but is not yet proven to be the live target.
 - The original Render PostgreSQL is suspended for billing. No billing action has been authorized; the candidate Neon snapshot is not an authoritative production backup.
-- The deployed Docker command and API start script invoke an opt-in acceptance-seed entrypoint. PR #53 removes those invocations and makes the seed fail closed in production; exact-head CI run #2166 passed, but the PR remains draft, unmerged and undeployed.
+- The deployed Docker command and API start script invoke an opt-in acceptance-seed entrypoint. PR #53 removes those invocations and makes the seed fail closed in production; exact-head CI run #2172 for current head `10ca7d8b623b85fd0cd3340f956ae4b8f620de41` passed, but the PR remains draft, unmerged and undeployed.
 - No real-site pilot, MeitY-approved instrument acceptance, or production certification has been demonstrated.
 
 ## SHAKTI gate status
