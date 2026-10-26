@@ -1,6 +1,12 @@
 -- Bind instrument approvals to reviewed, organization-scoped evidence-vault versions.
 -- Add explicit, immutable per-parameter measurement specifications.
 
+-- Use a monotonic sequence to order append-only reviews when multiple decisions share a transaction timestamp.
+alter table evidence_artifact_reviews
+  add column review_sequence bigint generated always as identity;
+create unique index evidence_artifact_reviews_sequence_idx
+  on evidence_artifact_reviews(review_sequence);
+
 alter table mrv_instruments
   add column if not exists meity_evidence_artifact_version_id uuid references evidence_artifact_versions(id) on delete restrict,
   add column if not exists calibration_evidence_artifact_version_id uuid references evidence_artifact_versions(id) on delete restrict,
@@ -74,7 +80,7 @@ begin
             and r.id = (
               select latest.id from evidence_artifact_reviews latest
                where latest.evidence_id=e.id and latest.artifact_version_id=v.id
-               order by latest.created_at desc, latest.id desc limit 1
+               order by latest.created_at desc, latest.review_sequence desc limit 1
             )
             and r.decision='APPROVED'
        )
@@ -138,7 +144,7 @@ begin
             and r.id = (
               select latest.id from evidence_artifact_reviews latest
                where latest.evidence_id = e.id and latest.artifact_version_id = v.id
-               order by latest.created_at desc, latest.id desc limit 1
+               order by latest.created_at desc, latest.review_sequence desc limit 1
             )
             and r.decision = 'APPROVED'
        )
@@ -166,7 +172,7 @@ begin
             and r.id = (
               select latest.id from evidence_artifact_reviews latest
                where latest.evidence_id = e.id and latest.artifact_version_id = v.id
-               order by latest.created_at desc, latest.id desc limit 1
+               order by latest.created_at desc, latest.review_sequence desc limit 1
             )
             and r.decision = 'APPROVED'
        )
@@ -194,7 +200,7 @@ begin
             and r.id = (
               select latest.id from evidence_artifact_reviews latest
                where latest.evidence_id = e.id and latest.artifact_version_id = v.id
-               order by latest.created_at desc, latest.id desc limit 1
+               order by latest.created_at desc, latest.review_sequence desc limit 1
             )
             and r.decision = 'APPROVED'
        )
@@ -299,7 +305,7 @@ returns boolean language sql stable as $$
                  and r.reviewer_identity_id <> v.uploaded_by_identity_id
                  and r.id = (select latest.id from evidence_artifact_reviews latest
                               where latest.evidence_id=e.id and latest.artifact_version_id=v.id
-                              order by latest.created_at desc, latest.id desc limit 1)
+                              order by latest.created_at desc, latest.review_sequence desc limit 1)
                  and r.decision='APPROVED'
             )
        )
@@ -322,7 +328,7 @@ returns boolean language sql stable as $$
                    and r.reviewer_identity_id <> v.uploaded_by_identity_id
                    and r.id = (select latest.id from evidence_artifact_reviews latest
                                 where latest.evidence_id=e.id and latest.artifact_version_id=v.id
-                                order by latest.created_at desc, latest.id desc limit 1)
+                                order by latest.created_at desc, latest.review_sequence desc limit 1)
                    and r.decision='APPROVED'
               )
          )
@@ -346,7 +352,7 @@ returns boolean language sql stable as $$
                    and r.reviewer_identity_id <> v.uploaded_by_identity_id
                    and r.id = (select latest.id from evidence_artifact_reviews latest
                                 where latest.evidence_id=e.id and latest.artifact_version_id=v.id
-                                order by latest.created_at desc, latest.id desc limit 1)
+                                order by latest.created_at desc, latest.review_sequence desc limit 1)
                    and r.decision='APPROVED'
               )
          )
@@ -370,7 +376,7 @@ returns boolean language sql stable as $$
                       and r.reviewer_identity_id <> v.uploaded_by_identity_id
                       and r.id = (select latest.id from evidence_artifact_reviews latest
                                    where latest.evidence_id=e.id and latest.artifact_version_id=v.id
-                                   order by latest.created_at desc, latest.id desc limit 1)
+                                   order by latest.created_at desc, latest.review_sequence desc limit 1)
                       and r.decision='APPROVED'
                  )
             )
