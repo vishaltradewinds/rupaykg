@@ -76,6 +76,7 @@ export function WasteCustodyPanel(props: {
   const [reasonCode, setReasonCode] = useState("");
   const [supersedesEventId, setSupersedesEventId] = useState("");
   const [occurredAt, setOccurredAt] = useState(localDateTimeNow());
+  const [online, setOnline] = useState(navigator.onLine);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
@@ -86,6 +87,14 @@ export function WasteCustodyPanel(props: {
   const requiresCounterparty = counterpartyRequired.has(eventType);
   const requiresReason = reasonRequired.has(eventType);
   const measured = quantityBasis === "MEASURED" || eventType === "WEIGHMENT_CAPTURED";
+
+  useEffect(() => {
+    const onOnline = () => setOnline(true);
+    const onOffline = () => setOnline(false);
+    window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOffline);
+    return () => { window.removeEventListener("online", onOnline); window.removeEventListener("offline", onOffline); };
+  }, []);
 
   useEffect(() => {
     if (!flows.length) {
@@ -145,6 +154,7 @@ export function WasteCustodyPanel(props: {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selectedFlow || !canRecord || !token) return;
+    if (!online) { setError("This panel requires an online connection. Offline custody capture is not yet enabled here; no event has been queued."); return; }
     if (requiresCounterparty && !counterpartyId) {
       setError("Select the receiving or handing-over organization.");
       return;
@@ -247,8 +257,8 @@ export function WasteCustodyPanel(props: {
             </label>}
             <label className="custody-field"><span>When did it occur?</span><input type="datetime-local" value={occurredAt} onChange={e => setOccurredAt(e.target.value)} required /></label>
           </div>
-          <div className="custody-actions"><button type="submit" disabled={submitting || loading}>{submitting ? "Saving…" : "Record custody event"}</button><button type="button" className="secondary" onClick={() => void refreshFlowData()} disabled={loading}>{loading ? "Refreshing…" : "Refresh chain"}</button></div>
-          <p className="custody-note">Directory entries indicate verified platform membership and geography only. They do not prove material-specific permits, facility authorisation or EPR eligibility. The server rechecks permission and chain participation.</p>
+          <div className="custody-actions"><button type="submit" disabled={submitting || loading || !online}>{submitting ? "Saving…" : "Record custody event"}</button><button type="button" className="secondary" onClick={() => void refreshFlowData()} disabled={loading}>{loading ? "Refreshing…" : "Refresh chain"}</button></div>
+          <p className="custody-note">{online ? "" : "Offline: event submission is disabled; no custody event will be silently discarded or falsely marked as queued. " }Directory entries indicate verified platform membership and geography only. They do not prove material-specific permits, facility authorisation or EPR eligibility. The server rechecks permission and chain participation.</p>
         </form>}
         {message && <p className="custody-success" role="status">{message}</p>}
         {error && <p className="error" role="alert">{error}</p>}
