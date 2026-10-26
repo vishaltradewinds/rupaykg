@@ -1,4 +1,5 @@
 import Fastify from "fastify";
+import { registerSecurityHeaders } from "./security-headers.js";
 import cors from "@fastify/cors";
 import fastifyStatic from "@fastify/static";
 import { existsSync, readFileSync } from "node:fs";
@@ -18,18 +19,9 @@ import { registerEvidenceVaultRoutes } from "./evidence-vault-routes.js";
 import { registerPlatformAdminRoutes } from "./platform-admin-routes.js";
 
 const app = Fastify({ logger: true });
+registerSecurityHeaders(app);
 
-// Shakti security baseline: set browser-facing headers on API and static responses.
-// Content-Security-Policy remains a separate gate until SPA assets and evidence workflows are reviewed.
-app.addHook("onSend", async (_request, reply, payload) => {
-  reply.header("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
-  reply.header("X-Content-Type-Options", "nosniff");
-  reply.header("X-Frame-Options", "DENY");
-  reply.header("Referrer-Policy", "strict-origin-when-cross-origin");
-  // Preserve same-origin camera/geolocation for field evidence; disable microphone.
-  reply.header("Permissions-Policy", "camera=(self), geolocation=(self), microphone=()");
-  return payload;
-});
+
 const allowedOrigins = process.env.RUPAYKG_ALLOWED_ORIGINS?.split(",").map(origin => origin.trim()).filter(Boolean) ?? [];
 await app.register(cors, { origin: allowedOrigins.length ? allowedOrigins : false });
 const webRoot = resolve(process.cwd(), "apps/web/dist");
