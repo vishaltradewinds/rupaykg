@@ -38,7 +38,6 @@ export async function registerFacilityDeviceLinkRoutes(app:FastifyInstance,pool:
    if(d.status!=="VERIFIED"||!d.identity_id){await c.query("rollback");return reply.code(409).send({error:"Device must be independently enrolled and verified first",code:"FIELD_DEVICE_NOT_VERIFIED"});}
    const ins=await c.query<{id:string;status:string}>("insert into facility_device_links(organization_id,facility_id,device_id,note,created_by_identity_id) values($1,$2,$3,$4,$5) returning id,status",[f.organization_id,id,deviceId,note,auth.identityId]);
    const link=ins.rows[0]!;
-   await c.query("insert into facility_device_link_events(link_id,actor_identity_id,event_type,new_status,note) values($1,$2,'LINK_REQUESTED','PENDING',$3)",[link.id,auth.identityId,note]);
    await c.query("commit");return reply.code(201).send({source:"postgresql",syntheticData:false,link});
   }catch(error){await c.query("rollback").catch(()=>undefined);const message=error instanceof Error?error.message:"";if(message.includes("facility_device_one_open_link_per_pair"))return reply.code(409).send({error:"This device already has a pending or verified association with the facility",code:"FACILITY_DEVICE_LINK_CONFLICT"});if(message.includes("facility device link"))return reply.code(403).send({error:"Device/facility organization or geography constraint failed",code:"FACILITY_DEVICE_SCOPE_FORBIDDEN"});request.log.error(error);return reply.code(503).send({error:"Facility device association failed",code:"FACILITY_DEVICE_LINK_CREATE_UNAVAILABLE"});}finally{c.release();}
  });
@@ -55,7 +54,6 @@ export async function registerFacilityDeviceLinkRoutes(app:FastifyInstance,pool:
    if(link.status!=="PENDING"){await c.query("rollback");return reply.code(409).send({error:"Only pending device associations can be reviewed",code:"FACILITY_DEVICE_LINK_NOT_PENDING"});}
    if(link.created_by_identity_id===auth.identityId){await c.query("rollback");return reply.code(403).send({error:"Association requester cannot review their own request",code:"FACILITY_DEVICE_SELF_REVIEW_FORBIDDEN"});}
    const updated=await c.query("update facility_device_links set status=$2,reviewed_by_identity_id=$3,review_note=$4,reviewed_at=now() where id=$1 returning *",[id,decision,auth.identityId,note]);
-   await c.query("insert into facility_device_link_events(link_id,actor_identity_id,event_type,previous_status,new_status,note) values($1,$2,'LINK_REVIEWED','PENDING',$3,$4)",[id,auth.identityId,decision,note]);
    await c.query("commit");return {source:"postgresql",syntheticData:false,link:updated.rows[0]};
   }catch(error){await c.query("rollback").catch(()=>undefined);request.log.error(error);return reply.code(503).send({error:"Facility device association review failed",code:"FACILITY_DEVICE_REVIEW_UNAVAILABLE"});}finally{c.release();}
  });
