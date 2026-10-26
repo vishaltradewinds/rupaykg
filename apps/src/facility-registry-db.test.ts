@@ -38,13 +38,17 @@ test("facility registry enforces tenant geography, membership and append-only re
       "insert into identities(external_subject,display_name) values($1,$2) returning id",
       [`facility-registry-outsider-${suffix}`, "Facility registry outsider"],
     )).rows[0]!.id;
+    const reviewer = (await client.query<{ id: string }>(
+      "insert into identities(external_subject,display_name) values($1,$2) returning id",
+      [`facility-registry-reviewer-${suffix}`, "Facility registry reviewer"],
+    )).rows[0]!.id;
     const role = (await client.query<{ id: string }>(
       "insert into roles(organization_id,name,permissions) values($1,$2,'[\"facility:manage\"]'::jsonb) returning id",
       [org, `FACILITY-MANAGER-${suffix}`],
     )).rows[0]!.id;
     await client.query(
-      "insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED'),($4,$2,$3,'VERIFIED')",
-      [actor, org, role, operator],
+      "insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED'),($4,$2,$3,'VERIFIED'),($5,$2,$3,'VERIFIED')",
+      [actor, org, role, operator, reviewer],
     );
 
     const state = (await client.query<{ id: string }>(
@@ -89,7 +93,7 @@ test("facility registry enforces tenant geography, membership and append-only re
       [facility.id, outsider, actor],
     ), /verified membership in the facility organization/i);
 
-    await client.query("update facility_memberships set status='VERIFIED',reviewed_by_identity_id=$2,reviewed_at=now(),review_note='independent review' where id=$1", [membership.id, actor]);
+    await client.query("update facility_memberships set status='VERIFIED',reviewed_by_identity_id=$2,reviewed_at=now(),review_note='independent review' where id=$1", [membership.id, reviewer]);
     const updated = (await client.query<{ version: number }>(
       "update facilities set name='Collection Centre Renamed' where id=$1 returning version",
       [facility.id],
