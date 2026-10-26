@@ -314,7 +314,7 @@ export async function registerWasteCustodyRoutes(app: FastifyInstance, pool: Poo
           return reply.code(403).send({ error: "Resource-flow geography is outside active organization scope", code: "CUSTODY_FLOW_FORBIDDEN" });
         }
       }
-      const outOfScopeEvent = await pool.query<{ exists: boolean }>(
+      const outOfScopeEvent = await pool.query<{ out_of_scope: boolean }>(
         `select exists (
           select 1 from chain_of_custody_links c
            where c.resource_flow_id = $1
