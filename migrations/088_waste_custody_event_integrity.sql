@@ -114,9 +114,14 @@ begin
       select 1
         from organization_memberships om
         join roles r on r.id = om.role_id
+        join identities i on i.id = om.identity_id
+        join organizations o on o.id = om.organization_id
        where om.identity_id = new.recorded_by_identity_id
          and om.organization_id = new.actor_organization_id
          and om.status = 'VERIFIED'
+         and i.status = 'VERIFIED'
+         and i.suspended_at is null
+         and o.status = 'VERIFIED'
          and exists (
            select 1
              from jsonb_array_elements_text(r.permissions) permission
@@ -137,8 +142,8 @@ begin
     end if;
 
     if new.counterparty_organization_id is not null
-       and not exists (select 1 from organizations o where o.id = new.counterparty_organization_id) then
-      raise exception 'custody event counterparty organization does not exist';
+       and not exists (select 1 from organizations o where o.id = new.counterparty_organization_id and o.status = 'VERIFIED') then
+      raise exception 'custody event counterparty organization is missing or not verified';
     end if;
 
     if new.event_type = 'CORRECTION' then
