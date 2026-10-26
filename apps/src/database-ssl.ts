@@ -19,17 +19,27 @@ function isIpv4Loopback(hostname: string): boolean {
   let address: number;
 
   if (octets.length === 1) {
-    if (octets[0] > 0xffffffff) return false;
-    address = octets[0];
+    const only = octets[0]!;
+    if (only > 0xffffffff) return false;
+    address = only;
   } else if (octets.length === 2) {
-    if (octets[0] > 255 || octets[1] > 0xffffff) return false;
-    address = octets[0] * 0x1000000 + octets[1];
+    const first = octets[0]!;
+    const last = octets[1]!;
+    if (first > 255 || last > 0xffffff) return false;
+    address = first * 0x1000000 + last;
   } else if (octets.length === 3) {
-    if (octets[0] > 255 || octets[1] > 255 || octets[2] > 0xffff) return false;
-    address = octets[0] * 0x1000000 + octets[1] * 0x10000 + octets[2];
+    const first = octets[0]!;
+    const second = octets[1]!;
+    const last = octets[2]!;
+    if (first > 255 || second > 255 || last > 0xffff) return false;
+    address = first * 0x1000000 + second * 0x10000 + last;
   } else {
+    const first = octets[0]!;
+    const second = octets[1]!;
+    const third = octets[2]!;
+    const fourth = octets[3]!;
     if (octets.some((value) => value > 255)) return false;
-    address = octets[0] * 0x1000000 + octets[1] * 0x10000 + octets[2] * 0x100 + octets[3];
+    address = first * 0x1000000 + second * 0x10000 + third * 0x100 + fourth;
   }
   return Math.floor(address / 0x1000000) === 127;
 }
