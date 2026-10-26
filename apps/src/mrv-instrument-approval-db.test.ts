@@ -29,6 +29,14 @@ test("PostgreSQL enforces MRV instrument approval evidence and append-only decis
       "insert into identities(external_subject,display_name) values($1,$2) returning id",
       [`mrv-instrument-reviewer-${suffix}`, "MRV instrument reviewer"],
     )).rows[0]!.id;
+    const reviewerRoleId = (await client.query<{ id: string }>(
+      "insert into roles(organization_id,name,permissions) values($1,$2,'[\"VERIFY_EVIDENCE\"]'::jsonb) returning id",
+      [organizationId, `MRV-REVIEWER-${suffix}`],
+    )).rows[0]!.id;
+    await client.query(
+      "insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED')",
+      [reviewerIdentityId, organizationId, reviewerRoleId],
+    );
     const instrumentId = (await client.query<{ id: string; approval_status: string }>(
       "insert into mrv_instruments(organization_id,instrument_code,instrument_type,manufacturer,model,sku_revision,intended_use,supported_parameter_codes,registered_by_identity_id) values($1,$2,'GAS_FLOW','Test Manufacturer','Flow Model 1','Rev A','Landfill methane recovery flow measurement',array['gas_flow'],$3) returning id,approval_status",
       [organizationId, `FLOW-${suffix}`, identityId],
