@@ -29,9 +29,9 @@ create table facility_activity_link_events (
 );
 create index facility_activity_link_events_idx on facility_activity_link_events(link_id,created_at);
 create or replace function enforce_facility_activity_link_scope() returns trigger language plpgsql as $$
-declare f_org uuid; f_geo uuid; a_org uuid; a_geo uuid;
+declare f_org uuid; f_geo uuid; f_status text; a_org uuid; a_geo uuid;
 begin
- select organization_id,geography_id into f_org,f_geo from facilities where id=new.facility_id;
+ select organization_id,geography_id,operational_status into f_org,f_geo,f_status from facilities where id=new.facility_id;
  select organization_id,geography_id into a_org,a_geo from activities where id=new.activity_id;
  if f_org is null or a_org is null or new.organization_id<>f_org or new.organization_id<>a_org then
   raise exception 'facility activity link must stay within one organization';
@@ -42,12 +42,32 @@ begin
  if not organization_has_geography_scope(new.organization_id,f_geo) or not organization_has_geography_scope(new.organization_id,a_geo) then
   raise exception 'facility activity link geography is outside organization authorization scope';
  end if;
- if new.status='VERIFIED' and new.reviewed_by_identity_id=new.created_by_identity_id then
-  raise exception 'facility activity link requester cannot approve their own link';
+ if tg_op='INSERT' and f_status<>'ACTIVE' then
+  raise exception 'facility activity link requires an independently activated facility profile';
+ end if;
+ if tg_op='UPDATE' then
+  if new.organization_id<>old.organization_id or new.facility_id<>old.facility_id or new.activity_id<>old.activity_id or new.created_by_identity_id<>old.created_by_identity_id or new.note<>old.note then
+   raise exception 'facility activity link identity fields are immutable';
+  end if;
+  if old.status<>'PENDING' or new.status not in ('VERIFIED','REJECTED') then
+   raise exception 'facility activity link can only transition once from PENDING to a reviewed terminal state';
+  end if;
+ end if;
+ if new.status in ('VERIFIED','REJECTED') then
+  if new.reviewed_by_identity_id is null or new.reviewed_at is null or new.review_note is null then
+   raise exception 'facility activity link review metadata is required';
+  end if;
+  if new.reviewed_by_identity_id=new.created_by_identity_id then
+   raise exception 'facility activity link requester cannot review their own link';
+  end if;
+  if not exists(select 1 from organization_memberships om where om.organization_id=new.organization_id and om.identity_id=new.reviewed_by_identity_id and om.status='VERIFIED') then
+   raise exception 'facility activity link reviewer must be a verified organization member';
+  end if;
+ elsif new.reviewed_by_identity_id is not null or new.reviewed_at is not null or new.review_note is not null then
+  raise exception 'pending facility activity link cannot carry review metadata';
  end if;
  return new;
 end; $$;
-create trigger facility_activity_link_scope_guard before insert or update on facility_activity_links for each row execute function enforce_facility_activity_link_scope();
 create or replace function prevent_facility_activity_link_event_mutation() returns trigger language plpgsql as $$
 begin raise exception 'facility activity link events are append-only'; end; $$;
 create trigger facility_activity_link_events_append_only before update or delete on facility_activity_link_events for each row execute function prevent_facility_activity_link_event_mutation();
