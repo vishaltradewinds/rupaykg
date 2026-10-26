@@ -32,6 +32,12 @@ A public MP Pollution Control Board status/inspection report filed through the N
 
 The current rule set and each permit's conditions must be checked against official, current documents before implementation. A consent-validity date does not itself establish compliance with every condition.
 
+## 2.1 Mandatory MeitY hardware gate
+
+The project rule is strict: only an exact hardware model with verified applicable MeitY approval for its intended use may proceed, alongside all other required statutory, metrology, sector and site approvals. A MeitY programme affiliation, domestic origin, generic vendor claim, open-source licence or approval for another model/use is not sufficient.
+
+If there is no applicable MeitY scheme for the candidate category, or exact-model evidence cannot be verified, mark the candidate **BLOCKED — MEITY APPROVAL NOT VERIFIED**. Do not purchase, install or use it, and do not substitute another certification by assumption. Record the gap and obtain an explicit policy decision before changing this rule. This register does not assert that any candidate currently passes this gate.
+
 ## 3. Methodology gate — no premature instrument selection
 
 Before naming any MRV sensor, determine the real facility process and applicable approved methodology. In particular, do not infer that a landfill methane-recovery methodology applies merely because the site is an MSW facility. Landfill disposal, biomethanation, composting, RDF production, waste-to-energy, material recovery and other processes can have different measurement and eligibility requirements.
