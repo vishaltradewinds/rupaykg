@@ -1,6 +1,6 @@
 # RupayKg Greenfield Repository Assessment
 
-**Status:** Initial static assessment; runtime behavior and live environment not independently validated  
+**Status:** Initial static assessment with remediation tracked separately; runtime behavior and live environment not independently validated  
 **Baseline reviewed:** `main` at the time of review on 2026-10-26  
 **Target:** Greenfield pan-India platform defined in `docs/GREENFIELD_PLATFORM_BASELINE.md`  
 **Decision:** Do not infer production readiness from current repository structure or historical CI results.
@@ -33,13 +33,13 @@ The acceptance seed script exits without changes unless `RUPAYKG_ACCEPTANCE_SEED
 
 The seed's PostgreSQL client also disables TLS certificate validation when SSL is enabled. The migration client independently uses the same insecure `rejectUnauthorized: false` pattern for SSL connections. Both are concrete code findings; whether either path is currently active in the hosted environment remains unverified.
 
-**Required remediation design (not yet implemented by this document):**
-1. Make the acceptance-seed entrypoint fail closed whenever `NODE_ENV=production`; do not rely on an unrelated synthetic-data flag.
-2. Ensure production startup cannot invoke fixture seeding at all. Prefer no seed command in the production image's normal entrypoint.
-3. Move migrations to a separately authorized deployment job using a dedicated migration role, explicit target verification, lock/serialization, verified TLS, and an approved rollback/recovery plan.
-4. Share a single validated PostgreSQL TLS configuration path; no `rejectUnauthorized: false` in production connections.
-5. Add automated tests proving that production plus any seed flag exits before connecting or writing; add TLS configuration tests for both migration and seed code.
-6. Inspect the exact current deployed image/commit and authorized environment metadata before claiming exposure or applying any change.
+**Remediation tracking:** The startup-order, acceptance-seed prohibition, and shared verified-TLS changes are implemented in draft PR [#85](https://github.com/vishaltradewinds/rupaykg/pull/85). The PR's exact head has passed CI, including migration validation, CI PostgreSQL migration execution, typecheck, build, browser smoke, tests, and production container build. This is engineering evidence only; the PR remains unmerged and no production deployment has been performed.
+
+**Remaining remediation and release gates:**
+1. Independently review PR #85 and verify the exact-head CI record before merge; no production deployment is implied by its CI pass.
+2. Move migrations to a separately authorized deployment job using a dedicated migration role, explicit target verification, lock/serialization, verified TLS, and an approved rollback/recovery plan.
+3. Inspect the exact current deployed image/commit and authorized environment metadata before claiming exposure or applying any change.
+4. Verify target database identity, data inventory, retention decisions, and backup/restore readiness before any data movement.
 
 ## 4. Greenfield classification
 
