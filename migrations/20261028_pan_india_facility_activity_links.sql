@@ -70,6 +70,7 @@ begin
  end if;
  return new;
 end; $$;
+create trigger facility_activity_link_scope_guard before insert or update on facility_activity_links for each row execute function enforce_facility_activity_link_scope();
 create or replace function prevent_facility_activity_link_event_mutation() returns trigger language plpgsql as $$
 begin raise exception 'facility activity link events are append-only'; end; $$;
 create trigger facility_activity_link_events_append_only before update or delete on facility_activity_link_events for each row execute function prevent_facility_activity_link_event_mutation();
