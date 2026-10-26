@@ -21,7 +21,18 @@ This register is an intake and qualification template for the proposed SITE-JBP-
 | Required carbon/accounting methodology and version | Official methodology, eligibility analysis and approved monitoring plan | OPEN — not verified |
 | Statutory and conformity obligations | Applicable permits, metrology requirements, exact-model conformity/approval evidence and competent review | OPEN — not verified |
 
-## 2. Methodology gate — no premature instrument selection
+## 2. Public-record leads discovered (verify before use)
+
+A public MP Pollution Control Board status/inspection report filed through the National Green Tribunal website describes the Kathonda facility as a **Waste-to-Energy (WtE) plant using mass-incineration technology**, capable of processing mixed municipal solid waste. The report says the plant was recommissioned in January 2026 after an overhaul. It also includes an MPPCB consent order dated 16 March 2026 for M/s Jabalpur MSW Pvt. Ltd., listing 600 TPD MSW processing capacity and an 11.50 MW power plant, with consent/authorisation validity stated through 28 February 2028 subject to conditions. These are public-record leads, not confirmation of today's operating condition or the scope of any RupayKg project. The operator's current records and the complete consent conditions must be collected and verified before design.
+
+- Official NGT-hosted MPPCB status/inspection report and consent-order attachment: https://www.greentribunal.gov.in/sites/default/files/news_updates/STATUS%20CUM%20INSPECTION%20REPORT%20BY%20MPPCB%20IN%20OA%20NO.%20819%20of%202024%20NEWS%20ITEM%20TITLED%20JABALPUR%20KATHAUNDA%20PLANT%20MEIN%20KACHARA%20JALNE%20KE%20BAAD%20DUR%20DUR%20TAK%20FAIL%20RAHE%20DHOOL%20KE%20KAN.pdf
+- CPCB's central SWM portal states the Solid Waste Management Rules, 2026 were notified on 27 January 2026 and came into force on 1 April 2026: https://swmp.cpcb.gov.in/en
+
+**Engineering consequence:** the public record points to a WtE mass-incineration process, not proof of a landfill methane-recovery activity. Do not use BM WA03.001 or assume a landfill methane monitoring plan for this plant without a separate, documented activity boundary and methodology applicability assessment. A WtE project's candidate measurement domains may include incoming/feed waste mass, feed composition/calorific value, electricity generated/exported, auxiliary fuel, stack emissions and ash/residue flows—but these are only investigation prompts, not a final MRV parameter list. Final parameters must come from the actual process boundary, approved methodology/monitoring plan, permits and verified instrument records.
+
+The current rule set and each permit's conditions must be checked against official, current documents before implementation. A consent-validity date does not itself establish compliance with every condition.
+
+## 3. Methodology gate — no premature instrument selection
 
 Before naming any MRV sensor, determine the real facility process and applicable approved methodology. In particular, do not infer that a landfill methane-recovery methodology applies merely because the site is an MSW facility. Landfill disposal, biomethanation, composting, RDF production, waste-to-energy, material recovery and other processes can have different measurement and eligibility requirements.
 
@@ -36,7 +47,7 @@ For each proposed monitored parameter, document:
 
 If the methodology or applicability is unresolved, mark the parameter **BLOCKED — METHODOLOGY NOT CONFIRMED**. Do not fabricate a monitoring plan.
 
-## 3. Instrument register (one row per parameter/instrument)
+## 4. Instrument register (one row per parameter/instrument)
 
 | Field | Required value |
 |---|---|
@@ -58,7 +69,7 @@ If the methodology or applicability is unresolved, mark the parameter **BLOCKED 
 
 Do not assign an instrument code or mark an instrument verified until the real device and required evidence are available. Unknown values remain unknown; free-text labels are not proof of physical source.
 
-## 4. Edge gateway requirements (to be decided after instruments are known)
+## 5. Edge gateway requirements (to be decided after instruments are known)
 
 | Requirement | Evidence/decision required | Status |
 |---|---|---|
@@ -73,7 +84,7 @@ Do not assign an instrument code or mark an instrument verified until the real d
 | Firmware/software maintenance and vulnerability response | Supported lifecycle, update procedure and owner | OPEN |
 | Total lifecycle cost | Itemized hardware, integration, installation, calibration, support and replacement estimate | OPEN |
 
-## 5. Mandatory test cases before field use
+## 6. Mandatory test cases before field use
 
 1. Reject unknown, unregistered, expired, held or unapproved instruments.
 2. Reject parameter/unit mismatch, out-of-range values and malformed payloads.
@@ -88,7 +99,7 @@ Do not assign an instrument code or mark an instrument verified until the real d
 
 Synthetic fixtures are for isolated software testing only. They must not be sent to live/staging authoritative MRV paths or used as calibration, commissioning or real-field evidence.
 
-## 6. Decision gates
+## 7. Decision gates
 
 - **G0 Context discovery:** site/operator/process and boundary evidence verified.
 - **G1 Methodology:** applicable methodology/version and parameter requirements independently reviewed.
@@ -101,6 +112,6 @@ Synthetic fixtures are for isolated software testing only. They must not be sent
 
 A failed mandatory gate blocks progression. Passing application CI does not establish instrument calibration, site commissioning, statutory approval or production certification.
 
-## 7. Next practical action
+## 8. Next practical action
 
 Collect the evidence listed in Section 1 from the site owner/operator and identify the actual process. Then produce the methodology-to-parameter map before selecting sensors or edge hardware. No purchase or paid service is authorized by this register.
