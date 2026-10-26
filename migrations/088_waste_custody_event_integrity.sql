@@ -156,7 +156,7 @@ begin
       select actor_organization_id, counterparty_organization_id
         into latest_actor_organization_id, latest_counterparty_organization_id
         from chain_of_custody_links
-       where resource_flow_id = new.resource_flow_id and event_type is not null
+       where resource_flow_id = new.resource_flow_id and event_type is not null and event_type <> 'CORRECTION'
        order by sequence_no desc limit 1;
       if not found then
         if new.actor_organization_id is distinct from flow_organization_id then
