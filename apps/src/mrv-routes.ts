@@ -78,7 +78,10 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
 
   app.post("/api/v1/mrv/activities/:activityId/submit", async (request, reply) => {
     const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
-    const activityId = (request.params as { activityId: string }).activityId;
+    const rawActivityId = (request.params as { activityId: string }).activityId;
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(rawActivityId)) return reply.code(400).send({ error: "Valid activityId UUID is required", code: "MRV_ACTIVITY_ID_INVALID" });
+    // Normalize UUID casing so equivalent PostgreSQL UUID spellings share one advisory lock.
+    const activityId = rawActivityId.toLowerCase();
     const body = bodyOf(request as never);
     const verificationId = str(body, "verificationId");
     const evidenceId = str(body, "evidenceId");
