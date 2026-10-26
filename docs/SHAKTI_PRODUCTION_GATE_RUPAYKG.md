@@ -17,7 +17,7 @@ This document is the production-control record for RupayKg under SHAKTI — Stan
 - Current observed live checks: `/health` HTTP 200; `/api/v1/status` reports PostgreSQL and `syntheticData=false`; unauthenticated `/api/v1/overview` returns HTTP 401; same-origin CORS is allowed and an untrusted origin receives no `Access-Control-Allow-Origin`.
 - Current live responses omit HSTS, X-Content-Type-Options, X-Frame-Options, Referrer-Policy and Permissions-Policy.
 - The live application reports PostgreSQL but the exact host/project/branch/runtime role have not been authoritatively mapped. A Neon candidate has matching regulatory-source IDs but is not yet proven to be the live target.
-- The original Render PostgreSQL is suspended for billing. No billing action has been authorized; the candidate Neon snapshot is not an authoritative production backup.
+- The original Render PostgreSQL is suspended for billing. The user confirmed RupayKg is a new application not yet proven in a real operating environment and directed use of no-billing options. No specific irreplaceable business records have been identified; do not pay to recover the old Render database. The candidate Neon snapshot is not an authoritative production backup and expires 2026-11-02.
 - The deployed Docker command and API start script invoke an opt-in acceptance-seed entrypoint. PR #53 removes those invocations and makes the seed fail closed in production; exact-head CI run #2172 for current head `10ca7d8b623b85fd0cd3340f956ae4b8f620de41` passed, but the PR remains draft, unmerged and undeployed.
 - No real-site pilot, MeitY-approved instrument acceptance, or production certification has been demonstrated.
 
@@ -47,8 +47,8 @@ This document is the production-control record for RupayKg under SHAKTI — Stan
 
 ## P0 blockers — ordered before any release
 
-1. **Authoritative database:** identify the exact live PostgreSQL host/project/branch and runtime role without exposing secrets; verify the intended schema and migration state.
-2. **Recovery:** establish a free, permitted backup/export and a successful isolated restore for the confirmed target. Do not treat the unconfirmed Neon candidate snapshot as production recovery evidence.
+1. **Authoritative database:** identify the exact live PostgreSQL host/project/branch and runtime role without exposing secrets; verify the intended schema and migration state. The Neon candidate branches' only listed role has CREATEDB, CREATEROLE, REPLICATION and BYPASSRLS privileges, so it is not suitable as a least-privilege runtime role.
+2. **Data recovery decision:** do not recover/pay for the suspended Render database in the current scope because no irreplaceable operational data has been identified for this new app. Separately, before real traffic, establish a no-billing backup/export and successful isolated restore for the chosen runtime database. Do not treat the unconfirmed Neon candidate snapshot as production recovery evidence.
 3. **Safe startup:** remove acceptance fixture seeding from all production startup paths and prove the seed refuses production mode (PR #53; CI/review required).
 4. **Security:** add and verify baseline browser security headers (PR #52; not deployed). Keep CSP deferred until SPA, workers and evidence upload are compatibility-audited.
 5. **Operational acceptance:** test real authentication, organization/geography authorization, activity → measurement → evidence → verification, replay/idempotency, audit provenance, and failure handling against a controlled live environment with isolated test data.
