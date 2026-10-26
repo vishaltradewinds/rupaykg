@@ -6,6 +6,7 @@ export type RuntimeDatabaseRoleState = {
   canReplicate: boolean;
   bypassesRls: boolean;
   ownsDatabase: boolean;
+  canCreateInDatabase: boolean;
   ownsPublicSchema: boolean;
   ownsPublicObjects: boolean;
   canCreateInPublicSchema: boolean;
@@ -26,6 +27,7 @@ export function runtimeDatabaseRoleFailure(state: RuntimeDatabaseRoleState): str
   if (state.canReplicate) forbidden.push("REPLICATION");
   if (state.bypassesRls) forbidden.push("BYPASSRLS");
   if (state.ownsDatabase) forbidden.push("database ownership");
+  if (state.canCreateInDatabase) forbidden.push("CREATE on database");
   if (state.ownsPublicSchema) forbidden.push("public schema ownership");
   if (state.ownsPublicObjects) forbidden.push("public application object ownership");
   if (state.canCreateInPublicSchema) forbidden.push("CREATE on public schema");
