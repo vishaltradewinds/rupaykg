@@ -67,6 +67,25 @@ function isUuid(value: unknown): value is string {
   return typeof value === "string" && UUID.test(value);
 }
 
+function isStrictTimestamp(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,9})?(Z|[+-]\d{2}:\d{2})$/.exec(value);
+  if (!match) return false;
+  const [, yearText, monthText, dayText, hourText, minuteText, secondText, zone] = match;
+  const year = Number(yearText), month = Number(monthText), day = Number(dayText);
+  const hour = Number(hourText), minute = Number(minuteText), second = Number(secondText);
+  if (year < 1 || month < 1 || month > 12 || hour > 23 || minute > 59 || second > 59) return false;
+  const leapYear = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const daysInMonth = [31, leapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  if (day < 1 || day > daysInMonth[month - 1]!) return false;
+  if (zone !== "Z") {
+    const offsetHour = Number(zone.slice(1, 3));
+    const offsetMinute = Number(zone.slice(4, 6));
+    if (offsetHour > 23 || offsetMinute > 59) return false;
+  }
+  return !Number.isNaN(Date.parse(value));
+}
+
 /** Unknown, malformed or unsupported event payloads fail closed with stable reason codes. */
 export function validateWasteCustodyEvent(input: unknown): WasteCustodyValidation {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
@@ -100,8 +119,8 @@ export function validateWasteCustodyEvent(input: unknown): WasteCustodyValidatio
   if (value.quantityBasis === "MEASURED" && (!isNonBlank(value.measurementMethod) || !isNonBlank(value.instrumentId))) {
     return { ok: false, code: "CUSTODY_MEASUREMENT_PROVENANCE_REQUIRED", error: "Measured quantities require a method and instrument identifier" };
   }
-  if (!isNonBlank(value.occurredAt) || !/(?:Z|[+-]\d{2}:\d{2})$/i.test(value.occurredAt) || Number.isNaN(Date.parse(value.occurredAt))) {
-    return { ok: false, code: "CUSTODY_EVENT_TIME_INVALID", error: "Event timestamp must be a valid ISO timestamp with an explicit timezone" };
+  if (!isStrictTimestamp(value.occurredAt)) {
+    return { ok: false, code: "CUSTODY_EVENT_TIME_INVALID", error: "Event timestamp must be a valid ISO timestamp with explicit timezone and real calendar fields" };
   }
   for (const key of ["activityId", "fromGeographyId", "toGeographyId", "supersedesEventId"] as const) {
     const candidate = value[key];
