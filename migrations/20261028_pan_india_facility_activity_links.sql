@@ -31,8 +31,8 @@ create index facility_activity_link_events_idx on facility_activity_link_events(
 create or replace function enforce_facility_activity_link_scope() returns trigger language plpgsql as $$
 declare f_org uuid; f_geo uuid; f_status text; a_org uuid; a_geo uuid;
 begin
- select organization_id,geography_id,operational_status into f_org,f_geo,f_status from facilities where id=new.facility_id;
- select organization_id,geography_id into a_org,a_geo from activities where id=new.activity_id;
+ select organization_id,geography_id,operational_status into f_org,f_geo,f_status from facilities where id=new.facility_id for share;
+ select organization_id,geography_id into a_org,a_geo from activities where id=new.activity_id for share;
  if f_org is null or a_org is null or new.organization_id<>f_org or new.organization_id<>a_org then
   raise exception 'facility activity link must stay within one organization';
  end if;
@@ -42,7 +42,7 @@ begin
  if not organization_has_geography_scope(new.organization_id,f_geo) or not organization_has_geography_scope(new.organization_id,a_geo) then
   raise exception 'facility activity link geography is outside organization authorization scope';
  end if;
- if tg_op='INSERT' and f_status<>'ACTIVE' then
+ if (tg_op='INSERT' or new.status='VERIFIED') and f_status<>'ACTIVE' then
   raise exception 'facility activity link requires an independently activated facility profile';
  end if;
  if tg_op='UPDATE' then
