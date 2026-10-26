@@ -36,7 +36,7 @@ export interface MrvInstrumentApprovalEvidence {
 }
 
 export interface MrvInstrumentParameterSpec {
-  instrument_code?: string;
+  instrument_code: string;
   parameter_code: string;
   unit: string;
   minimum_value: string | number;
@@ -58,7 +58,7 @@ export function instrumentParameterFailure(
   const spec = specs.find((candidate) =>
     candidate.parameter_code.trim().toLowerCase() === parameterCode.trim().toLowerCase()
     && candidate.unit.trim() === unit.trim()
-    && (!candidate.instrument_code || candidate.instrument_code === instrumentCode),
+    && candidate.instrument_code === instrumentCode,
   );
   if (!spec) return `Instrument "${instrumentCode}" has no exact parameter/unit specification for "${parameterCode}" in "${unit}".`;
   const minimum = Number(spec.minimum_value);
