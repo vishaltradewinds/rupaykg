@@ -95,7 +95,7 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
       const context = await pool.query<{ organization_id: string; activity_status: string; decision: string; evidence_status: string; evidence_activity_id: string | null; evidence_count: string; observation_count: string }>(
         `select a.organization_id, a.status activity_status, v.decision, e.status evidence_status, e.activity_id evidence_activity_id,
                 (select count(*)::text from evidence e2 where e2.activity_id=a.id) evidence_count,
-                (select count(*)::text from mrv_observations mo where mo.activity_id=a.id) observation_count
+                ((select count(*) from mrv_observations mo where mo.activity_id=a.id) + (select count(*) from measurements mm where mm.activity_id=a.id and mm.mrv_instrument_id is not null and mm.parameter_code is not null))::text observation_count
            from activities a join verifications v on v.id=$2 and v.activity_id=a.id join evidence e on e.id=$3 and e.activity_id=a.id where a.id=$1`,
         [activityId, verificationId, evidenceId]);
       const row = context.rows[0];
@@ -106,6 +106,21 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
       if (row.activity_status !== "COMPLETED" || row.decision !== "APPROVED" || row.evidence_status !== "VERIFIED" || row.evidence_activity_id !== activityId) return reply.code(409).send({ error: "Completed activity, approved verification and VERIFIED evidence are required before Guardian MRV", code: "MRV_PRECONDITION_FAILED" });
 
       const observations = await pool.query("select id, parameter_code, observed_value, unit, method, instrument_id, observed_at, uncertainty, quality_status, metadata from mrv_observations where activity_id=$1 order by observed_at", [activityId]);
+      // Direct and offline field-sync MEASUREMENT_CREATE persist to measurements.
+      // Include only readings with an explicit instrument+parameter binding; never infer
+      // a physical source from legacy free-text source fields.
+      const instrumentMeasurements = await pool.query(
+        `select m.id, m.parameter_code, m.value::text as observed_value, m.unit, m.method,
+                i.instrument_code as instrument_id, m.measured_at as observed_at,
+                null::numeric as uncertainty, null::text as quality_status, m.metadata
+           from measurements m
+           join mrv_instruments i on i.id = m.mrv_instrument_id
+          where m.activity_id=$1 and m.mrv_instrument_id is not null
+            and m.parameter_code is not null
+          order by m.measured_at`,
+        [activityId],
+      );
+      observations.rows.push(...instrumentMeasurements.rows);
       const instrumentCodes = [...new Set(observations.rows.map((observation) => typeof observation.instrument_id === "string" ? observation.instrument_id.trim() : "").filter(Boolean))];
       const registeredInstruments = instrumentCodes.length
         ? await pool.query<MrvInstrumentApprovalEvidence>(
