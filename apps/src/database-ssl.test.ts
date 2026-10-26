@@ -72,12 +72,14 @@ describe("PostgreSQL TLS policy", () => {
     }), /PRODUCTION_DATABASE_TLS_REQUIRED/);
   });
 
-  it("rejects loopback database targets in production before allowing TLS opt-out", () => {
-    assert.throws(() => readDatabaseSslSetting({
-      NODE_ENV: "production",
-      DATABASE_URL: "postgresql://localhost:5432/rupaykg",
-      DATABASE_SSL: "false",
-    }), /PRODUCTION_DATABASE_TARGET_FORBIDDEN/);
+  it("rejects all common loopback host spellings in production", () => {
+    for (const hostname of ["localhost", "127.0.0.1", "127.0.0.2", "127.1", "[::1]", "service.localhost"]) {
+      assert.throws(() => readDatabaseSslSetting({
+        NODE_ENV: "production",
+        DATABASE_URL: `postgresql://${hostname}:5432/rupaykg`,
+        DATABASE_SSL: "false",
+      }), /PRODUCTION_DATABASE_TARGET_FORBIDDEN/, hostname);
+    }
   });
 
   it("retains the provider-internal non-TLS exception for production Render database hosts", () => {
