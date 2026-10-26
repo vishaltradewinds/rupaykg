@@ -322,10 +322,10 @@ export async function registerWasteCustodyRoutes(app: FastifyInstance, pool: Poo
                (c.from_geography_id is not null and not organization_has_geography_scope($2, c.from_geography_id))
                or (c.to_geography_id is not null and not organization_has_geography_scope($2, c.to_geography_id))
              )
-        ) as exists`,
+        ) as out_of_scope`,
         [resourceFlowId, organizationId],
       );
-      if (outOfScopeEvent.rows[0]?.exists) {
+      if (outOfScopeEvent.rows[0]?.out_of_scope) {
         return reply.code(403).send({ error: "Custody event geography is outside active organization scope", code: "CUSTODY_FLOW_FORBIDDEN" });
       }
       const events = await pool.query(
