@@ -114,12 +114,13 @@ No later gate can compensate for a failed earlier gate. Passing software CI does
 
 ## 9. Immediate next actions
 
-1. Obtain a facility process/measurement specification for the pilot site before finalizing instrument categories.
-2. Inspect official SHAKTI and candidate board documentation for exact supported board/SoC, toolchain, interfaces and lifecycle.
-3. Select one no-cost software prototype target only after verifying its current toolchain and support; simulate the data contract without live MRV submission.
-4. Build an evidence-backed comparison using the rubric above. Keep unknowns open.
-5. Request real instrument manuals and interface details from the site/operator before any bench design.
-6. Proceed to physical hardware only after the user explicitly authorizes any required expenditure and the applicable qualification gates are passed.
+1. Complete the [SITE-JBP-01 measurement requirements register](SITE_JBP_01_MEASUREMENT_REQUIREMENTS_REGISTER.md). It is an evidence-intake template; all site/process facts remain unverified until supported by operator records and official evidence.
+2. Obtain a facility process/measurement specification for the pilot site before finalizing instrument categories.
+3. Inspect official SHAKTI and candidate board documentation for exact supported board/SoC, toolchain, interfaces and lifecycle.
+4. Select one no-cost software prototype target only after verifying its current toolchain and support; simulate the data contract without live MRV submission.
+5. Build an evidence-backed comparison using the rubric above. Keep unknowns open.
+6. Request real instrument manuals and interface details from the site/operator before any bench design.
+7. Proceed to physical hardware only after the user explicitly authorizes any required expenditure and the applicable qualification gates are passed.
 
 ## 10. Current decision
 
