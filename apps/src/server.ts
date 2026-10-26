@@ -121,7 +121,7 @@ app.post("/api/v1/activities/:activityId/measurements", async (request, reply) =
     const evidenceCurrent = await pool!.query<{ current: boolean }>("select mrv_instrument_evidence_is_current($1) as current", [instrumentId]);
     if (evidenceCurrent.rows[0]?.current !== true) return reply.code(409).send({ error: "Instrument evidence-vault approval is no longer current", code: "MRV_INSTRUMENT_EVIDENCE_INVALID", eligibleForMrv: false, syntheticData: false });
     const parameterSpecs = await pool!.query<MrvInstrumentParameterSpec>(
-      "select parameter_code,unit,minimum_value::text,maximum_value::text,resolution::text,accuracy_absolute::text,accuracy_relative_percent::text from mrv_instrument_parameter_specs where instrument_id=$1",
+      "select i.instrument_code,s.parameter_code,s.unit,s.minimum_value::text,s.maximum_value::text,s.resolution::text,s.accuracy_absolute::text,s.accuracy_relative_percent::text from mrv_instrument_parameter_specs s join mrv_instruments i on i.id=s.instrument_id where s.instrument_id=$1",
       [instrumentId],
     );
     const parameterFailure = instrumentParameterFailure(instrumentCode, parameterCode, unit, value, parameterSpecs.rows);
