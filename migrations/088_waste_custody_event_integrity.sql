@@ -51,6 +51,7 @@ alter table chain_of_custody_links
       and actor_organization_id is not null
       and recorded_by_identity_id is not null
       and occurred_at is not null
+      and quantity_basis is not null
       and quantity_basis in ('DECLARED','ESTIMATED','MEASURED')
       and quantity_source is not null and length(btrim(quantity_source)) > 0
       and (
