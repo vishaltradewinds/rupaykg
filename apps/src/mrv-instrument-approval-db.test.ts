@@ -115,7 +115,7 @@ test("PostgreSQL enforces MRV instrument approval evidence and append-only decis
     assert.ok(submissionReading.rows.some((reading) =>
       reading.id === validMeasurement.rows[0]?.id
       && reading.parameter_code === "gas_flow"
-      && reading.observed_value === "2"
+      && Number(reading.observed_value) === 2
       && reading.instrument_id === `FLOW-${suffix}`,
     ));
 
