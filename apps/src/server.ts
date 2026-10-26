@@ -1,4 +1,5 @@
 import Fastify from "fastify";
+import { registerSecurityHeaders } from "./security-headers.js";
 import cors from "@fastify/cors";
 import fastifyStatic from "@fastify/static";
 import { existsSync, readFileSync } from "node:fs";
@@ -18,6 +19,9 @@ import { registerEvidenceVaultRoutes } from "./evidence-vault-routes.js";
 import { registerPlatformAdminRoutes } from "./platform-admin-routes.js";
 
 const app = Fastify({ logger: true });
+registerSecurityHeaders(app);
+
+
 const allowedOrigins = process.env.RUPAYKG_ALLOWED_ORIGINS?.split(",").map(origin => origin.trim()).filter(Boolean) ?? [];
 await app.register(cors, { origin: allowedOrigins.length ? allowedOrigins : false });
 const webRoot = resolve(process.cwd(), "apps/web/dist");
