@@ -34,7 +34,7 @@ describe("PostgreSQL TLS policy", () => {
     const options = readDatabaseConnectionOptions({
       DATABASE_URL: "postgresql://db.example.invalid:5432/rupaykg?sslmode=require&sslrootcert=%2Ftmp%2Froot.pem&application_name=rupaykg",
       DATABASE_SSL: "require",
-      DATABASE_CA_CERT: "-----BEGIN CERTIFICATE-----\\nfixture-ca\\n-----END CERTIFICATE-----",
+      DATABASE_CA_CERT: "-----BEGIN CERTIFICATE-----\nfixture-ca\n-----END CERTIFICATE-----",
     });
     const parsed = new URL(options.connectionString);
     assert.equal(parsed.searchParams.has("sslmode"), false);
