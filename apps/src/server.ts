@@ -9,6 +9,7 @@ import { registerOnboardingHierarchyRoutes } from "./onboarding-hierarchy-routes
 import { registerValueRoutes } from "./value-routes.js";
 import { registerRegistryRoutes } from "./registry-routes.js";
 import { registerSyncRoutes } from "./sync-routes.js";
+import { registerWasteCustodyRoutes } from "./waste-custody-routes.js";
 import { registerWorkspaceRoutes } from "./workspace-routes.js";
 import { registerBwgRoutes } from "./bwg-routes.js";
 import { registerCpcbSwmRoutes } from "./cpcb-swm-routes.js";
@@ -94,6 +95,7 @@ await registerOnboardingHierarchyRoutes(app, pool);
 await registerValueRoutes(app, pool);
 await registerRegistryRoutes(app, pool);
 await registerSyncRoutes(app, pool);
+await registerWasteCustodyRoutes(app, pool);
 await registerWorkspaceRoutes(app, pool);
 await registerBwgRoutes(app, pool);
 await registerCpcbSwmRoutes(app, pool);
