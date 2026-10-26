@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 
 type Flow = {
   id: string;
@@ -142,7 +142,7 @@ export function WasteCustodyPanel(props: {
 
   useEffect(() => { void refreshFlowData(); }, [flowId, token, organizationId, canRead, canRecord]);
 
-  async function submit(event: React.FormEvent<HTMLFormElement>) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selectedFlow || !canRecord || !token) return;
     if (requiresCounterparty && !counterpartyId) {
