@@ -23,6 +23,7 @@ test("resource flows bind optional facility endpoints to organization and exact 
   await c.query("update facilities set operational_status='ACTIVE',updated_by_identity_id=$2 where id=$1",[otherFacility,reviewer]);
   const flow=(await c.query<{id:string;source_facility_id:string}>("insert into resource_flows(organization_id,origin_type,resource_form,material_code,declared_quantity,unit,source_geography_id,source_facility_id) values($1,'COLLECTION','SOLID','MIXED_MSW',10,'kg',$2,$3) returning id,source_facility_id",[org,geo,facility])).rows[0]!;
   assert.equal(flow.source_facility_id,facility);
+  await rejectsInSavepoint(c,()=>c.query("update facilities set geography_id=$2,updated_by_identity_id=$3 where id=$1",[facility,otherGeo,reviewer]),/cannot change facility geography while resource flows reference this facility/i);
   await rejectsInSavepoint(c,()=>c.query("insert into resource_flows(organization_id,origin_type,resource_form,material_code,declared_quantity,unit,source_geography_id,source_facility_id) values($1,'COLLECTION','SOLID','MIXED_MSW',10,'kg',$2,$3)",[org,geo,otherFacility]),/exactly match source geography/i);
   await rejectsInSavepoint(c,()=>c.query("insert into resource_flows(organization_id,origin_type,resource_form,material_code,declared_quantity,unit,source_geography_id,source_facility_id) values($1,'COLLECTION','SOLID','MIXED_MSW',10,'kg',$2,$3)",[otherOrg,geo,facility]),/belong to the flow organization/i);
   await c.query("rollback");
