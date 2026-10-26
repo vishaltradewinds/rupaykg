@@ -85,6 +85,14 @@ test("corrections require a superseded event and a reason", () => {
   if (!missingReason.ok) assert.equal(missingReason.code, "CUSTODY_REASON_REQUIRED");
 });
 
+test("rejects normalized invalid dates and non-ISO timestamps", () => {
+  for (const occurredAt of ["2026-02-31T09:30:00Z", "1", "2026-10-26T09:30:00", "2026-13-01T09:30:00Z"]) {
+    const result = validateWasteCustodyEvent(valid({ occurredAt }));
+    assert.equal(result.ok, false, `accepted malformed timestamp: ${occurredAt}`);
+    if (!result.ok) assert.equal(result.code, "CUSTODY_EVENT_TIME_INVALID");
+  }
+});
+
 test("requires explicit timezone and bounded idempotency key", () => {
   const noTimezone = validateWasteCustodyEvent(valid({ occurredAt: "2026-10-26T09:30:00" }));
   assert.equal(noTimezone.ok, false);
