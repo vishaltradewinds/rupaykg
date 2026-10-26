@@ -265,6 +265,91 @@ function bodyOf(request: FastifyRequest): Record<string, unknown> {
 }
 
 export async function registerWasteCustodyRoutes(app: FastifyInstance, pool: Pool | null): Promise<void> {
+  app.get("/api/v1/resource-flows/:resourceFlowId/custody-counterparties", async (request, reply) => {
+    if (!pool) return reply.code(503).send({ error: "Custody directory unavailable", code: "DATABASE_UNAVAILABLE", syntheticData: false });
+    let auth: AuthContext | null;
+    try {
+      auth = await authenticate(request, pool);
+      if (!auth) return reply.code(401).send(bearerChallenge());
+    } catch (error) {
+      request.log.error(error);
+      return reply.code(503).send({ error: "Authentication service unavailable", code: "AUTH_UNAVAILABLE" });
+    }
+    const { resourceFlowId } = request.params as { resourceFlowId: string };
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(resourceFlowId)) {
+      return reply.code(400).send({ error: "resourceFlowId must be a UUID", code: "INVALID_RESOURCE_FLOW" });
+    }
+    const organizationId = auth.activeOrganizationId;
+    if (!organizationId || !await hasOrganizationPermission(pool, auth, organizationId, ["waste:record"])) {
+      return reply.code(403).send({ error: "Waste recording permission for the active organization is required", code: "OPERATION_FORBIDDEN" });
+    }
+    try {
+      const flow = await pool.query<{ organization_id: string; source_geography_id: string | null; destination_geography_id: string | null }>(
+        "select organization_id, source_geography_id, destination_geography_id from resource_flows where id = $1",
+        [resourceFlowId],
+      );
+      const flowRow = flow.rows[0];
+      if (!flowRow) return reply.code(404).send({ error: "Resource flow was not found", code: "RESOURCE_FLOW_NOT_FOUND" });
+      const participant = await pool.query<{ ok: boolean }>(
+        `select (
+          $2::uuid = $3::uuid
+          or exists (
+            select 1 from chain_of_custody_links c
+             where c.resource_flow_id = $1
+               and (c.actor_organization_id = $2 or c.counterparty_organization_id = $2)
+          )
+        ) as ok`,
+        [resourceFlowId, organizationId, flowRow.organization_id],
+      );
+      if (!participant.rows[0]?.ok) {
+        return reply.code(403).send({ error: "Active organization is not a participant in this resource flow", code: "CUSTODY_FLOW_FORBIDDEN" });
+      }
+      for (const geographyId of [flowRow.source_geography_id, flowRow.destination_geography_id]) {
+        if (!geographyId) continue;
+        const scoped = await pool.query<{ ok: boolean }>(
+          "select organization_has_geography_scope($1, $2) as ok",
+          [organizationId, geographyId],
+        );
+        if (!scoped.rows[0]?.ok) return reply.code(403).send({ error: "Resource-flow geography is outside active organization scope", code: "CUSTODY_FLOW_FORBIDDEN" });
+      }
+      const organizations = await pool.query(
+        `select distinct o.id, o.name, o.organization_type
+           from organizations o
+          where o.status = 'VERIFIED'
+            and o.id <> $1
+            and exists (
+              select 1
+                from organization_memberships om
+                join roles r on r.id = om.role_id
+               where om.organization_id = o.id
+                 and om.status = 'VERIFIED'
+                 and exists (
+                   select 1 from jsonb_array_elements_text(r.permissions) permission
+                    where permission = 'waste:record'
+                 )
+            )
+            and (
+              ($2::uuid is null and $3::uuid is null)
+              or ($2::uuid is not null and organization_has_geography_scope(o.id, $2))
+              or ($3::uuid is not null and organization_has_geography_scope(o.id, $3))
+            )
+          order by o.name
+          limit 200`,
+        [organizationId, flowRow.source_geography_id, flowRow.destination_geography_id],
+      );
+      return {
+        source: "postgresql",
+        syntheticData: false,
+        directoryBasis: "VERIFIED_PLATFORM_MEMBERSHIP_AND_GEOGRAPHY_ONLY",
+        statutoryAuthorizationVerified: false,
+        organizations: organizations.rows,
+      };
+    } catch (error) {
+      request.log.error(error);
+      return reply.code(503).send({ error: "Custody directory unavailable", code: "CUSTODY_DIRECTORY_UNAVAILABLE", syntheticData: false });
+    }
+  });
+
   app.get("/api/v1/resource-flows/:resourceFlowId/custody-events", async (request, reply) => {
     if (!pool) return reply.code(503).send({ error: "Custody event service unavailable", code: "DATABASE_UNAVAILABLE", syntheticData: false });
     let auth: AuthContext | null;
