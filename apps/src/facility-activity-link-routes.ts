@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import type { Pool } from "pg";
+import type { Pool, PoolClient } from "pg";
 import { authenticate, hasOrganizationPermission, type AuthContext } from "./auth.js";
 
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -8,7 +8,7 @@ type Request={body:unknown;params:Record<string,string>;query:unknown;log:{error
 function bodyOf(r:Request):Record<string,unknown>{return r.body&&typeof r.body==="object"&&!Array.isArray(r.body)?r.body as Record<string,unknown>:{};}
 function str(b:Record<string,unknown>,key:string,max=2000):string|null{const v=b[key];return typeof v==="string"&&v.trim().length>0&&v.trim().length<=max?v.trim():null;}
 async function authFor(request:Request,reply:Reply,pool:Pool|null):Promise<AuthContext|null>{if(!pool){reply.code(503).send({error:"Database unavailable",code:"DATABASE_UNAVAILABLE"});return null;}try{const auth=await authenticate(request as never,pool);if(!auth){reply.code(401).send({error:"Authenticated session required",code:"AUTH_REQUIRED"});return null;}return auth;}catch(error){request.log.error(error);reply.code(503).send({error:"Authentication service unavailable",code:"AUTH_UNAVAILABLE"});return null;}}
-async function canManage(pool:Pool,auth:AuthContext,org:string):Promise<boolean>{return hasOrganizationPermission(pool,auth,org,["facility:manage"]);}
+async function canManage(pool:Pool|PoolClient,auth:AuthContext,org:string):Promise<boolean>{return hasOrganizationPermission(pool,auth,org,["facility:manage"]);}
 
 export async function registerFacilityActivityLinkRoutes(app:FastifyInstance,pool:Pool|null):Promise<void>{
  app.get("/api/v1/facilities/:facilityId/activity-links",async(request,reply)=>{
