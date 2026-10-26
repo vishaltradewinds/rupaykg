@@ -19,6 +19,15 @@ export function normalizeMrvActivityId(value: string): string | null {
     : null;
 }
 
+function canonicalizeObservationValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonicalizeObservationValue);
+  if (value !== null && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    return Object.fromEntries(Object.keys(record).sort().map((key) => [key, canonicalizeObservationValue(record[key])]));
+  }
+  return value;
+}
+
 export function mrvObservationSetHash(rows: Array<Record<string, unknown>>): string {
   const observationSet = rows.map((o) => ({
     id: String(o.id ?? ""),
@@ -29,6 +38,8 @@ export function mrvObservationSetHash(rows: Array<Record<string, unknown>>): str
     instrumentId: String(o.instrument_id ?? ""),
     observedAt: o.observed_at == null ? "" : new Date(o.observed_at as string | number | Date).toISOString(),
     uncertainty: o.uncertainty == null ? null : String(o.uncertainty),
+    qualityStatus: String(o.quality_status ?? ""),
+    metadata: canonicalizeObservationValue(o.metadata ?? null),
   })).sort((a, b) => a.id.localeCompare(b.id));
   return createHash("sha256").update(JSON.stringify(observationSet)).digest("hex");
 }
