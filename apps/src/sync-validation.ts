@@ -34,3 +34,22 @@ export function validateConflictResolution(body: Record<string, unknown>): { ok:
   }
   return { ok: true, resolutionStatus: resolutionStatus as "RESOLVED" | "REJECTED", resolutionReason };
 }
+
+/** Direct and offline resource-flow intake must enforce the same minimum geography requirement. */
+export type ResourceFlowGeographyValidation =
+  | { ok: true }
+  | { ok: false; code: "GEOGRAPHY_REQUIRED"; error: string };
+
+export function validateResourceFlowGeography(
+  sourceGeographyId: string | null,
+  destinationGeographyId: string | null,
+): ResourceFlowGeographyValidation {
+  if (!sourceGeographyId && !destinationGeographyId) {
+    return {
+      ok: false,
+      code: "GEOGRAPHY_REQUIRED",
+      error: "At least one authorized source or destination geography is required",
+    };
+  }
+  return { ok: true };
+}
