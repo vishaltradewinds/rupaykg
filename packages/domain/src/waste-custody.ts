@@ -73,8 +73,8 @@ export function validateWasteCustodyEvent(input: unknown): WasteCustodyValidatio
     return { ok: false, code: "CUSTODY_EVENT_INVALID", error: "Custody event must be an object" };
   }
   const value = input as Partial<WasteCustodyEventInput>;
-  if (!isUuid(value.resourceFlowId) || !isNonBlank(value.idempotencyKey)) {
-    return { ok: false, code: "CUSTODY_EVENT_IDENTITY_REQUIRED", error: "A valid resourceFlowId and idempotencyKey are required" };
+  if (!isUuid(value.resourceFlowId) || !isNonBlank(value.idempotencyKey) || value.idempotencyKey.length > 200) {
+    return { ok: false, code: "CUSTODY_EVENT_IDENTITY_REQUIRED", error: "A valid resourceFlowId and an idempotencyKey of 1–200 characters are required" };
   }
   if (!WASTE_CUSTODY_EVENT_TYPES.includes(value.eventType as WasteCustodyEventType)) {
     return { ok: false, code: "CUSTODY_EVENT_TYPE_UNKNOWN", error: "Unknown custody event type must be reviewed" };
@@ -94,11 +94,14 @@ export function validateWasteCustodyEvent(input: unknown): WasteCustodyValidatio
   if (!["DECLARED", "ESTIMATED", "MEASURED"].includes(value.quantityBasis as string) || !isNonBlank(value.quantitySource)) {
     return { ok: false, code: "CUSTODY_QUANTITY_PROVENANCE_REQUIRED", error: "Quantity basis and source are required; declared or estimated values must not be represented as measured" };
   }
+  if (value.eventType === "WEIGHMENT_CAPTURED" && value.quantityBasis !== "MEASURED") {
+    return { ok: false, code: "CUSTODY_WEIGHMENT_MUST_BE_MEASURED", error: "A weighment event must record a measured quantity, not a declaration or estimate" };
+  }
   if (value.quantityBasis === "MEASURED" && (!isNonBlank(value.measurementMethod) || !isNonBlank(value.instrumentId))) {
     return { ok: false, code: "CUSTODY_MEASUREMENT_PROVENANCE_REQUIRED", error: "Measured quantities require a method and instrument identifier" };
   }
-  if (!isNonBlank(value.occurredAt) || Number.isNaN(Date.parse(value.occurredAt))) {
-    return { ok: false, code: "CUSTODY_EVENT_TIME_INVALID", error: "A valid event timestamp is required" };
+  if (!isNonBlank(value.occurredAt) || !/(?:Z|[+-]\\d{2}:\\d{2})$/i.test(value.occurredAt) || Number.isNaN(Date.parse(value.occurredAt))) {
+    return { ok: false, code: "CUSTODY_EVENT_TIME_INVALID", error: "Event timestamp must be a valid ISO timestamp with an explicit timezone" };
   }
   for (const key of ["activityId", "fromGeographyId", "toGeographyId", "supersedesEventId"] as const) {
     const candidate = value[key];
@@ -109,8 +112,8 @@ export function validateWasteCustodyEvent(input: unknown): WasteCustodyValidatio
   if (value.evidenceIds !== undefined && (!Array.isArray(value.evidenceIds) || value.evidenceIds.some((id) => !isUuid(id)))) {
     return { ok: false, code: "CUSTODY_EVIDENCE_REFERENCE_INVALID", error: "Evidence references must be an array of valid UUIDs" };
   }
-  if (["PARTIAL_ACCEPTANCE", "REJECTION", "QUANTITY_DISPUTE"].includes(value.eventType as string) && !isNonBlank(value.reasonCode)) {
-    return { ok: false, code: "CUSTODY_REASON_REQUIRED", error: "Partial acceptance, rejection and quantity disputes require a reason code" };
+  if (["PARTIAL_ACCEPTANCE", "REJECTION", "QUANTITY_DISPUTE", "CORRECTION"].includes(value.eventType as string) && !isNonBlank(value.reasonCode)) {
+    return { ok: false, code: "CUSTODY_REASON_REQUIRED", error: "Partial acceptance, rejection, quantity disputes and corrections require a reason code" };
   }
   if (value.eventType === "CORRECTION" && !isUuid(value.supersedesEventId)) {
     return { ok: false, code: "CUSTODY_SUPERSESSION_REQUIRED", error: "A correction must reference the event it supersedes; history must not be overwritten" };
