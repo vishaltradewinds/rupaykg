@@ -8,9 +8,11 @@
 
 ## 1. Foundational decision
 
-RupayKg is a greenfield, pan-India digital operating platform for waste, resource recovery, circular-economy evidence, and governed environmental/MRV workflows. Existing repository code, database migrations, demo/acceptance fixtures, deployment settings, and pilot-specific assumptions are implementation inputs to assess—not requirements to preserve automatically.
+**Greenfield here refers primarily to the target data model and data-migration approach. It does not mean rebuilding the entire application from scratch.** RupayKg's intended outcome remains a pan-India digital operating platform for waste, resource recovery, circular-economy evidence, and governed environmental/MRV workflows.
 
-This baseline defines the target system. It does not claim that the current implementation satisfies it. Existing components may be reused only after their behavior, security, compliance fit, maintainability, and test evidence have been checked.
+The target data model is defined from the intended national operating requirements. Existing database schemas, migration history, demo/acceptance fixtures, and pilot-specific records must not constrain that target automatically. Existing application code, workflows, integrations, and real operational records are assessed independently for reuse, refactoring, replacement, migration, archival, or exclusion. Preserve genuine records when required and authorized; do not carry over legacy structure or data merely because it exists.
+
+This baseline defines the target data and operating model. It does not claim that the current implementation satisfies it. Existing components may be reused only after their behavior, security, compliance fit, maintainability, and test evidence have been checked.
 
 **Non-goals:** designing the national platform around one landfill or municipality; treating a pilot as the national data model; using synthetic acceptance records as operational evidence; representing software workflow states as statutory approvals, verified environmental outcomes, carbon-credit issuance, or completed financial settlement.
 
