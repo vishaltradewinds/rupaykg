@@ -56,5 +56,5 @@ Before a production rollback:
 - The exact live PostgreSQL host/project/branch/runtime role has not been authoritatively mapped. Do not run a backup command against an assumed target.
 - The original Render PostgreSQL is suspended for billing. No paid action is authorized. The manual Neon snapshot belongs to an unconfirmed candidate and is not a verified production backup.
 - Repository-local migration validation and workspace tests passed on the connected desktop's existing local branch; the test run skipped database integration cases that require `DATABASE_URL`. This is not a full production acceptance result.
-- PR #53's seed isolation guard is still in CI review; no production code was changed or deployed by that work.
+- PR #53's seed isolation guard passed exact-head CI run #2166 but remains draft/unmerged/undeployed; no production code was changed or deployed by that work.
 - Guardian/Hedera live acceptance remains pending real authorized credentials and execution evidence.
