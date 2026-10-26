@@ -175,6 +175,24 @@ test("PostgreSQL enforces MRV instrument approval evidence and append-only decis
       [instrumentId.id],
     ), /append-only/i);
 
+    // Demotion must not make the same physical instrument identity editable again.
+    await client.query(
+      "update mrv_instruments set approval_status='HOLD',reviewed_by_identity_id=$2,reviewed_at=now(),review_note='test demotion after verification' where id=$1",
+      [instrumentId.id, reviewerIdentityId],
+    );
+    await rejectsInSavepoint(client, () => client.query(
+      "update mrv_instrument_parameter_specs set maximum_value=600 where instrument_id=$1",
+      [instrumentId.id],
+    ), /immutable after first verification/i);
+    await rejectsInSavepoint(client, () => client.query(
+      "update mrv_instruments set model='substituted after demotion' where id=$1",
+      [instrumentId.id],
+    ), /immutable after first verification/i);
+    await rejectsInSavepoint(client, () => client.query(
+      "update mrv_instruments set meity_evidence_artifact_version_id=$2 where id=$1",
+      [instrumentId.id, calibrationArtifact.id],
+    ), /immutable after first verification/i);
+
     const gatewayId = (await client.query<{ id: string }>(
       "insert into mrv_instruments(organization_id,instrument_code,instrument_type,manufacturer,model,sku_revision,intended_use,measurement_instrument,non_measurement_reason,supported_parameter_codes,firmware_version,firmware_support_until,registered_by_identity_id) values($1,$2,'INDUSTRIAL_GATEWAY','Test Manufacturer','Gateway Model 1','Rev A','Authenticated MRV data transport',false,'Gateway transports data but does not measure a physical parameter','{}','1.0.0',now()+interval '1 year',$3) returning id",
       [organizationId, `GATEWAY-${suffix}`, identityId],
