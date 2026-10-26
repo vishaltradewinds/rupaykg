@@ -75,3 +75,10 @@ Migration `086_reserved_role_restoration_db_guard.sql` protects status reactivat
 ## Acceptance fixture registry exclusion
 
 Migration `087_acceptance_fixture_registry_exclusion.sql` prevents activities or evidence explicitly marked with `metadata.acceptanceFixture=true` from backing credentials in value-bearing states. It also binds the database gate to the exact activity, verification, and evidence tuple. The MRV API reports acceptance fixtures as not registry eligible even after real Guardian/Hedera/Mirror Node verification. External anchoring proves message integrity and consensus; it does not validate the underlying activity as a real eligible carbon project.
+
+
+## Waste custody event extension
+
+Migration `088_waste_custody_event_runtime.sql` extends the existing `chain_of_custody_links` table rather than creating a parallel waste ledger. It adds flow-scoped participant invitations, idempotency/payload provenance, quantity basis and measurement provenance, correction links, evidence associations, and append-only database guards. Existing rows are retained as `LEGACY_UNCLASSIFIED`; they must not be reinterpreted as verified custody events.
+
+The custody API records participant assignments and custody assertions against the existing `resource_flows` table. Submitted events remain `PENDING_REVIEW`. These records do not prove lawful transport, processing, recycling, statutory authorisation, EPR eligibility, carbon reductions or certificate issuance. Regulatory scope and external permits remain separate gates; settlement/MRV/official reporting must not treat pending assertions as verified facts.
