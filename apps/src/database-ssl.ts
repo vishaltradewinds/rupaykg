@@ -3,6 +3,29 @@ import type { ConnectionOptions } from "node:tls";
 export type DatabaseSslSetting = false | (ConnectionOptions & { rejectUnauthorized: true });
 
 /**
+ * Reject canonical and non-canonical loopback spellings for production DB
+ * targets. URL parsing with an HTTP authority normalizes alternate IPv4
+ * spellings such as 127.1 to their canonical dotted-quad form.
+ */
+export function isLoopbackDatabaseHost(hostname: string): boolean {
+  const host = hostname.toLowerCase().replace(/\.$/, "");
+  if (host === "localhost" || host.endsWith(".localhost")) return true;
+
+  let normalized = host;
+  try {
+    normalized = new URL(`http://${host}`).hostname.toLowerCase();
+  } catch {
+    // Invalid/unsupported host forms are handled by the caller's URL validation.
+  }
+
+  if (normalized === "[::1]") return true;
+  const octets = normalized.split(".");
+  return octets.length === 4 &&
+    octets[0] === "127" &&
+    octets.every((octet) => /^\d+$/.test(octet) && Number(octet) >= 0 && Number(octet) <= 255);
+}
+
+/**
  * Explicit PostgreSQL TLS policy shared by migration and fixture tooling.
  * Production public connections require a trusted CA. Render's internal
  * dpg-* database host uses the provider-internal non-TLS path only when the
@@ -33,8 +56,7 @@ export function readDatabaseSslSetting(env: NodeJS.ProcessEnv = process.env): Da
   // The only production non-TLS exception is the provider-internal Render
   // database path validated above.
   if (env.NODE_ENV === "production") {
-    const hostname = parsed.hostname.toLowerCase();
-    if (["localhost", "127.0.0.1", "::1", "[::1]"].includes(hostname)) {
+    if (isLoopbackDatabaseHost(parsed.hostname)) {
       throw new Error("PRODUCTION_DATABASE_TARGET_FORBIDDEN: loopback host");
     }
     if (mode === "false") {
