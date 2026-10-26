@@ -140,6 +140,7 @@ test("instrument parameter specification enforces exact unit, range, accuracy me
   }];
   assert.equal(instrumentParameterFailure("GAS-FLOW-01", "gas_flow", "m3/h", 123.4, specs), null);
   assert.match(instrumentParameterFailure("GAS-FLOW-OTHER", "gas_flow", "m3/h", 123.4, specs) ?? "", /no exact parameter\/unit specification/i);
+  assert.match(instrumentParameterFailure("gas-flow-01", "gas_flow", "m3/h", 123.4, specs) ?? "", /no exact parameter\/unit specification/i);
   assert.match(instrumentParameterFailure("GAS-FLOW-01", "gas_flow", "m3/h", 123.4, [{ ...specs[0]!, instrument_code: "" }]) ?? "", /no exact parameter\/unit specification/i);
   assert.match(instrumentParameterFailure("GAS-FLOW-01", "gas_flow", "L/min", 123.4, specs) ?? "", /no exact parameter\/unit specification/i);
   assert.match(instrumentParameterFailure("GAS-FLOW-01", "gas_flow", "M3/h", 123.4, specs) ?? "", /no exact parameter\/unit specification/i);
