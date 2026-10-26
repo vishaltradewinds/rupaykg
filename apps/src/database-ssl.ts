@@ -1,6 +1,6 @@
 import type { ConnectionOptions } from "node:tls";
 
-export type DatabaseSslSetting = false | (ConnectionOptions & { rejectUnauthorized: true; ca: string });
+export type DatabaseSslSetting = false | (ConnectionOptions & { rejectUnauthorized: true });
 
 /**
  * Explicit PostgreSQL TLS policy shared by migration and fixture tooling.
@@ -34,8 +34,14 @@ export function readDatabaseSslSetting(env: NodeJS.ProcessEnv = process.env): Da
   }
 
   const ca = env.DATABASE_CA_CERT?.trim();
-  if (!ca || !ca.includes("BEGIN CERTIFICATE") || !ca.includes("END CERTIFICATE")) {
-    throw new Error("DATABASE_CA_CERT must contain a PEM certificate when DATABASE_SSL=require");
+  if (ca && ca.includes("BEGIN CERTIFICATE") && ca.includes("END CERTIFICATE")) {
+    return { rejectUnauthorized: true, ca };
   }
-  return { rejectUnauthorized: true, ca };
+  // Match production-config.ts: sslmode=require may use the runtime's trusted
+  // system CA store when no custom CA is supplied, but certificate validation
+  // must remain enabled.
+  if (parsed.searchParams.get("sslmode") === "require") {
+    return { rejectUnauthorized: true };
+  }
+  throw new Error("DATABASE_CA_CERT must contain a PEM certificate when DATABASE_SSL=require");
 }
