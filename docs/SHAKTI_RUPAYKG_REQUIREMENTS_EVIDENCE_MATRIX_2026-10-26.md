@@ -83,3 +83,24 @@ The following are mandatory prerequisites for a production release decision:
 10. Record the Shakti decision and approval before deployment.
 
 **Current release decision: HOLD. No merge, paid recovery, billing activation or deployment is authorized by this document.**
+
+## Greenfield platform execution priority (2026-10-26)
+
+**User direction:** RupayKg is being built as a new pan-India platform, not as a data-recovery or legacy-data migration project. Engineering effort must prioritize a working product and scalable operating model. Do not spend batches reconciling old rows, restoring suspended historical datasets, or migrating candidate database contents unless a specific product requirement or legal retention obligation makes that necessary.
+
+Execution priority:
+1. **Product definition and architecture:** one pan-India multi-tenant platform for bulk waste generators, aggregators, transporters, recyclers/processors, auditors and authorized public-sector stakeholders; configurable by material, state, local rules and facility/site.
+2. **Greenfield domain model and schema:** define the minimum viable canonical entities, relationships, event lifecycle, evidence/provenance, role/organization boundaries, audit history and APIs from requirements. Prefer clean migrations and empty, explicitly initialized operational tables over copying unverified legacy data.
+3. **End-to-end workflow:** organization onboarding → waste lot/material declaration → weighment/collection → transport custody → facility receipt and processing → evidence validation → MRV calculation/review → reporting and authorized downstream claims. Each stage must have state transitions, responsible actor, evidence requirements, exception handling and traceability.
+4. **Hardware anchor layer:** model device identity, exact approved/conforming device model, calibration, telemetry protocol, offline buffering, timestamps, signatures/integrity, device health and manual fallback. Hardware approval is per exact device and deployment; do not assume all devices share one blanket approval.
+5. **Engineering gates:** API/schema tests, tenant isolation, authorization, idempotency, replay protection, audit/event integrity, synthetic test fixtures only in non-production, observability, backup/restore and rollback.
+6. **Release discipline:** keep production deployment last. Database-host identification is required before changing or deploying the current live service, but it is not a reason to block independent greenfield design, schema development, non-production tests or documentation.
+
+Data policy:
+- Do not restore/pay for the suspended Render database or migrate old records by default.
+- Treat existing catalogs and candidate Neon contents as reference evidence only; do not treat them as approved product truth.
+- Create only the minimum necessary synthetic fixtures in isolated development/test environments, clearly labelled and impossible to seed into production.
+- Preserve evidence and historical artifacts, but defer bulk data reconciliation until a specific acceptance criterion requires it.
+- Never change the live database target merely to make progress. Continue in a separate, safe development path until the product and deployment gates are satisfied.
+
+This priority changes work sequencing, not Shakti obligations. Security, privacy, applicable statutory/conformity obligations, evidence integrity, release approval and no-unapproved-billing controls remain mandatory. Current production decision remains **HOLD**; this section does not authorize merge, database switch or deployment.
