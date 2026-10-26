@@ -42,6 +42,7 @@ async function assertRuntimeDatabaseRole(): Promise<void> {
       can_replicate: boolean;
       bypasses_rls: boolean;
       owns_database: boolean;
+      can_create_in_database: boolean;
       owns_public_schema: boolean;
       owns_public_objects: boolean;
       can_create_in_public_schema: boolean;
@@ -55,6 +56,7 @@ async function assertRuntimeDatabaseRole(): Promise<void> {
         r.rolreplication AS can_replicate,
         r.rolbypassrls AS bypasses_rls,
         d.datdba = r.oid AS owns_database,
+        has_database_privilege(r.rolname, d.oid, 'CREATE') AS can_create_in_database,
         n.nspowner = r.oid AS owns_public_schema,
         EXISTS (
           SELECT 1
@@ -93,6 +95,7 @@ async function assertRuntimeDatabaseRole(): Promise<void> {
       canReplicate: role.can_replicate,
       bypassesRls: role.bypasses_rls,
       ownsDatabase: role.owns_database,
+      canCreateInDatabase: role.can_create_in_database,
       ownsPublicSchema: role.owns_public_schema,
       ownsPublicObjects: role.owns_public_objects,
       canCreateInPublicSchema: role.can_create_in_public_schema,
