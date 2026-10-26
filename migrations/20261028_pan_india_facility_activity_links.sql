@@ -71,6 +71,19 @@ begin
  return new;
 end; $$;
 create trigger facility_activity_link_scope_guard before insert or update on facility_activity_links for each row execute function enforce_facility_activity_link_scope();
+create or replace function prevent_facility_geography_change_with_open_activity_links() returns trigger language plpgsql as $
+begin
+ if new.geography_id is distinct from old.geography_id and exists(
+   select 1 from facility_activity_links where facility_id=old.id and status in ('PENDING','VERIFIED')
+ ) then
+  raise exception 'cannot change facility geography while pending or verified activity links exist';
+ end if;
+ return new;
+end; $;
+create trigger facilities_activity_link_geography_guard
+before update of geography_id on facilities
+for each row execute function prevent_facility_geography_change_with_open_activity_links();
+
 create or replace function prevent_facility_activity_link_event_mutation() returns trigger language plpgsql as $$
 begin raise exception 'facility activity link events are append-only'; end; $$;
 create trigger facility_activity_link_events_append_only before update or delete on facility_activity_link_events for each row execute function prevent_facility_activity_link_event_mutation();
