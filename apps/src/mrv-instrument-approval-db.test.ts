@@ -208,6 +208,11 @@ test("PostgreSQL enforces MRV instrument approval evidence and append-only decis
       [instrumentId.id, calibrationArtifact.id],
     ), /immutable after first verification/i);
 
+    await rejectsInSavepoint(client, () => client.query(
+      "update mrv_instruments set security_evidence_artifact_version_id=$2 where id=$1",
+      [instrumentId.id, meityArtifact.id],
+    ), /immutable after first verification/i);
+
     const gatewayId = (await client.query<{ id: string }>(
       "insert into mrv_instruments(organization_id,instrument_code,instrument_type,manufacturer,model,sku_revision,intended_use,measurement_instrument,non_measurement_reason,supported_parameter_codes,firmware_version,firmware_support_until,registered_by_identity_id) values($1,$2,'INDUSTRIAL_GATEWAY','Test Manufacturer','Gateway Model 1','Rev A','Authenticated MRV data transport',false,'Gateway transports data but does not measure a physical parameter','{}','1.0.0',now()+interval '1 year',$3) returning id",
       [organizationId, `GATEWAY-${suffix}`, identityId],
