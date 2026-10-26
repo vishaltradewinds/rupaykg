@@ -1,4 +1,6 @@
 import Fastify from "fastify";
+import { registerSecurityHeaders } from "./security-headers.js";
+import { runtimeDatabaseRoleFailure } from "./runtime-db-role-policy.js";
 import cors from "@fastify/cors";
 import fastifyStatic from "@fastify/static";
 import { existsSync, readFileSync } from "node:fs";
@@ -18,6 +20,7 @@ import { registerEvidenceVaultRoutes } from "./evidence-vault-routes.js";
 import { registerPlatformAdminRoutes } from "./platform-admin-routes.js";
 
 const app = Fastify({ logger: true });
+registerSecurityHeaders(app);
 const allowedOrigins = process.env.RUPAYKG_ALLOWED_ORIGINS?.split(",").map(origin => origin.trim()).filter(Boolean) ?? [];
 await app.register(cors, { origin: allowedOrigins.length ? allowedOrigins : false });
 const webRoot = resolve(process.cwd(), "apps/web/dist");
@@ -27,6 +30,89 @@ const poolConfig: PoolConfig = { connectionString: databaseUrl, max: 10 };
 if (process.env.DATABASE_SSL === "require") poolConfig.ssl = { rejectUnauthorized: true, ca: process.env.DATABASE_CA_CERT };
 else if (process.env.DATABASE_SSL !== "false") poolConfig.ssl = { rejectUnauthorized: false };
 const pool = databaseUrl ? new Pool(poolConfig) : null;
+
+async function assertRuntimeDatabaseRole(): Promise<void> {
+  if (process.env.NODE_ENV !== "production") return;
+  if (!pool) throw new Error("PRODUCTION_DB_ROLE_INVALID: DATABASE_URL is required before runtime-role validation");
+
+  try {
+    const result = await pool.query<{
+      role_name: string;
+      is_superuser: boolean;
+      can_create_database: boolean;
+      can_create_role: boolean;
+      can_replicate: boolean;
+      bypasses_rls: boolean;
+      owns_database: boolean;
+      can_create_in_database: boolean;
+      owns_public_schema: boolean;
+      owns_public_objects: boolean;
+      can_create_in_public_schema: boolean;
+      has_unsafe_table_privileges: boolean;
+    }>(`
+      SELECT
+        r.rolname AS role_name,
+        r.rolsuper AS is_superuser,
+        r.rolcreatedb AS can_create_database,
+        r.rolcreaterole AS can_create_role,
+        r.rolreplication AS can_replicate,
+        r.rolbypassrls AS bypasses_rls,
+        d.datdba = r.oid AS owns_database,
+        has_database_privilege(r.rolname, d.oid, 'CREATE') AS can_create_in_database,
+        n.nspowner = r.oid AS owns_public_schema,
+        EXISTS (
+          SELECT 1
+          FROM pg_class c
+          JOIN pg_namespace object_schema ON object_schema.oid = c.relnamespace
+          WHERE object_schema.nspname = 'public'
+            AND c.relkind IN ('r', 'p', 'S', 'v', 'm', 'f')
+            AND c.relowner = r.oid
+        ) AS owns_public_objects,
+        has_schema_privilege(r.rolname, n.oid, 'CREATE') AS can_create_in_public_schema,
+        EXISTS (
+          SELECT 1
+          FROM pg_class c
+          JOIN pg_namespace object_schema ON object_schema.oid = c.relnamespace
+          WHERE object_schema.nspname = 'public'
+            AND c.relkind IN ('r', 'p')
+            AND (
+              has_table_privilege(r.rolname, c.oid, 'TRUNCATE')
+              OR has_table_privilege(r.rolname, c.oid, 'REFERENCES')
+              OR has_table_privilege(r.rolname, c.oid, 'TRIGGER')
+            )
+        ) AS has_unsafe_table_privileges
+      FROM pg_roles r
+      JOIN pg_database d ON d.datname = current_database()
+      JOIN pg_namespace n ON n.nspname = 'public'
+      WHERE r.rolname = current_user
+    `);
+    const role = result.rows[0];
+    if (!role) throw new Error("PRODUCTION_DB_ROLE_INVALID: unable to inspect current database role privileges");
+
+    const failure = runtimeDatabaseRoleFailure({
+      roleName: role.role_name,
+      isSuperuser: role.is_superuser,
+      canCreateDatabase: role.can_create_database,
+      canCreateRole: role.can_create_role,
+      canReplicate: role.can_replicate,
+      bypassesRls: role.bypasses_rls,
+      ownsDatabase: role.owns_database,
+      canCreateInDatabase: role.can_create_in_database,
+      ownsPublicSchema: role.owns_public_schema,
+      ownsPublicObjects: role.owns_public_objects,
+      canCreateInPublicSchema: role.can_create_in_public_schema,
+      hasUnsafeTablePrivileges: role.has_unsafe_table_privileges,
+    });
+    if (failure) throw new Error(failure);
+  } catch (error) {
+    await pool.end();
+    throw error;
+  }
+}
+
+// Refuse production startup if the API connection uses an owner/admin identity.
+// Database DDL must be performed by the separate migration identity.
+await assertRuntimeDatabaseRole();
 async function query<T extends Record<string, unknown>>(text: string, values: unknown[] = []): Promise<T[]> { if (!pool) throw new Error("DATABASE_URL is not configured"); return (await pool.query<T>(text, values)).rows; }
 function bodyOf(request: { body: unknown }): Record<string, unknown> { return (request.body && typeof request.body === "object" ? request.body : {}) as Record<string, unknown>; }
 function requiredString(body: Record<string, unknown>, key: string): string | null { return typeof body[key] === "string" && body[key].trim() ? body[key].trim() : null; }
