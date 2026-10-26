@@ -28,11 +28,13 @@ test("facility device links enforce organization scope, independent review, geog
   const pendingDevice=(await c.query<{id:string}>("insert into field_devices(device_id,identity_id,organization_id,status) values($1,$2,$3,'PENDING') returning id",[`pending-device-${suffix}`,actor,org])).rows[0]!.id;
   const link=(await c.query<{id:string;status:string}>("insert into facility_device_links(organization_id,facility_id,device_id,note,created_by_identity_id) values($1,$2,$3,'Explicit site-device association',$4) returning id,status",[org,facility,device,actor])).rows[0]!;
   assert.equal(link.status,"PENDING");
+  assert.equal((await c.query("select id from facility_device_link_events where link_id=$1",[link.id])).rowCount,1,"request event must be database-generated");
   await rejectsInSavepoint(c,()=>c.query("insert into facility_device_links(organization_id,facility_id,device_id,note,created_by_identity_id) values($1,$2,$3,'Cross tenant device link',$4)",[org,facility,otherOrgDevice,actor]),/facility device link must stay within one organization/i);
   await rejectsInSavepoint(c,()=>c.query("insert into facility_device_links(organization_id,facility_id,device_id,note,created_by_identity_id) values($1,$2,$3,'Unverified device link',$4)",[org,facility,pendingDevice,actor]),/requires an independently verified enrolled device/i);
   await rejectsInSavepoint(c,()=>c.query("update facilities set geography_id=$2,updated_by_identity_id=$3 where id=$1",[facility,otherGeo,reviewer]),/cannot change facility geography while pending or verified device links exist/i);
   await rejectsInSavepoint(c,()=>c.query("update facility_device_links set status='VERIFIED',reviewed_by_identity_id=$2,reviewed_at=now(),review_note='Self review' where id=$1",[link.id,actor]),/cannot review their own link|check constraint/i);
   await c.query("update facility_device_links set status='VERIFIED',reviewed_by_identity_id=$2,reviewed_at=now(),review_note='Independent review' where id=$1",[link.id,reviewer]);
+  assert.equal((await c.query("select id from facility_device_link_events where link_id=$1",[link.id])).rowCount,2,"review event must be database-generated");
   await rejectsInSavepoint(c,()=>c.query("insert into facility_device_links(organization_id,facility_id,device_id,note,created_by_identity_id) values($1,$2,$3,'Duplicate open link',$4)",[org,facility,device,actor]),/unique constraint/i);
   const event=(await c.query<{id:string}>("insert into facility_device_link_events(link_id,actor_identity_id,event_type,new_status,note) values($1,$2,'LINK_REQUESTED','PENDING','Test event') returning id",[link.id,actor])).rows[0]!.id;
   await rejectsInSavepoint(c,()=>c.query("update facility_device_link_events set note='tampered' where id=$1",[event]),/append-only/i);
