@@ -196,7 +196,7 @@ export async function persistWasteCustodyEvent(
     }>(
       `select actor_organization_id, counterparty_organization_id
          from chain_of_custody_links
-        where resource_flow_id = $1 and event_type is not null
+        where resource_flow_id = $1 and event_type is not null and event_type <> 'CORRECTION'
         order by sequence_no desc limit 1`,
       [value.resourceFlowId],
     );
