@@ -64,6 +64,7 @@ test("custody route persistence is idempotent and rejects organizations outside 
       unit: "kg",
       quantityBasis: "DECLARED",
       quantitySource: "generator declaration",
+      toGeographyId: geographyId,
       occurredAt: "2026-10-26T09:30:00Z",
     };
     const first = await persistWasteCustodyEvent(client, actorAuth, input);
