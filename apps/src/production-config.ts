@@ -33,8 +33,11 @@ function productionDatabaseUrl(value: string): string {
 }
 
 function productionCaCert(value: string): string {
+  // A custom CA is optional for providers whose certificates chain to Node trusted public roots.
+  // Certificate and hostname verification remain mandatory whether or not a custom CA is supplied.
+  if (!value) return "";
   if (value.includes("-----BEGIN CERTIFICATE-----") && value.includes("-----END CERTIFICATE-----")) return value;
-  throw new Error("PRODUCTION_CONFIG_INVALID: DATABASE_CA_CERT must contain a PEM certificate for external PostgreSQL TLS");
+  throw new Error("PRODUCTION_CONFIG_INVALID: DATABASE_CA_CERT must be empty or contain a PEM certificate");
 }
 
 function origins(value: string): string[] {
