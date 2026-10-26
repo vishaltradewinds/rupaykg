@@ -44,6 +44,21 @@ test("PostgreSQL enforces MRV instrument approval evidence and append-only decis
     const datasheetArtifact = await createReviewedArtifact(client, organizationId, activityId, identityId, reviewerIdentityId, "MANUFACTURER_DATASHEET", `Manufacturer datasheet ${suffix}`);
     const gatewayMeityArtifact = await createReviewedArtifact(client, organizationId, activityId, identityId, reviewerIdentityId, "MEITY_GATEWAY_CERTIFICATE", `Gateway MeitY certificate ${suffix}`);
     const gatewaySecurityArtifact = await createReviewedArtifact(client, organizationId, activityId, identityId, reviewerIdentityId, "SECURITY_REVIEW", `Gateway security review ${suffix}`);
+    const reviewOrderArtifact = await createReviewedArtifact(
+      client, organizationId, activityId, identityId, reviewerIdentityId,
+      "REVIEW_ORDER_TEST", `Review order fixture ${suffix}`,
+    );
+    // PostgreSQL now() is transaction-stable: both decisions intentionally share a timestamp.
+    await client.query(
+      "insert into evidence_artifact_reviews(evidence_id,artifact_version_id,reviewer_identity_id,decision,rationale,created_at) values($1,$2,$3,'REJECTED','Later rejection must win',now())",
+      [reviewOrderArtifact.evidenceId, reviewOrderArtifact.id, reviewerIdentityId],
+    );
+    const latestReview = await client.query<{ decision: string }>(
+      "select decision from evidence_artifact_reviews where evidence_id=$1 order by created_at desc, review_sequence desc limit 1",
+      [reviewOrderArtifact.evidenceId],
+    );
+    assert.equal(latestReview.rows[0]?.decision, "REJECTED");
+
     const foreignOrganizationId = (await client.query<{ id: string }>(
       "insert into organizations(name,organization_type) values($1,'COLLECTOR') returning id",
       [`foreign-evidence-org-${suffix}`],
