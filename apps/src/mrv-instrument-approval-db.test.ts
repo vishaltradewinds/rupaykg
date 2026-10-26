@@ -106,18 +106,33 @@ test("PostgreSQL enforces MRV instrument approval evidence and append-only decis
 
     // The MRV submission query must be able to consume direct/field-sync measurements
     // through the canonical instrument_code, not only mrv_observations rows.
-    const submissionReading = await client.query<{ id: string; parameter_code: string; observed_value: string; instrument_id: string }>(
-      `select m.id, m.parameter_code, m.value::text as observed_value, i.instrument_code as instrument_id
+    const submissionQuery = `select m.id, m.parameter_code, m.value::text as observed_value, i.instrument_code as instrument_id
          from measurements m join mrv_instruments i on i.id=m.mrv_instrument_id
-        where m.activity_id=$1 and m.mrv_instrument_id is not null and m.parameter_code is not null`,
-      [activityId],
-    );
+        where m.activity_id=$1 and m.mrv_instrument_id is not null and m.parameter_code is not null
+          and not exists (select 1 from mrv_observations mo where mo.activity_id=m.activity_id and mo.measurement_id=m.id)`;
+    const submissionReading = await client.query<{ id: string; parameter_code: string; observed_value: string; instrument_id: string }>(submissionQuery, [activityId]);
     assert.ok(submissionReading.rows.some((reading) =>
       reading.id === validMeasurement.rows[0]?.id
       && reading.parameter_code === "gas_flow"
       && Number(reading.observed_value) === 2
       && reading.instrument_id === `FLOW-${suffix}`,
     ));
+
+    // A measurement already represented by mrv_observations must not be forwarded twice.
+    await client.query(
+      "insert into mrv_observations(activity_id,measurement_id,parameter_code,observed_value,unit,method,instrument_id,observed_at) values($1,$2,'gas_flow',2,'m3/h','test', $3, now())",
+      [activityId, validMeasurement.rows[0]!.id, `FLOW-${suffix}`],
+    );
+    const deduplicatedSubmission = await client.query(submissionQuery, [activityId]);
+    assert.ok(!deduplicatedSubmission.rows.some((reading) => reading.id === validMeasurement.rows[0]?.id));
+    const deduplicatedCount = await client.query<{ count: string }>(
+      `select ((select count(*) from mrv_observations mo where mo.activity_id=$1)
+          + (select count(*) from measurements mm where mm.activity_id=$1
+              and mm.mrv_instrument_id is not null and mm.parameter_code is not null
+              and not exists (select 1 from mrv_observations mo where mo.activity_id=mm.activity_id and mo.measurement_id=mm.id)))::text as count`,
+      [activityId],
+    );
+    assert.equal(Number(deduplicatedCount.rows[0]?.count), 1);
 
     await client.query(
       "insert into evidence_artifact_reviews(evidence_id,artifact_version_id,reviewer_identity_id,decision,rationale) values($1,$2,$3,'REJECTED','Test rejection invalidates approval')",
