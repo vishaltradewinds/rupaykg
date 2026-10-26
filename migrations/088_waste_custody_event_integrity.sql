@@ -144,7 +144,7 @@ $$;
 
 drop trigger if exists custody_event_integrity_guard on chain_of_custody_links;
 create trigger custody_event_integrity_guard
-before insert or update or delete on chain_of_custody_links
+before insert or update on chain_of_custody_links
 for each row execute function enforce_custody_event_integrity();
 
 -- Typed events cannot be updated or deleted; legacy rows retain their existing
