@@ -242,6 +242,28 @@ test("PostgreSQL enforces MRV instrument approval evidence and append-only decis
     );
     assert.equal(gatewayApproved.rows[0]?.approval_status, "VERIFIED");
 
+    // Once authoritative MRV provenance exists, all measurement mutations must fail closed.
+    const verificationId = (await client.query<{ id: string }>(
+      "insert into verifications(evidence_id,activity_id,verifier_identity_id,decision,scope) values($1,$2,$3,'APPROVED','MRV measurement freeze regression') returning id",
+      [meityArtifact.evidenceId, activityId, reviewerIdentityId],
+    )).rows[0]!.id;
+    await client.query(
+      "insert into mrv_provenance_events(activity_id,verification_id,evidence_id,guardian_policy_id,guardian_execution_id,guardian_status,hcs_status,hcs_topic_id,hcs_transaction_id,hcs_consensus_timestamp,integrity_hash,methodology_code,metadata) values($1,$2,$3,'TEST-POLICY','TEST-EXECUTION','VERIFIED','CONSENSUS_CONFIRMED','0.0.12345','TEST-TX','2026-10-26T09:00:00.000Z',$4,'TEST-METHODOLOGY','{}'::jsonb)",
+      [activityId, verificationId, meityArtifact.evidenceId, "e".repeat(64)],
+    );
+    await rejectsInSavepoint(client, () => client.query(
+      "insert into measurements(activity_id,value,unit,method,source,measured_at) values($1,3,'kg','test','late reading',now())",
+      [activityId],
+    ), /MEASUREMENT_IMMUTABLE_AFTER_MRV_SUBMISSION/i);
+    await rejectsInSavepoint(client, () => client.query(
+      "update measurements set value=3 where id=$1",
+      [validMeasurement.rows[0]!.id],
+    ), /MEASUREMENT_IMMUTABLE_AFTER_MRV_SUBMISSION/i);
+    await rejectsInSavepoint(client, () => client.query(
+      "delete from measurements where id=$1",
+      [validMeasurement.rows[0]!.id],
+    ), /MEASUREMENT_IMMUTABLE_AFTER_MRV_SUBMISSION/i);
+
     await client.query("rollback");
   } catch (error) {
     await client.query("rollback");
