@@ -265,6 +265,85 @@ function bodyOf(request: FastifyRequest): Record<string, unknown> {
 }
 
 export async function registerWasteCustodyRoutes(app: FastifyInstance, pool: Pool | null): Promise<void> {
+  app.get("/api/v1/resource-flows/:resourceFlowId/custody-events", async (request, reply) => {
+    if (!pool) return reply.code(503).send({ error: "Custody event service unavailable", code: "DATABASE_UNAVAILABLE", syntheticData: false });
+    let auth: AuthContext | null;
+    try {
+      auth = await authenticate(request, pool);
+      if (!auth) return reply.code(401).send(bearerChallenge());
+    } catch (error) {
+      request.log.error(error);
+      return reply.code(503).send({ error: "Authentication service unavailable", code: "AUTH_UNAVAILABLE" });
+    }
+    const { resourceFlowId } = request.params as { resourceFlowId: string };
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(resourceFlowId)) {
+      return reply.code(400).send({ error: "resourceFlowId must be a UUID", code: "INVALID_RESOURCE_FLOW" });
+    }
+    const organizationId = auth.activeOrganizationId;
+    if (!organizationId || !await hasOrganizationPermission(pool, auth, organizationId, ["waste:read"])) {
+      return reply.code(403).send({ error: "Waste read permission for the active organization is required", code: "WORKSPACE_READ_FORBIDDEN" });
+    }
+    try {
+      const flow = await pool.query<{ id: string; organization_id: string; source_geography_id: string | null; destination_geography_id: string | null }>(
+        "select id, organization_id, source_geography_id, destination_geography_id from resource_flows where id = $1",
+        [resourceFlowId],
+      );
+      const flowRow = flow.rows[0];
+      if (!flowRow) return reply.code(404).send({ error: "Resource flow was not found", code: "RESOURCE_FLOW_NOT_FOUND" });
+      const participant = await pool.query<{ ok: boolean }>(
+        `select (
+          $2::uuid = $3::uuid
+          or exists (
+            select 1 from chain_of_custody_links c
+             where c.resource_flow_id = $1
+               and (c.actor_organization_id = $2 or c.counterparty_organization_id = $2)
+          )
+        ) as ok`,
+        [resourceFlowId, organizationId, flowRow.organization_id],
+      );
+      if (participant.rows[0]?.ok !== true) {
+        return reply.code(403).send({ error: "Active organization is not a participant in this resource flow", code: "CUSTODY_FLOW_FORBIDDEN" });
+      }
+      for (const geographyId of [flowRow.source_geography_id, flowRow.destination_geography_id]) {
+        if (!geographyId) continue;
+        const scoped = await pool.query<{ ok: boolean }>(
+          "select organization_has_geography_scope($1, $2) as ok",
+          [organizationId, geographyId],
+        );
+        if (scoped.rows[0]?.ok !== true) {
+          return reply.code(403).send({ error: "Resource-flow geography is outside active organization scope", code: "CUSTODY_FLOW_FORBIDDEN" });
+        }
+      }
+      const events = await pool.query(
+        `select c.id, c.resource_flow_id, c.sequence_no,
+                coalesce(c.event_type, 'LEGACY_UNTYPED') as event_type,
+                case when c.event_type is null then 'LEGACY_UNTYPED' else 'TYPED_APPEND_ONLY' end as provenance_status,
+                c.actor_organization_id, actor.name as actor_organization_name,
+                c.counterparty_organization_id, counterparty.name as counterparty_organization_name,
+                c.activity_id, c.quantity, c.unit, c.quantity_basis, c.quantity_source,
+                c.measurement_method, c.instrument_id, c.occurred_at, c.recorded_at,
+                c.from_geography_id, c.to_geography_id, c.evidence_id, c.evidence_ids,
+                c.reason_code, c.supersedes_link_id, c.recorded_by_identity_id, c.event_hash
+           from chain_of_custody_links c
+           left join organizations actor on actor.id = c.actor_organization_id
+           left join organizations counterparty on counterparty.id = c.counterparty_organization_id
+          where c.resource_flow_id = $1
+          order by c.sequence_no asc
+          limit 500`,
+        [resourceFlowId],
+      );
+      return {
+        source: "postgresql",
+        syntheticData: false,
+        resourceFlowId,
+        events: events.rows,
+      };
+    } catch (error) {
+      request.log.error(error);
+      return reply.code(503).send({ error: "Custody event history unavailable", code: "CUSTODY_EVENT_HISTORY_UNAVAILABLE", syntheticData: false });
+    }
+  });
+
   app.post("/api/v1/resource-flows/:resourceFlowId/custody-events", async (request, reply) => {
     if (!pool) return reply.code(503).send({ error: "Custody event service unavailable", code: "DATABASE_UNAVAILABLE", syntheticData: false });
     let auth: AuthContext | null;
