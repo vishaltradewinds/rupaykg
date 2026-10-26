@@ -27,7 +27,9 @@ if (!sessionToken) throw new Error("RUPAYKG_ACCEPTANCE_SESSION_TOKEN is required
 const pool = new Pool({
   connectionString: databaseUrl,
   max: 1,
-  ssl: process.env.DATABASE_SSL === "false" ? undefined : { rejectUnauthorized: false },
+  ssl: process.env.DATABASE_SSL === "false"
+    ? undefined
+    : { rejectUnauthorized: true, ca: process.env.DATABASE_CA_CERT },
 });
 
 const tokenHash = createHash("sha256").update(sessionToken).digest("hex");
