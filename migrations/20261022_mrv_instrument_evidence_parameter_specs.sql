@@ -339,6 +339,7 @@ begin
     or new.security_review_status is distinct from old.security_review_status
     or new.security_evidence_reference is distinct from old.security_evidence_reference
     or new.security_evidence_sha256 is distinct from old.security_evidence_sha256
+    or new.security_evidence_artifact_version_id is distinct from old.security_evidence_artifact_version_id
     or new.security_reviewed_at is distinct from old.security_reviewed_at
     or new.security_not_applicable_reason is distinct from old.security_not_applicable_reason
     or new.meity_certificate_id is distinct from old.meity_certificate_id
