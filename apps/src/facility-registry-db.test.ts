@@ -73,6 +73,11 @@ test("facility registry enforces tenant geography, membership and append-only re
     assert.equal(facility.operational_status, "UNVERIFIED");
 
     await rejectsInSavepoint(client, () => client.query(
+      "update facilities set operational_status='ACTIVE',updated_by_identity_id=$2 where id=$1",
+      [facility.id, actor],
+    ), /creator cannot independently activate/i);
+
+    await rejectsInSavepoint(client, () => client.query(
       "insert into facilities(organization_id,facility_code,name,facility_type,geography_id,created_by_identity_id,updated_by_identity_id) values($1,$2,$3,'COLLECTION_CENTRE',$4,$5,$5)",
       [org, `OUTSIDE-${suffix}`, "Out of scope", otherState, actor],
     ), /outside organization authorization scope/i);
