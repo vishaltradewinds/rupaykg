@@ -36,7 +36,7 @@ test("typed custody events are sequenced, hashed, idempotent and append-only", a
       "insert into resource_flows(organization_id, origin_type, resource_form, material_code, declared_quantity, unit) values ($1, 'MUNICIPAL', 'WASTE', 'TEST-MATERIAL', 100, 'kg') returning id",
       [actorOrg],
     )).rows[0]!.id;
-    const eventId = (await client.query<{ id: string; sequence_no: number; event_hash: string }>(
+    const eventId = (await client.query<{ id: string; sequence_no: number; event_hash: string; recorded_at: Date | string }>(
       `insert into chain_of_custody_links(
         resource_flow_id, sequence_no, actor_organization_id, counterparty_organization_id,
         quantity, unit, recorded_at, event_type, idempotency_key, quantity_basis,
