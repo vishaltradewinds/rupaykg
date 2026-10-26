@@ -36,7 +36,7 @@ test("facility device links enforce organization scope, independent review, geog
   await c.query("update facility_device_links set status='VERIFIED',reviewed_by_identity_id=$2,reviewed_at=now(),review_note='Independent review' where id=$1",[link.id,reviewer]);
   assert.equal((await c.query("select id from facility_device_link_events where link_id=$1",[link.id])).rowCount,2,"review event must be database-generated");
   await rejectsInSavepoint(c,()=>c.query("insert into facility_device_links(organization_id,facility_id,device_id,note,created_by_identity_id) values($1,$2,$3,'Duplicate open link',$4)",[org,facility,device,actor]),/unique constraint/i);
-  const event=(await c.query<{id:string}>("insert into facility_device_link_events(link_id,actor_identity_id,event_type,new_status,note) values($1,$2,'LINK_REQUESTED','PENDING','Test event') returning id",[link.id,actor])).rows[0]!.id;
+  const event=(await c.query<{id:string}>("select id from facility_device_link_events where link_id=$1 order by created_at limit 1",[link.id])).rows[0]!.id;
   await rejectsInSavepoint(c,()=>c.query("update facility_device_link_events set note='tampered' where id=$1",[event]),/append-only/i);
   assert.notEqual(org,otherOrg);
   await c.query("rollback");
