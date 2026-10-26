@@ -73,8 +73,14 @@ describe("production configuration", () => {
     assert.equal(config.databaseCaCert, valid.DATABASE_CA_CERT);
   });
 
-  it("requires a production CA certificate for PostgreSQL TLS", () => {
-    assert.throws(() => readProductionConfig({ ...valid, DATABASE_URL: "postgresql://runtime_role:runtime-secret@prod.example.invalid:5432/rupaykg", DATABASE_CA_CERT: "" }), /DATABASE_CA_CERT must contain a PEM certificate/);
+  it("uses the system trust store when a custom PostgreSQL CA is not configured", () => {
+    const config = readProductionConfig({ ...valid, DATABASE_CA_CERT: "" });
+    assert.equal(config.databaseSsl, "require");
+    assert.equal(config.databaseCaCert, "");
+  });
+
+  it("rejects malformed custom PostgreSQL CA material", () => {
+    assert.throws(() => readProductionConfig({ ...valid, DATABASE_CA_CERT: "not-a-certificate" }), /DATABASE_CA_CERT must be empty or contain a PEM certificate/);
   });
 
   it("requires real authentication", () => {
