@@ -16,9 +16,11 @@ test("facility activity links enforce tenant/geography scope, independent review
   const reviewer=(await c.query<{id:string}>("insert into identities(external_subject,display_name) values($1,$2) returning id",[`facility-activity-reviewer-${suffix}`,"Independent link reviewer"])).rows[0]!.id;
   const role=(await c.query<{id:string}>("insert into roles(organization_id,name,permissions) values($1,$2,'[\"facility:manage\"]'::jsonb) returning id",[org,`FACILITY-ACTIVITY-${suffix}`])).rows[0]!.id;
   await c.query("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED'),($4,$2,$3,'VERIFIED')",[actor,org,role,reviewer]);
-  const geo=(await c.query<{id:string}>("insert into geography(kind,code,name,source) values('DISTRICT',$1,$2,'test') returning id",[`FAL-${suffix}`,`Facility Activity District ${suffix}`])).rows[0]!.id;
-  const otherGeo=(await c.query<{id:string}>("insert into geography(kind,code,name,source) values('DISTRICT',$1,$2,'test') returning id",[`FALO-${suffix}`,`Facility Activity Other District ${suffix}`])).rows[0]!.id;
-  await c.query("insert into organization_geography_scopes(organization_id,geography_id,status) values($1,$2,'VERIFIED')",[org,geo]);
+  const state=(await c.query<{id:string}>("insert into geography(kind,code,name,source) values('STATE_UT',$1,$2,'test') returning id",[`FALS-${suffix}`,`Facility Activity State ${suffix}`])).rows[0]!.id;
+  const geo=(await c.query<{id:string}>("insert into geography(parent_id,kind,code,name,source) values($1,'DISTRICT',$2,$3,'test') returning id",[state,`FAL-${suffix}`,`Facility Activity District ${suffix}`])).rows[0]!.id;
+  const otherState=(await c.query<{id:string}>("insert into geography(kind,code,name,source) values('STATE_UT',$1,$2,'test') returning id",[`FALOS-${suffix}`,`Facility Activity Other State ${suffix}`])).rows[0]!.id;
+  const otherGeo=(await c.query<{id:string}>("insert into geography(parent_id,kind,code,name,source) values($1,'DISTRICT',$2,$3,'test') returning id",[otherState,`FALO-${suffix}`,`Facility Activity Other District ${suffix}`])).rows[0]!.id;
+  await c.query("insert into organization_geography_scopes(organization_id,geography_id,status) values($1,$2,'VERIFIED')",[org,state]);
   const facility=(await c.query<{id:string}>("insert into facilities(organization_id,facility_code,name,facility_type,geography_id,created_by_identity_id,updated_by_identity_id) values($1,$2,'Link Test Facility','COLLECTION_CENTRE',$3,$4,$4) returning id",[org,`FAL-${suffix}`,geo,actor])).rows[0]!.id;
   await c.query("update facilities set operational_status='ACTIVE',updated_by_identity_id=$2 where id=$1",[facility,reviewer]);
   const activity=(await c.query<{id:string}>("insert into activities(organization_id,actor_identity_id,geography_id,activity_type,status,completed_at) values($1,$2,$3,'COLLECTION','COMPLETED',now()) returning id",[org,actor,geo])).rows[0]!.id;
