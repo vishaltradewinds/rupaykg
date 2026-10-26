@@ -5,8 +5,8 @@ export type DatabaseSslSetting = false | (ConnectionOptions & { rejectUnauthoriz
 /**
  * Explicit PostgreSQL TLS policy shared by migration and fixture tooling.
  * Production public connections require a trusted CA. Render's internal
- * dpg-* database host is treated as provider-internal TLS termination only
- * when the URL has no explicit sslmode, matching production-config.ts.
+ * dpg-* database host uses the provider-internal non-TLS path only when the
+ * URL has no explicit sslmode, matching production-config.ts.
  */
 export function readDatabaseSslSetting(env: NodeJS.ProcessEnv = process.env): DatabaseSslSetting {
   const mode = env.DATABASE_SSL;
