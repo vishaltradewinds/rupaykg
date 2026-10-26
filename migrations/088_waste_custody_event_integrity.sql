@@ -6,6 +6,7 @@ alter table chain_of_custody_links
   add column if not exists event_type text,
   add column if not exists idempotency_key text,
   add column if not exists counterparty_organization_id uuid references organizations(id),
+  add column if not exists occurred_at timestamptz,
   add column if not exists quantity_basis text,
   add column if not exists quantity_source text,
   add column if not exists measurement_method text,
@@ -50,6 +51,7 @@ alter table chain_of_custody_links
       idempotency_key is not null and length(btrim(idempotency_key)) between 1 and 200
       and actor_organization_id is not null
       and recorded_by_identity_id is not null
+      and occurred_at is not null
       and quantity_basis in ('DECLARED','ESTIMATED','MEASURED')
       and quantity_source is not null and length(btrim(quantity_source)) > 0
       and (
