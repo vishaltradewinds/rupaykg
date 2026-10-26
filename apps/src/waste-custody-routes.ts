@@ -321,6 +321,7 @@ export async function registerWasteCustodyRoutes(app: FastifyInstance, pool: Poo
               select 1
                 from organization_memberships om
                 join roles r on r.id = om.role_id
+                join identities i on i.id = om.identity_id and i.status = 'VERIFIED' and i.suspended_at is null
                where om.organization_id = o.id
                  and om.status = 'VERIFIED'
                  and exists (
@@ -423,12 +424,15 @@ export async function registerWasteCustodyRoutes(app: FastifyInstance, pool: Poo
                 c.measurement_method, c.instrument_id, c.occurred_at, c.recorded_at,
                 c.from_geography_id, c.to_geography_id, c.evidence_id, c.evidence_ids,
                 c.reason_code, c.supersedes_link_id, c.recorded_by_identity_id, c.event_hash
-           from chain_of_custody_links c
+           from (
+             select * from chain_of_custody_links
+              where resource_flow_id = $1
+              order by sequence_no desc
+              limit 500
+           ) c
            left join organizations actor on actor.id = c.actor_organization_id
            left join organizations counterparty on counterparty.id = c.counterparty_organization_id
-          where c.resource_flow_id = $1
-          order by c.sequence_no asc
-          limit 500`,
+          order by c.sequence_no asc`,
         [resourceFlowId],
       );
       return {
