@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
 import { Pool } from "pg";
+import { readDatabaseSslSetting } from "./database-ssl.js";
+import { shouldRunAcceptanceSeed } from "./acceptance-seed-policy.js";
 
 /**
  * Creates one deterministic, idempotent live-acceptance dataset.
@@ -10,7 +12,7 @@ import { Pool } from "pg";
  * migration 081; it never invents LGD/government geography data.
  */
 
-if (process.env.RUPAYKG_ACCEPTANCE_SEED_ON_START !== "true") {
+if (!shouldRunAcceptanceSeed(process.env)) {
   process.exit(0);
 }
 
@@ -22,7 +24,7 @@ if (!sessionToken) throw new Error("RUPAYKG_ACCEPTANCE_SESSION_TOKEN is required
 const pool = new Pool({
   connectionString: databaseUrl,
   max: 1,
-  ssl: process.env.DATABASE_SSL === "false" ? undefined : { rejectUnauthorized: false },
+  ssl: readDatabaseSslSetting(),
 });
 
 const tokenHash = createHash("sha256").update(sessionToken).digest("hex");
