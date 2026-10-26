@@ -27,7 +27,10 @@ const webRoot = resolve(process.cwd(), "apps/web/dist");
 if (existsSync(webRoot)) await app.register(fastifyStatic, { root: webRoot, wildcard: false });
 const databaseUrl = process.env.DATABASE_URL;
 const poolConfig: PoolConfig = { connectionString: databaseUrl, max: 10 };
-if (process.env.DATABASE_SSL === "require") poolConfig.ssl = { rejectUnauthorized: true, ca: process.env.DATABASE_CA_CERT };
+if (process.env.DATABASE_SSL === "require") {
+  const ca = process.env.DATABASE_CA_CERT?.trim();
+  poolConfig.ssl = { rejectUnauthorized: true, ...(ca ? { ca } : {}) };
+}
 else if (process.env.DATABASE_SSL !== "false") poolConfig.ssl = { rejectUnauthorized: false };
 const pool = databaseUrl ? new Pool(poolConfig) : null;
 
