@@ -56,7 +56,7 @@ export async function persistWasteCustodyEvent(
   if (!fromGeographyId && !toGeographyId) {
     throw fail("CUSTODY_GEOGRAPHY_REQUIRED", "At least one source or destination geography is required for custody provenance");
   }
-  const suppliedGeographies = [fromGeographyId, toGeographyId].filter((id): id is string => Boolean(id));
+  const suppliedGeographies = [...new Set([fromGeographyId, toGeographyId].filter((id): id is string => Boolean(id)))];
   if (suppliedGeographies.length) {
     const existingGeographies = await client.query<{ id: string }>(
       "select id from geography where id = any($1::uuid[])",
