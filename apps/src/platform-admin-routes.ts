@@ -6,7 +6,7 @@ import { authenticate, type AuthContext } from "./auth.js";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const SAFE_PERMISSIONS = new Set([
   "dashboard:read", "profile:read", "profile:update", "waste:read", "waste:record",
-  "evidence:upload", "reports:read", "reports:export", "swm:read", "projects:read",
+  "evidence:upload", "reports:read", "reports:export", "swm:read", "projects:read", "facility:manage",
   "projects:create", "registry:read", "credits:read", "credits:buy", "epr:read",
   "csr:read", "guardian:read", "audit:read",
 ]);
