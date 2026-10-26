@@ -12,6 +12,3 @@ RupayKg is a nationwide platform for urban and rural resource flows, digital MRV
 
 **Current readiness note:** TRL 4 is a provisional assessment of controlled software/testing evidence only. TRL 5+ is not demonstrated; hardware TRL is not assessed due to insufficient evidence. Production certification remains HOLD/OFF until applicable evidence and approvals are complete.
 
-CI verification marker: statutory applicability and onboarding governance type fixes are validated against the current main lifecycle without removing platform capabilities.
-
-Current validation target: statutory BWG nullability narrowing and type-safe onboarding governance fetch interception.
