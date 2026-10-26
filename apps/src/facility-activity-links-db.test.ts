@@ -1,0 +1,43 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
+import { Pool, type PoolClient } from "pg";
+
+const url=process.env.DATABASE_URL;
+test("facility activity links enforce tenant/geography scope, independent review and append-only history",{skip:!url},async()=>{
+ assert.ok(url);
+ const pool=new Pool({connectionString:url,max:1,ssl:process.env.DATABASE_SSL==="false"?undefined:{rejectUnauthorized:false}});
+ const c=await pool.connect(),suffix=randomUUID();
+ try{
+  await c.query("begin");
+  const org=(await c.query<{id:string}>("insert into organizations(name,organization_type) values($1,'COLLECTOR') returning id",[`facility-activity-org-${suffix}`])).rows[0]!.id;
+  const otherOrg=(await c.query<{id:string}>("insert into organizations(name,organization_type) values($1,'PROCESSOR') returning id",[`facility-activity-other-${suffix}`])).rows[0]!.id;
+  const actor=(await c.query<{id:string}>("insert into identities(external_subject,display_name) values($1,$2) returning id",[`facility-activity-actor-${suffix}`,"Link requester"])).rows[0]!.id;
+  const reviewer=(await c.query<{id:string}>("insert into identities(external_subject,display_name) values($1,$2) returning id",[`facility-activity-reviewer-${suffix}`,"Independent link reviewer"])).rows[0]!.id;
+  const role=(await c.query<{id:string}>("insert into roles(organization_id,name,permissions) values($1,$2,'[\"facility:manage\"]'::jsonb) returning id",[org,`FACILITY-ACTIVITY-${suffix}`])).rows[0]!.id;
+  await c.query("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED'),($4,$2,$3,'VERIFIED')",[actor,org,role,reviewer]);
+  const geo=(await c.query<{id:string}>("insert into geography(kind,code,name,source) values('DISTRICT',$1,$2,'test') returning id",[`FAL-${suffix}`,`Facility Activity District ${suffix}`])).rows[0]!.id;
+  const otherGeo=(await c.query<{id:string}>("insert into geography(kind,code,name,source) values('DISTRICT',$1,$2,'test') returning id",[`FALO-${suffix}`,`Facility Activity Other District ${suffix}`])).rows[0]!.id;
+  await c.query("insert into organization_geography_scopes(organization_id,geography_id,status) values($1,$2,'VERIFIED')",[org,geo]);
+  const facility=(await c.query<{id:string}>("insert into facilities(organization_id,facility_code,name,facility_type,geography_id,created_by_identity_id,updated_by_identity_id) values($1,$2,'Link Test Facility','COLLECTION_CENTRE',$3,$4,$4) returning id",[org,`FAL-${suffix}`,geo,actor])).rows[0]!.id;
+  await c.query("update facilities set operational_status='ACTIVE',updated_by_identity_id=$2 where id=$1",[facility,reviewer]);
+  const activity=(await c.query<{id:string}>("insert into activities(organization_id,actor_identity_id,geography_id,activity_type,status,completed_at) values($1,$2,$3,'COLLECTION','COMPLETED',now()) returning id",[org,actor,geo])).rows[0]!.id;
+  const otherActivity=(await c.query<{id:string}>("insert into activities(organization_id,actor_identity_id,geography_id,activity_type,status,completed_at) values($1,$2,$3,'COLLECTION','COMPLETED',now()) returning id",[org,actor,otherGeo])).rows[0]!.id;
+  const link=(await c.query<{id:string;status:string}>("insert into facility_activity_links(organization_id,facility_id,activity_id,note,created_by_identity_id) values($1,$2,$3,'Explicit test linkage',$4) returning id,status",[org,facility,activity,actor])).rows[0]!;
+  assert.equal(link.status,"PENDING");
+  await rejectsInSavepoint(c,()=>c.query("update facility_activity_links set status='VERIFIED',reviewed_by_identity_id=$2,reviewed_at=now(),review_note='self review' where id=$1",[link.id,actor]),/cannot approve their own link/i);
+  await rejectsInSavepoint(c,()=>c.query("insert into facility_activity_links(organization_id,facility_id,activity_id,note,created_by_identity_id) values($1,$2,$3,'Wrong geography',$4)",[org,facility,otherActivity,actor]),/exact matching facility and activity geography/i);
+  await c.query("update facility_activity_links set status='VERIFIED',reviewed_by_identity_id=$2,reviewed_at=now(),review_note='Independent review' where id=$1",[link.id,reviewer]);
+  await rejectsInSavepoint(c,()=>c.query("insert into facility_activity_links(organization_id,facility_id,activity_id,note,created_by_identity_id) values($1,$2,$3,'Duplicate link',$4)",[org,facility,activity,actor]),/unique constraint/i);
+  const event=(await c.query<{id:string}>("insert into facility_activity_link_events(link_id,actor_identity_id,event_type,previous_status,new_status,note) values($1,$2,'LINK_REQUESTED',null,'PENDING','Test event') returning id",[link.id,actor])).rows[0]!.id;
+  await rejectsInSavepoint(c,()=>c.query("update facility_activity_link_events set note='tampered' where id=$1",[event]),/append-only/i);
+  assert.notEqual(org,otherOrg);
+  await c.query("rollback");
+ }catch(error){await c.query("rollback").catch(()=>undefined);throw error;}finally{c.release();await pool.end();}
+});
+async function rejectsInSavepoint(client:PoolClient,operation:()=>Promise<unknown>,pattern:RegExp):Promise<void>{
+ await client.query("savepoint expected_failure");
+ try{await operation();await client.query("rollback to savepoint expected_failure");assert.fail("Expected operation to fail");}
+ catch(error){await client.query("rollback to savepoint expected_failure");assert.match(error instanceof Error?error.message:String(error),pattern);}
+ finally{await client.query("release savepoint expected_failure");}
+}
