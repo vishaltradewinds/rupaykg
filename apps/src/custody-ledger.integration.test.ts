@@ -49,6 +49,21 @@ test("typed custody events are sequenced, hashed, idempotent and append-only", a
     assert.equal(eventId.sequence_no, 0);
     assert.match(eventId.event_hash, /^[0-9a-f]{64}$/);
 
+    await client.query("savepoint missing_quantity_basis");
+    await assert.rejects(
+      client.query(
+        `insert into chain_of_custody_links(
+          resource_flow_id, sequence_no, actor_organization_id, counterparty_organization_id,
+          quantity, unit, recorded_at, event_type, idempotency_key, quantity_source,
+          occurred_at, recorded_by_identity_id
+        ) values ($1, 0, $2, $3, 100, 'kg', now(), 'GENERATOR_HANDOVER', $4,
+          'generator declaration', '2026-10-26T09:30:00Z', $5)`,
+        [flowId, actorOrg, counterpartyOrg, `missing-basis-${suffix}`, identityId],
+      ),
+      /check constraint|quantity basis/i,
+    );
+    await client.query("rollback to savepoint missing_quantity_basis");
+
     await client.query("savepoint duplicate_event");
     await assert.rejects(
       client.query(
