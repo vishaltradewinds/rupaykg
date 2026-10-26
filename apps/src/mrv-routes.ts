@@ -95,7 +95,7 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
       const context = await pool.query<{ organization_id: string; activity_status: string; decision: string; evidence_status: string; evidence_activity_id: string | null; evidence_count: string; observation_count: string }>(
         `select a.organization_id, a.status activity_status, v.decision, e.status evidence_status, e.activity_id evidence_activity_id,
                 (select count(*)::text from evidence e2 where e2.activity_id=a.id) evidence_count,
-                ((select count(*) from mrv_observations mo where mo.activity_id=a.id) + (select count(*) from measurements mm where mm.activity_id=a.id and mm.mrv_instrument_id is not null and mm.parameter_code is not null))::text observation_count
+                ((select count(*) from mrv_observations mo where mo.activity_id=a.id) + (select count(*) from measurements mm where mm.activity_id=a.id and mm.mrv_instrument_id is not null and mm.parameter_code is not null and not exists (select 1 from mrv_observations mo where mo.activity_id=mm.activity_id and mo.measurement_id=mm.id)))::text observation_count
            from activities a join verifications v on v.id=$2 and v.activity_id=a.id join evidence e on e.id=$3 and e.activity_id=a.id where a.id=$1`,
         [activityId, verificationId, evidenceId]);
       const row = context.rows[0];
@@ -117,6 +117,10 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
            join mrv_instruments i on i.id = m.mrv_instrument_id
           where m.activity_id=$1 and m.mrv_instrument_id is not null
             and m.parameter_code is not null
+            and not exists (
+              select 1 from mrv_observations mo
+               where mo.activity_id=m.activity_id and mo.measurement_id=m.id
+            )
           order by m.measured_at`,
         [activityId],
       );
