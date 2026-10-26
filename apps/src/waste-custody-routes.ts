@@ -203,6 +203,7 @@ export async function registerWasteCustodyRoutes(app: FastifyInstance, pool: Poo
           await client.query("rollback"); return fail(reply, 400, "Every evidence reference must belong to the actor or assigned counterparty organization", "CUSTODY_EVIDENCE_SCOPE_INVALID");
         }
       }
+      await client.query("select id from resource_flows where id=$1 for update", [flowId]);
       const replay = await client.query<{ id: string; sequence_no: number; review_status: string; same_payload: boolean }>(
         "select id,sequence_no,review_status,event_payload=$3::jsonb as same_payload from chain_of_custody_links where resource_flow_id=$1 and idempotency_key=$2 for update",
         [flowId, event.idempotencyKey, JSON.stringify(event)],
@@ -213,7 +214,6 @@ export async function registerWasteCustodyRoutes(app: FastifyInstance, pool: Poo
         await client.query("commit");
         return reply.code(200).send({ source: "postgresql", syntheticData: false, replay: true, custodyEvent: { id: existing.id, sequenceNo: existing.sequence_no, reviewStatus: existing.review_status }, legalAuthorization: "NOT_ASSESSED" });
       }
-      await client.query("select id from resource_flows where id=$1 for update", [flowId]);
       const sequence = await client.query<{ next_sequence: number }>(
         "select coalesce(max(sequence_no),-1)+1 as next_sequence from chain_of_custody_links where resource_flow_id=$1", [flowId],
       );
