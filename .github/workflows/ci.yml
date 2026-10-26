@@ -38,6 +38,8 @@ jobs:
       - run: npm install --no-audit --no-fund
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=high
+      - name: Verify production startup excludes acceptance fixtures
+        run: node scripts/validate-production-startup.mjs
       - run: npm run validate:migrations
       - run: npm run migrate -w @rupaykg/api
       - run: npm run typecheck
