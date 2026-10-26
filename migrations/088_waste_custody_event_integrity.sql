@@ -104,12 +104,27 @@ begin
     select exists (
       select 1
         from organization_memberships om
+        join roles r on r.id = om.role_id
        where om.identity_id = new.recorded_by_identity_id
          and om.organization_id = new.actor_organization_id
          and om.status = 'VERIFIED'
+         and exists (
+           select 1
+             from jsonb_array_elements_text(r.permissions) permission
+            where permission = 'waste:record'
+         )
     ) into membership_valid;
     if not membership_valid then
-      raise exception 'custody event actor must have verified membership in actor organization';
+      raise exception 'custody event actor requires verified membership and waste:record permission';
+    end if;
+
+    if new.from_geography_id is not null
+       and not organization_has_geography_scope(new.actor_organization_id, new.from_geography_id) then
+      raise exception 'custody event source geography is outside actor organization scope';
+    end if;
+    if new.to_geography_id is not null
+       and not organization_has_geography_scope(new.actor_organization_id, new.to_geography_id) then
+      raise exception 'custody event destination geography is outside actor organization scope';
     end if;
 
     if new.counterparty_organization_id is not null
