@@ -57,7 +57,7 @@ export async function createCurrentInstrumentReading(
     [instrumentId, `TEST-CERT-${suffix}`, meity.sha256, meity.id, calibration.sha256, calibration.id, input.reviewerIdentityId],
   );
   await client.query(
-    "insert into mrv_observations(activity_id,parameter_code,observed_value,unit,method,instrument_id,observed_at,metadata) values($1,'gas_flow',2,'m3/h','database-test-fixture',$2,now(),jsonb_build_object('testFixture',true,'label',$3))",
+    "insert into mrv_observations(activity_id,parameter_code,observed_value,unit,method,instrument_id,observed_at,metadata) values($1,'gas_flow',2,'m3/h','database-test-fixture',$2,now(),jsonb_build_object('testFixture',true,'label',$3::text))",
     [input.activityId, instrumentCode, input.label],
   );
   return { instrumentId, instrumentCode };
