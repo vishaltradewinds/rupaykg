@@ -101,8 +101,12 @@ test("evidence vault enforces tenant scope, versioned storage, integrity and ind
     assert.equal(reviewerDecision.statusCode, 200, reviewerDecision.body);
     assert.equal(reviewerDecision.json().data.status, "VERIFIED");
 
-    const secondReview = await app.inject({ method: "POST", url: "/api/v1/evidence-vault/"+uploaded.evidenceId+"/review", headers: headers(reviewerToken), payload: { decision: "REJECTED", rationale: "Attempt a second decision" } });
-    assert.equal(secondReview.statusCode, 409, secondReview.body);
+    const revocationReview = await app.inject({ method: "POST", url: "/api/v1/evidence-vault/"+uploaded.evidenceId+"/review", headers: headers(reviewerToken), payload: { decision: "REJECTED", rationale: "New information invalidated this evidence" } });
+    assert.equal(revocationReview.statusCode, 200, revocationReview.body);
+    assert.equal(revocationReview.json().data.status, "REJECTED");
+
+    const repeatReview = await app.inject({ method: "POST", url: "/api/v1/evidence-vault/"+uploaded.evidenceId+"/review", headers: headers(reviewerToken), payload: { decision: "REJECTED", rationale: "Rejected artifact must remain terminal" } });
+    assert.equal(repeatReview.statusCode, 409, repeatReview.body);
 
     const spoofedPdf = await app.inject({ method: "POST", url: "/api/v1/evidence-vault/upload", headers: headers(uploaderToken), payload: { activityId: activity.rows[0]!.id, evidenceType: "MALICIOUS", fileName: "not-a-pdf.pdf", mediaType: "application/pdf", contentBase64: Buffer.from("MZ executable bytes").toString("base64") } });
     assert.equal(spoofedPdf.statusCode, 415, spoofedPdf.body);
