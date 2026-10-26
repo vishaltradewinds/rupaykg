@@ -73,7 +73,7 @@ describe("PostgreSQL TLS policy", () => {
   });
 
   it("rejects all common loopback host spellings in production", () => {
-    for (const hostname of ["localhost", "127.0.0.1", "127.0.0.2", "127.1", "[::1]", "service.localhost"]) {
+    for (const hostname of ["localhost", "127.0.0.1", "127.0.0.2", "127.1", "2130706433", "0x7f000001", "0177.0.0.1", "[::1]", "service.localhost"]) {
       assert.throws(() => readDatabaseSslSetting({
         NODE_ENV: "production",
         DATABASE_URL: `postgresql://${hostname}:5432/rupaykg`,
