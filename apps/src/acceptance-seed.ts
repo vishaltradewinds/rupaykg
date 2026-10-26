@@ -13,5 +13,3 @@ if (process.env.RUPAYKG_ACCEPTANCE_SEED_ON_START === "true") {
     "Synthetic acceptance seeding is disabled for authoritative MRV. Use a real, independently verified activity for Guardian/Hedera live acceptance; synthetic fixtures must remain offline and registry-ineligible.",
   );
 }
-
-process.exit(0);
