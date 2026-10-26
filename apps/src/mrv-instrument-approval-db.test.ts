@@ -183,7 +183,7 @@ test("PostgreSQL enforces MRV instrument approval evidence and append-only decis
     await rejectsInSavepoint(client, () => client.query(
       "update mrv_instruments set meity_evidence_artifact_version_id=$2 where id=$1",
       [instrumentId.id, calibrationArtifact.id],
-    ), /evidence artifact versions are immutable/i);
+    ), /immutable after first verification/i);
 
     await rejectsInSavepoint(client, () => client.query(
       "update mrv_instrument_decisions set decision_note='tampered' where instrument_id=$1",
