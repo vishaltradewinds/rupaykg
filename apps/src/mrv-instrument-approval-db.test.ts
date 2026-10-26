@@ -54,7 +54,7 @@ test("PostgreSQL enforces MRV instrument approval evidence and append-only decis
       [reviewOrderArtifact.evidenceId, reviewOrderArtifact.id, reviewerIdentityId],
     );
     const latestReview = await client.query<{ decision: string }>(
-      "select decision from evidence_artifact_reviews where evidence_id=$1 order by created_at desc, review_sequence desc limit 1",
+      "select decision from evidence_artifact_reviews where evidence_id=$1 order by review_sequence desc limit 1",
       [reviewOrderArtifact.evidenceId],
     );
     assert.equal(latestReview.rows[0]?.decision, "REJECTED");
