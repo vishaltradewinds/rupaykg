@@ -266,7 +266,7 @@ export function WasteCustodyPanel(props: {
           <div className="section-heading"><div><p className="eyebrow">AUDIT TRAIL</p><h3>Recorded events</h3></div><span>{events.length} records</span></div>
           {loading && <p className="empty">Loading authoritative custody history…</p>}
           {!loading && !events.length && <p className="empty">No custody events have been recorded for this flow.</p>}
-          {events.slice(0, 40).map(item => <article className="custody-event" key={item.id}>
+          {events.slice(-40).map(item => <article className="custody-event" key={item.id}>
             <div className="custody-event-top"><strong>#{item.sequence_no} · {item.event_type.replaceAll("_", " ")}</strong><span>{item.provenance_status === "TYPED_APPEND_ONLY" ? "APPEND-ONLY" : "LEGACY · UNVERIFIED PROVENANCE"}</span></div>
             <p>{item.quantity} {item.unit} · {item.quantity_basis ?? "basis unknown"} · {item.actor_organization_name ?? "Actor not recorded"}{item.counterparty_organization_name ? ` → ${item.counterparty_organization_name}` : ""}</p>
             <small>Occurred: {displayDate(item.occurred_at)} · Recorded: {displayDate(item.recorded_at)}</small>
