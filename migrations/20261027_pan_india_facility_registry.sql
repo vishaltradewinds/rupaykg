@@ -96,6 +96,18 @@ begin
   ) then
     raise exception 'facility membership identity must have verified membership in the facility organization';
   end if;
+  if new.reviewed_by_identity_id is not null and not exists (
+    select 1 from facilities f
+    join organization_memberships om on om.organization_id=f.organization_id
+    where f.id=new.facility_id
+      and om.identity_id=new.reviewed_by_identity_id
+      and om.status='VERIFIED'
+  ) then
+    raise exception 'facility membership reviewer must have verified membership in the facility organization';
+  end if;
+  if new.status='VERIFIED' and new.reviewed_by_identity_id=new.assigned_by_identity_id then
+    raise exception 'facility membership grantor cannot review their own grant';
+  end if;
   return new;
 end;
 $$;
