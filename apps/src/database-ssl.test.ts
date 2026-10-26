@@ -63,4 +63,28 @@ describe("PostgreSQL TLS policy", () => {
       DATABASE_SSL: "require",
     }), false);
   });
+
+  it("rejects disabled TLS for a non-provider database in production", () => {
+    assert.throws(() => readDatabaseSslSetting({
+      NODE_ENV: "production",
+      DATABASE_URL: "postgresql://db.example.invalid:5432/rupaykg",
+      DATABASE_SSL: "false",
+    }), /PRODUCTION_DATABASE_TLS_REQUIRED/);
+  });
+
+  it("rejects loopback database targets in production before allowing TLS opt-out", () => {
+    assert.throws(() => readDatabaseSslSetting({
+      NODE_ENV: "production",
+      DATABASE_URL: "postgresql://localhost:5432/rupaykg",
+      DATABASE_SSL: "false",
+    }), /PRODUCTION_DATABASE_TARGET_FORBIDDEN/);
+  });
+
+  it("retains the provider-internal non-TLS exception for production Render database hosts", () => {
+    assert.equal(readDatabaseSslSetting({
+      NODE_ENV: "production",
+      DATABASE_URL: "postgresql://dpg-example-a/rupaykg",
+      DATABASE_SSL: "false",
+    }), false);
+  });
 });
