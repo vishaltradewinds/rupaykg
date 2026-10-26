@@ -13,5 +13,8 @@ if (/acceptance-seed\.js/.test(apiPackage.scripts?.start ?? "")) {
 if (!/NODE_ENV\s*===\s*"production"[\s\S]*?Acceptance seeding is forbidden in production/.test(acceptanceSeed)) {
   throw new Error("Acceptance seed must explicitly fail closed in production");
 }
+if (/rejectUnauthorized\s*:\s*false/.test(acceptanceSeed)) {
+  throw new Error("Acceptance seed must not disable PostgreSQL TLS certificate verification");
+}
 
-console.log("Production startup is isolated from acceptance fixture seeding.");
+console.log("Production startup excludes acceptance fixtures and preserves PostgreSQL TLS verification.");
