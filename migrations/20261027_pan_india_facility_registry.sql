@@ -73,6 +73,11 @@ begin
     raise exception 'facility geography is outside organization authorization scope';
   end if;
   if tg_op = 'UPDATE' then
+    if new.operational_status='ACTIVE'
+       and old.operational_status <> 'ACTIVE'
+       and new.updated_by_identity_id = old.created_by_identity_id then
+      raise exception 'facility creator cannot independently activate their own facility profile';
+    end if;
     new.version := old.version + 1;
     new.updated_at := now();
   end if;
