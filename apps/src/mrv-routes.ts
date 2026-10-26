@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import type { Pool, PoolClient } from "pg";
 import { authenticate, canActForOrganization, hasOrganizationPermission, type AuthContext } from "./auth.js";
@@ -174,6 +175,19 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
       // The optional anchor quantity is populated only when an explicit mapping selects
       // exactly one observation from the already instrument/evidence/parameter-validated set.
       const { quantity, unit } = explicitAnchorQuantity(observations.rows, null);
+      // Replay identity must include every validated reading, not just activity IDs.
+      // Sort by stable reading ID so query ordering cannot change the digest.
+      const observationSet = observations.rows.map((o: Record<string, unknown>) => ({
+        id: String(o.id ?? ""),
+        parameterCode: String(o.parameter_code ?? ""),
+        value: String(o.observed_value ?? ""),
+        unit: String(o.unit ?? ""),
+        method: String(o.method ?? ""),
+        instrumentId: String(o.instrument_id ?? ""),
+        observedAt: o.observed_at == null ? "" : new Date(o.observed_at as string | number | Date).toISOString(),
+        uncertainty: o.uncertainty == null ? null : String(o.uncertainty),
+      })).sort((a, b) => a.id.localeCompare(b.id));
+      const observationSetHash = createHash("sha256").update(JSON.stringify(observationSet)).digest("hex");
 
       // Reuse an exact, already-persisted external anchor on sequential retries.
       // Match the full payload hash so changed measurements/methodology cannot reuse stale provenance.
@@ -190,7 +204,7 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
       );
       const existing = prior.rows.find(record => {
         if (!record.guardian_execution_id) return false;
-        return integrityHash({ schema: "rupaykg:mrv:v1", activityId, verificationId, evidenceId, guardianPolicyId: policyId, guardianExecutionId: record.guardian_execution_id, mrvStatus: "VERIFIED", methodologyCode, quantity, unit, metadata: { guardianStatus: "VERIFIED" } }) === record.integrity_hash;
+        return integrityHash({ schema: "rupaykg:mrv:v1", activityId, verificationId, evidenceId, guardianPolicyId: policyId, guardianExecutionId: record.guardian_execution_id, mrvStatus: "VERIFIED", methodologyCode, quantity, unit, metadata: { guardianStatus: "VERIFIED", observationSetHash } }) === record.integrity_hash;
       });
       if (existing?.guardian_execution_id && existing.hcs_topic_id && existing.hcs_transaction_id && existing.hcs_consensus_timestamp) {
         const acceptanceFixture = await isAcceptanceFixture(pool, activityId);
@@ -207,7 +221,7 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
       const guardian = await executeGuardianMrv({ activityId, verificationId, evidenceId, policyId, methodologyCode, observations: observations.rows, evidence: evidence.rows, metadata: { evidenceCount: Number(row.evidence_count), observationCount: Number(row.observation_count) } });
       if (guardian.status !== "VERIFIED" || !guardian.executionId) return reply.code(503).send({ source: "guardian", syntheticData: false, guardian, eligibleForRegistry: false });
 
-      const anchor = await submitHcsAnchor({ schema: "rupaykg:mrv:v1", activityId, verificationId, evidenceId, guardianPolicyId: policyId, guardianExecutionId: guardian.executionId, mrvStatus: "VERIFIED", methodologyCode, quantity, unit, metadata: { guardianStatus: guardian.status } });
+      const anchor = await submitHcsAnchor({ schema: "rupaykg:mrv:v1", activityId, verificationId, evidenceId, guardianPolicyId: policyId, guardianExecutionId: guardian.executionId, mrvStatus: "VERIFIED", methodologyCode, quantity, unit, metadata: { guardianStatus: guardian.status, observationSetHash } });
       const persisted = await pool.query(`insert into mrv_provenance_events(activity_id,verification_id,evidence_id,guardian_policy_id,guardian_execution_id,guardian_status,hcs_status,hcs_topic_id,hcs_transaction_id,hcs_consensus_timestamp,integrity_hash,methodology_code,metadata) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) on conflict(activity_id,verification_id,integrity_hash) do update set guardian_execution_id=excluded.guardian_execution_id,guardian_status=excluded.guardian_status,hcs_status=excluded.hcs_status,hcs_topic_id=excluded.hcs_topic_id,hcs_transaction_id=excluded.hcs_transaction_id,hcs_consensus_timestamp=excluded.hcs_consensus_timestamp,metadata=excluded.metadata,mirror_node_verified_at=null returning *`, [activityId, verificationId, evidenceId, policyId, guardian.executionId, guardian.status, anchor.status, anchor.topicId || null, anchor.transactionId, anchor.consensusTimestamp, anchor.integrityHash, methodologyCode || null, JSON.stringify({ guardian: guardian.raw ?? null })]);
       return reply.code(anchor.status === "CONSENSUS_CONFIRMED" ? 201 : 503).send({ source: "postgresql+guardian+hedera", syntheticData: false, guardian, hedera: anchor, provenance: persisted.rows[0], eligibleForRegistry: false });
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Authoritative MRV submission unavailable", code: "MRV_UNAVAILABLE", syntheticData: false }); }
