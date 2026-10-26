@@ -4,7 +4,7 @@ import type { Pool, PoolClient } from "pg";
 import { authenticate, type AuthContext } from "./auth.js";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const SAFE_PERMISSIONS = new Set([
+const ROLE_EDITOR_PERMISSIONS = new Set([
   "dashboard:read", "profile:read", "profile:update", "waste:read", "waste:record",
   "evidence:upload", "reports:read", "reports:export", "swm:read", "projects:read", "facility:manage",
   "projects:create", "registry:read", "credits:read", "credits:buy", "epr:read",
@@ -293,7 +293,7 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
          order by o.name,r.name limit 300`,
         [[...RESERVED_ROLES]],
       );
-      return { source: "postgresql", syntheticData: false, safeEditablePermissions: [...SAFE_PERMISSIONS], roles: result.rows };
+      return { source: "postgresql", syntheticData: false, safeEditablePermissions: [...ROLE_EDITOR_PERMISSIONS], roles: result.rows };
     } catch (error) {
       request.log.error(error);
       return routeError(reply, 503, "Role directory unavailable", "ROLE_DIRECTORY_UNAVAILABLE");
@@ -309,10 +309,10 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
     const permissions = body.permissions;
     if (!UUID.test(roleId)) return routeError(reply, 400, "A valid role UUID is required", "ROLE_ID_INVALID");
     if (!validReason(reason)) return routeError(reply, 400, "A reason of 8–1000 characters is required", "ADMIN_REASON_REQUIRED");
-    if (!Array.isArray(permissions) || permissions.length > SAFE_PERMISSIONS.size ||
-        permissions.some((p) => typeof p !== "string" || !SAFE_PERMISSIONS.has(p)) ||
+    if (!Array.isArray(permissions) || permissions.length > ROLE_EDITOR_PERMISSIONS.size ||
+        permissions.some((p) => typeof p !== "string" || !ROLE_EDITOR_PERMISSIONS.has(p)) ||
         new Set(permissions).size !== permissions.length) {
-      return routeError(reply, 400, "Permissions must be a unique list from the approved low-risk permission catalogue", "ROLE_PERMISSIONS_INVALID");
+      return routeError(reply, 400, "Permissions must be a unique list from the approved role-editor permission catalogue", "ROLE_PERMISSIONS_INVALID");
     }
     try {
       const result = await transaction(pool, async (client) => {
@@ -322,7 +322,7 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
         const role = selected.rows[0];
         if (!role) return { status: 404 as const, body: { error: "Role not found", code: "ROLE_NOT_FOUND" } };
         if (RESERVED_ROLES.has(role.name)) return { status: 409 as const, body: { error: "Reserved platform roles cannot be edited through the ordinary role editor", code: "RESERVED_ROLE_LOCKED" } };
-        if ((role.permissions ?? []).some((p) => PROTECTED_PERMISSIONS.has(p) || !SAFE_PERMISSIONS.has(p))) {
+        if ((role.permissions ?? []).some((p) => PROTECTED_PERMISSIONS.has(p) || !ROLE_EDITOR_PERMISSIONS.has(p))) {
           return { status: 409 as const, body: { error: "This role contains high-risk permissions and requires a separately governed permission-change workflow", code: "HIGH_RISK_ROLE_LOCKED" } };
         }
         const updated = await client.query<{ id: string; organization_id: string; name: string; permissions: string[] }>(
@@ -606,7 +606,7 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
         if (target.organization_status !== "VERIFIED") return { status: 409 as const, body: { error: "Membership cannot be granted until the organization is verified", code: "ORGANIZATION_NOT_VERIFIED" } };
         if (target.role_organization_id !== organizationId) return { status: 400 as const, body: { error: "Role does not belong to the target organization", code: "ROLE_ORGANIZATION_MISMATCH" } };
         if (RESERVED_ROLES.has(target.role_name)) return { status: 409 as const, body: { error: "Platform-reserved roles require a separate dual-control workflow and cannot be granted here", code: "RESERVED_ROLE_GRANT_BLOCKED" } };
-        if ((target.role_permissions ?? []).some((permission) => PROTECTED_PERMISSIONS.has(permission) || !SAFE_PERMISSIONS.has(permission))) return { status: 409 as const, body: { error: "This role contains high-risk permissions and requires a separately approved access-grant workflow", code: "HIGH_RISK_ROLE_GRANT_BLOCKED" } };
+        if ((target.role_permissions ?? []).some((permission) => PROTECTED_PERMISSIONS.has(permission) || !ROLE_EDITOR_PERMISSIONS.has(permission))) return { status: 409 as const, body: { error: "This role contains high-risk permissions and requires a separately approved access-grant workflow", code: "HIGH_RISK_ROLE_GRANT_BLOCKED" } };
         const prior = await client.query<{ id: string; status: string; last_revoked_at: Date | null }>(
           "select id,status,last_revoked_at from organization_memberships where identity_id=$1 and organization_id=$2 and role_id=$3 for update",
           [identityId, organizationId, roleId],
