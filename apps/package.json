@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx src/server.ts",
-    "start": "node dist/src/migrate.js && node dist/src/production-server.js",
+    "start": "node dist/src/production-entrypoint.js",
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "migrate": "tsx src/migrate.ts",
