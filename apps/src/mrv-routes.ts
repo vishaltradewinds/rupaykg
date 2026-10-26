@@ -81,6 +81,55 @@ async function activityInAuthorizedGeography(pool: Pool, auth: AuthContext, acti
  * Acceptance fixtures may exercise the real external trust rail, but they are
  * never evidence of a real carbon project and must not be presented as registry eligible.
  */
+
+/**
+ * Registry eligibility is a live gate, not a permanent property of an old anchor.
+ * A later evidence-vault rejection must immediately make the activity ineligible.
+ */
+async function activityInstrumentEvidenceIsCurrent(pool: Pool, activityId: string): Promise<boolean> {
+  const result = await pool.query<{ eligible: boolean }>(
+    `select
+       (
+         exists (
+           select 1 from mrv_observations mo
+            where mo.activity_id = $1 and mo.instrument_id is not null and btrim(mo.instrument_id) <> ''
+         )
+         or exists (
+           select 1 from measurements mm
+            where mm.activity_id = $1 and mm.mrv_instrument_id is not null
+         )
+       )
+       and not exists (
+         select 1
+           from mrv_observations mo
+           left join activities a on a.id = mo.activity_id
+           left join mrv_instruments i
+             on i.organization_id = a.organization_id
+            and i.instrument_code = mo.instrument_id
+          where mo.activity_id = $1
+            and (
+              mo.instrument_id is null or btrim(mo.instrument_id) = ''
+              or i.id is null or i.approval_status <> 'VERIFIED'
+              or not mrv_instrument_evidence_is_current(i.id)
+            )
+       )
+       and not exists (
+         select 1
+           from measurements mm
+           left join mrv_instruments i
+             on i.id = mm.mrv_instrument_id
+            and i.organization_id = (select a.organization_id from activities a where a.id = $1)
+          where mm.activity_id = $1 and mm.mrv_instrument_id is not null
+            and (
+              i.id is null or i.approval_status <> 'VERIFIED'
+              or not mrv_instrument_evidence_is_current(i.id)
+            )
+       ) as eligible`,
+    [activityId],
+  );
+  return result.rows[0]?.eligible === true;
+}
+
 async function isAcceptanceFixture(pool: Pool, activityId: string): Promise<boolean> {
   const result = await pool.query<{ is_fixture: boolean }>(
     `select
@@ -229,12 +278,14 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
       });
       if (existing?.guardian_execution_id && existing.hcs_topic_id && existing.hcs_transaction_id && existing.hcs_consensus_timestamp) {
         const acceptanceFixture = await isAcceptanceFixture(pool, activityId);
+        const instrumentEvidenceCurrent = await activityInstrumentEvidenceIsCurrent(pool, activityId);
         return reply.code(200).send({
           source: "postgresql+guardian+hedera", syntheticData: false, replay: true,
           guardian: { status: "VERIFIED", executionId: existing.guardian_execution_id, policyId: existing.guardian_policy_id, message: "Reused persisted Guardian execution; no duplicate provider submission." },
           hedera: { status: "CONSENSUS_CONFIRMED", transactionId: existing.hcs_transaction_id, consensusTimestamp: existing.hcs_consensus_timestamp, topicId: existing.hcs_topic_id, network: hederaStatus().network, integrityHash: existing.integrity_hash, message: "Reused persisted HCS anchor; no duplicate consensus message submitted." },
           provenance: existing,
-          eligibleForRegistry: !acceptanceFixture && Boolean(existing.mirror_node_verified_at),
+          eligibleForRegistry: !acceptanceFixture && instrumentEvidenceCurrent && Boolean(existing.mirror_node_verified_at),
+          ...(!instrumentEvidenceCurrent ? { registryEligibilityReason: "MRV_INSTRUMENT_EVIDENCE_NOT_CURRENT" } : {}),
           ...(acceptanceFixture ? { registryEligibilityReason: "ACCEPTANCE_FIXTURE_NOT_REGISTRY_ELIGIBLE" } : {}),
         });
       }
@@ -264,10 +315,12 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
       if (!await activityInAuthorizedGeography(pool, auth, activityId, owner.rows[0].organization_id)) return reply.code(403).send({ error: "Activity geography is outside organization authorization scope", code: "GEOGRAPHY_FORBIDDEN" });
       const rows = await pool.query("select * from mrv_provenance_events where activity_id=$1 order by created_at desc", [activityId]);
       const acceptanceFixture = await isAcceptanceFixture(pool, activityId);
+      const instrumentEvidenceCurrent = await activityInstrumentEvidenceIsCurrent(pool, activityId);
       return {
         source: "postgresql",
         syntheticData: false,
-        eligibleForRegistry: !acceptanceFixture && rows.rows.some(r => r.guardian_status === "VERIFIED" && r.hcs_status === "CONSENSUS_CONFIRMED" && r.mirror_node_verified_at != null),
+        eligibleForRegistry: !acceptanceFixture && instrumentEvidenceCurrent && rows.rows.some(r => r.guardian_status === "VERIFIED" && r.hcs_status === "CONSENSUS_CONFIRMED" && r.mirror_node_verified_at != null),
+        ...(!instrumentEvidenceCurrent ? { registryEligibilityReason: "MRV_INSTRUMENT_EVIDENCE_NOT_CURRENT" } : {}),
         ...(acceptanceFixture ? { registryEligibilityReason: "ACCEPTANCE_FIXTURE_NOT_REGISTRY_ELIGIBLE" } : {}),
         provenance: rows.rows,
       };
@@ -297,11 +350,13 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
       );
       if (!persisted.rows[0]?.mirror_node_verified_at) return { source: "hedera-mirror-node", syntheticData: false, verified: false, eligibleForRegistry: false, error: "MRV provenance changed during Mirror Node verification; retry against the current record" };
       const acceptanceFixture = await isAcceptanceFixture(pool, row.activity_id);
+      const instrumentEvidenceCurrent = await activityInstrumentEvidenceIsCurrent(pool, row.activity_id);
       return {
         source: "hedera-mirror-node",
         syntheticData: false,
         ...verification,
-        eligibleForRegistry: !acceptanceFixture,
+        eligibleForRegistry: !acceptanceFixture && instrumentEvidenceCurrent,
+        ...(!instrumentEvidenceCurrent ? { registryEligibilityReason: "MRV_INSTRUMENT_EVIDENCE_NOT_CURRENT" } : {}),
         ...(acceptanceFixture ? { registryEligibilityReason: "ACCEPTANCE_FIXTURE_NOT_REGISTRY_ELIGIBLE" } : {}),
         persistedVerificationAt: persisted.rows[0].mirror_node_verified_at,
       };
