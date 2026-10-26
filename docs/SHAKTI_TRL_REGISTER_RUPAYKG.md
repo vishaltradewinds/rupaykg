@@ -3,7 +3,7 @@
 **Assessment date:** 2026-10-26  
 **Assessment basis:** Repository and CI evidence available at the time of assessment; not an independent field certification.  
 **Related universal policy:** [SHAKTI Standards](SHAKTI_STANDARDS.md)  
-**Detailed audit:** [RupayKg Technology Readiness Level Audit](https://github.com/vishaltradewinds/rupaykg/blob/audit/technology-readiness-level/docs/TECHNOLOGY_READINESS_LEVEL_AUDIT_2026-10-26.md)
+**Detailed audit:** [RupayKg Technology Readiness Level Audit](TECHNOLOGY_READINESS_LEVEL_AUDIT_2026-10-26.md)
 
 ## Current decision
 
