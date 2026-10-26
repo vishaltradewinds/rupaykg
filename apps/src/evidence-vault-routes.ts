@@ -12,6 +12,17 @@ const bodyOf=(r:Req):B=>r.body&&typeof r.body==="object"?r.body as B:{};
 const str=(b:B,k:string):string|null=>typeof b[k]==="string"&&b[k].trim()?b[k].trim():null;
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+export function evidenceReviewTransitionFailure(currentStatus:string, decision:string):string|null {
+ if(decision!=="APPROVED"&&decision!=="REJECTED")return "Decision must be APPROVED or REJECTED.";
+ if(currentStatus==="CAPTURED")return null;
+ // A reviewer must be able to revoke evidence already used to approve an MRV instrument.
+ // Rejection is terminal for this immutable artifact version; replacement requires a new version.
+ if(currentStatus==="VERIFIED"&&decision==="REJECTED")return null;
+ if(currentStatus==="VERIFIED")return "Verified evidence can only be revoked by a rejection review; upload a new version to submit replacement evidence.";
+ if(currentStatus==="REJECTED")return "Rejected evidence is terminal; upload a new version for a new review.";
+ return "Evidence status does not permit review.";
+}
+
 export function sanitizeEvidenceFileName(value:string):string|null {
  const name=value.normalize("NFKC").replace(/[\\/\u0000-\u001f\u007f]/g,"_").replace(/^\.+/,"").trim();
  return !name||name.length>180||name==="."||name===".."?null:name;
@@ -112,7 +123,8 @@ export async function registerEvidenceVaultRoutes(app:FastifyInstance,pool:Pool|
    if(!row||!row.geography_id||!canActForOrganization(auth,row.organization_id)){await client.query("rollback");return reply.code(404).send({error:"Evidence not found",code:"EVIDENCE_NOT_FOUND"});}
    const g=await client.query<{ok:boolean}>("select organization_has_geography_scope($1::uuid,$2::uuid) ok",[row.organization_id,row.geography_id]);
    if(!g.rows[0]?.ok||!await hasOrganizationPermission(client,auth,row.organization_id,["evidence:review"])||!await canVerifyEvidence(client,auth.identityId,id)){await client.query("rollback");return reply.code(403).send({error:"Evidence review permission and geography scope required",code:"EVIDENCE_REVIEW_FORBIDDEN"});}
-   if(row.status==="VERIFIED"||row.status==="REJECTED"){await client.query("rollback");return reply.code(409).send({error:"Reviewed evidence is immutable; upload a new version",code:"EVIDENCE_ALREADY_REVIEWED"});}
+   const transitionFailure=evidenceReviewTransitionFailure(row.status,decision);
+   if(transitionFailure){await client.query("rollback");return reply.code(409).send({error:transitionFailure,code:row.status==="REJECTED"?"EVIDENCE_ALREADY_REJECTED":"EVIDENCE_REVIEW_TRANSITION_FORBIDDEN"});}
    if(row.uploaded_by_identity_id===auth.identityId){await client.query("rollback");return reply.code(403).send({error:"Evidence uploader cannot review their own artifact",code:"EVIDENCE_SELF_REVIEW_FORBIDDEN"});}
    const status=decision==="APPROVED"?"VERIFIED":"REJECTED";
    await client.query("insert into evidence_artifact_reviews(evidence_id,artifact_version_id,reviewer_identity_id,decision,rationale) values($1,$2,$3,$4,$5)",[id,row.artifact_id,auth.identityId,decision,rationale]);
