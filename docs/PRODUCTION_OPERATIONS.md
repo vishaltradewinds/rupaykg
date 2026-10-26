@@ -8,9 +8,9 @@
 - Degraded database state returns HTTP 503.
 - Keep the health endpoint unauthenticated so the platform can probe it.
 
-## Backup procedure — Free Render PostgreSQL
+## Backup procedure — chosen runtime PostgreSQL (not historical Render recovery)
 
-Free Render PostgreSQL does not provide Render-managed recovery/PITR. Use an external logical backup.
+The suspended historical Render database is not a required recovery target for the current new-app scope. For whichever database is selected for future live operation, Free Render PostgreSQL does not provide Render-managed recovery/PITR; use an external logical backup only after the authoritative target and read permissions are verified.
 
 **Precondition:** this is a procedure template, not proof that the current live target can be backed up. First identify the authoritative live database and confirm the operator has permitted read access. The suspended Render database and the unconfirmed Neon candidate must not be conflated. Do not request, print, or commit credentials.
 
