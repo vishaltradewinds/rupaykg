@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { Pool } from "pg";
-import { readDatabaseSslSetting } from "./database-ssl.js";
+import { readDatabaseConnectionOptions } from "./database-ssl.js";
 import { shouldRunAcceptanceSeed } from "./acceptance-seed-policy.js";
 
 /**
@@ -22,9 +22,8 @@ if (!databaseUrl) throw new Error("DATABASE_URL is required for acceptance seed"
 if (!sessionToken) throw new Error("RUPAYKG_ACCEPTANCE_SESSION_TOKEN is required for acceptance seed");
 
 const pool = new Pool({
-  connectionString: databaseUrl,
+  ...readDatabaseConnectionOptions(),
   max: 1,
-  ssl: readDatabaseSslSetting(),
 });
 
 const tokenHash = createHash("sha256").update(sessionToken).digest("hex");
