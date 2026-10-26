@@ -14,6 +14,15 @@ if (process.env.RUPAYKG_ACCEPTANCE_SEED_ON_START !== "true") {
   process.exit(0);
 }
 
+// This legacy fixture writes synthetic measurements/evidence. It must never be
+// used to exercise the authoritative live MRV submit route: that route requires
+// real, organization-scoped instrument approval and evidence-vault provenance.
+// Use the manual Guardian/Hedera workflow with a real completed activity,
+// approved verification, verified evidence, and instrument-bound readings.
+throw new Error(
+  "Synthetic acceptance seeding is disabled for authoritative MRV. Use a real, independently verified activity for Guardian/Hedera live acceptance; synthetic fixtures must remain offline and registry-ineligible.",
+);
+
 const databaseUrl = process.env.DATABASE_URL;
 const sessionToken = process.env.RUPAYKG_ACCEPTANCE_SESSION_TOKEN;
 if (!databaseUrl) throw new Error("DATABASE_URL is required for acceptance seed");
