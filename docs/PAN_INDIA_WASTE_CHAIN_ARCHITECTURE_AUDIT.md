@@ -16,7 +16,11 @@
 | Regulatory source/requirement catalog | migrations/026_regulatory_source_provenance.sql; migrations/039_india_regulatory_requirements.sql; migrations/042_india_regulatory_requirement_catalog.sql; migrations/053_authoritative_regulatory_baseline.sql; migrations/064_statutory_applicability_controls.sql | Versioned source and requirement concepts plus evidence-based applicability controls exist | Complete current State/UT/local rule coverage is not demonstrated by the existence of a catalog |
 | EPR scheme and obligation/return records | migrations/005_carbon_epr_esg.sql; migrations/067_epr_scheme_catalog.sql; migrations/068-072 EPR lifecycle; apps/src/bwg-routes.ts; apps/src/epr-return-routes.ts | Several national EPR schemes and scoped obligations/returns are already modelled | Do not assume every stream, amendment, external certificate or portal state is current/complete without per-scheme verification |
 | BWG/SWM workspace and eligibility/reporting | apps/web/src/bwg-reporting-panel.ts; migrations/036-044; migrations/20261018_cpcb_swm_stakeholder_workspaces.sql; migrations/20261019_cpcb_bwg_workflow_tracking.sql; docs/CPCB_SWMP_2026_BWG_DASHBOARD_AUDIT.md | BWG thresholds, a preparation workspace, user-reported CPCB status history and compliance reporting exist | The existing audit explicitly says it is not a complete mirror of the CPCB portal and not a live portal/API integration |
-| MRV evidence vault and instrument-bound validation | PR #51 (open, unmerged) and related migration/test changes on its branch | New hardening work is proposed and CI-validated on its PR branch | It is not yet in main or production; do not assume it is already deployed |
+| Evidence artifact vault | `migrations/20261021_evidence_artifact_vault.sql`; `apps/src/evidence-vault-routes.ts`; `docs/CPCB_SWMP_2026_STAKEHOLDER_WORKFLOWS.md` | A bounded evidence-artifact vault and its routes are present on main; workflow docs record the relevant backend/workspace work as merged | Presence in source does not establish production deployment, access-policy correctness, or end-to-end operation |
+
+
+
+**Separate pending capability:** instrument-bound validation and related MRV hardening proposed in PR #51 remains open/unmerged as of this audit. Do not treat that branch as a main-branch or production capability.
 
 ## 2. Confirmed product gaps to resolve
 
