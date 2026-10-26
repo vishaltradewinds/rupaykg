@@ -314,6 +314,20 @@ export async function registerWasteCustodyRoutes(app: FastifyInstance, pool: Poo
           return reply.code(403).send({ error: "Resource-flow geography is outside active organization scope", code: "CUSTODY_FLOW_FORBIDDEN" });
         }
       }
+      const outOfScopeEvent = await pool.query<{ exists: boolean }>(
+        `select exists (
+          select 1 from chain_of_custody_links c
+           where c.resource_flow_id = $1
+             and (
+               (c.from_geography_id is not null and not organization_has_geography_scope($2, c.from_geography_id))
+               or (c.to_geography_id is not null and not organization_has_geography_scope($2, c.to_geography_id))
+             )
+        ) as exists`,
+        [resourceFlowId, organizationId],
+      );
+      if (outOfScopeEvent.rows[0]?.exists) {
+        return reply.code(403).send({ error: "Custody event geography is outside active organization scope", code: "CUSTODY_FLOW_FORBIDDEN" });
+      }
       const events = await pool.query(
         `select c.id, c.resource_flow_id, c.sequence_no,
                 coalesce(c.event_type, 'LEGACY_UNTYPED') as event_type,
