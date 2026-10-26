@@ -21,6 +21,15 @@ describe("PostgreSQL TLS policy", () => {
     if (ssl !== false) assert.match(ssl.ca, /BEGIN CERTIFICATE/);
   });
 
+  it("keeps certificate verification enabled for sslmode=require using system trust", () => {
+    const ssl = readDatabaseSslSetting({
+      DATABASE_URL: "postgresql://db.example.invalid:5432/rupaykg?sslmode=require",
+      DATABASE_SSL: "require",
+    });
+    assert.notEqual(ssl, false);
+    if (ssl !== false) assert.equal(ssl.rejectUnauthorized, true);
+  });
+
   it("fails closed when TLS mode is missing", () => {
     assert.throws(() => readDatabaseSslSetting({
       DATABASE_URL: "postgresql://db.example.invalid:5432/rupaykg",
