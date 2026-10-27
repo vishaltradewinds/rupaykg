@@ -15,7 +15,8 @@
     "test": "npm run build -w @rupaykg/domain && npm run build -w @rupaykg/carbon && npm run build -w @rupaykg/compliance && npm run build -w @rupaykg/esg && npm run build -w @rupaykg/intelligence && npm run test --workspaces --if-present",
     "typecheck": "npm run build -w @rupaykg/domain && npm run build -w @rupaykg/carbon && npm run build -w @rupaykg/compliance && npm run build -w @rupaykg/esg && npm run build -w @rupaykg/intelligence && npm run typecheck -w @rupaykg/api && npm run typecheck -w @rupaykg/web",
     "validate:migrations": "node scripts/validate-migrations.mjs",
-    "ecosystem:reconcile": "node scripts/reconcile-ecosystem-state.mjs"
+    "ecosystem:reconcile": "node scripts/reconcile-ecosystem-state.mjs",
+    "test:guardian-policy": "node scripts/test-wa03-guardian-policy-reproducibility.mjs"
   },
   "overrides": {
     "protobufjs": "8.8.0",
