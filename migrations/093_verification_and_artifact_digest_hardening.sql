@@ -28,6 +28,35 @@ language sql stable as $identity_scope$
   end;
 $identity_scope$;
 
+-- Organization-wide records have no single geography. Restrict them to one
+-- unambiguous verified role with no role-specific geography restriction.
+create or replace function identity_has_organization_scope(
+  p_identity_id uuid,
+  p_organization_id uuid
+) returns boolean
+language sql stable as $identity_org_scope$
+  select case
+    when p_identity_id is null or p_organization_id is null then false
+    when (
+      select count(*)
+      from organization_memberships om
+      where om.identity_id = p_identity_id
+        and om.organization_id = p_organization_id
+        and om.status = 'VERIFIED'
+    ) <> 1 then false
+    else exists (
+      select 1
+      from organization_memberships om
+      join roles r on r.id = om.role_id
+      where om.identity_id = p_identity_id
+        and om.organization_id = p_organization_id
+        and om.status = 'VERIFIED'
+        and jsonb_typeof(r.geography_scope) = 'array'
+        and jsonb_array_length(r.geography_scope) = 0
+    )
+  end;
+$identity_org_scope$;
+
 -- Verification authorization hardening.
 -- The legacy 010 trigger allowed role names (VERIFIER/AUDITOR) to bypass the
 -- explicit permission model introduced in 027. Keep database enforcement aligned
