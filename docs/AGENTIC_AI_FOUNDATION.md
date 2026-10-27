@@ -6,12 +6,18 @@
 - Evidence gates and explicit READY, BLOCKED, and REQUIRES_HUMAN steps.
 - Optional provider-neutral OpenAI-compatible chat-completions adapter for plain-language plan explanation. It is disabled by default and has no tools or action-execution access.
 - Capability discovery endpoint and unit tests for planning gates and model adapter configuration.
+- Typed, allow-listed domain-tool policy registry for activity, measurement, evidence, verification and stakeholder-onboarding reads; workflows are checked against the permissions required by their tool set before planning.
+- Capability discovery reports tool metadata; the model cannot invoke tools. Domain SQL remains fixed, parameterized, and organization/geography scoped in the workflow route.
 - Shakti Standards lifecycle / TRL boundary documentation.
 
 ## Stakeholder coverage baseline
 See [AGENTIC_STAKEHOLDER_PERMISSION_MATRIX.md](AGENTIC_STAKEHOLDER_PERMISSION_MATRIX.md) for the pan-India stakeholder matrix, current-versus-planned implementation status, permission boundaries, cross-cutting control roles, source/evidence expectations, rollout batches and Shakti Standards gates.
 
 The matrix identifies 35 stakeholder categories. This is target coverage, not a claim that each category has a dedicated agent or live integration. The current increment provides four generic read-only advisory workflow goals only.
+
+## Read-only tool registry
+
+The registry in `apps/src/agentic-tools.ts` defines six tool identifiers and their domain, permission alternatives, read-only mode and organization/geography scope. Each of the four goals is mapped to an explicit tool allow-list. The plan endpoint checks each required tool permission before reading domain data and returns `AGENTIC_TOOL_FORBIDDEN` with the denied tool ID when authorization fails. The registry does not grant permissions, perform writes, or expose arbitrary SQL/URLs. Tool metadata is discoverable from the capabilities endpoint. Dedicated tool handlers and model-driven tool calling are not enabled in this increment.
 
 ## API
 - `GET /api/v1/agentic/capabilities`
