@@ -1,6 +1,7 @@
 export * from "./state-machines.js";
 export * from "./regulatory.js";
 export * from "./resource-flows.js";
+export * from "./waste-chain.js";
 export * from "./field-operations.js";
 export * from "./geography.js";
 export * from "./cpcb-swm.js";
