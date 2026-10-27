@@ -60,25 +60,37 @@ export async function registerIcvcmCcpRoutes(app: FastifyInstance, pool: Pool | 
         }
       }
       const assessments = rawAssessments as CcpPrincipleAssessment[];
-      // Serialize revision allocation per organization/activity while retaining the
-      // unique constraint as the final database-level integrity guard.
-      // The lock and insert run in one statement/transaction, so concurrent requests
-      // cannot both allocate the same revision number.
-      const saved = await pool.query(
-        `with revision_lock as materialized (
-           select pg_advisory_xact_lock(hashtextextended($1::text || ':' || $2::text, 0))
-         ),
-         next_revision as (
-           select coalesce(max(a.revision_number), 0) + 1 as revision_number
-             from icvcm_ccp_assessments a cross join revision_lock
-            where a.organization_id=$1 and a.activity_id=$2
-         )
-         insert into icvcm_ccp_assessments
-           (organization_id, activity_id, assessed_by_identity_id, revision_number, assessment, summary, status)
-         select $1, $2, $3, next_revision.revision_number, $4::jsonb, $5::jsonb, 'INTERNAL_DRAFT'
-           from next_revision
-         returning id, organization_id, activity_id, assessed_by_identity_id, revision_number, assessment, summary, status, created_at`,
-        [organizationId, activityId, auth.identityId, JSON.stringify(assessments), JSON.stringify(summary)]);
+      // Use an explicit transaction: acquire the transaction-scoped lock in its
+      // own statement, then read the latest committed revision in a fresh statement
+      // snapshot before inserting. A single CTE statement could retain a snapshot
+      // taken before waiting on the advisory lock.
+      const db = await pool.connect();
+      let saved;
+      try {
+        await db.query("begin");
+        await db.query(
+          "select pg_advisory_xact_lock(hashtextextended($1::text || ':' || $2::text, 0))",
+          [organizationId, activityId],
+        );
+        const latest = await db.query<{ revision_number: number }>(
+          "select coalesce(max(revision_number), 0) as revision_number from icvcm_ccp_assessments where organization_id=$1 and activity_id=$2",
+          [organizationId, activityId],
+        );
+        const nextRevision = Number(latest.rows[0]?.revision_number ?? 0) + 1;
+        saved = await db.query(
+          `insert into icvcm_ccp_assessments
+             (organization_id, activity_id, assessed_by_identity_id, revision_number, assessment, summary, status)
+           values ($1, $2, $3, $4, $5::jsonb, $6::jsonb, 'INTERNAL_DRAFT')
+           returning id, organization_id, activity_id, assessed_by_identity_id, revision_number, assessment, summary, status, created_at`,
+          [organizationId, activityId, auth.identityId, nextRevision, JSON.stringify(assessments), JSON.stringify(summary)],
+        );
+        await db.query("commit");
+      } catch (error) {
+        try { await db.query("rollback"); } catch {}
+        throw error;
+      } finally {
+        db.release();
+      }
       return reply.code(200).send({
         source: "postgresql", syntheticData: false,
         record: saved.rows[0],
