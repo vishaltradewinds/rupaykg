@@ -101,3 +101,9 @@ The ICVCM assessment table migration `20261027_icvcm_ccp_assessments.sql` also i
 ## Assessed activity context immutability
 
 Migration `092_assessed_activity_context_immutability.sql` prevents changing an activity's organization or geography after it supports an accepted/completed EPR external confirmation or an append-only ICVCM assessment. It also blocks deletion of such activities. Corrective work should preserve the historical activity and create a new, explicitly linked record rather than silently changing the basis of an existing assessment.
+
+## Assessed geography-scope policy immutability
+
+Migration `093_assessed_geography_scope_immutability.sql` prevents insert/update/delete changes to an organization's geography-scope rows after that organization has accepted/completed EPR external-confirmation history or ICVCM assessment history. This is necessary because removing the last verified scope can change the existing authorization function's behavior from an explicit scope check to its legacy no-scope fallback.
+
+Migration `094_geography_scope_transfer_guard.sql` closes the transfer edge case by checking both the source and destination organizations when a scope row is moved. This is a fail-closed interim control; it does not implement versioned authorization policies. Organizations with assessed history must not rewrite scope policy in place until a separately reviewed versioned policy model is implemented.
