@@ -136,6 +136,7 @@ export async function registerAgenticWorkflowRoutes(app: FastifyInstance, pool: 
       return reply.code(403).send({ error: "Agentic planning requires audit:read or projects:manage permission", code: "AGENTIC_PLAN_FORBIDDEN" });
     }
     const geographyId = typeof body.geographyId === "string" && body.geographyId.trim() ? body.geographyId.trim() : null;
+    if (geographyId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(geographyId)) return reply.code(400).send({ error: "Invalid geography UUID", code: "GEOGRAPHY_ID_INVALID" });
     if (geographyId) {
       const scope = await pool.query<{ ok: boolean }>(
         `select exists (select 1 from organization_memberships om where om.identity_id=$1 and om.organization_id=$2 and om.status='VERIFIED' and organization_has_geography_scope(om.organization_id,$3::uuid)) as ok`,
