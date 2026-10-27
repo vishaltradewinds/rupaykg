@@ -97,7 +97,6 @@ test("PostgreSQL rejects EPR external acceptance without independently verified 
       "insert into organizations(name, organization_type, status) values($1,'test_fixture','VERIFIED') returning id",
       ["TEST-EPR-OTHER-"+suffix]
     )).rows[0]!.id;
-    await client.query("savepoint organization_reassignment");
     const acceptedReturn = (await client.query<{id:string}>(
       `insert into epr_returns
         (scheme_id,organization_id,period_start,period_end,return_type,reported_quantity,status,
@@ -107,6 +106,7 @@ test("PostgreSQL rejects EPR external acceptance without independently verified 
        returning id`,
       [scheme,org,"QUARTERLY_ACCEPTED_"+suffix,"TEST-EXT-VALID-"+suffix,evidence,approvedVerification]
     )).rows[0]!.id;
+    await client.query("savepoint organization_reassignment");
     await assert.rejects(
       client.query("update epr_returns set organization_id=$2 where id=$1",[acceptedReturn,otherOrg]),
       /must be verified, approved, provenance-backed and organization\/geography scoped/i,
