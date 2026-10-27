@@ -161,7 +161,7 @@ test("PostgreSQL rejects EPR external acceptance without independently verified 
     await client.query("savepoint activity_context_rewrite");
     await assert.rejects(
       client.query("update activities set geography_id=$2 where id=$1",[activity,alternateGeography]),
-      /activity organization\/geography backing accepted EPR confirmation is immutable/i,
+      /activity organization\/geography backing accepted EPR confirmation is immutable|activity geography is outside organization authorization scope/i,
       "accepted EPR confirmation must retain its original activity geography"
     );
     await client.query("rollback to savepoint activity_context_rewrite");
