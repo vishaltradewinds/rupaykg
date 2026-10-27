@@ -79,4 +79,4 @@ Migration `087_acceptance_fixture_registry_exclusion.sql` prevents activities or
 
 ## ICVCM CCP internal evidence assessments
 
-Migration `20261027_icvcm_ccp_assessments.sql` persists one internal evidence-completeness assessment per activity and organization. API writes require authenticated organization membership and `evidence:review` permission; every cited evidence UUID must resolve to `VERIFIED` evidence for the same activity. Records remain `INTERNAL_DRAFT`. This is not ICVCM certification, independent verification, a statutory compliance decision, or a carbon-credit issuance action.
+Migration `20261027_icvcm_ccp_assessments.sql` persists append-only, versioned internal evidence-completeness assessments per activity and organization. API writes require authenticated organization membership and `evidence:review` permission; every cited evidence UUID must resolve to `VERIFIED` evidence for the same activity. Records remain `INTERNAL_DRAFT`; PostgreSQL blocks updates and deletes so revisions retain their history. This is not ICVCM certification, independent verification, a statutory compliance decision, or a carbon-credit issuance action.
