@@ -97,6 +97,28 @@ test("PostgreSQL rejects EPR external acceptance without independently verified 
       "insert into organizations(name, organization_type, status) values($1,'test_fixture','VERIFIED') returning id",
       ["TEST-EPR-OTHER-"+suffix]
     )).rows[0]!.id;
+    const outOfOrgVerifier = (await client.query<{id:string}>(
+      "insert into identities(external_subject,display_name,status) values($1,$2,'VERIFIED') returning id",
+      ["test-epr-out-of-org-verifier:"+suffix,"Out-of-organization verifier"]
+    )).rows[0]!.id;
+    const otherOrgVerifierRole = (await client.query<{id:string}>(
+      "insert into roles(organization_id,name,permissions) values($1,'TEST_VERIFIER_OTHER_ORG','[\"VERIFY_EVIDENCE\"]') returning id",
+      [otherOrg]
+    )).rows[0]!.id;
+    await client.query(
+      "insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED')",
+      [outOfOrgVerifier,otherOrg,otherOrgVerifierRole]
+    );
+    await client.query("savepoint cross_org_verification");
+    await assert.rejects(
+      client.query(
+        "insert into verifications(evidence_id,activity_id,verifier_identity_id,decision,scope,rationale) values($1,$2,$3,'APPROVED','EPR_EXTERNAL_ACCEPTANCE','Must fail: verifier only belongs to another organization')",
+        [evidence,activity,outOfOrgVerifier]
+      ),
+      /active verifier permission in the activity organization/i,
+      "an approved verification must be authorized by a verified membership in the activity's own organization"
+    );
+    await client.query("rollback to savepoint cross_org_verification");
     const acceptedReturn = (await client.query<{id:string}>(
       `insert into epr_returns
         (scheme_id,organization_id,period_start,period_end,return_type,reported_quantity,status,
