@@ -71,6 +71,20 @@ test("evidence vault enforces tenant scope, versioned storage, integrity and ind
     assert.equal(uploaded.versionNumber, 1);
     assert.equal(uploaded.sha256, createHash("sha256").update(bytes).digest("hex"));
 
+    // Direct database writers must not be able to pair arbitrary bytes with a
+    // syntactically valid but incorrect digest, even if they bypass the API.
+    const forgedEvidence = await pool.query<{ id: string }>(
+      "insert into evidence(activity_id,evidence_type,status,captured_at,content_uri,content_hash,metadata) values($1,'FORGED_TEST','CAPTURED',now(),'db://evidence-vault/pending',$2,'{}'::jsonb) returning id",
+      [activity.rows[0]!.id, "0".repeat(64)],
+    );
+    await assert.rejects(
+      pool.query(
+        "insert into evidence_artifact_versions(series_id,evidence_id,version_number,file_name,media_type,size_bytes,sha256,content,uploaded_by_identity_id) values($1,$2,1,'forged.pdf','application/pdf',$3,$4,$5,$6)",
+        [uploaded.seriesId, forgedEvidence.rows[0]!.id, bytes.length, "0".repeat(64), bytes, uploaderId],
+      ),
+      /SHA-256 does not match stored bytes/,
+    );
+
     const secondBytes = Buffer.from("%PDF-1.7\\nCorrected MRV evidence fixture\\n");
     const secondUpload = await app.inject({
       method: "POST", url: "/api/v1/evidence-vault/upload", headers: headers(uploaderToken),
