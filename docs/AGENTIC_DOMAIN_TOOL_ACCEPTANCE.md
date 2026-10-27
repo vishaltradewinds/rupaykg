@@ -12,3 +12,9 @@
 - Regression tests assert disallowed aggregate tables are absent from each goal's generated fixed SQL, and unavailable aggregate fields return zero rather than leaking other domains' counts.
 - Model-explanation tests assert tenant/geography/source-record identifiers are not sent to the provider; blocker input and model output remain bounded; malformed provider responses fail closed.
 - Aggregate counts derived from the latest bounded activity result set must be labelled as bounded in plan explanations; never present a capped sample as an exhaustive organization-wide total.
+
+
+## Evidence provenance and verification semantics
+- Evidence counts indicate recorded evidence rows within the bounded activity result set; they do not establish artifact integrity, provenance, relevance, admissibility, chain of custody, or regulatory sufficiency.
+- An existing `APPROVED` verification decision is surfaced as a recorded status only. The planner does not revalidate verifier identity, independence, authorization, methodology, or underlying evidence.
+- Compliance and resource-flow workflows must keep human review required until those checks are backed by authoritative schema fields, validation rules, and integrated tests. Do not convert a count into a compliance claim or credit issuance decision.
