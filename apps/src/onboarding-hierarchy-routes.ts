@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type { Pool, PoolClient } from "pg";
-import { authenticate } from "./auth.js";
+import { authenticate, type AuthContext } from "./auth.js";
 
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const PLATFORM=["platform_admin","super_admin"] as const;
