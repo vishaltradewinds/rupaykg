@@ -7,7 +7,7 @@ create or replace function role_has_geography_scope(
   p_geography_id uuid
 ) returns boolean
 language sql stable as $$
-  with role_data as (
+  with recursive role_data as (
     select r.geography_scope
     from roles r
     where r.id = p_role_id
