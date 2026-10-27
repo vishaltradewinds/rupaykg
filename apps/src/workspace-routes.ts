@@ -70,7 +70,7 @@ export async function registerWorkspaceRoutes(app: FastifyInstance, pool: Pool |
       if (geographyId) params.push(geographyId);
       if (contextRequest.context) params.push(operatingContextGeographyKinds(contextRequest.context));
       const geographyClause = geoClause(geographyId, "a.geography_id");
-      const contextClause = operatingContextSqlClause(contextRequest.context, params.length + 1);
+      const contextClause = operatingContextSqlClause(contextRequest.context, params.length);
       const scopeClause = " and organization_has_geography_scope(a.organization_id,a.geography_id) and exists (select 1 from organization_memberships rsm where rsm.identity_id=$2 and rsm.organization_id=a.organization_id and rsm.status='VERIFIED' and role_has_geography_scope(rsm.role_id,a.geography_id))";
       const [activities, measurements, evidence, verifications] = await Promise.all([
         pool.query(`select a.id,a.activity_type,a.status,a.occurred_at,a.created_at,a.geography_id,g.name as geography_name,g.kind::text as geography_kind from activities a left join geography g on g.id=a.geography_id where a.organization_id=any($1::uuid[])${scopeClause}${geographyClause}${contextClause} order by a.created_at desc limit 100`, params),
