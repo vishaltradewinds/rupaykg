@@ -52,3 +52,15 @@ test("existing legal evidence and verified status permit review but never automa
   assert.ok(plan.steps.some(step => step.id === "human-review" && step.status === "REQUIRES_HUMAN"));
   assert.equal(plan.canExecute, false);
 });
+test("aggregate findings disclose that they are based on the bounded activity result set", () => {
+  const plan = buildAgenticPlan({
+    ...base,
+    goal: "prepare_compliance",
+    sourceRecordIds: ["activity-1", "activity-2"],
+    measurementCount: 5,
+    evidenceCount: 3,
+    verifiedCount: 1,
+  });
+  assert.match(plan.steps.find(step => step.id === "evidence")!.reason, /bounded activity result set \(2 activity record\(s\)\)/);
+  assert.match(plan.steps.find(step => step.id === "verification")!.reason, /bounded activity result set \(2 activity record\(s\)\)/);
+});
