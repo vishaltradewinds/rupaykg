@@ -15,16 +15,24 @@ const timestamp = buildTimestamp.toISOString();
 const root = path.resolve('guardian-policies/WA03.001');
 fs.mkdirSync(path.join(root,'schemas'), {recursive:true});
 
+// Preserve IDs already present in the tracked policy: they may be referenced by
+// Guardian instances or evidence. New semantic tags require an explicit review.
+const stableIds = {
+  WA03_001_ROOT: 'ee4fb9cf-947b-474a-a9b0-b3cd7dbeace2',
+  Choose_Role: 'f88bbf83-1f85-4f52-982a-a3ef577d1dc7',
+  Project_Proponent: '0df9a0ce-7b94-4494-81dd-fc4669b38db5',
+  wa03_applicability_form: 'a0230842-f33c-4ca9-a499-f44bcb92460c',
+  wa03_baseline_form: '2302bf51-71f7-440e-ba59-7b3691f8ddbd',
+  wa03_monitoring_form: 'c9afb072-9781-4626-9b75-1cd7bce73d1b',
+  wa03_equation4_calc: '7207cc7b-552a-4e45-9e69-6d15259160c5',
+  wa03_equation4_math: 'aa7d80c7-49de-4bde-9b65-e5af7dc80dd5',
+  Verification_Body: 'fcb9c262-c881-4dc0-8ab0-aa98de2c631f',
+  wa03_verification_form: '8ed947fa-dd87-48b8-809a-21dd3b43556b'
+};
 function stableUuid(name) {
-  const bytes = crypto.createHash('sha256')
-    .update('rupaykg:wa03.001:guardian-policy:v1:')
-    .update(name)
-    .digest()
-    .subarray(0, 16);
-  bytes[6] = (bytes[6] & 0x0f) | 0x50;
-  bytes[8] = (bytes[8] & 0x3f) | 0x80;
-  const hex = bytes.toString('hex');
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  const id = stableIds[name];
+  if (!id) throw new Error(`No reviewed stable Guardian block ID registered for tag: ${name}`);
+  return id;
 }
 
 const ids = {
