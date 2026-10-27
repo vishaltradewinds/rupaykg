@@ -120,3 +120,14 @@ Do not use “PASS” for an implementation-only state. Each evidence item must 
 - Production certification: **HOLD / OFF**
 
 No approval is implied by this document's creation or by a pull request being opened.
+
+
+## 8. Execution log — 2026-10-27
+
+- **Artifact:** GitHub Actions CI run #2563, run ID `40486773314`.
+- **Tested revision:** `fee5e61c6326235b46f6459bea57d4fe62cb48b1` (the original PR #93 ledger commit).
+- **Result:** workflow conclusion **SUCCESS**. Dependency audit, migration validation, CI migration execution, typecheck, production build, browser smoke test, disposable-PostgreSQL acceptance tests, and production container build completed successfully.
+- **Run reference:** https://github.com/vishaltradewinds/rupaykg/actions/runs/40486773314
+- **Limit:** this result applies only to the exact tested revision and CI environment. It is not an independent review, live-environment validation, backup/restore proof, external integration acceptance, hardware qualification, regulatory approval, or TRL 5 evidence.
+- **Gate accounting:** E-02 remains **NOT ASSESSED** as a complete cross-candidate gate until all relevant candidate PR heads have current exact-head CI evidence and the required reviewer accepts the evidence. This successful run is one recorded input, not blanket approval.
+- **Current decision unchanged:** provisional software TRL 4; TRL 5 NOT DEMONSTRATED; hardware NOT ASSESSED where evidence is missing; production certification HOLD/OFF.
