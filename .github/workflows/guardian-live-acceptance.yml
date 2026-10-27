@@ -158,7 +158,7 @@ jobs:
           if not timestamp:
               raise SystemExit('No Hedera consensus timestamp was returned.')
           with open('/tmp/acceptance.env', 'w') as f:
-              f.write('CONSENSUS_TIMESTAMP=' + timestamp + '\\n')
+              f.write('CONSENSUS_TIMESTAMP=' + timestamp + chr(10))
           print('Guardian VERIFIED and Hedera CONSENSUS_CONFIRMED; awaiting independent Mirror Node verification.')
           PY
 
