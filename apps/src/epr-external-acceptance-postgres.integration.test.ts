@@ -109,7 +109,7 @@ test("PostgreSQL rejects EPR external acceptance without independently verified 
     await client.query("savepoint organization_reassignment");
     await assert.rejects(
       client.query("update epr_returns set organization_id=$2 where id=$1",[acceptedReturn,otherOrg]),
-      /must be verified, approved, provenance-backed and organization\/geography scoped/i,
+      /accepted EPR external confirmation is immutable|must be verified, approved, provenance-backed and organization\/geography scoped/i,
       "accepted return must not be reassigned away from the organization that owns its evidence"
     );
     await client.query("rollback to savepoint organization_reassignment");
