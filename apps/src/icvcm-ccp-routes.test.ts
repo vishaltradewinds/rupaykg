@@ -10,7 +10,7 @@ const ACTIVITY = "22222222-2222-4222-8222-222222222222";
 const EVIDENCE = "33333333-3333-4333-8333-333333333333";
 const IDENTITY = "44444444-4444-4444-8444-444444444444";
 
-function fakePool(options: { permission?: boolean; evidenceVerified?: boolean } = {}) {
+function fakePool(options: { permission?: boolean; evidenceVerified?: boolean; activityOrganizationMatches?: boolean; geographyAllowed?: boolean } = {}) {
   const calls: Array<{ sql: string; params: unknown[] }> = [];
   let revision = 0;
   const pool = {
@@ -19,8 +19,8 @@ function fakePool(options: { permission?: boolean; evidenceVerified?: boolean } 
       if (sql.includes("from identity_sessions")) return { rows: [{ identity_id: IDENTITY }] };
       if (sql.includes("select exists (")) return { rows: [{ ok: options.permission ?? true }] };
       if (sql.includes("from organization_memberships")) return { rows: [{ organization_id: ORG, role_id: "role", status: "VERIFIED" }] };
-      if (sql.includes("from activities")) return { rows: [{ organization_id: ORG, geography_id: "55555555-5555-4555-8555-555555555555" }] };
-      if (sql.includes("organization_has_geography_scope")) return { rows: [{ ok: true }] };
+      if (sql.includes("from activities")) return { rows: [{ organization_id: options.activityOrganizationMatches === false ? "77777777-7777-4777-8777-777777777777" : ORG, geography_id: "55555555-5555-4555-8555-555555555555" }] };
+      if (sql.includes("organization_has_geography_scope")) return { rows: [{ ok: options.geographyAllowed ?? true }] };
       if (sql.includes("from evidence")) return { rows: options.evidenceVerified === false ? [] : [{ id: EVIDENCE }] };
       if (sql.includes("insert into icvcm_ccp_assessments")) return { rows: [{
         id: "66666666-6666-4666-8666-666666666666", organization_id: ORG, activity_id: ACTIVITY,
@@ -119,5 +119,32 @@ test("ICVCM assessment API rejects non-UUID evidence references before database 
   assert.equal(response.statusCode, 400);
   assert.equal(response.json().code, "INVALID_EVIDENCE_REFERENCE");
   assert.equal(calls.some(call => call.sql.includes("from evidence")), false);
+  await app.close();
+});
+
+
+test("ICVCM assessment API rejects an activity owned by another organization", async () => {
+  const { pool, calls } = fakePool({ activityOrganizationMatches: false });
+  const app = await setup(pool);
+  const response = await app.inject({
+    method: "POST", url: `/api/v1/activities/${ACTIVITY}/icvcm-ccp-assessments`,
+    headers: { authorization: "Bearer test-token" }, payload: body,
+  });
+  assert.equal(response.statusCode, 404);
+  assert.equal(response.json().code, "ACTIVITY_NOT_FOUND");
+  assert.equal(calls.some(call => call.sql.includes("insert into icvcm_ccp_assessments")), false);
+  await app.close();
+});
+
+test("ICVCM assessment API rejects activities outside organization geography scope", async () => {
+  const { pool, calls } = fakePool({ geographyAllowed: false });
+  const app = await setup(pool);
+  const response = await app.inject({
+    method: "POST", url: `/api/v1/activities/${ACTIVITY}/icvcm-ccp-assessments`,
+    headers: { authorization: "Bearer test-token" }, payload: body,
+  });
+  assert.equal(response.statusCode, 403);
+  assert.equal(response.json().code, "GEOGRAPHY_FORBIDDEN");
+  assert.equal(calls.some(call => call.sql.includes("insert into icvcm_ccp_assessments")), false);
   await app.close();
 });
