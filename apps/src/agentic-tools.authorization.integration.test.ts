@@ -109,6 +109,8 @@ test("role geography scope permits descendants and denies unrelated or unlocated
   const suffix = randomBytes(8).toString("hex");
   let organizationId = "";
   let roleId = "";
+  let ambiguousRoleId = "";
+  let identityId = "";
   let rootId = "";
   let childId = "";
   let outsideId = "";
@@ -134,6 +136,18 @@ test("role geography scope permits descendants and denies unrelated or unlocated
       [organizationId, "TEST-ROLE-GEO-" + suffix, rootId],
     )).rows[0]!.id;
 
+    identityId = (await pool.query<{id:string}>(
+      "insert into identities(external_subject,display_name,status) values($1,$2,'VERIFIED') returning id",
+      ["TEST-ROLE-GEO-IDENTITY-" + suffix, "Test role geography identity " + suffix],
+    )).rows[0]!.id;
+    await pool.query("insert into organization_geography_scopes(organization_id,geography_id,status) values($1,$2,'VERIFIED')", [organizationId, rootId]);
+    await pool.query("alter table organization_memberships disable trigger stakeholder_membership_application_guard");
+    try {
+      await pool.query("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED')", [identityId, organizationId, roleId]);
+    } finally {
+      await pool.query("alter table organization_memberships enable trigger stakeholder_membership_application_guard");
+    }
+
     const descendant = await pool.query<{ok:boolean}>(
       "select role_has_geography_scope($1::uuid,$2::uuid) as ok", [roleId, childId],
     );
@@ -146,8 +160,36 @@ test("role geography scope permits descendants and denies unrelated or unlocated
     assert.equal(descendant.rows[0]?.ok, true, "a configured root must include descendants");
     assert.equal(unrelated.rows[0]?.ok, false, "a configured root must exclude unrelated geographies");
     assert.equal(unlocated.rows[0]?.ok, false, "a restricted role must not see records without geography");
+
+    const identityDescendant = await pool.query<{ok:boolean}>(
+      "select identity_has_geography_scope($1::uuid,$2::uuid,$3::uuid) as ok", [identityId, organizationId, childId],
+    );
+    const identityUnrelated = await pool.query<{ok:boolean}>(
+      "select identity_has_geography_scope($1::uuid,$2::uuid,$3::uuid) as ok", [identityId, organizationId, outsideId],
+    );
+    assert.equal(identityDescendant.rows[0]?.ok, true, "identity scope must require both organization and role geography grants");
+    assert.equal(identityUnrelated.rows[0]?.ok, false, "identity scope must reject geography outside the role grant");
+
+    ambiguousRoleId = (await pool.query<{id:string}>(
+      "insert into roles(organization_id,name,permissions,geography_scope) values($1,$2,'[]'::jsonb,'[]'::jsonb) returning id",
+      [organizationId, "TEST-ROLE-GEO-AMBIGUOUS-" + suffix],
+    )).rows[0]!.id;
+    await pool.query("alter table organization_memberships disable trigger stakeholder_membership_application_guard");
+    try {
+      await pool.query("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED')", [identityId, organizationId, ambiguousRoleId]);
+    } finally {
+      await pool.query("alter table organization_memberships enable trigger stakeholder_membership_application_guard");
+    }
+    const ambiguous = await pool.query<{ok:boolean}>(
+      "select identity_has_geography_scope($1::uuid,$2::uuid,$3::uuid) as ok", [identityId, organizationId, childId],
+    );
+    assert.equal(ambiguous.rows[0]?.ok, false, "multiple verified roles must fail closed instead of choosing the broader role");
   } finally {
+    if (identityId) await pool.query("delete from organization_memberships where identity_id=$1", [identityId]);
+    if (identityId) await pool.query("delete from identities where id=$1", [identityId]);
     if (roleId) await pool.query("delete from roles where id=$1", [roleId]);
+    if (ambiguousRoleId) await pool.query("delete from roles where id=$1", [ambiguousRoleId]);
+    if (organizationId) await pool.query("delete from organization_geography_scopes where organization_id=$1", [organizationId]);
     if (childId) await pool.query("delete from geography where id=$1", [childId]);
     if (rootId) await pool.query("delete from geography where id=$1", [rootId]);
     if (outsideId) await pool.query("delete from geography where id=$1", [outsideId]);
