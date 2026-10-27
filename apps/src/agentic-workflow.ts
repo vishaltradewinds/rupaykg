@@ -119,7 +119,8 @@ export async function registerAgenticWorkflowRoutes(app: FastifyInstance, pool: 
       { goal: "trace_resource_flow", description: "Plan a source-grounded custody and evidence reconciliation." },
       { goal: "onboard_stakeholder", description: "Prepare stakeholder due-diligence steps without approving identity or membership." },
     ],
-    guardrails: ["authenticated organization scope", "source-grounded outputs", "no synthetic evidence", "no authoritative mutations", "human approval for consequential decisions"],
+    tools: listAgenticToolDefinitions(),
+    guardrails: ["authenticated organization scope", "per-tool permission checks", "source-grounded outputs", "no synthetic evidence", "no authoritative mutations", "human approval for consequential decisions"],
     productionCertification: "HOLD",
   }));
 
