@@ -32,7 +32,7 @@ test("tool authorization fails closed before downstream handlers when a permissi
   const result = await authorizeAgenticTools(pool, auth, "org-1", "prepare_compliance");
   assert.deepEqual(result, { allowed: false, deniedToolId: "activities.list" });
   assert.equal(calls.length, 1);
-  assert.deepEqual(calls[0], ["identity-1", "org-1", ["waste:read", "projects:read", "audit:read", "projects:manage"]]);
+  assert.deepEqual(calls[0], ["identity-1", "org-1", ["waste:read", "projects:read", "audit:read"]]);
 });
 
 test("tool authorization requires every allow-listed tool permission", async () => {
