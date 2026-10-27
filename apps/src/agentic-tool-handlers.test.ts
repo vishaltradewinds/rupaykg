@@ -26,6 +26,7 @@ test("read handlers use fixed parameterized queries scoped to organization and g
   assert.deepEqual(calls[0]!.values, ["org-1", "00000000-0000-4000-8000-000000000001", "role-1"]);
   assert.match(calls[0]!.sql, /a\.organization_id=\$1/);
   assert.match(calls[0]!.sql, /organization_has_geography_scope/);
+  assert.match(calls[0]!.sql, /role_has_geography_scope/);
   assert.match(calls[0]!.sql, /limit 100/i);
   assert.deepEqual(result.sourceRecordIds, ["activity-1"]);
   assert.equal(result.measurementCount, 2);
@@ -45,6 +46,7 @@ test("onboarding handler returns only bounded application IDs and aggregate evid
   assert.equal(calls.length, 1);
   assert.deepEqual(calls[0]!.values, ["org-2", null, "role-2"]);
   assert.match(calls[0]!.sql, /stakeholder_applications/);
+  assert.match(calls[0]!.sql, /role_has_geography_scope/);
   assert.match(calls[0]!.sql, /limit 100/i);
   assert.deepEqual(result.sourceRecordIds, ["application-1"]);
   assert.equal(result.measurementCount, 0);
