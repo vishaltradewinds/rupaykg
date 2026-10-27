@@ -116,6 +116,24 @@ jobs:
                       for field in ("createDate", "updateDate", "uuid", "version", "name"):
                           if old_obj.get(field) != new_obj.get(field):
                               report.append(f"| ↳ top-level `{field}` | | | `{old_obj.get(field)}` | `{new_obj.get(field)}` | NO |")
+                      def flatten(value, prefix="$"):
+                          if isinstance(value, dict):
+                              for key, item in value.items():
+                                  yield from flatten(item, f"{prefix}.{key}")
+                          elif isinstance(value, list):
+                              for index, item in enumerate(value):
+                                  yield from flatten(item, f"{prefix}[{index}]")
+                          else:
+                              yield prefix, value
+                      old_values, new_values = dict(flatten(old_obj)), dict(flatten(new_obj))
+                      differences = [(key, old_values.get(key), new_values.get(key))
+                                     for key in sorted(set(old_values) | set(new_values))
+                                     if old_values.get(key) != new_values.get(key)]
+                      report.append(f"| ↳ differing JSON leaf fields | | | {len(differences)} paths | (details below) | NO |")
+                      for key, old_value, new_value in differences[:40]:
+                          report.append(f"| ↳ `{key}` | | | `{str(old_value)[:100]}` | `{str(new_value)[:100]}` | NO |")
+                      if len(differences) > 40:
+                          report.append(f"| ↳ additional differences | | | {len(differences) - 40} omitted | | NO |")
                   except (ValueError, AttributeError):
                       pass
           report += ["", f"**Files compared:** {len(files)}", f"**Files changed:** {changed}", ""]
