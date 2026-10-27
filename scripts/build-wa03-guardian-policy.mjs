@@ -1,6 +1,5 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import crypto from 'node:crypto';
 
 const sourceDateEpoch = process.env.SOURCE_DATE_EPOCH;
 if (!sourceDateEpoch || !/^\d+$/.test(sourceDateEpoch)) {
