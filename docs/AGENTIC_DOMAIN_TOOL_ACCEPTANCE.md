@@ -25,3 +25,9 @@
 - Evidence artifact inserts must recompute SHA-256 from stored bytes and match the canonical evidence content hash. API-only digest checks are insufficient.
 - Integration acceptance must attempt a forged artifact insert directly through SQL and confirm the database rejects it.
 - These controls establish consistency of stored bytes and permission checks; they do not establish that the source document is genuine, legally admissible, or independently validated against a physical event.
+
+## Cross-route role geography acceptance
+- Geography-bound API reads and mutations must enforce both organization scope and the active identity's role scope through `identity_has_geography_scope`; direct role checks alone are insufficient when multiple verified roles exist.
+- Multiple verified roles for one identity in one organization fail closed until the platform has an explicit, validated active-role selector.
+- The shared gate is covered in agentic PostgreSQL acceptance tests and is applied to workspace reads, EPR returns/obligations, CPCB SWM workspaces, Guardian MRV operations, and evidence verification.
+- Continue the audit for registry, settlement/sync, value/carbon, statutory applicability, and onboarding route families. This acceptance list is not a claim that platform-wide authorization review is complete.
