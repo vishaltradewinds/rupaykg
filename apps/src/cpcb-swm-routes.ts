@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import type { Pool, PoolClient } from "pg";
-import { authenticate, bearerChallenge, canActForOrganization, hasOrganizationPermission, type AuthContext } from "./auth.js";
+import { authenticate, bearerChallenge, canActForOrganization, hasOrganizationPermission } from "./auth.js";
 import { initialSwmChecklist } from "@rupaykg/domain";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
