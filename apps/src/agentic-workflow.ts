@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import type { Pool } from "pg";
-import { authenticate, bearerChallenge, hasOrganizationPermission, type AuthContext } from "./auth.js";
+import { authenticate, bearerChallenge, type AuthContext } from "./auth.js";
+import { authorizeAgenticTools, listAgenticToolDefinitions } from "./agentic-tools.js";
 import { explainAgenticPlan, readAgenticModelConfig } from "./agentic-model.js";
 
 export type AgenticGoal =
@@ -132,8 +133,14 @@ export async function registerAgenticWorkflowRoutes(app: FastifyInstance, pool: 
     if (!isAgenticGoal(body.goal)) return reply.code(400).send({ error: "goal must be one of review_measurements, prepare_compliance, trace_resource_flow, onboard_stakeholder", code: "AGENTIC_GOAL_INVALID" });
     const organizationId = auth.activeOrganizationId;
     if (!organizationId) return reply.code(403).send({ error: "Select an active verified organization before requesting an agentic plan", code: "ORGANIZATION_SCOPE_REQUIRED" });
-    if (!await hasOrganizationPermission(pool, auth, organizationId, ["audit:read", "projects:manage"])) {
-      return reply.code(403).send({ error: "Agentic planning requires audit:read or projects:manage permission", code: "AGENTIC_PLAN_FORBIDDEN" });
+    const toolAuthorization = await authorizeAgenticTools(pool, auth, organizationId, body.goal);
+    if (!toolAuthorization.allowed) {
+      request.log.warn({ event: "agentic.tool.authorization_denied", goal: body.goal, organizationId, toolId: toolAuthorization.deniedToolId });
+      return reply.code(403).send({
+        error: "The active organization role is not authorized for every read-only domain tool required by this workflow",
+        code: "AGENTIC_TOOL_FORBIDDEN",
+        deniedToolId: toolAuthorization.deniedToolId,
+      });
     }
     const geographyId = typeof body.geographyId === "string" && body.geographyId.trim() ? body.geographyId.trim() : null;
     if (geographyId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(geographyId)) return reply.code(400).send({ error: "Invalid geography UUID", code: "GEOGRAPHY_ID_INVALID" });
