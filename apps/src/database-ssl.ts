@@ -41,7 +41,7 @@ function isIpv4Loopback(hostname: string): boolean {
     if (octets.some((value) => value > 255)) return false;
     address = first * 0x1000000 + second * 0x10000 + third * 0x100 + fourth;
   }
-  return Math.floor(address / 0x1000000) === 127;
+  return Math.floor(address / 0x1000000) === 127 || address === 0;
 }
 
 /**
@@ -50,7 +50,7 @@ function isIpv4Loopback(hostname: string): boolean {
  */
 export function isLoopbackDatabaseHost(hostname: string): boolean {
   const host = hostname.toLowerCase().replace(/\.$/, "");
-  if (host === "localhost" || host.endsWith(".localhost") || host === "[::1]" || host === "::1") return true;
+  if (host === "localhost" || host.endsWith(".localhost") || host === "[::1]" || host === "::1" || host === "[::]" || host === "::") return true;
 
   let normalized = host;
   try {
@@ -58,7 +58,10 @@ export function isLoopbackDatabaseHost(hostname: string): boolean {
   } catch {
     // Invalid/unsupported host forms are handled by the caller's URL validation.
   }
-  if (normalized === "[::1]" || normalized === "::1") return true;
+  if (normalized === "[::1]" || normalized === "::1" || normalized === "[::]" || normalized === "::") return true;
+  // URL canonicalizes IPv4-mapped IPv6 addresses; 0x7f in the high byte of
+  // the mapped IPv4 portion represents the entire 127.0.0.0/8 loopback range.
+  if (/^\[?::ffff:7f[0-9a-f]{2}:[0-9a-f]{1,4}\]?$/i.test(normalized)) return true;
   return isIpv4Loopback(host) || isIpv4Loopback(normalized);
 }
 
