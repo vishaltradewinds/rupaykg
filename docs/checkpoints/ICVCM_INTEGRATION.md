@@ -16,14 +16,12 @@ Latest implementation commit at the moment of checkpoint creation:
 The latest GitHub Actions run for that head:
 https://github.com/vishaltradewinds/rupaykg/actions/runs/40516522244
 
-Status: FAILED at `npm run validate:migrations`. Confirmed failure:
-`Error: duplicate migration number: 20261027 (20261027_icvcm_ccp_assessments.sql)`
-The newly added timestamp-prefixed migration files collide with the existing ICVCM migration under `scripts/validate-migrations.mjs`. First resume task: rename the new migrations to unique migration numbers consistent with the repository's migration numbering convention, update `migrations/README.md`, verify all references, then rerun CI. Do not assume SQL integration tests have run successfully for the latest changes.
+Previous CI status: FAILED at `npm run validate:migrations` with duplicate migration number `20261027`. Remediation committed on the working branch: migrations are being assigned unique ordered numbers 097, 098 and 099, and documentation references are being updated. CI has not yet been rerun against the corrected head; do not assume SQL integration tests have run successfully.
 
 ## Batch implemented before checkpoint
 
-- `20261027_evidence_artifact_chain_binding.sql`: immutable evidence artifact-series identity/scope; exact artifact-version review binding; reviewer must not be uploader; active review and verification permissions required within owning organization.
-- `20261027_vault_content_verification_binding.sql`: stored-byte SHA-256 and byte-length checks; binds artifact to canonical evidence activity/type/hash and binds vault-backed verification to an append-only review by the same verifier and decision.
+- `098_evidence_artifact_chain_binding.sql`: immutable evidence artifact-series identity/scope; exact artifact-version review binding; reviewer must not be uploader; active review and verification permissions required within owning organization.
+- `099_vault_content_verification_binding.sql`: stored-byte SHA-256 and byte-length checks; binds artifact to canonical evidence activity/type/hash and binds vault-backed verification to an append-only review by the same verifier and decision.
 - `apps/src/evidence-vault.integration.test.ts`: added regression assertions for series reassignment and mismatched artifact-version review.
 - `migrations/README.md`: documents these integrity controls and clarifies they do not prove claim truth or statutory acceptance.
 
