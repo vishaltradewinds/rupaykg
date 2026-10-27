@@ -31,7 +31,7 @@ async function authorizeGeography(pool: Pool, auth: AuthContext, geographyId: st
   const check = await pool.query<{ ok: boolean }>(`select exists (select 1 from organization_memberships om where om.identity_id=$1 and om.status='VERIFIED' and ($3::uuid is null or om.organization_id=$3::uuid) and organization_has_geography_scope(om.organization_id,$2) and role_has_geography_scope(om.role_id,$2)) as ok`, [auth.identityId, geographyId, auth.activeOrganizationId ?? null]);
   return check.rows[0]?.ok === true;
 }
-function geoClause(geographyId: string | null, column: string, parameterIndex = 3): string { return geographyId ? ` and ${column} = ${parameterIndex}` : ""; }
+function geoClause(geographyId: string | null, column: string, parameterIndex = 3): string { return geographyId ? " and " + column + " = $" + parameterIndex : ""; }
 
 type WorkspaceName = "resourceFlows" | "mrv" | "compliance" | "carbon" | "registry" | "settlement" | "esg";
 const WORKSPACE_READ_PERMISSIONS: Record<WorkspaceName, readonly string[]> = {
