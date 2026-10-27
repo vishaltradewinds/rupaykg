@@ -55,6 +55,19 @@ try {
   const blockIds = collectBlockIds(policy.config);
   assert.ok(blockIds.length > 0, 'Expected generated policy blocks');
   assert.equal(new Set(blockIds).size, blockIds.length, 'Generated policy block IDs must be unique');
+  const expectedCanonicalIds = [
+    'ee4fb9cf-947b-474a-a9b0-b3cd7dbeace2',
+    'f88bbf83-1f85-4f52-982a-a3ef577d1dc7',
+    '0df9a0ce-7b94-4494-81dd-fc4669b38db5',
+    'a0230842-f33c-4ca9-a499-f44bcb92460c',
+    '2302bf51-71f7-440e-ba59-7b3691f8ddbd',
+    'c9afb072-9781-4626-9b75-1cd7bce73d1b',
+    '7207cc7b-552a-4e45-9e69-6d15259160c5',
+    'aa7d80c7-49de-4bde-9b65-e5af7dc80dd5',
+    'fcb9c262-c881-4dc0-8ab0-aa98de2c631f',
+    '8ed947fa-dd87-48b8-809a-21dd3b43556b'
+  ].sort();
+  assert.deepEqual([...blockIds].sort(), expectedCanonicalIds, 'Generated policy must preserve reviewed canonical block IDs');
 
   for (const entry of fs.readdirSync(path.join(outputRoot, 'schemas')).filter(name => name.endsWith('.json'))) {
     const schema = JSON.parse(fs.readFileSync(path.join(outputRoot, 'schemas', entry), 'utf8'));
