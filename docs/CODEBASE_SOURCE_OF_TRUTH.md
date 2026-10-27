@@ -105,4 +105,6 @@ The generator `scripts/build-wa03-guardian-policy.mjs` preserves the ten reviewe
 
 CI uploads the generated source as `guardian-wa03-001-generated-source-review`, a SHA-256 reconciliation report as `guardian-wa03-001-reconciliation-report`, and the deterministic review-only package as `guardian-wa03-001-review-only`. These artifacts are review evidence, not production acceptance.
 
-**Still pending:** wait for CI on the current head and verify the report shows zero source differences. Then compare the deterministic review package's internal file hashes with the checked-in `guardian-policies/RupayKg-WA03.001-v1.policy` before deciding whether the tracked package needs replacement. No tracked policy source or package has been overwritten. Real Guardian import/publication and Guardian → Hedera → Mirror Node live acceptance remain unverified.
+**Reconciliation result (CI run `40506260663`, commit `f63dcce81218b0061aaab6dfa918a7d792e3a8a9`): PASS.** The report confirms all seven generated source files match the tracked files byte-for-byte and all seven files inside the checked-in `.policy` archive match the generated source by SHA-256. The archive integrity check also passed. No tracked policy source or package needed replacement; none was overwritten.
+
+**Still pending:** real Guardian import/publication and Guardian → Hedera → Mirror Node live acceptance. The live-acceptance workflow requires a valid session token and real organization/activity/verification/evidence/policy IDs; CI's deterministic build does not substitute for those live checks.
