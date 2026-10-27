@@ -38,3 +38,17 @@ test("empty source data never creates a fabricated ready plan", () => {
   assert.ok(plan.blockers.length > 0);
   assert.deepEqual(plan.sourceRecordIds, []);
 });
+
+test("stakeholder onboarding remains blocked until due-diligence evidence exists", () => {
+  const plan = buildAgenticPlan({ ...base, goal: "onboard_stakeholder", evidenceCount: 0, verifiedCount: 0 });
+  assert.ok(plan.steps.some(step => step.id === "due-diligence" && step.status === "BLOCKED"));
+  assert.equal(plan.canExecute, false);
+  assert.equal(plan.humanApprovalRequired, true);
+});
+
+test("existing legal evidence and verified status permit review but never automatic approval", () => {
+  const plan = buildAgenticPlan({ ...base, goal: "onboard_stakeholder", evidenceCount: 2, verifiedCount: 1 });
+  assert.ok(plan.steps.some(step => step.id === "due-diligence" && step.status === "READY"));
+  assert.ok(plan.steps.some(step => step.id === "human-review" && step.status === "REQUIRES_HUMAN"));
+  assert.equal(plan.canExecute, false);
+});
