@@ -5,10 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "tsx src/server.ts",
-    "start": "node dist/src/acceptance-seed.js && node dist/src/production-server.js",
+    "start": "node dist/src/production-server.js",
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "migrate": "tsx src/migrate.ts",
+    "acceptance:seed": "node dist/src/acceptance-seed.js",
     "test": "npm run build && node --test \"dist/**/*.test.js\""
   },
   "dependencies": {

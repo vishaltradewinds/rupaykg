@@ -1,9 +1,54 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import crypto from 'node:crypto';
+
+// Preserve the canonical timestamps already present in the checked-in policy
+// source. These are fixed metadata, not wall-clock build times.
+const canonicalPolicyUpdateDate = '2026-09-24T09:14:36.144Z';
+const canonicalSchemaTimestamps = {
+  'WA03.001 Project Applicability': {
+    createDate: '2026-09-24T09:14:36.137Z',
+    updateDate: '2026-09-24T09:14:36.139Z'
+  },
+  'WA03.001 Baseline Determination': {
+    createDate: '2026-09-24T09:14:36.139Z',
+    updateDate: '2026-09-24T09:14:36.139Z'
+  },
+  'WA03.001 Project Monitoring': {
+    createDate: '2026-09-24T09:14:36.139Z',
+    updateDate: '2026-09-24T09:14:36.139Z'
+  },
+  'WA03.001 Equation 4 Result': {
+    createDate: '2026-09-24T09:14:36.139Z',
+    updateDate: '2026-09-24T09:14:36.139Z'
+  },
+  'WA03.001 Verification Decision': {
+    createDate: '2026-09-24T09:14:36.139Z',
+    updateDate: '2026-09-24T09:14:36.139Z'
+  }
+};
 
 const root = path.resolve('guardian-policies/WA03.001');
 fs.mkdirSync(path.join(root,'schemas'), {recursive:true});
+
+// Preserve IDs already present in the tracked policy: they may be referenced by
+// Guardian instances or evidence. New semantic tags require an explicit review.
+const stableIds = {
+  WA03_001_ROOT: 'ee4fb9cf-947b-474a-a9b0-b3cd7dbeace2',
+  Choose_Role: 'f88bbf83-1f85-4f52-982a-a3ef577d1dc7',
+  Project_Proponent: '0df9a0ce-7b94-4494-81dd-fc4669b38db5',
+  wa03_applicability_form: 'a0230842-f33c-4ca9-a499-f44bcb92460c',
+  wa03_baseline_form: '2302bf51-71f7-440e-ba59-7b3691f8ddbd',
+  wa03_monitoring_form: 'c9afb072-9781-4626-9b75-1cd7bce73d1b',
+  wa03_equation4_calc: '7207cc7b-552a-4e45-9e69-6d15259160c5',
+  wa03_equation4_math: 'aa7d80c7-49de-4bde-9b65-e5af7dc80dd5',
+  Verification_Body: 'fcb9c262-c881-4dc0-8ab0-aa98de2c631f',
+  wa03_verification_form: '8ed947fa-dd87-48b8-809a-21dd3b43556b'
+};
+function stableUuid(name) {
+  const id = stableIds[name];
+  if (!id) throw new Error(`No reviewed stable Guardian block ID registered for tag: ${name}`);
+  return id;
+}
 
 const ids = {
   applicability:'8b2d9c31-5c1b-4a7f-9b5a-000000000001',
@@ -14,8 +59,10 @@ const ids = {
 };
 
 function schema(id,name,description,properties,required){
+  const dates = canonicalSchemaTimestamps[name];
+  if (!dates) throw new Error(`No canonical timestamp mapping registered for schema: ${name}`);
   return {
-    createDate:new Date().toISOString(), updateDate:new Date().toISOString(),
+    createDate:dates.createDate, updateDate:dates.updateDate,
     uuid:id, hash:'', name, description, entity:'NONE', documentFileId:null, contextFileId:null,
     version:'1.0.0', sourceVersion:'BEE BM WA03.001 v1.0', creator:'', owner:'',
     topicId:null, messageId:null, documentURL:null, contextURL:`schema:${id}`,
@@ -93,8 +140,7 @@ const schemas=[
 ];
 for(const s of schemas) fs.writeFileSync(path.join(root,'schemas',`#${s.uuid}.json`),JSON.stringify(s,null,2));
 
-const uuid=()=>crypto.randomUUID();
-const block=(blockType,tag,permissions,extra={})=>({id:uuid(),blockType,defaultActive:true,permissions,onErrorAction:'no-action',uiMetaData:{},tag,children:[],events:[],artifacts:[],...extra});
+const block=(blockType,tag,permissions,extra={})=>({id:stableUuid(tag),blockType,defaultActive:true,permissions,onErrorAction:'no-action',uiMetaData:{},tag,children:[],events:[],artifacts:[],...extra});
 const pp='Project Proponent', vv='Verification Body';
 
 const choose=block('policyRolesBlock','Choose_Role',['NO_ROLE'],{roles:[pp,vv]});
@@ -123,7 +169,7 @@ const calc=block('calculateContainerBlock','wa03_equation4_calc',[pp],{
     {name:'ery',title:'ERy,calculated',value:'E_ER'}
   ],
   children:[{
-    id:uuid(),blockType:'calculateMathAddonBlock',defaultActive:true,permissions:[pp],onErrorAction:'no-action',uiMetaData:{},tag:'wa03_equation4_math',children:[],events:[],artifacts:[],
+    id:stableUuid('wa03_equation4_math'),blockType:'calculateMathAddonBlock',defaultActive:true,permissions:[pp],onErrorAction:'no-action',uiMetaData:{},tag:'wa03_equation4_math',children:[],events:[],artifacts:[],
     equations:[
       {variable:'E_GWP',formula:'29.8'},
       {variable:'E_ER',formula:'(E_FCH4_PJ-E_FCH4_BL)*E_GWP*(1-E_OX)-E_PE-E_LE'}
@@ -131,14 +177,14 @@ const calc=block('calculateContainerBlock','wa03_equation4_calc',[pp],{
   }]
 });
 const v=block('requestVcDocumentBlock','wa03_verification_form',[vv],{uiMetaData:{type:'page',title:'WA03.001 Independent Verification'},presetFields:[],schema:`#${ids.verification}`,idType:'UUID'});
-const rootBlock={id:uuid(),blockType:'interfaceContainerBlock',permissions:['ANY_ROLE'],onErrorAction:'no-action',uiMetaData:{type:'blank',fields:[]},options:[],dataSource:'auto',tag:'WA03_001_ROOT',children:[
+const rootBlock={id:stableUuid('WA03_001_ROOT'),blockType:'interfaceContainerBlock',permissions:['ANY_ROLE'],onErrorAction:'no-action',uiMetaData:{type:'blank',fields:[]},options:[],dataSource:'auto',tag:'WA03_001_ROOT',children:[
   choose,
-  {id:uuid(),blockType:'interfaceContainerBlock',defaultActive:true,permissions:[pp],onErrorAction:'no-action',uiMetaData:{type:'tabs'},tag:'Project_Proponent',children:[a,b,m,calc],events:[],artifacts:[]},
-  {id:uuid(),blockType:'interfaceContainerBlock',defaultActive:true,permissions:[vv],onErrorAction:'no-action',uiMetaData:{type:'tabs'},tag:'Verification_Body',children:[v],events:[],artifacts:[]}
+  {id:stableUuid('Project_Proponent'),blockType:'interfaceContainerBlock',defaultActive:true,permissions:[pp],onErrorAction:'no-action',uiMetaData:{type:'tabs'},tag:'Project_Proponent',children:[a,b,m,calc],events:[],artifacts:[]},
+  {id:stableUuid('Verification_Body'),blockType:'interfaceContainerBlock',defaultActive:true,permissions:[vv],onErrorAction:'no-action',uiMetaData:{type:'tabs'},tag:'Verification_Body',children:[v],events:[],artifacts:[]}
 ],events:[],artifacts:[]};
 
 const policy={
-  updateDate:new Date().toISOString(),uuid:'2b1dbf72-0d6c-4d90-9e16-5e8b8c000301',
+  updateDate:canonicalPolicyUpdateDate,uuid:'2b1dbf72-0d6c-4d90-9e16-5e8b8c000301',
   name:'RupayKg BM WA03.001 Landfill Methane Recovery',version:'1.0.0',
   description:'Guardian-native dMRV policy specification for BEE BM WA03.001 v1.0. BEE is the controlling regulatory authority. Guardian examples are not substituted.',
   topicDescription:'RupayKg WA03.001 policy',
