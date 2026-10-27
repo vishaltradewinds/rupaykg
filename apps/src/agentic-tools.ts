@@ -44,7 +44,7 @@ const TOOL_REGISTRY: Record<AgenticToolId, AgenticToolDefinition> = {
     domain: "evidence",
     description: "Count evidence metadata associated with authorised activities; do not return artifact bytes.",
     mode: "READ_ONLY",
-    requiredAnyPermission: ["evidence:review", "waste:read", "audit:read", "projects:read"],
+    requiredAnyPermission: ["evidence:read", "waste:read", "audit:read", "projects:read"],
     organizationScoped: true,
     geographyScoped: true,
   },
