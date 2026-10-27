@@ -135,6 +135,14 @@ export async function registerAgenticWorkflowRoutes(app: FastifyInstance, pool: 
     if (!isAgenticGoal(body.goal)) return reply.code(400).send({ error: "goal must be one of review_measurements, prepare_compliance, trace_resource_flow, onboard_stakeholder", code: "AGENTIC_GOAL_INVALID" });
     const organizationId = auth.activeOrganizationId;
     if (!organizationId) return reply.code(403).send({ error: "Select an active verified organization before requesting an agentic plan", code: "ORGANIZATION_SCOPE_REQUIRED" });
+    const activeMemberships = auth.memberships.filter(m => m.organization_id === organizationId);
+    if (activeMemberships.length !== 1) {
+      return reply.code(403).send({
+        error: "Agentic workflows require exactly one verified role in the active organization so role-level geography scope is unambiguous",
+        code: "AGENTIC_ROLE_SCOPE_AMBIGUOUS",
+      });
+    }
+    const roleId = activeMemberships[0]!.role_id;
     const toolAuthorization = await authorizeAgenticTools(pool, auth, organizationId, body.goal);
     if (!toolAuthorization.allowed) {
       request.log.warn({ event: "agentic.tool.authorization_denied", goal: body.goal, organizationId, toolId: toolAuthorization.deniedToolId });
@@ -148,13 +156,15 @@ export async function registerAgenticWorkflowRoutes(app: FastifyInstance, pool: 
     if (geographyId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(geographyId)) return reply.code(400).send({ error: "Invalid geography UUID", code: "GEOGRAPHY_ID_INVALID" });
     if (geographyId) {
       const scope = await pool.query<{ ok: boolean }>(
-        `select exists (select 1 from organization_memberships om where om.identity_id=$1 and om.organization_id=$2 and om.status='VERIFIED' and organization_has_geography_scope(om.organization_id,$3::uuid)) as ok`,
-        [auth.identityId, organizationId, geographyId],
+        `select (organization_has_geography_scope($2::uuid,$3::uuid) and role_has_geography_scope($4::uuid,$3::uuid)) as ok
+           from organization_memberships om
+          where om.identity_id=$1 and om.organization_id=$2 and om.role_id=$4 and om.status='VERIFIED'`,
+        [auth.identityId, organizationId, geographyId, roleId],
       );
       if (!scope.rows[0]?.ok) return reply.code(403).send({ error: "Geography outside organization authorization scope", code: "GEOGRAPHY_FORBIDDEN" });
     }
     try {
-      const readResult = await executeAgenticReadTools(pool, { goal: body.goal, organizationId, geographyId });
+      const readResult = await executeAgenticReadTools(pool, { goal: body.goal, organizationId, roleId, geographyId });
       const { sourceRecordIds, measurementCount: measurements, evidenceCount: evidence, verifiedCount: verified } = readResult;
       const plan = buildAgenticPlan({
         goal: body.goal,
