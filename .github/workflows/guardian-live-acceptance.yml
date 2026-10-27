@@ -64,9 +64,17 @@ jobs:
           if missing:
               raise SystemExit("Missing required acceptance input(s): " + ", ".join(missing))
           parsed = urlparse(os.environ["BASE_URL"].rstrip("/"))
-          if parsed.scheme != "https" or not parsed.netloc:
-              raise SystemExit("rupaykg_base_url must be an HTTPS URL")
-          print("Acceptance inputs validated; no credentials or secrets are printed.")
+          if parsed.scheme != "https" or parsed.hostname != "rupaykg.onrender.com" or parsed.port not in (None, 443) or parsed.username or parsed.password or parsed.path not in ("", "/") or parsed.query or parsed.fragment:
+              raise SystemExit("rupaykg_base_url must be the approved production origin https://rupaykg.onrender.com with no path, credentials, query, or fragment.")
+          import re
+          uuid_pattern = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$")
+          for name in ("ORGANIZATION_ID", "ACTIVITY_ID", "VERIFICATION_ID", "EVIDENCE_ID"):
+              if not uuid_pattern.fullmatch(os.environ[name].strip()):
+                  raise SystemExit(name + " must be a UUID.")
+          policy = os.environ["POLICY_ID"].strip()
+          if not re.fullmatch(r"[A-Za-z0-9._:-]{1,200}", policy):
+              raise SystemExit("POLICY_ID must be a 1-200 character policy identifier without whitespace or path characters.")
+          print("Approved production origin and acceptance identifiers validated; no credentials or secrets are printed.")
           PY
 
       - name: Check runtime MRV configuration
@@ -131,8 +139,7 @@ jobs:
             --data "$payload" \
             "$BASE_URL/api/v1/mrv/activities/$ACTIVITY_ID/submit")
           if [ "$http_code" != "201" ]; then
-            echo "Authoritative MRV submission returned HTTP $http_code"
-            cat /tmp/mrv-submit.json
+            echo "Authoritative MRV submission returned HTTP $http_code; response body withheld to avoid exposing operational data."
             exit 1
           fi
           python - <<'PY'
