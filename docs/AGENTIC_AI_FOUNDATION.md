@@ -6,6 +6,7 @@
 - Evidence gates and explicit READY, BLOCKED, and REQUIRES_HUMAN steps.
 - Optional provider-neutral OpenAI-compatible chat-completions adapter for plain-language plan explanation. It is disabled by default and has no tools or action-execution access.
 - Capability discovery endpoint and unit tests for planning gates and model adapter configuration.
+- Model-boundary tests verify the provider receives a minimized summary (not organization/geography/source-record identifiers), blocker lists are bounded, provider output is capped, and malformed responses fail closed.
 - Typed, allow-listed domain-tool policy registry for activity, measurement, evidence, verification and stakeholder-onboarding reads; workflows are checked against read-oriented permissions required by their tool set before planning.
 - Optional disposable-PostgreSQL integration coverage verifies read access is granted by explicit read permissions and rejects `projects:manage`, `VERIFY_EVIDENCE`, and `MANAGE_STAKEHOLDERS` as standalone substitutes. The test runs only when `RUPAYKG_RUN_DB_INTEGRATION_TESTS=1` and `DATABASE_URL` are set.
 - Capability discovery reports tool metadata; the model cannot invoke tools. Domain SQL remains fixed, parameterized, and organization/geography scoped in the workflow route.
@@ -18,7 +19,7 @@ The matrix identifies 35 stakeholder categories. This is target coverage, not a 
 
 ## Read-only tool registry
 
-The registry in `apps/src/agentic-tools.ts` defines six tool identifiers and their domain, permission alternatives, read-only mode and organization/geography scope. Each of the four goals is mapped to an explicit tool allow-list. The plan endpoint checks each required tool permission before reading domain data and returns `AGENTIC_TOOL_FORBIDDEN` with the denied tool ID when authorization fails. The registry does not grant permissions, perform writes, or expose arbitrary SQL/URLs. Tool metadata is discoverable from the capabilities endpoint. Dedicated tool handlers and model-driven tool calling are not enabled in this increment.
+The registry in `apps/src/agentic-tools.ts` defines six tool identifiers and their domain, permission alternatives, read-only mode and organization/geography scope. Each of the four goals is mapped to an explicit tool allow-list. The plan endpoint checks each required tool permission before reading domain data and returns `AGENTIC_TOOL_FORBIDDEN` with the denied tool ID when authorization fails. Fixed parameterized read handlers are wired into the route; they return bounded identifiers and aggregate counts, enforce organization/geography scope in SQL, and never accept model-supplied SQL or filters. The registry does not grant permissions or perform writes. Tool metadata is discoverable from the capabilities endpoint. The model itself cannot invoke tools; the server executes only the fixed allow-listed read path after authorization.
 
 ## API
 - `GET /api/v1/agentic/capabilities`
