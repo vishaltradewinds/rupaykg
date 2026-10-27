@@ -10,16 +10,17 @@ Production certification: OFF
 
 ## Exact resume position
 
-Latest implementation commit at the moment of checkpoint creation:
-`dabdf0e79b70de470f1c4d95e7fde972a1ff16b9`
+Latest migration-renumbering commit on the working branch:
+`467514bed0c9d29d2dd086f89d3bb53a37a7defa`
 
-The latest GitHub Actions run for that head:
+Previous CI run for the pre-fix commit:
 https://github.com/vishaltradewinds/rupaykg/actions/runs/40516522244
 
-Previous CI status: FAILED at `npm run validate:migrations` with duplicate migration number `20261027`. Remediation committed on the working branch: migrations are being assigned unique ordered numbers 097, 098 and 099, and documentation references are being updated. CI has not yet been rerun against the corrected head; do not assume SQL integration tests have run successfully.
+Previous CI status: FAILED at `npm run validate:migrations` with duplicate migration number `20261027`. The three timestamp-prefixed migrations have now been renamed to unique ordered migrations 097, 098 and 099, references in `migrations/README.md` and this checkpoint have been updated, and the old duplicate-number files have been deleted. CI has not yet been confirmed on the corrected head; do not assume SQL integration tests have run successfully.
 
 ## Batch implemented before checkpoint
 
+- `097_icvcm_ccp_assessments.sql`: append-only internal ICVCM evidence assessment table and organization/activity binding.
 - `098_evidence_artifact_chain_binding.sql`: immutable evidence artifact-series identity/scope; exact artifact-version review binding; reviewer must not be uploader; active review and verification permissions required within owning organization.
 - `099_vault_content_verification_binding.sql`: stored-byte SHA-256 and byte-length checks; binds artifact to canonical evidence activity/type/hash and binds vault-backed verification to an append-only review by the same verifier and decision.
 - `apps/src/evidence-vault.integration.test.ts`: added regression assertions for series reassignment and mismatched artifact-version review.
@@ -31,7 +32,7 @@ The PR already includes the ICVCM Core Carbon Principles catalogue and supplemen
 
 ## Required next gates (Shakti Standards)
 
-1. Fix duplicate migration numbering and ensure migration ordering is valid.
+1. Confirm CI reruns on the corrected head; validate migration numbering and ordering.
 2. Rerun migration validation and inspect failures rather than weakening checks.
 3. Run full build/unit tests and disposable-PostgreSQL integration suite against the latest head.
 4. Review new SQL triggers for ordering/schema correctness and verify evidence-vault route/review/verification transaction behavior.
