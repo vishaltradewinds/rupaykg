@@ -97,22 +97,19 @@ Do not replace them with a shared helper by text similarity alone. A future cons
 
 Before further destructive cleanup, review actual import/call graphs and package-manager resolution, add regression coverage for any helper consolidation, run the complete CI suite on the exact commit, and keep production changes outside this cleanup PR. The current evidence supports targeted cleanup and explicit unresolved decisions; it does not support deleting the intelligence package, gRPC dependency, Cloud Build pipeline, or changing Render resource identity yet.
 
-### Guardian live-acceptance workflow — gate ordering and runtime script corrected (2026-10-27)
+### Guardian live-acceptance workflow — gate ordering, runtime and credential-boundary hardening (2026-10-27)
 
-Source review found that `.github/workflows/guardian-live-acceptance.yml` required registry eligibility before Mirror Node verification. That contradicted the API state transition: a new successful submission persists Guardian VERIFIED + HCS CONSENSUS_CONFIRMED, while registry eligibility remains false until the Mirror Node independently verifies the HCS message and the verification is persisted.
+Source review found that `.github/workflows/guardian-live-acceptance.yml` required registry eligibility before Mirror Node verification. The workflow now validates authoritative non-synthetic MRV, Guardian VERIFIED + HCS CONSENSUS_CONFIRMED, exact activity/verification/evidence/policy bindings, independent Mirror Node verification, and persisted final eligibility in that order.
 
-The workflow now:
-1. Requires a non-synthetic authoritative MRV submission, Guardian VERIFIED with execution ID, HCS CONSENSUS_CONFIRMED, and exact activity/verification/evidence/policy bindings.
-2. Checks the matching persisted provenance row before Mirror Node verification without demanding premature registry eligibility.
-3. Requires Mirror Node verification to return `verified=true` and `eligibleForRegistry=true`.
-4. Re-fetches provenance and requires persisted registry eligibility and a Mirror Node verification timestamp.
-5. Uses `scripts/test-guardian-live-acceptance-workflow.mjs`, wired into CI, to guard gate ordering and key runtime-script prerequisites.
+Additional runtime fixes covered a missing Python `os` import and a malformed timestamp-file newline. The regression test protects both.
 
-A second source-level defect was caught during review: the submission step used `os.environ` without importing `os`; the regression test now protects that import. A timestamp-file writer also encoded a literal backslash-n instead of a real newline, which would have made the next step's shell `source` fail. It now writes a real newline and the regression test protects that behavior.
+**Credential-boundary hardening:** the workflow previously accepted any HTTPS base URL while sending the `RUPAYKG_SESSION_TOKEN` bearer credential. It now rejects every origin except the known production origin `https://rupaykg.onrender.com`, including URLs containing credentials, alternate ports, paths, query strings, or fragments. Organization/activity/verification/evidence identifiers must match UUID syntax; the Guardian policy identifier is restricted to a safe bounded character set. Failed submission response bodies are not printed to CI logs. Regression assertions cover these protections.
 
-**Validation:** latest CI run `40509871653` passed on commit `c3177b802f2116ef3d3e5228fd7f3e7819ea8cce`, including the acceptance workflow regression check, typecheck, application tests and production-container build.
+**Live read-only check (2026-10-27):** `https://rupaykg.onrender.com/health` returned HTTP 200 with `{"status":"READY","database":"AVAILABLE","syntheticData":false}`. The protected `/api/v1/mrv/status` endpoint returned HTTP 401 with `AUTH_REQUIRED` when called without credentials, confirming that an authorized session is required; no token was exposed or supplied in this probe.
 
-**Live acceptance remains unexecuted.** The workflow is manually dispatched, but the connected GitHub interface has no workflow-dispatch action. The live Render service deploys from `main`; this PR remains open/unmerged. Do not treat CI as proof of a real Guardian/Hedera acceptance. Run the workflow through an authorized release path with a valid session secret and real, approved activity/verification/evidence/policy identifiers before asserting live acceptance.
+**Validation:** CI run `40511379421` passed on commit `2e5ba211ceeb028a17107312329a536057588d91`, including acceptance workflow regression checks, application tests, browser smoke test and production-container build.
+
+**Live Guardian/Hedera acceptance remains unexecuted.** The connected GitHub interface does not expose workflow dispatch. No live MRV submission was sent and no production transaction was created by this check. To finish, run the manual workflow through an authorized GitHub release path with the configured `RUPAYKG_SESSION_TOKEN` secret and genuine approved activity/verification/evidence/policy identifiers. CI and health status are not substitutes for Guardian/HCS/Mirror Node acceptance evidence.
 
 ### Guardian generator reproducibility — canonical source reconciliation
 
