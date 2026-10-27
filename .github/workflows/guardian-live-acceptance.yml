@@ -145,13 +145,21 @@ jobs:
           if hedera.get('status') != 'CONSENSUS_CONFIRMED':
               raise SystemExit('Hedera HCS consensus was not confirmed.')
           # Registry eligibility remains false until Mirror Node verification is persisted.
+          if data.get('syntheticData') is not False:
+              raise SystemExit('Submission response is not explicitly non-synthetic.')
+          provenance = data.get('provenance') or {}
+          for field, expected in [('activity_id', os.environ['ACTIVITY_ID']),
+                                  ('verification_id', os.environ['VERIFICATION_ID']),
+                                  ('evidence_id', os.environ['EVIDENCE_ID']),
+                                  ('guardian_policy_id', os.environ['POLICY_ID'])]:
+              if provenance.get(field) != expected:
+                  raise SystemExit(f'Persisted submission field {field} does not match the requested acceptance input.')
           timestamp = hedera.get('consensusTimestamp')
           if not timestamp:
               raise SystemExit('No Hedera consensus timestamp was returned.')
           with open('/tmp/acceptance.env', 'w') as f:
-              f.write('CONSENSUS_TIMESTAMP=' + timestamp + '\n')
-          print('Guardian VERIFIED and Hedera CONSENSUS_CONFIRMED.')
-          print('Registry eligibility:', data.get('eligibleForRegistry'))
+              f.write('CONSENSUS_TIMESTAMP=' + timestamp + '\\n')
+          print('Guardian VERIFIED and Hedera CONSENSUS_CONFIRMED; awaiting independent Mirror Node verification.')
           PY
 
       - name: Verify persisted provenance
