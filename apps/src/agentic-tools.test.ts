@@ -20,6 +20,6 @@ test("each workflow receives only its explicit allow-listed tool set", () => {
 
 test("tool definitions cannot mutate the registry through returned permission arrays", () => {
   const exposed = listAgenticToolDefinitions();
-  exposed[0].requiredAnyPermission.push("admin:system");
+  (exposed[0].requiredAnyPermission as string[]).push("admin:system");
   assert.ok(!listAgenticToolDefinitions()[0].requiredAnyPermission.includes("admin:system"));
 });
