@@ -88,7 +88,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 - <<'PY'
-          import hashlib, json, pathlib, subprocess
+          import hashlib, json, pathlib, subprocess, zipfile
           root = pathlib.Path("guardian-policies/WA03.001")
           files = [pathlib.Path("guardian-policies/WA03.001/README.md"),
                    pathlib.Path("guardian-policies/WA03.001/policy.json")]
@@ -134,7 +134,35 @@ jobs:
                           report.append(f"| ↳ additional differences | | | {len(differences) - 40} omitted | | NO |")
                   except (ValueError, AttributeError):
                       pass
-          report += ["", f"**Files compared:** {len(files)}", f"**Files changed:** {changed}", ""]
+          package_path = pathlib.Path("guardian-policies/RupayKg-WA03.001-v1.policy")
+          package_changed = 0
+          expected_members = {p.relative_to(root).as_posix(): p.read_bytes() for p in files}
+          report += ["", "## Checked-in package member reconciliation", "",
+                     "| Package member | Generated source SHA-256 | Packaged SHA-256 | Match |",
+                     "|---|---|---|---|"]
+          with zipfile.ZipFile(package_path) as archive:
+              bad_member = archive.testzip()
+              if bad_member:
+                  raise SystemExit("Checked-in Guardian package is corrupt at member: " + bad_member)
+              packaged_names = set(archive.namelist())
+              expected_names = set(expected_members)
+              for name, generated_bytes in expected_members.items():
+                  if name not in packaged_names:
+                      package_changed += 1
+                      report.append(f"| `{name}` | `{hashlib.sha256(generated_bytes).hexdigest()}` | MISSING | NO |")
+                      continue
+                  packaged_bytes = archive.read(name)
+                  generated_hash = hashlib.sha256(generated_bytes).hexdigest()
+                  packaged_hash = hashlib.sha256(packaged_bytes).hexdigest()
+                  match = generated_bytes == packaged_bytes
+                  package_changed += not match
+                  report.append(f"| `{name}` | `{generated_hash}` | `{packaged_hash}` | {'YES' if match else 'NO'} |")
+              extra_members = sorted(packaged_names - expected_names)
+              if extra_members:
+                  package_changed += len(extra_members)
+                  report.append(f"| Unexpected package members | | | NO: {', '.join(extra_members)} |")
+          report += ["", f"**Source files compared:** {len(files)}", f"**Source files changed:** {changed}",
+                     f"**Package member differences:** {package_changed}", ""]
           report_path = pathlib.Path("guardian-reconciliation-report.md")
           report_path.write_text("\n".join(report) + "\n")
           print(report_path.read_text())
