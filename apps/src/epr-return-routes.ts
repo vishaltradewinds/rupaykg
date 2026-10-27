@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type { Pool } from "pg";
-import { authenticate, bearerChallenge, hasOrganizationPermission } from "./auth.js";
+import { authenticate, bearerChallenge, hasOrganizationPermission, type AuthContext } from "./auth.js";
 
 function bodyOf(request: { body: unknown }): Record<string, unknown> {
   return request.body && typeof request.body === "object" ? request.body as Record<string, unknown> : {};
