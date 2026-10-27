@@ -23,6 +23,14 @@ assert.ok(validateInputs.includes('POLICY_ID must be a 1-200 character policy id
   'Guardian policy identifier must reject whitespace and path characters');
 assert.ok(!submission.includes('cat /tmp/mrv-submit.json'),
   'Failed submissions must not print the full operational response body into CI logs');
+assert.ok(submission.includes('if [ "$http_code" != "200" ] && [ "$http_code" != "201" ]; then'),
+  'Fresh submissions (201) and idempotent replays (200) must both be accepted'); 
+assert.ok(submission.includes('HTTP 201 is a fresh successful submission; HTTP 200 is an idempotent replay.'),
+  'The workflow must explicitly document the distinction between fresh submissions and idempotent replays');
+assert.ok(submission.includes('replay must not create a duplicate transaction.'),
+  'Idempotent replay must not create a duplicate transaction');
+assert.ok(submission.indexOf('if [ "$http_code" != "200" ] && [ "$http_code" != "201" ]; then') < submission.indexOf("guardian.get('status') != 'VERIFIED'"),
+  'Both accepted HTTP statuses must proceed through the same strict Guardian/Hedera/provenance validation');
 
 assert.ok(submission.includes("guardian.get('status') != 'VERIFIED'"));
 assert.ok(submission.includes("hedera.get('status') != 'CONSENSUS_CONFIRMED'"));
