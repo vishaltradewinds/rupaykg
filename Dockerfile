@@ -1,7 +1,7 @@
 FROM node:22-bookworm-slim AS build
 WORKDIR /app
 
-COPY package.json tsconfig.json ./
+COPY package.json package-lock.json tsconfig.json ./
 COPY apps ./apps
 COPY packages ./packages
 COPY migrations ./migrations
