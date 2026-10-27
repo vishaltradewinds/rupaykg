@@ -60,6 +60,14 @@ test("PostgreSQL enforces append-only ICVCM assessment history and unique revisi
     const assessmentId = inserted.rows[0]?.id as string | undefined;
     assert.ok(assessmentId, "first internal draft should persist");
 
+    await client.query("savepoint before_activity_owner_rewrite");
+    await assert.rejects(
+      client.query("update activities set organization_id=$2 where id=$1",[activityId,otherOrganization.rows[0]!.id]),
+      /activity organization\/geography backing ICVCM assessment history is immutable/i,
+      "ICVCM assessment history must retain the activity's assessed organization"
+    );
+    await client.query("rollback to savepoint before_activity_owner_rewrite");
+
     await client.query("savepoint before_update_attempt");
     await assert.rejects(
       client.query("update icvcm_ccp_assessments set summary = '{}'::jsonb where id = $1", [assessmentId]),
