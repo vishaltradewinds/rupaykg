@@ -154,6 +154,22 @@ test("PostgreSQL rejects EPR external acceptance without independently verified 
     );
     await client.query("rollback to savepoint confirmation_rewrite");
 
+    await client.query("savepoint geography_scope_delete");
+    await assert.rejects(
+      client.query("delete from organization_geography_scopes where organization_id=$1 and geography_id=$2",[org,geography]),
+      /organization geography scope policy is immutable after accepted EPR or ICVCM assessment history/i,
+      "accepted EPR history must preserve the geography authorization scope used for assessment"
+    );
+    await client.query("rollback to savepoint geography_scope_delete");
+
+    await client.query("savepoint geography_scope_transfer");
+    await assert.rejects(
+      client.query("update organization_geography_scopes set organization_id=$3 where organization_id=$1 and geography_id=$2",[org,geography,otherOrg]),
+      /organization geography scope policy is immutable after accepted EPR or ICVCM assessment history/i,
+      "a scope row must not be transferred out of an organization with accepted EPR history"
+    );
+    await client.query("rollback to savepoint geography_scope_transfer");
+
     const alternateGeography = (await client.query<{id:string}>(
       "insert into geography(kind,code,name,source) values('STATE_UT',$1,$2,'integration-test') returning id",
       ["ALT-"+suffix,"Alternate test geography "+suffix]
