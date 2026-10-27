@@ -113,6 +113,22 @@ test("PostgreSQL rejects EPR external acceptance without independently verified 
       "accepted return must not be reassigned away from the organization that owns its evidence"
     );
     await client.query("rollback to savepoint organization_reassignment");
+
+    await client.query("savepoint evidence_invalidation");
+    await assert.rejects(
+      client.query("update evidence set status='UNDER_REVIEW' where id=$1",[evidence]),
+      /evidence referenced by accepted EPR return is immutable/i,
+      "accepted EPR evidence cannot be downgraded after external acceptance"
+    );
+    await client.query("rollback to savepoint evidence_invalidation");
+
+    await client.query("savepoint verification_invalidation");
+    await assert.rejects(
+      client.query("update verifications set decision='REJECTED' where id=$1",[approvedVerification]),
+      /verification referenced by accepted EPR return is immutable/i,
+      "accepted EPR verification cannot be revoked in place"
+    );
+    await client.query("rollback to savepoint verification_invalidation");
   } finally {
     try { await client.query("rollback"); } catch {}
     client.release();
