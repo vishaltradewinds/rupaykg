@@ -20,9 +20,9 @@ type OnboardingRow = { id: string; evidence_count: string; verified_count: strin
  */
 export async function executeAgenticReadTools(
   pool: Pool,
-  input: { goal: AgenticGoal; organizationId: string; geographyId: string | null },
+  input: { goal: AgenticGoal; organizationId: string; roleId: string; geographyId: string | null },
 ): Promise<AgenticReadResult> {
-  const { goal, organizationId, geographyId } = input;
+  const { goal, organizationId, roleId, geographyId } = input;
   const toolIds = getAgenticToolsForGoal(goal).map(tool => tool.id);
 
   if (goal === "onboard_stakeholder") {
@@ -39,10 +39,13 @@ export async function executeAgenticReadTools(
        join organization_status os on os.organization_id=sa.organization_id
        where sa.organization_id=$1
          and ($2::uuid is null or sa.geography_id=$2::uuid)
-         and (sa.geography_id is null or organization_has_geography_scope(sa.organization_id,sa.geography_id))
+         and (sa.geography_id is null or (
+           organization_has_geography_scope(sa.organization_id,sa.geography_id)
+           and role_has_geography_scope($3::uuid,sa.geography_id)
+         ))
        order by sa.created_at desc
        limit 100`,
-      [organizationId, geographyId],
+      [organizationId, geographyId, roleId],
     );
     return {
       toolIds,
@@ -75,10 +78,11 @@ export async function executeAgenticReadTools(
      where a.organization_id=$1
        and a.geography_id is not null
        and organization_has_geography_scope(a.organization_id,a.geography_id)
+       and role_has_geography_scope($3::uuid,a.geography_id)
        and ($2::uuid is null or a.geography_id=$2::uuid)
      order by a.created_at desc
      limit 100`,
-    [organizationId, geographyId],
+    [organizationId, geographyId, roleId],
   );
 
   return {
