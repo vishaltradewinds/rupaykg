@@ -102,3 +102,56 @@ test("agentic tool authorization uses real PostgreSQL role permissions and rejec
     await pool.end();
   }
 });
+
+
+test("role geography scope permits descendants and denies unrelated or unlocated records", { skip: !enabled }, async () => {
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  const suffix = randomBytes(8).toString("hex");
+  let organizationId = "";
+  let roleId = "";
+  let rootId = "";
+  let childId = "";
+  let outsideId = "";
+  try {
+    organizationId = (await pool.query<{id:string}>(
+      "insert into organizations(name,organization_type,status) values($1,'test_fixture','VERIFIED') returning id",
+      ["TEST-ROLE-GEO-" + suffix],
+    )).rows[0]!.id;
+    rootId = (await pool.query<{id:string}>(
+      "insert into geography(kind,code,name) values('STATE_UT',$1,$2) returning id",
+      ["TEST-STATE-" + suffix, "Test role scope root " + suffix],
+    )).rows[0]!.id;
+    childId = (await pool.query<{id:string}>(
+      "insert into geography(parent_id,kind,code,name) values($1,'DISTRICT',$2,$3) returning id",
+      [rootId, "TEST-DISTRICT-" + suffix, "Test role scope child " + suffix],
+    )).rows[0]!.id;
+    outsideId = (await pool.query<{id:string}>(
+      "insert into geography(kind,code,name) values('STATE_UT',$1,$2) returning id",
+      ["TEST-OUTSIDE-" + suffix, "Test role scope outside " + suffix],
+    )).rows[0]!.id;
+    roleId = (await pool.query<{id:string}>(
+      "insert into roles(organization_id,name,permissions,geography_scope) values($1,$2,'[]'::jsonb,jsonb_build_array($3::text)) returning id",
+      [organizationId, "TEST-ROLE-GEO-" + suffix, rootId],
+    )).rows[0]!.id;
+
+    const descendant = await pool.query<{ok:boolean}>(
+      "select role_has_geography_scope($1::uuid,$2::uuid) as ok", [roleId, childId],
+    );
+    const unrelated = await pool.query<{ok:boolean}>(
+      "select role_has_geography_scope($1::uuid,$2::uuid) as ok", [roleId, outsideId],
+    );
+    const unlocated = await pool.query<{ok:boolean}>(
+      "select role_has_geography_scope($1::uuid,null::uuid) as ok", [roleId],
+    );
+    assert.equal(descendant.rows[0]?.ok, true, "a configured root must include descendants");
+    assert.equal(unrelated.rows[0]?.ok, false, "a configured root must exclude unrelated geographies");
+    assert.equal(unlocated.rows[0]?.ok, false, "a restricted role must not see records without geography");
+  } finally {
+    if (roleId) await pool.query("delete from roles where id=$1", [roleId]);
+    if (childId) await pool.query("delete from geography where id=$1", [childId]);
+    if (rootId) await pool.query("delete from geography where id=$1", [rootId]);
+    if (outsideId) await pool.query("delete from geography where id=$1", [outsideId]);
+    if (organizationId) await pool.query("delete from organizations where id=$1", [organizationId]);
+    await pool.end();
+  }
+});
