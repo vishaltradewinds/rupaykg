@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { getAgenticToolsForGoal, listAgenticToolDefinitions } from "./agentic-tools.js";
+import { authorizeAgenticTools, getAgenticToolsForGoal, listAgenticToolDefinitions } from "./agentic-tools.js";
+import type { Pool } from "pg";
 
 test("registry exposes only explicit read-only, tenant and geography-scoped tools", () => {
   const tools = listAgenticToolDefinitions();
@@ -22,4 +23,23 @@ test("tool definitions cannot mutate the registry through returned permission ar
   const exposed = listAgenticToolDefinitions();
   (exposed[0]!.requiredAnyPermission as string[]).push("admin:system");
   assert.ok(!listAgenticToolDefinitions()[0]!.requiredAnyPermission.includes("admin:system"));
+});
+
+test("tool authorization fails closed before downstream handlers when a permission is denied", async () => {
+  const calls: unknown[][] = [];
+  const pool = { query: async (_sql: string, values?: unknown[]) => { calls.push(values ?? []); return { rows: [{ ok: false }] }; } } as unknown as Pool;
+  const auth = { identityId: "identity-1", memberships: [] };
+  const result = await authorizeAgenticTools(pool, auth, "org-1", "prepare_compliance");
+  assert.deepEqual(result, { allowed: false, deniedToolId: "activities.list" });
+  assert.equal(calls.length, 1);
+  assert.deepEqual(calls[0], ["identity-1", "org-1", ["waste:read", "projects:read", "audit:read", "projects:manage"]]);
+});
+
+test("tool authorization requires every allow-listed tool permission", async () => {
+  let calls = 0;
+  const pool = { query: async () => { calls += 1; return { rows: [{ ok: true }] }; } } as unknown as Pool;
+  const auth = { identityId: "identity-2", memberships: [] };
+  const result = await authorizeAgenticTools(pool, auth, "org-2", "prepare_compliance");
+  assert.deepEqual(result, { allowed: true, toolIds: ["activities.list", "evidence.count", "verifications.count"] });
+  assert.equal(calls, 3);
 });
