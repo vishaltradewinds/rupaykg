@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type { Pool } from "pg";
-import { authenticate, bearerChallenge, hasOrganizationPermission, type AuthContext } from "./auth.js";
+import { authenticate, bearerChallenge, hasOrganizationPermission } from "./auth.js";
 import { registerEprReturnRoutes } from "./epr-return-routes.js";
 
 async function authFor(request: Parameters<typeof authenticate>[0], reply: { code: (status: number) => { send: (body: unknown) => unknown } }, pool: Pool | null): Promise<AuthContext | null> {
