@@ -94,4 +94,6 @@ Migration `090_epr_acceptance_evidence_immutability.sql` prevents evidence or ve
 
 ## Acceptance integrity and ICVCM ownership binding
 
-Migration `091_acceptance_and_icvcm_binding_guards.sql` makes authority-confirmation fields and organization binding immutable once an EPR return is `ACCEPTED` or `COMPLETED` (the only allowed progression is `ACCEPTED` to `COMPLETED`). It also explicitly blocks deletion of evidence/verification artifacts supporting accepted returns and ensures an ICVCM assessment's organization matches its activity at the database boundary.
+Migration `091_acceptance_and_icvcm_binding_guards.sql` makes authority-confirmation fields and organization binding immutable once an EPR return is `ACCEPTED` or `COMPLETED` (the only allowed progression is `ACCEPTED` to `COMPLETED`). It also explicitly blocks deletion of evidence/verification artifacts supporting accepted returns.
+
+Migration `20261027_icvcm_ccp_assessments_org_guard.sql` follows creation of the ICVCM assessment table and ensures an assessment's organization matches its activity at the database boundary.
