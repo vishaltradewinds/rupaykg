@@ -81,6 +81,21 @@ export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool |
       if (!row) { await client.query("ROLLBACK"); return reply.code(404).send({ error: "EPR return not found", code: "EPR_RETURN_NOT_FOUND" }); }
       if (!canAct(auth, row.organization_id) || !await hasOrganizationPermission(pool, auth, row.organization_id, ["epr:manage"])) { await client.query("ROLLBACK"); return reply.code(403).send({ error: "EPR management permission required", code: "EPR_RETURN_WRITE_FORBIDDEN" }); }
       if (row.status !== "DRAFT" && row.status !== "REJECTED") { await client.query("ROLLBACK"); return reply.code(409).send({ error: `Return cannot be submitted from ${row.status}`, code: "INVALID_EPR_RETURN_STATE" }); }
+      // An internal obligation or EPR catalogue entry is not a legal applicability
+      // determination. Require a reviewed organization/scheme determination first.
+      const applicability = await client.query<{ applicability_status: string; determined_by_identity_id: string | null; determined_at: Date | string | null }>(
+        "select applicability_status, determined_by_identity_id, determined_at from organization_epr_applicability where organization_id=$1 and scheme=$2",
+        [row.organization_id, row.scheme_code],
+      );
+      const applicabilityRow = applicability.rows[0];
+      if (!applicabilityRow || applicabilityRow.applicability_status !== "APPLICABLE" || !applicabilityRow.determined_by_identity_id || !applicabilityRow.determined_at) {
+        await client.query("ROLLBACK");
+        return reply.code(409).send({
+          error: "A reviewed APPLICABLE determination for this organization and EPR scheme is required before submission",
+          code: "EPR_APPLICABILITY_UNRESOLVED",
+          externalSubmission: "NOT_SUBMITTED",
+        });
+      }
       const obligation = await client.query(`select id,target_quantity,fulfilled_quantity,status from epr_obligations where id=$1 for update`, [row.obligation_id]);
       const obligationRow = obligation.rows[0];
       if (!obligationRow) { await client.query("ROLLBACK"); return reply.code(409).send({ error: "Bound EPR obligation not found", code: "OBLIGATION_NOT_FOUND" }); }
@@ -104,8 +119,17 @@ export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool |
 
   app.post("/api/v1/epr/returns/:returnId/external-reference", async (request, reply) => {
     const auth = await authFor(request, reply, pool); if (!auth || !pool) return;
-    const body = bodyOf(request); const externalReference = requiredString(body, "externalReference");
-    if (!externalReference) return reply.code(400).send({ error: "externalReference is required", code: "EXTERNAL_REFERENCE_REQUIRED" });
+    const body = bodyOf(request);
+    const externalReference = requiredString(body, "externalReference");
+    const externalAuthority = requiredString(body, "externalAuthority");
+    const evidenceId = requiredString(body, "evidenceId");
+    const verificationId = requiredString(body, "verificationId");
+    if (!externalReference || !externalAuthority || !evidenceId || !verificationId) {
+      return reply.code(400).send({
+        error: "externalReference, externalAuthority, evidenceId and verificationId are required to record external confirmation",
+        code: "EXTERNAL_CONFIRMATION_EVIDENCE_REQUIRED",
+      });
+    }
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
@@ -115,9 +139,41 @@ export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool |
       if (!canAct(auth, row.rows[0].organization_id) || !await hasOrganizationPermission(pool, auth, row.rows[0].organization_id, ["epr:manage"])) { await client.query("ROLLBACK"); return reply.code(403).send({ error: "EPR management permission required", code: "EPR_RETURN_WRITE_FORBIDDEN" }); }
       if (!["SUBMITTED","ACCEPTED","COMPLETED"].includes(row.rows[0].status)) { await client.query("ROLLBACK"); return reply.code(409).send({ error: "External reference can only be recorded after submission", code: "INVALID_EPR_RETURN_STATE" }); }
       if (row.rows[0].external_reference && row.rows[0].external_reference !== externalReference) { await client.query("ROLLBACK"); return reply.code(409).send({ error: "A different external reference is already recorded for this EPR return", code: "EXTERNAL_REFERENCE_IMMUTABLE" }); }
-      const updated = await client.query("update epr_returns set external_reference=$2 where id=$1 returning *", [returnId, externalReference]);
+      const confirmation = await client.query(
+        `select e.id,a.organization_id,a.geography_id,e.status,e.content_hash,e.content_uri
+           from evidence e
+           join activities a on a.id=e.activity_id
+           join verifications v on v.id=$2 and v.evidence_id=e.id and v.decision='APPROVED'
+          where e.id=$1`,
+        [evidenceId, verificationId],
+      );
+      const confirmationRow = confirmation.rows[0];
+      if (!confirmationRow || confirmationRow.status !== "VERIFIED" ||
+          (!confirmationRow.content_hash && !confirmationRow.content_uri) ||
+          confirmationRow.organization_id !== row.rows[0].organization_id || !confirmationRow.geography_id) {
+        await client.query("ROLLBACK");
+        return reply.code(409).send({ error: "External confirmation evidence must be verified, approved, provenance-backed and organization-scoped", code: "EXTERNAL_CONFIRMATION_EVIDENCE_NOT_ELIGIBLE" });
+      }
+      const geography = await client.query("select organization_has_geography_scope($1,$2) as ok", [row.rows[0].organization_id, confirmationRow.geography_id]);
+      if (!geography.rows[0]?.ok) {
+        await client.query("ROLLBACK");
+        return reply.code(403).send({ error: "External confirmation evidence geography is outside organization scope", code: "GEOGRAPHY_FORBIDDEN" });
+      }
+      const updated = await client.query(
+        `update epr_returns
+            set external_reference=$2, external_authority_name=$3,
+                external_confirmation_evidence_id=$4,
+                external_confirmation_verification_id=$5,
+                external_authority_confirmed_at=now()
+          where id=$1 returning *`,
+        [returnId, externalReference, externalAuthority, evidenceId, verificationId],
+      );
       await client.query("COMMIT");
-      return { source: "postgresql", syntheticData: false, authoritativeMutation: true, eprReturn: updated.rows[0], externalSubmission: "EXTERNAL_REFERENCE_RECORDED_NOT_ISSUED_BY_RUPAYKG" };
+      return {
+        source: "postgresql", syntheticData: false, authoritativeMutation: true,
+        eprReturn: updated.rows[0],
+        externalSubmission: "EXTERNAL_CONFIRMATION_EVIDENCE_RECORDED_NOT_ISSUED_BY_RUPAYKG",
+      };
     } catch (error: unknown) {
       await client.query("ROLLBACK").catch(() => undefined);
       request.log.error(error);
