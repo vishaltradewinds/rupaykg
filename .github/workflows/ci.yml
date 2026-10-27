@@ -120,7 +120,7 @@ jobs:
                       pass
           report += ["", f"**Files compared:** {len(files)}", f"**Files changed:** {changed}", ""]
           report_path = pathlib.Path("guardian-reconciliation-report.md")
-          report_path.write_text("\\n".join(report) + "\\n")
+          report_path.write_text("\n".join(report) + "\n")
           print(report_path.read_text())
           if changed:
               print("::notice title=Guardian artifact reconciliation required::Generated policy source differs from tracked files; no tracked file was overwritten.")
