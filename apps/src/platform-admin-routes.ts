@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { Pool, PoolClient } from "pg";
-import { authenticate, type AuthContext } from "./auth.js";
+import { authenticate } from "./auth.js";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const SAFE_PERMISSIONS = new Set([
