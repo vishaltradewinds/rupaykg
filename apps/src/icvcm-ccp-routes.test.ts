@@ -111,6 +111,8 @@ test("ICVCM assessment revisions append rather than overwrite prior records", as
   assert.equal(second.statusCode, 200);
   assert.equal(first.json().record.revision_number, 1);
   assert.equal(second.json().record.revision_number, 2);
+  const { calls } = fakePool();
+  assert.ok(calls.length === 0, "fresh test fixture starts without database calls");
   await app.close();
 });
 
