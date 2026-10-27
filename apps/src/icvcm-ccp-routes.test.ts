@@ -98,8 +98,8 @@ test("ICVCM assessment API persists only internal draft and explicitly disclaims
 });
 
 
-test("ICVCM assessment revisions append rather than overwrite prior records", async () => {
-  const { pool } = fakePool();
+test("ICVCM assessment revisions append rather than overwrite prior records under a transaction lock", async () => {
+  const { pool, calls } = fakePool();
   const app = await setup(pool);
   const request = {
     method: "POST" as const, url: `/api/v1/activities/${ACTIVITY}/icvcm-ccp-assessments`,
@@ -111,8 +111,11 @@ test("ICVCM assessment revisions append rather than overwrite prior records", as
   assert.equal(second.statusCode, 200);
   assert.equal(first.json().record.revision_number, 1);
   assert.equal(second.json().record.revision_number, 2);
-  const { calls } = fakePool();
-  assert.ok(calls.length === 0, "fresh test fixture starts without database calls");
+  assert.ok(calls.some(call => call.sql === "begin"), "revision write starts a transaction");
+  assert.ok(calls.some(call => call.sql.includes("pg_advisory_xact_lock")), "revision write serializes concurrent requests");
+  assert.ok(calls.some(call => call.sql.includes("select coalesce(max(revision_number)")), "revision is allocated from current history");
+  assert.ok(calls.some(call => call.sql === "commit"), "successful revision write commits");
+  assert.equal(calls.filter(call => call.sql.includes("insert into icvcm_ccp_assessments")).length, 2);
   await app.close();
 });
 
