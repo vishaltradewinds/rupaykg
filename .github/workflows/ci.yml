@@ -42,6 +42,32 @@ jobs:
       - run: npm run migrate -w @rupaykg/api
       - run: npm run typecheck
       - run: npm run build
+      - name: API runtime smoke test route registration and database readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+          node apps/dist/src/server.js > /tmp/rupaykg-api.log 2>&1 &
+          api_pid=$!
+          trap 'kill "$api_pid" 2>/dev/null || true' EXIT
+          status=""
+          for attempt in {1..30}; do
+            status="$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:3000/health || true)"
+            if [ "$status" = "200" ]; then break; fi
+            sleep 1
+          done
+          if [ "$status" != "200" ]; then
+            cat /tmp/rupaykg-api.log
+            echo "API health check returned $status; expected 200"
+            exit 1
+          fi
+          for route in /api/v1/auth/me /api/v1/statutory/epr/schemes /api/v1/epr/returns; do
+            status="$(curl --silent --output /dev/null --write-out '%{http_code}' "http://127.0.0.1:3000$route")"
+            if [ "$status" != "401" ]; then
+              cat /tmp/rupaykg-api.log
+              echo "$route returned $status; expected 401 for an unauthenticated request"
+              exit 1
+            fi
+          done
       - name: Browser smoke test production web build
         shell: bash
         run: |
