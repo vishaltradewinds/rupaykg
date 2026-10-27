@@ -132,7 +132,7 @@ test("role geography scope permits descendants and denies unrelated or unlocated
       ["TEST-OUTSIDE-" + suffix, "Test role scope outside " + suffix],
     )).rows[0]!.id;
     roleId = (await pool.query<{id:string}>(
-      "insert into roles(organization_id,name,permissions,geography_scope) values($1,$2,'[]'::jsonb,jsonb_build_array($3::text)) returning id",
+      "insert into roles(organization_id,name,permissions,geography_scope) values($1,$2,'[\"waste:read\"]'::jsonb,jsonb_build_array($3::text)) returning id",
       [organizationId, "TEST-ROLE-GEO-" + suffix, rootId],
     )).rows[0]!.id;
 
@@ -171,7 +171,7 @@ test("role geography scope permits descendants and denies unrelated or unlocated
     assert.equal(identityUnrelated.rows[0]?.ok, false, "identity scope must reject geography outside the role grant");
 
     ambiguousRoleId = (await pool.query<{id:string}>(
-      "insert into roles(organization_id,name,permissions,geography_scope) values($1,$2,'[]'::jsonb,'[]'::jsonb) returning id",
+      "insert into roles(organization_id,name,permissions,geography_scope) values($1,$2,'[\"reports:read\"]'::jsonb,'[]'::jsonb) returning id",
       [organizationId, "TEST-ROLE-GEO-AMBIGUOUS-" + suffix],
     )).rows[0]!.id;
     await pool.query("alter table organization_memberships disable trigger stakeholder_membership_application_guard");
