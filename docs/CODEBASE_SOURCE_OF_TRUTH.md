@@ -97,3 +97,9 @@ Do not replace them with a shared helper by text similarity alone. A future cons
 
 Before further destructive cleanup, review actual import/call graphs and package-manager resolution, add regression coverage for any helper consolidation, run the complete CI suite on the exact commit, and keep production changes outside this cleanup PR. The current evidence supports targeted cleanup and explicit unresolved decisions; it does not support deleting the intelligence package, gRPC dependency, Cloud Build pipeline, or changing Render resource identity yet.
 
+### Guardian generator reproducibility — unresolved build-integrity risk
+
+Review of `scripts/build-wa03-guardian-policy.mjs` found that policy and schema generation is not reproducible by default: it uses `crypto.randomUUID()` for policy-block identifiers and calls `new Date()` while emitting schema/policy timestamps. Two runs from the same source can therefore produce different JSON, and generated IDs may change between regeneration and packaging. The committed generated bundle and packaged `.policy` file must not be assumed to match the generator merely because the paths are canonical.
+
+**Disposition:** do not regenerate/import/publish this policy as part of routine cleanup until a dedicated change introduces stable, collision-safe IDs for generated blocks and a documented build timestamp policy (for example, a controlled `SOURCE_DATE_EPOCH` for reproducible builds), with tests proving repeated generation is byte-for-byte stable under the same build inputs. Then regenerate the canonical bundle, package it, compare artifact hashes, validate the archive, and run Guardian's real import/live-acceptance workflow. This audit did not change the generator or packaged binary because doing so without regenerating and validating the entire Guardian artifact set would create a source/artifact mismatch.
+
