@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import type { Pool } from "pg";
 import { authenticate, bearerChallenge, hasOrganizationPermission, type AuthContext } from "./auth.js";
+import { explainAgenticPlan, readAgenticModelConfig } from "./agentic-model.js";
 
 export type AgenticGoal =
   | "review_measurements"
@@ -169,6 +170,13 @@ export async function registerAgenticWorkflowRoutes(app: FastifyInstance, pool: 
         verifiedCount: verified,
       });
       request.log.info({ event: "agentic.plan.created", goal: plan.goal, organizationId, geographyId, sourceRecordCount: plan.sourceRecordIds.length, blockerCount: plan.blockers.length });
+      const query = request.query && typeof request.query === "object" ? request.query as Record<string, unknown> : {};
+      if (query.explain === "true") {
+        const modelConfig = readAgenticModelConfig();
+        const modelExplanation = await explainAgenticPlan(plan, modelConfig);
+        request.log.info({ event: "agentic.plan.explanation", goal: plan.goal, status: modelExplanation.status });
+        return reply.send({ ...plan, modelExplanation });
+      }
       return reply.send(plan);
     } catch (error) {
       request.log.error(error);
