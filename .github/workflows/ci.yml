@@ -40,7 +40,7 @@ jobs:
         run: npm run test:guardian-policy
       - name: Build and validate review-only Guardian policy artifact
         env:
-          SOURCE_DATE_EPOCH: "1743033600"
+          SOURCE_DATE_EPOCH: "1790241276"
         shell: bash
         run: |
           set -euo pipefail
@@ -49,7 +49,7 @@ jobs:
           import datetime, hashlib, pathlib, zipfile
           root = pathlib.Path("guardian-policies/WA03.001")
           output = pathlib.Path("guardian-policies/RupayKg-WA03.001-v1.policy")
-          epoch = 1743033600
+          epoch = 1790241276
           dt = datetime.datetime.fromtimestamp(epoch, datetime.timezone.utc)
           stamp = (max(dt.year, 1980), dt.month, dt.day, dt.hour, dt.minute, dt.second // 2 * 2)
           with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
