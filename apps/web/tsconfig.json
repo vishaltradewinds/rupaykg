@@ -2,7 +2,11 @@
   "compilerOptions": {
     "target": "ES2022",
     "useDefineForClassFields": true,
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
     "allowJs": false,
     "skipLibCheck": true,
     "esModuleInterop": true,
@@ -15,24 +19,7 @@
     "noEmit": true,
     "jsx": "react-jsx"
   },
-  "include": ["src"],
-  "exclude": [
-    "src/bwg-reporting-panel.ts",
-    "src/citizen-farmer-guided-panel.ts",
-    "src/compliance-panel.ts",
-    "src/epr-return-panel.ts",
-    "src/esg-panel.ts",
-    "src/field-capture-experience.ts",
-    "src/field-device-panel.tsx",
-    "src/mrv-provenance-panel.ts",
-    "src/mrv-verification-actions.ts",
-    "src/onboarding-governance-panel.ts",
-    "src/registry-issuance-panel.ts",
-    "src/registry-settlement-panel.ts",
-    "src/resource-flow-panel.ts",
-    "src/settlement-reconciliation-panel.ts",
-    "src/statutory-applicability-panel.ts",
-    "src/ulb-command-center.tsx",
-    "src/value-lifecycle-panel.tsx"
+  "include": [
+    "src"
   ]
 }
