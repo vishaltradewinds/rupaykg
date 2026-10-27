@@ -97,3 +97,7 @@ Migration `090_epr_acceptance_evidence_immutability.sql` prevents evidence or ve
 Migration `091_acceptance_and_icvcm_binding_guards.sql` makes authority-confirmation fields and organization binding immutable once an EPR return is `ACCEPTED` or `COMPLETED` (the only allowed progression is `ACCEPTED` to `COMPLETED`). It also explicitly blocks deletion of evidence/verification artifacts supporting accepted returns.
 
 The ICVCM assessment table migration `20261027_icvcm_ccp_assessments.sql` also installs a database trigger ensuring an assessment's organization matches its activity. The trigger is defined after table creation in the same migration so migration ordering remains deterministic.
+
+## Assessed activity context immutability
+
+Migration `092_assessed_activity_context_immutability.sql` prevents changing an activity's organization or geography after it supports an accepted/completed EPR external confirmation or an append-only ICVCM assessment. It also blocks deletion of such activities. Corrective work should preserve the historical activity and create a new, explicitly linked record rather than silently changing the basis of an existing assessment.
