@@ -46,7 +46,7 @@ $$;
 
 drop trigger if exists epr_external_acceptance_evidence_guard on epr_returns;
 create trigger epr_external_acceptance_evidence_guard
-before insert or update of status, external_reference, external_authority_name,
+before insert or update of organization_id, status, external_reference, external_authority_name,
   external_confirmation_evidence_id, external_confirmation_verification_id,
   external_authority_confirmed_at
 on epr_returns
