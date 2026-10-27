@@ -63,3 +63,13 @@ A stale `docs/CI_VERIFICATION_TRIGGER.md` file was removed because it contained 
 ### Unused-local compiler guard
 
 The root TypeScript configuration enables `noUnusedLocals` to make unused local variables and imports visible to the compiler across the configured projects. The first run surfaced an unused onboarding hierarchy helper and an unused integration-test variable; both were removed without changing route behavior or test assertions. CI must pass on the final head before this guard is treated as validated. This compiler option does not replace a full unused-export or dependency reachability audit.
+
+### Workspace dependency ownership — duplicate web tooling removed
+
+The root workspace no longer declares `vite` or `@vitejs/plugin-react` as root development dependencies. Both are owned directly by `apps/web/package.json`, where the Vite build scripts run. The matching root manifest metadata in `package-lock.json` was updated while preserving the lockfile's installed package records and the web workspace declarations. CI's `npm ci`, build, typecheck and tests must validate this change before it is accepted.
+
+The remaining API dependency `@grpc/grpc-js` was not removed merely because no direct import was found in the inspected API source: the Hedera SDK integration and dependency/peer requirements must be checked against the resolved lockfile before changing it. Likewise, the `@rupaykg/intelligence` workspace package is built by root scripts but its exports are not imported by the current API route module; it is retained pending a product decision whether this package is an intentional future library or should be integrated/retired. A string search alone is not sufficient proof that a package is safe to delete.
+
+### Evidence review authorization boundary — review, not proven vulnerability
+
+The evidence-vault review route checks the active organization's membership and `evidence:review` permission, verifies the organization's geography scope for the activity, then applies the explicit `VERIFY_EVIDENCE` permission and geography-scope check in `canVerifyEvidence`. It also prevents an uploader from reviewing their own artifact and persists the review decision transactionally. The cross-organization geography check inside `canVerifyEvidence` therefore appears to be an additional verifier-scope gate, not standalone evidence of a tenant-isolation defect. Do not alter this authorization path without regression tests covering owner-organization membership, verifier role permission, geography scope, and self-review rejection.
