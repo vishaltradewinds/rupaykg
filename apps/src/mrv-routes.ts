@@ -23,25 +23,12 @@ async function requirePermission(pool: Pool, auth: AuthContext, organizationId: 
 
 async function activityInAuthorizedGeography(pool: Pool, auth: AuthContext, activityId: string, organizationId: string): Promise<boolean> {
   const result = await pool.query<{ ok: boolean }>(
-    `select exists(
-       select 1 from activities a
-       where a.id=$1 and a.organization_id=$2 and a.geography_id is not null
-         and organization_has_geography_scope(a.organization_id,a.geography_id)
-     ) as ok`,
-    [activityId, organizationId],
-  );
-  if (result.rows[0]?.ok !== true) return false;
-  const membership = await pool.query<{ ok: boolean }>(
-    `select exists(
-       select 1 from organization_memberships om
-       join activities a on a.organization_id=om.organization_id
-       where om.identity_id=$1 and om.organization_id=$2 and om.status='VERIFIED'
-         and a.id=$3 and a.geography_id is not null
-         and organization_has_geography_scope(om.organization_id,a.geography_id)
-     ) as ok`,
+    `select identity_has_geography_scope($1,$2,a.geography_id) as ok
+       from activities a
+       where a.id=$3 and a.organization_id=$2 and a.geography_id is not null`,
     [auth.identityId, organizationId, activityId],
   );
-  return membership.rows[0]?.ok === true;
+  return result.rows[0]?.ok === true;
 }
 
 /**
