@@ -74,3 +74,31 @@ test("onboarding organization-level evidence is not double-counted across applic
   assert.equal(result.evidenceCount, 2, "organization-level evidence should be counted once, not once per application");
   assert.equal(result.verifiedCount, 1, "organization verification should be counted once, not once per application");
 });
+test("measurement-review goal does not query evidence or verification aggregates", async () => {
+  const { pool, calls } = fakePool([{ id: "activity-1", measurement_count: "2", evidence_count: "0", verified_count: "0" }]);
+  const result = await executeAgenticReadTools(pool, {
+    goal: "review_measurements",
+    organizationId: "org-review",
+    geographyId: null,
+  });
+  assert.doesNotMatch(calls[0]!.sql, /from evidence e/i);
+  assert.doesNotMatch(calls[0]!.sql, /from verifications v/i);
+  assert.equal(result.measurementCount, 2);
+  assert.equal(result.evidenceCount, 0);
+  assert.equal(result.verifiedCount, 0);
+});
+
+test("resource-flow goal reads evidence counts but not measurements or verification aggregates", async () => {
+  const { pool, calls } = fakePool([{ id: "activity-2", measurement_count: "0", evidence_count: "3", verified_count: "0" }]);
+  const result = await executeAgenticReadTools(pool, {
+    goal: "trace_resource_flow",
+    organizationId: "org-flow",
+    geographyId: null,
+  });
+  assert.doesNotMatch(calls[0]!.sql, /from measurements m/i);
+  assert.match(calls[0]!.sql, /from evidence e/i);
+  assert.doesNotMatch(calls[0]!.sql, /from verifications v/i);
+  assert.equal(result.measurementCount, 0);
+  assert.equal(result.evidenceCount, 3);
+  assert.equal(result.verifiedCount, 0);
+});
