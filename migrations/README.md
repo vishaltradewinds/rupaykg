@@ -90,3 +90,8 @@ Migration `20261027_icvcm_ccp_assessments.sql` persists append-only, versioned i
 ## Accepted EPR evidence immutability
 
 Migration `090_epr_acceptance_evidence_immutability.sql` prevents evidence or verification records referenced by an `ACCEPTED`/`COMPLETED` EPR return from being rewritten in place. Corrections must create new evidence and verification records so an already-recorded external acceptance cannot silently lose its evidentiary basis.
+
+
+## Acceptance integrity and ICVCM ownership binding
+
+Migration `091_acceptance_and_icvcm_binding_guards.sql` makes authority-confirmation fields and organization binding immutable once an EPR return is `ACCEPTED` or `COMPLETED` (the only allowed progression is `ACCEPTED` to `COMPLETED`). It also explicitly blocks deletion of evidence/verification artifacts supporting accepted returns and ensures an ICVCM assessment's organization matches its activity at the database boundary.
