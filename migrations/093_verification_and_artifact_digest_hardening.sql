@@ -1,3 +1,33 @@
+
+-- Shared identity-to-geography gate for all operational APIs. Ambiguous verified
+-- roles within an organization fail closed instead of selecting the broadest role.
+create or replace function identity_has_geography_scope(
+  p_identity_id uuid,
+  p_organization_id uuid,
+  p_geography_id uuid
+) returns boolean
+language sql stable as $
+  select case
+    when p_identity_id is null or p_organization_id is null or p_geography_id is null then false
+    when (
+      select count(*)
+      from organization_memberships om
+      where om.identity_id = p_identity_id
+        and om.organization_id = p_organization_id
+        and om.status = 'VERIFIED'
+    ) <> 1 then false
+    else exists (
+      select 1
+      from organization_memberships om
+      where om.identity_id = p_identity_id
+        and om.organization_id = p_organization_id
+        and om.status = 'VERIFIED'
+        and organization_has_geography_scope(p_organization_id, p_geography_id)
+        and role_has_geography_scope(om.role_id, p_geography_id)
+    )
+  end;
+$;
+
 -- Verification authorization hardening.
 -- The legacy 010 trigger allowed role names (VERIFIER/AUDITOR) to bypass the
 -- explicit permission model introduced in 027. Keep database enforcement aligned
