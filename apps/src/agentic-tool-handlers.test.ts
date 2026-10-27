@@ -85,6 +85,7 @@ test("measurement-review goal does not query evidence or verification aggregates
   const result = await executeAgenticReadTools(pool, {
     goal: "review_measurements",
     organizationId: "org-review",
+    roleId: "role-review",
     geographyId: null,
   });
   assert.doesNotMatch(calls[0]!.sql, /from evidence e/i);
@@ -99,6 +100,7 @@ test("resource-flow goal reads evidence counts but not measurements or verificat
   const result = await executeAgenticReadTools(pool, {
     goal: "trace_resource_flow",
     organizationId: "org-flow",
+    roleId: "role-flow",
     geographyId: null,
   });
   assert.doesNotMatch(calls[0]!.sql, /from measurements m/i);
