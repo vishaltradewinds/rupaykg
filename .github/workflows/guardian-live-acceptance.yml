@@ -136,7 +136,7 @@ jobs:
             exit 1
           fi
           python - <<'PY'
-          import json
+          import json, os
           data = json.load(open('/tmp/mrv-submit.json'))
           guardian = data.get('guardian') or {}
           hedera = data.get('hedera') or {}
