@@ -8,7 +8,17 @@
 
 RupayKg will use the Integrity Council for the Voluntary Carbon Market (ICVCM) Core Carbon Principles (CCPs) as a complementary high-integrity benchmark for its MRV evidence, methodology governance, safeguards and carbon-credit lifecycle controls.
 
-ICVCM is not a substitute for applicable Indian law. Statutory and regulatory applicability must remain a separate mandatory gate, including applicable CPCB, EPR, solid-waste-management and Indian Carbon Credit Trading Scheme (CCTS) obligations. The actual requirement set depends on the activity, project, jurisdiction, mechanism and current authoritative rules.
+**India-first rule:** RupayKg is being built and operated for India. Applicable Indian central and state law, notified rules, competent-authority directions, permissions/consents and applicable methodology requirements are the primary mandatory compliance gates. ICVCM is a supplementary voluntary integrity benchmark only where relevant; it must never override, replace or imply satisfaction of Indian law.
+
+Applicability must be resolved for each activity using the current official source and effective date. The control plane must distinguish: (a) binding statutory obligations; (b) scheme and methodology rules; (c) permit/consent conditions and state/local requirements; and (d) voluntary standards such as ICVCM. Do not infer that all waste activities qualify for carbon credits, that every entity is covered by CCTS, or that one state's workflow applies nationwide. Pan-India means a common platform with jurisdiction- and activity-specific rules, not a single blanket legal configuration.
+
+RupayKg must keep separate compliance decisions for, where applicable:
+- Solid Waste Management (SWM) Rules, 2026 and the relevant CPCB/SPCB/PCC and ULB/RLB requirements;
+- waste-category-specific EPR rules, registrations, targets, returns and evidence (for example, plastic, e-waste, battery or other regulated streams only where applicable);
+- the Indian Carbon Credit Trading Scheme (CCTS), the applicable compliance or offset mechanism, approved sector/methodology, monitoring plan and verification arrangements administered through the relevant Indian institutions;
+- state/local permits, consents, land/facility approvals, environmental safeguards and other activity-specific statutory conditions.
+
+If legal applicability or an effective date is unresolved, mark the control **REQUIRES_REGULATORY_REVIEW** and fail closed for claims or release. Record the official instrument, rule/notification number where available, issuing authority, publication/effective dates, jurisdiction, applicability rationale, source URL, version/hash where feasible, last-reviewed date and reviewer. Do not silently turn a draft, consultation, guidance note or voluntary benchmark into a binding rule.
 
 RupayKg supports project evidence, MRV calculations, workflow and external registry/authority evidence. It does not itself issue government or registry carbon credits. A calculation, internal review, complete evidence register or software control must never be represented as external issuance, ICVCM approval or a CCP label.
 
@@ -43,7 +53,21 @@ Work must be executed in coherent batches, with evidence retained for each gate:
 6. **TRL and real-world validation:** document the current TRL with objective evidence. A greenfield platform or automated tests alone do not prove operational TRL or live acceptance.
 7. **Release authorization:** keep production certification OFF until all relevant evidence, approvals, security gates and live external acceptance tests are verified. Never auto-merge or infer approval from code completion.
 
-## 4. Relevant official online resources
+## 4. India-first statutory source register and voluntary references
+
+### 4.1 Indian primary sources — mandatory review where applicable
+
+| Source | Platform use and guardrail |
+|---|---|
+| [CPCB Centralised Online Portal for Solid Waste Management](https://swmp.cpcb.gov.in/en) | The portal states that SWM Rules, 2026 were notified on 27 January 2026 and took effect on 1 April 2026. Use the current official rules and portal instructions to map stakeholder duties, registration/reporting and facility workflows. |
+| [Official SWM Rules, 2026 PDF hosted by CPCB](https://swm.cpcb.gov.in/images/solid-waste-management-rules-2026.pdf) | Primary text for rule-by-rule mapping. Validate amendments, corrigenda, applicability and effective dates before release. |
+| [Ministry of Environment, Forest and Climate Change — PIB release on SWM Rules, 2026](https://www.pib.gov.in/PressReleasePage.aspx?PRID=2219676&lang=1&reg=3) | Official explanatory release; use the notified rules as the controlling text where summaries differ. |
+| [Bureau of Energy Efficiency — Carbon Market](https://beeindia.gov.in/show_content.php?lang=1&level=1&lid=294&ls_id=116) | Primary institutional source for CCTS documents, offset mechanism procedures, methodologies, approved sectors and verification-agency procedures. |
+| [Press Information Bureau — Carbon Credit Trading Scheme update, 5 February 2026](https://www.pib.gov.in/PressReleasePage.aspx?PRID=2223703&lang=2&reg=3) | Official summary of the Indian Carbon Market institutional framework. Confirm operative requirements against current BEE notifications/procedures and Gazette instruments. |
+
+These are starting points, not an exhaustive legal register. The implementation batch must add the applicable EPR rules and current CPCB/SPCB/PCC, ULB/RLB and state-specific official instruments for each waste stream and activity. No legal applicability should be asserted solely from a news article or general summary.
+
+### 4.2 ICVCM — supplementary voluntary integrity references
 
 Use official ICVCM pages as the primary reference set. Review for updates before relying on a criterion or making an external claim.
 
@@ -82,6 +106,6 @@ Additional Indian primary sources must be recorded separately in the statutory s
 - [ ] Complete independent regulatory/methodology review and TRL evidence assessment.
 - [ ] Verify live external integrations and required human approvals before any production release.
 
-## 6. Change-control rule
+## 6. India-first decision and release gates\n\n1. **Indian statutory gate first:** no ICVCM evidence status can compensate for a missing or failed applicable Indian legal requirement.\n2. **Applicability before automation:** determine waste stream, activity, jurisdiction, responsible stakeholder, operative instrument and effective date before presenting a requirement as applicable.\n3. **No false coverage:** CCTS participation, an approved offset methodology, EPR applicability and credit eligibility must each be established independently from current authoritative sources.\n4. **Human/legal escalation:** uncertain interpretation is a recorded unresolved item for competent regulatory/legal review, not an AI-generated compliance decision.\n5. **Evidence-backed TRL:** repository tests establish engineering evidence only. They do not prove legal compliance, operational performance, external acceptance or production readiness.\n6. **Fail-closed release:** keep PR #95 draft/unmerged and production certification OFF until independent code review, regulatory/methodology mapping, security review, real-environment acceptance and required approvals are evidenced.\n\n## 7. Change-control rule
 
 Reassess this mapping when ICVCM publishes updated criteria, rule interpretations, assessment procedures or methodology decisions. Store the source/version reviewed and a dated change decision. Do not treat consultation drafts as final requirements unless the official source confirms adoption.
