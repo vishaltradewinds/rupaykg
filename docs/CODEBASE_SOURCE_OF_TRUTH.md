@@ -11,6 +11,7 @@ This file records current source-of-truth decisions to avoid duplicate or contra
 | Stakeholder authentication | `apps/src/auth-routes.ts`, `apps/src/auth.ts`, `apps/src/rbac-policy.ts` | Native PostgreSQL-backed sessions; Firebase is not in the current runtime authentication contract. |
 | Production configuration | `apps/src/production-config.ts` | Fail closed on missing or unsafe production settings. |
 | Dependencies | Root `package.json` + committed `package-lock.json` | Use `npm ci` for reproducible CI and Docker installs. |
+| Root workspace commands | Root `package.json` | Build shared packages before API/web typechecking and tests; no `lint` command is exposed until a real linter is configured. |
 | Database schema | Ordered SQL files in `migrations/` + migration validator | Do not rewrite applied migrations; add and validate a new migration for schema changes. |
 | Container build/start | Root `Dockerfile` | Build from the root lockfile; migrate, then start the production entrypoint. |
 | CI validation | `.github/workflows/ci.yml` | CI is a validation gate, not a deployment or production-certification signal. |
