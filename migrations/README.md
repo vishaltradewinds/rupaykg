@@ -75,3 +75,8 @@ Migration `086_reserved_role_restoration_db_guard.sql` protects status reactivat
 ## Acceptance fixture registry exclusion
 
 Migration `087_acceptance_fixture_registry_exclusion.sql` prevents activities or evidence explicitly marked with `metadata.acceptanceFixture=true` from backing credentials in value-bearing states. It also binds the database gate to the exact activity, verification, and evidence tuple. The MRV API reports acceptance fixtures as not registry eligible even after real Guardian/Hedera/Mirror Node verification. External anchoring proves message integrity and consensus; it does not validate the underlying activity as a real eligible carbon project.
+
+
+## ICVCM CCP internal evidence assessments
+
+Migration `20261027_icvcm_ccp_assessments.sql` persists one internal evidence-completeness assessment per activity and organization. API writes require authenticated organization membership and `evidence:review` permission; every cited evidence UUID must resolve to `VERIFIED` evidence for the same activity. Records remain `INTERNAL_DRAFT`. This is not ICVCM certification, independent verification, a statutory compliance decision, or a carbon-credit issuance action.
