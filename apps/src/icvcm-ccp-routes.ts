@@ -60,14 +60,14 @@ export async function registerIcvcmCcpRoutes(app: FastifyInstance, pool: Pool | 
         }
       }
       const assessments = rawAssessments as CcpPrincipleAssessment[];
+      // Append a new revision; historical evidence assessments are never overwritten.
+      // The unique revision constraint makes concurrent collisions fail closed.
       const saved = await pool.query(
-        `insert into icvcm_ccp_assessments (organization_id, activity_id, assessed_by_identity_id, assessment, summary, status)
-         values ($1,$2,$3,$4::jsonb,$5::jsonb,'INTERNAL_DRAFT')
-         on conflict (organization_id, activity_id) do update
-           set assessed_by_identity_id=excluded.assessed_by_identity_id,
-               assessment=excluded.assessment, summary=excluded.summary,
-               status='INTERNAL_DRAFT', updated_at=now()
-         returning id, organization_id, activity_id, assessed_by_identity_id, assessment, summary, status, created_at, updated_at`,
+        `insert into icvcm_ccp_assessments
+           (organization_id, activity_id, assessed_by_identity_id, revision_number, assessment, summary, status)
+         select $1, $2, $3, coalesce(max(revision_number), 0) + 1, $4::jsonb, $5::jsonb, 'INTERNAL_DRAFT'
+           from icvcm_ccp_assessments where organization_id=$1 and activity_id=$2
+         returning id, organization_id, activity_id, assessed_by_identity_id, revision_number, assessment, summary, status, created_at`,
         [organizationId, activityId, auth.identityId, JSON.stringify(assessments), JSON.stringify(summary)]);
       return reply.code(200).send({
         source: "postgresql", syntheticData: false,
@@ -108,7 +108,7 @@ export async function registerIcvcmCcpRoutes(app: FastifyInstance, pool: Pool | 
         return reply.code(403).send({ error: "Activity is outside organization geography scope", code: "GEOGRAPHY_FORBIDDEN" });
       }
       const rows = await pool.query(
-        "select id, organization_id, activity_id, assessed_by_identity_id, assessment, summary, status, created_at, updated_at from icvcm_ccp_assessments where organization_id=$1 and activity_id=$2",
+        "select id, organization_id, activity_id, assessed_by_identity_id, revision_number, assessment, summary, status, created_at from icvcm_ccp_assessments where organization_id=$1 and activity_id=$2 order by revision_number desc limit 1",
         [organizationId, activityId]);
       return { source: "postgresql", syntheticData: false, principles: ICVCM_CCP_PRINCIPLES, record: rows.rows[0] ?? null };
     } catch (error) {
