@@ -27,7 +27,7 @@ language sql stable as $$
     ) then false
     else exists (
       select 1 from role_roots rr
-      join ancestors a on a.id = rr.value::uuid
+      join ancestors a on a.id = rr.scope_id::uuid
     )
   end;
 $$;
