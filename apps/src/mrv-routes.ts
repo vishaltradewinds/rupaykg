@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type { Pool, PoolClient } from "pg";
-import { authenticate, canActForOrganization, hasOrganizationPermission, type AuthContext } from "./auth.js";
+import { authenticate, canActForOrganization, hasOrganizationPermission } from "./auth.js";
 import { executeGuardianMrv, guardianStatus } from "./guardian-mrv.js";
 import { hederaStatus, integrityHash, submitHcsAnchor, verifyHcsMessage } from "./hedera-anchor.js";
 import { registerStatutoryRoutes } from "./statutory-routes.js";
