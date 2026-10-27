@@ -6,7 +6,7 @@ create or replace function identity_has_geography_scope(
   p_organization_id uuid,
   p_geography_id uuid
 ) returns boolean
-language sql stable as $
+language sql stable as $identity_scope$
   select case
     when p_identity_id is null or p_organization_id is null or p_geography_id is null then false
     when (
@@ -26,7 +26,7 @@ language sql stable as $
         and role_has_geography_scope(om.role_id, p_geography_id)
     )
   end;
-$;
+$identity_scope$;
 
 -- Verification authorization hardening.
 -- The legacy 010 trigger allowed role names (VERIFIER/AUDITOR) to bypass the
