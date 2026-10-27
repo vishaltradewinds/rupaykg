@@ -23,7 +23,7 @@ The registry in `apps/src/agentic-tools.ts` defines six tool identifiers and the
 - `GET /api/v1/agentic/capabilities`
 - `POST /api/v1/agentic/plan` with JSON such as `{"goal":"prepare_compliance","geographyId":"optional-uuid"}`
 - Add query parameter `?explain=true` to request an optional model explanation. When model configuration is absent or the provider fails, the response reports DISABLED or UNAVAILABLE without blocking the evidence-grounded plan.
-- Requires a valid bearer session, active organization, and `audit:read` or `projects:manage` permission.
+- Requires a valid bearer session and active organization. Authorization is then checked per goal against each tool’s read-oriented permission alternatives; broad `projects:manage` alone is not accepted as a substitute for read permission.
 
 ## Optional model configuration
 Model use is disabled unless explicitly enabled. Configure through deployment secrets/environment, never source control:
