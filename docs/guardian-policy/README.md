@@ -12,14 +12,16 @@ The WA03.001 policy JSON previously stored under `docs/guardian-policy/wa03.001/
 
 ## Reproducible generation
 
-The generator preserves the reviewed block IDs already present in the canonical policy and fails closed if a new block tag has no approved ID mapping. A regression test checks that all ten existing block IDs remain unchanged and unique. It requires an explicit `SOURCE_DATE_EPOCH` (Unix seconds) so generated timestamps are controlled by the build inputs rather than the current clock.
+The generator preserves the reviewed block IDs and exact metadata timestamps already present in the canonical policy source. A regression test checks that all ten existing block IDs remain unchanged and unique, and that all six policy/schema timestamps remain canonical. New block tags or schema names fail closed until explicitly reviewed and mapped. Generation uses no wall-clock timestamps.
 
-For a reproducible build, set the timestamp deliberately and record it in the build evidence. For example, in Bash:
+For a reproducible build, run the generator from the repository root and run the test:
 
 ```sh
-SOURCE_DATE_EPOCH=1790241276 node scripts/build-wa03-guardian-policy.mjs
+node scripts/build-wa03-guardian-policy.mjs
 npm run test:guardian-policy
 ```
+
+The policy/schema timestamps are fixed canonical metadata; the packaging test separately normalizes ZIP timestamps.
 
 Run the generator from the repository root. Rebuild the packaged artifact only after reviewing the generated source changes; compare hashes and validate the package before any import. Do not manually maintain parallel policy JSON files.
 
