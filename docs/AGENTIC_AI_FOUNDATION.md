@@ -45,3 +45,6 @@ The adapter sends a bounded plan summary, not raw uploaded evidence. Model outpu
 - Field validation, independent security review, TRL advancement, or production certification.
 
 Those capabilities require domain-specific evidence, explicit authorization, idempotency, audit trails, threat modelling, integration tests, operational recovery and human approval gates. Production certification remains HOLD/OFF.
+
+## Open authorization gate — role-level geography scope
+The current agentic request and read-handler path enforces the organization's configured geography roots through `organization_has_geography_scope`, but it does not yet interpret the separate `roles.geography_scope` JSON field. Do not treat organization-level scope as proof that a user's assigned role is restricted correctly. Before broad enablement, define the role-scope semantics (including empty/unconfigured scope and descendant geographies), apply them consistently to explicit and unfiltered geography requests, and add real-PostgreSQL allow/deny tests for same-organization roles with different geography scopes. This gate is OPEN; do not claim full role/geography isolation until it passes.
