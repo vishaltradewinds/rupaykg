@@ -42,7 +42,7 @@ export const ICVCM_CCP_PRINCIPLES: readonly IcvcmCcpPrinciple[] = [
   { id: "CCP-07", name: "Robust quantification of emission reductions and removals", pillar: "EMISSIONS_IMPACT", intendedControl: "Version methodology, baseline, factors, units, monitoring data, uncertainty, leakage, equations and reproducible calculation trace." },
   { id: "CCP-08", name: "No double counting", pillar: "EMISSIONS_IMPACT", intendedControl: "Detect duplicate registration/issuance, track ownership and transfer/retirement states, and assess double claiming under applicable rules." },
   { id: "CCP-09", name: "Sustainable development benefits and safeguards", pillar: "SUSTAINABLE_DEVELOPMENT", intendedControl: "Record environmental/social safeguards, stakeholder engagement, grievance handling, impact evidence and remediation." },
-  { id: "CCP-10", name: "Contribution to net zero transition", pillar: "SUSTAINABLE_DEVELOPMENT", intendedControl: "Document a context-appropriate assessment of alignment with long-term net-zero transition and risks of locking in incompatible emissions." },
+  { id: "CCP-10", name: "Net zero transition", pillar: "SUSTAINABLE_DEVELOPMENT", intendedControl: "Document a context-appropriate assessment of alignment with long-term net-zero transition and risks of locking in incompatible emissions." },
 ] as const;
 
 export type CcpAssessmentResult = {
