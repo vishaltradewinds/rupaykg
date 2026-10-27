@@ -59,3 +59,18 @@ test("read handler propagates database failure rather than fabricating evidence"
     geographyId: null,
   }), /database unavailable/);
 });
+
+test("onboarding organization-level evidence is not double-counted across applications", async () => {
+  const { pool } = fakePool([
+    { id: "application-1", evidence_count: "2", verified_count: "1" },
+    { id: "application-2", evidence_count: "2", verified_count: "1" },
+  ]);
+  const result = await executeAgenticReadTools(pool, {
+    goal: "onboard_stakeholder",
+    organizationId: "org-4",
+    geographyId: null,
+  });
+  assert.deepEqual(result.sourceRecordIds, ["application-1", "application-2"]);
+  assert.equal(result.evidenceCount, 2, "organization-level evidence should be counted once, not once per application");
+  assert.equal(result.verifiedCount, 1, "organization verification should be counted once, not once per application");
+});
