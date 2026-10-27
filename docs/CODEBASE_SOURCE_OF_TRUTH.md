@@ -44,6 +44,15 @@ Four redundant marker-only documents named `docs/CI_LATEST_WEB_TYPECHECK_VERIFIC
 
 `scripts/package-wa03.ps1` no longer assumes one developer's absolute Windows path. It resolves the repository from the script location and fails if the canonical generated policy source is missing.
 
+
+### Runtime route registration and orphan code
+
+The production API is started through `apps/src/production-server.ts`, which validates configuration and imports `apps/src/server.ts`. Route modules are not active merely because they compile: each intended module must be registered by the server. The cleanup found that `auth-routes.ts`, `statutory-routes.ts`, and `epr-return-routes.ts` contained implemented handlers but were not registered, while the web client calls the auth endpoints. The production server now explicitly registers these modules. A static route-path comparison found no exact method/path duplicates across the inspected server and route modules; runtime CI remains the required validation gate.
+
+The web package's `prebuild` hook called `scripts/validate-web-config.mjs`, which only printed a success message and performed no validation. The hook and no-op script were removed. The unreferenced `apps/web/public/signin-bridge.js` asset was also removed because it was not loaded by `index.html` or referenced by the React entrypoint. The remaining public scripts are explicitly loaded by `apps/web/index.html` and were retained.
+
+A stale `docs/CI_VERIFICATION_TRIGGER.md` file was removed because it contained a marker and an obsolete Firebase-authentication claim rather than verifiable CI evidence.
+
 ## Release discipline
 
 - Passing CI does not prove live integration or regulatory acceptance.
