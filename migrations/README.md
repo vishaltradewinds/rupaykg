@@ -115,3 +115,9 @@ Migration `095_assessed_geography_hierarchy_immutability.sql` prevents re-parent
 ## Verification authorization provenance
 
 Migration `096_verification_authorization_provenance.sql` requires an approved verification to be performed by an unsuspended, verified identity holding an explicit verification permission through a verified membership in the same organization as the activity. It also requires the verification's activity to match the cited evidence activity and records the membership, role, permission snapshot, and timestamp used for the approval decision. This preserves decision-time authorization provenance when permissions later change; it does not prevent legitimate future membership revocation.
+
+## Evidence artifact-chain binding
+
+Migration `20261027_evidence_artifact_chain_binding.sql` makes evidence artifact-series identity and scope immutable and requires each appended review to reference the exact stored artifact version. The database verifies that the reviewer is not the uploader and has active review plus verification permissions through a verified membership in the artifact's owning organization.
+
+Migration `20261027_vault_content_verification_binding.sql` verifies the stored bytes against the declared SHA-256 and byte length at insertion, binds the artifact to the canonical evidence activity/type/hash, and requires a vault-backed verification to match an append-only review by the same verifier with the corresponding decision. Non-vault evidence retains the existing verification workflow. These controls preserve evidence provenance; they do not independently establish that the underlying claim is true or that an authority accepted it.
