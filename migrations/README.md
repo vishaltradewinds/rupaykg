@@ -84,7 +84,7 @@ Migration `087_acceptance_fixture_registry_exclusion.sql` prevents activities or
 
 ## ICVCM CCP internal evidence assessments
 
-Migration `20261027_icvcm_ccp_assessments.sql` persists append-only, versioned internal evidence-completeness assessments per activity and organization. API writes require authenticated organization membership and `evidence:review` permission; every cited evidence UUID must resolve to `VERIFIED` evidence for the same activity. Records remain `INTERNAL_DRAFT`; PostgreSQL blocks updates and deletes so revisions retain their history. This is not ICVCM certification, independent verification, a statutory compliance decision, or a carbon-credit issuance action.
+Migration `097_icvcm_ccp_assessments.sql` persists append-only, versioned internal evidence-completeness assessments per activity and organization. API writes require authenticated organization membership and `evidence:review` permission; every cited evidence UUID must resolve to `VERIFIED` evidence for the same activity. Records remain `INTERNAL_DRAFT`; PostgreSQL blocks updates and deletes so revisions retain their history. This is not ICVCM certification, independent verification, a statutory compliance decision, or a carbon-credit issuance action.
 
 
 ## Accepted EPR evidence immutability
@@ -96,7 +96,7 @@ Migration `090_epr_acceptance_evidence_immutability.sql` prevents evidence or ve
 
 Migration `091_acceptance_and_icvcm_binding_guards.sql` makes authority-confirmation fields and organization binding immutable once an EPR return is `ACCEPTED` or `COMPLETED` (the only allowed progression is `ACCEPTED` to `COMPLETED`). It also explicitly blocks deletion of evidence/verification artifacts supporting accepted returns.
 
-The ICVCM assessment table migration `20261027_icvcm_ccp_assessments.sql` also installs a database trigger ensuring an assessment's organization matches its activity. The trigger is defined after table creation in the same migration so migration ordering remains deterministic.
+The ICVCM assessment table migration `097_icvcm_ccp_assessments.sql` also installs a database trigger ensuring an assessment's organization matches its activity. The trigger is defined after table creation in the same migration so migration ordering remains deterministic.
 
 ## Assessed activity context immutability
 
@@ -118,6 +118,6 @@ Migration `096_verification_authorization_provenance.sql` requires an approved v
 
 ## Evidence artifact-chain binding
 
-Migration `20261027_evidence_artifact_chain_binding.sql` makes evidence artifact-series identity and scope immutable and requires each appended review to reference the exact stored artifact version. The database verifies that the reviewer is not the uploader and has active review plus verification permissions through a verified membership in the artifact's owning organization.
+Migration `098_evidence_artifact_chain_binding.sql` makes evidence artifact-series identity and scope immutable and requires each appended review to reference the exact stored artifact version. The database verifies that the reviewer is not the uploader and has active review plus verification permissions through a verified membership in the artifact's owning organization.
 
-Migration `20261027_vault_content_verification_binding.sql` verifies the stored bytes against the declared SHA-256 and byte length at insertion, binds the artifact to the canonical evidence activity/type/hash, and requires a vault-backed verification to match an append-only review by the same verifier with the corresponding decision. Non-vault evidence retains the existing verification workflow. These controls preserve evidence provenance; they do not independently establish that the underlying claim is true or that an authority accepted it.
+Migration `099_vault_content_verification_binding.sql` verifies the stored bytes against the declared SHA-256 and byte length at insertion, binds the artifact to the canonical evidence activity/type/hash, and requires a vault-backed verification to match an append-only review by the same verifier with the corresponding decision. Non-vault evidence retains the existing verification workflow. These controls preserve evidence provenance; they do not independently establish that the underlying claim is true or that an authority accepted it.
