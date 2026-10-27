@@ -22,11 +22,14 @@ function fakePool(options: { permission?: boolean; evidenceVerified?: boolean; a
     if (sql.includes("organization_has_geography_scope")) return { rows: [{ ok: options.geographyAllowed ?? true }] };
     if (sql.includes("from evidence")) return { rows: options.evidenceVerified === false ? [] : [{ id: EVIDENCE }] };
     if (sql.includes("select coalesce(max(revision_number)")) return { rows: [{ revision_number: revision }] };
-    if (sql.includes("insert into icvcm_ccp_assessments")) return { rows: [{
-      id: "66666666-6666-4666-8666-666666666666", organization_id: ORG, activity_id: ACTIVITY,
-      assessed_by_identity_id: IDENTITY, revision_number: Number(params[3] ?? ++revision), assessment: [], summary: { status: "GAPS_IDENTIFIED" },
-      status: "INTERNAL_DRAFT", created_at: new Date(0),
-    }] };
+    if (sql.includes("insert into icvcm_ccp_assessments")) {
+      revision = Number(params[3] ?? revision + 1);
+      return { rows: [{
+        id: "66666666-6666-4666-8666-666666666666", organization_id: ORG, activity_id: ACTIVITY,
+        assessed_by_identity_id: IDENTITY, revision_number: revision, assessment: [], summary: { status: "GAPS_IDENTIFIED" },
+        status: "INTERNAL_DRAFT", created_at: new Date(0),
+      }] };
+    }
     return { rows: [] };
   };
   const pool = {
