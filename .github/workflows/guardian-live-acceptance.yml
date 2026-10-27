@@ -144,8 +144,7 @@ jobs:
               raise SystemExit('Guardian did not return VERIFIED with an authoritative executionId.')
           if hedera.get('status') != 'CONSENSUS_CONFIRMED':
               raise SystemExit('Hedera HCS consensus was not confirmed.')
-          if not data.get('eligibleForRegistry'):
-              raise SystemExit('Submission did not become registry-eligible.')
+          # Registry eligibility remains false until Mirror Node verification is persisted.
           timestamp = hedera.get('consensusTimestamp')
           if not timestamp:
               raise SystemExit('No Hedera consensus timestamp was returned.')
@@ -160,6 +159,9 @@ jobs:
           BASE_URL: ${{ inputs.rupaykg_base_url }}
           ORGANIZATION_ID: ${{ inputs.organization_id }}
           ACTIVITY_ID: ${{ inputs.activity_id }}
+          VERIFICATION_ID: ${{ inputs.verification_id }}
+          EVIDENCE_ID: ${{ inputs.evidence_id }}
+          POLICY_ID: ${{ inputs.guardian_policy_id }}
           TOKEN: ${{ secrets.RUPAYKG_SESSION_TOKEN }}
         run: |
           set -euo pipefail
@@ -168,17 +170,24 @@ jobs:
             --header "X-RupayKG-Organization-Id: $ORGANIZATION_ID" \
             "$BASE_URL/api/v1/mrv/provenance/$ACTIVITY_ID" > /tmp/provenance.json
           python - <<'PY'
-          import json
+          import json, os
           data = json.load(open('/tmp/provenance.json'))
           if data.get('syntheticData') is not False:
               raise SystemExit('Persisted provenance is not explicitly non-synthetic.')
-          if not data.get('eligibleForRegistry'):
-              raise SystemExit('Persisted provenance is not registry-eligible.')
           rows = data.get('provenance') or []
-          confirmed = [r for r in rows if r.get('guardian_status') == 'VERIFIED' and r.get('hcs_status') == 'CONSENSUS_CONFIRMED']
+          confirmed = [r for r in rows if
+                       r.get('activity_id') == os.environ['ACTIVITY_ID'] and
+                       r.get('verification_id') == os.environ['VERIFICATION_ID'] and
+                       r.get('evidence_id') == os.environ['EVIDENCE_ID'] and
+                       r.get('guardian_policy_id') == os.environ['POLICY_ID'] and
+                       r.get('guardian_status') == 'VERIFIED' and
+                       r.get('hcs_status') == 'CONSENSUS_CONFIRMED' and
+                       r.get('guardian_execution_id') and
+                       r.get('hcs_transaction_id') and
+                       r.get('hcs_consensus_timestamp')]
           if not confirmed:
-              raise SystemExit('No persisted Guardian VERIFIED + HCS CONSENSUS_CONFIRMED provenance row found.')
-          print('Persisted authoritative provenance confirmed.')
+              raise SystemExit('No persisted Guardian/HCS provenance row matches the exact acceptance activity, verification, evidence and policy IDs.')
+          print('Persisted authoritative Guardian/HCS provenance binding confirmed; Mirror Node verification is next.')
           PY
 
       - name: Verify Hedera provenance through Mirror Node
@@ -199,12 +208,42 @@ jobs:
           data = json.load(open('/tmp/hedera-verify.json'))
           if data.get('verified') is not True:
               raise SystemExit('Mirror Node did not verify the persisted Hedera provenance record.')
+          if data.get('eligibleForRegistry') is not True:
+              raise SystemExit('Mirror Node verification did not persist registry eligibility; acceptance cannot pass.')
           print('Mirror Node verification: true')
           print('Network:', data.get('network'))
           print('Consensus timestamp:', data.get('consensusTimestamp'))
           print('Sequence number:', data.get('sequenceNumber'))
+          print('Registry eligibility after persisted Mirror Node verification: true')
+          PY
+
+      - name: Re-check persisted registry eligibility
+        env:
+          BASE_URL: ${{ inputs.rupaykg_base_url }}
+          ORGANIZATION_ID: ${{ inputs.organization_id }}
+          ACTIVITY_ID: ${{ inputs.activity_id }}
+          TOKEN: ${{ secrets.RUPAYKG_SESSION_TOKEN }}
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --silent --show-error \
+            --header "Authorization: Bearer $TOKEN" \
+            --header "X-RupayKG-Organization-Id: $ORGANIZATION_ID" \
+            "$BASE_URL/api/v1/mrv/provenance/$ACTIVITY_ID" > /tmp/provenance-final.json
+          python - <<'PY'
+          import json
+          data = json.load(open('/tmp/provenance-final.json'))
+          if data.get('syntheticData') is not False:
+              raise SystemExit('Final persisted provenance is not explicitly non-synthetic.')
+          if data.get('eligibleForRegistry') is not True:
+              raise SystemExit('Registry eligibility was not persisted after Mirror Node verification.')
+          rows = data.get('provenance') or []
+          if not any(r.get('guardian_status') == 'VERIFIED' and
+                     r.get('hcs_status') == 'CONSENSUS_CONFIRMED' and
+                     r.get('mirror_node_verified_at') for r in rows):
+              raise SystemExit('Final provenance lacks persisted Guardian/HCS/Mirror Node confirmation.')
+          print('Final persisted registry eligibility and Mirror Node timestamp confirmed.')
           PY
 
       - name: Acceptance result
         run: |
-          echo "LIVE ACCEPTANCE PASSED: RupayKG -> Guardian VERIFIED -> Hedera HCS CONSENSUS_CONFIRMED -> persisted provenance -> Mirror Node verified."
+          echo "LIVE ACCEPTANCE PASSED: non-synthetic RupayKG -> Guardian VERIFIED -> Hedera HCS CONSENSUS_CONFIRMED -> persisted provenance -> Mirror Node verified -> persisted registry eligibility."
