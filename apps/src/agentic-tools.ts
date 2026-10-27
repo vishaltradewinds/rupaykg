@@ -53,7 +53,7 @@ const TOOL_REGISTRY: Record<AgenticToolId, AgenticToolDefinition> = {
     domain: "verification",
     description: "Count approved verification records for authorised activities; does not make a verification decision.",
     mode: "READ_ONLY",
-    requiredAnyPermission: ["VERIFY_EVIDENCE", "evidence:review", "audit:read", "projects:read"],
+    requiredAnyPermission: ["evidence:review", "audit:read", "projects:read"],
     organizationScoped: true,
     geographyScoped: true,
   },
