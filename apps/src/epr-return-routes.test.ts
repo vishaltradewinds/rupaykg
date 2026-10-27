@@ -13,7 +13,7 @@ function fakePool() {
   const query = async (sql: string, _params: unknown[] = []) => {
     calls.push(sql);
     if (sql.includes("from identity_sessions")) return { rows: [{ identity_id: IDENTITY }] };
-    if (sql.includes("select exists (")) return { rows: [{ ok: true }] };
+    if (sql.includes("jsonb_array_elements_text")) return { rows: [{ ok: true }] };
     if (sql.includes("from organization_memberships")) return { rows: [{ organization_id: ORG, role_id: "role", status: "VERIFIED" }] };
     return { rows: [] };
   };
