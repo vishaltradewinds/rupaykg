@@ -59,3 +59,7 @@ A stale `docs/CI_VERIFICATION_TRIGGER.md` file was removed because it contained 
 - Passing CI does not prove live integration or regulatory acceptance.
 - Do not merge until required checks and review are complete.
 - Do not enable production certification until Shakti Standards evidence gates, TRL evidence, live stakeholder workflows, security/recovery tests and external trust acceptance are independently satisfied.
+
+### Unused-local compiler guard
+
+The root TypeScript configuration enables `noUnusedLocals` to make unused local variables and imports visible to the compiler across the configured projects. The first run surfaced an unused onboarding hierarchy helper and an unused integration-test variable; both were removed without changing route behavior or test assertions. CI must pass on the final head before this guard is treated as validated. This compiler option does not replace a full unused-export or dependency reachability audit.
