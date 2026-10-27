@@ -65,7 +65,45 @@ try {
   runGenerator(tempRoot);
   const second = snapshot(outputRoot);
   assert.deepEqual(second, first, 'Repeated generation with identical inputs must be byte-for-byte stable');
-  console.log(`Guardian policy reproducibility passed: ${first.length} files; stable IDs, timestamps, and hashes.`);
+
+  // Build a deterministic ZIP package with normalized timestamps and file modes.
+  const packageScript = String.raw`
+import hashlib, os, pathlib, sys, zipfile
+source = pathlib.Path(sys.argv[1])
+target = pathlib.Path(sys.argv[2])
+epoch = int(sys.argv[3])
+import datetime
+stamp = datetime.datetime.fromtimestamp(epoch, datetime.timezone.utc)
+stamp = (max(stamp.year, 1980), stamp.month, stamp.day, stamp.hour, stamp.minute, stamp.second // 2 * 2)
+with zipfile.ZipFile(target, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
+    for path in sorted(p for p in source.rglob('*') if p.is_file()):
+        name = path.relative_to(source).as_posix()
+        info = zipfile.ZipInfo(name, date_time=stamp)
+        info.compress_type = zipfile.ZIP_DEFLATED
+        info.external_attr = 0o100644 << 16
+        archive.writestr(info, path.read_bytes(), compress_type=zipfile.ZIP_DEFLATED, compresslevel=9)
+with zipfile.ZipFile(target) as archive:
+    bad = archive.testzip()
+    if bad:
+        raise SystemExit('Corrupt archive member: ' + bad)
+    if 'policy.json' not in archive.namelist():
+        raise SystemExit('Packaged policy.json missing')
+    if not any(name.startswith('schemas/') and name.endswith('.json') for name in archive.namelist()):
+        raise SystemExit('Packaged schema JSON missing')
+print(hashlib.sha256(target.read_bytes()).hexdigest())
+`;
+  const zipOne = path.join(tempRoot, 'guardian-policy-one.zip');
+  const zipTwo = path.join(tempRoot, 'guardian-policy-two.zip');
+  function packageGenerated(target) {
+    const result = spawnSync('python3', ['-c', packageScript, outputRoot, target, epoch], { encoding: 'utf8' });
+    assert.equal(result.status, 0, `Package validation failed:\n${result.stdout}\n${result.stderr}`);
+    return result.stdout.trim();
+  }
+  const packageHashOne = packageGenerated(zipOne);
+  const packageHashTwo = packageGenerated(zipTwo);
+  assert.match(packageHashOne, /^[a-f0-9]{64}$/);
+  assert.equal(packageHashTwo, packageHashOne, 'Identical generated sources must produce identical package hashes');
+  console.log(`Guardian policy reproducibility passed: ${first.length} files; stable IDs, timestamps, source hashes, and validated package SHA-256 ${packageHashOne}.`);
 } finally {
   fs.rmSync(tempRoot, { recursive: true, force: true });
 }
