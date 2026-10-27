@@ -18,3 +18,10 @@
 - Evidence counts indicate recorded evidence rows within the bounded activity result set; they do not establish artifact integrity, provenance, relevance, admissibility, chain of custody, or regulatory sufficiency.
 - An existing `APPROVED` verification decision is surfaced as a recorded status only. The planner does not revalidate verifier identity, independence, authorization, methodology, or underlying evidence.
 - Compliance and resource-flow workflows must keep human review required until those checks are backed by authoritative schema fields, validation rules, and integrated tests. Do not convert a count into a compliance claim or credit issuance decision.
+
+## Database-level provenance regression gates
+- Verification authorization is enforced through the explicit permission helper; role names alone (for example, AUDITOR or VERIFIER) must not grant verification authority.
+- A verification's supplied activity must match the activity that owns its evidence; self-verification remains prohibited.
+- Evidence artifact inserts must recompute SHA-256 from stored bytes and match the canonical evidence content hash. API-only digest checks are insufficient.
+- Integration acceptance must attempt a forged artifact insert directly through SQL and confirm the database rejects it.
+- These controls establish consistency of stored bytes and permission checks; they do not establish that the source document is genuine, legally admissible, or independently validated against a physical event.
