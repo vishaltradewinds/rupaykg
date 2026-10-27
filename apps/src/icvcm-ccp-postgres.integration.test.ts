@@ -33,6 +33,23 @@ test("PostgreSQL enforces append-only ICVCM assessment history and unique revisi
     );
     const activityId = activity.rows[0]!.id;
 
+    const otherOrganization = await client.query<{ id: string }>(
+      "insert into organizations(name, organization_type, status) values($1, 'test_fixture', 'VERIFIED') returning id",
+      ["TEST-ICVCM-OTHER-" + suffix],
+    );
+    await client.query("savepoint before_cross_organization_insert");
+    await assert.rejects(
+      client.query(
+        `insert into icvcm_ccp_assessments
+          (organization_id, activity_id, assessed_by_identity_id, revision_number, assessment, summary, status)
+         values ($1, $2, $3, 1, '[]'::jsonb, '{"status":"GAPS_IDENTIFIED"}'::jsonb, 'INTERNAL_DRAFT')`,
+        [otherOrganization.rows[0]!.id, activityId, identityId],
+      ),
+      /organization must match the activity organization/i,
+      "database must reject an assessment that claims an activity owned by another organization",
+    );
+    await client.query("rollback to savepoint before_cross_organization_insert");
+
     const insertAssessment = () => client.query(
       `insert into icvcm_ccp_assessments
         (organization_id, activity_id, assessed_by_identity_id, revision_number, assessment, summary, status)
