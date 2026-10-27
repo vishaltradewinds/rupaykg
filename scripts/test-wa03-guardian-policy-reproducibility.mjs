@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const generator = path.join(repoRoot, 'scripts', 'build-wa03-guardian-policy.mjs');
 const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'rupaykg-wa03-repro-'));
-const epoch = '1743033600';
+const epoch = '1790241276';
 const expectedTimestamp = new Date(Number(epoch) * 1000).toISOString();
 
 function snapshot(directory) {
