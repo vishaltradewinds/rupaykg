@@ -32,3 +32,35 @@ test("model explanation returns bounded plain-text advice only", async () => {
   assert.equal(result.status, "COMPLETED");
   assert.match(result.explanation ?? "", /Human review/);
 });
+test("model receives only a bounded plan summary, not tenant IDs or source record IDs", async () => {
+  const config = { enabled: true, baseUrl: "https://model.example", model: "test-model", timeoutMs: 1000 };
+  await explainAgenticPlan({
+    ...plan,
+    organizationId: "sensitive-organization-id",
+    geographyId: "sensitive-geography-id",
+    sourceRecordIds: ["sensitive-source-record-id"],
+    blockers: Array.from({ length: 40 }, (_, i) => "blocker-" + i),
+  }, config, async (_input, init) => {
+    const sent = JSON.parse(String(init?.body));
+    const userContent = sent.messages[1].content as string;
+    assert.equal(userContent.includes("sensitive-organization-id"), false);
+    assert.equal(userContent.includes("sensitive-geography-id"), false);
+    assert.equal(userContent.includes("sensitive-source-record-id"), false);
+    const summary = JSON.parse(userContent);
+    assert.equal(summary.sourceRecordCount, 1);
+    assert.equal(summary.blockers.length, 30);
+    return new Response(JSON.stringify({ choices: [{ message: { content: "Summary only." } }] }), { status: 200 });
+  });
+});
+
+test("model output is capped and malformed provider responses fail closed", async () => {
+  const config = { enabled: true, baseUrl: "https://model.example", model: "test-model", timeoutMs: 1000 };
+  const bounded = await explainAgenticPlan(plan, config, async () =>
+    new Response(JSON.stringify({ choices: [{ message: { content: "x".repeat(2500) } }] }), { status: 200 }));
+  assert.equal(bounded.status, "COMPLETED");
+  assert.equal(bounded.explanation?.length, 2000);
+
+  const malformed = await explainAgenticPlan(plan, config, async () =>
+    new Response(JSON.stringify({ choices: [] }), { status: 200 }));
+  assert.deepEqual(malformed, { status: "UNAVAILABLE", explanation: null });
+});
