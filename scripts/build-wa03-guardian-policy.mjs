@@ -1,15 +1,31 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-const sourceDateEpoch = process.env.SOURCE_DATE_EPOCH;
-if (!sourceDateEpoch || !/^\d+$/.test(sourceDateEpoch)) {
-  throw new Error('Set SOURCE_DATE_EPOCH to a fixed Unix timestamp (seconds) for reproducible policy generation.');
-}
-const buildTimestamp = new Date(Number(sourceDateEpoch) * 1000);
-if (!Number.isFinite(buildTimestamp.getTime())) {
-  throw new Error('SOURCE_DATE_EPOCH is outside the supported timestamp range.');
-}
-const timestamp = buildTimestamp.toISOString();
+// Preserve the canonical timestamps already present in the checked-in policy
+// source. These are fixed metadata, not wall-clock build times.
+const canonicalPolicyUpdateDate = '2026-09-24T09:14:36.144Z';
+const canonicalSchemaTimestamps = {
+  'WA03.001 Project Applicability': {
+    createDate: '2026-09-24T09:14:36.137Z',
+    updateDate: '2026-09-24T09:14:36.139Z'
+  },
+  'WA03.001 Baseline Determination': {
+    createDate: '2026-09-24T09:14:36.139Z',
+    updateDate: '2026-09-24T09:14:36.139Z'
+  },
+  'WA03.001 Project Monitoring': {
+    createDate: '2026-09-24T09:14:36.139Z',
+    updateDate: '2026-09-24T09:14:36.139Z'
+  },
+  'WA03.001 Equation 4 Result': {
+    createDate: '2026-09-24T09:14:36.139Z',
+    updateDate: '2026-09-24T09:14:36.139Z'
+  },
+  'WA03.001 Verification Decision': {
+    createDate: '2026-09-24T09:14:36.139Z',
+    updateDate: '2026-09-24T09:14:36.139Z'
+  }
+};
 
 const root = path.resolve('guardian-policies/WA03.001');
 fs.mkdirSync(path.join(root,'schemas'), {recursive:true});
@@ -43,8 +59,10 @@ const ids = {
 };
 
 function schema(id,name,description,properties,required){
+  const dates = canonicalSchemaTimestamps[name];
+  if (!dates) throw new Error(`No canonical timestamp mapping registered for schema: ${name}`);
   return {
-    createDate:timestamp, updateDate:timestamp,
+    createDate:dates.createDate, updateDate:dates.updateDate,
     uuid:id, hash:'', name, description, entity:'NONE', documentFileId:null, contextFileId:null,
     version:'1.0.0', sourceVersion:'BEE BM WA03.001 v1.0', creator:'', owner:'',
     topicId:null, messageId:null, documentURL:null, contextURL:`schema:${id}`,
@@ -166,7 +184,7 @@ const rootBlock={id:stableUuid('WA03_001_ROOT'),blockType:'interfaceContainerBlo
 ],events:[],artifacts:[]};
 
 const policy={
-  updateDate:timestamp,uuid:'2b1dbf72-0d6c-4d90-9e16-5e8b8c000301',
+  updateDate:canonicalPolicyUpdateDate,uuid:'2b1dbf72-0d6c-4d90-9e16-5e8b8c000301',
   name:'RupayKg BM WA03.001 Landfill Methane Recovery',version:'1.0.0',
   description:'Guardian-native dMRV policy specification for BEE BM WA03.001 v1.0. BEE is the controlling regulatory authority. Guardian examples are not substituted.',
   topicDescription:'RupayKg WA03.001 policy',
