@@ -95,6 +95,18 @@ export async function registerIcvcmCcpRoutes(app: FastifyInstance, pool: Pool | 
       if (!await hasOrganizationPermission(pool, auth, organizationId, ["evidence:review", "evidence:upload"])) {
         return reply.code(403).send({ error: "Evidence review/read permission is required", code: "PERMISSION_FORBIDDEN" });
       }
+      const activity = await pool.query<{ geography_id: string | null }>(
+        "select geography_id from activities where id=$1 and organization_id=$2",
+        [activityId, organizationId]);
+      if (!activity.rows[0] || !activity.rows[0].geography_id) {
+        return reply.code(404).send({ error: "Activity not found in the requested organization scope", code: "ACTIVITY_NOT_FOUND" });
+      }
+      const geography = await pool.query<{ ok: boolean }>(
+        "select organization_has_geography_scope($1::uuid,$2::uuid) as ok",
+        [organizationId, activity.rows[0].geography_id]);
+      if (geography.rows[0]?.ok !== true) {
+        return reply.code(403).send({ error: "Activity is outside organization geography scope", code: "GEOGRAPHY_FORBIDDEN" });
+      }
       const rows = await pool.query(
         "select id, organization_id, activity_id, assessed_by_identity_id, assessment, summary, status, created_at, updated_at from icvcm_ccp_assessments where organization_id=$1 and activity_id=$2",
         [organizationId, activityId]);
