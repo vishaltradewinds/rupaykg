@@ -10,10 +10,6 @@ declare
   activity_actor uuid;
   evidence_activity_id uuid;
 begin
-  if not has_verification_permission(new.verifier_identity_id) then
-    raise exception 'verifier lacks explicit verification permission';
-  end if;
-
   if new.evidence_id is not null then
     select e.activity_id, a.actor_identity_id
       into evidence_activity_id, activity_actor
@@ -37,6 +33,10 @@ begin
 
   if activity_actor is not null and activity_actor = new.verifier_identity_id then
     raise exception 'verifier cannot self-approve activity evidence';
+  end if;
+
+  if not has_verification_permission(new.verifier_identity_id) then
+    raise exception 'verifier lacks explicit verification permission';
   end if;
 
   return new;
