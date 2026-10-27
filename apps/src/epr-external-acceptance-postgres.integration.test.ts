@@ -170,6 +170,18 @@ test("PostgreSQL rejects EPR external acceptance without independently verified 
     );
     await client.query("rollback to savepoint geography_scope_transfer");
 
+    const countryGeography = (await client.query<{id:string}>(
+      "insert into geography(kind,code,name,source) values('COUNTRY',$1,$2,'integration-test') returning id",
+      ["COUNTRY-"+suffix,"Test country "+suffix]
+    )).rows[0]!.id;
+    await client.query("savepoint geography_hierarchy_rewrite");
+    await assert.rejects(
+      client.query("update geography set parent_id=$2 where id=$1",[geography,countryGeography]),
+      /geography hierarchy backing accepted EPR or ICVCM assessment history is immutable/i,
+      "accepted EPR history must preserve the geography hierarchy used for scope authorization"
+    );
+    await client.query("rollback to savepoint geography_hierarchy_rewrite");
+
     const alternateGeography = (await client.query<{id:string}>(
       "insert into geography(kind,code,name,source) values('STATE_UT',$1,$2,'integration-test') returning id",
       ["ALT-"+suffix,"Alternate test geography "+suffix]
