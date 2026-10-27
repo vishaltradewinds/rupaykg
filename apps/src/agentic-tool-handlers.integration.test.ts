@@ -11,6 +11,7 @@ test("agentic read tools enforce PostgreSQL tenant and exact geography isolation
   const suffix = randomBytes(8).toString("hex");
   let organizationId = "";
   let otherOrganizationId = "";
+  let roleId = "";
   const geographyIds: string[] = [];
   const activityIds: string[] = [];
   try {
@@ -21,6 +22,11 @@ test("agentic read tools enforce PostgreSQL tenant and exact geography isolation
     otherOrganizationId = (await pool.query<{ id: string }>(
       "insert into organizations(name,organization_type,status) values($1,'test_fixture','VERIFIED') returning id",
       ["TEST-AGENTIC-OTHER-" + suffix],
+    )).rows[0]!.id;
+
+    roleId = (await pool.query<{ id: string }>(
+      "insert into roles(organization_id,name,permissions,geography_scope) values($1,$2,'[\"waste:read\"]'::jsonb,'[]'::jsonb) returning id",
+      [organizationId, "TEST-AGENTIC-ROLE-" + suffix],
     )).rows[0]!.id;
 
     const root = (await pool.query<{ id: string }>(
@@ -58,6 +64,7 @@ test("agentic read tools enforce PostgreSQL tenant and exact geography isolation
     const result = await executeAgenticReadTools(pool, {
       goal: "trace_resource_flow",
       organizationId,
+      roleId,
       geographyId: root,
     });
     assert.deepEqual(result.sourceRecordIds, [ownRootActivity]);
@@ -73,6 +80,7 @@ test("agentic read tools enforce PostgreSQL tenant and exact geography isolation
     if (organizationId) {
       await pool.query("delete from organization_geography_scopes where organization_id=$1", [organizationId]);
     }
+    if (roleId) await pool.query("delete from roles where id=$1", [roleId]);
     if (organizationId) await pool.query("delete from organizations where id=$1", [organizationId]);
     if (otherOrganizationId) await pool.query("delete from organizations where id=$1", [otherOrganizationId]);
     if (geographyIds.length) await pool.query("delete from geography where id=any($1::uuid[])", [geographyIds.reverse()]);
