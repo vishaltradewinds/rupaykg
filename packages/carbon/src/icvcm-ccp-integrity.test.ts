@@ -44,3 +44,22 @@ test("unknown and duplicate principle IDs are rejected", () => {
     { principleId: "CCP-01", status: "GAP" },
   ]), /Duplicate ICVCM CCP assessment/);
 });
+
+test("blank evidence references do not satisfy the evidenced gate", () => {
+  const result = assessIcvcmCcpEvidence([
+    { principleId: "CCP-01", status: "EVIDENCED", evidenceReferences: ["  ", ""] },
+  ]);
+  assert.equal(result.controls[0].status, "GAP");
+  assert.deepEqual(result.controls[0].evidenceReferences, []);
+});
+
+test("malformed runtime evidence payloads fail closed", () => {
+  assert.throws(
+    () => assessIcvcmCcpEvidence([{ principleId: "CCP-01", status: "EVIDENCED", evidenceReferences: [42] } as never]),
+    /Evidence references must contain only strings/,
+  );
+  assert.throws(
+    () => assessIcvcmCcpEvidence([{ principleId: "CCP-01", status: "MAYBE" } as never]),
+    /Invalid assessment status/,
+  );
+});
