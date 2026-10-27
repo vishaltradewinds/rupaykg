@@ -6,7 +6,8 @@
 - Evidence gates and explicit READY, BLOCKED, and REQUIRES_HUMAN steps.
 - Optional provider-neutral OpenAI-compatible chat-completions adapter for plain-language plan explanation. It is disabled by default and has no tools or action-execution access.
 - Capability discovery endpoint and unit tests for planning gates and model adapter configuration.
-- Typed, allow-listed domain-tool policy registry for activity, measurement, evidence, verification and stakeholder-onboarding reads; workflows are checked against the permissions required by their tool set before planning.
+- Typed, allow-listed domain-tool policy registry for activity, measurement, evidence, verification and stakeholder-onboarding reads; workflows are checked against read-oriented permissions required by their tool set before planning.
+- Optional disposable-PostgreSQL integration coverage verifies read access is granted by explicit read permissions and rejects `projects:manage`, `VERIFY_EVIDENCE`, and `MANAGE_STAKEHOLDERS` as standalone substitutes. The test runs only when `RUPAYKG_RUN_DB_INTEGRATION_TESTS=1` and `DATABASE_URL` are set.
 - Capability discovery reports tool metadata; the model cannot invoke tools. Domain SQL remains fixed, parameterized, and organization/geography scoped in the workflow route.
 - Shakti Standards lifecycle / TRL boundary documentation.
 
