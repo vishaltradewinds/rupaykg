@@ -85,3 +85,8 @@ Migration `087_acceptance_fixture_registry_exclusion.sql` prevents activities or
 ## ICVCM CCP internal evidence assessments
 
 Migration `20261027_icvcm_ccp_assessments.sql` persists append-only, versioned internal evidence-completeness assessments per activity and organization. API writes require authenticated organization membership and `evidence:review` permission; every cited evidence UUID must resolve to `VERIFIED` evidence for the same activity. Records remain `INTERNAL_DRAFT`; PostgreSQL blocks updates and deletes so revisions retain their history. This is not ICVCM certification, independent verification, a statutory compliance decision, or a carbon-credit issuance action.
+
+
+## Accepted EPR evidence immutability
+
+Migration `090_epr_acceptance_evidence_immutability.sql` prevents evidence or verification records referenced by an `ACCEPTED`/`COMPLETED` EPR return from being rewritten in place. Corrections must create new evidence and verification records so an already-recorded external acceptance cannot silently lose its evidentiary basis.
