@@ -55,11 +55,22 @@ export async function executeAgenticReadTools(
     };
   }
 
+  // Do not read or expose aggregate domains unless the goal's allow-list includes them.
+  // These SQL fragments are selected only from server-owned constants, never request/model input.
+  const measurementSelect = goal === "review_measurements"
+    ? "(select count(*)::text from measurements m where m.activity_id=a.id)"
+    : "'0'::text";
+  const evidenceSelect = goal === "prepare_compliance" || goal === "trace_resource_flow"
+    ? "(select count(*)::text from evidence e where e.activity_id=a.id)"
+    : "'0'::text";
+  const verificationSelect = goal === "prepare_compliance"
+    ? "(select count(*)::text from verifications v where v.activity_id=a.id and v.decision='APPROVED')"
+    : "'0'::text";
   const result = await pool.query<ActivityRow>(
     `select a.id,
-      (select count(*)::text from measurements m where m.activity_id=a.id) as measurement_count,
-      (select count(*)::text from evidence e where e.activity_id=a.id) as evidence_count,
-      (select count(*)::text from verifications v where v.activity_id=a.id and v.decision='APPROVED') as verified_count
+      ${measurementSelect} as measurement_count,
+      ${evidenceSelect} as evidence_count,
+      ${verificationSelect} as verified_count
      from activities a
      where a.organization_id=$1
        and a.geography_id is not null
