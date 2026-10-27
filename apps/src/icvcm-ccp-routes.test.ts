@@ -13,22 +13,25 @@ const IDENTITY = "44444444-4444-4444-8444-444444444444";
 function fakePool(options: { permission?: boolean; evidenceVerified?: boolean; activityOrganizationMatches?: boolean; geographyAllowed?: boolean } = {}) {
   const calls: Array<{ sql: string; params: unknown[] }> = [];
   let revision = 0;
+  const query = async (sql: string, params: unknown[] = []) => {
+    calls.push({ sql, params });
+    if (sql.includes("from identity_sessions")) return { rows: [{ identity_id: IDENTITY }] };
+    if (sql.includes("select exists (")) return { rows: [{ ok: options.permission ?? true }] };
+    if (sql.includes("from organization_memberships")) return { rows: [{ organization_id: ORG, role_id: "role", status: "VERIFIED" }] };
+    if (sql.includes("from activities")) return { rows: [{ organization_id: options.activityOrganizationMatches === false ? "77777777-7777-4777-8777-777777777777" : ORG, geography_id: "55555555-5555-4555-8555-555555555555" }] };
+    if (sql.includes("organization_has_geography_scope")) return { rows: [{ ok: options.geographyAllowed ?? true }] };
+    if (sql.includes("from evidence")) return { rows: options.evidenceVerified === false ? [] : [{ id: EVIDENCE }] };
+    if (sql.includes("select coalesce(max(revision_number)")) return { rows: [{ revision_number: revision }] };
+    if (sql.includes("insert into icvcm_ccp_assessments")) return { rows: [{
+      id: "66666666-6666-4666-8666-666666666666", organization_id: ORG, activity_id: ACTIVITY,
+      assessed_by_identity_id: IDENTITY, revision_number: Number(params[3] ?? ++revision), assessment: [], summary: { status: "GAPS_IDENTIFIED" },
+      status: "INTERNAL_DRAFT", created_at: new Date(0),
+    }] };
+    return { rows: [] };
+  };
   const pool = {
-    query: async (sql: string, params: unknown[] = []) => {
-      calls.push({ sql, params });
-      if (sql.includes("from identity_sessions")) return { rows: [{ identity_id: IDENTITY }] };
-      if (sql.includes("select exists (")) return { rows: [{ ok: options.permission ?? true }] };
-      if (sql.includes("from organization_memberships")) return { rows: [{ organization_id: ORG, role_id: "role", status: "VERIFIED" }] };
-      if (sql.includes("from activities")) return { rows: [{ organization_id: options.activityOrganizationMatches === false ? "77777777-7777-4777-8777-777777777777" : ORG, geography_id: "55555555-5555-4555-8555-555555555555" }] };
-      if (sql.includes("organization_has_geography_scope")) return { rows: [{ ok: options.geographyAllowed ?? true }] };
-      if (sql.includes("from evidence")) return { rows: options.evidenceVerified === false ? [] : [{ id: EVIDENCE }] };
-      if (sql.includes("insert into icvcm_ccp_assessments")) return { rows: [{
-        id: "66666666-6666-4666-8666-666666666666", organization_id: ORG, activity_id: ACTIVITY,
-        assessed_by_identity_id: IDENTITY, revision_number: ++revision, assessment: [], summary: { status: "GAPS_IDENTIFIED" },
-        status: "INTERNAL_DRAFT", created_at: new Date(0),
-      }] };
-      throw new Error("Unexpected SQL in route test: " + sql);
-    },
+    query,
+    connect: async () => ({ query, release: () => undefined }),
   };
   return { pool: pool as unknown as Pool, calls };
 }
