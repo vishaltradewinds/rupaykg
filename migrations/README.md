@@ -111,3 +111,7 @@ Migration `094_geography_scope_transfer_guard.sql` closes the transfer edge case
 ## Assessed geography hierarchy immutability
 
 Migration `095_assessed_geography_hierarchy_immutability.sql` prevents re-parenting a geography node when its current ancestry is used by an activity with accepted/completed EPR confirmation or ICVCM assessment history, including when the node is an organization's verified scope root. Because scope authorization walks `geography.parent_id`, changing ancestry could retroactively change the authorization result for historical assessments. A correction workflow should preserve the original hierarchy and introduce an explicit, versioned geography correction rather than rewriting historical ancestry.
+
+## Verification authorization provenance
+
+Migration `096_verification_authorization_provenance.sql` requires an approved verification to be performed by an unsuspended, verified identity holding an explicit verification permission through a verified membership in the same organization as the activity. It also requires the verification's activity to match the cited evidence activity and records the membership, role, permission snapshot, and timestamp used for the approval decision. This preserves decision-time authorization provenance when permissions later change; it does not prevent legitimate future membership revocation.
