@@ -1,21 +1,33 @@
-# RupayKg Agentic AI — initial implementation boundary
+# RupayKg Agentic AI — capabilities, controls and rollout
 
-## Implemented in this change
-- Authenticated, organization-scoped agentic workflow planning API.
-- Four allow-listed workflows: measurement review, compliance preparation, resource-flow/custody trace, stakeholder onboarding checklist.
-- Plans are grounded in PostgreSQL activity, measurement, evidence and verification records.
-- Explicit blocker reporting and human-review steps.
-- Read-only advisory mode; the planner cannot write operational records, approve compliance, verify evidence, issue/transfer/retire credentials, settle funds, or approve onboarding.
+## Implemented in this source-code increment
+- Authenticated, organization-scoped workflow planning backed by authoritative PostgreSQL records.
+- Four allow-listed goals: measurement review, compliance preparation, resource-flow/custody tracing, and stakeholder onboarding checklist.
+- Evidence gates and explicit READY, BLOCKED, and REQUIRES_HUMAN steps.
+- Optional provider-neutral OpenAI-compatible chat-completions adapter for plain-language plan explanation. It is disabled by default and has no tools or action-execution access.
+- Capability discovery endpoint and unit tests for planning gates and model adapter configuration.
+- Shakti Standards lifecycle / TRL boundary documentation.
 
 ## API
-- `GET /api/v1/agentic/capabilities`: lists workflow capabilities and safety boundaries.
-- `POST /api/v1/agentic/plan`: JSON body `{"goal":"prepare_compliance","geographyId":"optional-uuid"}`; requires a valid bearer session, active organization, and `audit:read` or `projects:manage` permission.
-- Plans are evidence-gated. Missing data is returned as BLOCKED; the service never manufactures evidence or implies legal compliance.
+- `GET /api/v1/agentic/capabilities`
+- `POST /api/v1/agentic/plan` with JSON such as `{"goal":"prepare_compliance","geographyId":"optional-uuid"}`
+- Add query parameter `?explain=true` to request an optional model explanation. When model configuration is absent or the provider fails, the response reports DISABLED or UNAVAILABLE without blocking the evidence-grounded plan.
+- Requires a valid bearer session, active organization, and `audit:read` or `projects:manage` permission.
 
-## What this is not
-This is a production-code foundation for governed agentic workflows, not a claim of a fully autonomous LLM agent or production certification. No model provider or external paid API is called. A future model adapter must be isolated behind a typed interface, with tool allow-listing, prompt-injection defenses, audit logging, budgets/timeouts, evaluation tests, and human approval gates. Any authoritative write must go through existing domain services and their authorization/idempotency/audit controls.
+## Optional model configuration
+Model use is disabled unless explicitly enabled. Configure through deployment secrets/environment, never source control:
+- `RUPAYKG_AGENTIC_MODEL_ENABLED=true`
+- `RUPAYKG_AGENTIC_MODEL_BASE_URL=https://<trusted-provider-host>` (remote HTTPS required; HTTP allowed only for localhost inference)
+- `RUPAYKG_AGENTIC_MODEL_NAME=<configured-model-name>`
+- optionally `RUPAYKG_AGENTIC_MODEL_API_KEY`
+- optionally `RUPAYKG_AGENTIC_MODEL_TIMEOUT_MS=8000` (bounded to 1000–20000 ms)
 
-## Shakti Standards / TRL
-- Lifecycle gate: implementation and unit-test evidence only until CI and independent review complete.
-- Provisional subsystem TRL: not advanced by this PR; agentic subsystem readiness is NOT DEMONSTRATED beyond source-level implementation until tested in a representative integrated environment.
-- Production certification: HOLD/OFF.
+The adapter sends a bounded plan summary, not raw uploaded evidence. Model output is capped and treated as advisory text only. The model cannot invoke tools, write records, or override policy. Use a trusted endpoint; review data-residency and privacy terms before enabling any remote provider.
+
+## Explicitly not implemented or not claimed
+- Autonomous mutation/execution of domain actions.
+- OCR/evidence extraction, external registry submissions, Hedera write/consensus verification, W3C VC signing, weighbridge/device control, or statutory filings.
+- Long-running queues/retries, persistent agent memory, multi-agent delegation, model evaluation/observability dashboard, or provider-specific operational integration.
+- Field validation, independent security review, TRL advancement, or production certification.
+
+Those capabilities require domain-specific evidence, explicit authorization, idempotency, audit trails, threat modelling, integration tests, operational recovery and human approval gates. Production certification remains HOLD/OFF.
