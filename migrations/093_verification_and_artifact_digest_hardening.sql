@@ -57,7 +57,10 @@ declare
   actual_hash text;
   series_org uuid;
   series_activity uuid;
+  series_type_value text;
   evidence_activity uuid;
+  evidence_org_id uuid;
+  evidence_type_value text;
   evidence_hash text;
 begin
   actual_hash := encode(digest(new.content, 'sha256'), 'hex');
