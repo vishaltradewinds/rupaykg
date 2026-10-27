@@ -153,6 +153,18 @@ test("PostgreSQL rejects EPR external acceptance without independently verified 
       "accepted external authority reference cannot be rewritten"
     );
     await client.query("rollback to savepoint confirmation_rewrite");
+
+    const alternateGeography = (await client.query<{id:string}>(
+      "insert into geography(kind,code,name,source) values('STATE_UT',$1,$2,'integration-test') returning id",
+      ["ALT-"+suffix,"Alternate test geography "+suffix]
+    )).rows[0]!.id;
+    await client.query("savepoint activity_context_rewrite");
+    await assert.rejects(
+      client.query("update activities set geography_id=$2 where id=$1",[activity,alternateGeography]),
+      /activity organization\/geography backing accepted EPR confirmation is immutable/i,
+      "accepted EPR confirmation must retain its original activity geography"
+    );
+    await client.query("rollback to savepoint activity_context_rewrite");
   } finally {
     try { await client.query("rollback"); } catch {}
     client.release();
