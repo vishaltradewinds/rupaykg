@@ -75,6 +75,27 @@ jobs:
           path: guardian-policies/RupayKg-WA03.001-v1.policy
           if-no-files-found: error
           retention-days: 14
+      - name: Upload generated Guardian source for reconciliation
+        uses: actions/upload-artifact@v4
+        with:
+          name: guardian-wa03-001-generated-source-review
+          path: |
+            guardian-policies/WA03.001/README.md
+            guardian-policies/WA03.001/policy.json
+            guardian-policies/WA03.001/schemas/*.json
+          if-no-files-found: error
+          retention-days: 14
+      - name: Compare generated Guardian source with tracked source
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- guardian-policies/WA03.001; then
+            echo "Generated Guardian source matches tracked source."
+          else
+            echo "::notice title=Guardian artifact reconciliation required::Generated policy source differs from tracked files. Review the generated-source artifact; tracked source was not overwritten."
+            git diff --stat -- guardian-policies/WA03.001
+            git diff --numstat -- guardian-policies/WA03.001
+          fi
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=high
       - run: npm run validate:migrations
