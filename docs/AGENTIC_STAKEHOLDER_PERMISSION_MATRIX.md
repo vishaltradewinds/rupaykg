@@ -150,8 +150,17 @@ The current `POST /api/v1/agentic/plan` endpoint requires:
 - Geography scope validation when a geography UUID is supplied.
 - Read-only advisory output with `canExecute: false` and `humanApprovalRequired: true`.
 
-**Security follow-up:** Before exposing separate domain tools, replace a broad endpoint-level permission check with a per-tool permission map based on least privilege. Read-only measurement review should not implicitly grant compliance, onboarding, registry, verifier or settlement permissions. Negative tests must prove denied roles cannot access records outside their organisation, geography, programme or assigned activity. The current broad permission contract is documented, not endorsed as the final production role model.
+**Security follow-up:** A per-tool permission registry is now present in `apps/src/agentic-tools.ts`. Each workflow requires an explicit allow-listed set of read-only tools and each tool lists permission alternatives from the existing RBAC vocabulary. The plan endpoint checks every required tool before reading data. Some compatibility alternatives (`audit:read`, `projects:manage`) remain broad; a future role migration should replace them only after role-by-role impact analysis and negative authorization tests. Read-only measurement review must not implicitly grant compliance, onboarding, registry, verifier or settlement mutation permissions. Negative tests must prove denied roles cannot access records outside their organisation, geography, programme or assigned activity.
 
 ### Mapping decision
 
 The 35 stakeholder categories are target roles. Only the underlying data models explicitly named above are confirmed from repository source in this review. For categories whose source systems or tables are not mapped, implementation must first discover the authoritative source and access contract rather than inventing a table, status, integration or permission.
+
+## 9. Read-only domain-tool registry — implementation status
+
+Added source files:
+- `apps/src/agentic-tools.ts`: typed tool definitions for `activities.list`, `measurements.count`, `evidence.count`, `verifications.count`, `stakeholder_applications.list` and `organization_verification.count`.
+- `apps/src/agentic-tools.test.ts`: tests that registry entries are read-only, tenant/geography-scoped, permission-bound, allow-listed by goal, and returned permission arrays cannot mutate the registry.
+- `apps/src/agentic-workflow.ts`: the plan endpoint checks the tool permissions required by the selected goal before querying records; the capabilities endpoint exposes tool metadata.
+
+This is an **authorization and tool-policy registry**, not yet a general-purpose tool execution engine. The model cannot call these tools directly. Existing fixed SQL remains in the workflow route; separate typed query handlers, role-specific negative authorization tests, and a reviewed compatibility-permission migration are next. This distinction prevents documentation from overstating implementation.
