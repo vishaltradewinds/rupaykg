@@ -13,6 +13,7 @@ async function authFor(r:Request,reply:Reply,pool:Pool|null):Promise<AuthContext
   catch(error){r.log.error(error);reply.code(503).send({error:"Authentication service unavailable",code:"AUTH_UNAVAILABLE"});return null}
 }
 async function tx<T>(pool:Pool,fn:(client:PoolClient)=>Promise<T>):Promise<T>{const client=await pool.connect();try{await client.query("begin");const result=await fn(client);await client.query("commit");return result}catch(error){await client.query("rollback");throw error}finally{client.release()}}
+// Registry mutations require one unambiguous verified role and both organization + role geography grants.
 async function identityCanAccessActivity(client: Pool | PoolClient, auth: AuthContext, organizationId: string, activityId: string): Promise<boolean> {
   const result = await client.query<{ ok: boolean }>(
     "select identity_has_geography_scope($1,$2,a.geography_id) ok from activities a where a.id=$3 and a.organization_id=$2 and a.geography_id is not null",
