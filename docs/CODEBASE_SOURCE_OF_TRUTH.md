@@ -51,7 +51,7 @@ The production API is started through `apps/src/production-server.ts`, which val
 
 The web package's `prebuild` hook called `scripts/validate-web-config.mjs`, which only printed a success message and performed no validation. The hook, no-op script, and the matching Dockerfile command were removed. The unreferenced `apps/web/public/signin-bridge.js` asset was also removed because it was not loaded by `index.html` or referenced by the React entrypoint. The remaining public scripts are explicitly loaded by `apps/web/index.html` and were retained.
 
-A stale `docs/CI_VERIFICATION_TRIGGER.md` file was removed because it contained a marker and an obsolete Firebase-authentication claim rather than verifiable CI evidence.
+A stale `docs/CI_VERIFICATION_TRIGGER.md` file was removed because it contained a marker and an obsolete Firebase-authentication claim rather than verifiable CI evidence. The root `lint` script was also removed because every workspace lacked a `lint` script and the command silently succeeded without running a linter; no linter is claimed to be configured.
 
 ## Release discipline
 
