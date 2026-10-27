@@ -82,6 +82,16 @@ describe("PostgreSQL TLS policy", () => {
     }
   });
 
+  it("rejects the full IPv4 loopback range and unspecified targets in direct production tooling", () => {
+    for (const hostname of ["127.0.0.2", "127.255.255.255", "0.0.0.0", "0", "[::]", "[::ffff:127.0.0.1]"]) {
+      assert.throws(() => readDatabaseSslSetting({
+        NODE_ENV: "production",
+        DATABASE_URL: `postgresql://${hostname}:5432/rupaykg`,
+        DATABASE_SSL: "false",
+      }), /PRODUCTION_DATABASE_TARGET_FORBIDDEN/, hostname);
+    }
+  });
+
   it("retains the provider-internal non-TLS exception for production Render database hosts", () => {
     assert.equal(readDatabaseSslSetting({
       NODE_ENV: "production",
