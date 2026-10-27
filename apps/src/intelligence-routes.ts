@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type { Pool } from "pg";
-import { authenticate, bearerChallenge, hasOrganizationPermission, type AuthContext } from "./auth.js";
+import { authenticate, bearerChallenge, hasOrganizationPermission } from "./auth.js";
 
 function orgIds(auth: AuthContext): string[] {
   return auth.activeOrganizationId ? [auth.activeOrganizationId] : [...new Set(auth.memberships.map((m) => m.organization_id))];
