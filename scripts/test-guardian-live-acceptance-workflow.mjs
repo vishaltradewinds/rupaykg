@@ -21,6 +21,8 @@ assert.ok(!submission.includes("Submission did not become registry-eligible"),
   'Submission must not require registry eligibility before Mirror Node verification');
 assert.ok(submission.includes("provenance.get(field) != expected"),
   'Submission must bind persisted provenance to the exact activity/verification/evidence/policy inputs');
+assert.ok(submission.includes('import json, os'),
+  'Submission step must import os before reading acceptance identifiers from environment variables');
 assert.ok(persisted.includes("r.get('activity_id') == os.environ['ACTIVITY_ID']"));
 assert.ok(persisted.includes("r.get('verification_id') == os.environ['VERIFICATION_ID']"));
 assert.ok(persisted.includes("r.get('evidence_id') == os.environ['EVIDENCE_ID']"));
