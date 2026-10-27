@@ -19,10 +19,11 @@ test("read handlers use fixed parameterized queries scoped to organization and g
   const result = await executeAgenticReadTools(pool, {
     goal: "prepare_compliance",
     organizationId: "org-1",
+    roleId: "role-1",
     geographyId: "00000000-0000-4000-8000-000000000001",
   });
   assert.equal(calls.length, 1);
-  assert.deepEqual(calls[0]!.values, ["org-1", "00000000-0000-4000-8000-000000000001"]);
+  assert.deepEqual(calls[0]!.values, ["org-1", "00000000-0000-4000-8000-000000000001", "role-1"]);
   assert.match(calls[0]!.sql, /a\.organization_id=\$1/);
   assert.match(calls[0]!.sql, /organization_has_geography_scope/);
   assert.match(calls[0]!.sql, /limit 100/i);
@@ -38,10 +39,11 @@ test("onboarding handler returns only bounded application IDs and aggregate evid
   const result = await executeAgenticReadTools(pool, {
     goal: "onboard_stakeholder",
     organizationId: "org-2",
+    roleId: "role-2",
     geographyId: null,
   });
   assert.equal(calls.length, 1);
-  assert.deepEqual(calls[0]!.values, ["org-2", null]);
+  assert.deepEqual(calls[0]!.values, ["org-2", null, "role-2"]);
   assert.match(calls[0]!.sql, /stakeholder_applications/);
   assert.match(calls[0]!.sql, /limit 100/i);
   assert.deepEqual(result.sourceRecordIds, ["application-1"]);
@@ -56,6 +58,7 @@ test("read handler propagates database failure rather than fabricating evidence"
   await assert.rejects(() => executeAgenticReadTools(pool, {
     goal: "trace_resource_flow",
     organizationId: "org-3",
+    roleId: "role-3",
     geographyId: null,
   }), /database unavailable/);
 });
@@ -68,6 +71,7 @@ test("onboarding organization-level evidence is not double-counted across applic
   const result = await executeAgenticReadTools(pool, {
     goal: "onboard_stakeholder",
     organizationId: "org-4",
+    roleId: "role-4",
     geographyId: null,
   });
   assert.deepEqual(result.sourceRecordIds, ["application-1", "application-2"]);
