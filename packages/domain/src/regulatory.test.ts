@@ -58,7 +58,7 @@ test("source outside its end date fails closed", () => {
 });
 
 test("missing or invalid effective date fails closed", () => {
-  const missing = { ...source, effectiveFrom: undefined };
+  const missing = { ...source, effectiveFrom: "" };
   assert.deepEqual(evaluateRegulatorySource(missing, { asOfDate: "2026-10-27" }), {
     applicable: false,
     reason: "MISSING_OR_INVALID_EFFECTIVE_FROM",
