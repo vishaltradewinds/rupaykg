@@ -71,6 +71,8 @@ Additional Indian primary sources must be recorded separately in the statutory s
 - [x] Require evidence references for any control marked evidenced.
 - [x] State that internal completeness is not ICVCM certification, CCP eligibility, external verification or credit issuance.
 - [x] Add unit tests for empty, incomplete, complete, unknown and duplicate assessments.
+- [x] Harden runtime validation for malformed evidence-reference payloads and invalid statuses.
+- [x] Test whitespace-only evidence references so they cannot satisfy the evidence gate.
 - [ ] Run package tests, TypeScript build/typecheck and repository-wide regression suite.
 - [ ] Review whether existing APIs/UI need a controlled evidence-register workflow, without creating duplicate registries.
 - [ ] Complete independent regulatory/methodology review and TRL evidence assessment.
