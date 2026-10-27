@@ -87,6 +87,32 @@ test("PostgreSQL rejects EPR external acceptance without independently verified 
       "external acceptance must reject unverified evidence or rejected verification"
     );
     await client.query("rollback to savepoint rejected_confirmation");
+
+    // A valid acceptance must remain bound to its original organization.
+    const approvedVerification = (await client.query<{id:string}>(
+      "insert into verifications(evidence_id,activity_id,verifier_identity_id,decision,scope,rationale) values($1,$2,$3,'APPROVED','EPR_EXTERNAL_ACCEPTANCE','Independent authority evidence review approved') returning id",
+      [evidence,activity,verifierIdentity]
+    )).rows[0]!.id;
+    const otherOrg = (await client.query<{id:string}>(
+      "insert into organizations(name, organization_type, status) values($1,'test_fixture','VERIFIED') returning id",
+      ["TEST-EPR-OTHER-"+suffix]
+    )).rows[0]!.id;
+    await client.query("savepoint organization_reassignment");
+    const acceptedReturn = (await client.query<{id:string}>(
+      `insert into epr_returns
+        (scheme_id,organization_id,period_start,period_end,return_type,reported_quantity,status,
+         external_reference,external_authority_name,external_confirmation_evidence_id,
+         external_confirmation_verification_id,external_authority_confirmed_at)
+       values($1,$2,'2026-01-01','2026-03-31',$3,0,'ACCEPTED',$4,'Test authority',$5,$6,now())
+       returning id`,
+      [scheme,org,"QUARTERLY_ACCEPTED_"+suffix,"TEST-EXT-VALID-"+suffix,evidence,approvedVerification]
+    )).rows[0]!.id;
+    await assert.rejects(
+      client.query("update epr_returns set organization_id=$2 where id=$1",[acceptedReturn,otherOrg]),
+      /must be verified, approved, provenance-backed and organization\/geography scoped/i,
+      "accepted return must not be reassigned away from the organization that owns its evidence"
+    );
+    await client.query("rollback to savepoint organization_reassignment");
   } finally {
     try { await client.query("rollback"); } catch {}
     client.release();
