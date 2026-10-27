@@ -39,8 +39,6 @@ jobs:
       - name: Verify Guardian policy generation is reproducible
         run: npm run test:guardian-policy
       - name: Build and validate review-only Guardian policy artifact
-        env:
-          SOURCE_DATE_EPOCH: "1790241276"
         shell: bash
         run: |
           set -euo pipefail
