@@ -84,7 +84,7 @@ Use official ICVCM pages as the primary reference set. Review for updates before
 | [CCP Rule Architecture consultation page](https://www.icvcm.org/consultation/ccp-rule-architecture/) | Rule interpretation and consultation materials; distinguish drafts from final adopted rules. |
 | [Application platform update, 18 August 2026](https://icvcm.org/program-application-platform-update-august-2026/) | ICVCM stated the application platform would be closed until April 2027, with an expected April–July 2027 submission window. Recheck the current official status before planning an application. |
 
-Additional Indian primary sources must be recorded separately in the statutory source register, including the Bureau of Energy Efficiency for CCTS/methodologies and CPCB/competent authorities for applicable waste/EPR obligations. ICVCM does not determine Indian statutory applicability.
+The maintained starting register is [`docs/INDIA_REGULATORY_APPLICABILITY_REGISTER.md`](./INDIA_REGULATORY_APPLICABILITY_REGISTER.md). It lists official CPCB/MoEFCC and BEE starting sources, required source metadata, fail-closed decision states, and explicit gaps for activity-specific EPR and state/local instruments. It is not yet an exhaustive legal register and must receive independent review before production use. ICVCM does not determine Indian statutory applicability.
 
 ## 5. Implementation and acceptance checklist
 
