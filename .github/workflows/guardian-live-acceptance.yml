@@ -138,10 +138,12 @@ jobs:
             --header 'Content-Type: application/json' \
             --data "$payload" \
             "$BASE_URL/api/v1/mrv/activities/$ACTIVITY_ID/submit")
-          if [ "$http_code" != "201" ]; then
+          if [ "$http_code" != "200" ] && [ "$http_code" != "201" ]; then
             echo "Authoritative MRV submission returned HTTP $http_code; response body withheld to avoid exposing operational data."
             exit 1
           fi
+          # HTTP 201 is a fresh successful submission; HTTP 200 is an idempotent replay.
+          # Both must pass the same strict validation below; replay must not create a duplicate transaction.
           python - <<'PY'
           import json, os
           data = json.load(open('/tmp/mrv-submit.json'))
