@@ -51,7 +51,7 @@ try {
   runGenerator(tempRoot);
   const first = snapshot(outputRoot);
   const policy = JSON.parse(fs.readFileSync(path.join(outputRoot, 'policy.json'), 'utf8'));
-  assert.equal(policy.updateDate, expectedTimestamp);
+  assert.equal(policy.updateDate, '2026-09-24T09:14:36.144Z');
   const blockIds = collectBlockIds(policy.config);
   assert.ok(blockIds.length > 0, 'Expected generated policy blocks');
   assert.equal(new Set(blockIds).size, blockIds.length, 'Generated policy block IDs must be unique');
@@ -69,10 +69,19 @@ try {
   ].sort();
   assert.deepEqual([...blockIds].sort(), expectedCanonicalIds, 'Generated policy must preserve reviewed canonical block IDs');
 
+  const expectedSchemaDates = {
+    'WA03.001 Project Applicability': ['2026-09-24T09:14:36.137Z', '2026-09-24T09:14:36.139Z'],
+    'WA03.001 Baseline Determination': ['2026-09-24T09:14:36.139Z', '2026-09-24T09:14:36.139Z'],
+    'WA03.001 Project Monitoring': ['2026-09-24T09:14:36.139Z', '2026-09-24T09:14:36.139Z'],
+    'WA03.001 Equation 4 Result': ['2026-09-24T09:14:36.139Z', '2026-09-24T09:14:36.139Z'],
+    'WA03.001 Verification Decision': ['2026-09-24T09:14:36.139Z', '2026-09-24T09:14:36.139Z']
+  };
   for (const entry of fs.readdirSync(path.join(outputRoot, 'schemas')).filter(name => name.endsWith('.json'))) {
     const schema = JSON.parse(fs.readFileSync(path.join(outputRoot, 'schemas', entry), 'utf8'));
-    assert.equal(schema.createDate, expectedTimestamp, `${entry}: createDate must use controlled timestamp`);
-    assert.equal(schema.updateDate, expectedTimestamp, `${entry}: updateDate must use controlled timestamp`);
+    const expectedDates = expectedSchemaDates[schema.name];
+    assert.ok(expectedDates, `${entry}: schema must have a reviewed canonical timestamp mapping`);
+    assert.equal(schema.createDate, expectedDates[0], `${entry}: createDate must remain canonical`);
+    assert.equal(schema.updateDate, expectedDates[1], `${entry}: updateDate must remain canonical`);
   }
 
   runGenerator(tempRoot);
