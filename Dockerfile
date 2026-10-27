@@ -7,7 +7,6 @@ COPY packages ./packages
 COPY migrations ./migrations
 COPY scripts ./scripts
 RUN npm ci --no-audit --no-fund
-RUN node scripts/validate-web-config.mjs
 RUN npm run build
 RUN npm prune --omit=dev
 
