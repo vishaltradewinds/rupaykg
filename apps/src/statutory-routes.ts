@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type { Pool } from "pg";
-import { authenticate, canActForOrganization, hasOrganizationPermission } from "./auth.js";
+import { authenticate, canActForOrganization, hasOrganizationPermission, type AuthContext } from "./auth.js";
 
 type Reply = { code: (status: number) => { send: (body: unknown) => unknown } };
 type Request = { body: unknown; params: Record<string, string>; log: { error: (error: unknown) => void } };
