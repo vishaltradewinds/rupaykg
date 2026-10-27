@@ -7,9 +7,9 @@ create or replace function role_has_geography_scope(
 ) returns boolean
 language sql stable as $$
   with role_roots as (
-    select value
+    select scopes.scope_id
     from roles r
-    cross join lateral jsonb_array_elements_text(r.geography_scope) value
+    cross join lateral jsonb_array_elements_text(r.geography_scope) as scopes(scope_id)
     where r.id = p_role_id
   ),
   ancestors(id) as (
@@ -23,7 +23,7 @@ language sql stable as $$
     when not exists (select 1 from role_roots) then true
     when exists (
       select 1 from role_roots rr
-      where rr.value !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+      where rr.scope_id !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
     ) then false
     else exists (
       select 1 from role_roots rr
