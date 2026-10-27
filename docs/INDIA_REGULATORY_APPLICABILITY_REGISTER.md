@@ -107,7 +107,7 @@ Repository inspection found existing regulatory structures and controls in `pack
 
 The domain source gate now checks source status, required source metadata, valid effective dates, whether the rule is effective on the requested date, optional end date, and jurisdiction matching. It deliberately answers whether a source record is eligible for rule evaluation; it does **not** decide whether a particular organization/activity is legally covered. Regression tests cover future-effective, expired, missing-date, invalid-metadata and jurisdiction-mismatch cases.
 
-Migration `073_epr_portal_provenance_guardrails.sql` reconciles the plastic packaging catalogue's portal entrypoint to CPCB's Common EPR Portal, preserves the prior portal URL as metadata, and marks external authority confirmation as required. It explicitly does not generalize this portal change to other streams.
+Migration `074_epr_portal_provenance_guardrails.sql` reconciles the plastic packaging catalogue's portal entrypoint to CPCB's Common EPR Portal, preserves the prior portal URL as metadata, and marks external authority confirmation as required. It explicitly does not generalize this portal change to other streams.
 
 ### Remaining work
 
