@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import type { Pool } from "pg";
 import { authenticate, bearerChallenge, type AuthContext } from "./auth.js";
-import { authorizeAgenticTools, listAgenticToolDefinitions } from "./agentic-tools.js";
+import { authorizeAgenticTools, listAgenticToolDefinitions, getAgenticToolsForGoal } from "./agentic-tools.js";
 import { explainAgenticPlan, readAgenticModelConfig } from "./agentic-model.js";
 
 export type AgenticGoal =
@@ -108,6 +108,39 @@ export function buildAgenticPlan(input: {
   };
 }
 
+type AgenticReadRow = { id: string; measurement_count: string; evidence_count: string; verified_count: string };
+
+async function executeReadOnlyDomainTools(pool: Pool, input: { goal: AgenticGoal; organizationId: string; geographyId: string | null }): Promise<{ sourceRecordIds: string[]; measurementCount: number; evidenceCount: number; verifiedCount: number; toolIds: string[] }> {
+  const { goal, organizationId, geographyId } = input;
+  const tools = getAgenticToolsForGoal(goal);
+  if (goal === "onboard_stakeholder") {
+    const result = await pool.query<{ id: string; measurement_count: string; evidence_count: string; verified_count: string }>(
+      `select sa.id, '0'::text as measurement_count,
+        (select count(*)::text from organization_verification_evidence ove where ove.organization_id=sa.organization_id) as evidence_count,
+        (case when o.verification_status='VERIFIED' then '1' else '0' end)::text as verified_count
+       from stakeholder_applications sa join organizations o on o.id=sa.organization_id
+       where sa.organization_id=$1 and ($2::uuid is null or sa.geography_id=$2::uuid)
+         and (sa.geography_id is null or organization_has_geography_scope(sa.organization_id,sa.geography_id))
+       order by sa.created_at desc limit 100`,
+      [organizationId, geographyId],
+    );
+    return { sourceRecordIds: result.rows.map(row => row.id), measurementCount: 0, evidenceCount: result.rows.reduce((sum,row)=>sum+Number(row.evidence_count),0), verifiedCount: result.rows.reduce((sum,row)=>sum+Number(row.verified_count),0), toolIds: tools.map(tool=>tool.id) };
+  }
+  const result = await pool.query<AgenticReadRow>(
+    `select a.id,
+      (select count(*)::text from measurements m where m.activity_id=a.id) as measurement_count,
+      (select count(*)::text from evidence e where e.activity_id=a.id) as evidence_count,
+      (select count(*)::text from verifications v where v.activity_id=a.id and v.decision='APPROVED') as verified_count
+     from activities a
+     where a.organization_id=$1 and a.geography_id is not null
+       and organization_has_geography_scope(a.organization_id,a.geography_id)
+       and ($2::uuid is null or a.geography_id=$2::uuid)
+     order by a.created_at desc limit 100`,
+    [organizationId, geographyId],
+  );
+  return { sourceRecordIds: result.rows.map(row => row.id), measurementCount: result.rows.reduce((sum,row)=>sum+Number(row.measurement_count),0), evidenceCount: result.rows.reduce((sum,row)=>sum+Number(row.evidence_count),0), verifiedCount: result.rows.reduce((sum,row)=>sum+Number(row.verified_count),0), toolIds: tools.map(tool=>tool.id) };
+}
+
 export async function registerAgenticWorkflowRoutes(app: FastifyInstance, pool: Pool | null): Promise<void> {
   app.get("/api/v1/agentic/capabilities", async () => ({
     service: "rupaykg-agentic-workflow",
@@ -153,39 +186,13 @@ export async function registerAgenticWorkflowRoutes(app: FastifyInstance, pool: 
       if (!scope.rows[0]?.ok) return reply.code(403).send({ error: "Geography outside organization authorization scope", code: "GEOGRAPHY_FORBIDDEN" });
     }
     try {
-      const rows = body.goal === "onboard_stakeholder"
-        ? await pool.query<{ id: string; measurement_count: string; evidence_count: string; verified_count: string }>(
-            `select sa.id, '0'::text as measurement_count,
-              (select count(*)::text from organization_verification_evidence ove where ove.organization_id=sa.organization_id) as evidence_count,
-              (case when o.verification_status='VERIFIED' then '1' else '0' end)::text as verified_count
-             from stakeholder_applications sa join organizations o on o.id=sa.organization_id
-             where sa.organization_id=$1
-               and ($2::uuid is null or sa.geography_id=$2::uuid)
-               and (sa.geography_id is null or organization_has_geography_scope(sa.organization_id,sa.geography_id))
-             order by sa.created_at desc limit 100`,
-            [organizationId, geographyId],
-          )
-        : await pool.query<{ id: string; measurement_count: string; evidence_count: string; verified_count: string }>(
-            `select a.id,
-              (select count(*)::text from measurements m where m.activity_id=a.id) as measurement_count,
-              (select count(*)::text from evidence e where e.activity_id=a.id) as evidence_count,
-              (select count(*)::text from verifications v where v.activity_id=a.id and v.decision='APPROVED') as verified_count
-             from activities a
-             where a.organization_id=$1
-               and a.geography_id is not null
-               and organization_has_geography_scope(a.organization_id,a.geography_id)
-               and ($2::uuid is null or a.geography_id=$2::uuid)
-             order by a.created_at desc limit 100`,
-            [organizationId, geographyId],
-          );
-      const measurements = rows.rows.reduce((sum, row) => sum + Number(row.measurement_count), 0);
-      const evidence = rows.rows.reduce((sum, row) => sum + Number(row.evidence_count), 0);
-      const verified = rows.rows.reduce((sum, row) => sum + Number(row.verified_count), 0);
+      const readResult = await executeReadOnlyDomainTools(pool, { goal: body.goal, organizationId, geographyId });
+      const { sourceRecordIds, measurementCount: measurements, evidenceCount: evidence, verifiedCount: verified } = readResult;
       const plan = buildAgenticPlan({
         goal: body.goal,
         organizationId,
         geographyId,
-        sourceRecordIds: rows.rows.map(row => row.id),
+        sourceRecordIds,
         measurementCount: measurements,
         evidenceCount: evidence,
         verifiedCount: verified,
