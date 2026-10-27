@@ -10,10 +10,19 @@ const step = name => {
   const next = workflow.indexOf('\n      - name:', start + marker.length);
   return workflow.slice(start, next === -1 ? workflow.length : next);
 };
+const validateInputs = step('Validate acceptance inputs');
 const submission = step('Submit authoritative MRV');
 const persisted = step('Verify persisted provenance');
 const mirror = step('Verify Hedera provenance through Mirror Node');
 const finalState = step('Re-check persisted registry eligibility');
+assert.ok(validateInputs.includes('parsed.hostname != "rupaykg.onrender.com"'),
+  'Live acceptance must never send the session secret to an arbitrary HTTPS host');
+assert.ok(validateInputs.includes('uuid_pattern.fullmatch'),
+  'Organization/activity/verification/evidence identifiers must be validated as UUIDs');
+assert.ok(validateInputs.includes('POLICY_ID must be a 1-200 character policy identifier'),
+  'Guardian policy identifier must reject whitespace and path characters');
+assert.ok(!submission.includes('cat /tmp/mrv-submit.json'),
+  'Failed submissions must not print the full operational response body into CI logs');
 
 assert.ok(submission.includes("guardian.get('status') != 'VERIFIED'"));
 assert.ok(submission.includes("hedera.get('status') != 'CONSENSUS_CONFIRMED'"));
