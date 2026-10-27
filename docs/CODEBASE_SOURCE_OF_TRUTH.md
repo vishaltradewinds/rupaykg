@@ -77,3 +77,23 @@ The evidence-vault review route checks the active organization's membership and 
 ### Render resource identity — account state verified
 
 Read-only inspection of the connected Render workspace on 2026-10-27 confirms the existing production-facing web service is named `rupaykg`, points to `vishaltradewinds/rupaykg`, deploys from `main`, uses the root Dockerfile, and has health check `/health`. Its Render service ID is `srv-daki4d7qj5pc73b8qksg`. The repository Blueprint still declares `rupaykg-production`; this is a resource-identity mismatch, not a safe rename. Do not apply the Blueprint or rename/create a service as part of cleanup until a non-destructive Blueprint plan confirms that it will reconcile to the existing service rather than create a second service. PR branch commits are not the live service's configured deployment branch.
+
+### Duplicate route authentication helpers — reviewed, not mechanically merged
+
+The API contains similar route-local authentication wrappers in `bwg-routes.ts`, `epr-return-routes.ts`, `mrv-routes.ts`, and `registry-routes.ts`. They all fail closed when the database or session authentication is unavailable, but their response payloads and helper signatures differ. The EPR-return module also has a local organization-membership check; other route families use shared organization-scope/permission helpers. These are related patterns, not yet proven drop-in duplicates.
+
+Do not replace them with a shared helper by text similarity alone. A future consolidation must preserve each route's HTTP response contract and test: (1) missing database, (2) missing/invalid/expired session, (3) verified versus unverified membership, (4) active organization selection for multi-organization identities, and (5) organization permission denial. The existing `authenticate` function in `apps/src/auth.ts` remains the canonical session and active-organization resolver.
+
+### Unused integration/package candidates — evidence required
+
+- `@rupaykg/intelligence` is included in root build/typecheck sequencing but its package exports are not imported by the inspected API route modules. This alone does not establish that it is dead code. Retire it only after checking all workspace imports, package scripts, tests, and intended product scope; otherwise record an explicit integration owner and boundary.
+- `@grpc/grpc-js` remains a direct API dependency and root override alongside `@hiero-ledger/sdk`. Do not remove it until the resolved dependency tree and SDK peer/runtime requirements prove it is unnecessary. Avoid changing the lockfile based only on a source-level import search.
+
+### Cloud Build pipeline — consumer/trigger not yet verified
+
+`cloudbuild.yaml` builds and pushes a commit-tagged image to Artifact Registry in `asia-south1`; the Render service independently deploys from the GitHub `main` branch using the root Dockerfile. No evidence in this repository alone proves whether a Cloud Build trigger or external consumer is active. Keep the pipeline until its trigger, image consumers, and retention/cost implications are checked in the owning Google Cloud project. Do not claim the pushed image is the live Render image.
+
+### Next safe cleanup gate
+
+Before further destructive cleanup, review actual import/call graphs and package-manager resolution, add regression coverage for any helper consolidation, run the complete CI suite on the exact commit, and keep production changes outside this cleanup PR. The current evidence supports targeted cleanup and explicit unresolved decisions; it does not support deleting the intelligence package, gRPC dependency, Cloud Build pipeline, or changing Render resource identity yet.
+
