@@ -19,6 +19,10 @@ test("PostgreSQL rejects EPR external acceptance without independently verified 
       "insert into identities(external_subject,display_name,status) values($1,$2,'VERIFIED') returning id",
       ["test-epr-acceptance:"+suffix,"EPR acceptance integration test"]
     )).rows[0]!.id;
+    const verifierIdentity = (await client.query<{id:string}>(
+      "insert into identities(external_subject,display_name,status) values($1,$2,'VERIFIED') returning id",
+      ["test-epr-verifier:"+suffix,"Independent EPR verification test identity"]
+    )).rows[0]!.id;
     const geography = (await client.query<{id:string}>(
       "insert into geography(kind,code,name,source) values('STATE_UT',$1,$2,'integration-test') returning id",
       ["TEST-"+suffix,"Test geography "+suffix]
@@ -37,7 +41,7 @@ test("PostgreSQL rejects EPR external acceptance without independently verified 
     )).rows[0]!.id;
     const rejectedVerification = (await client.query<{id:string}>(
       "insert into verifications(evidence_id,activity_id,verifier_identity_id,decision,scope,rationale) values($1,$2,$3,'REJECTED','EPR_EXTERNAL_ACCEPTANCE','Integration fixture intentionally rejected') returning id",
-      [evidence,activity,identity]
+      [evidence,activity,verifierIdentity]
     )).rows[0]!.id;
 
     const base = {
