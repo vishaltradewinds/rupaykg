@@ -27,11 +27,16 @@ export async function executeAgenticReadTools(
 
   if (goal === "onboard_stakeholder") {
     const result = await pool.query<OnboardingRow>(
-      `select sa.id,
-        (select count(*)::text from organization_verification_evidence ove where ove.organization_id=sa.organization_id) as evidence_count,
-        (case when o.verification_status='VERIFIED' then '1' else '0' end)::text as verified_count
+      `with organization_status as (
+         select o.id as organization_id,
+           (select count(*)::text from organization_verification_evidence ove where ove.organization_id=o.id) as evidence_count,
+           (case when o.verification_status='VERIFIED' then '1' else '0' end)::text as verified_count
+         from organizations o
+         where o.id=$1
+       )
+       select sa.id, os.evidence_count, os.verified_count
        from stakeholder_applications sa
-       join organizations o on o.id=sa.organization_id
+       join organization_status os on os.organization_id=sa.organization_id
        where sa.organization_id=$1
          and ($2::uuid is null or sa.geography_id=$2::uuid)
          and (sa.geography_id is null or organization_has_geography_scope(sa.organization_id,sa.geography_id))
@@ -43,8 +48,10 @@ export async function executeAgenticReadTools(
       toolIds,
       sourceRecordIds: result.rows.map(row => row.id),
       measurementCount: 0,
-      evidenceCount: result.rows.reduce((sum, row) => sum + Number(row.evidence_count), 0),
-      verifiedCount: result.rows.reduce((sum, row) => sum + Number(row.verified_count), 0),
+      // Legal evidence and organization verification belong to the organization,
+      // not each application. Read these organization-level aggregates once.
+      evidenceCount: Number(result.rows[0]?.evidence_count ?? 0),
+      verifiedCount: Number(result.rows[0]?.verified_count ?? 0),
     };
   }
 
