@@ -97,6 +97,21 @@ Do not replace them with a shared helper by text similarity alone. A future cons
 
 Before further destructive cleanup, review actual import/call graphs and package-manager resolution, add regression coverage for any helper consolidation, run the complete CI suite on the exact commit, and keep production changes outside this cleanup PR. The current evidence supports targeted cleanup and explicit unresolved decisions; it does not support deleting the intelligence package, gRPC dependency, Cloud Build pipeline, or changing Render resource identity yet.
 
+### Guardian live-acceptance workflow — gate ordering corrected (2026-10-27)
+
+A source review found that `.github/workflows/guardian-live-acceptance.yml` required `eligibleForRegistry=true` immediately after authoritative MRV submission and before the Mirror Node verification step. This contradicted the API's intended state transition: a new successful submission persists Guardian VERIFIED + HCS CONSENSUS_CONFIRMED, while registry eligibility remains false until `/api/v1/mrv/hedera/verify/:consensusTimestamp` verifies the message and persists `mirror_node_verified_at`. The old workflow would therefore fail valid submissions before reaching Mirror Node verification.
+
+The workflow was corrected to:
+1. Require non-synthetic authoritative MRV, Guardian VERIFIED, HCS CONSENSUS_CONFIRMED, and exact activity/verification/evidence/policy bindings.
+2. Verify the matching persisted provenance row before Mirror Node verification without demanding premature registry eligibility.
+3. Require Mirror Node verification to return `verified=true` and `eligibleForRegistry=true`.
+4. Re-fetch persisted provenance and require registry eligibility plus a persisted Mirror Node verification timestamp.
+5. Add `scripts/test-guardian-live-acceptance-workflow.mjs`, wired into CI, to guard step ordering and the above pre/post-verification gates.
+
+**Validation:** CI run `40507898851` passed on commit `d0de2adda0f7dc75194cebc7b21e67a22540c62e`, including the new workflow regression check and production-container build. This validates workflow source and application build only. It is **not** evidence of a live Guardian/Hedera acceptance run.
+
+**Operational limitation:** the workflow is a manual `workflow_dispatch` workflow. This connected GitHub interface exposes no workflow-dispatch action, and PR #94 remains unmerged by design. Consequently the real deployed acceptance has not been executed. Do not merge solely to bypass this limitation; require the authorized release gate and real non-fixture activity identifiers/session secret, then run the workflow on the deployed service.
+
 ### Guardian generator reproducibility — canonical source reconciliation
 
 The generator `scripts/build-wa03-guardian-policy.mjs` preserves the ten reviewed policy-block IDs and the exact canonical metadata timestamps already present in the tracked policy/schema source. New block tags and schema names fail closed until explicitly mapped. The test `scripts/test-wa03-guardian-policy-reproducibility.mjs`, exposed as `npm run test:guardian-policy` and run by CI, verifies repeat-generation byte equality, canonical timestamps, unique/preserved block IDs, deterministic ZIP hashes, required package members, and archive integrity.
