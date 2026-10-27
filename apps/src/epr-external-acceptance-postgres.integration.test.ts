@@ -129,6 +129,30 @@ test("PostgreSQL rejects EPR external acceptance without independently verified 
       "accepted EPR verification cannot be revoked in place"
     );
     await client.query("rollback to savepoint verification_invalidation");
+
+    await client.query("savepoint evidence_delete");
+    await assert.rejects(
+      client.query("delete from evidence where id=$1",[evidence]),
+      /evidence referenced by accepted EPR return cannot be deleted/i,
+      "accepted EPR evidence cannot be deleted"
+    );
+    await client.query("rollback to savepoint evidence_delete");
+
+    await client.query("savepoint verification_delete");
+    await assert.rejects(
+      client.query("delete from verifications where id=$1",[approvedVerification]),
+      /verification referenced by accepted EPR return cannot be deleted/i,
+      "accepted EPR verification cannot be deleted"
+    );
+    await client.query("rollback to savepoint verification_delete");
+
+    await client.query("savepoint confirmation_rewrite");
+    await assert.rejects(
+      client.query("update epr_returns set external_reference='REWRITTEN' where id=$1",[acceptedReturn]),
+      /accepted EPR external confirmation is immutable/i,
+      "accepted external authority reference cannot be rewritten"
+    );
+    await client.query("rollback to savepoint confirmation_rewrite");
   } finally {
     try { await client.query("rollback"); } catch {}
     client.release();
