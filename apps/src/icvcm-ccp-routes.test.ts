@@ -17,8 +17,8 @@ function fakePool(options: { permission?: boolean; evidenceVerified?: boolean } 
     query: async (sql: string, params: unknown[] = []) => {
       calls.push({ sql, params });
       if (sql.includes("from identity_sessions")) return { rows: [{ identity_id: IDENTITY }] };
-      if (sql.includes("from organization_memberships")) return { rows: [{ organization_id: ORG, role_id: "role", status: "VERIFIED" }] };
       if (sql.includes("select exists (")) return { rows: [{ ok: options.permission ?? true }] };
+      if (sql.includes("from organization_memberships")) return { rows: [{ organization_id: ORG, role_id: "role", status: "VERIFIED" }] };
       if (sql.includes("from activities")) return { rows: [{ organization_id: ORG, geography_id: "55555555-5555-4555-8555-555555555555" }] };
       if (sql.includes("organization_has_geography_scope")) return { rows: [{ ok: true }] };
       if (sql.includes("from evidence")) return { rows: options.evidenceVerified === false ? [] : [{ id: EVIDENCE }] };
