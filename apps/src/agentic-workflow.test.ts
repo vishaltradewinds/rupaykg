@@ -64,3 +64,17 @@ test("aggregate findings disclose that they are based on the bounded activity re
   assert.match(plan.steps.find(step => step.id === "evidence")!.reason, /bounded activity result set \(2 activity record\(s\)\)/);
   assert.match(plan.steps.find(step => step.id === "verification")!.reason, /bounded activity result set \(2 activity record\(s\)\)/);
 });
+
+
+test("compliance evidence count is not presented as proof of provenance or independent verification", () => {
+  const plan = buildAgenticPlan({ ...base, goal: "prepare_compliance", evidenceCount: 2, verifiedCount: 1 });
+  assert.match(plan.steps.find(step => step.id === "evidence")!.reason, /count alone does not establish provenance, integrity, relevance, or admissibility/);
+  assert.match(plan.steps.find(step => step.id === "verification")!.reason, /not independently revalidated by the planner/);
+});
+
+test("resource-flow evidence count preserves the need to validate custody and provenance", () => {
+  const plan = buildAgenticPlan({ ...base, goal: "trace_resource_flow", evidenceCount: 2 });
+  assert.match(plan.steps.find(step => step.id === "evidence")!.reason, /provenance, integrity, custody linkage, and completeness still require review/);
+  assert.equal(plan.canExecute, false);
+  assert.equal(plan.humanApprovalRequired, true);
+});
