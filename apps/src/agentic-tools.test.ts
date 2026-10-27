@@ -11,6 +11,7 @@ test("registry exposes only explicit read-only, tenant and geography-scoped tool
   assert.ok(tools.every(tool => tool.requiredAnyPermission.length > 0));
   assert.ok(tools.every(tool => !tool.requiredAnyPermission.includes("projects:manage")), "broad management permission must not substitute for read access");
   assert.ok(tools.every(tool => !tool.requiredAnyPermission.includes("VERIFY_EVIDENCE")), "high-risk verification authority must not substitute for read access");
+  assert.ok(tools.every(tool => !tool.requiredAnyPermission.includes("evidence:review")), "review authority must not substitute for read access");
   assert.ok(!tools.some(tool => /write|submit|issue|settle|approve|delete/i.test(tool.id)));
 });
 
