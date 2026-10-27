@@ -20,7 +20,7 @@ function fakePool(options: { geographyAllowed?: boolean; failActivityRead?: bool
         return { rows: [{ organization_id: organizationId, role_id: "role-1", status: "VERIFIED" }] };
       }
       if (sql.includes("jsonb_array_elements_text(r.permissions)")) return { rows: [{ ok: true }] };
-      if (sql.includes("organization_has_geography_scope(om.organization_id,$3::uuid)")) {
+      if (sql.includes("role_has_geography_scope($4::uuid,$3::uuid)")) {
         return { rows: [{ ok: options.geographyAllowed ?? false }] };
       }
       if (sql.includes("from activities a")) {
