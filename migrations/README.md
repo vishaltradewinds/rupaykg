@@ -107,3 +107,7 @@ Migration `092_assessed_activity_context_immutability.sql` prevents changing an 
 Migration `093_assessed_geography_scope_immutability.sql` prevents insert/update/delete changes to an organization's geography-scope rows after that organization has accepted/completed EPR external-confirmation history or ICVCM assessment history. This is necessary because removing the last verified scope can change the existing authorization function's behavior from an explicit scope check to its legacy no-scope fallback.
 
 Migration `094_geography_scope_transfer_guard.sql` closes the transfer edge case by checking both the source and destination organizations when a scope row is moved. This is a fail-closed interim control; it does not implement versioned authorization policies. Organizations with assessed history must not rewrite scope policy in place until a separately reviewed versioned policy model is implemented.
+
+## Assessed geography hierarchy immutability
+
+Migration `095_assessed_geography_hierarchy_immutability.sql` prevents re-parenting a geography node when its current ancestry is used by an activity with accepted/completed EPR confirmation or ICVCM assessment history, including when the node is an organization's verified scope root. Because scope authorization walks `geography.parent_id`, changing ancestry could retroactively change the authorization result for historical assessments. A correction workflow should preserve the original hierarchy and introduce an explicit, versioned geography correction rather than rewriting historical ancestry.
