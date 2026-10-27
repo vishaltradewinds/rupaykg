@@ -1,7 +1,7 @@
 import { createHash, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import type { Pool } from "pg";
-import { authenticate, issueOpaqueToken } from "./auth.js";
+import { authenticate, issueOpaqueToken, type AuthContext } from "./auth.js";
 import { getPermissionsForRole } from "./rbac-policy.js";
 
 type Body = Record<string, unknown>;
