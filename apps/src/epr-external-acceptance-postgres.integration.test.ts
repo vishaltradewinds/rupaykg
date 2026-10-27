@@ -27,6 +27,18 @@ test("PostgreSQL rejects EPR external acceptance without independently verified 
       "insert into geography(kind,code,name,source) values('STATE_UT',$1,$2,'integration-test') returning id",
       ["TEST-"+suffix,"Test geography "+suffix]
     )).rows[0]!.id;
+    await client.query(
+      "insert into organization_geography_scopes(organization_id,geography_id,status) values($1,$2,'VERIFIED')",
+      [org,geography]
+    );
+    const verifierRole = (await client.query<{id:string}>(
+      "insert into roles(organization_id,name,permissions) values($1,'TEST_VERIFIER','[\"VERIFY_EVIDENCE\"]') returning id",
+      [org]
+    )).rows[0]!.id;
+    await client.query(
+      "insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED')",
+      [verifierIdentity,org,verifierRole]
+    );
     const activity = (await client.query<{id:string}>(
       "insert into activities(organization_id,actor_identity_id,geography_id,activity_type,status,metadata) values($1,$2,$3,'EPR_EXTERNAL_ACCEPTANCE_TEST','DRAFT','{}'::jsonb) returning id",
       [org,identity,geography]
@@ -36,13 +48,14 @@ test("PostgreSQL rejects EPR external acceptance without independently verified 
       ["TEST_EPR_"+suffix]
     )).rows[0]!.id;
     const evidence = (await client.query<{id:string}>(
-      "insert into evidence(activity_id,evidence_type,status,captured_at,content_uri,content_hash,metadata) values($1,'AUTHORITY_CONFIRMATION','CAPTURED',now(),'test://authority-confirmation','"+ "a".repeat(64) +"','{}'::jsonb) returning id",
+      "insert into evidence(activity_id,evidence_type,status,captured_at,content_uri,content_hash,metadata) values($1,'AUTHORITY_CONFIRMATION','UNDER_REVIEW',now(),'test://authority-confirmation','"+ "a".repeat(64) +"','{}'::jsonb) returning id",
       [activity]
     )).rows[0]!.id;
     const rejectedVerification = (await client.query<{id:string}>(
       "insert into verifications(evidence_id,activity_id,verifier_identity_id,decision,scope,rationale) values($1,$2,$3,'REJECTED','EPR_EXTERNAL_ACCEPTANCE','Integration fixture intentionally rejected') returning id",
       [evidence,activity,verifierIdentity]
     )).rows[0]!.id;
+    await client.query("update evidence set status='VERIFIED' where id=$1",[evidence]);
 
     const base = {
       schemeId: scheme, organizationId: org, periodStart: "2026-01-01", periodEnd: "2026-03-31",
