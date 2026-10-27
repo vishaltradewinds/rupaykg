@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import type { Pool } from "pg";
-import { authenticate, bearerChallenge, canActForOrganization, canVerifyEvidence, hasOrganizationPermission } from "./auth.js";
+import { authenticate, bearerChallenge, canActForOrganization, canVerifyEvidence, hasOrganizationPermission, type AuthContext } from "./auth.js";
 
 const MAX_BYTES = 5 * 1024 * 1024;
 const MEDIA = new Set(["application/pdf", "image/jpeg", "image/png", "text/csv", "text/plain", "application/json"]);
