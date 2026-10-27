@@ -73,10 +73,10 @@ Additional Indian primary sources must be recorded separately in the statutory s
 - [x] Add unit tests for empty, incomplete, complete, unknown and duplicate assessments.
 - [x] Harden runtime validation for malformed evidence-reference payloads and invalid statuses.
 - [x] Test whitespace-only evidence references so they cannot satisfy the evidence gate.
-- [x] Add authenticated activity-scoped API routes to persist and retrieve internal CCP evidence assessments.
+- [x] Add authenticated activity-scoped API routes to persist and retrieve versioned internal CCP evidence assessments.
 - [x] Reuse the existing PostgreSQL evidence vault; require evidence UUIDs to resolve to VERIFIED evidence bound to the same activity.
 - [x] Enforce organization membership, `evidence:review` write permission, activity ownership and geography scope before persistence.
-- [x] Persist records only as `INTERNAL_DRAFT`; this workflow exposes no approval, certification or issuance action.
+- [x] Persist append-only revisions only as `INTERNAL_DRAFT`; this workflow exposes no approval, certification or issuance action.
 - [ ] Add dedicated API-level authorization and persistence regression tests, including cross-organization access and incomplete evidence.
 - [ ] Run the updated package tests, TypeScript build/typecheck and repository-wide regression suite.
 - [ ] Complete independent regulatory/methodology review and TRL evidence assessment.
