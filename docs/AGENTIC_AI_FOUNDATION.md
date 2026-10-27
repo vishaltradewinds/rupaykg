@@ -3,7 +3,7 @@
 ## Implemented in this source-code increment
 - Authenticated, organization-scoped workflow planning backed by authoritative PostgreSQL records.
 - Four allow-listed goals: measurement review, compliance preparation, resource-flow/custody tracing, and stakeholder onboarding checklist.
-- Evidence gates and explicit READY, BLOCKED, and REQUIRES_HUMAN steps.
+- Evidence gates and explicit READY, BLOCKED, and REQUIRES_HUMAN steps. Evidence counts are described as recorded metadata only; the planner explicitly does not treat counts or an existing APPROVED flag as independent proof of provenance, integrity, admissibility, custody completeness, or verifier independence.
 - Optional provider-neutral OpenAI-compatible chat-completions adapter for plain-language plan explanation. It is disabled by default and has no tools or action-execution access.
 - Capability discovery endpoint and unit tests for planning gates and model adapter configuration.
 - Model-boundary tests verify the provider receives a minimized summary (not organization/geography/source-record identifiers), blocker lists are bounded, provider output is capped, and malformed responses fail closed.
