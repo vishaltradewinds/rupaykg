@@ -36,6 +36,8 @@ jobs:
           node-version: '22.x'
           package-manager-cache: false
       - run: npm ci --no-audit --no-fund
+      - name: Verify Guardian policy generation is reproducible
+        run: npm run test:guardian-policy
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=high
       - run: npm run validate:migrations
