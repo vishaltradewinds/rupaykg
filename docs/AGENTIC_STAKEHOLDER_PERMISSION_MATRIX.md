@@ -117,3 +117,41 @@ Before any stakeholder-specific tool is enabled, document and test all of the fo
 ## 7. Immediate engineering follow-up
 
 This document is a baseline for engineering, not a claim that all 35 categories have been implemented. The next code batch should add a typed read-only tool registry only after matching each proposed tool to actual database schema and existing authorization helpers. Do not add speculative database fields, synthetic stakeholder records, external write actions or broad administrator bypasses.
+
+
+## 8. Repository-grounded schema and authorization mapping
+
+This section maps the design to repository artifacts inspected for this increment. A table's existence does not prove that every role may read it; endpoint-level authorization and geography constraints still apply.
+
+| Domain | Repository evidence / existing data model | Agentic use now | Gap before role-specific tools |
+|---|---|---|---|
+| Identity and tenant membership | `identities`, `identity_sessions`, `organization_memberships`, `roles`; `apps/src/auth.ts` | Existing bearer authentication, verified membership and active-organization scope | Add per-tool action scopes; do not treat authentication alone as permission |
+| Geography | `geography`, `organization_has_geography_scope(...)`; migrations `003`, `012` | Optional geography scope is validated before planning | Map each role to allowed geography levels and test parent/child scope boundaries |
+| Operational activities | `activities`; agentic workflow query in `apps/src/agentic-workflow.ts` | Source records for measurement, compliance and resource-flow plans | Confirm required fields and role-specific row access before expanding tools |
+| Measurements | `measurements`; migration `003` adds capture/device/location provenance | Counts and presence checks only | Add typed read model for value, unit, method, timestamp, source, calibration and anomaly evidence |
+| Evidence and verification | `evidence`, `verifications`; `apps/src/auth.ts` contains high-risk evidence permission helpers | Evidence and approved-verification counts; no evidence bytes sent to model | Use provenance-bound evidence references; enforce verifier independence and read permissions |
+| Stakeholder applications | `stakeholder_applications`; migrations `029`, `062`, `077`, `078` | Onboarding planning reads existing applications and organization verification state | Add safe read-only view for requested role/type, approval chain and current state; never approve via AI |
+| Organization legal verification | `organization_verification_evidence` is queried by current workflow; migration `063` governs legal verification | Evidence count and verified-status prerequisite only | Map evidence types and verification status explicitly; prevent cross-organization evidence joins |
+| Bulk Waste Generator reporting | `bwg_profiles`, `bwg_reporting_periods`, `bwg_waste_reports`, `bwg_epr_reports`, `bwg_esg_reports`; migrations `036`–`044` | Not queried by current agentic planner | Build BWG-specific read-only planner using applicability status and reporting period; never infer applicability |
+| CPCB SWM stakeholder workspaces | `cpcb_swm_stakeholder_workspaces`; migration `20261018_cpcb_swm_stakeholder_workspaces.sql` | Not queried by current agentic planner | Support defined stakeholder types (BWG, waste facility, ULB, district/gram panchayat, collector/transporter, processor) and treat CPCB status claim as unverified |
+| Evidence artifact vault | `evidence_artifact_series`, `evidence_artifact_versions`, `evidence_artifact_reviews`; migration `20261021_evidence_artifact_vault.sql` | Not used for model input; current model adapter receives bounded plan summary only | Add permission-checked metadata-only lookup first; content extraction requires file safety, provenance, retention and evaluation controls |
+| Registry and carbon credentials | Registry/settlement/Guardian and methodology migrations exist, including high-risk permission constants in `apps/src/auth.ts` | No agentic write/issue/transfer/retire action | Keep all such actions outside current agent tool registry; require external confirmation and dual-control review |
+| Settlement | Settlement migrations and `HIGH_RISK_PERMISSIONS.AUTHORIZE_SETTLEMENT/SETTLE_FUNDS` | No agentic settlement capability | No fund movement, settlement authorisation or payment status claim from model output |
+| Field devices and sync | `field_devices`, `operation_sync_envelopes`, activity/evidence/measurement device provenance; migrations `003`, `016`, `017`, `033`, `034` | No agentic device control or device-health tool | Device identity, enrollment, freshness, calibration and tenant binding must be checked; no write/control tools in current increment |
+| Regulatory catalogue and applicability | `regulatory_sources` plus statutory applicability and requirement migrations `039`–`044`, `053`–`070` | Current compliance planner checks operational evidence/verification prerequisites, not full legal applicability | Resolve effective-dated rule, jurisdiction, waste stream and applicability before generating a compliance checklist |
+| Hierarchical onboarding | `stakeholder_application_approvals`; migration `077`; separation control in `078` | Current plan does not approve or advance the chain | Any future UI must display approval stages read-only; decisions must use existing guarded APIs and authorised human identities |
+
+### Current permission contract
+
+The current `POST /api/v1/agentic/plan` endpoint requires:
+- A valid bearer session for a verified, non-suspended identity.
+- An active verified organization membership (multi-organization identities must select the organization).
+- Either `audit:read` or `projects:manage` permission.
+- Geography scope validation when a geography UUID is supplied.
+- Read-only advisory output with `canExecute: false` and `humanApprovalRequired: true`.
+
+**Security follow-up:** Before exposing separate domain tools, replace a broad endpoint-level permission check with a per-tool permission map based on least privilege. Read-only measurement review should not implicitly grant compliance, onboarding, registry, verifier or settlement permissions. Negative tests must prove denied roles cannot access records outside their organisation, geography, programme or assigned activity. The current broad permission contract is documented, not endorsed as the final production role model.
+
+### Mapping decision
+
+The 35 stakeholder categories are target roles. Only the underlying data models explicitly named above are confirmed from repository source in this review. For categories whose source systems or tables are not mapped, implementation must first discover the authoritative source and access contract rather than inventing a table, status, integration or permission.
