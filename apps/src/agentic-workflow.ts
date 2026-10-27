@@ -84,8 +84,8 @@ export function buildAgenticPlan(input: {
   } else {
     steps.push(
       { id: "scope", title: "Confirm organization and geography scope", status: "READY", reason: "The request is authenticated and scoped to a verified organization membership.", requiredEvidence: ["verified_membership", "geography_scope"] },
-      { id: "source", title: "Inspect existing onboarding and organization records", status: hasSources ? "READY" : "BLOCKED", reason: hasSources ? `Found ${sourceRecordIds.length} in-scope activity record(s); organization onboarding records must still be checked by the onboarding workflow.` : "No in-scope operational records were found; this endpoint does not create stakeholder or membership records.", requiredEvidence: ["legal identity", "organization details", "authorized representative"] },
-      { id: "due-diligence", title: "Complete stakeholder due diligence", status: "BLOCKED", reason: "Identity, statutory registrations, role authority and geography scope require dedicated verified onboarding evidence.", requiredEvidence: ["identity verification", "registration evidence where applicable", "role and mandate evidence"] },
+      { id: "source", title: "Inspect existing onboarding and organization records", status: hasSources ? "READY" : "BLOCKED", reason: hasSources ? `Found ${sourceRecordIds.length} stakeholder application record(s) in the authorized organization scope.` : "No stakeholder applications were found in this organization/geography scope; this endpoint does not create stakeholder or membership records.", requiredEvidence: ["legal identity", "organization details", "authorized representative"] },
+      { id: "due-diligence", title: "Complete stakeholder due diligence", status: hasEvidence && hasVerified ? "READY" : "BLOCKED", reason: hasEvidence && hasVerified ? "Legal evidence and organization verification records exist; a reviewer must still confirm identity, role mandate and applicable registration requirements." : "Legal evidence and verified organization status are incomplete; identity, statutory registrations, role authority and geography scope must be checked.", requiredEvidence: ["identity verification", "registration evidence where applicable", "role and mandate evidence"] },
       { id: "human-review", title: "Authorized onboarding decision", status: "REQUIRES_HUMAN", reason: "The agent may prepare a checklist but cannot approve identity, membership, or statutory eligibility.", requiredEvidence: ["authorized reviewer", "decision record"] },
     );
   }
@@ -144,19 +144,31 @@ export async function registerAgenticWorkflowRoutes(app: FastifyInstance, pool: 
       if (!scope.rows[0]?.ok) return reply.code(403).send({ error: "Geography outside organization authorization scope", code: "GEOGRAPHY_FORBIDDEN" });
     }
     try {
-      const rows = await pool.query<{ id: string; measurement_count: string; evidence_count: string; verified_count: string }>(
-        `select a.id,
-          (select count(*)::text from measurements m where m.activity_id=a.id) as measurement_count,
-          (select count(*)::text from evidence e where e.activity_id=a.id) as evidence_count,
-          (select count(*)::text from verifications v where v.activity_id=a.id and v.decision='APPROVED') as verified_count
-         from activities a
-         where a.organization_id=$1
-           and a.geography_id is not null
-           and organization_has_geography_scope(a.organization_id,a.geography_id)
-           and ($2::uuid is null or a.geography_id=$2::uuid)
-         order by a.created_at desc limit 100`,
-        [organizationId, geographyId],
-      );
+      const rows = body.goal === "onboard_stakeholder"
+        ? await pool.query<{ id: string; measurement_count: string; evidence_count: string; verified_count: string }>(
+            `select sa.id, '0'::text as measurement_count,
+              (select count(*)::text from organization_verification_evidence ove where ove.organization_id=sa.organization_id) as evidence_count,
+              (case when o.verification_status='VERIFIED' then '1' else '0' end)::text as verified_count
+             from stakeholder_applications sa join organizations o on o.id=sa.organization_id
+             where sa.organization_id=$1
+               and ($2::uuid is null or sa.geography_id=$2::uuid)
+               and (sa.geography_id is null or organization_has_geography_scope(sa.organization_id,sa.geography_id))
+             order by sa.created_at desc limit 100`,
+            [organizationId, geographyId],
+          )
+        : await pool.query<{ id: string; measurement_count: string; evidence_count: string; verified_count: string }>(
+            `select a.id,
+              (select count(*)::text from measurements m where m.activity_id=a.id) as measurement_count,
+              (select count(*)::text from evidence e where e.activity_id=a.id) as evidence_count,
+              (select count(*)::text from verifications v where v.activity_id=a.id and v.decision='APPROVED') as verified_count
+             from activities a
+             where a.organization_id=$1
+               and a.geography_id is not null
+               and organization_has_geography_scope(a.organization_id,a.geography_id)
+               and ($2::uuid is null or a.geography_id=$2::uuid)
+             order by a.created_at desc limit 100`,
+            [organizationId, geographyId],
+          );
       const measurements = rows.rows.reduce((sum, row) => sum + Number(row.measurement_count), 0);
       const evidence = rows.rows.reduce((sum, row) => sum + Number(row.evidence_count), 0);
       const verified = rows.rows.reduce((sum, row) => sum + Number(row.verified_count), 0);
