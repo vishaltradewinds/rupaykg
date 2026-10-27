@@ -13,6 +13,13 @@ async function authFor(r:Request,reply:Reply,pool:Pool|null):Promise<AuthContext
   catch(error){r.log.error(error);reply.code(503).send({error:"Authentication service unavailable",code:"AUTH_UNAVAILABLE"});return null}
 }
 async function tx<T>(pool:Pool,fn:(client:PoolClient)=>Promise<T>):Promise<T>{const client=await pool.connect();try{await client.query("begin");const result=await fn(client);await client.query("commit");return result}catch(error){await client.query("rollback");throw error}finally{client.release()}}
+async function identityCanAccessActivity(client: Pool | PoolClient, auth: AuthContext, organizationId: string, activityId: string): Promise<boolean> {
+  const result = await client.query<{ ok: boolean }>(
+    "select identity_has_geography_scope($1,$2,a.geography_id) ok from activities a where a.id=$3 and a.organization_id=$2 and a.geography_id is not null",
+    [auth.identityId, organizationId, activityId],
+  );
+  return result.rows[0]?.ok === true;
+}
 
 export async function registerRegistryRoutes(app:FastifyInstance,pool:Pool|null):Promise<void>{
   app.post("/api/v1/credentials",async(request,reply)=>{
@@ -27,8 +34,8 @@ export async function registerRegistryRoutes(app:FastifyInstance,pool:Pool|null)
       if(v.rows[0].activity_id!==activityId)throw Object.assign(new Error("Verification is not bound to the requested activity"),{code:"EVIDENCE_MISMATCH"});
       const e=await c.query<{activity_id:string|null;status:string;acceptance_fixture:string|null}>("select activity_id,status,metadata->>'acceptanceFixture' as acceptance_fixture from evidence where id=$1 for update",[v.rows[0].evidence_id]);
       if(!e.rows[0]||e.rows[0].status!=="VERIFIED"||e.rows[0].activity_id!==activityId)throw Object.assign(new Error("Verification is not bound to verified activity evidence"),{code:"EVIDENCE_MISMATCH"});
-      const a=await c.query<{organization_id:string;status:string;acceptance_fixture:string|null}>("select organization_id,status,metadata->>'acceptanceFixture' as acceptance_fixture from activities where id=$1 for update",[activityId]);
-      if(!a.rows[0]||a.rows[0].organization_id!==issuerOrganizationId||a.rows[0].status!=="COMPLETED")throw Object.assign(new Error("Completed activity owned by issuer is required"),{code:"ACTIVITY_NOT_ELIGIBLE"});
+      const a=await c.query<{organization_id:string;status:string;geography_id:string|null;acceptance_fixture:string|null}>("select organization_id,status,geography_id,metadata->>'acceptanceFixture' as acceptance_fixture from activities where id=$1 for update",[activityId]);
+      if(!a.rows[0]||a.rows[0].organization_id!==issuerOrganizationId||a.rows[0].status!=="COMPLETED")throw Object.assign(new Error("Completed activity owned by issuer is required"),{code:"ACTIVITY_NOT_ELIGIBLE"});if(!await identityCanAccessActivity(c,auth,issuerOrganizationId,activityId))throw Object.assign(new Error("Activity geography is outside role authorization scope"),{code:"GEOGRAPHY_FORBIDDEN"});
       if(a.rows[0]?.acceptance_fixture==="true"||e.rows[0]?.acceptance_fixture==="true")throw Object.assign(new Error("Acceptance fixture activity/evidence cannot be used for registry credential issuance"),{code:"ACCEPTANCE_FIXTURE_NOT_REGISTRY_ELIGIBLE"});
       const provenance=await c.query<{id:string;guardian_execution_id:string;hcs_topic_id:string;hcs_consensus_timestamp:string;integrity_hash:string;mirror_node_verified_at:Date}>(
         `select m.id,m.guardian_execution_id,m.hcs_topic_id,m.hcs_consensus_timestamp,m.integrity_hash,m.mirror_node_verified_at
