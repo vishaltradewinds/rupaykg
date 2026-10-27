@@ -27,6 +27,7 @@ test("agentic tool authorization uses real PostgreSQL role permissions and rejec
 
     const scenarios = [
       { key: "read", permissions: ["waste:read"], org: organizationId },
+      { key: "evidence-read", permissions: ["projects:read", "evidence:read", "audit:read"], org: organizationId },
       { key: "manage-only", permissions: ["projects:manage"], org: organizationId },
       { key: "verify-only", permissions: ["VERIFY_EVIDENCE"], org: organizationId },
       { key: "stakeholder-manage-only", permissions: ["MANAGE_STAKEHOLDERS"], org: organizationId },
