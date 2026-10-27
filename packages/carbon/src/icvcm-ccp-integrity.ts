@@ -82,6 +82,15 @@ export function assessIcvcmCcpEvidence(
     if (!["EVIDENCED", "GAP", "NOT_ASSESSED"].includes(assessment.status)) {
       throw new Error(`Invalid assessment status for ${assessment.principleId}`);
     }
+    if (assessment.evidenceReferences !== undefined && !Array.isArray(assessment.evidenceReferences)) {
+      throw new Error(`Evidence references must be an array for ${assessment.principleId}`);
+    }
+    if (assessment.evidenceReferences?.some((reference) => typeof reference !== "string")) {
+      throw new Error(`Evidence references must contain only strings for ${assessment.principleId}`);
+    }
+    if (assessment.notes !== undefined && typeof assessment.notes !== "string") {
+      throw new Error(`Assessment notes must be a string for ${assessment.principleId}`);
+    }
     byId.set(assessment.principleId, assessment);
   }
 
