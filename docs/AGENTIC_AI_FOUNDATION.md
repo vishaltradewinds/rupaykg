@@ -8,6 +8,11 @@
 - Capability discovery endpoint and unit tests for planning gates and model adapter configuration.
 - Shakti Standards lifecycle / TRL boundary documentation.
 
+## Stakeholder coverage baseline
+See [AGENTIC_STAKEHOLDER_PERMISSION_MATRIX.md](AGENTIC_STAKEHOLDER_PERMISSION_MATRIX.md) for the pan-India stakeholder matrix, current-versus-planned implementation status, permission boundaries, cross-cutting control roles, source/evidence expectations, rollout batches and Shakti Standards gates.
+
+The matrix identifies 35 stakeholder categories. This is target coverage, not a claim that each category has a dedicated agent or live integration. The current increment provides four generic read-only advisory workflow goals only.
+
 ## API
 - `GET /api/v1/agentic/capabilities`
 - `POST /api/v1/agentic/plan` with JSON such as `{"goal":"prepare_compliance","geographyId":"optional-uuid"}`
@@ -28,6 +33,7 @@ The adapter sends a bounded plan summary, not raw uploaded evidence. Model outpu
 - Autonomous mutation/execution of domain actions.
 - OCR/evidence extraction, external registry submissions, Hedera write/consensus verification, W3C VC signing, weighbridge/device control, or statutory filings.
 - Long-running queues/retries, persistent agent memory, multi-agent delegation, model evaluation/observability dashboard, or provider-specific operational integration.
+- Dedicated agents for all stakeholder categories in the matrix.
 - Field validation, independent security review, TRL advancement, or production certification.
 
 Those capabilities require domain-specific evidence, explicit authorization, idempotency, audit trails, threat modelling, integration tests, operational recovery and human approval gates. Production certification remains HOLD/OFF.
