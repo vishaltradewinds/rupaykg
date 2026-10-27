@@ -2,8 +2,30 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 
+const sourceDateEpoch = process.env.SOURCE_DATE_EPOCH;
+if (!sourceDateEpoch || !/^\d+$/.test(sourceDateEpoch)) {
+  throw new Error('Set SOURCE_DATE_EPOCH to a fixed Unix timestamp (seconds) for reproducible policy generation.');
+}
+const buildTimestamp = new Date(Number(sourceDateEpoch) * 1000);
+if (!Number.isFinite(buildTimestamp.getTime())) {
+  throw new Error('SOURCE_DATE_EPOCH is outside the supported timestamp range.');
+}
+const timestamp = buildTimestamp.toISOString();
+
 const root = path.resolve('guardian-policies/WA03.001');
 fs.mkdirSync(path.join(root,'schemas'), {recursive:true});
+
+function stableUuid(name) {
+  const bytes = crypto.createHash('sha256')
+    .update('rupaykg:wa03.001:guardian-policy:v1:')
+    .update(name)
+    .digest()
+    .subarray(0, 16);
+  bytes[6] = (bytes[6] & 0x0f) | 0x50;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = bytes.toString('hex');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
 
 const ids = {
   applicability:'8b2d9c31-5c1b-4a7f-9b5a-000000000001',
@@ -15,7 +37,7 @@ const ids = {
 
 function schema(id,name,description,properties,required){
   return {
-    createDate:new Date().toISOString(), updateDate:new Date().toISOString(),
+    createDate:timestamp, updateDate:timestamp,
     uuid:id, hash:'', name, description, entity:'NONE', documentFileId:null, contextFileId:null,
     version:'1.0.0', sourceVersion:'BEE BM WA03.001 v1.0', creator:'', owner:'',
     topicId:null, messageId:null, documentURL:null, contextURL:`schema:${id}`,
@@ -93,8 +115,7 @@ const schemas=[
 ];
 for(const s of schemas) fs.writeFileSync(path.join(root,'schemas',`#${s.uuid}.json`),JSON.stringify(s,null,2));
 
-const uuid=()=>crypto.randomUUID();
-const block=(blockType,tag,permissions,extra={})=>({id:uuid(),blockType,defaultActive:true,permissions,onErrorAction:'no-action',uiMetaData:{},tag,children:[],events:[],artifacts:[],...extra});
+const block=(blockType,tag,permissions,extra={})=>({id:stableUuid(tag),blockType,defaultActive:true,permissions,onErrorAction:'no-action',uiMetaData:{},tag,children:[],events:[],artifacts:[],...extra});
 const pp='Project Proponent', vv='Verification Body';
 
 const choose=block('policyRolesBlock','Choose_Role',['NO_ROLE'],{roles:[pp,vv]});
@@ -123,7 +144,7 @@ const calc=block('calculateContainerBlock','wa03_equation4_calc',[pp],{
     {name:'ery',title:'ERy,calculated',value:'E_ER'}
   ],
   children:[{
-    id:uuid(),blockType:'calculateMathAddonBlock',defaultActive:true,permissions:[pp],onErrorAction:'no-action',uiMetaData:{},tag:'wa03_equation4_math',children:[],events:[],artifacts:[],
+    id:stableUuid('wa03_equation4_math'),blockType:'calculateMathAddonBlock',defaultActive:true,permissions:[pp],onErrorAction:'no-action',uiMetaData:{},tag:'wa03_equation4_math',children:[],events:[],artifacts:[],
     equations:[
       {variable:'E_GWP',formula:'29.8'},
       {variable:'E_ER',formula:'(E_FCH4_PJ-E_FCH4_BL)*E_GWP*(1-E_OX)-E_PE-E_LE'}
@@ -131,14 +152,14 @@ const calc=block('calculateContainerBlock','wa03_equation4_calc',[pp],{
   }]
 });
 const v=block('requestVcDocumentBlock','wa03_verification_form',[vv],{uiMetaData:{type:'page',title:'WA03.001 Independent Verification'},presetFields:[],schema:`#${ids.verification}`,idType:'UUID'});
-const rootBlock={id:uuid(),blockType:'interfaceContainerBlock',permissions:['ANY_ROLE'],onErrorAction:'no-action',uiMetaData:{type:'blank',fields:[]},options:[],dataSource:'auto',tag:'WA03_001_ROOT',children:[
+const rootBlock={id:stableUuid('WA03_001_ROOT'),blockType:'interfaceContainerBlock',permissions:['ANY_ROLE'],onErrorAction:'no-action',uiMetaData:{type:'blank',fields:[]},options:[],dataSource:'auto',tag:'WA03_001_ROOT',children:[
   choose,
-  {id:uuid(),blockType:'interfaceContainerBlock',defaultActive:true,permissions:[pp],onErrorAction:'no-action',uiMetaData:{type:'tabs'},tag:'Project_Proponent',children:[a,b,m,calc],events:[],artifacts:[]},
-  {id:uuid(),blockType:'interfaceContainerBlock',defaultActive:true,permissions:[vv],onErrorAction:'no-action',uiMetaData:{type:'tabs'},tag:'Verification_Body',children:[v],events:[],artifacts:[]}
+  {id:stableUuid('Project_Proponent'),blockType:'interfaceContainerBlock',defaultActive:true,permissions:[pp],onErrorAction:'no-action',uiMetaData:{type:'tabs'},tag:'Project_Proponent',children:[a,b,m,calc],events:[],artifacts:[]},
+  {id:stableUuid('Verification_Body'),blockType:'interfaceContainerBlock',defaultActive:true,permissions:[vv],onErrorAction:'no-action',uiMetaData:{type:'tabs'},tag:'Verification_Body',children:[v],events:[],artifacts:[]}
 ],events:[],artifacts:[]};
 
 const policy={
-  updateDate:new Date().toISOString(),uuid:'2b1dbf72-0d6c-4d90-9e16-5e8b8c000301',
+  updateDate:timestamp,uuid:'2b1dbf72-0d6c-4d90-9e16-5e8b8c000301',
   name:'RupayKg BM WA03.001 Landfill Methane Recovery',version:'1.0.0',
   description:'Guardian-native dMRV policy specification for BEE BM WA03.001 v1.0. BEE is the controlling regulatory authority. Guardian examples are not substituted.',
   topicDescription:'RupayKg WA03.001 policy',
