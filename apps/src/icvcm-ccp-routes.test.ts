@@ -12,6 +12,7 @@ const IDENTITY = "44444444-4444-4444-8444-444444444444";
 
 function fakePool(options: { permission?: boolean; evidenceVerified?: boolean } = {}) {
   const calls: Array<{ sql: string; params: unknown[] }> = [];
+  let revision = 0;
   const pool = {
     query: async (sql: string, params: unknown[] = []) => {
       calls.push({ sql, params });
@@ -23,8 +24,8 @@ function fakePool(options: { permission?: boolean; evidenceVerified?: boolean } 
       if (sql.includes("from evidence")) return { rows: options.evidenceVerified === false ? [] : [{ id: EVIDENCE }] };
       if (sql.includes("insert into icvcm_ccp_assessments")) return { rows: [{
         id: "66666666-6666-4666-8666-666666666666", organization_id: ORG, activity_id: ACTIVITY,
-        assessed_by_identity_id: IDENTITY, assessment: [], summary: { status: "GAPS_IDENTIFIED" },
-        status: "INTERNAL_DRAFT", created_at: new Date(0), updated_at: new Date(0),
+        assessed_by_identity_id: IDENTITY, revision_number: ++revision, assessment: [], summary: { status: "GAPS_IDENTIFIED" },
+        status: "INTERNAL_DRAFT", created_at: new Date(0),
       }] };
       throw new Error("Unexpected SQL in route test: " + sql);
     },
@@ -87,5 +88,36 @@ test("ICVCM assessment API persists only internal draft and explicitly disclaims
   assert.ok(response.json().limitations.some((item: string) => item.includes("not ICVCM approval")));
   assert.ok(calls.some(call => call.sql.includes("insert into icvcm_ccp_assessments")));
   assert.equal(ICVCM_CCP_PRINCIPLES.length, 10);
+  await app.close();
+});
+
+
+test("ICVCM assessment revisions append rather than overwrite prior records", async () => {
+  const { pool } = fakePool();
+  const app = await setup(pool);
+  const request = {
+    method: "POST" as const, url: `/api/v1/activities/${ACTIVITY}/icvcm-ccp-assessments`,
+    headers: { authorization: "Bearer test-token" }, payload: body,
+  };
+  const first = await app.inject(request);
+  const second = await app.inject(request);
+  assert.equal(first.statusCode, 200);
+  assert.equal(second.statusCode, 200);
+  assert.equal(first.json().record.revision_number, 1);
+  assert.equal(second.json().record.revision_number, 2);
+  await app.close();
+});
+
+test("ICVCM assessment API rejects non-UUID evidence references before database lookup", async () => {
+  const { pool, calls } = fakePool();
+  const app = await setup(pool);
+  const response = await app.inject({
+    method: "POST", url: `/api/v1/activities/${ACTIVITY}/icvcm-ccp-assessments`,
+    headers: { authorization: "Bearer test-token" },
+    payload: { ...body, assessments: [{ principleId: "CCP-01", status: "EVIDENCED", evidenceReferences: ["evidence://not-a-uuid"] }] },
+  });
+  assert.equal(response.statusCode, 400);
+  assert.equal(response.json().code, "INVALID_EVIDENCE_REFERENCE");
+  assert.equal(calls.some(call => call.sql.includes("from evidence")), false);
   await app.close();
 });
