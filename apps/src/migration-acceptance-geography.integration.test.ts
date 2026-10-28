@@ -80,12 +80,16 @@ test("credential database guard rejects acceptance-fixture geography even when a
           activity_id uuid NOT NULL,
           verification_id uuid,
           methodology_version_id uuid
-        );
-        INSERT INTO geography(id, metadata)
-        VALUES ($1, '{"acceptanceFixture": true, "nonLgd": true}'::jsonb);
-        INSERT INTO activities(id, geography_id, metadata)
-        VALUES ($2, $1, '{}'::jsonb);
-      `, [geographyId, activityId]);
+        )
+      `);
+      await seedPool.query(
+        "INSERT INTO geography(id, metadata) VALUES ($1, $2::jsonb)",
+        [geographyId, JSON.stringify({ acceptanceFixture: true, nonLgd: true })],
+      );
+      await seedPool.query(
+        "INSERT INTO activities(id, geography_id, metadata) VALUES ($1, $2, '{}'::jsonb)",
+        [activityId, geographyId],
+      );
     } finally {
       await seedPool.end();
     }
