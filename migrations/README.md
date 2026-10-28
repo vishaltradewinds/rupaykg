@@ -127,3 +127,9 @@ Migration `105_vault_content_verification_binding.sql` verifies the stored bytes
 ## Integrated migration version sequence
 
 The governed agentic foundation owns migration versions `088`–`093`. The EPR/ICVCM follow-on controls use unique versions `094`–`105`. Do not reuse a numeric prefix: `apps/src/migrate.ts` treats the numeric prefix as the schema migration version and stops if a different filename has already claimed it. Validate the entire ordered chain against a fresh disposable PostgreSQL database before release.
+
+## Activity-specific registry eligibility decision
+
+Migration `106_activity_registry_eligibility_decisions.sql` adds an append-only activity-level statutory/methodology eligibility decision record bound to the exact activity, approved verification, verified evidence, production-eligible methodology version, and activity geography. A decision must carry a non-empty statutory basis, applicability rationale, permit/authority evidence collection, independent review reference, reviewer identity, and validity dates. This record is an internal control and does not itself constitute government approval or registry certification.
+
+Migration `107_credential_registry_eligibility_guard.sql` enforces this decision at the PostgreSQL credential boundary. Registry issuance requires a current approved eligibility decision bound to the same verified MRV tuple and methodology version. The API also checks the decision before issuance. If the eligibility record or production-eligible methodology evidence is absent, issuance fails closed. Do not create approval records without actual authoritative source evidence and independent review.
