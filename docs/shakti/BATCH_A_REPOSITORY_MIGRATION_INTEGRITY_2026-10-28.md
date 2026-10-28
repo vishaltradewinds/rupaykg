@@ -64,3 +64,11 @@ No production environment was accessed or changed by this document-only checkpoi
 | PR #103 | `468b59cb6d4b57327b1f235cca78bbf187e84472` | 1 passed | Not recorded | Draft; audit evidence only |
 
 These check runs are engineering validation only. They do not prove a live Guardian/Hedera/Mirror Node transaction, production database state, legal/methodology approval, TRL closure, or production certification.
+
+
+## Follow-up — migration runner identity confirmed
+- Inspected `apps/src/migrate.ts` on main. The runner derives `schema_migrations.version` from the filename prefix (`filename.split("_", 1)[0]`) and stores both the version and filename.
+- Therefore the date-prefixed migrations on main and ordinal-prefixed migrations in PR #97 are different migration versions to the actual runner even when their SQL is byte-identical. On an environment where the main date-prefixed migration is already recorded, the PR's ordinal migration is not skipped as already applied; it will be attempted under a distinct version and may fail on duplicate schema objects.
+- This confirms a migration execution risk, not just a naming/style concern. Do not rename already-applied migrations or invent a ledger rewrite. First establish each environment's `schema_migrations` contents through authorized read-only access, then review a forward-only reconciliation strategy.
+- PR #97 received a second follow-up comment with this runner-level evidence (comment ID 6467533514).
+- The updated audit document's CI run was still in progress at the latest poll. Its migration validation, migration execution, typecheck, build, browser smoke, and disposable PostgreSQL acceptance steps had completed successfully; the production-container build step remained in progress. These are checks on the audit branch's current tree, not on the combined main + PR #97 candidate, so they do not close the merge blocker.
