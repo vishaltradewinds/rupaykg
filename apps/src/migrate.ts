@@ -27,8 +27,14 @@ try {
   // container (/app/apps/dist/src). Never assume a single filesystem root.
   const here = path.dirname(fileURLToPath(import.meta.url));
   const candidates = [path.resolve(here, "../../migrations"), path.resolve(here, "../../../migrations")];
-  const migrationDir = candidates.find((candidate) => existsSync(candidate));
-  if (!migrationDir) throw new Error(`Migration directory not found. Checked: ${candidates.join(", ")}`);
+  // Test-only override is gated by the acceptance-test flag.
+  const testMigrationDir = process.env.RUPAYKG_RUN_DUAL_LEDGER_TESTS === "1"
+    ? process.env.RUPAYKG_TEST_MIGRATIONS_DIR
+    : undefined;
+  const migrationDir = testMigrationDir
+    ? path.resolve(testMigrationDir)
+    : candidates.find((candidate) => existsSync(candidate));
+  if (!migrationDir || !existsSync(migrationDir)) throw new Error(`Migration directory not found. Checked: ${[testMigrationDir, ...candidates].filter(Boolean).join(", ")}`);
   const files = (await readdir(migrationDir))
     .filter((name) => /^\d+_.+\.sql$/.test(name))
     .sort();
