@@ -25,7 +25,7 @@ function validBatch(batchId = "b5e74bb0-b3a1-4fd7-ae67-c3c2a68d56ab", municipalC
     batchMetadata: {
       authorityCode: "MH-PCB",
       municipalCode,
-      syncWindowTimestamp: "2026-10-19T02:30:00Z",
+      syncWindowTimestamp: new Date().toISOString(),
       sourceVersion: "synthetic-source-v1",
       batchId,
     },
