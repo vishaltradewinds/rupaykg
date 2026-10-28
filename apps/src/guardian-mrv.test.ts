@@ -56,7 +56,7 @@ test("Guardian MRV accepts VERIFIED only with an authoritative execution id", as
   const previousUrl = process.env.GUARDIAN_MRV_SUBMIT_URL;
   const previousFetch = globalThis.fetch;
   process.env.GUARDIAN_MRV_SUBMIT_URL = "https://guardian.test/mrv";
-  globalThis.fetch = async () => new Response(JSON.stringify({ status: "VERIFIED", executionId: "guardian-execution-1" }), {
+  globalThis.fetch = async () => new Response(JSON.stringify({ status: "VERIFIED", policyId: "policy-1", executionId: "guardian-execution-1" }), {
     status: 200,
     headers: { "content-type": "application/json" },
   });
@@ -79,7 +79,7 @@ test("explicit idempotency key differentiates changed source-input digests", asy
   const seen: string[] = [];
   globalThis.fetch = async (_input, init) => {
     seen.push(new Headers(init?.headers).get("idempotency-key") || "");
-    return new Response(JSON.stringify({ status: "VERIFIED", executionId: "guardian-execution-1" }), {
+    return new Response(JSON.stringify({ status: "VERIFIED", policyId: "policy-1", executionId: "guardian-execution-1" }), {
       status: 200, headers: { "content-type": "application/json" },
     });
   };
@@ -102,7 +102,7 @@ test("default Guardian idempotency key binds source observations and evidence", 
   const seen: string[] = [];
   globalThis.fetch = async (_input, init) => {
     seen.push(new Headers(init?.headers).get("idempotency-key") || "");
-    return new Response(JSON.stringify({ status: "VERIFIED", executionId: "guardian-execution-1" }), {
+    return new Response(JSON.stringify({ status: "VERIFIED", policyId: "policy-1", executionId: "guardian-execution-1" }), {
       status: 200, headers: { "content-type": "application/json" },
     });
   };
@@ -126,7 +126,7 @@ test("default Guardian idempotency key is stable across object property order", 
   const seen: string[] = [];
   globalThis.fetch = async (_input, init) => {
     seen.push(new Headers(init?.headers).get("idempotency-key") || "");
-    return new Response(JSON.stringify({ status: "VERIFIED", executionId: "guardian-execution-1" }), {
+    return new Response(JSON.stringify({ status: "VERIFIED", policyId: "policy-1", executionId: "guardian-execution-1" }), {
       status: 200, headers: { "content-type": "application/json" },
     });
   };
@@ -157,7 +157,7 @@ test("default Guardian idempotency key canonicalizes nested evidence objects", a
   const seen: string[] = [];
   globalThis.fetch = async (_input, init) => {
     seen.push(new Headers(init?.headers).get("idempotency-key") || "");
-    return new Response(JSON.stringify({ status: "VERIFIED", executionId: "guardian-execution-1" }), {
+    return new Response(JSON.stringify({ status: "VERIFIED", policyId: "policy-1", executionId: "guardian-execution-1" }), {
       status: 200, headers: { "content-type": "application/json" },
     });
   };
@@ -186,7 +186,7 @@ test("default Guardian idempotency key binds request metadata", async () => {
   const seen: string[] = [];
   globalThis.fetch = async (_input, init) => {
     seen.push(new Headers(init?.headers).get("idempotency-key") || "");
-    return new Response(JSON.stringify({ status: "VERIFIED", executionId: "guardian-execution-1" }), {
+    return new Response(JSON.stringify({ status: "VERIFIED", policyId: "policy-1", executionId: "guardian-execution-1" }), {
       status: 200, headers: { "content-type": "application/json" },
     });
   };
@@ -209,7 +209,7 @@ test("default Guardian idempotency key canonicalizes nested request metadata", a
   const seen: string[] = [];
   globalThis.fetch = async (_input, init) => {
     seen.push(new Headers(init?.headers).get("idempotency-key") || "");
-    return new Response(JSON.stringify({ status: "VERIFIED", executionId: "guardian-execution-1" }), {
+    return new Response(JSON.stringify({ status: "VERIFIED", policyId: "policy-1", executionId: "guardian-execution-1" }), {
       status: 200, headers: { "content-type": "application/json" },
     });
   };
@@ -238,7 +238,7 @@ test("default Guardian idempotency key preserves observation array order", async
   const seen: string[] = [];
   globalThis.fetch = async (_input, init) => {
     seen.push(new Headers(init?.headers).get("idempotency-key") || "");
-    return new Response(JSON.stringify({ status: "VERIFIED", executionId: "guardian-execution-1" }), {
+    return new Response(JSON.stringify({ status: "VERIFIED", policyId: "policy-1", executionId: "guardian-execution-1" }), {
       status: 200, headers: { "content-type": "application/json" },
     });
   };
@@ -336,7 +336,7 @@ test("Guardian rejects oversized provider responses without returning body conte
   const previousUrl = process.env.GUARDIAN_MRV_SUBMIT_URL;
   const previousFetch = globalThis.fetch;
   process.env.GUARDIAN_MRV_SUBMIT_URL = "https://guardian.test/mrv";
-  globalThis.fetch = async () => new Response(JSON.stringify({ status: "VERIFIED", executionId: "x", unexpected: "x".repeat(1024 * 1024 + 10) }), {
+  globalThis.fetch = async () => new Response(JSON.stringify({ status: "VERIFIED", policyId: "policy-1", executionId: "x", unexpected: "x".repeat(1024 * 1024 + 10) }), {
     status: 200, headers: { "content-type": "application/json" },
   });
   try {
