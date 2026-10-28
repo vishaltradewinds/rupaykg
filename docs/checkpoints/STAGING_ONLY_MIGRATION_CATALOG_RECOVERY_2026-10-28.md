@@ -151,3 +151,14 @@ Indexes:
 - Compatibility proof: **not established**
 - Production/staging write authorization: **not granted**
 - Production certification: **HOLD**
+
+
+## Additional operational finding — staging inbox backlog
+
+A second read-only aggregate query found that the 12 staging inbox rows are not merely historical fixtures:
+- 8 rows remain in `PROCESSING` with all 8 leases expired as of the audit time; the latest lease expiry was 2026-10-20.
+- 1 `RETRY` row has a retry time in the past.
+- 1 `RECEIVED`, 1 `VALIDATED`, and 1 `QUARANTINED` row remain.
+- Latest inbox receipt and event timestamps are on 2026-10-20, so the queue appears stale for approximately eight days as of 2026-10-28.
+
+This is a **staging operational incident candidate**, separate from migration compatibility. Do not auto-requeue, alter status, or clear these rows during migration repair. Next safe investigation is read-only correlation of each inbox row's non-payload identifiers/status/attempt/error fields with worker logs and code paths, followed by a documented recovery plan and disposable test. Do not read or expose raw payloads in the audit report.
