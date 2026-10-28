@@ -74,3 +74,19 @@ test("permanently stalled work triggers bounded forced termination without closi
   assert.equal(terminationCode, 1);
   assert.equal(closed, false, "must not close pool while work is still active");
 });
+
+test("forced termination is still requested if forced-termination logging throws", async () => {
+  let terminationCode: number | undefined;
+  const result = await drainBeforeClose({
+    isInFlight: () => true,
+    timeoutMs: 2,
+    secondStageTimeoutMs: 2,
+    pollIntervalMs: 1,
+    onForcedTermination: () => { throw new Error("logger failed"); },
+    terminate: code => { terminationCode = code; },
+    close: async () => { throw new Error("resources must not close while work is active"); },
+  });
+
+  assert.deepEqual(result, { timedOut: true, forcedTermination: true });
+  assert.equal(terminationCode, 1);
+});
