@@ -56,6 +56,7 @@ function deterministicIdempotencyKey(input: GuardianMrvRequest): string {
       methodologyCode: input.methodologyCode,
       observations: input.observations,
       evidence: input.evidence,
+      metadata: input.metadata,
     })))
     .digest("hex");
 }
