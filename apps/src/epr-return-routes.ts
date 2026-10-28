@@ -76,7 +76,7 @@ export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool |
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
-      const current = await client.query(`select r.*,eo.target_quantity,eo.fulfilled_quantity as obligation_fulfilled,eo.status as obligation_status,s.code as scheme_code from epr_returns r join epr_obligations eo on eo.id=r.obligation_id join obligations o on o.id=eo.obligation_id join epr_schemes s on s.id=r.scheme_id where r.id=$1 for update`, [returnId]);
+      const current = await client.query(`select r.*,eo.target_quantity,eo.fulfilled_quantity as obligation_fulfilled,eo.status as obligation_status,s.code as scheme_code,o.jurisdiction_id from epr_returns r join epr_obligations eo on eo.id=r.obligation_id join obligations o on o.id=eo.obligation_id join epr_schemes s on s.id=r.scheme_id where r.id=$1 for update`, [returnId]);
       const row = current.rows[0];
       if (!row) { await client.query("ROLLBACK"); return reply.code(404).send({ error: "EPR return not found", code: "EPR_RETURN_NOT_FOUND" }); }
       if (!canAct(auth, row.organization_id) || !await hasOrganizationPermission(pool, auth, row.organization_id, ["epr:manage"])) { await client.query("ROLLBACK"); return reply.code(403).send({ error: "EPR management permission required", code: "EPR_RETURN_WRITE_FORBIDDEN" }); }
