@@ -286,6 +286,7 @@ test("Guardian MRV rejects a whitespace-only execution identifier", async () => 
   process.env.GUARDIAN_MRV_SUBMIT_URL = "https://guardian.test/mrv";
   globalThis.fetch = async () => new Response(JSON.stringify({
     status: "VERIFIED",
+    policyId: "policy-1",
     executionId: "   ",
   }), { status: 200, headers: { "content-type": "application/json" } });
   try {
@@ -308,6 +309,7 @@ test("Guardian result exposes only normalized fields and a response digest, neve
   process.env.GUARDIAN_MRV_SUBMIT_URL = "https://guardian.test/mrv";
   globalThis.fetch = async () => new Response(JSON.stringify({
     status: "VERIFIED",
+    policyId: "policy-1",
     executionId: "guardian-execution-safe",
     policyId: "policy-1",
     correlationId: "provider-correlation-1",
