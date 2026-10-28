@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readdir } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { assertNoOrphanedMigrationRecords, findOrphanedMigrationRecords } from "./migration-ledger.js";
@@ -8,7 +9,10 @@ import { assertNoOrphanedMigrationRecords, findOrphanedMigrationRecords } from "
 // Read the actual migration filenames shipped in this branch, rather than
 // assuming numbered replacements exist. This is a read-only release-catalog test.
 const here = path.dirname(fileURLToPath(import.meta.url));
-const availableReleaseFiles = await readdir(path.resolve(here, "../../migrations"));
+const migrationDirCandidates = [path.resolve(here, "../../migrations"), path.resolve(here, "../../../migrations"), path.resolve(here, "../../../../migrations")];
+const migrationDir = migrationDirCandidates.find((candidate) => existsSync(candidate));
+if (!migrationDir) throw new Error(`Migration catalog not found. Checked: ${migrationDirCandidates.join(", ")}`);
+const availableReleaseFiles = await readdir(migrationDir);
 
 const sharedLegacyRecords = [
   { version: "20261018", filename: "20261018_cpcb_swm_stakeholder_workspaces.sql" },
