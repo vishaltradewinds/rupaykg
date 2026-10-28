@@ -73,3 +73,26 @@ Important limitation: these are compact test fixtures derived from recovered mig
 ## Fixture fidelity follow-up
 
 A normalized executable-SQL comparison was performed against the recovered feature-branch source blobs for all five fixture files (2026-10-22 through 2026-10-25 plus the proposed 2026-11-01 corrective migration). After removing SQL comments, normalizing case/whitespace, and normalizing whitespace around SQL punctuation, all five fixture bodies matched their recovered source bodies. The fixtures are not byte-for-byte copies; this comparison establishes normalized textual equivalence under that normalization, not equivalence proven by a full PostgreSQL parser. The actual-runner acceptance test is green on the isolated fixture schemas.
+
+## Release-catalog reconciliation finding (confirmed against this branch)
+
+A direct inventory of `migrations/` at this branch's head found **91 migration files: numbered migrations 001–087 plus the four date-prefixed files 20261018–20261021**. It does **not** contain `096_verification_authorization_provenance.sql` or the staging-only files `20261022_async_mirror_inbox.sql` through `20261025_ai_evidence_intake_jobs.sql`.
+
+The previous history-fixture test incorrectly assumed numbered replacements 088–091 and 096 were in the current release catalog. That assumption is now removed: `apps/src/migration-ledger-history-fixtures.test.ts` reads the actual `migrations/` directory and verifies the real missing-file outcomes.
+
+Consequences for the current branch:
+- The four shared legacy migration records from 20261018–20261021 are present in the catalog.
+- A production ledger containing `096_verification_authorization_provenance.sql` is orphaned against this branch's release catalog; the fail-closed guard must stop.
+- A staging ledger containing 20261022–20261025 is orphaned against this branch's release catalog; the fail-closed guard must stop.
+- This is a **release-blocking catalog mismatch**, not a reason to bypass the guard. Recover and review the exact missing historical sources, reconcile naming/history explicitly, and validate a forward-only release catalog before deployment.
+
+## Expanded read-only object-definition checks
+
+Read-only PostgreSQL catalog queries on production and staging confirmed:
+- Staging has `async_mirror_inbox`, `async_mirror_inbox_events`, `ai_intake_rate_limits`, and `ai_evidence_intake_jobs`; production has none of those four tables.
+- Staging's `async_mirror_inbox_status_check` allows `RECEIVED, PROCESSING, PROCESSED, VALIDATED, REJECTED, RETRY, QUARANTINED`, but not `UNRESOLVED`.
+- Production's `verifications` table has `authorization_membership_id`, `authorization_role_id`, `authorization_permissions_snapshot`, and `authorization_checked_at`; staging does not.
+- Production's `prevent_invalid_verification` trigger function binds evidence to its activity, requires an organization-scoped active verifier membership and allowed permission, and writes the authorization provenance snapshot. Staging's function uses a less restrictive `has_verification_permission` check and does not populate that snapshot.
+- These differences are security- and behavior-relevant. Do not overwrite production's stronger verification policy with staging's definition; the intended canonical behavior and forward migration must be independently reviewed.
+
+The object-level query covered the target tables, constraints, indexes, and relevant trigger/function definitions. It is not a claim that every object in the entire database has been fully reconciled.
