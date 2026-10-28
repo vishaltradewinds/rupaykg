@@ -1,0 +1,87 @@
+# Forward-only Migration Reconciliation Plan — 2026-10-28
+
+## Decision and safety boundary
+
+**Current release catalog is not eligible to run against either audited live ledger. Production certification and async worker scheduler remain HOLD.** This plan is for review and isolated validation; it authorizes no live database writes.
+
+Never edit an already-applied migration in place, fabricate ledger entries, delete existing rows, disable the orphan guard, auto-requeue staging inbox rows, or weaken production verification controls to obtain schema parity.
+
+## Confirmed history divergence
+
+| Environment ledger | Recorded source absent from current release catalog | Required disposition |
+|---|---|---|
+| Production | `096_verification_authorization_provenance.sql` | Recover historical source for review; independently review; create a new forward-only migration only after approval. |
+| Staging | `20261022_async_mirror_inbox.sql` | Recover exact source and dependency order; reconcile staging-only objects without data loss. |
+| Staging | `20261023_async_mirror_worker_leases.sql` | Recover exact source; resolve worker status/check-constraint mismatch before any scheduler activation. |
+| Staging | `20261024_ai_intake_rate_limits.sql` | Recover exact source; confirm intended limits and object dependencies. |
+| Staging | `20261025_ai_evidence_intake_jobs.sql` | Recover exact source; confirm job lifecycle, idempotency and evidence integrity. |
+
+The shared 20261018–20261021 migrations are present in the current branch and must not be labelled orphaned. Production and staging are not assumed equivalent merely because shared table counts match.
+
+## Batch A — immutable evidence and source recovery
+
+1. Pin production and staging ledger exports, migration catalog inventory, object definitions, constraints, indexes, triggers, trigger functions, and row counts as read-only artifacts with timestamps and hashes.
+2. Recover the exact historical sources from Git history or trusted release artifacts. Record commit SHA, blob SHA, filename, and whether it was ever approved/released.
+3. Preserve recovered SQL outside the release `migrations/` directory until review is complete. Recovered source is evidence, not deployment authorization.
+4. If an exact source cannot be verified, stop that branch of reconciliation. Do not create a substitute with a different filename and pretend it is the same historical migration.
+
+## Batch B — security and dependency review
+
+### Verification authorization (096)
+
+The recovered source was explicitly removed from main as unreviewed. It adds authorization provenance columns and strengthens the verification trigger. Before reintroduction:
+- inspect existing approved verifications with missing provenance without mutating them;
+- do not fabricate decision-time membership/role snapshots;
+- decide how legacy rows will be labelled and exposed to auditors;
+- verify all constraints and trigger/function definitions explicitly—`ADD COLUMN IF NOT EXISTS` does not repair a pre-existing column's missing foreign key;
+- independently review search-path/privilege safety, permission spelling equivalence, role/membership revocation semantics, concurrent updates, and decision changes away from APPROVED;
+- write a new, reviewed forward migration; preserve the historical source and never replay it against production.
+
+### Async mirror / AI intake (20261022–25)
+
+- Recover exact source and dependency order for inbox, leases/status constraints, rate limits and evidence intake jobs.
+- Fix the observed mismatch where worker code writes `UNRESOLVED` but the recorded status CHECK constraint does not allow it. Use a reviewed forward migration that safely adds the intended state and validates every transition.
+- Treat existing staging inbox/events as retained data. No deletes, requeues, lease resets, or payload changes during reconciliation.
+- Verify idempotency keys, payload hashes, append-only event history, lease expiry, retry exhaustion, quarantine, authorization, and rate-limit semantics.
+- Keep the scheduler disabled until disposable PostgreSQL integration tests exercise the real worker and database constraints.
+
+## Batch C — disposable PostgreSQL rehearsal
+
+Create fresh, isolated schemas/branches with production-like and staging-like ledger histories. Do not use live databases for rehearsals.
+
+1. Run the current release runner unchanged and assert it fails closed on missing recorded sources.
+2. Apply proposed forward migrations only to disposable schemas using a versioned rehearsal bundle.
+3. Compare pre/post object definitions: columns/types/nullability/defaults, constraints, indexes, triggers, functions, grants, RLS policies, and relevant extensions.
+4. Compare data counts and stable row hashes for retained tables; specifically verify all staging inbox and event rows remain unchanged.
+5. Test positive and negative verification cases, including organization mismatch, missing/inactive membership, suspended identity, self-verification, evidence/activity mismatch, and authorization snapshot capture.
+6. Test async worker transitions against PostgreSQL CHECK constraints, including unresolved crosswalk, retries, lease expiry, quarantine, and duplicate delivery.
+7. Re-run the migration runner twice; first run must produce the expected state and second run must be a no-op.
+8. Simulate interrupted/failed migration and documented recovery/restore procedures.
+
+## Batch D — approvals and staged rollout
+
+Required approvals before any live change:
+- independent security reviewer for verification authorization;
+- database/migration owner for history reconciliation and rollback/restore;
+- domain owner for async mirror and AI evidence-intake semantics;
+- compliance owner confirming statutory evidence/record-retention obligations;
+- release approver signing the Shakti Standards gate record.
+
+Then:
+1. take and verify recoverable backups/snapshots under the approved change plan;
+2. apply the reviewed migration bundle first to an isolated rehearsal, then to a designated staging branch;
+3. verify schema/data parity and application behavior with signed evidence;
+4. obtain explicit production change approval and a maintenance/rollback plan before production changes;
+5. apply forward-only changes in the approved order and verify postconditions;
+6. keep the worker scheduler off until the worker/status acceptance suite is green and an operator explicitly authorizes activation.
+
+## Exit criteria
+
+- Every ledger filename resolves to the exact reviewed source or a formally approved, auditable history-reconciliation record.
+- No migration guard bypass, in-place edit of applied history, data loss, or weakened authorization control.
+- Disposable PostgreSQL tests cover actual SQL and real constraints.
+- Production/staging object-level diffs are reviewed and explain every remaining difference.
+- All CI checks pass on the exact final commit.
+- TRL and Shakti Standards evidence are updated; production certification decision is separately approved.
+
+**Status: plan documented; source recovery and test hardening in progress; no live writes authorized or performed.**
