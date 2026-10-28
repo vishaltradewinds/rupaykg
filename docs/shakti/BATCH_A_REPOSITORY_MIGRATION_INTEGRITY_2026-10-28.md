@@ -44,3 +44,21 @@ Status: OPEN; this is an audit checkpoint, not release approval.
 Batch A remains OPEN until current heads are recorded, migration files and references are reconciled, applied migration state is established for each relevant environment, exact-head CI is recorded, discrepancies have a reviewed/tested remediation plan, and an independent reviewer accepts the evidence.
 
 No production environment was accessed or changed by this document-only checkpoint. No merge, deployment, registry issuance, or production certification is authorized by this document.
+
+
+## Follow-up findings — exact candidate heads inspected
+- PR #102 head: `eaa3ff53e467b66d246c6fd0feac7611c0a6c20c`; two GitHub Actions `validate` check runs completed successfully on that exact SHA. No submitted review was returned.
+- PR #97 head: `730327adc30cfaea0441f77adb12a757305d3514`; one GitHub Actions `validate` check run completed successfully on that exact SHA. No submitted review was returned.
+- Main currently has date-named migrations `20261018_cpcb_swm_stakeholder_workspaces.sql`, `20261019_cpcb_bwg_workflow_tracking.sql`, `20261020_ccts_methodology_registry.sql`, and `20261021_evidence_artifact_vault.sql`.
+- The PR #97 candidate contains `088_cpcb_swm_stakeholder_workspaces.sql`, `089_cpcb_bwg_workflow_tracking.sql`, `090_ccts_methodology_registry.sql`, and `091_evidence_artifact_vault.sql`. The first three pairs were fetched and their Git blob SHAs match exactly across differently numbered paths; the evidence-vault pair also has the same opening schema/content and requires full-file hash/content comparison before merge.
+- This is a concrete migration-history conflict: the same schema change is represented under two different migration identities. A combined branch can attempt to create the same objects twice, and an environment's migration ledger may not treat the alternate filename as the already-applied migration. Do not merge PR #97 until the candidate is reconciled to one canonical migration identity per change, migration ordering is reviewed, and clean-database plus upgrade-path tests pass.
+- The current `scripts/validate-migrations.mjs` checks duplicate numeric prefixes and duplicate `CREATE TABLE/TYPE` objects within the checked-out tree. It does not establish environment-applied state or prove that a semantically identical migration has not been copied under a different prefix across branches. Add a regression check for cross-branch/canonical migration identity or explicitly reconcile the duplicated files before merge.
+- The main commit's deleted `096_verification_authorization_provenance.sql` and PR #97's `096_epr_acceptance_evidence_immutability.sql` are distinct filenames/purposes. If any environment previously applied the deleted migration under a numeric-only ledger, the migration ledger must be inspected before any forward migration runs; Git alone cannot resolve this.
+
+## Current exact-head gate snapshot
+| Candidate | Exact head | CI check runs | Independent review | Release posture |
+|---|---|---|---|---|
+| PR #102 | `eaa3ff53e467b66d246c6fd0feac7611c0a6c20c` | 2 passed | Not recorded | HOLD pending review and external acceptance |
+| PR #97 | `730327adc30cfaea0441f77adb12a757305d3514` | 1 passed | Not recorded | BLOCK merge pending migration identity reconciliation and independent review |
+
+These check runs are engineering validation only. They do not prove a live Guardian/Hedera/Mirror Node transaction, production database state, legal/methodology approval, TRL closure, or production certification.
