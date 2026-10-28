@@ -46,6 +46,10 @@ jobs:
         env:
           RUPAYKG_RUN_DUAL_LEDGER_TESTS: "1"
         run: node scripts/test-dual-ledger-compatibility.mjs
+      - name: Actual migration runner against dual-ledger fixtures
+        env:
+          RUPAYKG_RUN_DUAL_LEDGER_TESTS: "1"
+        run: node scripts/test-actual-migration-runner.mjs
       - name: Browser smoke test production web build
         shell: bash
         run: |
