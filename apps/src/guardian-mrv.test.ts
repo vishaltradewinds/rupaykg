@@ -229,3 +229,31 @@ test("default Guardian idempotency key canonicalizes nested request metadata", a
     else process.env.GUARDIAN_MRV_SUBMIT_URL = previousUrl;
   }
 });
+
+
+test("default Guardian idempotency key preserves observation array order", async () => {
+  const previousUrl = process.env.GUARDIAN_MRV_SUBMIT_URL;
+  const previousFetch = globalThis.fetch;
+  process.env.GUARDIAN_MRV_SUBMIT_URL = "https://guardian.test/mrv";
+  const seen: string[] = [];
+  globalThis.fetch = async (_input, init) => {
+    seen.push(new Headers(init?.headers).get("idempotency-key") || "");
+    return new Response(JSON.stringify({ status: "VERIFIED", executionId: "guardian-execution-1" }), {
+      status: 200, headers: { "content-type": "application/json" },
+    });
+  };
+  try {
+    const first = { ...request, observations: [
+      { parameter_code: "mass", observed_value: "10", unit: "kg" },
+      { parameter_code: "moisture", observed_value: "5", unit: "%" },
+    ] };
+    const reversed = { ...request, observations: [...first.observations].reverse() };
+    await executeGuardianMrv(first);
+    await executeGuardianMrv(reversed);
+    assert.notEqual(seen[0], seen[1]);
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousUrl === undefined) delete process.env.GUARDIAN_MRV_SUBMIT_URL;
+    else process.env.GUARDIAN_MRV_SUBMIT_URL = previousUrl;
+  }
+});
