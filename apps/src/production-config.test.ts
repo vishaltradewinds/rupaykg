@@ -37,8 +37,13 @@ describe("production configuration", () => {
     assert.throws(() => readProductionConfig({ ...valid, DATABASE_URL: "" }), /DATABASE_URL is required/);
   });
 
-  it("fails closed for local database targets", () => {
-    assert.throws(() => readProductionConfig({ ...valid, DATABASE_URL: "postgresql://localhost:5432/rupaykg" }), /must not target localhost/);
+  it("fails closed for localhost and all common loopback spellings", () => {
+    for (const hostname of ["localhost", "127.0.0.1", "127.0.0.2", "127.1", "2130706433", "0x7f000001", "0177.0.0.1", "[::1]", "[::]", "0.0.0.0", "0", "[::ffff:127.0.0.1]", "service.localhost"]) {
+      assert.throws(() => readProductionConfig({
+        ...valid,
+        DATABASE_URL: `postgresql://${hostname}:5432/rupaykg`,
+      }), /must not target loopback/, hostname);
+    }
   });
 
   it("requires TLS database configuration", () => {

@@ -27,7 +27,10 @@ test("production config accepts the fail-closed production contract", () => {
 test("production config rejects missing or unsafe production requirements", () => {
   const cases = [
     [{ ...baseEnv, NODE_ENV: "development" }, /NODE_ENV must be production/],
-    [{ ...baseEnv, DATABASE_URL: "postgresql://localhost/rupaykg" }, /must not target localhost/],
+    [{ ...baseEnv, DATABASE_URL: "postgresql://localhost/rupaykg" }, /must not target loopback/],
+    [{ ...baseEnv, DATABASE_URL: "postgresql://127.0.0.2/rupaykg" }, /must not target loopback/],
+    [{ ...baseEnv, DATABASE_URL: "postgresql://127.1/rupaykg" }, /must not target loopback/],
+    [{ ...baseEnv, DATABASE_URL: "postgresql://2130706433/rupaykg" }, /must not target loopback/],
     [{ ...baseEnv, DATABASE_SSL: "false" }, /DATABASE_SSL must be require/],
     [{ ...baseEnv, DATABASE_CA_CERT: "" }, /DATABASE_CA_CERT must contain a PEM certificate/],
     [{ ...baseEnv, RUPAYKG_AUTH_MODE: "session" }, /RUPAYKG_AUTH_MODE must be real/],

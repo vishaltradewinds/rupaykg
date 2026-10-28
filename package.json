@@ -11,7 +11,7 @@
   ],
   "scripts": {
     "build": "npm run build -w @rupaykg/domain && npm run build -w @rupaykg/carbon && npm run build -w @rupaykg/compliance && npm run build -w @rupaykg/esg && npm run build -w @rupaykg/intelligence && npm run build -w @rupaykg/api && npm run build -w @rupaykg/web",
-    "start": "node apps/dist/src/production-server.js",
+    "start": "node apps/dist/src/production-entrypoint.js",
     "test": "npm run test --workspaces --if-present",
     "typecheck": "npm run build -w @rupaykg/domain && npm run build -w @rupaykg/carbon && npm run build -w @rupaykg/compliance && npm run build -w @rupaykg/esg && npm run build -w @rupaykg/intelligence && npm run typecheck --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",
