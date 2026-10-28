@@ -69,7 +69,7 @@ Migration `085_platform_access_dual_control.sql` records requests to grant reser
 
 ## EPR external acceptance evidence
 
-Migration `089_epr_external_acceptance_evidence.sql` adds evidence and authority fields for external EPR acceptance and a PostgreSQL trigger that rejects `ACCEPTED`/`COMPLETED` return states without a recorded authority, external reference, verified provenance-backed evidence, approved verification, and confirmation timestamp. Internal submission remains distinct from external submission/acceptance; applicability must also be reviewed for the organization and scheme before a return can be submitted.
+Migration `095_epr_external_acceptance_evidence.sql` adds evidence and authority fields for external EPR acceptance and a PostgreSQL trigger that rejects `ACCEPTED`/`COMPLETED` return states without a recorded authority, external reference, verified provenance-backed evidence, approved verification, and confirmation timestamp. Internal submission remains distinct from external submission/acceptance; applicability must also be reviewed for the organization and scheme before a return can be submitted.
 
 
 ## Reserved-role restoration guard
@@ -124,4 +124,4 @@ Migration `103_vault_content_verification_binding.sql` verifies the stored bytes
 
 ## Integrated migration version sequence
 
-The governed agentic foundation owns migration versions `090`–`093`. The EPR/ICVCM follow-on controls use unique versions `094`–`103`. Do not reuse a numeric prefix: `apps/src/migrate.ts` treats the numeric prefix as the schema migration version and stops if a different filename has already claimed it. Validate the entire ordered chain against a fresh disposable PostgreSQL database before release.
+The governed agentic foundation owns migration versions `090`–`093`. The EPR/ICVCM follow-on controls use unique versions `094`–`105`. Do not reuse a numeric prefix: `apps/src/migrate.ts` treats the numeric prefix as the schema migration version and stops if a different filename has already claimed it. Validate the entire ordered chain against a fresh disposable PostgreSQL database before release.
