@@ -32,6 +32,7 @@ const productionSchema = "runner_prod_" + suffix;
 const stagingSchema = "runner_stage_" + suffix;
 const productionHistorySchema = "runner_prod_history_" + suffix;
 const stagingHistorySchema = "runner_stage_history_" + suffix;
+const verificationSchema = "runner_verification_" + suffix;
 const q = (s) => '"' + s.replaceAll('"', '""') + '"';
 const setSchema = (schema) => client.query("set search_path to " + q(schema) + ", public");
 const prereqs = async () => {
@@ -58,7 +59,7 @@ const schemas = [];
 try {
   await client.connect();
   connected = true;
-  for (const schema of [productionSchema, stagingSchema, productionHistorySchema, stagingHistorySchema]) {
+  for (const schema of [productionSchema, stagingSchema, productionHistorySchema, stagingHistorySchema, verificationSchema]) {
     await client.query("create schema " + q(schema));
     schemas.push(schema);
     await setSchema(schema);
@@ -141,6 +142,57 @@ try {
   assert.match(stageHistory.stderr + stageHistory.stdout, /20261022_async_mirror_inbox\.sql/);
   assert.match(stageHistory.stderr + stageHistory.stdout, /20261025_ai_evidence_intake_jobs\.sql/);
 
+  // Execute the recovered 096 SQL as an isolated disposable-schema acceptance
+  // fixture, not as a release migration. Validate authorization binding and snapshot.
+  await setSchema(verificationSchema);
+  await client.query(`
+    create table organizations(id uuid primary key);
+    create table identities(id uuid primary key, status text not null, suspended_at timestamptz);
+    create table roles(id uuid primary key, permissions jsonb not null);
+    create table organization_memberships(
+      id uuid primary key, identity_id uuid not null references identities(id),
+      organization_id uuid not null references organizations(id),
+      role_id uuid not null references roles(id), status text not null, created_at timestamptz not null default now()
+    );
+    create table activities(id uuid primary key, actor_identity_id uuid, organization_id uuid references organizations(id));
+    create table evidence(id uuid primary key, activity_id uuid references activities(id));
+    create table verifications(
+      id uuid primary key, activity_id uuid references activities(id), evidence_id uuid references evidence(id),
+      verifier_identity_id uuid not null references identities(id), decision text not null
+    );
+  `);
+  await client.query(await readFile(path.join(fixtureSource, "096_verification_authorization_provenance.sql"), "utf8"));
+  const ids = {
+    org: "10000000-0000-4000-8000-000000000001",
+    verifier: "10000000-0000-4000-8000-000000000002",
+    actor: "10000000-0000-4000-8000-000000000003",
+    role: "10000000-0000-4000-8000-000000000004",
+    membership: "10000000-0000-4000-8000-000000000005",
+    activity: "10000000-0000-4000-8000-000000000006",
+    evidence: "10000000-0000-4000-8000-000000000007",
+    verification: "10000000-0000-4000-8000-000000000008",
+  };
+  await client.query("insert into organizations(id) values ($1)", [ids.org]);
+  await client.query("insert into identities(id,status) values ($1,'VERIFIED'),($2,'VERIFIED')", [ids.verifier, ids.actor]);
+  await client.query("insert into roles(id,permissions) values ($1,'[\"VERIFY_EVIDENCE\"]'::jsonb)", [ids.role]);
+  await client.query("insert into organization_memberships(id,identity_id,organization_id,role_id,status) values ($1,$2,$3,$4,'VERIFIED')", [ids.membership, ids.verifier, ids.org, ids.role]);
+  await client.query("insert into activities(id,actor_identity_id,organization_id) values ($1,$2,$3)", [ids.activity, ids.actor, ids.org]);
+  await client.query("insert into evidence(id,activity_id) values ($1,$2)", [ids.evidence, ids.activity]);
+  await client.query("insert into verifications(id,activity_id,evidence_id,verifier_identity_id,decision) values ($1,$2,$3,$4,'APPROVED')", [ids.verification, ids.activity, ids.evidence, ids.verifier]);
+  const snapshot = (await client.query("select authorization_membership_id,authorization_role_id,authorization_permissions_snapshot,authorization_checked_at from verifications where id=$1", [ids.verification])).rows[0];
+  assert.equal(snapshot.authorization_membership_id, ids.membership);
+  assert.equal(snapshot.authorization_role_id, ids.role);
+  assert.deepEqual(snapshot.authorization_permissions_snapshot, ["VERIFY_EVIDENCE"]);
+  assert.ok(snapshot.authorization_checked_at, "approval must capture decision-time authorization timestamp");
+  await assert.rejects(
+    client.query("insert into verifications(id,activity_id,evidence_id,verifier_identity_id,decision) values ($1,$2,$3,$4,'APPROVED')", ["10000000-0000-4000-8000-000000000009", ids.activity, ids.evidence, ids.actor]),
+    /cannot verify its own evidence/,
+  );
+  await assert.rejects(
+    client.query("insert into verifications(id,activity_id,evidence_id,verifier_identity_id,decision) values ($1,$2,$3,$4,'APPROVED')", ["10000000-0000-4000-8000-000000000010", "10000000-0000-4000-8000-000000000011", ids.evidence, ids.verifier]),
+    /must match the evidence activity/,
+  );
+
   // Fail-closed negative case: recorded file is absent from the release directory.
   const missingDir = path.join(temp, "missing-file-release");
   await mkdir(missingDir);
@@ -148,7 +200,7 @@ try {
   const orphan = runRunner(stagingSchema, missingDir);
   assert.notEqual(orphan.status, 0, "actual runner must fail when ledger references a missing migration file");
   assert.match(orphan.stderr + orphan.stdout, /recorded migration|orphan|absent/i);
-  console.log("PASS: actual migrate.ts runner applied production-shaped fixture, skipped staging ledger matches, preserved 12 inbox + 12 event rows, no-op repeat runs, and failed closed for missing files in production-shaped (096) and staging-shaped (20261022-25) historical ledgers.");
+  console.log("PASS: actual migrate.ts runner applied production-shaped fixture, skipped staging ledger matches, preserved 12 inbox + 12 event rows, no-op repeat runs, failed closed for missing historical ledger files, and verified recovered 096 authorization binding/snapshot behavior in an isolated PostgreSQL schema.");
 } finally {
   if (connected) {
     for (const schema of schemas.reverse()) {
