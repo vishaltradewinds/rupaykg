@@ -84,8 +84,9 @@ test("government inbox worker persists retry recovery, quarantine and append-onl
     return { id: inserted.rows[0]!.id, authorityCode, batchId, shouldQuarantine };
   };
   try {
-    const recoverable = await makeRow("TST-" + suffix.slice(0, 8).toUpperCase());
-    const expectedCrosswalk = await provisionCrosswalk(recoverable.authorityCode, "TEST-MUNI", new Date().toISOString());
+    const recoverableAuthority = "TST-" + suffix.slice(0, 8).toUpperCase();
+    const expectedCrosswalk = await provisionCrosswalk(recoverableAuthority, "TEST-MUNI", new Date().toISOString());
+    const recoverable = await makeRow(recoverableAuthority);
     const first = await runGovernmentInboxWorker(pool, async () => { throw new Error("SyntheticTransientFailure"); }, { batchSize: 10, maxAttempts: 3 });
     assert.ok(first.retried >= 1, "transient validator failure must be persisted as RETRY");
     const retryRow = await pool.query<{ status: string; attempts: number; lease_token: string | null }>(
@@ -263,8 +264,9 @@ test("government inbox worker persists retry recovery, quarantine and append-onl
     );
 
     // Concurrent workers must not claim the same row while the first validator is in flight.
-    const concurrent = await makeRow("CON-" + suffix.slice(0, 8));
-    await provisionCrosswalk(concurrent.authorityCode, "TEST-MUNI", new Date().toISOString());
+    const concurrentAuthority = "CON-" + suffix.slice(0, 8);
+    await provisionCrosswalk(concurrentAuthority, "TEST-MUNI", new Date().toISOString());
+    const concurrent = await makeRow(concurrentAuthority);
     let releaseConcurrentValidation: () => void = () => {};
     let signalConcurrentValidation: () => void = () => {};
     const concurrentValidationStarted = new Promise<void>(resolve => { signalConcurrentValidation = resolve; });
@@ -289,8 +291,9 @@ test("government inbox worker persists retry recovery, quarantine and append-onl
     assert.equal(concurrentFinal.rows[0]?.attempts, 1);
 
     // A worker whose lease token has been superseded must not overwrite the newer lease owner's state.
-    const stale = await makeRow("STL-" + suffix.slice(0, 8));
-    await provisionCrosswalk(stale.authorityCode, "TEST-MUNI", new Date().toISOString());
+    const staleAuthority = "STL-" + suffix.slice(0, 8);
+    await provisionCrosswalk(staleAuthority, "TEST-MUNI", new Date().toISOString());
+    const stale = await makeRow(staleAuthority);
     let releaseStaleValidation: () => void = () => {};
     let signalStaleValidation: () => void = () => {};
     const staleValidationStarted = new Promise<void>(resolve => { signalStaleValidation = resolve; });
