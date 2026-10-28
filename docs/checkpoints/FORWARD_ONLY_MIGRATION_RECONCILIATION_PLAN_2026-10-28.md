@@ -175,3 +175,14 @@ The non-release source branch `intelligence/ai-evidence-intake-middleware` conta
 **Status: targeted UNRESOLVED rehearsal and fixture/source SQL equivalence checks passed; deployed-source provenance, independent security/database review, full worker-transition acceptance evidence, and release approval remain blocking. Production/staging unchanged; scheduler disabled.**
 
 
+## Additional deployment provenance evidence — Render, 2026-10-28
+
+Read-only Render service history for the production-facing `rupaykg` service (service ID `srv-daki4d7qj5pc73b8qksg`) correlates two consecutive deployments:
+
+- Deployment of commit `ca8f4100782e13f8d72106187fafc8e1e446214f` (“Bind verification to organization and snapshot authority”) started at 2026-10-27T13:44:53Z and finished at 13:46:30Z. Its application log at 13:46:15.943Z states `Database migrations are current (92 files).`
+- Deployment of commit `54a7fe1ceb41b37a68720a71c10a1dd03af30dea` (“Remove accidentally placed unreviewed verification migration from main”) started at 13:46:32Z and finished at 13:48:15Z. Its application log at 13:47:56.609Z states `Database migrations are current (91 files).`
+- The read-only production migration ledger records `096_verification_authorization_provenance.sql` at 2026-10-27T13:46:14.262Z. The recovered SQL blob is `258b1f4534efbf915688f78aa84d4ec24a47cbc0`, from the first deployment's commit, and the review fixture is byte-for-byte identical to that blob.
+
+This is a strong, time-correlated reconstruction that the 92-file build containing the historical 096 source ran immediately before the ledger timestamp, and that the following 91-file deployment omitted the source. It improves provenance evidence materially, but it is **not a cryptographic attestation of the exact image filesystem or SQL bytes executed**: the inspected Render history did not provide a retained image digest or deployment bundle containing the migration checksum. Record the source as *deployment-correlated, blob-recovered; artifact-level attestation unavailable*, not as checksum-verified deployment provenance.
+
+The same logs do not prove which exact SQL bytes were used for staging's 20261022–20261025 entries. Their candidate source blobs and fixtures match after SQL normalization, but staging deployment-source provenance remains open. Continue to hold release certification pending independent review and artifact-level evidence or a formally accepted provenance exception.
