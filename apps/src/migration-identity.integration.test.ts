@@ -427,3 +427,87 @@ test("migration runner rejects reverse deployment when date-prefixed candidate m
     await rm(fixtureDir, { recursive: true, force: true });
   }
 });
+
+
+test("migration runner rejects malformed schema_migrations ledger before candidate DDL", {
+  skip: !enabled || !databaseUrl ? "requires disposable PostgreSQL integration-test mode and DATABASE_URL" : false,
+}, async () => {
+  const sourceDir = path.dirname(fileURLToPath(import.meta.url));
+  const migrationRunner = path.join(sourceDir, "migrate.js");
+  const baseUrl = new URL(databaseUrl!);
+  const adminUrl = new URL(baseUrl);
+  adminUrl.pathname = "/postgres";
+  const adminPool = new Pool({
+    connectionString: adminUrl.toString(),
+    ssl: process.env.DATABASE_SSL === "false" ? undefined : { rejectUnauthorized: false },
+  });
+  const dbName = `rupaykg_malformed_ledger_${process.pid}_${Date.now()}`;
+  const testUrl = new URL(baseUrl);
+  testUrl.pathname = `/${dbName}`;
+  const fixtureDir = await mkdtemp(path.join(tmpdir(), "rupaykg-malformed-ledger-fixture-"));
+
+  try {
+    await writeFile(
+      path.join(fixtureDir, "001_malformed_ledger_probe.sql"),
+      "CREATE TABLE malformed_ledger_probe (id integer);",
+      "utf8",
+    );
+    await adminPool.query(`CREATE DATABASE "${dbName}"`);
+    const seedPool = new Pool({
+      connectionString: testUrl.toString(),
+      ssl: process.env.DATABASE_SSL === "false" ? undefined : { rejectUnauthorized: false },
+    });
+    try {
+      // Simulate an older/broken ledger table that CREATE TABLE IF NOT EXISTS cannot repair.
+      await seedPool.query("CREATE TABLE schema_migrations (version text PRIMARY KEY)");
+      await seedPool.query("INSERT INTO schema_migrations(version) VALUES ('historic')");
+    } finally {
+      await seedPool.end();
+    }
+
+    const child = spawnSync(process.execPath, [migrationRunner], {
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        NODE_ENV: "test",
+        RUPAYKG_RUN_DB_INTEGRATION_TESTS: "1",
+        DATABASE_URL: testUrl.toString(),
+        RUPAYKG_TEST_MIGRATION_DIR: fixtureDir,
+      },
+      timeout: 30_000,
+    });
+    assert.equal(child.error, undefined, "migration runner process should start and finish normally");
+    assert.notEqual(child.status, 0, "malformed ledger schema must fail closed");
+    assert.match(`${child.stdout}\\n${child.stderr}`, /MIGRATION_LEDGER_SCHEMA_INVALID/);
+    assert.match(`${child.stdout}\\n${child.stderr}`, /No migrations were applied/);
+
+    const verifyPool = new Pool({
+      connectionString: testUrl.toString(),
+      ssl: process.env.DATABASE_SSL === "false" ? undefined : { rejectUnauthorized: false },
+    });
+    try {
+      const ledger = await verifyPool.query<{ version: string }>(
+        "SELECT version FROM schema_migrations ORDER BY version",
+      );
+      assert.deepEqual(ledger.rows, [{ version: "historic" }], "malformed ledger data must remain unchanged");
+      const columns = await verifyPool.query<{ column_name: string }>(
+        "SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'schema_migrations' ORDER BY column_name",
+      );
+      assert.deepEqual(columns.rows.map((row) => row.column_name), ["version"], "runner must not auto-repair ledger schema");
+      const tables = await verifyPool.query<{ tablename: string }>(
+        "SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename <> 'schema_migrations'",
+      );
+      assert.deepEqual(tables.rows, [], "malformed ledger must be rejected before candidate migration DDL");
+    } finally {
+      await verifyPool.end();
+    }
+  } finally {
+    await adminPool.query(
+      "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid()",
+      [dbName],
+    );
+    await adminPool.query(`DROP DATABASE IF EXISTS "${dbName}"`);
+    await adminPool.end();
+    await rm(fixtureDir, { recursive: true, force: true });
+  }
+});
