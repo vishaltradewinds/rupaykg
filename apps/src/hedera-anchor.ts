@@ -95,7 +95,8 @@ export async function submitHcsAnchor(payload: AnchorPayload): Promise<AnchorRes
     const record = await response.getRecord(client);
     const consensusTimestamp = record.consensusTimestamp?.toString() ?? null;
     if (!consensusTimestamp) throw new Error("Hedera did not return a consensus timestamp");
-    const transactionId = response.transactionId?.toString() ?? null;
+    const transactionId = response.transactionId?.toString().trim() || null;
+    if (!transactionId) throw new Error("Hedera did not return a transaction identifier");
     client.close();
     return { status: "CONSENSUS_CONFIRMED", transactionId, consensusTimestamp, topicId, network, integrityHash: hash, message: "MRV provenance anchored to Hedera HCS with consensus confirmation." };
   } catch (error) {
