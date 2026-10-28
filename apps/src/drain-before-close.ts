@@ -2,11 +2,12 @@ export interface DrainBeforeCloseOptions {
   isInFlight: () => boolean;
   close: () => Promise<void>;
   timeoutMs: number;
+  // Required: the helper must never silently return with active work still running.
+  terminate: (exitCode: number) => void;
   secondStageTimeoutMs?: number;
   pollIntervalMs?: number;
   onTimeout?: () => void;
   onForcedTermination?: () => void;
-  terminate?: (exitCode: number) => void;
 }
 
 export interface DrainBeforeCloseResult {
@@ -47,6 +48,6 @@ export async function drainBeforeClose(
 
   // Never close a resource while active work may still be using it.
   options.onForcedTermination?.();
-  options.terminate?.(1);
+  options.terminate(1);
   return { timedOut: true, forcedTermination: true };
 }
