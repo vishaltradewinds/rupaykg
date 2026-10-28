@@ -124,3 +124,18 @@ test("Mirror Node verification rejects malformed topic and timestamp before netw
     assert.equal(called, false);
   });
 });
+
+
+test("Mirror Node verification rejects malformed base64 before decoding", async () => {
+  await withEnvironment(async () => {
+    globalThis.fetch = async () => new Response(JSON.stringify({ messages: [{
+      consensus_timestamp: timestamp,
+      sequence_number: 9,
+      topic_id: topicId,
+      message: "!!!!",
+    }] }), { status: 200, headers: { "content-type": "application/json" } });
+    const result = await verifyHcsMessage(timestamp, topicId);
+    assert.equal(result.verified, false);
+    assert.equal(result.error, "HCS message is not valid base64");
+  });
+});
