@@ -200,3 +200,32 @@ test("default Guardian idempotency key binds request metadata", async () => {
     else process.env.GUARDIAN_MRV_SUBMIT_URL = previousUrl;
   }
 });
+
+
+test("default Guardian idempotency key canonicalizes nested request metadata", async () => {
+  const previousUrl = process.env.GUARDIAN_MRV_SUBMIT_URL;
+  const previousFetch = globalThis.fetch;
+  process.env.GUARDIAN_MRV_SUBMIT_URL = "https://guardian.test/mrv";
+  const seen: string[] = [];
+  globalThis.fetch = async (_input, init) => {
+    seen.push(new Headers(init?.headers).get("idempotency-key") || "");
+    return new Response(JSON.stringify({ status: "VERIFIED", executionId: "guardian-execution-1" }), {
+      status: 200, headers: { "content-type": "application/json" },
+    });
+  };
+  try {
+    await executeGuardianMrv({
+      ...request,
+      metadata: { capture: { device: "scale-1", location: { site: "site-1", zone: "north" } } },
+    });
+    await executeGuardianMrv({
+      ...request,
+      metadata: { capture: { location: { zone: "north", site: "site-1" }, device: "scale-1" } },
+    });
+    assert.equal(seen[0], seen[1]);
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousUrl === undefined) delete process.env.GUARDIAN_MRV_SUBMIT_URL;
+    else process.env.GUARDIAN_MRV_SUBMIT_URL = previousUrl;
+  }
+});
