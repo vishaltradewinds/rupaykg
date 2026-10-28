@@ -50,11 +50,11 @@ test("production lifecycle integration gate", { skip: !url }, async () => {
     const unauthorizedRole = (await c.query("insert into roles(organization_id,name,permissions) values($1,'READER','[\"dashboard:read\"]') returning id", [org])).rows[0].id;
     const unauthorized = (await c.query("insert into identities(external_subject,display_name) values('integration-unauthorized','unauthorized') returning id")).rows[0].id;
     await c.query("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED')", [unauthorized, org, unauthorizedRole]);
-    const credential = (await c.query("insert into credentials(activity_id,issuer_organization_id,trust_root_id,status,verification_id,quantity,unit) values($1,$2,'integration-root','ISSUED',$3,100,'kg') returning id", [activity, org, verification])).rows[0].id;
+    const credential = (await c.query("insert into credentials(activity_id,issuer_organization_id,trust_root_id,status,verification_id,methodology_version_id,quantity,unit) values($1,$2,'integration-root','ISSUED',$3,$4,100,'kg') returning id", [activity, org, verification, methodologyVersionId])).rows[0].id;
     await reject(c, () => c.query("insert into registry_events(credential_id,event_type,to_owner_id,verification_id,recorded_by_identity_id,event_hash) values($1,'ISSUED',$2,$3,$4,'integration')", [credential, org, verification, unauthorized]), /explicit permission: ISSUE_CREDENTIAL/);
     await c.query("insert into registry_events(credential_id,event_type,to_owner_id,verification_id,recorded_by_identity_id,event_hash) values($1,'ISSUED',$2,$3,$4,'integration')", [credential, org, verification, verifier]);
     await c.query("update credentials set status='ACTIVE' where id=$1", [credential]);
-    await reject(c, () => c.query("insert into credentials(activity_id,issuer_organization_id,trust_root_id,status,verification_id,quantity,unit) values($1,$2,'integration-root','ISSUED',$3,100,'kg')", [activity, org, verification]), /duplicate key|credentials_activity_verification_unique_idx/);
+    await reject(c, () => c.query("insert into credentials(activity_id,issuer_organization_id,trust_root_id,status,verification_id,methodology_version_id,quantity,unit) values($1,$2,'integration-root','ISSUED',$3,$4,100,'kg')", [activity, org, verification, methodologyVersionId]), /duplicate key|credentials_activity_verification_unique_idx/);
 
     const settlement = (await c.query("insert into settlements(credential_id,payer_id,payee_id,amount,currency,status) values($1,$2,$3,1000,'INR','CREATED') returning id", [credential, org, buyer])).rows[0].id;
     await c.query("update settlements set status='AUTHORIZED',authorization_reference='auth',verified_at=now() where id=$1", [settlement]);
