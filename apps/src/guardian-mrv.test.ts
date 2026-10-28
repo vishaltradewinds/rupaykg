@@ -70,3 +70,26 @@ test("Guardian MRV accepts VERIFIED only with an authoritative execution id", as
     else process.env.GUARDIAN_MRV_SUBMIT_URL = previousUrl;
   }
 });
+
+
+test("explicit idempotency key differentiates changed source-input digests", async () => {
+  const previousUrl = process.env.GUARDIAN_MRV_SUBMIT_URL;
+  const previousFetch = globalThis.fetch;
+  process.env.GUARDIAN_MRV_SUBMIT_URL = "https://guardian.test/mrv";
+  const seen: string[] = [];
+  globalThis.fetch = async (_input, init) => {
+    seen.push(new Headers(init?.headers).get("idempotency-key") || "");
+    return new Response(JSON.stringify({ status: "VERIFIED", executionId: "guardian-execution-1" }), {
+      status: 200, headers: { "content-type": "application/json" },
+    });
+  };
+  try {
+    await executeGuardianMrv({ ...request, idempotencyKey: "a".repeat(64) });
+    await executeGuardianMrv({ ...request, observations: [{ parameter_code: "mass", observed_value: "11", unit: "kg" }], idempotencyKey: "b".repeat(64) });
+    assert.deepEqual(seen, ["a".repeat(64), "b".repeat(64)]);
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousUrl === undefined) delete process.env.GUARDIAN_MRV_SUBMIT_URL;
+    else process.env.GUARDIAN_MRV_SUBMIT_URL = previousUrl;
+  }
+});
