@@ -8,6 +8,8 @@ import { Pool } from "pg";
 const enabled = process.env.RUPAYKG_RUN_DB_INTEGRATION_TESTS === "1";
 const databaseUrl = process.env.DATABASE_URL;
 
+const migrationVersion = (filename: string): string => filename.slice(0, filename.indexOf("_"));
+
 const legacyPairs = [
   ["20261018_cpcb_swm_stakeholder_workspaces.sql", "088_cpcb_swm_stakeholder_workspaces.sql"],
   ["20261019_cpcb_bwg_workflow_tracking.sql", "089_cpcb_bwg_workflow_tracking.sql"],
@@ -55,7 +57,7 @@ test("migration runner rejects each known legacy identity and mixed history befo
               )
             `);
             for (const [legacy] of scenario.pairs) {
-              const version = legacy.split("_", 1)[0];
+              const version = migrationVersion(legacy);
               await testPool.query(
                 "INSERT INTO schema_migrations(version, filename) VALUES ($1, $2)",
                 [version, legacy],
@@ -86,7 +88,7 @@ test("migration runner rejects each known legacy identity and mixed history befo
             assert.deepEqual(
               ledger.rows,
               scenario.pairs
-                .map(([legacy]) => ({ version: legacy.split("_", 1)[0], filename: legacy }))
+                .map(([legacy]) => ({ version: migrationVersion(legacy), filename: legacy }))
                 .sort((a, b) => a.version.localeCompare(b.version)),
               "rejected state must preserve exact historical ledger tuples",
             );
