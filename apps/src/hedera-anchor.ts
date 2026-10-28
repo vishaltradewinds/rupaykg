@@ -165,9 +165,10 @@ export async function verifyHcsMessage(consensusTimestamp: string, topicId = pro
     const found = data.messages.find(message => message && message.consensus_timestamp === consensusTimestamp && message.topic_id === topicId);
     if (!found) return { verified: false, network, error: "Consensus message not found for the supplied Hedera topic and consensus timestamp" };
     if (typeof found.message !== "string" || found.message.length === 0 || found.message.length > Math.ceil(MIRROR_NODE_MAX_MESSAGE_BYTES * 4 / 3)) return { verified: false, network, error: "HCS message is missing or exceeds the configured size limit" };
-    let decoded: Buffer;
-    try { decoded = Buffer.from(found.message, "base64"); }
-    catch { return { verified: false, network, error: "HCS message is not valid base64" }; }
+    if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(found.message)) {
+      return { verified: false, network, error: "HCS message is not valid base64" };
+    }
+    const decoded = Buffer.from(found.message, "base64");
     if (decoded.byteLength > MIRROR_NODE_MAX_MESSAGE_BYTES) return { verified: false, network, error: "HCS message exceeds the configured size limit" };
     let payload: unknown;
     try { payload = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(decoded)); }
