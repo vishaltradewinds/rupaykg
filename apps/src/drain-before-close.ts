@@ -39,7 +39,12 @@ export async function drainBeforeClose(
     return { timedOut: false, forcedTermination: false };
   }
 
-  options.onTimeout?.();
+  // Observability callbacks must not defeat the bounded shutdown policy.
+  try {
+    options.onTimeout?.();
+  } catch {
+    // Continue draining even if timeout reporting fails.
+  }
   await waitForChangeUntil(Date.now() + secondStageTimeoutMs);
   if (!options.isInFlight()) {
     await options.close();
@@ -47,7 +52,12 @@ export async function drainBeforeClose(
   }
 
   // Never close a resource while active work may still be using it.
-  options.onForcedTermination?.();
+  // Ensure termination is requested even if the forced-termination logger fails.
+  try {
+    options.onForcedTermination?.();
+  } catch {
+    // Termination takes priority over best-effort observability.
+  }
   options.terminate(1);
   return { timedOut: true, forcedTermination: true };
 }
