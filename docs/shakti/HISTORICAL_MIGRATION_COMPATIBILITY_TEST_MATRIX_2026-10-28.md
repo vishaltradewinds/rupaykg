@@ -110,3 +110,28 @@ Code review of the matrix identified a reverse-direction risk: when a date-prefi
 ## CI finding and corrective change — reverse guard (2026-10-28)
 
 CI run [40684318481](https://github.com/vishaltradewinds/rupaykg/actions/runs/40684318481) exposed a real gap: the reverse-direction helper test passed, but the integration test showed `migrate.ts` queried only date-prefixed ledger filenames, so an ordinal ledger row was never passed to the reverse-direction conflict checker. Corrected the preflight query to include both keys and values of the explicit identity map in commit `477e01ef99576019c47318b75abfa18a290bd0e9`. The reverse integration test and full CI must pass on this fix before verification. This is a valuable fail-closed test finding, not a release pass.
+
+
+## Latest CI verification — reverse identity guard (2026-10-28)
+
+The corrective change that queries both ordinal and date-prefixed names is now verified by two successful full workflow runs:
+
+- Run [40684760311](https://github.com/vishaltradewinds/rupaykg/actions/runs/40684760311), commit `477e01ef99576019c47318b75abfa18a290bd0e9`: success. All steps passed, including migration validation, clean PostgreSQL migration, strict typecheck, build, browser smoke test, automated tests with disposable PostgreSQL acceptance, and production container build.
+- Run [40684775244](https://github.com/vishaltradewinds/rupaykg/actions/runs/40684775244), commit `4cc753f42a9ef9c775a4494a1abebf3b98ec9580`: success on the latest documentation-updated validation branch head. All workflow steps passed, including the disposable PostgreSQL acceptance suite and production container build.
+
+The reverse-direction regression that failed in run 40684318481 is now covered by successful full CI on the corrective code commit; the later branch-head run is also green. This verifies the current fail-closed guard and existing regression suite, not production-history compatibility or authorization to release.
+
+## Explicit content-integrity decision
+
+The current `schema_migrations` ledger records `version`, `filename`, and `applied_at`, but no migration content digest. Therefore, the ledger alone cannot prove which exact SQL bytes were historically applied. A matching filename/version is not proof of matching content or resulting schema.
+
+- Do not retroactively invent, backfill, or assert historical checksums without independent, environment-specific evidence.
+- For future migrations, consider a versioned checksum ledger or immutable migration manifest, with a controlled rollout and compatibility plan; do not silently change the existing ledger contract.
+- Before any environment-specific reconciliation, obtain authorized read-only ledger/schema evidence, compare it with repository history and deployment records, and require independent review plus an approved recovery plan.
+- Arbitrary partial application cannot be reliably inferred from a missing ledger row alone because migration DDL may have non-transactional or external effects. Keep the runner fail-closed; test known transaction behavior in disposable PostgreSQL and document migration-specific exceptions rather than promising universal rollback.
+
+## Current disposition
+
+The reverse-identity fail-closed regression is CI-verified on the latest validation branch. The full historical-state matrix remains incomplete, including authorized environment evidence, broader partial/conflicting-state characterization, independent review, recovery approval, and separate live Guardian/HCS/Mirror Node acceptance.
+
+**Release remains HOLD.** PRs #97 and #104 remain unmerged; production certification remains OFF. No production database was accessed or modified.
