@@ -84,4 +84,18 @@ Then:
 - All CI checks pass on the exact final commit.
 - TRL and Shakti Standards evidence are updated; production certification decision is separately approved.
 
-**Status: plan documented; source recovery and test hardening in progress; no live writes authorized or performed.**
+
+## Batch A — Git path provenance recovered (2026-10-28)
+
+Candidate source branch tip at inspection: `c56b9c1fe341ce3ba943bced10f47163dae2a513` (`intelligence/ai-evidence-intake-middleware`). Git path history reports these introducing commits:
+
+| File | Candidate introducing commit | Commit message/date |
+|---|---|---|
+| `20261022_async_mirror_inbox.sql` | `5064e086085dda7f8765047ae8120f9cb6bf0d80` | `feat(bridge): add durable async mirror inbox migration` — 2026-10-19 |
+| `20261023_async_mirror_worker_leases.sql` | `a27978f4f450108956b6baa3a17541c07a8ade26` and follow-up `13237f1714510a18021a94601ac9ff7b9f1def37` | Worker lease/quarantine and append-only state-transition work — 2026-10-20 |
+| `20261024_ai_intake_rate_limits.sql` | `a54fbdf81b0f5c4ae558acec3fc104407f70c48b` | `security: add database-backed AI intake rate limit` — 2026-10-20 |
+| `20261025_ai_evidence_intake_jobs.sql` | `fc958c1096baecf4f0f0c3f08b2f38742dafe708` | `feat: add durable AI intake idempotency ledger` — 2026-10-20 |
+
+This establishes repository history for candidate artifacts, **not** proof of which exact SQL was applied to staging. Still required: compare file/blob hashes with deployment artifacts or recorded migration checksums, confirm the branch was the actual source used at deployment time, and reconcile chronology against the live migration ledger. Do not promote files based only on commit messages or filename match.
+
+**Status: candidate sources and Git path history located for staging 20261022–25; deployment checksum verification pending; no live writes authorized or performed.**
