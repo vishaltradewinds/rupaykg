@@ -28,19 +28,33 @@ test("production lifecycle integration gate", { skip: !url }, async () => {
 
     // CI cannot call live Guardian/Hedera credentials. This fixture represents the
     // authoritative, already-confirmed provenance boundary enforced by production SQL.
+    const methodologyCode = "TEST-METHODOLOGY-INTEGRATION";
+    const methodologyVersionId = (await c.query(
+      "insert into methodology_versions(methodology_code,version,rules,source_reference,source_hash,applicability_rules,parameter_dictionary,equation_mapping,reconciliation_evidence,reconciliation_reference,reconciled_at,regression_verified_at) values($1,'test-1','{}'::jsonb,'test-fixture://methodology',repeat('a',64),'{\"fixture\":true}'::jsonb,'{\"fixture\":true}'::jsonb,'{\"fixture\":true}'::jsonb,'[{\"fixture\":true}]'::jsonb,'test-reconciliation',now(),now()) returning id",
+      [methodologyCode],
+    )).rows[0].id;
     await c.query(
-      "insert into mrv_provenance_events(activity_id,verification_id,evidence_id,guardian_policy_id,guardian_execution_id,guardian_status,hcs_status,hcs_topic_id,hcs_transaction_id,hcs_consensus_timestamp,integrity_hash,metadata,mirror_node_verified_at) values($1,$2,$3,'integration-policy','integration-guardian','VERIFIED','CONSENSUS_CONFIRMED','0.0.123','integration-tx','integration-consensus','integration-hash','{\"testFixture\":true}',clock_timestamp())",
-      [activity, verification, evidence]
+      "insert into methodology_governance_evidence(methodology_version_id,evidence_kind,reference,evidence_hash,independent_party,evidence) values($1,'NUMERICAL_RECONCILIATION','test-reconciliation',repeat('b',64),'TEST_FIXTURE_ONLY','{\"fixture\":true}'::jsonb),($1,'REGRESSION_TEST','test-regression',repeat('c',64),'TEST_FIXTURE_ONLY','{\"fixture\":true}'::jsonb)",
+      [methodologyVersionId],
+    );
+    await c.query("update methodology_versions set governance_status='PRODUCTION_ELIGIBLE' where id=$1", [methodologyVersionId]);
+    await c.query(
+      "insert into mrv_provenance_events(activity_id,verification_id,evidence_id,methodology_code,guardian_policy_id,guardian_execution_id,guardian_status,hcs_status,hcs_topic_id,hcs_transaction_id,hcs_consensus_timestamp,integrity_hash,metadata,mirror_node_verified_at) values($1,$2,$3,$4,'integration-policy','integration-guardian','VERIFIED','CONSENSUS_CONFIRMED','0.0.123','integration-tx','integration-consensus','integration-hash','{\"testFixture\":true}',clock_timestamp())",
+      [activity, verification, evidence, methodologyCode],
+    );
+    await c.query(
+      "insert into activity_registry_eligibility_decisions(activity_id,verification_id,evidence_id,methodology_version_id,geography_id,decision,statutory_basis,permit_and_authority_evidence,applicability_rationale,independent_review_reference,reviewer_identity_id,effective_from) values($1,$2,$3,$4,$5,'APPROVED','{\"testFixture\":true}'::jsonb,'[{\"testFixture\":true}]'::jsonb,'TEST FIXTURE ONLY - NOT A REGULATORY APPROVAL','TEST-REVIEW-INTEGRATION',$6,current_date)",
+      [activity, verification, evidence, methodologyVersionId, geography, verifier],
     );
 
     const unauthorizedRole = (await c.query("insert into roles(organization_id,name,permissions) values($1,'READER','[\"dashboard:read\"]') returning id", [org])).rows[0].id;
     const unauthorized = (await c.query("insert into identities(external_subject,display_name) values('integration-unauthorized','unauthorized') returning id")).rows[0].id;
     await c.query("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED')", [unauthorized, org, unauthorizedRole]);
-    const credential = (await c.query("insert into credentials(activity_id,issuer_organization_id,trust_root_id,status,verification_id,quantity,unit) values($1,$2,'integration-root','ISSUED',$3,100,'kg') returning id", [activity, org, verification])).rows[0].id;
+    const credential = (await c.query("insert into credentials(activity_id,issuer_organization_id,trust_root_id,status,verification_id,methodology_version_id,quantity,unit) values($1,$2,'integration-root','ISSUED',$3,$4,100,'kg') returning id", [activity, org, verification, methodologyVersionId])).rows[0].id;
     await reject(c, () => c.query("insert into registry_events(credential_id,event_type,to_owner_id,verification_id,recorded_by_identity_id,event_hash) values($1,'ISSUED',$2,$3,$4,'integration')", [credential, org, verification, unauthorized]), /explicit permission: ISSUE_CREDENTIAL/);
     await c.query("insert into registry_events(credential_id,event_type,to_owner_id,verification_id,recorded_by_identity_id,event_hash) values($1,'ISSUED',$2,$3,$4,'integration')", [credential, org, verification, verifier]);
     await c.query("update credentials set status='ACTIVE' where id=$1", [credential]);
-    await reject(c, () => c.query("insert into credentials(activity_id,issuer_organization_id,trust_root_id,status,verification_id,quantity,unit) values($1,$2,'integration-root','ISSUED',$3,100,'kg')", [activity, org, verification]), /duplicate key|credentials_activity_verification_unique_idx/);
+    await reject(c, () => c.query("insert into credentials(activity_id,issuer_organization_id,trust_root_id,status,verification_id,methodology_version_id,quantity,unit) values($1,$2,'integration-root','ISSUED',$3,$4,100,'kg')", [activity, org, verification, methodologyVersionId]), /duplicate key|credentials_activity_verification_unique_idx/);
 
     const settlement = (await c.query("insert into settlements(credential_id,payer_id,payee_id,amount,currency,status) values($1,$2,$3,1000,'INR','CREATED') returning id", [credential, org, buyer])).rows[0].id;
     await c.query("update settlements set status='AUTHORIZED',authorization_reference='auth',verified_at=now() where id=$1", [settlement]);

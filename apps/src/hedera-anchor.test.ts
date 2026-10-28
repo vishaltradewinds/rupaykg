@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { integrityHash, verifyHcsMessage, type AnchorPayload } from "./hedera-anchor.js";
+import { canonicalIntegrityHash, integrityHash, verifyHcsMessage, type AnchorPayload } from "./hedera-anchor.js";
 
 const timestamp = "1791620000.123456789";
 const topicId = "0.0.12345";
@@ -73,4 +73,13 @@ test("MRV integrity hash survives JSON serialization when optional fields are un
   const withUndefined = { ...payload, methodologyCode: undefined, quantity: undefined, unit: undefined, metadata: undefined };
   const serialized = JSON.parse(JSON.stringify(withUndefined)) as AnchorPayload;
   assert.equal(integrityHash(withUndefined), integrityHash(serialized));
+});
+
+
+test("canonical source digests and HCS payload hash change when evidence changes", () => {
+  const evidence = [{ id: "ev-1", content_hash: "sha256:aaa", status: "VERIFIED" }];
+  const digest = canonicalIntegrityHash({ schema: "rupaykg:mrv-evidence:v1", evidence });
+  const changedDigest = canonicalIntegrityHash({ schema: "rupaykg:mrv-evidence:v1", evidence: [{ ...evidence[0], content_hash: "sha256:bbb" }] });
+  assert.notEqual(digest, changedDigest);
+  assert.notEqual(integrityHash({ ...payload, metadata: { evidenceDigest: digest } }), integrityHash({ ...payload, metadata: { evidenceDigest: changedDigest } }));
 });

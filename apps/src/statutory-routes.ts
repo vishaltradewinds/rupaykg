@@ -65,7 +65,7 @@ async function organizationFor(auth: AuthContext, pool: Pool, request: Request, 
   return requested;
 }
 
-async function evidenceBindingValid(pool: Pool, organizationId: string, evidenceId: string | null, verificationId: string | null): Promise<boolean> {
+async function evidenceBindingValid(pool: Pool, identityId: string, organizationId: string, evidenceId: string | null, verificationId: string | null): Promise<boolean> {
   if (!evidenceId && !verificationId) return true;
   if (!evidenceId || !verificationId) return false;
   const result = await pool.query<{ ok: boolean }>(
@@ -78,9 +78,9 @@ async function evidenceBindingValid(pool: Pool, organizationId: string, evidence
          and v.decision='APPROVED'
          and (e.content_hash is not null or e.content_uri is not null)
          and a.geography_id is not null
-         and organization_has_geography_scope(a.organization_id,a.geography_id)
+         and identity_has_geography_scope($4,a.organization_id,a.geography_id)
      ) ok`,
-    [organizationId, evidenceId, verificationId],
+    [organizationId, evidenceId, verificationId, identityId],
   );
   return result.rows[0]?.ok === true;
 }
@@ -107,6 +107,7 @@ export async function registerStatutoryRoutes(app: FastifyInstance, pool: Pool |
     const organizationId = await organizationFor(auth, pool, request as never, reply); if (!organizationId) return;
     try {
       if (!await hasOrganizationPermission(pool, auth, organizationId, ["swm:read", "epr:read", "reports:read"])) return reply.code(403).send({ error: "Statutory applicability read permission required", code: "STATUTORY_PERMISSION_REQUIRED" });
+      if (!(await pool.query<{ok:boolean}>("select identity_has_organization_scope($1,$2) ok", [auth.identityId, organizationId])).rows[0]?.ok) return reply.code(403).send({ error: "Organization-wide statutory records require an unscoped role", code: "GEOGRAPHY_FORBIDDEN" });
       const [profiles, bwg, epr] = await Promise.all([
         pool.query("select id,framework,rule_reference,effective_from,effective_to,applicability_status,basis,determination_note,externally_confirmed,external_authority,external_reference,determined_by_identity_id,determined_at,created_at from organization_statutory_profiles where organization_id=$1 order by effective_from desc nulls last,created_at desc", [organizationId]),
         pool.query("select * from organization_bwg_assessments where organization_id=$1 order by assessment_date desc,created_at desc", [organizationId]),
@@ -122,13 +123,14 @@ export async function registerStatutoryRoutes(app: FastifyInstance, pool: Pool |
     const organizationId = text(body, "organizationId") || auth.activeOrganizationId || auth.memberships[0]?.organization_id || null;
     if (!organizationId || !canActForOrganization(auth, organizationId)) return reply.code(403).send({ error: "No verified membership for organization", code: "ORG_FORBIDDEN" });
     if (!await hasOrganizationPermission(pool, auth, organizationId, ["swm:manage", "audit:execute", "reports:export"])) return reply.code(403).send({ error: "BWG applicability assessment permission required", code: "STATUTORY_WRITE_REQUIRED" });
+    if (!(await pool.query<{ok:boolean}>("select identity_has_organization_scope($1,$2) ok", [auth.identityId, organizationId])).rows[0]?.ok) return reply.code(403).send({ error: "Organization-wide BWG assessment requires an unscoped role", code: "GEOGRAPHY_FORBIDDEN" });
     const floorArea = nonNegative(body, "floorAreaSqM");
     const water = nonNegative(body, "waterConsumptionLpd");
     const waste = nonNegative(body, "solidWasteKgpd");
     if (floorArea === null || water === null || waste === null) return reply.code(400).send({ error: "BWG measurements must be non-negative numbers", code: "INVALID_BWG_MEASUREMENTS" });
     const evidenceId = text(body, "evidenceId");
     const verificationId = text(body, "verificationId");
-    if (!await evidenceBindingValid(pool, organizationId, evidenceId, verificationId)) return reply.code(400).send({ error: "Evidence and verification must be supplied together and be verified, approved, and organization/geography scoped", code: "STATUTORY_EVIDENCE_BINDING_INVALID" });
+    if (!await evidenceBindingValid(pool, auth.identityId, organizationId, evidenceId, verificationId)) return reply.code(400).send({ error: "Evidence and verification must be supplied together and be verified, approved, and organization/geography scoped", code: "STATUTORY_EVIDENCE_BINDING_INVALID" });
     const status = bwgStatus(floorArea, water, waste);
     const note = text(body, "determinationNote");
     try {
@@ -151,6 +153,7 @@ export async function registerStatutoryRoutes(app: FastifyInstance, pool: Pool |
     const organizationId = text(body, "organizationId") || auth.activeOrganizationId || auth.memberships[0]?.organization_id || null;
     if (!organizationId || !canActForOrganization(auth, organizationId)) return reply.code(403).send({ error: "No verified membership for organization", code: "ORG_FORBIDDEN" });
     if (!await hasOrganizationPermission(pool, auth, organizationId, ["epr:manage", "audit:execute", "reports:export"])) return reply.code(403).send({ error: "EPR applicability management permission required", code: "STATUTORY_EPR_WRITE_REQUIRED" });
+    if (!(await pool.query<{ok:boolean}>("select identity_has_organization_scope($1,$2) ok", [auth.identityId, organizationId])).rows[0]?.ok) return reply.code(403).send({ error: "Organization-wide EPR applicability requires an unscoped role", code: "GEOGRAPHY_FORBIDDEN" });
     const scheme = text(body, "scheme");
     if (!scheme) return reply.code(400).send({ error: "EPR scheme is required", code: "EPR_SCHEME_REQUIRED" });
     const schemeRow = await pool.query<{ code: string; name: string; metadata: Record<string, unknown> }>("select code,name,metadata from epr_schemes where code=$1 and status='VERIFIED'", [scheme]);
@@ -160,7 +163,7 @@ export async function registerStatutoryRoutes(app: FastifyInstance, pool: Pool |
     if (!allowed.has(status)) return reply.code(400).send({ error: "Invalid EPR applicability status", code: "INVALID_EPR_APPLICABILITY" });
     const evidenceId = text(body, "evidenceId");
     const verificationId = text(body, "verificationId");
-    if (!await evidenceBindingValid(pool, organizationId, evidenceId, verificationId)) return reply.code(400).send({ error: "Evidence and verification must be supplied together and be verified, approved, and organization/geography scoped", code: "STATUTORY_EVIDENCE_BINDING_INVALID" });
+    if (!await evidenceBindingValid(pool, auth.identityId, organizationId, evidenceId, verificationId)) return reply.code(400).send({ error: "Evidence and verification must be supplied together and be verified, approved, and organization/geography scoped", code: "STATUTORY_EVIDENCE_BINDING_INVALID" });
     const metadata = schemeRow.rows[0].metadata ?? {};
     const metadataRule = typeof metadata.rule_reference === "string" ? metadata.rule_reference : null;
     const registrationInput = normalizeEprRegistrationInput(text(body, "cpcbRegistrationReference"), text(body, "cpcbRegistrationStatus"), body.basis);
