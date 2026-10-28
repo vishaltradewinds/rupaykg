@@ -178,6 +178,9 @@ export async function executeGuardianMrv(input: GuardianMrvRequest): Promise<Gua
     if (status === "VERIFIED" && !executionId) {
       return { status: "UNAVAILABLE", executionId: null, policyId: input.policyId, correlationId, idempotencyKey, ...(providerCorrelationId ? { providerCorrelationId } : {}), ...(responseDigest ? { responseDigest } : {}), message: "Guardian returned VERIFIED without an authoritative execution identifier." };
     }
+    if (status === "VERIFIED" && body.policyId !== input.policyId) {
+      return { status: "UNAVAILABLE", executionId: null, policyId: input.policyId, correlationId, idempotencyKey, ...(providerCorrelationId ? { providerCorrelationId } : {}), ...(responseDigest ? { responseDigest } : {}), message: "Guardian VERIFIED response omitted or mismatched the requested policy identifier." };
+    }
     if (typeof body.policyId === "string" && body.policyId !== input.policyId) {
       return { status: "UNAVAILABLE", executionId: null, policyId: input.policyId, correlationId, idempotencyKey, ...(providerCorrelationId ? { providerCorrelationId } : {}), ...(responseDigest ? { responseDigest } : {}), message: "Guardian returned a response for a policy identifier that does not match the requested policy." };
     }
