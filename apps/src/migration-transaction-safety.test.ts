@@ -31,7 +31,7 @@ function findTransactionIncompatibilities(sql: string): string[] {
     ["REINDEX CONCURRENTLY", /\bREINDEX\b[^;]*\bCONCURRENTLY\b/i],
     ["VACUUM", /\bVACUUM\b/i],
     ["CREATE/DROP DATABASE", /\b(?:CREATE|DROP)\s+DATABASE\b/i],
-    ["explicit transaction control", /^\s*(?:BEGIN|COMMIT|ROLLBACK|SAVEPOINT|PREPARE\s+TRANSACTION)\s*;?/im],
+    ["explicit transaction control", /(?:^|;)\s*(?:BEGIN|COMMIT|ROLLBACK|SAVEPOINT|PREPARE\s+TRANSACTION)\s*;?/im],
   ];
   return checks.filter(([, pattern]) => pattern.test(clean)).map(([name]) => name);
 }
