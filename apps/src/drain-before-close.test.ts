@@ -4,8 +4,9 @@ import { drainBeforeClose } from "./drain-before-close.js";
 
 function deferred() {
   let resolve!: () => void;
-  const promise = new Promise<void>(done => { resolve = done; });
-  return { promise, resolve };
+  let reject!: (error: Error) => void;
+  const promise = new Promise<void>((done, fail) => { resolve = done; reject = fail; });
+  return { promise, resolve, reject };
 }
 
 test("drain closes resources after active work settles within grace period", async () => {
@@ -85,6 +86,55 @@ test("forced termination is still requested if forced-termination logging throws
     onForcedTermination: () => { throw new Error("logger failed"); },
     terminate: code => { terminationCode = code; },
     close: async () => { throw new Error("resources must not close while work is active"); },
+  });
+
+  assert.deepEqual(result, { timedOut: true, forcedTermination: true });
+  assert.equal(terminationCode, 1);
+});
+
+test("hung resource closure triggers bounded forced termination", async () => {
+  let terminationCode: number | undefined;
+  let closeFailure: "timeout" | "rejected" | undefined;
+  const result = await drainBeforeClose({
+    isInFlight: () => false,
+    timeoutMs: 5,
+    closeTimeoutMs: 5,
+    terminate: code => { terminationCode = code; },
+    onCloseFailure: reason => { closeFailure = reason; },
+    close: () => new Promise<void>(() => {}),
+  });
+
+  assert.deepEqual(result, { timedOut: true, forcedTermination: true });
+  assert.equal(closeFailure, "timeout");
+  assert.equal(terminationCode, 1);
+});
+
+test("rejected resource closure triggers forced termination", async () => {
+  let terminationCode: number | undefined;
+  let closeFailure: "timeout" | "rejected" | undefined;
+  const result = await drainBeforeClose({
+    isInFlight: () => false,
+    timeoutMs: 5,
+    closeTimeoutMs: 50,
+    terminate: code => { terminationCode = code; },
+    onCloseFailure: reason => { closeFailure = reason; },
+    close: async () => { throw new Error("pool close failed"); },
+  });
+
+  assert.deepEqual(result, { timedOut: true, forcedTermination: true });
+  assert.equal(closeFailure, "rejected");
+  assert.equal(terminationCode, 1);
+});
+
+test("close failure still requests termination if its logging callback throws", async () => {
+  let terminationCode: number | undefined;
+  const result = await drainBeforeClose({
+    isInFlight: () => false,
+    timeoutMs: 5,
+    closeTimeoutMs: 50,
+    terminate: code => { terminationCode = code; },
+    onCloseFailure: () => { throw new Error("logger failed"); },
+    close: async () => { throw new Error("pool close failed"); },
   });
 
   assert.deepEqual(result, { timedOut: true, forcedTermination: true });
