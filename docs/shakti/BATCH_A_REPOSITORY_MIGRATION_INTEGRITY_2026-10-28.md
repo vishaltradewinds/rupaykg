@@ -72,3 +72,23 @@ These check runs are engineering validation only. They do not prove a live Guard
 - This confirms a migration execution risk, not just a naming/style concern. Do not rename already-applied migrations or invent a ledger rewrite. First establish each environment's `schema_migrations` contents through authorized read-only access, then review a forward-only reconciliation strategy.
 - PR #97 received a second follow-up comment with this runner-level evidence (comment ID 6467533514).
 - The updated audit document's CI run was still in progress at the latest poll. Its migration validation, migration execution, typecheck, build, browser smoke, and disposable PostgreSQL acceptance steps had completed successfully; the production-container build step remained in progress. These are checks on the audit branch's current tree, not on the combined main + PR #97 candidate, so they do not close the merge blocker.
+
+
+## Synthetic merge-candidate inspection — PR #97
+- GitHub reports synthetic merge commit `eac32ec13d9bbe247c9bc131769a8113178d710a` with parents main `54a7fe1ceb41b37a68720a71c10a1dd03af30dea` and PR head `730327adc30cfaea0441f77adb12a757305d3514`.
+- The synthetic merge tree contains the ordinal migration paths `088`, `089`, `090`, and `091` in place of main's date-prefixed paths. It does not contain both sets simultaneously. Thus the merge-candidate issue is a migration-identity replacement, not simply two same-content files executing together in that tree.
+- Because `apps/src/migrate.ts` keys applied migrations by filename prefix, any environment with the date-prefixed versions already recorded can treat the ordinal versions as unapplied and attempt them again. The missing source filenames also mean Git source history alone cannot tell whether the schema is already present in a deployed database.
+- A validation-only branch `audit/pr97-merge-candidate-validation-2026-10-28` was created from the synthetic merge commit. It adds `docs/shakti/PR97_MERGE_CANDIDATE_VALIDATION_2026-10-28.md` with the exact candidate SHA, parent SHAs, safety boundaries, and test matrix. No production or main-branch changes were made.
+- No workflow run was associated with the synthetic merge commit by the available PR-triggered workflow-run lookup. Therefore merge-candidate CI remains UNVERIFIED; PR-head CI is not a substitute.
+- PR #97 received a third comment recording this tree-level finding (comment ID 6467564803).
+
+## Required migration reconciliation test matrix
+| Initial state | Expected evidence |
+|---|---|
+| Empty disposable PostgreSQL database | Candidate migration tree applies in order; all expected schema objects and migration ledger rows are present |
+| Main date-prefixed migrations already applied | Candidate upgrade completes without duplicate schema failures and with a deliberate, reviewed ledger identity strategy |
+| PR ordinal migrations already applied | Candidate upgrade completes without replaying schema changes |
+| Migration fails midway | Transactional behavior and recovery path verified; no partial/untracked schema state |
+| Production environment | Read-only `schema_migrations(version, filename, applied_at)` evidence from authorized operator; no changes during inspection |
+
+Do not choose a ledger rewrite, rename historical migration files, or run production migrations until the state-specific tests and independent review are complete.
