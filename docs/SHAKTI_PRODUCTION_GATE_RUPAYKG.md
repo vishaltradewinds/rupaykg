@@ -69,3 +69,22 @@ A successful build, CI run, deployment, or HTTP 200 response is **not** sufficie
 RupayKg becomes SHAKTI-certified for its defined production release only after every applicable gate is evidenced, all material blockers are closed, and required independent external approvals/evidence are satisfied.
 
 **Current certification decision: BLOCKED — evidence incomplete.**
+
+
+## 2026-10-28 integration candidate status (separate from deployed main)
+
+This addendum records the current integration candidate and must not be read as a change to the deployed production state above.
+
+- Integration PR: [#97](https://github.com/vishaltradewinds/rupaykg/pull/97)
+- Latest observed candidate commit when this addendum was prepared: `e51b2327fa2f5a1730b295b6fa09bd1ab1b8a788`.
+- CI for the immediately preceding commit `6c53cfb8325c50906486dea810e3050a49be8b25` completed successfully in [workflow 40657274911](https://github.com/vishaltradewinds/rupaykg/actions/runs/40657274911).
+- CI for candidate `e51b2327fa2f5a1730b295b6fa09bd1ab1b8a788` was still in progress at the last check; do not infer its result from the prior commit.
+- Automated tests now cover default idempotency-key binding to observations, evidence and metadata; object-key-order stability at top level and nested levels; and preservation of observation-array order.
+- No independent PR review submissions were recorded at the last check.
+- Live Guardian/Hedera/Mirror Node acceptance remains unproven. The existing blocker record documents an earlier Hedera `INVALID_SIGNATURE` failure; this historical note is not proof of current credential status. Re-run only in an authorized non-production environment and capture fresh evidence.
+- Indian statutory applicability and methodology eligibility still require activity-/jurisdiction-specific review against current primary instruments and a qualified reviewer.
+- Software TRL remains provisional at TRL 4; TRL 5 is not demonstrated by CI alone. Hardware TRL is not assessed in this record.
+
+### Candidate release decision
+
+**HOLD — not merged, not deployed, not certified.** CI is engineering evidence only. Reassess this decision only after exact-head CI succeeds and the independent review, statutory/methodology, external trust-chain, and operational evidence gates are closed.
