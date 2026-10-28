@@ -42,8 +42,8 @@ for (const file of files) {
       const statementPrefix = statementStart >= 0
         ? sql.slice(statementStart, match.index + match[0].length).toLowerCase()
         : "";
-      const replaceable = /create\\s+or\\s+replace\\s+function/.test(statementPrefix);
-      const guarded = /if\\s+not\\s+exists/.test(statementPrefix);
+      const replaceable = /create\s+or\s+replace\s+function/.test(statementPrefix);
+      const guarded = /if\s+not\s+exists/.test(statementPrefix);
       const prior = objects.get(key);
 
       // Repeated declarations may be intentional when the later migration explicitly
