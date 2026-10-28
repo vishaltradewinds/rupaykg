@@ -96,3 +96,15 @@ Read-only PostgreSQL catalog queries on production and staging confirmed:
 - These differences are security- and behavior-relevant. Do not overwrite production's stronger verification policy with staging's definition; the intended canonical behavior and forward migration must be independently reviewed.
 
 The object-level query covered the target tables, constraints, indexes, and relevant trigger/function definitions. It is not a claim that every object in the entire database has been fully reconciled.
+
+## Recovery of production-recorded migration 096
+
+The missing production source was recovered from Git history:
+- Source commit: `ca8f4100782e13f8d72106187fafc8e1e446214f` — “Bind verification to organization and snapshot authority”.
+- Source blob: `258b1f4534efbf915688f78aa84d4ec24a47cbc0`.
+- Follow-up commit `54a7fe1ceb41b37a68720a71c10a1dd03af30dea` explicitly removed the migration from main as unreviewed.
+- A non-release evidence fixture was preserved at `scripts/fixtures/legacy-migrations/096_verification_authorization_provenance.sql`; it is **not** in the release `migrations/` directory and must not be treated as approved deployment material.
+
+The recovered SQL adds four verification authorization provenance fields and changes `prevent_invalid_verification()` to bind evidence to its activity, require organization-scoped active verifier permission, reject self-verification, and record the decision-time permission snapshot. This is consistent with the stronger production-side definition observed in the read-only catalog audit. Because the historical change was explicitly removed as unreviewed, its recovery is evidence preservation—not approval to reintroduce it into a release. Obtain independent security/domain review and prepare an approved forward migration or formally documented history-reconciliation approach before any release.
+
+The actual-runner acceptance suite has been extended to model the production ledger's recorded `096` and staging's recorded `20261022`–`20261025` files against a release catalog that lacks them. It asserts the actual runner fails closed in both cases. The new CI run must pass before this batch is considered complete.
