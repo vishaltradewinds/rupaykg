@@ -135,4 +135,22 @@ Additional read-only checks on staging branch `br-spring-hill-b4544vz5` confirme
 
 This confirms a concrete runtime compatibility blocker: the worker's UNRESOLVED status cannot be persisted under the current staging CHECK. Do not enable the worker or apply the candidate migration until tests exercise the exact SQL against a disposable PostgreSQL database, including existing rows, constraint replacement, allowed/disallowed statuses, rerun behavior, and rollback/recovery expectations. The 12 inbox rows and 29 events remain untouched.
 
-**Status: live ledger and staging constraint/data evidence recorded; source checksum provenance and disposable PostgreSQL rehearsal remain blocking gates. No live writes performed.**
+
+## Disposable Neon PostgreSQL rehearsal — 2026-10-28
+
+A separate Neon branch was created from the staging snapshot solely for rehearsal:
+- Project: `steep-mud-79906940`
+- Rehearsal branch: `shakti-unresolved-migration-rehearsal-20261028` (`br-broad-glade-b46npw8o`)
+- Parent staging branch: `br-spring-hill-b4544vz5`
+
+On the rehearsal branch only, the candidate forward-only `UNRESOLVED` CHECK replacement from Git blob `4f9776bc449025e795cb0d5c93e8bace9dea280b` was applied twice. Both applications completed successfully. The resulting CHECK includes `UNRESOLVED`. A controlled test successfully persisted `UNRESOLVED` and the CHECK rejected `INVALID_TEST_STATUS`; the test row's original `PROCESSING` status was restored.
+
+Post-test read-only checks on the rehearsal branch:
+- Inbox rows: 12 (same as baseline).
+- Status distribution: PROCESSING=8, QUARANTINED=1, RECEIVED=1, RETRY=1, VALIDATED=1; UNRESOLVED=0 after restoring the test row.
+- Inbox event rows: 33, up from the staging baseline of 29 because the controlled status-transition test exercised the append-only event trigger. These four test-generated events exist only on the rehearsal branch; no staging/production rows were touched.
+- Invalid status rejection and repeated migration application passed.
+
+This is a useful targeted rehearsal, not the complete migration acceptance gate. Still required: test every worker transition and lease/quarantine/retry path against the exact worker implementation; test concurrency and interrupted migration recovery; compare all source migrations with trusted deployment artifacts; independently review the proposed migration; and obtain release approval. The rehearsal branch is retained as evidence and must not be treated as production data. Do not enable the worker.
+
+**Status: targeted disposable-PostgreSQL rehearsal passed; full worker acceptance, deployment source provenance, independent review and release approval remain blocking gates. Production/staging unchanged; scheduler disabled.**
