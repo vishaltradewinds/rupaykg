@@ -210,3 +210,14 @@ Full workflow run [40693796240](https://github.com/vishaltradewinds/rupaykg/acti
 Scope limitation: this is a static screening test, not a full SQL parser or proof that every migration is safe under every PostgreSQL version/runtime state. Any flagged non-transactional command still requires migration-specific review, and dynamic SQL or unusual syntax may need separate scrutiny.
 
 **Release remains HOLD.** Authorized environment-specific ledger/schema evidence, broader partial-application and schema-drift characterization, independent review, approved recovery plan, separate live Guardian/HCS/Mirror Node acceptance where in scope, and explicit release approval remain outstanding. PRs #97 and #104 remain unmerged; production certification remains OFF. No production database was accessed or modified.
+
+
+## CI verification — disposable PostgreSQL cleanup stability (2026-10-28)
+
+The cleanup failure in run [40694241773](https://github.com/vishaltradewinds/rupaykg/actions/runs/40694241773) was traced to redundant forced termination of PostgreSQL backends while disposable test databases were being torn down. The affected integration scenarios use synchronous child-process execution and close their per-test pools before cleanup; forced backend termination was unnecessary and could surface as an asynchronous connection error in another active test.
+
+Commit `37d96b31066942d854752b42947c205489de1b39` removes those redundant `pg_terminate_backend` cleanup calls from the migration identity integration tests. Full workflow run [40694790907](https://github.com/vishaltradewinds/rupaykg/actions/runs/40694790907) completed successfully on that commit.
+
+This establishes CI success for the cleanup adjustment and the suite at that commit. It does not prove all historical schema states or live environment migration histories. The cleanup remains confined to disposable test databases; no production database was accessed or modified.
+
+**Release remains HOLD.** PRs #97 and #104 remain unmerged; production certification remains OFF. Open gates are unchanged: authorized read-only per-environment ledger/schema evidence, broader partial-application and schema-drift characterization, independent review and approved recovery plan, separate live Guardian/HCS/Mirror Node acceptance where in scope, and explicit production release approval.
