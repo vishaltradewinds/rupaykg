@@ -192,7 +192,7 @@ test("government inbox worker persists retry recovery, quarantine and append-onl
 
     // Retiring a source snapshot must stop new inbox batches from resolving through
     // mappings grounded in that snapshot. Historical validated rows remain unchanged.
-    const retiredAuthority = "RET-" + suffix.slice(0, 8).toUpperCase();
+    const retiredAuthority = "RTA-" + suffix.slice(0, 8).toUpperCase();
     const retiredFixture = await provisionCrosswalk(retiredAuthority, "RET-MUNI", new Date().toISOString());
     await pool.query("update authoritative_source_snapshots set validation_status='RETIRED' where id=$1", [retiredFixture.sourceSnapshotId]);
     const retiredBatchId = randomUUID();
