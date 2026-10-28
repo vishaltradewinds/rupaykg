@@ -41,7 +41,8 @@ try {
 
   // Fail closed on known filename-identity changes. Never silently re-run
   // equivalent DDL against a database whose ledger records the old identity.
-  const legacyNames = Object.values(LEGACY_MIGRATION_IDENTITIES);
+  // Query both sides of every known pair so reverse deployments fail closed too.
+  const legacyNames = [...Object.keys(LEGACY_MIGRATION_IDENTITIES), ...Object.values(LEGACY_MIGRATION_IDENTITIES)];
   const legacyRows = legacyNames.length
     ? await pool.query<{ filename: string }>(
         "select filename from schema_migrations where filename = any($1::text[])",
