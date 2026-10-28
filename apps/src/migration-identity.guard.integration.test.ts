@@ -7,7 +7,7 @@ import { Pool } from "pg";
 
 const enabled = process.env.RUPAYKG_RUN_DB_INTEGRATION_TESTS === "1" && Boolean(process.env.DATABASE_URL);
 const sourceDir = path.dirname(fileURLToPath(import.meta.url));
-const repoRoot = path.resolve(sourceDir, "../..");
+const repoRoot = path.resolve(sourceDir, "../../..");
 
 describe("migration identity guard with isolated PostgreSQL schema", { skip: !enabled }, () => {
   const schema = `migration_guard_${process.pid}_${Date.now()}`;
