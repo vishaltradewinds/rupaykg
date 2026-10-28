@@ -38,11 +38,22 @@ for (const file of files) {
     for (const match of sql.matchAll(pattern)) {
       const object = match[1].toLowerCase();
       const key = `${kind}:${object}`;
+      const statementStart = sql.slice(0, match.index).toLowerCase().lastIndexOf("create");
+      const statementPrefix = statementStart >= 0
+        ? sql.slice(statementStart, match.index + match[0].length).toLowerCase()
+        : "";
+      const replaceable = /create\\s+or\\s+replace\\s+function/.test(statementPrefix);
+      const guarded = /if\\s+not\\s+exists/.test(statementPrefix);
       const prior = objects.get(key);
-      if (prior) {
-        throw new Error(`duplicate database ${kind} '${object}' in ${prior} and ${file}`);
+
+      // Repeated declarations may be intentional when the later migration explicitly
+      // replaces a function or guards creation with IF NOT EXISTS. These are tracked
+      // rather than treated as a hard collision; migration-path tests must still prove
+      // the resulting schema is correct.
+      if (prior && !replaceable && !guarded) {
+        throw new Error(`duplicate unguarded database ${kind} '${object}' in ${prior.file} and ${file}`);
       }
-      objects.set(key, file);
+      if (!prior) objects.set(key, { file, replaceable, guarded });
     }
   }
 }
