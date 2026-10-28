@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { findLegacyIdentityConflicts, findVersionFilenameConflicts } from "./migration-identity.js";
+import { findDuplicateCandidateVersions, findLegacyIdentityConflicts, findVersionFilenameConflicts } from "./migration-identity.js";
 
 describe("historical migration identity guard", () => {
   it("flags a date-prefixed legacy ledger row when the ordinal candidate is present", () => {
@@ -101,5 +101,31 @@ describe("migration version/filename preflight", () => {
       ),
       [],
     );
+  });
+});
+
+
+describe("candidate migration tree version uniqueness", () => {
+  it("flags duplicate numeric version prefixes before any migration runs", () => {
+    assert.deepEqual(
+      findDuplicateCandidateVersions([
+        "001_first.sql",
+        "002_second.sql",
+        "001_other.sql",
+        "003_third.sql",
+      ]),
+      [{ version: "001", filenames: ["001_first.sql", "001_other.sql"] }],
+    );
+  });
+
+  it("accepts a migration tree with unique version prefixes", () => {
+    assert.deepEqual(
+      findDuplicateCandidateVersions(["001_first.sql", "002_second.sql"]),
+      [],
+    );
+  });
+
+  it("ignores filenames without a version separator", () => {
+    assert.deepEqual(findDuplicateCandidateVersions(["README.md", "001_first.sql"]), []);
   });
 });
