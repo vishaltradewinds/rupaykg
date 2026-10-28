@@ -54,8 +54,12 @@ function canonical(value: unknown): string {
   return `{${keys.map(key => `${JSON.stringify(key)}:${canonical(object[key])}`).join(",")}}`;
 }
 
+export function canonicalIntegrityHash(value: unknown): string {
+  return crypto.createHash("sha256").update(canonical(value)).digest("hex");
+}
+
 export function integrityHash(payload: AnchorPayload): string {
-  return crypto.createHash("sha256").update(canonical(payload)).digest("hex");
+  return canonicalIntegrityHash(payload);
 }
 
 export function hederaStatus() {
