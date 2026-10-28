@@ -20,6 +20,8 @@ const names = [
   "20261024_ai_intake_rate_limits.sql",
   "20261025_ai_evidence_intake_jobs.sql",
 ];
+const repoRoot = path.resolve(here, "..");
+const currentCatalog = path.join(repoRoot, "migrations");
 const temp = await mkdtemp(path.join(os.tmpdir(), "rupaykg-migration-runner-"));
 const migrationDir = path.join(temp, "migrations");
 await mkdir(migrationDir);
@@ -28,6 +30,8 @@ const client = new Client({ connectionString: process.env.DATABASE_URL, ssl: pro
 const suffix = Date.now() + "_" + Math.floor(Math.random() * 1e6);
 const productionSchema = "runner_prod_" + suffix;
 const stagingSchema = "runner_stage_" + suffix;
+const productionHistorySchema = "runner_prod_history_" + suffix;
+const stagingHistorySchema = "runner_stage_history_" + suffix;
 const q = (s) => '"' + s.replaceAll('"', '""') + '"';
 const setSchema = (schema) => client.query("set search_path to " + q(schema) + ", public");
 const prereqs = async () => {
@@ -43,7 +47,7 @@ const runRunner = (schema, dir = migrationDir) => {
     PGOPTIONS: "-c search_path=" + schema + ",public",
   };
   return spawnSync("node_modules/.bin/tsx", ["apps/src/migrate.ts"], {
-    cwd: path.resolve(here, ".."),
+    cwd: repoRoot,
     env,
     encoding: "utf8",
     timeout: 120000,
@@ -54,7 +58,7 @@ const schemas = [];
 try {
   await client.connect();
   connected = true;
-  for (const schema of [productionSchema, stagingSchema]) {
+  for (const schema of [productionSchema, stagingSchema, productionHistorySchema, stagingHistorySchema]) {
     await client.query("create schema " + q(schema));
     schemas.push(schema);
     await setSchema(schema);
@@ -101,6 +105,42 @@ try {
   const stageRepeat = runRunner(stagingSchema);
   assert.equal(stageRepeat.status, 0, "repeated staging runner should be a no-op: " + stageRepeat.stderr + stageRepeat.stdout);
 
+  // Full-history shape: shared legacy records exist, while production's 096
+  // record and staging's 20261022-25 records are absent from this release catalog.
+  // The shared historical sources are present in this branch; ledger entries
+  // make the runner skip them, so no historical SQL is replayed in these schemas.
+  const historicalCatalog = path.join(temp, "historical-release-catalog");
+  await mkdir(historicalCatalog);
+  const sharedLegacy = [
+    "20261018_cpcb_swm_stakeholder_workspaces.sql",
+    "20261019_cpcb_bwg_workflow_tracking.sql",
+    "20261020_ccts_methodology_registry.sql",
+    "20261021_evidence_artifact_vault.sql",
+  ];
+  for (const name of sharedLegacy) await copyFile(path.join(currentCatalog, name), path.join(historicalCatalog, name));
+
+  for (const schema of [productionHistorySchema, stagingHistorySchema]) {
+    await setSchema(schema);
+    await client.query("create table schema_migrations(version text primary key, filename text not null, applied_at timestamptz not null default now())");
+    for (const name of sharedLegacy) {
+      await client.query("insert into schema_migrations(version,filename) values ($1,$2)", [name.split("_", 1)[0], name]);
+    }
+  }
+  await setSchema(productionHistorySchema);
+  await client.query("insert into schema_migrations(version,filename) values ('096','096_verification_authorization_provenance.sql')");
+  const prodHistory = runRunner(productionHistorySchema, historicalCatalog);
+  assert.notEqual(prodHistory.status, 0, "actual runner must fail closed for production's missing recorded 096 source");
+  assert.match(prodHistory.stderr + prodHistory.stdout, /096_verification_authorization_provenance\.sql/);
+
+  await setSchema(stagingHistorySchema);
+  for (const name of names) {
+    await client.query("insert into schema_migrations(version,filename) values ($1,$2)", [name.split("_", 1)[0], name]);
+  }
+  const stageHistory = runRunner(stagingHistorySchema, historicalCatalog);
+  assert.notEqual(stageHistory.status, 0, "actual runner must fail closed for staging's absent 20261022-25 source files");
+  assert.match(stageHistory.stderr + stageHistory.stdout, /20261022_async_mirror_inbox\.sql/);
+  assert.match(stageHistory.stderr + stageHistory.stdout, /20261025_ai_evidence_intake_jobs\.sql/);
+
   // Fail-closed negative case: recorded file is absent from the release directory.
   const missingDir = path.join(temp, "missing-file-release");
   await mkdir(missingDir);
@@ -108,7 +148,7 @@ try {
   const orphan = runRunner(stagingSchema, missingDir);
   assert.notEqual(orphan.status, 0, "actual runner must fail when ledger references a missing migration file");
   assert.match(orphan.stderr + orphan.stdout, /recorded migration|orphan|absent/i);
-  console.log("PASS: actual migrate.ts runner applied production-shaped fixture, skipped staging ledger matches, preserved 12 inbox + 12 event rows, no-op repeat runs, and failed closed on missing recorded source.");
+  console.log("PASS: actual migrate.ts runner applied production-shaped fixture, skipped staging ledger matches, preserved 12 inbox + 12 event rows, no-op repeat runs, and failed closed for missing files in production-shaped (096) and staging-shaped (20261022-25) historical ledgers.");
 } finally {
   if (connected) {
     for (const schema of schemas.reverse()) {
