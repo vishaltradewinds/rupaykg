@@ -56,3 +56,13 @@ This is clean-install evidence only. It does not establish compatibility with an
 ## Decision
 
 **HOLD.** Do not merge PR #97, do not merge validation-only PR #104, do not rename applied migration files, do not backfill or rewrite a live ledger, and do not enable production certification based solely on clean-install CI. The next code change should be a dedicated historical-ledger regression harness, followed by a narrowly allowlisted reconciliation implementation only if authorized ledger evidence demonstrates that it is needed.
+
+## Engineering progress — fail-closed guard
+
+A fail-closed guard has been added in the validation branch:
+- `apps/src/migration-identity.ts` contains an explicit allowlist of the four observed legacy-to-candidate filename identity pairs.
+- `apps/src/migration-identity.test.ts` covers a legacy conflict, a clean ledger, unrelated names, and mixed historical rows.
+- `apps/src/migrate.ts` checks the migration ledger before applying candidate migrations and emits `MIGRATION_IDENTITY_CONFLICT` if a known legacy filename is present. It does not alias, backfill, rename, or rewrite ledger entries.
+
+This guard is a safety improvement, **not a compatibility fix**. Historical installations will intentionally stop with a clear error until a reviewed reconciliation path is implemented and tested. CI for the code changes is still being validated; do not treat the guard as release-ready until that run passes and independent review is complete.
+
