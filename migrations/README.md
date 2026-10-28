@@ -126,4 +126,4 @@ Migration `105_vault_content_verification_binding.sql` verifies the stored bytes
 
 ## Integrated migration version sequence
 
-The governed agentic foundation owns migration versions `090`–`093`. The EPR/ICVCM follow-on controls use unique versions `094`–`105`. Do not reuse a numeric prefix: `apps/src/migrate.ts` treats the numeric prefix as the schema migration version and stops if a different filename has already claimed it. Validate the entire ordered chain against a fresh disposable PostgreSQL database before release.
+The governed agentic foundation owns migration versions `088`–`093`. The EPR/ICVCM follow-on controls use unique versions `094`–`105`. Do not reuse a numeric prefix: `apps/src/migrate.ts` treats the numeric prefix as the schema migration version and stops if a different filename has already claimed it. Validate the entire ordered chain against a fresh disposable PostgreSQL database before release.
