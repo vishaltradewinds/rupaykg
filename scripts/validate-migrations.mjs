@@ -38,12 +38,12 @@ for (const file of files) {
     for (const match of sql.matchAll(pattern)) {
       const object = match[1].toLowerCase();
       const key = `${kind}:${object}`;
-      const statementStart = sql.slice(0, match.index).toLowerCase().lastIndexOf("create");
-      const statementPrefix = statementStart >= 0
-        ? sql.slice(statementStart, match.index + match[0].length).toLowerCase()
-        : "";
-      const replaceable = /create\s+or\s+replace\s+function/.test(statementPrefix);
-      const guarded = /if\s+not\s+exists/.test(statementPrefix);
+      // The matched declaration itself contains the CREATE modifiers. Looking
+      // backward for the previous "create" can accidentally inspect an unrelated
+      // earlier statement and misclassify valid CREATE OR REPLACE declarations.
+      const declaration = match[0].toLowerCase();
+      const replaceable = kind === "function" && /create\s+or\s+replace\s+function/.test(declaration);
+      const guarded = /if\s+not\s+exists/.test(declaration);
       const prior = objects.get(key);
 
       // Repeated declarations may be intentional when the later migration explicitly
