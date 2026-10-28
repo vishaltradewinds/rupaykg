@@ -5,12 +5,11 @@ import { assertNoOrphanedMigrationRecords, findOrphanedMigrationRecords } from "
 // These records are derived from the read-only live audit dated 2026-10-28.
 // Keep the fixtures intentionally small: they exercise reconciliation behavior,
 // not the full database schema. No fixture authorizes a production ledger write.
-const canonicalReleaseFiles = [
+const relevantCanonicalFiles = [
   "088_cpcb_swm_stakeholder_workspaces.sql",
   "089_cpcb_bwg_workflow_tracking.sql",
   "090_ccts_methodology_registry.sql",
   "091_evidence_artifact_vault.sql",
-  
 ];
 
 const sharedLegacyRecords = [
@@ -26,7 +25,7 @@ test("production legacy ledger stays blocked until an explicit compatibility pro
     { version: "096", filename: "096_verification_authorization_provenance.sql" },
   ];
   const orphans = findOrphanedMigrationRecords(productionRecords, [
-    ...canonicalReleaseFiles,
+    ...relevantCanonicalFiles,
     "096_verification_authorization_provenance.sql",
   ]);
   assert.deepEqual(orphans, sharedLegacyRecords);
@@ -39,7 +38,7 @@ test("production legacy ledger stays blocked until an explicit compatibility pro
   );
 });
 
-test("staging-only async and AI legacy records are not mapped to numbered migrations 092-095", () => {
+test("staging-only async and AI legacy records are not mapped to numbered migrations 092-095 (whose actual contents differ and are not treated as aliases)", () => {
   const stagingOnlyRecords = [
     { version: "20261022", filename: "20261022_async_mirror_inbox.sql" },
     { version: "20261023", filename: "20261023_async_mirror_worker_leases.sql" },
