@@ -8,12 +8,21 @@ Read-only inspection only. No INSERT, UPDATE, DELETE, DDL, migration-ledger chan
 
 ## Source recovery result
 
-Source recovery status was rechecked against additional repository branches on 2026-10-28:
-- **Recovered:** `migrations/20261024_ai_intake_rate_limits.sql` from branch `intelligence/ai-evidence-intake-middleware`, blob `87b51fe60a96a4e0752c8b0a9a170c81f9936dbb`. The recovered SQL defines the identity/organization/minute composite primary key, request_count 1–10 check, and window_start index; these match the catalog summary recorded below.
-- **Recovered:** `migrations/20261025_ai_evidence_intake_jobs.sql` from the same branch, blob `6a0ae54530b7b756dac33589eaf18df3b071d8f2`. The recovered SQL defines the durable idempotency ledger, status/attempt/hash checks, evidence and organization/identity foreign keys, and recovery/organization indexes; these match the catalog summary recorded below.
-- **Not recovered:** `migrations/20261022_async_mirror_inbox.sql` and `migrations/20261023_async_mirror_worker_leases.sql`. Exact-path checks across the current migration branch and other relevant mirror/sync branches did not find these files. Searches of commit messages and issues did not surface a source artifact. No CI artifacts were attached to the inspected successful runs.
+Source recovery was rechecked against the feature branch `intelligence/ai-evidence-intake-middleware`, head commit `c56b9c1fe341ce3ba943bced10f47163dae2a513`. **All four original SQL files have now been located** on that branch:
 
-This narrows the recovery gap from four migrations to two. For 20261022/23, the schema below remains reconstructed from PostgreSQL catalogs on staging only. For 20261024/25, source SQL is recovered from a non-default feature branch but has not yet been independently replay-tested against clean and upgrade fixtures. The feature branch is evidence of source, not proof that its application code is present in the current release candidate. Exact historical grants, RLS policies, ownership, later alterations, and the original semantics of the separate worker-lease filename remain unverified.
+- `migrations/20261022_async_mirror_inbox.sql` — blob `4d08607e03561b9fbb4ce502b4c4211127237050`; [source](https://github.com/vishaltradewinds/rupaykg/blob/intelligence/ai-evidence-intake-middleware/migrations/20261022_async_mirror_inbox.sql).
+- `migrations/20261023_async_mirror_worker_leases.sql` — blob `33cb4d5d2e29a4a111340e5a0ac34170a0081895`; [source](https://github.com/vishaltradewinds/rupaykg/blob/intelligence/ai-evidence-intake-middleware/migrations/20261023_async_mirror_worker_leases.sql).
+- `migrations/20261024_ai_intake_rate_limits.sql` — blob `87b51fe60a96a4e0752c8b0a9a170c81f9936dbb`; [source](https://github.com/vishaltradewinds/rupaykg/blob/intelligence/ai-evidence-intake-middleware/migrations/20261024_ai_intake_rate_limits.sql).
+- `migrations/20261025_ai_evidence_intake_jobs.sql` — blob `6a0ae54530b7b756dac33589eaf18df3b071d8f2`; [source](https://github.com/vishaltradewinds/rupaykg/blob/intelligence/ai-evidence-intake-middleware/migrations/20261025_ai_evidence_intake_jobs.sql).
+
+The same branch contains worker and integration-test sources:
+- `apps/src/async-mirror-worker.ts` — blob `8008f0fa73f0f0a613cfcc1387fe50de51407862`.
+- `apps/src/async-mirror-worker.test.ts` — blob `34451173fcc24a1b793ea0672ebccbbd397be23c`.
+- `apps/src/async-mirror-worker-db.test.ts` — blob `611f16a2d2806747cf5f2d53df1a5629a69d7c9d`.
+- `apps/src/async-mirror-routes.ts` — blob `96b814fb8723afeaadb3ba542126fbd73954928b`.
+- `docs/GOVERNMENT_INBOX_WORKER_OPERATIONS.md` — blob `598595a169a725cf90397033befe2ac58386733c`.
+
+**Important:** finding source in a feature branch is not equivalent to release approval. The worker operations document explicitly describes an engineering capability whose production scheduler is not enabled or certified. The 20261022 SQL creates the initial inbox status check; 20261023 expands it and adds lease/retry/quarantine columns and indexes. This aligns with the staging catalog observations. Before porting or applying anything, we still need to review branch divergence, run clean-install and both-ledger upgrade tests in disposable PostgreSQL, and prove that staging's 12 inbox and 29 event rows remain intact. No SQL has been applied to live databases. Exact historical grants/policies/ownership and any later modifications remain subject to full catalog comparison.
 
 ## Environment delta confirmed by read-only catalog checks
 
@@ -204,3 +213,8 @@ This means the synthetic inbox rows' owning seed/test code is not present in the
 - Latest CI for this checkpoint branch completed successfully: [run 40720538325](https://github.com/vishaltradewinds/rupaykg/actions/runs/40720538325), commit `1591450348564794324d17c8688ea1c72f209f5b`.
 - The preceding documentation checkpoints also passed CI: [run 40720462052](https://github.com/vishaltradewinds/rupaykg/actions/runs/40720462052) and [run 40720257060](https://github.com/vishaltradewinds/rupaykg/actions/runs/40720257060).
 - No database writes were performed. PR #107 remains unmerged; live migration compatibility remains unproven and production certification stays **HOLD**.
+
+
+## Recovery checkpoint update — 2026-10-28 16:03 UTC
+
+All four source migration files and the async mirror worker implementation/tests have been located on feature branch `intelligence/ai-evidence-intake-middleware`. This closes the source-discovery gap, but not the release compatibility gate. CI passed for the prior report commit `77616533d3d6c931f530e7f62799af777eb01306` ([run 40721501835](https://github.com/vishaltradewinds/rupaykg/actions/runs/40721501835)); this report update itself requires its own CI run. PR #107 remains draft/open. No database writes were performed; production certification remains **HOLD**.
