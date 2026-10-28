@@ -261,6 +261,57 @@ test("government inbox worker persists retry recovery, quarantine and append-onl
       /append-only/,
       "transition evidence must remain append-only",
     );
+
+    // Concurrent workers must not claim the same row while the first validator is in flight.
+    const concurrent = await makeRow("CON-" + suffix.slice(0, 8));
+    let releaseConcurrentValidation: () => void = () => {};
+    let signalConcurrentValidation: () => void = () => {};
+    const concurrentValidationStarted = new Promise<void>(resolve => { signalConcurrentValidation = resolve; });
+    const concurrentValidationGate = new Promise<void>(resolve => { releaseConcurrentValidation = resolve; });
+    const firstConcurrentWorker = runGovernmentInboxWorker(pool, async () => {
+      signalConcurrentValidation();
+      await concurrentValidationGate;
+      return { valid: true, summary: { officialAcceptance: false, authoritativeMrvMutation: false, guardianSubmission: false } };
+    }, { batchSize: 1, maxAttempts: 3 });
+    await concurrentValidationStarted;
+    const secondConcurrentWorker = await runGovernmentInboxWorker(pool, async () => ({
+      valid: true,
+      summary: { officialAcceptance: false, authoritativeMrvMutation: false, guardianSubmission: false },
+    }), { batchSize: 1, maxAttempts: 3 });
+    assert.equal(secondConcurrentWorker.claimed, 0, "a concurrent worker must not claim the row already leased by the first worker");
+    releaseConcurrentValidation();
+    await firstConcurrentWorker;
+    const concurrentFinal = await pool.query<{ status: string; attempts: number }>(
+      "select status,attempts from async_mirror_inbox where id=$1", [concurrent.id],
+    );
+    assert.equal(concurrentFinal.rows[0]?.status, "VALIDATED");
+    assert.equal(concurrentFinal.rows[0]?.attempts, 1);
+
+    // A worker whose lease token has been superseded must not overwrite the newer lease owner's state.
+    const stale = await makeRow("STL-" + suffix.slice(0, 8));
+    let releaseStaleValidation: () => void = () => {};
+    let signalStaleValidation: () => void = () => {};
+    const staleValidationStarted = new Promise<void>(resolve => { signalStaleValidation = resolve; });
+    const staleValidationGate = new Promise<void>(resolve => { releaseStaleValidation = resolve; });
+    const staleWorker = runGovernmentInboxWorker(pool, async () => {
+      signalStaleValidation();
+      await staleValidationGate;
+      return { valid: true, summary: { officialAcceptance: false, authoritativeMrvMutation: false, guardianSubmission: false } };
+    }, { batchSize: 1, maxAttempts: 3 });
+    await staleValidationStarted;
+    const supersededToken = randomUUID();
+    await pool.query(
+      "update async_mirror_inbox set lease_token=$2,lease_until=now()+interval '120 seconds' where id=$1 and status='PROCESSING'",
+      [stale.id, supersededToken],
+    );
+    releaseStaleValidation();
+    await staleWorker;
+    const staleFinal = await pool.query<{ status: string; lease_token: string | null }>(
+      "select status,lease_token from async_mirror_inbox where id=$1", [stale.id],
+    );
+    assert.equal(staleFinal.rows[0]?.status, "PROCESSING", "stale worker must not commit a terminal status after its lease token is replaced");
+    assert.equal(staleFinal.rows[0]?.lease_token, supersededToken, "newer lease token must remain authoritative");
+
   } finally {
     await pool.end();
   }
