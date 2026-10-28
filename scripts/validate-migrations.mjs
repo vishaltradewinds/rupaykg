@@ -44,13 +44,15 @@ for (const file of files) {
       const declaration = match[0].toLowerCase();
       const replaceable = kind === "function" && /create\s+or\s+replace\s+function/.test(declaration);
       const guarded = /if\s+not\s+exists/.test(declaration);
+      const explicitlyDropped = kind === "trigger"
+        && new RegExp(`drop\\s+trigger\\s+if\\s+exists\\s+${object}\\b`, "i").test(sql.slice(0, match.index));
       const prior = objects.get(key);
 
       // Repeated declarations may be intentional when the later migration explicitly
       // replaces a function or guards creation with IF NOT EXISTS. These are tracked
       // rather than treated as a hard collision; migration-path tests must still prove
       // the resulting schema is correct.
-      if (prior && !replaceable && !guarded) {
+      if (prior && !replaceable && !guarded && !explicitlyDropped) {
         throw new Error(`duplicate unguarded database ${kind} '${object}' in ${prior.file} and ${file}`);
       }
       if (!prior) objects.set(key, { file, replaceable, guarded });
