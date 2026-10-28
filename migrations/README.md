@@ -67,6 +67,8 @@ Migration `084_platform_audit_chain_head.sql` bootstraps a singleton chain head 
 Migration `085_platform_access_dual_control.sql` records requests to grant reserved platform roles or restore a revoked reserved-role membership. The request and decision are separately authenticated, require distinct active Super Admin requester and approver identities, prohibit the target identity from approving its own change, revalidate the target and role at decision time, apply the membership change in the same transaction as approval, and append a hash-linked audit event. Ordinary membership grant and restoration routes remain blocked for reserved roles.
 
 
+Migration `094_epr_portal_provenance_guardrails.sql` records source/version and provenance guardrails for EPR portal workflows.
+
 ## EPR external acceptance evidence
 
 Migration `095_epr_external_acceptance_evidence.sql` adds evidence and authority fields for external EPR acceptance and a PostgreSQL trigger that rejects `ACCEPTED`/`COMPLETED` return states without a recorded authority, external reference, verified provenance-backed evidence, approved verification, and confirmation timestamp. Internal submission remains distinct from external submission/acceptance; applicability must also be reviewed for the organization and scheme before a return can be submitted.
@@ -84,43 +86,43 @@ Migration `087_acceptance_fixture_registry_exclusion.sql` prevents activities or
 
 ## ICVCM CCP internal evidence assessments
 
-Migration `101_icvcm_ccp_assessments.sql` persists append-only, versioned internal evidence-completeness assessments per activity and organization. API writes require authenticated organization membership and `evidence:review` permission; every cited evidence UUID must resolve to `VERIFIED` evidence for the same activity. Records remain `INTERNAL_DRAFT`; PostgreSQL blocks updates and deletes so revisions retain their history. This is not ICVCM certification, independent verification, a statutory compliance decision, or a carbon-credit issuance action.
+Migration `103_icvcm_ccp_assessments.sql` persists append-only, versioned internal evidence-completeness assessments per activity and organization. API writes require authenticated organization membership and `evidence:review` permission; every cited evidence UUID must resolve to `VERIFIED` evidence for the same activity. Records remain `INTERNAL_DRAFT`; PostgreSQL blocks updates and deletes so revisions retain their history. This is not ICVCM certification, independent verification, a statutory compliance decision, or a carbon-credit issuance action.
 
 
 ## Accepted EPR evidence immutability
 
-Migration `094_epr_acceptance_evidence_immutability.sql` prevents evidence or verification records referenced by an `ACCEPTED`/`COMPLETED` EPR return from being rewritten in place. Corrections must create new evidence and verification records so an already-recorded external acceptance cannot silently lose its evidentiary basis.
+Migration `096_epr_acceptance_evidence_immutability.sql` prevents evidence or verification records referenced by an `ACCEPTED`/`COMPLETED` EPR return from being rewritten in place. Corrections must create new evidence and verification records so an already-recorded external acceptance cannot silently lose its evidentiary basis.
 
 
 ## Acceptance integrity and ICVCM ownership binding
 
-Migration `095_acceptance_and_icvcm_binding_guards.sql` makes authority-confirmation fields and organization binding immutable once an EPR return is `ACCEPTED` or `COMPLETED` (the only allowed progression is `ACCEPTED` to `COMPLETED`). It also explicitly blocks deletion of evidence/verification artifacts supporting accepted returns.
+Migration `097_acceptance_and_icvcm_binding_guards.sql` makes authority-confirmation fields and organization binding immutable once an EPR return is `ACCEPTED` or `COMPLETED` (the only allowed progression is `ACCEPTED` to `COMPLETED`). It also explicitly blocks deletion of evidence/verification artifacts supporting accepted returns.
 
-The ICVCM assessment table migration `101_icvcm_ccp_assessments.sql` also installs a database trigger ensuring an assessment's organization matches its activity. The trigger is defined after table creation in the same migration so migration ordering remains deterministic.
+The ICVCM assessment table migration `103_icvcm_ccp_assessments.sql` also installs a database trigger ensuring an assessment's organization matches its activity. The trigger is defined after table creation in the same migration so migration ordering remains deterministic.
 
 ## Assessed activity context immutability
 
-Migration `096_assessed_activity_context_immutability.sql` prevents changing an activity's organization or geography after it supports an accepted/completed EPR external confirmation or an append-only ICVCM assessment. It also blocks deletion of such activities. Corrective work should preserve the historical activity and create a new, explicitly linked record rather than silently changing the basis of an existing assessment.
+Migration `098_assessed_activity_context_immutability.sql` prevents changing an activity's organization or geography after it supports an accepted/completed EPR external confirmation or an append-only ICVCM assessment. It also blocks deletion of such activities. Corrective work should preserve the historical activity and create a new, explicitly linked record rather than silently changing the basis of an existing assessment.
 
 ## Assessed geography-scope policy immutability
 
-Migration `097_assessed_geography_scope_immutability.sql` prevents insert/update/delete changes to an organization's geography-scope rows after that organization has accepted/completed EPR external-confirmation history or ICVCM assessment history. This is necessary because removing the last verified scope can change the existing authorization function's behavior from an explicit scope check to its legacy no-scope fallback.
+Migration `099_assessed_geography_scope_immutability.sql` prevents insert/update/delete changes to an organization's geography-scope rows after that organization has accepted/completed EPR external-confirmation history or ICVCM assessment history. This is necessary because removing the last verified scope can change the existing authorization function's behavior from an explicit scope check to its legacy no-scope fallback.
 
-Migration `098_geography_scope_transfer_guard.sql` closes the transfer edge case by checking both the source and destination organizations when a scope row is moved. This is a fail-closed interim control; it does not implement versioned authorization policies. Organizations with assessed history must not rewrite scope policy in place until a separately reviewed versioned policy model is implemented.
+Migration `100_geography_scope_transfer_guard.sql` closes the transfer edge case by checking both the source and destination organizations when a scope row is moved. This is a fail-closed interim control; it does not implement versioned authorization policies. Organizations with assessed history must not rewrite scope policy in place until a separately reviewed versioned policy model is implemented.
 
 ## Assessed geography hierarchy immutability
 
-Migration `099_assessed_geography_hierarchy_immutability.sql` prevents re-parenting a geography node when its current ancestry is used by an activity with accepted/completed EPR confirmation or ICVCM assessment history, including when the node is an organization's verified scope root. Because scope authorization walks `geography.parent_id`, changing ancestry could retroactively change the authorization result for historical assessments. A correction workflow should preserve the original hierarchy and introduce an explicit, versioned geography correction rather than rewriting historical ancestry.
+Migration `101_assessed_geography_hierarchy_immutability.sql` prevents re-parenting a geography node when its current ancestry is used by an activity with accepted/completed EPR confirmation or ICVCM assessment history, including when the node is an organization's verified scope root. Because scope authorization walks `geography.parent_id`, changing ancestry could retroactively change the authorization result for historical assessments. A correction workflow should preserve the original hierarchy and introduce an explicit, versioned geography correction rather than rewriting historical ancestry.
 
 ## Verification authorization provenance
 
-Migration `100_verification_authorization_provenance.sql` requires an approved verification to be performed by an unsuspended, verified identity holding an explicit verification permission through a verified membership in the same organization as the activity. It also requires the verification's activity to match the cited evidence activity and records the membership, role, permission snapshot, and timestamp used for the approval decision. This preserves decision-time authorization provenance when permissions later change; it does not prevent legitimate future membership revocation.
+Migration `102_verification_authorization_provenance.sql` requires an approved verification to be performed by an unsuspended, verified identity holding an explicit verification permission through a verified membership in the same organization as the activity. It also requires the verification's activity to match the cited evidence activity and records the membership, role, permission snapshot, and timestamp used for the approval decision. This preserves decision-time authorization provenance when permissions later change; it does not prevent legitimate future membership revocation.
 
 ## Evidence artifact-chain binding
 
-Migration `102_evidence_artifact_chain_binding.sql` makes evidence artifact-series identity and scope immutable and requires each appended review to reference the exact stored artifact version. The database verifies that the reviewer is not the uploader and has active review plus verification permissions through a verified membership in the artifact's owning organization.
+Migration `104_evidence_artifact_chain_binding.sql` makes evidence artifact-series identity and scope immutable and requires each appended review to reference the exact stored artifact version. The database verifies that the reviewer is not the uploader and has active review plus verification permissions through a verified membership in the artifact's owning organization.
 
-Migration `103_vault_content_verification_binding.sql` verifies the stored bytes against the declared SHA-256 and byte length at insertion, binds the artifact to the canonical evidence activity/type/hash, and requires a vault-backed verification to match an append-only review by the same verifier with the corresponding decision. Non-vault evidence retains the existing verification workflow. These controls preserve evidence provenance; they do not independently establish that the underlying claim is true or that an authority accepted it.
+Migration `105_vault_content_verification_binding.sql` verifies the stored bytes against the declared SHA-256 and byte length at insertion, binds the artifact to the canonical evidence activity/type/hash, and requires a vault-backed verification to match an append-only review by the same verifier with the corresponding decision. Non-vault evidence retains the existing verification workflow. These controls preserve evidence provenance; they do not independently establish that the underlying claim is true or that an authority accepted it.
 
 ## Integrated migration version sequence
 
