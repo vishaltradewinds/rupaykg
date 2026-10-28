@@ -172,3 +172,18 @@ This is a **staging operational incident candidate**, separate from migration co
 - The RECEIVED row has attempts=0; the VALIDATED row has attempts=1 and no last_error_code.
 
 This pattern is consistent with a test/synthetic queue exercise, but that is not conclusively proven from catalog metadata alone. Verify environment ownership and correlate worker/test logs before treating these as real operational workload or attempting recovery. Raw payloads were not queried.
+
+
+### Stronger synthetic-data evidence
+
+A read-only query of non-payload metadata for all 12 inbox rows found every row uses `authority_code='TEST-AUTH'` and `municipal_code='TEST-MUNI'`. Batch identifiers follow the repeated `b2b2…` test pattern for 10 rows, with two explicit test UUIDs for the initial samples. The only terminal failure code is `WORKER_ATTEMPTS_EXHAUSTED`; the retry row's error is explicitly `SyntheticTransientError`. This is strong evidence that these are test/acceptance fixtures rather than real municipal workload, although environment ownership should still be confirmed before any destructive cleanup.
+
+The current repository tree and code search did not surface a worker implementation or matching worker error strings. Therefore no safe code-level replay/requeue operation can be justified from this repository snapshot. Preserve the rows until the test fixture's owning test/seed script is located and the environment owner approves cleanup.
+
+## Queue recovery disposition
+
+- Classification: **very likely synthetic/acceptance data**
+- Operational backlog: **not treated as a production incident**
+- Automatic requeue/lease reset: **not performed**
+- Raw payload inspection: **not performed**
+- Safe next action: locate the fixture/seed/test source from repository history, CI artifacts, or deployment bundle; add a disposable test proving fixture creation and expected queue transitions; then document a separately approved staging cleanup if the environment owner wants it removed.
