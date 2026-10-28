@@ -74,3 +74,10 @@ This guard is a safety improvement, **not a compatibility fix**. Historical inst
 After the expanded identity guard passed CI, the migration runner was hardened to compare all candidate migration versions against the existing ledger before entering the DDL loop. This prevents a conflicting version that sorts late in the migration tree from being discovered only after earlier candidate migrations have already run.
 
 A new disposable-PostgreSQL integration scenario seeds a conflicting ledger filename for version `091`, expects `MIGRATION_VERSION_CONFLICT` and `No migrations were applied`, and verifies both the exact ledger tuple and absence of candidate-created tables. This change is validation-only and awaits its own CI result. It does not validate content digests, partial migrations, rollback direction, or production histories.
+
+
+## CI verification update — late conflict preflight
+
+Run [40683182559](https://github.com/vishaltradewinds/rupaykg/actions/runs/40683182559) completed successfully on commit `0a5ea6e3d079a92f26ac1a6a3c3ce8966d4d43db`. The workflow passed migration validation, clean migration, strict typecheck, build, browser smoke test, the automated test step (including disposable PostgreSQL integration mode), and production container build.
+
+Intermediate runs failed on transient/incomplete commits while the runner and tests were being updated. The successful run above is the verification point for the consolidated preflight change. This still does not prove the unimplemented historical states listed in the matrix.
