@@ -143,8 +143,8 @@ async function readMirrorBody(response: Response): Promise<string> {
 
 export async function verifyHcsMessage(consensusTimestamp: string, topicId = process.env.HEDERA_TOPIC_ID || "", expectedIntegrityHash?: string, expectedActivityId?: string, expectedVerificationId?: string, expectedEvidenceId?: string, expectedGuardianExecutionId?: string) {
   const network = networkName();
-  if (!/^\\d+\\.\\d+\\.\\d+$/.test(topicId)) return { verified: false, network, error: "A valid Hedera topic ID is required" };
-  if (!/^\\d{10,}\\.\\d{1,9}$/.test(consensusTimestamp)) return { verified: false, network, error: "A valid Hedera consensus timestamp is required" };
+  if (!/^\d+\.\d+\.\d+$/.test(topicId)) return { verified: false, network, error: "A valid Hedera topic ID is required" };
+  if (!/^\d{10,}\.\d{1,9}$/.test(consensusTimestamp)) return { verified: false, network, error: "A valid Hedera consensus timestamp is required" };
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), MIRROR_NODE_TIMEOUT_MS);
   try {
