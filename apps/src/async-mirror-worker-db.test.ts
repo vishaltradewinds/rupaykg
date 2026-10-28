@@ -264,7 +264,7 @@ test("government inbox worker persists retry recovery, quarantine and append-onl
     );
 
     // Concurrent workers must not claim the same row while the first validator is in flight.
-    const concurrentAuthority = "TST-" + suffix.slice(8, 16);
+    const concurrentAuthority = "TST-" + suffix.slice(8, 16).toUpperCase();
     await provisionCrosswalk(concurrentAuthority, "TEST-MUNI", new Date().toISOString());
     const concurrent = await makeRow(concurrentAuthority);
     let releaseConcurrentValidation: () => void = () => {};
