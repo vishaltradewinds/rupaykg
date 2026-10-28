@@ -30,7 +30,7 @@ test("production lifecycle integration gate", { skip: !url }, async () => {
     // authoritative, already-confirmed provenance boundary enforced by production SQL.
     const methodologyCode = "TEST-METHODOLOGY-INTEGRATION";
     const methodologyVersionId = (await c.query(
-      "insert into methodology_versions(methodology_code,version,rules,source_reference,source_hash,applicability_rules,parameter_dictionary,equation_mapping,reconciliation_evidence,reconciliation_reference,reconciled_at,regression_verified_at) values($1,'test-1','{}'::jsonb,'test-fixture://methodology',repeat('a',64),'{}'::jsonb,'{}'::jsonb,'{}'::jsonb,'[{\\"fixture\\":true}]'::jsonb,'test-reconciliation',now(),now()) returning id",
+      "insert into methodology_versions(methodology_code,version,rules,source_reference,source_hash,applicability_rules,parameter_dictionary,equation_mapping,reconciliation_evidence,reconciliation_reference,reconciled_at,regression_verified_at) values($1,'test-1','{}'::jsonb,'test-fixture://methodology',repeat('a',64),'{\"fixture\":true}'::jsonb,'{\"fixture\":true}'::jsonb,'{\"fixture\":true}'::jsonb,'[{\\"fixture\\":true}]'::jsonb,'test-reconciliation',now(),now()) returning id",
       [methodologyCode],
     )).rows[0].id;
     await c.query(
