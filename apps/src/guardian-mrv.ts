@@ -19,9 +19,12 @@ export interface GuardianMrvResult {
   policyId: string;
   correlationId: string;
   idempotencyKey: string;
-  raw?: unknown;
+  providerCorrelationId?: string;
+  responseDigest?: string;
   message: string;
 }
+
+const MAX_RESPONSE_BYTES = 1024 * 1024;
 
 function endpoint(): string | null {
   const value = process.env.GUARDIAN_MRV_SUBMIT_URL?.trim();
@@ -61,11 +64,45 @@ function deterministicIdempotencyKey(input: GuardianMrvRequest): string {
     .digest("hex");
 }
 
+async function readBoundedBody(response: Response, maxBytes = MAX_RESPONSE_BYTES): Promise<string> {
+  const declaredLength = Number(response.headers.get("content-length") || "0");
+  if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {
+    await response.body?.cancel().catch(() => undefined);
+    throw new Error("PROVIDER_RESPONSE_TOO_LARGE");
+  }
+  if (!response.body) return "";
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel().catch(() => undefined);
+        throw new Error("PROVIDER_RESPONSE_TOO_LARGE");
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+}
+
 export function guardianStatus() {
   return {
     configured: Boolean(endpoint()),
     submitUrlConfigured: Boolean(endpoint()),
     timeoutMs: timeoutMs(),
+    maxResponseBytes: MAX_RESPONSE_BYTES,
     syntheticData: false,
     integration: "hedera-guardian",
     contract: "rupaykg:guardian-mrv:v1",
@@ -108,19 +145,41 @@ export async function executeGuardianMrv(input: GuardianMrvRequest): Promise<Gua
       }),
     });
     const contentType = response.headers.get("content-type") || "";
-    const raw = contentType.includes("application/json") ? await response.json().catch(() => null) : null;
+    let rawText = "";
+    if (contentType.toLowerCase().includes("application/json")) {
+      try {
+        rawText = await readBoundedBody(response);
+      } catch (error) {
+        const code = error instanceof Error && error.message === "PROVIDER_RESPONSE_TOO_LARGE" ? "exceeded the configured size limit" : "could not be safely read";
+        return { status: "UNAVAILABLE", executionId: null, policyId: input.policyId, correlationId, idempotencyKey, message: `Guardian response ${code}.` };
+      }
+    } else {
+      await response.body?.cancel().catch(() => undefined);
+    }
+    const responseDigest = rawText ? createHash("sha256").update(rawText).digest("hex") : undefined;
     if (!response.ok) {
-      return { status: "UNAVAILABLE", executionId: null, policyId: input.policyId, correlationId, idempotencyKey, raw, message: `Guardian MRV endpoint returned HTTP ${response.status}.` };
+      return { status: "UNAVAILABLE", executionId: null, policyId: input.policyId, correlationId, idempotencyKey, ...(responseDigest ? { responseDigest } : {}), message: `Guardian MRV endpoint returned HTTP ${response.status}.` };
     }
-    const body = raw as Record<string, unknown> | null;
-    const status = body?.status === "REJECTED" ? "REJECTED" : body?.status === "VERIFIED" ? "VERIFIED" : "UNAVAILABLE";
-    const executionIdValue = typeof body?.executionId === "string" ? body.executionId : typeof body?.id === "string" ? body.id : null;
+    let raw: unknown = null;
+    if (rawText) {
+      try { raw = JSON.parse(rawText); }
+      catch {
+        return { status: "UNAVAILABLE", executionId: null, policyId: input.policyId, correlationId, idempotencyKey, responseDigest, message: "Guardian returned malformed JSON." };
+      }
+    }
+    const body = raw && typeof raw === "object" && !Array.isArray(raw) ? raw as Record<string, unknown> : null;
+    if (!body) {
+      return { status: "UNAVAILABLE", executionId: null, policyId: input.policyId, correlationId, idempotencyKey, ...(responseDigest ? { responseDigest } : {}), message: "Guardian returned an invalid response shape." };
+    }
+    const status = body.status === "REJECTED" ? "REJECTED" : body.status === "VERIFIED" ? "VERIFIED" : "UNAVAILABLE";
+    const executionIdValue = typeof body.executionId === "string" ? body.executionId : typeof body.id === "string" ? body.id : null;
     const executionId = executionIdValue?.trim() || null;
+    const providerCorrelationId = typeof body.correlationId === "string" && body.correlationId.length <= 200 ? body.correlationId : undefined;
     if (status === "VERIFIED" && !executionId) {
-      return { status: "UNAVAILABLE", executionId: null, policyId: input.policyId, correlationId, idempotencyKey, raw, message: "Guardian returned VERIFIED without an authoritative execution identifier." };
+      return { status: "UNAVAILABLE", executionId: null, policyId: input.policyId, correlationId, idempotencyKey, ...(providerCorrelationId ? { providerCorrelationId } : {}), ...(responseDigest ? { responseDigest } : {}), message: "Guardian returned VERIFIED without an authoritative execution identifier." };
     }
-    if (status === "VERIFIED" && typeof body?.policyId === "string" && body.policyId !== input.policyId) {
-      return { status: "UNAVAILABLE", executionId: null, policyId: input.policyId, correlationId, idempotencyKey, raw, message: "Guardian returned VERIFIED for a policy identifier that does not match the requested policy." };
+    if (typeof body.policyId === "string" && body.policyId !== input.policyId) {
+      return { status: "UNAVAILABLE", executionId: null, policyId: input.policyId, correlationId, idempotencyKey, ...(providerCorrelationId ? { providerCorrelationId } : {}), ...(responseDigest ? { responseDigest } : {}), message: "Guardian returned a response for a policy identifier that does not match the requested policy." };
     }
     return {
       status,
@@ -128,11 +187,12 @@ export async function executeGuardianMrv(input: GuardianMrvRequest): Promise<Gua
       policyId: input.policyId,
       correlationId,
       idempotencyKey,
-      raw,
+      ...(providerCorrelationId ? { providerCorrelationId } : {}),
+      ...(responseDigest ? { responseDigest } : {}),
       message: status === "VERIFIED" ? "Guardian completed the configured MRV workflow." : status === "REJECTED" ? "Guardian rejected the configured MRV workflow." : "Guardian did not return an authoritative VERIFIED or REJECTED decision.",
     };
   } catch (error) {
-    const message = error instanceof Error && error.name === "AbortError" ? `Guardian MRV endpoint timed out after ${timeoutMs()}ms.` : `Guardian MRV endpoint is unavailable: ${error instanceof Error ? error.message : String(error)}`;
+    const message = error instanceof Error && error.name === "AbortError" ? `Guardian MRV endpoint timed out after ${timeoutMs()}ms.` : "Guardian MRV endpoint is unavailable due to a network or transport error.";
     return { status: "UNAVAILABLE", executionId: null, policyId: input.policyId, correlationId, idempotencyKey, message };
   } finally {
     clearTimeout(timer);
