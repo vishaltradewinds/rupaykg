@@ -169,3 +169,12 @@ CI run [40689183426](https://github.com/vishaltradewinds/rupaykg/actions/runs/40
 These results cover the tested failure modes only. They do not prove all partial migrations are recoverable, validate every possible schema drift, or establish the state of any live environment.
 
 **Remaining release gates:** authorized read-only per-environment ledger/schema evidence; broader historical-state characterization; independent review and recovery approval; separate live Guardian/HCS/Mirror Node acceptance; production release approval. No production database was accessed or modified. Production certification remains OFF/HOLD.
+
+
+## CI verification — nullable historical filename (2026-10-28)
+
+The disposable-PostgreSQL nullable-filename regression passed in [run 40690102201](https://github.com/vishaltradewinds/rupaykg/actions/runs/40690102201), commit `2c3302fb028dcabbc5a94ecb901494efddfc1902`. The fixture uses a ledger with `version` as its primary key but permits `filename` to be NULL, then seeds a NULL historical filename. The migration runner rejects the ledger with `MIGRATION_LEDGER_SCHEMA_INVALID`, applies no candidate DDL, and preserves the malformed historical row unchanged for manual review.
+
+This verifies the specific nullable-filename case only. It does not establish historical SQL content integrity, infer live-environment migration history, or prove arbitrary partial DDL is recoverable.
+
+**Release remains HOLD.** PRs #97 and #104 remain unmerged; production certification remains OFF. No production database was accessed or modified.
