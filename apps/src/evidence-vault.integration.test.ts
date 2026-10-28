@@ -82,7 +82,7 @@ test("evidence vault enforces tenant scope, versioned storage, integrity and ind
         "insert into evidence_artifact_versions(series_id,evidence_id,version_number,file_name,media_type,size_bytes,sha256,content,uploaded_by_identity_id) values($1,$2,1,'forged.pdf','application/pdf',$3,$4,$5,$6)",
         [uploaded.seriesId, forgedEvidence.rows[0]!.id, bytes.length, "0".repeat(64), bytes, uploaderId],
       ),
-      /SHA-256 does not match stored bytes/,
+      /artifact digest and size must match stored bytes and canonical evidence hash|SHA-256 does not match stored bytes/,
     );
 
     const secondBytes = Buffer.from("%PDF-1.7\\nCorrected MRV evidence fixture\\n");
