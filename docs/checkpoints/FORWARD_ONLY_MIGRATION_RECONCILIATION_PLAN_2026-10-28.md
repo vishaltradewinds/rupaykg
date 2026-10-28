@@ -153,4 +153,25 @@ Post-test read-only checks on the rehearsal branch:
 
 This is a useful targeted rehearsal, not the complete migration acceptance gate. Still required: test every worker transition and lease/quarantine/retry path against the exact worker implementation; test concurrency and interrupted migration recovery; compare all source migrations with trusted deployment artifacts; independently review the proposed migration; and obtain release approval. The rehearsal branch is retained as evidence and must not be treated as production data. Do not enable the worker.
 
-**Status: targeted disposable-PostgreSQL rehearsal passed; full worker acceptance, deployment source provenance, independent review and release approval remain blocking gates. Production/staging unchanged; scheduler disabled.**
+
+
+## Candidate SQL fixture-fidelity audit — 2026-10-28
+
+The four non-release SQL fixtures used by the disposable PostgreSQL tests have provenance headers and formatting differences, so their Git blob hashes are not expected to equal the source blobs. To avoid treating formatting differences as substantive SQL divergence, the SQL was compared after removing line comments, stripping whitespace, and case-folding.
+
+Results:
+- `20261022_async_mirror_inbox.sql`: normalized SQL matches source blob `4d08607e03561b9fbb4ce502b4c4211127237050`.
+- `20261023_async_mirror_worker_leases.sql`: normalized SQL matches source blob `33cb4d5d2e29a4a111340e5a0ac34170a0081895`.
+- `20261024_ai_intake_rate_limits.sql`: normalized SQL matches source blob `87b51fe60a96a4e0752c8b0a9a170c81f9936dbb`.
+- `20261025_ai_evidence_intake_jobs.sql`: normalized SQL matches source blob `6a0ae54530b7b756dac33589eaf18df3b071d8f2`.
+- Recovered `096_verification_authorization_provenance.sql` fixture is byte-for-byte identical to blob `258b1f4534efbf915688f78aa84d4ec24a47cbc0`.
+
+This is a source-fixture consistency check, not proof the source was deployed to staging/production. The live ledger stores no checksums, and the inspected historical GitHub Actions run returned no artifacts. No trusted release bundle/deployment checksum was found in the evidence inspected so far. The exact deployed-source provenance gate therefore remains OPEN.
+
+## Worker integration evidence found
+
+The non-release source branch `intelligence/ai-evidence-intake-middleware` contains `apps/src/async-mirror-worker-db.test.ts`, `apps/src/async-mirror-worker.test.ts`, and scheduler/operations documentation. Its CI run `39912468229` completed successfully on commit `c56b9c1fe341ce3ba943bced10f47163dae2a513`, including the general test suite and disposable PostgreSQL acceptance step. This supports the existence of engineering tests on that branch; it does not certify production behavior or justify moving that worker into the release branch. Before release, confirm the CI's DB integration test was actually enabled for that run and ensure the worker source and exact migrations are reviewed together in a controlled release candidate.
+
+**Status: targeted UNRESOLVED rehearsal and fixture/source SQL equivalence checks passed; deployed-source provenance, independent security/database review, full worker-transition acceptance evidence, and release approval remain blocking. Production/staging unchanged; scheduler disabled.**
+
+
