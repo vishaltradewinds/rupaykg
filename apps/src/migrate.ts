@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
-import { findLegacyIdentityConflicts, findVersionFilenameConflicts, LEGACY_MIGRATION_IDENTITIES } from "./migration-identity.js";
+import { findDuplicateCandidateVersions, findLegacyIdentityConflicts, findVersionFilenameConflicts, LEGACY_MIGRATION_IDENTITIES } from "./migration-identity.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) throw new Error("DATABASE_URL is required");
@@ -83,6 +83,18 @@ try {
   const files = (await readdir(migrationDir))
     .filter((name) => /^\d+_.+\.sql$/.test(name))
     .sort();
+
+  // Reject duplicate version prefixes before any candidate migration DDL. Otherwise
+  // the first file could be applied before a later same-version filename conflicts.
+  const duplicateVersions = findDuplicateCandidateVersions(files);
+  if (duplicateVersions.length > 0) {
+    const details = duplicateVersions
+      .map(({ version, filenames }) => `${version}: ${filenames.join(", ")}`)
+      .join("; ");
+    throw new Error(
+      `MIGRATION_CANDIDATE_VERSION_DUPLICATE: candidate migration tree contains duplicate version prefix(es): ${details}. No migrations were applied.`,
+    );
+  }
 
   // Fail closed on known filename-identity changes. Never silently re-run
   // equivalent DDL against a database whose ledger records the old identity.
