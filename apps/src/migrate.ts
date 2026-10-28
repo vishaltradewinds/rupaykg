@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
+import { findLegacyIdentityConflicts, LEGACY_MIGRATION_IDENTITIES } from "./migration-identity.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) throw new Error("DATABASE_URL is required");
@@ -29,8 +30,30 @@ try {
   const migrationDir = candidates.find((candidate) => existsSync(candidate));
   if (!migrationDir) throw new Error(`Migration directory not found. Checked: ${candidates.join(", ")}`);
   const files = (await readdir(migrationDir))
-    .filter((name) => /^\d+_.+\.sql$/.test(name))
+    .filter((name) => /^\\d+_.+\\.sql$/.test(name))
     .sort();
+
+  // Fail closed on known filename-identity changes. Never silently re-run
+  // equivalent DDL against a database whose ledger records the old identity.
+  const legacyNames = Object.values(LEGACY_MIGRATION_IDENTITIES);
+  const legacyRows = legacyNames.length
+    ? await pool.query<{ filename: string }>(
+        "select filename from schema_migrations where filename = any($1::text[])",
+        [legacyNames],
+      )
+    : { rows: [] as Array<{ filename: string }> };
+  const identityConflicts = findLegacyIdentityConflicts(
+    files,
+    legacyRows.rows.map((row) => row.filename),
+  );
+  if (identityConflicts.length > 0) {
+    const details = identityConflicts
+      .map(({ candidate, recordedLegacy }) => `${recordedLegacy} -> ${candidate}`)
+      .join("; ");
+    throw new Error(
+      `MIGRATION_IDENTITY_CONFLICT: database ledger contains historical migration filename(s) replaced by this migration tree: ${details}. No migrations were applied. Require reviewed, environment-specific reconciliation before proceeding.`,
+    );
+  }
 
   for (const filename of files) {
     const version = filename.split("_", 1)[0];
