@@ -241,3 +241,14 @@ A read-only inventory of the validation branch's Git tree found 107 numbered SQL
 The static transaction-safety regression also passed as part of full CI run [40693796240](https://github.com/vishaltradewinds/rupaykg/actions/runs/40693796240). A limited read of recent migrations found trigger replacement patterns (`DROP TRIGGER IF EXISTS` followed by `CREATE TRIGGER`) and immutable-state guards; the reviewed samples did not show table/column drops, truncation, or concurrent index creation. This sample is not a full destructive-DDL audit of all 107 files and must not be represented as one.
 
 **Remaining audit work:** complete a whole-tree, SQL-aware review of destructive/data-rewriting statements and schema dependencies; compare actual schema/ledger state using authorized read-only evidence per environment; expand partial-application/schema-drift fixtures. No production database was accessed or modified.
+
+
+## Transaction-safety scanner lexical regression — 2026-10-28
+
+The static screen was hardened after adding focused regression tests exposed two scanner limitations: transaction-control commands after a preceding statement were not detected, and inline SQL comments were not stripped unless they began a line. The scanner now masks dollar-quoted bodies and single-quoted literals before stripping block and line comments, and checks for explicit transaction control at statement boundaries. Regression coverage exercises procedural `BEGIN`, quoted literals, inline comments, and top-level `BEGIN` following another statement.
+
+The final correction is commit `397c945523ec513e956a996d65e614ccc9c43322`. [Workflow run 40696331263](https://github.com/vishaltradewinds/rupaykg/actions/runs/40696331263) completed successfully on that commit, including the full test suite, disposable PostgreSQL acceptance, browser smoke test, and production-container build.
+
+Scope limitation remains: this is a lightweight static screen, not a PostgreSQL parser. It does not establish runtime correctness for every SQL dialect feature, dynamic SQL path, database version, or historical schema state. Findings still require migration-specific review.
+
+**Release remains HOLD.** PRs #97 and #104 remain unmerged; production certification remains OFF. Authorized read-only ledger/schema evidence for each target environment, broader historical-state characterization, independent recovery review, applicable live Guardian/HCS/Mirror Node acceptance, and explicit release approval remain outstanding. No production database was accessed or modified.
