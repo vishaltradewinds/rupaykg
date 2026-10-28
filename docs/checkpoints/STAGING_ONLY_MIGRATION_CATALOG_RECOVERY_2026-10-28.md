@@ -215,6 +215,22 @@ This means the synthetic inbox rows' owning seed/test code is not present in the
 - No database writes were performed. PR #107 remains unmerged; live migration compatibility remains unproven and production certification stays **HOLD**.
 
 
+## Newly identified release blocker — worker status constraint mismatch
+
+Review of the recovered worker source found a concrete incompatibility that must be resolved before any worker activation:
+
+- `apps/src/async-mirror-worker.ts` writes `status='UNRESOLVED'` when a structurally valid batch has no verified jurisdiction crosswalk or has ambiguous crosswalk candidates (worker source blob `8008f0fa73f0f0a613cfcc1387fe50de51407862`).
+- `migrations/20261023_async_mirror_worker_leases.sql` constrains status to `RECEIVED, PROCESSING, PROCESSED, VALIDATED, REJECTED, RETRY, QUARANTINED` and does **not** allow `UNRESOLVED`.
+- The feature branch contains a later migration, `migrations/20261101_async_mirror_unresolved_crosswalk.sql` (blob `4f9776bc449025e795cb0d5c93e8bace9dea280b`), which adds `UNRESOLVED` to the constraint. That migration is dated in the future relative to this audit (2026-10-28) and is not present in the current candidate branch. It is a proposed corrective source, not proof the live staging schema has been fixed.
+- The worker unit tests cover unresolved/ambiguous cases using a fake pool, which does not enforce PostgreSQL CHECK constraints. A disposable-PostgreSQL integration test must explicitly exercise this state against the exact migration chain. A passing unit test alone is insufficient.
+
+**Disposition:** treat the unresolved-status path as a release blocker. Do not enable the scheduler or port worker code into the release candidate until the status constraint is reconciled via a correctly ordered, reviewed migration and a real PostgreSQL integration test proves that both unresolved and normal state transitions work. Do not edit already-applied historical migrations in place. Production/staging remain untouched.
+
 ## Recovery checkpoint update — 2026-10-28 16:03 UTC
 
 All four source migration files and the async mirror worker implementation/tests have been located on feature branch `intelligence/ai-evidence-intake-middleware`. This closes the source-discovery gap, but not the release compatibility gate. CI passed for the prior report commit `77616533d3d6c931f530e7f62799af777eb01306` ([run 40721501835](https://github.com/vishaltradewinds/rupaykg/actions/runs/40721501835)); this report update itself requires its own CI run. PR #107 remains draft/open. No database writes were performed; production certification remains **HOLD**.
+
+
+## CI follow-up — 2026-10-28 16:04 UTC
+
+CI run [40722267160](https://github.com/vishaltradewinds/rupaykg/actions/runs/40722267160) is running for report commit `bc84541c6e4efe17d4e2ec27d92ae7f7c38acfdb`; final status not yet confirmed. Previous report commit `77616533d3d6c931f530e7f62799af777eb01306` passed CI in [run 40721501835](https://github.com/vishaltradewinds/rupaykg/actions/runs/40721501835).
