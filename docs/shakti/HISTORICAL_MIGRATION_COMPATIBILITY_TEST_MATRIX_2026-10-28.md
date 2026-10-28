@@ -178,3 +178,22 @@ The disposable-PostgreSQL nullable-filename regression passed in [run 4069010220
 This verifies the specific nullable-filename case only. It does not establish historical SQL content integrity, infer live-environment migration history, or prove arbitrary partial DDL is recoverable.
 
 **Release remains HOLD.** PRs #97 and #104 remain unmerged; production certification remains OFF. No production database was accessed or modified.
+
+
+## CI verification — duplicate candidate version prefixes (2026-10-28)
+
+The candidate migration directory is now checked for duplicate numeric version prefixes before any migration DDL runs. The runner emits `MIGRATION_CANDIDATE_VERSION_DUPLICATE` and fails closed if two files share a version prefix.
+
+Coverage added:
+- Unit tests for duplicate prefixes, unique prefixes, and filenames without a version separator.
+- A disposable-PostgreSQL integration regression with two `001_*.sql` candidates. It asserts a non-zero runner exit, the duplicate-version diagnostic, an empty migration ledger, and no candidate-created tables.
+
+Verification:
+- Full workflow run [40691758185](https://github.com/vishaltradewinds/rupaykg/actions/runs/40691758185), attempt 2, completed successfully on commit `391833f65379f926f8f27aa004610bda2343f890`.
+- The first attempt failed during an existing legacy-identity fixture because PostgreSQL terminated a connection during administrator cleanup. The retry passed; the duplicate-candidate-version integration test passed in the first attempt as well. The transient first-attempt failure is retained as evidence and not misrepresented as a clean first pass.
+
+This verifies the new candidate-tree uniqueness guard and current tested suite at the stated commit. It does not establish compatibility with any production migration history.
+
+## Updated release disposition
+
+**HOLD remains mandatory.** The new duplicate-prefix regression is CI-verified. Still open: authorized read-only ledger/schema evidence for each relevant environment; broader partial-application and schema-drift characterization; migration-specific review for transaction-incompatible SQL; independent review and approved recovery/rollback; separate live Guardian/HCS/Mirror Node acceptance where in scope; and explicit production release approval. No production database access or writes were performed. PRs #97 and #104 remain unmerged; production certification remains OFF.
