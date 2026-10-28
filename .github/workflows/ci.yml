@@ -1,10 +1,16 @@
 name: CI
 
 on:
+  # Run the full validation suite on the production branch and on security
+  # remediation branches so PRs targeting integration branches are validated.
   push:
-    branches: [main]
+    branches:
+      - main
+      - "security/**"
   pull_request:
-    branches: [main]
+    branches:
+      - main
+      - "integration/**"
 
 permissions:
   contents: read
