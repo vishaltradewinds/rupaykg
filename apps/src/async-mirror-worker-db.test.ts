@@ -264,6 +264,7 @@ test("government inbox worker persists retry recovery, quarantine and append-onl
 
     // Concurrent workers must not claim the same row while the first validator is in flight.
     const concurrent = await makeRow("CON-" + suffix.slice(0, 8));
+    await provisionCrosswalk(concurrent.authorityCode, "TEST-MUNI", new Date().toISOString());
     let releaseConcurrentValidation: () => void = () => {};
     let signalConcurrentValidation: () => void = () => {};
     const concurrentValidationStarted = new Promise<void>(resolve => { signalConcurrentValidation = resolve; });
@@ -289,6 +290,7 @@ test("government inbox worker persists retry recovery, quarantine and append-onl
 
     // A worker whose lease token has been superseded must not overwrite the newer lease owner's state.
     const stale = await makeRow("STL-" + suffix.slice(0, 8));
+    await provisionCrosswalk(stale.authorityCode, "TEST-MUNI", new Date().toISOString());
     let releaseStaleValidation: () => void = () => {};
     let signalStaleValidation: () => void = () => {};
     const staleValidationStarted = new Promise<void>(resolve => { signalStaleValidation = resolve; });
