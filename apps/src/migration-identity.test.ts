@@ -16,6 +16,19 @@ describe("historical migration identity guard", () => {
     );
   });
 
+  it("flags the reverse deployment direction when the date-prefixed candidate meets an ordinal ledger", () => {
+    assert.deepEqual(
+      findLegacyIdentityConflicts(
+        ["20261018_cpcb_swm_stakeholder_workspaces.sql"],
+        ["088_cpcb_swm_stakeholder_workspaces.sql"],
+      ),
+      [{
+        candidate: "20261018_cpcb_swm_stakeholder_workspaces.sql",
+        recordedLegacy: "088_cpcb_swm_stakeholder_workspaces.sql",
+      }],
+    );
+  });
+
   it("does not flag a clean database with no legacy ledger rows", () => {
     assert.deepEqual(
       findLegacyIdentityConflicts(["088_cpcb_swm_stakeholder_workspaces.sql"], []),
