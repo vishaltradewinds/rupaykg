@@ -74,7 +74,7 @@ test("evidence vault enforces tenant scope, versioned storage, integrity and ind
     // Direct database writers must not be able to pair arbitrary bytes with a
     // syntactically valid but incorrect digest, even if they bypass the API.
     const forgedEvidence = await pool.query<{ id: string }>(
-      "insert into evidence(activity_id,evidence_type,status,captured_at,content_uri,content_hash,metadata) values($1,'FORGED_TEST','CAPTURED',now(),'db://evidence-vault/pending',$2,'{}'::jsonb) returning id",
+      "insert into evidence(activity_id,evidence_type,status,captured_at,content_uri,content_hash,metadata) values($1,'WASTE_WEIGHT_TICKET','CAPTURED',now(),'db://evidence-vault/pending',$2,'{}'::jsonb) returning id",
       [activity.rows[0]!.id, "0".repeat(64)],
     );
     await assert.rejects(
