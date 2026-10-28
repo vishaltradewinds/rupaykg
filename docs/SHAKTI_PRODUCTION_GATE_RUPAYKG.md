@@ -73,18 +73,19 @@ RupayKg becomes SHAKTI-certified for its defined production release only after e
 
 ## 2026-10-28 integration candidate status (separate from deployed main)
 
-This addendum records the current integration candidate and must not be read as a change to the deployed production state above.
+This addendum records the latest validated integration candidate known at 2026-10-28 08:58 UTC. It does not change the deployed `main` production state recorded above.
 
 - Integration PR: [#97](https://github.com/vishaltradewinds/rupaykg/pull/97)
-- Latest observed candidate commit when this addendum was prepared: `e51b2327fa2f5a1730b295b6fa09bd1ab1b8a788`.
-- CI for the immediately preceding commit `6c53cfb8325c50906486dea810e3050a49be8b25` completed successfully in [workflow 40657274911](https://github.com/vishaltradewinds/rupaykg/actions/runs/40657274911).
-- CI for candidate `e51b2327fa2f5a1730b295b6fa09bd1ab1b8a788` was still in progress at the last check; do not infer its result from the prior commit.
-- Automated tests now cover default idempotency-key binding to observations, evidence and metadata; object-key-order stability at top level and nested levels; and preservation of observation-array order.
-- No independent PR review submissions were recorded at the last check.
-- Live Guardian/Hedera/Mirror Node acceptance remains unproven. The existing blocker record documents an earlier Hedera `INVALID_SIGNATURE` failure; this historical note is not proof of current credential status. Re-run only in an authorized non-production environment and capture fresh evidence.
-- Indian statutory applicability and methodology eligibility still require activity-/jurisdiction-specific review against current primary instruments and a qualified reviewer.
+- Exact validated candidate head: `e77a7a0c26bde7f2b2260f48d4fe5f6bd0ee2925`.
+- Exact-head CI: [workflow 40660423796](https://github.com/vishaltradewinds/rupaykg/actions/runs/40660423796) — **success**. This run covers dependency audit, migration validation/execution, typecheck, build, browser smoke, PostgreSQL acceptance tests and production container build.
+- Earlier failed workflows belong to intermediate commits and remain historical evidence; they are not the result for the validated head.
+- The candidate hardens Guardian idempotency input binding, rejects an explicit Guardian policy mismatch, requires a non-empty Hedera transaction identifier before reporting consensus, and separates technical provenance from actual statutory/methodology/registry eligibility.
+- Credential issuance is guarded at the API and PostgreSQL boundary. It requires current activity-specific eligibility bound to the activity, approved verification, verified evidence, methodology version, geography, and validity dates. Acceptance/test fixtures remain ineligible; database integration fixtures that exercise the positive path are explicitly labelled TEST FIXTURE ONLY and are not real approvals.
+- PR #97 remains open and unmerged. The latest review check returned no submitted independent reviews.
+- Live Guardian/Hedera/Mirror Node acceptance remains unproven. The earlier Hedera `INVALID_SIGNATURE` event is historical and does not establish current credential status. Re-run only in an authorized non-production environment and capture fresh evidence.
+- Indian statutory applicability, official methodology/source locking, numerical reconciliation and independent methodology approval remain open for each applicable activity/jurisdiction.
 - Software TRL remains provisional at TRL 4; TRL 5 is not demonstrated by CI alone. Hardware TRL is not assessed in this record.
 
 ### Candidate release decision
 
-**HOLD — not merged, not deployed, not certified.** CI is engineering evidence only. Reassess this decision only after exact-head CI succeeds and the independent review, statutory/methodology, external trust-chain, and operational evidence gates are closed.
+**HOLD — PR #97 is not merged and this candidate is not deployed or certified.** Exact-head CI is an engineering pass only. Reassess only after independent code/security review, live external trust-chain acceptance, statutory/methodology decisions, and operational/privacy/resilience evidence are completed and reviewed.
