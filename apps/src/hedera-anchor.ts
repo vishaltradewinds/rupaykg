@@ -107,33 +107,90 @@ export async function submitHcsAnchor(payload: AnchorPayload): Promise<AnchorRes
   }
 }
 
+const MIRROR_NODE_TIMEOUT_MS = 8000;
+const MIRROR_NODE_MAX_RESPONSE_BYTES = 1024 * 1024;
+const MIRROR_NODE_MAX_MESSAGE_BYTES = 256 * 1024;
+
+async function readMirrorBody(response: Response): Promise<string> {
+  const declaredLength = Number(response.headers.get("content-length") || "0");
+  if (Number.isFinite(declaredLength) && declaredLength > MIRROR_NODE_MAX_RESPONSE_BYTES) {
+    await response.body?.cancel().catch(() => undefined);
+    throw new Error("MIRROR_RESPONSE_TOO_LARGE");
+  }
+  if (!response.body) return "";
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > MIRROR_NODE_MAX_RESPONSE_BYTES) {
+        await reader.cancel().catch(() => undefined);
+        throw new Error("MIRROR_RESPONSE_TOO_LARGE");
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+  return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+}
+
 export async function verifyHcsMessage(consensusTimestamp: string, topicId = process.env.HEDERA_TOPIC_ID || "", expectedIntegrityHash?: string, expectedActivityId?: string, expectedVerificationId?: string, expectedEvidenceId?: string, expectedGuardianExecutionId?: string) {
   const network = networkName();
-  if (!topicId) return { verified: false, network, error: "HEDERA_TOPIC_ID is not configured" };
-  const response = await fetch(`${mirrorEndpoint(network)}/api/v1/topics/${encodeURIComponent(topicId)}/messages?timestamp=${encodeURIComponent(`eq:${consensusTimestamp}`)}&limit=1&order=desc`);
-  if (!response.ok) return { verified: false, network, error: `Mirror node HTTP ${response.status}` };
-  const data = await response.json() as { messages?: Array<{ consensus_timestamp?: string; sequence_number?: number; message?: string; topic_id?: string }> };
-  const found = data.messages?.find(message => message.consensus_timestamp === consensusTimestamp && (!message.topic_id || message.topic_id === topicId));
-  if (!found) return { verified: false, network, error: "Consensus message not found for the supplied Hedera topic and consensus timestamp" };
-  let payload: unknown = null;
-  if (found.message) {
-    try { payload = JSON.parse(Buffer.from(found.message, "base64").toString("utf8")); }
-    catch { payload = Buffer.from(found.message, "base64").toString("utf8"); }
+  if (!/^\\d+\\.\\d+\\.\\d+$/.test(topicId)) return { verified: false, network, error: "A valid Hedera topic ID is required" };
+  if (!/^\\d{10,}\\.\\d{1,9}$/.test(consensusTimestamp)) return { verified: false, network, error: "A valid Hedera consensus timestamp is required" };
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), MIRROR_NODE_TIMEOUT_MS);
+  try {
+    const response = await fetch(`${mirrorEndpoint(network)}/api/v1/topics/${encodeURIComponent(topicId)}/messages?timestamp=${encodeURIComponent(`eq:${consensusTimestamp}`)}&limit=1&order=desc`, { signal: controller.signal, headers: { accept: "application/json" } });
+    if (!response.ok) {
+      await response.body?.cancel().catch(() => undefined);
+      return { verified: false, network, error: `Mirror node HTTP ${response.status}` };
+    }
+    let text: string;
+    try { text = await readMirrorBody(response); }
+    catch (error) {
+      return { verified: false, network, error: error instanceof Error && error.message === "MIRROR_RESPONSE_TOO_LARGE" ? "Mirror Node response exceeded the configured size limit" : "Mirror Node response could not be safely read" };
+    }
+    let data: { messages?: Array<{ consensus_timestamp?: string; sequence_number?: number; message?: string; topic_id?: string }> };
+    try { data = JSON.parse(text) as typeof data; }
+    catch { return { verified: false, network, error: "Mirror Node returned malformed JSON" }; }
+    if (!data || typeof data !== "object" || !Array.isArray(data.messages)) return { verified: false, network, error: "Mirror Node response has an invalid shape" };
+    const found = data.messages.find(message => message && message.consensus_timestamp === consensusTimestamp && message.topic_id === topicId);
+    if (!found) return { verified: false, network, error: "Consensus message not found for the supplied Hedera topic and consensus timestamp" };
+    if (typeof found.message !== "string" || found.message.length === 0 || found.message.length > Math.ceil(MIRROR_NODE_MAX_MESSAGE_BYTES * 4 / 3)) return { verified: false, network, error: "HCS message is missing or exceeds the configured size limit" };
+    let decoded: Buffer;
+    try { decoded = Buffer.from(found.message, "base64"); }
+    catch { return { verified: false, network, error: "HCS message is not valid base64" }; }
+    if (decoded.byteLength > MIRROR_NODE_MAX_MESSAGE_BYTES) return { verified: false, network, error: "HCS message exceeds the configured size limit" };
+    let payload: unknown;
+    try { payload = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(decoded)); }
+    catch { return { verified: false, network, error: "HCS message is not valid UTF-8 JSON" }; }
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) return { verified: false, network, error: "HCS message payload is not a structured RupayKG provenance record" };
+    const record = payload as Record<string, unknown>;
+    const requiredMatches = [
+      ["schema", "rupaykg:mrv:v1"],
+      ["mrvStatus", "VERIFIED"],
+      ...(expectedIntegrityHash ? [["integrityHash", expectedIntegrityHash]] as const : []),
+      ...(expectedActivityId ? [["activityId", expectedActivityId]] as const : []),
+      ...(expectedVerificationId ? [["verificationId", expectedVerificationId]] as const : []),
+      ...(expectedEvidenceId ? [["evidenceId", expectedEvidenceId]] as const : []),
+      ...(expectedGuardianExecutionId ? [["guardianExecutionId", expectedGuardianExecutionId]] as const : []),
+    ];
+    for (const [field, expected] of requiredMatches) if (record[field] !== expected) return { verified: false, network, consensusTimestamp: found.consensus_timestamp, sequenceNumber: found.sequence_number, error: `HCS provenance field mismatch: ${field}` };
+    const { integrityHash: anchoredHash, anchoredAt: _anchoredAt, ...unsignedPayload } = record;
+    const candidate = unsignedPayload as unknown as AnchorPayload;
+    if (typeof anchoredHash !== "string" || integrityHash(candidate) !== anchoredHash) return { verified: false, network, consensusTimestamp: found.consensus_timestamp, sequenceNumber: found.sequence_number, error: "HCS integrity hash does not match the anchored provenance payload" };
+    return { verified: true, network, consensusTimestamp: found.consensus_timestamp, sequenceNumber: found.sequence_number, payload };
+  } catch (error) {
+    return { verified: false, network, error: error instanceof Error && error.name === "AbortError" ? "Mirror Node request timed out" : "Mirror Node request failed due to a network error" };
+  } finally {
+    clearTimeout(timer);
   }
-  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return { verified: false, network, consensusTimestamp: found.consensus_timestamp, sequenceNumber: found.sequence_number, payload, error: "HCS message payload is not a structured RupayKG provenance record" };
-  const record = payload as Record<string, unknown>;
-  const requiredMatches = [
-    ["schema", "rupaykg:mrv:v1"],
-    ["mrvStatus", "VERIFIED"],
-    ...(expectedIntegrityHash ? [["integrityHash", expectedIntegrityHash]] as const : []),
-    ...(expectedActivityId ? [["activityId", expectedActivityId]] as const : []),
-    ...(expectedVerificationId ? [["verificationId", expectedVerificationId]] as const : []),
-    ...(expectedEvidenceId ? [["evidenceId", expectedEvidenceId]] as const : []),
-    ...(expectedGuardianExecutionId ? [["guardianExecutionId", expectedGuardianExecutionId]] as const : []),
-  ];
-  for (const [field, expected] of requiredMatches) if (record[field] !== expected) return { verified: false, network, consensusTimestamp: found.consensus_timestamp, sequenceNumber: found.sequence_number, payload, error: `HCS provenance field mismatch: ${field}` };
-  const { integrityHash: anchoredHash, anchoredAt: _anchoredAt, ...unsignedPayload } = record;
-  const candidate = unsignedPayload as unknown as AnchorPayload;
-  if (typeof anchoredHash !== "string" || integrityHash(candidate) !== anchoredHash) return { verified: false, network, consensusTimestamp: found.consensus_timestamp, sequenceNumber: found.sequence_number, payload, error: "HCS integrity hash does not match the anchored provenance payload" };
-  return { verified: true, network, consensusTimestamp: found.consensus_timestamp, sequenceNumber: found.sequence_number, payload };
 }
