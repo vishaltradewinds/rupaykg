@@ -110,4 +110,16 @@ Fetched each candidate file at its introducing/follow-up commit and compared the
 
 This confirms Git blob continuity within repository history for these three unchanged files and the later worker migration revision. It does **not** authenticate the exact source deployed to staging. Deployment-artifact/ledger-checksum matching remains the blocking provenance gate.
 
-**Status: Git blob continuity checked for candidate staging sources; deployment checksum verification pending; no live writes authorized or performed.**
+
+## Read-only live ledger evidence — 2026-10-28
+
+Read-only SELECTs were run against the connected Neon project `steep-mud-79906940`; no data was modified.
+
+- Production branch `br-restless-base-b44cip2h`: ledger records version `096`, filename `096_verification_authorization_provenance.sql`, applied at `2026-10-27T13:46:14.262Z`.
+- Staging branch `br-spring-hill-b4544vz5`: ledger records versions `20261022` through `20261025` with the expected filenames, all timestamped `2026-10-20T10:48:38.647Z`.
+
+**Important evidence limitation:** both live `public.schema_migrations` tables contain only `version`, `filename`, and `applied_at`; they do not store source checksums. Therefore the live ledger cannot establish which exact Git blob was applied. Provenance must be established from retained deployment artifacts, release bundles, CI/deployment logs, or other trusted contemporaneous evidence. Do not manufacture checksums or infer exact applied source from the filename alone.
+
+The read-only check confirms the ledger entries and timestamps, not source equivalence or schema safety. Continue to HOLD live changes and scheduler activation.
+
+**Status: live ledger entries confirmed read-only; ledger stores no source checksum; deployment-artifact provenance and forward-only rehearsal remain blocking gates. No live writes performed.**
