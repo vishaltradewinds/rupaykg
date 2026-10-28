@@ -27,7 +27,13 @@ try {
   // container (/app/apps/dist/src). Never assume a single filesystem root.
   const here = path.dirname(fileURLToPath(import.meta.url));
   const candidates = [path.resolve(here, "../../migrations"), path.resolve(here, "../../../migrations")];
-  const migrationDir = candidates.find((candidate) => existsSync(candidate));
+  // A temporary migration directory is permitted only for explicitly enabled
+  // integration tests. Production runs always use the repository/container tree.
+  const testMigrationDir =
+    process.env.RUPAYKG_RUN_DB_INTEGRATION_TESTS === "1" && process.env.NODE_ENV === "test"
+      ? process.env.RUPAYKG_TEST_MIGRATION_DIR
+      : undefined;
+  const migrationDir = testMigrationDir ?? candidates.find((candidate) => existsSync(candidate));
   if (!migrationDir) throw new Error(`Migration directory not found. Checked: ${candidates.join(", ")}`);
   const files = (await readdir(migrationDir))
     .filter((name) => /^\d+_.+\.sql$/.test(name))
