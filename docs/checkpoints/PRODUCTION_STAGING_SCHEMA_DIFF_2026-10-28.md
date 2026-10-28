@@ -69,3 +69,7 @@ Important limitation: these are compact test fixtures derived from recovered mig
 6. Keep production certification, production migration changes, and scheduler activation **HOLD** until every gate is evidenced.
 
 **Shakti disposition:** engineering test gate improved; live environment reconciliation and production certification remain blocked.
+
+## Fixture fidelity follow-up
+
+A normalized executable-SQL comparison was performed against the recovered feature-branch source blobs for all five fixture files (2026-10-22 through 2026-10-25 plus the proposed 2026-11-01 corrective migration). After removing SQL comments, normalizing case/whitespace, and normalizing whitespace around SQL punctuation, all five fixture bodies matched their recovered source bodies. The fixtures are not byte-for-byte copies; this comparison establishes normalized textual equivalence under that normalization, not equivalence proven by a full PostgreSQL parser. The actual-runner acceptance test is green on the isolated fixture schemas.
