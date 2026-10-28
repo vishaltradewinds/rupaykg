@@ -135,3 +135,21 @@ The current `schema_migrations` ledger records `version`, `filename`, and `appli
 The reverse-identity fail-closed regression is CI-verified on the latest validation branch. The full historical-state matrix remains incomplete, including authorized environment evidence, broader partial/conflicting-state characterization, independent review, recovery approval, and separate live Guardian/HCS/Mirror Node acceptance.
 
 **Release remains HOLD.** PRs #97 and #104 remain unmerged; production certification remains OFF. No production database was accessed or modified.
+
+
+## CI verification — malformed ledger fail-closed guard (2026-10-28)
+
+The runner's malformed-ledger guard and its disposable-PostgreSQL regression are now CI-verified:
+
+- Run [40687283301](https://github.com/vishaltradewinds/rupaykg/actions/runs/40687283301), commit `2149a558cbca05fae3a53ce58c988e0de777079f`: success. The runner guard passed the full workflow.
+- Run [40687328797](https://github.com/vishaltradewinds/rupaykg/actions/runs/40687328797), commit `58dd84696f2ad6e626ac5bd766e694ec6cda0d50`: success. The test-containing commit passed the full workflow, including disposable PostgreSQL acceptance. The regression verifies that a ledger missing the required `filename` column is rejected with `MIGRATION_LEDGER_SCHEMA_INVALID`, the existing row and table shape remain unchanged, and no candidate DDL is applied.
+
+The subsequent documentation commit has its own CI run and is not represented by these two code-test results. This closes the malformed-ledger-schema regression for the tested shape; it does not cover arbitrary partially-applied migrations or prove any live environment's history.
+
+## Revised current disposition
+
+CI now verifies the tested fail-closed cases: known identity conflicts in both deployment directions, exact recorded ordinal identity is skipped without rerunning fixture DDL, late version/filename conflicts are preflighted before candidate DDL, transactional rollback for the tested PostgreSQL failure, and rejection of a malformed migration ledger. The full historical-state matrix is still **not complete**.
+
+Open gates remain: partial application and conflicting states beyond the fixtures, historical content integrity (no retroactive checksum claims), authorized read-only ledger/schema evidence per relevant environment, independent review, approved recovery plan, separate live Guardian/HCS/Mirror Node acceptance, and production release approval.
+
+**Release remains HOLD.** PRs #97 and #104 remain unmerged; production certification remains OFF. No production database was accessed or modified.
