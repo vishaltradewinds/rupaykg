@@ -16,6 +16,7 @@ test("drain closes resources after active work settles within grace period", asy
     isInFlight: () => inFlight,
     timeoutMs: 500,
     pollIntervalMs: 2,
+    terminate: () => { throw new Error("termination must not be requested for a clean drain"); },
     close: async () => { assert.equal(inFlight, false); closed = true; },
   });
 
