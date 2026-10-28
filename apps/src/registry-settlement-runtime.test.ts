@@ -52,7 +52,7 @@ before(async () => {
     verificationId = (await c.query<{ id: string }>("insert into verifications(evidence_id,activity_id,verifier_identity_id,decision,scope,rationale) values($1,$2,$3,'APPROVED','runtime','independent runtime acceptance') returning id", [evidenceId, activityId, verifierId])).rows[0]!.id;
     const methodologyCode = `TEST-METHODOLOGY-${suffix}`;
     const methodologyVersionId = (await c.query<{ id: string }>(
-      "insert into methodology_versions(methodology_code,version,rules,source_reference,source_hash,applicability_rules,parameter_dictionary,equation_mapping,reconciliation_evidence,reconciliation_reference,reconciled_at,regression_verified_at) values($1,'test-1','{}'::jsonb,'test-fixture://methodology',repeat('a',64),'{}'::jsonb,'{}'::jsonb,'{}'::jsonb,'[{\\"fixture\\":true}]'::jsonb,'test-reconciliation',now(),now()) returning id",
+      "insert into methodology_versions(methodology_code,version,rules,source_reference,source_hash,applicability_rules,parameter_dictionary,equation_mapping,reconciliation_evidence,reconciliation_reference,reconciled_at,regression_verified_at) values($1,'test-1','{}'::jsonb,'test-fixture://methodology',repeat('a',64),'{\"fixture\":true}'::jsonb,'{\"fixture\":true}'::jsonb,'{\"fixture\":true}'::jsonb,'[{\\"fixture\\":true}]'::jsonb,'test-reconciliation',now(),now()) returning id",
       [methodologyCode],
     )).rows[0]!.id;
     await c.query(
