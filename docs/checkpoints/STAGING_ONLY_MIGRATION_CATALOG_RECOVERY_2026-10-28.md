@@ -162,3 +162,13 @@ A second read-only aggregate query found that the 12 staging inbox rows are not 
 - Latest inbox receipt and event timestamps are on 2026-10-20, so the queue appears stale for approximately eight days as of 2026-10-28.
 
 This is a **staging operational incident candidate**, separate from migration compatibility. Do not auto-requeue, alter status, or clear these rows during migration repair. Next safe investigation is read-only correlation of each inbox row's non-payload identifiers/status/attempt/error fields with worker logs and code paths, followed by a documented recovery plan and disposable test. Do not read or expose raw payloads in the audit report.
+
+
+### Read-only queue error/attempt breakdown
+
+- 6 PROCESSING rows have attempts=1 and no last_error_code; 2 PROCESSING rows have attempts=2 and no last_error_code.
+- The QUARANTINED row reached attempts=5 with `WORKER_ATTEMPTS_EXHAUSTED`.
+- The RETRY row has attempts=1 and `SyntheticTransientError`.
+- The RECEIVED row has attempts=0; the VALIDATED row has attempts=1 and no last_error_code.
+
+This pattern is consistent with a test/synthetic queue exercise, but that is not conclusively proven from catalog metadata alone. Verify environment ownership and correlate worker/test logs before treating these as real operational workload or attempting recovery. Raw payloads were not queried.
