@@ -20,9 +20,10 @@ function fakePool() {
   const clientQuery = async (sql: string, _params: unknown[] = []) => {
     calls.push(sql);
     if (sql === "BEGIN" || sql === "ROLLBACK" || sql === "COMMIT") return { rows: [] };
+    if (sql.includes("identity_has_geography_scope")) return { rows: [{ ok: true }] };
     if (sql.includes("from epr_returns r join epr_obligations")) return { rows: [{
       id: RETURN_ID, organization_id: ORG, status: "DRAFT", obligation_id: "obligation",
-      scheme_code: "PLASTIC_PACKAGING", scheme_id: "scheme",
+      scheme_code: "PLASTIC_PACKAGING", scheme_id: "scheme", jurisdiction_id: "state-jurisdiction",
     }] };
     if (sql.includes("from organization_epr_applicability")) return { rows: [] };
     return { rows: [] };
