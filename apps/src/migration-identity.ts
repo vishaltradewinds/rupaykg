@@ -41,3 +41,21 @@ export function findVersionFilenameConflicts(
     return candidate && candidate !== filename ? [{ candidate, recorded: filename, version }] : [];
   });
 }
+
+
+export function findDuplicateCandidateVersions(
+  candidateFiles: readonly string[],
+): Array<{ version: string; filenames: string[] }> {
+  const filenamesByVersion = new Map<string, string[]>();
+  for (const filename of candidateFiles) {
+    const separator = filename.indexOf("_");
+    if (separator <= 0) continue;
+    const version = filename.slice(0, separator);
+    const filenames = filenamesByVersion.get(version) ?? [];
+    filenames.push(filename);
+    filenamesByVersion.set(version, filenames);
+  }
+  return [...filenamesByVersion.entries()]
+    .filter(([, filenames]) => filenames.length > 1)
+    .map(([version, filenames]) => ({ version, filenames: [...filenames].sort() }));
+}
