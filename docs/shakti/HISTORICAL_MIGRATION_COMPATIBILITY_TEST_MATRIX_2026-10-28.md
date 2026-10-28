@@ -81,3 +81,8 @@ A new disposable-PostgreSQL integration scenario seeds a conflicting ledger file
 Run [40683182559](https://github.com/vishaltradewinds/rupaykg/actions/runs/40683182559) completed successfully on commit `0a5ea6e3d079a92f26ac1a6a3c3ce8966d4d43db`. The workflow passed migration validation, clean migration, strict typecheck, build, browser smoke test, the automated test step (including disposable PostgreSQL integration mode), and production container build.
 
 Intermediate runs failed on transient/incomplete commits while the runner and tests were being updated. The successful run above is the verification point for the consolidated preflight change. This still does not prove the unimplemented historical states listed in the matrix.
+
+
+## Transactional rollback regression added — awaiting CI
+
+A disposable-PostgreSQL integration test now supplies a temporary migration fixture that creates a table and then deliberately fails. The test expects the runner to fail, verifies the failed migration has no ledger row, and verifies the table DDL rolled back. The runner's test-directory override is gated by both `RUPAYKG_RUN_DB_INTEGRATION_TESTS=1` and `NODE_ENV=test`; ordinary runs continue using the normal repository/container migration directory. This scenario is not verified until its own CI run passes.
