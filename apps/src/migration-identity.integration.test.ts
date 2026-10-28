@@ -102,10 +102,7 @@ test("migration runner rejects each known legacy identity and mixed history befo
             await verifyPool.end();
           }
         } finally {
-          await adminPool.query(
-            "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid()",
-            [dbName],
-          );
+          // Child processes and per-test pools are closed before dropping this disposable database.
           await adminPool.query(`DROP DATABASE IF EXISTS "${dbName}"`);
         }
       });
@@ -181,11 +178,8 @@ test("migration runner preflights late version conflicts before any candidate DD
       await verifyPool.end();
     }
   } finally {
-    await adminPool.query(
-      "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid()",
-      [dbName],
-    );
-    await adminPool.query(`DROP DATABASE IF EXISTS "${dbName}"`);
+          // Child processes and per-test pools are closed before dropping this disposable database.
+          await adminPool.query(`DROP DATABASE IF EXISTS "${dbName}"`);
     await adminPool.end();
   }
 });
@@ -248,11 +242,8 @@ test("failed migration rolls back its DDL and does not write a ledger row", {
       await verifyPool.end();
     }
   } finally {
-    await adminPool.query(
-      "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid()",
-      [dbName],
-    );
-    await adminPool.query(`DROP DATABASE IF EXISTS "${dbName}"`);
+          // Child processes and per-test pools are closed before dropping this disposable database.
+          await adminPool.query(`DROP DATABASE IF EXISTS "${dbName}"`);
     await adminPool.end();
     await rm(fixtureDir, { recursive: true, force: true });
   }
@@ -332,11 +323,8 @@ test("migration runner skips an exact already-recorded ordinal identity without 
       await verifyPool.end();
     }
   } finally {
-    await adminPool.query(
-      "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid()",
-      [dbName],
-    );
-    await adminPool.query(`DROP DATABASE IF EXISTS "${dbName}"`);
+          // Child processes and per-test pools are closed before dropping this disposable database.
+          await adminPool.query(`DROP DATABASE IF EXISTS "${dbName}"`);
     await adminPool.end();
     await rm(fixtureDir, { recursive: true, force: true });
   }
@@ -418,11 +406,8 @@ test("migration runner rejects reverse deployment when date-prefixed candidate m
       await verifyPool.end();
     }
   } finally {
-    await adminPool.query(
-      "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid()",
-      [dbName],
-    );
-    await adminPool.query(`DROP DATABASE IF EXISTS "${dbName}"`);
+          // Child processes and per-test pools are closed before dropping this disposable database.
+          await adminPool.query(`DROP DATABASE IF EXISTS "${dbName}"`);
     await adminPool.end();
     await rm(fixtureDir, { recursive: true, force: true });
   }
@@ -502,11 +487,8 @@ test("migration runner rejects malformed schema_migrations ledger before candida
       await verifyPool.end();
     }
   } finally {
-    await adminPool.query(
-      "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid()",
-      [dbName],
-    );
-    await adminPool.query(`DROP DATABASE IF EXISTS "${dbName}"`);
+          // Child processes and per-test pools are closed before dropping this disposable database.
+          await adminPool.query(`DROP DATABASE IF EXISTS "${dbName}"`);
     await adminPool.end();
     await rm(fixtureDir, { recursive: true, force: true });
   }
@@ -579,11 +561,8 @@ test("migration runner fails closed when unledgered partial DDL collides with a 
       await verifyPool.end();
     }
   } finally {
-    await adminPool.query(
-      "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid()",
-      [dbName],
-    );
-    await adminPool.query(`DROP DATABASE IF EXISTS "${dbName}"`);
+          // Child processes and per-test pools are closed before dropping this disposable database.
+          await adminPool.query(`DROP DATABASE IF EXISTS "${dbName}"`);
     await adminPool.end();
     await rm(fixtureDir, { recursive: true, force: true });
   }
@@ -665,11 +644,8 @@ test("migration runner rejects a ledger without version uniqueness constraints b
       await verifyPool.end();
     }
   } finally {
-    await adminPool.query(
-      "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid()",
-      [dbName],
-    );
-    await adminPool.query(`DROP DATABASE IF EXISTS "${dbName}"`);
+          // Child processes and per-test pools are closed before dropping this disposable database.
+          await adminPool.query(`DROP DATABASE IF EXISTS "${dbName}"`);
     await adminPool.end();
     await rm(fixtureDir, { recursive: true, force: true });
   }
@@ -748,11 +724,8 @@ test("migration runner rejects a nullable filename ledger before candidate DDL",
       await verifyPool.end();
     }
   } finally {
-    await adminPool.query(
-      "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid()",
-      [dbName],
-    );
-    await adminPool.query(`DROP DATABASE IF EXISTS "${dbName}"`);
+          // Child processes and per-test pools are closed before dropping this disposable database.
+          await adminPool.query(`DROP DATABASE IF EXISTS "${dbName}"`);
     await adminPool.end();
     await rm(fixtureDir, { recursive: true, force: true });
   }
@@ -829,11 +802,8 @@ test("migration runner rejects duplicate candidate version prefixes before apply
       await verifyPool.end();
     }
   } finally {
-    await adminPool.query(
-      "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid()",
-      [dbName],
-    );
-    await adminPool.query(`DROP DATABASE IF EXISTS "${dbName}"`);
+          // Child processes and per-test pools are closed before dropping this disposable database.
+          await adminPool.query(`DROP DATABASE IF EXISTS "${dbName}"`);
     await adminPool.end();
     await rm(fixtureDir, { recursive: true, force: true });
   }
