@@ -46,6 +46,34 @@ async function isAcceptanceFixture(pool: Pool, activityId: string): Promise<bool
   return result.rows[0]?.is_fixture === true;
 }
 
+export function buildMrvInputBinding(input: {
+  activityId: string;
+  verificationId: string;
+  evidenceId: string;
+  policyId: string;
+  methodologyCode?: string;
+  quantity?: number;
+  unit?: string;
+  observations: unknown[];
+  evidence: unknown[];
+}) {
+  const observationDigest = canonicalIntegrityHash({ schema: "rupaykg:mrv-observations:v1", observations: input.observations });
+  const evidenceDigest = canonicalIntegrityHash({ schema: "rupaykg:mrv-evidence:v1", evidence: input.evidence });
+  const idempotencyKey = canonicalIntegrityHash({
+    schema: "rupaykg:guardian-mrv-idempotency:v1",
+    activityId: input.activityId,
+    verificationId: input.verificationId,
+    evidenceId: input.evidenceId,
+    policyId: input.policyId,
+    methodologyCode: input.methodologyCode,
+    observationDigest,
+    evidenceDigest,
+    quantity: input.quantity,
+    unit: input.unit,
+  });
+  return { observationDigest, evidenceDigest, idempotencyKey };
+}
+
 export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null): Promise<void> {
   app.get("/api/v1/mrv/status", async (request, reply) => {
     const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
@@ -98,8 +126,11 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
       const unit = quantityRow.rows[0]?.unit || undefined;
       // Bind the complete, deterministically ordered source inputs without placing
       // raw observations or evidence metadata on the public Hedera topic.
-      const observationDigest = canonicalIntegrityHash({ schema: "rupaykg:mrv-observations:v1", observations: observations.rows });
-      const evidenceDigest = canonicalIntegrityHash({ schema: "rupaykg:mrv-evidence:v1", evidence: evidence.rows });
+      const inputBinding = buildMrvInputBinding({
+        activityId, verificationId, evidenceId, policyId, methodologyCode, quantity, unit,
+        observations: observations.rows, evidence: evidence.rows,
+      });
+      const { observationDigest, evidenceDigest } = inputBinding;
 
       // Reuse only an anchor whose hash commits to every source input and the
       // exact Guardian execution. Older partial hashes intentionally do not match.
@@ -133,7 +164,7 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
       const guardian = await executeGuardianMrv({
         activityId, verificationId, evidenceId, policyId, methodologyCode,
         observations: observations.rows, evidence: evidence.rows,
-        idempotencyKey: canonicalIntegrityHash({ schema: "rupaykg:guardian-mrv-idempotency:v1", activityId, verificationId, evidenceId, policyId, methodologyCode, observationDigest, evidenceDigest, quantity, unit }),
+        idempotencyKey: inputBinding.idempotencyKey,
         metadata: { evidenceCount: Number(row.evidence_count), observationCount: Number(row.observation_count), observationDigest, evidenceDigest },
       });
       if (guardian.status !== "VERIFIED" || !guardian.executionId) return reply.code(503).send({ source: "guardian", syntheticData: false, guardian, eligibleForRegistry: false });
