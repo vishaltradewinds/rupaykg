@@ -91,8 +91,23 @@ test("evidence vault enforces tenant scope, versioned storage, integrity and ind
       payload: { activityId: activity.rows[0]!.id, seriesId: uploaded.seriesId, evidenceType: "WASTE_WEIGHT_TICKET", fileName: "weight-ticket-corrected.pdf", mediaType: "application/pdf", contentBase64: secondBytes.toString("base64"), sourceReference: "TEST-SLIP-CORRECTED-"+suffix, measurementPeriodStart: "2026-10-01", measurementPeriodEnd: "2026-10-31" },
     });
     assert.equal(secondUpload.statusCode, 201, secondUpload.body);
-    const second = secondUpload.json().data as { evidenceId: string; versionNumber: number };
+    const second = secondUpload.json().data as { evidenceId: string; artifactVersionId: string; versionNumber: number };
     assert.equal(second.versionNumber, 2);
+
+    await assert.rejects(
+      pool.query("update evidence_artifact_series set activity_id=$2 where id=$1", [uploaded.seriesId, "00000000-0000-4000-8000-000000000001"]),
+      /evidence artifact series provenance is immutable/i,
+      "series scope must not be rewritten after artifacts are recorded",
+    );
+
+    await assert.rejects(
+      pool.query(
+        "insert into evidence_artifact_reviews(evidence_id,artifact_version_id,reviewer_identity_id,decision,rationale) values($1,$2,$3,'APPROVED','Mismatched artifact version must fail')",
+        [uploaded.evidenceId, second.artifactVersionId, reviewerId],
+      ),
+      /review must reference the exact artifact version/i,
+      "a review must not be rebound to a different artifact version",
+    );
 
     const list = await app.inject({ method: "GET", url: "/api/v1/evidence-vault?activityId="+activity.rows[0]!.id, headers: headers(uploaderToken) });
     assert.equal(list.statusCode, 200, list.body);
