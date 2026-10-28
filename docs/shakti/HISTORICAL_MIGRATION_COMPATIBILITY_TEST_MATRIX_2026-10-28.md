@@ -105,3 +105,8 @@ The test is added on the validation branch in commit `5c051a620c02d01f16f73e74aa
 ## Reverse-deployment identity guard added (2026-10-28)
 
 Code review of the matrix identified a reverse-direction risk: when a date-prefixed migration tree is deployed against a ledger recording the corresponding ordinal filename, the earlier guard only checked ordinal candidates against date-prefixed ledger rows. The guard now rejects either direction for the four explicit filename pairs. Unit coverage and a disposable-PostgreSQL integration test verify that a date-prefixed candidate against ordinal history emits `MIGRATION_IDENTITY_CONFLICT`, preserves the exact ledger tuple, and applies no candidate DDL. These changes are on the validation branch in commits `647215b4c1121a7302cbe50c80458703e594c8d9`, `5a4fe0096a7acb9f77772ce2c141d1b01fa95d03`, and `3e68ce2395d8b628a45d9c140288a4715b1a4ee0`. They remain unverified until the relevant CI run completes successfully. This closes only the identified fail-closed guard gap; it does not establish bidirectional deployment compatibility.
+
+
+## CI finding and corrective change — reverse guard (2026-10-28)
+
+CI run [40684318481](https://github.com/vishaltradewinds/rupaykg/actions/runs/40684318481) exposed a real gap: the reverse-direction helper test passed, but the integration test showed `migrate.ts` queried only date-prefixed ledger filenames, so an ordinal ledger row was never passed to the reverse-direction conflict checker. Corrected the preflight query to include both keys and values of the explicit identity map in commit `477e01ef99576019c47318b75abfa18a290bd0e9`. The reverse integration test and full CI must pass on this fix before verification. This is a valuable fail-closed test finding, not a release pass.
