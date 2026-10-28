@@ -47,7 +47,7 @@ This is clean-install evidence only. It does not establish compatibility with an
 - [x] Candidate clean-install CI passed on run 40679354379.
 - [x] Migration identity conflict documented with exact filenames and blob identities.
 - [ ] Authorized read-only ledger evidence received for each relevant environment.
-- [ ] Historical-state regression fixtures implemented and passing on disposable PostgreSQL.
+- [ ] Full historical-state matrix implemented and passing on disposable PostgreSQL (a first disposable-DB fail-closed regression test has been added; its CI result is pending).
 - [ ] Independent review of any proposed reconciliation logic.
 - [ ] Recovery/rollback procedure approved.
 - [ ] Live non-production Guardian/HCS/Mirror Node acceptance evidence collected separately.
