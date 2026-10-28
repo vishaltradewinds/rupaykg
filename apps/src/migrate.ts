@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
-import { findLegacyIdentityConflicts, LEGACY_MIGRATION_IDENTITIES } from "./migration-identity.js";
+import { findLegacyIdentityConflicts, findVersionFilenameConflicts, LEGACY_MIGRATION_IDENTITIES } from "./migration-identity.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) throw new Error("DATABASE_URL is required");
@@ -72,6 +72,21 @@ try {
   if (versionConflicts.length > 0) {
     throw new Error(
       `MIGRATION_VERSION_CONFLICT: ${versionConflicts.join("; ")}. No migrations were applied.`,
+    );
+  }
+
+  // Preflight all existing version/filename identities before applying any migration.
+  // This prevents a late collision from being discovered only after earlier DDL ran.
+  const recordedRows = await pool.query<{ version: string; filename: string }>(
+    "select version, filename from schema_migrations",
+  );
+  const versionConflicts = findVersionFilenameConflicts(files, recordedRows.rows);
+  if (versionConflicts.length > 0) {
+    const details = versionConflicts
+      .map(({ version, recorded, candidate }) => `${version}: ledger=${recorded}, candidate=${candidate}`)
+      .join("; ");
+    throw new Error(
+      `MIGRATION_VERSION_CONFLICT: existing migration version/filename identity differs from this migration tree: ${details}. No migrations were applied.`,
     );
   }
 
