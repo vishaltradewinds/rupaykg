@@ -291,7 +291,7 @@ test("government inbox worker persists retry recovery, quarantine and append-onl
     assert.equal(concurrentFinal.rows[0]?.attempts, 1);
 
     // A worker whose lease token has been superseded must not overwrite the newer lease owner's state.
-    const staleAuthority = "STL-" + suffix.slice(0, 8);
+    const staleAuthority = "STL-" + suffix.slice(0, 8).toUpperCase();
     await provisionCrosswalk(staleAuthority, "TEST-MUNI", new Date().toISOString());
     const stale = await makeRow(staleAuthority);
     let releaseStaleValidation: () => void = () => {};
