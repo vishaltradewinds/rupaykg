@@ -101,9 +101,9 @@ export async function submitHcsAnchor(payload: AnchorPayload): Promise<AnchorRes
     return { status: "CONSENSUS_CONFIRMED", transactionId, consensusTimestamp, topicId, network, integrityHash: hash, message: "MRV provenance anchored to Hedera HCS with consensus confirmation." };
   } catch (error) {
     try { client?.close(); } catch {}
-    const message = error instanceof Error ? error.message : String(error);
-    const retryable = /timeout|busy|platform_transaction_not_created|connection/i.test(message);
-    return { status: retryable ? "RETRYABLE_FAILURE" : "FAILED", transactionId: null, consensusTimestamp: null, topicId, network, integrityHash: hash, message: `Hedera HCS submission failed: ${message}` };
+    const safeMessage = error instanceof Error ? error.message : "";
+    const retryable = /timeout|busy|platform_transaction_not_created|connection/i.test(safeMessage);
+    return { status: retryable ? "RETRYABLE_FAILURE" : "FAILED", transactionId: null, consensusTimestamp: null, topicId, network, integrityHash: hash, message: retryable ? "Hedera HCS submission failed due to a retryable network or service condition." : "Hedera HCS submission failed; provider details were withheld." };
   }
 }
 
