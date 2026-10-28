@@ -33,9 +33,30 @@ function timeoutMs(): number {
   return Number.isFinite(parsed) && parsed >= 1000 && parsed <= 60000 ? parsed : 10000;
 }
 
+function canonicalize(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonicalize);
+  if (value !== null && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([key, entry]) => [key, canonicalize(entry)]),
+    );
+  }
+  return value;
+}
+
 function deterministicIdempotencyKey(input: GuardianMrvRequest): string {
   return createHash("sha256")
-    .update([input.activityId, input.verificationId, input.evidenceId, input.policyId, input.methodologyCode || ""].join("|"))
+    .update(JSON.stringify(canonicalize({
+      schema: "rupaykg:guardian-mrv-idempotency:v1",
+      activityId: input.activityId,
+      verificationId: input.verificationId,
+      evidenceId: input.evidenceId,
+      policyId: input.policyId,
+      methodologyCode: input.methodologyCode,
+      observations: input.observations,
+      evidence: input.evidence,
+    })))
     .digest("hex");
 }
 
