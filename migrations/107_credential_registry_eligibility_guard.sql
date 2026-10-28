@@ -1,4 +1,5 @@
--- Database-level issuance guard: API route checks are not the only enforcement boundary.
+-- Database-level issuance guard: preserve the established fixture/MRV error boundaries,
+-- then require a current activity-specific eligibility decision before value-bearing status.
 create or replace function require_activity_registry_eligibility_for_credential()
 returns trigger language plpgsql as $$
 declare
@@ -6,6 +7,40 @@ declare
   v_methodology_code text;
 begin
   if new.status in ('ISSUED','ACTIVE','TRANSFERRED','RETIRED') then
+    if exists (
+      select 1 from activities a
+       where a.id = new.activity_id and a.metadata->>'acceptanceFixture' = 'true'
+    ) or exists (
+      select 1 from evidence e
+      join verifications v on v.evidence_id=e.id
+       where e.activity_id=new.activity_id and v.id=new.verification_id
+         and e.metadata->>'acceptanceFixture'='true'
+    ) then
+      raise exception 'ACCEPTANCE_FIXTURE_NOT_REGISTRY_ELIGIBLE: acceptance fixture activity/evidence cannot back an issued registry credential';
+    end if;
+
+    if not exists (
+      select 1
+        from mrv_provenance_events m
+        join verifications v on v.id=new.verification_id
+        join evidence e on e.id=m.evidence_id
+       where m.activity_id=new.activity_id
+         and m.verification_id=new.verification_id
+         and v.activity_id=m.activity_id
+         and e.activity_id=m.activity_id
+         and v.evidence_id=m.evidence_id
+         and m.guardian_status='VERIFIED'
+         and m.hcs_status='CONSENSUS_CONFIRMED'
+         and nullif(btrim(m.guardian_execution_id),'') is not null
+         and nullif(btrim(m.hcs_topic_id),'') is not null
+         and nullif(btrim(m.hcs_transaction_id),'') is not null
+         and nullif(btrim(m.hcs_consensus_timestamp),'') is not null
+         and nullif(btrim(m.integrity_hash),'') is not null
+         and m.mirror_node_verified_at is not null
+    ) then
+      raise exception 'CREDENTIAL_MRV_REQUIRED: credential issuance requires Guardian VERIFIED, Hedera HCS consensus, and persisted Mirror Node verification bound to the verified evidence';
+    end if;
+
     if new.methodology_version_id is null or new.verification_id is null then
       raise exception 'REGULATORY_ELIGIBILITY_REQUIRED: credential requires a bound methodology version and verification';
     end if;
