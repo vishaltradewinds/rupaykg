@@ -94,6 +94,7 @@ async function shutdown(signal: string) {
     isInFlight: () => inFlight,
     timeoutMs: 10_000,
     secondStageTimeoutMs: 5_000,
+    closeTimeoutMs: 5_000,
     pollIntervalMs: 100,
     onTimeout: () => {
       process.exitCode = 1;
@@ -108,6 +109,13 @@ async function shutdown(signal: string) {
         resourceCloseSkipped: true,
         retryMayReprocessWork: true,
         idempotencyRequired: true,
+      });
+    },
+    onCloseFailure: reason => {
+      emit("shutdown_resource_close_failed", {
+        signal,
+        reason,
+        forcedTerminationRequested: true,
       });
     },
     terminate: exitCode => process.exit(exitCode),
