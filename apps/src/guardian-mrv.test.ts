@@ -259,6 +259,26 @@ test("default Guardian idempotency key preserves observation array order", async
 });
 
 
+test("Guardian MRV rejects VERIFIED when the requested policy identifier is omitted", async () => {
+  const previousUrl = process.env.GUARDIAN_MRV_SUBMIT_URL;
+  const previousFetch = globalThis.fetch;
+  process.env.GUARDIAN_MRV_SUBMIT_URL = "https://guardian.test/mrv";
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    status: "VERIFIED",
+    executionId: "guardian-execution-1",
+  }), { status: 200, headers: { "content-type": "application/json" } });
+  try {
+    const result = await executeGuardianMrv(request);
+    assert.equal(result.status, "UNAVAILABLE");
+    assert.equal(result.executionId, null);
+    assert.match(result.message, /omitted or mismatched the requested policy identifier/);
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousUrl === undefined) delete process.env.GUARDIAN_MRV_SUBMIT_URL;
+    else process.env.GUARDIAN_MRV_SUBMIT_URL = previousUrl;
+  }
+});
+
 test("Guardian MRV rejects VERIFIED for a different policy identifier", async () => {
   const previousUrl = process.env.GUARDIAN_MRV_SUBMIT_URL;
   const previousFetch = globalThis.fetch;
@@ -272,7 +292,7 @@ test("Guardian MRV rejects VERIFIED for a different policy identifier", async ()
     const result = await executeGuardianMrv(request);
     assert.equal(result.status, "UNAVAILABLE");
     assert.equal(result.executionId, null);
-    assert.match(result.message, /does not match the requested policy/);
+    assert.match(result.message, /omitted or mismatched the requested policy identifier/);
   } finally {
     globalThis.fetch = previousFetch;
     if (previousUrl === undefined) delete process.env.GUARDIAN_MRV_SUBMIT_URL;
@@ -311,7 +331,6 @@ test("Guardian result exposes only normalized fields and a response digest, neve
     status: "VERIFIED",
     policyId: "policy-1",
     executionId: "guardian-execution-safe",
-    policyId: "policy-1",
     correlationId: "provider-correlation-1",
     secretToken: "must-not-escape",
     personalData: { email: "person@example.invalid" },
