@@ -47,7 +47,7 @@ That run proves the single-pair integration regression at that commit. The expan
 - [x] Candidate clean-install CI passed on run 40681738454 (commit 2e9fb91; prior to expanded matrix test).
 - [x] Migration identity conflict documented with exact filenames and blob identities.
 - [ ] Authorized read-only ledger evidence received for each relevant environment.
-- [ ] Full historical-state matrix implemented and passing on disposable PostgreSQL. The first single-pair disposable-DB fail-closed regression passed in run 40681738454; expanded all-four-pairs plus mixed-ledger coverage is awaiting its own CI result.
+- [ ] Full historical-state matrix implemented and passing on disposable PostgreSQL. Expanded all-four-pairs plus mixed-ledger coverage passed the automated-test step in run 40682490733 (commit 8284c52). A follow-up preflight regression now covers a late migration-version conflict and asserts no candidate DDL; its CI result is pending.
 - [ ] Independent review of any proposed reconciliation logic.
 - [ ] Recovery/rollback procedure approved.
 - [ ] Live non-production Guardian/HCS/Mirror Node acceptance evidence collected separately.
@@ -67,3 +67,10 @@ A fail-closed guard has been added in the validation branch:
 
 This guard is a safety improvement, **not a compatibility fix**. Historical installations will intentionally stop with a clear error until a reviewed reconciliation path is implemented and tested. The latest completed run validates the earlier single-pair test; the expanded multi-scenario regression has a new commit and must pass its own CI. Do not treat the guard as release-ready until that run passes and independent review is complete.
 
+
+
+## Follow-up hardening — preflight before DDL (2026-10-28)
+
+After the expanded identity guard passed CI, the migration runner was hardened to compare all candidate migration versions against the existing ledger before entering the DDL loop. This prevents a conflicting version that sorts late in the migration tree from being discovered only after earlier candidate migrations have already run.
+
+A new disposable-PostgreSQL integration scenario seeds a conflicting ledger filename for version `091`, expects `MIGRATION_VERSION_CONFLICT` and `No migrations were applied`, and verifies both the exact ledger tuple and absence of candidate-created tables. This change is validation-only and awaits its own CI result. It does not validate content digests, partial migrations, rollback direction, or production histories.
