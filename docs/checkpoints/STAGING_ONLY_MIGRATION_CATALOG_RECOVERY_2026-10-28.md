@@ -221,6 +221,30 @@ GitHub compare between `shakti/migration-ledger-orphan-guard` and `intelligence/
 
 **Decision:** do not merge or cherry-pick the feature branch wholesale. First extract a minimal, reviewable patch set, reconcile all intervening schema dependencies and migration ordering, and run it against disposable fixtures. The `20261101_async_mirror_unresolved_crosswalk.sql` fix is dated after this audit date and must be treated as a future-dated branch artifact requiring chronology and release-history verification, not as an already-applied live correction.
 
+## Migration-runner compatibility analysis
+
+The current `apps/src/migrate.ts` runner filters numeric-prefix SQL filenames, sorts them lexicographically, uses the leading filename prefix as the ledger `version`, checks the orphan guard against recorded filenames, and skips a migration only when both version and filename match.
+
+Implications for the recovered 20261022–20261025 files:
+
+- **Production shape:** because those four tables are absent and their date-prefixed versions are not recorded, restoring the exact source files would cause the runner to attempt them after the current numbered migration sequence. The dependencies on existing `identities`, `organizations`, and `evidence` tables must be verified against the final release schema before doing so.
+- **Staging shape:** the ledger already records these exact filenames, so restoring the source files should make the runner skip them rather than replay the non-idempotent `CREATE TABLE async_mirror_inbox` migration. This must be proven using a disposable staging-shaped fixture, including row-count and checksum assertions for the 12 inbox rows and 29 event rows.
+- **Fail-closed condition:** if a restored file's name differs from the recorded filename, or a version collides, the runner must stop. Do not rename historical files or edit already-applied SQL to force compatibility.
+- **Status constraint:** migration 20261023 does not allow `UNRESOLVED`; the separate 20261101 fix is future-dated relative to this audit. It must not be treated as part of the current release until ordering, review, and PostgreSQL tests are complete.
+
+## Disposable acceptance matrix required before integration
+
+| Fixture | Required assertion |
+|---|---|
+| Production-shaped ledger/schema | 20261022–25 each apply once; migration ledger records exact filename/version; all dependent FKs resolve |
+| Staging-shaped ledger/schema | 20261022–25 are skipped by exact ledger match; 12 inbox and 29 event rows remain unchanged |
+| Staging orphan negative test | Removing any recorded legacy SQL file causes fail-closed before executing pending migrations |
+| Worker transition test | Real PostgreSQL accepts valid `UNRESOLVED` transition only after the reviewed constraint migration; ordinary retry/validated/quarantine transitions still work |
+| Repeat run | A second migration run is a no-op and does not duplicate seed data or mutate preserved rows |
+| Failure injection | A failed migration transaction leaves no partial DDL/ledger record; recovery instructions are tested on disposable database |
+
+No live database write or requeue is authorized by this audit. These are acceptance gates, not claims that the tests have already run.
+
 ## Latest documentation CI result
 
 - Commit `61316fd03eec69dbbfef7fa797aabcf7374e1380`: CI passed, [run 40722433202](https://github.com/vishaltradewinds/rupaykg/actions/runs/40722433202).
