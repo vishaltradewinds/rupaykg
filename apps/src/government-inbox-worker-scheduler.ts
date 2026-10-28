@@ -1,4 +1,5 @@
 import { Pool, type PoolConfig } from "pg";
+import { drainBeforeClose } from "./drain-before-close.js";
 import { readProductionConfig } from "./production-config.js";
 import { reconcileGovernmentInbox, runGovernmentInboxWorker } from "./async-mirror-worker.js";
 import { readGovernmentInboxWorkerIntervalSeconds } from "./government-inbox-worker-scheduler-config.js";
@@ -89,13 +90,25 @@ async function shutdown(signal: string) {
   stopping = true;
   if (timer) clearInterval(timer);
   emit("shutdown_started", { signal });
-  const deadline = Date.now() + 10_000;
-  while (inFlight && Date.now() < deadline) {
-    await new Promise(resolve => setTimeout(resolve, 100));
-  }
-  await pool.end();
-  emit("shutdown_completed", { signal, inFlightAtShutdown: inFlight });
-  process.exitCode = inFlight ? 1 : 0;
+  const result = await drainBeforeClose({
+    isInFlight: () => inFlight,
+    timeoutMs: 10_000,
+    pollIntervalMs: 100,
+    onTimeout: () => {
+      process.exitCode = 1;
+      emit("shutdown_grace_deadline_exceeded", {
+        signal,
+        resourceCloseDeferred: true,
+      });
+    },
+    close: () => pool.end(),
+  });
+  emit("shutdown_completed", {
+    signal,
+    timedOut: result.timedOut,
+    inFlightAtShutdown: inFlight,
+  });
+  if (!result.timedOut) process.exitCode = 0;
 }
 
 process.once("SIGTERM", () => { void shutdown("SIGTERM"); });
