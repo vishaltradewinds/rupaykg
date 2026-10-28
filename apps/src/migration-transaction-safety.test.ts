@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 function stripSqlComments(sql: string): string {
   return sql
     .replace(/\/\*[\s\S]*?\*\//g, " ")
-    .replace(/^\s*--.*$/gm, " ");
+    .replace(/--.*$/gm, " ");
 }
 
 function stripDollarQuotedBodies(sql: string): string {
