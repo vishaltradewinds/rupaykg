@@ -20,9 +20,9 @@ Previous CI status: FAILED at `npm run validate:migrations` with duplicate migra
 
 ## Batch implemented before checkpoint
 
-- `097_icvcm_ccp_assessments.sql`: append-only internal ICVCM evidence assessment table and organization/activity binding.
-- `098_evidence_artifact_chain_binding.sql`: immutable evidence artifact-series identity/scope; exact artifact-version review binding; reviewer must not be uploader; active review and verification permissions required within owning organization.
-- `099_vault_content_verification_binding.sql`: stored-byte SHA-256 and byte-length checks; binds artifact to canonical evidence activity/type/hash and binds vault-backed verification to an append-only review by the same verifier and decision.
+- `101_icvcm_ccp_assessments.sql`: append-only internal ICVCM evidence assessment table and organization/activity binding.
+- `102_evidence_artifact_chain_binding.sql`: immutable evidence artifact-series identity/scope; exact artifact-version review binding; reviewer must not be uploader; active review and verification permissions required within owning organization.
+- `103_vault_content_verification_binding.sql`: stored-byte SHA-256 and byte-length checks; binds artifact to canonical evidence activity/type/hash and binds vault-backed verification to an append-only review by the same verifier and decision.
 - `apps/src/evidence-vault.integration.test.ts`: added regression assertions for series reassignment and mismatched artifact-version review.
 - `migrations/README.md`: documents these integrity controls and clarifies they do not prove claim truth or statutory acceptance.
 
