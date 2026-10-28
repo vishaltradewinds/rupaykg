@@ -23,6 +23,20 @@ try {
     )
   `);
 
+  // Refuse malformed pre-existing ledgers before querying migration identities or running DDL.
+  // CREATE TABLE IF NOT EXISTS does not repair an existing table with an incompatible shape.
+  const ledgerColumns = await pool.query<{ column_name: string }>(
+    `select column_name from information_schema.columns
+     where table_schema = current_schema() and table_name = 'schema_migrations'`,
+  );
+  const availableLedgerColumns = new Set(ledgerColumns.rows.map((row) => row.column_name));
+  const missingLedgerColumns = ["version", "filename"].filter((column) => !availableLedgerColumns.has(column));
+  if (missingLedgerColumns.length > 0) {
+    throw new Error(
+      `MIGRATION_LEDGER_SCHEMA_INVALID: schema_migrations is missing required column(s): ${missingLedgerColumns.join(", ")}. No migrations were applied; inspect and recover the ledger manually.`,
+    );
+  }
+
   // Support both CI/source execution (/repo/apps/src) and the production
   // container (/app/apps/dist/src). Never assume a single filesystem root.
   const here = path.dirname(fileURLToPath(import.meta.url));
