@@ -164,7 +164,7 @@ export async function verifyHcsMessage(consensusTimestamp: string, topicId = pro
     if (!data || typeof data !== "object" || !Array.isArray(data.messages)) return { verified: false, network, error: "Mirror Node response has an invalid shape" };
     const found = data.messages.find(message => message && message.consensus_timestamp === consensusTimestamp && message.topic_id === topicId);
     if (!found) return { verified: false, network, error: "Consensus message not found for the supplied Hedera topic and consensus timestamp" };
-    if (typeof found.message !== "string" || found.message.length === 0 || found.message.length > Math.ceil(MIRROR_NODE_MAX_MESSAGE_BYTES * 4 / 3)) return { verified: false, network, error: "HCS message is missing or exceeds the configured size limit" };
+    if (typeof found.message !== "string" || found.message.length === 0 || found.message.length > 4 * Math.ceil(MIRROR_NODE_MAX_MESSAGE_BYTES / 3)) return { verified: false, network, error: "HCS message is missing or exceeds the configured size limit" };
     if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(found.message)) {
       return { verified: false, network, error: "HCS message is not valid base64" };
     }
