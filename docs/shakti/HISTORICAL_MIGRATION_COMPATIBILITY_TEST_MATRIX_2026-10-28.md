@@ -83,6 +83,13 @@ Run [40683182559](https://github.com/vishaltradewinds/rupaykg/actions/runs/40683
 Intermediate runs failed on transient/incomplete commits while the runner and tests were being updated. The successful run above is the verification point for the consolidated preflight change. This still does not prove the unimplemented historical states listed in the matrix.
 
 
-## Transactional rollback regression added — awaiting CI
+## Transactional rollback regression — CI verified
 
-A disposable-PostgreSQL integration test now supplies a temporary migration fixture that creates a table and then deliberately fails. The test expects the runner to fail, verifies the failed migration has no ledger row, and verifies the table DDL rolled back. The runner's test-directory override is gated by both `RUPAYKG_RUN_DB_INTEGRATION_TESTS=1` and `NODE_ENV=test`; ordinary runs continue using the normal repository/container migration directory. This scenario is not verified until its own CI run passes.
+A disposable-PostgreSQL integration test now supplies a temporary migration fixture that creates a table and then deliberately fails. The test expects the runner to fail, verifies the failed migration has no ledger row, and verifies the table DDL rolled back. The runner's test-directory override is gated by both `RUPAYKG_RUN_DB_INTEGRATION_TESTS=1` and `NODE_ENV=test`; ordinary runs continue using the normal repository/container migration directory. CI run 40683464471 completed successfully on commit `c51f99072d12d895ecf09d52491bfb055d1b72b8`. The automated-test step and production container build both passed. The run passed the complete workflow: dependency audit, migration validation, clean migration, typecheck, build, browser smoke test, automated tests including disposable PostgreSQL acceptance, and production container build. This verifies the rollback regression on that commit; it does not close the other historical-state gaps below.
+
+
+## CI verification update — transactional rollback (2026-10-28)
+
+Run [40683464471](https://github.com/vishaltradewinds/rupaykg/actions/runs/40683464471) completed with conclusion `success` for commit `c51f99072d12d895ecf09d52491bfb055d1b72b8`. All workflow steps passed, including `Run tests including disposable PostgreSQL acceptance` and `Build production container`. The rollback fixture therefore has CI evidence that the deliberate migration failure leaves no ledger row and rolls back its table DDL in the disposable PostgreSQL test environment.
+
+**Still open:** the current PR head is a later documentation commit; the successful run was on the preceding code commit. Re-run/confirm CI against the latest PR head before treating the complete branch as verified. The full matrix remains incomplete: ordinal already-applied history, content mismatch, partial/conflicting states beyond the covered preflight cases, reverse-deployment compatibility, authorized per-environment ledger evidence, independent review, recovery approval, and separate live Guardian/HCS/Mirror Node acceptance. Production certification remains OFF/HOLD.
