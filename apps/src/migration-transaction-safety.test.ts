@@ -16,8 +16,15 @@ function stripDollarQuotedBodies(sql: string): string {
   return sql.replace(/(\$[A-Za-z_][A-Za-z0-9_]*\$|\$\$)[\s\S]*?\1/g, " ");
 }
 
+function stripSingleQuotedStrings(sql: string): string {
+  // SQL escapes a single quote inside a string by doubling it.
+  return sql.replace(/'(?:''|[^'])*'/g, " ");
+}
+
 function findTransactionIncompatibilities(sql: string): string[] {
-  const clean = stripDollarQuotedBodies(stripSqlComments(sql));
+  // Remove opaque bodies and literals before comments, so comment markers
+  // inside a quoted body/string cannot corrupt the scanner's lexical view.
+  const clean = stripSqlComments(stripSingleQuotedStrings(stripDollarQuotedBodies(sql)));
   const checks: Array<[string, RegExp]> = [
     ["CREATE INDEX CONCURRENTLY", /\bCREATE\s+(?:UNIQUE\s+)?INDEX\s+CONCURRENTLY\b/i],
     ["DROP INDEX CONCURRENTLY", /\bDROP\s+INDEX\s+CONCURRENTLY\b/i],
@@ -28,6 +35,18 @@ function findTransactionIncompatibilities(sql: string): string[] {
   ];
   return checks.filter(([, pattern]) => pattern.test(clean)).map(([name]) => name);
 }
+
+test("transaction-safety scanner distinguishes top-level commands from SQL bodies and literals", () => {
+  assert.deepEqual(findTransactionIncompatibilities(
+    "CREATE FUNCTION f() RETURNS void AS $ BEGIN PERFORM 1; END; $ LANGUAGE plpgsql; SELECT 'BEGIN; COMMIT;';",
+  ), []);
+  assert.deepEqual(findTransactionIncompatibilities(
+    "SELECT 1; BEGIN; SELECT 2;",
+  ), ["explicit transaction control"]);
+  assert.deepEqual(findTransactionIncompatibilities(
+    "SELECT 'VACUUM'; -- CREATE INDEX CONCURRENTLY\\nSELECT 1;",
+  ), []);
+});
 
 test("migration SQL is compatible with the runner's per-file PostgreSQL transaction", async () => {
   const here = path.dirname(fileURLToPath(import.meta.url));
