@@ -35,7 +35,7 @@ export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool |
     if (!organizationId || !canAct(auth, organizationId)) return reply.code(403).send({ error: "Verified organization membership required", code: "ORG_FORBIDDEN" });
     if (!await hasOrganizationPermission(pool, auth, organizationId, ["epr:read", "epr:manage", "reports:read"])) return reply.code(403).send({ error: "EPR return read permission required", code: "EPR_RETURN_READ_FORBIDDEN" });
     try {
-      const rows = await pool.query(`select r.id,r.scheme_id,s.code as scheme_code,s.name as scheme_name,r.organization_id,r.obligation_id,r.period_start,r.period_end,r.return_type,r.reported_quantity,r.obligation_quantity,r.fulfilled_quantity,r.status,r.external_reference,r.evidence_id,r.verification_id,r.submitted_at,r.created_at from epr_returns r join epr_schemes s on s.id=r.scheme_id where r.organization_id=$1 order by r.period_end desc,r.created_at desc limit 100`, [organizationId]);
+      const rows = await pool.query(`select r.id,r.scheme_id,s.code as scheme_code,s.name as scheme_name,r.organization_id,r.obligation_id,r.period_start,r.period_end,r.return_type,r.reported_quantity,r.obligation_quantity,r.fulfilled_quantity,r.status,r.external_reference,r.evidence_id,r.verification_id,r.submitted_at,r.created_at from epr_returns r join epr_schemes s on s.id=r.scheme_id join epr_obligations eo on eo.id=r.obligation_id join obligations o on o.id=eo.obligation_id where r.organization_id=$1 and identity_has_geography_scope($2,r.organization_id,o.jurisdiction_id) order by r.period_end desc,r.created_at desc limit 100`, [organizationId, auth.identityId]);
       return { source: "postgresql", syntheticData: false, returns: rows.rows };
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "EPR return workspace unavailable", syntheticData: false }); }
   });
@@ -55,7 +55,7 @@ export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool |
     if (!await hasOrganizationPermission(pool, auth, organizationId, ["epr:manage"])) return reply.code(403).send({ error: "EPR management permission required", code: "EPR_RETURN_WRITE_FORBIDDEN" });
     if (Number.isNaN(Date.parse(periodStart)) || Number.isNaN(Date.parse(periodEnd)) || periodStart > periodEnd) return reply.code(400).send({ error: "Valid periodStart and periodEnd are required", code: "INVALID_PERIOD" });
     try {
-      const rows = await pool.query(`insert into epr_returns(scheme_id,organization_id,obligation_id,period_start,period_end,return_type,reported_quantity,status) select $1,$2,$3,$4::date,$5::date,$6,$7,'DRAFT' where exists(select 1 from epr_schemes where id=$1 and status='VERIFIED') and exists(select 1 from epr_obligations eo join obligations o on o.id=eo.obligation_id where eo.id=$3 and eo.scheme_id=$1 and eo.obligated_organization_id=$2 and eo.status in ('OPEN','ELIGIBLE') and o.period_start <= $5::date and o.period_end >= $4::date) returning *`, [schemeId, organizationId, obligationId, periodStart, periodEnd, returnType, reportedQuantity]);
+      const rows = await pool.query(`insert into epr_returns(scheme_id,organization_id,obligation_id,period_start,period_end,return_type,reported_quantity,status) select $1,$2,$3,$4::date,$5::date,$6,$7,'DRAFT' where exists(select 1 from epr_schemes where id=$1 and status='VERIFIED') and exists(select 1 from epr_obligations eo join obligations o on o.id=eo.obligation_id where eo.id=$3 and eo.scheme_id=$1 and eo.obligated_organization_id=$2 and eo.status in ('OPEN','ELIGIBLE') and o.period_start <= $5::date and o.period_end >= $4::date and identity_has_geography_scope($8,$2,o.jurisdiction_id)) returning *`, [schemeId, organizationId, obligationId, periodStart, periodEnd, returnType, reportedQuantity, auth.identityId]);
       if (!rows.rows[0]) return reply.code(409).send({ error: "Verified EPR scheme and matching open/eligible obligation are required", code: "EPR_RETURN_NOT_ELIGIBLE" });
       return reply.code(201).send({ source: "postgresql", syntheticData: false, authoritativeMutation: true, eprReturn: rows.rows[0] });
     } catch (error: unknown) {
@@ -76,11 +76,28 @@ export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool |
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
-      const current = await client.query(`select r.*,eo.target_quantity,eo.fulfilled_quantity as obligation_fulfilled,eo.status as obligation_status,s.code as scheme_code from epr_returns r join epr_obligations eo on eo.id=r.obligation_id join epr_schemes s on s.id=r.scheme_id where r.id=$1 for update`, [returnId]);
+      const current = await client.query(`select r.*,eo.target_quantity,eo.fulfilled_quantity as obligation_fulfilled,eo.status as obligation_status,s.code as scheme_code,o.jurisdiction_id from epr_returns r join epr_obligations eo on eo.id=r.obligation_id join obligations o on o.id=eo.obligation_id join epr_schemes s on s.id=r.scheme_id where r.id=$1 for update`, [returnId]);
       const row = current.rows[0];
       if (!row) { await client.query("ROLLBACK"); return reply.code(404).send({ error: "EPR return not found", code: "EPR_RETURN_NOT_FOUND" }); }
       if (!canAct(auth, row.organization_id) || !await hasOrganizationPermission(pool, auth, row.organization_id, ["epr:manage"])) { await client.query("ROLLBACK"); return reply.code(403).send({ error: "EPR management permission required", code: "EPR_RETURN_WRITE_FORBIDDEN" }); }
+      const jurisdictionScope = await client.query("select identity_has_geography_scope($1,$2,$3) ok", [auth.identityId, row.organization_id, row.jurisdiction_id]);
+      if (!jurisdictionScope.rows[0]?.ok) { await client.query("ROLLBACK"); return reply.code(403).send({ error: "EPR jurisdiction is outside role geography authorization scope", code: "GEOGRAPHY_FORBIDDEN" }); }
       if (row.status !== "DRAFT" && row.status !== "REJECTED") { await client.query("ROLLBACK"); return reply.code(409).send({ error: `Return cannot be submitted from ${row.status}`, code: "INVALID_EPR_RETURN_STATE" }); }
+      // An internal obligation or EPR catalogue entry is not a legal applicability
+      // determination. Require a reviewed organization/scheme determination first.
+      const applicability = await client.query<{ applicability_status: string; determined_by_identity_id: string | null; determined_at: Date | string | null }>(
+        "select applicability_status, determined_by_identity_id, determined_at from organization_epr_applicability where organization_id=$1 and scheme=$2",
+        [row.organization_id, row.scheme_code],
+      );
+      const applicabilityRow = applicability.rows[0];
+      if (!applicabilityRow || applicabilityRow.applicability_status !== "APPLICABLE" || !applicabilityRow.determined_by_identity_id || !applicabilityRow.determined_at) {
+        await client.query("ROLLBACK");
+        return reply.code(409).send({
+          error: "A reviewed APPLICABLE determination for this organization and EPR scheme is required before submission",
+          code: "EPR_APPLICABILITY_UNRESOLVED",
+          externalSubmission: "NOT_SUBMITTED",
+        });
+      }
       const obligation = await client.query(`select id,target_quantity,fulfilled_quantity,status from epr_obligations where id=$1 for update`, [row.obligation_id]);
       const obligationRow = obligation.rows[0];
       if (!obligationRow) { await client.query("ROLLBACK"); return reply.code(409).send({ error: "Bound EPR obligation not found", code: "OBLIGATION_NOT_FOUND" }); }
@@ -88,7 +105,7 @@ export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool |
       const evidence = await client.query(`select e.id,e.status,e.content_hash,e.content_uri,a.organization_id,a.geography_id from evidence e join activities a on a.id=e.activity_id join verifications v on v.id=$2 and v.evidence_id=e.id and v.decision='APPROVED' where e.id=$1`, [evidenceId, verificationId]);
       const evidenceRow = evidence.rows[0];
       if (!evidenceRow || evidenceRow.status !== "VERIFIED" || (!evidenceRow.content_hash && !evidenceRow.content_uri) || evidenceRow.organization_id !== row.organization_id || !evidenceRow.geography_id) { await client.query("ROLLBACK"); return reply.code(409).send({ error: "Submission evidence must be verified, provenance-backed, approved and organization-scoped", code: "EVIDENCE_NOT_ELIGIBLE" }); }
-      const geo = await client.query(`select organization_has_geography_scope($1,$2) as ok`, [row.organization_id, evidenceRow.geography_id]);
+      const geo = await client.query(`select identity_has_geography_scope($1,$2,$3) as ok`, [auth.identityId, row.organization_id, evidenceRow.geography_id]);
       if (!geo.rows[0]?.ok) { await client.query("ROLLBACK"); return reply.code(403).send({ error: "Evidence geography is outside organization authorization scope", code: "GEOGRAPHY_FORBIDDEN" }); }
       const fulfilled = Number(row.reported_quantity);
       const balance = Number(obligationRow.target_quantity) - Number(obligationRow.fulfilled_quantity);
@@ -104,20 +121,63 @@ export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool |
 
   app.post("/api/v1/epr/returns/:returnId/external-reference", async (request, reply) => {
     const auth = await authFor(request, reply, pool); if (!auth || !pool) return;
-    const body = bodyOf(request); const externalReference = requiredString(body, "externalReference");
-    if (!externalReference) return reply.code(400).send({ error: "externalReference is required", code: "EXTERNAL_REFERENCE_REQUIRED" });
+    const body = bodyOf(request);
+    const externalReference = requiredString(body, "externalReference");
+    const externalAuthority = requiredString(body, "externalAuthority");
+    const evidenceId = requiredString(body, "evidenceId");
+    const verificationId = requiredString(body, "verificationId");
+    if (!externalReference || !externalAuthority || !evidenceId || !verificationId) {
+      return reply.code(400).send({
+        error: "externalReference, externalAuthority, evidenceId and verificationId are required to record external confirmation",
+        code: "EXTERNAL_CONFIRMATION_EVIDENCE_REQUIRED",
+      });
+    }
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
       const returnId = (request.params as { returnId: string }).returnId;
-      const row = await client.query<{ organization_id: string; status: string; external_reference: string | null }>("select organization_id,status,external_reference from epr_returns where id=$1 for update", [returnId]);
+      const row = await client.query<{ organization_id: string; status: string; external_reference: string | null; jurisdiction_id: string | null }>("select r.organization_id,r.status,r.external_reference,o.jurisdiction_id from epr_returns r join epr_obligations eo on eo.id=r.obligation_id join obligations o on o.id=eo.obligation_id where r.id=$1 for update of r", [returnId]);
       if (!row.rows[0]) { await client.query("ROLLBACK"); return reply.code(404).send({ error: "EPR return not found", code: "EPR_RETURN_NOT_FOUND" }); }
       if (!canAct(auth, row.rows[0].organization_id) || !await hasOrganizationPermission(pool, auth, row.rows[0].organization_id, ["epr:manage"])) { await client.query("ROLLBACK"); return reply.code(403).send({ error: "EPR management permission required", code: "EPR_RETURN_WRITE_FORBIDDEN" }); }
       if (!["SUBMITTED","ACCEPTED","COMPLETED"].includes(row.rows[0].status)) { await client.query("ROLLBACK"); return reply.code(409).send({ error: "External reference can only be recorded after submission", code: "INVALID_EPR_RETURN_STATE" }); }
       if (row.rows[0].external_reference && row.rows[0].external_reference !== externalReference) { await client.query("ROLLBACK"); return reply.code(409).send({ error: "A different external reference is already recorded for this EPR return", code: "EXTERNAL_REFERENCE_IMMUTABLE" }); }
-      const updated = await client.query("update epr_returns set external_reference=$2 where id=$1 returning *", [returnId, externalReference]);
+      const jurisdictionScope = await client.query("select identity_has_geography_scope($1,$2,$3) ok", [auth.identityId, row.rows[0].organization_id, row.rows[0].jurisdiction_id]);
+      if (!jurisdictionScope.rows[0]?.ok) { await client.query("ROLLBACK"); return reply.code(403).send({ error: "EPR jurisdiction is outside role geography authorization scope", code: "GEOGRAPHY_FORBIDDEN" }); }
+      const confirmation = await client.query(
+        `select e.id,a.organization_id,a.geography_id,e.status,e.content_hash,e.content_uri
+           from evidence e
+           join activities a on a.id=e.activity_id
+           join verifications v on v.id=$2 and v.evidence_id=e.id and v.decision='APPROVED'
+          where e.id=$1`,
+        [evidenceId, verificationId],
+      );
+      const confirmationRow = confirmation.rows[0];
+      if (!confirmationRow || confirmationRow.status !== "VERIFIED" ||
+          (!confirmationRow.content_hash && !confirmationRow.content_uri) ||
+          confirmationRow.organization_id !== row.rows[0].organization_id || !confirmationRow.geography_id) {
+        await client.query("ROLLBACK");
+        return reply.code(409).send({ error: "External confirmation evidence must be verified, approved, provenance-backed and organization-scoped", code: "EXTERNAL_CONFIRMATION_EVIDENCE_NOT_ELIGIBLE" });
+      }
+      const geography = await client.query("select identity_has_geography_scope($1,$2,$3) as ok", [auth.identityId, row.rows[0].organization_id, confirmationRow.geography_id]);
+      if (!geography.rows[0]?.ok) {
+        await client.query("ROLLBACK");
+        return reply.code(403).send({ error: "External confirmation evidence geography is outside organization scope", code: "GEOGRAPHY_FORBIDDEN" });
+      }
+      const updated = await client.query(
+        `update epr_returns
+            set external_reference=$2, external_authority_name=$3,
+                external_confirmation_evidence_id=$4,
+                external_confirmation_verification_id=$5,
+                external_authority_confirmed_at=now()
+          where id=$1 returning *`,
+        [returnId, externalReference, externalAuthority, evidenceId, verificationId],
+      );
       await client.query("COMMIT");
-      return { source: "postgresql", syntheticData: false, authoritativeMutation: true, eprReturn: updated.rows[0], externalSubmission: "EXTERNAL_REFERENCE_RECORDED_NOT_ISSUED_BY_RUPAYKG" };
+      return {
+        source: "postgresql", syntheticData: false, authoritativeMutation: true,
+        eprReturn: updated.rows[0],
+        externalSubmission: "EXTERNAL_CONFIRMATION_EVIDENCE_RECORDED_NOT_ISSUED_BY_RUPAYKG",
+      };
     } catch (error: unknown) {
       await client.query("ROLLBACK").catch(() => undefined);
       request.log.error(error);
