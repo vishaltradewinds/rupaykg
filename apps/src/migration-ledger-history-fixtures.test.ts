@@ -31,7 +31,7 @@ test("production legacy ledger stays blocked until an explicit compatibility pro
   assert.deepEqual(orphans, sharedLegacyRecords);
   assert.throws(
     () => assertNoOrphanedMigrationRecords(productionRecords, [
-      ...canonicalReleaseFiles,
+      ...relevantCanonicalFiles,
       "096_verification_authorization_provenance.sql",
     ]),
     /20261018.*20261019.*20261020.*20261021/,
@@ -45,10 +45,10 @@ test("staging-only async and AI legacy records are not mapped to numbered migrat
     { version: "20261024", filename: "20261024_ai_intake_rate_limits.sql" },
     { version: "20261025", filename: "20261025_ai_evidence_intake_jobs.sql" },
   ];
-  const orphans = findOrphanedMigrationRecords(stagingOnlyRecords, canonicalReleaseFiles);
+  const orphans = findOrphanedMigrationRecords(stagingOnlyRecords, relevantCanonicalFiles);
   assert.deepEqual(orphans, stagingOnlyRecords);
   assert.throws(
-    () => assertNoOrphanedMigrationRecords(stagingOnlyRecords, canonicalReleaseFiles),
+    () => assertNoOrphanedMigrationRecords(stagingOnlyRecords, relevantCanonicalFiles),
     /20261022.*20261023.*20261024.*20261025/,
   );
 });
