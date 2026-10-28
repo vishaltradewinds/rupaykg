@@ -14,7 +14,6 @@ test("migration runner fails closed on legacy filename identity before applying 
   const sourceDir = path.dirname(fileURLToPath(import.meta.url));
   const migrationRunner = path.join(sourceDir, "migrate.js");
   const baseUrl = new URL(databaseUrl!);
-  const originalDbName = baseUrl.pathname.replace(/^\//, "") || "postgres";
   const adminUrl = new URL(baseUrl);
   adminUrl.pathname = "/postgres";
   const adminPool = new Pool({ connectionString: adminUrl.toString(), ssl: process.env.DATABASE_SSL === "false" ? undefined : { rejectUnauthorized: false } });
