@@ -221,3 +221,14 @@ Commit `37d96b31066942d854752b42947c205489de1b39` removes those redundant `pg_te
 This establishes CI success for the cleanup adjustment and the suite at that commit. It does not prove all historical schema states or live environment migration histories. The cleanup remains confined to disposable test databases; no production database was accessed or modified.
 
 **Release remains HOLD.** PRs #97 and #104 remain unmerged; production certification remains OFF. Open gates are unchanged: authorized read-only per-environment ledger/schema evidence, broader partial-application and schema-drift characterization, independent review and approved recovery plan, separate live Guardian/HCS/Mirror Node acceptance where in scope, and explicit production release approval.
+
+
+## Disposable PostgreSQL fixture cleanup reliability — 2026-10-28
+
+The workflow on commit `bbf88f51d464792d176a365171836767f2735d27` failed in the legacy-identity integration suite during fixture cleanup with PostgreSQL error `terminating connection due to administrator command`. This was a cleanup-path failure, not a migration-guard assertion failure. Inspection showed the test runs the migration runner synchronously and closes each per-database pool before cleanup, so the explicit `pg_terminate_backend` cleanup query was redundant and introduced a race with PostgreSQL's own connection lifecycle.
+
+Removed the forced backend-termination calls from `apps/src/migration-identity.integration.test.ts` and retained explicit pool closure followed by disposable database drop. Corrective commit: `37d96b31066942d854752b42947c205489de1b39`.
+
+Verification: [workflow run 40694790907](https://github.com/vishaltradewinds/rupaykg/actions/runs/40694790907) completed successfully on that commit.
+
+This improves test cleanup reliability but does not replace repeated-run/stress testing or per-environment migration ledger inspection. **Release remains HOLD**; PRs #97 and #104 remain unmerged, production certification remains OFF, and no production database was accessed or modified.
