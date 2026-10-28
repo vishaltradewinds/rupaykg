@@ -252,3 +252,32 @@ The final correction is commit `397c945523ec513e956a996d65e614ccc9c43322`. [Work
 Scope limitation remains: this is a lightweight static screen, not a PostgreSQL parser. It does not establish runtime correctness for every SQL dialect feature, dynamic SQL path, database version, or historical schema state. Findings still require migration-specific review.
 
 **Release remains HOLD.** PRs #97 and #104 remain unmerged; production certification remains OFF. Authorized read-only ledger/schema evidence for each target environment, broader historical-state characterization, independent recovery review, applicable live Guardian/HCS/Mirror Node acceptance, and explicit release approval remain outstanding. No production database was accessed or modified.
+
+## Whole-tree destructive-DDL and data-rewrite screening — 2026-10-28
+
+A first-pass static pattern sweep was run against all 107 numbered migration files (001–107) in the validation branch. The sweep looked for table/column/type/schema drops, truncation, direct `DELETE FROM`, direct `UPDATE ... SET`, concurrent index operations, constraint validation markers, and cascade clauses. This is a text-pattern screen, not a full SQL parser or proof that all dynamic SQL, multiline constructs, indirect trigger effects, or dependency risks have been exhaustively characterized.
+
+### Findings requiring explicit review
+
+1. **Migration 043 — check-constraint replacement.** The migration conditionally drops and recreates `bwg_epr_reports_fulfilled_le_obligated` with `fulfilled_quantity <= obligated_quantity`. It does not delete rows, but it can fail if existing rows violate the new check. Before any environment rollout, read-only evidence must establish whether the table exists and whether existing data satisfies the invariant; do not auto-correct historical quantities.
+2. **Migration 066 — foreign-key replacement and cascading deletion semantics.** The migration replaces organization foreign keys on `organization_statutory_profiles`, `organization_bwg_assessments`, `organization_epr_applicability`, and `organization_verification_evidence` with `ON DELETE CASCADE`. This is not a direct data rewrite, but it changes the downstream effect of deleting an organization and may remove associated rows through referential actions. Confirm the intended retention, legal-hold, audit, and tenant-offboarding policy and inspect the actual pre-existing FK definitions before release. The migration drops two possible legacy FK names on `organization_epr_applicability`, which should be checked against actual schema state.
+3. **Migration 087 — fail-closed acceptance-fixture guard.** A preflight aborts if an acceptance-fixture activity/evidence item already backs a value-bearing credential; the migration then replaces a credential trigger to block fixture-backed issuance and require Guardian/HCS/Mirror Node evidence. It intentionally does not rewrite affected historical registry state. This is a safety gate, not proof that external trust-rail evidence is live or independently verified.
+4. **Migration 081 — acceptance-fixture geography seeding.** Adds source-versioned acceptance-only geography with conflict/no-existing-row guards. It is explicitly marked as non-government acceptance metadata; verify it remains excluded from production registry eligibility and never gets represented as official geography.
+5. **Migration 084 — audit-chain head initialization.** Creates the chain-head table and initializes it from the latest existing audit event only when no singleton head exists; this does not retroactively prove that prior audit rows form one complete, verified chain. Existing audit history and cutover semantics require separate evidence.
+6. **Migration 103 — append-only ICVCM internal assessment history.** Adds an internal-draft-only assessment table, tenant/activity binding, and an update/delete guard. The migration comments correctly distinguish internal readiness evidence from certification or credit issuance.
+
+### Static screen outcome and limits
+
+- The sweep found no direct `DROP TABLE`, `DROP COLUMN`, `TRUNCATE`, direct `DELETE FROM`, direct `UPDATE ... SET`, `ALTER TYPE`, or `CREATE/DROP INDEX CONCURRENTLY` command in the scanned migration text.
+- It did find the constraint replacement in 043, FK/constraint replacement in 066, and several expected seed inserts and trigger-replacement patterns. Seed inserts and trigger replacements require idempotency/dependency review; their presence alone is not evidence of a defect.
+- No claim is made that all schema dependencies, dynamic SQL, function side effects, constraint-validation failures, lock duration, table-rewrite risk, or data-retention implications have been cleared. This remains a preliminary whole-tree screen plus targeted inspection, not independent certification.
+
+### Required follow-up before release
+
+- Compare the 043/066 assumptions against authorized read-only schema and data evidence in every target environment.
+- Review organization deletion, retention, audit, and legal-hold requirements against migration 066's cascade behavior.
+- Continue semantic dependency review across all migrations, including trigger/function replacement order, indexes/constraints, table locks, data-volume effects, and partial-application recovery.
+- Expand disposable-PostgreSQL fixtures for violated existing check constraints, FK-name/schema drift, and interrupted application around constraint replacement.
+- Obtain independent review and a documented recovery/rollback plan.
+
+**Disposition remains HOLD.** The latest branch CI run [40696726464](https://github.com/vishaltradewinds/rupaykg/actions/runs/40696726464) completed successfully on the branch head at the time of that run. That run verifies its tested code and documentation snapshot, not the new matrix update below. PRs #97 and #104 remain unmerged; production certification remains OFF. No production database was accessed or modified.
