@@ -187,3 +187,13 @@ The current repository tree and code search did not surface a worker implementat
 - Automatic requeue/lease reset: **not performed**
 - Raw payload inspection: **not performed**
 - Safe next action: locate the fixture/seed/test source from repository history, CI artifacts, or deployment bundle; add a disposable test proving fixture creation and expected queue transitions; then document a separately approved staging cleanup if the environment owner wants it removed.
+
+
+### Repository ownership search
+
+Inspected the current branch tree (348 tracked paths) and the available acceptance seed:
+- No queue/worker implementation, mirror inbox handler, or worker test file is present in the branch tree.
+- `apps/src/acceptance-seed.ts` is a separate WA03.001 carbon/MRV live-acceptance fixture and contains no mirror-inbox table or `TEST-AUTH` seed.
+- The existing `migrations/083_mrv_mirror_node_registry_gate.sql` concerns Guardian/Hedera issuance gating, not async mirror queue storage.
+
+This means the synthetic inbox rows' owning seed/test code is not present in the current candidate branch. Do not add guessed queue-worker code or fabricate a historical migration under the numbered migration directory. Keep the catalog reconstruction as documentation until a trustworthy source artifact is recovered or an independently reviewed new migration is authored.
