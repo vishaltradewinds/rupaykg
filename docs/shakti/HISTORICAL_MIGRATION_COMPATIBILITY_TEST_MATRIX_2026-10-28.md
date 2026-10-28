@@ -93,3 +93,10 @@ A disposable-PostgreSQL integration test now supplies a temporary migration fixt
 Run [40683464471](https://github.com/vishaltradewinds/rupaykg/actions/runs/40683464471) completed with conclusion `success` for commit `c51f99072d12d895ecf09d52491bfb055d1b72b8`. All workflow steps passed, including `Run tests including disposable PostgreSQL acceptance` and `Build production container`. The rollback fixture therefore has CI evidence that the deliberate migration failure leaves no ledger row and rolls back its table DDL in the disposable PostgreSQL test environment.
 
 **Still open:** the current PR head is a later documentation commit; the successful run was on the preceding code commit. Re-run/confirm CI against the latest PR head before treating the complete branch as verified. The full matrix remains incomplete: ordinal already-applied history, content mismatch, partial/conflicting states beyond the covered preflight cases, reverse-deployment compatibility, authorized per-environment ledger evidence, independent review, recovery approval, and separate live Guardian/HCS/Mirror Node acceptance. Production certification remains OFF/HOLD.
+
+
+## Ordinal-history rerun guard regression added (2026-10-28)
+
+A new disposable-PostgreSQL integration test seeds an exact ledger tuple for an ordinal migration identity and supplies a fixture SQL file that would create a probe table if executed. It asserts the runner exits successfully, preserves the exact ledger tuple, and does not create the probe table. This covers the narrow behavior that an exact already-recorded version/filename identity is skipped without rerunning DDL; it does **not** prove that the actual historical schema matches the migration's intended effects or verify production ledger state.
+
+The test is added on the validation branch in commit `5c051a620c02d01f16f73e74aa595e1d456b384e`. CI for this commit must pass before this regression is considered verified. Validation-only scope remains unchanged: no production DB access or writes, no merge, and certification OFF/HOLD.
