@@ -63,7 +63,9 @@ try {
     await client.query("create schema " + q(schema));
     schemas.push(schema);
     await setSchema(schema);
-    await prereqs();
+    // The authorization fixture defines its own complete minimal schema below;
+    // do not pre-create the same tables in that dedicated schema.
+    if (schema !== verificationSchema) await prereqs();
   }
 
   // Production-shaped schema: run the actual repository migration runner.
