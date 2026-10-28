@@ -50,7 +50,21 @@ before(async () => {
     const measurementId = (await c.query<{ id: string }>("insert into measurements(activity_id,value,unit,method,source,measured_at,quality_status) values($1,100,'kg','WEIGHBRIDGE','FIELD',now(),'VERIFIED') returning id", [activityId])).rows[0]!.id;
     evidenceId = (await c.query<{ id: string }>("insert into evidence(activity_id,measurement_id,evidence_type,status,captured_at,content_hash) values($1,$2,'WEIGHBRIDGE_RECORD','VERIFIED',now(),$3) returning id", [activityId, measurementId, `runtime-${suffix}`])).rows[0]!.id;
     verificationId = (await c.query<{ id: string }>("insert into verifications(evidence_id,activity_id,verifier_identity_id,decision,scope,rationale) values($1,$2,$3,'APPROVED','runtime','independent runtime acceptance') returning id", [evidenceId, activityId, verifierId])).rows[0]!.id;
-    await c.query("insert into mrv_provenance_events(activity_id,verification_id,evidence_id,guardian_policy_id,guardian_execution_id,guardian_status,hcs_status,hcs_topic_id,hcs_transaction_id,hcs_consensus_timestamp,integrity_hash,metadata,mirror_node_verified_at) values($1,$2,$3,'runtime-policy','runtime-guardian','VERIFIED','CONSENSUS_CONFIRMED','0.0.123',$4,$5,$6,'{\"testFixture\":true}',clock_timestamp())", [activityId, verificationId, evidenceId, `runtime-tx-${suffix}`, `runtime-consensus-${suffix}`, `runtime-hash-${suffix}`]);
+    const methodologyCode = `TEST-METHODOLOGY-${suffix}`;
+    const methodologyVersionId = (await c.query<{ id: string }>(
+      "insert into methodology_versions(methodology_code,version,rules,source_reference,source_hash,applicability_rules,parameter_dictionary,equation_mapping,reconciliation_evidence,reconciliation_reference,reconciled_at,regression_verified_at) values($1,'test-1','{}'::jsonb,'test-fixture://methodology',repeat('a',64),'{}'::jsonb,'{}'::jsonb,'{}'::jsonb,'[{\\"fixture\\":true}]'::jsonb,'test-reconciliation',now(),now()) returning id",
+      [methodologyCode],
+    )).rows[0]!.id;
+    await c.query(
+      "insert into methodology_governance_evidence(methodology_version_id,evidence_kind,reference,evidence_hash,independent_party,evidence) values($1,'NUMERICAL_RECONCILIATION','test-reconciliation',repeat('b',64),'TEST_FIXTURE_ONLY','{\\"fixture\\":true}'::jsonb),($1,'REGRESSION_TEST','test-regression',repeat('c',64),'TEST_FIXTURE_ONLY','{\\"fixture\\":true}'::jsonb)",
+      [methodologyVersionId],
+    );
+    await c.query("update methodology_versions set governance_status='PRODUCTION_ELIGIBLE' where id=$1", [methodologyVersionId]);
+    await c.query("insert into mrv_provenance_events(activity_id,verification_id,evidence_id,methodology_code,guardian_policy_id,guardian_execution_id,guardian_status,hcs_status,hcs_topic_id,hcs_transaction_id,hcs_consensus_timestamp,integrity_hash,metadata,mirror_node_verified_at) values($1,$2,$3,$4,'runtime-policy','runtime-guardian','VERIFIED','CONSENSUS_CONFIRMED','0.0.123',$5,$6,$7,'{\\"testFixture\\":true}',clock_timestamp())", [activityId, verificationId, evidenceId, methodologyCode, `runtime-tx-${suffix}`, `runtime-consensus-${suffix}`, `runtime-hash-${suffix}`]);
+    await c.query(
+      "insert into activity_registry_eligibility_decisions(activity_id,verification_id,evidence_id,methodology_version_id,geography_id,decision,statutory_basis,permit_and_authority_evidence,applicability_rationale,independent_review_reference,reviewer_identity_id,effective_from) values($1,$2,$3,$4,$5,'APPROVED','{\\"testFixture\\":true}'::jsonb,'[{\\"testFixture\\":true}]'::jsonb,'TEST FIXTURE ONLY - NOT A REGULATORY APPROVAL',$6,$7,current_date)",
+      [activityId, verificationId, evidenceId, methodologyVersionId, geographyId, `TEST-REVIEW-${suffix}`, verifierId],
+    );
     await c.query("commit");
   } catch (error) { await c.query("rollback"); throw error; } finally { c.release(); }
   server = spawn(process.execPath, ["dist/src/server.js"], { cwd: process.cwd(), env: { ...process.env, PORT: String(port), HOST: "127.0.0.1", DATABASE_URL: databaseUrl, DATABASE_SSL: "false" }, stdio: ["ignore", "ignore", "pipe"] });
