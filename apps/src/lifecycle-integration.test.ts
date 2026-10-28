@@ -30,20 +30,20 @@ test("production lifecycle integration gate", { skip: !url }, async () => {
     // authoritative, already-confirmed provenance boundary enforced by production SQL.
     const methodologyCode = "TEST-METHODOLOGY-INTEGRATION";
     const methodologyVersionId = (await c.query(
-      "insert into methodology_versions(methodology_code,version,rules,source_reference,source_hash,applicability_rules,parameter_dictionary,equation_mapping,reconciliation_evidence,reconciliation_reference,reconciled_at,regression_verified_at) values($1,'test-1','{}'::jsonb,'test-fixture://methodology',repeat('a',64),'{\"fixture\":true}'::jsonb,'{\"fixture\":true}'::jsonb,'{\"fixture\":true}'::jsonb,'[{\\"fixture\\":true}]'::jsonb,'test-reconciliation',now(),now()) returning id",
+      "insert into methodology_versions(methodology_code,version,rules,source_reference,source_hash,applicability_rules,parameter_dictionary,equation_mapping,reconciliation_evidence,reconciliation_reference,reconciled_at,regression_verified_at) values($1,'test-1','{}'::jsonb,'test-fixture://methodology',repeat('a',64),'{\"fixture\":true}'::jsonb,'{\"fixture\":true}'::jsonb,'{\"fixture\":true}'::jsonb,'[{\"fixture\":true}]'::jsonb,'test-reconciliation',now(),now()) returning id",
       [methodologyCode],
     )).rows[0].id;
     await c.query(
-      "insert into methodology_governance_evidence(methodology_version_id,evidence_kind,reference,evidence_hash,independent_party,evidence) values($1,'NUMERICAL_RECONCILIATION','test-reconciliation',repeat('b',64),'TEST_FIXTURE_ONLY','{\\"fixture\\":true}'::jsonb),($1,'REGRESSION_TEST','test-regression',repeat('c',64),'TEST_FIXTURE_ONLY','{\\"fixture\\":true}'::jsonb)",
+      "insert into methodology_governance_evidence(methodology_version_id,evidence_kind,reference,evidence_hash,independent_party,evidence) values($1,'NUMERICAL_RECONCILIATION','test-reconciliation',repeat('b',64),'TEST_FIXTURE_ONLY','{\"fixture\":true}'::jsonb),($1,'REGRESSION_TEST','test-regression',repeat('c',64),'TEST_FIXTURE_ONLY','{\"fixture\":true}'::jsonb)",
       [methodologyVersionId],
     );
     await c.query("update methodology_versions set governance_status='PRODUCTION_ELIGIBLE' where id=$1", [methodologyVersionId]);
     await c.query(
-      "insert into mrv_provenance_events(activity_id,verification_id,evidence_id,methodology_code,guardian_policy_id,guardian_execution_id,guardian_status,hcs_status,hcs_topic_id,hcs_transaction_id,hcs_consensus_timestamp,integrity_hash,metadata,mirror_node_verified_at) values($1,$2,$3,$4,'integration-policy','integration-guardian','VERIFIED','CONSENSUS_CONFIRMED','0.0.123','integration-tx','integration-consensus','integration-hash','{\\"testFixture\\":true}',clock_timestamp())",
+      "insert into mrv_provenance_events(activity_id,verification_id,evidence_id,methodology_code,guardian_policy_id,guardian_execution_id,guardian_status,hcs_status,hcs_topic_id,hcs_transaction_id,hcs_consensus_timestamp,integrity_hash,metadata,mirror_node_verified_at) values($1,$2,$3,$4,'integration-policy','integration-guardian','VERIFIED','CONSENSUS_CONFIRMED','0.0.123','integration-tx','integration-consensus','integration-hash','{\"testFixture\":true}',clock_timestamp())",
       [activity, verification, evidence, methodologyCode],
     );
     await c.query(
-      "insert into activity_registry_eligibility_decisions(activity_id,verification_id,evidence_id,methodology_version_id,geography_id,decision,statutory_basis,permit_and_authority_evidence,applicability_rationale,independent_review_reference,reviewer_identity_id,effective_from) values($1,$2,$3,$4,$5,'APPROVED','{\\"testFixture\\":true}'::jsonb,'[{\\"testFixture\\":true}]'::jsonb,'TEST FIXTURE ONLY - NOT A REGULATORY APPROVAL','TEST-REVIEW-INTEGRATION',$6,current_date)",
+      "insert into activity_registry_eligibility_decisions(activity_id,verification_id,evidence_id,methodology_version_id,geography_id,decision,statutory_basis,permit_and_authority_evidence,applicability_rationale,independent_review_reference,reviewer_identity_id,effective_from) values($1,$2,$3,$4,$5,'APPROVED','{\"testFixture\":true}'::jsonb,'[{\"testFixture\":true}]'::jsonb,'TEST FIXTURE ONLY - NOT A REGULATORY APPROVAL','TEST-REVIEW-INTEGRATION',$6,current_date)",
       [activity, verification, evidence, methodologyVersionId, geography, verifier],
     );
 
