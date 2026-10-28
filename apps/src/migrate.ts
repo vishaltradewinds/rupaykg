@@ -37,6 +37,37 @@ try {
     );
   }
 
+  const ledgerDefinition = await pool.query<{ column_name: string; is_nullable: string }>(
+    `select column_name, is_nullable from information_schema.columns
+     where table_schema = current_schema() and table_name = 'schema_migrations'`,
+  );
+  const nullableByColumn = new Map(ledgerDefinition.rows.map((row) => [row.column_name, row.is_nullable]));
+  const primaryKeyColumns = await pool.query<{ column_name: string }>(
+    `select kcu.column_name
+     from information_schema.table_constraints tc
+     join information_schema.key_column_usage kcu
+       on tc.constraint_catalog = kcu.constraint_catalog
+      and tc.constraint_schema = kcu.constraint_schema
+      and tc.constraint_name = kcu.constraint_name
+      and tc.table_schema = kcu.table_schema
+      and tc.table_name = kcu.table_name
+     where tc.table_schema = current_schema()
+       and tc.table_name = 'schema_migrations'
+       and tc.constraint_type = 'PRIMARY KEY'`,
+  );
+  const primaryKeyNames = primaryKeyColumns.rows.map((row) => row.column_name);
+  const ledgerDefinitionProblems: string[] = [];
+  if (nullableByColumn.get("version") !== "NO") ledgerDefinitionProblems.push("version must be NOT NULL");
+  if (nullableByColumn.get("filename") !== "NO") ledgerDefinitionProblems.push("filename must be NOT NULL");
+  if (primaryKeyNames.length !== 1 || primaryKeyNames[0] !== "version") {
+    ledgerDefinitionProblems.push("version must be the sole PRIMARY KEY column");
+  }
+  if (ledgerDefinitionProblems.length > 0) {
+    throw new Error(
+      `MIGRATION_LEDGER_SCHEMA_INVALID: ${ledgerDefinitionProblems.join("; ")}. No migrations were applied; inspect and recover the ledger manually.`,
+    );
+  }
+
   // Support both CI/source execution (/repo/apps/src) and the production
   // container (/app/apps/dist/src). Never assume a single filesystem root.
   const here = path.dirname(fileURLToPath(import.meta.url));
