@@ -51,9 +51,9 @@ export function buildMrvInputBinding(input: {
   verificationId: string;
   evidenceId: string;
   policyId: string;
-  methodologyCode?: string;
-  quantity?: number;
-  unit?: string;
+  methodologyCode?: string | undefined;
+  quantity?: number | undefined;
+  unit?: string | undefined;
   observations: unknown[];
   evidence: unknown[];
 }) {
