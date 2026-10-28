@@ -122,4 +122,17 @@ Read-only SELECTs were run against the connected Neon project `steep-mud-7990694
 
 The read-only check confirms the ledger entries and timestamps, not source equivalence or schema safety. Continue to HOLD live changes and scheduler activation.
 
-**Status: live ledger entries confirmed read-only; ledger stores no source checksum; deployment-artifact provenance and forward-only rehearsal remain blocking gates. No live writes performed.**
+
+## Read-only staging constraint/data check — 2026-10-28
+
+Additional read-only checks on staging branch `br-spring-hill-b4544vz5` confirmed:
+
+- `async_mirror_inbox`: 12 rows; statuses are PROCESSING=8, QUARANTINED=1, RECEIVED=1, RETRY=1, VALIDATED=1.
+- `async_mirror_inbox_events`: 29 rows.
+- Current `async_mirror_inbox_status_check` allows RECEIVED, PROCESSING, PROCESSED, VALIDATED, REJECTED, RETRY, QUARANTINED; it does **not** allow UNRESOLVED.
+- Current count of rows with status UNRESOLVED is 0.
+- The candidate forward migration `20261101_async_mirror_unresolved_crosswalk.sql` proposes replacing that CHECK to add UNRESOLVED and clarifies its non-authoritative meaning. It is still an unapproved candidate on a non-release branch; it has not been applied.
+
+This confirms a concrete runtime compatibility blocker: the worker's UNRESOLVED status cannot be persisted under the current staging CHECK. Do not enable the worker or apply the candidate migration until tests exercise the exact SQL against a disposable PostgreSQL database, including existing rows, constraint replacement, allowed/disallowed statuses, rerun behavior, and rollback/recovery expectations. The 12 inbox rows and 29 events remain untouched.
+
+**Status: live ledger and staging constraint/data evidence recorded; source checksum provenance and disposable PostgreSQL rehearsal remain blocking gates. No live writes performed.**
