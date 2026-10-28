@@ -93,6 +93,7 @@ async function shutdown(signal: string) {
   const result = await drainBeforeClose({
     isInFlight: () => inFlight,
     timeoutMs: 10_000,
+    secondStageTimeoutMs: 5_000,
     pollIntervalMs: 100,
     onTimeout: () => {
       process.exitCode = 1;
@@ -101,11 +102,21 @@ async function shutdown(signal: string) {
         resourceCloseDeferred: true,
       });
     },
+    onForcedTermination: () => {
+      emit("shutdown_forced_termination", {
+        signal,
+        resourceCloseSkipped: true,
+        retryMayReprocessWork: true,
+        idempotencyRequired: true,
+      });
+    },
+    terminate: exitCode => process.exit(exitCode),
     close: () => pool.end(),
   });
   emit("shutdown_completed", {
     signal,
     timedOut: result.timedOut,
+    forcedTermination: result.forcedTermination,
     inFlightAtShutdown: inFlight,
   });
   if (!result.timedOut) process.exitCode = 0;
