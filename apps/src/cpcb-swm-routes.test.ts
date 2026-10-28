@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { initialSwmChecklist } from "@rupaykg/domain";
+import { resolveStakeholderTaxonomy } from "./cpcb-swm-routes.js";
 import { safeChecklist, safeObservations, isCpcbReportedStatus, isSwmLocalStage } from "./cpcb-swm-routes.js";
 
 const baseChecklist = initialSwmChecklist("BWG").map(item => ({
@@ -59,4 +60,14 @@ test("local workflow stages are separate from reported CPCB statuses", () => {
   assert.equal(isSwmLocalStage("CORRECTION_PREPARATION"), true);
   assert.equal(isSwmLocalStage("APPROVED"), false);
   assert.equal(isSwmLocalStage("INTEGRATED_API_SYNCED"), false);
+});
+
+test("stakeholder taxonomy resolver accepts registered classes and rejects unknown codes", async () => {
+  const fakePool = { query: async (_sql: string, values: unknown[]) => ({
+    rows: values[0] === "COMMUNITY_COMPOSTER" ? [{ code: "COMMUNITY_COMPOSTER", checklist_profile: "PROCESSOR" }] : [],
+  }) };
+  assert.deepEqual(await resolveStakeholderTaxonomy(fakePool as never, "COMMUNITY_COMPOSTER"), { code: "COMMUNITY_COMPOSTER", checklistProfile: "PROCESSOR" });
+  assert.equal(await resolveStakeholderTaxonomy(fakePool as never, "UNKNOWN_CLASS"), null);
+  assert.equal(await resolveStakeholderTaxonomy(fakePool as never, "bad class"), null);
+  assert.equal(await resolveStakeholderTaxonomy(fakePool as never, null), null);
 });

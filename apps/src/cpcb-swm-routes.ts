@@ -1,15 +1,14 @@
-import { createHash } from "node:crypto";
+import { hashPlatformAuditEventV2 } from "./platform-audit-hash.js";
 import type { FastifyInstance } from "fastify";
 import type { Pool, PoolClient } from "pg";
 import { authenticate, bearerChallenge, canActForOrganization, hasOrganizationPermission, type AuthContext } from "./auth.js";
-import { initialSwmChecklist } from "@rupaykg/domain";
+import { initialSwmChecklist, type SwmStakeholderType } from "@rupaykg/domain";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const STAKEHOLDERS = ["BWG", "WASTE_FACILITY", "ULB", "DISTRICT_PANCHAYAT", "GRAM_PANCHAYAT", "COLLECTOR_TRANSPORTER", "PROCESSOR"] as const;
 const EVIDENCE_STATUSES = ["MISSING", "PROVIDED_UNVERIFIED", "REJECTED", "EXPIRED", "NOT_APPLICABLE", "UNRESOLVED"] as const;
 const REPORTED_STATUSES = ["NOT_REPORTED", "DRAFT", "UNDER_REVIEW", "CORRECTION_REQUESTED", "APPROVED", "REJECTED"] as const;
 const LOCAL_STAGES = ["LOCAL_PREPARATION", "ELIGIBILITY_REVIEW", "DOCUMENTS_PENDING", "READY_FOR_USER_SUBMISSION", "SUBMISSION_REPORTED", "UNDER_REVIEW_FOLLOW_UP", "CORRECTION_PREPARATION", "AMENDMENT_PREPARATION", "LEVEL_1_APPEAL_PREPARATION", "GRIEVANCE_PREPARATION", "EVENT_INTIMATION_PREPARATION", "CLOSED_LOCAL", "UNRESOLVED"] as const;
-type Stakeholder = typeof STAKEHOLDERS[number];
+type Stakeholder = SwmStakeholderType;
 type ChecklistStatus = typeof EVIDENCE_STATUSES[number];
 type ChecklistItem = { key: string; label: string; status: ChecklistStatus; officialRequirement: "GUIDE_LISTED" | "RULE_DERIVED" | "NEEDS_OFFICIAL_CONFIRMATION" };
 type Reply = { code: (status: number) => { send: (body: unknown) => unknown } };
@@ -20,7 +19,6 @@ const text = (body: Record<string, unknown>, key: string, max = 2000): string | 
   return typeof value === "string" && value.trim() && value.trim().length <= max ? value.trim() : null;
 };
 const bodyOf = (request: Request): Record<string, unknown> => request.body && typeof request.body === "object" ? request.body as Record<string, unknown> : {};
-const validStakeholder = (value: unknown): value is Stakeholder => typeof value === "string" && (STAKEHOLDERS as readonly string[]).includes(value);
 const validDate = (value: unknown): value is string => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
 
 async function authFor(request: Request, reply: Reply, pool: Pool | null): Promise<AuthContext | null> {
@@ -28,6 +26,16 @@ async function authFor(request: Request, reply: Reply, pool: Pool | null): Promi
   try { const auth = await authenticate(request as never, pool); if (!auth) { reply.code(401).send(bearerChallenge()); return null; } return auth; }
   catch (error) { request.log.error(error); reply.code(503).send({ error: "Authentication service unavailable", code: "AUTH_UNAVAILABLE", syntheticData: false }); return null; }
 }
+export async function resolveStakeholderTaxonomy(pool: Pool, value: unknown): Promise<{ code: string; checklistProfile: Stakeholder } | null> {
+  if (typeof value !== "string" || !/^[A-Z][A-Z0-9_]{1,79}$/.test(value)) return null;
+  const result = await pool.query<{ code: string; checklist_profile: Stakeholder }>(
+    "select code,checklist_profile from swm_stakeholder_taxonomy where code=$1 and governance_status in ('BASELINE_SUPPORTED','APPROVED') and effective_from <= current_date and (effective_to is null or effective_to >= current_date)",
+    [value],
+  );
+  const row = result.rows[0];
+  return row ? { code: row.code, checklistProfile: row.checklist_profile } : null;
+}
+
 export function safeChecklist(value: unknown, stakeholder: Stakeholder): ChecklistItem[] | null {
   if (!Array.isArray(value) || value.length > 100) return null;
   const result: ChecklistItem[] = [];
@@ -80,14 +88,47 @@ export function safeObservations(value: unknown): boolean {
   }
   return true;
 }
-function hashEvent(value: unknown): string { return createHash("sha256").update(JSON.stringify(value)).digest("hex"); }
 async function writeAudit(client: PoolClient, identityId: string, organizationId: string, action: string, targetId: string, payload: unknown, requestId: string) {
-  const prior = await client.query<{ event_hash: string }>("select event_hash from audit_events where organization_id=$1 order by created_at desc, id desc limit 1 for update", [organizationId]);
-  const previousHash = prior.rows[0]?.event_hash ?? null;
-  const event = { identityId, organizationId, action, targetId, payload, requestId, previousHash, at: new Date().toISOString() };
-  await client.query("insert into audit_events(actor_identity_id,organization_id,action,target_type,target_id,request_id,previous_hash,event_hash,payload) values($1,$2,$3,'cpcb_swm_stakeholder_workspace',$4,$5,$6,$7,$8::jsonb)", [identityId, organizationId, action, targetId, requestId, previousHash, hashEvent(event), JSON.stringify(payload)]);
+  // Use the same locked global chain head as platform-admin audit writes. Locking only
+  // the newest organization event can fork the chain under concurrent requests and
+  // bypass the authoritative chain head.
+  const prior = await client.query<{ last_event_hash: string | null }>(
+    "select last_event_hash from platform_audit_chain_head where singleton=true for update",
+  );
+  if (prior.rowCount !== 1) throw new Error("PLATFORM_AUDIT_CHAIN_HEAD_MISSING");
+  const previousHash = prior.rows[0]?.last_event_hash ?? null;
+  const event = {
+    actorIdentityId: identityId,
+    action,
+    targetType: "cpcb_swm_stakeholder_workspace",
+    targetId,
+    organizationId,
+    requestId,
+    payload,
+    previousHash,
+  };
+  const eventHash = hashPlatformAuditEventV2(event);
+  const inserted = await client.query<{ id: string }>(
+    `insert into audit_events(actor_identity_id,organization_id,action,target_type,target_id,request_id,previous_hash,event_hash,payload,hash_version,created_at)
+     values($1,$2,$3,'cpcb_swm_stakeholder_workspace',$4,$5,$6,$7,$8::jsonb,2,clock_timestamp())
+     returning id`,
+    [identityId, organizationId, action, targetId, requestId, previousHash, eventHash, JSON.stringify(payload)],
+  );
+  const eventId = inserted.rows[0]?.id;
+  if (!eventId) throw new Error("PLATFORM_AUDIT_EVENT_INSERT_FAILED");
+  await client.query(
+    "update platform_audit_chain_head set last_event_id=$1,last_event_hash=$2,updated_at=clock_timestamp() where singleton=true",
+    [eventId, eventHash],
+  );
 }
 
+async function hasVerifiedStakeholderAuthorization(pool: Pool, organizationId: string, stakeholderType: string): Promise<boolean> {
+  const result = await pool.query<{ ok: boolean }>(
+    "select exists (select 1 from organizations o join organization_stakeholder_authorizations a on a.organization_id=o.id where o.id=$1 and o.verification_status='VERIFIED' and a.stakeholder_type=$2 and a.status='VERIFIED' and a.verified_by_identity_id is not null and a.verified_at is not null and (a.expires_at is null or a.expires_at > now())) as ok",
+    [organizationId, stakeholderType],
+  );
+  return result.rows[0]?.ok === true;
+}
 export async function registerCpcbSwmRoutes(app: FastifyInstance, pool: Pool | null): Promise<void> {
   app.get("/api/v1/cpcb-swm/workspaces", async (request, reply) => {
     const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
@@ -95,7 +136,7 @@ export async function registerCpcbSwmRoutes(app: FastifyInstance, pool: Pool | n
     if (!organizationId || !canActForOrganization(auth, organizationId)) return reply.code(403).send({ error: "Select a verified organization", code: "ORG_FORBIDDEN" });
     if (!await hasOrganizationPermission(pool, auth, organizationId, ["swm:read", "waste:read", "reports:read", "epr:read", "audit:read"])) return reply.code(403).send({ error: "CPCB SWM workspace read permission required", code: "SWM_READ_FORBIDDEN" });
     try {
-      const rows = await pool.query("select w.id,w.organization_id,w.geography_id,w.stakeholder_type,w.title,w.eligibility_observations,w.checklist,w.cpcb_application_reference,w.cpcb_status_claim,w.cpcb_reported_status,w.local_workflow_stage,w.cpcb_status_source_reference,w.cpcb_status_reference_recorded_at,w.cpcb_status_note,w.due_date,w.notes,w.created_by_identity_id,w.updated_by_identity_id,w.created_at,w.updated_at,coalesce((select json_agg(json_build_object('id',h.id,'previousReportedStatus',h.previous_reported_status,'reportedStatus',h.reported_status,'sourceReference',h.source_reference,'statusNote',h.status_note,'actorIdentityId',h.actor_identity_id,'recordedAt',h.recorded_at) order by h.recorded_at desc) from cpcb_swm_status_history h where h.workspace_id=w.id),'[]'::json) as status_history from cpcb_swm_stakeholder_workspaces w where w.organization_id=$1 order by w.updated_at desc limit 100", [organizationId]);
+      const rows = await pool.query("select w.id,w.organization_id,w.geography_id,w.stakeholder_type,w.title,w.eligibility_observations,w.checklist,w.cpcb_application_reference,w.cpcb_status_claim,w.cpcb_reported_status,w.local_workflow_stage,w.cpcb_status_source_reference,w.cpcb_status_reference_recorded_at,w.cpcb_status_note,w.due_date,w.notes,w.created_by_identity_id,w.updated_by_identity_id,w.created_at,w.updated_at,coalesce((select json_agg(json_build_object('id',h.id,'previousReportedStatus',h.previous_reported_status,'reportedStatus',h.reported_status,'sourceReference',h.source_reference,'statusNote',h.status_note,'actorIdentityId',h.actor_identity_id,'recordedAt',h.recorded_at) order by h.recorded_at desc) from cpcb_swm_status_history h where h.workspace_id=w.id),'[]'::json) as status_history from cpcb_swm_stakeholder_workspaces w where w.organization_id=$1 and w.geography_id is not null and organization_has_explicit_geography_scope(w.organization_id,w.geography_id) order by w.updated_at desc limit 100", [organizationId]);
       return { source: "postgresql", syntheticData: false, workspaces: rows.rows };
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "CPCB SWM workspace unavailable", code: "SWM_WORKSPACE_UNAVAILABLE", syntheticData: false }); }
   });
@@ -106,28 +147,33 @@ export async function registerCpcbSwmRoutes(app: FastifyInstance, pool: Pool | n
     if (!organizationId || !canActForOrganization(auth, organizationId)) return reply.code(403).send({ error: "Select a verified organization", code: "ORG_FORBIDDEN" });
     if (!await hasOrganizationPermission(pool, auth, organizationId, ["waste:record"])) return reply.code(403).send({ error: "Waste-recording permission required to save stakeholder preparation", code: "SWM_WRITE_FORBIDDEN" });
     const stakeholderType = body.stakeholderType;
+    let taxonomy: { code: string; checklistProfile: Stakeholder } | null = null;
+    try { taxonomy = await resolveStakeholderTaxonomy(pool, stakeholderType); }
+    catch (error) { request.log.error(error); return reply.code(503).send({ error: "Stakeholder taxonomy unavailable", code: "SWM_TAXONOMY_UNAVAILABLE", syntheticData: false }); }
     const title = text(body, "title", 240);
     const reportedStatus = body.cpcbReportedStatus === undefined ? "NOT_REPORTED" : body.cpcbReportedStatus;
     const localStage = body.localWorkflowStage === undefined ? "LOCAL_PREPARATION" : body.localWorkflowStage;
     const statusNote = text(body, "statusNote", 1000);
     const geographyId = text(body, "geographyId", 64);
-    const checklist = validStakeholder(stakeholderType) ? safeChecklist(body.checklist, stakeholderType) : null;
+    const checklist = taxonomy ? safeChecklist(body.checklist, taxonomy.checklistProfile) : null;
     const observations = body.eligibilityObservations;
     const applicationReference = text(body, "cpcbApplicationReference", 240);
     const sourceReference = text(body, "cpcbStatusSourceReference", 500);
     const dueDate = body.dueDate === null || body.dueDate === "" || body.dueDate === undefined ? null : validDate(body.dueDate) ? body.dueDate : "INVALID";
     const notes = body.notes === undefined || body.notes === null ? null : text(body, "notes", 4000);
-    if (!validStakeholder(stakeholderType) || !title || !checklist || !safeObservations(observations) || !isCpcbReportedStatus(reportedStatus) || !isSwmLocalStage(localStage) || (reportedStatus !== "NOT_REPORTED" && !sourceReference) || (geographyId && !UUID.test(geographyId)) || dueDate === "INVALID" || (body.notes !== undefined && body.notes !== null && body.notes !== "" && notes === null) || (body.statusNote !== undefined && body.statusNote !== null && body.statusNote !== "" && statusNote === null)) return reply.code(400).send({ error: "Invalid stakeholder type, title, geography, canonical checklist, observations, workflow stage, reported status, status source, due date or notes", code: "SWM_WORKSPACE_INVALID" });
+    if (!taxonomy || !title || !checklist || !safeObservations(observations) || !isCpcbReportedStatus(reportedStatus) || !isSwmLocalStage(localStage) || (reportedStatus !== "NOT_REPORTED" && !sourceReference) || (!geographyId || !UUID.test(geographyId)) || dueDate === "INVALID" || (body.notes !== undefined && body.notes !== null && body.notes !== "" && notes === null) || (body.statusNote !== undefined && body.statusNote !== null && body.statusNote !== "" && statusNote === null)) return reply.code(400).send({ error: "Invalid stakeholder type, title, required geography, canonical checklist, observations, workflow stage, reported status, status source, due date or notes", code: "SWM_WORKSPACE_INVALID" });
+    if (!taxonomy || !await hasVerifiedStakeholderAuthorization(pool, organizationId, taxonomy.code)) { return reply.code(403).send({ error: "Verified organization-to-stakeholder authorization required", code: "SWM_STAKEHOLDER_AUTHORIZATION_REQUIRED", syntheticData: false }); }
     try {
-      if (geographyId) {
-        const allowed = await pool.query<{ ok: boolean }>("select exists(select 1 from organization_memberships om where om.identity_id=$1 and om.organization_id=$2 and om.status='VERIFIED' and organization_has_geography_scope(om.organization_id,$3::uuid)) ok", [auth.identityId, organizationId, geographyId]);
-        if (!allowed.rows[0]?.ok) return reply.code(403).send({ error: "Geography outside verified organization scope", code: "GEOGRAPHY_FORBIDDEN" });
-      }
+      const allowed = await pool.query<{ ok: boolean }>(
+        "select exists(select 1 from organization_memberships om where om.identity_id=$1 and om.organization_id=$2 and om.status='VERIFIED' and exists(select 1 from organization_geography_scopes s where s.organization_id=om.organization_id and s.status='VERIFIED') and organization_has_explicit_geography_scope(om.organization_id,$3::uuid)) ok",
+        [auth.identityId, organizationId, geographyId],
+      );
+      if (!allowed.rows[0]?.ok) return reply.code(403).send({ error: "An explicit verified organization geography scope is required and must include the requested geography", code: "GEOGRAPHY_FORBIDDEN" });
       const client = await pool.connect();
       try {
         await client.query("begin");
         const effectiveSourceReference = reportedStatus === "NOT_REPORTED" ? null : sourceReference;
-        const rows = await client.query("insert into cpcb_swm_stakeholder_workspaces(organization_id,geography_id,stakeholder_type,title,eligibility_observations,checklist,cpcb_application_reference,cpcb_status_claim,cpcb_reported_status,local_workflow_stage,cpcb_status_source_reference,cpcb_status_reference_recorded_at,cpcb_status_note,due_date,notes,created_by_identity_id,updated_by_identity_id) values($1,$2,$3,$4,$5::jsonb,$6::jsonb,$7,'USER_REPORTED_UNVERIFIED',$8,$9,$10,case when $10 is not null then now() else null end,$11,$12,$13,$14,$14) returning *", [organizationId, geographyId || null, stakeholderType, title, JSON.stringify(observations), JSON.stringify(checklist), applicationReference, reportedStatus, localStage, effectiveSourceReference, statusNote, dueDate, notes, auth.identityId]);
+        const rows = await client.query("insert into cpcb_swm_stakeholder_workspaces(organization_id,geography_id,stakeholder_type,title,eligibility_observations,checklist,cpcb_application_reference,cpcb_status_claim,cpcb_reported_status,local_workflow_stage,cpcb_status_source_reference,cpcb_status_reference_recorded_at,cpcb_status_note,due_date,notes,created_by_identity_id,updated_by_identity_id) values($1,$2,$3,$4,$5::jsonb,$6::jsonb,$7,'USER_REPORTED_UNVERIFIED',$8,$9,$10,case when $10::text is not null then now() else null end,$11,$12,$13,$14,$14) returning *", [organizationId, geographyId || null, stakeholderType, title, JSON.stringify(observations), JSON.stringify(checklist), applicationReference, reportedStatus, localStage, effectiveSourceReference, statusNote, dueDate, notes, auth.identityId]);
         const workspace = rows.rows[0] as { id: string };
         if (reportedStatus !== "NOT_REPORTED") {
           await client.query("insert into cpcb_swm_status_history(workspace_id,organization_id,previous_reported_status,reported_status,source_reference,status_note,actor_identity_id) values($1,$2,'NOT_REPORTED',$3,$4,$5,$6)", [workspace.id, organizationId, reportedStatus, effectiveSourceReference, statusNote, auth.identityId]);
@@ -146,26 +192,31 @@ export async function registerCpcbSwmRoutes(app: FastifyInstance, pool: Pool | n
     if (!UUID.test(id)) return reply.code(400).send({ error: "Invalid workspace ID", code: "SWM_WORKSPACE_ID_INVALID" });
     if (!await hasOrganizationPermission(pool, auth, organizationId, ["waste:record"])) return reply.code(403).send({ error: "Waste-recording permission required to update stakeholder preparation", code: "SWM_WRITE_FORBIDDEN" });
     const stakeholderType = body.stakeholderType, title = text(body, "title", 240), geographyId = text(body, "geographyId", 64);
+    let taxonomy: { code: string; checklistProfile: Stakeholder } | null = null;
+    try { taxonomy = await resolveStakeholderTaxonomy(pool, stakeholderType); }
+    catch (error) { request.log.error(error); return reply.code(503).send({ error: "Stakeholder taxonomy unavailable", code: "SWM_TAXONOMY_UNAVAILABLE", syntheticData: false }); }
     const reportedStatus = body.cpcbReportedStatus === undefined ? "NOT_REPORTED" : body.cpcbReportedStatus;
     const localStage = body.localWorkflowStage === undefined ? "LOCAL_PREPARATION" : body.localWorkflowStage;
     const statusNote = text(body, "statusNote", 1000);
-    const checklist = validStakeholder(stakeholderType) ? safeChecklist(body.checklist, stakeholderType) : null, observations = body.eligibilityObservations;
+    const checklist = taxonomy ? safeChecklist(body.checklist, taxonomy.checklistProfile) : null, observations = body.eligibilityObservations;
     const applicationReference = text(body, "cpcbApplicationReference", 240), sourceReference = text(body, "cpcbStatusSourceReference", 500);
     const dueDate = body.dueDate === null || body.dueDate === "" || body.dueDate === undefined ? null : validDate(body.dueDate) ? body.dueDate : "INVALID";
     const notes = body.notes === undefined || body.notes === null ? null : text(body, "notes", 4000);
-    if (!validStakeholder(stakeholderType) || !title || !checklist || !safeObservations(observations) || !isCpcbReportedStatus(reportedStatus) || !isSwmLocalStage(localStage) || (reportedStatus !== "NOT_REPORTED" && !sourceReference) || (geographyId && !UUID.test(geographyId)) || dueDate === "INVALID" || (body.notes !== undefined && body.notes !== null && body.notes !== "" && notes === null) || (body.statusNote !== undefined && body.statusNote !== null && body.statusNote !== "" && statusNote === null)) return reply.code(400).send({ error: "Invalid stakeholder type, title, geography, canonical checklist, observations, workflow stage, reported status, status source, due date or notes", code: "SWM_WORKSPACE_INVALID" });
+    if (!taxonomy || !title || !checklist || !safeObservations(observations) || !isCpcbReportedStatus(reportedStatus) || !isSwmLocalStage(localStage) || (reportedStatus !== "NOT_REPORTED" && !sourceReference) || (!geographyId || !UUID.test(geographyId)) || dueDate === "INVALID" || (body.notes !== undefined && body.notes !== null && body.notes !== "" && notes === null) || (body.statusNote !== undefined && body.statusNote !== null && body.statusNote !== "" && statusNote === null)) return reply.code(400).send({ error: "Invalid stakeholder type, title, required geography, canonical checklist, observations, workflow stage, reported status, status source, due date or notes", code: "SWM_WORKSPACE_INVALID" });
+    if (!taxonomy || !await hasVerifiedStakeholderAuthorization(pool, organizationId, taxonomy.code)) { return reply.code(403).send({ error: "Verified organization-to-stakeholder authorization required", code: "SWM_STAKEHOLDER_AUTHORIZATION_REQUIRED", syntheticData: false }); }
     try {
-      if (geographyId) {
-        const allowed = await pool.query<{ ok: boolean }>("select exists(select 1 from organization_memberships om where om.identity_id=$1 and om.organization_id=$2 and om.status='VERIFIED' and organization_has_geography_scope(om.organization_id,$3::uuid)) ok", [auth.identityId, organizationId, geographyId]);
-        if (!allowed.rows[0]?.ok) return reply.code(403).send({ error: "Geography outside verified organization scope", code: "GEOGRAPHY_FORBIDDEN" });
-      }
+      const allowed = await pool.query<{ ok: boolean }>(
+        "select exists(select 1 from organization_memberships om where om.identity_id=$1 and om.organization_id=$2 and om.status='VERIFIED' and exists(select 1 from organization_geography_scopes s where s.organization_id=om.organization_id and s.status='VERIFIED') and organization_has_explicit_geography_scope(om.organization_id,$3::uuid)) ok",
+        [auth.identityId, organizationId, geographyId],
+      );
+      if (!allowed.rows[0]?.ok) return reply.code(403).send({ error: "An explicit verified organization geography scope is required and must include the requested geography", code: "GEOGRAPHY_FORBIDDEN" });
       const client = await pool.connect();
       try {
         await client.query("begin");
-        const prior = await client.query<{ id: string; cpcb_reported_status: string; cpcb_status_source_reference: string | null; cpcb_status_note: string | null }>("select id,cpcb_reported_status,cpcb_status_source_reference,cpcb_status_note from cpcb_swm_stakeholder_workspaces where id=$1 and organization_id=$2 for update", [id, organizationId]);
+        const prior = await client.query<{ id: string; cpcb_reported_status: string; cpcb_status_source_reference: string | null; cpcb_status_note: string | null }>("select id,cpcb_reported_status,cpcb_status_source_reference,cpcb_status_note from cpcb_swm_stakeholder_workspaces where id=$1 and organization_id=$2 and geography_id is not null and organization_has_explicit_geography_scope(organization_id,geography_id) for update", [id, organizationId]);
         if (!prior.rows[0]) { await client.query("rollback"); return reply.code(404).send({ error: "Stakeholder workspace not found", code: "SWM_WORKSPACE_NOT_FOUND" }); }
         const effectiveSourceReference = reportedStatus === "NOT_REPORTED" ? null : sourceReference;
-        const rows = await client.query("update cpcb_swm_stakeholder_workspaces set geography_id=$1,stakeholder_type=$2,title=$3,eligibility_observations=$4::jsonb,checklist=$5::jsonb,cpcb_application_reference=$6,cpcb_reported_status=$7,local_workflow_stage=$8,cpcb_status_source_reference=$9,cpcb_status_reference_recorded_at=case when $9 is not null then now() else null end,cpcb_status_note=$10,due_date=$11,notes=$12,updated_by_identity_id=$13,updated_at=now() where id=$14 and organization_id=$15 returning *", [geographyId || null, stakeholderType, title, JSON.stringify(observations), JSON.stringify(checklist), applicationReference, reportedStatus, localStage, effectiveSourceReference, statusNote, dueDate, notes, auth.identityId, id, organizationId]);
+        const rows = await client.query("update cpcb_swm_stakeholder_workspaces set geography_id=$1,stakeholder_type=$2,title=$3,eligibility_observations=$4::jsonb,checklist=$5::jsonb,cpcb_application_reference=$6,cpcb_reported_status=$7,local_workflow_stage=$8,cpcb_status_source_reference=$9,cpcb_status_reference_recorded_at=case when $9::text is not null then now() else null end,cpcb_status_note=$10,due_date=$11,notes=$12,updated_by_identity_id=$13,updated_at=now() where id=$14 and organization_id=$15 returning *", [geographyId || null, stakeholderType, title, JSON.stringify(observations), JSON.stringify(checklist), applicationReference, reportedStatus, localStage, effectiveSourceReference, statusNote, dueDate, notes, auth.identityId, id, organizationId]);
         if (prior.rows[0].cpcb_reported_status !== reportedStatus || prior.rows[0].cpcb_status_source_reference !== effectiveSourceReference || prior.rows[0].cpcb_status_note !== statusNote) {
           await client.query("insert into cpcb_swm_status_history(workspace_id,organization_id,previous_reported_status,reported_status,source_reference,status_note,actor_identity_id) values($1,$2,$3,$4,$5,$6,$7)", [id, organizationId, prior.rows[0].cpcb_reported_status, reportedStatus, effectiveSourceReference, statusNote, auth.identityId]);
         }

@@ -10,16 +10,14 @@ This document is the production-control record for RupayKg under SHAKTI — Stan
 
 - Repository: `vishaltradewinds/rupaykg`
 - Default branch: `main`
-- Current deployed commit: `5c1c215c777b0e7f15a4b74168db5c0f9307fbd5`
-- Current commit: `docs: add production backup and rollback runbook`
-- Render service: `rupaykg`
-- Render URL: `https://rupaykg.onrender.com`
-- Render branch: `main`
-- Auto-deploy: enabled
-- Current Render deployment state: live
-- Latest observed production deployment: `dep-dans9ibm8hqs73cck110`
-- Latest observed startup state: PostgreSQL-backed health/readiness verified on the current live deployment; service listening; root request returned HTTP 200.
-- Acceptance fixture is being created at startup and is explicitly marked as a fixture.
+- Live Render service: `rupaykg` (`srv-daki4d7qj5pc73b8qksg`)
+- URL: `https://rupaykg.onrender.com`
+- Configured branch: `main`; auto-deploy is enabled.
+- Latest live deployment observed during the 2026-10-23 repository audit: `dep-dbbjqic9v7es73ffofmg`, status `live`, commit `0ddcf6087620880e21ea60f954c9f05d6b759469` (`revert: keep AI intake test on feature branch`).
+- Feature branch under audit: `intelligence/ai-evidence-intake-middleware`, PR #41; it is not the configured Render branch and is not deployed by this PR.
+- Runtime caveat: this audit verified Render service metadata and deployment history, not effective secret/environment-variable values, application readiness, or current public HTTP behavior. Re-run those acceptance checks before relying on them.
+- Manifest caveat: checked-in `render.yaml` declares `HEDERA_NETWORK=testnet` for a service named `rupaykg-production`. This is not proof of the live service's effective value; verify the actual environment and approved account/topic before any production trust-rail claim.
+- Acceptance fixture: repository documentation says a synthetic fixture is created at startup; this must remain visibly synthetic and excluded from real production metrics.
 
 ## SHAKTI gate status
 

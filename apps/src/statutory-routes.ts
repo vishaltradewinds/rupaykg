@@ -6,10 +6,10 @@ type Reply = { code: (status: number) => { send: (body: unknown) => unknown } };
 type Request = { body: unknown; params: Record<string, string>; log: { error: (error: unknown) => void } };
 const bodyOf = (request: Request): Record<string, unknown> => request.body && typeof request.body === "object" ? request.body as Record<string, unknown> : {};
 const text = (body: Record<string, unknown>, key: string): string | null => typeof body[key] === "string" && body[key].trim() ? body[key].trim() : null;
-const nonNegative = (body: Record<string, unknown>, key: string): number | null | undefined => {
+export const nonNegativeEprInput = (body: Record<string, unknown>, key: string): number | null | undefined => {
   if (body[key] === undefined || body[key] === null || body[key] === "") return undefined;
-  const value = Number(body[key]);
-  return Number.isFinite(value) && value >= 0 ? value : null;
+  const value = body[key];
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
 };
 
 export type ExternalRegistrationReport = {
@@ -78,17 +78,30 @@ async function evidenceBindingValid(pool: Pool, organizationId: string, evidence
          and v.decision='APPROVED'
          and (e.content_hash is not null or e.content_uri is not null)
          and a.geography_id is not null
-         and organization_has_geography_scope(a.organization_id,a.geography_id)
+         and organization_has_explicit_geography_scope(a.organization_id,a.geography_id)
      ) ok`,
     [organizationId, evidenceId, verificationId],
   );
   return result.rows[0]?.ok === true;
 }
 
-function bwgStatus(floorArea: number | null | undefined, water: number | null | undefined, waste: number | null | undefined): "UNKNOWN" | "UNDER_REVIEW" | "APPLICABLE" | "NOT_APPLICABLE" {
-  if (floorArea === null || water === null || waste === null) return "UNDER_REVIEW";
+export type BwgRuleThresholds = { floorAreaSqM: number; waterConsumptionLpd: number; solidWasteKgpd: number };
+export function parseBwgRuleThresholds(value: unknown): BwgRuleThresholds | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const thresholds = (value as Record<string, unknown>).thresholds;
+  if (!thresholds || typeof thresholds !== "object" || Array.isArray(thresholds)) return null;
+  const record = thresholds as Record<string, unknown>;
+  const values = [record.floorAreaSqM, record.waterConsumptionLpd, record.solidWasteKgpd];
+  if (!values.every(item => typeof item === "number" && Number.isFinite(item) && item > 0)) return null;
+  return { floorAreaSqM: values[0] as number, waterConsumptionLpd: values[1] as number, solidWasteKgpd: values[2] as number };
+}
+export function bwgStatus(floorArea: number | null | undefined, water: number | null | undefined, waste: number | null | undefined, thresholds: BwgRuleThresholds | null): "UNKNOWN" | "UNDER_REVIEW" | "APPLICABLE" | "NOT_APPLICABLE" {
+  if (!thresholds || floorArea === null || water === null || waste === null) return "UNDER_REVIEW";
+  if ((floorArea !== undefined && floorArea >= thresholds.floorAreaSqM)
+    || (water !== undefined && water >= thresholds.waterConsumptionLpd)
+    || (waste !== undefined && waste >= thresholds.solidWasteKgpd)) return "APPLICABLE";
   if (floorArea === undefined || water === undefined || waste === undefined) return "UNKNOWN";
-  return floorArea >= 20000 || water >= 40000 || waste >= 100 ? "APPLICABLE" : "NOT_APPLICABLE";
+  return "NOT_APPLICABLE";
 }
 
 export async function registerStatutoryRoutes(app: FastifyInstance, pool: Pool | null): Promise<void> {
@@ -107,12 +120,13 @@ export async function registerStatutoryRoutes(app: FastifyInstance, pool: Pool |
     const organizationId = await organizationFor(auth, pool, request as never, reply); if (!organizationId) return;
     try {
       if (!await hasOrganizationPermission(pool, auth, organizationId, ["swm:read", "epr:read", "reports:read"])) return reply.code(403).send({ error: "Statutory applicability read permission required", code: "STATUTORY_PERMISSION_REQUIRED" });
-      const [profiles, bwg, epr] = await Promise.all([
-        pool.query("select id,framework,rule_reference,effective_from,effective_to,applicability_status,basis,determination_note,externally_confirmed,external_authority,external_reference,determined_by_identity_id,determined_at,created_at from organization_statutory_profiles where organization_id=$1 order by effective_from desc nulls last,created_at desc", [organizationId]),
+      const [profiles, bwg, epr, ruleVersions] = await Promise.all([
+        pool.query("select id,framework,rule_reference,effective_from,effective_to,applicability_status,basis,determination_note,externally_confirmed,external_authority,external_reference,determined_by_identity_id,determined_at,rule_version_id,created_at from organization_statutory_profiles where organization_id=$1 order by effective_from desc nulls last,created_at desc", [organizationId]),
         pool.query("select * from organization_bwg_assessments where organization_id=$1 order by assessment_date desc,created_at desc", [organizationId]),
         pool.query("select a.*,s.name scheme_name,s.authority scheme_authority,s.metadata scheme_metadata from organization_epr_applicability a left join epr_schemes s on s.code=a.scheme where a.organization_id=$1 order by a.scheme", [organizationId]),
+        pool.query("select id,framework,rule_reference,stakeholder_class,scheme_code,jurisdiction_scope_kind,jurisdiction_scope_code,source_snapshot_id,version_label,effective_from,effective_to,status,notes from regulatory_rule_versions order by framework,rule_reference,effective_from desc", []),
       ]);
-      return { source: "postgresql", syntheticData: false, statutoryBoundary: "INTERNAL_APPLICABILITY_PREPARATION_ONLY", profiles: profiles.rows, bwgAssessments: bwg.rows, eprApplicability: epr.rows };
+      return { source: "postgresql", syntheticData: false, statutoryBoundary: "INTERNAL_APPLICABILITY_PREPARATION_ONLY", profiles: profiles.rows, bwgAssessments: bwg.rows, eprApplicability: epr.rows, ruleVersions: ruleVersions.rows };
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Statutory applicability unavailable", code: "STATUTORY_UNAVAILABLE", syntheticData: false }); }
   });
 
@@ -122,26 +136,35 @@ export async function registerStatutoryRoutes(app: FastifyInstance, pool: Pool |
     const organizationId = text(body, "organizationId") || auth.activeOrganizationId || auth.memberships[0]?.organization_id || null;
     if (!organizationId || !canActForOrganization(auth, organizationId)) return reply.code(403).send({ error: "No verified membership for organization", code: "ORG_FORBIDDEN" });
     if (!await hasOrganizationPermission(pool, auth, organizationId, ["swm:manage", "audit:execute", "reports:export"])) return reply.code(403).send({ error: "BWG applicability assessment permission required", code: "STATUTORY_WRITE_REQUIRED" });
-    const floorArea = nonNegative(body, "floorAreaSqM");
-    const water = nonNegative(body, "waterConsumptionLpd");
-    const waste = nonNegative(body, "solidWasteKgpd");
+    const floorArea = nonNegativeEprInput(body, "floorAreaSqM");
+    const water = nonNegativeEprInput(body, "waterConsumptionLpd");
+    const waste = nonNegativeEprInput(body, "solidWasteKgpd");
     if (floorArea === null || water === null || waste === null) return reply.code(400).send({ error: "BWG measurements must be non-negative numbers", code: "INVALID_BWG_MEASUREMENTS" });
     const evidenceId = text(body, "evidenceId");
     const verificationId = text(body, "verificationId");
     if (!await evidenceBindingValid(pool, organizationId, evidenceId, verificationId)) return reply.code(400).send({ error: "Evidence and verification must be supplied together and be verified, approved, and organization/geography scoped", code: "STATUTORY_EVIDENCE_BINDING_INVALID" });
-    const status = bwgStatus(floorArea, water, waste);
+    let status = bwgStatus(floorArea, water, waste, null);
     const note = text(body, "determinationNote");
     try {
+      const versionResult = await pool.query<{ id: string; rule_reference: string; version_label: string; rule_payload: unknown }>(
+        "select r.id,r.rule_reference,r.version_label,r.rule_payload from regulatory_rule_versions r join authoritative_source_snapshots s on s.id=r.source_snapshot_id where r.framework='SWM_BWG' and r.stakeholder_class='BWG' and r.jurisdiction_scope_kind='INDIA' and r.jurisdiction_scope_code='IN' and r.status='APPROVED' and s.validation_status='APPROVED' and r.effective_from <= coalesce($1::date,current_date) and (r.effective_to is null or r.effective_to >= coalesce($1::date,current_date)) and (s.effective_from is null or s.effective_from <= coalesce($1::date,current_date)) and (s.effective_to is null or s.effective_to >= coalesce($1::date,current_date)) order by r.effective_from desc limit 1",
+        [text(body, "assessmentDate")],
+      );
+      const rule = versionResult.rows[0] ?? null;
+      const thresholds = rule ? parseBwgRuleThresholds(rule.rule_payload) : null;
+      status = bwgStatus(floorArea, water, waste, thresholds);
+      const effectiveThresholds = thresholds ?? { floorAreaSqM: 20000, waterConsumptionLpd: 40000, solidWasteKgpd: 100 };
+      const thresholdBasis = rule && thresholds ? rule.rule_reference + ":" + rule.version_label : "RULE_VERSION_UNAVAILABLE_REVIEW_REQUIRED";
       const result = await pool.query(
         `insert into organization_bwg_assessments
           (organization_id,assessment_date,floor_area_sq_m,water_consumption_lpd,solid_waste_kgpd,
-           floor_area_threshold_sq_m,water_threshold_lpd,waste_threshold_kgpd,threshold_basis,
+           floor_area_threshold_sq_m,water_threshold_lpd,waste_threshold_kgpd,threshold_basis,rule_version_id,
            applicability_status,evidence_id,verification_id,determination_note,determined_by_identity_id,determined_at)
-         values($1,coalesce($2::date,current_date),$3,$4,$5,20000,40000,100,'SWM_RULES_2026_S_O_388_E',$6,$7,$8,$9,$10,now())
+         values($1,coalesce($2::date,current_date),$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,now())
          returning *`,
-        [organizationId, text(body, "assessmentDate"), floorArea ?? null, water ?? null, waste ?? null, status, evidenceId, verificationId, note, auth.identityId],
+        [organizationId, text(body, "assessmentDate"), floorArea ?? null, water ?? null, waste ?? null, effectiveThresholds.floorAreaSqM, effectiveThresholds.waterConsumptionLpd, effectiveThresholds.solidWasteKgpd, thresholdBasis, rule?.id ?? null, status, evidenceId, verificationId, note, auth.identityId],
       );
-      return reply.code(201).send({ source: "postgresql", syntheticData: false, assessment: result.rows[0], statutoryBoundary: "INTERNAL_APPLICABILITY_PREPARATION_ONLY", externalRegistrationRequired: status === "APPLICABLE" });
+      return reply.code(201).send({ source: "postgresql", syntheticData: false, assessment: result.rows[0], statutoryBoundary: "INTERNAL_APPLICABILITY_PREPARATION_ONLY", applicabilityEvidence: rule && thresholds ? "APPROVED_VERSIONED_RULE" : "RULE_VERSION_REQUIRED", externalRegistrationRequired: status === "APPLICABLE" });
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "BWG assessment could not be persisted", code: "STATUTORY_WRITE_UNAVAILABLE", syntheticData: false }); }
   });
 
