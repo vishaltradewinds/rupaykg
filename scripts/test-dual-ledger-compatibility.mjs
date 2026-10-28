@@ -82,6 +82,26 @@ try {
   await client.query("update async_mirror_inbox set status='VALIDATED' where id=$1", [inserted.rows[0].id]);
   assert.equal((await client.query("select status from async_mirror_inbox where id=$1", [inserted.rows[0].id])).rows[0].status, "VALIDATED");
 
+  // Exercise the complete post-correction CHECK contract, not just UNRESOLVED.
+  // Use isolated synthetic rows so these assertions do not depend on transition
+  // ordering or mutate any live/staging data.
+  const allowedStatuses = ["RECEIVED", "PROCESSING", "PROCESSED", "VALIDATED", "REJECTED", "RETRY", "QUARANTINED", "UNRESOLVED"];
+  for (const [index, status] of allowedStatuses.entries()) {
+    const row = await client.query(
+      "insert into async_mirror_inbox(authority_code,municipal_code,batch_id,sync_window_timestamp,payload,payload_sha256,status) values ('STATUS-TEST','TEST-MUNI',$1,now(),'{}',$2,$3) returning status",
+      ["20000000-0000-4000-8000-" + String(index + 1).padStart(12, "0"), String(index + 1).toString(16).padStart(64, "0"), status],
+    );
+    assert.equal(row.rows[0].status, status, "corrective CHECK must preserve allowed status " + status);
+  }
+  await assert.rejects(
+    client.query(
+      "insert into async_mirror_inbox(authority_code,municipal_code,batch_id,sync_window_timestamp,payload,payload_sha256,status) values ('STATUS-TEST','TEST-MUNI',gen_random_uuid(),now(),'{}',$1,'INVALID_TEST_STATUS')",
+      ["f".repeat(64)],
+    ),
+    /async_mirror_inbox_status_check/,
+    "corrective CHECK must continue rejecting unknown statuses",
+  );
+
   // Staging-shaped history: same source migrations are already recorded; runner must skip them.
   await setSchema(stagingSchema);
   for (const name of migrationNames) await applyAndRecord(name);
