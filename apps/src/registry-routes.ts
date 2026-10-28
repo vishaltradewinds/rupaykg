@@ -48,8 +48,8 @@ export async function registerRegistryRoutes(app:FastifyInstance,pool:Pool|null)
       const a=await c.query<{organization_id:string;status:string;geography_id:string|null;acceptance_fixture:string|null}>("select organization_id,status,geography_id,metadata->>'acceptanceFixture' as acceptance_fixture from activities where id=$1 for update",[activityId]);
       if(!a.rows[0]||a.rows[0].organization_id!==issuerOrganizationId||a.rows[0].status!=="COMPLETED")throw Object.assign(new Error("Completed activity owned by issuer is required"),{code:"ACTIVITY_NOT_ELIGIBLE"});if(!await identityCanAccessActivity(c,auth,issuerOrganizationId,activityId))throw Object.assign(new Error("Activity geography is outside role authorization scope"),{code:"GEOGRAPHY_FORBIDDEN"});
       if(a.rows[0]?.acceptance_fixture==="true"||e.rows[0]?.acceptance_fixture==="true")throw Object.assign(new Error("Acceptance fixture activity/evidence cannot be used for registry credential issuance"),{code:"ACCEPTANCE_FIXTURE_NOT_REGISTRY_ELIGIBLE"});
-      const provenance=await c.query<{id:string;guardian_execution_id:string;hcs_topic_id:string;hcs_consensus_timestamp:string;integrity_hash:string;mirror_node_verified_at:Date}>(
-        `select m.id,m.guardian_execution_id,m.hcs_topic_id,m.hcs_consensus_timestamp,m.integrity_hash,m.mirror_node_verified_at
+      const provenance=await c.query<{id:string;guardian_execution_id:string;hcs_topic_id:string;hcs_consensus_timestamp:string;integrity_hash:string;methodology_code:string|null;mirror_node_verified_at:Date}>(
+        `select m.id,m.guardian_execution_id,m.hcs_topic_id,m.hcs_consensus_timestamp,m.integrity_hash,m.methodology_code,m.mirror_node_verified_at
            from mrv_provenance_events m
            join verifications v on v.id=m.verification_id and v.evidence_id=m.evidence_id
           where m.activity_id=$1 and m.verification_id=$2 and m.evidence_id=$3
@@ -64,10 +64,23 @@ export async function registerRegistryRoutes(app:FastifyInstance,pool:Pool|null)
         [activityId,verificationId,v.rows[0].evidence_id]);
       const proof=provenance.rows[0];
       if(!proof)throw Object.assign(new Error("Guardian, Hedera consensus and persisted Mirror Node verification are required before credential issuance"),{code:"MIRROR_NODE_VERIFICATION_REQUIRED"});
+      if(!proof.methodology_code)throw Object.assign(new Error("A bound methodology code is required before registry eligibility can be assessed"),{code:"REGULATORY_ELIGIBILITY_REQUIRED"});
+      const eligibility=await c.query<{id:string;methodology_version_id:string}>(`
+        select d.id,d.methodology_version_id
+          from activity_registry_eligibility_decisions d
+          join methodology_versions mv on mv.id=d.methodology_version_id
+          join activities a on a.id=d.activity_id
+         where d.activity_id=$1 and d.verification_id=$2 and d.evidence_id=$3
+           and mv.methodology_code=$4 and mv.governance_status='PRODUCTION_ELIGIBLE'
+           and d.geography_id=a.geography_id and d.decision='APPROVED'
+           and d.effective_from<=current_date and (d.effective_to is null or d.effective_to>=current_date)
+         order by d.created_at desc limit 1 for share of d,mv,a`,
+        [activityId,verificationId,v.rows[0].evidence_id,proof.methodology_code]);
+      if(!eligibility.rows[0])throw Object.assign(new Error("Current activity-specific statutory and methodology eligibility decision is required before credential issuance"),{code:"REGULATORY_ELIGIBILITY_REQUIRED"});
       const existing=await c.query("select id from credentials where activity_id=$1 and verification_id=$2",[activityId,verificationId]);if(existing.rows[0])throw Object.assign(new Error("Credential already exists for verification"),{code:"CREDENTIAL_EXISTS"});
-      const inserted=await c.query("insert into credentials(activity_id,issuer_organization_id,trust_root_id,status,verification_id,quantity,unit,issued_at) values($1,$2,$3,'ISSUED',$4,$5,$6,now()) returning *",[activityId,issuerOrganizationId,trustRootId,verificationId,quantity,unit]);
+      const inserted=await c.query("insert into credentials(activity_id,issuer_organization_id,trust_root_id,status,verification_id,methodology_version_id,quantity,unit,issued_at) values($1,$2,$3,'ISSUED',$4,$5,$6,$7,now()) returning *",[activityId,issuerOrganizationId,trustRootId,verificationId,eligibility.rows[0].methodology_version_id,quantity,unit]);
       await c.query("insert into registry_events(credential_id,event_type,from_owner_id,to_owner_id,verification_id,recorded_by_identity_id,event_hash) values($1,'ISSUED',null,$2,$3,$4,$5)",[inserted.rows[0].id,issuerOrganizationId,verificationId,auth.identityId,`issue:${inserted.rows[0].id}:${verificationId}`]);return inserted.rows[0]
-    })})}catch(error){request.log.error(error);const code=(error as {code?:string}).code;if(code==="HIGH_RISK_PERMISSION_REQUIRED"||code==="GEOGRAPHY_FORBIDDEN")return reply.code(403).send({error:(error as Error).message,code});if(["VERIFICATION_REQUIRED","EVIDENCE_MISMATCH","ACTIVITY_NOT_ELIGIBLE","CREDENTIAL_EXISTS","MIRROR_NODE_VERIFICATION_REQUIRED","ACCEPTANCE_FIXTURE_NOT_REGISTRY_ELIGIBLE"].includes(code??""))return reply.code(409).send({error:(error as Error).message,code});return reply.code(503).send({error:"Credential issuance unavailable",syntheticData:false})}
+    })})}catch(error){request.log.error(error);const code=(error as {code?:string}).code;if(code==="HIGH_RISK_PERMISSION_REQUIRED"||code==="GEOGRAPHY_FORBIDDEN")return reply.code(403).send({error:(error as Error).message,code});if(["VERIFICATION_REQUIRED","EVIDENCE_MISMATCH","ACTIVITY_NOT_ELIGIBLE","CREDENTIAL_EXISTS","MIRROR_NODE_VERIFICATION_REQUIRED","REGULATORY_ELIGIBILITY_REQUIRED","ACCEPTANCE_FIXTURE_NOT_REGISTRY_ELIGIBLE"].includes(code??""))return reply.code(409).send({error:(error as Error).message,code});return reply.code(503).send({error:"Credential issuance unavailable",syntheticData:false})}
   });
 
   app.post("/api/v1/credentials/:credentialId/activate",async(request,reply)=>{
