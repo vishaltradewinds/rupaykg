@@ -16,9 +16,17 @@ export function findLegacyIdentityConflicts(
 ): Array<{ candidate: string; recordedLegacy: string }> {
   const candidates = new Set(candidateFiles);
   const recorded = new Set(recordedFilenames);
-  return Object.entries(LEGACY_MIGRATION_IDENTITIES)
-    .filter(([candidate, legacy]) => candidates.has(candidate) && recorded.has(legacy))
-    .map(([candidate, recordedLegacy]) => ({ candidate, recordedLegacy }));
+  return Object.entries(LEGACY_MIGRATION_IDENTITIES).flatMap(([ordinal, datePrefixed]) => {
+    if (candidates.has(ordinal) && recorded.has(datePrefixed)) {
+      return [{ candidate: ordinal, recordedLegacy: datePrefixed }];
+    }
+    // Fail closed in the reverse deployment direction too: a date-prefixed
+    // candidate must not rerun DDL when the ledger records its ordinal identity.
+    if (candidates.has(datePrefixed) && recorded.has(ordinal)) {
+      return [{ candidate: datePrefixed, recordedLegacy: ordinal }];
+    }
+    return [];
+  });
 }
 
 export function findVersionFilenameConflicts(
