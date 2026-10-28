@@ -38,16 +38,15 @@ function findTransactionIncompatibilities(sql: string): string[] {
 
 test("transaction-safety scanner distinguishes top-level commands from SQL bodies and literals", () => {
   assert.deepEqual(findTransactionIncompatibilities(
-    "CREATE FUNCTION f() RETURNS void AS $ BEGIN PERFORM 1; END; $ LANGUAGE plpgsql; SELECT 'BEGIN; COMMIT;';",
+    "CREATE FUNCTION f() RETURNS void AS $$ BEGIN PERFORM 1; END; $$ LANGUAGE plpgsql; SELECT 'BEGIN; COMMIT;';",
   ), []);
   assert.deepEqual(findTransactionIncompatibilities(
     "SELECT 1; BEGIN; SELECT 2;",
   ), ["explicit transaction control"]);
   assert.deepEqual(findTransactionIncompatibilities(
-    "SELECT 'VACUUM'; -- CREATE INDEX CONCURRENTLY\\nSELECT 1;",
+    "SELECT 'VACUUM'; -- CREATE INDEX CONCURRENTLY\nSELECT 1;",
   ), []);
 });
-
 test("migration SQL is compatible with the runner's per-file PostgreSQL transaction", async () => {
   const here = path.dirname(fileURLToPath(import.meta.url));
   const migrationDirs = [
