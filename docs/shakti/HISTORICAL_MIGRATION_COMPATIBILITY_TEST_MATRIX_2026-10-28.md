@@ -281,3 +281,24 @@ A first-pass static pattern sweep was run against all 107 numbered migration fil
 - Obtain independent review and a documented recovery/rollback plan.
 
 **Disposition remains HOLD.** The latest branch CI run [40696726464](https://github.com/vishaltradewinds/rupaykg/actions/runs/40696726464) completed successfully on the branch head at the time of that run. That run verifies its tested code and documentation snapshot, not the new matrix update below. PRs #97 and #104 remain unmerged; production certification remains OFF. No production database was accessed or modified.
+
+
+### Follow-on semantic review — registry eligibility and trigger interactions
+
+A targeted review was completed for migrations 043, 066, 081, 084, 087, 103, 106, and 107 after the initial text-pattern sweep.
+
+7. **Migrations 106/107 — eligibility evidence binding and credential issuance gate.** Migration 106 adds append-only activity-specific eligibility decisions bound to an approved verification, verified evidence, production-eligible methodology, and the activity's geography. Migration 107 adds a credential trigger that requires a currently effective APPROVED decision and corroborating MRV provenance before a value-bearing credential status. This is an important fail-closed control, but the SQL presence alone does not prove correct behavior for existing databases, trigger order, concurrent state changes, reviewer authorization/separation, or every credential transition. Disposable-PostgreSQL tests must exercise approved/rejected/requires-review decisions, expired/future decisions, mismatched activity/evidence/methodology/geography, missing MRV bindings, and updates/transfers/retirement transitions. Independent review must also verify that all paths that can create or change a value-bearing credential invoke both required guards.
+8. **Migration 087/107 — duplicate MRV guard layers.** Both migrations define credential guards that check acceptance-fixture exclusion and Guardian/HCS/Mirror Node provenance; 107 adds statutory/methodology eligibility on top. Review the effective trigger names and PostgreSQL alphabetical firing order, ensure no guard can be bypassed by trigger replacement or a status transition, and maintain tests for the expected stable error boundary. Do not infer actual live Guardian/HCS/Mirror Node acceptance from stored status fields alone.
+9. **Migration 103 — tenant binding and append-only behavior.** The assessment table binds activity to organization via a trigger and prevents update/delete. Tests should verify mismatched organization/activity rejection, append-only enforcement, duplicate revision rejection, and that internal-draft assessments cannot be mistaken for ICVCM certification or registry eligibility.
+10. **Migration 084 — audit-chain bootstrap boundary.** The migration anchors to the newest existing audit event only if the singleton head is absent. Its own comment explicitly says older writers did not all participate in the chain; therefore this is a cutover anchor, not retrospective proof of complete historical hash continuity. Record a cutover timestamp and independent verification procedure before relying on this chain for assurance.
+11. **Migration 081 — acceptance geography metadata.** The seed marks the source as VERIFIED and inserts a non-government acceptance cluster. This label is local fixture metadata, not proof of official source verification. Production registry eligibility must continue to reject fixture-backed activity/evidence, and no UI/report/export should label this fixture geography as government-authoritative.
+12. **Migration 043/066 — unresolved rollout prerequisites.** The new check constraint in 043 may reject existing violating rows; migration 066 replaces organization foreign keys with cascading deletes. These require environment-specific read-only evidence and retention/legal-hold approval before rollout. No automatic repair, data deletion, or production schema change is authorized by this review.
+
+#### Validation required for the newly reviewed controls
+
+- Add or confirm disposable-PostgreSQL acceptance coverage for the 106/107 eligibility lifecycle and the 087/107 dual-trigger interaction.
+- Verify trigger definitions and constraint/index dependencies from a disposable database built from the complete migration history, not only by reading SQL files.
+- Add tests for 103 append-only/tenant binding and 084 bootstrap behavior with empty, populated, and pre-existing-head states.
+- Obtain legal/compliance approval for the cascade behavior in 066 and authorized read-only data evidence for 043 before any deployment.
+
+This is a targeted semantic review of the named migrations, not a claim that every migration's behavior has been proven under every historical schema, data distribution, PostgreSQL version, or concurrency pattern.
