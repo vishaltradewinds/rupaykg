@@ -8,13 +8,12 @@ Read-only inspection only. No INSERT, UPDATE, DELETE, DDL, migration-ledger chan
 
 ## Source recovery result
 
-Searched GitHub repository history for these exact paths; each path returned no commits:
-- `migrations/20261022_async_mirror_inbox.sql`
-- `migrations/20261023_async_mirror_worker_leases.sql`
-- `migrations/20261024_ai_intake_rate_limits.sql`
-- `migrations/20261025_ai_evidence_intake_jobs.sql`
+Source recovery status was rechecked against additional repository branches on 2026-10-28:
+- **Recovered:** `migrations/20261024_ai_intake_rate_limits.sql` from branch `intelligence/ai-evidence-intake-middleware`, blob `87b51fe60a96a4e0752c8b0a9a170c81f9936dbb`. The recovered SQL defines the identity/organization/minute composite primary key, request_count 1–10 check, and window_start index; these match the catalog summary recorded below.
+- **Recovered:** `migrations/20261025_ai_evidence_intake_jobs.sql` from the same branch, blob `6a0ae54530b7b756dac33589eaf18df3b071d8f2`. The recovered SQL defines the durable idempotency ledger, status/attempt/hash checks, evidence and organization/identity foreign keys, and recovery/organization indexes; these match the catalog summary recorded below.
+- **Not recovered:** `migrations/20261022_async_mirror_inbox.sql` and `migrations/20261023_async_mirror_worker_leases.sql`. Exact-path checks across the current migration branch and other relevant mirror/sync branches did not find these files. Searches of commit messages and issues did not surface a source artifact. No CI artifacts were attached to the inspected successful runs.
 
-Repository code search also returned no matching files/excerpts for the table names. Therefore the original source SQL is **not recovered**. The schema below is reconstructed from PostgreSQL catalogs on staging only. Exact historical statement ordering, comments, grants, RLS policies, ownership, and any objects that were later altered cannot be inferred from this snapshot.
+This narrows the recovery gap from four migrations to two. For 20261022/23, the schema below remains reconstructed from PostgreSQL catalogs on staging only. For 20261024/25, source SQL is recovered from a non-default feature branch but has not yet been independently replay-tested against clean and upgrade fixtures. The feature branch is evidence of source, not proof that its application code is present in the current release candidate. Exact historical grants, RLS policies, ownership, later alterations, and the original semantics of the separate worker-lease filename remain unverified.
 
 ## Environment delta confirmed by read-only catalog checks
 
@@ -138,11 +137,12 @@ Indexes:
 
 ## Next engineering gates
 
-1. Recover original SQL from a trusted backup, developer artifact, CI artifact, deployment bundle, or audit record. If unavailable, treat the catalog reconstruction as a new reviewed migration specification, never as the original migration.
-2. Capture full staging definitions and compare all columns, constraints, indexes, sequence ownership, grants, policies, functions, and dependencies against the proposed specification.
-3. Create a disposable PostgreSQL fixture representing both the production ledger/schema and staging ledger/schema. Preserve and assert staging inbox/event rows across any proposed upgrade.
-4. Test clean install, upgrade from each actual ledger shape, repeated run/idempotence, rollback/recovery, and fail-closed behavior.
-5. Obtain independent review before any production/staging DDL or ledger write.
+1. Recover the two missing 20261022/23 SQL files from a trusted backup, developer artifact, deployment bundle, or audit record. If unavailable, treat catalog reconstruction as a new reviewed migration specification, never as recovered original SQL.
+2. Import the recovered 20261024/25 files into an isolated disposable fixture and compare their full SQL-defined objects against staging catalogs; do not copy them into the release candidate or replay them against live staging merely because source was found.
+3. Capture complete staging definitions including sequence ownership, grants, policies, dependencies, all indexes/constraints/functions, and seed data.
+4. Create disposable PostgreSQL fixtures for both actual production and staging ledger/schema shapes. Preserve and assert all 12 inbox and 29 event rows across proposed upgrade tests.
+5. Test clean install, upgrade from each ledger shape, repeated run/idempotence, rollback/recovery, and fail-closed behavior.
+6. Obtain independent review before any production/staging DDL or ledger write.
 
 ## Shakti status
 
@@ -197,3 +197,10 @@ Inspected the current branch tree (348 tracked paths) and the available acceptan
 - The existing `migrations/083_mrv_mirror_node_registry_gate.sql` concerns Guardian/Hedera issuance gating, not async mirror queue storage.
 
 This means the synthetic inbox rows' owning seed/test code is not present in the current candidate branch. Do not add guessed queue-worker code or fabricate a historical migration under the numbered migration directory. Keep the catalog reconstruction as documentation until a trustworthy source artifact is recovered or an independently reviewed new migration is authored.
+
+
+## Recovery checkpoint update — 2026-10-28 15:58 UTC
+
+- Latest CI for this checkpoint branch completed successfully: [run 40720538325](https://github.com/vishaltradewinds/rupaykg/actions/runs/40720538325), commit `1591450348564794324d17c8688ea1c72f209f5b`.
+- The preceding documentation checkpoints also passed CI: [run 40720462052](https://github.com/vishaltradewinds/rupaykg/actions/runs/40720462052) and [run 40720257060](https://github.com/vishaltradewinds/rupaykg/actions/runs/40720257060).
+- No database writes were performed. PR #107 remains unmerged; live migration compatibility remains unproven and production certification stays **HOLD**.
