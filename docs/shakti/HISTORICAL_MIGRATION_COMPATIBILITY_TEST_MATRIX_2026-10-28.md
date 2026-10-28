@@ -153,3 +153,19 @@ CI now verifies the tested fail-closed cases: known identity conflicts in both d
 Open gates remain: partial application and conflicting states beyond the fixtures, historical content integrity (no retroactive checksum claims), authorized read-only ledger/schema evidence per relevant environment, independent review, approved recovery plan, separate live Guardian/HCS/Mirror Node acceptance, and production release approval.
 
 **Release remains HOLD.** PRs #97 and #104 remain unmerged; production certification remains OFF. No production database was accessed or modified.
+
+
+## CI verification — partial DDL and ledger constraints (2026-10-28)
+
+The partial-DDL collision fixture passed in [run 40688756509](https://github.com/vishaltradewinds/rupaykg/actions/runs/40688756509), commit `d6af70441a1c55877dcebffc6350956b4761584f`. In disposable PostgreSQL, an existing candidate table with no matching ledger row causes migration failure; the runner does not insert a false ledger row and the pre-existing table data remains unchanged.
+
+The migration ledger guard was then strengthened to validate the ledger's minimum structural contract before migration discovery/application:
+- Required `version` and `filename` columns must exist.
+- Both columns must be `NOT NULL`.
+- `version` must be the sole primary-key column.
+
+CI run [40689183426](https://github.com/vishaltradewinds/rupaykg/actions/runs/40689183426) passed on runner commit `012c4efd86d50c8c1c5c1339c35db6224a852570`. The disposable-PostgreSQL duplicate-version/no-primary-key regression passed in [run 40689214299](https://github.com/vishaltradewinds/rupaykg/actions/runs/40689214299), commit `36e42bf47aee067c3d161ae591a64833b8220a99`. It verifies the malformed ledger is rejected with `MIGRATION_LEDGER_SCHEMA_INVALID` before candidate DDL, and duplicate historical rows remain unchanged for manual review.
+
+These results cover the tested failure modes only. They do not prove all partial migrations are recoverable, validate every possible schema drift, or establish the state of any live environment.
+
+**Remaining release gates:** authorized read-only per-environment ledger/schema evidence; broader historical-state characterization; independent review and recovery approval; separate live Guardian/HCS/Mirror Node acceptance; production release approval. No production database was accessed or modified. Production certification remains OFF/HOLD.
