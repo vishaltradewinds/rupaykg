@@ -10,8 +10,14 @@ function stripSqlComments(sql: string): string {
     .replace(/^\s*--.*$/gm, " ");
 }
 
+function stripDollarQuotedBodies(sql: string): string {
+  // BEGIN/COMMIT tokens inside PL/pgSQL function bodies are procedural
+  // block syntax, not top-level transaction commands sent to the runner.
+  return sql.replace(/(\$[A-Za-z_][A-Za-z0-9_]*\$|\$\$)[\s\S]*?\1/g, " ");
+}
+
 function findTransactionIncompatibilities(sql: string): string[] {
-  const clean = stripSqlComments(sql);
+  const clean = stripDollarQuotedBodies(stripSqlComments(sql));
   const checks: Array<[string, RegExp]> = [
     ["CREATE INDEX CONCURRENTLY", /\bCREATE\s+(?:UNIQUE\s+)?INDEX\s+CONCURRENTLY\b/i],
     ["DROP INDEX CONCURRENTLY", /\bDROP\s+INDEX\s+CONCURRENTLY\b/i],
