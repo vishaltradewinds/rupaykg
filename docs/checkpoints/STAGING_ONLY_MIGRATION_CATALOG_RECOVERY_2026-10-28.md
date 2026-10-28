@@ -215,6 +215,17 @@ This means the synthetic inbox rows' owning seed/test code is not present in the
 - No database writes were performed. PR #107 remains unmerged; live migration compatibility remains unproven and production certification stays **HOLD**.
 
 
+## Branch compatibility decision — do not merge the feature branch wholesale
+
+GitHub compare between `shakti/migration-ledger-orphan-guard` and `intelligence/ai-evidence-intake-middleware` reports **diverged**: feature branch is 558 commits ahead and 19 commits behind the migration-ledger branch (comparison API result at 2026-10-28). The feature branch adds the four recovered migration files, worker/routes/scheduler code, integration tests, and additional October/November migrations; it is not a small isolated source-recovery patch.
+
+**Decision:** do not merge or cherry-pick the feature branch wholesale. First extract a minimal, reviewable patch set, reconcile all intervening schema dependencies and migration ordering, and run it against disposable fixtures. The `20261101_async_mirror_unresolved_crosswalk.sql` fix is dated after this audit date and must be treated as a future-dated branch artifact requiring chronology and release-history verification, not as an already-applied live correction.
+
+## Latest documentation CI result
+
+- Commit `61316fd03eec69dbbfef7fa797aabcf7374e1380`: CI passed, [run 40722433202](https://github.com/vishaltradewinds/rupaykg/actions/runs/40722433202).
+- This pass validates the current migration-ledger branch's checks/build/tests. It does **not** validate merging the diverged worker feature branch or prove live database upgrade compatibility.
+
 ## Newly identified release blocker — worker status constraint mismatch
 
 Review of the recovered worker source found a concrete incompatibility that must be resolved before any worker activation:
