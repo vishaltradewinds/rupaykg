@@ -121,3 +121,7 @@ Migration `100_verification_authorization_provenance.sql` requires an approved v
 Migration `102_evidence_artifact_chain_binding.sql` makes evidence artifact-series identity and scope immutable and requires each appended review to reference the exact stored artifact version. The database verifies that the reviewer is not the uploader and has active review plus verification permissions through a verified membership in the artifact's owning organization.
 
 Migration `103_vault_content_verification_binding.sql` verifies the stored bytes against the declared SHA-256 and byte length at insertion, binds the artifact to the canonical evidence activity/type/hash, and requires a vault-backed verification to match an append-only review by the same verifier with the corresponding decision. Non-vault evidence retains the existing verification workflow. These controls preserve evidence provenance; they do not independently establish that the underlying claim is true or that an authority accepted it.
+
+## Integrated migration version sequence
+
+The governed agentic foundation owns migration versions `090`–`093`. The EPR/ICVCM follow-on controls use unique versions `094`–`103`. Do not reuse a numeric prefix: `apps/src/migrate.ts` treats the numeric prefix as the schema migration version and stops if a different filename has already claimed it. Validate the entire ordered chain against a fresh disposable PostgreSQL database before release.
