@@ -55,26 +55,6 @@ try {
     );
   }
 
-  // Validate every candidate version against the ledger before applying any
-  // migration. A late conflict must not leave earlier migrations partially
-  // applied just because it sorts later in the migration directory.
-  const recordedVersions = await pool.query<{ version: string; filename: string }>(
-    "select version, filename from schema_migrations",
-  );
-  const ledgerByVersion = new Map(recordedVersions.rows.map((row) => [row.version, row.filename]));
-  const versionConflicts = files
-    .map((filename) => ({ filename, version: filename.split("_", 1)[0] }))
-    .filter(({ filename, version }) => {
-      const recordedFilename = ledgerByVersion.get(version);
-      return recordedFilename !== undefined && recordedFilename !== filename;
-    })
-    .map(({ filename, version }) => `${version}: ledger has ${ledgerByVersion.get(version)}, candidate has ${filename}`);
-  if (versionConflicts.length > 0) {
-    throw new Error(
-      `MIGRATION_VERSION_CONFLICT: ${versionConflicts.join("; ")}. No migrations were applied.`,
-    );
-  }
-
   // Preflight all existing version/filename identities before applying any migration.
   // This prevents a late collision from being discovered only after earlier DDL ran.
   const recordedRows = await pool.query<{ version: string; filename: string }>(
