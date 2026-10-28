@@ -7,16 +7,16 @@ Related work: PR #97; validation-only PR #104.
 
 ## Current CI evidence
 
-Validation workflow run 40679354379 / job 122785780123 completed successfully:
+Latest completed validation run before the current test expansion: run 40681738454 / job 122793881189, commit 2e9fb91d807e52f699d98703d847ef47f86db0b7, completed successfully. It passed:
 - production dependency audit
 - migration structure validation
 - clean PostgreSQL migration
 - typecheck and build
 - production web browser smoke test
-- automated tests including disposable PostgreSQL acceptance
+- automated tests including the then-current disposable PostgreSQL legacy-identity rejection test
 - production container build
 
-This is clean-install evidence only. It does not establish compatibility with an existing schema_migrations ledger.
+That run proves the single-pair integration regression at that commit. The expanded test covering all four known pairs plus a mixed-ledger fixture is a newer commit and its own CI run must pass before it is considered verified. Clean-install success does not establish compatibility with an existing schema_migrations ledger.
 
 ## Historical-state matrix (required before any reconciliation code)
 
@@ -44,10 +44,10 @@ This is clean-install evidence only. It does not establish compatibility with an
 
 ## Release gates
 
-- [x] Candidate clean-install CI passed on run 40679354379.
+- [x] Candidate clean-install CI passed on run 40681738454 (commit 2e9fb91; prior to expanded matrix test).
 - [x] Migration identity conflict documented with exact filenames and blob identities.
 - [ ] Authorized read-only ledger evidence received for each relevant environment.
-- [ ] Full historical-state matrix implemented and passing on disposable PostgreSQL (a first disposable-DB fail-closed regression test has been added; its CI result is pending).
+- [ ] Full historical-state matrix implemented and passing on disposable PostgreSQL. The first single-pair disposable-DB fail-closed regression passed in run 40681738454; expanded all-four-pairs plus mixed-ledger coverage is awaiting its own CI result.
 - [ ] Independent review of any proposed reconciliation logic.
 - [ ] Recovery/rollback procedure approved.
 - [ ] Live non-production Guardian/HCS/Mirror Node acceptance evidence collected separately.
@@ -62,7 +62,8 @@ This is clean-install evidence only. It does not establish compatibility with an
 A fail-closed guard has been added in the validation branch:
 - `apps/src/migration-identity.ts` contains an explicit allowlist of the four observed legacy-to-candidate filename identity pairs.
 - `apps/src/migration-identity.test.ts` covers a legacy conflict, a clean ledger, unrelated names, and mixed historical rows.
+- `apps/src/migration-identity.integration.test.ts` has been expanded to seed each of the four known legacy filenames independently and a mixed legacy-ledger case in separate disposable PostgreSQL databases. Each scenario asserts fail-closed diagnostics, unchanged exact ledger tuples, and no candidate migration DDL. The expanded test is not verified until its corresponding CI run succeeds.
 - `apps/src/migrate.ts` checks the migration ledger before applying candidate migrations and emits `MIGRATION_IDENTITY_CONFLICT` if a known legacy filename is present. It does not alias, backfill, rename, or rewrite ledger entries.
 
-This guard is a safety improvement, **not a compatibility fix**. Historical installations will intentionally stop with a clear error until a reviewed reconciliation path is implemented and tested. CI for the code changes is still being validated; do not treat the guard as release-ready until that run passes and independent review is complete.
+This guard is a safety improvement, **not a compatibility fix**. Historical installations will intentionally stop with a clear error until a reviewed reconciliation path is implemented and tested. The latest completed run validates the earlier single-pair test; the expanded multi-scenario regression has a new commit and must pass its own CI. Do not treat the guard as release-ready until that run passes and independent review is complete.
 
