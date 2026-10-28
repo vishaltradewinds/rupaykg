@@ -20,3 +20,16 @@ export function findLegacyIdentityConflicts(
     .filter(([candidate, legacy]) => candidates.has(candidate) && recorded.has(legacy))
     .map(([candidate, recordedLegacy]) => ({ candidate, recordedLegacy }));
 }
+
+export function findVersionFilenameConflicts(
+  candidateFiles: readonly string[],
+  recordedRows: readonly { version: string; filename: string }[],
+): Array<{ candidate: string; recorded: string; version: string }> {
+  const candidateByVersion = new Map(
+    candidateFiles.map((filename) => [filename.slice(0, filename.indexOf("_")), filename]),
+  );
+  return recordedRows.flatMap(({ version, filename }) => {
+    const candidate = candidateByVersion.get(version);
+    return candidate && candidate !== filename ? [{ candidate, recorded: filename, version }] : [];
+  });
+}
