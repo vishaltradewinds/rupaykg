@@ -55,7 +55,7 @@ That run proves the single-pair integration regression at that commit. The expan
 
 ## Decision
 
-**HOLD.** Do not merge PR #97, do not merge validation-only PR #104, do not rename applied migration files, do not backfill or rewrite a live ledger, and do not enable production certification based solely on clean-install CI. The next code change should be a dedicated historical-ledger regression harness, followed by a narrowly allowlisted reconciliation implementation only if authorized ledger evidence demonstrates that it is needed.
+**HOLD.** Do not merge PR #97, do not merge validation-only PR #104, do not rename applied migration files, do not backfill or rewrite a live ledger, and do not enable production certification based solely on clean-install CI. The next work is to verify the expanded historical-ledger regression harness in CI and add the remaining historical-state scenarios. A narrowly allowlisted reconciliation implementation may be considered only if authorized ledger evidence demonstrates that it is needed.
 
 ## Engineering progress — fail-closed guard
 
@@ -63,7 +63,7 @@ A fail-closed guard has been added in the validation branch:
 - `apps/src/migration-identity.ts` contains an explicit allowlist of the four observed legacy-to-candidate filename identity pairs.
 - `apps/src/migration-identity.test.ts` covers a legacy conflict, a clean ledger, unrelated names, and mixed historical rows.
 - `apps/src/migration-identity.integration.test.ts` has been expanded to seed each of the four known legacy filenames independently and a mixed legacy-ledger case in separate disposable PostgreSQL databases. Each scenario asserts fail-closed diagnostics, unchanged exact ledger tuples, and no candidate migration DDL. The expanded test is not verified until its corresponding CI run succeeds.
-- `apps/src/migrate.ts` checks the migration ledger before applying candidate migrations and emits `MIGRATION_IDENTITY_CONFLICT` if a known legacy filename is present. It does not alias, backfill, rename, or rewrite ledger entries.
+- `apps/src/migrate.ts` checks the migration ledger before applying candidate migrations and emits `MIGRATION_IDENTITY_CONFLICT` if a known legacy filename is present. It now also preflights all recorded version/filename pairs against the candidate migration tree and emits `MIGRATION_VERSION_CONFLICT` before any candidate DDL when a version maps to a different filename. It does not alias, backfill, rename, or rewrite ledger entries.\n- Unit and disposable-PostgreSQL regression coverage has been added for a version/filename mismatch, asserting the runner rejects before candidate DDL and preserves the ledger. This new coverage is pending its own CI run.
 
 This guard is a safety improvement, **not a compatibility fix**. Historical installations will intentionally stop with a clear error until a reviewed reconciliation path is implemented and tested. The latest completed run validates the earlier single-pair test; the expanded multi-scenario regression has a new commit and must pass its own CI. Do not treat the guard as release-ready until that run passes and independent review is complete.
 
