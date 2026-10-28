@@ -121,3 +121,37 @@ This file is a controlled starting register, not a complete pan-India legal rule
 5. obtain independent regulatory/methodology review before production use.
 
 No production certification, automatic legal determination or credit issuance is enabled by this document.
+
+## 7. Shakti Standards closure matrix — 2026-10-28
+
+This matrix is a work-control register, not a claim that the listed reviews have passed. A row can move to CLOSED only when the referenced evidence is attached to the relevant activity/version and a named reviewer records the decision.
+
+| Priority | Workstream | Minimum closure evidence | Responsible decision-maker | Gate while open |
+|---|---|---|---|---|
+| P0 | Operative SWM Rules, 2026 | Retained official rules artifact; checksum; effective-date/amendment check; rule-by-rule applicability map for the actual facility and stakeholder roles; reviewer/date | Qualified Indian regulatory reviewer, with product owner recording implementation | No legal-compliance claim for affected workflow |
+| P0 | CCTS mechanism and eligibility | Current Gazette/BEE procedure and methodology/version; mechanism and sector eligibility; activity boundary; approved validation/verification path; evidence of relevant authority/registry state | Qualified carbon-market/regulatory reviewer | No credit-eligibility or issuance representation |
+| P0 | BM WA03.001 / BM WA03.002 pathway | Current official methodology files and hashes; scope/combination check; all referenced BM-T tool versions; parameter-to-evidence mapping; reproducible calculation reconciliation; independent methodology review | Qualified methodology reviewer | REQUIRES_REGULATORY_REVIEW or EVIDENCE_INCOMPLETE; block value eligibility |
+| P0 | EPR, where applicable | Waste-stream classification; operative stream-specific rules/notifications; producer/processor/registered-entity roles; portal/registration evidence; separate EPR certificate and carbon-credit ledgers | Qualified EPR reviewer / competent authority evidence | No EPR-compliance claim or certificate substitution |
+| P0 | State / SPCB / PCC / ULB / RLB / facility permissions | State and local jurisdiction; permits/consents/registrations/contracts as applicable; validity dates and conditions; responsible authority; source and evidence references | Qualified local regulatory reviewer / relevant authority | Block affected facility/workflow claims |
+| P0 | Guardian → Hedera → Mirror Node | Authorized non-production execution; real Guardian response and policy identity; persisted provenance digest; Hedera transaction/topic and consensus evidence; Mirror Node retrieval; digest equality; negative/retry tests; sanitized evidence bundle | Independent technical reviewer plus authorized environment operator | No live acceptance or production certification |
+| P1 | ICVCM CCP readiness | Evidence for each applicable CCP; versioned control mapping; independent verification and findings; safeguards and double-counting evidence; explicit statement that internal readiness is not ICVCM approval | Independent carbon-integrity reviewer | Internal readiness only; no CCP label/approval claim |
+| P1 | Privacy, cybersecurity and records | Data-flow and retention map; access controls; applicable Indian privacy/cyber obligations reviewed; incident response, secret rotation, audit-log and deletion/retention tests | Security/privacy reviewer | Block affected production data processing if unresolved |
+| P1 | Operations and resilience | Monitoring/alert tests; backup and restore exercise; rollback evidence; environment separation; rate-limit/abuse tests; incident ownership and runbooks | Operations owner plus independent reviewer | No production release approval |
+| P1 | TRL and product claims | Evidence ledger mapping each TRL criterion to observed test, environment, result, reviewer and date; software and hardware assessed separately | Technical assessor independent of implementation where feasible | Keep software TRL 4 provisional; do not claim TRL 5; hardware unassessed |
+
+### Required per-activity evidence packet
+
+Every activity seeking a compliance or carbon-value decision must have a versioned packet containing:
+
+1. Activity ID, facility/site, state/UT, local jurisdiction, waste stream, activity dates, operator and role classification.
+2. Applicable instruments with official URLs, source artifacts/hashes, publication and effective dates, amendment status, exact clauses and applicability rationale.
+3. Distinct decisions for statutory applicability, facility permits, EPR, CCTS mechanism/methodology eligibility, MRV calculation, independent verification, ICVCM internal readiness, external issuance/transfer/retirement, and settlement.
+4. Evidence inventory with immutable IDs, origin/custody, capture time, units, quality flags, transformations, calculation version and content digests.
+5. Reviewer identity/authority, conflict/independence declaration where required, decision, findings, remediation owner and review date.
+6. Explicit unresolved items and fail-closed state; no AI-generated interpretation may silently become a legal decision or external-authority confirmation.
+
+### Operational rule for source changes
+
+When an official source changes, do not silently mutate prior decisions. Create a new source version, identify affected jurisdictions/activities and effective dates, run regression tests against the affected controls, preserve historical decision lineage, and require review before the new rule version becomes active. If retroactivity, transition provisions or applicability are unclear, set REQUIRES_REGULATORY_REVIEW.
+
+**Current status:** These closure requirements are defined; they are not evidence that the outstanding reviews have been completed. The register remains an initial controlled register and is not a complete legal opinion or production-approved ruleset.
