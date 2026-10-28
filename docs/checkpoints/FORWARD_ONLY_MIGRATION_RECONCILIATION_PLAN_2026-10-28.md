@@ -98,4 +98,16 @@ Candidate source branch tip at inspection: `c56b9c1fe341ce3ba943bced10f47163dae2
 
 This establishes repository history for candidate artifacts, **not** proof of which exact SQL was applied to staging. Still required: compare file/blob hashes with deployment artifacts or recorded migration checksums, confirm the branch was the actual source used at deployment time, and reconcile chronology against the live migration ledger. Do not promote files based only on commit messages or filename match.
 
-**Status: candidate sources and Git path history located for staging 20261022–25; deployment checksum verification pending; no live writes authorized or performed.**
+
+### Source blob continuity check
+
+Fetched each candidate file at its introducing/follow-up commit and compared the Git blob SHA with the candidate branch tip:
+
+- `20261022_async_mirror_inbox.sql`: identical blob at introduction and candidate branch tip (`4d08607e03561b9fbb4ce502b4c4211127237050`).
+- `20261023_async_mirror_worker_leases.sql`: original blob at the lease/quarantine commit was `eeb01ff38cacf66db35852310e0330948d55e169`; it changed in the append-only state-transition follow-up. The follow-up blob matches the candidate branch tip (`33cb4d5d2e29a4a111340e5a0ac34170a0081895`).
+- `20261024_ai_intake_rate_limits.sql`: identical blob at introduction and candidate branch tip (`87b51fe60a96a4e0752c8b0a9a170c81f9936dbb`).
+- `20261025_ai_evidence_intake_jobs.sql`: identical blob at introduction and candidate branch tip (`6a0ae54530b7b756dac33589eaf18df3b071d8f2`).
+
+This confirms Git blob continuity within repository history for these three unchanged files and the later worker migration revision. It does **not** authenticate the exact source deployed to staging. Deployment-artifact/ledger-checksum matching remains the blocking provenance gate.
+
+**Status: Git blob continuity checked for candidate staging sources; deployment checksum verification pending; no live writes authorized or performed.**
