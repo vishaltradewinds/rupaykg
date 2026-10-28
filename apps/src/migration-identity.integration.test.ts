@@ -341,3 +341,89 @@ test("migration runner skips an exact already-recorded ordinal identity without 
     await rm(fixtureDir, { recursive: true, force: true });
   }
 });
+
+
+test("migration runner rejects reverse deployment when date-prefixed candidate meets ordinal history", {
+  skip: !enabled || !databaseUrl ? "requires disposable PostgreSQL integration-test mode and DATABASE_URL" : false,
+}, async () => {
+  const sourceDir = path.dirname(fileURLToPath(import.meta.url));
+  const migrationRunner = path.join(sourceDir, "migrate.js");
+  const baseUrl = new URL(databaseUrl!);
+  const adminUrl = new URL(baseUrl);
+  adminUrl.pathname = "/postgres";
+  const adminPool = new Pool({
+    connectionString: adminUrl.toString(),
+    ssl: process.env.DATABASE_SSL === "false" ? undefined : { rejectUnauthorized: false },
+  });
+  const dbName = `rupaykg_reverse_identity_${process.pid}_${Date.now()}`;
+  const testUrl = new URL(baseUrl);
+  testUrl.pathname = `/${dbName}`;
+  const fixtureDir = await mkdtemp(path.join(tmpdir(), "rupaykg-reverse-identity-fixture-"));
+  const candidate = "20261018_cpcb_swm_stakeholder_workspaces.sql";
+  const recorded = "088_cpcb_swm_stakeholder_workspaces.sql";
+
+  try {
+    await writeFile(path.join(fixtureDir, candidate), "CREATE TABLE reverse_identity_probe (id integer);", "utf8");
+    await adminPool.query(`CREATE DATABASE "${dbName}"`);
+    const seedPool = new Pool({
+      connectionString: testUrl.toString(),
+      ssl: process.env.DATABASE_SSL === "false" ? undefined : { rejectUnauthorized: false },
+    });
+    try {
+      await seedPool.query(`
+        CREATE TABLE schema_migrations (
+          version text PRIMARY KEY,
+          filename text NOT NULL,
+          applied_at timestamptz NOT NULL DEFAULT now()
+        )
+      `);
+      await seedPool.query(
+        "INSERT INTO schema_migrations(version, filename) VALUES ($1, $2)",
+        ["088", recorded],
+      );
+    } finally {
+      await seedPool.end();
+    }
+
+    const child = spawnSync(process.execPath, [migrationRunner], {
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        NODE_ENV: "test",
+        RUPAYKG_RUN_DB_INTEGRATION_TESTS: "1",
+        DATABASE_URL: testUrl.toString(),
+        RUPAYKG_TEST_MIGRATION_DIR: fixtureDir,
+      },
+      timeout: 30_000,
+    });
+    assert.equal(child.error, undefined, "migration runner process should start and finish normally");
+    assert.notEqual(child.status, 0, "reverse identity conflict must be rejected");
+    assert.match(`${child.stdout}\n${child.stderr}`, /MIGRATION_IDENTITY_CONFLICT/);
+    assert.match(`${child.stdout}\n${child.stderr}`, /No migrations were applied/);
+
+    const verifyPool = new Pool({
+      connectionString: testUrl.toString(),
+      ssl: process.env.DATABASE_SSL === "false" ? undefined : { rejectUnauthorized: false },
+    });
+    try {
+      const ledger = await verifyPool.query<{ version: string; filename: string }>(
+        "SELECT version, filename FROM schema_migrations ORDER BY version",
+      );
+      assert.deepEqual(ledger.rows, [{ version: "088", filename: recorded }], "reverse conflict must preserve ledger");
+      const table = await verifyPool.query<{ exists: boolean }>(
+        "SELECT to_regclass('public.reverse_identity_probe') IS NOT NULL AS exists",
+      );
+      assert.equal(table.rows[0]?.exists, false, "reverse conflict must reject before candidate DDL");
+    } finally {
+      await verifyPool.end();
+    }
+  } finally {
+    await adminPool.query(
+      "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid()",
+      [dbName],
+    );
+    await adminPool.query(`DROP DATABASE IF EXISTS "${dbName}"`);
+    await adminPool.end();
+    await rm(fixtureDir, { recursive: true, force: true });
+  }
+});
