@@ -28,7 +28,7 @@ before(async () => {
     const retiredVerification = (await c.query<{ id: string }>("insert into verifications(evidence_id,activity_id,verifier_identity_id,decision,scope,rationale) values($1,$2,$3,'APPROVED','settlement-guard','independent database guard test') returning id", [retiredEvidence, retiredActivity, verifier])).rows[0]!.id;
     const retiredMethodologyCode = `TEST-METHODOLOGY-RETIRED-${suffix}`;
     const retiredMethodologyId = (await c.query(
-      "insert into methodology_versions(methodology_code,version,rules,source_reference,source_hash,applicability_rules,parameter_dictionary,equation_mapping,reconciliation_evidence,reconciliation_reference,reconciled_at,regression_verified_at) values($1,'test-1','{}'::jsonb,'test-fixture://methodology',repeat('a',64),'{}'::jsonb,'{}'::jsonb,'{}'::jsonb,'[{\\"fixture\\":true}]'::jsonb,$2,now(),now()) returning id",
+      "insert into methodology_versions(methodology_code,version,rules,source_reference,source_hash,applicability_rules,parameter_dictionary,equation_mapping,reconciliation_evidence,reconciliation_reference,reconciled_at,regression_verified_at) values($1,'test-1','{}'::jsonb,'test-fixture://methodology',repeat('a',64),'{\"fixture\":true}'::jsonb,'{\"fixture\":true}'::jsonb,'{\"fixture\":true}'::jsonb,'[{\\"fixture\\":true}]'::jsonb,$2,now(),now()) returning id",
       [retiredMethodologyCode, `retired-reconciliation-${suffix}`],
     )).rows[0]!.id;
     await c.query(
@@ -52,7 +52,7 @@ before(async () => {
     const openVerification = (await c.query<{ id: string }>("insert into verifications(evidence_id,activity_id,verifier_identity_id,decision,scope,rationale) values($1,$2,$3,'APPROVED','settlement-guard','independent database guard test') returning id", [openEvidence, openActivity, verifier])).rows[0]!.id;
     const openMethodologyCode = `TEST-METHODOLOGY-OPEN-${suffix}`;
     const openMethodologyId = (await c.query(
-      "insert into methodology_versions(methodology_code,version,rules,source_reference,source_hash,applicability_rules,parameter_dictionary,equation_mapping,reconciliation_evidence,reconciliation_reference,reconciled_at,regression_verified_at) values($1,'test-1','{}'::jsonb,'test-fixture://methodology',repeat('a',64),'{}'::jsonb,'{}'::jsonb,'{}'::jsonb,'[{\\"fixture\\":true}]'::jsonb,$2,now(),now()) returning id",
+      "insert into methodology_versions(methodology_code,version,rules,source_reference,source_hash,applicability_rules,parameter_dictionary,equation_mapping,reconciliation_evidence,reconciliation_reference,reconciled_at,regression_verified_at) values($1,'test-1','{}'::jsonb,'test-fixture://methodology',repeat('a',64),'{\"fixture\":true}'::jsonb,'{\"fixture\":true}'::jsonb,'{\"fixture\":true}'::jsonb,'[{\\"fixture\\":true}]'::jsonb,$2,now(),now()) returning id",
       [openMethodologyCode, `open-reconciliation-${suffix}`],
     )).rows[0]!.id;
     await c.query(
