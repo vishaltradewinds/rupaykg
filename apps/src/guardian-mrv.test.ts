@@ -299,3 +299,73 @@ test("Guardian MRV rejects a whitespace-only execution identifier", async () => 
     else process.env.GUARDIAN_MRV_SUBMIT_URL = previousUrl;
   }
 });
+
+
+// Provider response minimization and resilience regression tests.
+test("Guardian result exposes only normalized fields and a response digest, never provider JSON", async () => {
+  const previousUrl = process.env.GUARDIAN_MRV_SUBMIT_URL;
+  const previousFetch = globalThis.fetch;
+  process.env.GUARDIAN_MRV_SUBMIT_URL = "https://guardian.test/mrv";
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    status: "VERIFIED",
+    executionId: "guardian-execution-safe",
+    policyId: "policy-1",
+    correlationId: "provider-correlation-1",
+    secretToken: "must-not-escape",
+    personalData: { email: "person@example.invalid" },
+  }), { status: 200, headers: { "content-type": "application/json" } });
+  try {
+    const result = await executeGuardianMrv(request);
+    assert.equal(result.status, "VERIFIED");
+    assert.equal(result.executionId, "guardian-execution-safe");
+    assert.equal(result.providerCorrelationId, "provider-correlation-1");
+    assert.match(String(result.responseDigest), /^[a-f0-9]{64}$/);
+    assert.equal("raw" in result, false);
+    assert.equal(JSON.stringify(result).includes("must-not-escape"), false);
+    assert.equal(JSON.stringify(result).includes("person@example.invalid"), false);
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousUrl === undefined) delete process.env.GUARDIAN_MRV_SUBMIT_URL;
+    else process.env.GUARDIAN_MRV_SUBMIT_URL = previousUrl;
+  }
+});
+
+test("Guardian rejects oversized provider responses without returning body content", async () => {
+  const previousUrl = process.env.GUARDIAN_MRV_SUBMIT_URL;
+  const previousFetch = globalThis.fetch;
+  process.env.GUARDIAN_MRV_SUBMIT_URL = "https://guardian.test/mrv";
+  globalThis.fetch = async () => new Response(JSON.stringify({ status: "VERIFIED", executionId: "x", unexpected: "x".repeat(1024 * 1024 + 10) }), {
+    status: 200, headers: { "content-type": "application/json" },
+  });
+  try {
+    const result = await executeGuardianMrv(request);
+    assert.equal(result.status, "UNAVAILABLE");
+    assert.equal("raw" in result, false);
+    assert.equal(JSON.stringify(result).includes("unexpected"), false);
+    assert.match(result.message, /size limit/);
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousUrl === undefined) delete process.env.GUARDIAN_MRV_SUBMIT_URL;
+    else process.env.GUARDIAN_MRV_SUBMIT_URL = previousUrl;
+  }
+});
+
+test("Guardian malformed JSON fails closed with a safe error", async () => {
+  const previousUrl = process.env.GUARDIAN_MRV_SUBMIT_URL;
+  const previousFetch = globalThis.fetch;
+  process.env.GUARDIAN_MRV_SUBMIT_URL = "https://guardian.test/mrv";
+  globalThis.fetch = async () => new Response("{broken-secret-shaped-content", {
+    status: 200, headers: { "content-type": "application/json" },
+  });
+  try {
+    const result = await executeGuardianMrv(request);
+    assert.equal(result.status, "UNAVAILABLE");
+    assert.equal("raw" in result, false);
+    assert.equal(result.message, "Guardian returned malformed JSON.");
+    assert.equal(JSON.stringify(result).includes("broken-secret-shaped-content"), false);
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousUrl === undefined) delete process.env.GUARDIAN_MRV_SUBMIT_URL;
+    else process.env.GUARDIAN_MRV_SUBMIT_URL = previousUrl;
+  }
+});
