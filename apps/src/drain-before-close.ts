@@ -2,31 +2,51 @@ export interface DrainBeforeCloseOptions {
   isInFlight: () => boolean;
   close: () => Promise<void>;
   timeoutMs: number;
+  secondStageTimeoutMs?: number;
   pollIntervalMs?: number;
   onTimeout?: () => void;
+  onForcedTermination?: () => void;
+  terminate?: (exitCode: number) => void;
+}
+
+export interface DrainBeforeCloseResult {
+  timedOut: boolean;
+  forcedTermination: boolean;
 }
 
 /**
  * Drain active work before closing resources it may still be using.
- * A timeout marks shutdown as unclean, but never closes resources under active work.
+ * After the grace period, allow one bounded second-stage drain. If work remains
+ * stuck, terminate the process without closing resources underneath that work.
  */
-export async function drainBeforeClose(options: DrainBeforeCloseOptions): Promise<{ timedOut: boolean }> {
+export async function drainBeforeClose(
+  options: DrainBeforeCloseOptions,
+): Promise<DrainBeforeCloseResult> {
   const pollIntervalMs = options.pollIntervalMs ?? 100;
-  const deadline = Date.now() + options.timeoutMs;
+  const secondStageTimeoutMs = options.secondStageTimeoutMs ?? 5_000;
+  const waitForChangeUntil = async (deadline: number) => {
+    while (options.isInFlight() && Date.now() < deadline) {
+      await new Promise<void>(resolve =>
+        setTimeout(resolve, Math.min(pollIntervalMs, Math.max(1, deadline - Date.now()))),
+      );
+    }
+  };
 
-  while (options.isInFlight() && Date.now() < deadline) {
-    await new Promise<void>(resolve => setTimeout(resolve, Math.min(pollIntervalMs, Math.max(1, deadline - Date.now()))));
+  await waitForChangeUntil(Date.now() + options.timeoutMs);
+  if (!options.isInFlight()) {
+    await options.close();
+    return { timedOut: false, forcedTermination: false };
   }
 
-  const timedOut = options.isInFlight();
-  if (timedOut) options.onTimeout?.();
-
-  // After the grace deadline, wait for the active operation to settle before closing
-  // the pool. This may take longer than the grace period, intentionally.
-  while (options.isInFlight()) {
-    await new Promise<void>(resolve => setTimeout(resolve, pollIntervalMs));
+  options.onTimeout?.();
+  await waitForChangeUntil(Date.now() + secondStageTimeoutMs);
+  if (!options.isInFlight()) {
+    await options.close();
+    return { timedOut: true, forcedTermination: false };
   }
 
-  await options.close();
-  return { timedOut };
+  // Never close a resource while active work may still be using it.
+  options.onForcedTermination?.();
+  options.terminate?.(1);
+  return { timedOut: true, forcedTermination: true };
 }
