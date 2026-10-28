@@ -164,7 +164,7 @@ export async function executeGuardianMrv(input: GuardianMrvRequest): Promise<Gua
     if (rawText) {
       try { raw = JSON.parse(rawText); }
       catch {
-        return { status: "UNAVAILABLE", executionId: null, policyId: input.policyId, correlationId, idempotencyKey, responseDigest, message: "Guardian returned malformed JSON." };
+        return { status: "UNAVAILABLE", executionId: null, policyId: input.policyId, correlationId, idempotencyKey, ...(responseDigest ? { responseDigest } : {}), message: "Guardian returned malformed JSON." };
       }
     }
     const body = raw && typeof raw === "object" && !Array.isArray(raw) ? raw as Record<string, unknown> : null;
