@@ -112,3 +112,78 @@ test("migration runner rejects each known legacy identity and mixed history befo
     await adminPool.end();
   }
 });
+
+
+test("migration runner preflights late version conflicts before any candidate DDL", {
+  skip: !enabled || !databaseUrl ? "requires disposable PostgreSQL integration-test mode and DATABASE_URL" : false,
+}, async () => {
+  const sourceDir = path.dirname(fileURLToPath(import.meta.url));
+  const migrationRunner = path.join(sourceDir, "migrate.js");
+  const baseUrl = new URL(databaseUrl!);
+  const adminUrl = new URL(baseUrl);
+  adminUrl.pathname = "/postgres";
+  const adminPool = new Pool({
+    connectionString: adminUrl.toString(),
+    ssl: process.env.DATABASE_SSL === "false" ? undefined : { rejectUnauthorized: false },
+  });
+  const dbName = `rupaykg_version_conflict_${process.pid}_${Date.now()}`;
+  const testUrl = new URL(baseUrl);
+  testUrl.pathname = `/${dbName}`;
+
+  try {
+    await adminPool.query(`CREATE DATABASE "${dbName}"`);
+    const seedPool = new Pool({
+      connectionString: testUrl.toString(),
+      ssl: process.env.DATABASE_SSL === "false" ? undefined : { rejectUnauthorized: false },
+    });
+    try {
+      await seedPool.query(`
+        CREATE TABLE schema_migrations (
+          version text PRIMARY KEY,
+          filename text NOT NULL,
+          applied_at timestamptz NOT NULL DEFAULT now()
+        )
+      `);
+      await seedPool.query(
+        "INSERT INTO schema_migrations(version, filename) VALUES ($1, $2)",
+        ["091", "091_unexpected_historical_name.sql"],
+      );
+    } finally {
+      await seedPool.end();
+    }
+
+    const child = spawnSync(process.execPath, [migrationRunner], {
+      encoding: "utf8",
+      env: { ...process.env, DATABASE_URL: testUrl.toString() },
+      timeout: 30_000,
+    });
+    assert.equal(child.error, undefined, "migration runner process should start and finish normally");
+    assert.notEqual(child.status, 0, "runner must reject the conflicting version before applying migrations");
+    assert.match(`${child.stdout}\n${child.stderr}`, /MIGRATION_VERSION_CONFLICT/);
+    assert.match(`${child.stdout}\n${child.stderr}`, /No migrations were applied/);
+
+    const verifyPool = new Pool({
+      connectionString: testUrl.toString(),
+      ssl: process.env.DATABASE_SSL === "false" ? undefined : { rejectUnauthorized: false },
+    });
+    try {
+      const ledger = await verifyPool.query<{ version: string; filename: string }>(
+        "SELECT version, filename FROM schema_migrations ORDER BY version",
+      );
+      assert.deepEqual(ledger.rows, [{ version: "091", filename: "091_unexpected_historical_name.sql" }]);
+      const tables = await verifyPool.query<{ tablename: string }>(
+        "SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename <> 'schema_migrations'",
+      );
+      assert.deepEqual(tables.rows, [], "preflight must reject before earlier candidate migrations create tables");
+    } finally {
+      await verifyPool.end();
+    }
+  } finally {
+    await adminPool.query(
+      "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid()",
+      [dbName],
+    );
+    await adminPool.query(`DROP DATABASE IF EXISTS "${dbName}"`);
+    await adminPool.end();
+  }
+});
