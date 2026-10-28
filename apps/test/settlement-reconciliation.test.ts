@@ -57,11 +57,11 @@ before(async () => {
   )).rows[0]!.id;
   const methodologyCode = `TEST-METHODOLOGY-SETTLEMENT-RECON-${suffix}`;
   const methodologyVersionId = (await pool.query<{ id: string }>(
-    "insert into methodology_versions(methodology_code,version,rules,source_reference,source_hash,applicability_rules,parameter_dictionary,equation_mapping,reconciliation_evidence,reconciliation_reference,reconciled_at,regression_verified_at) values($1,'test-1','{}'::jsonb,'test-fixture://methodology',repeat('a',64),'{\\"fixture\\":true}'::jsonb,'{\\"fixture\\":true}'::jsonb,'{\\"fixture\\":true}'::jsonb,'[{\\"fixture\\":true}]'::jsonb,$2,now(),now()) returning id",
+    "insert into methodology_versions(methodology_code,version,rules,source_reference,source_hash,applicability_rules,parameter_dictionary,equation_mapping,reconciliation_evidence,reconciliation_reference,reconciled_at,regression_verified_at) values($1,'test-1','{}'::jsonb,'test-fixture://methodology',repeat('a',64),'{\"fixture\":true}'::jsonb,'{\"fixture\":true}'::jsonb,'{\"fixture\":true}'::jsonb,'[{\"fixture\":true}]'::jsonb,$2,now(),now()) returning id",
     [methodologyCode, `settlement-reconciliation-reconciliation-${suffix}`],
   )).rows[0]!.id;
   await pool.query(
-    "insert into methodology_governance_evidence(methodology_version_id,evidence_kind,reference,evidence_hash,independent_party,evidence) values($1,'NUMERICAL_RECONCILIATION',$2,repeat('b',64),'TEST_FIXTURE_ONLY','{\\"fixture\\":true}'::jsonb),($1,'REGRESSION_TEST',$3,repeat('c',64),'TEST_FIXTURE_ONLY','{\\"fixture\\":true}'::jsonb)",
+    "insert into methodology_governance_evidence(methodology_version_id,evidence_kind,reference,evidence_hash,independent_party,evidence) values($1,'NUMERICAL_RECONCILIATION',$2,repeat('b',64),'TEST_FIXTURE_ONLY','{\"fixture\":true}'::jsonb),($1,'REGRESSION_TEST',$3,repeat('c',64),'TEST_FIXTURE_ONLY','{\"fixture\":true}'::jsonb)",
     [methodologyVersionId, `settlement-reconciliation-reconciliation-${suffix}`, `settlement-reconciliation-regression-${suffix}`],
   );
   await pool.query("update methodology_versions set governance_status='PRODUCTION_ELIGIBLE' where id=$1", [methodologyVersionId]);
@@ -70,7 +70,7 @@ before(async () => {
     [activity, verification, evidence, methodologyCode, `settlement-reconciliation-policy-${suffix}`, `settlement-reconciliation-execution-${suffix}`, `settlement-reconciliation-tx-${suffix}`, `settlement-reconciliation-hash-${suffix}`, JSON.stringify({ testFixture: true })],
   );
   await pool.query(
-    "insert into activity_registry_eligibility_decisions(activity_id,verification_id,evidence_id,methodology_version_id,geography_id,decision,statutory_basis,permit_and_authority_evidence,applicability_rationale,independent_review_reference,reviewer_identity_id,effective_from) values($1,$2,$3,$4,$5,'APPROVED','{\\"testFixture\\":true}'::jsonb,'[{\\"testFixture\\":true}]'::jsonb,'TEST FIXTURE ONLY - NOT A REGULATORY APPROVAL',$6,$7,current_date)",
+    "insert into activity_registry_eligibility_decisions(activity_id,verification_id,evidence_id,methodology_version_id,geography_id,decision,statutory_basis,permit_and_authority_evidence,applicability_rationale,independent_review_reference,reviewer_identity_id,effective_from) values($1,$2,$3,$4,$5,'APPROVED','{\"testFixture\":true}'::jsonb,'[{\"testFixture\":true}]'::jsonb,'TEST FIXTURE ONLY - NOT A REGULATORY APPROVAL',$6,$7,current_date)",
     [activity, verification, evidence, methodologyVersionId, geography, `settlement-reconciliation-review-${suffix}`, verifier],
   );
   const credential = (await pool.query<{ id: string }>(
