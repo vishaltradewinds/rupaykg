@@ -197,3 +197,16 @@ This verifies the new candidate-tree uniqueness guard and current tested suite a
 ## Updated release disposition
 
 **HOLD remains mandatory.** The new duplicate-prefix regression is CI-verified. Still open: authorized read-only ledger/schema evidence for each relevant environment; broader partial-application and schema-drift characterization; migration-specific review for transaction-incompatible SQL; independent review and approved recovery/rollback; separate live Guardian/HCS/Mirror Node acceptance where in scope; and explicit production release approval. No production database access or writes were performed. PRs #97 and #104 remain unmerged; production certification remains OFF.
+
+
+## CI verification — transaction-safety static screen (2026-10-28)
+
+The new transaction-safety screen initially failed in run [40693200362](https://github.com/vishaltradewinds/rupaykg/actions/runs/40693200362) because the scanner treated `BEGIN` tokens inside dollar-quoted PL/pgSQL function bodies as top-level transaction commands. Inspection of representative findings confirmed this was a scanner false positive, not evidence that those migrations issue runner-level transaction control.
+
+The scanner was corrected to strip dollar-quoted function bodies after removing SQL comments, then check the remaining SQL for explicit transaction control and known transaction-incompatible statements. The corrected code is commit `a79dc21172b85448a77eb33bf1e7607254cf0f8b`.
+
+Full workflow run [40693796240](https://github.com/vishaltradewinds/rupaykg/actions/runs/40693796240) completed successfully on that commit. All workflow checks passed, including migration validation, clean migration, typecheck, build, browser smoke test, automated tests including disposable PostgreSQL acceptance, and production container build.
+
+Scope limitation: this is a static screening test, not a full SQL parser or proof that every migration is safe under every PostgreSQL version/runtime state. Any flagged non-transactional command still requires migration-specific review, and dynamic SQL or unusual syntax may need separate scrutiny.
+
+**Release remains HOLD.** Authorized environment-specific ledger/schema evidence, broader partial-application and schema-drift characterization, independent review, approved recovery plan, separate live Guardian/HCS/Mirror Node acceptance where in scope, and explicit release approval remain outstanding. PRs #97 and #104 remain unmerged; production certification remains OFF. No production database was accessed or modified.
