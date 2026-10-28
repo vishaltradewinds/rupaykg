@@ -232,3 +232,12 @@ Removed the forced backend-termination calls from `apps/src/migration-identity.i
 Verification: [workflow run 40694790907](https://github.com/vishaltradewinds/rupaykg/actions/runs/40694790907) completed successfully on that commit.
 
 This improves test cleanup reliability but does not replace repeated-run/stress testing or per-environment migration ledger inspection. **Release remains HOLD**; PRs #97 and #104 remain unmerged, production certification remains OFF, and no production database was accessed or modified.
+
+
+## Repository migration-tree inventory — 2026-10-28
+
+A read-only inventory of the validation branch's Git tree found 107 numbered SQL migrations, versions 001 through 107, with no missing numeric versions, duplicate prefixes, or non-canonical numeric padding. This is a repository-structure observation only; it does not establish which files have run in any environment or whether a deployed schema matches the repository.
+
+The static transaction-safety regression also passed as part of full CI run [40693796240](https://github.com/vishaltradewinds/rupaykg/actions/runs/40693796240). A limited read of recent migrations found trigger replacement patterns (`DROP TRIGGER IF EXISTS` followed by `CREATE TRIGGER`) and immutable-state guards; the reviewed samples did not show table/column drops, truncation, or concurrent index creation. This sample is not a full destructive-DDL audit of all 107 files and must not be represented as one.
+
+**Remaining audit work:** complete a whole-tree, SQL-aware review of destructive/data-rewriting statements and schema dependencies; compare actual schema/ledger state using authorized read-only evidence per environment; expand partial-application/schema-drift fixtures. No production database was accessed or modified.
