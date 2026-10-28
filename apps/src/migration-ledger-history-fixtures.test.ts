@@ -10,10 +10,7 @@ const canonicalReleaseFiles = [
   "089_cpcb_bwg_workflow_tracking.sql",
   "090_ccts_methodology_registry.sql",
   "091_evidence_artifact_vault.sql",
-  "092_example_candidate_migration.sql",
-  "093_example_candidate_migration.sql",
-  "094_example_candidate_migration.sql",
-  "095_example_candidate_migration.sql",
+  
 ];
 
 const sharedLegacyRecords = [
