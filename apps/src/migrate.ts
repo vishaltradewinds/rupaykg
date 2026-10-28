@@ -3,47 +3,73 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
+import { readProductionConfig } from "./production-config.js";
+import { findMigrationFilenameConflicts } from "./migration-inventory.js";
 
-const databaseUrl = process.env.DATABASE_URL;
+// Validate the complete production contract before any database connection or DDL.
+const productionConfig = process.env.NODE_ENV === "production" ? readProductionConfig() : null;
+const databaseUrl = productionConfig?.migrationDatabaseUrl ?? process.env.DATABASE_URL;
 if (!databaseUrl) throw new Error("DATABASE_URL is required");
+const databaseSsl = productionConfig?.databaseSsl ?? process.env.DATABASE_SSL;
+const databaseCaCert = productionConfig?.databaseCaCert ?? process.env.DATABASE_CA_CERT?.trim() ?? "";
+const ssl = databaseSsl === "false"
+  ? false
+  : { rejectUnauthorized: true, ...(databaseCaCert ? { ca: databaseCaCert } : {}) };
 
-const pool = new Pool({
-  connectionString: databaseUrl,
-  max: 1,
-  ssl: process.env.DATABASE_SSL === "false" ? undefined : { rejectUnauthorized: false },
-});
+const pool = new Pool({ connectionString: databaseUrl, max: 1, ssl });
 
 try {
-  await pool.query(`
-    create table if not exists schema_migrations (
-      version text primary key,
-      filename text not null,
-      applied_at timestamptz not null default now()
-    )
-  `);
-
-  // Support both CI/source execution (/repo/apps/src) and the production
-  // container (/app/apps/dist/src). Never assume a single filesystem root.
+  // Resolve and validate the complete local migration inventory before any DDL.
   const here = path.dirname(fileURLToPath(import.meta.url));
   const candidates = [path.resolve(here, "../../migrations"), path.resolve(here, "../../../migrations")];
   const migrationDir = candidates.find((candidate) => existsSync(candidate));
   if (!migrationDir) throw new Error(`Migration directory not found. Checked: ${candidates.join(", ")}`);
+
   const files = (await readdir(migrationDir))
     .filter((name) => /^\d+_.+\.sql$/.test(name))
     .sort();
-
+  const expected = new Map<string, string>();
   for (const filename of files) {
-    const version = filename.split("_", 1)[0];
-    const existing = await pool.query<{ version: string; filename: string }>(
-      "select version, filename from schema_migrations where version = $1",
-      [version],
+    const version = filename.split("_", 1)[0]!;
+    const previous = expected.get(version);
+    if (previous) throw new Error(`Duplicate migration version ${version}: ${previous} and ${filename}`);
+    expected.set(version, filename);
+  }
+
+  // Read-only full-ledger preflight. Any unexplained history stops the run before DDL.
+  const ledgerExists = await pool.query<{ ledger: string | null }>(
+    "select to_regclass('public.schema_migrations')::text as ledger",
+  );
+  const applied = new Map<string, string>();
+  if (ledgerExists.rows[0]?.ledger) {
+    const ledger = await pool.query<{ version: string; filename: string }>(
+      "select version, filename from public.schema_migrations order by version",
     );
-    if (existing.rows[0]) {
-      if (existing.rows[0].filename !== filename) {
-        throw new Error(`Migration version ${version} is already recorded as ${existing.rows[0].filename}, not ${filename}`);
-      }
-      continue;
+    for (const row of ledger.rows) applied.set(row.version, row.filename);
+
+    const conflicts = findMigrationFilenameConflicts(files, ledger.rows);
+    const unexpected = ledger.rows.filter((row) => !expected.has(row.version));
+    if (conflicts.length > 0 || unexpected.length > 0) {
+      const details = [
+        ...conflicts.map((row) => `version ${row.version}: ledger=${row.recorded}, repository=${row.expected}`),
+        ...unexpected.map((row) => `version ${row.version}: ledger filename ${row.filename} has no matching migration file`),
+      ];
+      throw new Error("Migration preflight failed; no schema changes were made. Reconcile authoritative history first:\n" + details.join("\n"));
     }
+  } else {
+    await pool.query(`
+      create table public.schema_migrations (
+        version text primary key,
+        filename text not null,
+        applied_at timestamptz not null default now()
+      )
+    `);
+  }
+
+  // The preflight passed; apply only migrations absent from the ledger.
+  for (const filename of files) {
+    const version = filename.split("_", 1)[0]!;
+    if (applied.has(version)) continue;
 
     const sql = await readFile(path.join(migrationDir, filename), "utf8");
     const client = await pool.connect();
@@ -51,10 +77,11 @@ try {
       await client.query("begin");
       await client.query(sql);
       await client.query(
-        "insert into schema_migrations(version, filename) values ($1, $2)",
+        "insert into public.schema_migrations(version, filename) values ($1, $2)",
         [version, filename],
       );
       await client.query("commit");
+      applied.set(version, filename);
       console.log(`Applied ${filename}`);
     } catch (error) {
       await client.query("rollback");

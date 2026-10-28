@@ -1,34 +1,43 @@
 # Database migrations
 
+## Migration identity and legacy history (2026-10-25)
+
+The migration ledger records filenames as immutable identities, not merely numeric ordering. The historical migrations `20261022_async_mirror_inbox.sql`, `20261023_async_mirror_worker_leases.sql`, `20261024_ai_intake_rate_limits.sql`, and `20261025_ai_evidence_intake_jobs.sql` are preserved from the `intelligence/ai-evidence-intake-middleware` engineering branch because their exact filenames appear in the staging ledger. Do not replace or repurpose these version identities.
+
+The CPCB/BM WA03.001/MRV migrations introduced by the current Shakti batch therefore use fresh identifiers `20261029` through `20261035`. The missing numeric slots `20261026`–`20261028` are intentional; never renumber an already-applied migration merely to make the sequence contiguous. The migration runner preflights all repository filename/version conflicts before applying any individual migration. A conflict must be resolved by restoring the original migration source and assigning new identifiers to unapplied work, not by changing the database ledger or bypassing the fail-closed check.
+
+This source recovery preserves filename identity, but it does not prove that a particular database is the live production target or that its schema is healthy. Verify provider/project/branch identity and perform disposable-database replay and state verification before any production change.
+
+
 Apply migrations in filename order against a fresh PostgreSQL database:
 
-1. `001_core.sql` — authoritative core entities and lifecycle enums.
-2. `002_regulatory.sql` — versioned regulatory source catalog; this historical seed migration is immutable and later provenance corrections belong in subsequent migrations.
-3. `003_identity_geography_operations.sql` — source-versioned geography, identity credentials, assignments and offline operation intake.
-4. `004_security_auth.sql` — organization memberships and opaque identity sessions.
-5. `005_carbon_epr_esg.sql` — carbon projects/calculations, EPR and ESG reporting records.
-6. `006_registry_settlement_guardrails.sql` — database-level issuance and settlement safety guards.
-7. `007_resource_flow_mrv.sql` — resource custody links and MRV observation/verification requirements.
-8. `008_verification_integrity.sql` — independent verifier authorization and verification integrity controls.
-9. `009_field_sync.sql` — durable offline field envelopes, conflicts and cursors.
-10. `010_integrity_controls.sql` — tamper-evident registry/settlement event hashing and append-only guards.
-11. `011_field_sync_application.sql` — authoritative entity-application metadata for field envelopes.
-12. `012_geography_authorization.sql` — organization geography roots and database-enforced descendant scope.
-13. `013_settlement_external_confirmation.sql` — external authority confirmation and reconciliation gates before settlement finalization.
-14. `014_registry_settlement_idempotency.sql` — idempotency constraints for registry and settlement mutations.
-15. `015_high_risk_action_permissions.sql` — explicit high-risk action permissions for registry and settlement operations.
-16. `016_field_device_enrollment.sql` — field-device enrollment and lifecycle controls.
-17. `017_field_device_provenance.sql` — field-device provenance metadata and integrity controls.
-18. `018_value_mutation_permissions.sql` — authorization boundaries for value-layer mutations.
-19. `019_settlement_reconciliation_immutability.sql` — immutable settlement reconciliation evidence and state controls.
-20. `020_carbon_calculation_provenance.sql` — evidence-bound carbon calculation provenance.
-21. `021_methodology_governance.sql` — methodology source lock, applicability/parameter/equation mapping and production-eligibility governance.
-22. `022_carbon_provenance_integrity.sql` — database integrity controls for carbon provenance.
-23. `024_methodology_governance_immutability.sql` — forward-only methodology governance and immutable mapped/reconciled state.
-24. `025_methodology_reconciliation_evidence.sql` — independent numerical reconciliation and regression-verification evidence required for production eligibility.
-25. `026_regulatory_source_provenance.sql` — exact verified official-source corrections and verification dates for regulatory records; does not rewrite the historical seed migration.
-26. `027_verification_permission_guard.sql` — database verification authorization guard requiring explicit `VERIFY_EVIDENCE` permission rather than legacy role-name elevation.
-27. `028_settlement_retired_credential_guard.sql` — prevents settlement creation for retired credentials and prevents retirement while an attached settlement remains open.
+1. `001_core.sql` â€” authoritative core entities and lifecycle enums.
+2. `002_regulatory.sql` â€” versioned regulatory source catalog; this historical seed migration is immutable and later provenance corrections belong in subsequent migrations.
+3. `003_identity_geography_operations.sql` â€” source-versioned geography, identity credentials, assignments and offline operation intake.
+4. `004_security_auth.sql` â€” organization memberships and opaque identity sessions.
+5. `005_carbon_epr_esg.sql` â€” carbon projects/calculations, EPR and ESG reporting records.
+6. `006_registry_settlement_guardrails.sql` â€” database-level issuance and settlement safety guards.
+7. `007_resource_flow_mrv.sql` â€” resource custody links and MRV observation/verification requirements.
+8. `008_verification_integrity.sql` â€” independent verifier authorization and verification integrity controls.
+9. `009_field_sync.sql` â€” durable offline field envelopes, conflicts and cursors.
+10. `010_integrity_controls.sql` â€” tamper-evident registry/settlement event hashing and append-only guards.
+11. `011_field_sync_application.sql` â€” authoritative entity-application metadata for field envelopes.
+12. `012_geography_authorization.sql` â€” organization geography roots and database-enforced descendant scope.
+13. `013_settlement_external_confirmation.sql` â€” external authority confirmation and reconciliation gates before settlement finalization.
+14. `014_registry_settlement_idempotency.sql` â€” idempotency constraints for registry and settlement mutations.
+15. `015_high_risk_action_permissions.sql` â€” explicit high-risk action permissions for registry and settlement operations.
+16. `016_field_device_enrollment.sql` â€” field-device enrollment and lifecycle controls.
+17. `017_field_device_provenance.sql` â€” field-device provenance metadata and integrity controls.
+18. `018_value_mutation_permissions.sql` â€” authorization boundaries for value-layer mutations.
+19. `019_settlement_reconciliation_immutability.sql` â€” immutable settlement reconciliation evidence and state controls.
+20. `020_carbon_calculation_provenance.sql` â€” evidence-bound carbon calculation provenance.
+21. `021_methodology_governance.sql` â€” methodology source lock, applicability/parameter/equation mapping and production-eligibility governance.
+22. `022_carbon_provenance_integrity.sql` â€” database integrity controls for carbon provenance.
+23. `024_methodology_governance_immutability.sql` â€” forward-only methodology governance and immutable mapped/reconciled state.
+24. `025_methodology_reconciliation_evidence.sql` â€” independent numerical reconciliation and regression-verification evidence required for production eligibility.
+25. `026_regulatory_source_provenance.sql` â€” exact verified official-source corrections and verification dates for regulatory records; does not rewrite the historical seed migration.
+26. `027_verification_permission_guard.sql` â€” database verification authorization guard requiring explicit `VERIFY_EVIDENCE` permission rather than legacy role-name elevation.
+27. `028_settlement_retired_credential_guard.sql` â€” prevents settlement creation for retired credentials and prevents retirement while an attached settlement remains open.
 
 Migration `023` is intentionally absent from the current repository history; do not renumber later migrations to fill the gap. Migration numbering is identity, not a requirement for contiguous integers.
 
@@ -58,9 +67,11 @@ A credential in `RETIRED` state cannot be used to create a settlement. A credent
 
 Migration `083_mrv_mirror_node_registry_gate.sql` adds the persisted `mirror_node_verified_at` acceptance marker and tightens the PostgreSQL credential-issuance trigger. A Guardian `VERIFIED` result and Hedera `CONSENSUS_CONFIRMED` response are not sufficient by themselves; the exact anchored payload must also be successfully verified through Mirror Node. Existing provenance rows remain ineligible until that verification is performed. The authenticated Mirror Node verification endpoint checks the exact payload/hash and persists the marker only if the anchored tuple has not changed during verification. Credential issuance requires that persisted marker, and PostgreSQL independently checks it on inserts and transitions into value-bearing credential states.
 
-## Platform-admin audit chain head
+## Global audit chain
 
-Migration `084_platform_audit_chain_head.sql` bootstraps a singleton chain head using the latest existing audit row as a migration-time anchor. Older audit writers do not all participate in the platform-admin chain, so the bootstrap is not a certification of the entire historical audit table. After cutover, platform-admin appends lock the head row inside the same transaction, use its hash as the predecessor, insert the event, and advance the head atomically. Append order therefore does not depend on transaction-start timestamps or random UUID ordering. A failed transaction rolls back both event and head update. Audit events are append-only; tests must not delete them or rewind the head.
+Migration `084_platform_audit_chain_head.sql` introduced the singleton chain head. Migration `088_global_audit_chain_enforcement.sql` takes a short write lock on the head and audit table, selects the latest existing audit row as the legacy predecessor, then appends a dedicated `AUDIT_CHAIN_CUTOVER_ANCHOR` event. The immutable `platform_audit_chain_anchor` record stores the cutover event ID/hash and the legacy predecessor ID/hash. Timestamp/UUID ordering is used only to select that historical predecessor; it does not certify legacy chain order or retroactively prove historical tamper resistance.
+
+After migration 088, database triggers own the append contract for every `audit_events` writer. The BEFORE INSERT trigger serializes on the head row, replaces caller-supplied predecessor/hash values, and computes SHA-256 over canonical JSONB event data with UTC-normalized timestamps. The AFTER INSERT trigger advances the head in the same transaction. Append sequence therefore follows the locked head, not transaction-start timestamps or random UUID ordering. A rollback removes both the new event and head advance. UPDATE and DELETE against audit rows are rejected; TRUNCATE is also blocked by a statement-level guard. Deleting or truncating the chain head and truncating the immutable anchor are blocked as well. These triggers are defense in depth, not a substitute for a dedicated non-owner runtime role: an owner can alter or disable triggers. Tests must not delete audit events or rewind the head.
 
 ## Reserved-role dual control
 
@@ -75,3 +86,8 @@ Migration `086_reserved_role_restoration_db_guard.sql` protects status reactivat
 ## Acceptance fixture registry exclusion
 
 Migration `087_acceptance_fixture_registry_exclusion.sql` prevents activities or evidence explicitly marked with `metadata.acceptanceFixture=true` from backing credentials in value-bearing states. It also binds the database gate to the exact activity, verification, and evidence tuple. The MRV API reports acceptance fixtures as not registry eligible even after real Guardian/Hedera/Mirror Node verification. External anchoring proves message integrity and consensus; it does not validate the underlying activity as a real eligible carbon project.
+
+
+## Global append-only audit chain
+
+Migration `088_global_audit_chain_enforcement.sql` moves audit-chain enforcement to PostgreSQL so every insert into `audit_events`â€”including CPCB SWM, field-device, and conflict-trigger writersâ€”uses the same serialized SHA-256 chain. A `BEFORE INSERT` trigger locks the singleton chain head, overwrites caller-supplied predecessor/hash values using a canonical JSON representation, and an `AFTER INSERT` trigger advances the head in the same transaction. Any transaction rollback therefore rolls back both the event and head update. UPDATE and DELETE are rejected by the database. The chain starts at the migration-time anchor; this does not certify legacy rows written before migration 088 and does not assert that historical data was tamper-proof.

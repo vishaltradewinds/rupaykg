@@ -14,6 +14,10 @@ import { registerBwgRoutes } from "./bwg-routes.js";
 import { registerCpcbSwmRoutes } from "./cpcb-swm-routes.js";
 import { registerIntelligenceRoutes } from "./intelligence-routes.js";
 import { registerMrvRoutes } from "./mrv-routes.js";
+import { registerBmWa03001BaselineRoutes } from "./bm-wa03001-baseline-routes.js";
+import { registerBmWa03001ReconciliationRoutes } from "./bm-wa03001-reconciliation-routes.js";
+import { registerBmWa03001BaselineAttestationRoutes } from "./bm-wa03001-baseline-attestation-routes.js";
+import { registerBmT011AssessmentRoutes } from "./bm-t-011-assessment-routes.js";
 import { registerEvidenceVaultRoutes } from "./evidence-vault-routes.js";
 import { registerPlatformAdminRoutes } from "./platform-admin-routes.js";
 
@@ -24,8 +28,16 @@ const webRoot = resolve(process.cwd(), "apps/web/dist");
 if (existsSync(webRoot)) await app.register(fastifyStatic, { root: webRoot, wildcard: false });
 const databaseUrl = process.env.DATABASE_URL;
 const poolConfig: PoolConfig = { connectionString: databaseUrl, max: 10 };
-if (process.env.DATABASE_SSL === "require") poolConfig.ssl = { rejectUnauthorized: true, ca: process.env.DATABASE_CA_CERT };
-else if (process.env.DATABASE_SSL !== "false") poolConfig.ssl = { rejectUnauthorized: false };
+if (process.env.DATABASE_SSL === "require") {
+  poolConfig.ssl = { rejectUnauthorized: true, ...(process.env.DATABASE_CA_CERT ? { ca: process.env.DATABASE_CA_CERT } : {}) };
+} else if (process.env.DATABASE_SSL === "false") {
+  // Explicit opt-out is reserved for local/disposable databases and the
+  // provider-approved private network configuration validated at startup.
+  poolConfig.ssl = false;
+} else {
+  // Never silently accept an untrusted PostgreSQL certificate.
+  poolConfig.ssl = { rejectUnauthorized: true, ...(process.env.DATABASE_CA_CERT ? { ca: process.env.DATABASE_CA_CERT } : {}) };
+}
 const pool = databaseUrl ? new Pool(poolConfig) : null;
 async function query<T extends Record<string, unknown>>(text: string, values: unknown[] = []): Promise<T[]> { if (!pool) throw new Error("DATABASE_URL is not configured"); return (await pool.query<T>(text, values)).rows; }
 function bodyOf(request: { body: unknown }): Record<string, unknown> { return (request.body && typeof request.body === "object" ? request.body : {}) as Record<string, unknown>; }
@@ -99,6 +111,10 @@ await registerBwgRoutes(app, pool);
 await registerCpcbSwmRoutes(app, pool);
 await registerIntelligenceRoutes(app, pool);
 await registerMrvRoutes(app, pool);
+await registerBmWa03001BaselineRoutes(app, pool);
+await registerBmWa03001ReconciliationRoutes(app, pool);
+await registerBmWa03001BaselineAttestationRoutes(app, pool);
+await registerBmT011AssessmentRoutes(app, pool);
 await registerEvidenceVaultRoutes(app, pool);
 await registerPlatformAdminRoutes(app, pool);
 
