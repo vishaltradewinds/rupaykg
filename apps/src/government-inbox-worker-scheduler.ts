@@ -131,4 +131,6 @@ emit("scheduler_started", {
   alertDeliveryConfigured: Boolean(alertWebhookUrl),
 });
 await tick();
-timer = setInterval(() => { void tick(); }, intervalSeconds * 1000);
+// A signal may arrive while the initial tick is running; do not create a live
+// interval after shutdown has already begun.
+if (!stopping) timer = setInterval(() => { void tick(); }, intervalSeconds * 1000);
