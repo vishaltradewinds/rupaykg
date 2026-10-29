@@ -21,7 +21,7 @@ export function readAgenticModelConfig(env: NodeJS.ProcessEnv = process.env): Ag
   const localHost = ["localhost", "127.0.0.1", "[::1]"].includes(parsed.hostname.toLowerCase());
   if (parsed.username || parsed.password || parsed.search || parsed.hash) return null;
   const secureRemote = parsed.protocol === "https:";
-  const localDevelopment = env.NODE_ENV !== "production" && parsed.protocol === "http:" && localHost;
+  const localDevelopment = env.NODE_ENV === "development" && parsed.protocol === "http:" && localHost;
   if (!secureRemote && !localDevelopment) return null;
   const timeout = Number(env.RUPAYKG_AGENTIC_MODEL_TIMEOUT_MS ?? "8000");
   return {
