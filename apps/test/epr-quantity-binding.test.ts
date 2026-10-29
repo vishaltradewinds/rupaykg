@@ -40,3 +40,19 @@ test("EPR binding rejects missing dimensions, invalid quantity, and failed autho
   assert.equal(evaluateEprQuantityBinding({ ...completeBinding, verifierCurrentlyAuthorized: false }).ready, false);
   assert.equal(evaluateEprQuantityBinding({ ...completeBinding, evidenceNotRevoked: false }).ready, false);
 });
+
+test("EPR quantity binding rejects malformed and impossible calendar dates", () => {
+  for (const [periodStart, periodEnd] of [
+    ["2026-02-30", "2027-03-31"],
+    ["2026/04/01", "2027-03-31"],
+    ["2026-04-01T00:00:00Z", "2027-03-31"],
+    ["2027-04-01", "2027-03-31"],
+  ]) {
+    assert.equal(
+      evaluateEprQuantityBinding({ ...completeBinding, periodStart, periodEnd }).ready,
+      false,
+      `${periodStart} / ${periodEnd}`,
+    );
+  }
+  assert.equal(evaluateEprQuantityBinding(completeBinding).ready, true);
+});
