@@ -24,7 +24,10 @@ export function classifyMetric(metric: EsgMetric): EsgMetricState {
   if (!metric.code.trim() || !metric.unit.trim() || !Number.isFinite(metric.value)) {
     throw new Error("metric code, unit and finite value are required");
   }
-  return metric.evidenceId && metric.verificationId ? "VERIFIED" : "PENDING";
+  // This pure helper cannot resolve persisted evidence or verification records. IDs are
+  // references, not proof of approval, ownership, scope, freshness, or methodology.
+  // Keep the metric pending until an authoritative server-side service resolves them.
+  return "PENDING";
 }
 
 export function validateEsgFramework(framework: string): EsgFramework {
