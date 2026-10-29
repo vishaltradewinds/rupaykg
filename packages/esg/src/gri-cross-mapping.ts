@@ -121,10 +121,10 @@ export type GriCrossMappingReviewResult = {
   creditEligibilityConclusion: "NOT_CHANGED";
 };
 
-function isHttpUrl(value: string): boolean {
+function isHttpsUrl(value: string): boolean {
   try {
     const url = new URL(value);
-    return url.protocol === "https:" || url.protocol === "http:";
+    return url.protocol === "https:";
   } catch {
     return false;
   }
@@ -155,7 +155,7 @@ export function evaluateGriCrossMappingForReview(
 
   if (!mapping.sourceRequirement.version.trim()) blockers.push("SOURCE_VERSION_REQUIRED");
   if (!mapping.sourceRequirement.sourceUrl.trim()) blockers.push("SOURCE_URL_REQUIRED");
-  else if (!isHttpUrl(mapping.sourceRequirement.sourceUrl)) blockers.push("SOURCE_URL_INVALID");
+  else if (!isHttpsUrl(mapping.sourceRequirement.sourceUrl)) blockers.push("SOURCE_URL_INVALID");
   if (!mapping.sourceRequirement.officialSourceVerifiedAt) {
     blockers.push("OFFICIAL_SOURCE_VERIFICATION_REQUIRED");
   } else if (!isValidIsoDateTime(mapping.sourceRequirement.officialSourceVerifiedAt)) {
