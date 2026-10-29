@@ -63,7 +63,7 @@ test("EPR return creation accepts a real ISO calendar period at the date-validat
   assert.notEqual(response.json().code, "INVALID_PERIOD");
 });
 
-function makeNonDraftReturnPool(status: "REJECTED" | "SUBMITTED"): { pool: Pool; transactions: string[] } {
+function makeNonDraftReturnPool(status: "REJECTED" | "SUBMITTED" | "DRAFT"): { pool: Pool; transactions: string[] } {
   const transactions: string[] = [];
   const poolQuery = async (sql: string) => {
     if (sql.includes("from identity_sessions")) return { rows: [{ identity_id: identityId }] };
@@ -83,6 +83,7 @@ function makeNonDraftReturnPool(status: "REJECTED" | "SUBMITTED"): { pool: Pool;
         status,
       }] };
     }
+    if (sql.includes("select id,target_quantity,fulfilled_quantity,status from epr_obligations")) return { rows: [] };
     throw new Error(`Unexpected client SQL in rejected-return test: ${sql}`);
   };
   return {
@@ -130,4 +131,24 @@ test("submitted EPR returns cannot be submitted a second time", async () => {
   assert.equal(response.statusCode, 409);
   assert.equal(response.json().code, "INVALID_EPR_RETURN_STATE");
   assert.deepEqual(mock.transactions, ["BEGIN", "ROLLBACK"], "duplicate submission must roll back without committing");
+});
+
+
+test("EPR submission rolls back if the locked obligation cannot be resolved", async () => {
+  const app = Fastify();
+  const mock = makeNonDraftReturnPool("DRAFT");
+  await registerEprReturnRoutes(app, mock.pool);
+  const response = await app.inject({
+    method: "POST",
+    url: "/api/v1/epr/returns/66666666-6666-4666-8666-666666666666/submit",
+    headers: { authorization: "Bearer test-session" },
+    payload: {
+      evidenceId: "77777777-7777-4777-8777-777777777777",
+      verificationId: "88888888-8888-4888-8888-888888888888",
+    },
+  });
+  await app.close();
+  assert.equal(response.statusCode, 409);
+  assert.equal(response.json().code, "OBLIGATION_NOT_FOUND");
+  assert.deepEqual(mock.transactions, ["BEGIN", "ROLLBACK"], "failed obligation resolution must not commit");
 });
