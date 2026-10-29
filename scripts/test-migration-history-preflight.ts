@@ -6,6 +6,7 @@ import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { runMigrations } from "../apps/src/migrate.js";
 
+async function main(): Promise<void> {
 if (process.env.DATABASE_URL == null || process.env.RUPAYKG_RUN_MIGRATION_HISTORY_TESTS !== "1") {
   throw new Error("Set DATABASE_URL and RUPAYKG_RUN_MIGRATION_HISTORY_TESTS=1 for this disposable-PostgreSQL acceptance test.");
 }
@@ -88,3 +89,9 @@ try {
   await admin.end().catch(() => undefined);
   await rm(temp, { recursive: true, force: true });
 }
+}
+
+main().catch((error: unknown) => {
+  console.error(error);
+  process.exitCode = 1;
+});
