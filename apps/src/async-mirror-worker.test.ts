@@ -296,3 +296,28 @@ test("worker does not finalize or retry a row after lease renewal reports lost o
   assert.equal(statements.some(sql => sql.includes("set status='VALIDATED'")), false);
   assert.match(statements.find(sql => sql.includes("set status=$3")) ?? "", /lease_until > now\(\)/i);
 });
+
+
+test("worker treats a zero-row terminal write as lost lease ownership", async () => {
+  const statements: string[] = [];
+  const pool = {
+    query: async (sql: string) => {
+      statements.push(sql);
+      if (sql.includes("returning inbox.id")) return { rows: [row], rowCount: 1 };
+      if (sql.includes("from government_jurisdiction_crosswalks c")) {
+        return { rows: [{ id: "crosswalk-id", organization_id: "organization-id", geography_id: "geography-id", activity_id: null, source_version: "synthetic-v1" }], rowCount: 1 };
+      }
+      if (sql.includes("set status='VALIDATED'") || sql.includes("set status=$3")) return { rows: [], rowCount: 0 };
+      return { rows: [], rowCount: 1 };
+    },
+  } as unknown as Pool;
+
+  const result = await runGovernmentInboxWorker(pool);
+  assert.equal(result.validated, 0);
+  assert.equal(result.retried, 0);
+  assert.equal(statements.some(sql => sql.includes("set status='VALIDATED'")), true);
+  const recovery = statements.find(sql => sql.includes("set status=$3")) ?? "";
+  assert.match(recovery, /status='PROCESSING'/i);
+  assert.match(recovery, /lease_token=\$2/i);
+  assert.match(recovery, /lease_until > now\(\)/i);
+});
