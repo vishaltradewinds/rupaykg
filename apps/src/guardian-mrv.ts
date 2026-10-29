@@ -34,7 +34,7 @@ function endpoint(): string | null {
   if (parsed.username || parsed.password || parsed.search || parsed.hash) return null;
   const localHost = ["localhost", "127.0.0.1", "[::1]"].includes(parsed.hostname.toLowerCase());
   const secureRemote = parsed.protocol === "https:";
-  const localDevelopment = process.env.NODE_ENV !== "production" && parsed.protocol === "http:" && localHost;
+  const localDevelopment = process.env.NODE_ENV === "development" && parsed.protocol === "http:" && localHost;
   if (!secureRemote && !localDevelopment) return null;
   return parsed.toString().replace(/\/$/, "");
 }
