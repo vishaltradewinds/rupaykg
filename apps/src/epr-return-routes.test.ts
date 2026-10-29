@@ -62,3 +62,47 @@ test("EPR return creation accepts a real ISO calendar period at the date-validat
   assert.equal(response.statusCode, 503);
   assert.notEqual(response.json().code, "INVALID_PERIOD");
 });
+
+function makeRejectedReturnPool(): Pool {
+  const poolQuery = async (sql: string) => {
+    if (sql.includes("from identity_sessions")) return { rows: [{ identity_id: identityId }] };
+    if (sql.includes("from organization_memberships") && sql.includes("where identity_id = $1 and status = 'VERIFIED'")) {
+      return { rows: [{ organization_id: organizationId, role_id: "33333333-3333-4333-8333-333333333333", status: "VERIFIED" }] };
+    }
+    if (sql.includes("select exists")) return { rows: [{ ok: true }] };
+    throw new Error(`Unexpected pool SQL in rejected-return test: ${sql}`);
+  };
+  const clientQuery = async (sql: string) => {
+    if (sql === "BEGIN" || sql === "ROLLBACK") return { rows: [] };
+    if (sql.includes("from epr_returns r join epr_obligations")) {
+      return { rows: [{
+        id: "66666666-6666-4666-8666-666666666666",
+        organization_id: organizationId,
+        obligation_id: "55555555-5555-4555-8555-555555555555",
+        status: "REJECTED",
+      }] };
+    }
+    throw new Error(`Unexpected client SQL in rejected-return test: ${sql}`);
+  };
+  return {
+    query: poolQuery,
+    connect: async () => ({ query: clientQuery, release: () => undefined }),
+  } as unknown as Pool;
+}
+
+test("rejected EPR returns fail closed until fulfillment reconciliation is implemented", async () => {
+  const app = Fastify();
+  await registerEprReturnRoutes(app, makeRejectedReturnPool());
+  const response = await app.inject({
+    method: "POST",
+    url: "/api/v1/epr/returns/66666666-6666-4666-8666-666666666666/submit",
+    headers: { authorization: "Bearer test-session" },
+    payload: {
+      evidenceId: "77777777-7777-4777-8777-777777777777",
+      verificationId: "88888888-8888-4888-8888-888888888888",
+    },
+  });
+  await app.close();
+  assert.equal(response.statusCode, 409);
+  assert.equal(response.json().code, "EPR_REJECTED_RETURN_RECONCILIATION_REQUIRED");
+});
