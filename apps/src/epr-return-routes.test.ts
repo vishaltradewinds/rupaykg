@@ -63,7 +63,7 @@ test("EPR return creation accepts a real ISO calendar period at the date-validat
   assert.notEqual(response.json().code, "INVALID_PERIOD");
 });
 
-function makeNonDraftReturnPool(status: "REJECTED" | "SUBMITTED" | "DRAFT", throwOnObligationLookup = false): { pool: Pool; transactions: string[] } {
+function makeNonDraftReturnPool(status: "REJECTED" | "SUBMITTED" | "DRAFT", throwOnObligationLookup = false, obligationStatus: string | null = null): { pool: Pool; transactions: string[] } {
   const transactions: string[] = [];
   const poolQuery = async (sql: string) => {
     if (sql.includes("from identity_sessions")) return { rows: [{ identity_id: identityId }] };
@@ -85,6 +85,7 @@ function makeNonDraftReturnPool(status: "REJECTED" | "SUBMITTED" | "DRAFT", thro
     }
     if (sql.includes("select id,target_quantity,fulfilled_quantity,status from epr_obligations")) {
       if (throwOnObligationLookup) throw new Error("simulated database failure during obligation lookup");
+      if (obligationStatus) return { rows: [{ id: "55555555-5555-4555-8555-555555555555", target_quantity: "100", fulfilled_quantity: "0", status: obligationStatus }] };
       return { rows: [] };
     }
     throw new Error(`Unexpected client SQL in rejected-return test: ${sql}`);
@@ -154,6 +155,25 @@ test("EPR submission catches database errors and rolls back the open transaction
   assert.equal(response.statusCode, 503);
   assert.equal(response.json().code, undefined);
   assert.deepEqual(mock.transactions, ["BEGIN", "ROLLBACK"], "database errors must not leave a transaction open or commit partial state");
+});
+
+test("EPR submission rolls back when obligation is no longer eligible", async () => {
+  const app = Fastify();
+  const mock = makeNonDraftReturnPool("DRAFT", false, "COMPLETED");
+  await registerEprReturnRoutes(app, mock.pool);
+  const response = await app.inject({
+    method: "POST",
+    url: "/api/v1/epr/returns/66666666-6666-4666-8666-666666666666/submit",
+    headers: { authorization: "Bearer test-session" },
+    payload: {
+      evidenceId: "77777777-7777-4777-8777-777777777777",
+      verificationId: "88888888-8888-4888-8888-888888888888",
+    },
+  });
+  await app.close();
+  assert.equal(response.statusCode, 409);
+  assert.equal(response.json().code, "OBLIGATION_NOT_ELIGIBLE");
+  assert.deepEqual(mock.transactions, ["BEGIN", "ROLLBACK"], "ineligible obligation must not commit or consume a binding");
 });
 
 test("EPR submission rolls back if the locked obligation cannot be resolved", async () => {
