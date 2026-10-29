@@ -85,10 +85,12 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
       const period = await pool.query<{ organization_id: string; reporting_boundary: string | null }>("select organization_id, reporting_boundary from esg_reporting_periods where id = $1", [periodId]);
       if (!period.rows[0]) return reply.code(404).send({ error: "Reporting period not found" });
       const organizationId = period.rows[0].organization_id;
-      const reportingBoundary = resolveEsgReportingBoundary(period.rows[0].reporting_boundary);
-      if (!reportingBoundary) return reply.code(409).send({ error: "ESG reporting period requires an explicit reporting boundary before metrics can be recorded", code: "ESG_REPORTING_BOUNDARY_REQUIRED", productionGate: "HOLD" });
+      // Authorize before returning boundary-specific validation details to avoid
+      // leaking reporting-period configuration to an unrelated organization.
       if (!canActForOrganization(auth, organizationId)) return reply.code(403).send({ error: "Organization access denied", code: "ORG_FORBIDDEN" });
       if (!await hasValuePermission(pool, "can_write_esg", auth.identityId, organizationId)) return reply.code(403).send({ error: "ESG metric write permission required", code: "ESG_WRITE_FORBIDDEN" });
+      const reportingBoundary = resolveEsgReportingBoundary(period.rows[0].reporting_boundary);
+      if (!reportingBoundary) return reply.code(409).send({ error: "ESG reporting period requires an explicit reporting boundary before metrics can be recorded", code: "ESG_REPORTING_BOUNDARY_REQUIRED", productionGate: "HOLD" });
       const evidenceId = str(body, "evidenceId"); const verificationId = str(body, "verificationId");
       if (verificationId && !evidenceId) return reply.code(400).send({ error: "verificationId requires evidenceId" });
       const metric = { code: metricCode, scope, value, unit, ...(evidenceId ? { evidenceId } : {}), ...(verificationId ? { verificationId } : {}) };
