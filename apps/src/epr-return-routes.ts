@@ -90,9 +90,13 @@ export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool |
         join methodology_versions mv on mv.effective_from is not null and mv.effective_from <= r.period_start
           and mv.rules->'eprBinding'->>'schemeCode'=s.code and mv.rules->'eprBinding'->>'categoryCode'=eo.category_code and mv.rules->'eprBinding'->>'unitCode'=m.unit
         where r.id=$1 and r.organization_id=$2 and r.status='DRAFT'
-          and exists(select 1 from organization_memberships om join roles ro on ro.id=om.role_id where om.identity_id=v.verifier_identity_id and om.status='VERIFIED'
-            and organization_has_geography_scope(om.organization_id,a.geography_id)
-            and exists(select 1 from jsonb_array_elements_text(ro.permissions) p where p=any($3::text[])))
+          and exists(select 1 from organization_memberships om
+            join roles ro on ro.id=om.role_id
+            join identities i on i.id=om.identity_id
+            where om.identity_id=v.verifier_identity_id and om.organization_id=r.organization_id
+              and om.status='VERIFIED' and i.status='VERIFIED' and i.suspended_at is null
+              and organization_has_geography_scope(om.organization_id,a.geography_id)
+              and exists(select 1 from jsonb_array_elements_text(ro.permissions) p where p=any($3::text[])))
           and not exists(select 1 from epr_return_quantity_bindings b where b.measurement_id=m.id or b.custody_link_id=c.id)
           and (select coalesce(sum(b.measured_quantity),0)+m.value <= rf.declared_quantity from epr_return_quantity_bindings b where b.resource_flow_id=rf.id)
         order by m.measured_at desc limit 100`, [returnId, row.organization_id, ["VERIFY_EVIDENCE", "verification:approve", "verification.approve"]]);
