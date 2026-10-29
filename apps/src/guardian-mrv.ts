@@ -28,7 +28,15 @@ const MAX_RESPONSE_BYTES = 1024 * 1024;
 
 function endpoint(): string | null {
   const value = process.env.GUARDIAN_MRV_SUBMIT_URL?.trim();
-  return value || null;
+  if (!value) return null;
+  let parsed: URL;
+  try { parsed = new URL(value); } catch { return null; }
+  if (parsed.username || parsed.password || parsed.search || parsed.hash) return null;
+  const localHost = ["localhost", "127.0.0.1", "[::1]"].includes(parsed.hostname.toLowerCase());
+  const secureRemote = parsed.protocol === "https:";
+  const localDevelopment = process.env.NODE_ENV !== "production" && parsed.protocol === "http:" && localHost;
+  if (!secureRemote && !localDevelopment) return null;
+  return parsed.toString().replace(/\\/$/, "");
 }
 
 function timeoutMs(): number {
