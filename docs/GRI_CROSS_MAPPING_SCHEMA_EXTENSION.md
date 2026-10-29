@@ -71,6 +71,17 @@ The existing interfaces were inspected before designing any GRI integration. Thi
 | MRV provenance | `POST /api/v1/mrv/activities/:activityId/submit` requires evidence and approved verification; MRV status exposes Guardian/Hedera status and registry-eligibility conditions. | Keep MRV provenance and credit eligibility as separate source-of-truth states; GRI is a reporting crosswalk only. |
 | Parallel safety work | PR #120 concurrently changes `apps/web/src/esg-panel.ts`, `apps/web/src/epr-return-panel.ts`, `packages/esg/src/index.ts`, `packages/esg/src/index.test.ts`, value/EPR routes, and migration history. | Do not edit these shared files in this branch. Rebase/coordinate after PR #120's disposition and run the complete integration suite. |
 
+### Regulatory source-register integration — PR #119 boundary
+
+The source register in PR #119 was inspected at branch `docs/india-epr-esg-ccts-regulatory-baseline`, commit `[current PR #119 head]` (research-only). It declares registry ID `RUPAYKG-INDIA-REGULATORY-SOURCES`, schema version `1.0.0`, `registryStatus: RESEARCH_ONLY`, and `activationPolicy: FAIL_CLOSED`. Its required release evidence includes exact-document archival, SHA-256 verification, effective-date and amendment review, actor/stream/jurisdiction/period applicability, independent legal/domain approval, and effective-date boundary tests. The listed sources currently have no archived SHA-256 and show `NOT_ARCHIVED_HASH_PENDING`; therefore they are discovery/research inputs, not activated legal rules.
+
+Integration contract:
+- Once PR #119 is reviewed and its source-register contract is accepted, reference stable `source.id` values and immutable source-version/hash records rather than copying regulatory titles, URLs or applicability conclusions into the GRI module.
+- Preserve source domains and legal status. Example IDs include `CPCB-SWM-RULES-2026`, `CPCB-PLASTIC-EPR`, `SEBI-BRSR`, `SEBI-VALUE-CHAIN-2025`, `BEE-CCTS-OFFSET-PROCEDURE`, and `ICVCM-CCP`; ICVCM remains supplemental and cannot substitute for Indian law.
+- A `DISCOVERY_SOURCE`, `NOT_ARCHIVED_HASH_PENDING`, `CURRENT_VERSION_MUST_BE_RECONFIRMED`, or other unresolved source state must block any mapping that depends on an authoritative legal conclusion. The UI may show a research cross-reference, but must not label the mapping legally approved, compliant, assured, or production-activated.
+- GRI source-version validity and Indian regulatory-source validity are separate dimensions. Do not infer that a GRI disclosure standard is an Indian statutory instrument or that an Indian rule applies to every entity/reporting period.
+- Do not merge PR #119 or consume its branch as a production dependency automatically. Coordinate after review; pin the accepted source-register version and test compatibility on the final integrated commit.
+
 ### Proposed API and record lifecycle — not yet implemented
 
 After the migration ledger is reconciled and the regulatory source register from PR #119 is accepted, add a separately reviewed route module rather than expanding shared routes in this draft:
