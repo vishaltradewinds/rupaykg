@@ -186,6 +186,33 @@ try {
   assert.equal(snapshot.authorization_role_id, ids.role);
   assert.deepEqual(snapshot.authorization_permissions_snapshot, ["VERIFY_EVIDENCE"]);
   assert.ok(snapshot.authorization_checked_at, "approval must capture decision-time authorization timestamp");
+
+  // The legacy trigger stores decision-time authorization provenance but does
+  // not clear it when current decision changes. Assert the distinction so
+  // consumers must gate current approval on decision='APPROVED', not snapshot presence.
+  await client.query("update verifications set decision='REJECTED' where id=$1", [ids.verification]);
+  const rejected = (await client.query(
+    "select decision,authorization_membership_id,authorization_role_id,authorization_permissions_snapshot,authorization_checked_at from verifications where id=$1",
+    [ids.verification],
+  )).rows[0];
+  assert.equal(rejected.decision, "REJECTED", "current decision must remain authoritative");
+  assert.equal(rejected.authorization_membership_id, ids.membership, "prior authorization snapshot is retained as historical provenance");
+  assert.equal(rejected.authorization_role_id, ids.role);
+  assert.deepEqual(rejected.authorization_permissions_snapshot, ["VERIFY_EVIDENCE"]);
+  assert.ok(rejected.authorization_checked_at);
+
+  // Re-approval must pass the trigger's live authorization checks again.
+  await client.query("update verifications set decision='APPROVED' where id=$1", [ids.verification]);
+  const reapproved = (await client.query(
+    "select decision,authorization_membership_id,authorization_role_id,authorization_permissions_snapshot,authorization_checked_at from verifications where id=$1",
+    [ids.verification],
+  )).rows[0];
+  assert.equal(reapproved.decision, "APPROVED");
+  assert.equal(reapproved.authorization_membership_id, ids.membership);
+  assert.equal(reapproved.authorization_role_id, ids.role);
+  assert.deepEqual(reapproved.authorization_permissions_snapshot, ["VERIFY_EVIDENCE"]);
+  assert.ok(reapproved.authorization_checked_at, "re-approval must capture authorization again");
+
   await assert.rejects(
     client.query("insert into verifications(id,activity_id,evidence_id,verifier_identity_id,decision) values ($1,$2,$3,$4,'APPROVED')", ["10000000-0000-4000-8000-000000000009", ids.activity, ids.evidence, ids.actor]),
     /cannot verify its own evidence/,
@@ -202,7 +229,7 @@ try {
   const orphan = runRunner(stagingSchema, missingDir);
   assert.notEqual(orphan.status, 0, "actual runner must fail when ledger references a missing migration file");
   assert.match(orphan.stderr + orphan.stdout, /recorded migration|orphan|absent/i);
-  console.log("PASS: actual migrate.ts runner applied production-shaped fixture, skipped staging ledger matches, preserved 12 inbox + 12 event rows, no-op repeat runs, failed closed for missing historical ledger files, and verified recovered 096 authorization binding/snapshot behavior in an isolated PostgreSQL schema.");
+  console.log("PASS: actual migrate.ts runner applied production-shaped fixture, skipped staging ledger matches, preserved 12 inbox + 12 event rows, no-op repeat runs, failed closed for missing historical ledger files, and verified recovered 096 authorization binding plus APPROVED→REJECTED→APPROVED snapshot semantics in an isolated PostgreSQL schema.");
 } finally {
   if (connected) {
     for (const schema of schemas.reverse()) {
