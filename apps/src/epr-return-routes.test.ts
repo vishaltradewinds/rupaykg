@@ -75,6 +75,7 @@ function makeNonDraftReturnPool(status: "REJECTED" | "SUBMITTED" | "DRAFT", thro
   };
   const clientQuery = async (sql: string) => {
     if (sql === "BEGIN" || sql === "ROLLBACK" || sql === "COMMIT") { transactions.push(sql); return { rows: [] }; }
+    if (sql.includes("for share of om, r, i") && sql.includes("om.organization_id=$2")) return { rows: [{ identity_id: identityId }] };
     if (sql.includes("from epr_returns r join epr_obligations")) {
       return { rows: [{
         id: "66666666-6666-4666-8666-666666666666",
