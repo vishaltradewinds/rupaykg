@@ -44,6 +44,76 @@ export type GriCrossMappingReviewInput = {
   };
 };
 
+/**
+ * Snake-case projection of the persisted JSON Schema fields used by the review
+ * gate. Callers must validate the complete record against the JSON Schema before
+ * adapting it; this type is not a substitute for runtime schema validation.
+ */
+export type GriCrossMappingSchemaProjection = {
+  status: GriCrossMappingReviewInput["status"];
+  source_requirement: {
+    version: string;
+    source_url: string;
+    official_source_verified_at?: string | null;
+  };
+  target_disclosure: {
+    version: string;
+    standard_id: string;
+    disclosure_id: string;
+  };
+  relationship: GriCrossMappingReviewInput["relationship"];
+  rationale: string;
+  applicability: {
+    determination: GriApplicability;
+    basis: string;
+  };
+  evidence: {
+    required: boolean;
+    items: Array<{ integrity_status: GriEvidenceIntegrity }>;
+    lineage_status: GriLineageStatus;
+  };
+  controls: {
+    double_counting_check: GriDoubleCountingCheck;
+    compliance_conclusion: string;
+    credit_eligibility_conclusion: string;
+  };
+};
+
+/** Map the schema's persisted snake_case representation to the internal review DTO. */
+export function toGriCrossMappingReviewInput(
+  record: GriCrossMappingSchemaProjection,
+): GriCrossMappingReviewInput {
+  return {
+    status: record.status,
+    sourceRequirement: {
+      version: record.source_requirement.version,
+      sourceUrl: record.source_requirement.source_url,
+      officialSourceVerifiedAt: record.source_requirement.official_source_verified_at,
+    },
+    targetDisclosure: {
+      version: record.target_disclosure.version,
+      standardId: record.target_disclosure.standard_id,
+      disclosureId: record.target_disclosure.disclosure_id,
+    },
+    relationship: record.relationship,
+    rationale: record.rationale,
+    applicability: {
+      determination: record.applicability.determination,
+      basis: record.applicability.basis,
+    },
+    evidence: {
+      required: record.evidence.required,
+      items: record.evidence.items.map((item) => ({ integrityStatus: item.integrity_status })),
+      lineageStatus: record.evidence.lineage_status,
+    },
+    controls: {
+      doubleCountingCheck: record.controls.double_counting_check,
+      complianceConclusion: record.controls.compliance_conclusion,
+      creditEligibilityConclusion: record.controls.credit_eligibility_conclusion,
+    },
+  };
+}
+
 export type GriCrossMappingReviewResult = {
   decision: "BLOCKED" | "READY_FOR_HUMAN_REVIEW";
   blockers: string[];
