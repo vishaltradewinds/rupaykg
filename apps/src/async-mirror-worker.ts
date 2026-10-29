@@ -156,6 +156,28 @@ export async function runGovernmentInboxWorker(
 
   const result = { claimed: claimed.rows.length, validated: 0, rejected: 0, unresolved: 0, retried: 0, quarantined: 0 };
   for (const row of claimed.rows) {
+    // Renew the lease while validation and crosswalk resolution are in flight.
+    // Terminal writes remain fenced by the original token; a failed renewal
+    // marks ownership as lost and prevents this worker from claiming success.
+    let leaseLost = false;
+    let leaseRenewalInProgress = false;
+    const leaseHeartbeat = setInterval(() => {
+      if (leaseLost || leaseRenewalInProgress) return;
+      leaseRenewalInProgress = true;
+      void pool.query(
+        `update async_mirror_inbox
+            set lease_until=now() + ($3 * interval '1 second')
+          where id=$1 and status='PROCESSING' and lease_token=$2`,
+        [row.id, row.lease_token, leaseSeconds],
+      ).then((renewed) => {
+        if ((renewed.rowCount ?? 0) !== 1) leaseLost = true;
+      }).catch(() => {
+        leaseLost = true;
+      }).finally(() => {
+        leaseRenewalInProgress = false;
+      });
+    }, Math.max(5_000, Math.floor((leaseSeconds * 1_000) / 3)));
+    leaseHeartbeat.unref?.();
     try {
       let outcome: GovernmentInboxValidation;
       if (canonicalGovBridgeHash(row.payload) !== row.payload_sha256) {
@@ -246,6 +268,7 @@ export async function runGovernmentInboxWorker(
           };
         }
       }
+      if (leaseLost) throw new Error("WORKER_LEASE_LOST");
       if (outcome.valid) {
         const updated = await pool.query(
           `update async_mirror_inbox
@@ -256,6 +279,7 @@ export async function runGovernmentInboxWorker(
         );
         if ((updated.rowCount ?? 0) === 1) result.validated += 1;
       } else if (outcome.state === "UNRESOLVED") {
+        if (leaseLost) throw new Error("WORKER_LEASE_LOST");
         const updated = await pool.query(
           `update async_mirror_inbox
               set status='UNRESOLVED', processed_at=now(), lease_token=null, lease_until=null,
@@ -265,6 +289,7 @@ export async function runGovernmentInboxWorker(
         );
         if ((updated.rowCount ?? 0) === 1) result.unresolved += 1;
       } else {
+        if (leaseLost) throw new Error("WORKER_LEASE_LOST");
         const code = (outcome.errorCode ?? "PAYLOAD_VALIDATION_REJECTED").replace(/[^A-Z0-9_.-]/gi, "_").slice(0, 100);
         const updated = await pool.query(
           `update async_mirror_inbox
@@ -292,6 +317,8 @@ export async function runGovernmentInboxWorker(
         if (exhausted) result.quarantined += 1;
         else result.retried += 1;
       }
+    } finally {
+      clearInterval(leaseHeartbeat);
     }
   }
   return result;
