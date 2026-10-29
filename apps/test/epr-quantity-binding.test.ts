@@ -42,12 +42,13 @@ test("EPR binding rejects missing dimensions, invalid quantity, and failed autho
 });
 
 test("EPR quantity binding rejects malformed and impossible calendar dates", () => {
-  for (const [periodStart, periodEnd] of [
+  const invalidPeriods: Array<[string, string]> = [
     ["2026-02-30", "2027-03-31"],
     ["2026/04/01", "2027-03-31"],
     ["2026-04-01T00:00:00Z", "2027-03-31"],
     ["2027-04-01", "2027-03-31"],
-  ]) {
+  ];
+  for (const [periodStart, periodEnd] of invalidPeriods) {
     assert.equal(
       evaluateEprQuantityBinding({ ...completeBinding, periodStart, periodEnd }).ready,
       false,
