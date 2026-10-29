@@ -70,8 +70,8 @@ test("ESG route keeps metric PENDING when verifier authority is no longer curren
 });
 
 
-test("ESG route keeps metric PENDING when the underlying evidence has been revoked", async () => {
+test("ESG route rejects metric recording when the underlying evidence has been revoked", async () => {
   const response = await postMetric({ evidenceStatus: "REVOKED" });
-  assert.equal(response.statusCode, 201);
-  assert.equal(response.json().state, "PENDING");
+  assert.equal(response.statusCode, 409);
+  assert.equal(response.json().code, "EVIDENCE_NOT_VERIFIED");
 });
