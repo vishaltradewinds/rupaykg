@@ -140,3 +140,43 @@ test("close failure still requests termination if its logging callback throws", 
   assert.deepEqual(result, { timedOut: true, forcedTermination: true });
   assert.equal(terminationCode, 1);
 });
+
+
+test("timeout reporting failure does not interrupt bounded drain or resource closure", async () => {
+  let inFlight = true;
+  let closed = false;
+  let terminationCode: number | undefined;
+  const operation = drainBeforeClose({
+    isInFlight: () => inFlight,
+    timeoutMs: 5,
+    secondStageTimeoutMs: 100,
+    pollIntervalMs: 1,
+    onTimeout: () => { throw new Error("timeout telemetry failed"); },
+    terminate: code => { terminationCode = code; },
+    close: async () => { assert.equal(inFlight, false); closed = true; },
+  });
+
+  await new Promise(resolve => setTimeout(resolve, 15));
+  inFlight = false;
+  const result = await operation;
+  assert.deepEqual(result, { timedOut: true, forcedTermination: false });
+  assert.equal(closed, true);
+  assert.equal(terminationCode, undefined);
+});
+
+test("timeout reporting failure cannot suppress forced termination for stuck work", async () => {
+  let terminationCode: number | undefined;
+  const result = await drainBeforeClose({
+    isInFlight: () => true,
+    timeoutMs: 2,
+    secondStageTimeoutMs: 3,
+    pollIntervalMs: 1,
+    onTimeout: () => { throw new Error("timeout telemetry failed"); },
+    onForcedTermination: () => { throw new Error("forced-termination telemetry failed"); },
+    terminate: code => { terminationCode = code; },
+    close: async () => { throw new Error("must not close active resources"); },
+  });
+
+  assert.deepEqual(result, { timedOut: true, forcedTermination: true });
+  assert.equal(terminationCode, 1);
+});
