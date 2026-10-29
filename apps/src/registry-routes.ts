@@ -81,7 +81,7 @@ export async function registerRegistryRoutes(app:FastifyInstance,pool:Pool|null)
                 and latest.evidence_id=d.evidence_id
                 and latest.methodology_version_id=d.methodology_version_id
                 and latest.geography_id=d.geography_id
-              order by latest.created_at desc, latest.id desc
+              order by latest.decision_sequence desc
               limit 1
            )
            and d.effective_from<=current_date and (d.effective_to is null or d.effective_to>=current_date)
