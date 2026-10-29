@@ -121,6 +121,23 @@ export type GriCrossMappingReviewResult = {
   creditEligibilityConclusion: "NOT_CHANGED";
 };
 
+function isHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" || url.protocol === "http:";
+  } catch {
+    return false;
+  }
+}
+
+function isValidIsoDateTime(value: string): boolean {
+  // Require an explicit timezone so the verification timestamp is unambiguous.
+  if (!/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})$/.test(value)) {
+    return false;
+  }
+  return Number.isFinite(Date.parse(value));
+}
+
 export function evaluateGriCrossMappingForReview(
   mapping: GriCrossMappingReviewInput,
 ): GriCrossMappingReviewResult {
@@ -128,7 +145,12 @@ export function evaluateGriCrossMappingForReview(
 
   if (!mapping.sourceRequirement.version.trim()) blockers.push("SOURCE_VERSION_REQUIRED");
   if (!mapping.sourceRequirement.sourceUrl.trim()) blockers.push("SOURCE_URL_REQUIRED");
-  if (!mapping.sourceRequirement.officialSourceVerifiedAt) blockers.push("OFFICIAL_SOURCE_VERIFICATION_REQUIRED");
+  else if (!isHttpUrl(mapping.sourceRequirement.sourceUrl)) blockers.push("SOURCE_URL_INVALID");
+  if (!mapping.sourceRequirement.officialSourceVerifiedAt) {
+    blockers.push("OFFICIAL_SOURCE_VERIFICATION_REQUIRED");
+  } else if (!isValidIsoDateTime(mapping.sourceRequirement.officialSourceVerifiedAt)) {
+    blockers.push("OFFICIAL_SOURCE_VERIFICATION_TIMESTAMP_INVALID");
+  }
   if (!mapping.targetDisclosure.version.trim()) blockers.push("TARGET_VERSION_REQUIRED");
   if (!mapping.targetDisclosure.standardId.trim() || !mapping.targetDisclosure.disclosureId.trim()) {
     blockers.push("TARGET_DISCLOSURE_ID_REQUIRED");
