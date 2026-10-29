@@ -1,42 +1,16 @@
 # Database migrations
 
-Apply migrations in filename order against a fresh PostgreSQL database:
+Apply migrations in filename order against a fresh PostgreSQL database. The repository contains numbered migrations `001` through `091` plus date-keyed migrations for the later CPCB/SWM, BWG workflow, CCTS methodology-registry and evidence-vault workstreams. The migration filenames are the canonical source inventory; use the actual files rather than a hand-maintained numeric summary to determine what is present.
 
-1. `001_core.sql` — authoritative core entities and lifecycle enums.
-2. `002_regulatory.sql` — versioned regulatory source catalog; this historical seed migration is immutable and later provenance corrections belong in subsequent migrations.
-3. `003_identity_geography_operations.sql` — source-versioned geography, identity credentials, assignments and offline operation intake.
-4. `004_security_auth.sql` — organization memberships and opaque identity sessions.
-5. `005_carbon_epr_esg.sql` — carbon projects/calculations, EPR and ESG reporting records.
-6. `006_registry_settlement_guardrails.sql` — database-level issuance and settlement safety guards.
-7. `007_resource_flow_mrv.sql` — resource custody links and MRV observation/verification requirements.
-8. `008_verification_integrity.sql` — independent verifier authorization and verification integrity controls.
-9. `009_field_sync.sql` — durable offline field envelopes, conflicts and cursors.
-10. `010_integrity_controls.sql` — tamper-evident registry/settlement event hashing and append-only guards.
-11. `011_field_sync_application.sql` — authoritative entity-application metadata for field envelopes.
-12. `012_geography_authorization.sql` — organization geography roots and database-enforced descendant scope.
-13. `013_settlement_external_confirmation.sql` — external authority confirmation and reconciliation gates before settlement finalization.
-14. `014_registry_settlement_idempotency.sql` — idempotency constraints for registry and settlement mutations.
-15. `015_high_risk_action_permissions.sql` — explicit high-risk action permissions for registry and settlement operations.
-16. `016_field_device_enrollment.sql` — field-device enrollment and lifecycle controls.
-17. `017_field_device_provenance.sql` — field-device provenance metadata and integrity controls.
-18. `018_value_mutation_permissions.sql` — authorization boundaries for value-layer mutations.
-19. `019_settlement_reconciliation_immutability.sql` — immutable settlement reconciliation evidence and state controls.
-20. `020_carbon_calculation_provenance.sql` — evidence-bound carbon calculation provenance.
-21. `021_methodology_governance.sql` — methodology source lock, applicability/parameter/equation mapping and production-eligibility governance.
-22. `022_carbon_provenance_integrity.sql` — database integrity controls for carbon provenance.
-23. `024_methodology_governance_immutability.sql` — forward-only methodology governance and immutable mapped/reconciled state.
-24. `025_methodology_reconciliation_evidence.sql` — independent numerical reconciliation and regression-verification evidence required for production eligibility.
-25. `026_regulatory_source_provenance.sql` — exact verified official-source corrections and verification dates for regulatory records; does not rewrite the historical seed migration.
-26. `027_verification_permission_guard.sql` — database verification authorization guard requiring explicit `VERIFY_EVIDENCE` permission rather than legacy role-name elevation.
-27. `028_settlement_retired_credential_guard.sql` — prevents settlement creation for retired credentials and prevents retirement while an attached settlement remains open.
+The migration history includes the core schema, regulatory-source catalogue, identity and geography authorization, field/offline operations, evidence and verification, carbon/MRV, EPR returns and credit integrity, ESG/BRSR reporting, stakeholder onboarding and approvals, registry/settlement guardrails, and the newer stakeholder-workspace, CCTS-registry and evidence-vault extensions. Migrations `088_epr_authoritative_quantity_binding.sql` and `089_esg_methodology_binding.sql` add persisted EPR quantity provenance and ESG methodology-version binding respectively. Migration `090_epr_declared_quantity_reconciliation.sql` preserves the original draft-declared quantity and makes the measured quantity authoritative when a valid EPR binding is created. Migration `091_epr_quantity_binding_delete_guard.sql` prohibits deleting EPR quantity provenance rows; any correction requires a separately reviewed reversal workflow.
 
-Migration `023` is intentionally absent from the current repository history; do not renumber later migrations to fill the gap. Migration numbering is identity, not a requirement for contiguous integers.
+Migration `023_lifecycle_state_guards.sql` is present in the current repository. Do not rely on older documentation that described migration 023 as absent. Migration numbering is identity, not a requirement for contiguous integers; never renumber or reuse an applied migration version.
 
-Migration files are intentionally ordered and each numbered migration must have one authoritative owner. Do not reintroduce duplicate numbered migrations containing the same tables or enums.
+Migration files are intentionally ordered and each migration version must have one authoritative owner. Do not reintroduce duplicate numbered migrations containing the same tables or enums.
 
 ## Production rule
 
-A migration runner must stop on the first error. Never silently continue after a partial schema application. Run against a controlled migration ledger in deployment infrastructure before accepting application traffic.
+A migration runner must stop on the first error. Never silently continue after a partial schema application. Before executing any new SQL, reconcile every applied ledger row against the exact source filename and ensure the filename prefix matches the recorded version; any missing source or version/filename mismatch blocks the entire run before new migrations are applied. Run against a controlled migration ledger in deployment infrastructure before accepting application traffic. A CI pass against a disposable database does not reconcile a separate production or staging ledger.
 
 Verification requires a verified organization membership with an explicit `VERIFY_EVIDENCE` permission (or one of its documented aliases). Role names such as `VERIFIER`/`AUDITOR` are not privilege grants, and an activity actor cannot approve their own evidence. Registry and settlement event hashes are generated by PostgreSQL from canonical event fields rather than trusting caller-provided hashes.
 

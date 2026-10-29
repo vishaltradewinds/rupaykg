@@ -40,6 +40,10 @@ jobs:
         run: npm audit --omit=dev --audit-level=high
       - run: npm run validate:migrations
       - run: npm run migrate -w @rupaykg/api
+      - name: Migration-history preflight fails before SQL (disposable PostgreSQL)
+        env:
+          RUPAYKG_RUN_MIGRATION_HISTORY_TESTS: "1"
+        run: node_modules/.bin/tsx scripts/test-migration-history-preflight.ts
       - run: npm run typecheck
       - run: npm run build
       - name: Browser smoke test production web build

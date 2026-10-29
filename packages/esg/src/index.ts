@@ -20,11 +20,43 @@ export type EsgMetric = {
 
 export type EsgMetricState = "VERIFIED" | "PENDING";
 
-export function classifyMetric(metric: EsgMetric): EsgMetricState {
+/**
+ * This context must be produced by a trusted, persisted-record validation path,
+ * never copied from an HTTP request or accepted from the metric payload.
+ */
+export type AuthoritativeEsgVerification = {
+  evidencePersisted: boolean;
+  evidenceApproved: boolean;
+  verificationPersisted: boolean;
+  verifierCurrentlyAuthorized: boolean;
+  organizationMatches: boolean;
+  geographyMatches: boolean;
+  reportingPeriodMatches: boolean;
+  methodologyMatches: boolean;
+  evidenceCurrentAndNotRevoked: boolean;
+};
+
+export function hasAuthoritativeEsgVerification(
+  verification: AuthoritativeEsgVerification | undefined,
+): boolean {
+  return verification !== undefined
+    && Object.values(verification).every((value) => value === true);
+}
+
+export function classifyMetric(
+  metric: EsgMetric,
+  verification?: AuthoritativeEsgVerification,
+): EsgMetricState {
   if (!metric.code.trim() || !metric.unit.trim() || !Number.isFinite(metric.value)) {
     throw new Error("metric code, unit and finite value are required");
   }
-  return metric.evidenceId && metric.verificationId ? "VERIFIED" : "PENDING";
+  // Reference IDs prove only that IDs were supplied. They do not establish
+  // persistence, approval, scope, period, methodology, or current authority.
+  return metric.evidenceId
+    && metric.verificationId
+    && hasAuthoritativeEsgVerification(verification)
+    ? "VERIFIED"
+    : "PENDING";
 }
 
 export function validateEsgFramework(framework: string): EsgFramework {
