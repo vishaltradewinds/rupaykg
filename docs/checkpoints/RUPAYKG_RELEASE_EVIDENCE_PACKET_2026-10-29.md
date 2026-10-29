@@ -12,9 +12,9 @@ Snapshot refreshed 2026-10-29 from GitHub PR metadata, reviews, and PR-triggered
 
 | PR | Workstream | Head SHA | Recorded CI result | Current disposition |
 |---|---|---|---|---|
-| #97 | ICVCM integrity controls and governed agentic foundation | `49d4da5480f32fb1bc5b4d2057d605f5ab035ad2` | CI passed on preceding code head; documentation-only reference correction has a new run pending | Open; no independent review; migration compatibility and live external acceptance remain blockers |
+| #97 | ICVCM integrity controls and governed agentic foundation | `49d4da5480f32fb1bc5b4d2057d605f5ab035ad2` | CI passed (workflow `40831631892`) | Open; no independent review; migration compatibility and live external acceptance remain blockers |
 | #102 | Guardian/Mirror Node response hardening | `bb9a12686e54a586aa995d77e1301ea02b1276ed` | CI passed (workflow `40829616919`) | Open; no independent review; live Guardian/Hedera/Mirror Node round trip not demonstrated |
-| #108 | Dual-ledger migration compatibility acceptance and production TLS hardening | `12b3860616dfae3a080ccf93051b0ab0bbcce6e3` | CI passed (workflow `40831743887`) | Open; historical migration-source/ledger mismatch remains a hard blocker |
+| #108 | Dual-ledger migration compatibility acceptance and production TLS hardening | `829d2900ccd907cc36714c9d6d479e4d9b3ea198` | Code changes passed on predecessor `12b3860616dfae3a080ccf93051b0ab0bbcce6e3` (workflow `40831743887`); evidence-only refresh commit requires exact-head CI | Open; historical migration-source/ledger mismatch remains a hard blocker |
 | #109 | Government inbox scheduler shutdown and worker lease safety | `3013a5fbde5567e67a23ab851f3eadddcfc37bc7` | CI passed (workflow `40831665247`) | Open; independent review and cross-PR release reconciliation required |
 | #110 | Intelligence-branch CI validation | `a0d7a4cd6f57a752ff1aeac532097f12974811a4` | CI passed (workflow `40829157476`) | Open; reproducible `npm ci` install and own-branch trigger validated |
 | #106 | Migration-candidate validation / diagnostic evidence | `4939debab84e66ef87674ba18f0e797b9eb309f5` | CI passed (workflow `40716535582`) | Draft/open; diagnostic only, does not reconcile live migration histories |
@@ -25,6 +25,9 @@ References:
 - PR #102: https://github.com/vishaltradewinds/rupaykg/pull/102
 - PR #108: https://github.com/vishaltradewinds/rupaykg/pull/108
 - PR #109: https://github.com/vishaltradewinds/rupaykg/pull/109
+- PR #110: https://github.com/vishaltradewinds/rupaykg/pull/110
+- PR #106: https://github.com/vishaltradewinds/rupaykg/pull/106
+- PR #107: https://github.com/vishaltradewinds/rupaykg/pull/107
 
 This table is a point-in-time snapshot. Re-query head SHAs and workflow runs before making any merge/release decision.
 
