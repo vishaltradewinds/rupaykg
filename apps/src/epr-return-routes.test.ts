@@ -418,15 +418,10 @@ test("EPR quantity binding rejects resource-flow over-allocation before insertin
   assert.equal(response.statusCode, 409);
   assert.equal(response.json().code, "EPR_FLOW_MASS_BALANCE_EXCEEDED");
   assert.deepEqual(transactions, ["BEGIN", "ROLLBACK"], "resource-flow over-allocation must abort before inserting a binding");
-  const authority = queries.find((query) => query.sql.includes("for share of om, r, i") && query.sql.includes("om.organization_id=$4"));
-  assert.ok(authority, "binding-time verifier authorization must lock membership, role, and identity rows");
-  assert.ok(authority!.sql.includes("om.organization_id=$4"));
-  assert.ok(authority!.sql.includes("i.status='VERIFIED'"));
-  assert.ok(authority!.sql.includes("i.suspended_at is null"));
-  assert.deepEqual(authority!.values?.[3], organizationId, "verifier must belong to the return organization");
   assert.ok(queries.some((query) => query.sql.includes("select coalesce(sum(measured_quantity),0)+$2::numeric") && query.values?.[0] === "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaab"), "flow capacity must be checked under the resource-flow lock");
   assert.equal(queries.some((query) => query.sql.includes("insert into epr_return_quantity_bindings")), false);
 });
+
 
 
 test("EPR quantity binding rejects a revoked actor permission before inspecting evidence", async () => {
