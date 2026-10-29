@@ -1,8 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import Ajv2020 from "ajv/dist/2020.js";
-import addFormats from "ajv-formats";
+import * as Ajv2020Module from "ajv/dist/2020.js";
+import * as addFormatsModule from "ajv-formats";
+
+const Ajv2020 = ((Ajv2020Module as unknown as { default?: unknown }).default ?? Ajv2020Module) as new (options?: object) => { compile: (schema: object) => ((data: unknown) => boolean) & { errors?: Array<{ keyword?: string }> } };
+const addFormats = ((addFormatsModule as unknown as { default?: unknown }).default ?? addFormatsModule) as (ajv: InstanceType<typeof Ajv2020>) => void;
 
 const schemaUrl = new URL("../../../schemas/gri-cross-mapping.schema.json", import.meta.url);
 const schema = JSON.parse(readFileSync(schemaUrl, "utf8")) as object;
@@ -94,7 +97,7 @@ test("GRI cross-mapping schema rejects missing required fields and unknown prope
   assert.ok((validate.errors ?? []).length > 0);
 
   assert.equal(validate({ ...validRecord, unreviewed_override: true }), false);
-  assert.ok((validate.errors ?? []).some((error) => error.keyword === "additionalProperties"));
+  assert.ok((validate.errors ?? []).some((error: { keyword?: string }) => error.keyword === "additionalProperties"));
 });
 
 test("GRI cross-mapping schema rejects malformed source URL and impossible effective date", () => {
