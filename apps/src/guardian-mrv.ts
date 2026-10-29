@@ -36,7 +36,7 @@ function endpoint(): string | null {
   const secureRemote = parsed.protocol === "https:";
   const localDevelopment = process.env.NODE_ENV !== "production" && parsed.protocol === "http:" && localHost;
   if (!secureRemote && !localDevelopment) return null;
-  return parsed.toString().replace(/\\/$/, "");
+  return parsed.toString().replace(/\/$/, "");
 }
 
 function timeoutMs(): number {
