@@ -184,3 +184,28 @@ test("worker does not report success when both outcome and retry persistence fai
   );
   assert.deepEqual(attemptedWrites, ["outcome", "retry"]);
 });
+
+
+test("worker cannot finalize an outcome after its lease token has been replaced", async () => {
+  const statements: string[] = [];
+  const pool = {
+    query: async (sql: string) => {
+      statements.push(sql);
+      if (sql.includes("returning inbox.id")) return { rows: [row], rowCount: 1 };
+      if (sql.includes("from government_jurisdiction_crosswalks c")) {
+        return { rows: [{ id: "crosswalk-id", organization_id: "organization-id", geography_id: "geography-id", activity_id: null, source_version: "synthetic-v1" }], rowCount: 1 };
+      }
+      // Simulate another worker reclaiming the row and changing its lease token
+      // before this worker's fenced terminal update.
+      if (sql.includes("set status='VALIDATED'")) return { rows: [], rowCount: 0 };
+      return { rows: [], rowCount: 1 };
+    },
+  } as unknown as Pool;
+
+  const result = await runGovernmentInboxWorker(pool);
+  assert.equal(result.claimed, 1);
+  assert.equal(result.validated, 0);
+  const terminalUpdate = statements.find(sql => sql.includes("set status='VALIDATED'"));
+  assert.ok(terminalUpdate);
+  assert.match(terminalUpdate, /where id=\$1 and status='PROCESSING' and lease_token=\$2/i);
+});
