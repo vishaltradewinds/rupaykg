@@ -47,3 +47,36 @@ These runs are not a combined integration run. They do not establish legal compl
 - A successful CI run is engineering evidence, not regulatory approval or production certification.
 - No GRI crosswalk can satisfy or override EPR obligations, ESG assurance, CCTS eligibility, or CCC issuance.
 - All external submission, verification, acceptance and certificate statuses must be supported by authoritative evidence; otherwise retain a non-authoritative state such as `NOT_OBSERVED` or `PENDING_REVIEW`.
+
+## 5. Read-only live-ledger and schema comparison — 2026-10-29
+
+Read-only Neon queries were run against project `steep-mud-79906940`, database `rupaykg`. No database writes were performed.
+
+### Ledger summary
+
+| Environment | Ledger rows | Earliest applied | Latest applied |
+|---|---:|---|---|
+| Production branch `br-restless-base-b44cip2h` | 92 | 2026-10-17T10:47:58.762Z | 2026-10-27T13:46:14.262Z |
+| Staging branch `br-spring-hill-b4544vz5` | 95 | 2026-10-17T10:47:58.762Z | 2026-10-20T10:48:38.647Z |
+
+Both ledgers share the date-prefixed migration records `20261018`–`20261021`. Production records `096_verification_authorization_provenance.sql`; staging instead records `20261022_async_mirror_inbox.sql`, `20261023_async_mirror_worker_leases.sql`, `20261024_ai_intake_rate_limits.sql`, and `20261025_ai_evidence_intake_jobs.sql`. This is divergent history, not a safe linear “production behind staging” sequence.
+
+### Read-only object-level schema diff
+
+Neon schema comparison (production relative to staging) identified substantive differences, including:
+
+- Staging has the async mirror inbox, append-only inbox event functions, AI intake rate-limit and durable AI evidence-intake job tables; these objects are absent from the production-side schema dump.
+- The verification authorization trigger/function definitions differ. Staging's definition derives activity from evidence, enforces activity/organization binding and active organization membership, blocks self-verification, and records authorization snapshots. Production's compared definition is older/different and does not contain all of those checks.
+- The staging-side inbox event mutation/recording functions are absent from the production-side schema dump.
+- These are functional/security differences, not merely migration-ledger naming differences.
+
+The schema diff is evidence for a targeted object-by-object review, not a deployment plan. Before any reconciliation, independently inspect exact definitions of affected triggers/functions, grants/RLS, table constraints, indexes and data dependencies. Do not copy staging schema wholesale to production, replay staging migrations on production, or infer that migration 096 is safely equivalent to staging verification logic.
+
+### Immediate implications
+
+1. Maintain the production and staging write freeze for migration reconciliation.
+2. Do not enable the async mirror/AI intake worker in production until its required objects and worker transitions are reviewed and tested.
+3. Treat verification authorization behavior as a security-significant parity gap requiring an independent reviewer and explicit acceptance tests.
+4. Build a forward-only reconciliation proposal only after the canonical catalog, exact source provenance, data-preservation plan, backup/restore evidence, and approvals are recorded.
+5. CI for the documentation commit is separate from this read-only database evidence and must be confirmed at the exact commit before calling that commit validated.
+
