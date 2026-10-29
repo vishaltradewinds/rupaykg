@@ -63,7 +63,8 @@ test("EPR return creation accepts a real ISO calendar period at the date-validat
   assert.notEqual(response.json().code, "INVALID_PERIOD");
 });
 
-function makeNonDraftReturnPool(status: "REJECTED" | "SUBMITTED"): Pool {
+function makeNonDraftReturnPool(status: "REJECTED" | "SUBMITTED"): { pool: Pool; transactions: string[] } {
+  const transactions: string[] = [];
   const poolQuery = async (sql: string) => {
     if (sql.includes("from identity_sessions")) return { rows: [{ identity_id: identityId }] };
     if (sql.includes("from organization_memberships") && sql.includes("where identity_id = $1 and status = 'VERIFIED'")) {
@@ -73,7 +74,7 @@ function makeNonDraftReturnPool(status: "REJECTED" | "SUBMITTED"): Pool {
     throw new Error(`Unexpected pool SQL in rejected-return test: ${sql}`);
   };
   const clientQuery = async (sql: string) => {
-    if (sql === "BEGIN" || sql === "ROLLBACK") return { rows: [] };
+    if (sql === "BEGIN" || sql === "ROLLBACK" || sql === "COMMIT") { transactions.push(sql); return { rows: [] }; }
     if (sql.includes("from epr_returns r join epr_obligations")) {
       return { rows: [{
         id: "66666666-6666-4666-8666-666666666666",
@@ -85,14 +86,18 @@ function makeNonDraftReturnPool(status: "REJECTED" | "SUBMITTED"): Pool {
     throw new Error(`Unexpected client SQL in rejected-return test: ${sql}`);
   };
   return {
-    query: poolQuery,
-    connect: async () => ({ query: clientQuery, release: () => undefined }),
-  } as unknown as Pool;
+    pool: {
+      query: poolQuery,
+      connect: async () => ({ query: clientQuery, release: () => undefined }),
+    } as unknown as Pool,
+    transactions,
+  };
 }
 
 test("rejected EPR returns fail closed until fulfillment reconciliation is implemented", async () => {
   const app = Fastify();
-  await registerEprReturnRoutes(app, makeNonDraftReturnPool("REJECTED"));
+  const mock = makeNonDraftReturnPool("REJECTED");
+  await registerEprReturnRoutes(app, mock.pool);
   const response = await app.inject({
     method: "POST",
     url: "/api/v1/epr/returns/66666666-6666-4666-8666-666666666666/submit",
@@ -105,11 +110,13 @@ test("rejected EPR returns fail closed until fulfillment reconciliation is imple
   await app.close();
   assert.equal(response.statusCode, 409);
   assert.equal(response.json().code, "EPR_REJECTED_RETURN_RECONCILIATION_REQUIRED");
+  assert.deepEqual(mock.transactions, ["BEGIN", "ROLLBACK"], "rejected return must not commit or mutate fulfillment");
 });
 
 test("submitted EPR returns cannot be submitted a second time", async () => {
   const app = Fastify();
-  await registerEprReturnRoutes(app, makeNonDraftReturnPool("SUBMITTED"));
+  const mock = makeNonDraftReturnPool("SUBMITTED");
+  await registerEprReturnRoutes(app, mock.pool);
   const response = await app.inject({
     method: "POST",
     url: "/api/v1/epr/returns/66666666-6666-4666-8666-666666666666/submit",
@@ -122,4 +129,5 @@ test("submitted EPR returns cannot be submitted a second time", async () => {
   await app.close();
   assert.equal(response.statusCode, 409);
   assert.equal(response.json().code, "INVALID_EPR_RETURN_STATE");
+  assert.deepEqual(mock.transactions, ["BEGIN", "ROLLBACK"], "duplicate submission must roll back without committing");
 });
