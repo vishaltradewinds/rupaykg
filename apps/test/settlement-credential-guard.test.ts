@@ -119,7 +119,20 @@ describe("settlement credential lifecycle database guards", () => {
        context.geography_id,JSON.stringify({testFixture:true}),JSON.stringify([{testFixture:true}]),
        "TEST FIXTURE ONLY - later review requires reassessment",`later-review-${suffix}`,context.reviewer_identity_id],
     );
-    const error = await pool.query("update credentials set status='ISSUED' where id=$1", [openSettlementCredentialId])
+    const source = (await pool.query<{
+      activity_id: string; issuer_organization_id: string; trust_root_id: string;
+      verification_id: string; methodology_version_id: string; quantity: string; unit: string;
+    }>(
+      "select activity_id,issuer_organization_id,trust_root_id,verification_id,methodology_version_id,quantity::text,unit from credentials where id=$1",
+      [openSettlementCredentialId],
+    )).rows[0]!;
+    const candidateId = (await pool.query<{id:string}>(
+      `insert into credentials(activity_id,issuer_organization_id,trust_root_id,status,verification_id,methodology_version_id,quantity,unit,issued_at)
+       values($1,$2,$3,'ELIGIBLE',$4,$5,$6,$7,now()) returning id`,
+      [source.activity_id,source.issuer_organization_id,source.trust_root_id,source.verification_id,
+       source.methodology_version_id,source.quantity,source.unit],
+    )).rows[0]!.id;
+    const error = await pool.query("update credentials set status='ISSUED' where id=$1", [candidateId])
       .then(() => null).catch((value: unknown) => value);
     assert.ok(error instanceof Error, "newer REQUIRES_REVIEW decision must supersede an older APPROVED decision");
     assert.match(error.message, /REGULATORY_ELIGIBILITY_REQUIRED/i);
