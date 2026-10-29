@@ -163,3 +163,35 @@ test("failed double-counting checks and non-reviewable lifecycle states block", 
     assert.ok(result.blockers.includes("MAPPING_STATUS_NOT_REVIEWABLE"));
   }
 });
+
+
+test("invalid source URLs and ambiguous verification timestamps fail closed", () => {
+  const invalidUrl = evaluateGriCrossMappingForReview({
+    ...validReviewInput,
+    sourceRequirement: {
+      ...validReviewInput.sourceRequirement,
+      sourceUrl: "javascript:alert(1)",
+    },
+  });
+  assert.equal(invalidUrl.decision, "BLOCKED");
+  assert.ok(invalidUrl.blockers.includes("SOURCE_URL_INVALID"));
+
+  for (const officialSourceVerifiedAt of [
+    "not-a-timestamp",
+    "2026-10-29T10:00:00",
+    "2026-02-30T10:00:00Z",
+  ]) {
+    const invalidTimestamp = evaluateGriCrossMappingForReview({
+      ...validReviewInput,
+      sourceRequirement: {
+        ...validReviewInput.sourceRequirement,
+        officialSourceVerifiedAt,
+      },
+    });
+    assert.equal(invalidTimestamp.decision, "BLOCKED");
+    assert.ok(
+      invalidTimestamp.blockers.includes("OFFICIAL_SOURCE_VERIFICATION_TIMESTAMP_INVALID"),
+      `expected invalid timestamp to be rejected: ${officialSourceVerifiedAt}`,
+    );
+  }
+});
