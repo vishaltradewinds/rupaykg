@@ -97,7 +97,10 @@ export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool |
       const row = current.rows[0];
       if (!row) { await client.query("ROLLBACK"); return reply.code(404).send({ error: "EPR return not found", code: "EPR_RETURN_NOT_FOUND" }); }
       if (!canAct(auth, row.organization_id) || !await hasOrganizationPermission(pool, auth, row.organization_id, ["epr:manage"])) { await client.query("ROLLBACK"); return reply.code(403).send({ error: "EPR management permission required", code: "EPR_RETURN_WRITE_FORBIDDEN" }); }
-      if (row.status !== "DRAFT" && row.status !== "REJECTED") { await client.query("ROLLBACK"); return reply.code(409).send({ error: `Return cannot be submitted from ${row.status}`, code: "INVALID_EPR_RETURN_STATE" }); }
+      // Rejected returns may already have contributed to obligation fulfillment in an earlier submission.
+      // Until the authoritative rejection workflow atomically reverses that contribution, fail closed:
+      // only DRAFT returns can be submitted. A rejected return requires explicit reconciliation first.
+      if (row.status !== "DRAFT") { await client.query("ROLLBACK"); return reply.code(409).send({ error: row.status === "REJECTED" ? "Rejected return requires fulfillment reconciliation before resubmission" : `Return cannot be submitted from ${row.status}`, code: row.status === "REJECTED" ? "EPR_REJECTED_RETURN_RECONCILIATION_REQUIRED" : "INVALID_EPR_RETURN_STATE" }); }
       const obligation = await client.query(`select id,target_quantity,fulfilled_quantity,status from epr_obligations where id=$1 for update`, [row.obligation_id]);
       const obligationRow = obligation.rows[0];
       if (!obligationRow) { await client.query("ROLLBACK"); return reply.code(409).send({ error: "Bound EPR obligation not found", code: "OBLIGATION_NOT_FOUND" }); }
