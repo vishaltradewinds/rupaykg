@@ -35,6 +35,7 @@ test("production config rejects missing or unsafe production requirements", () =
     [{ ...baseEnv, RUPAYKG_ALLOWED_ORIGINS: "http://app.rupaykg.example" }, /origin must use HTTPS/],
     [{ ...baseEnv, RUPAYKG_ALLOWED_ORIGINS: "https://app.rupaykg.example/path" }, /must not contain path/],
     [{ ...baseEnv, RUPAYKG_SYNTHETIC_DATA: "true" }, /synthetic data is forbidden/],
+    [{ ...baseEnv, RUPAYKG_ACCEPTANCE_SEED_ON_START: "true" }, /acceptance seed is forbidden/],
     [{ ...baseEnv, VITE_RUPAYKG_SESSION_TOKEN: "not-allowed" }, /VITE_RUPAYKG_SESSION_TOKEN must not be provided/],
   ] as const;
 

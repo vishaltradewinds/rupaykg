@@ -10,6 +10,10 @@ import { Pool } from "pg";
  * migration 081; it never invents LGD/government geography data.
  */
 
+if (process.env.RUPAYKG_ACCEPTANCE_SEED_ON_START === "true" && process.env.NODE_ENV === "production") {
+  throw new Error("PRODUCTION_STARTUP_BLOCKED: acceptance seeding is forbidden in production");
+}
+
 if (process.env.RUPAYKG_ACCEPTANCE_SEED_ON_START !== "true") {
   process.exit(0);
 }

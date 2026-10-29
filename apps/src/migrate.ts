@@ -32,6 +32,18 @@ try {
     .filter((name) => /^\d+_.+\.sql$/.test(name))
     .sort();
 
+  // Reconcile the applied ledger before running any new SQL. An applied row
+  // without its exact source file is an unresolved release-history conflict.
+  const applied = await pool.query<{ version: string; filename: string }>(
+    "select version, filename from schema_migrations order by version",
+  );
+  const availableFiles = new Set(files);
+  const missingSources = applied.rows.filter((row) => !availableFiles.has(row.filename));
+  if (missingSources.length) {
+    const detail = missingSources.map((row) => `${row.version}:${row.filename}`).join(", ");
+    throw new Error(`MIGRATION_HISTORY_UNRESOLVED: applied migration source files are missing: ${detail}`);
+  }
+
   for (const filename of files) {
     const version = filename.split("_", 1)[0];
     const existing = await pool.query<{ version: string; filename: string }>(
