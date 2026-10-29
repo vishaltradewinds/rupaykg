@@ -236,8 +236,8 @@ export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool |
           eo.target_quantity,eo.fulfilled_quantity as obligation_fulfilled,eo.category_code as obligation_category_code,eo.scheme_id,
           m.value as current_measurement_value,m.unit as current_measurement_unit,m.quality_status,a.geography_id as evidence_geography_id,
           rf.organization_id as current_flow_organization_id,rf.status as current_flow_status,rf.material_code as current_flow_material_code,rf.unit as current_flow_unit,
-          c.actor_organization_id as current_custody_actor_organization_id,c.quantity as current_custody_quantity,c.unit as current_custody_unit,c.recorded_at as current_custody_recorded_at,c.evidence_id as current_custody_evidence_id,
-          e.status as current_evidence_status,e.content_hash,e.content_uri,
+          c.actor_organization_id as current_custody_actor_organization_id,c.quantity as current_custody_quantity,c.unit as current_custody_unit,c.recorded_at::date as current_custody_recorded_date,c.evidence_id as current_custody_evidence_id,
+          e.status as current_evidence_status,e.content_hash,e.content_uri,e.measurement_id as current_evidence_measurement_id,e.activity_id as current_evidence_activity_id,a.id as current_activity_id,
           v.decision as current_verification_decision,v.evidence_id as current_verification_evidence,v.verifier_identity_id,
           s.code as return_scheme_code,mv.effective_from,mv.rules
         from epr_return_quantity_bindings b
@@ -265,9 +265,11 @@ export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool |
           || binding.current_flow_material_code !== binding.category_code || binding.current_flow_unit !== binding.unit_code
           || binding.current_custody_actor_organization_id !== row.organization_id
           || String(binding.current_custody_quantity) !== String(binding.measured_quantity) || binding.current_custody_unit !== binding.unit_code
-          || String(binding.current_custody_recorded_at).slice(0,10) < String(binding.return_period_start).slice(0,10)
-          || String(binding.current_custody_recorded_at).slice(0,10) > String(binding.return_period_end).slice(0,10)
-          || (binding.current_custody_evidence_id !== binding.evidence_id && binding.evidence_id !== binding.measurement_id)
+          || String(binding.current_custody_recorded_date).slice(0,10) < String(binding.return_period_start).slice(0,10)
+          || String(binding.current_custody_recorded_date).slice(0,10) > String(binding.return_period_end).slice(0,10)
+          || (binding.current_custody_evidence_id !== binding.evidence_id
+            && binding.current_evidence_measurement_id !== binding.measurement_id
+            && binding.current_evidence_activity_id !== binding.current_activity_id)
           || binding.current_evidence_status !== "VERIFIED" || (!binding.content_hash && !binding.content_uri)
           || binding.current_verification_decision !== "APPROVED" || binding.current_verification_evidence !== binding.evidence_id
           || binding.consumed_at || !binding.effective_from || new Date(binding.effective_from) > new Date(binding.return_period_start)
