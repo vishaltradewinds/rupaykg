@@ -164,10 +164,20 @@ export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool |
       if (flowCapacity.rows[0]?.within_capacity !== true) {
         await client.query("ROLLBACK"); return reply.code(409).send({ error: "Binding would exceed the resource flow's declared quantity; mass-balance reconciliation is required", code: "EPR_FLOW_MASS_BALANCE_EXCEEDED" });
       }
-      const verifier = await client.query(`select exists(select 1 from organization_memberships om join roles r on r.id=om.role_id
-        where om.identity_id=$1 and om.status='VERIFIED' and organization_has_geography_scope(om.organization_id,$2)
-          and exists(select 1 from jsonb_array_elements_text(r.permissions) p where p=any($3::text[]))) as ok`, [src.verifier_identity_id, src.geography_id, ["VERIFY_EVIDENCE", "verification:approve", "verification.approve"]]);
-      if (verifier.rows[0]?.ok !== true) { await client.query("ROLLBACK"); return reply.code(409).send({ error: "Approving verifier lacks current database-backed verification authority for the evidence geography", code: "EPR_VERIFIER_AUTHORITY_INVALID" }); }
+      // Require current identity + organization membership + permission, and lock
+      // every authority row until the binding transaction commits. Geography scope
+      // alone is insufficient: a verifier from another organization must not qualify.
+      const verifier = await client.query(`select om.identity_id
+        from organization_memberships om
+        join roles r on r.id=om.role_id
+        join identities i on i.id=om.identity_id
+        where om.identity_id=$1 and om.organization_id=$4 and om.status='VERIFIED'
+          and i.status='VERIFIED' and i.suspended_at is null
+          and organization_has_geography_scope(om.organization_id,$2)
+          and exists(select 1 from jsonb_array_elements_text(r.permissions) p where p=any($3::text[]))
+        for share of om, r, i`,
+        [src.verifier_identity_id, src.geography_id, ["VERIFY_EVIDENCE", "verification:approve", "verification.approve"], row.organization_id]);
+      if (verifier.rows.length === 0) { await client.query("ROLLBACK"); return reply.code(409).send({ error: "Approving verifier lacks current database-backed verification authority for this organization and evidence geography", code: "EPR_VERIFIER_AUTHORITY_INVALID" }); }
       const inserted = await client.query(`insert into epr_return_quantity_bindings
         (epr_return_id,obligation_id,measurement_id,resource_flow_id,custody_link_id,evidence_id,verification_id,methodology_version_id,category_code,unit_code,period_start,period_end,measured_quantity,created_by_identity_id,declared_quantity_before_binding)
         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::date,$12::date,$13::numeric,$14,$15::numeric) returning id,epr_return_id,obligation_id,measurement_id,resource_flow_id,custody_link_id,evidence_id,verification_id,methodology_version_id,category_code,unit_code,period_start,period_end,measured_quantity,declared_quantity_before_binding,created_at`,
