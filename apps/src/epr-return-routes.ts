@@ -157,7 +157,8 @@ export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool |
           and mv.effective_from is not null and mv.effective_from <= $8::date
           and mv.rules->'eprBinding'->>'schemeCode'=$11
           and mv.rules->'eprBinding'->>'categoryCode'=$10
-          and mv.rules->'eprBinding'->>'unitCode'=m.unit`,
+          and mv.rules->'eprBinding'->>'unitCode'=m.unit
+        for share of m,a,c,e,v,mv`,
         [measurementId, resourceFlowId, custodyLinkId, evidenceId, verificationId, methodologyVersionId, row.organization_id, row.period_start, row.period_end, row.category_code, row.scheme_code]);
       const src = source.rows[0];
       if (!src || src.activity_organization_id !== row.organization_id || src.flow_organization_id !== row.organization_id || src.verification_evidence_id !== evidenceId) {
@@ -246,7 +247,9 @@ export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool |
         join evidence e on e.id=b.evidence_id
         join verifications v on v.id=b.verification_id
         join methodology_versions mv on mv.id=b.methodology_version_id
-        where b.epr_return_id=$1 for update of b,eo`, [returnId]);
+        where b.epr_return_id=$1
+        for update of b,eo
+        for share of m,a,e,v,mv`, [returnId]);
       const binding = bindingResult.rows[0];
       if (!binding || binding.obligation_id !== row.obligation_id || binding.evidence_id !== evidenceId || binding.verification_id !== verificationId || binding.category_code !== binding.obligation_category_code
           || String(binding.period_start).slice(0,10) !== String(binding.return_period_start).slice(0,10)
