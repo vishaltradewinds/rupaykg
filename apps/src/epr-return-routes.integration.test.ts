@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import Fastify from "fastify";
 import { registerEprReturnRoutes } from "./epr-return-routes.js";
-import type { Pool, PoolClient, QueryResult } from "pg";
+import type { Pool } from "pg";
 
 const ORG = "123e4567-e89b-42d3-a456-426614174001";
 const GEO = "123e4567-e89b-42d3-a456-426614174002";
@@ -14,7 +14,6 @@ const IDENTITY = "123e4567-e89b-42d3-a456-426614174007";
 
 test("EPR submit fails closed before fulfillment mutation when quantity binding is absent", async () => {
   const clientSql: string[] = [];
-  const poolSql: string[] = [];
   let released = false;
   const client = {
     query: async (sql: string) => {
@@ -30,6 +29,7 @@ test("EPR submit fails closed before fulfillment mutation when quantity binding 
         id: EVIDENCE, status: "VERIFIED", content_hash: "a".repeat(64), content_uri: null,
         organization_id: ORG, geography_id: GEO, verifier_identity_id: IDENTITY
       }] };
+      if (sql.includes("from organization_memberships vm")) return { rows: [{ authorized: true }] };
       if (sql.includes("select organization_has_geography_scope")) return { rows: [{ ok: true }] };
       if (sql.includes("select exists(select 1 from epr_returns where evidence_id")) return { rows: [{ reused: false }] };
       return { rows: [] };
@@ -38,7 +38,6 @@ test("EPR submit fails closed before fulfillment mutation when quantity binding 
   };
   const pool = {
     query: async (sql: string) => {
-      poolSql.push(sql);
       if (sql.includes("from identity_sessions")) return { rows: [{ identity_id: IDENTITY }] };
       if (sql.includes("from organization_memberships") && sql.includes("where identity_id = $1 and status")) return { rows: [{ organization_id: ORG, role_id: "role-1", status: "VERIFIED" }] };
       if (sql.includes("select exists (") && sql.includes("jsonb_array_elements_text")) return { rows: [{ ok: true }] };
@@ -60,8 +59,8 @@ test("EPR submit fails closed before fulfillment mutation when quantity binding 
     assert.equal(response.json().code, "EPR_QUANTITY_BINDING_NOT_IMPLEMENTED");
     assert.equal(response.json().productionGate, "HOLD");
     assert.ok(clientSql.includes("ROLLBACK"));
-    assert.ok(!clientSql.some((sql) => /update\\s+epr_obligations/i.test(sql)));
-    assert.ok(!clientSql.some((sql) => /update\\s+epr_returns/i.test(sql)));
+    assert.ok(!clientSql.some((sql) => /update\s+epr_obligations/i.test(sql)));
+    assert.ok(!clientSql.some((sql) => /update\s+epr_returns/i.test(sql)));
     assert.ok(released, "transaction client must be released");
   } finally {
     await app.close();
