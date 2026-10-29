@@ -227,6 +227,7 @@ test("EPR submission fails closed when current verifier authority is absent and 
       organization_id: organizationId, geography_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
     }] };
     if (sql.includes("select organization_has_geography_scope")) return { rows: [{ ok: true }] };
+    if (sql.includes("select coalesce(sum(measured_quantity),0) <= $2::numeric")) return { rows: [{ within_capacity: true }] };
     if (sql.includes("from epr_return_quantity_bindings b")) return { rows: [{
       id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", obligation_id: "55555555-5555-4555-8555-555555555555",
       evidence_id: evidenceId, verification_id: verificationId, category_code: "PLASTIC",
