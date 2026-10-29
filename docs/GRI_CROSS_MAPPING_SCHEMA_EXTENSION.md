@@ -27,7 +27,7 @@ Store exact standard identifiers, versions, effective dates and authoritative UR
 | EPR obligations and returns | Relevant GRI waste/material disclosures | Partial overlap | Never treat GRI mapping as a CPCB filing, certificate or authority acceptance. |
 | ICVCM Core Carbon Principles | Relevant climate/governance disclosures | Contextual | Voluntary integrity benchmarks do not replace Indian law or crediting-program rules. |
 
-GRI 101 Biodiversity 2024 is effective for reporting from January 2026. GRI 102 Climate Change 2025 and GRI 103 Energy 2025 are scheduled to be effective for reporting from January 2027. Implement effective-dated versions; do not rewrite prior reporting periods.
+GRI 101 Biodiversity 2024 is effective for reporting from January 2026. GRI 102 Climate Change 2025 and GRI 103 Energy 2025 are scheduled to be effective for reporting from January 2027. These effective-date statements remain subject to official-source confirmation before the mapping registry is approved for production. Implement effective-dated versions; do not rewrite prior reporting periods.
 
 ## Record contract
 
@@ -41,11 +41,17 @@ GRI 101 Biodiversity 2024 is effective for reporting from January 2026. GRI 102 
 - Separate double-counting, assurance, statutory compliance and credit-eligibility statuses.
 - Owner/approver roles and version/change-log references.
 
-## Integration plan — reuse existing architecture
+## Implemented in this isolated branch
 
-1. Extend the existing ESG/BRSR framework registry in `packages/esg`; preserve existing framework validation and metric classification.
+- `packages/esg/src/gri-cross-mapping.ts` adds a standalone, advisory review gate that returns blockers and can only mark a mapping `READY_FOR_HUMAN_REVIEW`; it does not approve the mapping.
+- `packages/esg/src/gri-cross-mapping.test.ts` covers readiness, fail-closed applicability/evidence checks, conflict review and the rule that GRI mapping cannot alter compliance or credit-eligibility conclusions.
+- The module intentionally has not been added to the shared ESG package export/index or server routes yet, to avoid collisions with parallel work currently changing ESG verification and production safety. No migration, database, production service or existing shared source file was changed in this batch.
+
+## Remaining integration plan — reuse existing architecture
+
+1. Reconcile with the parallel ESG verification and production-safety work before changing the shared `packages/esg/src/index.ts` or package exports.
 2. Bind mapping records to existing `esg_reporting_periods`, `esg_metrics`, EPR obligations/returns, evidence-vault records and MRV provenance by stable identifiers; do not copy authoritative measurements into a new competing source of truth.
-3. Add an additive database migration only after auditing current migrations and table constraints. Use effective-dated mapping versions and immutable reporting-period snapshots.
+3. Add an additive database migration only after auditing current migrations and table constraints and after the active migration-safety gates are resolved. Use effective-dated mapping versions and immutable reporting-period snapshots.
 4. Expose mapping read/write operations through existing authenticated server routes with organization-scoped RBAC, audit logging and strict validation.
 5. Extend existing ESG/reporting panels only after API contracts and stakeholder permissions are confirmed.
 6. Export a disclosure index showing mapping version, applicability, source evidence, omissions, estimates, limitations and assurance status.
@@ -60,6 +66,7 @@ GRI 101 Biodiversity 2024 is effective for reporting from January 2026. GRI 102 
 - **E — Integration:** existing APIs, migrations, RBAC, UI and exports work without regression.
 - **F — Assurance:** external assurance is claimed only when supported by independent evidence.
 - **G — Production:** CI, security, regression, rollback and operational readiness gates pass.
+- **TRL:** currently **TRL 3 (analytical/experimental proof-of-concept)** for this GRI mapping extension only: schema and isolated evaluator/tests are drafted, but end-to-end integration and validated deployment evidence are absent. This is an engineering estimate, not a certified TRL assessment.
 
 ## Minimum acceptance tests
 
@@ -70,7 +77,7 @@ GRI 101 Biodiversity 2024 is effective for reporting from January 2026. GRI 102 
 - Reject evidence that is missing, rejected or quarantined for a required disclosure.
 - Detect duplicate physical waste quantities across generator/collector/processor custody events.
 - Enforce organization-level authorization and immutable audit events.
-- Verify effective-dated GRI 102/103 transitions and report version.
+- Verify effective-dated GRI 102/103 transitions and report version against official sources.
 - Ensure existing BRSR, EPR, CPCB/SWM and MRV tests remain green.
 
 ## Official references
@@ -79,4 +86,4 @@ GRI 101 Biodiversity 2024 is effective for reporting from January 2026. GRI 102 
 - GRI Universal Standards: https://globalreporting.org/standards/standards-development/universal-standards/
 - GRI Standards development/effective dates: https://www.globalreporting.org/standards/standards-development/
 
-**Engineering disposition:** this PR provides the schema/documentation foundation only. Runtime integration, migration, route/UI changes and automated tests are not claimed complete by this change.
+**Engineering disposition:** schema and isolated advisory evaluator/test source are present on this draft branch. Automated CI execution is not yet evidenced. Public package export, persistence/migration, authenticated routes, stakeholder UI, regulatory source verification, independent review and production certification remain open gates.
