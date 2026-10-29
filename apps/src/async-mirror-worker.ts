@@ -155,7 +155,34 @@ export async function runGovernmentInboxWorker(
   );
 
   const result = { claimed: claimed.rows.length, validated: 0, rejected: 0, unresolved: 0, retried: 0, quarantined: 0 };
+  // Start heartbeats for every claimed row immediately. Rows later in this
+  // sequential batch must not expire while waiting behind slow earlier work.
+  const leaseStates = new Map<string, { lost: boolean; renewalInProgress: boolean; timer: ReturnType<typeof setInterval> }>();
   for (const row of claimed.rows) {
+    const state = { lost: false, renewalInProgress: false, timer: undefined as unknown as ReturnType<typeof setInterval> };
+    state.timer = setInterval(() => {
+      if (state.lost || state.renewalInProgress) return;
+      state.renewalInProgress = true;
+      void pool.query(
+        `update async_mirror_inbox
+            set lease_until=now() + ($3 * interval '1 second')
+          where id=$1 and status='PROCESSING' and lease_token=$2 and lease_until > now()`,
+        [row.id, row.lease_token, leaseSeconds],
+      ).then((renewed) => {
+        if ((renewed.rowCount ?? 0) !== 1) state.lost = true;
+      }).catch(() => {
+        state.lost = true;
+      }).finally(() => {
+        state.renewalInProgress = false;
+      });
+    }, Math.max(5_000, Math.floor((leaseSeconds * 1_000) / 3)));
+    state.timer.unref?.();
+    leaseStates.set(row.id, state);
+  }
+
+  try {
+    for (const row of claimed.rows) {
+      const leaseState = leaseStates.get(row.id)!;
     try {
       let outcome: GovernmentInboxValidation;
       if (canonicalGovBridgeHash(row.payload) !== row.payload_sha256) {
@@ -246,34 +273,40 @@ export async function runGovernmentInboxWorker(
           };
         }
       }
+      if (leaseState.lost) throw new Error("WORKER_LEASE_LOST");
       if (outcome.valid) {
         const updated = await pool.query(
           `update async_mirror_inbox
               set status='VALIDATED', processed_at=now(), lease_token=null, lease_until=null,
                   next_attempt_at=null, last_error_code=null, validation_summary=$3::jsonb
-            where id=$1 and status='PROCESSING' and lease_token=$2`,
+            where id=$1 and status='PROCESSING' and lease_token=$2 and lease_until > now()`,
           [row.id, row.lease_token, JSON.stringify(outcome.summary ?? {})],
         );
-        if ((updated.rowCount ?? 0) === 1) result.validated += 1;
+        if ((updated.rowCount ?? 0) !== 1) throw new Error("WORKER_LEASE_LOST");
+        result.validated += 1;
       } else if (outcome.state === "UNRESOLVED") {
+        if (leaseState.lost) throw new Error("WORKER_LEASE_LOST");
         const updated = await pool.query(
           `update async_mirror_inbox
               set status='UNRESOLVED', processed_at=now(), lease_token=null, lease_until=null,
                   next_attempt_at=null, last_error_code=$3, validation_summary=$4::jsonb
-            where id=$1 and status='PROCESSING' and lease_token=$2`,
+            where id=$1 and status='PROCESSING' and lease_token=$2 and lease_until > now()`,
           [row.id, row.lease_token, outcome.errorCode ?? "GOVERNMENT_CROSSWALK_UNRESOLVED", JSON.stringify(outcome.summary ?? {})],
         );
-        if ((updated.rowCount ?? 0) === 1) result.unresolved += 1;
+        if ((updated.rowCount ?? 0) !== 1) throw new Error("WORKER_LEASE_LOST");
+        result.unresolved += 1;
       } else {
+        if (leaseState.lost) throw new Error("WORKER_LEASE_LOST");
         const code = (outcome.errorCode ?? "PAYLOAD_VALIDATION_REJECTED").replace(/[^A-Z0-9_.-]/gi, "_").slice(0, 100);
         const updated = await pool.query(
           `update async_mirror_inbox
               set status='REJECTED', processed_at=now(), lease_token=null, lease_until=null,
                   next_attempt_at=null, last_error_code=$3, validation_summary=$4::jsonb
-            where id=$1 and status='PROCESSING' and lease_token=$2`,
+            where id=$1 and status='PROCESSING' and lease_token=$2 and lease_until > now()`,
           [row.id, row.lease_token, code, JSON.stringify(outcome.summary ?? {})],
         );
-        if ((updated.rowCount ?? 0) === 1) result.rejected += 1;
+        if ((updated.rowCount ?? 0) !== 1) throw new Error("WORKER_LEASE_LOST");
+        result.rejected += 1;
       }
     } catch (error) {
       const exhausted = row.attempts >= maxAttempts;
@@ -285,14 +318,21 @@ export async function runGovernmentInboxWorker(
                 next_attempt_at=case when $3='RETRY' then now() + ($4 * interval '1 second') else null end,
                 quarantined_at=case when $3='QUARANTINED' then now() else null end,
                 last_error_code=$5
-          where id=$1 and status='PROCESSING' and lease_token=$2`,
+          where id=$1 and status='PROCESSING' and lease_token=$2 and lease_until > now()`,
         [row.id, row.lease_token, exhausted ? "QUARANTINED" : "RETRY", delaySeconds, code],
       );
       if ((updated.rowCount ?? 0) === 1) {
         if (exhausted) result.quarantined += 1;
         else result.retried += 1;
       }
+    } finally {
+      clearInterval(leaseState.timer);
     }
+    }
+  } finally {
+    // Even if persistence itself throws, do not leave timers running for rows
+    // that were claimed but never reached in the sequential loop.
+    for (const state of leaseStates.values()) clearInterval(state.timer);
   }
   return result;
 }

@@ -158,3 +158,166 @@ test("government inbox timestamp validation checks calendar, clock, precision, a
     assert.equal(isValidSyncWindowTimestamp(timestamp), expected, timestamp);
   }
 });
+
+
+test("worker does not report success when both outcome and retry persistence fail", async () => {
+  const attemptedWrites: string[] = [];
+  const pool = {
+    query: async (sql: string) => {
+      if (sql.includes("returning inbox.id")) return { rows: [row], rowCount: 1 };
+      if (sql.includes("from government_jurisdiction_crosswalks c")) return { rows: [], rowCount: 0 };
+      if (sql.includes("set status='UNRESOLVED'")) {
+        attemptedWrites.push("outcome");
+        throw new Error("synthetic outcome persistence failure");
+      }
+      if (sql.includes("set status=$3")) {
+        attemptedWrites.push("retry");
+        throw new Error("synthetic retry persistence failure");
+      }
+      return { rows: [], rowCount: 1 };
+    },
+  } as unknown as Pool;
+
+  await assert.rejects(
+    runGovernmentInboxWorker(pool),
+    /synthetic retry persistence failure/,
+  );
+  assert.deepEqual(attemptedWrites, ["outcome", "retry"]);
+});
+
+
+test("worker renews its fenced lease while validation runs beyond the original lease window", async () => {
+  const statements: string[] = [];
+  const pool = {
+    query: async (sql: string) => {
+      statements.push(sql);
+      if (sql.includes("returning inbox.id")) return { rows: [row], rowCount: 1 };
+      if (sql.includes("set lease_until=now()")) return { rows: [], rowCount: 1 };
+      if (sql.includes("from government_jurisdiction_crosswalks c")) {
+        return { rows: [{ id: "crosswalk-id", organization_id: "organization-id", geography_id: "geography-id", activity_id: null, source_version: "synthetic-v1" }], rowCount: 1 };
+      }
+      return { rows: [], rowCount: 1 };
+    },
+  } as unknown as Pool;
+
+  const result = await runGovernmentInboxWorker(pool, async () => {
+    await new Promise(resolve => setTimeout(resolve, 5_200));
+    return { valid: true, summary: { validation: "SYNTHETIC_TEST_ONLY" } };
+  }, { leaseSeconds: 15 });
+
+  assert.equal(result.validated, 1);
+  const renewal = statements.find(sql => sql.includes("set lease_until=now()"));
+  assert.ok(renewal, "slow validation should trigger a lease renewal");
+  assert.match(renewal, /where id=\$1 and status='PROCESSING' and lease_token=\$2 and lease_until > now\(\)/i);
+  const terminal = statements.find(sql => sql.includes("set status='VALIDATED'"));
+  assert.ok(terminal);
+  assert.match(terminal, /where id=\$1 and status='PROCESSING' and lease_token=\$2 and lease_until > now\(\)/i);
+});
+
+
+test("worker cannot finalize an outcome after its lease token has been replaced", async () => {
+  const statements: string[] = [];
+  const pool = {
+    query: async (sql: string) => {
+      statements.push(sql);
+      if (sql.includes("returning inbox.id")) return { rows: [row], rowCount: 1 };
+      if (sql.includes("from government_jurisdiction_crosswalks c")) {
+        return { rows: [{ id: "crosswalk-id", organization_id: "organization-id", geography_id: "geography-id", activity_id: null, source_version: "synthetic-v1" }], rowCount: 1 };
+      }
+      // Simulate another worker reclaiming the row and changing its lease token
+      // before this worker's fenced terminal update.
+      if (sql.includes("set status='VALIDATED'")) return { rows: [], rowCount: 0 };
+      return { rows: [], rowCount: 1 };
+    },
+  } as unknown as Pool;
+
+  const result = await runGovernmentInboxWorker(pool);
+  assert.equal(result.claimed, 1);
+  assert.equal(result.validated, 0);
+  const terminalUpdate = statements.find(sql => sql.includes("set status='VALIDATED'"));
+  assert.ok(terminalUpdate);
+  assert.match(terminalUpdate, /where id=\$1 and status='PROCESSING' and lease_token=\$2/i);
+});
+
+
+test("worker renews leases for later batch rows while an earlier row is slow", async () => {
+  const secondRow = { ...row, id: "second-row-id", lease_token: "second-lease-token" };
+  const statements: Array<{ sql: string; values?: unknown[] | undefined }> = [];
+  const pool = {
+    query: async (sql: string, values?: unknown[]) => {
+      statements.push({ sql, values });
+      if (sql.includes("returning inbox.id")) return { rows: [row, secondRow], rowCount: 2 };
+      if (sql.includes("set lease_until=now()")) return { rows: [], rowCount: 1 };
+      if (sql.includes("from government_jurisdiction_crosswalks c")) {
+        return { rows: [{ id: "crosswalk-id", organization_id: "organization-id", geography_id: "geography-id", activity_id: null, source_version: "synthetic-v1" }], rowCount: 1 };
+      }
+      return { rows: [], rowCount: 1 };
+    },
+  } as unknown as Pool;
+
+  let calls = 0;
+  const result = await runGovernmentInboxWorker(pool, async () => {
+    calls += 1;
+    if (calls === 1) await new Promise(resolve => setTimeout(resolve, 5_200));
+    return { valid: true, summary: { validation: "SYNTHETIC_TEST_ONLY" } };
+  }, { batchSize: 2, leaseSeconds: 15 });
+
+  assert.equal(result.claimed, 2);
+  assert.equal(result.validated, 2);
+  const secondRowRenewal = statements.find(entry =>
+    entry.sql.includes("set lease_until=now()") && entry.values?.[0] === "second-row-id");
+  assert.ok(secondRowRenewal, "the second row's lease must renew before its sequential processing begins");
+  assert.match(secondRowRenewal.sql, /lease_until > now\(\)/i);
+});
+
+
+test("worker does not finalize or retry a row after lease renewal reports lost ownership", async () => {
+  const statements: string[] = [];
+  const pool = {
+    query: async (sql: string) => {
+      statements.push(sql);
+      if (sql.includes("returning inbox.id")) return { rows: [row], rowCount: 1 };
+      if (sql.includes("set lease_until=now()")) return { rows: [], rowCount: 0 };
+      if (sql.includes("from government_jurisdiction_crosswalks c")) {
+        return { rows: [{ id: "crosswalk-id", organization_id: "organization-id", geography_id: "geography-id", activity_id: null, source_version: "synthetic-v1" }], rowCount: 1 };
+      }
+      if (sql.includes("set status='VALIDATED'") || sql.includes("set status=$3")) return { rows: [], rowCount: 0 };
+      return { rows: [], rowCount: 1 };
+    },
+  } as unknown as Pool;
+
+  const result = await runGovernmentInboxWorker(pool, async () => {
+    await new Promise(resolve => setTimeout(resolve, 5_200));
+    return { valid: true, summary: { validation: "SYNTHETIC_TEST_ONLY" } };
+  }, { leaseSeconds: 15 });
+
+  assert.equal(result.validated, 0);
+  assert.equal(result.retried, 0);
+  assert.equal(statements.some(sql => sql.includes("set status='VALIDATED'")), false);
+  assert.match(statements.find(sql => sql.includes("set status=$3")) ?? "", /lease_until > now\(\)/i);
+});
+
+
+test("worker treats a zero-row terminal write as lost lease ownership", async () => {
+  const statements: string[] = [];
+  const pool = {
+    query: async (sql: string) => {
+      statements.push(sql);
+      if (sql.includes("returning inbox.id")) return { rows: [row], rowCount: 1 };
+      if (sql.includes("from government_jurisdiction_crosswalks c")) {
+        return { rows: [{ id: "crosswalk-id", organization_id: "organization-id", geography_id: "geography-id", activity_id: null, source_version: "synthetic-v1" }], rowCount: 1 };
+      }
+      if (sql.includes("set status='VALIDATED'") || sql.includes("set status=$3")) return { rows: [], rowCount: 0 };
+      return { rows: [], rowCount: 1 };
+    },
+  } as unknown as Pool;
+
+  const result = await runGovernmentInboxWorker(pool);
+  assert.equal(result.validated, 0);
+  assert.equal(result.retried, 0);
+  assert.equal(statements.some(sql => sql.includes("set status='VALIDATED'")), true);
+  const recovery = statements.find(sql => sql.includes("set status=$3")) ?? "";
+  assert.match(recovery, /status='PROCESSING'/i);
+  assert.match(recovery, /lease_token=\$2/i);
+  assert.match(recovery, /lease_until > now\(\)/i);
+});
