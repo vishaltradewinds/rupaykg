@@ -282,7 +282,8 @@ export async function runGovernmentInboxWorker(
             where id=$1 and status='PROCESSING' and lease_token=$2 and lease_until > now()`,
           [row.id, row.lease_token, JSON.stringify(outcome.summary ?? {})],
         );
-        if ((updated.rowCount ?? 0) === 1) result.validated += 1;
+        if ((updated.rowCount ?? 0) !== 1) throw new Error("WORKER_LEASE_LOST");
+        result.validated += 1;
       } else if (outcome.state === "UNRESOLVED") {
         if (leaseState.lost) throw new Error("WORKER_LEASE_LOST");
         const updated = await pool.query(
@@ -292,7 +293,8 @@ export async function runGovernmentInboxWorker(
             where id=$1 and status='PROCESSING' and lease_token=$2 and lease_until > now()`,
           [row.id, row.lease_token, outcome.errorCode ?? "GOVERNMENT_CROSSWALK_UNRESOLVED", JSON.stringify(outcome.summary ?? {})],
         );
-        if ((updated.rowCount ?? 0) === 1) result.unresolved += 1;
+        if ((updated.rowCount ?? 0) !== 1) throw new Error("WORKER_LEASE_LOST");
+        result.unresolved += 1;
       } else {
         if (leaseState.lost) throw new Error("WORKER_LEASE_LOST");
         const code = (outcome.errorCode ?? "PAYLOAD_VALIDATION_REJECTED").replace(/[^A-Z0-9_.-]/gi, "_").slice(0, 100);
@@ -303,7 +305,8 @@ export async function runGovernmentInboxWorker(
             where id=$1 and status='PROCESSING' and lease_token=$2 and lease_until > now()`,
           [row.id, row.lease_token, code, JSON.stringify(outcome.summary ?? {})],
         );
-        if ((updated.rowCount ?? 0) === 1) result.rejected += 1;
+        if ((updated.rowCount ?? 0) !== 1) throw new Error("WORKER_LEASE_LOST");
+        result.rejected += 1;
       }
     } catch (error) {
       const exhausted = row.attempts >= maxAttempts;
