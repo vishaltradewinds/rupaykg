@@ -140,6 +140,16 @@ export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool |
       await client.query("select pg_advisory_xact_lock(hashtext($1)::bigint)", [evidenceId]);
       const reusedEvidence = await client.query(`select exists(select 1 from epr_returns where evidence_id=$1 and id<>$2 and status in ('SUBMITTED','ACCEPTED','COMPLIANT')) as reused`, [evidenceId, returnId]);
       if (reusedEvidence.rows[0]?.reused === true) { await client.query("ROLLBACK"); return reply.code(409).send({ error: "Evidence is already bound to another submitted EPR return", code: "EVIDENCE_ALREADY_CONSUMED" }); }
+      // FAIL CLOSED: reported_quantity is caller-supplied and the repository has no governed,
+      // scheme/category/unit/period/methodology binding that derives this value from an authoritative
+      // measurement or eligible custody allocation. Do not increment statutory obligation fulfillment
+      // until that binding exists and is independently validated.
+      await client.query("ROLLBACK");
+      return reply.code(409).send({
+        error: "Authoritative measurement-to-EPR quantity binding is not implemented; reported quantity cannot be treated as verified fulfillment",
+        code: "EPR_QUANTITY_BINDING_NOT_IMPLEMENTED",
+        productionGate: "HOLD"
+      });
       const fulfilled = Number(row.reported_quantity);
       const balance = Number(obligationRow.target_quantity) - Number(obligationRow.fulfilled_quantity);
       if (!Number.isFinite(fulfilled) || fulfilled <= 0) { await client.query("ROLLBACK"); return reply.code(400).send({ error: "Reported quantity must be positive", code: "INVALID_QUANTITY" }); }
