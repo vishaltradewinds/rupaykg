@@ -43,7 +43,7 @@ jobs:
       - name: Migration-history preflight fails before SQL (disposable PostgreSQL)
         env:
           RUPAYKG_RUN_MIGRATION_HISTORY_TESTS: "1"
-        run: node scripts/test-migration-history-preflight.mjs
+        run: node_modules/.bin/tsx scripts/test-migration-history-preflight.ts
       - run: npm run typecheck
       - run: npm run build
       - name: Browser smoke test production web build
