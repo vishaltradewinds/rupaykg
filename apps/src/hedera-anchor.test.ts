@@ -83,3 +83,59 @@ test("canonical source digests and HCS payload hash change when evidence changes
   assert.notEqual(digest, changedDigest);
   assert.notEqual(integrityHash({ ...payload, metadata: { evidenceDigest: digest } }), integrityHash({ ...payload, metadata: { evidenceDigest: changedDigest } }));
 });
+
+
+test("Mirror Node verification rejects malformed JSON without accepting provenance", async () => {
+  await withEnvironment(async () => {
+    globalThis.fetch = async () => new Response("{not-json", { status: 200, headers: { "content-type": "application/json" } });
+    const result = await verifyHcsMessage(timestamp, topicId);
+    assert.equal(result.verified, false);
+    assert.match(String(result.error), /malformed JSON/);
+  });
+});
+
+test("Mirror Node verification rejects oversized response bodies", async () => {
+  await withEnvironment(async () => {
+    globalThis.fetch = async () => new Response("x".repeat(1024 * 1024 + 1), { status: 200, headers: { "content-type": "application/json" } });
+    const result = await verifyHcsMessage(timestamp, topicId);
+    assert.equal(result.verified, false);
+    assert.match(String(result.error), /size limit/);
+  });
+});
+
+test("Mirror Node network and timeout errors fail closed with sanitized errors", async () => {
+  await withEnvironment(async () => {
+    globalThis.fetch = async () => { throw Object.assign(new Error("secret endpoint token should not leak"), { name: "AbortError" }); };
+    const result = await verifyHcsMessage(timestamp, topicId);
+    assert.equal(result.verified, false);
+    assert.equal(result.error, "Mirror Node request timed out");
+    assert.equal(JSON.stringify(result).includes("secret endpoint token"), false);
+  });
+});
+
+test("Mirror Node verification rejects malformed topic and timestamp before network access", async () => {
+  await withEnvironment(async () => {
+    let called = false;
+    globalThis.fetch = async () => { called = true; return new Response("{}", { status: 200 }); };
+    const badTopic = await verifyHcsMessage(timestamp, "https://attacker.invalid");
+    const badTimestamp = await verifyHcsMessage("not-a-timestamp", topicId);
+    assert.equal(badTopic.verified, false);
+    assert.equal(badTimestamp.verified, false);
+    assert.equal(called, false);
+  });
+});
+
+
+test("Mirror Node verification rejects malformed base64 before decoding", async () => {
+  await withEnvironment(async () => {
+    globalThis.fetch = async () => new Response(JSON.stringify({ messages: [{
+      consensus_timestamp: timestamp,
+      sequence_number: 9,
+      topic_id: topicId,
+      message: "!!!!",
+    }] }), { status: 200, headers: { "content-type": "application/json" } });
+    const result = await verifyHcsMessage(timestamp, topicId);
+    assert.equal(result.verified, false);
+    assert.equal(result.error, "HCS message is not valid base64");
+  });
+});
