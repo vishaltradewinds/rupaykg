@@ -93,3 +93,26 @@ A second freshness discrepancy was identified in the BEE Offset Mechanism method
 - SEBI BRSR/BRSR Core circulars and March 2025 value-chain update (above).
 
 **Evidence limitation:** This note records source-page contents available during the check. It does not assert that every source document has been downloaded, hashed, legally reviewed or incorporated into the production policy registry. Those remain explicit release gates.
+
+## 5. Plastic Waste Management (Amendment) Rules, 2026 — G.S.R. 237(E)
+
+The official Maharashtra Pollution Control Board circular entry hosts the regulator copy of the notification dated 31 March 2026. The notification states that the amendment comes into force on publication in the Official Gazette. The CPCB plastic-waste portal also lists the 2026 amendment alongside prior amendments.
+
+- Regulator-hosted notification entry: https://mpcb.gov.in/en/node/7306
+- CPCB Plastic Waste Management portal: https://pwm.cpcb.gov.in/
+
+**Engineering gates:** record G.S.R. 237(E), publication/effective date, exact archived PDF bytes and SHA-256; review the complete amendment and any later operative directions. Do not hard-code a target table solely from a summary. Resolve actor, packaging category, reporting year, statutory exceptions and reporting requirements before applying the amendment to an organisation. Keep the 2026 amendment as a versioned rule overlay rather than overwriting historical calculations.
+
+## 6. BEE Accredited Carbon Verification Agency register
+
+BEE's official ACVA register page was checked on 29 October 2026 and displayed a last-updated date of 21 October 2026. It identifies agencies by accreditation certificate, validity, mechanism and sector scope.
+
+- Official BEE ACVA register: https://beeindia.gov.in/view_content.php?lid=568
+- Published accreditation procedure and eligibility criteria: https://www.beeindia.gov.in/sites/default/files/ACV_Procedure_Doc_18102024_Published.pdf
+
+**Engineering gates:**
+1. Resolve the assigned agency against the live register at assignment time; check validity, provisional/final status, the relevant compliance/offset mechanism and sector scope.
+2. Persist the register snapshot/reference, certificate number, checked-at timestamp, scope decision and any applicable conflict/independence checks with the validation/verification record.
+3. Re-check agency status before relying on a completed validation or verification. A listed agency is not evidence that a particular project was eligible, that a specific verification was completed, or that CCCs were issued.
+4. Archive and hash the exact register/PDF snapshot. Until this evidence exists, keep ACVA authority decisions pending and CCTS/CCC state fail-closed.
+
