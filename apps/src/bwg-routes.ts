@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import type { Pool } from "pg";
 import { authenticate, bearerChallenge, hasOrganizationPermission, type AuthContext } from "./auth.js";
-import { authorizeGeography, registerEprReturnRoutes, requestedGeography } from "./epr-return-routes.js";
+import { authorizeGeography, hasInvalidGeographyFilter, registerEprReturnRoutes, requestedGeography } from "./epr-return-routes.js";
 
 async function authFor(request: Parameters<typeof authenticate>[0], reply: { code: (status: number) => { send: (body: unknown) => unknown } }, pool: Pool | null): Promise<AuthContext | null> {
   if (!pool) { reply.code(503).send({ error: "Authoritative API unavailable", code: "DATABASE_UNAVAILABLE", syntheticData: false }); return null; }
@@ -17,6 +17,7 @@ export async function registerBwgRoutes(app: FastifyInstance, pool: Pool | null)
     const organizationId = typeof request.headers["x-rupaykg-organization-id"] === "string" ? request.headers["x-rupaykg-organization-id"] : auth.activeOrganizationId;
     if (!organizationId || !auth.memberships.some((membership) => membership.organization_id === organizationId && membership.status === "VERIFIED")) return reply.code(403).send({ error: "Verified organization membership required", code: "ORG_FORBIDDEN" });
     if (!await hasOrganizationPermission(pool, auth, organizationId, ["epr:read", "epr:manage", "reports:read"])) return reply.code(403).send({ error: "EPR obligation read permission required", code: "EPR_OBLIGATION_READ_FORBIDDEN" });
+    if (hasInvalidGeographyFilter(request)) return reply.code(400).send({ error: "geographyId must be a non-empty string when supplied", code: "INVALID_GEOGRAPHY_FILTER" });
     const geographyId = requestedGeography(request);
     if (geographyId && !await authorizeGeography(pool, auth, organizationId, geographyId)) return reply.code(403).send({ error: "Geography outside organization authorization scope", code: "GEOGRAPHY_FORBIDDEN" });
     try {
