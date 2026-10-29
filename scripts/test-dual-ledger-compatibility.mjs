@@ -10,6 +10,20 @@ if (process.env.RUPAYKG_RUN_DUAL_LEDGER_TESTS !== "1") {
   process.exit(0);
 }
 if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is required for disposable-schema acceptance tests.");
+const assertDisposableDatabaseTarget = (connectionString) => {
+  let parsed;
+  try { parsed = new URL(connectionString); } catch {
+    throw new Error("Refusing database integration tests: DATABASE_URL is not a valid URL.");
+  }
+  const safeHosts = new Set(["localhost", "127.0.0.1", "::1"]);
+  if (!safeHosts.has(parsed.hostname)) {
+    throw new Error(
+      `Refusing destructive schema-based acceptance tests against host "${parsed.hostname}". ` +
+      "Use a dedicated disposable PostgreSQL instance bound to loopback; these tests create and drop schemas.",
+    );
+  }
+};
+assertDisposableDatabaseTarget(process.env.DATABASE_URL);
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fixtureDir = path.join(here, "fixtures", "legacy-migrations");
