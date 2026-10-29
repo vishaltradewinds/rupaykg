@@ -1,3 +1,8 @@
+-- A monotonic sequence is needed because PostgreSQL now() timestamps can be identical
+-- for multiple decisions written in one transaction. Never infer review order from UUIDs.
+alter table activity_registry_eligibility_decisions
+  add column decision_sequence bigint generated always as identity;
+
 -- Database-level issuance guard: preserve the established fixture/MRV error boundaries,
 -- then require a current activity-specific eligibility decision before value-bearing status.
 create or replace function require_activity_registry_eligibility_for_credential()
@@ -71,7 +76,7 @@ begin
               and latest.evidence_id = d.evidence_id
               and latest.methodology_version_id = d.methodology_version_id
               and latest.geography_id = d.geography_id
-            order by latest.created_at desc, latest.id desc
+            order by latest.decision_sequence desc
             limit 1
          )
          and d.effective_from <= current_date
