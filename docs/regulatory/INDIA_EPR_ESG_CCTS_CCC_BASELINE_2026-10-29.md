@@ -159,3 +159,14 @@ A follow-up check of the official BEE Offset Mechanism methodology listing confi
 The CPCB Plastic Waste Management portal currently indexes amendment rules through 2026. The index is a discovery aid; applicable Gazette notifications, commencement and transitional clauses, actor/category, financial year, and subsequent amendments must be reviewed and archived before any EPR target or certificate logic is activated.
 
 This baseline remains research-only. Neither portal-page review nor a generated RupayKg report proves legal compliance, regulator acceptance, assurance, or certificate issuance.
+
+## 8. Source-specific control updates — 29 October 2026
+
+### Plastic Waste Management Amendment, G.S.R. 237(E)
+The regulator-hosted notification entry identifies the Plastic Waste Management (Amendment) Rules, 2026 dated 31 March 2026. The notification says it comes into force on publication in the Official Gazette. Before encoding its amended requirements, archive the exact PDF bytes, compute and verify SHA-256, inspect all clauses and exemptions, and map each obligation by actor, packaging category, reporting year and current CPCB directions. Do not apply a summarized target table universally. Sources: https://mpcb.gov.in/en/node/7306 and https://pwm.cpcb.gov.in/.
+
+### BEE Accredited Carbon Verification Agency register
+BEE's official ACVA register displayed a last-updated date of 21 October 2026 on the 29 October 2026 check. Each assignment must check the live register for current accreditation, validity, compliance-versus-offset mechanism, and applicable sector scope; persist a timestamped snapshot/reference and the decision with the project verification record. A listing does not establish a specific verification outcome, project eligibility or CCC issuance. Source: https://beeindia.gov.in/view_content.php?lid=568. Published accreditation procedure: https://www.beeindia.gov.in/sites/default/files/ACV_Procedure_Doc_18102024_Published.pdf.
+
+The exact-notification and live-register snapshots remain unarchived and unhashed at this checkpoint. These additions improve source discovery and control requirements but do not close the evidence gate or change RESEARCH_ONLY / FAIL_CLOSED status.
+
