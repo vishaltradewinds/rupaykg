@@ -201,7 +201,7 @@ test("EPR submission fails closed when current verifier authority is absent and 
   const evidenceId = "77777777-7777-4777-8777-777777777777";
   const verificationId = "88888888-8888-4888-8888-888888888888";
   const verifierId = "99999999-9999-4999-8999-999999999999";
-  const queries: Array<{ sql: string; values?: unknown[] }> = [];
+  const queries: Array<{ sql: string; values?: unknown[] | undefined }> = [];
   const transactions: string[] = [];
   const poolQuery = async (sql: string, values?: unknown[]) => {
     queries.push({ sql, values });
