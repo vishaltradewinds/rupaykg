@@ -88,7 +88,11 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
         const verified = await pool.query("select 1 from verifications where id = $1 and evidence_id = $2 and decision = 'APPROVED'", [verificationId, evidenceId]);
         if (!verified.rows[0]) return reply.code(409).send({ error: "Verification is not an approved verification for the supplied evidence", code: "VERIFICATION_INVALID" });
       }
-      const inserted = await pool.query("insert into esg_metrics (reporting_period_id, metric_code, scope, value, unit, evidence_id, verification_id, status, metadata) values ($1,$2,$3,$4,$5,$6,$7,$8,$9) returning *", [periodId, metricCode, scope, value, unit, evidenceId, verificationId, state, body.metadata ?? {}]);
+      const suppliedMetadata = body.metadata && typeof body.metadata === "object" && !Array.isArray(body.metadata) ? body.metadata as Record<string, unknown> : {};
+      const declaredAssurance = typeof suppliedMetadata.assuranceStatus === "string" ? suppliedMetadata.assuranceStatus : typeof suppliedMetadata.assurance_status === "string" ? suppliedMetadata.assurance_status : undefined;
+      const { assuranceStatus: _assuranceStatus, assurance_status: _assuranceStatusSnake, declaredAssuranceStatus: _declaredAssuranceStatus, declared_assurance_status: _declaredAssuranceStatusSnake, ...otherMetadata } = suppliedMetadata;
+      const persistedMetadata = { ...otherMetadata, assuranceStatus: "DECLARED_UNVERIFIED", ...(declaredAssurance ? { declaredAssuranceStatus: declaredAssurance } : {}) };
+      const inserted = await pool.query("insert into esg_metrics (reporting_period_id, metric_code, scope, value, unit, evidence_id, verification_id, status, metadata) values ($1,$2,$3,$4,$5,$6,$7,$8,$9) returning *", [periodId, metricCode, scope, value, unit, evidenceId, verificationId, state, persistedMetadata]);
       return reply.code(201).send({ source: "postgresql", syntheticData: false, metric: inserted.rows[0], state });
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "ESG metric recording unavailable", syntheticData: false }); }
   });
