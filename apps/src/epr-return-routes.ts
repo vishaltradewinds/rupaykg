@@ -150,8 +150,6 @@ export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool |
         code: "EPR_QUANTITY_BINDING_NOT_IMPLEMENTED",
         productionGate: "HOLD"
       });
-      await client.query("COMMIT");
-      return { source: "postgresql", syntheticData: false, authoritativeMutation: true, eprReturn: updated.rows[0], externalSubmission: "NOT_SUBMITTED" };
     } catch (error) { await client.query("ROLLBACK"); request.log.error(error); return reply.code(503).send({ error: "EPR return submission unavailable", syntheticData: false }); }
     finally { client.release(); }
   });
