@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
-import { missingMigrationSources } from "./migration-history.js";
+import { migrationHistoryConflicts } from "./migration-history.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) throw new Error("DATABASE_URL is required");
@@ -33,16 +33,17 @@ try {
     .filter((name) => /^\d+_.+\.sql$/.test(name))
     .sort();
 
-  // Reconcile the applied ledger before running any new SQL. An applied row
-  // without its exact source file is an unresolved release-history conflict.
+  // Reconcile every applied ledger row before running any new SQL. Missing source
+  // files and version/filename mismatches are release-history conflicts; neither
+  // may be discovered only after earlier migrations have already been applied.
   const applied = await pool.query<{ version: string; filename: string }>(
     "select version, filename from schema_migrations order by version",
   );
   const availableFiles = new Set(files);
-  const missingSources = missingMigrationSources(applied.rows, availableFiles);
-  if (missingSources.length) {
-    const detail = missingSources.map((row) => `${row.version}:${row.filename}`).join(", ");
-    throw new Error(`MIGRATION_HISTORY_UNRESOLVED: applied migration source files are missing: ${detail}`);
+  const historyConflicts = migrationHistoryConflicts(applied.rows, availableFiles);
+  if (historyConflicts.length) {
+    const detail = historyConflicts.map((row) => `${row.version}:${row.filename}:${row.reason}`).join(", ");
+    throw new Error(`MIGRATION_HISTORY_UNRESOLVED: reconcile the applied migration ledger before applying SQL: ${detail}`);
   }
 
   for (const filename of files) {
