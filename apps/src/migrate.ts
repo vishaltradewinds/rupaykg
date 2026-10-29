@@ -4,14 +4,25 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
 import { assertNoOrphanedMigrationRecords } from "./migration-ledger.js";
+import { readProductionConfig } from "./production-config.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) throw new Error("DATABASE_URL is required");
 
+const productionConfig = process.env.NODE_ENV === "production" ? readProductionConfig() : null;
 const pool = new Pool({
-  connectionString: databaseUrl,
+  connectionString: productionConfig?.databaseUrl ?? databaseUrl,
   max: 1,
-  ssl: process.env.DATABASE_SSL === "false" ? undefined : { rejectUnauthorized: false },
+  ...(productionConfig?.databaseSsl === "false" || (!productionConfig && process.env.DATABASE_SSL === "false")
+    ? {}
+    : {
+        ssl: {
+          rejectUnauthorized: productionConfig !== null || process.env.DATABASE_SSL === "require",
+          ...((productionConfig?.databaseCaCert || process.env.DATABASE_CA_CERT)
+            ? { ca: productionConfig?.databaseCaCert || process.env.DATABASE_CA_CERT }
+            : {}),
+        },
+      }),
 });
 
 try {
