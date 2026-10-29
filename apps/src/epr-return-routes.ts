@@ -98,7 +98,7 @@ export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool |
     try {
       const rows = await pool.query(`insert into epr_returns(scheme_id,organization_id,obligation_id,period_start,period_end,return_type,reported_quantity,status) select $1,$2,$3,$4::date,$5::date,$6,$7,'DRAFT' where exists(select 1 from epr_schemes where id=$1 and status='VERIFIED') and exists(select 1 from epr_obligations eo join obligations o on o.id=eo.obligation_id where eo.id=$3 and eo.scheme_id=$1 and eo.obligated_organization_id=$2 and eo.status in ('OPEN','ELIGIBLE') and o.period_start <= $5::date and o.period_end >= $4::date) returning *`, [schemeId, organizationId, obligationId, periodStart, periodEnd, returnType, reportedQuantity]);
       if (!rows.rows[0]) return reply.code(409).send({ error: "Verified EPR scheme and matching open/eligible obligation are required", code: "EPR_RETURN_NOT_ELIGIBLE" });
-      return reply.code(201).send({ source: "postgresql", syntheticData: false, authoritativeMutation: true, eprReturn: rows.rows[0] });
+      return reply.code(201).send({ source: "postgresql", syntheticData: false, authoritativeMutation: true, complianceState: "UNVERIFIED_DRAFT", quantityState: "UNVERIFIED_USER_DECLARATION", message: "Draft persisted only. reportedQuantity is user-entered and is not verified fulfillment, submitted compliance, or authority acceptance.", eprReturn: rows.rows[0] });
     } catch (error: unknown) {
       request.log.error(error);
       const message = error instanceof Error ? error.message : "";
