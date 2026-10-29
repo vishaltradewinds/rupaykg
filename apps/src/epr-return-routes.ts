@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import type { Pool } from "pg";
 import { authenticate, bearerChallenge, hasOrganizationPermission, type AuthContext } from "./auth.js";
-import { evaluateEprQuantityBinding } from "./epr-quantity-binding.js";
+import { evaluateEprQuantityBinding, isIsoCalendarDate } from "./epr-quantity-binding.js";
 
 function bodyOf(request: { body: unknown }): Record<string, unknown> {
   return request.body && typeof request.body === "object" ? request.body as Record<string, unknown> : {};
@@ -54,7 +54,7 @@ export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool |
     if (!organizationId || !schemeId || !obligationId || !periodStart || !periodEnd || !returnType || reportedQuantity === null) return reply.code(400).send({ error: "organizationId, schemeId, obligationId, periodStart, periodEnd, returnType and positive reportedQuantity are required", code: "INVALID_EPR_RETURN" });
     if (!canAct(auth, organizationId)) return reply.code(403).send({ error: "Verified organization membership required", code: "ORG_FORBIDDEN" });
     if (!await hasOrganizationPermission(pool, auth, organizationId, ["epr:manage"])) return reply.code(403).send({ error: "EPR management permission required", code: "EPR_RETURN_WRITE_FORBIDDEN" });
-    if (Number.isNaN(Date.parse(periodStart)) || Number.isNaN(Date.parse(periodEnd)) || periodStart > periodEnd) return reply.code(400).send({ error: "Valid periodStart and periodEnd are required", code: "INVALID_PERIOD" });
+    if (!isIsoCalendarDate(periodStart) || !isIsoCalendarDate(periodEnd) || periodStart > periodEnd) return reply.code(400).send({ error: "periodStart and periodEnd must be valid ISO calendar dates in ascending order", code: "INVALID_PERIOD" });
     try {
       const rows = await pool.query(`insert into epr_returns(scheme_id,organization_id,obligation_id,period_start,period_end,return_type,reported_quantity,status) select $1,$2,$3,$4::date,$5::date,$6,$7,'DRAFT' where exists(select 1 from epr_schemes where id=$1 and status='VERIFIED') and exists(select 1 from epr_obligations eo join obligations o on o.id=eo.obligation_id where eo.id=$3 and eo.scheme_id=$1 and eo.obligated_organization_id=$2 and eo.status in ('OPEN','ELIGIBLE') and o.period_start <= $5::date and o.period_end >= $4::date) returning *`, [schemeId, organizationId, obligationId, periodStart, periodEnd, returnType, reportedQuantity]);
       if (!rows.rows[0]) return reply.code(409).send({ error: "Verified EPR scheme and matching open/eligible obligation are required", code: "EPR_RETURN_NOT_ELIGIBLE" });
