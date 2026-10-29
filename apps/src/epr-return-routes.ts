@@ -107,6 +107,8 @@ export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool |
       if (!evidenceRow || evidenceRow.status !== "VERIFIED" || (!evidenceRow.content_hash && !evidenceRow.content_uri) || evidenceRow.organization_id !== row.organization_id || !evidenceRow.geography_id || evidenceRow.geography_id !== row.obligation_geography_id) { await client.query("ROLLBACK"); return reply.code(409).send({ error: "Submission evidence must be verified, provenance-backed, approved, organization-scoped and bound to the obligation geography", code: "EVIDENCE_NOT_ELIGIBLE" }); }
       const geo = await client.query(`select organization_has_geography_scope($1,$2) as ok`, [row.organization_id, evidenceRow.geography_id]);
       if (!geo.rows[0]?.ok) { await client.query("ROLLBACK"); return reply.code(403).send({ error: "Evidence geography is outside organization authorization scope", code: "GEOGRAPHY_FORBIDDEN" }); }
+      const reusedEvidence = await client.query(`select exists(select 1 from epr_returns where evidence_id=$1 and id<>$2 and status in ('SUBMITTED','ACCEPTED','COMPLIANT')) as reused`, [evidenceId, returnId]);
+      if (reusedEvidence.rows[0]?.reused === true) { await client.query("ROLLBACK"); return reply.code(409).send({ error: "Evidence is already bound to another submitted EPR return", code: "EVIDENCE_ALREADY_CONSUMED" }); }
       const fulfilled = Number(row.reported_quantity);
       const balance = Number(obligationRow.target_quantity) - Number(obligationRow.fulfilled_quantity);
       if (!Number.isFinite(fulfilled) || fulfilled <= 0) { await client.query("ROLLBACK"); return reply.code(400).send({ error: "Reported quantity must be positive", code: "INVALID_QUANTITY" }); }
