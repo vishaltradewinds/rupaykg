@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { authorizeGeography, requestedGeography } from "./epr-return-routes.js";
+import { authorizeGeography, hasInvalidGeographyFilter, requestedGeography } from "./epr-return-routes.js";
 import type { AuthContext } from "./auth.js";
 import type { Pool } from "pg";
 
@@ -11,11 +11,19 @@ test("requestedGeography trims a supplied geography identifier", () => {
   assert.equal(requestedGeography({ query: { geographyId: `  ${GEO}  ` } }), GEO);
 });
 
-test("requestedGeography treats missing, blank and non-string values as no filter", () => {
+test("requestedGeography returns no filter only when absent or not parseable as a value", () => {
   assert.equal(requestedGeography({ query: {} }), null);
   assert.equal(requestedGeography({ query: { geographyId: "   " } }), null);
   assert.equal(requestedGeography({ query: { geographyId: 123 } }), null);
   assert.equal(requestedGeography({ query: null }), null);
+});
+
+test("hasInvalidGeographyFilter rejects supplied blank and non-string values", () => {
+  assert.equal(hasInvalidGeographyFilter({ query: {} }), false);
+  assert.equal(hasInvalidGeographyFilter({ query: { geographyId: GEO } }), false);
+  assert.equal(hasInvalidGeographyFilter({ query: { geographyId: "   " } }), true);
+  assert.equal(hasInvalidGeographyFilter({ query: { geographyId: 123 } }), true);
+  assert.equal(hasInvalidGeographyFilter({ query: { geographyId: [GEO] } }), true);
 });
 
 test("authorizeGeography fails closed for malformed UUID without querying the database", async () => {
