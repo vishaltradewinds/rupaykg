@@ -90,4 +90,9 @@ async function main(): Promise<void> {
 }
 
 const invokedPath = process.argv[1] ? pathToFileURL(path.resolve(process.argv[1])).href : undefined;
-if (invokedPath === import.meta.url) await main();
+if (invokedPath === import.meta.url) {
+  main().catch((error: unknown) => {
+    console.error(error);
+    process.exitCode = 1;
+  });
+}
