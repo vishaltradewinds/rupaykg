@@ -45,6 +45,20 @@ The SEBI BRSR Core framework introduced a phased assurance glide path for listed
 - Store each report profile with source instrument/version, reporting period, metrics and definitions, estimation flags, evidence lineage, review/assurance state and applicable transition relief.
 - A generated export is not a filing, assurance opinion, regulator acceptance or company certification.
 
+
+## 3A. BEE Accredited Carbon Verification Agency (ACVA) register — live verifier control
+
+The BEE public ACVA register reports **Last Updated On 21 October 2026** and lists each agency's accreditation certificate number, provisional/final status, issue and validity dates, mechanism accreditation, and sectors accredited under the offset and compliance mechanisms.
+
+- Official register: https://beeindia.gov.in/view_content.php?lid=568
+
+**Engineering gates:**
+1. Verification eligibility must be checked against the current ACVA register for the relevant mechanism (compliance versus offset), sector, accreditation status, and validity period at the time of the verification activity.
+2. Do not infer that an agency accredited for one mechanism or sector is authorized for another; persist the source snapshot/version and the exact scope used for the decision.
+3. Re-check accreditation status for each decision and preserve a dated evidence snapshot. A verifier's identity, organization membership, or generic "approved" flag alone is not proof of current BEE accreditation.
+4. A local RupayKg verification record remains an internal workflow state until the required authorized verifier and applicable authoritative registry/process evidence are present. Never equate an ACVA register entry with a project's validation, verification, or CCC issuance.
+5. Download and hash the actual register/document where technically possible; until retained evidence is attached, this remains a source-page observation rather than an immutable audit artifact.
+
 ## 4. Release implications
 
 | Control | Current engineering disposition |
