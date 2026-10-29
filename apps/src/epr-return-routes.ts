@@ -106,7 +106,7 @@ export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool |
       await client.query("ROLLBACK");
       return reply.code(409).send({
         error: "Authoritative measurement-to-EPR quantity binding is not implemented; reported quantity cannot be treated as verified fulfillment",
-        code: quantityBinding.code,
+        code: quantityBinding.ready ? "EPR_QUANTITY_BINDING_NOT_IMPLEMENTED" : quantityBinding.code,
         productionGate: "HOLD"
       });
     } catch (error) { await client.query("ROLLBACK"); request.log.error(error); return reply.code(503).send({ error: "EPR return submission unavailable", syntheticData: false }); }
