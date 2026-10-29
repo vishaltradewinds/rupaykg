@@ -19,7 +19,7 @@ const assertDisposableDatabaseTarget = (connectionString) => {
     throw new Error("Refusing database integration tests: DATABASE_URL must use postgres:// or postgresql://.");
   }
   // WHATWG URL.hostname keeps brackets around IPv6 literals in Node.
-  const hostname = parsed.hostname.replace(/^\\[|\\]$/g, "").toLowerCase();
+  const hostname = parsed.hostname.replace(/^\[|\]$/g, "").toLowerCase();
   const safeHosts = new Set(["localhost", "127.0.0.1", "::1"]);
   if (!safeHosts.has(hostname)) {
     throw new Error(
