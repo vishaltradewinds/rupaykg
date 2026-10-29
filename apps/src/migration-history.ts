@@ -19,10 +19,14 @@ export function migrationHistoryConflicts(
   applied: readonly AppliedMigrationSource[],
   availableFiles: ReadonlySet<string>,
 ): Array<AppliedMigrationSource & { reason: "SOURCE_MISSING" | "VERSION_FILENAME_MISMATCH" }> {
-  return applied.flatMap((row) => {
-    if (!availableFiles.has(row.filename)) return [{ ...row, reason: "SOURCE_MISSING" as const }];
+  const conflicts: Array<AppliedMigrationSource & { reason: "SOURCE_MISSING" | "VERSION_FILENAME_MISMATCH" }> = [];
+  for (const row of applied) {
+    if (!availableFiles.has(row.filename)) {
+      conflicts.push({ ...row, reason: "SOURCE_MISSING" });
+      continue;
+    }
     const filenameVersion = row.filename.split("_", 1)[0];
-    if (filenameVersion !== row.version) return [{ ...row, reason: "VERSION_FILENAME_MISMATCH" as const }];
-    return [];
-  });
+    if (filenameVersion !== row.version) conflicts.push({ ...row, reason: "VERSION_FILENAME_MISMATCH" });
+  }
+  return conflicts;
 }
