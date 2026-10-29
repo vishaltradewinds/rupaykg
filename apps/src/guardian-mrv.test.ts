@@ -47,6 +47,11 @@ test("Guardian endpoint rejects insecure remote URLs and URLs containing credent
       const result = await executeGuardianMrv(request);
       assert.equal(result.status, "NOT_CONFIGURED", url);
     }
+    process.env.GUARDIAN_MRV_SUBMIT_URL = "http://127.0.0.1:11434/mrv";
+    delete process.env.NODE_ENV;
+    assert.equal(guardianStatus().configured, false, "local HTTP must fail closed without an explicit environment");
+    process.env.NODE_ENV = "development";
+    assert.equal(guardianStatus().configured, true, "loopback HTTP is permitted only in development");
     assert.equal(called, false);
   } finally {
     globalThis.fetch = previousFetch;
