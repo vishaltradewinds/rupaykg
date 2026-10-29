@@ -186,6 +186,35 @@ test("worker does not report success when both outcome and retry persistence fai
 });
 
 
+test("worker renews its fenced lease while validation runs beyond the original lease window", async () => {
+  const statements: string[] = [];
+  const pool = {
+    query: async (sql: string) => {
+      statements.push(sql);
+      if (sql.includes("returning inbox.id")) return { rows: [row], rowCount: 1 };
+      if (sql.includes("set lease_until=now()")) return { rows: [], rowCount: 1 };
+      if (sql.includes("from government_jurisdiction_crosswalks c")) {
+        return { rows: [{ id: "crosswalk-id", organization_id: "organization-id", geography_id: "geography-id", activity_id: null, source_version: "synthetic-v1" }], rowCount: 1 };
+      }
+      return { rows: [], rowCount: 1 };
+    },
+  } as unknown as Pool;
+
+  const result = await runGovernmentInboxWorker(pool, async () => {
+    await new Promise(resolve => setTimeout(resolve, 5_200));
+    return { valid: true, summary: { validation: "SYNTHETIC_TEST_ONLY" } };
+  }, { leaseSeconds: 15 });
+
+  assert.equal(result.validated, 1);
+  const renewal = statements.find(sql => sql.includes("set lease_until=now()"));
+  assert.ok(renewal, "slow validation should trigger a lease renewal");
+  assert.match(renewal, /where id=\$1 and status='PROCESSING' and lease_token=\$2/i);
+  const terminal = statements.find(sql => sql.includes("set status='VALIDATED'"));
+  assert.ok(terminal);
+  assert.match(terminal, /where id=\$1 and status='PROCESSING' and lease_token=\$2/i);
+});
+
+
 test("worker cannot finalize an outcome after its lease token has been replaced", async () => {
   const statements: string[] = [];
   const pool = {
