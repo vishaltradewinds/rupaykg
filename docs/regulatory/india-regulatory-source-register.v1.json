@@ -239,6 +239,36 @@
       "archiveStatus": "NOT_ARCHIVED_HASH_PENDING",
       "applicability": "Supplemental integrity benchmark only; never substitute for Indian statutory requirements or CCTS eligibility/issuance.",
       "notes": "Keep voluntary integrity review separate from legal compliance and government certificate status."
+    },
+    {
+      "id": "MOEFCC-PWM-AMENDMENT-2026-GSR-237E",
+      "domain": "EPR",
+      "authority": "Ministry of Environment, Forest and Climate Change; hosted by Maharashtra Pollution Control Board",
+      "title": "Plastic Waste Management (Amendment) Rules, 2026 — G.S.R. 237(E)",
+      "url": "https://mpcb.gov.in/en/node/7306",
+      "sourceType": "GAZETTE_NOTIFICATION_OFFICIAL_REGULATOR_COPY",
+      "legalStatus": "OPERATIVE_INSTRUMENT_REQUIRES_ARCHIVAL_REVIEW",
+      "publicationDate": "2026-03-31",
+      "effectiveFrom": "2026-03-31",
+      "documentSha256": null,
+      "archiveStatus": "NOT_ARCHIVED_HASH_PENDING",
+      "applicability": "Resolve PIBO/brand-owner/producer/importer role, packaging category, reporting year, any statutory exemption and current CPCB directions before applying amended obligations.",
+      "notes": "Official regulator-hosted copy listing for the 31 March 2026 notification G.S.R. 237(E). The amendment states it comes into force on publication in the Official Gazette. Archive the exact PDF bytes, compute SHA-256 and review the full amendment and later instruments before rule-engine activation."
+    },
+    {
+      "id": "BEE-CCTS-ACVA-REGISTER-2026-10-21",
+      "domain": "CCTS_CCC",
+      "authority": "Bureau of Energy Efficiency, Ministry of Power",
+      "title": "List of Accredited Carbon Verification Agencies empanelled under CCTS",
+      "url": "https://beeindia.gov.in/view_content.php?lid=568",
+      "sourceType": "OFFICIAL_REGISTER",
+      "legalStatus": "LIVE_REGISTER_REQUIRES_PER_ASSIGNMENT_VALIDITY_CHECK",
+      "publicationDate": null,
+      "effectiveFrom": null,
+      "documentSha256": null,
+      "archiveStatus": "NOT_ARCHIVED_HASH_PENDING",
+      "applicability": "At validation/verification assignment, confirm the agency's current accreditation status, validity, mechanism (compliance or offset), and approved sector scope against the live register and accreditation certificate.",
+      "notes": "Official BEE page showed last updated 21 October 2026 on the 29 October 2026 check. The register is dynamic; snapshot/hash it at assignment time. A listing alone does not establish independence, project eligibility, completed verification, or CCC issuance."
     }
   ]
 }
