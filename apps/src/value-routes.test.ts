@@ -78,6 +78,7 @@ test("ESG reporting boundary is required and normalized before metric writes", a
         return { rows: [{ organization_id: ORG, role_id: "role-1", status: "VERIFIED" }] };
       }
       if (sql.includes("from esg_reporting_periods")) return { rows: [{ organization_id: ORG, reporting_boundary: null }] };
+      if (sql.includes("can_write_esg")) return { rows: [{ ok: true }] };
       return { rows: [] };
     }
   } as unknown as Pool;
