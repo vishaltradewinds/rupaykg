@@ -150,3 +150,9 @@ Therefore:
 - Do not allow client-supplied `VERIFIED_AND_APPROVED` status or SHA-256 values to self-authorize a source. These fields must be derived from server-controlled registry records and independently approved evidence.
 - Add adversarial tests for lookalike domains, unexpected subdomains, redirects, URL/userinfo confusion, stale versions and source-ID/URL/hash mismatches. Test redirect destinations at fetch time and avoid fetching arbitrary user-supplied URLs from privileged server environments.
 - Until this trusted registry binding exists, the module remains a review-gate prototype and must not be used to issue legal-compliance conclusions or activate production mappings.
+
+### Trusted source binding helper (prototype)
+
+The isolated ESG package now exports `validateGriSourceBinding(submitted, trusted)`. It performs a deterministic, fail-closed comparison of source-register ID, canonical URL, version, approved validation status and SHA-256. Missing registry records, unapproved records, mismatched identifiers/URLs/versions and missing or mismatched hashes return explicit blockers. Tests cover exact-match success and adversarial mismatch cases.
+
+This helper is a **pure comparison function**, not a registry client or security boundary by itself. The production caller must load `trusted` from server-controlled, version-pinned registry storage after authorization; never accept the `trusted` argument from a client request. No arbitrary URL fetching, redirects or network access is performed by this helper. Effective-date, jurisdiction and actor applicability must still be resolved by the governed source workflow before activation.
