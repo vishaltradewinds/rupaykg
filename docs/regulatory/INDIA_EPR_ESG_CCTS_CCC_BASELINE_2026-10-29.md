@@ -129,3 +129,24 @@ Every regulatory object should carry, where applicable: authority, instrument ID
 ## 9. Review cadence
 
 Re-check official source pages and Gazette notices before each rule-engine release and at each financial-year/reporting-period transition. A source change opens a controlled impact review identifying affected calculations, forms, schemas, tests, reports, open cases and historical records. Never silently change past obligations or published metrics.
+
+## 10. Official-source freshness recheck — 2026-10-29
+
+This section records a targeted official-source recheck for current engineering priorities. It is not a complete legal opinion or a claim that every underlying Gazette instrument has been archived and hashed.
+
+### BEE / Indian Carbon Market
+- The BEE Carbon Market page lists the **Detailed Procedure for Compliance Mechanism under CCTS** and the **Detailed Procedure for Offset Mechanism and Methodologies** as current document families. Preserve these as separate compliance-versus-offset control planes. Do not infer that a project can earn CCCs from compliance-period emissions performance, EPR certificates, waste tonnage or an ESG metric alone. Source: https://beeindia.gov.in/show_content.php?lang=1&level=1&lid=294&ls_id=116
+- BEE's current public page also exposes the **Greenhouse Gases Emission Intensity Target Rules, 2025**, target-setting notifications, methodology materials and draft consultation documents. The engineering ingestion process must distinguish final/operative instruments from draft consultations and stakeholder-comment notices; a draft must never be promoted to an active eligibility rule. Source: https://beeindia.gov.in/show_content.php?lang=1&level=1&lid=294&ls_id=116
+- BEE's register of Accredited Carbon Verification Agencies showed a page update dated **21 October 2026**. At validation time, any verifier assignment must query the current official register and check mechanism, sector scope, accreditation type, validity and status; do not freeze the page's current names into a long-lived allowlist. Source: https://beeindia.gov.in/view_content.php?lid=568
+- The offset procedure's project start-date, regulatory-compliance, approved-sector/methodology, additionality, validation/verification and double-counting gates remain mandatory inputs to a project-specific eligibility decision. The platform must represent missing evidence as BLOCKED/PENDING_REVIEW, not as eligible or issued.
+
+### SEBI / BRSR and value-chain disclosures
+- SEBI's 28 March 2025 circular modified the value-chain ESG disclosure/assurance approach. The official FAQ states value-chain disclosures and related assessment/assurance are voluntary from FY 2025–26 and describes the relevant top-250 listed-entity and value-chain scope. Do not implement the original 2023 timetable as if unchanged; select requirements by reporting year and the latest applicable SEBI/LODR instrument. Sources: https://www.sebi.gov.in/legal/circulars/mar-2025/measures-to-facilitate-ease-of-doing-business-with-respect-to-framework-for-assurance-or-assessment-esg-disclosures-for-value-chain-and-introduction-of-voluntary-disclosure-on-green-credits_93102.html and https://www.sebi.gov.in/sebi_data/faqfiles/apr-2025/1745399101865.pdf
+- Voluntary value-chain disclosure does not make all ESG disclosures voluntary. Applicability of BRSR/BRSR Core to the listed entity, its reporting period and other applicable laws must be determined separately. Do not generalize a listed-entity reporting relaxation to every RupayKg stakeholder.
+
+### Required ingestion and release controls
+1. Store instrument title, issuing authority, official URL, document hash, publication/issue date, effective-from/effective-to, supersession link, legal status (FINAL, DRAFT, SUPERSEDED, WITHDRAWN, UNKNOWN), applicability basis, review date and reviewer.
+2. A changed source document or new official notice creates a review task; it must not silently rewrite historic rule evaluations or past calculations.
+3. Keep a draft, consultation, press summary, portal banner and operative Gazette notification as distinct source types. The authoritative legal instrument controls where sources conflict.
+4. Before a policy version can affect calculations or stakeholder submissions, require human legal/domain approval, test fixtures for both effective-date boundaries, and an auditable change record.
+5. This recheck does not close the broader Gazette/source-hash archive gate. Exact current notifications, amendments, effective dates and applicable portal manuals still need to be retrieved and hashed per waste stream, jurisdiction, actor and reporting period.
