@@ -44,12 +44,13 @@ Official GRI sources confirm that GRI 101 Biodiversity 2024 took effect for repo
 ## Implemented in this isolated branch
 
 - `packages/esg/src/gri-cross-mapping.ts` adds a standalone, advisory review gate that returns blockers and can only mark a mapping `READY_FOR_HUMAN_REVIEW`; it does not approve the mapping.
-- `packages/esg/src/gri-cross-mapping.test.ts` covers readiness, fail-closed applicability/evidence checks, conflict review and the rule that GRI mapping cannot alter compliance or credit-eligibility conclusions.
+- The same module includes a typed adapter from persisted schema snake_case fields to the internal review DTO. The caller must validate the complete record against the JSON Schema before adapting it; the adapter is not a runtime schema validator.
+- `packages/esg/src/gri-cross-mapping.test.ts` covers readiness, fail-closed applicability/evidence checks, conflict review, schema-field adaptation and the rule that GRI mapping cannot alter compliance or credit-eligibility conclusions.
 - The module intentionally has not been added to the shared ESG package export/index or server routes yet, to avoid collisions with parallel work currently changing ESG verification and production safety. No migration, database, production service or existing shared source file was changed in this batch.
 
 ## Remaining integration plan — reuse existing architecture
 
-1. Reconcile with the parallel ESG verification and production-safety work before changing the shared `packages/esg/src/index.ts` or package exports.
+1. Reconcile with the parallel ESG verification and production-safety work before changing the shared `packages/esg/src/index.ts` or package exports. Coordinate with draft PR #119's India EPR/ESG/CCTS/CCC source register and consume its governed source records after integration rather than creating a second regulatory source of truth.
 2. Bind mapping records to existing `esg_reporting_periods`, `esg_metrics`, EPR obligations/returns, evidence-vault records and MRV provenance by stable identifiers; do not copy authoritative measurements into a new competing source of truth.
 3. Add an additive database migration only after auditing current migrations and table constraints and after the active migration-safety gates are resolved. Use effective-dated mapping versions and immutable reporting-period snapshots.
 4. Expose mapping read/write operations through existing authenticated server routes with organization-scoped RBAC, audit logging and strict validation.
@@ -86,4 +87,4 @@ Official GRI sources confirm that GRI 101 Biodiversity 2024 took effect for repo
 - GRI Universal Standards: https://globalreporting.org/standards/standards-development/universal-standards/
 - GRI Standards development/effective dates: https://www.globalreporting.org/standards/standards-development/
 
-**Engineering disposition:** schema and isolated advisory evaluator/test source are present on this draft branch. Automated CI execution is not yet evidenced. Public package export, persistence/migration, authenticated routes, stakeholder UI, regulatory source verification, independent review and production certification remain open gates.
+**Engineering disposition:** schema and isolated advisory evaluator/adapter/test source are present on this draft branch. The ESG package build/typecheck and all six package tests passed locally; the schema compiled under Ajv Draft 2020-12 with formats enabled, a valid fixture passed, and a missing-required-fields fixture was rejected. Exact-head GitHub Actions CI passed on the prior branch head; rerun CI for subsequent commits before relying on that evidence. Public package export, persistence/migration, authenticated routes, stakeholder UI, integration with draft PR #119's regulatory source register, independent review and production certification remain open gates.
