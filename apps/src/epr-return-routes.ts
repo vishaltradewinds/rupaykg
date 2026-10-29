@@ -107,6 +107,9 @@ export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool |
       if (!evidenceRow || evidenceRow.status !== "VERIFIED" || (!evidenceRow.content_hash && !evidenceRow.content_uri) || evidenceRow.organization_id !== row.organization_id || !evidenceRow.geography_id || evidenceRow.geography_id !== row.obligation_geography_id) { await client.query("ROLLBACK"); return reply.code(409).send({ error: "Submission evidence must be verified, provenance-backed, approved, organization-scoped and bound to the obligation geography", code: "EVIDENCE_NOT_ELIGIBLE" }); }
       const geo = await client.query(`select organization_has_geography_scope($1,$2) as ok`, [row.organization_id, evidenceRow.geography_id]);
       if (!geo.rows[0]?.ok) { await client.query("ROLLBACK"); return reply.code(403).send({ error: "Evidence geography is outside organization authorization scope", code: "GEOGRAPHY_FORBIDDEN" }); }
+      // Serialize submissions that consume the same evidence across different obligations.
+      // The lock is transaction-scoped and released on COMMIT/ROLLBACK; hash collisions only serialize unrelated evidence.
+      await client.query("select pg_advisory_xact_lock(hashtext($1)::bigint)", [evidenceId]);
       const reusedEvidence = await client.query(`select exists(select 1 from epr_returns where evidence_id=$1 and id<>$2 and status in ('SUBMITTED','ACCEPTED','COMPLIANT')) as reused`, [evidenceId, returnId]);
       if (reusedEvidence.rows[0]?.reused === true) { await client.query("ROLLBACK"); return reply.code(409).send({ error: "Evidence is already bound to another submitted EPR return", code: "EVIDENCE_ALREADY_CONSUMED" }); }
       const fulfilled = Number(row.reported_quantity);
