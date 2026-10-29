@@ -28,6 +28,11 @@ export function requestedGeography(request: { query: unknown }): string | null {
   const query = request.query && typeof request.query === "object" ? request.query as Record<string, unknown> : {};
   return typeof query.geographyId === "string" && query.geographyId.trim() ? query.geographyId.trim() : null;
 }
+export function hasInvalidGeographyFilter(request: { query: unknown }): boolean {
+  const query = request.query && typeof request.query === "object" ? request.query as Record<string, unknown> : {};
+  return Object.prototype.hasOwnProperty.call(query, "geographyId")
+    && (typeof query.geographyId !== "string" || query.geographyId.trim().length === 0);
+}
 export async function authorizeGeography(pool: Pool, auth: AuthContext, organizationId: string, geographyId: string): Promise<boolean> {
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(geographyId)) return false;
   if (!auth.memberships.some((membership) => membership.organization_id === organizationId && membership.status === "VERIFIED")) return false;
@@ -47,6 +52,7 @@ export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool |
     const organizationId = typeof request.headers["x-rupaykg-organization-id"] === "string" ? request.headers["x-rupaykg-organization-id"] : auth.activeOrganizationId;
     if (!organizationId || !canAct(auth, organizationId)) return reply.code(403).send({ error: "Verified organization membership required", code: "ORG_FORBIDDEN" });
     if (!await hasOrganizationPermission(pool, auth, organizationId, ["epr:read", "epr:manage", "reports:read"])) return reply.code(403).send({ error: "EPR return read permission required", code: "EPR_RETURN_READ_FORBIDDEN" });
+    if (hasInvalidGeographyFilter(request)) return reply.code(400).send({ error: "geographyId must be a non-empty string when supplied", code: "INVALID_GEOGRAPHY_FILTER" });
     const geographyId = requestedGeography(request);
     if (geographyId && !await authorizeGeography(pool, auth, organizationId, geographyId)) return reply.code(403).send({ error: "Geography outside organization authorization scope", code: "GEOGRAPHY_FORBIDDEN" });
     try {
