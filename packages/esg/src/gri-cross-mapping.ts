@@ -150,6 +150,7 @@ export function evaluateGriCrossMappingForReview(
   if (mapping.controls.doubleCountingCheck === "failed") blockers.push("DOUBLE_COUNTING_CHECK_FAILED");
   if (mapping.controls.doubleCountingCheck === "not_run") blockers.push("DOUBLE_COUNTING_CHECK_NOT_RUN");
   if (mapping.relationship === "conflict_requires_review") blockers.push("MAPPING_CONFLICT_REQUIRES_REVIEW");
+  if (mapping.status === "approved") blockers.push("APPROVED_MAPPING_IMMUTABLE_VERSION_REQUIRED");
   if (mapping.status === "blocked" || mapping.status === "deprecated") blockers.push("MAPPING_STATUS_NOT_REVIEWABLE");
 
   return {
