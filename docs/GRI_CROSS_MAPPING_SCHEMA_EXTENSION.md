@@ -58,6 +58,38 @@ Official GRI sources confirm that GRI 101 Biodiversity 2024 took effect for repo
 6. Export a disclosure index showing mapping version, applicability, source evidence, omissions, estimates, limitations and assurance status.
 7. Keep GRI disclosure readiness, EPR statutory state, CCTS state, external authority acceptance and credit issuance as separate state machines.
 
+## Existing-platform integration contract audit (2026-10-29)
+
+The existing interfaces were inspected before designing any GRI integration. This is a contract map, not an assertion that the GRI workflow is already integrated.
+
+| Existing system | Verified interface / behavior | GRI integration rule |
+|---|---|---|
+| ESG/BRSR metric write | `POST /api/v1/esg/reporting-periods/:periodId/metrics` in the existing value-routes implementation; route derives metric state from persisted evidence, verifier authority, period and methodology checks. | Link a mapping to the existing reporting-period and metric identifiers. Never set a metric to VERIFIED/ASSURED merely because a GRI mapping is ready. |
+| ESG workspace read | `GET /api/v1/workspaces/esg`; workspace routes enforce report/EPR/CSR/audit read permissions. | GRI disclosure index must be scoped to the active authorized organization and reuse the workspace's authentication/authorization model. |
+| EPR returns | `GET/POST /api/v1/epr/returns`; writes require verified organization membership and `epr:manage`. Submission uses `POST /api/v1/epr/returns/:returnId/submit` and requires verified evidence plus approved verification. | GRI links may reference EPR obligation/return IDs, but cannot submit returns, satisfy obligations, or imply CPCB acceptance. |
+| Evidence vault | `POST /api/v1/evidence-vault/upload` validates content, media type, activity/organization/geography scope and `evidence:upload` permission. | Reference evidence-vault IDs and existing provenance/hash data; do not create a second evidence store. |
+| MRV provenance | `POST /api/v1/mrv/activities/:activityId/submit` requires evidence and approved verification; MRV status exposes Guardian/Hedera status and registry-eligibility conditions. | Keep MRV provenance and credit eligibility as separate source-of-truth states; GRI is a reporting crosswalk only. |
+| Parallel safety work | PR #120 concurrently changes `apps/web/src/esg-panel.ts`, `apps/web/src/epr-return-panel.ts`, `packages/esg/src/index.ts`, `packages/esg/src/index.test.ts`, value/EPR routes, and migration history. | Do not edit these shared files in this branch. Rebase/coordinate after PR #120's disposition and run the complete integration suite. |
+
+### Proposed API and record lifecycle — not yet implemented
+
+After the migration ledger is reconciled and the regulatory source register from PR #119 is accepted, add a separately reviewed route module rather than expanding shared routes in this draft:
+
+- Read: `GET /api/v1/esg/reporting-periods/:periodId/gri-mappings`.
+- Create/update draft: `POST /api/v1/esg/reporting-periods/:periodId/gri-mappings` with strict JSON Schema validation and organization-scoped `reports:write`/dedicated permission.
+- Review decision: `POST /api/v1/esg/gri-mappings/:mappingId/review`, restricted to an explicitly authorized reporting/compliance reviewer; no self-approval where role separation is required.
+- Every write must verify period ownership, organization scope, source/target version, effective date, evidence lineage and reviewer authority in the server/database layer. Client-supplied organization IDs are never sufficient authorization.
+- Store immutable version history and append-only audit events only after the canonical migration ledger, rollback plan and production/staging ledger reconciliation are approved. Do not add a numbered migration now.
+- Response fields must separate `mapping_review_status`, `gri_disclosure_readiness`, `statutory_compliance_status`, `external_submission_status`, `assurance_status`, and `credit_eligibility_status`; the GRI evaluator may only produce `BLOCKED` or `READY_FOR_HUMAN_REVIEW`.
+- The disclosure index must preserve reporting-period snapshots, estimates, omissions, boundaries, methodology versions, source URLs and evidence references. Historical periods must not silently inherit a later GRI standard version.
+
+### Integration acceptance gates
+
+1. Contract tests cover unauthorized organization access, missing reviewer role, cross-organization evidence/period IDs, stale source versions, non-HTTPS URLs, invalid/effective-date mismatches, immutable-version rules, and rejected/quarantined evidence.
+2. Regression tests prove GRI state cannot mutate EPR obligation/return state, BRSR metric verification, CPCB submission/acceptance, CCTS state, MRV verification or credit issuance.
+3. Existing ESG/EPR/MRV route suites, workspace permission tests, migration preflight, build/typecheck and production-container build all pass on the final integrated head.
+4. Integration remains non-production until Shakti regulatory, security, operational, rollback and independent-review gates are evidenced.
+
 ## Shakti Standards release gates
 
 - **A — Regulatory source:** official source and effective dates checked.
