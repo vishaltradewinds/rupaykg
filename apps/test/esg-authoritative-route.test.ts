@@ -12,7 +12,7 @@ const evidenceId = "55555555-5555-4555-8555-555555555555";
 const verificationId = "66666666-6666-4666-8666-666666666666";
 const methodologyVersionId = "77777777-7777-4777-8777-777777777777";
 
-function makePool(options: { verifierAuthorized?: boolean; methodologyMatches?: boolean } = {}): Pool {
+function makePool(options: { verifierAuthorized?: boolean; methodologyMatches?: boolean; evidenceStatus?: string } = {}): Pool {
   const query = async (sql: string, values: unknown[] = []) => {
     if (sql.includes("from identity_sessions")) return { rows: [{ identity_id: identityId }] };
     if (sql.includes("from organization_memberships") && sql.includes("where identity_id = $1 and status = 'VERIFIED'")) {
@@ -22,7 +22,7 @@ function makePool(options: { verifierAuthorized?: boolean; methodologyMatches?: 
     if (sql.includes("select organization_id from esg_reporting_periods")) return { rows: [{ organization_id: organizationId }] };
     if (sql.includes("from evidence e join activities a on a.id=e.activity_id")) {
       return { rows: [{
-        evidence_id: evidenceId, evidence_status: "VERIFIED", content_hash: "a".repeat(64), content_uri: null,
+        evidence_id: evidenceId, evidence_status: options.evidenceStatus ?? "VERIFIED", content_hash: "a".repeat(64), content_uri: null,
         evidence_org: organizationId, geography_id: geographyId, occurred_at: new Date("2026-05-10T00:00:00Z"),
         measured_at: new Date("2026-05-10T00:00:00Z"), verification_id: verificationId,
         verification_decision: "APPROVED", verifier_identity_id: identityId, methodology_version_id: methodologyVersionId,
@@ -38,7 +38,7 @@ function makePool(options: { verifierAuthorized?: boolean; methodologyMatches?: 
   return { query } as unknown as Pool;
 }
 
-async function postMetric(options: { verifierAuthorized?: boolean; methodologyMatches?: boolean } = {}) {
+async function postMetric(options: { verifierAuthorized?: boolean; methodologyMatches?: boolean; evidenceStatus?: string } = {}) {
   const app = Fastify();
   await registerValueRoutes(app, makePool(options));
   const response = await app.inject({
@@ -65,6 +65,13 @@ test("ESG route keeps metric PENDING when the persisted methodology does not bin
 
 test("ESG route keeps metric PENDING when verifier authority is no longer current", async () => {
   const response = await postMetric({ verifierAuthorized: false });
+  assert.equal(response.statusCode, 201);
+  assert.equal(response.json().state, "PENDING");
+});
+
+
+test("ESG route keeps metric PENDING when the underlying evidence has been revoked", async () => {
+  const response = await postMetric({ evidenceStatus: "REVOKED" });
   assert.equal(response.statusCode, 201);
   assert.equal(response.json().state, "PENDING");
 });
