@@ -52,7 +52,7 @@ Official GRI sources confirm that GRI 101 Biodiversity 2024 took effect for repo
 
 1. Reconcile with the parallel ESG verification and production-safety work before changing the shared `packages/esg/src/index.ts` or package exports. Coordinate with draft PR #119's India EPR/ESG/CCTS/CCC source register and consume its governed source records after integration rather than creating a second regulatory source of truth.
 2. Bind mapping records to existing `esg_reporting_periods`, `esg_metrics`, EPR obligations/returns, evidence-vault records and MRV provenance by stable identifiers; do not copy authoritative measurements into a new competing source of truth.
-3. Add an additive database migration only after auditing current migrations and table constraints and after the active migration-safety gates are resolved. Use effective-dated mapping versions and immutable reporting-period snapshots.
+3. The additive registry migration is now present at `migrations/20261022_gri_cross_mapping_registry.sql`. It binds mappings to an existing ESG reporting period and organization, stores versioned source/target/evidence/control JSON, uses composite organization-scoped foreign keys, and adds append-only audit events plus database lifecycle/immutability guards. The migration validator passed locally (92 migrations / 75 schema objects). PostgreSQL migration execution and trigger behavior must still be confirmed by the current full CI run before this gate is marked complete.
 4. Expose mapping read/write operations through existing authenticated server routes with organization-scoped RBAC, audit logging and strict validation.
 5. Extend existing ESG/reporting panels only after API contracts and stakeholder permissions are confirmed.
 6. Export a disclosure index showing mapping version, applicability, source evidence, omissions, estimates, limitations and assurance status.
@@ -77,7 +77,7 @@ Official GRI sources confirm that GRI 101 Biodiversity 2024 took effect for repo
 - Preserve historical mapping versions and reporting-period snapshots.
 - Reject evidence that is missing, rejected or quarantined for a required disclosure.
 - Detect duplicate physical waste quantities across generator/collector/processor custody events.
-- Enforce organization-level authorization and immutable audit events.
+- Enforce organization-level authorization and immutable audit events (database append-only/immutability guards are present; authenticated route-level authorization and end-to-end tests remain pending).
 - Verify effective-dated GRI 102/103 transitions and report version against official sources.
 - Ensure existing BRSR, EPR, CPCB/SWM and MRV tests remain green.
 
@@ -87,4 +87,4 @@ Official GRI sources confirm that GRI 101 Biodiversity 2024 took effect for repo
 - GRI Universal Standards: https://globalreporting.org/standards/standards-development/universal-standards/
 - GRI Standards development/effective dates: https://www.globalreporting.org/standards/standards-development/
 
-**Engineering disposition:** schema and isolated advisory evaluator/adapter/test source are present on this draft branch. The ESG package build/typecheck and all six package tests passed locally; the schema compiled under Ajv Draft 2020-12 with formats enabled, a valid fixture passed, and a missing-required-fields fixture was rejected. Exact-head GitHub Actions CI passed on the prior branch head; rerun CI for subsequent commits before relying on that evidence. Public package export, persistence/migration, authenticated routes, stakeholder UI, integration with draft PR #119's regulatory source register, independent review and production certification remain open gates.
+**Engineering disposition (2026-10-29):** schema, isolated advisory evaluator/adapter/tests, and additive versioned registry migration are present on this draft branch. ESG package build/typecheck and seven package tests passed locally before the latest migration update; schema compilation and positive/negative fixtures passed under Ajv Draft 2020-12. The migration validator passed locally after the registry migration was added. Full repository CI passed on an earlier code head; a subsequent full run is still in progress and must validate the final migration head before its result is relied upon. Authenticated route registration and organization-scoped write APIs, route-level audit-event creation, public package export, stakeholder UI/exports, integration with draft PR #119's regulatory source register, independent review and production certification remain open gates. Do not merge or deploy until those gates are evidenced.
