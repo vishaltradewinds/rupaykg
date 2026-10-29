@@ -208,10 +208,10 @@ test("worker renews its fenced lease while validation runs beyond the original l
   assert.equal(result.validated, 1);
   const renewal = statements.find(sql => sql.includes("set lease_until=now()"));
   assert.ok(renewal, "slow validation should trigger a lease renewal");
-  assert.match(renewal, /where id=\$1 and status='PROCESSING' and lease_token=\$2/i);
+  assert.match(renewal, /where id=\$1 and status='PROCESSING' and lease_token=\$2 and lease_until > now\(\)/i);
   const terminal = statements.find(sql => sql.includes("set status='VALIDATED'"));
   assert.ok(terminal);
-  assert.match(terminal, /where id=\$1 and status='PROCESSING' and lease_token=\$2/i);
+  assert.match(terminal, /where id=\$1 and status='PROCESSING' and lease_token=\$2 and lease_until > now\(\)/i);
 });
 
 
