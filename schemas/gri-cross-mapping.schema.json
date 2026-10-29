@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rupaykg.in/schemas/gri-cross-mapping.schema.json",
+  "title": "RupayKg GRI Cross-Mapping Record",
+  "description": "Versioned relationship between an authoritative source requirement and a GRI disclosure. A mapping is not proof of statutory compliance, assurance, or carbon-credit eligibility.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version","mapping_id","status","source_requirement","target_disclosure","relationship","applicability","rationale","evidence","controls","governance"],
+  "properties": {
+    "schema_version": {"const":"1.0.0"},
+    "mapping_id": {"type":"string","pattern":"^[A-Z0-9][A-Z0-9._:-]{2,127}$"},
+    "status": {"enum":["draft","reviewed","approved","deprecated","blocked"]},
+    "source_requirement": {
+      "type":"object","additionalProperties":false,
+      "required":["framework","instrument_id","requirement_id","title","version","source_url","authority_type"],
+      "properties":{
+        "framework":{"enum":["INDIA_STATUTORY","EPR","CCTS","BRSR","ESG_INTERNAL","ICVCM_CCP","OTHER"]},
+        "instrument_id":{"type":"string","minLength":1},
+        "requirement_id":{"type":"string","minLength":1},
+        "title":{"type":"string","minLength":1},
+        "version":{"type":"string","minLength":1},
+        "source_url":{"type":"string","format":"uri"},
+        "effective_from":{"type":["string","null"],"format":"date"},
+        "effective_to":{"type":["string","null"],"format":"date"},
+        "authority_type":{"enum":["law","regulation","government_order","standard","methodology","voluntary_framework","internal_policy"]},
+        "official_source_verified_at":{"type":["string","null"],"format":"date-time"}
+      }
+    },
+    "target_disclosure":{
+      "type":"object","additionalProperties":false,
+      "required":["framework","standard_id","disclosure_id","title","version"],
+      "properties":{
+        "framework":{"enum":["GRI","BRSR","ISSB","INTERNAL_ESG","OTHER"]},
+        "standard_id":{"type":"string","minLength":1},
+        "disclosure_id":{"type":"string","minLength":1},
+        "title":{"type":"string","minLength":1},
+        "version":{"type":"string","minLength":1},
+        "effective_from":{"type":["string","null"],"format":"date"},
+        "materiality_dependent":{"type":"boolean","default":true}
+      }
+    },
+    "relationship":{"enum":["equivalent","partial_overlap","supports","contextual","no_direct_equivalence","conflict_requires_review"]},
+    "rationale":{"type":"string","minLength":10},
+    "limitations":{"type":"array","items":{"type":"string"},"default":[]},
+    "applicability":{
+      "type":"object","additionalProperties":false,
+      "required":["determination","basis"],
+      "properties":{
+        "determination":{"enum":["applicable","not_applicable","conditional","undetermined"]},
+        "basis":{"type":"string","minLength":1},
+        "entity_types":{"type":"array","items":{"type":"string"}},
+        "thresholds":{"type":"array","items":{"type":"string"}},
+        "reporting_period":{"type":["string","null"]},
+        "reviewed_by":{"type":["string","null"]},
+        "reviewed_at":{"type":["string","null"],"format":"date-time"}
+      }
+    },
+    "metrics":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["metric_id","unit","method","boundary"],"properties":{"metric_id":{"type":"string"},"unit":{"type":"string"},"method":{"type":"string"},"boundary":{"type":"string"},"disaggregation":{"type":"array","items":{"type":"string"}},"calculation_version":{"type":["string","null"]},"uncertainty":{"type":["string","null"]}}},"default":[]},
+    "evidence":{
+      "type":"object","additionalProperties":false,
+      "required":["required","items","lineage_status"],
+      "properties":{
+        "required":{"type":"boolean"},
+        "items":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["evidence_id","evidence_type","source_system","period","integrity_status"],"properties":{"evidence_id":{"type":"string"},"evidence_type":{"type":"string"},"source_system":{"type":"string"},"period":{"type":"string"},"uri_or_hash":{"type":["string","null"]},"captured_at":{"type":["string","null"],"format":"date-time"},"integrity_status":{"enum":["unverified","validated","rejected","quarantined"]}}}},
+        "lineage_status":{"enum":["missing","partial","complete","exception"]}
+      }
+    },
+    "controls":{
+      "type":"object","additionalProperties":false,
+      "required":["validation_rules","double_counting_check","assurance_status","compliance_conclusion","credit_eligibility_conclusion"],
+      "properties":{
+        "validation_rules":{"type":"array","items":{"type":"string"}},
+        "double_counting_check":{"enum":["not_run","passed","failed","not_applicable"]},
+        "assurance_status":{"enum":["not_assured","internal_review","independent_assurance","limited_assurance","reasonable_assurance"]},
+        "compliance_conclusion":{"enum":["not_assessed","compliant","non_compliant","partially_compliant","not_applicable","requires_legal_review"]},
+        "credit_eligibility_conclusion":{"enum":["not_assessed","not_applicable","requires_methodology_validation","independently_verified","rejected"]}
+      }
+    },
+    "governance":{
+      "type":"object","additionalProperties":false,
+      "required":["owner_role","approver_role","created_at","change_log_ref"],
+      "properties":{"owner_role":{"type":"string"},"approver_role":{"type":"string"},"created_at":{"type":"string","format":"date-time"},"change_log_ref":{"type":"string"},"supersedes_mapping_id":{"type":["string","null"]}}
+    }
+  }
+}
