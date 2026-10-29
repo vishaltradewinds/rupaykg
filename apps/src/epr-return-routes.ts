@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import type { Pool } from "pg";
+import type { Pool, PoolClient } from "pg";
 import { authenticate, bearerChallenge, hasOrganizationPermission, type AuthContext } from "./auth.js";
 import { evaluateEprQuantityBinding, isIsoCalendarDate } from "./epr-quantity-binding.js";
 
@@ -27,6 +27,22 @@ async function authFor(request: Parameters<typeof authenticate>[0], reply: { cod
 }
 function canAct(auth: AuthContext, organizationId: string): boolean {
   return auth.memberships.some((membership) => membership.organization_id === organizationId && membership.status === "VERIFIED");
+}
+
+// Mutating EPR routes call this inside their open transaction. Lock current
+// membership, role and identity rows so an actor's authority cannot be revoked
+// between authorization and the protected mutation.
+async function hasLockedEprManagementAuthority(client: PoolClient, auth: AuthContext, organizationId: string): Promise<boolean> {
+  const result = await client.query(`select om.identity_id
+    from organization_memberships om
+    join roles r on r.id=om.role_id
+    join identities i on i.id=om.identity_id
+    where om.identity_id=$1 and om.organization_id=$2 and om.status='VERIFIED'
+      and i.status='VERIFIED' and i.suspended_at is null
+      and exists(select 1 from jsonb_array_elements_text(r.permissions) p where p=any($3::text[]))
+    for share of om, r, i`,
+    [auth.identityId, organizationId, ["epr:manage"]]);
+  return result.rows.length > 0;
 }
 
 export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool | null): Promise<void> {
@@ -125,8 +141,8 @@ export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool |
         join epr_schemes s on s.id=r.scheme_id where r.id=$1 for update of r,eo`, [returnId]);
       const row = ret.rows[0];
       if (!row) { await client.query("ROLLBACK"); return reply.code(404).send({ error: "EPR return or linked obligation not found", code: "EPR_RETURN_NOT_FOUND" }); }
-      if (!canAct(auth, row.organization_id) || !await hasOrganizationPermission(client, auth, row.organization_id, ["epr:manage"])) {
-        await client.query("ROLLBACK"); return reply.code(403).send({ error: "EPR management permission required", code: "EPR_RETURN_WRITE_FORBIDDEN" });
+      if (!canAct(auth, row.organization_id) || !await hasLockedEprManagementAuthority(client, auth, row.organization_id)) {
+        await client.query("ROLLBACK"); return reply.code(403).send({ error: "Current EPR management authority is required", code: "EPR_RETURN_WRITE_FORBIDDEN" });
       }
       if (row.status !== "DRAFT") { await client.query("ROLLBACK"); return reply.code(409).send({ error: "Only draft returns may receive a quantity binding", code: "INVALID_EPR_RETURN_STATE" }); }
       // Serialize bindings per flow so concurrent returns cannot over-allocate its declared mass.
@@ -213,7 +229,7 @@ export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool |
       const current = await client.query(`select r.*,eo.target_quantity,eo.fulfilled_quantity as obligation_fulfilled,eo.status as obligation_status,s.code as scheme_code from epr_returns r join epr_obligations eo on eo.id=r.obligation_id join epr_schemes s on s.id=r.scheme_id where r.id=$1 for update`, [returnId]);
       const row = current.rows[0];
       if (!row) { await client.query("ROLLBACK"); return reply.code(404).send({ error: "EPR return not found", code: "EPR_RETURN_NOT_FOUND" }); }
-      if (!canAct(auth, row.organization_id) || !await hasOrganizationPermission(pool, auth, row.organization_id, ["epr:manage"])) { await client.query("ROLLBACK"); return reply.code(403).send({ error: "EPR management permission required", code: "EPR_RETURN_WRITE_FORBIDDEN" }); }
+      if (!canAct(auth, row.organization_id) || !await hasLockedEprManagementAuthority(client, auth, row.organization_id)) { await client.query("ROLLBACK"); return reply.code(403).send({ error: "Current EPR management authority is required", code: "EPR_RETURN_WRITE_FORBIDDEN" }); }
       // Rejected returns may already have consumed obligation balance. Until a
       // reconciliation workflow atomically reverses that balance, do not resubmit.
       if (row.status !== "DRAFT") {
