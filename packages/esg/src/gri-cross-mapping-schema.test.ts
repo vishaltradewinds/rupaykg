@@ -107,6 +107,12 @@ test("GRI cross-mapping schema rejects malformed source URL and impossible effec
   };
   assert.equal(validate(invalidUrl), false);
 
+  const insecureUrl = {
+    ...validRecord,
+    source_requirement: { ...validRecord.source_requirement, source_url: "http://moef.gov.in/" }
+  };
+  assert.equal(validate(insecureUrl), false);
+
   const invalidDate = {
     ...validRecord,
     source_requirement: { ...validRecord.source_requirement, effective_from: "2026-02-30" }
