@@ -128,7 +128,12 @@ export type GriCrossMappingReviewResult = {
 function isHttpsUrl(value: string): boolean {
   try {
     const url = new URL(value);
-    return url.protocol === "https:";
+    // Reject HTTPS URLs with embedded credentials: they can visually disguise
+    // the actual host and must not be accepted as authoritative-source links.
+    return url.protocol === "https:" &&
+      url.hostname.length > 0 &&
+      url.username.length === 0 &&
+      url.password.length === 0;
   } catch {
     return false;
   }
