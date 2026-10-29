@@ -178,7 +178,7 @@
       "documentSha256": null,
       "archiveStatus": "NOT_ARCHIVED_HASH_PENDING",
       "applicability": "Only current approved methodology/version and sector can be considered for a project; do not infer eligibility from waste activity alone.",
-      "notes": "Page showed last updated 7 July 2026 at review; current listing included BM WA03.001, BM WA03.002 and BM WA03.003."
+      "notes": "The BEE live page was rechecked on 2026-10-29. It lists BM WA03.001 (landfill methane recovery) and BM WA03.002 (flaring or use of landfill gas) under Waste Handling and Disposal; BM WA03.003 was not present in the current visible list at this check. Treat any prior .003 reference as unconfirmed until an official current entry and exact approved methodology document are archived and reviewed. Recheck the live register at release time."
     },
     {
       "id": "SEBI-BRSR",
