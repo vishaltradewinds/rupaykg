@@ -67,12 +67,12 @@ The current CPCB plastic-waste portal page lists Plastic Waste Management (Amend
 
 **Engineering gates:** obtain each applicable Gazette notification and amendments, archive the exact documents and SHA-256 hashes, resolve commencement/transitional clauses, and map actor/category/financial-year applicability before activating targets or certificate calculations. Keep the portal's document index distinct from the operative legal instrument and from actual CPCB filing/acceptance.
 
-A second freshness discrepancy was identified in the BEE Offset Mechanism methodology listing. The current visible BEE page lists BM WA03.001 (landfill methane recovery) and BM WA03.002 (flaring or use of landfill gas) under Waste Handling and Disposal; BM WA03.003 was not visible in the current list during this check. Earlier notes in this branch described BM WA03.003 as currently listed. That assertion is now treated as **unconfirmed**, not as an approved-methodology fact.
+A second freshness discrepancy was identified in the BEE Offset Mechanism methodology listing. The official BEE live page was rechecked after the earlier observation and explicitly lists BM WA03.001 (landfill methane recovery), BM WA03.002 (flaring or use of landfill gas), and BM WA03.003 (Production of Compressed Bio-gas (CBG)) under Waste Handling and Disposal. The earlier statement that .003 was not visible was incorrect and is superseded by this direct official-source check.
 
 - BEE live methodology listing: https://beeindia.gov.in/view_content.php?lang=1&lid=571
 - BEE Offset Mechanism procedure and methodologies page: https://beeindia.gov.in/show_content.php?lang=1&level=2&lid=640&ls_id=737
 
-**Engineering gates:** do not allow a project to select BM WA03.003 based solely on the earlier note or an internal catalogue. Confirm a current official listing and exact approved methodology document, archive and hash it, record version/effective date, and obtain domain review. Until then, fail closed for that methodology identifier. This is a registry-freshness discrepancy, not proof that the methodology was formally withdrawn.
+**Engineering gates:** the current listing supports recording BM WA03.003 as listed by BEE, but project activation still requires the exact methodology document and current procedure to be archived and hashed, version/effective date recorded, and project-specific eligibility reviewed. Do not infer registration, validation, verification, or CCC issuance from the methodology listing.
 
 ## 4. Release implications
 
