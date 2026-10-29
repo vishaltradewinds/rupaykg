@@ -80,3 +80,16 @@ The schema diff is evidence for a targeted object-by-object review, not a deploy
 4. Build a forward-only reconciliation proposal only after the canonical catalog, exact source provenance, data-preservation plan, backup/restore evidence, and approvals are recorded.
 5. CI for the documentation commit is separate from this read-only database evidence and must be confirmed at the exact commit before calling that commit validated.
 
+## 6. Source-recovery and deployment-correlation update — 2026-10-29 14:15 UTC
+
+Source discovery has advanced since the initial matrix:
+
+- Production migration 096 source was recovered from commit `ca8f4100782e13f8d72106187fafc8e1e446214f`, blob `258b1f4534efbf915688f78aa84d4ec24a47cbc0`. Render deploy `dep-dbgallbrjlhs73d104r0` ran from `13:44:53Z` to `13:46:30Z` on 2026-10-27; the production ledger records migration 096 at `13:46:14Z` during that window. The next deploy removed the file. This is strong chronology/source correlation, but not signed artifact-image attestation.
+- Staging migration source blobs are confirmed on `intelligence/ai-evidence-intake-middleware`: 20261022 `4d08607e03561b9fbb4ce502b4c4211127237050`; 20261023 `33cb4d5d2e29a4a111340e5a0ac34170a0081895`; 20261024 `87b51fe60a96a4e0752c8b0a9a170c81f9936dbb`; 20261025 `6a0ae54530b7b756dac33589eaf18df3b071d8f2`.
+- The staging feature branch is materially diverged; these sources must not be copied into the candidate or merged wholesale without dependency and catalog review.
+- Worker defect confirmed: worker code can write `UNRESOLVED`, but the recovered 20261023 constraint omits it. The future-dated 20261101 source is not a deployed fix. Disposable PostgreSQL acceptance must test this transition.
+
+Accordingly, update the first two gate rows: exact source discovery is now **CLOSED**; independent source/deployment review and artifact attestation remain **OPEN**. Canonical catalog, forward-only reconciliation, live writes, scheduler and production release remain **BLOCKED/HOLD**.
+
+The exact-head CI for this documentation commit must be checked independently; documentation CI does not validate database migration behavior.
+
