@@ -36,3 +36,22 @@ This is consistent with the stricter trigger/function definition observed in the
 - Independent security review sign-off.
 
 Until these gates are evidenced, production certification and any release depending on this migration remain **HOLD**.
+
+
+## Follow-up code review — concrete state-transition risk (2026-10-29)
+
+A line-by-line review of the preserved legacy SQL fixture at blob `258b1f4534efbf915688f78aa84d4ec24a47cbc0` found a specific decision-transition ambiguity:
+
+- The trigger writes the authorization snapshot when `NEW.decision = 'APPROVED'`.
+- On a later UPDATE changing the decision away from `APPROVED`, the trigger does not clear the four authorization fields or append a separate decision-history event.
+- The comments describe the fields as the snapshot used when verification was approved, so retaining the snapshot may be intentional historical provenance. However, a consumer reading only the current row could mistake it for current approval unless the data contract explicitly says it is historical and the current decision is checked independently.
+
+**Disposition:** this is a required security/data-contract decision, not permission to mutate or rewrite historical rows. Before any forward migration is approved:
+
+1. Define whether authorization fields represent immutable historical approval provenance or only current-decision provenance. Prefer an append-only decision event/history if audit requirements need both prior approval and subsequent revocation/rejection to be visible.
+2. Add disposable-PostgreSQL tests for INSERT APPROVED, UPDATE APPROVED→REJECTED (and other non-APPROVED decisions), UPDATE back to APPROVED, and concurrent membership/role revocation. Assert that current status and historical authorization evidence cannot be confused.
+3. Verify all production readers and APIs require the current decision to be APPROVED before treating a verification as currently approved; provenance fields alone must never imply current validity.
+4. Inspect the deployed trigger's exact name, owner, privileges and function `search_path`; the historical source's `DROP TRIGGER IF EXISTS verifications_integrity_guard` must not be replayed against production as a repair strategy.
+5. Keep legacy rows with missing snapshots explicitly classified as legacy/unavailable unless contemporaneous evidence supports a defensible backfill. Never fabricate decision-time membership or permissions.
+
+This finding does not change the release decision: source remains evidence-only, no migration was applied, and production certification remains HOLD.
