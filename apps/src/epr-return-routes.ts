@@ -140,22 +140,16 @@ export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool |
       await client.query("select pg_advisory_xact_lock(hashtext($1)::bigint)", [evidenceId]);
       const reusedEvidence = await client.query(`select exists(select 1 from epr_returns where evidence_id=$1 and id<>$2 and status in ('SUBMITTED','ACCEPTED','COMPLIANT')) as reused`, [evidenceId, returnId]);
       if (reusedEvidence.rows[0]?.reused === true) { await client.query("ROLLBACK"); return reply.code(409).send({ error: "Evidence is already bound to another submitted EPR return", code: "EVIDENCE_ALREADY_CONSUMED" }); }
-      // FAIL CLOSED: reported_quantity is caller-supplied and the repository has no governed,
-      // scheme/category/unit/period/methodology binding that derives this value from an authoritative
-      // measurement or eligible custody allocation. Do not increment statutory obligation fulfillment
-      // until that binding exists and is independently validated.
+      // FAIL CLOSED: reported_quantity is caller-supplied and no governed,
+      // scheme/category/unit/period/methodology binding currently derives it from an
+      // authoritative measurement or eligible custody allocation. Never increment
+      // statutory fulfillment from an unbound caller-supplied number.
       await client.query("ROLLBACK");
       return reply.code(409).send({
         error: "Authoritative measurement-to-EPR quantity binding is not implemented; reported quantity cannot be treated as verified fulfillment",
         code: "EPR_QUANTITY_BINDING_NOT_IMPLEMENTED",
         productionGate: "HOLD"
       });
-      const fulfilled = Number(row.reported_quantity);
-      const balance = Number(obligationRow.target_quantity) - Number(obligationRow.fulfilled_quantity);
-      if (!Number.isFinite(fulfilled) || fulfilled <= 0) { await client.query("ROLLBACK"); return reply.code(400).send({ error: "Reported quantity must be positive", code: "INVALID_QUANTITY" }); }
-      if (fulfilled > balance + 1e-9) { await client.query("ROLLBACK"); return reply.code(409).send({ error: "Reported quantity exceeds remaining EPR obligation balance", code: "OBLIGATION_BALANCE_EXCEEDED", remainingQuantity: Math.max(balance, 0) }); }
-      const updated = await client.query(`update epr_returns set fulfilled_quantity=$2,obligation_quantity=$3,evidence_id=$4,verification_id=$5,status='SUBMITTED',submitted_at=now() where id=$1 returning *`, [returnId, fulfilled, obligationRow.target_quantity, evidenceId, verificationId]);
-      await client.query(`update epr_obligations set fulfilled_quantity=fulfilled_quantity+$2,status=case when fulfilled_quantity+$2 >= target_quantity then 'COMPLIANT' else 'OPEN' end where id=$1`, [row.obligation_id, fulfilled]);
       await client.query("COMMIT");
       return { source: "postgresql", syntheticData: false, authoritativeMutation: true, eprReturn: updated.rows[0], externalSubmission: "NOT_SUBMITTED" };
     } catch (error) { await client.query("ROLLBACK"); request.log.error(error); return reply.code(503).send({ error: "EPR return submission unavailable", syntheticData: false }); }
