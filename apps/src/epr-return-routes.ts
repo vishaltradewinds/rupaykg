@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import type { Pool } from "pg";
 import { authenticate, bearerChallenge, hasOrganizationPermission, type AuthContext } from "./auth.js";
+import { evaluateEprQuantityBinding } from "./epr-quantity-binding.js";
 
 function bodyOf(request: { body: unknown }): Record<string, unknown> {
   return request.body && typeof request.body === "object" ? request.body as Record<string, unknown> : {};
@@ -80,7 +81,15 @@ export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool |
       const row = current.rows[0];
       if (!row) { await client.query("ROLLBACK"); return reply.code(404).send({ error: "EPR return not found", code: "EPR_RETURN_NOT_FOUND" }); }
       if (!canAct(auth, row.organization_id) || !await hasOrganizationPermission(pool, auth, row.organization_id, ["epr:manage"])) { await client.query("ROLLBACK"); return reply.code(403).send({ error: "EPR management permission required", code: "EPR_RETURN_WRITE_FORBIDDEN" }); }
-      if (row.status !== "DRAFT" && row.status !== "REJECTED") { await client.query("ROLLBACK"); return reply.code(409).send({ error: `Return cannot be submitted from ${row.status}`, code: "INVALID_EPR_RETURN_STATE" }); }
+      // Rejected returns may already have consumed obligation balance. Until a
+      // reconciliation workflow atomically reverses that balance, do not resubmit.
+      if (row.status !== "DRAFT") {
+        await client.query("ROLLBACK");
+        return reply.code(409).send({
+          error: row.status === "REJECTED" ? "Rejected return requires fulfillment reconciliation before resubmission" : `Return cannot be submitted from ${row.status}`,
+          code: row.status === "REJECTED" ? "EPR_REJECTED_RETURN_RECONCILIATION_REQUIRED" : "INVALID_EPR_RETURN_STATE"
+        });
+      }
       const obligation = await client.query(`select id,target_quantity,fulfilled_quantity,status from epr_obligations where id=$1 for update`, [row.obligation_id]);
       const obligationRow = obligation.rows[0];
       if (!obligationRow) { await client.query("ROLLBACK"); return reply.code(409).send({ error: "Bound EPR obligation not found", code: "OBLIGATION_NOT_FOUND" }); }
@@ -90,14 +99,16 @@ export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool |
       if (!evidenceRow || evidenceRow.status !== "VERIFIED" || (!evidenceRow.content_hash && !evidenceRow.content_uri) || evidenceRow.organization_id !== row.organization_id || !evidenceRow.geography_id) { await client.query("ROLLBACK"); return reply.code(409).send({ error: "Submission evidence must be verified, provenance-backed, approved and organization-scoped", code: "EVIDENCE_NOT_ELIGIBLE" }); }
       const geo = await client.query(`select organization_has_geography_scope($1,$2) as ok`, [row.organization_id, evidenceRow.geography_id]);
       if (!geo.rows[0]?.ok) { await client.query("ROLLBACK"); return reply.code(403).send({ error: "Evidence geography is outside organization authorization scope", code: "GEOGRAPHY_FORBIDDEN" }); }
-      const fulfilled = Number(row.reported_quantity);
-      const balance = Number(obligationRow.target_quantity) - Number(obligationRow.fulfilled_quantity);
-      if (!Number.isFinite(fulfilled) || fulfilled <= 0) { await client.query("ROLLBACK"); return reply.code(400).send({ error: "Reported quantity must be positive", code: "INVALID_QUANTITY" }); }
-      if (fulfilled > balance + 1e-9) { await client.query("ROLLBACK"); return reply.code(409).send({ error: "Reported quantity exceeds remaining EPR obligation balance", code: "OBLIGATION_BALANCE_EXCEEDED", remainingQuantity: Math.max(balance, 0) }); }
-      const updated = await client.query(`update epr_returns set fulfilled_quantity=$2,obligation_quantity=$3,evidence_id=$4,verification_id=$5,status='SUBMITTED',submitted_at=now() where id=$1 returning *`, [returnId, fulfilled, obligationRow.target_quantity, evidenceId, verificationId]);
-      await client.query(`update epr_obligations set fulfilled_quantity=fulfilled_quantity+$2,status=case when fulfilled_quantity+$2 >= target_quantity then 'COMPLIANT' else 'OPEN' end where id=$1`, [row.obligation_id, fulfilled]);
-      await client.query("COMMIT");
-      return { source: "postgresql", syntheticData: false, authoritativeMutation: true, eprReturn: updated.rows[0], externalSubmission: "NOT_SUBMITTED" };
+      // Do not convert caller-supplied reported_quantity into statutory fulfillment.
+      // No persisted measurement/custody/category/unit/period/methodology binding is
+      // currently available to this route. The guard intentionally fails closed.
+      const quantityBinding = evaluateEprQuantityBinding(undefined);
+      await client.query("ROLLBACK");
+      return reply.code(409).send({
+        error: "Authoritative measurement-to-EPR quantity binding is not implemented; reported quantity cannot be treated as verified fulfillment",
+        code: quantityBinding.code,
+        productionGate: "HOLD"
+      });
     } catch (error) { await client.query("ROLLBACK"); request.log.error(error); return reply.code(503).send({ error: "EPR return submission unavailable", syntheticData: false }); }
     finally { client.release(); }
   });
