@@ -103,3 +103,40 @@ test("ESG reporting boundary is required and normalized before metric writes", a
     await app.close();
   }
 });
+
+
+test("ESG boundary validation does not disclose another organization's period configuration", async () => {
+  const OTHER_ORG = "123e4567-e89b-42d3-a456-426614174099";
+  const calls: string[] = [];
+  const pool = {
+    query: async (sql: string) => {
+      calls.push(sql);
+      if (sql.includes("from identity_sessions")) return { rows: [{ identity_id: IDENTITY }] };
+      if (sql.includes("from organization_memberships") && sql.includes("where identity_id = $1 and status = 'VERIFIED'")) {
+        return { rows: [{ organization_id: ORG, role_id: "role-1", status: "VERIFIED" }] };
+      }
+      if (sql.includes("from esg_reporting_periods")) return { rows: [{ organization_id: OTHER_ORG, reporting_boundary: null }] };
+      return { rows: [] };
+    }
+  } as unknown as Pool;
+
+  const app = Fastify({ logger: false });
+  await registerValueRoutes(app, pool);
+  try {
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/v1/esg/reporting-periods/123e4567-e89b-42d3-a456-426614174009/metrics",
+      headers: {
+        authorization: "Bearer test-session-token",
+        "x-rupaykg-organization-id": ORG
+      },
+      payload: { metricCode: "ENERGY_TEST", scope: "2", unit: "kWh", value: 10 }
+    });
+
+    assert.equal(response.statusCode, 403);
+    assert.equal(response.json().code, "ORG_FORBIDDEN");
+    assert.ok(!calls.some((sql) => /can_write_esg/i.test(sql)), "unauthorized callers must not reach boundary-specific write validation");
+  } finally {
+    await app.close();
+  }
+});
