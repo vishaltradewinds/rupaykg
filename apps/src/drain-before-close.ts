@@ -33,7 +33,7 @@ async function closeWithinDeadline(
   let timer: ReturnType<typeof setTimeout> | undefined;
   const closeOutcome = Promise.resolve()
     .then(close)
-    .then<CloseOutcome>(
+    .then<CloseOutcome, CloseOutcome>(
       () => ({ kind: "closed" }),
       () => ({ kind: "rejected" }),
     );
