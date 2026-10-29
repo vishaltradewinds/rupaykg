@@ -94,3 +94,33 @@ describe("settlement credential lifecycle database guards", () => {
     assert.match(error.message, /Credential cannot be retired while a settlement is open/i);
   });
 });
+
+
+  it("fails closed when a newer eligibility review rejects an earlier approval", async () => {
+    if (!pool) return;
+    const context = (await pool.query<{
+      activity_id: string; verification_id: string; evidence_id: string;
+      methodology_version_id: string; geography_id: string; reviewer_identity_id: string;
+    }>(
+      `select d.activity_id,d.verification_id,d.evidence_id,d.methodology_version_id,d.geography_id,d.reviewer_identity_id
+         from activity_registry_eligibility_decisions d
+         join credentials c on c.activity_id=d.activity_id and c.verification_id=d.verification_id
+        where c.id=$1
+        order by d.created_at desc,d.id desc limit 1`,
+      [openSettlementCredentialId],
+    )).rows[0]!;
+    await pool.query(
+      `insert into activity_registry_eligibility_decisions
+       (activity_id,verification_id,evidence_id,methodology_version_id,geography_id,decision,
+        statutory_basis,permit_and_authority_evidence,applicability_rationale,
+        independent_review_reference,reviewer_identity_id,effective_from)
+       values($1,$2,$3,$4,$5,'REQUIRES_REVIEW',$6::jsonb,$7::jsonb,$8,$9,$10,current_date)`,
+      [context.activity_id,context.verification_id,context.evidence_id,context.methodology_version_id,
+       context.geography_id,JSON.stringify({testFixture:true}),JSON.stringify([{testFixture:true}]),
+       "TEST FIXTURE ONLY - later review requires reassessment",`later-review-${suffix}`,context.reviewer_identity_id],
+    );
+    const error = await pool.query("update credentials set status='ISSUED' where id=$1", [openSettlementCredentialId])
+      .then(() => null).catch((value: unknown) => value);
+    assert.ok(error instanceof Error, "newer REQUIRES_REVIEW decision must supersede an older APPROVED decision");
+    assert.match(error.message, /REGULATORY_ELIGIBILITY_REQUIRED/i);
+  });
