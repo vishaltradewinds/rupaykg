@@ -235,7 +235,7 @@ export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool |
       const bindingResult = await client.query(`select b.*,r.reported_quantity,r.period_start as return_period_start,r.period_end as return_period_end,
           eo.target_quantity,eo.fulfilled_quantity as obligation_fulfilled,eo.category_code as obligation_category_code,eo.scheme_id,
           m.value as current_measurement_value,m.unit as current_measurement_unit,m.quality_status,a.geography_id as evidence_geography_id,
-          rf.organization_id as current_flow_organization_id,rf.status as current_flow_status,rf.material_code as current_flow_material_code,rf.unit as current_flow_unit,
+          rf.organization_id as current_flow_organization_id,rf.status as current_flow_status,rf.material_code as current_flow_material_code,rf.unit as current_flow_unit,rf.declared_quantity::text as current_flow_declared_quantity,
           c.actor_organization_id as current_custody_actor_organization_id,c.quantity as current_custody_quantity,c.unit as current_custody_unit,c.recorded_at::date as current_custody_recorded_date,c.evidence_id as current_custody_evidence_id,
           e.status as current_evidence_status,e.content_hash,e.content_uri,e.measurement_id as current_evidence_measurement_id,e.activity_id as current_evidence_activity_id,a.id as current_activity_id,
           v.decision as current_verification_decision,v.evidence_id as current_verification_evidence,v.verifier_identity_id,
@@ -252,8 +252,8 @@ export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool |
         join verifications v on v.id=b.verification_id
         join methodology_versions mv on mv.id=b.methodology_version_id
         where b.epr_return_id=$1
-        for update of b,eo
-        for share of m,a,rf,c,e,v,mv`, [returnId]);
+        for update of b,eo,rf
+        for share of m,a,c,e,v,mv`, [returnId]);
       const binding = bindingResult.rows[0];
       if (!binding || binding.obligation_id !== row.obligation_id || binding.evidence_id !== evidenceId || binding.verification_id !== verificationId || binding.category_code !== binding.obligation_category_code
           || String(binding.period_start).slice(0,10) !== String(binding.return_period_start).slice(0,10)
@@ -278,6 +278,15 @@ export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool |
           || binding.rules?.eprBinding?.unitCode !== binding.unit_code) {
         await client.query("ROLLBACK");
         return reply.code(409).send({ error: "A current, unconsumed authoritative quantity binding matching the return is required", code: "EPR_AUTHORITATIVE_BINDING_REQUIRED", productionGate: "HOLD" });
+      }
+      // The resource-flow row is locked above, serializing this final mass-balance
+      // check against concurrent quantity-binding allocations on the same flow.
+      const currentFlowCapacity = await client.query(`select coalesce(sum(measured_quantity),0) <= $2::numeric as within_capacity
+        from epr_return_quantity_bindings where resource_flow_id=$1`,
+        [binding.resource_flow_id, binding.current_flow_declared_quantity]);
+      if (currentFlowCapacity.rows[0]?.within_capacity !== true) {
+        await client.query("ROLLBACK");
+        return reply.code(409).send({ error: "Current quantity bindings exceed the resource flow's declared quantity; reconciliation is required", code: "EPR_FLOW_MASS_BALANCE_EXCEEDED" });
       }
       // Lock the authority rows until the EPR submission commits. Without these
       // row locks, a membership revocation, role change, or identity suspension
