@@ -129,3 +129,39 @@ test("schema records source-register states and requires source validation metad
   const missingSourceValidation = { ...validRecord, source_requirement: Object.fromEntries(Object.entries(validRecord.source_requirement).filter(([key]) => key !== "source_validation")) };
   assert.equal(validate(missingSourceValidation), false);
 });
+
+test("source validation status and SHA-256 format are constrained by the schema", () => {
+  for (const status of ["DISCOVERY_SOURCE", "NOT_ARCHIVED_HASH_PENDING", "CURRENT_VERSION_MUST_BE_RECONFIRMED", "UNRESOLVED"]) {
+    const candidate = {
+      ...validRecord,
+      source_requirement: {
+        ...validRecord.source_requirement,
+        source_validation: { status, source_id: "TEST-SOURCE-001", sha256: null },
+      },
+    };
+    // The schema records research states; the runtime evaluator blocks them.
+    assert.equal(validate(candidate), true, `schema should record state ${status}`);
+  }
+
+  for (const sha256 of ["not-a-hash", "a".repeat(63), "g".repeat(64), "a".repeat(65)]) {
+    const candidate = {
+      ...validRecord,
+      source_requirement: {
+        ...validRecord.source_requirement,
+        source_validation: { status: "VERIFIED_AND_APPROVED", source_id: "TEST-SOURCE-001", sha256 },
+      },
+    };
+    assert.equal(validate(candidate), false, `schema should reject SHA-256 value: ${sha256}`);
+  }
+
+  for (const status of ["APPROVED", "verified", "", null]) {
+    const candidate = {
+      ...validRecord,
+      source_requirement: {
+        ...validRecord.source_requirement,
+        source_validation: { status, source_id: "TEST-SOURCE-001", sha256: "a".repeat(64) },
+      },
+    };
+    assert.equal(validate(candidate), false, `schema should reject source status: ${status}`);
+  }
+});
