@@ -59,6 +59,21 @@ The BEE public ACVA register reports **Last Updated On 21 October 2026** and lis
 4. A local RupayKg verification record remains an internal workflow state until the required authorized verifier and applicable authoritative registry/process evidence are present. Never equate an ACVA register entry with a project's validation, verification, or CCC issuance.
 5. Download and hash the actual register/document where technically possible; until retained evidence is attached, this remains a source-page observation rather than an immutable audit artifact.
 
+## 3B. Freshness discrepancy — plastic packaging EPR and BEE waste methodologies
+
+The current CPCB plastic-waste portal page lists Plastic Waste Management (Amendment) Rules for 2023, 2024, 2025 and 2026. This is a source-discovery finding only; the page listing does not establish which provisions apply to a particular actor or reporting period.
+
+- CPCB plastic EPR portal: https://pwm.cpcb.gov.in/
+
+**Engineering gates:** obtain each applicable Gazette notification and amendments, archive the exact documents and SHA-256 hashes, resolve commencement/transitional clauses, and map actor/category/financial-year applicability before activating targets or certificate calculations. Keep the portal's document index distinct from the operative legal instrument and from actual CPCB filing/acceptance.
+
+A second freshness discrepancy was identified in the BEE Offset Mechanism methodology listing. The current visible BEE page lists BM WA03.001 (landfill methane recovery) and BM WA03.002 (flaring or use of landfill gas) under Waste Handling and Disposal; BM WA03.003 was not visible in the current list during this check. Earlier notes in this branch described BM WA03.003 as currently listed. That assertion is now treated as **unconfirmed**, not as an approved-methodology fact.
+
+- BEE live methodology listing: https://beeindia.gov.in/view_content.php?lang=1&lid=571
+- BEE Offset Mechanism procedure and methodologies page: https://beeindia.gov.in/show_content.php?lang=1&level=2&lid=640&ls_id=737
+
+**Engineering gates:** do not allow a project to select BM WA03.003 based solely on the earlier note or an internal catalogue. Confirm a current official listing and exact approved methodology document, archive and hash it, record version/effective date, and obtain domain review. Until then, fail closed for that methodology identifier. This is a registry-freshness discrepancy, not proof that the methodology was formally withdrawn.
+
 ## 4. Release implications
 
 | Control | Current engineering disposition |
