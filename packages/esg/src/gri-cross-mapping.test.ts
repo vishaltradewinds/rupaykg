@@ -268,3 +268,38 @@ test("missing source-register identity, archive hash or verification timestamp f
     assert.equal(result.creditEligibilityConclusion, "NOT_CHANGED");
   }
 });
+
+test("trusted source binding requires exact registry identity, URL, version and archive hash", async () => {
+  const { validateGriSourceBinding } = await import("./gri-cross-mapping.js");
+  const trusted = {
+    sourceId: "CPCB-SWM-2026",
+    canonicalUrl: "https://cpcb.nic.in/solid-waste/",
+    version: "2026-01",
+    sha256: "b".repeat(64),
+    validationStatus: "VERIFIED_AND_APPROVED" as const,
+  };
+  const submitted = {
+    sourceId: trusted.sourceId,
+    sourceUrl: trusted.canonicalUrl,
+    sourceVersion: trusted.version,
+    sha256: trusted.sha256,
+  };
+
+  assert.deepEqual(validateGriSourceBinding(submitted, trusted), { valid: true, blockers: [] });
+
+  const cases = [
+    { ...submitted, sourceId: "ATTACKER-CONTROLLED-ID" },
+    { ...submitted, sourceUrl: "https://cpcb.nic.in.attacker.invalid/solid-waste/" },
+    { ...submitted, sourceVersion: "old-version" },
+    { ...submitted, sha256: "c".repeat(64) },
+    { ...submitted, sha256: null },
+  ];
+  for (const candidate of cases) {
+    const result = validateGriSourceBinding(candidate, trusted);
+    assert.equal(result.valid, false);
+    assert.ok(result.blockers.length > 0);
+  }
+
+  assert.ok(validateGriSourceBinding(submitted, null).blockers.includes("TRUSTED_SOURCE_REGISTER_RECORD_NOT_FOUND"));
+  assert.ok(validateGriSourceBinding(submitted, { ...trusted, validationStatus: "UNRESOLVED" }).blockers.includes("TRUSTED_SOURCE_REGISTER_RECORD_NOT_APPROVED"));
+});
