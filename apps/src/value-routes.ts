@@ -10,6 +10,15 @@ type Request = { body: unknown; params: Record<string, string>; log: { error: (e
 function bodyOf(request: Request): Record<string, unknown> { return request.body && typeof request.body === "object" ? request.body as Record<string, unknown> : {}; }
 function str(body: Record<string, unknown>, key: string): string | null { return typeof body[key] === "string" && body[key].trim() ? body[key].trim() : null; }
 function nonNegative(body: Record<string, unknown>, key: string): number | null { const n = Number(body[key]); return Number.isFinite(n) && n >= 0 ? n : null; }
+export function normalizeEsgMetricMetadata(input: unknown): Record<string, unknown> {
+  const metadata = input && typeof input === "object" && !Array.isArray(input) ? { ...(input as Record<string, unknown>) } : {};
+  const declaredAssurance = typeof metadata.assuranceStatus === "string" ? metadata.assuranceStatus : typeof metadata.assurance_status === "string" ? metadata.assurance_status : undefined;
+  delete metadata.assuranceStatus;
+  delete metadata.assurance_status;
+  delete metadata.declaredAssuranceStatus;
+  delete metadata.declared_assurance_status;
+  return { ...metadata, assuranceStatus: "DECLARED_UNVERIFIED", ...(declaredAssurance ? { declaredAssuranceStatus: declaredAssurance } : {}) };
+}
 async function authFor(request: Request, reply: Reply, pool: Pool | null): Promise<AuthContext | null> { try { const auth = await authenticate(request as never, pool); if (!auth) { reply.code(401).send({ error: "Authenticated session required", code: "AUTH_REQUIRED" }); return null; } return auth; } catch (error) { request.log.error(error); reply.code(503).send({ error: "Authentication service unavailable", code: "AUTH_UNAVAILABLE" }); return null; } }
 async function activityAccess(client: Pool | PoolClient, activityId: string, identityId: string): Promise<{ organization_id: string; geography_id: string | null } | null> { const result = await client.query<{ organization_id: string; geography_id: string | null }>(`select a.organization_id, a.geography_id from activities a join organization_memberships om on om.organization_id = a.organization_id where a.id = $1 and om.identity_id = $2 and om.status = 'VERIFIED'`, [activityId, identityId]); return result.rows[0] ?? null; }
 async function assertActivityGeographyScope(client: Pool | PoolClient, geographyId: string | null, identityId: string): Promise<{ ok: boolean; code?: string }> { if (!geographyId) return { ok: false, code: "ACTIVITY_GEOGRAPHY_REQUIRED" }; const result = await client.query<{ ok: boolean }>(`select exists(select 1 from organization_memberships om where om.identity_id = $1 and om.status = 'VERIFIED' and organization_has_geography_scope(om.organization_id, $2)) as ok`, [identityId, geographyId]); return result.rows[0]?.ok === true ? { ok: true } : { ok: false, code: "GEOGRAPHY_FORBIDDEN" }; }
@@ -88,10 +97,7 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
         const verified = await pool.query("select 1 from verifications where id = $1 and evidence_id = $2 and decision = 'APPROVED'", [verificationId, evidenceId]);
         if (!verified.rows[0]) return reply.code(409).send({ error: "Verification is not an approved verification for the supplied evidence", code: "VERIFICATION_INVALID" });
       }
-      const suppliedMetadata = body.metadata && typeof body.metadata === "object" && !Array.isArray(body.metadata) ? body.metadata as Record<string, unknown> : {};
-      const declaredAssurance = typeof suppliedMetadata.assuranceStatus === "string" ? suppliedMetadata.assuranceStatus : typeof suppliedMetadata.assurance_status === "string" ? suppliedMetadata.assurance_status : undefined;
-      const { assuranceStatus: _assuranceStatus, assurance_status: _assuranceStatusSnake, declaredAssuranceStatus: _declaredAssuranceStatus, declared_assurance_status: _declaredAssuranceStatusSnake, ...otherMetadata } = suppliedMetadata;
-      const persistedMetadata = { ...otherMetadata, assuranceStatus: "DECLARED_UNVERIFIED", ...(declaredAssurance ? { declaredAssuranceStatus: declaredAssurance } : {}) };
+      const persistedMetadata = normalizeEsgMetricMetadata(body.metadata);
       const inserted = await pool.query("insert into esg_metrics (reporting_period_id, metric_code, scope, value, unit, evidence_id, verification_id, status, metadata) values ($1,$2,$3,$4,$5,$6,$7,$8,$9) returning *", [periodId, metricCode, scope, value, unit, evidenceId, verificationId, state, persistedMetadata]);
       return reply.code(201).send({ source: "postgresql", syntheticData: false, metric: inserted.rows[0], state });
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "ESG metric recording unavailable", syntheticData: false }); }
