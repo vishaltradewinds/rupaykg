@@ -11,11 +11,11 @@ test("remote endpoints require HTTPS and embedded credentials are rejected", () 
   assert.equal(readAgenticModelConfig({ RUPAYKG_AGENTIC_MODEL_ENABLED: "true", RUPAYKG_AGENTIC_MODEL_BASE_URL: "http://example.com", RUPAYKG_AGENTIC_MODEL_NAME: "model" }), null);
   assert.equal(readAgenticModelConfig({ RUPAYKG_AGENTIC_MODEL_ENABLED: "true", RUPAYKG_AGENTIC_MODEL_BASE_URL: "https://user:pass@example.com", RUPAYKG_AGENTIC_MODEL_NAME: "model" }), null);
 });
-test("local HTTP inference endpoint is development-only", () => {
+test("local HTTP inference endpoint requires explicit development mode", () => {
   const env = { RUPAYKG_AGENTIC_MODEL_ENABLED: "true", RUPAYKG_AGENTIC_MODEL_BASE_URL: "http://127.0.0.1:11434", RUPAYKG_AGENTIC_MODEL_NAME: "qwen" };
-  const config = readAgenticModelConfig(env);
-  assert.equal(config?.model, "qwen");
+  assert.equal(readAgenticModelConfig(env), null);
   assert.equal(readAgenticModelConfig({ ...env, NODE_ENV: "production" }), null);
+  assert.equal(readAgenticModelConfig({ ...env, NODE_ENV: "development" })?.model, "qwen");
 });
 test("disabled adapter never calls provider", async () => {
   let called = false;
