@@ -18,9 +18,11 @@ export function readAgenticModelConfig(env: NodeJS.ProcessEnv = process.env): Ag
   if (!baseUrl || !model) return null;
   let parsed: URL;
   try { parsed = new URL(baseUrl); } catch { return null; }
-  const localHost = ["localhost", "127.0.0.1", "[::1]"].includes(parsed.hostname);
+  const localHost = ["localhost", "127.0.0.1", "[::1]"].includes(parsed.hostname.toLowerCase());
   if (parsed.username || parsed.password || parsed.search || parsed.hash) return null;
-  if (parsed.protocol !== "https:" && !(parsed.protocol === "http:" && localHost)) return null;
+  const secureRemote = parsed.protocol === "https:";
+  const localDevelopment = env.NODE_ENV !== "production" && parsed.protocol === "http:" && localHost;
+  if (!secureRemote && !localDevelopment) return null;
   const timeout = Number(env.RUPAYKG_AGENTIC_MODEL_TIMEOUT_MS ?? "8000");
   return {
     enabled: true,
@@ -29,6 +31,41 @@ export function readAgenticModelConfig(env: NodeJS.ProcessEnv = process.env): Ag
     ...(env.RUPAYKG_AGENTIC_MODEL_API_KEY ? { apiKey: env.RUPAYKG_AGENTIC_MODEL_API_KEY } : {}),
     timeoutMs: Number.isInteger(timeout) && timeout >= 1000 && timeout <= 20000 ? timeout : 8000,
   };
+}
+
+const MAX_MODEL_RESPONSE_BYTES = 256 * 1024;
+
+async function readBoundedBody(response: Response): Promise<string> {
+  const declaredLength = Number(response.headers.get("content-length") || "0");
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_MODEL_RESPONSE_BYTES) {
+    await response.body?.cancel().catch(() => undefined);
+    throw new Error("MODEL_RESPONSE_TOO_LARGE");
+  }
+  if (!response.body) return "";
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > MAX_MODEL_RESPONSE_BYTES) {
+        await reader.cancel().catch(() => undefined);
+        throw new Error("MODEL_RESPONSE_TOO_LARGE");
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
 }
 
 export async function explainAgenticPlan(
@@ -61,7 +98,13 @@ export async function explainAgenticPlan(
       }),
     });
     if (!response.ok) return { status: "UNAVAILABLE", explanation: null };
-    const payload: unknown = await response.json();
+    let payload: unknown;
+    try {
+      const body = await readBoundedBody(response);
+      payload = JSON.parse(body);
+    } catch {
+      return { status: "UNAVAILABLE", explanation: null };
+    }
     if (!payload || typeof payload !== "object") return { status: "UNAVAILABLE", explanation: null };
     const choices = (payload as { choices?: unknown }).choices;
     if (!Array.isArray(choices) || !choices.length || !choices[0] || typeof choices[0] !== "object") return { status: "UNAVAILABLE", explanation: null };
