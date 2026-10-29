@@ -222,3 +222,49 @@ test("verified source status without a valid SHA-256 still blocks", () => {
   assert.equal(result.decision, "BLOCKED");
   assert.ok(result.blockers.includes("AUTHORITATIVE_SOURCE_NOT_VERIFIED_AND_ARCHIVED"));
 });
+test("HTTPS source URLs with embedded credentials are rejected", () => {
+  const result = evaluateGriCrossMappingForReview({
+    ...validReviewInput,
+    sourceRequirement: {
+      ...validReviewInput.sourceRequirement,
+      sourceUrl: "https://trusted.example@attacker.invalid/regulation",
+    },
+  });
+  assert.equal(result.decision, "BLOCKED");
+  assert.ok(result.blockers.includes("SOURCE_URL_INVALID"));
+  assert.equal(result.complianceConclusion, "NOT_CHANGED");
+  assert.equal(result.creditEligibilityConclusion, "NOT_CHANGED");
+});
+
+test("missing source-register identity, archive hash or verification timestamp fails closed", () => {
+  const cases = [
+    {
+      sourceRequirement: {
+        ...validReviewInput.sourceRequirement,
+        sourceValidation: { status: "VERIFIED_AND_APPROVED" as const, sourceId: " ", sha256: "a".repeat(64) },
+      },
+      blocker: "SOURCE_REGISTER_ID_REQUIRED",
+    },
+    {
+      sourceRequirement: {
+        ...validReviewInput.sourceRequirement,
+        sourceValidation: { status: "VERIFIED_AND_APPROVED" as const, sourceId: "CPCB-SWM-RULES-2026", sha256: null },
+      },
+      blocker: "AUTHORITATIVE_SOURCE_NOT_VERIFIED_AND_ARCHIVED",
+    },
+    {
+      sourceRequirement: {
+        ...validReviewInput.sourceRequirement,
+        officialSourceVerifiedAt: null,
+      },
+      blocker: "OFFICIAL_SOURCE_VERIFICATION_REQUIRED",
+    },
+  ];
+  for (const item of cases) {
+    const result = evaluateGriCrossMappingForReview({ ...validReviewInput, sourceRequirement: item.sourceRequirement });
+    assert.equal(result.decision, "BLOCKED");
+    assert.ok(result.blockers.includes(item.blocker));
+    assert.equal(result.complianceConclusion, "NOT_CHANGED");
+    assert.equal(result.creditEligibilityConclusion, "NOT_CHANGED");
+  }
+});
