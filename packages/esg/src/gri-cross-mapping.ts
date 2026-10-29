@@ -219,6 +219,10 @@ export type TrustedGriSourceRegistryRecord = {
   version: string;
   sha256: string;
   validationStatus: GriSourceValidationStatus;
+  /** Registry-wide activation gate; research-only registries must never authorize mappings. */
+  registryStatus: "RESEARCH_ONLY" | "ACTIVE" | "SUSPENDED";
+  effectiveFrom?: string | null;
+  effectiveTo?: string | null;
 };
 
 export type GriSourceBindingInput = {
@@ -237,8 +241,20 @@ export function validateGriSourceBinding(
     blockers.push("TRUSTED_SOURCE_REGISTER_RECORD_NOT_FOUND");
     return { valid: false, blockers };
   }
+  if (trusted.registryStatus !== "ACTIVE") {
+    blockers.push("TRUSTED_SOURCE_REGISTER_NOT_ACTIVE");
+  }
   if (trusted.validationStatus !== "VERIFIED_AND_APPROVED") {
     blockers.push("TRUSTED_SOURCE_REGISTER_RECORD_NOT_APPROVED");
+  }
+  if (trusted.effectiveFrom != null && !/^\\d{4}-\\d{2}-\\d{2}$/.test(trusted.effectiveFrom)) {
+    blockers.push("TRUSTED_SOURCE_EFFECTIVE_FROM_INVALID");
+  }
+  if (trusted.effectiveTo != null && !/^\\d{4}-\\d{2}-\\d{2}$/.test(trusted.effectiveTo)) {
+    blockers.push("TRUSTED_SOURCE_EFFECTIVE_TO_INVALID");
+  }
+  if (trusted.effectiveFrom && trusted.effectiveTo && trusted.effectiveFrom > trusted.effectiveTo) {
+    blockers.push("TRUSTED_SOURCE_EFFECTIVE_DATE_RANGE_INVALID");
   }
   if (!/^[a-fA-F0-9]{64}$/.test(trusted.sha256)) {
     blockers.push("TRUSTED_SOURCE_REGISTER_HASH_INVALID");
