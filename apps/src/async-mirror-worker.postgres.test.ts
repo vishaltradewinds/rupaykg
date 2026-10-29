@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { Pool } from "pg";
 import { canonicalGovBridgeHash } from "./government-inbox-hash.js";
 import { runGovernmentInboxWorker } from "./async-mirror-worker.js";
@@ -137,12 +139,16 @@ test("real government inbox worker obeys PostgreSQL status constraints and prese
     const oldState = await pool.query("select status from async_mirror_inbox where id=$1", [oldSchemaId]);
     assert.equal(oldState.rows[0]?.status, "RETRY");
 
-    // Corrective constraint is a test-only disposable schema change, not a live migration.
-    await pool.query(`
-      alter table async_mirror_inbox drop constraint async_mirror_inbox_status_check;
-      alter table async_mirror_inbox add constraint async_mirror_inbox_status_check
-        check (status in ('RECEIVED','PROCESSING','PROCESSED','VALIDATED','REJECTED','RETRY','QUARANTINED','UNRESOLVED'));
-    `);
+    // Apply the exact proposed forward-migration source to this disposable schema.
+    // This validates the migration's SQL and the real worker together; it does
+    // not apply the migration to production/staging or authorize release.
+    const migrationCandidates = [
+      resolve(process.cwd(), "migrations/20261101_async_mirror_unresolved_crosswalk.sql"),
+      resolve(process.cwd(), "../migrations/20261101_async_mirror_unresolved_crosswalk.sql"),
+    ];
+    const migrationPath = migrationCandidates.find((candidate) => existsSync(candidate));
+    assert.ok(migrationPath, "corrective migration source must exist in the test checkout");
+    await pool.query(readFileSync(migrationPath, "utf8"));
     const correctedSchemaId = await insertInbox();
     const correctedResult = await runGovernmentInboxWorker(pool, undefined, { batchSize: 1, maxAttempts: 5 });
     assert.equal(correctedResult.claimed, 1);
