@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import type { Pool, PoolClient } from "pg";
 import { calculateEmissionReduction, isGenericCalculationMethodAllowed, sha256Canonical } from "@rupaykg/carbon";
 import { assessEprObligation } from "@rupaykg/compliance";
-import { classifyMetric } from "@rupaykg/esg";
+import { classifyMetric, type AuthoritativeEsgVerification } from "@rupaykg/esg";
 import { authenticate, canActForOrganization, hasOrganizationPermission, type AuthContext } from "./auth.js";
 import { registerAuthRoutes } from "./auth-routes.js";
 
@@ -83,21 +83,65 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
       const organizationId = period.rows[0].organization_id;
       if (!canActForOrganization(auth, organizationId)) return reply.code(403).send({ error: "Organization access denied", code: "ORG_FORBIDDEN" });
       if (!await hasValuePermission(pool, "can_write_esg", auth.identityId, organizationId)) return reply.code(403).send({ error: "ESG metric write permission required", code: "ESG_WRITE_FORBIDDEN" });
-      const evidenceId = str(body, "evidenceId"); const verificationId = str(body, "verificationId");
+      const evidenceId = str(body, "evidenceId"); const verificationId = str(body, "verificationId"); const methodologyVersionId = str(body, "methodologyVersionId");
       if (verificationId && !evidenceId) return reply.code(400).send({ error: "verificationId requires evidenceId" });
+      if (methodologyVersionId && !evidenceId) return reply.code(400).send({ error: "methodologyVersionId requires evidenceId", code: "ESG_METHODOLOGY_REQUIRES_EVIDENCE" });
       const metric = { code: metricCode, scope, value, unit, ...(evidenceId ? { evidenceId } : {}), ...(verificationId ? { verificationId } : {}) };
-      const state = classifyMetric(metric);
+      let authoritativeVerification: AuthoritativeEsgVerification | undefined;
+      let persistedMethodologyVersionId: string | null = null;
       if (evidenceId) {
-        const evidence = await pool.query<{ activity_id: string | null; status: string }>(`select e.activity_id, e.status from evidence e left join activities a on a.id=e.activity_id where e.id=$1 and a.organization_id=$2 and a.geography_id is not null and organization_has_geography_scope($2,a.geography_id)`, [evidenceId, organizationId]);
-        if (!evidence.rows[0]) return reply.code(403).send({ error: "Evidence is outside organization authorization scope", code: "EVIDENCE_FORBIDDEN" });
-        if (evidence.rows[0].status !== "VERIFIED") return reply.code(409).send({ error: "Evidence must be verified before ESG metric recording", code: "EVIDENCE_NOT_VERIFIED" });
+        const source = await pool.query<{
+          evidence_id: string; evidence_status: string; content_hash: string | null; content_uri: string | null;
+          evidence_org: string; geography_id: string | null; occurred_at: Date | null; measured_at: Date | null;
+          verification_id: string | null; verification_decision: string | null; verifier_identity_id: string | null;
+          methodology_version_id: string | null; effective_from: Date | null; rules: Record<string, unknown> | null;
+          period_start: Date; period_end: Date; framework: string; geography_matches: boolean; period_matches: boolean;
+        }>(`select e.id as evidence_id,e.status as evidence_status,e.content_hash,e.content_uri,a.organization_id as evidence_org,a.geography_id,a.occurred_at,m.measured_at,
+            v.id as verification_id,v.decision as verification_decision,v.verifier_identity_id,
+            mv.id as methodology_version_id,mv.effective_from,mv.rules,rp.period_start,rp.period_end,rp.framework,
+            (a.geography_id is not null and organization_has_geography_scope(rp.organization_id,a.geography_id)) as geography_matches,
+            (coalesce(m.measured_at,a.occurred_at)::date between rp.period_start and rp.period_end) as period_matches
+          from evidence e join activities a on a.id=e.activity_id
+          left join measurements m on m.id=e.measurement_id
+          join esg_reporting_periods rp on rp.id=$5
+          left join verifications v on v.id=$3 and v.evidence_id=e.id
+          left join methodology_versions mv on mv.id=$4
+          where e.id=$1 and rp.organization_id=$2`, [evidenceId, organizationId, verificationId, methodologyVersionId, periodId]);
+        const persisted = source.rows[0];
+        if (!persisted || persisted.evidence_org !== organizationId || !persisted.geography_matches) return reply.code(403).send({ error: "Evidence is outside organization or geography authorization scope", code: "EVIDENCE_FORBIDDEN" });
+        if (persisted.evidence_status !== "VERIFIED") return reply.code(409).send({ error: "Evidence must be verified before ESG metric recording", code: "EVIDENCE_NOT_VERIFIED" });
+        if (verificationId && (!persisted.verification_id || persisted.verification_decision !== "APPROVED")) return reply.code(409).send({ error: "Verification is not an approved persisted verification for the supplied evidence", code: "VERIFICATION_INVALID" });
+        if (methodologyVersionId && !persisted.methodology_version_id) return reply.code(409).send({ error: "ESG methodology version is not registered", code: "ESG_METHODOLOGY_NOT_REGISTERED" });
+        persistedMethodologyVersionId = persisted.methodology_version_id;
+        let verifierCurrentlyAuthorized = false;
+        if (persisted.verifier_identity_id && persisted.geography_id) {
+          const verifier = await pool.query<{ ok: boolean }>(`select exists(select 1 from organization_memberships om join roles r on r.id=om.role_id
+            where om.identity_id=$1 and om.status='VERIFIED' and organization_has_geography_scope(om.organization_id,$2)
+              and exists(select 1 from jsonb_array_elements_text(r.permissions) p where p=any($3::text[]))) as ok`, [persisted.verifier_identity_id, persisted.geography_id, ["VERIFY_EVIDENCE", "verification:approve", "verification.approve"]]);
+          verifierCurrentlyAuthorized = verifier.rows[0]?.ok === true;
+        }
+        const rules = persisted.rules as { esgBinding?: { framework?: string; metricCode?: string; scope?: string; unitCode?: string } } | null;
+        const methodologyMatches = Boolean(persisted.methodology_version_id && persisted.effective_from
+          && new Date(persisted.effective_from) <= new Date(persisted.period_start)
+          && rules?.esgBinding?.framework === persisted.framework
+          && rules?.esgBinding?.metricCode === metricCode
+          && rules?.esgBinding?.scope === scope
+          && rules?.esgBinding?.unitCode === unit);
+        authoritativeVerification = {
+          evidencePersisted: true,
+          evidenceApproved: persisted.evidence_status === "VERIFIED" && Boolean(persisted.content_hash || persisted.content_uri),
+          verificationPersisted: Boolean(persisted.verification_id && persisted.verification_decision === "APPROVED"),
+          verifierCurrentlyAuthorized,
+          organizationMatches: persisted.evidence_org === organizationId,
+          geographyMatches: persisted.geography_matches,
+          reportingPeriodMatches: persisted.period_matches,
+          methodologyMatches,
+          evidenceCurrentAndNotRevoked: persisted.evidence_status === "VERIFIED",
+        };
       }
-      if (verificationId) {
-        const verified = await pool.query("select 1 from verifications where id = $1 and evidence_id = $2 and decision = 'APPROVED'", [verificationId, evidenceId]);
-        if (!verified.rows[0]) return reply.code(409).send({ error: "Verification is not an approved verification for the supplied evidence", code: "VERIFICATION_INVALID" });
-      }
-      const inserted = await pool.query("insert into esg_metrics (reporting_period_id, metric_code, scope, value, unit, evidence_id, verification_id, status, metadata) values ($1,$2,$3,$4,$5,$6,$7,$8,$9) returning *", [periodId, metricCode, scope, value, unit, evidenceId, verificationId, state, body.metadata ?? {}]);
-      return reply.code(201).send({ source: "postgresql", syntheticData: false, metric: inserted.rows[0], state });
+      const state = classifyMetric(metric, authoritativeVerification);
+      const inserted = await pool.query("insert into esg_metrics (reporting_period_id, metric_code, scope, value, unit, evidence_id, verification_id, methodology_version_id, status, metadata) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) returning *", [periodId, metricCode, scope, value, unit, evidenceId, verificationId, persistedMethodologyVersionId, state, body.metadata ?? {}]);
+      return reply.code(201).send({ source: "postgresql", syntheticData: false, metric: inserted.rows[0], state, verification: authoritativeVerification ?? null });
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "ESG metric recording unavailable", syntheticData: false }); }
   });
 
