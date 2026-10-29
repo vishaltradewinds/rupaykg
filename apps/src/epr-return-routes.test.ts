@@ -253,7 +253,8 @@ test("EPR submission fails closed when current verifier authority is absent and 
       measurement_id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
       custody_link_id: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
     }] };
-    if (sql.includes("from organization_memberships om") && sql.includes("for share of om, r, i")) return { rows: [] };
+    if (sql.includes("for share of om, r, i") && sql.includes("om.organization_id=$2")) return { rows: [{ identity_id: identityId }] };
+    if (sql.includes("for share of om, r, i") && sql.includes("om.organization_id=$4")) return { rows: [] };
     throw new Error(`Unexpected client SQL in verifier authority test: ${sql}`);
   };
   const pool = {
@@ -317,7 +318,8 @@ test("EPR quantity binding rejects a verifier outside the return organization an
       verification_evidence_id: evidenceId,
     }] };
     if (sql.includes("select coalesce(sum(measured_quantity),0)+$2::numeric")) return { rows: [{ within_capacity: true }] };
-    if (sql.includes("for share of om, r, i")) return { rows: [] };
+    if (sql.includes("for share of om, r, i") && sql.includes("om.organization_id=$2")) return { rows: [{ identity_id: identityId }] };
+    if (sql.includes("for share of om, r, i") && sql.includes("om.organization_id=$4")) return { rows: [] };
     throw new Error(`Unexpected client SQL in quantity-binding verifier test: ${sql}`);
   };
   const pool = {
@@ -410,7 +412,8 @@ test("EPR submission rejects resource-flow over-allocation before consuming bind
       measurement_id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
       custody_link_id: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
     }] };
-    if (sql.includes("from organization_memberships om") && sql.includes("for share of om, r, i")) return { rows: [] };
+    if (sql.includes("for share of om, r, i") && sql.includes("om.organization_id=$2")) return { rows: [{ identity_id: identityId }] };
+    if (sql.includes("for share of om, r, i") && sql.includes("om.organization_id=$4")) return { rows: [] };
     throw new Error(`Unexpected client SQL in verifier authority test: ${sql}`);
   };
   const pool = {
