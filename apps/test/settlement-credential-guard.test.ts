@@ -98,40 +98,59 @@ describe("settlement credential lifecycle database guards", () => {
 
   it("fails closed when a newer eligibility review rejects an earlier approval", async () => {
     if (!pool) return;
-    const context = (await pool.query<{
-      activity_id: string; verification_id: string; evidence_id: string;
-      methodology_version_id: string; geography_id: string; reviewer_identity_id: string;
+    const source = (await pool.query<{
+      activity_id: string; issuer_organization_id: string; trust_root_id: string;
+      verification_id: string; evidence_id: string; methodology_version_id: string;
+      geography_id: string; reviewer_identity_id: string; methodology_code: string;
     }>(
-      `select d.activity_id,d.verification_id,d.evidence_id,d.methodology_version_id,d.geography_id,d.reviewer_identity_id
-         from activity_registry_eligibility_decisions d
-         join credentials c on c.activity_id=d.activity_id and c.verification_id=d.verification_id
+      `select c.activity_id,c.issuer_organization_id,c.trust_root_id,c.verification_id,
+              v.evidence_id,c.methodology_version_id,d.geography_id,d.reviewer_identity_id,mv.methodology_code
+         from credentials c
+         join verifications v on v.id=c.verification_id
+         join activity_registry_eligibility_decisions d on d.activity_id=c.activity_id and d.verification_id=c.verification_id
+         join methodology_versions mv on mv.id=c.methodology_version_id
         where c.id=$1
-        order by d.created_at desc,d.id desc limit 1`,
+        order by d.decision_sequence desc limit 1`,
       [openSettlementCredentialId],
     )).rows[0]!;
+    const verificationId = (await pool.query<{id:string}>(
+      `insert into verifications(evidence_id,activity_id,verifier_identity_id,decision,scope,rationale)
+       values($1,$2,$3,'APPROVED','eligibility-supersession-test','TEST FIXTURE ONLY - supersession regression') returning id`,
+      [source.evidence_id,source.activity_id,source.reviewer_identity_id],
+    )).rows[0]!.id;
+    await pool.query(
+      `insert into mrv_provenance_events
+       (activity_id,verification_id,evidence_id,methodology_code,guardian_policy_id,guardian_execution_id,
+        guardian_status,hcs_status,hcs_topic_id,hcs_transaction_id,hcs_consensus_timestamp,integrity_hash,metadata,mirror_node_verified_at)
+       values($1,$2,$3,$4,'supersession-test-policy',$5,'VERIFIED','CONSENSUS_CONFIRMED','0.0.123',$6,$7,$8,'{"testFixture":true}'::jsonb,clock_timestamp())`,
+      [source.activity_id,verificationId,source.evidence_id,source.methodology_code,
+       `supersession-guardian-${suffix}`,`supersession-tx-${suffix}`,`1700000000.${suffix.slice(0,9)}`,`supersession-hash-${suffix}`],
+    );
+    await pool.query(
+      `insert into activity_registry_eligibility_decisions
+       (activity_id,verification_id,evidence_id,methodology_version_id,geography_id,decision,
+        statutory_basis,permit_and_authority_evidence,applicability_rationale,
+        independent_review_reference,reviewer_identity_id,effective_from)
+       values($1,$2,$3,$4,$5,'APPROVED',$6::jsonb,$7::jsonb,$8,$9,$10,current_date)`,
+      [source.activity_id,verificationId,source.evidence_id,source.methodology_version_id,source.geography_id,
+       JSON.stringify({testFixture:true}),JSON.stringify([{testFixture:true}]),
+       "TEST FIXTURE ONLY - initial approval for supersession test",`initial-review-${suffix}`,source.reviewer_identity_id],
+    );
+    const candidateId = (await pool.query<{id:string}>(
+      `insert into credentials(activity_id,issuer_organization_id,trust_root_id,status,verification_id,methodology_version_id,quantity,unit,issued_at)
+       values($1,$2,$3,'ELIGIBLE',$4,$5,1,'kg',now()) returning id`,
+      [source.activity_id,source.issuer_organization_id,source.trust_root_id,verificationId,source.methodology_version_id],
+    )).rows[0]!.id;
     await pool.query(
       `insert into activity_registry_eligibility_decisions
        (activity_id,verification_id,evidence_id,methodology_version_id,geography_id,decision,
         statutory_basis,permit_and_authority_evidence,applicability_rationale,
         independent_review_reference,reviewer_identity_id,effective_from)
        values($1,$2,$3,$4,$5,'REQUIRES_REVIEW',$6::jsonb,$7::jsonb,$8,$9,$10,current_date)`,
-      [context.activity_id,context.verification_id,context.evidence_id,context.methodology_version_id,
-       context.geography_id,JSON.stringify({testFixture:true}),JSON.stringify([{testFixture:true}]),
-       "TEST FIXTURE ONLY - later review requires reassessment",`later-review-${suffix}`,context.reviewer_identity_id],
+      [source.activity_id,verificationId,source.evidence_id,source.methodology_version_id,source.geography_id,
+       JSON.stringify({testFixture:true}),JSON.stringify([{testFixture:true}]),
+       "TEST FIXTURE ONLY - later review requires reassessment",`later-review-${suffix}`,source.reviewer_identity_id],
     );
-    const source = (await pool.query<{
-      activity_id: string; issuer_organization_id: string; trust_root_id: string;
-      verification_id: string; methodology_version_id: string; quantity: string; unit: string;
-    }>(
-      "select activity_id,issuer_organization_id,trust_root_id,verification_id,methodology_version_id,quantity::text,unit from credentials where id=$1",
-      [openSettlementCredentialId],
-    )).rows[0]!;
-    const candidateId = (await pool.query<{id:string}>(
-      `insert into credentials(activity_id,issuer_organization_id,trust_root_id,status,verification_id,methodology_version_id,quantity,unit,issued_at)
-       values($1,$2,$3,'ELIGIBLE',$4,$5,$6,$7,now()) returning id`,
-      [source.activity_id,source.issuer_organization_id,source.trust_root_id,source.verification_id,
-       source.methodology_version_id,source.quantity,source.unit],
-    )).rows[0]!.id;
     const error = await pool.query("update credentials set status='ISSUED' where id=$1", [candidateId])
       .then(() => null).catch((value: unknown) => value);
     assert.ok(error instanceof Error, "newer REQUIRES_REVIEW decision must supersede an older APPROVED decision");
