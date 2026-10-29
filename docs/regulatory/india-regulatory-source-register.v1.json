@@ -178,7 +178,7 @@
       "documentSha256": null,
       "archiveStatus": "NOT_ARCHIVED_HASH_PENDING",
       "applicability": "Only current approved methodology/version and sector can be considered for a project; do not infer eligibility from waste activity alone.",
-      "notes": "The BEE live page was rechecked on 2026-10-29. It lists BM WA03.001 (landfill methane recovery) and BM WA03.002 (flaring or use of landfill gas) under Waste Handling and Disposal; BM WA03.003 was not present in the current visible list at this check. Treat any prior .003 reference as unconfirmed until an official current entry and exact approved methodology document are archived and reviewed. Recheck the live register at release time."
+      "notes": "Official BEE live methodology listing was rechecked on 2026-10-29 and lists BM WA03.001 (landfill methane recovery), BM WA03.002 (flaring or use of landfill gas), and BM WA03.003 (Production of Compressed Bio-gas (CBG)) under Waste Handling and Disposal. The exact current methodology document and applicable procedure/version must still be archived and reviewed before a project-specific eligibility decision; a listing alone does not establish project eligibility or CCC issuance."
     },
     {
       "id": "SEBI-BRSR",
