@@ -73,6 +73,17 @@ export async function registerRegistryRoutes(app:FastifyInstance,pool:Pool|null)
          where d.activity_id=$1 and d.verification_id=$2 and d.evidence_id=$3
            and mv.methodology_code=$4 and mv.governance_status='PRODUCTION_ELIGIBLE'
            and d.geography_id=a.geography_id and d.decision='APPROVED'
+           and d.id = (
+             select latest.id
+               from activity_registry_eligibility_decisions latest
+              where latest.activity_id=d.activity_id
+                and latest.verification_id=d.verification_id
+                and latest.evidence_id=d.evidence_id
+                and latest.methodology_version_id=d.methodology_version_id
+                and latest.geography_id=d.geography_id
+              order by latest.created_at desc, latest.id desc
+              limit 1
+           )
            and d.effective_from<=current_date and (d.effective_to is null or d.effective_to>=current_date)
          order by d.created_at desc limit 1 for share of d,mv,a`,
         [activityId,verificationId,v.rows[0].evidence_id,proof.methodology_code]);
