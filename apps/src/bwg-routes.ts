@@ -17,8 +17,12 @@ export async function registerBwgRoutes(app: FastifyInstance, pool: Pool | null)
     const organizationId = typeof request.headers["x-rupaykg-organization-id"] === "string" ? request.headers["x-rupaykg-organization-id"] : auth.activeOrganizationId;
     if (!organizationId || !auth.memberships.some((membership) => membership.organization_id === organizationId && membership.status === "VERIFIED")) return reply.code(403).send({ error: "Verified organization membership required", code: "ORG_FORBIDDEN" });
     if (!await hasOrganizationPermission(pool, auth, organizationId, ["epr:read", "epr:manage", "reports:read"])) return reply.code(403).send({ error: "EPR obligation read permission required", code: "EPR_OBLIGATION_READ_FORBIDDEN" });
+    const geographyId = requestedGeography(request);
+    if (geographyId && !await authorizeGeography(pool, auth, organizationId, geographyId)) return reply.code(403).send({ error: "Geography outside organization authorization scope", code: "GEOGRAPHY_FORBIDDEN" });
     try {
-      const rows = await pool.query(`select eo.id as epr_obligation_id,eo.obligation_id,eo.scheme_id,s.code as scheme_code,s.name as scheme_name,eo.category_code,eo.target_quantity,eo.fulfilled_quantity,eo.status,o.period_start,o.period_end,o.jurisdiction_id,g.name as jurisdiction_name from epr_obligations eo join epr_schemes s on s.id=eo.scheme_id join obligations o on o.id=eo.obligation_id left join geography g on g.id=o.jurisdiction_id where eo.obligated_organization_id=$1 order by o.period_end desc,eo.id desc limit 100`, [organizationId]);
+      const params: unknown[] = [organizationId];
+      if (geographyId) params.push(geographyId);
+      const rows = await pool.query(`select eo.id as epr_obligation_id,eo.obligation_id,eo.scheme_id,s.code as scheme_code,s.name as scheme_name,eo.category_code,eo.target_quantity,eo.fulfilled_quantity,eo.status,o.period_start,o.period_end,o.jurisdiction_id,g.name as jurisdiction_name from epr_obligations eo join epr_schemes s on s.id=eo.scheme_id join obligations o on o.id=eo.obligation_id left join geography g on g.id=o.jurisdiction_id where eo.obligated_organization_id=$1 and organization_has_geography_scope(eo.obligated_organization_id,o.jurisdiction_id)${geographyId ? " and o.jurisdiction_id=$2" : ""} order by o.period_end desc,eo.id desc limit 100`, params);
       return { source: "postgresql", syntheticData: false, obligations: rows.rows };
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "EPR obligation workspace unavailable", syntheticData: false }); }
   });
