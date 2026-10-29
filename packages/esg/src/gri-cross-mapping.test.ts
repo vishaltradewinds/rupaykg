@@ -277,6 +277,9 @@ test("trusted source binding requires exact registry identity, URL, version and 
     version: "2026-01",
     sha256: "b".repeat(64),
     validationStatus: "VERIFIED_AND_APPROVED" as const,
+    registryStatus: "ACTIVE" as const,
+    effectiveFrom: "2026-04-01",
+    effectiveTo: null,
   };
   const submitted = {
     sourceId: trusted.sourceId,
@@ -302,4 +305,39 @@ test("trusted source binding requires exact registry identity, URL, version and 
 
   assert.ok(validateGriSourceBinding(submitted, null).blockers.includes("TRUSTED_SOURCE_REGISTER_RECORD_NOT_FOUND"));
   assert.ok(validateGriSourceBinding(submitted, { ...trusted, validationStatus: "UNRESOLVED" }).blockers.includes("TRUSTED_SOURCE_REGISTER_RECORD_NOT_APPROVED"));
+});
+
+test("research-only or suspended registries cannot authorize a mapping even when a source record looks approved", async () => {
+  const { validateGriSourceBinding } = await import("./gri-cross-mapping.js");
+  const trusted = {
+    sourceId: "CPCB-SWM-2026",
+    canonicalUrl: "https://cpcb.nic.in/solid-waste/",
+    version: "2026-01",
+    sha256: "b".repeat(64),
+    validationStatus: "VERIFIED_AND_APPROVED" as const,
+    registryStatus: "RESEARCH_ONLY" as const,
+  };
+  const submitted = {
+    sourceId: trusted.sourceId,
+    sourceUrl: trusted.canonicalUrl,
+    sourceVersion: trusted.version,
+    sha256: trusted.sha256,
+  };
+  const researchOnly = validateGriSourceBinding(submitted, trusted);
+  assert.equal(researchOnly.valid, false);
+  assert.ok(researchOnly.blockers.includes("TRUSTED_SOURCE_REGISTER_NOT_ACTIVE"));
+
+  const suspended = validateGriSourceBinding(submitted, { ...trusted, registryStatus: "SUSPENDED" });
+  assert.equal(suspended.valid, false);
+  assert.ok(suspended.blockers.includes("TRUSTED_SOURCE_REGISTER_NOT_ACTIVE"));
+
+  const invalidDates = validateGriSourceBinding(submitted, {
+    ...trusted,
+    registryStatus: "ACTIVE",
+    effectiveFrom: "2026-99-99",
+    effectiveTo: "2026-01-01",
+  });
+  assert.equal(invalidDates.valid, false);
+  assert.ok(invalidDates.blockers.includes("TRUSTED_SOURCE_EFFECTIVE_FROM_INVALID"));
+  assert.ok(invalidDates.blockers.includes("TRUSTED_SOURCE_EFFECTIVE_DATE_RANGE_INVALID"));
 });
