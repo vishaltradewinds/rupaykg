@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - intelligence/ai-evidence-intake-middleware
+      - shakti/enable-intelligence-branch-ci
   pull_request:
     branches:
       - intelligence/ai-evidence-intake-middleware
