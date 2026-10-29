@@ -73,6 +73,31 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "EPR assessment unavailable", syntheticData: false }); }
   });
 
+  app.get("/api/v1/esg/reporting-periods/:periodId/methodology-options", async (request, reply) => {
+    const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
+    const periodId = (request.params as { periodId: string }).periodId;
+    const query = request.query && typeof request.query === "object" ? request.query as Record<string, unknown> : {};
+    const metricCode = typeof query.metricCode === "string" ? query.metricCode.trim() : "";
+    const scope = typeof query.scope === "string" ? query.scope.trim() : "";
+    const unit = typeof query.unit === "string" ? query.unit.trim() : "";
+    if (!metricCode || !["1", "2", "3", "IMPACT"].includes(scope) || !unit) return reply.code(400).send({ error: "metricCode, valid scope and unit are required to find an exact ESG methodology binding", code: "ESG_METHODOLOGY_FILTERS_REQUIRED" });
+    try {
+      const period = await pool.query<{ organization_id: string; period_start: string; framework: string }>("select organization_id,period_start,framework from esg_reporting_periods where id=$1", [periodId]);
+      const row = period.rows[0];
+      if (!row) return reply.code(404).send({ error: "Reporting period not found", code: "ESG_PERIOD_NOT_FOUND" });
+      if (!canActForOrganization(auth, row.organization_id)) return reply.code(403).send({ error: "Organization access denied", code: "ORG_FORBIDDEN" });
+      if (!await hasValuePermission(pool, "can_write_esg", auth.identityId, row.organization_id)) return reply.code(403).send({ error: "ESG write permission required", code: "ESG_WRITE_FORBIDDEN" });
+      const options = await pool.query(`select id,methodology_code,version,effective_from,rules->'esgBinding' as binding
+        from methodology_versions where effective_from is not null and effective_from <= $1::date
+          and rules->'esgBinding'->>'framework'=$2
+          and rules->'esgBinding'->>'metricCode'=$3
+          and rules->'esgBinding'->>'scope'=$4
+          and rules->'esgBinding'->>'unitCode'=$5
+        order by effective_from desc,methodology_code,version`, [row.period_start, row.framework, metricCode, scope, unit]);
+      return { source: "postgresql", syntheticData: false, reportingPeriodId: periodId, framework: row.framework, options: options.rows };
+    } catch (error) { request.log.error(error); return reply.code(503).send({ error: "ESG methodology options unavailable", syntheticData: false }); }
+  });
+
   app.post("/api/v1/esg/reporting-periods/:periodId/metrics", async (request, reply) => {
     const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
     const periodId = (request.params as { periodId: string }).periodId; const body = bodyOf(request as never); const metricCode = str(body, "metricCode"); const scope = str(body, "scope") as "1" | "2" | "3" | "IMPACT" | null; const unit = str(body, "unit"); const value = nonNegative(body, "value");
