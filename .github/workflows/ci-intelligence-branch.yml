@@ -1,0 +1,58 @@
+name: Intelligence Branch CI
+
+on:
+  push:
+    branches:
+      - intelligence/ai-evidence-intake-middleware
+  pull_request:
+    branches:
+      - intelligence/ai-evidence-intake-middleware
+
+permissions:
+  contents: read
+
+env:
+  DATABASE_URL: postgresql://postgres:postgres@localhost:5432/rupaykg
+  DATABASE_SSL: "false"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: rupaykg
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d rupaykg"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22.x"
+          package-manager-cache: false
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+      - name: Validate migration registry
+        run: npm run validate:migrations
+      - name: Run migrations against disposable PostgreSQL
+        run: npm run migrate -w @rupaykg/api
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Build
+        run: npm run build
+      - name: Run tests including PostgreSQL integration
+        env:
+          RUPAYKG_RUN_DB_INTEGRATION_TESTS: "1"
+        run: npm test
+      - name: Build production container
+        run: docker build --pull --tag rupaykg:ci .
