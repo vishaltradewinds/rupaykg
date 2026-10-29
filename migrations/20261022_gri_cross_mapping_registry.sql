@@ -44,6 +44,9 @@ create table if not exists esg_cross_mappings (
   check (length(trim(rationale)) >= 10)
 );
 
+create unique index if not exists esg_cross_mappings_id_org_uidx
+  on esg_cross_mappings(id, organization_id);
+
 create index if not exists esg_cross_mappings_period_status_idx
   on esg_cross_mappings(organization_id, reporting_period_id, status, mapping_key);
 
@@ -52,8 +55,9 @@ create index if not exists esg_cross_mappings_source_framework_idx
 
 create table if not exists esg_cross_mapping_events (
   id uuid primary key default gen_random_uuid(),
-  mapping_id uuid not null references esg_cross_mappings(id),
+  mapping_id uuid not null,
   organization_id uuid not null references organizations(id),
+  foreign key (mapping_id, organization_id) references esg_cross_mappings(id, organization_id),
   actor_id uuid,
   event_type text not null check (event_type in (
     'CREATED','UPDATED','SUBMITTED_FOR_REVIEW','APPROVED','BLOCKED',
@@ -71,6 +75,78 @@ create index if not exists esg_cross_mapping_events_mapping_idx
 
 create index if not exists esg_cross_mapping_events_org_idx
   on esg_cross_mapping_events(organization_id, created_at);
+
+create or replace function validate_esg_cross_mapping_lifecycle()
+returns trigger
+language plpgsql
+as $
+declare
+  evidence_item jsonb;
+begin
+  if new.status = 'REVIEW_REQUIRED' then
+    if coalesce(new.source_requirement ->> 'official_source_verified_at', '') = '' then
+      raise exception 'Official source verification is required before review';
+    end if;
+    if coalesce(new.target_disclosure ->> 'version', '') = '' then
+      raise exception 'Target disclosure version is required before review';
+    end if;
+    if coalesce(new.applicability ->> 'determination', 'undetermined') in ('undetermined','conditional') then
+      raise exception 'Undetermined or conditional applicability must be resolved before review';
+    end if;
+    if new.relationship = 'conflict_requires_review' then
+      raise exception 'Mapping conflict must be resolved before review';
+    end if;
+    if coalesce(new.evidence ->> 'required', 'true') = 'true' then
+      if coalesce(new.evidence ->> 'lineage_status', 'missing') <> 'complete'
+        or jsonb_array_length(coalesce(new.evidence -> 'items', '[]'::jsonb)) = 0 then
+        raise exception 'Required evidence and complete lineage are required before review';
+      end if;
+      for evidence_item in select value from jsonb_array_elements(coalesce(new.evidence -> 'items', '[]'::jsonb))
+      loop
+        if coalesce(evidence_item ->> 'integrity_status', 'unverified') <> 'validated' then
+          raise exception 'Every evidence item must be validated before review';
+        end if;
+      end loop;
+    end if;
+    if coalesce(new.controls ->> 'double_counting_check', 'not_run') not in ('passed','not_applicable') then
+      raise exception 'Double-counting check must pass or be explicitly not applicable before review';
+    end if;
+  end if;
+
+  if new.status = 'APPROVED' then
+    if tg_op = 'INSERT' or old.status <> 'REVIEW_REQUIRED' then
+      raise exception 'Only a REVIEW_REQUIRED mapping can transition to APPROVED';
+    end if;
+    if coalesce(new.source_requirement ->> 'official_source_verified_at', '') = ''
+      or coalesce(new.applicability ->> 'determination', 'undetermined') in ('undetermined','conditional')
+      or new.relationship = 'conflict_requires_review' then
+      raise exception 'Mapping has unresolved source, applicability or relationship blockers';
+    end if;
+    if coalesce(new.evidence ->> 'required', 'true') = 'true' then
+      if coalesce(new.evidence ->> 'lineage_status', 'missing') <> 'complete'
+        or jsonb_array_length(coalesce(new.evidence -> 'items', '[]'::jsonb)) = 0 then
+        raise exception 'Required evidence and complete lineage are required before approval';
+      end if;
+      for evidence_item in select value from jsonb_array_elements(coalesce(new.evidence -> 'items', '[]'::jsonb))
+      loop
+        if coalesce(evidence_item ->> 'integrity_status', 'unverified') <> 'validated' then
+          raise exception 'Every evidence item must be validated before approval';
+        end if;
+      end loop;
+    end if;
+    if coalesce(new.controls ->> 'double_counting_check', 'not_run') not in ('passed','not_applicable') then
+      raise exception 'Double-counting check must pass or be explicitly not applicable before approval';
+    end if;
+  end if;
+
+  return new;
+end;
+$;
+
+drop trigger if exists esg_cross_mapping_lifecycle_guard on esg_cross_mappings;
+create trigger esg_cross_mapping_lifecycle_guard
+  before insert or update of status on esg_cross_mappings
+  for each row execute function validate_esg_cross_mapping_lifecycle();
 
 create or replace function prevent_approved_esg_cross_mapping_mutation()
 returns trigger
