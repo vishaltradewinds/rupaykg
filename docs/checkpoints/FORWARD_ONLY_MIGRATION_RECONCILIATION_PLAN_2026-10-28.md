@@ -199,3 +199,45 @@ The same logs do not prove which exact SQL bytes were used for staging's 2026102
 - The migration-reconciliation branch head at commit `2af70c433fab6f6c1ca16da772ef3033230e3300` passed CI run [40743284007](https://github.com/vishaltradewinds/rupaykg/actions/runs/40743284007). All workflow steps completed successfully: dependency audit, migration validation and runner, typecheck, build, disposable PostgreSQL dual-ledger compatibility tests, actual-runner fixtures, browser smoke, full test suite, and production-container build.
 - PR [#108](https://github.com/vishaltradewinds/rupaykg/pull/108) remains open, draft, and unmerged. No independent reviews are recorded. The CI pass verifies the current engineering/test state only; it does not resolve live source provenance, approve migration SQL, or certify the platform.
 - Next work remains evidence-first: preserve fail-closed behavior; prepare the complete object-level diff and reviewer packet; seek independent security/database/domain/compliance review; do not deploy migrations or activate the worker scheduler without explicit Shakti release approval.
+
+## Evidence recovery update — 2026-10-29 14:15 UTC
+
+This section supersedes earlier wording that described all historical SQL sources as undiscovered. **Source discovery is now closed for the five named migration files; release/artifact attestation and semantic approval remain open.**
+
+### Production migration 096 — exact source and deployment chronology recovered
+
+- Historical source commit: `ca8f4100782e13f8d72106187fafc8e1e446214f` — “Bind verification to organization and snapshot authority”.
+- Exact file: `migrations/096_verification_authorization_provenance.sql`.
+- Git blob SHA-1: `258b1f4534efbf915688f78aa84d4ec24a47cbc0`.
+- Render deployment of that commit: `dep-dbgallbrjlhs73d104r0`; started `2026-10-27T13:44:53.629957Z`, completed `2026-10-27T13:46:30.644641Z`.
+- Production `schema_migrations` records `096_verification_authorization_provenance.sql` at `2026-10-27T13:46:14.262221Z`, during that deployment window.
+- The next deployment, commit `54a7fe1ceb41b37a68720a71c10a1dd03af30dea`, removed the migration from main; its Render deploy began at `2026-10-27T13:46:31.510225Z` and became live at `13:48:15.868647Z`.
+
+This is strong deployment-correlated evidence tying the recorded filename to an exact Git source blob and a Render deploy window. It is **not** a signed build-image manifest or proof of the exact SQL bytes executed by the running container. Preserve the source blob, commit and Render event references for independent review. Do not replay migration 096, and do not fabricate missing decision-time provenance for legacy verification rows.
+
+### Staging migrations 20261022–20261025 — exact source blobs recovered
+
+All four original SQL files were retrieved from feature branch `intelligence/ai-evidence-intake-middleware` and their Git blob IDs matched the previously recorded catalog-recovery evidence:
+
+| Migration | Git blob SHA-1 | Status |
+|---|---|---|
+| `20261022_async_mirror_inbox.sql` | `4d08607e03561b9fbb4ce502b4c4211127237050` | Source recovered; review required |
+| `20261023_async_mirror_worker_leases.sql` | `33cb4d5d2e29a4a111340e5a0ac34170a0081895` | Source recovered; review required |
+| `20261024_ai_intake_rate_limits.sql` | `87b51fe60a96a4e0752c8b0a9a170c81f9936dbb` | Source recovered; review required |
+| `20261025_ai_evidence_intake_jobs.sql` | `6a0ae54530b7b756dac33589eaf18df3b071d8f2` | Source recovered; review required |
+
+The source branch is materially diverged from the release candidate. Do not merge it wholesale or copy these files directly into the release catalog. Compare the exact source SQL with staging's complete catalog, constraints, functions, triggers, indexes, grants, ownership, and data; then port only an independently reviewed forward-only migration plan.
+
+### Confirmed worker constraint defect
+
+The recovered `20261023` status CHECK constraint excludes `UNRESOLVED`, while the feature-branch worker writes `UNRESOLVED` for valid-but-unmapped/ambiguous batches. A later source file, `20261101_async_mirror_unresolved_crosswalk.sql` (blob `4f9776bc449025e795cb0d5c93e8bace9dea280b`), adds that state but is future-dated relative to this audit and is not proof of a deployed fix. Worker unit tests with fake pools cannot establish PostgreSQL CHECK-constraint compatibility. This is a hard release blocker until a reviewed, correctly ordered migration and disposable PostgreSQL transition tests prove the behavior.
+
+### Updated gate decision
+
+- Exact source discovery: **CLOSED for the named files**.
+- Deployment/artifact attestation and independent source review: **OPEN**.
+- Canonical catalog and version/order reconciliation: **BLOCKED**.
+- Production/staging migration writes: **NOT AUTHORIZED**.
+- Worker scheduler: **HOLD**.
+- Production certification: **HOLD**.
+
