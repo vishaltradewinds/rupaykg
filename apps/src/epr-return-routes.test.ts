@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { authorizeGeography, hasInvalidGeographyFilter, requestedGeography } from "./epr-return-routes.js";
+import { authorizeGeography, hasCurrentVerifierAuthorization, hasInvalidGeographyFilter, requestedGeography } from "./epr-return-routes.js";
 import type { AuthContext } from "./auth.js";
 import type { Pool } from "pg";
 
@@ -53,4 +53,24 @@ test("authorizeGeography uses the database organization-scope decision", async (
 test("authorizeGeography denies a geography the database does not authorize", async () => {
   const pool = { query: async () => ({ rows: [{ ok: false }] }) } as unknown as Pool;
   assert.equal(await authorizeGeography(pool, auth(), "org-1", GEO), false);
+});
+
+
+test("hasCurrentVerifierAuthorization scopes active verifier permission to the return organization", async () => {
+  const calls: unknown[][] = [];
+  const pool = { query: async (sql: string, params: unknown[]) => {
+    calls.push([sql, ...params]);
+    return { rows: [{ authorized: true }] };
+  } } as unknown as Pool;
+  assert.equal(await hasCurrentVerifierAuthorization(pool, "123e4567-e89b-42d3-a456-426614174001", "123e4567-e89b-42d3-a456-426614174002"), true);
+  assert.equal(calls.length, 1);
+  assert.match(String(calls[0]?.[0]), /vm\.organization_id = \$2::uuid/);
+  assert.match(String(calls[0]?.[0]), /vm\.status = 'VERIFIED'/);
+  assert.equal(calls[0]?.[1], "123e4567-e89b-42d3-a456-426614174001");
+  assert.equal(calls[0]?.[2], "123e4567-e89b-42d3-a456-426614174002");
+});
+
+test("hasCurrentVerifierAuthorization fails closed when organization-scoped permission is absent", async () => {
+  const pool = { query: async () => ({ rows: [{ authorized: false }] }) } as unknown as Pool;
+  assert.equal(await hasCurrentVerifierAuthorization(pool, "123e4567-e89b-42d3-a456-426614174001", "123e4567-e89b-42d3-a456-426614174002"), false);
 });
