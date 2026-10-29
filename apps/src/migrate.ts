@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
+import { missingMigrationSources } from "./migration-history.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) throw new Error("DATABASE_URL is required");
@@ -38,7 +39,7 @@ try {
     "select version, filename from schema_migrations order by version",
   );
   const availableFiles = new Set(files);
-  const missingSources = applied.rows.filter((row) => !availableFiles.has(row.filename));
+  const missingSources = missingMigrationSources(applied.rows, availableFiles);
   if (missingSources.length) {
     const detail = missingSources.map((row) => `${row.version}:${row.filename}`).join(", ");
     throw new Error(`MIGRATION_HISTORY_UNRESOLVED: applied migration source files are missing: ${detail}`);
