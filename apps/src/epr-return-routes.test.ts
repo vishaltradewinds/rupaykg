@@ -275,7 +275,7 @@ test("EPR submission fails closed when current verifier authority is absent and 
   assert.equal(response.statusCode, 409);
   assert.equal(response.json().code, "EPR_VERIFIER_AUTHORITY_INVALID");
   assert.deepEqual(transactions, ["BEGIN", "ROLLBACK"], "missing current authority must roll back before consuming binding or fulfilling obligation");
-  const authority = queries.find((query) => query.sql.includes("for share of om, r, i"));
+  const authority = queries.find((query) => query.sql.includes("for share of om, r, i") && query.sql.includes("om.organization_id=$4"));
   assert.ok(authority, "verifier authorization query must lock membership, role, and identity rows");
   assert.match(authority!.sql, /om\.organization_id=\$4/);
   assert.match(authority!.sql, /i\.status='VERIFIED'/);
@@ -347,7 +347,7 @@ test("EPR quantity binding rejects a verifier outside the return organization an
   assert.equal(response.statusCode, 409);
   assert.equal(response.json().code, "EPR_VERIFIER_AUTHORITY_INVALID");
   assert.deepEqual(transactions, ["BEGIN", "ROLLBACK"], "invalid verifier authority must abort before inserting a binding");
-  const authority = queries.find((query) => query.sql.includes("for share of om, r, i"));
+  const authority = queries.find((query) => query.sql.includes("for share of om, r, i") && query.sql.includes("om.organization_id=$4"));
   assert.ok(authority, "binding-time verifier authorization must lock membership, role, and identity rows");
   assert.ok(authority!.sql.includes("om.organization_id=$4"));
   assert.ok(authority!.sql.includes("i.status='VERIFIED'"));
