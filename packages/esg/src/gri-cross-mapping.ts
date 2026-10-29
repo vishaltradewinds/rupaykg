@@ -206,3 +206,59 @@ export function evaluateGriCrossMappingForReview(
     creditEligibilityConclusion: "NOT_CHANGED",
   };
 }
+
+/**
+ * Server-side binding check between a submitted mapping and a trusted,
+ * version-pinned registry record. The registry record must be loaded by the
+ * server from an approved source; never pass client-supplied registry data here.
+ * This pure function does not fetch URLs or establish registry authenticity.
+ */
+export type TrustedGriSourceRegistryRecord = {
+  sourceId: string;
+  canonicalUrl: string;
+  version: string;
+  sha256: string;
+  validationStatus: GriSourceValidationStatus;
+};
+
+export type GriSourceBindingInput = {
+  sourceId: string;
+  sourceUrl: string;
+  sourceVersion: string;
+  sha256: string | null;
+};
+
+export function validateGriSourceBinding(
+  submitted: GriSourceBindingInput,
+  trusted: TrustedGriSourceRegistryRecord | null,
+): { valid: boolean; blockers: string[] } {
+  const blockers: string[] = [];
+  if (!trusted) {
+    blockers.push("TRUSTED_SOURCE_REGISTER_RECORD_NOT_FOUND");
+    return { valid: false, blockers };
+  }
+  if (trusted.validationStatus !== "VERIFIED_AND_APPROVED") {
+    blockers.push("TRUSTED_SOURCE_REGISTER_RECORD_NOT_APPROVED");
+  }
+  if (!/^[a-fA-F0-9]{64}$/.test(trusted.sha256)) {
+    blockers.push("TRUSTED_SOURCE_REGISTER_HASH_INVALID");
+  }
+  if (!submitted.sourceId.trim() || submitted.sourceId !== trusted.sourceId) {
+    blockers.push("SOURCE_REGISTER_ID_MISMATCH");
+  }
+  if (!submitted.sourceUrl.trim() || submitted.sourceUrl !== trusted.canonicalUrl) {
+    blockers.push("SOURCE_CANONICAL_URL_MISMATCH");
+  }
+  if (!submitted.sourceVersion.trim() || submitted.sourceVersion !== trusted.version) {
+    blockers.push("SOURCE_VERSION_MISMATCH");
+  }
+  if (
+    !submitted.sha256 ||
+    !/^[a-fA-F0-9]{64}$/.test(submitted.sha256) ||
+    !/^[a-fA-F0-9]{64}$/.test(trusted.sha256) ||
+    submitted.sha256.toLowerCase() !== trusted.sha256.toLowerCase()
+  ) {
+    blockers.push("SOURCE_ARCHIVE_HASH_MISMATCH");
+  }
+  return { valid: blockers.length === 0, blockers: [...new Set(blockers)] };
+}
