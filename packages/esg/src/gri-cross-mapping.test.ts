@@ -110,3 +110,12 @@ test("schema snake_case fields adapt without changing compliance or credit concl
   assert.equal(result.complianceConclusion, "NOT_CHANGED");
   assert.equal(result.creditEligibilityConclusion, "NOT_CHANGED");
 });
+
+test("approved mappings require a versioned change instead of being reopened in place", () => {
+  const result = evaluateGriCrossMappingForReview({
+    ...validReviewInput,
+    status: "approved",
+  });
+  assert.equal(result.decision, "BLOCKED");
+  assert.ok(result.blockers.includes("APPROVED_MAPPING_IMMUTABLE_VERSION_REQUIRED"));
+});
