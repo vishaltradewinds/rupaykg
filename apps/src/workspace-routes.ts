@@ -113,10 +113,20 @@ export async function registerWorkspaceRoutes(app: FastifyInstance, pool: Pool |
   app.get("/api/v1/workspaces/esg", async (request, reply) => {
     const auth = await requireAuth(app, pool, request, reply); if (!auth || !pool) return;
     const ids = orgIds(auth); if (!ids.length) return result({ reportingPeriods: [], metrics: [] });
+    const geographyId = requestedGeography(request);
+    if (geographyId && !await authorizeGeography(pool, auth, geographyId)) return reply.code(403).send({ error: "Geography outside organization authorization scope", code: "GEOGRAPHY_FORBIDDEN" });
     try {
-      const periods = await pool.query(`select id,organization_id,period_start,period_end,framework,status,reporting_standard,applicability_status,value_chain_reporting,assurance_mode,external_submission_status,methodology_notes,reporting_boundary from esg_reporting_periods where organization_id=any($1::uuid[]) order by period_end desc,period_start desc limit 100`, [ids]);
-      const metrics = await pool.query(`select em.id,em.reporting_period_id,em.metric_code,em.scope,em.value,em.unit,em.source_activity_id,em.evidence_id,em.verification_id,em.status,em.metadata,em.disclosure_id,em.esg_attribute,em.value_chain_direction,em.methodology,em.assumptions,em.reporting_boundary,em.data_quality,em.assurance_status from esg_metrics em join esg_reporting_periods rp on rp.id=em.reporting_period_id where rp.organization_id=any($1::uuid[]) order by em.id desc limit 200`, [ids]);
-      return result({ reportingPeriods: periods.rows, metrics: metrics.rows });
+      const params: unknown[] = [ids];
+      if (geographyId) params.push(geographyId);
+      const periodGeographyClause = geographyId
+        ? " and exists (select 1 from esg_metrics em join activities a on a.id=em.source_activity_id where em.reporting_period_id=rp.id and a.geography_id=$2 and organization_has_geography_scope(rp.organization_id,a.geography_id))"
+        : "";
+      const metricGeographyClause = geographyId
+        ? " and em.source_activity_id is not null and exists (select 1 from activities a where a.id=em.source_activity_id and a.geography_id=$2 and organization_has_geography_scope(rp.organization_id,a.geography_id))"
+        : "";
+      const periods = await pool.query(`select rp.id,rp.organization_id,rp.period_start,rp.period_end,rp.framework,rp.status,rp.reporting_standard,rp.applicability_status,rp.value_chain_reporting,rp.assurance_mode,rp.external_submission_status,rp.methodology_notes,rp.reporting_boundary from esg_reporting_periods rp where rp.organization_id=any($1::uuid[])${periodGeographyClause} order by rp.period_end desc,rp.period_start desc limit 100`, params);
+      const metrics = await pool.query(`select em.id,em.reporting_period_id,em.metric_code,em.scope,em.value,em.unit,em.source_activity_id,em.evidence_id,em.verification_id,em.status,em.metadata,em.disclosure_id,em.esg_attribute,em.value_chain_direction,em.methodology,em.assumptions,em.reporting_boundary,em.data_quality,em.assurance_status from esg_metrics em join esg_reporting_periods rp on rp.id=em.reporting_period_id where rp.organization_id=any($1::uuid[])${metricGeographyClause} order by em.id desc limit 200`, params);
+      return result({ reportingPeriods: periods.rows, metrics: metrics.rows, ...(geographyId ? { geographyId, geographyScoped: true } : {}) });
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "ESG workspace unavailable", syntheticData: false }); }
   });
 }
