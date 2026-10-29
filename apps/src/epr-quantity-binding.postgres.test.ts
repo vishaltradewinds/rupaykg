@@ -191,10 +191,25 @@ test("PostgreSQL resource-flow row lock serializes competing quantity allocation
     await first.query("begin");
     await first.query("select id from resource_flows where id=$1 for update", [flowId]);
 
-    // The second transaction must wait for the same flow-row lock. Once the
-    // first allocation commits, its capacity query must see that committed row.
+    // The second transaction must demonstrably block on the same flow-row lock.
+    // Observe PostgreSQL's lock wait before allowing the first allocation to commit.
     await second.query("begin");
+    const backend = await second.query("select pg_backend_pid() as pid");
+    const secondPid = Number(backend.rows[0].pid);
     const waitingLock = second.query("select id from resource_flows where id=$1 for update", [flowId]);
+    let observedLockWait = false;
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      const wait = await admin.query(
+        "select wait_event_type from pg_stat_activity where pid=$1",
+        [secondPid],
+      );
+      if (wait.rows[0]?.wait_event_type === "Lock") {
+        observedLockWait = true;
+        break;
+      }
+      await new Promise((resolveWait) => setTimeout(resolveWait, 20));
+    }
+    assert.equal(observedLockWait, true, "second transaction must be observed waiting on PostgreSQL row lock");
     await first.query(
       "insert into epr_return_quantity_bindings(id,resource_flow_id,measured_quantity) values ($1,$2,6)",
       [randomUUID(), flowId],
