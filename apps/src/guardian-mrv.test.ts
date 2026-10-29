@@ -26,6 +26,37 @@ test("Guardian MRV remains disabled without an explicit provider URL", async () 
   }
 });
 
+test("Guardian endpoint rejects insecure remote URLs and URLs containing credentials or query secrets", async () => {
+  const previousUrl = process.env.GUARDIAN_MRV_SUBMIT_URL;
+  const previousFetch = globalThis.fetch;
+  const previousNodeEnv = process.env.NODE_ENV;
+  let called = false;
+  globalThis.fetch = async () => {
+    called = true;
+    return new Response("{}", { status: 200, headers: { "content-type": "application/json" } });
+  };
+  try {
+    process.env.NODE_ENV = "production";
+    for (const url of [
+      "http://guardian.test/mrv",
+      "https://user:pass@guardian.test/mrv",
+      "https://guardian.test/mrv?token=secret",
+    ]) {
+      process.env.GUARDIAN_MRV_SUBMIT_URL = url;
+      assert.equal(guardianStatus().configured, false, url);
+      const result = await executeGuardianMrv(request);
+      assert.equal(result.status, "NOT_CONFIGURED", url);
+    }
+    assert.equal(called, false);
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousUrl === undefined) delete process.env.GUARDIAN_MRV_SUBMIT_URL;
+    else process.env.GUARDIAN_MRV_SUBMIT_URL = previousUrl;
+    if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = previousNodeEnv;
+  }
+});
+
 test("Guardian MRV rejects a VERIFIED response without an authoritative execution id", async () => {
   const previousUrl = process.env.GUARDIAN_MRV_SUBMIT_URL;
   const previousFetch = globalThis.fetch;
