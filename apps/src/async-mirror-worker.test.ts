@@ -238,3 +238,34 @@ test("worker cannot finalize an outcome after its lease token has been replaced"
   assert.ok(terminalUpdate);
   assert.match(terminalUpdate, /where id=\$1 and status='PROCESSING' and lease_token=\$2/i);
 });
+
+
+test("worker renews leases for later batch rows while an earlier row is slow", async () => {
+  const secondRow = { ...row, id: "second-row-id", lease_token: "second-lease-token" };
+  const statements: Array<{ sql: string; values?: unknown[] }> = [];
+  const pool = {
+    query: async (sql: string, values?: unknown[]) => {
+      statements.push({ sql, values });
+      if (sql.includes("returning inbox.id")) return { rows: [row, secondRow], rowCount: 2 };
+      if (sql.includes("set lease_until=now()")) return { rows: [], rowCount: 1 };
+      if (sql.includes("from government_jurisdiction_crosswalks c")) {
+        return { rows: [{ id: "crosswalk-id", organization_id: "organization-id", geography_id: "geography-id", activity_id: null, source_version: "synthetic-v1" }], rowCount: 1 };
+      }
+      return { rows: [], rowCount: 1 };
+    },
+  } as unknown as Pool;
+
+  let calls = 0;
+  const result = await runGovernmentInboxWorker(pool, async () => {
+    calls += 1;
+    if (calls === 1) await new Promise(resolve => setTimeout(resolve, 5_200));
+    return { valid: true, summary: { validation: "SYNTHETIC_TEST_ONLY" } };
+  }, { batchSize: 2, leaseSeconds: 15 });
+
+  assert.equal(result.claimed, 2);
+  assert.equal(result.validated, 2);
+  const secondRowRenewal = statements.find(entry =>
+    entry.sql.includes("set lease_until=now()") && entry.values?.[0] === "second-row-id");
+  assert.ok(secondRowRenewal, "the second row's lease must renew before its sequential processing begins");
+  assert.match(secondRowRenewal.sql, /lease_until > now\(\)/i);
+});
