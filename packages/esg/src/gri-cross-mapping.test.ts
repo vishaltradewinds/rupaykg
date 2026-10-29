@@ -13,6 +13,7 @@ const validReviewInput: GriCrossMappingReviewInput = {
     version: "2026-01",
     sourceUrl: "https://example.gov.in/regulation",
     officialSourceVerifiedAt: "2026-10-29T10:00:00Z",
+    sourceValidation: { status: "VERIFIED_AND_APPROVED", sourceId: "TEST-SOURCE-001", sha256: "a".repeat(64) },
   },
   targetDisclosure: { version: "GRI 306: Waste 2020", standardId: "GRI 306", disclosureId: "306-3" },
   relationship: "supports",
@@ -81,6 +82,7 @@ test("schema snake_case fields adapt without changing compliance or credit concl
       version: "2026-01",
       source_url: "https://example.gov.in/regulation",
       official_source_verified_at: "2026-10-29T10:00:00Z",
+      source_validation: { status: "VERIFIED_AND_APPROVED", source_id: "TEST-SOURCE-001", sha256: "a".repeat(64) },
     },
     target_disclosure: {
       version: "GRI 306: Waste 2020",
@@ -204,4 +206,19 @@ test("invalid source URLs and ambiguous verification timestamps fail closed", ()
       `expected invalid timestamp to be rejected: ${officialSourceVerifiedAt}`,
     );
   }
+});
+
+test("unarchived or unresolved regulatory sources block authoritative review", () => {
+  for (const status of ["DISCOVERY_SOURCE", "NOT_ARCHIVED_HASH_PENDING", "CURRENT_VERSION_MUST_BE_RECONFIRMED", "UNRESOLVED"] as const) {
+    const result = evaluateGriCrossMappingForReview({ ...validReviewInput, sourceRequirement: { ...validReviewInput.sourceRequirement, sourceValidation: { status, sourceId: "CPCB-SWM-RULES-2026", sha256: null } } });
+    assert.equal(result.decision, "BLOCKED");
+    assert.ok(result.blockers.includes("AUTHORITATIVE_SOURCE_NOT_VERIFIED_AND_ARCHIVED"));
+    assert.equal(result.complianceConclusion, "NOT_CHANGED");
+    assert.equal(result.creditEligibilityConclusion, "NOT_CHANGED");
+  }
+});
+test("verified source status without a valid SHA-256 still blocks", () => {
+  const result = evaluateGriCrossMappingForReview({ ...validReviewInput, sourceRequirement: { ...validReviewInput.sourceRequirement, sourceValidation: { status: "VERIFIED_AND_APPROVED", sourceId: "CPCB-SWM-RULES-2026", sha256: "not-a-hash" } } });
+  assert.equal(result.decision, "BLOCKED");
+  assert.ok(result.blockers.includes("AUTHORITATIVE_SOURCE_NOT_VERIFIED_AND_ARCHIVED"));
 });
