@@ -256,10 +256,10 @@ export function validateGriSourceBinding(
   if (trusted.validationStatus !== "VERIFIED_AND_APPROVED") {
     blockers.push("TRUSTED_SOURCE_REGISTER_RECORD_NOT_APPROVED");
   }
-  if (trusted.effectiveFrom != null && !/^\d{4}-\d{2}-\d{2}$/.test(trusted.effectiveFrom)) {
+  if (trusted.effectiveFrom != null && !isValidIsoCalendarDate(trusted.effectiveFrom)) {
     blockers.push("TRUSTED_SOURCE_EFFECTIVE_FROM_INVALID");
   }
-  if (trusted.effectiveTo != null && !/^\d{4}-\d{2}-\d{2}$/.test(trusted.effectiveTo)) {
+  if (trusted.effectiveTo != null && !isValidIsoCalendarDate(trusted.effectiveTo)) {
     blockers.push("TRUSTED_SOURCE_EFFECTIVE_TO_INVALID");
   }
   if (trusted.effectiveFrom && trusted.effectiveTo && trusted.effectiveFrom > trusted.effectiveTo) {
