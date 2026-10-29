@@ -242,7 +242,7 @@ test("worker cannot finalize an outcome after its lease token has been replaced"
 
 test("worker renews leases for later batch rows while an earlier row is slow", async () => {
   const secondRow = { ...row, id: "second-row-id", lease_token: "second-lease-token" };
-  const statements: Array<{ sql: string; values?: unknown[] }> = [];
+  const statements: Array<{ sql: string; values?: unknown[] | undefined }> = [];
   const pool = {
     query: async (sql: string, values?: unknown[]) => {
       statements.push({ sql, values });
