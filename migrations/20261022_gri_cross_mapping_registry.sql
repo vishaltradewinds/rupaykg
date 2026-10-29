@@ -145,7 +145,7 @@ $;
 
 drop trigger if exists esg_cross_mapping_lifecycle_guard on esg_cross_mappings;
 create trigger esg_cross_mapping_lifecycle_guard
-  before insert or update of status on esg_cross_mappings
+  before insert or update on esg_cross_mappings
   for each row execute function validate_esg_cross_mapping_lifecycle();
 
 create or replace function prevent_approved_esg_cross_mapping_mutation()
