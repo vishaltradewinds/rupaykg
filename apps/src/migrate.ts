@@ -9,7 +9,7 @@ import { migrationHistoryConflicts } from "./migration-history.js";
 export async function runMigrations(pool: PoolType, migrationDir: string): Promise<void> {
   if (!existsSync(migrationDir)) throw new Error(`Migration directory not found: ${migrationDir}`);
   const files = (await readdir(migrationDir))
-    .filter((name) => /^\\d+_.+\\.sql$/.test(name))
+    .filter((name) => /^\d+_.+\.sql$/.test(name))
     .sort();
 
   await pool.query(`
