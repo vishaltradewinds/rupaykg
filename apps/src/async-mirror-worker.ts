@@ -180,8 +180,9 @@ export async function runGovernmentInboxWorker(
     leaseStates.set(row.id, state);
   }
 
-  for (const row of claimed.rows) {
-    const leaseState = leaseStates.get(row.id)!;
+  try {
+    for (const row of claimed.rows) {
+      const leaseState = leaseStates.get(row.id)!;
     try {
       let outcome: GovernmentInboxValidation;
       if (canonicalGovBridgeHash(row.payload) !== row.payload_sha256) {
@@ -324,6 +325,11 @@ export async function runGovernmentInboxWorker(
     } finally {
       clearInterval(leaseState.timer);
     }
+    }
+  } finally {
+    // Even if persistence itself throws, do not leave timers running for rows
+    // that were claimed but never reached in the sequential loop.
+    for (const state of leaseStates.values()) clearInterval(state.timer);
   }
   return result;
 }
