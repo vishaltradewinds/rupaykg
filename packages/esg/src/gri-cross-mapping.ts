@@ -132,7 +132,7 @@ function isHttpUrl(value: string): boolean {
 
 function isValidIsoDateTime(value: string): boolean {
   // Require an explicit timezone so the verification timestamp is unambiguous.
-  if (!/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})$/.test(value)) {
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(value)) {
     return false;
   }
   const datePart = value.slice(0, 10);
