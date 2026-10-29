@@ -67,6 +67,39 @@ export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool |
     }
   });
 
+  app.get("/api/v1/epr/returns/:returnId/quantity-binding-options", async (request, reply) => {
+    const auth = await authFor(request, reply, pool); if (!auth || !pool) return;
+    const { returnId } = request.params as { returnId: string };
+    try {
+      const ret = await pool.query<{ organization_id: string; status: string }>("select organization_id,status from epr_returns where id=$1", [returnId]);
+      const row = ret.rows[0];
+      if (!row) return reply.code(404).send({ error: "EPR return not found", code: "EPR_RETURN_NOT_FOUND" });
+      if (!canAct(auth, row.organization_id) || !await hasOrganizationPermission(pool, auth, row.organization_id, ["epr:manage"])) return reply.code(403).send({ error: "EPR management permission required", code: "EPR_RETURN_WRITE_FORBIDDEN" });
+      const existing = await pool.query(`select id,measurement_id,resource_flow_id,custody_link_id,evidence_id,verification_id,methodology_version_id,category_code,unit_code,period_start,period_end,measured_quantity,consumed_at from epr_return_quantity_bindings where epr_return_id=$1`, [returnId]);
+      if (row.status !== "DRAFT" || existing.rows[0]) return { source: "postgresql", syntheticData: false, binding: existing.rows[0] ?? null, options: [] };
+      const options = await pool.query(`select m.id as measurement_id,rf.id as resource_flow_id,c.id as custody_link_id,e.id as evidence_id,v.id as verification_id,mv.id as methodology_version_id,
+          m.value::text as measured_quantity,m.unit as unit_code,rf.material_code as category_code,mv.methodology_code,mv.version as methodology_version,m.measured_at
+        from epr_returns r join epr_obligations eo on eo.id=r.obligation_id and eo.scheme_id=r.scheme_id and eo.obligated_organization_id=r.organization_id
+        join epr_schemes s on s.id=r.scheme_id
+        join measurements m on m.quality_status='VERIFIED' and m.measured_at::date between r.period_start and r.period_end
+        join activities a on a.id=m.activity_id and a.organization_id=r.organization_id and a.geography_id is not null and organization_has_geography_scope(r.organization_id,a.geography_id)
+        join resource_flows rf on rf.organization_id=r.organization_id and rf.material_code=eo.category_code and rf.unit=m.unit and rf.status in ('ACCEPTED','COMPLETED','VERIFIED')
+        join chain_of_custody_links c on c.resource_flow_id=rf.id and c.activity_id=a.id and c.actor_organization_id=r.organization_id and c.quantity=m.value and c.unit=m.unit and c.recorded_at::date between r.period_start and r.period_end
+        join evidence e on e.status='VERIFIED' and (e.content_hash is not null or e.content_uri is not null) and (e.measurement_id=m.id or e.activity_id=m.activity_id) and (c.evidence_id=e.id or e.measurement_id=m.id)
+        join verifications v on v.evidence_id=e.id and v.decision='APPROVED'
+        join methodology_versions mv on mv.effective_from is not null and mv.effective_from <= r.period_start
+          and mv.rules->'eprBinding'->>'schemeCode'=s.code and mv.rules->'eprBinding'->>'categoryCode'=eo.category_code and mv.rules->'eprBinding'->>'unitCode'=m.unit
+        where r.id=$1 and r.organization_id=$2 and r.status='DRAFT'
+          and exists(select 1 from organization_memberships om join roles ro on ro.id=om.role_id where om.identity_id=v.verifier_identity_id and om.status='VERIFIED'
+            and organization_has_geography_scope(om.organization_id,a.geography_id)
+            and exists(select 1 from jsonb_array_elements_text(ro.permissions) p where p=any($3::text[])))
+          and not exists(select 1 from epr_return_quantity_bindings b where b.measurement_id=m.id or b.custody_link_id=c.id)
+          and (select coalesce(sum(b.measured_quantity),0)+m.value <= rf.declared_quantity from epr_return_quantity_bindings b where b.resource_flow_id=rf.id)
+        order by m.measured_at desc limit 100`, [returnId, row.organization_id, ["VERIFY_EVIDENCE", "verification:approve", "verification.approve"]]);
+      return { source: "postgresql", syntheticData: false, binding: null, options: options.rows };
+    } catch (error) { request.log.error(error); return reply.code(503).send({ error: "EPR quantity-binding options unavailable", syntheticData: false }); }
+  });
+
   app.post("/api/v1/epr/returns/:returnId/bind-quantity", async (request, reply) => {
     const auth = await authFor(request, reply, pool); if (!auth || !pool) return;
     const { returnId } = request.params as { returnId: string };
@@ -136,9 +169,11 @@ export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool |
           and exists(select 1 from jsonb_array_elements_text(r.permissions) p where p=any($3::text[]))) as ok`, [src.verifier_identity_id, src.geography_id, ["VERIFY_EVIDENCE", "verification:approve", "verification.approve"]]);
       if (verifier.rows[0]?.ok !== true) { await client.query("ROLLBACK"); return reply.code(409).send({ error: "Approving verifier lacks current database-backed verification authority for the evidence geography", code: "EPR_VERIFIER_AUTHORITY_INVALID" }); }
       const inserted = await client.query(`insert into epr_return_quantity_bindings
-        (epr_return_id,obligation_id,measurement_id,resource_flow_id,custody_link_id,evidence_id,verification_id,methodology_version_id,category_code,unit_code,period_start,period_end,measured_quantity,created_by_identity_id)
-        values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::date,$12::date,$13::numeric,$14) returning id,epr_return_id,obligation_id,measurement_id,resource_flow_id,custody_link_id,evidence_id,verification_id,methodology_version_id,category_code,unit_code,period_start,period_end,measured_quantity,created_at`,
-        [returnId,row.epr_obligation_id,measurementId,resourceFlowId,custodyLinkId,evidenceId,verificationId,methodologyVersionId,row.category_code,src.measurement_unit,row.period_start,row.period_end,src.measured_quantity,auth.identityId]);
+        (epr_return_id,obligation_id,measurement_id,resource_flow_id,custody_link_id,evidence_id,verification_id,methodology_version_id,category_code,unit_code,period_start,period_end,measured_quantity,created_by_identity_id,declared_quantity_before_binding)
+        values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::date,$12::date,$13::numeric,$14,$15::numeric) returning id,epr_return_id,obligation_id,measurement_id,resource_flow_id,custody_link_id,evidence_id,verification_id,methodology_version_id,category_code,unit_code,period_start,period_end,measured_quantity,declared_quantity_before_binding,created_at`,
+        [returnId,row.epr_obligation_id,measurementId,resourceFlowId,custodyLinkId,evidenceId,verificationId,methodologyVersionId,row.category_code,src.measurement_unit,row.period_start,row.period_end,src.measured_quantity,auth.identityId,row.reported_quantity]);
+      const reconciled = await client.query("update epr_returns set reported_quantity=$2::numeric where id=$1 and status='DRAFT' returning id", [returnId, src.measured_quantity]);
+      if (!reconciled.rows[0]) { await client.query("ROLLBACK"); return reply.code(409).send({ error: "EPR return changed while quantity binding was being saved", code: "EPR_RETURN_STATE_CONFLICT" }); }
       await client.query("COMMIT");
       return reply.code(201).send({ source: "postgresql", syntheticData: false, quantityBinding: inserted.rows[0], statutoryFulfillmentApplied: false });
     } catch (error: unknown) {
