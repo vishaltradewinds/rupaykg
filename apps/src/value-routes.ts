@@ -10,6 +10,9 @@ type Request = { body: unknown; params: Record<string, string>; log: { error: (e
 function bodyOf(request: Request): Record<string, unknown> { return request.body && typeof request.body === "object" ? request.body as Record<string, unknown> : {}; }
 function str(body: Record<string, unknown>, key: string): string | null { return typeof body[key] === "string" && body[key].trim() ? body[key].trim() : null; }
 function nonNegative(body: Record<string, unknown>, key: string): number | null { const n = Number(body[key]); return Number.isFinite(n) && n >= 0 ? n : null; }
+export function resolveEsgReportingBoundary(input: unknown): string | null {
+  return typeof input === "string" && input.trim() ? input.trim() : null;
+}
 export function normalizeEsgMetricMetadata(input: unknown): Record<string, unknown> {
   const metadata = input && typeof input === "object" && !Array.isArray(input) ? { ...(input as Record<string, unknown>) } : {};
   const declaredAssurance = typeof metadata.assuranceStatus === "string" ? metadata.assuranceStatus : typeof metadata.assurance_status === "string" ? metadata.assurance_status : undefined;
@@ -79,9 +82,11 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
     const periodId = (request.params as { periodId: string }).periodId; const body = bodyOf(request as never); const metricCode = str(body, "metricCode"); const scope = str(body, "scope") as "1" | "2" | "3" | "IMPACT" | null; const unit = str(body, "unit"); const value = nonNegative(body, "value");
     if (!metricCode || !scope || !["1","2","3","IMPACT"].includes(scope) || !unit || value === null) return reply.code(400).send({ error: "metricCode, scope, unit and non-negative value are required" });
     try {
-      const period = await pool.query<{ organization_id: string }>("select organization_id from esg_reporting_periods where id = $1", [periodId]);
+      const period = await pool.query<{ organization_id: string; reporting_boundary: string | null }>("select organization_id, reporting_boundary from esg_reporting_periods where id = $1", [periodId]);
       if (!period.rows[0]) return reply.code(404).send({ error: "Reporting period not found" });
       const organizationId = period.rows[0].organization_id;
+      const reportingBoundary = resolveEsgReportingBoundary(period.rows[0].reporting_boundary);
+      if (!reportingBoundary) return reply.code(409).send({ error: "ESG reporting period requires an explicit reporting boundary before metrics can be recorded", code: "ESG_REPORTING_BOUNDARY_REQUIRED", productionGate: "HOLD" });
       if (!canActForOrganization(auth, organizationId)) return reply.code(403).send({ error: "Organization access denied", code: "ORG_FORBIDDEN" });
       if (!await hasValuePermission(pool, "can_write_esg", auth.identityId, organizationId)) return reply.code(403).send({ error: "ESG metric write permission required", code: "ESG_WRITE_FORBIDDEN" });
       const evidenceId = str(body, "evidenceId"); const verificationId = str(body, "verificationId");
@@ -98,8 +103,8 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
         if (!verified.rows[0]) return reply.code(409).send({ error: "Verification is not an approved verification for the supplied evidence", code: "VERIFICATION_INVALID" });
       }
       const persistedMetadata = normalizeEsgMetricMetadata(body.metadata);
-      const inserted = await pool.query("insert into esg_metrics (reporting_period_id, metric_code, scope, value, unit, evidence_id, verification_id, status, metadata) values ($1,$2,$3,$4,$5,$6,$7,$8,$9) returning *", [periodId, metricCode, scope, value, unit, evidenceId, verificationId, state, persistedMetadata]);
-      return reply.code(201).send({ source: "postgresql", syntheticData: false, metric: inserted.rows[0], state });
+      const inserted = await pool.query("insert into esg_metrics (reporting_period_id, metric_code, scope, value, unit, evidence_id, verification_id, status, metadata, reporting_boundary) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) returning *", [periodId, metricCode, scope, value, unit, evidenceId, verificationId, state, persistedMetadata, reportingBoundary]);
+      return reply.code(201).send({ source: "postgresql", syntheticData: false, metric: inserted.rows[0], state, reportingBoundary, reportingBoundarySource: "ESG_REPORTING_PERIOD" });
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "ESG metric recording unavailable", syntheticData: false }); }
   });
 
