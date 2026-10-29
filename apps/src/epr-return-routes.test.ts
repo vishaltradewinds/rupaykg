@@ -418,9 +418,13 @@ test("EPR quantity binding rejects resource-flow over-allocation before insertin
   assert.equal(response.statusCode, 409);
   assert.equal(response.json().code, "EPR_FLOW_MASS_BALANCE_EXCEEDED");
   assert.deepEqual(transactions, ["BEGIN", "ROLLBACK"], "resource-flow over-allocation must abort before inserting a binding");
-  assert.ok(queries.some((query) => query.sql.includes("select coalesce(sum(measured_quantity),0)+$2::numeric") && query.values?.[0] === "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaab"), "flow capacity must be checked under the resource-flow lock");
+  const flowLockIndex = queries.findIndex((query) => query.sql.includes("select id from resource_flows where id=$1 for update"));
+  const capacityCheckIndex = queries.findIndex((query) => query.sql.includes("select coalesce(sum(measured_quantity),0)+$2::numeric") && query.values?.[0] === "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaab");
+  assert.ok(flowLockIndex >= 0, "resource flow must be locked before capacity is evaluated");
+  assert.ok(capacityCheckIndex > flowLockIndex, "capacity check must run after the resource-flow lock to serialize competing bindings");
   assert.equal(queries.some((query) => query.sql.includes("insert into epr_return_quantity_bindings")), false);
 });
+
 
 
 
