@@ -115,3 +115,9 @@ Responses must not reveal whether a foreign organization's record exists. Return
 9. **TRL:** current GRI extension remains an engineering estimate of TRL 3 (isolated prototype). API contract completion alone does not raise TRL; end-to-end validation evidence is required.
 
 **Implementation decision:** defer routes, persistence and migrations until the dependency gates above are cleared. This document deliberately avoids modifying the concurrent ESG/EPR route files and migration ledger.
+
+## Registry-wide activation gate — critical control
+
+The current PR #119 register declares `registryStatus: RESEARCH_ONLY` and `activationPolicy: FAIL_CLOSED`; its listed sources also have pending archive/hash evidence. A source row that appears individually approved must not bypass this registry-wide state. The GRI source-binding helper therefore requires the trusted registry record to have `registryStatus: ACTIVE`, the individual record to be `VERIFIED_AND_APPROVED`, and a valid archive hash. `RESEARCH_ONLY` and `SUSPENDED` always block.
+
+The helper also rejects malformed effective-date fields and inverted effective-date ranges. This is a syntax/range guard only; the calling workflow must still compare the reporting period against the source's effective dates and confirm jurisdiction, actor, waste stream and applicable instrument. No source may be activated until PR #119's required release evidence and independent review are complete.
