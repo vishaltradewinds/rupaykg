@@ -16,10 +16,15 @@ const assertDisposableDatabaseTarget = (connectionString) => {
   try { parsed = new URL(connectionString); } catch {
     throw new Error("Refusing database integration tests: DATABASE_URL is not a valid URL.");
   }
+  if (!["postgres:", "postgresql:"].includes(parsed.protocol)) {
+    throw new Error("Refusing database integration tests: DATABASE_URL must use postgres:// or postgresql://.");
+  }
+  // WHATWG URL.hostname keeps brackets around IPv6 literals in Node.
+  const hostname = parsed.hostname.replace(/^\\[|\\]$/g, "").toLowerCase();
   const safeHosts = new Set(["localhost", "127.0.0.1", "::1"]);
-  if (!safeHosts.has(parsed.hostname)) {
+  if (!safeHosts.has(hostname)) {
     throw new Error(
-      `Refusing destructive schema-based acceptance tests against host "${parsed.hostname}". ` +
+      `Refusing destructive schema-based acceptance tests against host "${hostname}". ` +
       "Use a dedicated disposable PostgreSQL instance bound to loopback; these tests create and drop schemas.",
     );
   }
