@@ -119,3 +119,47 @@ test("approved mappings require a versioned change instead of being reopened in 
   assert.equal(result.decision, "BLOCKED");
   assert.ok(result.blockers.includes("APPROVED_MAPPING_IMMUTABLE_VERSION_REQUIRED"));
 });
+
+
+test("missing source version, target version and rationale block human review", () => {
+  const result = evaluateGriCrossMappingForReview({
+    ...validReviewInput,
+    sourceRequirement: { ...validReviewInput.sourceRequirement, version: " " },
+    targetDisclosure: { ...validReviewInput.targetDisclosure, version: "" },
+    rationale: "short",
+  });
+  assert.equal(result.decision, "BLOCKED");
+  assert.ok(result.blockers.includes("SOURCE_VERSION_REQUIRED"));
+  assert.ok(result.blockers.includes("TARGET_VERSION_REQUIRED"));
+  assert.ok(result.blockers.includes("MAPPING_RATIONALE_INSUFFICIENT"));
+});
+
+test("rejected or quarantined evidence blocks the mapping even with complete lineage", () => {
+  for (const integrityStatus of ["rejected", "quarantined"] as const) {
+    const result = evaluateGriCrossMappingForReview({
+      ...validReviewInput,
+      evidence: {
+        required: true,
+        items: [{ integrityStatus }],
+        lineageStatus: "complete",
+      },
+    });
+    assert.equal(result.decision, "BLOCKED");
+    assert.ok(result.blockers.includes("EVIDENCE_INTEGRITY_NOT_VALIDATED"));
+  }
+});
+
+test("failed double-counting checks and non-reviewable lifecycle states block", () => {
+  const doubleCount = evaluateGriCrossMappingForReview({
+    ...validReviewInput,
+    controls: { ...validReviewInput.controls, doubleCountingCheck: "failed" },
+  });
+  assert.equal(doubleCount.decision, "BLOCKED");
+  assert.ok(doubleCount.blockers.includes("DOUBLE_COUNTING_CHECK_FAILED"));
+
+  for (const status of ["blocked", "deprecated"] as const) {
+    const result = evaluateGriCrossMappingForReview({ ...validReviewInput, status });
+    assert.equal(result.decision, "BLOCKED");
+    assert.ok(result.blockers.includes("MAPPING_STATUS_NOT_REVIEWABLE"));
+  }
+});
