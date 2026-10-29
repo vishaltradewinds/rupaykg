@@ -24,6 +24,19 @@ async function authFor(request: Parameters<typeof authenticate>[0], reply: { cod
     return null;
   }
 }
+function requestedGeography(request: { query: unknown }): string | null {
+  const query = request.query && typeof request.query === "object" ? request.query as Record<string, unknown> : {};
+  return typeof query.geographyId === "string" && query.geographyId.trim() ? query.geographyId.trim() : null;
+}
+async function authorizeGeography(pool: Pool, auth: AuthContext, organizationId: string, geographyId: string): Promise<boolean> {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(geographyId)) return false;
+  if (!auth.memberships.some((membership) => membership.organization_id === organizationId && membership.status === "VERIFIED")) return false;
+  const result = await pool.query<{ ok: boolean }>(
+    "select organization_has_geography_scope($1::uuid,$2::uuid) as ok",
+    [organizationId, geographyId]
+  );
+  return result.rows[0]?.ok === true;
+}
 function canAct(auth: AuthContext, organizationId: string): boolean {
   return auth.memberships.some((membership) => membership.organization_id === organizationId && membership.status === "VERIFIED");
 }
@@ -34,8 +47,12 @@ export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool |
     const organizationId = typeof request.headers["x-rupaykg-organization-id"] === "string" ? request.headers["x-rupaykg-organization-id"] : auth.activeOrganizationId;
     if (!organizationId || !canAct(auth, organizationId)) return reply.code(403).send({ error: "Verified organization membership required", code: "ORG_FORBIDDEN" });
     if (!await hasOrganizationPermission(pool, auth, organizationId, ["epr:read", "epr:manage", "reports:read"])) return reply.code(403).send({ error: "EPR return read permission required", code: "EPR_RETURN_READ_FORBIDDEN" });
+    const geographyId = requestedGeography(request);
+    if (geographyId && !await authorizeGeography(pool, auth, organizationId, geographyId)) return reply.code(403).send({ error: "Geography outside organization authorization scope", code: "GEOGRAPHY_FORBIDDEN" });
     try {
-      const rows = await pool.query(`select r.id,r.scheme_id,s.code as scheme_code,s.name as scheme_name,r.organization_id,r.obligation_id,r.period_start,r.period_end,r.return_type,r.reported_quantity,r.obligation_quantity,r.fulfilled_quantity,r.status,r.external_reference,r.evidence_id,r.verification_id,r.submitted_at,r.created_at from epr_returns r join epr_schemes s on s.id=r.scheme_id where r.organization_id=$1 order by r.period_end desc,r.created_at desc limit 100`, [organizationId]);
+      const params: unknown[] = [organizationId];
+      if (geographyId) params.push(geographyId);
+      const rows = await pool.query(`select r.id,r.scheme_id,s.code as scheme_code,s.name as scheme_name,r.organization_id,r.obligation_id,r.period_start,r.period_end,r.return_type,r.reported_quantity,r.obligation_quantity,r.fulfilled_quantity,r.status,r.external_reference,r.evidence_id,r.verification_id,r.submitted_at,r.created_at,o.jurisdiction_id from epr_returns r join epr_obligations eo on eo.id=r.obligation_id join obligations o on o.id=eo.obligation_id join epr_schemes s on s.id=r.scheme_id where r.organization_id=$1 and organization_has_geography_scope(r.organization_id,o.jurisdiction_id)${geographyId ? " and o.jurisdiction_id=$2" : ""} order by r.period_end desc,r.created_at desc limit 100`, params);
       return { source: "postgresql", syntheticData: false, returns: rows.rows };
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "EPR return workspace unavailable", syntheticData: false }); }
   });
