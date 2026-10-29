@@ -158,3 +158,29 @@ test("government inbox timestamp validation checks calendar, clock, precision, a
     assert.equal(isValidSyncWindowTimestamp(timestamp), expected, timestamp);
   }
 });
+
+
+test("worker does not report success when both outcome and retry persistence fail", async () => {
+  const attemptedWrites: string[] = [];
+  const pool = {
+    query: async (sql: string) => {
+      if (sql.includes("returning inbox.id")) return { rows: [row], rowCount: 1 };
+      if (sql.includes("from government_jurisdiction_crosswalks c")) return { rows: [], rowCount: 0 };
+      if (sql.includes("set status='UNRESOLVED'")) {
+        attemptedWrites.push("outcome");
+        throw new Error("synthetic outcome persistence failure");
+      }
+      if (sql.includes("set status=$3")) {
+        attemptedWrites.push("retry");
+        throw new Error("synthetic retry persistence failure");
+      }
+      return { rows: [], rowCount: 1 };
+    },
+  } as unknown as Pool;
+
+  await assert.rejects(
+    runGovernmentInboxWorker(pool),
+    /synthetic retry persistence failure/,
+  );
+  assert.deepEqual(attemptedWrites, ["outcome", "retry"]);
+});
