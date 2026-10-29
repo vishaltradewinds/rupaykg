@@ -337,9 +337,9 @@ test("EPR quantity binding rejects a verifier outside the return organization an
   assert.deepEqual(transactions, ["BEGIN", "ROLLBACK"], "invalid verifier authority must abort before inserting a binding");
   const authority = queries.find((query) => query.sql.includes("for share of om, r, i"));
   assert.ok(authority, "binding-time verifier authorization must lock membership, role, and identity rows");
-  assert.match(authority!.sql, /om\\.organization_id=\\$4/);
-  assert.match(authority!.sql, /i\\.status='VERIFIED'/);
-  assert.match(authority!.sql, /i\\.suspended_at is null/);
+  assert.ok(authority!.sql.includes("om.organization_id=$4"));
+  assert.ok(authority!.sql.includes("i.status='VERIFIED'"));
+  assert.ok(authority!.sql.includes("i.suspended_at is null"));
   assert.deepEqual(authority!.values?.[3], organizationId, "verifier must belong to the return organization");
   assert.equal(queries.some((query) => query.sql.includes("insert into epr_return_quantity_bindings")), false);
 });
