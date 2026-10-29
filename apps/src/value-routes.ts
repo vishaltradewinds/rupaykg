@@ -1,7 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type { Pool, PoolClient } from "pg";
 import { calculateEmissionReduction, isGenericCalculationMethodAllowed, sha256Canonical } from "@rupaykg/carbon";
-import { assessEprObligation } from "@rupaykg/compliance";
 import { classifyMetric } from "@rupaykg/esg";
 import { authenticate, canActForOrganization, hasOrganizationPermission, type AuthContext } from "./auth.js";
 import { registerAuthRoutes } from "./auth-routes.js";
