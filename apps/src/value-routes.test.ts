@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import Fastify from "fastify";
 import type { Pool } from "pg";
-import { registerValueRoutes } from "./value-routes.js";
+import { normalizeEsgMetricMetadata, registerValueRoutes } from "./value-routes.js";
 
 const ORG = "123e4567-e89b-42d3-a456-426614174001";
 const IDENTITY = "123e4567-e89b-42d3-a456-426614174007";
@@ -43,4 +43,22 @@ test("legacy EPR assessment fails closed and does not mutate obligation state", 
   } finally {
     await app.close();
   }
+});
+
+test("ESG assurance metadata is stored as an unverified declaration", () => {
+  const normalized = normalizeEsgMetricMetadata({
+    disclosureId: "BRSR-TEST",
+    assuranceStatus: "ASSURED",
+    assurance_status: "ASSESSED",
+    declaredAssuranceStatus: "FORGED",
+    declared_assurance_status: "FORGED_SNAKE",
+    methodology: "declared methodology"
+  });
+
+  assert.equal(normalized.assuranceStatus, "DECLARED_UNVERIFIED");
+  assert.equal(normalized.declaredAssuranceStatus, "ASSURED");
+  assert.equal(normalized.disclosureId, "BRSR-TEST");
+  assert.equal(normalized.methodology, "declared methodology");
+  assert.equal("assurance_status" in normalized, false);
+  assert.equal("declared_assurance_status" in normalized, false);
 });
