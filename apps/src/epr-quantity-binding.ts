@@ -24,6 +24,12 @@ export type EprQuantityBindingDecision =
  * supplies a complete, trusted binding assembled from persisted records.
  * HTTP request fields must never be mapped directly into this type.
  */
+function isIsoCalendarDate(value: string): boolean {
+  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}
+
 export function evaluateEprQuantityBinding(
   binding: EprQuantityBinding | undefined,
 ): EprQuantityBindingDecision {
@@ -36,6 +42,8 @@ export function evaluateEprQuantityBinding(
   if (required.some((value) => typeof value !== "string" || value.trim() === "")
     || !Number.isFinite(binding.measuredQuantity)
     || binding.measuredQuantity <= 0
+    || !isIsoCalendarDate(binding.periodStart)
+    || !isIsoCalendarDate(binding.periodEnd)
     || binding.periodStart > binding.periodEnd
     || binding.measurementVerified !== true
     || binding.verifierCurrentlyAuthorized !== true
