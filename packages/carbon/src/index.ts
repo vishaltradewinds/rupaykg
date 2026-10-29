@@ -263,3 +263,5 @@ export function isIssuableCarbonValue(status: string, issuanceEvidence?: Externa
   // A completed calculation or a count of internal reviews is never proof of CCC issuance.
   return status === "ISSUED" && canClaimIssuedCarbonCredit("ISSUED", issuanceEvidence);
 }
+
+export * from "./icvcm-ccp-integrity.js";
