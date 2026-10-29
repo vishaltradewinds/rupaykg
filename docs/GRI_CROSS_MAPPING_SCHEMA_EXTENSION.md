@@ -1,7 +1,7 @@
 # GRI Cross-Mapping Schema Extension — RupayKg
 
 **Status:** Draft engineering foundation; not production-certified.  
-**Schema version:** 1.0.0  
+**Schema version:** 1.1.0  
 **Target repository:** `vishaltradewinds/rupaykg`
 
 ## Repository audit and integration boundary
@@ -32,7 +32,7 @@ Official GRI sources confirm that GRI 101 Biodiversity 2024 took effect for repo
 ## Record contract
 
 `schemas/gri-cross-mapping.schema.json` defines a mapping record containing:
-- Source requirement identity, legal/voluntary authority type, version, official source and effective dates.
+- Source requirement identity, legal/voluntary authority type, version, official source and effective dates, plus a governed source-register ID, validation state and archived SHA-256.
 - Target framework, GRI standard/disclosure identifier, version and effective date.
 - Relationship class and documented rationale/limitations.
 - Entity-specific applicability, thresholds, period and reviewer.
@@ -133,3 +133,8 @@ After the migration ledger is reconciled and the regulatory source register from
 **Engineering disposition (2026-10-29):** schema, isolated advisory evaluator/adapter/tests are present on this draft branch. ESG package build/typecheck and seven ESG tests passed locally; schema compilation and positive/negative fixtures passed under Ajv Draft 2020-12. The broader local test suite has 90 passes, 8 skips and one unrelated CORS runtime test failure; this must be diagnosed before claiming a green local suite. A proposed GRI registry migration was removed from this branch after the audit identified unresolved production/staging migration-ledger chronology and concurrent numbered migrations in PR #120; do not reintroduce a migration until that gate is reconciled. Authenticated route registration and organization-scoped write APIs, route-level audit-event creation, persistence migration, root-index integration, stakeholder UI/exports, integration with draft PR #119's regulatory source register, independent review and production certification remain open gates. Do not merge or deploy until those gates are evidenced.
 
 **Latest-head CI evidence (2026-10-29):** GitHub Actions run [40945135850](https://github.com/vishaltradewinds/rupaykg/actions/runs/40945135850) completed successfully for commit `98eedcc444496b2636f334dfc38a1a01de01e61f`, including the repository validation job, tests with disposable PostgreSQL acceptance, and production-container build. This confirms CI for that exact draft head only; it does not close the integration, regulatory activation, migration reconciliation, independent review, or production-certification gates listed above.
+
+
+### Source-register fail-closed enforcement (schema 1.1.0)
+
+The schema requires `source_requirement.source_validation` with a stable source-register ID, explicit validation state and SHA-256 field. The runtime review gate blocks any state other than `VERIFIED_AND_APPROVED`, and blocks a missing or malformed 64-character SHA-256. `DISCOVERY_SOURCE`, `NOT_ARCHIVED_HASH_PENDING`, `CURRENT_VERSION_MUST_BE_RECONFIRMED`, and `UNRESOLVED` cannot reach `READY_FOR_HUMAN_REVIEW`. This local fail-closed contract does not replace independent legal/domain approval. PR #119 remains research-only until its release evidence is complete.
