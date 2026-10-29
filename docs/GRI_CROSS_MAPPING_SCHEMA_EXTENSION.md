@@ -138,3 +138,15 @@ After the migration ledger is reconciled and the regulatory source register from
 ### Source-register fail-closed enforcement (schema 1.1.0)
 
 The schema requires `source_requirement.source_validation` with a stable source-register ID, explicit validation state and SHA-256 field. The runtime review gate blocks any state other than `VERIFIED_AND_APPROVED`, and blocks a missing or malformed 64-character SHA-256. `DISCOVERY_SOURCE`, `NOT_ARCHIVED_HASH_PENDING`, `CURRENT_VERSION_MUST_BE_RECONFIRMED`, and `UNRESOLVED` cannot reach `READY_FOR_HUMAN_REVIEW`. This local fail-closed contract does not replace independent legal/domain approval. PR #119 remains research-only until its release evidence is complete.
+
+### Source URL trust boundary — explicit pre-production gate
+
+The current evaluator validates URL syntax (HTTPS, a parseable hostname, and no embedded credentials) but does **not** establish that the hostname or URL is controlled by the relevant regulator or standard setter. A syntactically valid HTTPS URL can still point to an impersonation domain. The current schema's `source_url`, `source_id`, validation status and hash are data fields; their presence alone does not prove they came from a trusted registry service.
+
+Therefore:
+
+- Treat URL validation as input hygiene only, never as proof of source authority.
+- At integration, resolve `source_id` server-side against the accepted, version-pinned regulatory source register. Require the submitted canonical source URL, source version, archive object/hash and effective-date metadata to match that trusted record; reject mismatches.
+- Do not allow client-supplied `VERIFIED_AND_APPROVED` status or SHA-256 values to self-authorize a source. These fields must be derived from server-controlled registry records and independently approved evidence.
+- Add adversarial tests for lookalike domains, unexpected subdomains, redirects, URL/userinfo confusion, stale versions and source-ID/URL/hash mismatches. Test redirect destinations at fetch time and avoid fetching arbitrary user-supplied URLs from privileged server environments.
+- Until this trusted registry binding exists, the module remains a review-gate prototype and must not be used to issue legal-compliance conclusions or activate production mappings.
