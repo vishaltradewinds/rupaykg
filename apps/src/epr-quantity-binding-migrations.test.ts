@@ -59,3 +59,20 @@ test("EPR submission remains fail-closed until authoritative quantity binding is
   assert.match(route, /epr_quantity_binding_not_implemented/);
   assert.match(route, /productiongate\s*:\s*["']hold["']/);
 });
+
+test("EPR obligation allocation refuses mixed target units until an authoritative obligation unit exists", async () => {
+  const sql = await migration("103_epr_obligation_allocation_unit_consistency.sql");
+  assert.match(sql, /prior\.obligation_id = new\.obligation_id/);
+  assert.match(sql, /prior\.quantity_unit is distinct from new\.quantity_unit/);
+  assert.match(sql, /epr obligation allocations must use one consistent target unit/);
+});
+
+test("EPR source observation cannot be bound twice and allocation ledger remains append-only", async () => {
+  const schema = await migration("097_epr_authoritative_quantity_binding.sql");
+  const allocationGuard = await migration("097_epr_authoritative_quantity_binding.sql");
+  const immutability = await migration("102_epr_source_binding_immutability.sql");
+  assert.match(schema, /unique\s*\(mrv_observation_id\)/);
+  assert.match(allocationGuard, /idempotency_key text not null unique/);
+  assert.match(allocationGuard, /epr quantity allocation events are append-only/);
+  assert.match(immutability, /before update or delete on epr_quantity_source_bindings/);
+});
