@@ -8,14 +8,17 @@ This packet consolidates the currently recorded engineering evidence and unresol
 
 ## 1. Pull-request and CI evidence snapshot
 
-Snapshot taken 2026-10-29 from GitHub PR metadata, reviews, and PR-triggered workflow runs. CI conclusions apply only to the exact commit shown.
+Snapshot refreshed 2026-10-29 from GitHub PR metadata, reviews, and PR-triggered workflow runs. CI conclusions apply only to the exact commit shown; a documentation refresh commit may require its own CI run.
 
 | PR | Workstream | Head SHA | Recorded CI result | Current disposition |
 |---|---|---|---|---|
-| #97 | ICVCM integrity controls with governed agentic foundation | `730327adc30cfaea0441f77adb12a757305d3514` | CI completed successfully | Open; no submitted review found |
-| #102 | Guardian/Mirror Node response hardening | `eaa3ff53e467b66d246c6fd0feac7611c0a6c20c` | CI completed successfully | Open; no submitted review found |
-| #108 | Dual-ledger migration compatibility acceptance | `c628446fd91b3eb31dc37e500cbe3677809d1feb` | CI completed successfully | Draft/open; no submitted review found |
-| #109 | Government inbox scheduler shutdown lifecycle | `0d41b103523dd586de19d3c5bdbb462e23f9bca9` | No PR-triggered workflow run found for this head | Draft/open; exact-head CI required |
+| #97 | ICVCM integrity controls and governed agentic foundation | `49d4da5480f32fb1bc5b4d2057d605f5ab035ad2` | CI passed on preceding code head; documentation-only reference correction has a new run pending | Open; no independent review; migration compatibility and live external acceptance remain blockers |
+| #102 | Guardian/Mirror Node response hardening | `bb9a12686e54a586aa995d77e1301ea02b1276ed` | CI passed (workflow `40829616919`) | Open; no independent review; live Guardian/Hedera/Mirror Node round trip not demonstrated |
+| #108 | Dual-ledger migration compatibility acceptance and production TLS hardening | `12b3860616dfae3a080ccf93051b0ab0bbcce6e3` | CI passed (workflow `40831743887`) | Open; historical migration-source/ledger mismatch remains a hard blocker |
+| #109 | Government inbox scheduler shutdown and worker lease safety | `3013a5fbde5567e67a23ab851f3eadddcfc37bc7` | CI passed (workflow `40831665247`) | Open; independent review and cross-PR release reconciliation required |
+| #110 | Intelligence-branch CI validation | `a0d7a4cd6f57a752ff1aeac532097f12974811a4` | CI passed (workflow `40829157476`) | Open; reproducible `npm ci` install and own-branch trigger validated |
+| #106 | Migration-candidate validation / diagnostic evidence | `4939debab84e66ef87674ba18f0e797b9eb309f5` | CI passed (workflow `40716535582`) | Draft/open; diagnostic only, does not reconcile live migration histories |
+| #107 | Fail-closed guard for orphaned migration history | `8ef76f327cf4266d2da745f7a12c272e9b15e3e0` | CI passed (workflow `40723839400`) | Open; preventive guard only, not a substitute for per-environment migration reconciliation |
 
 References:
 - PR #97: https://github.com/vishaltradewinds/rupaykg/pull/97
