@@ -156,3 +156,78 @@ test("EPR quantity binding preserves immutable provenance, consumption, and uniq
     await admin.end();
   }
 });
+
+test("PostgreSQL resource-flow row lock serializes competing quantity allocations", {
+  skip: !enabled || !databaseUrl ? "requires disposable PostgreSQL and RUPAYKG_RUN_DB_INTEGRATION_TESTS=1" : false,
+}, async () => {
+  const admin = new Pool({ connectionString: databaseUrl, max: 1 });
+  const schema = `epr_binding_concurrency_it_${randomUUID().replaceAll("-", "")}`;
+  let pool: Pool | undefined;
+  let first: import("pg").PoolClient | undefined;
+  let second: import("pg").PoolClient | undefined;
+  try {
+    await admin.query(`create schema "${schema}"`);
+    pool = new Pool({
+      connectionString: databaseUrl,
+      max: 3,
+      options: `-c search_path=${schema},public`,
+    });
+    await pool.query(`
+      create table resource_flows (
+        id uuid primary key,
+        declared_quantity numeric(20,6) not null check (declared_quantity > 0)
+      );
+      create table epr_return_quantity_bindings (
+        id uuid primary key,
+        resource_flow_id uuid not null references resource_flows(id),
+        measured_quantity numeric(20,6) not null check (measured_quantity > 0)
+      )
+    `);
+    const flowId = randomUUID();
+    await pool.query("insert into resource_flows(id,declared_quantity) values ($1,10)", [flowId]);
+
+    first = await pool.connect();
+    second = await pool.connect();
+    await first.query("begin");
+    await first.query("select id from resource_flows where id=$1 for update", [flowId]);
+
+    // The second transaction must wait for the same flow-row lock. Once the
+    // first allocation commits, its capacity query must see that committed row.
+    await second.query("begin");
+    const waitingLock = second.query("select id from resource_flows where id=$1 for update", [flowId]);
+    await first.query(
+      "insert into epr_return_quantity_bindings(id,resource_flow_id,measured_quantity) values ($1,$2,6)",
+      [randomUUID(), flowId],
+    );
+    await first.query("commit");
+    await waitingLock;
+
+    const capacity = await second.query(
+      "select coalesce(sum(measured_quantity),0)+$2::numeric <= rf.declared_quantity as within_capacity " +
+      "from resource_flows rf left join epr_return_quantity_bindings b on b.resource_flow_id=rf.id " +
+      "where rf.id=$1 group by rf.declared_quantity",
+      [flowId, 6],
+    );
+    assert.equal(capacity.rows[0]?.within_capacity, false, "second allocation must observe the first committed allocation");
+    await second.query("rollback");
+
+    const retained = await pool.query(
+      "select coalesce(sum(measured_quantity),0)::text as allocated from epr_return_quantity_bindings where resource_flow_id=$1",
+      [flowId],
+    );
+    assert.equal(retained.rows[0]?.allocated, "6.000000", "only the first allocation may be retained");
+  } finally {
+    if (first) {
+      await first.query("rollback").catch(() => undefined);
+      first.release();
+    }
+    if (second) {
+      await second.query("rollback").catch(() => undefined);
+      second.release();
+    }
+    await pool?.end();
+    await admin.query(`drop schema if exists "${schema}" cascade`).catch(() => undefined);
+    await admin.end();
+  }
+});
+
