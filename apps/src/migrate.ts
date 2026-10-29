@@ -27,8 +27,17 @@ try {
   // container (/app/apps/dist/src). Never assume a single filesystem root.
   const here = path.dirname(fileURLToPath(import.meta.url));
   const candidates = [path.resolve(here, "../../migrations"), path.resolve(here, "../../../migrations")];
-  const migrationDir = candidates.find((candidate) => existsSync(candidate));
-  if (!migrationDir) throw new Error(`Migration directory not found. Checked: ${candidates.join(", ")}`);
+  // Isolated test catalog override is available only when the migration-history
+  // acceptance test explicitly opts in; never honor this variable in normal runs.
+  const testMigrationDir = process.env.RUPAYKG_RUN_MIGRATION_HISTORY_TESTS === "1"
+    ? process.env.RUPAYKG_TEST_MIGRATIONS_DIR
+    : undefined;
+  const migrationDir = testMigrationDir
+    ? path.resolve(testMigrationDir)
+    : candidates.find((candidate) => existsSync(candidate));
+  if (!migrationDir || !existsSync(migrationDir)) {
+    throw new Error(`Migration directory not found. Checked: ${[testMigrationDir, ...candidates].filter(Boolean).join(", ")}`);
+  }
   const files = (await readdir(migrationDir))
     .filter((name) => /^\d+_.+\.sql$/.test(name))
     .sort();
