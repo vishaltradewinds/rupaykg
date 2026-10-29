@@ -2,6 +2,7 @@ export type GriApplicability = "applicable" | "not_applicable" | "conditional" |
 export type GriEvidenceIntegrity = "unverified" | "validated" | "rejected" | "quarantined";
 export type GriLineageStatus = "missing" | "partial" | "complete" | "exception";
 export type GriDoubleCountingCheck = "not_run" | "passed" | "failed" | "not_applicable";
+export type GriSourceValidationStatus = "DISCOVERY_SOURCE" | "NOT_ARCHIVED_HASH_PENDING" | "CURRENT_VERSION_MUST_BE_RECONFIRMED" | "VERIFIED_AND_APPROVED" | "UNRESOLVED";
 
 /**
  * Minimal runtime view of the versioned JSON Schema record. This evaluator is
@@ -14,6 +15,7 @@ export type GriCrossMappingReviewInput = {
     version: string;
     sourceUrl: string;
     officialSourceVerifiedAt?: string | null;
+    sourceValidation: { status: GriSourceValidationStatus; sourceId: string; sha256: string | null };
   };
   targetDisclosure: {
     version: string;
@@ -55,6 +57,7 @@ export type GriCrossMappingSchemaProjection = {
     version: string;
     source_url: string;
     official_source_verified_at?: string | null;
+    source_validation: { status: GriSourceValidationStatus; source_id: string; sha256: string | null };
   };
   target_disclosure: {
     version: string;
@@ -89,6 +92,7 @@ export function toGriCrossMappingReviewInput(
       version: record.source_requirement.version,
       sourceUrl: record.source_requirement.source_url,
       officialSourceVerifiedAt: record.source_requirement.official_source_verified_at,
+      sourceValidation: { status: record.source_requirement.source_validation.status, sourceId: record.source_requirement.source_validation.source_id, sha256: record.source_requirement.source_validation.sha256 },
     },
     targetDisclosure: {
       version: record.target_disclosure.version,
@@ -154,6 +158,10 @@ export function evaluateGriCrossMappingForReview(
   const blockers: string[] = [];
 
   if (!mapping.sourceRequirement.version.trim()) blockers.push("SOURCE_VERSION_REQUIRED");
+  if (!mapping.sourceRequirement.sourceValidation.sourceId.trim()) blockers.push("SOURCE_REGISTER_ID_REQUIRED");
+  if (mapping.sourceRequirement.sourceValidation.status !== "VERIFIED_AND_APPROVED" || !mapping.sourceRequirement.sourceValidation.sha256 || !/^[a-fA-F0-9]{64}$/.test(mapping.sourceRequirement.sourceValidation.sha256)) {
+    blockers.push("AUTHORITATIVE_SOURCE_NOT_VERIFIED_AND_ARCHIVED");
+  }
   if (!mapping.sourceRequirement.sourceUrl.trim()) blockers.push("SOURCE_URL_REQUIRED");
   else if (!isHttpsUrl(mapping.sourceRequirement.sourceUrl)) blockers.push("SOURCE_URL_INVALID");
   if (!mapping.sourceRequirement.officialSourceVerifiedAt) {
