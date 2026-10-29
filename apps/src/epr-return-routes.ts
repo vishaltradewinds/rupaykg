@@ -249,15 +249,20 @@ export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool |
         await client.query("ROLLBACK");
         return reply.code(409).send({ error: "A current, unconsumed authoritative quantity binding matching the return is required", code: "EPR_AUTHORITATIVE_BINDING_REQUIRED", productionGate: "HOLD" });
       }
-      const currentVerifierAuthority = await client.query(`select exists(select 1 from organization_memberships om
+      // Lock the authority rows until the EPR submission commits. Without these
+      // row locks, a membership revocation, role change, or identity suspension
+      // could race between this check and the authoritative fulfillment mutation.
+      const currentVerifierAuthority = await client.query(`select om.identity_id
+        from organization_memberships om
         join roles r on r.id=om.role_id
         join identities i on i.id=om.identity_id
         where om.identity_id=$1 and om.organization_id=$4 and om.status='VERIFIED'
           and i.status='VERIFIED' and i.suspended_at is null
           and organization_has_geography_scope(om.organization_id,$2)
-          and exists(select 1 from jsonb_array_elements_text(r.permissions) p where p=any($3::text[]))) as ok`,
+          and exists(select 1 from jsonb_array_elements_text(r.permissions) p where p=any($3::text[]))
+        for share of om, r, i`,
         [binding.verifier_identity_id, binding.evidence_geography_id, ["VERIFY_EVIDENCE", "verification:approve", "verification.approve"], row.organization_id]);
-      if (currentVerifierAuthority.rows[0]?.ok !== true) {
+      if (currentVerifierAuthority.rows.length === 0) {
         await client.query("ROLLBACK"); return reply.code(409).send({ error: "Verifier authority is no longer valid", code: "EPR_VERIFIER_AUTHORITY_INVALID" });
       }
       const quantityBinding = evaluateEprQuantityBinding({
