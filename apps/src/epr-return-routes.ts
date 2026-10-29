@@ -33,6 +33,24 @@ export function hasInvalidGeographyFilter(request: { query: unknown }): boolean 
   return Object.prototype.hasOwnProperty.call(query, "geographyId")
     && (typeof query.geographyId !== "string" || query.geographyId.trim().length === 0);
 }
+export async function hasCurrentVerifierAuthorization(pool: Pick<Pool, "query">, verifierIdentityId: string, organizationId: string): Promise<boolean> {
+  const result = await pool.query<{ authorized: boolean }>(
+    `select exists (
+      select 1 from organization_memberships vm
+      join roles vr on vr.id = vm.role_id
+      where vm.identity_id = $1::uuid
+        and vm.organization_id = $2::uuid
+        and vm.status = 'VERIFIED'
+        and (
+          lower(vr.name) in ('verifier','auditor','validator','verification_officer')
+          or vr.permissions @> '["verification:approve"]'::jsonb
+          or vr.permissions @> '["verification.approve"]'::jsonb
+        )
+    ) as authorized`,
+    [verifierIdentityId, organizationId]
+  );
+  return result.rows[0]?.authorized === true;
+}
 export async function authorizeGeography(pool: Pool, auth: AuthContext, organizationId: string, geographyId: string): Promise<boolean> {
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(geographyId)) return false;
   if (!auth.memberships.some((membership) => membership.organization_id === organizationId && membership.status === "VERIFIED")) return false;
@@ -111,9 +129,10 @@ export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool |
       const obligationRow = obligation.rows[0];
       if (!obligationRow) { await client.query("ROLLBACK"); return reply.code(409).send({ error: "Bound EPR obligation not found", code: "OBLIGATION_NOT_FOUND" }); }
       if (!["OPEN", "ELIGIBLE"].includes(obligationRow.status)) { await client.query("ROLLBACK"); return reply.code(409).send({ error: `EPR obligation cannot be fulfilled from ${obligationRow.status}`, code: "OBLIGATION_NOT_ELIGIBLE" }); }
-      const evidence = await client.query(`select e.id,e.status,e.content_hash,e.content_uri,a.organization_id,a.geography_id from evidence e join activities a on a.id=e.activity_id join verifications v on v.id=$2 and v.evidence_id=e.id and v.decision='APPROVED' and (v.activity_id is null or v.activity_id=a.id) where e.id=$1 and exists (select 1 from organization_memberships vm join roles vr on vr.id=vm.role_id where vm.identity_id=v.verifier_identity_id and vm.organization_id=$3 and vm.status='VERIFIED' and (lower(vr.name) in ('verifier','auditor','validator','verification_officer') or vr.permissions @> '[\"verification:approve\"]'::jsonb or vr.permissions @> '[\"verification.approve\"]'::jsonb))`, [evidenceId, verificationId, row.organization_id]);
+      const evidence = await client.query(`select e.id,e.status,e.content_hash,e.content_uri,a.organization_id,a.geography_id,v.verifier_identity_id from evidence e join activities a on a.id=e.activity_id join verifications v on v.id=$2 and v.evidence_id=e.id and v.decision='APPROVED' and (v.activity_id is null or v.activity_id=a.id) where e.id=$1`, [evidenceId, verificationId]);
       const evidenceRow = evidence.rows[0];
-      if (!evidenceRow || evidenceRow.status !== "VERIFIED" || (!evidenceRow.content_hash && !evidenceRow.content_uri) || evidenceRow.organization_id !== row.organization_id || !evidenceRow.geography_id || evidenceRow.geography_id !== row.obligation_geography_id) { await client.query("ROLLBACK"); return reply.code(409).send({ error: "Submission evidence must be verified, provenance-backed, approved, organization-scoped and bound to the obligation geography", code: "EVIDENCE_NOT_ELIGIBLE" }); }
+      const verifierAuthorized = evidenceRow ? await hasCurrentVerifierAuthorization(client, evidenceRow.verifier_identity_id, row.organization_id) : false;
+      if (!evidenceRow || !verifierAuthorized || evidenceRow.status !== "VERIFIED" || (!evidenceRow.content_hash && !evidenceRow.content_uri) || evidenceRow.organization_id !== row.organization_id || !evidenceRow.geography_id || evidenceRow.geography_id !== row.obligation_geography_id) { await client.query("ROLLBACK"); return reply.code(409).send({ error: "Submission evidence must be verified, provenance-backed, approved, organization-scoped and bound to the obligation geography", code: "EVIDENCE_NOT_ELIGIBLE" }); }
       const geo = await client.query(`select organization_has_geography_scope($1,$2) as ok`, [row.organization_id, evidenceRow.geography_id]);
       if (!geo.rows[0]?.ok) { await client.query("ROLLBACK"); return reply.code(403).send({ error: "Evidence geography is outside organization authorization scope", code: "GEOGRAPHY_FORBIDDEN" }); }
       // Serialize submissions that consume the same evidence across different obligations.
