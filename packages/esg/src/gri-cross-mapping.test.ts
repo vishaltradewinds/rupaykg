@@ -176,6 +176,16 @@ test("invalid source URLs and ambiguous verification timestamps fail closed", ()
   assert.equal(invalidUrl.decision, "BLOCKED");
   assert.ok(invalidUrl.blockers.includes("SOURCE_URL_INVALID"));
 
+  const insecureUrl = evaluateGriCrossMappingForReview({
+    ...validReviewInput,
+    sourceRequirement: {
+      ...validReviewInput.sourceRequirement,
+      sourceUrl: "http://example.gov.in/regulation",
+    },
+  });
+  assert.equal(insecureUrl.decision, "BLOCKED");
+  assert.ok(insecureUrl.blockers.includes("SOURCE_URL_INVALID"));
+
   for (const officialSourceVerifiedAt of [
     "not-a-timestamp",
     "2026-10-29T10:00:00",
