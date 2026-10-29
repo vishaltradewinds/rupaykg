@@ -24,11 +24,11 @@ async function authFor(request: Parameters<typeof authenticate>[0], reply: { cod
     return null;
   }
 }
-function requestedGeography(request: { query: unknown }): string | null {
+export function requestedGeography(request: { query: unknown }): string | null {
   const query = request.query && typeof request.query === "object" ? request.query as Record<string, unknown> : {};
   return typeof query.geographyId === "string" && query.geographyId.trim() ? query.geographyId.trim() : null;
 }
-async function authorizeGeography(pool: Pool, auth: AuthContext, organizationId: string, geographyId: string): Promise<boolean> {
+export async function authorizeGeography(pool: Pool, auth: AuthContext, organizationId: string, geographyId: string): Promise<boolean> {
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(geographyId)) return false;
   if (!auth.memberships.some((membership) => membership.organization_id === organizationId && membership.status === "VERIFIED")) return false;
   const result = await pool.query<{ ok: boolean }>(
