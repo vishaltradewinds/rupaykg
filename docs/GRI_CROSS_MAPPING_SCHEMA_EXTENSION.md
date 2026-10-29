@@ -27,7 +27,7 @@ Store exact standard identifiers, versions, effective dates and authoritative UR
 | EPR obligations and returns | Relevant GRI waste/material disclosures | Partial overlap | Never treat GRI mapping as a CPCB filing, certificate or authority acceptance. |
 | ICVCM Core Carbon Principles | Relevant climate/governance disclosures | Contextual | Voluntary integrity benchmarks do not replace Indian law or crediting-program rules. |
 
-GRI 101 Biodiversity 2024 is effective for reporting from January 2026. GRI 102 Climate Change 2025 and GRI 103 Energy 2025 are scheduled to be effective for reporting from January 2027. These effective-date statements remain subject to official-source confirmation before the mapping registry is approved for production. Implement effective-dated versions; do not rewrite prior reporting periods.
+Official GRI sources confirm that GRI 101 Biodiversity 2024 took effect for reporting from 1 January 2026, while GRI 102 Climate Change 2025 and GRI 103 Energy 2025 take effect for reporting from 1 January 2027. Recheck official source/version at release time and implement effective-dated versions; do not rewrite prior reporting periods. See https://www.globalreporting.org/publications/documents/english/gri-101-biodiversity-2024-english/ and https://www.globalreporting.org/standards/standards-development/.
 
 ## Record contract
 
