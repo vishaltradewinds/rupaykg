@@ -14,7 +14,7 @@ addFormats(ajv);
 const validate = ajv.compile(schema);
 
 const validRecord = {
-  schema_version: "1.0.0",
+  schema_version: "1.1.0",
   mapping_id: "GRI.WASTE.306.001",
   status: "draft",
   source_requirement: {
@@ -27,7 +27,8 @@ const validRecord = {
     effective_from: "2026-01-01",
     effective_to: null,
     authority_type: "regulation",
-    official_source_verified_at: "2026-10-29T10:00:00Z"
+    official_source_verified_at: "2026-10-29T10:00:00Z",
+    source_validation: { status: "VERIFIED_AND_APPROVED", source_id: "TEST-SOURCE-001", sha256: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }
   },
   target_disclosure: {
     framework: "GRI",
@@ -118,4 +119,13 @@ test("GRI cross-mapping schema rejects malformed source URL and impossible effec
     source_requirement: { ...validRecord.source_requirement, effective_from: "2026-02-30" }
   };
   assert.equal(validate(invalidDate), false);
+});
+
+test("schema records source-register states and requires source validation metadata", () => {
+  for (const status of ["DISCOVERY_SOURCE", "NOT_ARCHIVED_HASH_PENDING", "CURRENT_VERSION_MUST_BE_RECONFIRMED", "UNRESOLVED"]) {
+    const candidate = { ...validRecord, source_requirement: { ...validRecord.source_requirement, source_validation: { status, source_id: "CPCB-SWM-RULES-2026", sha256: null } } };
+    assert.equal(validate(candidate), true, "runtime review gate blocks non-authoritative states");
+  }
+  const missingSourceValidation = { ...validRecord, source_requirement: Object.fromEntries(Object.entries(validRecord.source_requirement).filter(([key]) => key !== "source_validation")) };
+  assert.equal(validate(missingSourceValidation), false);
 });
