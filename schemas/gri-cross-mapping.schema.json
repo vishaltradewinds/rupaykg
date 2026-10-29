@@ -20,7 +20,7 @@
   ],
   "properties": {
     "schema_version": {
-      "const": "1.0.0"
+      "const": "1.1.0"
     },
     "mapping_id": {
       "type": "string",
@@ -45,7 +45,8 @@
         "title",
         "version",
         "source_url",
-        "authority_type"
+        "authority_type",
+        "source_validation"
       ],
       "properties": {
         "framework": {
@@ -112,6 +113,38 @@
             "null"
           ],
           "format": "date-time"
+        },
+        "source_validation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "status",
+            "source_id",
+            "sha256"
+          ],
+          "properties": {
+            "status": {
+              "enum": [
+                "DISCOVERY_SOURCE",
+                "NOT_ARCHIVED_HASH_PENDING",
+                "CURRENT_VERSION_MUST_BE_RECONFIRMED",
+                "VERIFIED_AND_APPROVED",
+                "UNRESOLVED"
+              ]
+            },
+            "source_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "sha256": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "pattern": "^[a-fA-F0-9]{64}$"
+            }
+          },
+          "description": "Governed source-register state. Only VERIFIED_AND_APPROVED with a SHA-256 may support authoritative legal conclusions."
         }
       }
     },
