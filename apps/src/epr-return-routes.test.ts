@@ -273,3 +273,73 @@ test("EPR submission fails closed when current verifier authority is absent and 
   assert.equal(queries.some((query) => query.sql.includes("update epr_obligations set fulfilled_quantity")), false);
   assert.equal(queries.some((query) => query.sql.includes("update epr_return_quantity_bindings set consumed_at")), false);
 });
+
+test("EPR quantity binding rejects a verifier outside the return organization and locks current authority", async () => {
+  const returnId = "66666666-6666-4666-8666-666666666666";
+  const evidenceId = "77777777-7777-4777-8777-777777777777";
+  const verificationId = "88888888-8888-4888-8888-888888888888";
+  const verifierId = "99999999-9999-4999-8999-999999999999";
+  const queries: Array<{ sql: string; values?: unknown[] | undefined }> = [];
+  const transactions: string[] = [];
+  const poolQuery = async (sql: string) => {
+    queries.push({ sql });
+    if (sql.includes("from identity_sessions")) return { rows: [{ identity_id: identityId }] };
+    if (sql.includes("from organization_memberships") && sql.includes("where identity_id = $1 and status = 'VERIFIED'")) {
+      return { rows: [{ organization_id: organizationId, role_id: "33333333-3333-4333-8333-333333333333", status: "VERIFIED" }] };
+    }
+    if (sql.includes("select exists")) return { rows: [{ ok: true }] };
+    throw new Error(`Unexpected pool SQL in quantity-binding verifier test: ${sql}`);
+  };
+  const clientQuery = async (sql: string, values?: unknown[]) => {
+    queries.push({ sql, values });
+    if (["BEGIN", "ROLLBACK", "COMMIT"].includes(sql)) { transactions.push(sql); return { rows: [] }; }
+    if (sql.includes("select exists")) return { rows: [{ ok: true }] };
+    if (sql.includes("from epr_returns r join epr_obligations eo")) return { rows: [{
+      id: returnId, organization_id: organizationId, obligation_id: "55555555-5555-4555-8555-555555555555",
+      scheme_id: "44444444-4444-4444-8444-444444444444", epr_obligation_id: "55555555-5555-4555-8555-555555555555",
+      category_code: "PLASTIC", obligation_status: "OPEN", scheme_code: "SCHEME", status: "DRAFT",
+      period_start: "2026-04-01", period_end: "2027-03-31", reported_quantity: "10",
+    }] };
+    if (sql.includes("select id from resource_flows where id=$1 for update")) return { rows: [] };
+    if (sql.includes("from measurements m join activities a")) return { rows: [{
+      measurement_id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd", measured_quantity: "10", measurement_unit: "kg",
+      activity_organization_id: organizationId, flow_organization_id: organizationId,
+      geography_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", flow_declared_quantity: "100",
+      verification_evidence_id: evidenceId,
+    }] };
+    if (sql.includes("select coalesce(sum(measured_quantity),0)+$2::numeric")) return { rows: [{ within_capacity: true }] };
+    if (sql.includes("for share of om, r, i")) return { rows: [] };
+    throw new Error(`Unexpected client SQL in quantity-binding verifier test: ${sql}`);
+  };
+  const pool = {
+    query: poolQuery,
+    connect: async () => ({ query: clientQuery, release: () => undefined }),
+  } as unknown as Pool;
+  const app = Fastify();
+  await registerEprReturnRoutes(app, pool);
+  const response = await app.inject({
+    method: "POST",
+    url: `/api/v1/epr/returns/${returnId}/bind-quantity`,
+    headers: { authorization: "Bearer test-session" },
+    payload: {
+      measurementId: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+      resourceFlowId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaab",
+      custodyLinkId: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+      evidenceId,
+      verificationId,
+      methodologyVersionId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+    },
+  });
+  await app.close();
+
+  assert.equal(response.statusCode, 409);
+  assert.equal(response.json().code, "EPR_VERIFIER_AUTHORITY_INVALID");
+  assert.deepEqual(transactions, ["BEGIN", "ROLLBACK"], "invalid verifier authority must abort before inserting a binding");
+  const authority = queries.find((query) => query.sql.includes("for share of om, r, i"));
+  assert.ok(authority, "binding-time verifier authorization must lock membership, role, and identity rows");
+  assert.match(authority!.sql, /om\\.organization_id=\\$4/);
+  assert.match(authority!.sql, /i\\.status='VERIFIED'/);
+  assert.match(authority!.sql, /i\\.suspended_at is null/);
+  assert.deepEqual(authority!.values?.[3], organizationId, "verifier must belong to the return organization");
+  assert.equal(queries.some((query) => query.sql.includes("insert into epr_return_quantity_bindings")), false);
+});
