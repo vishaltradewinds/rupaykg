@@ -11,7 +11,7 @@ export function findOrphanedMigrationRecords(records: readonly AppliedMigrationS
 /** Compatibility wrapper: canonical semantics live in migration-history.ts. */
 export function findMismatchedMigrationVersions(records: readonly AppliedMigrationSource[]): AppliedMigrationSource[] {
   return records.filter((record) => {
-    const match = /^(\\d+)_.*\\.sql$/.exec(record.filename);
+    const match = /^(\d+)_.*\.sql$/.exec(record.filename);
     return !match || record.version !== match[1];
   });
 }
