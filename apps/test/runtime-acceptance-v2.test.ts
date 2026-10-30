@@ -167,6 +167,21 @@ describe("runtime acceptance", () => {
     if (!pool) return;
     const apply = await request(`/api/v1/field-sync/envelopes/${envelopeId}/apply`, { method: "POST", body: "{}" }, actorToken);
     assert.equal(apply.status, 200); activityId = (await body(apply)).entityId;
+
+    // Reapplying an already applied envelope must return the same authoritative entity,
+    // without creating a duplicate activity or changing its identity.
+    const applyReplay = await request(`/api/v1/field-sync/envelopes/${envelopeId}/apply`, { method: "POST", body: "{}" }, actorToken);
+    assert.equal(applyReplay.status, 200);
+    const replayResult = await body(applyReplay);
+    assert.equal(replayResult.replay, true);
+    assert.equal(replayResult.entityId, activityId);
+    const appliedState = await pool.query<{ status: string; count: string }>(
+      `select e.status, (select count(*)::text from activities a where a.id=$2) as count from field_sync_envelopes e where e.id=$1`,
+      [envelopeId, activityId],
+    );
+    assert.equal(appliedState.rows[0]?.status, "APPLIED");
+    assert.equal(appliedState.rows[0]?.count, "1");
+
     const measuredAt = new Date().toISOString();
     const missingInstrument = await submitAndApply({ operationType: "MEASUREMENT_CREATE", activityId, value: 10, unit: "kg", method: "WEIGHBRIDGE", source: "FIELD", measuredAt }, actorToken, 2, `measurement-missing-${suffix}`, 400);
     assert.equal(missingInstrument.code, "INVALID_OPERATION");
