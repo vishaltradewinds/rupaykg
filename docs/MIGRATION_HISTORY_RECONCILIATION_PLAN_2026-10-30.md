@@ -102,3 +102,34 @@ A wider branch scan located historical source candidates for both the production
 4. Compare each migration's expected objects/constraints/functions to read-only staging schema definitions, including the inbox status check and event trigger.
 5. Record explicit disposition per file: authoritative/applied, source found but approval unresolved, competing candidate, or unresolved. No ledger mutation or SQL replay.
 
+
+
+## 8. Exact live-ledger filename evidence and chronology (read-only, 2026-10-30)
+
+A read-only `SELECT version, filename, applied_at FROM schema_migrations` was run against both known Neon branches, project `steep-mud-79906940`, database `rupaykg`. No writes were performed.
+
+### Production branch `br-restless-base-b44cip2h`
+- The applied ledger explicitly records `version=096`, filename `096_verification_authorization_provenance.sql`, applied at `2026-10-27T13:46:14.262Z`.
+- Git history shows the source was removed from `main` by commit `54a7fe1` at `2026-10-27T13:45:20Z`, with the commit message saying it was an accidentally placed unreviewed migration.
+- Thus the recorded application time is **54 seconds after** the removal commit timestamp. The historical source blob exists, but this timing increases the need to identify the exact deployed artifact and authorized execution record. It does not establish whether the SQL was executed from a branch, build artifact, manual action, or other path.
+
+### Staging branch `br-spring-hill-b4544vz5`
+The ledger explicitly records the async mirror / AI intake family:
+| Version | Exact stored filename | Applied at (UTC) | Candidate branch blob SHA |
+|---|---|---|---|
+| 20261022 | `20261022_async_mirror_inbox.sql` | 2026-10-20T10:48:38.647Z | `4d08607e03561b9fbb4ce502b4c4211127237050` |
+| 20261023 | `20261023_async_mirror_worker_leases.sql` | 2026-10-20T10:48:38.647Z | `33cb4d5d2e29a4a111340e5a0ac34170a0081895` |
+| 20261024 | `20261024_ai_intake_rate_limits.sql` | 2026-10-20T10:48:38.647Z | `87b51fe60a96a4e0752c8b0a9a170c81f9936dbb` |
+| 20261025 | `20261025_ai_evidence_intake_jobs.sql` | 2026-10-20T10:48:38.647Z | `6a0ae54530b7b756dac33589eaf18df3b071d8f2` |
+
+The competing CPCB/BM WA03.001 family is **not** what staging's ledger records for those four versions. This resolves the filename-family ambiguity.
+
+### Important chronology gap
+The async migration sources in branch `shakti/migration-runner-advisory-lock-2026-10-25` were restored by commits on **2026-10-25T10:23:53Z through 10:24:00Z**, while the staging ledger says they were applied on **2026-10-20T10:48:38.647Z**. Therefore, these restored branch commits cannot by themselves prove which exact SQL bytes were executed on staging five days earlier. The commit messages say “restore historical migration …”; original pre-restoration source, deployment artifact/hash, and approval/execution record must still be located.
+
+### Updated disposition
+- **Production 096:** filename and historical source blob identified; exact deployed artifact/approval provenance unresolved; application occurred just after removal from main.
+- **Staging 20261022–20261025:** exact applied filenames identified and candidate source blobs located; candidate restore commits postdate application by five days, so execution-source identity and approval provenance unresolved.
+- **Staging schema:** the previously observed inbox/event tables and statuses are consistent with the async migration family, but schema similarity alone does not prove SQL byte identity.
+- **Release decision:** continue fail-closed. No SQL replay, ledger editing, source restoration to main, migration renumbering, merge, or deployment is authorized by this evidence.
+
