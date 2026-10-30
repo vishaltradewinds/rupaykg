@@ -180,6 +180,14 @@ async function createFixture(pool: Pool, suffix: string): Promise<Fixture> {
       "insert into identities(external_subject,display_name) values($1,$2) returning id",
       [`mrv-concurrency-reviewer-${suffix}`, "MRV concurrency reviewer"],
     )).rows[0]!.id;
+    const reviewerRoleId = (await c.query<{ id: string }>(
+      "insert into roles(organization_id,name,permissions) values($1,$2,'[\"VERIFY_EVIDENCE\",\"TRANSFER_CREDENTIAL\"]'::jsonb) returning id",
+      [organizationId, `MRV-CONCURRENCY-REVIEWER-${suffix}`],
+    )).rows[0]!.id;
+    await c.query(
+      "insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED')",
+      [reviewerId, organizationId, reviewerRoleId],
+    );
     const activityId = (await c.query<{ id: string }>(
       "insert into activities(organization_id,actor_identity_id,geography_id,activity_type,occurred_at) values($1,$2,$3,'MRV_CONCURRENCY_TEST',now()) returning id",
       [organizationId, identityId, geographyId],
