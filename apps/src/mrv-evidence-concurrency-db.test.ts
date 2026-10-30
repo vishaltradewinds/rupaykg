@@ -217,6 +217,12 @@ async function createFixture(pool: Pool, suffix: string): Promise<Fixture> {
       "insert into verifications(evidence_id,activity_id,verifier_identity_id,decision,scope,rationale) values($1,$2,$3,'APPROVED','MRV concurrency fixture','test-only fixture') returning id",
       [meity.evidenceId, activityId, reviewerId],
     )).rows[0]!.id;
+    // Synthetic provenance exists only in the disposable CI database to satisfy
+    // the independent issuance prerequisite; it is not real Guardian/Hedera proof.
+    await c.query(
+      "insert into mrv_provenance_events(activity_id,verification_id,evidence_id,guardian_policy_id,guardian_execution_id,guardian_status,hcs_status,hcs_topic_id,hcs_transaction_id,hcs_consensus_timestamp,integrity_hash,methodology_code,mirror_node_verified_at,metadata) values($1,$2,$3,'TEST-ONLY-POLICY',$4,'VERIFIED','CONSENSUS_CONFIRMED','test-topic',$5,'2026-10-30T00:00:00.000Z',$6,'TEST-ONLY',now(),'{\"testOnly\":true}'::jsonb)",
+      [activityId, verificationId, meity.evidenceId, `test-guardian-${suffix}`, `test-hcs-tx-${suffix}`, createHash("sha256").update(suffix).digest("hex")],
+    );
     const credentialId = (await c.query<{ id: string }>(
       "insert into credentials(activity_id,issuer_organization_id,trust_root_id,status,verification_id) values($1,$2,'MRV-CONCURRENCY-ROOT','ELIGIBLE',$3) returning id",
       [activityId, organizationId, verificationId],
