@@ -79,7 +79,7 @@ Apply the Shakti Standards lifecycle: reality/context discovery → evidence →
 
 ## 8. Repository cleanup progress
 
-The repository cleanup and open-work triage inventory is recorded in [REPOSITORY_CLEANUP_TRIAGE_2026-10-30.md](REPOSITORY_CLEANUP_TRIAGE_2026-10-30.md). As of the first cleanup batch, obsolete marker-only PRs #5–#9 and superseded worker PR #144 were closed without merging. Duplicate branch refs have been identified but not deleted because deletion requires a supported write path and a final dependency check. See draft [PR #151](https://github.com/vishaltradewinds/rupaykg/pull/151); it remains unmerged pending review.
+The repository cleanup and open-work triage inventory is recorded in [REPOSITORY_CLEANUP_TRIAGE_2026-10-30.md](REPOSITORY_CLEANUP_TRIAGE_2026-10-30.md), with dependency lanes in [MIGRATION_PR_DEPENDENCY_MAP_2026-10-30.md](MIGRATION_PR_DEPENDENCY_MAP_2026-10-30.md). Obsolete marker-only PRs #5–#9 and superseded worker PRs #144 and #122 were closed without merging. PR #122 was closed only after exact patch comparison confirmed its worker PostgreSQL test and CORS runtime test patches were byte-for-byte identical to the coverage carried forward in #150. Duplicate branch refs have been identified but not deleted because deletion requires a supported write path and a final dependency check. See draft [PR #151](https://github.com/vishaltradewinds/rupaykg/pull/151); it remains unmerged pending review.
 
 
 ## 9. Newly confirmed migration identity collision across candidate branches
