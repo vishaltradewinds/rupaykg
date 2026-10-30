@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { Pool } from "pg";
 import type { Pool as PoolType } from "pg";
-import { migrationHistoryConflicts } from "./migration-history.js";
+import { migrationCatalogVersionConflicts, migrationHistoryConflicts } from "./migration-history.js";
 import { readProductionConfig } from "./production-config.js";
 
 /**
@@ -16,6 +16,13 @@ export async function runMigrations(pool: PoolType, migrationDir: string): Promi
   const files = (await readdir(migrationDir))
     .filter((name) => /^\d+_.+\.sql$/.test(name))
     .sort();
+
+  const catalogConflicts = migrationCatalogVersionConflicts(files);
+  if (catalogConflicts.length) {
+    throw new Error(
+      `MIGRATION_HISTORY_UNRESOLVED: migration catalog contains conflicting version prefixes: ${catalogConflicts.join(", ")}`,
+    );
+  }
 
   await pool.query(`
     create table if not exists schema_migrations (
