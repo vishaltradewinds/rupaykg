@@ -116,3 +116,43 @@ Not completed:
 - [Dual-ledger acceptance PR #108](https://github.com/vishaltradewinds/rupaykg/pull/108)
 - [Production safety/EPR/ESG PR #120](https://github.com/vishaltradewinds/rupaykg/pull/120)
 - [GRI schema PR #121](https://github.com/vishaltradewinds/rupaykg/pull/121)
+
+
+## 9. Expanded inventory and P0 migration finding — 2026-10-30
+
+### Open pull-request inventory
+A subsequent repository-wide GitHub search returned **71 open pull requests**, including documentation, migration, security, hardware, EPR/ESG/GRI, carbon/ICVCM, Guardian/Hedera, facility/resource-flow and AI work. The table in Section 3 is a focused dependency snapshot, not the full 71-item register. The complete inventory must be exported/rechecked before a broad merge batch.
+
+### Migration catalogue
+The current `main/migrations` directory contains **91 SQL migration files**: numbered migrations `001–087` plus four date-prefixed files `20261018` through `20261021`. It does not include `096_verification_authorization_provenance.sql` or the staging-recorded date-prefixed migrations `20261022` through `20261025`.
+
+The read-only production/staging comparison documented on PR #108 reports:
+- Production records migration `096_verification_authorization_provenance.sql`, whose source was removed from `main` as unreviewed.
+- Staging records `20261022`–`20261025` migration files that are absent from the current release catalogue.
+- Production and staging have materially different verification-authorization definitions.
+- Staging contains asynchronous inbox/AI-intake objects absent from production, and its inbox status constraint does not permit the worker's `UNRESOLVED` state.
+- The schema comparison was read-only; no reconciliation was applied.
+
+**P0 decision:** Treat production and staging release-catalogue mismatches as a hard release blocker. Do not merge application changes that assume the migration history is reconciled; do not remove the fail-closed checks; do not edit historical migration files; do not replay or repair live migration ledgers; do not activate the scheduler. Recover exact historical source artifacts, review the security-sensitive 096 logic independently, define a canonical forward-only release catalogue, and validate it against faithful production-shaped and staging-shaped disposable PostgreSQL histories before any authorised live change.
+
+### Migration PR collision map
+- PR #105 validates duplicate migration numbers/content and duplicate object names, but is a guardrail rather than a SQL parser and does not resolve existing collisions.
+- PR #106 is a **validation-only combined candidate** carrying a broad ICVCM/agentic feature set and migrations `088–107`; it must not be treated as a release candidate or merged wholesale.
+- PR #120 proposes EPR/ESG migrations numbered `088–091`.
+- PR #118 proposes EPR migrations numbered `097–103`.
+- PR #106 proposes multiple different migrations in the same numbered range. These branches cannot be integrated by number alone. The canonical migration namespace and ownership must be decided before integration.
+- PRs #124, #126, #107, #108, #91, #105, #46 and #56 touch overlapping migration runner, history, validation or production startup paths. Build one reviewed integration candidate and run the full required CI against its exact head rather than merging overlapping branches independently.
+
+### Exact-head CI observations at this audit moment
+- PR #126 head `61191f5b7252c5d89d5157cefb01c27f464a9aef`: CI run #3249 succeeded on that exact commit; it does not prove that production/staging history is reconciled.
+- PR #107 head `8ef76f327cf4266d2da745f7a12c272e9b15e3e0`: CI run #2977 succeeded on that exact commit; live migration mismatch remains.
+- PR #105 head `ee49c2acb9d284c32a939bc09e632f743eb61300`: CI run #2959 succeeded on that exact commit; validator collisions remain to be resolved.
+- PR #91 head `b8632ceacd18a0db2d635f23904e17c19664f48b`: CI run #2448 succeeded on that exact commit; review and production-target/recovery evidence remain required.
+- PR #120 head `1720df5eac80aa35d97f4b16b998ff70a2d45daa`: CI run #3213 succeeded on that exact commit; its numbered migrations conflict with other open proposals and are not approved to merge.
+- PR #90 run #3361 and PR #128 run #3362 were in progress at the time checked. PR #130's documentation-only CI run #3364 was also in progress. Recheck current run state before claiming success.
+- PR #108 has no workflow run returned by the commit-specific PR-triggered run query for its reported head; do not infer that its latest exact head passed. Verify its current run/checks directly before treating it as green.
+
+### Batch A revised disposition
+**Batch A remains PARTIALLY COMPLETE; P0 release-catalogue and governance blockers are confirmed.** The repository and PR inventory is more complete, but it is not a substitute for the authorised read-only environment export, exact-head test evidence, independent review, or a signed integration decision.
+
+Next, the responsible engineering owner should create a single migration reconciliation decision packet that names canonical owners for every conflicting migration range, lists exact source hashes, defines production/staging ledger preconditions and forward-only steps, and specifies disposable PostgreSQL acceptance cases. No live change is authorised by this finding.
