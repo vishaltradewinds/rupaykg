@@ -240,10 +240,18 @@ test("failed rollback destroys the session and does not attempt to unlock an unc
       rollbackFails: true,
     });
 
-    await assert.rejects(
-      runMigrations(pool, dir),
-      /Migration 001_safe\.sql failed and rollback failed/,
-    );
+    let migrationError: unknown;
+    try {
+      await runMigrations(pool, dir);
+      assert.fail("expected migration and rollback failure");
+    } catch (error) {
+      migrationError = error;
+    }
+    assert.ok(migrationError instanceof AggregateError);
+    assert.match(migrationError.message, /Migration 001_safe\\.sql failed and rollback failed/);
+    assert.equal(migrationError.errors.length, 2);
+    assert.match(String(migrationError.errors[0]), /simulated migration SQL failure/);
+    assert.match(String(migrationError.errors[1]), /simulated rollback failure/);
     assert.ok(calls.includes("begin"));
     assert.ok(calls.includes("select 1;"));
     assert.ok(calls.includes("rollback"));
