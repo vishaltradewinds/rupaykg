@@ -104,3 +104,25 @@ PR #108's green disposable-PostgreSQL CI does not establish which migration sour
 **Next action:** perform Gate A, then create and test a single coordinated candidate only after the exact current heads and intended scope are revalidated. Do not represent this coordination document as code integration or qualification evidence.
 
 **Shakti Standards:** ONE SHAKTI STANDARD. MANY PROJECT-SPECIFIC OPERATING SYSTEMS.
+
+
+## 9. Source-branch scope audit — 2026-10-30 13:49Z
+
+A fresh comparison against current `main` (`54a7fe1ceb41b37a68720a71c10a1dd03af30dea`) confirms that neither source branch is a clean current-main integration candidate:
+
+- PR #49 is 3 commits ahead and 2 behind main from merge base `0ddcf6087620880e21ea60e954c9f05d6b759469`; its comparison contains 14 files.
+- PR #51 is 121 commits ahead and 2 behind main from the same merge base; its comparison contains 38 files.
+- PR #51's diff includes related but broader changes to acceptance seeding, evidence-vault routes, Guardian/Hedera handling, registry eligibility, settlement guards, synchronization validation and associated tests/docs, as well as the instrument-approval feature.
+
+**Integration consequence:** do not transplant all 38 files or treat #51 as a clean superset without scope review. The integrated candidate must separate the minimum necessary approval/evidence-bound parameter changes from unrelated feature history, while retaining required dependencies. For every selected file, record why it is required and review the current-main delta. Explicitly decide whether the broader evidence-vault and credential-currentness migrations are prerequisites for the new approval behavior; do not silently omit required schema dependencies or pull in unrelated behavior.
+
+### Added pre-integration checklist
+- [ ] Confirm the source PR heads have not changed since this comparison.
+- [ ] Build a file-level inclusion/exclusion matrix for all 38 #51 paths.
+- [ ] Map every migration to its prerequisite schema/function and canonical execution order.
+- [ ] Review whether current-main already contains newer versions of files changed by the source branch.
+- [ ] Verify no behavior in acceptance-seed, Guardian/Hedera, registry, settlement or sync changes is lost or unintentionally imported.
+- [ ] Produce a single combined diff against current main; do not use the PR's old merge base as the review baseline.
+- [ ] Run exact-head CI only after the complete candidate is assembled.
+
+This audit intentionally narrows the next implementation step: the safe next action is scope/dependency mapping, not an automatic branch merge.
