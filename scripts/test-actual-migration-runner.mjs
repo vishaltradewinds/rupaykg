@@ -45,7 +45,7 @@ for (const unsafeUrl of [
   "https://example.com/not-postgres",
   "not-a-database-url",
 ]) {
-  assert.throws(() => assertDisposableDatabaseTarget(unsafeUrl), /Refusing database integration tests/);
+  assert.throws(() => assertDisposableDatabaseTarget(unsafeUrl), /Refusing (database integration tests|destructive schema-based acceptance tests)/);
 }
 const { Client } = pg;
 const here = path.dirname(fileURLToPath(import.meta.url));
