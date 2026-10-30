@@ -212,7 +212,7 @@ try {
   // decision currently refreshes the supposedly historical authorization
   // snapshot. This is diagnostic evidence against the recovered legacy trigger,
   // not an assertion that this behavior is acceptable.
-  await client.query("update roles set permissions='[\\"VERIFY_EVIDENCE\\",\\"UNRELATED_PERMISSION\\"]'::jsonb where id=$1", [ids.role]);
+  await client.query("update roles set permissions=$2::jsonb where id=$1", [ids.role, JSON.stringify(["VERIFY_EVIDENCE", "UNRELATED_PERMISSION"])]);
   await client.query("update verifications set evidence_id=evidence_id where id=$1", [ids.verification]);
   const afterUnrelatedUpdate = (await client.query(
     "select authorization_membership_id,authorization_role_id,authorization_permissions_snapshot,authorization_checked_at from verifications where id=$1",
@@ -226,7 +226,7 @@ try {
     "REPRODUCED DEFECT: unrelated update refreshes the purported decision-time authorization timestamp");
   // Restore the fixture's original role permission set and refresh the test row
   // so subsequent assertions remain isolated to the intended decision path.
-  await client.query("update roles set permissions='[\\"VERIFY_EVIDENCE\\"]'::jsonb where id=$1", [ids.role]);
+  await client.query("update roles set permissions=$2::jsonb where id=$1", [ids.role, JSON.stringify(["VERIFY_EVIDENCE"])]);
   await client.query("update verifications set evidence_id=evidence_id where id=$1", [ids.verification]);
 
   // The legacy trigger stores decision-time authorization provenance but does
