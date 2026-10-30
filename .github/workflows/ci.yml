@@ -1,10 +1,11 @@
 name: CI
 
 on:
+  # Validate worker lease-recovery fixes on their exact branch heads.
   push:
-    branches: [main]
+    branches: [main, 'fix/**', 'test/**']
   pull_request:
-    branches: [main]
+    branches: [main, intelligence/ai-evidence-intake-middleware, shakti/canonical-migration-history-verified]
 
 # Keep CI focused on the newest commit for each PR/branch; stale validation runs
 # must not consume runners while a corrected Shakti batch is waiting for evidence.
