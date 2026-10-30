@@ -1,6 +1,7 @@
 export type AppliedMigrationSource = { version: string; filename: string };
 export type MigrationHistoryConflict = AppliedMigrationSource & { reason: "SOURCE_MISSING" | "VERSION_FILENAME_MISMATCH" };
 
+/** Reports source and recorded-version conflicts without performing I/O. */
 export function findMigrationHistoryConflicts(records: readonly AppliedMigrationSource[], availableFilenames: readonly string[]): MigrationHistoryConflict[] {
   const available = new Set(availableFilenames);
   const conflicts: MigrationHistoryConflict[] = [];
