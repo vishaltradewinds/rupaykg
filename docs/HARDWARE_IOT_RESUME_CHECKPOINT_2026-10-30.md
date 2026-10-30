@@ -74,3 +74,13 @@ No physical instrument is selected or connected. No purchase, calibration, field
 - PR #51 head `e5388fd1db1533db1d5abcf7bd5f52fc5f09ad2b`: exact-head CI run #3357 (`41056362508`) passed all configured steps.
 - The stateful replay/integrity matrix has been added to the simulation plan. It remains an acceptance specification; individual cases are not claimed passed unless backed by exact-head test evidence.
 - PRs #47, #49, #51, #59 and #128 remain draft/unmerged. Resolve overlapping route/migration ownership between #49 and #51 before integration. Independent review, actual instrument/certificate/calibration packet, evidence-vault production contract, methodology/site eligibility, and bench/site qualification remain HOLD.
+
+
+## 2026-10-30 13:25Z — TRL and migration-reconciliation checkpoint
+
+- Refreshed PR #128 exact head: `b561c941c3658197e3d469b92163b5a73c1e3566`; exact-head CI run #3362 (`41057869797`) completed successfully. This is software validation only.
+- PR #129 strict canonical field-sync timestamp fix is at head `e51a7fa719abcd082c6d099652c74d6a04193b99`; exact-head CI run #3299 (`41029236997`) reports success. PR #129 remains a separate draft and must be included in integration review rather than assumed present in #128.
+- TRL execution plan PR #90 and evidence ledger PR #93 remain separate draft proposals. Use them as the canonical readiness/evidence route; do not create a competing hardware-specific TRL ledger.
+- Audit PR #130 head `3d740ce0ad1b5b9b0f2e817fe894ce3a9fc8087d` has completed exact-head CI run #3383 (`41062818695`) successfully. The audit records a migration reconciliation blocker: current main migration catalogue and proposed hardware/evidence migrations differ, and the branch history diverges from main. Do not rebase/merge/apply #49/#51 migrations until the canonical manifest, authorized read-only production/staging ledger/schema evidence, schema fingerprints, removed/duplicate migration analysis and disposable fresh-install/upgrade acceptance are reconciled.
+- PR #49/#51 continue to overlap on instrument approval routes and migrations; #51 also proposes evidence-bound parameter specifications and current-evidence guards. Explicitly select an integration order and independently review the combined diff before integration. Keep both drafts.
+- No actual device model, official exact-model approval packet, calibration evidence, physical bench test, site acceptance, production DB mutation, procurement or deployment has been completed in this batch. Hardware/IoT TRL remains NOT ASSESSED where evidence is insufficient; overall TRL 9 and production certification remain HOLD/OFF.
