@@ -157,3 +157,48 @@ test(
     }
   },
 );
+
+
+test(
+  "real PostgreSQL releases the advisory lock when migration SQL fails",
+  { skip: process.env.RUPAYKG_RUN_DB_INTEGRATION_TESTS !== "1" || !process.env.DATABASE_URL },
+  async () => {
+    const adminPool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      max: 2,
+      ...(process.env.DATABASE_SSL === "false" ? { ssl: false } : {}),
+    });
+    const schema = `rk_migration_failure_test_${randomUUID().replace(/-/g, "")}`;
+    let migrationPool: Pool | undefined;
+    let probePool: Pool | undefined;
+    try {
+      await adminPool.query(`create schema "${schema}"`);
+      const options = `-c search_path=${schema}`;
+      const ssl = process.env.DATABASE_SSL === "false" ? { ssl: false as const } : {};
+      migrationPool = new Pool({ connectionString: process.env.DATABASE_URL, max: 1, options, ...ssl });
+      probePool = new Pool({ connectionString: process.env.DATABASE_URL, max: 1, options, ...ssl });
+      const dir = await mkdtemp(path.join(os.tmpdir(), "rupaykg-migration-failure-"));
+      try {
+        await writeFile(path.join(dir, "001_fail.sql"), "select * from migration_table_that_does_not_exist;", "utf8");
+        await assert.rejects(
+          runMigrations(migrationPool as unknown as PoolType, dir),
+          /Migration 001_fail\.sql failed/,
+        );
+
+        const lockProbe = await probePool.query(
+          "select pg_try_advisory_lock($1, $2) as acquired",
+          [1380270932, 1380270923],
+        );
+        assert.equal(lockProbe.rows[0]?.acquired, true);
+        await probePool.query("select pg_advisory_unlock($1, $2)", [1380270932, 1380270923]);
+      } finally {
+        await rm(dir, { recursive: true, force: true });
+      }
+    } finally {
+      await probePool?.end();
+      await migrationPool?.end();
+      await adminPool.query(`drop schema if exists "${schema}" cascade`);
+      await adminPool.end();
+    }
+  },
+);
