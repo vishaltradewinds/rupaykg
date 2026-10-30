@@ -136,7 +136,7 @@ async function main(): Promise<void> {
     // runner can apply the first of two conflicting files.
     await writeFile(
       path.join(catalog, "001_conflicting.sql"),
-      "insert into migration_preflight_sentinel(marker) values ('CONFLICTING_CATALOG_SQL_EXECUTED');\\n",
+      "insert into migration_preflight_sentinel(marker) values ('CONFLICTING_CATALOG_SQL_EXECUTED');\n",
       "utf8",
     );
     const duplicateSchema = "history_duplicate_catalog_" + suffix;
