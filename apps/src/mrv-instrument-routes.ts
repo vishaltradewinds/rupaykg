@@ -206,8 +206,26 @@ export async function registerMrvInstrumentRoutes(app: FastifyInstance, pool: Po
       const row = current.rows[0];
       if (!row) return reply.code(404).send({ error: "MRV instrument not found", code: "MRV_INSTRUMENT_NOT_FOUND" });
       if (!await canManageInstrument(client as unknown as Pool, auth, row.organization_id)) return reply.code(403).send({ error: "MRV instrument review permission required", code: "MRV_INSTRUMENT_PERMISSION_REQUIRED" });
-      if (row.approval_status === "VERIFIED") {
-        if (decision === "VERIFIED") return reply.code(200).send({ source: "postgresql", syntheticData: false, replay: true, instrumentId, approvalStatus: "VERIFIED" });
+      if (row.approval_status === "VERIFIED" && decision === "VERIFIED") {
+        // Idempotency must not turn stale evidence into an apparent successful approval.
+        // A previously verified instrument can lose current-evidence eligibility after a
+        // later evidence-vault rejection; check the live guard before returning replay success.
+        const currentEvidence = await client.query<{ current: boolean }>(
+          "select mrv_instrument_evidence_is_current($1) as current",
+          [instrumentId],
+        );
+        if (currentEvidence.rows[0]?.current !== true) {
+          await client.query("rollback");
+          transactionOpen = false;
+          return reply.code(409).send({
+            error: "Instrument evidence is no longer current; replacement evidence must be uploaded and independently reviewed before reapproval",
+            code: "MRV_INSTRUMENT_EVIDENCE_STALE",
+            syntheticData: false,
+          });
+        }
+        await client.query("rollback");
+        transactionOpen = false;
+        return reply.code(200).send({ source: "postgresql", syntheticData: false, replay: true, instrumentId, approvalStatus: "VERIFIED" });
       }
 
       if (decision !== "VERIFIED") {
