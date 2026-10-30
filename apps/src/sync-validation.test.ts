@@ -57,8 +57,10 @@ test("rejects capture timestamps without an explicit timezone or full time", () 
 
 test("rejects impossible calendar dates and clock or timezone values", () => {
   for (const capturedAt of [
+    "0000-02-29T10:00:00Z",
     "2026-02-30T10:00:00Z",
     "2024-02-30T10:00:00Z",
+    "1900-02-29T10:00:00Z",
     "2026-13-01T10:00:00Z",
     "2026-09-02T24:00:00Z",
     "2026-09-02T10:60:00Z",
