@@ -285,7 +285,7 @@ test("real government inbox worker obeys PostgreSQL status constraints and prese
       [staleId,"TEST-AUTHORITY","TEST-MUNICIPALITY",staleBatchId,"2026-10-19T02:30:00Z",JSON.stringify(stalePayload),canonicalGovBridgeHash(stalePayload)],
     );
     const staleResult = await runGovernmentInboxWorker(pool, async (input) => {
-      await pool.query("update async_mirror_inbox set lease_token=$2 where id=$1", [input.id, randomUUID()]);
+      await pool!.query("update async_mirror_inbox set lease_token=$2 where id=$1", [input.id, randomUUID()]);
       return { valid: false, errorCode: "STALE_WORKER_SIMULATION" };
     }, { batchSize: 1, maxAttempts: 5 });
     assert.equal(staleResult.claimed, 1);
