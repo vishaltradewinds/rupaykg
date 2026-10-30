@@ -160,3 +160,16 @@ CI result IDs above were checked against the exact current head SHAs, not copied
 - No production/staging writes, migrations, deployments, scheduler activation, or official MRV/Guardian submissions were performed.
 - This is engineering-only regression hardening. Physical instrument qualification and field TRL are not established by these tests.
 - **ENGINEERING ONLY / PRODUCTION CERTIFICATION HOLD-OFF.**
+
+
+## 2026-10-30 21:00Z — exact-head refresh and TRL coordination
+
+This addendum supersedes the earlier exact-head value above for current PR status; preserve the older result as historical evidence.
+
+- Current PR #128 head observed from GitHub: `8bd60f2d155889f000d0da0c75ae9c0bc61c5369`.
+- Exact-head `validate` check is completed successfully: workflow run `41083599004`. This is software/CI validation only. It does not establish hardware-in-the-loop, physical instrument calibration, MeitY/device approval, site acceptance, live MRV, or TRL advancement.
+- Canonical TRL coordination: PR #90 is the master TRL execution plan; PR #93 is the evidence ledger; PR #130 is the dated baseline/dependency audit. A separate duplicate TRL plan PR (#152) was closed without merge to avoid competing readiness documents.
+- Cleanup PR #151's documentation-only head `b3e751de4a0cc7b2248a156754c36dee5f72eacb` passed run `41124525462`; this has no bearing on runtime or production release gates.
+- The hardware approval work remains coordinated: #49 and #51 overlap in routes/migrations; #136 records the integration gate; #59 holds the national architecture and software-only simulation plan. Do not merge or implement overlapping migrations independently. Recheck exact heads before every integration decision.
+- Current production database/artifact provenance and migration identity collision remain unresolved. Production HOLD, scheduler OFF, certification HOLD/OFF.
+- Next hardware batch remains: complete the adapter boundary negative tests; reconcile timestamp behavior with canonical field sync in its owning branch; trace raw payload hash and instrument/calibration/evidence lineage through the canonical persisted MRV record; then run controlled bench/hardware-in-loop tests only after an exact instrument and interface are established. Do not invent a driver/protocol or mark simulated fixtures as field evidence.
