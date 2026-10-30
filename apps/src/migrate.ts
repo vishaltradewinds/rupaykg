@@ -26,9 +26,19 @@ export async function runMigrations(pool: PoolType, migrationDir: string): Promi
   const client = await pool.connect();
   const lockKeys = [1380270932, 1380270923] as const;
   let lockAcquired = false;
+  let clientReleased = false;
   try {
-    await client.query("select pg_advisory_lock($1, $2)", [...lockKeys]);
-    lockAcquired = true;
+    try {
+      await client.query("select pg_advisory_lock($1, $2)", [...lockKeys]);
+      lockAcquired = true;
+    } catch (lockError) {
+      // The server may have acquired the session lock before the response was
+      // lost. Destroy this connection rather than return an uncertain session
+      // to the pool.
+      client.release(lockError instanceof Error ? lockError : new Error("Migration advisory-lock acquisition failed"));
+      clientReleased = true;
+      throw lockError;
+    }
 
     // Inspect whether the ledger exists before any DDL. A conflicting existing
     // ledger must fail closed without even bootstrapping schema_migrations.
@@ -93,10 +103,11 @@ export async function runMigrations(pool: PoolType, migrationDir: string): Promi
         // A session-level lock may still be held if unlock fails. Destroy the
         // connection instead of returning a possibly locked session to the pool.
         client.release(unlockError instanceof Error ? unlockError : new Error("Failed to release migration advisory lock"));
+        clientReleased = true;
         throw unlockError;
       }
     }
-    client.release();
+    if (!clientReleased) client.release();
   }
 }
 
