@@ -221,3 +221,15 @@ PR #137 run #3412 (`41068514359`) initially failed because runtime acceptance su
 Rerun #3414 (run ID `41068861872`) at exact candidate head `c9a449655fbc29bd03350d64771ab3a8602b3c18` is now **SUCCESS**: dependency/security audit, migration catalogue validation, disposable PostgreSQL migration run, typecheck, build, browser smoke test, full tests including disposable PostgreSQL acceptance, and production-container build all passed.
 
 This is engineering CI evidence for the draft candidate only. It does not resolve production/staging migration provenance, independent code review, exact-model statutory approval, calibration, physical/site acceptance, methodology eligibility, TRL advancement, or production certification. PR #137 remains Draft; no merge/deployment/live DB action occurred.
+
+
+## 13. Static integration review finding — separation of duties added
+
+A source review of draft PR #137 found that the initial candidate allowed the registering identity to self-approve an instrument. This is inconsistent with independent evidence review. Remediation added to the candidate:
+
+- API review route rejects `VERIFIED` when reviewer identity equals `registered_by_identity_id` (`MRV_INSTRUMENT_SEPARATION_OF_DUTIES_REQUIRED`).
+- Migration 088 database trigger independently rejects direct SQL self-approval, so the API check is not the only control.
+- PostgreSQL acceptance test now uses a distinct reviewer for legitimate approval and explicitly asserts self-approval fails.
+- API and migration documentation updated to state the dual-control rule.
+
+Remediation commits: `6a706b55bb2a3e57db29c64c133817a8d939d9db`, `964df30e3a7174f4c5d0228c5476626d140f4409`, `aae901fa7557edd3143180388c4a66df1d895375`, `8e283a076d5afbc3ce1d56f03fdcca72c445276f`. The latest amended head requires a fresh exact-head CI run; the earlier green run does not validate these changes. Keep PR #137 Draft until CI and independent review pass.
