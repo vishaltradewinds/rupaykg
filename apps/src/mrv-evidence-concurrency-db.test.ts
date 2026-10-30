@@ -121,10 +121,13 @@ async function performUse(client: PoolClient, kind: UseKind, f: Fixture, nonce: 
       [f.credentialId, createHash("sha256").update(nonce).digest("hex"), f.organizationId, f.foreignOrganizationId, f.reviewerId],
     );
   } else {
-    await client.query(
-      "insert into settlements(credential_id,payer_id,payee_id,amount,currency,status,authorization_reference,verified_at) values($1,$2,$3,1,'INR','EXECUTING',$4,now())",
+    // The settlement lifecycle intentionally only permits creation in CREATED/ELIGIBLE.
+    // Exercise the guarded value-bearing transition separately, in the same transaction.
+    const settlement = await client.query<{ id: string }>(
+      "insert into settlements(credential_id,payer_id,payee_id,amount,currency,status,authorization_reference,verified_at) values($1,$2,$3,1,'INR','CREATED',$4,now()) returning id",
       [f.credentialId, f.organizationId, f.foreignOrganizationId, `AUTH-${nonce}`],
     );
+    await client.query("update settlements set status='EXECUTING' where id=$1", [settlement.rows[0]!.id]);
   }
 }
 
