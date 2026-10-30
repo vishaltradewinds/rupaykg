@@ -249,6 +249,30 @@ test("real government inbox worker obeys PostgreSQL status constraints and prese
     assert.equal(exhaustedState.lease_until, null);
     assert.ok(exhaustedState.quarantined_at);
 
+    // Retry exhaustion must also quarantine PROCESSING rows whose lease is NULL.
+    // The worker's pre-claim quarantine pass should handle this without trying
+    // to claim or reprocess the row.
+    const exhaustedNullLeaseId = randomUUID();
+    const exhaustedNullLeaseBatchId = randomUUID();
+    const exhaustedNullLeasePayload = makePayload(exhaustedNullLeaseBatchId);
+    await pool.query(
+      `insert into async_mirror_inbox
+        (id,authority_code,municipal_code,batch_id,sync_window_timestamp,payload,payload_sha256,attempts,status,lease_token,lease_until)
+       values ($1,$2,$3,$4,$5,$6::jsonb,$7,5,'PROCESSING',$8,null)`,
+      [exhaustedNullLeaseId,"TEST-AUTHORITY","TEST-MUNICIPALITY",exhaustedNullLeaseBatchId,"2026-10-19T02:30:00Z",JSON.stringify(exhaustedNullLeasePayload),canonicalGovBridgeHash(exhaustedNullLeasePayload),randomUUID()],
+    );
+    const exhaustedNullLeaseResult = await runGovernmentInboxWorker(pool, undefined, { batchSize: 1, maxAttempts: 5 });
+    assert.equal(exhaustedNullLeaseResult.claimed, 0, "exhausted NULL-lease row must not be reclaimed");
+    const exhaustedNullLeaseState = (await pool.query(
+      "select status,last_error_code,lease_token,lease_until,quarantined_at from async_mirror_inbox where id=$1",
+      [exhaustedNullLeaseId],
+    )).rows[0];
+    assert.equal(exhaustedNullLeaseState.status, "QUARANTINED");
+    assert.equal(exhaustedNullLeaseState.last_error_code, "WORKER_ATTEMPTS_EXHAUSTED");
+    assert.equal(exhaustedNullLeaseState.lease_token, null);
+    assert.equal(exhaustedNullLeaseState.lease_until, null);
+    assert.ok(exhaustedNullLeaseState.quarantined_at);
+
     // Expired leases are recoverable, but the row must still end unresolved
     // when no verified current jurisdiction crosswalk exists.
     const expiredId = randomUUID();
