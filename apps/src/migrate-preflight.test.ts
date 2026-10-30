@@ -91,7 +91,7 @@ test("conflicting existing ledger fails before ledger DDL and pending SQL, then 
     await assert.rejects(runMigrations(pool, dir), /MIGRATION_HISTORY_UNRESOLVED/);
     assert.equal(calls.some((sql) => sql.startsWith("create table if not exists schema_migrations")), false);
     assert.equal(calls.some((sql) => sql === "select 1;"), false);
-    assert.ok(calls[0].startsWith("select pg_advisory_lock"));
+    assert.ok(calls[0]?.startsWith("select pg_advisory_lock"));
     assert.ok(calls.at(-1)?.startsWith("select pg_advisory_unlock"));
     assert.equal(getReleaseCount(), 1);
   });
@@ -121,7 +121,7 @@ test("failed advisory lock acquisition releases connection without database muta
     const { pool, calls, getReleaseCount, releaseErrors } = fakePool({ ledgerExists: false, lockFails: true });
     await assert.rejects(runMigrations(pool, dir), /simulated advisory lock failure/);
     assert.equal(calls.length, 1);
-    assert.ok(calls[0].startsWith("select pg_advisory_lock"));
+    assert.ok(calls[0]?.startsWith("select pg_advisory_lock"));
     assert.equal(getReleaseCount(), 1);
     assert.ok(releaseErrors[0] instanceof Error);
   });
