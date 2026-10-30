@@ -159,3 +159,23 @@ A read-only inspection of Render service `rupaykg` (service ID `srv-daki4d7qj5pc
 
 ### Remaining work for staging source provenance
 The Render event/log inspection above resolves the production 096 execution path but does not resolve the four staging migrations. Continue searching the pre-2026-10-20 Git objects, CI/deployment artifacts and logs, and change/approval records for the async/AI family. Candidate commits dated 2026-10-25 remain too late to prove the bytes applied on 2026-10-20.
+
+
+## 10. Staging worker/status constraint mismatch and test evidence (2026-10-30)
+
+Read the source SQL for the recovered async/AI migration family and the current PR #122 test record:
+
+- `20261022_async_mirror_inbox.sql` creates `async_mirror_inbox.status` with allowed states `RECEIVED, PROCESSING, PROCESSED, REJECTED, RETRY`.
+- `20261023_async_mirror_worker_leases.sql` replaces that constraint with `RECEIVED, PROCESSING, PROCESSED, VALIDATED, REJECTED, RETRY, QUARANTINED`; **`UNRESOLVED` is not allowed**.
+- PR #122 documents a real-worker/disposable-PostgreSQL test for this mismatch. Its CI run `40891694084` passed on head `23d405bde272fb5cefe441db8f0ab496f0adc2b7`. A later comment reports commit `c3fbe3be779dfc221e55ef6344f538ee89e6cfec` applies the proposed `20261101_async_mirror_unresolved_crosswalk.sql` in the disposable schema before testing the real worker, while explicitly warning that exact-head CI/triggering for that later commit still needs confirmation.
+- The PR description states that, under the historical constraint, the failed transition falls back to `RETRY`; the proposed corrected constraint permits `UNRESOLVED` only when no verified jurisdiction crosswalk exists. That state remains internal and non-authoritative: no official acceptance, MRV mutation, or Guardian submission is intended.
+
+**Disposition:** this is a concrete staging functional-compatibility blocker, not permission to apply the future-dated migration. First establish the exact staging migration SQL bytes and worker version that were deployed; then verify the current PR #122 head and exact-head CI. Only after review should an additive, forward-only status widening be considered for a controlled environment. Test the full state machine, retries, lease expiry, quarantine, event append-only behavior, and assurance that `UNRESOLVED` cannot become an official authority/MRV/credit decision. No live database change is authorized.
+
+## 11. Current evidence-based gate ordering
+
+1. **P0-A — Source/deployment provenance:** retain the Render commit/log/ledger correlation for production 096; obtain approval/change record and independent trigger/function security review. Locate pre-2026-10-20 source/artifact identity for staging 20261022–25.
+2. **P0-B — Staging worker compatibility:** confirm exact PR #122 head and CI; reproduce the current worker against the exact staging schema in disposable PostgreSQL. Keep the proposed 20261101 migration unapproved until its SQL, operational impact, and upgrade path are reviewed.
+3. **P0-C — Canonical catalogue/ledger contract:** independently review PR #134 and integrate the missing-source/version-filename/duplicate-prefix checks with the dual-ledger and startup preflight work only through one coordinated exact-head candidate.
+4. **P0-D — Release-shaped acceptance:** run fresh-install and supported upgrade tests against the final combined migration inventory, with production/staging-like ledger snapshots; prove failures occur before any pending SQL and ledger stays unchanged.
+5. **Only then:** independent security/release approval, staged rollout and rollback/compensation plan. Until then production certification stays HOLD/OFF.
