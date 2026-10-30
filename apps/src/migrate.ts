@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
-import { assertMigrationHistoryConsistent } from "./migration-ledger.js";
+import { assertMigrationHistoryConsistent } from "./migration-history.js";
 import { readProductionConfig } from "./production-config.js";
 
 const databaseUrl = process.env.DATABASE_URL;
