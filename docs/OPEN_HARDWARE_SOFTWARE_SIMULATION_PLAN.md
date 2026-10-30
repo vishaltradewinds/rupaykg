@@ -53,6 +53,33 @@ The test harness must reject a fixture if its synthetic-only marker is missing, 
 
 The timestamp policy and numerical limits must be explicit test parameters, not invented site requirements.
 
+
+## 4A. Stateful canonical-boundary acceptance matrix
+
+The local adapter validator is intentionally stateless and cannot prove replay protection, tenant authorization, instrument approval or immutable database lineage. These cases must be exercised against the canonical field-sync/API + disposable PostgreSQL boundary in an isolated test environment, using synthetic-only identities and no production/staging credentials.
+
+| Case | Test setup | Required outcome |
+|---|---|---|
+| Same event ID + same canonical digest | Submit, then retry byte-equivalent logical event | Idempotent success/reference to the original event; exactly one authoritative test record |
+| Same event ID + changed digest | Reuse event key but mutate value, unit, instrument, timestamp or metadata | Conflict/quarantine; never overwrite the original |
+| Duplicate client sequence | Two distinct event IDs share a sequence for one device stream | Reject/quarantine according to canonical contract; no silent collapse |
+| Sequence regression | Submit a lower sequence after a higher accepted sequence | Reject/quarantine; preserve audit trail |
+| Offline reconnect/replay | Queue multiple ordered synthetic events and replay with retries/reordered transport | Deterministic reconciliation; no duplicate accepted measurements or silent event loss |
+| Corrupted local queue | Mutate stored payload after digest generation | Digest mismatch; quarantine and preserve diagnostic evidence |
+| Tenant/site mismatch | Authenticated test identity submits another organization's/site's device or instrument | Authorization denial before authoritative mutation |
+| Unknown/revoked device | Device is absent, unverified or revoked at submit time | Fail closed; no accepted measurement |
+| Wrong instrument/model/parameter | Observation references a different instrument or unsupported parameter | Reject; exact instrument and parameter binding required |
+| Unit/range/resolution/accuracy mismatch | Submit invalid unit or value outside reviewed specification; test resolution/accuracy boundaries | Reject/quarantine; no implicit unit conversion or inferred tolerance |
+| Calibration absent/expired/rejected | Remove, expire or reject the calibration evidence after a prior valid fixture | New measurement/MRV eligibility denied; stale approval must not be reused |
+| Evidence version/hash mismatch | Replace artifact version, alter bytes, or mismatch stored hash | Reject; recomputed content hash and current reviewed artifact version must match |
+| Review revocation race | Revoke/reject instrument/evidence concurrently with measurement acceptance | Database/API serialization must prevent acceptance using stale approval |
+| Clock and ordering faults | Naive timestamp, impossible date, untrusted clock, received-before-observed | Reject/quarantine; preserve source value rather than silently normalize |
+| Production boundary | Configure an attempted production/staging URL in the simulator | Test harness blocks the network call before transmission; no credentials or live MRV write path exists |
+
+Acceptance must assert both the API result and database state, including row counts, foreign-key/tenant scope, immutable digests and audit/decision records. A test that only checks an HTTP error is insufficient if a partial database write could still occur. Run concurrency cases repeatedly against a disposable PostgreSQL database to catch race-sensitive regressions.
+
+These cases are **test requirements, not proof they already pass**. Mark each case PASS only with an exact commit, reproducible command, test output and isolated-database evidence. Do not skip a failing case to obtain a green result.
+
 ## 5. Acceptance criteria
 
 The simulation may be marked **SOFTWARE SIMULATION PASS** only when:
