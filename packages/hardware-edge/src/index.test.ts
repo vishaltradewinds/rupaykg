@@ -96,3 +96,44 @@ test("receive time before observation time is rejected", () => {
   value.receivedAt = "2026-10-30T06:59:59.000Z";
   assert.ok(validateEdgeObservation(value).blockers.includes("RECEIVED_BEFORE_OBSERVED"));
 });
+
+
+test("unsupported schema and malformed timestamp are quarantined", () => {
+  const value = { ...goodObservation(), schemaVersion: "rupaykg.edge-observation.v99", observedAt: "not-a-time" };
+  const result = validateEdgeObservation(value);
+  assert.equal(result.disposition, "QUARANTINED");
+  assert.ok(result.blockers.includes("UNSUPPORTED_SCHEMA_VERSION"));
+  assert.ok(result.blockers.includes("INVALID_OBSERVED_AT"));
+});
+
+test("missing identity and unit fields are explicitly blocked", () => {
+  const value = { ...goodObservation(), deviceId: " ", instrumentId: "", unit: " " };
+  const result = validateEdgeObservation(value);
+  assert.equal(result.disposition, "QUARANTINED");
+  assert.ok(result.blockers.includes("MISSING_OR_INVALID_DEVICE_ID"));
+  assert.ok(result.blockers.includes("MISSING_OR_INVALID_INSTRUMENT_ID"));
+  assert.ok(result.blockers.includes("MISSING_OR_INVALID_UNIT"));
+});
+
+test("malformed quality flags are quarantined", () => {
+  const value = { ...goodObservation(), qualityFlags: ["", 123] };
+  const result = validateEdgeObservation(value);
+  assert.equal(result.disposition, "QUARANTINED");
+  assert.ok(result.blockers.includes("INVALID_QUALITY_FLAGS"));
+});
+
+test("verified-current calibration without a record identifier is blocked", () => {
+  const value = goodObservation();
+  value.calibrationRecordId = null;
+  const result = validateEdgeObservation(value);
+  assert.equal(result.disposition, "CALIBRATION_BLOCKED");
+  assert.deepEqual(result.blockers, ["CALIBRATION_EVIDENCE_MISSING_OR_EXPIRED"]);
+});
+
+test("revoked device identity is quarantined", () => {
+  const value = goodObservation();
+  value.authenticationState = "REVOKED";
+  const result = validateEdgeObservation(value);
+  assert.equal(result.disposition, "QUARANTINED");
+  assert.ok(result.blockers.includes("DEVICE_NOT_AUTHENTICATED"));
+});
