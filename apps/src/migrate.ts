@@ -30,23 +30,33 @@ export async function runMigrations(pool: PoolType, migrationDir: string): Promi
       version text primary key,
       filename text not null,
       applied_at timestamptz not null default now(),
-      source_sha256 text
+      source_sha256 text,
+      source_sha256_required boolean not null default false,
+      constraint schema_migrations_source_sha256_required_check
+        check (not source_sha256_required or source_sha256 is not null)
     )
   `);
 
   // Older ledgers may not have source_sha256. Detect this without mutating
   // their schema, then validate the complete filename/version history first.
-  const checksumColumn = await pool.query<{ exists: boolean }>(
-    "select exists (select 1 from information_schema.columns where table_schema = current_schema() and table_name = 'schema_migrations' and column_name = 'source_sha256') as exists",
+  const columnCheck = await pool.query<{ source_sha256: boolean; source_sha256_required: boolean }>(
+    "select " +
+      "exists (select 1 from information_schema.columns where table_schema = current_schema() and table_name = 'schema_migrations' and column_name = 'source_sha256') as source_sha256, " +
+      "exists (select 1 from information_schema.columns where table_schema = current_schema() and table_name = 'schema_migrations' and column_name = 'source_sha256_required') as source_sha256_required",
   );
-  const hasChecksumColumn = checksumColumn.rows[0]?.exists === true;
-  const applied = hasChecksumColumn
-    ? await pool.query<{ version: string; filename: string; source_sha256: string | null }>(
-        "select version, filename, source_sha256 from schema_migrations order by version",
+  const hasChecksumColumn = columnCheck.rows[0]?.source_sha256 === true;
+  const hasRequiredFlag = columnCheck.rows[0]?.source_sha256_required === true;
+  const applied = hasChecksumColumn && hasRequiredFlag
+    ? await pool.query<{ version: string; filename: string; source_sha256: string | null; source_sha256_required: boolean }>(
+        "select version, filename, source_sha256, source_sha256_required from schema_migrations order by version",
       )
-    : await pool.query<{ version: string; filename: string; source_sha256?: null }>(
-        "select version, filename from schema_migrations order by version",
-      );
+    : hasChecksumColumn
+      ? await pool.query<{ version: string; filename: string; source_sha256: string | null; source_sha256_required?: false }>(
+          "select version, filename, source_sha256 from schema_migrations order by version",
+        )
+      : await pool.query<{ version: string; filename: string; source_sha256?: null; source_sha256_required?: false }>(
+          "select version, filename from schema_migrations order by version",
+        );
 
   const conflicts = migrationHistoryConflicts(applied.rows, new Set(files));
   if (conflicts.length) {
@@ -60,7 +70,12 @@ export async function runMigrations(pool: PoolType, migrationDir: string): Promi
   const digestConflicts: string[] = [];
   if (hasChecksumColumn) {
     for (const row of applied.rows) {
-      if (!row.source_sha256) continue;
+      if (!row.source_sha256) {
+        if ("source_sha256_required" in row && row.source_sha256_required === true) {
+          digestConflicts.push(`${row.version}:${row.filename}:REQUIRED_SOURCE_CHECKSUM_MISSING`);
+        }
+        continue;
+      }
       const sqlBytes = await readFile(path.join(migrationDir, row.filename));
       const actual = createHash("sha256").update(sqlBytes).digest("hex");
       if (!/^[a-f0-9]{64}$/.test(row.source_sha256) || actual !== row.source_sha256) {
@@ -77,6 +92,24 @@ export async function runMigrations(pool: PoolType, migrationDir: string): Promi
   if (!hasChecksumColumn) {
     await pool.query("alter table schema_migrations add column source_sha256 text");
   }
+  if (!hasRequiredFlag) {
+    await pool.query("alter table schema_migrations add column source_sha256_required boolean not null default false");
+  }
+  await pool.query(`
+    do $checksum_constraint$
+    begin
+      if not exists (
+        select 1 from pg_constraint
+        where conname = 'schema_migrations_source_sha256_required_check'
+          and conrelid = 'schema_migrations'::regclass
+      ) then
+        alter table schema_migrations
+          add constraint schema_migrations_source_sha256_required_check
+          check (not source_sha256_required or source_sha256 is not null);
+      end if;
+    end;
+    $checksum_constraint$;
+  `);
   for (const filename of files) {
     const version = filename.split("_", 1)[0];
     const existing = await pool.query<{ version: string; filename: string }>(
@@ -99,7 +132,7 @@ export async function runMigrations(pool: PoolType, migrationDir: string): Promi
       await client.query("begin");
       await client.query(sql);
       await client.query(
-        "insert into schema_migrations(version, filename, source_sha256) values ($1, $2, $3)",
+        "insert into schema_migrations(version, filename, source_sha256, source_sha256_required) values ($1, $2, $3, true)",
         [version, filename, sourceSha256],
       );
       await client.query("commit");
