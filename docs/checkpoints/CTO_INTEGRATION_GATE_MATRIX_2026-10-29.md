@@ -10,10 +10,13 @@ The following exact-head GitHub Actions runs were queried on 2026-10-29 and retu
 
 | Workstream | PR | Checked head | CI run | Interpretation |
 |---|---:|---|---:|---|
-| Dual-ledger migration compatibility | #108 | `8343d065e63565dac0c03ae6d65d1abba4dea0de` | `40832658604` | Engineering acceptance only |
-| India regulatory source baseline | #119 | `5ba6ed40ca7d988337fe63b689cfac6577295bc0` | `40877858923` | Research/source-register tests only |
-| Production safety and EPR/ESG verification | #120 | `c93b162a853e8dcd096d706b13f095fe5f8d2479` | `40887959002` | Engineering acceptance only |
-| GRI cross-mapping | #121 | `b04718ee1b0a34aa42f0bf4aa5dea32081de3892` | `40887646135` | Schema/package tests only |
+| Dual-ledger migration compatibility | #108 | `efca1f2ef08bc87198e7f8294c9fb02f82e0d9e9` | `40934043842` | Exact-head CI successful; engineering acceptance only |
+| India regulatory source baseline | #119 | `4fa786482c84403189cd062e796599f3f1fc8c2c` | Not rechecked in this batch | Source-register review only |
+| Production safety and EPR/ESG verification | #120 | `1720df5eac80aa35d97f4b16b998ff70a2d45daa` | Not rechecked in this batch | Engineering acceptance only |
+| GRI cross-mapping | #121 | `b353d41ad71fa0f05149c046d75b2dba07c10f45` | Not rechecked in this batch | Schema/package tests only |
+| Migration runner P0 reconciliation | #124 | `ea25f71eaad921bd97c8de5ea6b6f180a171b488` | `41011871214` | Exact-head CI successful; candidate base is CI validation branch, not main |
+| Fail-closed migration preflight | #126 | `61191f5b7252c5d89d5157cefb01c27f464a9aef` | `41014548851` | Exact-head CI successful; engineering acceptance only |
+| Authoritative regulatory source register | #127 | `269c953104c1dfe0f230fc814c78f9a1378b73ad` | `41020120401` | Exact-head CI successful; sources remain research-only until archived and approved |
 
 These runs are not a combined integration run. They do not establish legal completeness, live schema parity, production readiness, independent review, or certification. Re-check the current PR heads and rerun CI after any integration.
 
@@ -93,3 +96,16 @@ Accordingly, update the first two gate rows: exact source discovery is now **CLO
 
 The exact-head CI for this documentation commit must be checked independently; documentation CI does not validate database migration behavior.
 
+
+
+## 6. Exact-head recheck — 2026-10-30
+
+The migration candidates were rechecked against their current pull-request heads. PR #108 run `40934043842`, PR #124 run `41011871214`, and PR #126 run `41014548851` all completed successfully on the exact heads shown above. PR #127 run `41020120401` also completed successfully. These are separate runs, not a combined integration gate. PR #124 targets `ci/migration-p0-validation-path`, so its green run does not by itself validate integration with `main`.
+
+### Remaining hard blockers
+
+- Production ledger entry `096_verification_authorization_provenance.sql` and staging entries `20261022_async_mirror_inbox.sql` through `20261025_ai_evidence_intake_jobs.sql` still lack trusted artifact-level deployed-source attestation and an approved canonical forward-only disposition.
+- The proposed `20261101_async_mirror_unresolved_crosswalk.sql` is a recovered/candidate source only, is not a canonical release migration, and is not evidence that the live status constraint has been fixed.
+- The worker can emit `UNRESOLVED` while the recovered 20261023 status constraint excludes it. This remains a functional defect until a reviewed forward migration and actual-worker disposable-PostgreSQL tests pass.
+- Do not merge overlapping migration changes independently. Required next gate is one reviewed canonical catalog/plan, followed by integrated disposable PostgreSQL tests against production-shaped and staging-shaped ledgers, preserving all inbox/event data and proving rerun/no-op and failure recovery.
+- Production and staging remain write-frozen for this reconciliation; scheduler and production certification remain HOLD/OFF. No live SQL, ledger repair, scheduler activation, statutory submission, or credit issuance is authorized.
