@@ -55,16 +55,18 @@ async function exerciseRace(
   const reviewClient = await pool.connect();
   const observer = await pool.connect();
   try {
-    await useClient.query("select set_config('application_name',$1,false)", [`rupaykg-use-${kind}-${winner}-${suffix}`]);
-    await reviewClient.query("select set_config('application_name',$1,false)", [`rupaykg-reject-${kind}-${winner}-${suffix}`]);
-    await observer.query("select set_config('application_name',$1,false)", [`rupaykg-observer-${suffix}`]);
+    const useApp = `mrv-use-${suffix.slice(0, 8)}`;
+    const reviewApp = `mrv-rej-${suffix.slice(0, 8)}`;
+    await useClient.query("select set_config('application_name',$1,false)", [useApp]);
+    await reviewClient.query("select set_config('application_name',$1,false)", [reviewApp]);
+    await observer.query("select set_config('application_name',$1,false)", [`mrv-obs-${suffix.slice(0, 8)}`]);
 
     if (winner === "use-first") {
       await useClient.query("begin");
       await performUse(useClient, kind, fixture, suffix);
       await reviewClient.query("begin");
       const rejection = rejectEvidence(reviewClient, fixture);
-      await waitUntilBlocked(observer, `rupaykg-reject-${kind}-${winner}-${suffix}`);
+      await waitUntilBlocked(observer, reviewApp);
       await useClient.query("commit");
       await rejection;
       await reviewClient.query("commit");
@@ -73,7 +75,7 @@ async function exerciseRace(
       await lockEvidenceForReview(reviewClient, fixture);
       await useClient.query("begin");
       const useAttempt = performUse(useClient, kind, fixture, suffix);
-      await waitUntilBlocked(observer, `rupaykg-use-${kind}-${winner}-${suffix}`);
+      await waitUntilBlocked(observer, useApp);
       await rejectEvidenceAfterLocks(reviewClient, fixture);
       await reviewClient.query("commit");
       await assert.rejects(useAttempt, errorPattern(kind));
