@@ -149,12 +149,12 @@ begin
 
   return true;
 end;
-$$;
+$function$;
 
 create or replace function require_current_mrv_evidence_for_registry_use()
 returns trigger
 language plpgsql
-as $$
+as $function$
 declare
   credential_id_value uuid;
 begin
@@ -171,7 +171,7 @@ begin
 
   return new;
 end;
-$$;
+$function$;
 
 drop trigger if exists registry_transfer_current_mrv_evidence_guard on registry_events;
 create trigger registry_transfer_current_mrv_evidence_guard
@@ -181,7 +181,7 @@ for each row execute function require_current_mrv_evidence_for_registry_use();
 create or replace function require_current_mrv_evidence_for_settlement()
 returns trigger
 language plpgsql
-as $$
+as $function$
 begin
   if new.status in ('EXECUTING','RECONCILING','SETTLED')
      and (
@@ -194,7 +194,7 @@ begin
 
   return new;
 end;
-$$;
+$function$;
 
 drop trigger if exists settlement_current_mrv_evidence_guard on settlements;
 create trigger settlement_current_mrv_evidence_guard
