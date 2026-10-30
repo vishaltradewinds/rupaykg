@@ -249,7 +249,8 @@ test("failed rollback destroys the session and does not attempt to unlock an unc
     assert.ok(calls.includes("rollback"));
     assert.equal(calls.some((sql) => sql.startsWith("select pg_advisory_unlock")), false);
     assert.equal(getReleaseCount(), 1);
-    assert.ok(releaseErrors[0] instanceof Error);
-    assert.match(releaseErrors[0]!.message, /rollback also failed; destroying database connection/);
+    const releaseError = releaseErrors[0];
+    assert.ok(releaseError instanceof Error);
+    assert.match(releaseError.message, /rollback also failed; destroying database connection/);
   });
 });
