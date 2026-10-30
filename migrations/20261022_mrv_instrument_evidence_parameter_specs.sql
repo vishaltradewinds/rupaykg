@@ -383,6 +383,28 @@ returns boolean language sql stable as $$
     select 1
       from mrv_instruments i
      where i.id = p_instrument_id
+       -- Enforce lifecycle and expiry at the shared database gate, not only in API code.
+       and i.approval_status = 'VERIFIED'
+       and (
+         (i.meity_validity_basis = 'NO_EXPIRY_CONFIRMED' and i.meity_valid_until is null)
+         or
+         (i.meity_validity_basis = 'VALID_UNTIL' and i.meity_valid_until > now())
+       )
+       and (
+         not i.calibration_required
+         or (
+           i.calibration_status = 'VERIFIED'
+           and i.calibration_valid_until is not null
+           and i.calibration_valid_until > now()
+         )
+       )
+       and (
+         i.firmware_version is null
+         or (
+           i.firmware_support_until is not null
+           and i.firmware_support_until > now()
+         )
+       )
        and exists (
          select 1
            from evidence_artifact_versions v
