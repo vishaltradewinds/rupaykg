@@ -49,7 +49,7 @@ Returns HTTP 201 with `approvalStatus: HOLD`. Registration is not approval. Meas
 
 `POST /api/v1/mrv/instruments/<instrument-uuid>/review`
 
-Every review requires `decision` (`VERIFIED`, `HOLD`, `EXPIRED`, or `REJECTED`) and a non-empty `note`. The review permission is organization-scoped and is required even if the requester registered the candidate.
+Every review requires `decision` (`VERIFIED`, `HOLD`, `EXPIRED`, or `REJECTED`) and a non-empty `note`. The review permission is organization-scoped. A different authorized identity must verify a candidate; self-approval is rejected by both the API and PostgreSQL guard.
 
 To set `decision: VERIFIED`, include:
 
