@@ -1,3 +1,7 @@
+> **CURRENT OVERRIDE — 2026-10-30:** Current release decision is **Production HOLD · scheduler OFF · certification HOLD/OFF**. Neon main records migration 096 and contains its expected schema/function changes, aligned to a Render runtime log, but the Render-to-Neon target, immutable image digest, exact SQL SHA-256, and release authorization remain unproven. Staging/rehearsal history also diverges. The historical baseline below is retained for audit only and must not be treated as current verification. See [Current Source of Truth](CURRENT_SOURCE_OF_TRUTH.md) and [Issue #145](https://github.com/vishaltradewinds/rupaykg/issues/145).
+
+---
+
 # RupayKg — SHAKTI Production Gate
 
 ## Purpose
