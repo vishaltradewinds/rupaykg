@@ -133,6 +133,7 @@ async function performUse(client: PoolClient, kind: UseKind, f: Fixture, nonce: 
       "insert into settlements(credential_id,payer_id,payee_id,amount,currency,status,authorization_reference,verified_at) values($1,$2,$3,1,'INR','CREATED',$4,now()) returning id",
       [f.credentialId, f.organizationId, f.foreignOrganizationId, `AUTH-${nonce}`],
     );
+    await client.query("update settlements set status='AUTHORIZED' where id=$1", [settlement.rows[0]!.id]);
     await client.query("update settlements set status='EXECUTING' where id=$1", [settlement.rows[0]!.id]);
   }
 }
