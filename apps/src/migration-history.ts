@@ -30,3 +30,21 @@ export function migrationHistoryConflicts(
   }
   return conflicts;
 }
+
+/**
+ * Reject release catalogs that contain multiple SQL files for the same numeric
+ * version. Otherwise the runner could apply one file before discovering the
+ * conflicting filename for that version later in the loop.
+ */
+export function migrationCatalogVersionConflicts(availableFiles: readonly string[]): string[] {
+  const filenamesByVersion = new Map<string, string[]>();
+  for (const filename of availableFiles) {
+    const version = filename.split("_", 1)[0];
+    const filenames = filenamesByVersion.get(version) ?? [];
+    filenames.push(filename);
+    filenamesByVersion.set(version, filenames);
+  }
+  return [...filenamesByVersion.entries()]
+    .filter(([, filenames]) => filenames.length > 1)
+    .map(([version, filenames]) => `${version}:${filenames.sort().join("|")}`);
+}
