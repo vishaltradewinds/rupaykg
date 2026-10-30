@@ -87,10 +87,31 @@ async function exerciseRace(
     try {
       await verifyClient.query("begin");
       const followUpKind: UseKind = kind === "issuance" ? "transfer" : kind;
-      await assert.rejects(
-        performUse(verifyClient, followUpKind, fixture, `post-rejection-${suffix}`),
-        errorPattern(followUpKind),
-      );
+      if (followUpKind === "settlement") {
+        // In use-first order, the original settlement is committed before evidence
+        // rejection. Re-check that same value-bearing record instead of creating a
+        // duplicate that would fail for an unrelated uniqueness constraint.
+        const existing = await verifyClient.query<{ id: string }>(
+          "select id from settlements where credential_id=$1 and payer_id=$2 and payee_id=$3 and status not in ('SETTLED','CANCELLED') order by created_at desc limit 1",
+          [fixture.credentialId, fixture.organizationId, fixture.foreignOrganizationId],
+        );
+        if (existing.rows[0]) {
+          await assert.rejects(
+            verifyClient.query("update settlements set status=status where id=$1", [existing.rows[0].id]),
+            errorPattern(followUpKind),
+          );
+        } else {
+          await assert.rejects(
+            performUse(verifyClient, followUpKind, fixture, `post-rejection-${suffix}`),
+            errorPattern(followUpKind),
+          );
+        }
+      } else {
+        await assert.rejects(
+          performUse(verifyClient, followUpKind, fixture, `post-rejection-${suffix}`),
+          errorPattern(followUpKind),
+        );
+      }
       await verifyClient.query("rollback");
     } finally {
       verifyClient.release();
