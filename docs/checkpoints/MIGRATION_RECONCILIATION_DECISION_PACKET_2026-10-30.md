@@ -87,3 +87,20 @@ The gate is not passed until evidence, independent reviews, integrated test resu
 **Evidence boundary:** this is a code-review finding from the PR #120 patch compared with the #108 working branch, not proof that any live ledger contains this malformed state. No database was queried or changed for this review. The latest exact-head CI success for #108 remains evidence for that head only; it does not test the combined #108 + #120 code.
 
 **Required integration gate:** one combined candidate must pass the existing dual-ledger actual-runner suite plus the malformed version/filename negative case, all migration 088–091 tests, GRI package tests, and schema/data-preservation assertions against both disposable ledger shapes. Keep production and scheduler HOLD/OFF until independent review and the full release gate pass.
+
+
+## Follow-up integration disposition — PR #108 versus PR #126 (2026-10-30)
+
+A direct file-level comparison of the current branch heads establishes that the substantive PR #126 preflight implementation is already present on PR #108's branch:
+
+- `apps/src/migrate.ts` imports and executes `migrationHistoryConflicts` before pending migration SQL.
+- `apps/src/migration-history.ts` detects missing source files and version/filename-prefix mismatch; PR #108 additionally rejects duplicate migration-catalog version prefixes before any ledger query or pending migration SQL.
+- `.github/workflows/ci.yml` on PR #108 already enables the dedicated disposable-PostgreSQL migration-history preflight test.
+- `scripts/test-actual-migration-runner.mjs` on PR #108 includes the available filename recorded under the wrong version case and asserts failure before pending SQL, preserving the original ledger row.
+- PR #108 also contains the broader dual-ledger and actual-runner acceptance cases, so no blind cherry-pick or manual file merge from #126 is required.
+
+**Disposition:** treat PR #108 as the single integration candidate for this code path. PR #126 is redundant as an independent merge candidate and should not be merged separately. Keep the candidate draft/unmerged until exact-head CI and independent review are verified. After the candidate passes those gates, close #126 as superseded rather than merge it.
+
+**Evidence limitation:** this is a repository code comparison. The workflow lookup available during this review returned a successful historical run but did not establish a successful CI run for current head `0fc473ee69a21b05e8af5f1e476fd51835261152`. The combined branch still needs a clearly attributable exact-head CI result. No production or staging database was queried or changed in this follow-up.
+
+**Release gate remains unchanged:** production/staging migration writes, historical SQL replay, worker scheduler activation, production release and certification remain HOLD/OFF pending authorized live-ledger evidence, object-level reconciliation, independent database/security review and approved forward-only plan.
