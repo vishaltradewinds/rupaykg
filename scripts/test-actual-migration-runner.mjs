@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { createHash } from "node:crypto";
 import pg from "pg";
 
 if (process.env.RUPAYKG_RUN_DUAL_LEDGER_TESTS !== "1") {
@@ -34,6 +35,8 @@ const productionHistorySchema = "runner_prod_history_" + suffix;
 const stagingHistorySchema = "runner_stage_history_" + suffix;
 const verificationSchema = "runner_verification_" + suffix;
 const versionMismatchSchema = "runner_version_mismatch_" + suffix;
+const checksumMismatchSchema = "runner_checksum_mismatch_" + suffix;
+const checksumMatchSchema = "runner_checksum_match_" + suffix;
 const q = (s) => '"' + s.replaceAll('"', '""') + '"';
 const setSchema = (schema) => client.query("set search_path to " + q(schema) + ", public");
 const prereqs = async () => {
@@ -60,7 +63,7 @@ const schemas = [];
 try {
   await client.connect();
   connected = true;
-  for (const schema of [productionSchema, stagingSchema, productionHistorySchema, stagingHistorySchema, verificationSchema, versionMismatchSchema]) {
+  for (const schema of [productionSchema, stagingSchema, productionHistorySchema, stagingHistorySchema, verificationSchema, versionMismatchSchema, checksumMismatchSchema, checksumMatchSchema]) {
     await client.query("create schema " + q(schema));
     schemas.push(schema);
     await setSchema(schema);
@@ -73,8 +76,12 @@ try {
   const prod = runRunner(productionSchema);
   assert.equal(prod.status, 0, "actual runner should apply recovered migrations to production-shaped schema: " + prod.stderr + prod.stdout);
   await setSchema(productionSchema);
-  const prodLedger = (await client.query("select version, filename from schema_migrations order by version")).rows;
+  const prodLedger = (await client.query("select version, filename, source_sha256 from schema_migrations order by version")).rows;
   assert.deepEqual(prodLedger.map(x => x.filename), names);
+  for (const row of prodLedger) {
+    const bytes = await readFile(path.join(migrationDir, row.filename));
+    assert.equal(row.source_sha256, createHash("sha256").update(bytes).digest("hex"), "newly applied migrations must record exact SQL-byte SHA-256");
+  }
   for (const table of ["async_mirror_inbox", "async_mirror_inbox_events", "ai_intake_rate_limits", "ai_evidence_intake_jobs"]) {
     const exists = (await client.query("select to_regclass($1) is not null as yes", [productionSchema + "." + table])).rows[0].yes;
     assert.equal(exists, true, "runner must create " + table);
@@ -106,6 +113,8 @@ try {
   assert.deepEqual((await client.query("select id, authority_code, municipal_code, batch_id, status, attempts, payload_sha256 from async_mirror_inbox order by id")).rows, inboxBefore);
   assert.deepEqual((await client.query("select id, inbox_id, from_status, to_status, attempt, payload_sha256 from async_mirror_inbox_events order by id")).rows, eventsBefore);
   assert.equal((await client.query("select count(*)::int n from schema_migrations")).rows[0].n, 4);
+  assert.equal((await client.query("select count(*)::int n from schema_migrations where source_sha256 is null")).rows[0].n, 4,
+    "legacy rows without a trusted digest must remain explicitly unattested rather than being backfilled");
   const stageRepeat = runRunner(stagingSchema);
   assert.equal(stageRepeat.status, 0, "repeated staging runner should be a no-op: " + stageRepeat.stderr + stageRepeat.stdout);
 
@@ -165,6 +174,40 @@ try {
   await setSchema(versionMismatchSchema);
   assert.equal((await client.query("select count(*)::int n from migration_preflight_sentinel")).rows[0].n, 0, "version mismatch must fail before pending migration SQL");
   assert.deepEqual((await client.query("select version,filename from schema_migrations")).rows, [{ version: "999", filename: "001_should_not_run.sql" }], "version mismatch must preserve the original ledger row");
+  // A same-name/same-version SQL edit must fail before any migration SQL executes.
+  const checksumMismatchCatalog = path.join(temp, "checksum-mismatch-release");
+  await mkdir(checksumMismatchCatalog);
+  const originalChecksumSql = "create table checksum_sentinel(marker text);\n";
+  const alteredChecksumSql = "insert into checksum_sentinel(marker) values ('ALTERED_SQL_EXECUTED');\n";
+  const checksumFilename = "001_checksum_guard.sql";
+  await writeFile(path.join(checksumMismatchCatalog, checksumFilename), alteredChecksumSql, "utf8");
+  await setSchema(checksumMismatchSchema);
+  await client.query("create table checksum_sentinel(marker text)");
+  await client.query("create table schema_migrations(version text primary key, filename text not null, applied_at timestamptz not null default now(), source_sha256 text)");
+  await client.query("insert into schema_migrations(version,filename,source_sha256) values ('001',$1,$2)", [checksumFilename, createHash("sha256").update(originalChecksumSql).digest("hex")]);
+  const checksumMismatch = runRunner(checksumMismatchSchema, checksumMismatchCatalog);
+  assert.notEqual(checksumMismatch.status, 0, "runner must reject altered SQL bytes under the same filename/version");
+  assert.match(checksumMismatch.stderr + checksumMismatch.stdout, /SOURCE_CHECKSUM_MISMATCH/);
+  await setSchema(checksumMismatchSchema);
+  assert.equal((await client.query("select count(*)::int n from checksum_sentinel")).rows[0].n, 0, "checksum mismatch must fail before altered SQL executes");
+
+  // A matching historical digest is accepted; a newly applied migration is hashed.
+  const checksumMatchCatalog = path.join(temp, "checksum-match-release");
+  await mkdir(checksumMatchCatalog);
+  const baselineSql = "create table checksum_baseline(marker text);\n";
+  const pendingSql = "create table checksum_pending(marker text);\n";
+  await writeFile(path.join(checksumMatchCatalog, "001_baseline.sql"), baselineSql, "utf8");
+  await writeFile(path.join(checksumMatchCatalog, "002_pending.sql"), pendingSql, "utf8");
+  await setSchema(checksumMatchSchema);
+  await client.query("create table checksum_baseline(marker text)");
+  await client.query("create table schema_migrations(version text primary key, filename text not null, applied_at timestamptz not null default now(), source_sha256 text)");
+  await client.query("insert into schema_migrations(version,filename,source_sha256) values ('001','001_baseline.sql',$1)", [createHash("sha256").update(baselineSql).digest("hex")]);
+  const checksumMatch = runRunner(checksumMatchSchema, checksumMatchCatalog);
+  assert.equal(checksumMatch.status, 0, "matching recorded digest must pass and pending migration should apply: " + checksumMatch.stderr + checksumMatch.stdout);
+  await setSchema(checksumMatchSchema);
+  const pendingLedger = (await client.query("select source_sha256 from schema_migrations where version='002'")).rows[0];
+  assert.equal(pendingLedger.source_sha256, createHash("sha256").update(pendingSql).digest("hex"), "new migration ledger row must store the exact source digest");
+  assert.equal((await client.query("select to_regclass($1) is not null as yes", [checksumMatchSchema + ".checksum_pending"])).rows[0].yes, true);
   // Execute the recovered 096 SQL as an isolated disposable-schema acceptance
   // fixture, not as a release migration. Validate authorization binding and snapshot.
   await setSchema(verificationSchema);
@@ -417,7 +460,7 @@ try {
   const orphan = runRunner(stagingSchema, missingDir);
   assert.notEqual(orphan.status, 0, "actual runner must fail when ledger references a missing migration file");
   assert.match(orphan.stderr + orphan.stdout, /MIGRATION_HISTORY_UNRESOLVED|recorded migration|orphan|absent/i);
-  console.log("PASS: actual migrate.ts runner applied production-shaped fixture, skipped staging ledger matches, preserved 12 inbox + 12 event rows, no-op repeat runs, failed closed for missing historical ledger files, failed closed for an available filename recorded under the wrong version, and verified recovered 096 authorization binding plus APPROVED→REJECTED→APPROVED snapshot semantics in isolated PostgreSQL schemas.");
+  console.log("PASS: actual migrate.ts runner records and verifies SHA-256 SQL source digests, rejects altered SQL under the same filename/version before execution, preserves legacy NULL digests without false attestation, preserves 12 inbox + 12 event rows, no-op repeat runs, fails closed for missing history/version conflicts, and verifies recovered 096 authorization semantics in isolated PostgreSQL schemas.");
 } finally {
   if (connected) {
     for (const schema of schemas.reverse()) {
