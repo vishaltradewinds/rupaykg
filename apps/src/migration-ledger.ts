@@ -1,4 +1,4 @@
-import { assertMigrationHistoryConsistent, findMigrationHistoryConflicts } from "./migration-history.js";
+import { assertMigrationHistoryConsistent, findMigrationHistoryConflicts, findMigrationCatalogVersionConflicts } from "./migration-history.js";
 export type { AppliedMigrationSource as AppliedMigrationRecord } from "./migration-history.js";
 import type { AppliedMigrationSource } from "./migration-history.js";
 
@@ -21,4 +21,4 @@ export function assertNoOrphanedMigrationRecords(records: readonly AppliedMigrat
   assertMigrationHistoryConsistent(records, availableFilenames);
 }
 
-export { findMigrationHistoryConflicts };
+export { findMigrationHistoryConflicts, findMigrationCatalogVersionConflicts };
