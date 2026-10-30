@@ -174,3 +174,11 @@ These are starting points for dated applicability review, not evidence that a se
 
 - Review of the generated source caught over-escaped regex metacharacters before the latest CI run completed. Corrected the timestamp regex to standard TypeScript/JavaScript regex syntax in commit `5d40c6a68e3c612a43e6658f5cb06ee06e5da630`.
 - The exact-head CI must validate this corrected head; the earlier queued run is not sufficient. Status remains **PENDING** until the latest head's checks finish.
+
+### Canonical ingestion boundary audit — 2026-10-30 08:42 UTC
+
+- Exact-head hardware-edge validation workflow #3293 completed with conclusion **success** for code commit `5d40c6a68e3c612a43e6658f5cb06ee06e5da630`. The branch's subsequent documentation-only checkpoint commit is not itself the tested code head; re-run/check CI on the latest PR head before merge.
+- Read-only source audit of `apps/src/sync-validation.ts` and `apps/src/sync-routes.ts` on `fix/guardian-hedera-gate-20261010` confirms the canonical field-sync path already checks verified device identity, idempotency-key payload conflicts, and client-sequence collisions inside a database transaction. Same-sequence/same-key/same-payload replays are idempotent; collisions are recorded and rejected.
+- **Integration gap identified:** current `validateSyncEnvelope` accepts `capturedAt` if `Date.parse` can parse it, which can admit date-only/timezone-naive timestamps. The new hardware-edge adapter validator is stricter. This is a canonical ingestion contract issue to reconcile with the owning sync/migration PRs before production linkage; do not silently patch shared `sync-validation.ts` from this parallel branch.
+- Hardware edge adapter remains a pre-ingestion shape validator, not a canonical persistence or authorization path. Any future linkage must preserve authenticated `/api/v1/field-sync/envelopes` intake and its existing idempotency/sequence handling, then add exact-model/parameter/calibration authorization at the approved owner boundary.
+- No canonical route, migration, evidence vault, production database, physical interface, or instrument approval code was changed in this audit batch.
