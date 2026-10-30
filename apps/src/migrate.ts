@@ -89,7 +89,25 @@ export async function runMigrations(pool: PoolType, migrationDir: string): Promi
         await client.query("commit");
         console.log(`Applied ${filename}`);
       } catch (error) {
-        await client.query("rollback");
+        try {
+          await client.query("rollback");
+        } catch (rollbackError) {
+          // A failed rollback leaves transaction/session state uncertain. Destroy
+          // the connection so it cannot be reused by the pool; PostgreSQL releases
+          // session advisory locks when the connection is closed.
+          const connectionError = new Error(
+            `Migration ${filename} failed and rollback also failed; destroying database connection`,
+            { cause: rollbackError },
+          );
+          client.release(connectionError);
+          clientReleased = true;
+          lockAcquired = false;
+          throw new AggregateError(
+            [error, rollbackError],
+            `Migration ${filename} failed and rollback failed`,
+            { cause: error },
+          );
+        }
         throw new Error(`Migration ${filename} failed`, { cause: error });
       }
     }
