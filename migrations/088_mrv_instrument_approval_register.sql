@@ -251,6 +251,7 @@ begin
         'supportedParameterCodes', new.supported_parameter_codes,
         'meityCertificateId', new.meity_certificate_id,
         'meityIssuer', new.meity_issuer,
+        'meityCertificateScope', new.meity_certificate_scope,
         'meityVerifiedAt', new.meity_verified_at,
         'interfaceProtocol', new.interface_protocol,
         'meityEvidenceReference', new.meity_evidence_reference,
