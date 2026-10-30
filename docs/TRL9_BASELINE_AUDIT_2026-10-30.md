@@ -150,9 +150,16 @@ The read-only production/staging comparison documented on PR #108 reports:
 - PR #91 head `b8632ceacd18a0db2d635f23904e17c19664f48b`: CI run #2448 succeeded on that exact commit; review and production-target/recovery evidence remain required.
 - PR #120 head `1720df5eac80aa35d97f4b16b998ff70a2d45daa`: CI run #3213 succeeded on that exact commit; its numbered migrations conflict with other open proposals and are not approved to merge.
 - PR #90 run #3361 and PR #128 run #3362 were in progress at the time checked. PR #130's documentation-only CI run #3364 was also in progress. Recheck current run state before claiming success.
-- PR #108 has no workflow run returned by the commit-specific PR-triggered run query for its reported head; do not infer that its latest exact head passed. Verify its current run/checks directly before treating it as green.
+- PR #108 exact head `0fc473ee69e21b05e8af5f1e476fd51835261152` has completed CI run #3279 (run ID `41024084332`) with conclusion `success`. This is evidence for that exact candidate head's configured CI only; it does not reconcile live ledgers, approve migration SQL, or authorize production changes.
 
 ### Batch A revised disposition
 **Batch A remains PARTIALLY COMPLETE; P0 release-catalogue and governance blockers are confirmed.** The repository and PR inventory is more complete, but it is not a substitute for the authorised read-only environment export, exact-head test evidence, independent review, or a signed integration decision.
 
 Next, the responsible engineering owner should create a single migration reconciliation decision packet that names canonical owners for every conflicting migration range, lists exact source hashes, defines production/staging ledger preconditions and forward-only steps, and specifies disposable PostgreSQL acceptance cases. No live change is authorised by this finding.
+
+
+## 10. CI evidence correction — 2026-10-30
+
+The branch-scoped workflow history was checked after the initial commit-specific lookup. PR #108's exact head `0fc473ee69e21b05e8af5f1e476fd51835261152` passed CI run #3279 (run ID `41024084332`): [workflow run](https://github.com/vishaltradewinds/rupaykg/actions/runs/41024084332). This corrects the earlier note that the commit-specific lookup returned no run; that earlier note described the lookup method, not an absence of CI.
+
+This exact-head CI success is a positive engineering gate for the candidate test harness, not live migration reconciliation, independent review, deployment provenance attestation, or production release approval. The current #130 baseline-doc CI run #3365 is in progress on head `923a38b531a8db3a44f0c831e13dc728ed282b55`; wait for its conclusion before claiming documentation CI passed.
