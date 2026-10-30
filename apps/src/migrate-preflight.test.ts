@@ -15,6 +15,7 @@ function fakePool(options: {
   applied?: Array<{ version: string; filename: string }>;
   lockFails?: boolean;
   unlockFails?: boolean;
+  unlockReturnsFalse?: boolean;
   migrationFails?: boolean;
   rollbackFails?: boolean;
 }) {
@@ -30,6 +31,9 @@ function fakePool(options: {
     if (normalized.startsWith("select pg_advisory_unlock") && options.unlockFails) {
       throw new Error("simulated advisory unlock failure");
     }
+    if (normalized.startsWith("select pg_advisory_unlock") && options.unlockReturnsFalse) {
+      return { rows: [{ pg_advisory_unlock: false }] };
+    }
     if (normalized === "select 1;" && options.migrationFails) {
       throw new Error("simulated migration SQL failure");
     }
@@ -42,8 +46,11 @@ function fakePool(options: {
     if (normalized.startsWith("select version, filename from schema_migrations order by version")) {
       return { rows: options.applied ?? [] };
     }
-    if (normalized.startsWith("select pg_advisory_lock") || normalized.startsWith("select pg_advisory_unlock")) {
+    if (normalized.startsWith("select pg_advisory_lock")) {
       return { rows: [{ pg_advisory_lock: null }] };
+    }
+    if (normalized.startsWith("select pg_advisory_unlock")) {
+      return { rows: [{ pg_advisory_unlock: true }] };
     }
     return { rows: [] };
   }
@@ -260,5 +267,18 @@ test("failed rollback destroys the session and does not attempt to unlock an unc
     const releaseError = releaseErrors[0];
     assert.ok(releaseError instanceof Error);
     assert.match(releaseError.message, /rollback also failed; destroying database connection/);
+  });
+});
+
+test("false advisory unlock result destroys the connection instead of silently passing", async () => {
+  await withCatalog(async (dir) => {
+    const { pool, calls, getReleaseCount, releaseErrors } = fakePool({
+      ledgerExists: false,
+      unlockReturnsFalse: true,
+    });
+    await assert.rejects(runMigrations(pool, dir), /lock ownership could not be confirmed/);
+    assert.ok(calls.at(-1)?.startsWith("select pg_advisory_unlock"));
+    assert.equal(getReleaseCount(), 1);
+    assert.ok(releaseErrors[0] instanceof Error);
   });
 });
