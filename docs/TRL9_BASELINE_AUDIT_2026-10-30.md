@@ -163,3 +163,31 @@ Next, the responsible engineering owner should create a single migration reconci
 The branch-scoped workflow history was checked after the initial commit-specific lookup. PR #108's exact head `0fc473ee69e21b05e8af5f1e476fd51835261152` passed CI run #3279 (run ID `41024084332`): [workflow run](https://github.com/vishaltradewinds/rupaykg/actions/runs/41024084332). This corrects the earlier note that the commit-specific lookup returned no run; that earlier note described the lookup method, not an absence of CI.
 
 This exact-head CI success is a positive engineering gate for the candidate test harness, not live migration reconciliation, independent review, deployment provenance attestation, or production release approval. The current #130 baseline-doc CI run #3365 is in progress on head `923a38b531a8db3a44f0c831e13dc728ed282b55`; wait for its conclusion before claiming documentation CI passed.
+
+
+## 11. Direct read-only Neon recheck — 2026-10-30
+
+Using the connected Neon project `steep-mud-79906940` (`rupaykg-production-fresh`), I ran SELECT-only checks against the currently listed production and staging branches. No DDL, DML, migration, ledger repair, queue update, scheduler change or deployment was performed.
+
+| Evidence item | Production branch `br-restless-base-b44cip2h` | Staging branch `br-spring-hill-b4544vz5` |
+|---|---|---|
+| Database name | `rupaykg` | `rupaykg` |
+| `schema_migrations` row count | 92 | 95 |
+| Latest recorded migration timestamp | `2026-10-27T13:46:14.262Z` | `2026-10-20T10:48:38.647Z` |
+| Divergent records | `096_verification_authorization_provenance.sql` present | `20261022`–`20261025` async/AI migrations present |
+| Instrumented schema difference | Four `verifications.authorization_*` columns present | Those four columns absent |
+| Async inbox tables | Not present in the previously inspected object comparison | `async_mirror_inbox` and `async_mirror_inbox_events` present |
+
+Staging row counts re-confirmed:
+- `async_mirror_inbox`: 12 rows.
+- `async_mirror_inbox_events`: 29 rows.
+- Inbox status distribution: PROCESSING=8, QUARANTINED=1, RECEIVED=1, RETRY=1, VALIDATED=1.
+- The current `async_mirror_inbox_status_check` permits RECEIVED, PROCESSING, PROCESSED, VALIDATED, REJECTED, RETRY and QUARANTINED; it does **not** permit `UNRESOLVED`.
+
+Production's `schema_migrations` query returned exactly one row for version `096` and filename `096_verification_authorization_provenance.sql`. Staging's ledger query returned all four expected rows for `20261022`–`20261025`.
+
+**Evidence boundary:** these SELECT results verify current ledger entries, row counts, columns and the staging CHECK definition at the time queried. They do not prove deployed SQL artifact hashes, all-object schema equivalence, data equivalence, or that a forward migration is safe. The previously documented read-only schema comparison and migration decision packet remain necessary.
+
+### Operational consequence
+
+The production/staging release-catalog mismatch is confirmed by a fresh direct read-only check, not only by an old PR description. Keep the migration runner fail-closed. Keep the async worker scheduler off. No production migration, schema repair, ledger mutation or data change is authorized. The next engineering task remains a single reviewed reconciliation candidate that passes exact-head CI and complete disposable PostgreSQL acceptance against both ledger shapes.
