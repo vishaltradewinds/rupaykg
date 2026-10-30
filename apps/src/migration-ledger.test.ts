@@ -18,7 +18,7 @@ test("fails closed when a recorded migration file was removed or renamed", () =>
   assert.deepEqual(findOrphanedMigrationRecords(records, available), [records[0]]);
   assert.throws(
     () => assertNoOrphanedMigrationRecords(records, available),
-    /Migration ledger references files absent from this release: 20261018/,
+    /MIGRATION_HISTORY_UNRESOLVED: reconcile the applied migration ledger before applying SQL: 20261018:20261018_cpcb_swm_stakeholder_workspaces.sql:SOURCE_MISSING/,
   );
 });
 
