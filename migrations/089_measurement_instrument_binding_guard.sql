@@ -32,6 +32,8 @@ begin
        or new.method is distinct from old.method
        or new.source is distinct from old.source
        or new.measured_at is distinct from old.measured_at
+       or new.quality_status is distinct from old.quality_status
+       or new.metadata is distinct from old.metadata
        or new.mrv_instrument_id is distinct from old.mrv_instrument_id
        or new.parameter_code is distinct from old.parameter_code) then
     raise exception 'instrument-bound measurement facts and provenance are immutable; create a corrected measurement instead';
@@ -104,6 +106,6 @@ end;
 $$;
 
 create trigger measurements_mrv_instrument_binding_guard
-before insert or update of activity_id, value, unit, method, source, measured_at, mrv_instrument_id, parameter_code
+before insert or update of activity_id, value, unit, method, source, measured_at, quality_status, metadata, mrv_instrument_id, parameter_code
 on measurements
 for each row execute function guard_measurement_mrv_instrument_binding();
