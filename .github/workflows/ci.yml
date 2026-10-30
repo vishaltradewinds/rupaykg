@@ -1,10 +1,11 @@
 name: CI
 
 on:
+  # Exercise migration-history fixture branches with the full acceptance workflow.
   push:
-    branches: [main]
+    branches: [main, 'test/**']
   pull_request:
-    branches: [main]
+    branches: [main, shakti/canonical-migration-history-verified]
 
 permissions:
   contents: read
