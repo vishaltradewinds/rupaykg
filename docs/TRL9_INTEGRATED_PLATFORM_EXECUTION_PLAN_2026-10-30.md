@@ -1,10 +1,12 @@
-# RupayKg TRL-9 Integrated Platform Execution Plan
+# RupayKg TRL-9 Integrated Platform Execution Workstream
 
 **Plan baseline:** 2026-10-30  
 **Repository:** `vishaltradewinds/rupaykg`  
-**Track:** Parallel to repository cleanup and migration-provenance reconciliation  
-**Status:** Execution framework established; TRL-9 **NOT CLAIMED**  
+**Track:** Execution runbook subordinate to the master Shakti TRL roadmap  
+**Status:** Execution runbook; TRL-9 **NOT CLAIMED**  
 **Release posture:** Production HOLD · scheduler OFF · certification HOLD/OFF
+
+**Document hierarchy:** The master gate framework is `docs/TRL9_EXECUTION_PLAN.md` proposed in [PR #90](https://github.com/vishaltradewinds/rupaykg/pull/90); the acceptance evidence ledger is `docs/TRL_5_EVIDENCE_LEDGER.md` proposed in [PR #93](https://github.com/vishaltradewinds/rupaykg/pull/93). This file is a subordinate, execution-oriented runbook that adds parallel work lanes and concrete exit evidence. It does not replace those documents, create a separate TRL scale, or authorize any production action. Integrate it only after reviewers reconcile overlapping content and the canonical parent plan/ledger.
 
 ## 1. Objective and decision rule
 
