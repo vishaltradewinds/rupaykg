@@ -33,6 +33,7 @@ const stagingSchema = "runner_stage_" + suffix;
 const productionHistorySchema = "runner_prod_history_" + suffix;
 const stagingHistorySchema = "runner_stage_history_" + suffix;
 const verificationSchema = "runner_verification_" + suffix;
+const versionMismatchSchema = "runner_version_mismatch_" + suffix;
 const q = (s) => '"' + s.replaceAll('"', '""') + '"';
 const setSchema = (schema) => client.query("set search_path to " + q(schema) + ", public");
 const prereqs = async () => {
@@ -59,7 +60,7 @@ const schemas = [];
 try {
   await client.connect();
   connected = true;
-  for (const schema of [productionSchema, stagingSchema, productionHistorySchema, stagingHistorySchema, verificationSchema]) {
+  for (const schema of [productionSchema, stagingSchema, productionHistorySchema, stagingHistorySchema, verificationSchema, versionMismatchSchema]) {
     await client.query("create schema " + q(schema));
     schemas.push(schema);
     await setSchema(schema);
@@ -144,7 +145,7 @@ try {
   assert.match(stageHistory.stderr + stageHistory.stdout, /20261022_async_mirror_inbox\.sql/);
   assert.match(stageHistory.stderr + stageHistory.stdout, /20261025_ai_evidence_intake_jobs\.sql/);
 
-  // Execute the recovered 096 SQL as an isolated disposable-schema acceptance
+  // An available catalog file recorded under the wrong ledger version must fail\n  // during full-history preflight, before pending SQL executes.\n  const mismatchCatalog = path.join(temp, "version-mismatch-release");\n  await mkdir(mismatchCatalog);\n  await writeFile(path.join(mismatchCatalog, "001_should_not_run.sql"),\n    "insert into migration_preflight_sentinel(marker) values ('VERSION_MISMATCH_SQL_EXECUTED');\\n", "utf8");\n  await setSchema(versionMismatchSchema);\n  await client.query("create table migration_preflight_sentinel(marker text not null)");\n  await client.query("create table schema_migrations(version text primary key, filename text not null, applied_at timestamptz not null default now())");\n  await client.query("insert into schema_migrations(version,filename) values ('999','001_should_not_run.sql')");\n  const mismatch = runRunner(versionMismatchSchema, mismatchCatalog);\n  assert.notEqual(mismatch.status, 0, "actual runner must reject a catalog filename recorded under the wrong version");\n  assert.match(mismatch.stderr + mismatch.stdout, /MIGRATION_HISTORY_UNRESOLVED/);\n  assert.match(mismatch.stderr + mismatch.stdout, /999:001_should_not_run\\.sql:VERSION_FILENAME_MISMATCH/);\n  await setSchema(versionMismatchSchema);\n  assert.equal((await client.query("select count(*)::int n from migration_preflight_sentinel")).rows[0].n, 0, "version mismatch must fail before pending migration SQL");\n  assert.deepEqual((await client.query("select version,filename from schema_migrations")).rows, [{ version: "999", filename: "001_should_not_run.sql" }], "version mismatch must preserve the original ledger row");\n\n  // Execute the recovered 096 SQL as an isolated disposable-schema acceptance
   // fixture, not as a release migration. Validate authorization binding and snapshot.
   await setSchema(verificationSchema);
   await client.query(`
@@ -229,7 +230,7 @@ try {
   const orphan = runRunner(stagingSchema, missingDir);
   assert.notEqual(orphan.status, 0, "actual runner must fail when ledger references a missing migration file");
   assert.match(orphan.stderr + orphan.stdout, /MIGRATION_HISTORY_UNRESOLVED|recorded migration|orphan|absent/i);
-  console.log("PASS: actual migrate.ts runner applied production-shaped fixture, skipped staging ledger matches, preserved 12 inbox + 12 event rows, no-op repeat runs, failed closed for missing historical ledger files, and verified recovered 096 authorization binding plus APPROVED→REJECTED→APPROVED snapshot semantics in an isolated PostgreSQL schema.");
+  console.log("PASS: actual migrate.ts runner applied production-shaped fixture, skipped staging ledger matches, preserved 12 inbox + 12 event rows, no-op repeat runs, failed closed for missing historical ledger files, failed closed for an available filename recorded under the wrong version, and verified recovered 096 authorization binding plus APPROVED→REJECTED→APPROVED snapshot semantics in isolated PostgreSQL schemas.");
 } finally {
   if (connected) {
     for (const schema of schemas.reverse()) {
