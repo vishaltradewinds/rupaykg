@@ -25,6 +25,11 @@ test("PostgreSQL enforces MRV instrument approval evidence and append-only decis
       "insert into identities(external_subject,display_name) values($1,$2) returning id",
       [`mrv-instrument-test-${suffix}`, "MRV instrument test"],
     )).rows[0]!.id;
+    const reviewerId = (await client.query<{ id: string }>(
+      "insert into identities(external_subject,display_name) values($1,$2) returning id",
+      [`mrv-instrument-reviewer-${suffix}`, "Independent MRV instrument reviewer"],
+    )).rows[0]!.id;
+
     const instrumentId = (await client.query<{ id: string; approval_status: string }>(
       "insert into mrv_instruments(organization_id,instrument_code,instrument_type,manufacturer,model,sku_revision,intended_use,supported_parameter_codes,registered_by_identity_id) values($1,$2,'GAS_FLOW','Test Manufacturer','Flow Model 1','Rev A','Landfill methane recovery flow measurement',array['gas_flow'],$3) returning id,approval_status",
       [organizationId, `FLOW-${suffix}`, identityId],
@@ -49,12 +54,12 @@ test("PostgreSQL enforces MRV instrument approval evidence and append-only decis
 
     await rejectsInSavepoint(client, () => client.query(
       "update mrv_instruments set approval_status='VERIFIED',reviewed_by_identity_id=$2,reviewed_at=now(),review_note='must fail without approval evidence' where id=$1",
-      [instrumentId.id, identityId],
+      [instrumentId.id, reviewerId],
     ), /exact-model MeitY approval evidence/i);
 
     const approved = await client.query<{ approval_status: string }>(
       "update mrv_instruments set approval_status='VERIFIED',meity_certificate_id='MEITY-CERT-TEST',meity_issuer='Official authority',meity_certificate_scope='Exact manufacturer/model/SKU revision',meity_verification_url='https://official.example.gov/cert',meity_evidence_reference='evidence://meity-test',meity_evidence_sha256=$3,meity_verified_at=now(),meity_validity_basis='VALID_UNTIL',meity_valid_until=now()+interval '1 year',calibration_required=true,calibration_status='VERIFIED',calibration_certificate_id='CAL-TEST',calibration_evidence_reference='evidence://cal-test',calibration_evidence_sha256=$4,calibration_lab='Traceable lab',calibration_traceability='National standard traceability',calibration_uncertainty=0.2,calibration_valid_until=now()+interval '1 year',security_review_status='NOT_APPLICABLE_WITH_JUSTIFICATION',security_not_applicable_reason='Test fixture uses no firmware; test-only written rationale',reviewed_by_identity_id=$2,reviewed_at=now(),review_note='test exact-model approval and calibration evidence' where id=$1 returning approval_status",
-      [instrumentId.id, identityId, "a".repeat(64), "b".repeat(64)],
+      [instrumentId.id, reviewerId, "a".repeat(64), "b".repeat(64)],
     );
     assert.equal(approved.rows[0]?.approval_status, "VERIFIED");
 
