@@ -282,6 +282,13 @@ test("PostgreSQL enforces MRV instrument approval evidence and append-only decis
     );
     assert.equal(evidenceCurrentAfterRejection.rows[0]?.current, false);
 
+    // A caller-controlled provenance metadata marker must not bypass current-evidence
+    // checks when an existing eligible credential is promoted into a value-bearing state.
+    await rejectsInSavepoint(client, () => client.query(
+      "update credentials set status='ACTIVE' where id=$1",
+      [credentialId],
+    ), /CREDENTIAL_MRV_INSTRUMENT_EVIDENCE_REQUIRED/i);
+
     await rejectsInSavepoint(client, () => client.query(
       "insert into registry_events(credential_id,event_type,event_hash,from_owner_id,to_owner_id,recorded_by_identity_id) values($1,'TRANSFERRED',$2,$3,$4,$5)",
       [credentialId, "f".repeat(64), organizationId, foreignOrganizationId, reviewerIdentityId],
