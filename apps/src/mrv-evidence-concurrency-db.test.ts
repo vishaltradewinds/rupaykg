@@ -164,8 +164,7 @@ async function exerciseHttpRouteRace(winner: "approval-first" | "rejection-first
   const observer = await pool.connect();
   const blocker = await pool.connect();
   try {
-    const fixture = await createFixture(pool, suffix);
-    await pool.query("update mrv_instruments set approval_status='HOLD' where id=$1", [fixture.instrumentId]);
+    const fixture = await createFixture(pool, suffix, { leaveInstrumentOnHold: true });
     await pool.query("update identities set status='VERIFIED' where id=$1", [fixture.reviewerId]);
     const role = await pool.query<{ id: string }>(
       "insert into roles(organization_id,name,permissions) values($1,$2,'[\"VERIFY_EVIDENCE\",\"evidence:review\",\"guardian:operate\"]'::jsonb) returning id",
@@ -183,50 +182,24 @@ async function exerciseHttpRouteRace(winner: "approval-first" | "rejection-first
     await registerEvidenceVaultRoutes(app, pool);
     await registerMrvInstrumentRoutes(app, pool);
     const headers = { authorization: `Bearer ${token}`, "x-rupaykg-organization-id": fixture.organizationId };
-    // Reuse the exact evidence fields already stored on the fixture. The production
-    // immutability guard correctly forbids changing evidence after first verification;
-    // this race tests only the HOLD -> VERIFIED transition versus concurrent revocation.
-    const existing = await pool.query<{
-      meity_certificate_id: string; meity_issuer: string; meity_certificate_scope: string;
-      meity_verification_url: string; meity_evidence_reference: string; meity_evidence_sha256: string;
-      meity_evidence_artifact_version_id: string; meity_verified_at: string;
-      meity_validity_basis: string; meity_valid_until: string | null; calibration_required: boolean;
-      calibration_status: string; calibration_certificate_id: string | null;
-      calibration_evidence_reference: string | null; calibration_evidence_sha256: string | null;
-      calibration_evidence_artifact_version_id: string | null; calibration_lab: string | null;
-      calibration_traceability: string | null; calibration_uncertainty: string | number | null;
-      calibration_valid_until: string | null; security_review_status: string;
-      security_evidence_reference: string | null; security_evidence_sha256: string | null;
-      security_evidence_artifact_version_id: string | null; security_reviewed_at: string | null;
-      security_not_applicable_reason: string | null; firmware_version: string | null;
-      firmware_support_until: string | null;
-    }>(
-      "select meity_certificate_id,meity_issuer,meity_certificate_scope,meity_verification_url,meity_evidence_reference,meity_evidence_sha256,meity_evidence_artifact_version_id,meity_verified_at::text meity_verified_at,meity_validity_basis,meity_valid_until::text meity_valid_until,calibration_required,calibration_status,calibration_certificate_id,calibration_evidence_reference,calibration_evidence_sha256,calibration_evidence_artifact_version_id,calibration_lab,calibration_traceability,calibration_uncertainty,calibration_valid_until::text calibration_valid_until,security_review_status,security_evidence_reference,security_evidence_sha256,security_evidence_artifact_version_id,security_reviewed_at::text security_reviewed_at,security_not_applicable_reason,firmware_version,firmware_support_until::text firmware_support_until from mrv_instruments where id=$1",
-      [fixture.instrumentId],
-    );
-    const evidence = existing.rows[0]!;
-    const asIso = (value: string | null) => value;
+    const future = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString();
     const approvalRequest = () => app.inject({
       method: "POST",
       url: `/api/v1/mrv/instruments/${fixture.instrumentId}/review`,
       headers,
       payload: {
         decision: "VERIFIED", note: "Deterministic HTTP concurrency acceptance test",
-        meityCertificateId: evidence.meity_certificate_id, meityIssuer: evidence.meity_issuer,
-        meityCertificateScope: evidence.meity_certificate_scope, meityVerificationUrl: evidence.meity_verification_url,
-        meityEvidenceReference: evidence.meity_evidence_reference, meityEvidenceSha256: evidence.meity_evidence_sha256,
-        meityEvidenceArtifactVersionId: evidence.meity_evidence_artifact_version_id, meityVerifiedAt: asIso(evidence.meity_verified_at),
-        meityValidityBasis: evidence.meity_validity_basis, meityValidUntil: asIso(evidence.meity_valid_until),
-        calibrationRequired: evidence.calibration_required, calibrationStatus: evidence.calibration_status,
-        calibrationCertificateId: evidence.calibration_certificate_id, calibrationEvidenceReference: evidence.calibration_evidence_reference,
-        calibrationEvidenceSha256: evidence.calibration_evidence_sha256, calibrationEvidenceArtifactVersionId: evidence.calibration_evidence_artifact_version_id,
-        calibrationLab: evidence.calibration_lab, calibrationTraceability: evidence.calibration_traceability,
-        calibrationUncertainty: evidence.calibration_uncertainty == null ? null : Number(evidence.calibration_uncertainty),
-        calibrationValidUntil: asIso(evidence.calibration_valid_until), securityReviewStatus: evidence.security_review_status,
-        securityEvidenceReference: evidence.security_evidence_reference, securityEvidenceSha256: evidence.security_evidence_sha256,
-        securityEvidenceArtifactVersionId: evidence.security_evidence_artifact_version_id,
-        securityReviewedAt: asIso(evidence.security_reviewed_at), securityNotApplicableReason: evidence.security_not_applicable_reason,
-        firmwareVersion: evidence.firmware_version, firmwareSupportUntil: asIso(evidence.firmware_support_until),
+        meityCertificateId: "MEITY-HTTP-RACE", meityIssuer: "Test authority",
+        meityCertificateScope: "Exact model/SKU revision", meityVerificationUrl: "https://official.example.gov/test",
+        meityEvidenceReference: "evidence://meity-test", meityEvidenceSha256: fixture.meitySha256,
+        meityEvidenceArtifactVersionId: fixture.artifactId, meityVerifiedAt: new Date().toISOString(),
+        meityValidityBasis: "VALID_UNTIL", meityValidUntil: future, calibrationRequired: true,
+        calibrationStatus: "VERIFIED", calibrationCertificateId: "CAL-HTTP-RACE",
+        calibrationEvidenceReference: "evidence://cal-test", calibrationEvidenceSha256: fixture.calibrationSha256,
+        calibrationEvidenceArtifactVersionId: fixture.calibrationArtifactId, calibrationLab: "Traceable test lab",
+        calibrationTraceability: "Test national standard traceability", calibrationUncertainty: 0.2,
+        calibrationValidUntil: future, securityReviewStatus: "NOT_APPLICABLE_WITH_JUSTIFICATION",
+        securityNotApplicableReason: "Non-firmware test instrument",
       },
     });
     const rejectionRequest = () => app.inject({
@@ -526,7 +499,7 @@ async function waitUntilBlocked(observer: PoolClient, applicationName: string): 
   throw new Error(`Timed out waiting for PostgreSQL lock wait: ${applicationName}`);
 }
 
-async function createFixture(pool: Pool, suffix: string): Promise<Fixture> {
+async function createFixture(pool: Pool, suffix: string, options: { leaveInstrumentOnHold?: boolean } = {}): Promise<Fixture> {
   const c = await pool.connect();
   try {
     const organizationId = (await c.query<{ id: string }>(
@@ -575,14 +548,16 @@ async function createFixture(pool: Pool, suffix: string): Promise<Fixture> {
       "insert into mrv_instrument_parameter_specs(instrument_id,parameter_code,unit,minimum_value,maximum_value,resolution,accuracy_absolute,accuracy_basis,source_evidence_artifact_version_id,created_by_identity_id) values($1,'gas_flow','m3/h',0,500,0.1,0.5,'concurrency test specification',$2,$3)",
       [instrumentId, datasheet.id, identityId],
     );
-    await c.query(
-      "update mrv_instruments set approval_status='VERIFIED',meity_certificate_id='MEITY-CONC-TEST',meity_issuer='Test authority',meity_certificate_scope='Exact model/SKU revision',meity_verification_url='https://official.example.gov/test',meity_evidence_reference='evidence://meity-test',meity_evidence_sha256=$2,meity_evidence_artifact_version_id=$3,meity_verified_at=now(),meity_validity_basis='VALID_UNTIL',meity_valid_until=now()+interval '1 year',calibration_required=true,calibration_status='VERIFIED',calibration_certificate_id='CAL-CONC-TEST',calibration_evidence_reference='evidence://cal-test',calibration_evidence_sha256=$4,calibration_evidence_artifact_version_id=$5,calibration_lab='Traceable test lab',calibration_traceability='Test national standard traceability',calibration_uncertainty=0.2,calibration_valid_until=now()+interval '1 year',security_review_status='NOT_APPLICABLE_WITH_JUSTIFICATION',security_not_applicable_reason='Non-firmware test instrument',reviewed_by_identity_id=$6,reviewed_at=now(),review_note='Concurrency test instrument approval' where id=$1",
-      [instrumentId, meity.sha256, meity.id, calibration.sha256, calibration.id, reviewerId],
-    );
-    await c.query(
-      "insert into measurements(activity_id,value,unit,method,source,measured_at,mrv_instrument_id,parameter_code) values($1,2,'m3/h','test','two-session concurrency fixture',now(),$2,'gas_flow')",
-      [activityId, instrumentId],
-    );
+    if (!options.leaveInstrumentOnHold) {
+      await c.query(
+        "update mrv_instruments set approval_status='VERIFIED',meity_certificate_id='MEITY-CONC-TEST',meity_issuer='Test authority',meity_certificate_scope='Exact model/SKU revision',meity_verification_url='https://official.example.gov/test',meity_evidence_reference='evidence://meity-test',meity_evidence_sha256=$2,meity_evidence_artifact_version_id=$3,meity_verified_at=now(),meity_validity_basis='VALID_UNTIL',meity_valid_until=now()+interval '1 year',calibration_required=true,calibration_status='VERIFIED',calibration_certificate_id='CAL-CONC-TEST',calibration_evidence_reference='evidence://cal-test',calibration_evidence_sha256=$4,calibration_evidence_artifact_version_id=$5,calibration_lab='Traceable test lab',calibration_traceability='Test national standard traceability',calibration_uncertainty=0.2,calibration_valid_until=now()+interval '1 year',security_review_status='NOT_APPLICABLE_WITH_JUSTIFICATION',security_not_applicable_reason='Non-firmware test instrument',reviewed_by_identity_id=$6,reviewed_at=now(),review_note='Concurrency test instrument approval' where id=$1",
+        [instrumentId, meity.sha256, meity.id, calibration.sha256, calibration.id, reviewerId],
+      );
+      await c.query(
+        "insert into measurements(activity_id,value,unit,method,source,measured_at,mrv_instrument_id,parameter_code) values($1,2,'m3/h','test','two-session concurrency fixture',now(),$2,'gas_flow')",
+        [activityId, instrumentId],
+      );
+    }
     const verificationId = (await c.query<{ id: string }>(
       "insert into verifications(evidence_id,activity_id,verifier_identity_id,decision,scope,rationale) values($1,$2,$3,'APPROVED','MRV concurrency fixture','test-only fixture') returning id",
       [meity.evidenceId, activityId, reviewerId],
