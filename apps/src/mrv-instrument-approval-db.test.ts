@@ -256,7 +256,7 @@ test("PostgreSQL enforces MRV instrument approval evidence and append-only decis
       [meityArtifact.evidenceId, activityId, reviewerIdentityId],
     )).rows[0]!.id;
     await client.query(
-      "insert into mrv_provenance_events(activity_id,verification_id,evidence_id,guardian_policy_id,guardian_execution_id,guardian_status,hcs_status,hcs_topic_id,hcs_transaction_id,hcs_consensus_timestamp,integrity_hash,methodology_code,metadata) values($1,$2,$3,'TEST-POLICY','TEST-EXECUTION','VERIFIED','CONSENSUS_CONFIRMED','0.0.12345','TEST-TX','2026-10-26T09:00:00.000Z',$4,'TEST-METHODOLOGY','{}'::jsonb)",
+      "insert into mrv_provenance_events(activity_id,verification_id,evidence_id,guardian_policy_id,guardian_execution_id,guardian_status,hcs_status,hcs_topic_id,hcs_transaction_id,hcs_consensus_timestamp,integrity_hash,methodology_code,metadata) values($1,$2,$3,'TEST-POLICY','TEST-EXECUTION','VERIFIED','CONSENSUS_CONFIRMED','0.0.12345','TEST-TX','2026-10-26T09:00:00.000Z',$4,'TEST-METHODOLOGY','{\"testFixture\":\"true\"}'::jsonb)",
       [activityId, verificationId, meityArtifact.evidenceId, "e".repeat(64)],
     );
     await rejectsInSavepoint(client, () => client.query(
@@ -286,7 +286,7 @@ test("PostgreSQL enforces MRV instrument approval evidence and append-only decis
 
     // Existing credentials must not be transferred or settled when evidence is later rejected.
     const credentialId = (await client.query<{ id: string }>(
-      "insert into credentials(activity_id,issuer_organization_id,trust_root_id,status,verification_id) values($1,$2,'MRV-TEST-ROOT','DRAFT',$3) returning id",
+      "insert into credentials(activity_id,issuer_organization_id,trust_root_id,status,verification_id) values($1,$2,'MRV-TEST-ROOT','ELIGIBLE',$3) returning id",
       [activityId, organizationId, verificationId],
     )).rows[0]!.id;
     const evidenceCurrentBeforeRejection = await client.query<{ current: boolean }>(
