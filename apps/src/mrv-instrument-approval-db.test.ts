@@ -288,7 +288,7 @@ test("PostgreSQL enforces MRV instrument approval evidence and append-only decis
     ), /REGISTRY_MRV_EVIDENCE_STALE/i);
 
     await rejectsInSavepoint(client, () => client.query(
-      "insert into settlements(credential_id,payer_id,payee_id,amount,currency,status) values($1,$2,$3,1,'INR','SETTLED')",
+      "insert into settlements(credential_id,payer_id,payee_id,amount,currency,status,authorization_reference,verified_at) values($1,$2,$3,1,'INR','EXECUTING','TEST-AUTH',now())",
       [credentialId, organizationId, foreignOrganizationId],
     ), /SETTLEMENT_MRV_EVIDENCE_STALE/i);
 
