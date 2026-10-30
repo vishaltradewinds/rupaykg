@@ -25,6 +25,81 @@ export async function registerRegistryRoutes(app:FastifyInstance,pool:Pool|null)
       const v=await c.query<{evidence_id:string;decision:string;activity_id:string}>("select evidence_id,decision,activity_id from verifications where id=$1 for update",[verificationId]);
       if(!v.rows[0]||v.rows[0].decision!=="APPROVED")throw Object.assign(new Error("Approved verification required"),{code:"VERIFICATION_REQUIRED"});
       if(v.rows[0].activity_id!==activityId)throw Object.assign(new Error("Verification is not bound to the requested activity"),{code:"EVIDENCE_MISMATCH"});
+      // Match the database guard and evidence-vault review lock order: instrument rows,
+      // then their referenced evidence rows, then the activity's verification evidence.
+      // Locking evidence first here can deadlock against a reviewer holding an instrument
+      // FOR UPDATE while waiting for the same evidence row.
+      await c.query(
+        `select i.id
+           from mrv_instruments i
+          where i.id in (
+            select i2.id
+              from mrv_instruments i2
+              join mrv_observations mo
+                on mo.instrument_id = i2.instrument_code
+               and mo.activity_id = $1
+             where i2.organization_id = $2
+            union
+            select mm.mrv_instrument_id
+              from measurements mm
+             where mm.activity_id = $1
+               and mm.mrv_instrument_id is not null
+          )
+          order by i.id
+          for share`,
+        [activityId, issuerOrganizationId],
+      );
+      await c.query(
+        `select e.id
+           from evidence e
+          where exists (
+            select 1
+              from evidence_artifact_versions av
+              join mrv_instruments i
+                on av.id in (i.meity_evidence_artifact_version_id,
+                             i.calibration_evidence_artifact_version_id,
+                             i.security_evidence_artifact_version_id)
+             where av.evidence_id = e.id
+               and i.organization_id = $2
+               and i.id in (
+                 select i2.id
+                   from mrv_instruments i2
+                   join mrv_observations mo
+                     on mo.instrument_id = i2.instrument_code
+                    and mo.activity_id = $1
+                  where i2.organization_id = $2
+                 union
+                 select mm.mrv_instrument_id
+                   from measurements mm
+                  where mm.activity_id = $1
+                    and mm.mrv_instrument_id is not null
+               )
+          ) or exists (
+            select 1
+              from evidence_artifact_versions av
+              join mrv_instrument_parameter_specs ps
+                on ps.source_evidence_artifact_version_id = av.id
+              join mrv_instruments i on i.id = ps.instrument_id
+             where av.evidence_id = e.id
+               and i.organization_id = $2
+               and i.id in (
+                 select i2.id
+                   from mrv_instruments i2
+                   join mrv_observations mo
+                     on mo.instrument_id = i2.instrument_code
+                    and mo.activity_id = $1
+                  where i2.organization_id = $2
+                 union
+                 select mm.mrv_instrument_id
+                   from measurements mm
+                  where mm.activity_id = $1
+                    and mm.mrv_instrument_id is not null
+               )
+          )
+          order by e.id
+          for share`,
+        [activityId, issuerOrganizationId],
+      );
       const e=await c.query<{activity_id:string|null;status:string;acceptance_fixture:string|null}>("select activity_id,status,metadata->>'acceptanceFixture' as acceptance_fixture from evidence where id=$1 for update",[v.rows[0].evidence_id]);
       if(!e.rows[0]||e.rows[0].status!=="VERIFIED"||e.rows[0].activity_id!==activityId)throw Object.assign(new Error("Verification is not bound to verified activity evidence"),{code:"EVIDENCE_MISMATCH"});
       const a=await c.query<{organization_id:string;status:string;acceptance_fixture:string|null}>("select organization_id,status,metadata->>'acceptanceFixture' as acceptance_fixture from activities where id=$1 for update",[activityId]);
