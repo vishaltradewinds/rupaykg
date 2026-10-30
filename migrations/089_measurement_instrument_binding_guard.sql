@@ -26,9 +26,15 @@ begin
   -- Corrections must be represented as a new measurement, not by unlinking or rebinding it.
   if tg_op = 'UPDATE'
      and old.mrv_instrument_id is not null
-     and (new.mrv_instrument_id is distinct from old.mrv_instrument_id
+     and (new.activity_id is distinct from old.activity_id
+       or new.value is distinct from old.value
+       or new.unit is distinct from old.unit
+       or new.method is distinct from old.method
+       or new.source is distinct from old.source
+       or new.measured_at is distinct from old.measured_at
+       or new.mrv_instrument_id is distinct from old.mrv_instrument_id
        or new.parameter_code is distinct from old.parameter_code) then
-    raise exception 'instrument-bound measurement provenance is immutable; create a corrected measurement instead';
+    raise exception 'instrument-bound measurement facts and provenance are immutable; create a corrected measurement instead';
   end if;
 
   -- Legacy/unlinked measurements remain readable, but are not instrument-certified.
@@ -98,6 +104,6 @@ end;
 $$;
 
 create trigger measurements_mrv_instrument_binding_guard
-before insert or update of activity_id, value, unit, mrv_instrument_id, parameter_code
+before insert or update of activity_id, value, unit, method, source, measured_at, mrv_instrument_id, parameter_code
 on measurements
 for each row execute function guard_measurement_mrv_instrument_binding();
