@@ -1,8 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { assertNoOrphanedMigrationRecords, findOrphanedMigrationRecords } from "./migration-ledger.js";
+import { assertNoOrphanedMigrationRecords, findMismatchedMigrationVersions, findOrphanedMigrationRecords } from "./migration-ledger.js";
 
-test("accepts a ledger whose migration filenames exist in the release", () => {
+test("accepts a ledger whose migration filenames exist and version prefixes match", () => {
   assert.doesNotThrow(() => assertNoOrphanedMigrationRecords(
     [{ version: "088", filename: "088_cpcb_swm_stakeholder_workspaces.sql" }],
     ["088_cpcb_swm_stakeholder_workspaces.sql", "089_cpcb_bwg_workflow_tracking.sql"],
@@ -22,6 +22,18 @@ test("fails closed when a recorded migration file was removed or renamed", () =>
   );
 });
 
+test("fails closed when a catalog filename exists but ledger version disagrees with its prefix", () => {
+  const files = ["088_cpcb_swm_stakeholder_workspaces.sql", "089_cpcb_bwg_workflow_tracking.sql"];
+  const records = [
+    { version: "089", filename: "088_cpcb_swm_stakeholder_workspaces.sql" },
+  ];
+  assert.deepEqual(findMismatchedMigrationVersions(records), records);
+  assert.throws(
+    () => assertNoOrphanedMigrationRecords(records, files),
+    /version\/filename prefix mismatch.*089 records 088_cpcb_swm_stakeholder_workspaces\.sql.*expected version 088/,
+  );
+});
+
 test("does not silently ignore multiple orphaned migration records", () => {
   assert.throws(
     () => assertNoOrphanedMigrationRecords(
@@ -32,5 +44,12 @@ test("does not silently ignore multiple orphaned migration records", () => {
       [],
     ),
     /20261018.*20261019/,
+  );
+});
+
+test("rejects filenames without a numeric migration prefix", () => {
+  assert.throws(
+    () => assertNoOrphanedMigrationRecords([{ version: "088", filename: "cpcb_swm_stakeholder_workspaces.sql" }], ["cpcb_swm_stakeholder_workspaces.sql"]),
+    /version\/filename prefix mismatch/,
   );
 });
