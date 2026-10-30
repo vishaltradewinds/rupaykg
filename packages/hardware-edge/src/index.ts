@@ -100,7 +100,7 @@ export function validateEdgeObservation(input: unknown): ObservationValidation {
     && Date.parse(input.receivedAt) < Date.parse(input.observedAt)) {
     blockers.push("RECEIVED_BEFORE_OBSERVED");
   }
-  if (!Number.isSafeInteger(input.sequence) || (input.sequence as number) < 0) blockers.push("INVALID_SEQUENCE");
+  if (!Number.isSafeInteger(input.sequence) || (input.sequence as number) < 1) blockers.push("INVALID_SEQUENCE");
   if (typeof input.value !== "number" || !Number.isFinite(input.value)) blockers.push("INVALID_MEASUREMENT_VALUE");
   if (!validSha256(input.rawPayloadSha256)) blockers.push("INVALID_RAW_PAYLOAD_SHA256");
   if (input.firmwareVersion !== null && !nonEmpty(input.firmwareVersion)) blockers.push("INVALID_FIRMWARE_VERSION");
