@@ -17,6 +17,18 @@ Validate the data contract and fail-closed behavior between a future edge collec
 - Use no credentials, paid services, external APIs, hardware procurement, or deployment.
 - Any integration test that could write to a shared environment must be disabled by default and require an explicit isolated test database.
 
+### 2A. Enforced network and credential isolation (mandatory gate)
+
+The isolation rules above are not satisfied by documentation or by an expectation that tests will not call external services. The harness/CI job must enforce the boundary before executing any test:
+
+- Run in a disposable container/job with no inherited production, staging, Guardian, Hedera, cloud, or deployment credentials; explicitly unset known credential variables and do not mount developer credential stores or cloud CLI configuration.
+- Deny outbound network by default at the job/container boundary. Allow-list only the disposable local test database and explicitly started local test services needed by the test. A test-level mock or an assertion that a request was not expected is not a network boundary.
+- Use a disposable PostgreSQL instance with a unique test database/schema and a verified non-production connection target. Abort before tests if the target host/database is not on the explicit local allow-list.
+- Add a negative-control test that attempts a connection to a non-allow-listed destination and proves it is blocked before any HTTP request or payload can be transmitted. Record the network-policy result in CI artifacts.
+- If the CI provider cannot enforce outbound denial, classify the run as **ISOLATION NOT PROVEN** and do not mark the simulation acceptance gate PASS.
+
+This gate protects against accidental synthetic writes to shared MRV/Guardian/anchoring services. It does not replace application authorization tests.
+
 ## 3. Minimal synthetic event contract
 
 A fixture may contain:
