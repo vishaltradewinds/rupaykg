@@ -296,3 +296,32 @@ The candidate hardware implementation remains a single integration proposal unde
 - No production migration, rebase, merge, deployment, procurement or hardware qualification was performed.
 - No TRL advancement is claimed; overall TRL 9 and production certification remain **HOLD/OFF**.
 - Continue coordinating the IoT stack with the single TRL execution plan (#90) and evidence ledger (#93); this section adds evidence to the existing audit rather than creating another readiness register.
+
+
+## 16. Parallel TRL-9 execution checkpoint — 2026-10-30 20:59Z
+
+### Canonical workstream confirmed
+- Master execution plan: PR #90, `docs/TRL9_EXECUTION_PLAN.md`.
+- Dated baseline/dependency audit: this document in PR #130.
+- Detailed evidence ledger: PR #93, `docs/TRL5_EVIDENCE_LEDGER.md`.
+- Hardware/IoT source integration candidate: PR #128, subject to current-head and dependency review.
+- Instrument approval/evidence-bound parameter work: PR #49/#51, with PR #136 documenting their integration gate.
+- Repository cleanup and current-source checkpoint: PR #151.
+- A separate TRL plan draft (#152) was created during coordination, found to duplicate the canonical master plan, and closed without merge. Do not create another parallel readiness document or evidence register.
+
+### Fresh validation observed
+- Repository cleanup PR #151 head `b3e751de4a0cc7b2248a156754c36dee5f72eacb` passed GitHub Actions run #41124525462 (run ID `41124525462`) at 2026-10-30 20:40:08Z. This run validates the documentation-cleanup head only; it is not evidence of runtime, production database, hardware, field, statutory or TRL readiness.
+- The current main baseline remains `54a7fe1ceb41b37a68720a71c10a1dd03af30dea` for the cleanup checkpoint. The cleanup branch remains an unmerged draft PR.
+- The migration provenance gate remains open: Render's exact Neon target and immutable artifact/image digest are not proven; migration 096 has been observed in the Neon main ledger/schema and Render logs but is absent from current main source. Candidate branches also contain a migration identity collision. Do not replay, rollback, renumber or reconcile live migration state without an approved evidence packet.
+- Exact-head worker PostgreSQL acceptance and independent review remain outstanding as recorded in Issue #145. Green CI on other heads cannot substitute for this gate.
+
+### TRL disposition and next batch
+- **Software:** retain the provisional TRL 4 assessment pending the canonical evidence ledger and independent review.
+- **Integrated platform:** TRL not verified.
+- **Hardware/IoT:** not assessed where exact-device, calibration, approval and real-site evidence are absent.
+- **TRL 5 and TRL 9:** NOT DEMONSTRATED. Production remains HOLD; scheduler OFF; certification HOLD/OFF.
+- Continue independent parallel engineering only in isolated branches/disposable databases: (1) software/worker reliability; (2) hardware edge contract and measurement lineage; (3) instrument approval and parameter evidence; (4) regulatory/methodology evidence; (5) Guardian/Hedera/Mirror Node acceptance preparation; (6) field Golden Transaction planning. Respect migration dependencies and do not integrate branches just to reduce PR count.
+- Next evidence-producing actions: close exact-head worker review/CI gaps; complete deployment/artifact/database provenance; reconcile migration histories; validate the canonical #128/#49/#51 hardware stack on one reviewed candidate; then execute real non-fixture field and external-integration acceptance only after authorized site/configuration readiness.
+
+### Safety
+This addendum records repository/API evidence and coordination decisions only. No production database, application runtime, deployment, device, scheduler or statutory filing was changed. No independent TRL assessor approval exists in this checkpoint, so no TRL advancement is claimed.
