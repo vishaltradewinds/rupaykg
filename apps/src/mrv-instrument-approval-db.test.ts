@@ -21,6 +21,14 @@ test("PostgreSQL enforces MRV instrument approval evidence and append-only decis
       "insert into organizations(name,organization_type) values($1,'COLLECTOR') returning id",
       [`mrv-instrument-test-${suffix}`],
     )).rows[0]!.id;
+    const geographyId = (await client.query<{ id: string }>(
+      "insert into geography(kind,code,name) values('STATE_UT',$1,$2) returning id",
+      [`MRV-INSTRUMENT-${suffix}`, `MRV Instrument Test ${suffix}`],
+    )).rows[0]!.id;
+    await client.query(
+      "insert into organization_geography_scopes(organization_id,geography_id) values($1,$2)",
+      [organizationId, geographyId],
+    );
     const identityId = (await client.query<{ id: string }>(
       "insert into identities(external_subject,display_name) values($1,$2) returning id",
       [`mrv-instrument-test-${suffix}`, "MRV instrument test"],
@@ -44,8 +52,8 @@ test("PostgreSQL enforces MRV instrument approval evidence and append-only decis
     assert.equal(instrumentId.approval_status, "HOLD");
 
     const activityId = (await client.query<{ id: string }>(
-      "insert into activities(organization_id,actor_identity_id,activity_type,occurred_at) values($1,$2,'MRV_INSTRUMENT_TEST',now()) returning id",
-      [organizationId, identityId],
+      "insert into activities(organization_id,actor_identity_id,geography_id,activity_type,occurred_at) values($1,$2,$3,'MRV_INSTRUMENT_TEST',now()) returning id",
+      [organizationId, identityId, geographyId],
     )).rows[0]!.id;
     const meityArtifact = await createReviewedArtifact(client, organizationId, activityId, identityId, reviewerIdentityId, "MEITY_CERTIFICATE", `MeitY exact model certificate ${suffix}`);
     const calibrationArtifact = await createReviewedArtifact(client, organizationId, activityId, identityId, reviewerIdentityId, "CALIBRATION_CERTIFICATE", `Calibration certificate ${suffix}`);
