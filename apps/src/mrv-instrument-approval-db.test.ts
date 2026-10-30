@@ -121,6 +121,10 @@ test("PostgreSQL enforces MRV instrument approval evidence and append-only decis
       [instrumentId.id, organizationId, reviewerId],
     ), /must be recorded by the instrument lifecycle trigger/i);
 
+    await rejectsInSavepoint(client, () => client.query(
+      "truncate table mrv_instrument_decisions",
+    ), /append-only/i);
+
     const gatewayId = (await client.query<{ id: string }>(
       "insert into mrv_instruments(organization_id,instrument_code,instrument_type,manufacturer,model,sku_revision,intended_use,measurement_instrument,non_measurement_reason,supported_parameter_codes,firmware_version,firmware_support_until,registered_by_identity_id) values($1,$2,'INDUSTRIAL_GATEWAY','Test Manufacturer','Gateway Model 1','Rev A','Authenticated MRV data transport',false,'Gateway transports data but does not measure a physical parameter','{}','1.0.0',now()+interval '1 year',$3) returning id",
       [organizationId, `GATEWAY-${suffix}`, identityId],
