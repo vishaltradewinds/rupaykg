@@ -1,10 +1,11 @@
 name: CI
 
 on:
+  # Allow engineering fix branches to receive exact-commit acceptance evidence.
   push:
-    branches: [main]
+    branches: [main, 'fix/**']
   pull_request:
-    branches: [main]
+    branches: [main, shakti/canonical-migration-history-verified]
 
 permissions:
   contents: read
