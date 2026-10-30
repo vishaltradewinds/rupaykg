@@ -19,19 +19,6 @@ begin
     raise exception 'CREDENTIAL_MRV_INSTRUMENT_EVIDENCE_REQUIRED: credential activity is missing';
   end if;
 
-  -- Existing database integration suites use explicitly synthetic provenance rows to
-  -- exercise settlement lifecycle transitions. These fixtures are not produced by the
-  -- application MRV submission path; preserve their isolated test semantics. Real
-  -- application provenance must pass the current instrument-evidence checks below.
-  if exists (
-    select 1 from mrv_provenance_events m
-     where m.activity_id = new.activity_id
-       and m.verification_id = new.verification_id
-       and m.metadata->>'testFixture' = 'true'
-  ) then
-    return new;
-  end if;
-
   -- Serialize issuance against instrument status changes and evidence-vault review.
   -- The review API locks the instrument row and the evidence row before appending a
   -- review decision. Holding SHARE locks until this credential transaction commits
