@@ -50,3 +50,12 @@ No physical instrument is selected or connected. No purchase, calibration, field
 - Corrective change and regression tests were committed to the owning integration branch for PR #51: `021926e533109d626a952c31680143085c2eecb1`. Field-sync now requires explicit timezone and rejects impossible calendar/clock values; tests cover date-only, timezone-naive, invalid dates/times, invalid offset minutes, explicit offsets and fractional seconds.
 - PR #51 body updated with this follow-up. Exact-head CI for the new commit has not yet been observed; PR remains draft and must not be merged until CI and independent review pass.
 - The PR #128 checkpoint document itself is current through the original exact-head validation plus this coordination note; no production database, hardware, or deployment changes were made.
+
+
+## Follow-up execution update — 2026-10-30 12:35Z
+
+- Refreshed PR #128 head: `0e4bef4c5a420902af494503e448dd3d04dca041`. Exact-head CI run #3356 (`41055626185`) completed successfully, including production-container build and cleanup. PR #128 remains draft/open/unmerged.
+- PR #51 exact head is `e5388fd1db1533db1d5abcf7bd5f52fc5f09ad2b`. The prior concurrency failure was traced to the test calling an eligibility predicate while the instrument was deliberately HOLD; the predicate correctly requires VERIFIED. The test was changed to exercise the database evidence-binding trigger during the HOLD→VERIFIED transition and assert the specific fail-closed rejection when evidence review is rejected.
+- PR #51 CI run #3357 (`41056362508`) has passed dependency audit, migration validation/execution, typecheck, build, browser smoke and the full disposable PostgreSQL acceptance tests. Production-container build is still running; no final workflow conclusion yet.
+- Do not claim #51 passed until the entire workflow is completed successfully. Keep #47/#49/#51/#59/#128 as drafts and unmerged until overlap ownership, exact-head CI and independent review are resolved.
+- Hardware gates remain unchanged: no selected/connected physical instrument, no verified exact-model statutory approval, no calibration/bench/site acceptance, and no production deployment or certification.
