@@ -131,3 +131,41 @@ No approval is implied by this document's creation or by a pull request being op
 - **Limit:** this result applies only to the exact tested revision and CI environment. It is not an independent review, live-environment validation, backup/restore proof, external integration acceptance, hardware qualification, regulatory approval, or TRL 5 evidence.
 - **Gate accounting:** E-02 remains **NOT ASSESSED** as a complete cross-candidate gate until all relevant candidate PR heads have current exact-head CI evidence and the required reviewer accepts the evidence. This successful run is one recorded input, not blanket approval.
 - **Current decision unchanged:** provisional software TRL 4; TRL 5 NOT DEMONSTRATED; hardware NOT ASSESSED where evidence is missing; production certification HOLD/OFF.
+
+
+## 9. Execution log — 2026-10-30 checkpoint refresh
+
+**Purpose:** Record CI evidence observed for selected active engineering candidates. This section is a timestamped snapshot, not a complete PR inventory, merge approval, independent review, or TRL advancement.
+
+**Recorded repository baseline:** `main` SHA `54a7fe1ceb41b37a68720a71c10a1dd03af30dea`.
+
+| Candidate | Exact tested head | CI run ID | Recorded result | Evidence boundary |
+|---|---|---:|---|---|
+| PR #108 — dual-ledger migration acceptance | `e4dcb3588d208968c49947d0493f98da6884aed2` | `41064298999` | SUCCESS | Disposable PostgreSQL and software acceptance only; live migration-source provenance unresolved. |
+| PR #128 — hardware-edge observation contract | `ee4cdcd997214aa5316825699b770fec64994178` | `41063212712` | SUCCESS | Isolated software contract only; no physical device qualification or site acceptance. |
+| PR #130 — TRL 9 baseline audit | `3d740ce0ad1b5b9b0f2e817fe894ce3a9fc8087d` | `41062818695` | SUCCESS | Documentation/baseline validation only; no TRL advancement. |
+| PR #51 — evidence-bound instrument approval | `1824d2a342ab64850575c9488a544edf3c80cbd5` | `41058468210` | SUCCESS | Branch CI evidence only; shared approval routes/migrations overlap with PR #49. |
+| PR #59 — hardware qualification plan | `a1ddd1b5d93f571daf64f6bdce6bc36381bbe8b3` | `41059092409` | SUCCESS | Plan/documentation checks only; not physical qualification evidence. |
+| PR #127 — regulatory source register | `269c953104c1dfe0f230fc814c78f9a1378b73ad` | `41020120401` | SUCCESS | Research-register validation only; listed sources are not all archived, hashed and independently approved. |
+| PR #90 — TRL execution plan | `b361e75dfbc4a110626afeba0098f7822c8ba3d2` | `41057840083` | SUCCESS | Execution-plan documentation only; no field readiness evidence. |
+
+Run references:
+- https://github.com/vishaltradewinds/rupaykg/actions/runs/41064298999
+- https://github.com/vishaltradewinds/rupaykg/actions/runs/41063212712
+- https://github.com/vishaltradewinds/rupaykg/actions/runs/41062818695
+- https://github.com/vishaltradewinds/rupaykg/actions/runs/41058468210
+- https://github.com/vishaltradewinds/rupaykg/actions/runs/41059092409
+- https://github.com/vishaltradewinds/rupaykg/actions/runs/41020120401
+- https://github.com/vishaltradewinds/rupaykg/actions/runs/41057840083
+
+**Important qualifications**
+1. These runs apply to the exact SHAs shown, not to later commits or a combined integration candidate.
+2. PR #49 and #51 both change the instrument approval routes/runtime paths and contain byte-identical migrations `088_mrv_instrument_approval_register.sql` and `089_measurement_instrument_binding_guard.sql`; integrate the schema only once after combined-diff review. Their base histories are behind current `main`, so current-main integration and exact-head CI remain required.
+3. PR #51 includes `20261031_mrv_instrument_current_expiry_guard.sql`, dated one day after this checkpoint. Confirm intended migration chronology and catalogue ordering before any integration.
+4. PR #108 CI success does not establish which historical migration source was deployed to live production/staging. No live database changes are authorized.
+5. Hardware/site evidence intake remains open. Public-record leads do not replace current operator confirmation, actual instrument inventory, exact-model approval evidence, calibration records, or site acceptance.
+6. No independent review submissions were present on PR #108 when checked; CI is not a substitute for independent review.
+
+**Gate accounting:** E-02 remains **NOT ASSESSED** as a complete cross-candidate gate until the relevant current heads are checked, a single coordinated integration candidate passes exact-head CI, and an authorized reviewer accepts the evidence. E-11/E-14 remain **NOT ASSESSED / NOT DEMONSTRATED** where exact device and relevant-environment evidence is absent. E-15 remains **BLOCKED**.
+
+**Decision unchanged:** provisional software TRL 4; integrated-platform TRL unverified; TRL 5 NOT DEMONSTRATED; hardware/IoT TRL not assessed where evidence is insufficient; production certification HOLD/OFF.
