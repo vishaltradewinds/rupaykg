@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { assertNoOrphanedMigrationRecords, findMismatchedMigrationVersions, findOrphanedMigrationRecords } from "./migration-ledger.js";
+import { assertMigrationHistoryConsistent, assertNoOrphanedMigrationRecords, findMigrationCatalogVersionConflicts, findMismatchedMigrationVersions, findOrphanedMigrationRecords } from "./migration-ledger.js";
 
 test("accepts a ledger whose migration filenames exist and version prefixes match", () => {
   assert.doesNotThrow(() => assertNoOrphanedMigrationRecords(
@@ -51,5 +51,28 @@ test("rejects filenames without a numeric migration prefix", () => {
   assert.throws(
     () => assertNoOrphanedMigrationRecords([{ version: "088", filename: "cpcb_swm_stakeholder_workspaces.sql" }], ["cpcb_swm_stakeholder_workspaces.sql"]),
     /version\/filename prefix mismatch/,
+  );
+});
+
+
+test("canonical contract rejects duplicate numeric prefixes before migrations can run", () => {
+  const files = ["088_first.sql", "088_second.sql"];
+  assert.deepEqual(findMigrationCatalogVersionConflicts(files), ["088:088_first.sql|088_second.sql"]);
+  assert.throws(
+    () => assertMigrationHistoryConsistent([], files),
+    /MIGRATION_HISTORY_UNRESOLVED: migration catalog contains conflicting version prefixes.*088_first\\.sql.*088_second\\.sql/,
+  );
+});
+
+test("canonical contract reports missing sources and version mismatch with stable reasons", () => {
+  assert.throws(
+    () => assertMigrationHistoryConsistent(
+      [
+        { version: "096", filename: "096_missing.sql" },
+        { version: "999", filename: "088_present.sql" },
+      ],
+      ["088_present.sql"],
+    ),
+    /096:096_missing\\.sql:SOURCE_MISSING.*999:088_present\\.sql:VERSION_FILENAME_MISMATCH/,
   );
 });
