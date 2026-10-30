@@ -126,3 +126,61 @@ A fresh comparison against current `main` (`54a7fe1ceb41b37a68720a71c10a1dd03af3
 - [ ] Run exact-head CI only after the complete candidate is assembled.
 
 This audit intentionally narrows the next implementation step: the safe next action is scope/dependency mapping, not an automatic branch merge.
+
+
+## 10. File-level inclusion / exclusion matrix — 2026-10-30 13:50Z
+
+### Revalidated source and CI facts
+
+- PR #136 coordination-document commit `ae1f7d5b9e8d6edd51b3c7a6f62b68101472502b` completed workflow run #3404 (run ID `41066425963`) successfully. Dependency audit, migration validation, disposable migration run, typecheck, build, browser smoke test, tests including disposable PostgreSQL acceptance, production-container build and cleanup all completed successfully. This validates the **documentation-only PR #136 head**, not an application integration candidate.
+- The current-main migration README ends at migration 087. Requests for `migrations/088_mrv_instrument_approval_register.sql` and `migrations/089_measurement_instrument_binding_guard.sql` at `main` returned 404, confirming neither is currently present on main. The two source branches contain byte-identical/blob-identical 088 and 089 files; add each once if approved.
+- PR #51's migration `20261022_mrv_instrument_evidence_parameter_specs.sql` requires existing evidence-vault tables and adds `mrv_instrument_parameter_specs`; its migration README says it must follow the evidence-vault schema. Migrations 20261027 and 20261030 add current-evidence controls to credential/registry/settlement paths. Migration 20261031 is explicitly future-dated at this checkpoint and remains excluded pending chronology and catalogue review.
+
+### Disposition matrix for all 38 paths in PR #51
+
+| Path | Disposition for a minimal approval/parameter candidate | Reason / required handling |
+|---|---|---|
+| `apps/src/acceptance-seed.test.ts` | DEFER | Acceptance-fixture behavior is a separate concern; include only if the selected candidate changes its contract. |
+| `apps/src/acceptance-seed.ts` | DEFER | Avoid importing unrelated fixture seeding changes; retain existing fixture exclusion controls. |
+| `apps/src/evidence-vault-review-transition.test.ts` | CONDITIONAL DEPENDENCY | Include if evidence review/rejection transitions are changed or required to prove the selected current-evidence contract. |
+| `apps/src/evidence-vault-routes.ts` | CONDITIONAL DEPENDENCY | Compare against current main; include only the minimum evidence-artifact API required by parameter-spec references, not an old branch snapshot. |
+| `apps/src/evidence-vault.integration.test.ts` | CONDITIONAL DEPENDENCY | Required if the selected diff changes evidence-vault integration; otherwise keep as existing regression coverage. |
+| `apps/src/hardware-simulation.test.ts` | INCLUDE / REVIEW | Relevant simulation coverage; verify it tests software contracts only and label physical/site acceptance as unproven. |
+| `apps/src/hedera-anchor.test.ts` | DEFER | Broader anchoring behavior is not automatically part of the approval gate. Include only for a demonstrated direct dependency. |
+| `apps/src/hedera-anchor.ts` | DEFER | Do not import unrelated Guardian/Hedera changes as incidental branch history. |
+| `apps/src/mrv-evidence-concurrency-db.test.ts` | CONDITIONAL DEPENDENCY | Include if evidence review/issuance lock ordering is included; test rejection-vs-issuance race behavior on disposable PostgreSQL. |
+| `apps/src/mrv-instrument-approval-db.test.ts` | INCLUDE | Required for database-level approval, evidence, calibration, parameter and fail-closed behavior. |
+| `apps/src/mrv-instrument-approval.test.ts` | INCLUDE | Required unit tests for approval/parameter validation. |
+| `apps/src/mrv-instrument-approval.ts` | INCLUDE | Core approval and parameter-spec validation logic; reconcile manually against current main. |
+| `apps/src/mrv-instrument-routes.ts` | INCLUDE | Core organization-scoped instrument register APIs and authorization. |
+| `apps/src/mrv-replay-identity.test.ts` | DEFER | Replay-identity integrity is a separate behavior set unless changed code directly depends on it. |
+| `apps/src/mrv-routes.ts` | INCLUDE / SCOPE EDIT | Integrate only approval, parameter and current-evidence checks needed for MRV submission; preserve unrelated current-main behavior. |
+| `apps/src/registry-routes.ts` | CONDITIONAL DEPENDENCY | Include only if current-evidence checks are intentionally required at registry eligibility; review all unrelated registry changes. |
+| `apps/src/server.ts` | INCLUDE / SCOPE EDIT | Register required instrument/evidence routes and imports; do not replace current-main server code wholesale. |
+| `apps/src/sync-routes.ts` | INCLUDE / SCOPE EDIT | Required to enforce the same instrument/parameter gate on offline sync; preserve existing sync envelope and authorization semantics. |
+| `apps/src/sync-validation.test.ts` | SEPARATE IOT WORKSTREAM | Explicit-timezone/calendar validation belongs to the parallel IoT timestamp-hardening scope; integrate as a separately reviewed, non-conflicting change. |
+| `apps/src/sync-validation.ts` | SEPARATE IOT WORKSTREAM | Same as above; do not lose timestamp hardening, but do not conflate it with instrument approval. |
+| `apps/test/cors-runtime.test.ts` | CONDITIONAL | Include if new routes or runtime behavior require its added CORS assertion; compare against current main. |
+| `apps/test/mrv-instrument-test-fixture.ts` | INCLUDE | Shared synthetic fixtures for instrument approval tests; ensure clearly test-only and never accepted as field qualification evidence. |
+| `apps/test/runtime-acceptance-v2.test.ts` | SCOPE EDIT | Preserve only assertions needed to test the selected approval/sync behavior; review unrelated acceptance changes separately. |
+| `apps/test/settlement-credential-guard.test.ts` | CONDITIONAL DEPENDENCY | Include if the selected current-evidence migration changes credential transfer/settlement eligibility. |
+| `apps/test/settlement-reconciliation.test.ts` | DEFER | Settlement reconciliation changes are outside minimal instrument approval unless a demonstrated dependency requires them. |
+| `docs/GUARDIAN_LIVE_ACCEPTANCE.md` | DEFER / REVIEW DIFF | Do not pull in anchoring documentation changes without a direct contract change; live Guardian/Hedera evidence remains a separate gate. |
+| `docs/MRV_INSTRUMENT_APPROVAL_API.md` | INCLUDE | Update the API contract to match the final integrated route and evidence-vault behavior. |
+| `docs/RUPAYKG_NO_COST_IOT_SIMULATION_RUNBOOK.md` | SEPARATE IOT WORKSTREAM | Keep in the parallel IoT simulation workstream; simulation does not prove physical qualification. |
+| `docs/SETTLEMENT.md` | DEFER | Settlement docs are unrelated unless current-evidence settlement enforcement is expressly included. |
+| `migrations/088_mrv_instrument_approval_register.sql` | INCLUDE ONCE, AFTER REVIEW | Not on main. Required for the instrument register/decision history. Never duplicate. |
+| `migrations/089_measurement_instrument_binding_guard.sql` | INCLUDE ONCE, AFTER REVIEW | Not on main. Depends on 088 and binds new measurement writes to instrument/parameter; preserve historical rows as unbound. |
+| `migrations/20261022_mrv_instrument_evidence_parameter_specs.sql` | CONDITIONAL, LIKELY CORE | Required for structured per-parameter specs and evidence-vault artifact-version binding. First prove its prerequisites exist in the integrated migration sequence and verify clean-install plus supported upgrade paths. |
+| `migrations/20261026_mrv_measurement_freeze_after_submission.sql` | SEPARATE SCOPE / CONDITIONAL | Adds broad post-submission immutability; do not silently include as an approval dependency. If intended, review correction/superseding workflow and concurrency tests. |
+| `migrations/20261027_credential_current_mrv_instrument_evidence.sql` | CONDITIONAL DEPENDENCY | Required if issuance must re-check current evidence; validate ordering after evidence-vault/parameter schema and test lock order. |
+| `migrations/20261030_existing_credential_current_mrv_evidence_guard.sql` | CONDITIONAL DEPENDENCY | Extends current-evidence checks to existing credentials/transfers/settlements. Include only with explicit registry/settlement scope and independent review. |
+| `migrations/20261031_mrv_instrument_current_expiry_guard.sql` | EXCLUDE / BLOCKED | Future-dated relative to this checkpoint. Require owner-approved intended release date, filename chronology, manifest/catalogue ordering and upgrade review before reconsideration. |
+| `migrations/README.md` | INCLUDE AS MERGED EDIT | Main README is through 087; add descriptions for only the approved migrations in canonical order, with no duplicate entries or misleading statement that live ledgers are reconciled. |
+| `package-lock.json` | CONDITIONAL | Reproduce only deliberate dependency changes against current main; inspect lockfile diff and audit results rather than importing the old lockfile wholesale. |
+
+### Integration conclusion
+
+The matrix is a scoped review disposition, not approval to merge any source branch. Build the candidate from current main and take the smallest coherent set: core register/route/measurement/sync enforcement, migration 088/089 once, parameter-spec/evidence-vault dependencies only after prerequisite proof, aligned tests and API documentation. Keep timestamp hardening tracked in the parallel IoT workstream. Treat credential-currentness, post-submission freeze, Guardian/Hedera, registry and settlement changes as explicit scope decisions rather than accidental imports.
+
+Before writing application code, verify the latest source heads and compare the actual current-main versions of every selected shared file. The production/staging migration provenance blocker is unchanged; no live database action is authorized.
