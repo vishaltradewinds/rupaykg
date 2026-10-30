@@ -20,7 +20,7 @@ function fakePool(options: {
   let releaseCount = 0;
   const releaseErrors: Array<Error | boolean | undefined> = [];
   async function query(sql: string): Promise<QueryResult> {
-    const normalized = sql.replace(/\\s+/g, " ").trim();
+    const normalized = sql.replace(/\s+/g, " ").trim();
     calls.push(normalized);
     if (normalized.startsWith("select pg_advisory_lock") && options.lockFails) {
       throw new Error("simulated advisory lock failure");
