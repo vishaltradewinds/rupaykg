@@ -41,7 +41,11 @@ export interface ObservationValidation {
 const nonEmpty = (value: unknown): value is string =>
   typeof value === "string" && value.trim().length > 0;
 const validTime = (value: unknown): value is string =>
-  typeof value === "string" && value.trim().length > 0 && Number.isFinite(Date.parse(value));
+  typeof value === "string"
+  // Require an explicit timezone and full timestamp; date-only and timezone-naive
+  // values are ambiguous across edge devices and must not enter the evidence path.
+  && /^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,3})?(?:Z|[+-]\\d{2}:\\d{2})$/.test(value)
+  && Number.isFinite(Date.parse(value));
 const validSha256 = (value: unknown): value is string =>
   typeof value === "string" && /^[a-f0-9]{64}$/i.test(value);
 const isRecord = (value: unknown): value is Record<string, unknown> =>
