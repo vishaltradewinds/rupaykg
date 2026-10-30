@@ -212,3 +212,12 @@ Exact-head CI run #3412 / run ID `41068514359`: **IN PROGRESS** at first check.
 ### Required next gate
 
 Wait for run #3412 to finish and repair any actual failures on the candidate branch. Then independently inspect the full combined diff, migration ordering and all fail-closed paths. Keep Draft until exact-head CI is green, independent review is complete, supported upgrade paths are established and migration provenance has a separate authorized reconciliation packet. No merge, deployment, live DB operation, device procurement or certification is authorized by opening this candidate.
+
+
+## 12. Candidate CI correction and retest — 2026-10-30 14:06Z
+
+PR #137 run #3412 (`41068514359`) initially failed because runtime acceptance submitted a measurement without the newly required instrument code and parameter. The test contract was corrected to assert fail-closed behavior for missing and unregistered instruments in commit `c9a449655fbc29bd03350d64771ab3a8602b3c18`.
+
+Rerun #3414 (run ID `41068861872`) at exact candidate head `c9a449655fbc29bd03350d64771ab3a8602b3c18` is now **SUCCESS**: dependency/security audit, migration catalogue validation, disposable PostgreSQL migration run, typecheck, build, browser smoke test, full tests including disposable PostgreSQL acceptance, and production-container build all passed.
+
+This is engineering CI evidence for the draft candidate only. It does not resolve production/staging migration provenance, independent code review, exact-model statutory approval, calibration, physical/site acceptance, methodology eligibility, TRL advancement, or production certification. PR #137 remains Draft; no merge/deployment/live DB action occurred.
