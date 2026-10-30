@@ -129,3 +129,34 @@ CI result IDs above were checked against the exact current head SHAs, not copied
 - The job log shows seven Node test-suite summaries with test counts `99, 22, 2, 29, 1, 19, 2`; each reported `fail 0` and `skipped 0` (174 reported top-level tests across those suite summaries). This is evidence for this checkpoint commit's current configured suite only; it is **not** evidence that PR #122's distinct `async-mirror-worker.postgres.test.ts` ran at its corrected head.
 - Rechecked PR #122 head `86bff3db61d4881fc83507a5de03810c20c3299b`: workflow lookup still returns no PR-triggered run. PR #141 has no recorded review submissions. Do not infer acceptance of #122 from #128's green CI.
 - Next gate remains an authorized independent review of PR #141, followed by an exact-head PostgreSQL run for PR #122. No review was fabricated, no PR merged, and no production/staging write or deployment occurred.
+
+
+## Worker null-lease recovery checkpoint — 2026-10-30 15:44Z
+
+### Current worker integration state
+- PR #122: https://github.com/vishaltradewinds/rupaykg/pull/122
+  - Target/base: `intelligence/ai-evidence-intake-middleware`
+  - Current head: `484233a37c8ee232e834df44192df8ae754cb9cc`
+  - The disposable PostgreSQL test now includes a `PROCESSING` row with `lease_until IS NULL`; expected behavior is reclaim and safe `UNRESOLVED` outcome when no verified jurisdiction crosswalk exists.
+  - Exact-head CI remains unverified.
+- PR #142: https://github.com/vishaltradewinds/rupaykg/pull/142
+  - Draft/open, unmerged; base `intelligence/ai-evidence-intake-middleware`.
+  - Head `08f7157a4944336065729d320dd16ae22ddae9a9`.
+  - Narrow worker fix makes the claim predicate consistent with retry-exhaustion handling: `PROCESSING` rows are claimable when `lease_until IS NULL OR lease_until < now()`, subject to the attempt limit.
+  - Exact-head CI remains unverified; do not describe the fix as tested or accepted yet.
+- PR #141: https://github.com/vishaltradewinds/rupaykg/pull/141
+  - CI trigger correction enables pull requests targeting `intelligence/ai-evidence-intake-middleware`.
+  - Its existing run passed in its own merge context, but it remains pending independent review/integration. Do not bypass review or retarget #122 to main.
+- Coordination comment linking #122 and #142 posted on PR #122 (comment ID `6526824288`).
+
+### Required next actions
+1. Obtain authorized independent review of PR #141; integrate only if approved by the feature-base owner.
+2. Run CI on the exact current head of PR #122 with PostgreSQL 16 and `RUPAYKG_RUN_DB_INTEGRATION_TESTS=1`; inspect logs to prove the named test executed rather than skipped.
+3. Run CI on PR #142 after the relevant branch/base context includes the worker change; add or coordinate a test that directly exercises the null-lease claim predicate.
+4. Reconcile #122/#142 overlap before merge. Do not merge either without owner approval and independent review.
+5. Continue migration-history and source-provenance reconciliation separately; no staging/production DDL/DML or migration application.
+
+### Safety and release posture
+- No production/staging writes, migrations, deployments, scheduler activation, or official MRV/Guardian submissions were performed.
+- This is engineering-only regression hardening. Physical instrument qualification and field TRL are not established by these tests.
+- **ENGINEERING ONLY / PRODUCTION CERTIFICATION HOLD-OFF.**
