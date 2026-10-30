@@ -303,3 +303,19 @@ Confirmed in source:
 The associated CI run #3432 / `41073420333` completed **SUCCESS**. This confirms engineering behavior at the referenced candidate head; it does not resolve historical deployment artifact attestation, complete production/staging object reconciliation, or approval of a canonical forward-only migration plan. PR #108 remains Draft/unmerged, and the live production/staging databases remain untouched.
 
 **Disposition:** retain the fail-closed guard; do not merge PR #108 or apply live migrations until independent database/security review, source/deployment provenance assessment, complete schema/object dependency inventory, integrated exact-head acceptance and authorized Shakti release approval are complete. Production/staging writes, historical SQL replay, worker scheduler activation and production certification remain **HOLD/OFF**.
+
+
+## 19. Migration source-integrity limitation and checksum policy — 2026-10-30 15:24Z
+
+The migration runner implementation was reviewed beyond its missing-file/version preflight. It currently reconciles recorded `version` and `filename`, but the ledger does not retain a source-content digest. Therefore, a file with the same name and version prefix but altered SQL bytes can pass filename-level reconciliation. The present checks prove filename availability/consistency, not historical byte-for-byte source provenance.
+
+**Required policy for the migration-reconciliation release:**
+
+1. Do not infer historical checksums from the current checkout and call them deployed-source checksums. Preserve an explicit `LEGACY_UNATTESTED` state for rows whose exact deployed artifact cannot be independently recovered.
+2. Before introducing checksum enforcement, design and rehearse an additive ledger extension in disposable PostgreSQL. Run complete-ledger preflight first; do not make schema changes before unresolved history has been surfaced.
+3. For newly applied migrations, record a cryptographic digest of the exact SQL bytes applied in the same transaction as the migration ledger row. On subsequent runs, fail closed if a recorded digest differs from the available source.
+4. Keep legacy rows without trusted digests distinguishable from verified rows. Any approved baseline/attestation must cite the deployment artifact, repository commit or release bundle and independent evidence; do not silently backfill current-file hashes as historical truth.
+5. Add acceptance cases for same filename with altered contents, absent digest on a new-format row, trusted digest match/mismatch, failed migration transaction rollback, and compatibility with the existing production/staging history shapes.
+6. Do not activate checksum enforcement against live environments until the schema/catalog plan, rollback/recovery approach, source provenance and release approval have passed independent review.
+
+This is a newly documented security finding and a required follow-up for PR #108, not a claim that checksum enforcement has already been implemented. The existing actual-runner tests continue to prove the current fail-closed behavior for missing source files and version/filename mismatches only. PR #108 remains Draft/unmerged; no live database was read or modified in this action, and no migration was applied.
