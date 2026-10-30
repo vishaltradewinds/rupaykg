@@ -111,7 +111,7 @@ async function main(): Promise<void> {
       for (const candidate of candidates) {
         try {
           const entries = await readdir(candidate);
-          if (entries.some((name) => /^\\d+_.+\\.sql$/.test(name))) {
+          if (entries.some((name) => /^\d+_.+\.sql$/.test(name))) {
             migrationDir = candidate;
             break;
           }
