@@ -40,6 +40,10 @@ jobs:
         run: npm audit --omit=dev --audit-level=high
       - run: npm run validate:migrations
       - run: npm run migrate -w @rupaykg/api
+      - name: Authorization provenance regression and forward-fix proposal (disposable PostgreSQL)
+        env:
+          RUPAYKG_RUN_AUTHORIZATION_PROVENANCE_TESTS: "1"
+        run: node scripts/test-authorization-provenance-forward-fix.mjs
       - run: npm run typecheck
       - run: npm run build
       - name: Browser smoke test production web build
