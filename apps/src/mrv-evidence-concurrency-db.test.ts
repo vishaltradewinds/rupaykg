@@ -44,6 +44,99 @@ test("PostgreSQL serializes evidence rejection against credential issuance, tran
   }
 });
 
+
+test("PostgreSQL serializes instrument approval against evidence rejection on two sessions", {
+  skip: !url || !enabled,
+  timeout: 120_000,
+}, async () => {
+  assert.ok(url);
+  const pool = new Pool({
+    connectionString: url,
+    max: 5,
+    application_name: "rupaykg-mrv-approval-concurrency-test",
+    ssl: process.env.DATABASE_SSL === "false" ? undefined : { rejectUnauthorized: false },
+  });
+  try {
+    await exerciseApprovalRace(pool, "approval-first");
+    await exerciseApprovalRace(pool, "rejection-first");
+  } finally {
+    await pool.end();
+  }
+});
+
+async function exerciseApprovalRace(pool: Pool, winner: "approval-first" | "rejection-first"): Promise<void> {
+  const suffix = randomUUID();
+  const fixture = await createFixture(pool, suffix);
+  const approval = await pool.connect();
+  const review = await pool.connect();
+  const observer = await pool.connect();
+  const approvalApp = `mrv-appr-${suffix.slice(0, 8)}`;
+  const reviewApp = `mrv-rej-appr-${suffix.slice(0, 8)}`;
+  try {
+    await approval.query("select set_config('application_name',$1,false)", [approvalApp]);
+    await review.query("select set_config('application_name',$1,false)", [reviewApp]);
+    await observer.query("select set_config('application_name',$1,false)", [`mrv-obs-appr-${suffix.slice(0, 8)}`]);
+
+    if (winner === "approval-first") {
+      await approval.query("begin");
+      await approval.query("select id from mrv_instruments where id=$1 for update", [fixture.instrumentId]);
+      await lockInstrumentEvidence(approval, fixture);
+      await assertEvidenceCurrent(approval, fixture);
+      await approval.query("update mrv_instruments set approval_status='VERIFIED',reviewed_by_identity_id=$2,reviewed_at=now(),review_note='two-session approval race test' where id=$1", [fixture.instrumentId, fixture.reviewerId]);
+      await review.query("begin");
+      const rejection = rejectEvidence(review, fixture);
+      await waitUntilBlocked(observer, reviewApp);
+      await approval.query("commit");
+      await rejection;
+      await review.query("commit");
+    } else {
+      await review.query("begin");
+      await lockEvidenceForReview(review, fixture);
+      await approval.query("begin");
+      const approvalAttempt = (async () => {
+        await approval.query("select id from mrv_instruments where id=$1 for update", [fixture.instrumentId]);
+        await lockInstrumentEvidence(approval, fixture);
+        await assertEvidenceCurrent(approval, fixture);
+        await approval.query("update mrv_instruments set approval_status='VERIFIED',reviewed_by_identity_id=$2,reviewed_at=now(),review_note='two-session approval race test' where id=$1", [fixture.instrumentId, fixture.reviewerId]);
+      })();
+      await waitUntilBlocked(observer, approvalApp);
+      await rejectEvidenceAfterLocks(review, fixture);
+      await review.query("commit");
+      await assert.rejects(approvalAttempt, /MRV_APPROVAL_EVIDENCE_STALE/);
+      await approval.query("rollback");
+    }
+
+    const final = await pool.query<{ status: string; approval_status: string }>(
+      "select e.status::text status,i.approval_status from evidence e cross join mrv_instruments i where e.id=$1 and i.id=$2",
+      [fixture.evidenceId, fixture.instrumentId],
+    );
+    assert.equal(final.rows[0]?.status, "REJECTED", "rejection must be durable after both sessions finish");
+    if (winner === "rejection-first") assert.notEqual(final.rows[0]?.approval_status, "VERIFIED");
+    const guard = await pool.query<{ current: boolean }>("select mrv_instrument_evidence_is_current($1) current", [fixture.instrumentId]);
+    assert.equal(guard.rows[0]?.current, false, "revoked evidence must make the instrument ineligible");
+  } catch (error) {
+    await approval.query("rollback").catch(() => undefined);
+    await review.query("rollback").catch(() => undefined);
+    throw new Error(`instrument approval / evidence rejection / ${winner} failed: ${String(error)}`, { cause: error });
+  } finally {
+    approval.release();
+    review.release();
+    observer.release();
+  }
+}
+
+async function lockInstrumentEvidence(client: PoolClient, f: Fixture): Promise<void> {
+  await client.query(
+    "select e.id from evidence e where e.id in (select v.evidence_id from evidence_artifact_versions v where v.id in (select i.meity_evidence_artifact_version_id from mrv_instruments i where i.id=$1 union select i.calibration_evidence_artifact_version_id from mrv_instruments i where i.id=$1 union select i.security_evidence_artifact_version_id from mrv_instruments i where i.id=$1 union select ps.source_evidence_artifact_version_id from mrv_instrument_parameter_specs ps where ps.instrument_id=$1)) order by e.id for update",
+    [f.instrumentId],
+  );
+}
+
+async function assertEvidenceCurrent(client: PoolClient, f: Fixture): Promise<void> {
+  const result = await client.query<{ current: boolean }>("select mrv_instrument_evidence_is_current($1) current", [f.instrumentId]);
+  if (result.rows[0]?.current !== true) throw new Error("MRV_APPROVAL_EVIDENCE_STALE: instrument approval requires current reviewed evidence");
+}
+
 async function exerciseRace(
   pool: Pool,
   kind: UseKind,
