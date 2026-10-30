@@ -53,6 +53,15 @@ These overlap, but are not interchangeable without reviewing each diff and its b
 ### Hardware, compliance, TRL, and product features
 - #127–#130, #136–#137, #47/#49/#59, #93/#90/#87/#86, #97/#102, and the older feature/security/compliance PRs contain potentially unique work. Their age or draft status alone is not grounds for deletion. Require exact-head CI, dependency mapping, scope review, and a successor reference before closing any.
 
+
+## Critical candidate-branch migration identity collision
+
+PR #104 (`audit/pr97-merge-candidate-validation-2026-10-28`) and PR #106 (`shakti/batch-a-combined-pr97-validation`) both contain:
+- `migrations/096_epr_acceptance_evidence_immutability.sql`, Git blob `28ea4b350fe5074d2e59e59fc38c714019d00c10`.
+- `migrations/102_verification_authorization_provenance.sql`, Git blob `258b1f4534efbf915688f78aa84d4ec24a47cbc0`, identical to the historical `096_verification_authorization_provenance.sql` blob.
+
+These candidate branches assign version 096 to different SQL than the historical production-observed authorization migration and renumber that authorization SQL to 102. Their broader diffs are not identical. **Do not close/delete either PR as a duplicate.** Treat this as a migration-identity collision that blocks any merge until exact branch histories, dependencies, and observed database ledgers are reconciled. This is why the migration-history stack must remain isolated from product-feature merging.
+
 ## Next safe cleanup batch
 
 1. Export a full PR/branch inventory with exact head SHA, base SHA, draft/state, last update, checks, changed paths and dependency links.
