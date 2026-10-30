@@ -131,6 +131,42 @@ async function main(): Promise<void> {
       );
       console.log("PASS " + scenario.name + ": rejected before migration SQL; sentinel and complete ledger preserved.");
     }
+
+    // Duplicate version prefixes in the release catalog must fail before the
+    // runner can apply the first of two conflicting files.
+    await writeFile(
+      path.join(catalog, "001_conflicting.sql"),
+      "insert into migration_preflight_sentinel(marker) values ('CONFLICTING_CATALOG_SQL_EXECUTED');\\n",
+      "utf8",
+    );
+    const duplicateSchema = "history_duplicate_catalog_" + suffix;
+    await admin.query("create schema " + quote(duplicateSchema));
+    created.push(duplicateSchema);
+    const duplicatePool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      max: 1,
+      ssl: process.env.DATABASE_SSL === "false" ? undefined : { rejectUnauthorized: false },
+      options: "-c search_path=" + duplicateSchema + ",public",
+    });
+    scenarioPools.push(duplicatePool);
+    await duplicatePool.query("create table migration_preflight_sentinel(marker text not null)");
+    await duplicatePool.query("create table schema_migrations(version text primary key, filename text not null, applied_at timestamptz not null default now())");
+    await assert.rejects(
+      runMigrations(duplicatePool, catalog),
+      (error: unknown) => {
+        const message = error instanceof Error ? error.message : String(error);
+        assert.match(message, /MIGRATION_HISTORY_UNRESOLVED/);
+        assert.match(message, /conflicting version prefixes/);
+        assert.match(message, /001_conflicting\\.sql/);
+        return true;
+      },
+      "duplicate catalog version prefixes must fail before any migration SQL",
+    );
+    const duplicateMarkerCount = (await duplicatePool.query("select count(*)::int as n from migration_preflight_sentinel")).rows[0].n;
+    assert.equal(duplicateMarkerCount, 0, "duplicate catalog conflict must be detected before migration SQL executes");
+    const duplicateLedger = (await duplicatePool.query("select count(*)::int as n from schema_migrations")).rows[0].n;
+    assert.equal(duplicateLedger, 0, "duplicate catalog conflict must not create migration ledger rows");
+    console.log("PASS duplicate-catalog-version-conflict: rejected before migration SQL; sentinel and ledger unchanged.");
   } finally {
     await Promise.all(scenarioPools.map((pool) => pool.end().catch(() => undefined)));
     if (connected) {
