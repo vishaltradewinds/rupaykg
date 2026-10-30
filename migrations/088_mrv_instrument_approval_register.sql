@@ -296,14 +296,14 @@ $$;
 -- Only the instrument lifecycle trigger may append decision rows. The nested
 -- insert runs at trigger depth >= 2; ordinary application SQL runs at depth 1.
 create or replace function require_mrv_instrument_decision_trigger_context()
-returns trigger language plpgsql as $
+returns trigger language plpgsql as $decision_guard$
 begin
   if pg_trigger_depth() < 2 then
     raise exception 'MRV instrument decisions must be recorded by the instrument lifecycle trigger';
   end if;
   return new;
 end;
-$;
+$decision_guard$;
 
 create trigger mrv_instrument_decisions_guard_insert
 before insert on mrv_instrument_decisions
