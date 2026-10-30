@@ -3,9 +3,18 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
+import { assertMigrationCatalogConsistent, assertMigrationHistoryConsistent } from "./migration-history.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) throw new Error("DATABASE_URL is required");
+
+// Resolve and validate the release catalogue before opening a database connection or issuing DDL.
+const here = path.dirname(fileURLToPath(import.meta.url));
+const candidates = [path.resolve(here, "../../migrations"), path.resolve(here, "../../../migrations")];
+const migrationDir = candidates.find((candidate) => existsSync(candidate));
+if (!migrationDir) throw new Error(`Migration directory not found. Checked: ${candidates.join(", ")}`);
+const files = (await readdir(migrationDir)).filter((name) => /^\\d+_.+\\.sql$/.test(name)).sort();
+assertMigrationCatalogConsistent(files);
 
 const pool = new Pool({
   connectionString: databaseUrl,
@@ -31,6 +40,11 @@ try {
   const files = (await readdir(migrationDir))
     .filter((name) => /^\d+_.+\.sql$/.test(name))
     .sort();
+
+  const recorded = await pool.query<{ version: string; filename: string }>(
+    "select version, filename from schema_migrations order by version",
+  );
+  assertMigrationHistoryConsistent(recorded.rows, files);
 
   for (const filename of files) {
     const version = filename.split("_", 1)[0];
