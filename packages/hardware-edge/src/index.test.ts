@@ -79,3 +79,20 @@ test("unjustified non-applicable calibration cannot pass locally", () => {
   assert.equal(result.disposition, "CALIBRATION_BLOCKED");
   assert.deepEqual(result.blockers, ["CALIBRATION_NOT_APPLICABLE_REQUIRES_REVIEWED_REGISTER_RECORD"]);
 });
+
+test("null payload is rejected without throwing", () => {
+  assert.equal(validateEdgeObservation(null).disposition, "QUARANTINED");
+});
+
+test("unknown calibration state is rejected", () => {
+  const value = { ...goodObservation(), calibrationState: "UNKNOWN" };
+  const result = validateEdgeObservation(value);
+  assert.equal(result.disposition, "QUARANTINED");
+  assert.ok(result.blockers.includes("INVALID_CALIBRATION_STATE"));
+});
+
+test("receive time before observation time is rejected", () => {
+  const value = goodObservation();
+  value.receivedAt = "2026-10-30T06:59:59.000Z";
+  assert.ok(validateEdgeObservation(value).blockers.includes("RECEIVED_BEFORE_OBSERVED"));
+});
