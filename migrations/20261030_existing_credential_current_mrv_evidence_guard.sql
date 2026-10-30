@@ -2,8 +2,9 @@
 -- instrument evidence that has since been rejected/expired. This deliberately does
 -- not auto-retire or rewrite issued credentials: that lifecycle decision requires an
 -- explicit registry/legal policy and must preserve settlement and audit obligations.
--- Synthetic acceptance fixtures are isolated by the same explicit testFixture marker
--- used by the issuance guard; application-generated provenance must never set it.
+-- Acceptance-fixture exclusion is enforced by the registry eligibility guard using
+-- activity/evidence fixture classification. Provenance metadata is not an authorization
+-- signal and must never bypass instrument-evidence checks.
 
 create or replace function credential_has_current_mrv_instrument_evidence(p_credential_id uuid)
 returns boolean
