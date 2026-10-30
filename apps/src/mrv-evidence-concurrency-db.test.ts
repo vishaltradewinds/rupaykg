@@ -67,6 +67,11 @@ test("PostgreSQL serializes instrument approval against evidence rejection on tw
 async function exerciseApprovalRace(pool: Pool, winner: "approval-first" | "rejection-first"): Promise<void> {
   const suffix = randomUUID();
   const fixture = await createFixture(pool, suffix);
+  // The shared fixture is fully verified for other acceptance cases. Reset only its
+  // review state to HOLD before this isolated approval-race test; evidence and identity
+  // remain immutable and committed. This ensures rejection-first proves approval cannot
+  // move a pending instrument to VERIFIED using revoked evidence.
+  await pool.query("update mrv_instruments set approval_status='HOLD' where id=$1", [fixture.instrumentId]);
   const approval = await pool.connect();
   const review = await pool.connect();
   const observer = await pool.connect();
