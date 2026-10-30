@@ -8,8 +8,8 @@
 create or replace function credential_has_current_mrv_instrument_evidence(p_credential_id uuid)
 returns boolean
 language plpgsql
-stable
-as $$
+volatile
+as $
 declare
   activity_id_value uuid;
   activity_org uuid;
