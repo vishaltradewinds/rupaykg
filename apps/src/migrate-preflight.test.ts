@@ -248,7 +248,7 @@ test("failed rollback destroys the session and does not attempt to unlock an unc
       migrationError = error;
     }
     assert.ok(migrationError instanceof AggregateError);
-    assert.match(migrationError.message, /Migration 001_safe\\.sql failed and rollback failed/);
+    assert.match(migrationError.message, /Migration 001_safe\.sql failed and rollback failed/);
     assert.equal(migrationError.errors.length, 2);
     assert.match(String(migrationError.errors[0]), /simulated migration SQL failure/);
     assert.match(String(migrationError.errors[1]), /simulated rollback failure/);
