@@ -273,3 +273,15 @@ Latest PR #137 candidate head: `58e50aa8c1853862caf5b4aa4d8cdd586c06bac0`.
 Exact-head CI run #3452 / `41076530688` completed **SUCCESS** at that exact head: dependency/security audit, migration validation, fresh PostgreSQL migration execution, TypeScript typecheck, build, production-web browser smoke test, tests including disposable PostgreSQL acceptance, and production-container build all passed.
 
 This remains an engineering candidate only. The PR is still Draft and unmerged. CI does not resolve production/staging migration provenance, establish physical instrument qualification, prove official approval evidence genuine, or establish site/methodology eligibility or TRL advancement. No production migration, deployment, procurement or certification occurred.
+
+
+## 17. Exact certificate-scope snapshot and ingestion/status race guard — 2026-10-30 15:10Z
+
+Follow-up independent review of PR #137 found two additional integrity considerations and addressed them in the candidate:
+
+- Decision snapshots now retain `meityCertificateScope`, so the exact claimed certificate scope reviewed for a VERIFIED transition is preserved with the decision history. A PostgreSQL acceptance assertion checks that the exact manufacturer/model/SKU scope is captured.
+- The measurement-binding trigger now selects the instrument row `FOR SHARE` rather than `FOR KEY SHARE`. The stronger row lock serializes a measurement insert with concurrent instrument status/evidence updates, avoiding a window in which an approval downgrade could race with ingestion.
+
+Migration README updated. Latest PR #137 head: `b18ef022df97b9c2ac886c450dcbec8de8ebfdae`. Exact-head CI run #3458 / `41078052561` completed **SUCCESS**: dependency/security audit, migration catalogue validation, fresh PostgreSQL migration execution, typecheck, build, browser smoke test, PostgreSQL acceptance tests and production-container build all passed.
+
+This remains engineering evidence only. PR #137 remains Draft/unmerged. Migration history reconciliation, independent authorization review, physical instrument evidence and calibration, site/methodology eligibility, TRL evidence and production approval remain open. No live migration, deployment, procurement or certification occurred.
