@@ -14,7 +14,7 @@ const candidates = [path.resolve(here, "../../migrations"), path.resolve(here, "
 const migrationDir = candidates.find((candidate) => existsSync(candidate));
 if (!migrationDir) throw new Error("Migration directory not found. Checked: " + candidates.join(", "));
 const files = (await readdir(migrationDir))
-  .filter((name) => /^\\d+_.+\\.sql$/.test(name))
+  .filter((name) => /^\d+_.+\.sql$/.test(name))
   .sort();
 assertMigrationCatalogConsistent(files);
 
