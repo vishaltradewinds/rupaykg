@@ -157,7 +157,7 @@ async function main(): Promise<void> {
         const message = error instanceof Error ? error.message : String(error);
         assert.match(message, /MIGRATION_HISTORY_UNRESOLVED/);
         assert.match(message, /conflicting version prefixes/);
-        assert.match(message, /001_conflicting\\.sql/);
+        assert.match(message, /001_conflicting\.sql/);
         return true;
       },
       "duplicate catalog version prefixes must fail before any migration SQL",
