@@ -293,6 +293,22 @@ begin
 end;
 $$;
 
+-- Only the instrument lifecycle trigger may append decision rows. The nested
+-- insert runs at trigger depth >= 2; ordinary application SQL runs at depth 1.
+create or replace function require_mrv_instrument_decision_trigger_context()
+returns trigger language plpgsql as $
+begin
+  if pg_trigger_depth() < 2 then
+    raise exception 'MRV instrument decisions must be recorded by the instrument lifecycle trigger';
+  end if;
+  return new;
+end;
+$;
+
+create trigger mrv_instrument_decisions_guard_insert
+before insert on mrv_instrument_decisions
+for each row execute function require_mrv_instrument_decision_trigger_context();
+
 create trigger mrv_instrument_decisions_append_only
 before update or delete on mrv_instrument_decisions
 for each row execute function prevent_mrv_instrument_decision_mutation();
