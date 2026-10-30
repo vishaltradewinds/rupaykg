@@ -67,7 +67,7 @@ begin
   select * into instrument_row
     from mrv_instruments
    where id = new.mrv_instrument_id
-   for key share;
+   for share;
   if not found then
     raise exception 'measurement instrument is not registered';
   end if;
