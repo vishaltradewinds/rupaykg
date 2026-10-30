@@ -96,6 +96,11 @@ test("PostgreSQL enforces MRV instrument approval evidence and append-only decis
     ), /instrument-bound measurement facts and provenance are immutable/i);
 
     await rejectsInSavepoint(client, () => client.query(
+      "delete from measurements where id=$1",
+      [validMeasurement.rows[0]!.id],
+    ), /instrument-bound measurements cannot be deleted/i);
+
+    await rejectsInSavepoint(client, () => client.query(
       "insert into measurements(activity_id,value,unit,method,source,measured_at,mrv_instrument_id,parameter_code) values($1,2,'m3/h','test','instrument test',now(),$2,'methane_content')",
       [activityId, instrumentId.id],
     ), /not supported/i);
