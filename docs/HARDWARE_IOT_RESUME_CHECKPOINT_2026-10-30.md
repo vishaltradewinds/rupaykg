@@ -59,3 +59,10 @@ No physical instrument is selected or connected. No purchase, calibration, field
 - PR #51 CI run #3357 (`41056362508`) has passed dependency audit, migration validation/execution, typecheck, build, browser smoke and the full disposable PostgreSQL acceptance tests. Production-container build is still running; no final workflow conclusion yet.
 - Do not claim #51 passed until the entire workflow is completed successfully. Keep #47/#49/#51/#59/#128 as drafts and unmerged until overlap ownership, exact-head CI and independent review are resolved.
 - Hardware gates remain unchanged: no selected/connected physical instrument, no verified exact-model statutory approval, no calibration/bench/site acceptance, and no production deployment or certification.
+
+
+## Exact-head validation update — 2026-10-30 12:39Z
+- Current PR #128 head is `3b78a4091bca919ea35ae60911160fe2ad8be2b6` (includes the checkpoint update).
+- Exact-head CI run #3358 (run ID `41056559100`) completed successfully, including all configured validation and production-container build steps.
+- PR #51 current head `e5388fd1db1533db1d5abcf7bd5f52fc5f09ad2b` also passed exact-head CI run #3357 (run ID `41056362508`). This does not resolve the overlapping approval-route/migration ownership between #49 and #51; do not merge either until an explicit integration order and independent review are recorded.
+- PR #47/#49/#51/#59/#128 remain open drafts and unmerged. Physical hardware qualification, official exact-model approval, calibration, bench/site acceptance, methodology eligibility and production release remain HOLD.
