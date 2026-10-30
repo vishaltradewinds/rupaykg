@@ -62,7 +62,10 @@ test("uncertain device clock is quarantined, not silently rewritten", () => {
   assert.ok(validateEdgeObservation(value).blockers.includes("DEVICE_CLOCK_UNCERTAIN"));
 });
 
-test("negative or fractional sequence is rejected", () => {
+test("zero, negative or fractional sequence is rejected", () => {
+  const zero = goodObservation();
+  zero.sequence = 0;
+  assert.ok(validateEdgeObservation(zero).blockers.includes("INVALID_SEQUENCE"));
   const negative = goodObservation();
   negative.sequence = -1;
   assert.ok(validateEdgeObservation(negative).blockers.includes("INVALID_SEQUENCE"));
