@@ -42,3 +42,11 @@ Pan-India and vendor-neutral: qualified measuring instrument → documented read
 No physical instrument is selected or connected. No purchase, calibration, field test, site acceptance, statutory approval, carbon-credit eligibility, production database mutation, deployment or certification is claimed or authorized. No BOM or CAPEX estimate should be treated as approved until the actual requirements and model-specific evidence are verified.
 
 **Resume command:** “resume IoT Stack workstream” — continue at Next batch item 1, refresh live PR heads and canonical ownership, then work in coherent batches without disturbing parallel ESG/EPR/GRI/CCTS work.
+
+
+## Follow-up execution update — 2026-10-30 12:28Z
+- Refreshed live PR heads and changed-file lists for #47, #49, #51, #59 and #128. All remain open drafts; #49/#51 still overlap on the instrument-approval routes and migrations.
+- Canonical timestamp discrepancy was confirmed in `main/apps/src/sync-validation.ts`: it previously relied on `Date.parse` alone.
+- Corrective change and regression tests were committed to the owning integration branch for PR #51: `021926e533109d626a952c31680143085c2eecb1`. Field-sync now requires explicit timezone and rejects impossible calendar/clock values; tests cover date-only, timezone-naive, invalid dates/times, invalid offset minutes, explicit offsets and fractional seconds.
+- PR #51 body updated with this follow-up. Exact-head CI for the new commit has not yet been observed; PR remains draft and must not be merged until CI and independent review pass.
+- The PR #128 checkpoint document itself is current through the original exact-head validation plus this coordination note; no production database, hardware, or deployment changes were made.
