@@ -60,7 +60,7 @@ test("canonical contract rejects duplicate numeric prefixes before migrations ca
   assert.deepEqual(findMigrationCatalogVersionConflicts(files), ["088:088_first.sql|088_second.sql"]);
   assert.throws(
     () => assertMigrationHistoryConsistent([], files),
-    /MIGRATION_HISTORY_UNRESOLVED: migration catalog contains conflicting version prefixes.*088_first\\.sql.*088_second\\.sql/,
+    /MIGRATION_HISTORY_UNRESOLVED: migration catalog contains conflicting version prefixes.*088_first\.sql.*088_second\.sql/,
   );
 });
 
@@ -73,6 +73,6 @@ test("canonical contract reports missing sources and version mismatch with stabl
       ],
       ["088_present.sql"],
     ),
-    /096:096_missing\\.sql:SOURCE_MISSING.*999:088_present\\.sql:VERSION_FILENAME_MISMATCH/,
+    /096:096_missing\.sql:SOURCE_MISSING.*999:088_present\.sql:VERSION_FILENAME_MISMATCH/,
   );
 });
