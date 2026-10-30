@@ -13,7 +13,7 @@ function isUuid(value: string): boolean {
 function isStrictTimestamp(value: string): boolean {
   // Require a complete RFC3339-style timestamp with an explicit timezone.
   // Date.parse alone accepts date-only and timezone-naive values in some runtimes.
-  const match = /^(\\d{4})-(\\d{2})-(\\d{2})T(\\d{2}):(\\d{2}):(\\d{2})(?:\\.(\\d+))?(Z|[+-]\\d{2}:\\d{2})$/.exec(value);
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?(Z|[+-]\d{2}:\d{2})$/.exec(value);
   if (!match) return false;
 
   const year = Number(match[1]);
