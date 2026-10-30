@@ -50,6 +50,10 @@ jobs:
         env:
           RUPAYKG_RUN_DUAL_LEDGER_TESTS: "1"
         run: node scripts/test-actual-migration-runner.mjs
+      - name: Migration history preflight rejects conflicts before SQL (disposable PostgreSQL)
+        env:
+          RUPAYKG_RUN_MIGRATION_HISTORY_TESTS: "1"
+        run: node_modules/.bin/tsx scripts/test-migration-history-preflight.ts
       - name: Browser smoke test production web build
         shell: bash
         run: |
