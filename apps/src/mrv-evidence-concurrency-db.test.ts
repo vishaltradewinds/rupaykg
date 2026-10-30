@@ -121,6 +121,12 @@ async function performUse(client: PoolClient, kind: UseKind, f: Fixture, nonce: 
       [f.credentialId, createHash("sha256").update(nonce).digest("hex"), f.organizationId, f.foreignOrganizationId, f.reviewerId],
     );
   } else {
+    // Settlement requires a registry-backed current owner; do not fabricate ownership
+    // through settlement fields alone. Seed the fixture's authoritative issuance event.
+    await client.query(
+      "insert into registry_events(credential_id,event_type,event_hash,to_owner_id,recorded_by_identity_id) values($1,'ISSUED',$2,$3,$4)",
+      [f.credentialId, createHash("sha256").update(`registry-issue-${nonce}`).digest("hex"), f.organizationId, f.reviewerId],
+    );
     // The settlement lifecycle intentionally only permits creation in CREATED/ELIGIBLE.
     // Exercise the guarded value-bearing transition separately, in the same transaction.
     const settlement = await client.query<{ id: string }>(
