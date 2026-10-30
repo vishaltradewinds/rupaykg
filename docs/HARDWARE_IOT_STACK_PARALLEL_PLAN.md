@@ -132,3 +132,14 @@ These are starting points for dated applicability review, not evidence that a se
 - Procurement, physical connection, field testing, certification, government acceptance and production deployment: not claimed or authorized.
 
 **Definition of done:** a real, authorized instrument is enrolled and approved under the exact model/parameter contract; source data is securely acquired and replay-safe; calibration and evidence lineage are verified; the canonical MRV path accepts only admissible measurements; offline/fault/security/tenant tests pass; site acceptance and independent Shakti release gates are signed. Until then, production remains HOLD.
+
+
+## Resume checkpoint — 2026-10-30 08:37 UTC
+
+- Reopened the canonical parallel branch `hardware/iot-stack-parallel-2026-10-30` and confirmed the workstream already has a dedicated PR (#128). Do not continue the separate `hardware/iot-stack-foundation-2026-10-30` documentation branch as the primary implementation path; it is redundant and must not be merged without reconciliation.
+- Rechecked PR #128's recorded commit `21d39d2e26ef2331d108e461a6e8935c4b7fcbba`: GitHub Actions CI run #3281 completed with conclusion **success** for that commit. This validates that commit only; recheck current PR head and exact-head CI before merge.
+- Current repo findings: main `package.json` build chain contains the hardware-edge package only on the PR branch; README/main does not establish that this work is merged or deployed.
+- Keep #47, #49, #51 and #59 as coordinated draft dependencies. In particular, #49/#51 overlap in approval routes and migrations. No duplicate approval schema, route, evidence store, or protocol-specific driver is to be introduced here.
+- Immediate next task: refresh current PR heads and review gates, then expand only non-overlapping synthetic acceptance tests for payload identity/digest, invalid timestamp ordering, calibration state, authorization/clock flags, and malformed input. Stateful replay/sequence checks must be tested at the canonical ingestion boundary, not claimed by this stateless validator.
+- Physical interface and BOM remain HOLD until exact instrument make/model/manual, protocol/electrical specification, site activity and monitoring-methodology boundary are supplied and reviewed.
+- No production deployment, database mutation, physical device connection, procurement or hardware certification was performed.
