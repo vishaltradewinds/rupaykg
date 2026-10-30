@@ -138,6 +138,9 @@ test("real government inbox worker obeys PostgreSQL status constraints and prese
     assert.equal(oldSchemaResult.retried, 1);
     const oldState = await pool.query("select status from async_mirror_inbox where id=$1", [oldSchemaId]);
     assert.equal(oldState.rows[0]?.status, "RETRY");
+    // Keep the historical-schema retry out of the immediately following run so
+    // the second assertion deterministically exercises the corrected-schema row.
+    await pool.query("update async_mirror_inbox set next_attempt_at=now() + interval '1 hour' where id=$1", [oldSchemaId]);
 
     // Apply the exact proposed forward-migration source to this disposable schema.
     // This validates the migration's SQL and the real worker together; it does
