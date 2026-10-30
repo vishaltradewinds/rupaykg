@@ -2,6 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
 import { Pool, type PoolClient } from "pg";
+import Fastify from "fastify";
+import { issueOpaqueToken } from "./auth.js";
+import { registerEvidenceVaultRoutes } from "./evidence-vault-routes.js";
+import { registerMrvInstrumentRoutes } from "./mrv-instrument-routes.js";
 
 const url = process.env.DATABASE_URL;
 const enabled = process.env.RUPAYKG_RUN_DB_INTEGRATION_TESTS === "1";
@@ -16,6 +20,10 @@ type Fixture = {
   instrumentId: string;
   evidenceId: string;
   artifactId: string;
+  meitySha256: string;
+  calibrationEvidenceId: string;
+  calibrationArtifactId: string;
+  calibrationSha256: string;
   credentialId: string;
 };
 
@@ -60,6 +68,75 @@ test("PostgreSQL serializes instrument approval against evidence rejection on tw
     await exerciseApprovalRace(pool, "approval-first");
     await exerciseApprovalRace(pool, "rejection-first");
   } finally {
+    await pool.end();
+  }
+});
+
+test("HTTP routes reject stale evidence and refuse MRV instrument approval", {
+  skip: !url || !enabled,
+  timeout: 120_000,
+}, async () => {
+  assert.ok(url);
+  const pool = new Pool({
+    connectionString: url,
+    max: 6,
+    application_name: "rupaykg-mrv-route-integration-test",
+    ssl: process.env.DATABASE_SSL === "false" ? undefined : { rejectUnauthorized: false },
+  });
+  const app = Fastify({ logger: false });
+  try {
+    const suffix = randomUUID();
+    const fixture = await createFixture(pool, suffix);
+    await pool.query("update mrv_instruments set approval_status='HOLD' where id=$1", [fixture.instrumentId]);
+    const token = issueOpaqueToken();
+    await pool.query("update identities set status='VERIFIED' where id=$1", [fixture.reviewerId]);
+    const role = await pool.query<{id:string}>(
+      "insert into roles(organization_id,name,permissions) values($1,$2,'[\"VERIFY_EVIDENCE\",\"evidence:review\",\"guardian:operate\"]'::jsonb) returning id",
+      [fixture.organizationId, `MRV-ROUTE-REVIEWER-${suffix}`],
+    );
+    await pool.query("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED')", [fixture.reviewerId, fixture.organizationId, role.rows[0]!.id]);
+    await pool.query("insert into identity_sessions(identity_id,token_hash,expires_at) values($1,$2,now()+interval '15 minutes')", [fixture.reviewerId, createHash("sha256").update(token).digest("hex")]);
+    await registerEvidenceVaultRoutes(app, pool);
+    await registerMrvInstrumentRoutes(app, pool);
+    const headers = { authorization: `Bearer ${token}`, "x-rupaykg-organization-id": fixture.organizationId };
+    const rejection = await app.inject({
+      method: "POST",
+      url: `/api/v1/evidence-vault/${fixture.evidenceId}/review`,
+      headers,
+      payload: { decision: "REJECTED", rationale: "Route-level integration revocation test" },
+    });
+    assert.equal(rejection.statusCode, 200, rejection.body);
+    assert.equal(rejection.json().data.status, "REJECTED");
+    const future = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString();
+    const approval = await app.inject({
+      method: "POST",
+      url: `/api/v1/mrv/instruments/${fixture.instrumentId}/review`,
+      headers,
+      payload: {
+        decision: "VERIFIED", note: "Route-level stale-evidence fail-closed test",
+        meityCertificateId: "MEITY-CONC-TEST", meityIssuer: "Test authority",
+        meityCertificateScope: "Exact model/SKU revision", meityVerificationUrl: "https://official.example.gov/test",
+        meityEvidenceReference: "evidence://meity-test", meityEvidenceSha256: fixture.meitySha256,
+        meityEvidenceArtifactVersionId: fixture.artifactId, meityVerifiedAt: new Date().toISOString(),
+        meityValidityBasis: "VALID_UNTIL", meityValidUntil: future, calibrationRequired: true,
+        calibrationStatus: "VERIFIED", calibrationCertificateId: "CAL-CONC-TEST",
+        calibrationEvidenceReference: "evidence://cal-test", calibrationEvidenceSha256: fixture.calibrationSha256,
+        calibrationEvidenceArtifactVersionId: fixture.calibrationArtifactId, calibrationLab: "Traceable test lab",
+        calibrationTraceability: "Test national standard traceability", calibrationUncertainty: 0.2,
+        calibrationValidUntil: future, securityReviewStatus: "NOT_APPLICABLE_WITH_JUSTIFICATION",
+        securityNotApplicableReason: "Non-firmware test instrument",
+      },
+    });
+    assert.equal(approval.statusCode, 409, approval.body);
+    assert.equal(approval.json().code, "MRV_INSTRUMENT_REVIEW_BLOCKED");
+    const state = await pool.query<{ evidence_status: string; approval_status: string }>(
+      "select e.status::text evidence_status,i.approval_status from evidence e cross join mrv_instruments i where e.id=$1 and i.id=$2",
+      [fixture.evidenceId, fixture.instrumentId],
+    );
+    assert.equal(state.rows[0]?.evidence_status, "REJECTED");
+    assert.equal(state.rows[0]?.approval_status, "HOLD");
+  } finally {
+    await app.close();
     await pool.end();
   }
 });
@@ -360,7 +437,7 @@ async function createFixture(pool: Pool, suffix: string): Promise<Fixture> {
       [activityId, organizationId, verificationId],
     )).rows[0]!.id;
 
-    return { organizationId, foreignOrganizationId, activityId, identityId, reviewerId, instrumentId, evidenceId: meity.evidenceId, artifactId: meity.id, credentialId };
+    return { organizationId, foreignOrganizationId, activityId, identityId, reviewerId, instrumentId, evidenceId: meity.evidenceId, artifactId: meity.id, meitySha256: meity.sha256, calibrationEvidenceId: calibration.evidenceId, calibrationArtifactId: calibration.id, calibrationSha256: calibration.sha256, credentialId };
   } finally {
     c.release();
   }
