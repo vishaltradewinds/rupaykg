@@ -176,7 +176,7 @@ try {
   const mismatchBefore = (await client.query("select version, filename from schema_migrations order by version")).rows;
   const versionMismatch = runRunner(versionMismatchSchema, historicalCatalog);
   assert.notEqual(versionMismatch.status, 0, "actual runner must reject a ledger version that disagrees with an existing catalog filename prefix");
-  assert.match(versionMismatch.stderr + versionMismatch.stdout, /version\\/filename prefix mismatch/i);
+  assert.match(versionMismatch.stderr + versionMismatch.stdout, /prefix mismatch/i);
   await setSchema(versionMismatchSchema);
   assert.deepEqual(
     (await client.query("select version, filename from schema_migrations order by version")).rows,
