@@ -101,10 +101,11 @@ export async function registerMrvInstrumentRoutes(app: FastifyInstance, pool: Po
       return reply.code(400).send({ error: "decision must be VERIFIED, HOLD, EXPIRED or REJECTED and note is required", code: "MRV_INSTRUMENT_REVIEW_INVALID" });
     }
     try {
-      const current = await pool.query<{ id: string; organization_id: string; approval_status: string; firmware_version: string | null; firmware_support_until: Date | string | null }>("select id,organization_id,approval_status,firmware_version,firmware_support_until from mrv_instruments where id=$1", [instrumentId]);
+      const current = await pool.query<{ id: string; organization_id: string; approval_status: string; registered_by_identity_id: string; firmware_version: string | null; firmware_support_until: Date | string | null }>("select id,organization_id,approval_status,registered_by_identity_id,firmware_version,firmware_support_until from mrv_instruments where id=$1", [instrumentId]);
       const row = current.rows[0];
       if (!row) return reply.code(404).send({ error: "MRV instrument not found", code: "MRV_INSTRUMENT_NOT_FOUND" });
       if (!await canManageInstrument(pool, auth, row.organization_id)) return reply.code(403).send({ error: "MRV instrument review permission required", code: "MRV_INSTRUMENT_PERMISSION_REQUIRED" });
+      if (decision === "VERIFIED" && row.registered_by_identity_id === auth.identityId) return reply.code(403).send({ error: "A different authorized reviewer must verify an instrument registered by this identity", code: "MRV_INSTRUMENT_SEPARATION_OF_DUTIES_REQUIRED" });
       if (row.approval_status === "VERIFIED") {
         if (decision === "VERIFIED") return reply.code(200).send({ source: "postgresql", syntheticData: false, replay: true, instrumentId, approvalStatus: "VERIFIED" });
       }
