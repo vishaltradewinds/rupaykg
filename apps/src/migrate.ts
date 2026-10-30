@@ -104,11 +104,24 @@ async function main(): Promise<void> {
       process.env.RUPAYKG_RUN_DUAL_LEDGER_TESTS === "1"
       ? process.env.RUPAYKG_TEST_MIGRATIONS_DIR
       : undefined;
-    const migrationDir = testMigrationDir
-      ? path.resolve(testMigrationDir)
-      : candidates.find((candidate) => existsSync(candidate));
+    let migrationDir: string | undefined;
+    if (testMigrationDir) {
+      migrationDir = path.resolve(testMigrationDir);
+    } else {
+      for (const candidate of candidates) {
+        try {
+          const entries = await readdir(candidate);
+          if (entries.some((name) => /^\\d+_.+\\.sql$/.test(name))) {
+            migrationDir = candidate;
+            break;
+          }
+        } catch {
+          // Try the next supported source/container layout.
+        }
+      }
+    }
     if (!migrationDir || !existsSync(migrationDir)) {
-      throw new Error(`Migration directory not found. Checked: ${[testMigrationDir, ...candidates].filter(Boolean).join(", ")}`);
+      throw new Error(`MIGRATION_CATALOG_EMPTY: no numbered SQL migration directory found. Checked: ${[testMigrationDir, ...candidates].filter(Boolean).join(", ")}`);
     }
 
     await runMigrations(pool, migrationDir);
