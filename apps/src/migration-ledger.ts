@@ -1,10 +1,67 @@
 export type AppliedMigrationRecord = { version: string; filename: string };
 
-/**
- * Refuse to apply new migrations when the ledger references a migration file
- * absent from the current release. This commonly indicates a renamed or
- * removed migration and requires an explicit, reviewed reconciliation.
- */
+export type MigrationHistoryConflict = {
+  version: string;
+  filename: string;
+  reason: "SOURCE_MISSING" | "VERSION_FILENAME_MISMATCH";
+};
+
+/** Pure canonical migration-history checks. This module performs no I/O. */
+export function findMigrationHistoryConflicts(
+  records: readonly AppliedMigrationRecord[],
+  availableFilenames: readonly string[],
+): MigrationHistoryConflict[] {
+  const available = new Set(availableFilenames);
+  const conflicts: MigrationHistoryConflict[] = [];
+  for (const record of records) {
+    if (!available.has(record.filename)) {
+      conflicts.push({ ...record, reason: "SOURCE_MISSING" });
+      continue;
+    }
+    const match = /^(\\d+)_.*\\.sql$/.exec(record.filename);
+    if (!match || record.version !== match[1]) {
+      conflicts.push({ ...record, reason: "VERSION_FILENAME_MISMATCH" });
+    }
+  }
+  return conflicts;
+}
+
+/** A release must never contain two files claiming the same numeric version. */
+export function findMigrationCatalogVersionConflicts(availableFilenames: readonly string[]): string[] {
+  const byVersion = new Map<string, string[]>();
+  for (const filename of availableFilenames) {
+    const match = /^(\\d+)_.*\\.sql$/.exec(filename);
+    if (!match) continue;
+    const files = byVersion.get(match[1]) ?? [];
+    files.push(filename);
+    byVersion.set(match[1], files);
+  }
+  return [...byVersion.entries()]
+    .filter(([, files]) => files.length > 1)
+    .map(([version, files]) => `${version}:${files.sort().join("|")}`);
+}
+
+/** Fail closed on every history/catalogue conflict before any migration SQL. */
+export function assertMigrationHistoryConsistent(
+  records: readonly AppliedMigrationRecord[],
+  availableFilenames: readonly string[],
+): void {
+  const catalogConflicts = findMigrationCatalogVersionConflicts(availableFilenames);
+  if (catalogConflicts.length) {
+    throw new Error(
+      `MIGRATION_HISTORY_UNRESOLVED: migration catalog contains conflicting version prefixes: ${catalogConflicts.join(", ")}`,
+    );
+  }
+  const conflicts = findMigrationHistoryConflicts(records, availableFilenames);
+  if (conflicts.length) {
+    const detail = conflicts.map(({ version, filename, reason }) => `${version}:${filename}:${reason}`).join(", ");
+    throw new Error(
+      `MIGRATION_HISTORY_UNRESOLVED: reconcile the applied migration ledger before applying SQL: ${detail}`,
+    );
+  }
+}
+
+/** @deprecated Compatibility wrapper; new callers should use the canonical contract. */
 export function findOrphanedMigrationRecords(
   records: readonly AppliedMigrationRecord[],
   availableFilenames: readonly string[],
@@ -13,43 +70,20 @@ export function findOrphanedMigrationRecords(
   return records.filter((record) => !available.has(record.filename));
 }
 
-/**
- * A ledger version must exactly match the numeric prefix of its recorded
- * filename. A mismatch can otherwise make the runner re-apply a migration
- * whose source file is present but recorded under the wrong version.
- */
+/** @deprecated Compatibility wrapper; new callers should use the canonical contract. */
 export function findMismatchedMigrationVersions(
   records: readonly AppliedMigrationRecord[],
 ): AppliedMigrationRecord[] {
   return records.filter((record) => {
-    const match = /^(\d+)_.*\.sql$/.exec(record.filename);
+    const match = /^(\\d+)_.*\\.sql$/.exec(record.filename);
     return !match || record.version !== match[1];
   });
 }
 
+/** @deprecated Compatibility wrapper; new callers should use the canonical contract. */
 export function assertNoOrphanedMigrationRecords(
   records: readonly AppliedMigrationRecord[],
   availableFilenames: readonly string[],
 ): void {
-  const orphaned = findOrphanedMigrationRecords(records, availableFilenames);
-  if (orphaned.length > 0) {
-    const details = orphaned
-      .map(({ version, filename }) => `${version} (${filename})`)
-      .join(", ");
-    throw new Error(
-      `Migration ledger references files absent from this release: ${details}. ` +
-      "Stop before applying migrations and complete a reviewed migration-history reconciliation.",
-    );
-  }
-
-  const mismatched = findMismatchedMigrationVersions(records);
-  if (mismatched.length > 0) {
-    const details = mismatched
-      .map(({ version, filename }) => `${version} records ${filename} (expected version ${/^(\d+)_/.exec(filename)?.[1] ?? "a numeric filename prefix"})`)
-      .join(", ");
-    throw new Error(
-      `Migration ledger version/filename prefix mismatch: ${details}. ` +
-      "Stop before applying migrations and complete a reviewed migration-history reconciliation.",
-    );
-  }
+  assertMigrationHistoryConsistent(records, availableFilenames);
 }
