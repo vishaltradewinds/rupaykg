@@ -24,18 +24,6 @@ begin
     return false;
   end if;
 
-  -- Explicitly synthetic DB fixtures are not application MRV provenance.
-  if exists (
-    select 1 from credentials c
-    join mrv_provenance_events m
-      on m.activity_id = c.activity_id
-     and m.verification_id = c.verification_id
-   where c.id = p_credential_id
-     and m.metadata->>'testFixture' = 'true'
-  ) then
-    return true;
-  end if;
-
   -- Lock in the same instrument -> evidence order used by credential issuance
   -- and evidence-vault review. Locks remain held until the caller commits.
   perform i.id
