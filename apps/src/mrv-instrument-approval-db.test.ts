@@ -284,6 +284,37 @@ test("PostgreSQL enforces MRV instrument approval evidence and append-only decis
       [activityId, validMeasurement.rows[0]!.id],
     ), /MRV_INPUT_IMMUTABLE_AFTER_SUBMISSION/i);
 
+    // Existing credentials must not be transferred or settled when evidence is later rejected.
+    const credentialId = (await client.query<{ id: string }>(
+      "insert into credentials(activity_id,issuer_organization_id,trust_root_id,status,verification_id) values($1,$2,'MRV-TEST-ROOT','DRAFT',$3) returning id",
+      [activityId, organizationId, verificationId],
+    )).rows[0]!.id;
+    const evidenceCurrentBeforeRejection = await client.query<{ current: boolean }>(
+      "select credential_has_current_mrv_instrument_evidence($1) as current",
+      [credentialId],
+    );
+    assert.equal(evidenceCurrentBeforeRejection.rows[0]?.current, true);
+
+    await client.query(
+      "insert into evidence_artifact_reviews(evidence_id,artifact_version_id,reviewer_identity_id,decision,rationale) values($1,$2,$3,'REJECTED','Regression: later rejection blocks registry use')",
+      [meityArtifact.evidenceId, meityArtifact.id, reviewerIdentityId],
+    );
+    const evidenceCurrentAfterRejection = await client.query<{ current: boolean }>(
+      "select credential_has_current_mrv_instrument_evidence($1) as current",
+      [credentialId],
+    );
+    assert.equal(evidenceCurrentAfterRejection.rows[0]?.current, false);
+
+    await rejectsInSavepoint(client, () => client.query(
+      "insert into registry_events(credential_id,event_type,event_hash,from_owner_id,to_owner_id) values($1,'TRANSFERRED',$2,$3,$4)",
+      [credentialId, "f".repeat(64), organizationId, foreignOrganizationId],
+    ), /REGISTRY_MRV_EVIDENCE_STALE/i);
+
+    await rejectsInSavepoint(client, () => client.query(
+      "insert into settlements(credential_id,payer_id,payee_id,amount,currency,status) values($1,$2,$3,1,'INR','SETTLED')",
+      [credentialId, organizationId, foreignOrganizationId],
+    ), /SETTLEMENT_MRV_EVIDENCE_STALE/i);
+
     await client.query("rollback");
   } catch (error) {
     await client.query("rollback");
