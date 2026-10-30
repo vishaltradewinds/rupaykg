@@ -85,6 +85,15 @@ test("PostgreSQL enforces MRV instrument approval evidence and append-only decis
       [instrumentId.id],
     ), /immutable/i);
 
+    await client.query("savepoint verified_identity_immutability");
+    await client.query("update mrv_instruments set approval_status='HOLD',reviewed_by_identity_id=$2,reviewed_at=now(),review_note='temporary hold for immutability test' where id=$1", [instrumentId.id, reviewerId]);
+    await rejectsInSavepoint(client, () => client.query(
+      "update mrv_instruments set model='substituted after hold' where id=$1",
+      [instrumentId.id],
+    ), /immutable/i);
+    await client.query("rollback to savepoint verified_identity_immutability");
+    await client.query("release savepoint verified_identity_immutability");
+
     await rejectsInSavepoint(client, () => client.query(
       "update mrv_instrument_decisions set decision_note='tampered' where instrument_id=$1",
       [instrumentId.id],
