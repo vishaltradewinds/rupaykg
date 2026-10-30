@@ -22,6 +22,13 @@ declare
   instrument_row record;
   activity_organization_id uuid;
 begin
+  if tg_op = 'DELETE' then
+    if old.mrv_instrument_id is not null then
+      raise exception 'instrument-bound measurements cannot be deleted; create a superseding measurement and preserve the original record';
+    end if;
+    return old;
+  end if;
+
   -- Once a reading has an instrument binding, preserve that provenance permanently.
   -- Corrections must be represented as a new measurement, not by unlinking or rebinding it.
   if tg_op = 'UPDATE'
@@ -108,4 +115,9 @@ $$;
 create trigger measurements_mrv_instrument_binding_guard
 before insert or update of activity_id, value, unit, method, source, measured_at, quality_status, metadata, mrv_instrument_id, parameter_code
 on measurements
+for each row execute function guard_measurement_mrv_instrument_binding();
+
+
+create trigger measurements_mrv_instrument_binding_no_delete
+before delete on measurements
 for each row execute function guard_measurement_mrv_instrument_binding();
