@@ -151,3 +151,12 @@ These are starting points for dated applicability review, not evidence that a se
 - Test change commit: `1c7eef26ad9563a11de25e7a2e065b5bf6183637`.
 - Exact-head CI for this new commit has not yet appeared in the workflow/status query; do not claim the new tests pass until CI or an isolated test run confirms them.
 - These tests validate stateless adapter-output shape only. Duplicate/replay detection, monotonic sequence enforcement across events, tenant/facility authorization, exact-model approval and calibration verification remain canonical server-side acceptance responsibilities.
+
+### Follow-on validation hardening — 2026-10-30 08:39 UTC
+
+- Tightened `validTime` in `packages/hardware-edge/src/index.ts`: observations must use a full timestamp with an explicit timezone (UTC `Z` or numeric offset). Date-only and timezone-naive values are ambiguous and are quarantined.
+- Added tests for date-only, timezone-naive, space-separated timestamps, and a valid RFC3339 offset timestamp.
+- Implementation commit: `3d7152f36cb9d447fbc1f45943527a67527e1fd6`.
+- Test commit: `eaca8bcd772d32098d1c3bf199535e83ab5983ce`.
+- Exact-head CI for this follow-on batch is not yet visible. Treat test outcome as **PENDING**, not passed.
+- Scope remains stateless payload validation. Event replay, duplicate ID/payload conflicts, monotonic sequence across observations, tenant/site authorization, model approval and evidence-vault verification must be enforced at the canonical server boundary.
