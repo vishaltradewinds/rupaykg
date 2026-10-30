@@ -8,13 +8,13 @@ import { assertMigrationCatalogConsistent, assertMigrationHistoryConsistent } fr
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) throw new Error("DATABASE_URL is required");
 
-// Resolve and validate the release catalogue before opening a database connection or issuing DDL.
+// Validate the release catalogue before opening a database connection or issuing DDL.
 const here = path.dirname(fileURLToPath(import.meta.url));
 const candidates = [path.resolve(here, "../../migrations"), path.resolve(here, "../../../migrations")];
 const migrationDir = candidates.find((candidate) => existsSync(candidate));
-if (!migrationDir) throw new Error(\`Migration directory not found. Checked: \${candidates.join(", ")}\`);
+if (!migrationDir) throw new Error("Migration directory not found. Checked: " + candidates.join(", "));
 const files = (await readdir(migrationDir))
-  .filter((name) => /^\d+_.+\.sql$/.test(name))
+  .filter((name) => /^\\d+_.+\\.sql$/.test(name))
   .sort();
 assertMigrationCatalogConsistent(files);
 
@@ -25,13 +25,10 @@ const pool = new Pool({
 });
 
 try {
-  await pool.query(\`
-    create table if not exists schema_migrations (
-      version text primary key,
-      filename text not null,
-      applied_at timestamptz not null default now()
-    )
-  \`);
+  await pool.query(
+    "create table if not exists schema_migrations (" +
+    "version text primary key, filename text not null, applied_at timestamptz not null default now())"
+  );
 
   const recorded = await pool.query<{ version: string; filename: string }>(
     "select version, filename from schema_migrations order by version",
@@ -46,7 +43,7 @@ try {
     );
     if (existing.rows[0]) {
       if (existing.rows[0].filename !== filename) {
-        throw new Error(\`Migration version \${version} is already recorded as \${existing.rows[0].filename}, not \${filename}\`);
+        throw new Error("Migration version " + version + " is already recorded as " + existing.rows[0].filename + ", not " + filename);
       }
       continue;
     }
@@ -61,16 +58,16 @@ try {
         [version, filename],
       );
       await client.query("commit");
-      console.log(\`Applied \${filename}\`);
+      console.log("Applied " + filename);
     } catch (error) {
       await client.query("rollback");
-      throw new Error(\`Migration \${filename} failed\`, { cause: error });
+      throw new Error("Migration " + filename + " failed", { cause: error });
     } finally {
       client.release();
     }
   }
 
-  console.log(\`Database migrations are current (\${files.length} files).\`);
+  console.log("Database migrations are current (" + files.length + " files).");
 } finally {
   await pool.end();
 }
