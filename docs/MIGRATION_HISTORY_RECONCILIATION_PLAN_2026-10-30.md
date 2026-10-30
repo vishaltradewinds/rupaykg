@@ -133,3 +133,29 @@ The async migration sources in branch `shakti/migration-runner-advisory-lock-202
 - **Staging schema:** the previously observed inbox/event tables and statuses are consistent with the async migration family, but schema similarity alone does not prove SQL byte identity.
 - **Release decision:** continue fail-closed. No SQL replay, ledger editing, source restoration to main, migration renumbering, merge, or deployment is authorized by this evidence.
 
+
+
+## 9. Render deployment/log correlation — production 096 (read-only, 2026-10-30)
+
+A read-only inspection of Render service `rupaykg` (service ID `srv-daki4d7qj5pc73b8qksg`) established a stronger execution chain than the earlier Git/ledger-only evidence:
+
+- Render event history shows a successful build/deploy initiated for commit `ca8f4100782e13f8d72106187fafc8e1e446214f` at `2026-10-27T13:44:54Z` (build completed at `13:45:43.075Z`; deploy completed at `13:46:30.922Z`). This is the commit containing `migrations/096_verification_authorization_provenance.sql` with blob SHA `258b1f4534efbf915688f78aa84d4ec24a47cbc0`.
+- Render application logs record `Applied 096_verification_authorization_provenance.sql` at `2026-10-27T13:46:15.075Z`, followed by `Database migrations are current (92 files).` at `13:46:15.943Z`.
+- The Neon production ledger records the same filename/version applied at `2026-10-27T13:46:14.262Z`. The log and ledger timestamps differ by about 0.8 seconds, consistent with the same migration execution (timestamps may be written/logged at different points).
+- Render then started a new build/deploy for removal commit `54a7fe1ceb41b37a68720a71c10a1dd03af30dea` at `13:46:32.414Z`, with deploy completion at `13:48:16.681Z`. Its application logs report `Database migrations are current (91 files).` at `13:47:56.609Z`.
+
+**Revised finding:** the best available evidence now ties the production application of migration 096 to the Render service booting a build of commit `ca8f410...`, rather than leaving the execution path wholly unknown. The sequence is: migration-containing build/deploy; migration applied; removal-commit build/deploy. The earlier statement that execution might have come from a manual or other path is superseded by this deployment/log correlation. However, this still does **not** establish that the migration had required review/approval or that the application was authorized. The removal commit explicitly says the migration was unreviewed. Preserve the deployed/log evidence and seek the PR/review/approval or incident/change record. Do not restore/replay the migration or edit the ledger.
+
+### Production 096 disposition after log correlation
+- Source blob identity: **identified**.
+- Render service deployment commit containing source: **identified**.
+- Runtime log of migration application: **identified** and correlated with ledger timestamp.
+- Approval/change authorization and independent review: **unresolved**.
+- Safe corrective action: **not yet determined**; do not remove columns/functions or replay SQL without impact analysis and approved forward-only remediation.
+
+### Additional read-only schema evidence
+- Both known Neon branches' `schema_migrations` tables contain only `version`, `filename`, and `applied_at`; no checksum/source-artifact digest is stored in the ledger. Thus ledger rows alone cannot cryptographically prove the executed SQL bytes.
+- Production has the four `verifications.authorization_*` columns; staging does not. Staging has the async/AI intake tables and the expected lease/event columns. This is schema-shape corroboration, not a checksum of the SQL that originally ran.
+
+### Remaining work for staging source provenance
+The Render event/log inspection above resolves the production 096 execution path but does not resolve the four staging migrations. Continue searching the pre-2026-10-20 Git objects, CI/deployment artifacts and logs, and change/approval records for the async/AI family. Candidate commits dated 2026-10-25 remain too late to prove the bytes applied on 2026-10-20.
