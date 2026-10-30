@@ -189,23 +189,23 @@ async function exerciseHttpRouteRace(winner: "approval-first" | "rejection-first
     const existing = await pool.query<{
       meity_certificate_id: string; meity_issuer: string; meity_certificate_scope: string;
       meity_verification_url: string; meity_evidence_reference: string; meity_evidence_sha256: string;
-      meity_evidence_artifact_version_id: string; meity_verified_at: Date | string;
-      meity_validity_basis: string; meity_valid_until: Date | string | null; calibration_required: boolean;
+      meity_evidence_artifact_version_id: string; meity_verified_at: string;
+      meity_validity_basis: string; meity_valid_until: string | null; calibration_required: boolean;
       calibration_status: string; calibration_certificate_id: string | null;
       calibration_evidence_reference: string | null; calibration_evidence_sha256: string | null;
       calibration_evidence_artifact_version_id: string | null; calibration_lab: string | null;
       calibration_traceability: string | null; calibration_uncertainty: string | number | null;
-      calibration_valid_until: Date | string | null; security_review_status: string;
+      calibration_valid_until: string | null; security_review_status: string;
       security_evidence_reference: string | null; security_evidence_sha256: string | null;
-      security_evidence_artifact_version_id: string | null; security_reviewed_at: Date | string | null;
+      security_evidence_artifact_version_id: string | null; security_reviewed_at: string | null;
       security_not_applicable_reason: string | null; firmware_version: string | null;
-      firmware_support_until: Date | string | null;
+      firmware_support_until: string | null;
     }>(
-      "select meity_certificate_id,meity_issuer,meity_certificate_scope,meity_verification_url,meity_evidence_reference,meity_evidence_sha256,meity_evidence_artifact_version_id,meity_verified_at,meity_validity_basis,meity_valid_until,calibration_required,calibration_status,calibration_certificate_id,calibration_evidence_reference,calibration_evidence_sha256,calibration_evidence_artifact_version_id,calibration_lab,calibration_traceability,calibration_uncertainty,calibration_valid_until,security_review_status,security_evidence_reference,security_evidence_sha256,security_evidence_artifact_version_id,security_reviewed_at,security_not_applicable_reason,firmware_version,firmware_support_until from mrv_instruments where id=$1",
+      "select meity_certificate_id,meity_issuer,meity_certificate_scope,meity_verification_url,meity_evidence_reference,meity_evidence_sha256,meity_evidence_artifact_version_id,meity_verified_at::text meity_verified_at,meity_validity_basis,meity_valid_until::text meity_valid_until,calibration_required,calibration_status,calibration_certificate_id,calibration_evidence_reference,calibration_evidence_sha256,calibration_evidence_artifact_version_id,calibration_lab,calibration_traceability,calibration_uncertainty,calibration_valid_until::text calibration_valid_until,security_review_status,security_evidence_reference,security_evidence_sha256,security_evidence_artifact_version_id,security_reviewed_at::text security_reviewed_at,security_not_applicable_reason,firmware_version,firmware_support_until::text firmware_support_until from mrv_instruments where id=$1",
       [fixture.instrumentId],
     );
     const evidence = existing.rows[0]!;
-    const asIso = (value: Date | string | null) => value == null ? null : new Date(value).toISOString();
+    const asIso = (value: string | null) => value;
     const approvalRequest = () => app.inject({
       method: "POST",
       url: `/api/v1/mrv/instruments/${fixture.instrumentId}/review`,
