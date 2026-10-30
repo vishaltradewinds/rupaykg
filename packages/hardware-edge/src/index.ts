@@ -3,7 +3,7 @@
  *
  * This package validates adapter output only. It does not read hardware, verify
  * calibration certificates, authenticate a device, persist evidence, or approve
- * MRV eligibility. Those decisions belong to the canonical services and human
+ * MRV eligibility. Those decisions belong to canonical services and human
  * review gates. No protocol-specific adapter is enabled until the exact field
  * instrument manual and interface are known.
  */
@@ -40,12 +40,25 @@ export interface ObservationValidation {
 
 const nonEmpty = (value: unknown): value is string =>
   typeof value === "string" && value.trim().length > 0;
-const validTime = (value: unknown): boolean =>
-  typeof value === "string" && Number.isFinite(Date.parse(value));
+const validTime = (value: unknown): value is string =>
+  typeof value === "string" && value.trim().length > 0 && Number.isFinite(Date.parse(value));
 const validSha256 = (value: unknown): value is string =>
   typeof value === "string" && /^[a-f0-9]{64}$/i.test(value);
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
 
-export function validateEdgeObservation(input: EdgeObservation): ObservationValidation {
+const quarantine = (blockers: string[]): ObservationValidation => ({
+  disposition: "QUARANTINED",
+  blockers,
+});
+
+/**
+ * Runtime validation is deliberately defensive: JSON from a physical adapter is
+ * untrusted even if the caller's TypeScript type claims otherwise.
+ */
+export function validateEdgeObservation(input: unknown): ObservationValidation {
+  if (!isRecord(input)) return quarantine(["INVALID_OBSERVATION_OBJECT"]);
+
   const blockers: string[] = [];
   if (input.schemaVersion !== "rupaykg.edge-observation.v1") blockers.push("UNSUPPORTED_SCHEMA_VERSION");
   for (const [field, value] of Object.entries({
@@ -59,25 +72,53 @@ export function validateEdgeObservation(input: EdgeObservation): ObservationVali
   })) {
     if (!nonEmpty(value)) blockers.push(`MISSING_OR_INVALID_${field.replace(/[A-Z]/g, (m) => `_${m}`).toUpperCase()}`);
   }
+
   if (!validTime(input.observedAt)) blockers.push("INVALID_OBSERVED_AT");
   if (!validTime(input.receivedAt)) blockers.push("INVALID_RECEIVED_AT");
-  if (!Number.isSafeInteger(input.sequence) || input.sequence < 0) blockers.push("INVALID_SEQUENCE");
+  if (validTime(input.observedAt) && validTime(input.receivedAt)
+    && Date.parse(input.receivedAt) < Date.parse(input.observedAt)) {
+    blockers.push("RECEIVED_BEFORE_OBSERVED");
+  }
+  if (!Number.isSafeInteger(input.sequence) || (input.sequence as number) < 0) blockers.push("INVALID_SEQUENCE");
   if (typeof input.value !== "number" || !Number.isFinite(input.value)) blockers.push("INVALID_MEASUREMENT_VALUE");
   if (!validSha256(input.rawPayloadSha256)) blockers.push("INVALID_RAW_PAYLOAD_SHA256");
-  if (!Array.isArray(input.qualityFlags) || input.qualityFlags.some((flag) => !nonEmpty(flag))) blockers.push("INVALID_QUALITY_FLAGS");
-  if (input.authenticationState !== "AUTHENTICATED") blockers.push("DEVICE_NOT_AUTHENTICATED");
-  if (input.clockQuality !== "TRUSTED") blockers.push("DEVICE_CLOCK_UNCERTAIN");
+  if (input.firmwareVersion !== null && !nonEmpty(input.firmwareVersion)) blockers.push("INVALID_FIRMWARE_VERSION");
+  if (!Array.isArray(input.qualityFlags) || input.qualityFlags.some((flag) => !nonEmpty(flag))) {
+    blockers.push("INVALID_QUALITY_FLAGS");
+  }
+  if (!["AUTHENTICATED", "UNVERIFIED", "REVOKED"].includes(String(input.authenticationState))) {
+    blockers.push("INVALID_AUTHENTICATION_STATE");
+  } else if (input.authenticationState !== "AUTHENTICATED") {
+    blockers.push("DEVICE_NOT_AUTHENTICATED");
+  }
+  if (!["TRUSTED", "UNCERTAIN"].includes(String(input.clockQuality))) {
+    blockers.push("INVALID_CLOCK_QUALITY");
+  } else if (input.clockQuality !== "TRUSTED") {
+    blockers.push("DEVICE_CLOCK_UNCERTAIN");
+  }
+  if (!["VERIFIED_CURRENT", "MISSING", "EXPIRED", "NOT_APPLICABLE_WITH_JUSTIFICATION"]
+    .includes(String(input.calibrationState))) {
+    blockers.push("INVALID_CALIBRATION_STATE");
+  }
 
-  if (blockers.length) return { disposition: "QUARANTINED", blockers };
+  if (blockers.length) return quarantine(blockers);
 
-  if (input.calibrationState === "MISSING" || input.calibrationState === "EXPIRED"
-    || (input.calibrationState === "VERIFIED_CURRENT" && !nonEmpty(input.calibrationRecordId))) {
+  const calibrationState = input.calibrationState as CalibrationState;
+  if (calibrationState === "MISSING" || calibrationState === "EXPIRED"
+    || (calibrationState === "VERIFIED_CURRENT" && !nonEmpty(input.calibrationRecordId))) {
     return { disposition: "CALIBRATION_BLOCKED", blockers: ["CALIBRATION_EVIDENCE_MISSING_OR_EXPIRED"] };
   }
-  if (input.calibrationState === "NOT_APPLICABLE_WITH_JUSTIFICATION" && !nonEmpty(input.calibrationRecordId)) {
-    // The justification is expected to be resolved by the canonical instrument register.
-    return { disposition: "CALIBRATION_BLOCKED", blockers: ["CALIBRATION_NOT_APPLICABLE_REQUIRES_REVIEWED_REGISTER_RECORD"] };
+  if (input.calibrationRecordId !== null && !nonEmpty(input.calibrationRecordId)) {
+    return { disposition: "CALIBRATION_BLOCKED", blockers: ["INVALID_CALIBRATION_RECORD_ID"] };
+  }
+  if (calibrationState === "NOT_APPLICABLE_WITH_JUSTIFICATION" && !nonEmpty(input.calibrationRecordId)) {
+    // The canonical instrument register must independently verify the rationale.
+    return {
+      disposition: "CALIBRATION_BLOCKED",
+      blockers: ["CALIBRATION_NOT_APPLICABLE_REQUIRES_REVIEWED_REGISTER_RECORD"],
+    };
   }
 
+  // This is a local shape check only, never an authoritative approval.
   return { disposition: "READY_FOR_REVIEW", blockers: [] };
 }
