@@ -6,6 +6,10 @@ test("catalog accepts unique numeric prefixes", () => {
   assert.doesNotThrow(() => assertMigrationCatalogConsistent(["088_first.sql", "089_second.sql"]));
 });
 
+test("catalog rejects an empty migration set", () => {
+  assert.throws(() => assertMigrationCatalogConsistent([]), /MIGRATION_CATALOG_EMPTY/);
+});
+
 test("catalog rejects duplicate numeric prefixes", () => {
   assert.deepEqual(findMigrationCatalogVersionConflicts(["088_first.sql", "088_second.sql"]), ["088:088_first.sql|088_second.sql"]);
   assert.throws(() => assertMigrationCatalogConsistent(["088_first.sql", "088_second.sql"]), /MIGRATION_CATALOG_CONFLICT/);
