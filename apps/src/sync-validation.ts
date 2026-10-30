@@ -24,9 +24,11 @@ function isStrictTimestamp(value: string): boolean {
   const second = Number(match[6]);
   const zone = match[8]!;
 
-  if (month < 1 || month > 12 || hour > 23 || minute > 59 || second > 59) return false;
-  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
-  if (day < 1 || day > daysInMonth) return false;
+  if (year < 1 || month < 1 || month > 12 || hour > 23 || minute > 59 || second > 59) return false;
+  // Avoid Date.UTC's special handling of years 0000–0099 as 1900–1999.
+  const leapYear = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const monthLengths = [31, leapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  if (day < 1 || day > monthLengths[month - 1]!) return false;
 
   if (zone !== "Z") {
     const offsetHour = Number(zone.slice(1, 3));
