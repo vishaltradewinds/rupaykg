@@ -184,7 +184,7 @@ try {
     "version-prefix mismatch must fail before any migration ledger changes",
   );
   assert.equal(
-    (await client.query("select to_regclass($1) is not null as yes", [versionMismatchSchema + ".organizations"])).rows[0].yes,
+    (await client.query("select to_regclass($1) is not null as yes", [versionMismatchSchema + ".ai_intake_rate_limits"])).rows[0].yes,
     false,
     "version-prefix mismatch must fail before applying pending migration SQL",
   );
