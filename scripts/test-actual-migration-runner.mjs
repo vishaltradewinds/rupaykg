@@ -145,7 +145,27 @@ try {
   assert.match(stageHistory.stderr + stageHistory.stdout, /20261022_async_mirror_inbox\.sql/);
   assert.match(stageHistory.stderr + stageHistory.stdout, /20261025_ai_evidence_intake_jobs\.sql/);
 
-  // An available catalog file recorded under the wrong ledger version must fail\n  // during full-history preflight, before pending SQL executes.\n  const mismatchCatalog = path.join(temp, "version-mismatch-release");\n  await mkdir(mismatchCatalog);\n  await writeFile(path.join(mismatchCatalog, "001_should_not_run.sql"),\n    "insert into migration_preflight_sentinel(marker) values ('VERSION_MISMATCH_SQL_EXECUTED');\\n", "utf8");\n  await setSchema(versionMismatchSchema);\n  await client.query("create table migration_preflight_sentinel(marker text not null)");\n  await client.query("create table schema_migrations(version text primary key, filename text not null, applied_at timestamptz not null default now())");\n  await client.query("insert into schema_migrations(version,filename) values ('999','001_should_not_run.sql')");\n  const mismatch = runRunner(versionMismatchSchema, mismatchCatalog);\n  assert.notEqual(mismatch.status, 0, "actual runner must reject a catalog filename recorded under the wrong version");\n  assert.match(mismatch.stderr + mismatch.stdout, /MIGRATION_HISTORY_UNRESOLVED/);\n  assert.match(mismatch.stderr + mismatch.stdout, /999:001_should_not_run\\.sql:VERSION_FILENAME_MISMATCH/);\n  await setSchema(versionMismatchSchema);\n  assert.equal((await client.query("select count(*)::int n from migration_preflight_sentinel")).rows[0].n, 0, "version mismatch must fail before pending migration SQL");\n  assert.deepEqual((await client.query("select version,filename from schema_migrations")).rows, [{ version: "999", filename: "001_should_not_run.sql" }], "version mismatch must preserve the original ledger row");\n\n  // Execute the recovered 096 SQL as an isolated disposable-schema acceptance
+  // An available catalog file recorded under the wrong ledger version must fail
+  // during full-history preflight, before pending SQL executes.
+  const mismatchCatalog = path.join(temp, "version-mismatch-release");
+  await mkdir(mismatchCatalog);
+  await writeFile(
+    path.join(mismatchCatalog, "001_should_not_run.sql"),
+    "insert into migration_preflight_sentinel(marker) values ('VERSION_MISMATCH_SQL_EXECUTED');\\n",
+    "utf8",
+  );
+  await setSchema(versionMismatchSchema);
+  await client.query("create table migration_preflight_sentinel(marker text not null)");
+  await client.query("create table schema_migrations(version text primary key, filename text not null, applied_at timestamptz not null default now())");
+  await client.query("insert into schema_migrations(version,filename) values ('999','001_should_not_run.sql')");
+  const mismatch = runRunner(versionMismatchSchema, mismatchCatalog);
+  assert.notEqual(mismatch.status, 0, "actual runner must reject a catalog filename recorded under the wrong version");
+  assert.match(mismatch.stderr + mismatch.stdout, /MIGRATION_HISTORY_UNRESOLVED/);
+  assert.match(mismatch.stderr + mismatch.stdout, /999:001_should_not_run\\.sql:VERSION_FILENAME_MISMATCH/);
+  await setSchema(versionMismatchSchema);
+  assert.equal((await client.query("select count(*)::int n from migration_preflight_sentinel")).rows[0].n, 0, "version mismatch must fail before pending migration SQL");
+  assert.deepEqual((await client.query("select version,filename from schema_migrations")).rows, [{ version: "999", filename: "001_should_not_run.sql" }], "version mismatch must preserve the original ledger row");
+  // Execute the recovered 096 SQL as an isolated disposable-schema acceptance
   // fixture, not as a release migration. Validate authorization binding and snapshot.
   await setSchema(verificationSchema);
   await client.query(`
