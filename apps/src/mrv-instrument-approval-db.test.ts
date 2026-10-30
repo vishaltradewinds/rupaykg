@@ -72,7 +72,19 @@ test("PostgreSQL enforces MRV instrument approval evidence and append-only decis
     await rejectsInSavepoint(client, () => client.query(
       "update measurements set mrv_instrument_id=null,parameter_code=null where id=$1",
       [validMeasurement.rows[0]!.id],
-    ), /instrument-bound measurement provenance is immutable/i);
+    ), /instrument-bound measurement facts and provenance are immutable/i);
+    await rejectsInSavepoint(client, () => client.query(
+      "update measurements set value=3 where id=$1",
+      [validMeasurement.rows[0]!.id],
+    ), /instrument-bound measurement facts and provenance are immutable/i);
+    await rejectsInSavepoint(client, () => client.query(
+      "update measurements set source='rewritten source' where id=$1",
+      [validMeasurement.rows[0]!.id],
+    ), /instrument-bound measurement facts and provenance are immutable/i);
+    await rejectsInSavepoint(client, () => client.query(
+      "update measurements set measured_at=measured_at + interval '1 minute' where id=$1",
+      [validMeasurement.rows[0]!.id],
+    ), /instrument-bound measurement facts and provenance are immutable/i);
 
     await rejectsInSavepoint(client, () => client.query(
       "insert into measurements(activity_id,value,unit,method,source,measured_at,mrv_instrument_id,parameter_code) values($1,2,'m3/h','test','instrument test',now(),$2,'methane_content')",
