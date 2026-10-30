@@ -182,3 +182,40 @@ TRL is evidence-based and provisional. Hardware prototype success alone does not
 ## 11. Definition of done
 
 The hardware/IoT stack is complete only when a real instrument can be securely enrolled, produce a reproducible and authenticated observation, survive offline/replay/failure conditions, preserve immutable source lineage, pass an instrument-specific calibration gate, bind to the correct methodology/activity/custody/site, reach the existing RupayKg MRV workflow, and pass security, legal applicability, site acceptance and independent Shakti review. Until then, status is **ENGINEERING IN PROGRESS / PRODUCTION HOLD**.
+
+
+## 12. Repository conflict and source audit — 2026-10-30
+
+### Existing overlapping work discovered
+
+Before adding runtime code, the parallel workstream inspected the canonical repository's open hardware PRs and changed-file lists:
+
+- **PR #47 — hardware/instrumentation approval register:** documentation and site-evidence intake, instrument-to-MRV acceptance matrix, and a methodology/site-reality hold. Its current record says the Kathonda facility is documented as waste-to-energy mass incineration; it does not establish an active landfill-methane-recovery boundary.
+- **PR #49 — model-specific hardware approval enforcement:** proposes the `mrv_instruments` register, instrument decision history, approval/calibration/security gates, routes and migration changes.
+- **PR #51 — evidence-bound instrument approval and parameter specifications:** extends #49 with evidence-vault artifact-version binding, recomputed hashes/reviewer-state checks, exact instrument-to-parameter binding, range/unit/resolution/accuracy enforcement, and freeze/replay protections.
+- **PR #128 — this parallel stack:** currently documentation-only, isolated on `hardware/iot-stack-parallel-2026-10-30`.
+
+These hardware PRs are reported as open/draft/unmerged in the inspected GitHub records. Their stated CI results are engineering evidence for the specific historical heads cited in those PR descriptions, not proof that the current main branch contains the changes or that a physical site is accepted.
+
+### Verified baseline boundary
+
+- The canonical repository's current `main` contains field synchronization code in `apps/src/sync-routes.ts`, including field-device identity checks, server cursors and organization/geography authorization helpers.
+- Attempts to fetch the instrument-approval implementation and migrations by their PR #49 paths from `main` returned NOT_FOUND. This is consistent with those changes not yet being merged into main; do not treat them as active main-branch runtime behavior.
+- PR #49/#51 already own the proposed hardware approval/calibration/parameter enforcement surface. This workstream must not independently create a second instrument registry, repeat those migrations, or modify shared MRV/sync/evidence files in parallel.
+- The main-branch source inspection is partial: the exact current end-to-end mapping from field sync through canonical measurement, evidence-vault artifact resolution and MRV submission still needs a focused, line-by-line review before runtime implementation.
+
+### Site and methodology gate
+
+The Jabalpur/Kathonda hardware cannot be selected on the assumption that BM WA03.001 landfill methane recovery is the target. The repository's existing hardware PR evidence records the facility as a waste-to-energy mass-incineration operation and states that a separate proposed Bio-CNG project was not yet established as commissioned in the reviewed record. Before selecting a sensor package, the project owner must identify the actual activity boundary and obtain current official/site evidence. Potential methodologies must be checked against the applicable current BEE documents and exact project conditions.
+
+### Decision for this workstream
+
+**Do not implement a competing hardware approval registry.** The next batch is integration reconciliation:
+
+1. Review the exact current heads and changed-file patches of PR #47, #49 and #51; confirm their dependency and migration order.
+2. Trace the current `main` sync envelope, measurement ingestion, evidence-vault artifact contract and MRV submission path.
+3. Produce a conflict map identifying which acceptance criteria are already covered by #47/#49/#51 and which edge/gateway capabilities remain absent.
+4. Keep new work isolated to hardware adapters, edge protocol contracts and bench/HIL acceptance tooling unless maintainers first reconcile the existing PRs.
+5. Do not modify migrations or shared routes until the owner of the overlapping PRs and the canonical evidence-store contract are clear.
+
+**Audit outcome:** architecture direction is confirmed; the overlapping approval work is identified; production hardware choice and runtime implementation remain blocked on integration reconciliation and real instrument/site evidence.
