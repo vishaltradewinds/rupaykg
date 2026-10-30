@@ -139,6 +139,27 @@ describe("runtime acceptance", () => {
     const pending = await make(pendingId, actorToken); assert.equal(pending.status, 403); assert.equal((await body(pending)).code, "DEVICE_FORBIDDEN");
     const accepted = await make(verifiedDeviceId, actorToken); assert.equal(accepted.status, 202); envelopeId = (await body(accepted)).envelope.id;
     const replay = await make(verifiedDeviceId, actorToken); assert.equal(replay.status, 200); assert.equal((await body(replay)).replay, true);
+
+    // A retry may be idempotent only when the logical payload is unchanged.
+    const changedPayload = await request("/api/v1/field-sync/envelopes", { method: "POST", body: JSON.stringify({ idempotencyKey: `runtime-${suffix}`, deviceId: verifiedDeviceId, clientSequence: 1, capturedAt, payload: { ...payload, activityType: "TRANSPORT" } }) }, actorToken);
+    assert.equal(changedPayload.status, 409);
+    assert.equal((await body(changedPayload)).code, "IDEMPOTENCY_CONFLICT");
+
+    // Reusing a device sequence with a different idempotency key must create a conflict,
+    // not a second authoritative envelope or a silent overwrite.
+    const sequenceCollision = await request("/api/v1/field-sync/envelopes", { method: "POST", body: JSON.stringify({ idempotencyKey: `runtime-sequence-conflict-${suffix}`, deviceId: verifiedDeviceId, clientSequence: 1, capturedAt, payload: { ...payload, activityType: "TRANSPORT" } }) }, actorToken);
+    assert.equal(sequenceCollision.status, 409);
+    const sequenceCollisionBody = await body(sequenceCollision);
+    assert.equal(sequenceCollisionBody.code, "CLIENT_SEQUENCE_CONFLICT");
+    assert.ok(typeof sequenceCollisionBody.conflictId === "string");
+    const persisted = await pool.query<{ envelopes: string; conflicts: string }>(
+      `select (select count(*)::text from field_sync_envelopes where device_id=$1 and client_sequence=1) as envelopes,
+              (select count(*)::text from field_sync_conflicts where envelope_id=$2 and conflict_type='CLIENT_SEQUENCE_COLLISION' and resolution_status='OPEN') as conflicts`,
+      [verifiedDeviceId, envelopeId],
+    );
+    assert.equal(persisted.rows[0]?.envelopes, "1");
+    assert.equal(Number(persisted.rows[0]?.conflicts), 1);
+
     const cross = await make(verifiedDeviceId, verifierToken); assert.equal(cross.status, 403);
   });
 
