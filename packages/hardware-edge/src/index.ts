@@ -44,7 +44,7 @@ const validTime = (value: unknown): value is string => {
   // Require a full RFC3339-style timestamp with an explicit timezone; date-only
   // and timezone-naive values are ambiguous across edge devices.
   if (typeof value !== "string") return false;
-  const match = /^(\\d{4})-(\\d{2})-(\\d{2})T(\\d{2}):(\\d{2}):(\\d{2})(?:\\.\\d{1,3})?(Z|([+-])(\\d{2}):(\\d{2}))$/.exec(value);
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,3})?(Z|([+-])(\d{2}):(\d{2}))$/.exec(value);
   if (!match) return false;
   const year = Number(match[1]);
   const month = Number(match[2]);
