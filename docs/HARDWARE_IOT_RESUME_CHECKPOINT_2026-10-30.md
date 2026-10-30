@@ -84,3 +84,39 @@ No physical instrument is selected or connected. No purchase, calibration, field
 - Audit PR #130 head `3d740ce0ad1b5b9b0f2e817fe894ce3a9fc8087d` has completed exact-head CI run #3383 (`41062818695`) successfully. The audit records a migration reconciliation blocker: current main migration catalogue and proposed hardware/evidence migrations differ, and the branch history diverges from main. Do not rebase/merge/apply #49/#51 migrations until the canonical manifest, authorized read-only production/staging ledger/schema evidence, schema fingerprints, removed/duplicate migration analysis and disposable fresh-install/upgrade acceptance are reconciled.
 - PR #49/#51 continue to overlap on instrument approval routes and migrations; #51 also proposes evidence-bound parameter specifications and current-evidence guards. Explicitly select an integration order and independently review the combined diff before integration. Keep both drafts.
 - No actual device model, official exact-model approval packet, calibration evidence, physical bench test, site acceptance, production DB mutation, procurement or deployment has been completed in this batch. Hardware/IoT TRL remains NOT ASSESSED where evidence is insufficient; overall TRL 9 and production certification remain HOLD/OFF.
+
+
+## Live resumption update — 2026-10-30 15:28Z
+
+### Refreshed exact heads and CI evidence
+
+All five related PRs were re-read from GitHub immediately before this checkpoint update. All remain **open, draft, and unmerged**, based on `main`.
+
+| PR | Current head | Exact-head CI | Current decision |
+|---|---|---|---|
+| #47 — approval register | `7812f6f98f1d136604f7100493a3e7749aa85454` | Run #2205 (`40287031621`) success | Documentation/approval register candidate; still needs independent review and integration alignment. |
+| #49 — model-specific approval | `4d606e188b31b890eb894aa8dfdd275f7c8ee4c4` | Run #2147 (`40198548747`) success | Overlaps #51 on approval API and migrations; do not integrate independently. |
+| #51 — evidence-bound parameters | `1824d2a342ab64850575c9488a544edf3c80cbd5` | Run #3368 (`41058468210`) success | Broader candidate, but latest CI does not resolve overlap or replace independent review. |
+| #59 — hardware/software qualification plan | `a1ddd1b5d93f571daf64f6bdce6bc36381bbe8b3` | Run #3371 (`41059092409`) success | Acceptance matrix is a specification; each case still needs case-level execution evidence. |
+| #128 — parallel IoT edge contract | `ee4cdcd997214aa5316825699b770fec64994178` | Run #3384 (`41063212712`) success | Edge contract and integration docs pass configured software CI; not physical qualification or release approval. |
+
+CI result IDs above were checked against the exact current head SHAs, not copied from stale PR-body checkpoints. They demonstrate configured automated software validation only.
+
+### Integration decisions
+
+1. **Keep PR #128 isolated from approval-schema changes.** It remains the adapter-output boundary and integration plan; do not copy the overlapping routes or migrations from #49/#51 into it.
+2. **No automatic merge order is inferred.** #51 is broader than #49, but both remain drafts. An authorized independent reviewer must inspect the combined routes, SQL/migration history, evidence-vault authorization and parameter enforcement before a maintainer chooses the integration order.
+3. **The hardware acceptance matrix is not a completed test report.** Stateful replay/idempotency, same-key/different-digest conflicts, sequence regression, tenant/site isolation, evidence version/hash mismatch, calibration revocation races, and write-boundary assertions require individual test evidence against the canonical ingestion and database boundary.
+4. **No exact physical product is currently qualified by this workstream.** ESP32, VEGA/SHAKTI, RS-232/RS-485/Modbus, or any named board/interface is only a candidate until exact device/manual/interface and intended-use evidence is supplied. A compute board does not establish approval or metrological fitness of the attached instrument.
+5. **TRL is evidence-gated.** Current evidence supports software-engineering validation for the adapter contract only. Hardware/field TRL is **NOT ASSESSED**; do not label the overall platform TRL 9 or production-ready from passing CI.
+6. **Regulatory/site boundary remains HOLD.** Confirm exact-model approval applicability and any relevant MeitY/STQC/BIS/QCO/WPC/ETA/Legal Metrology/electrical-safety requirements with authoritative records before procurement or use. Do not assume every industrial sensor requires the same certificate or that one certificate substitutes for calibration.
+7. **No live changes.** No production/staging database write, migration, deployment, hardware purchase, calibration, field connection, or MRV write was performed.
+
+### Next safe execution batch
+
+- Keep the exact-head CI evidence and this checkpoint together.
+- Build the integration review around one canonical instrument/evidence/parameter path, and reconcile migration history before any schema integration.
+- Add/run missing stateful acceptance tests only in an isolated disposable PostgreSQL environment and on the owning branch; require both API outcome and database-state assertions.
+- Obtain an actual candidate weighbridge/instrument packet (make/model/serial, OEM manual and interface, calibration certificate and scope, firmware/security lifecycle, evidence-vault artifact version/hash, official approval/applicability evidence) before designing a protocol adapter or BOM.
+- Continue separate RupayKg TRL execution plan/evidence ledger work; do not create a competing hardware TRL authority.
+- Retain **ENGINEERING ONLY / PRODUCTION CERTIFICATION HOLD-OFF** until independent review, exact-model and calibration evidence, bench/reference comparison, site acceptance, operations readiness and applicable statutory/methodology gates are closed.
