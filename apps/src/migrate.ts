@@ -1,5 +1,4 @@
 import { readdir, readFile } from "node:fs/promises";
-import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
@@ -11,11 +10,24 @@ if (!databaseUrl) throw new Error("DATABASE_URL is required");
 // Validate the release catalogue before opening a database connection or issuing DDL.
 const here = path.dirname(fileURLToPath(import.meta.url));
 const candidates = [path.resolve(here, "../../migrations"), path.resolve(here, "../../../migrations")];
-const migrationDir = candidates.find((candidate) => existsSync(candidate));
-if (!migrationDir) throw new Error("Migration directory not found. Checked: " + candidates.join(", "));
-const files = (await readdir(migrationDir))
-  .filter((name) => /^\d+_.+\.sql$/.test(name))
-  .sort();
+let migrationDir: string | undefined;
+let files: string[] = [];
+for (const candidate of candidates) {
+  try {
+    const entries = await readdir(candidate);
+    const sqlFiles = entries.filter((name) => /^\d+_.+\.sql$/.test(name)).sort();
+    if (sqlFiles.length > 0) {
+      migrationDir = candidate;
+      files = sqlFiles;
+      break;
+    }
+  } catch {
+    // Try the next supported source/container layout.
+  }
+}
+if (!migrationDir || files.length === 0) {
+  throw new Error("MIGRATION_CATALOG_EMPTY: no numbered SQL migrations found. Checked: " + candidates.join(", "));
+}
 assertMigrationCatalogConsistent(files);
 
 const pool = new Pool({
