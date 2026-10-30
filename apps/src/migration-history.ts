@@ -39,7 +39,7 @@ export function migrationHistoryConflicts(
 export function migrationCatalogVersionConflicts(availableFiles: readonly string[]): string[] {
   const filenamesByVersion = new Map<string, string[]>();
   for (const filename of availableFiles) {
-    const version = filename.split("_", 1)[0];
+    const version = filename.split("_", 1)[0] ?? "";
     const filenames = filenamesByVersion.get(version) ?? [];
     filenames.push(filename);
     filenamesByVersion.set(version, filenames);
