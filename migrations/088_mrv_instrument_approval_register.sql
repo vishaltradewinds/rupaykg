@@ -132,6 +132,11 @@ begin
     raise exception 'verified MRV instrument identity and approval evidence are immutable; register a new instrument record';
   end if;
 
+  if new.approval_status = 'VERIFIED'
+     and new.registered_by_identity_id = new.reviewed_by_identity_id then
+    raise exception 'MRV instrument approval requires a reviewer distinct from the registrant';
+  end if;
+
   if new.approval_status is distinct from old.approval_status then
     if new.reviewed_by_identity_id is null or new.reviewed_at is null or nullif(btrim(new.review_note), '') is null then
       raise exception 'MRV instrument status change requires reviewer, timestamp and reason';
