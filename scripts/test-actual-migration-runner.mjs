@@ -37,6 +37,7 @@ const verificationSchema = "runner_verification_" + suffix;
 const versionMismatchSchema = "runner_version_mismatch_" + suffix;
 const checksumMismatchSchema = "runner_checksum_mismatch_" + suffix;
 const checksumMatchSchema = "runner_checksum_match_" + suffix;
+const checksumMissingSchema = "runner_checksum_missing_" + suffix;
 const q = (s) => '"' + s.replaceAll('"', '""') + '"';
 const setSchema = (schema) => client.query("set search_path to " + q(schema) + ", public");
 const prereqs = async () => {
@@ -63,7 +64,7 @@ const schemas = [];
 try {
   await client.connect();
   connected = true;
-  for (const schema of [productionSchema, stagingSchema, productionHistorySchema, stagingHistorySchema, verificationSchema, versionMismatchSchema, checksumMismatchSchema, checksumMatchSchema]) {
+  for (const schema of [productionSchema, stagingSchema, productionHistorySchema, stagingHistorySchema, verificationSchema, versionMismatchSchema, checksumMismatchSchema, checksumMatchSchema, checksumMissingSchema]) {
     await client.query("create schema " + q(schema));
     schemas.push(schema);
     await setSchema(schema);
@@ -190,6 +191,24 @@ try {
   assert.match(checksumMismatch.stderr + checksumMismatch.stdout, /SOURCE_CHECKSUM_MISMATCH/);
   await setSchema(checksumMismatchSchema);
   assert.equal((await client.query("select count(*)::int n from checksum_sentinel")).rows[0].n, 0, "checksum mismatch must fail before altered SQL executes");
+
+  // A row marked checksum-required must fail closed if its digest is absent.
+  const checksumMissingCatalog = path.join(temp, "checksum-missing-release");
+  await mkdir(checksumMissingCatalog);
+  const missingFilename = "001_required_digest.sql";
+  const missingSql = "insert into required_digest_sentinel(marker) values ('SHOULD_NOT_RUN');\\n";
+  await writeFile(path.join(checksumMissingCatalog, missingFilename), missingSql, "utf8");
+  await setSchema(checksumMissingSchema);
+  await client.query("create table required_digest_sentinel(marker text)");
+  await client.query("create table schema_migrations(version text primary key, filename text not null, applied_at timestamptz not null default now(), source_sha256 text, source_sha256_required boolean not null default false)");
+  await client.query("insert into schema_migrations(version,filename,source_sha256,source_sha256_required) values ('001',$1,$2,true)", [missingFilename, createHash("sha256").update(missingSql).digest("hex")]);
+  await client.query("alter table schema_migrations drop constraint if exists schema_migrations_source_sha256_required_check");
+  await client.query("update schema_migrations set source_sha256=null where version='001'");
+  const checksumMissing = runRunner(checksumMissingSchema, checksumMissingCatalog);
+  assert.notEqual(checksumMissing.status, 0, "runner must reject missing digest on checksum-required row");
+  assert.match(checksumMissing.stderr + checksumMissing.stdout, /REQUIRED_SOURCE_CHECKSUM_MISSING/);
+  await setSchema(checksumMissingSchema);
+  assert.equal((await client.query("select count(*)::int n from required_digest_sentinel")).rows[0].n, 0, "missing required digest must fail before pending SQL executes");
 
   // A matching historical digest is accepted; a newly applied migration is hashed.
   const checksumMatchCatalog = path.join(temp, "checksum-match-release");
@@ -460,7 +479,7 @@ try {
   const orphan = runRunner(stagingSchema, missingDir);
   assert.notEqual(orphan.status, 0, "actual runner must fail when ledger references a missing migration file");
   assert.match(orphan.stderr + orphan.stdout, /MIGRATION_HISTORY_UNRESOLVED|recorded migration|orphan|absent/i);
-  console.log("PASS: actual migrate.ts runner records and verifies SHA-256 SQL source digests, rejects altered SQL under the same filename/version before execution, preserves legacy NULL digests without false attestation, preserves 12 inbox + 12 event rows, no-op repeat runs, fails closed for missing history/version conflicts, and verifies recovered 096 authorization semantics in isolated PostgreSQL schemas.");
+  console.log("PASS: actual migrate.ts runner records and verifies SHA-256 SQL source digests, rejects altered SQL and missing required digests before execution, preserves legacy NULL digests without false attestation, preserves 12 inbox + 12 event rows, no-op repeat runs, fails closed for missing history/version conflicts, and verifies recovered 096 authorization semantics in isolated PostgreSQL schemas.");
 } finally {
   if (connected) {
     for (const schema of schemas.reverse()) {
