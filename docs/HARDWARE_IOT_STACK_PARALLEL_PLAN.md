@@ -2,7 +2,7 @@
 
 **Date:** 2026-10-30  
 **Branch:** `hardware/iot-stack-parallel-2026-10-30`  
-**Status:** Integration audit and test baseline complete; runtime hardware integration gated.  
+**Status:** Integration audit and baseline complete; package-local adapter-output validation added; canonical ingestion and physical integration gated.  
 **Governing standard:** Shakti Standards.  
 **Scope:** Pan-India, vendor-neutral hardware-to-MRV stack; not a pilot-only architecture.
 
@@ -67,19 +67,19 @@ No device telemetry alone proves statutory compliance, EPR fulfillment, ESG assu
 - [x] Create isolated branch and draft PR.
 - [x] Establish a source-level integration audit and no-duplicate-persistence rule.
 - [x] Run targeted API unit/runtime tests on the available workstation checkout.
-- [ ] Refresh PR #47/#49/#51/#59 current heads, CI and review status.
-- [ ] Confirm which hardware approval/calibration migrations and services are present in current `main`.
+- [x] Refresh PR #47/#49/#51/#59 current heads/status; all remain open drafts and #49/#51 overlap in routes and migrations.
+- [x] Confirm proposed approval/calibration migrations are present in overlapping draft PRs #49/#51, not merged into `main`; avoid duplicate schema/routes.
 - [ ] Resolve ownership of schema, route and evidence-vault changes before writing runtime code.
 
 ### Batch B — instrument adapter contract
 
 Do not select protocol/driver until an actual instrument model and manual are available.
 
-- [ ] Define read-only adapter interface and raw-frame retention.
-- [ ] Bind each observation to exact instrument ID, model/revision, parameter code, unit, event ID, timestamp quality, monotonic sequence and source hash.
-- [ ] Keep hardware approval and calibration decisions server-authoritative.
+- [x] Add package-local validated adapter-output contract; it does not read hardware or persist raw frames. Protocol-specific interface and raw-frame retention remain gated.
+- [x] Adapter-output contract binds instrument/device/site/org, parameter, unit, event ID, timestamps, sequence, clock quality and raw payload SHA-256. Exact model/revision and parameter acceptance still belong to canonical approval register.
+- [x] Local validation returns only `READY_FOR_REVIEW`; it never approves an instrument or MRV eligibility. Server-authoritative approval/calibration integration remains gated.
 - [ ] Avoid unsupported RS-232/RS-485/Modbus assumptions; verify electrical/protocol details from the actual manual.
-- [ ] Tests: malformed frame, duplicate event, same ID with changed payload, sequence regression, clock skew, invalid unit/range, offline replay and queue corruption.
+- [ ] Extend tests after canonical envelope contract is confirmed: duplicate event, same ID with changed payload, sequence regression/replay, invalid unit/range, offline replay and queue corruption. Current synthetic tests cover malformed runtime input, digest, authentication/clock state, calibration state and timestamp order.
 
 ### Batch C — calibration and source-lineage acceptance
 
@@ -126,8 +126,8 @@ These are starting points for dated applicability review, not evidence that a se
 
 - Architecture and integration audit: documented.
 - Targeted workstation API tests: passed with 5 environment-gated skips.
-- PR #128 exact-head CI: running at last check.
-- Runtime adapter/calibration integration: not yet implemented in this branch.
+- PR #128 exact-head CI for commit `21d39d2e26ef2331d108e461a6e8935c4b7fcbba`: queued at last check.
+- Package-local adapter-output validation: implemented; canonical ingestion, authoritative calibration/model approval and protocol-specific hardware integration remain unimplemented.
 - Actual instrument model/manual/calibration evidence: not available in the reviewed context.
 - Procurement, physical connection, field testing, certification, government acceptance and production deployment: not claimed or authorized.
 
