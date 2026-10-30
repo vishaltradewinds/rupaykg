@@ -143,3 +143,11 @@ These are starting points for dated applicability review, not evidence that a se
 - Immediate next task: refresh current PR heads and review gates, then expand only non-overlapping synthetic acceptance tests for payload identity/digest, invalid timestamp ordering, calibration state, authorization/clock flags, and malformed input. Stateful replay/sequence checks must be tested at the canonical ingestion boundary, not claimed by this stateless validator.
 - Physical interface and BOM remain HOLD until exact instrument make/model/manual, protocol/electrical specification, site activity and monitoring-methodology boundary are supplied and reviewed.
 - No production deployment, database mutation, physical device connection, procurement or hardware certification was performed.
+
+
+### Follow-on test batch — 2026-10-30 08:37 UTC
+
+- Added five synthetic-only validator tests in `packages/hardware-edge/src/index.test.ts`: unsupported schema/invalid timestamp, missing identity/unit, malformed quality flags, verified-current calibration without a record ID, and revoked device identity.
+- Test change commit: `1c7eef26ad9563a11de25e7a2e065b5bf6183637`.
+- Exact-head CI for this new commit has not yet appeared in the workflow/status query; do not claim the new tests pass until CI or an isolated test run confirms them.
+- These tests validate stateless adapter-output shape only. Duplicate/replay detection, monotonic sequence enforcement across events, tenant/facility authorization, exact-model approval and calibration verification remain canonical server-side acceptance responsibilities.
