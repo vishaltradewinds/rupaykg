@@ -12,6 +12,12 @@ Read-only Neon inspection on 2026-10-30 found:
 
 **This is an unresolved source/ledger divergence. Production HOLD; scheduler OFF; certification HOLD/OFF. Do not run migrations to “make counts match,” delete/rewrite history, or infer the deployed database target from a matching timestamp.** See [Current Source of Truth](../docs/CURRENT_SOURCE_OF_TRUTH.md) and [Issue #145](https://github.com/vishaltradewinds/rupaykg/issues/145).
 
+## Candidate-branch identity collision — unresolved
+
+Unmerged PR branches #104 and #106 each contain `096_epr_acceptance_evidence_immutability.sql` (Git blob `28ea4b350fe5074d2e59e59fc38c714019d00c10`) and `102_verification_authorization_provenance.sql` (Git blob `258b1f4534efbf915688f78aa84d4ec24a47cbc0`). That second blob is identical to the historical `096_verification_authorization_provenance.sql` retrieved from commit `ca8f410...`. Candidate branches therefore use migration number 096 for a different migration and renumber the authorization-provenance migration to 102. These branches contain broader, differing implementation work, so do not classify them as safe duplicates or close/delete them without full diff and dependency review.
+
+This is a candidate-history conflict, not permission to modify the production ledger. No candidate sequence is authoritative until migration identity, source history, observed production/staging ledger and exact deployment provenance are reconciled. Do not merge, replay, rollback, or renumber migrations to force a match.
+
 ## Migration authoring rules
 
 1. Migration filenames and content are historical identity. Never edit, renumber, reuse, or delete a migration that may have been applied.
