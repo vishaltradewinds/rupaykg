@@ -240,3 +240,18 @@ Remediation commits: `6a706b55bb2a3e57db29c64c133817a8d939d9db`, `964df30e3a7174
 A second source review found that locking fields only while `old.approval_status = 'VERIFIED'` would permit an operator to downgrade to HOLD and then mutate the previously verified model/evidence. Migration 088 now checks the append-only decision history for any prior `VERIFIED` decision; model identity, instrument classification, parameter mapping, MeitY/calibration/security evidence, and registration provenance remain immutable thereafter. Reviewer metadata can change only alongside an explicit status transition, whose decision is appended to the decision history; this preserves the ability to place a previously verified instrument on HOLD/EXPIRED without opening an evidence-mutation bypass. The database test exercises VERIFIED → HOLD → attempted model substitution and expects rejection, rolling the test sequence back afterward.
 
 Latest amended candidate head: `365bd3f28026c79cfbbe33fabb8b5d581c92bf64`. Fresh CI run #3426 / `41070461964` is in progress. Earlier runs validate earlier commits only; do not mark the latest candidate green until this exact run passes. PR #137 remains Draft, unmerged, and undeployed.
+
+
+## 15. Measurement-fact immutability and exact-head CI — 2026-10-30 14:40Z
+
+PR #137 received an additional source-review fix after the verified-state downgrade correction:
+
+- An instrument-bound measurement could still have its value, source, method, measured timestamp, unit or activity link edited while keeping the instrument ID/parameter binding unchanged.
+- Migration 089 now rejects updates that change the measurement's activity, value, unit, method, source, measured timestamp, instrument ID or parameter code once instrument-bound. The trigger fires on updates to the guarded measurement fields; a correction must be represented as a new measurement.
+- PostgreSQL acceptance coverage now asserts rejection of unbinding, value rewriting, source rewriting and measured-time rewriting. The migration README states the immutable measurement-fact rule.
+
+Commits in this batch: migration `8d27110165f3026d30df8d02198b85307ab58b88`, test `3a815eedecd5cd2ec1fd8fdc9f221b5ba0f949f5`, documentation `46830affd985229e349a9f2a5feeb799d3251510`. Latest PR #137 head: `46830affd985229e349a9f2a5feeb799d3251510`.
+
+CI run #3430 / `41073290199` completed successfully on the preceding head `592f4494a1bf30a3e9cb9c75558eec5876c32290`. It does **not** validate the subsequent measurement-fact immutability changes. A new exact-head run is required; as of this checkpoint, no CI run was returned for the latest head.
+
+Disposition remains HOLD: PR #137 is Draft and unmerged. Independent review, exact-head CI, migration provenance reconciliation, supported upgrade-path validation, exact-model device evidence and physical/site acceptance remain outstanding. No deployment, live database migration, procurement or certification is authorized.
