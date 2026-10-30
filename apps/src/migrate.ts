@@ -1,4 +1,5 @@
 import { readdir, readFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -28,20 +29,54 @@ export async function runMigrations(pool: PoolType, migrationDir: string): Promi
     create table if not exists schema_migrations (
       version text primary key,
       filename text not null,
-      applied_at timestamptz not null default now()
+      applied_at timestamptz not null default now(),
+      source_sha256 text
     )
   `);
 
-  // Reconcile every recorded row before executing any pending migration SQL.
-  const applied = await pool.query<{ version: string; filename: string }>(
-    "select version, filename from schema_migrations order by version",
+  // Older ledgers may not have source_sha256. Detect this without mutating
+  // their schema, then validate the complete filename/version history first.
+  const checksumColumn = await pool.query<{ exists: boolean }>(
+    "select exists (select 1 from information_schema.columns where table_schema = current_schema() and table_name = 'schema_migrations' and column_name = 'source_sha256') as exists",
   );
+  const hasChecksumColumn = checksumColumn.rows[0]?.exists === true;
+  const applied = hasChecksumColumn
+    ? await pool.query<{ version: string; filename: string; source_sha256: string | null }>(
+        "select version, filename, source_sha256 from schema_migrations order by version",
+      )
+    : await pool.query<{ version: string; filename: string; source_sha256?: null }>(
+        "select version, filename from schema_migrations order by version",
+      );
+
   const conflicts = migrationHistoryConflicts(applied.rows, new Set(files));
   if (conflicts.length) {
     const detail = conflicts.map((row) => `${row.version}:${row.filename}:${row.reason}`).join(", ");
     throw new Error(`MIGRATION_HISTORY_UNRESOLVED: reconcile the applied migration ledger before applying SQL: ${detail}`);
   }
 
+  // A trusted digest proves only that this release's SQL bytes match the bytes
+  // recorded when that migration was applied. Legacy NULL digests remain
+  // explicitly unattested; never backfill them from the current checkout.
+  const digestConflicts: string[] = [];
+  if (hasChecksumColumn) {
+    for (const row of applied.rows) {
+      if (!row.source_sha256) continue;
+      const sqlBytes = await readFile(path.join(migrationDir, row.filename));
+      const actual = createHash("sha256").update(sqlBytes).digest("hex");
+      if (!/^[a-f0-9]{64}$/.test(row.source_sha256) || actual !== row.source_sha256) {
+        digestConflicts.push(`${row.version}:${row.filename}:SOURCE_CHECKSUM_MISMATCH`);
+      }
+    }
+  }
+  if (digestConflicts.length) {
+    throw new Error(`MIGRATION_HISTORY_UNRESOLVED: migration source checksum mismatch: ${digestConflicts.join(", ")}`);
+  }
+
+  // Only after complete ledger preflight succeeds may an existing legacy ledger
+  // be extended. This is additive and deliberately does not attest old rows.
+  if (!hasChecksumColumn) {
+    await pool.query("alter table schema_migrations add column source_sha256 text");
+  }
   for (const filename of files) {
     const version = filename.split("_", 1)[0];
     const existing = await pool.query<{ version: string; filename: string }>(
@@ -56,14 +91,16 @@ export async function runMigrations(pool: PoolType, migrationDir: string): Promi
       continue;
     }
 
-    const sql = await readFile(path.join(migrationDir, filename), "utf8");
+    const sqlBytes = await readFile(path.join(migrationDir, filename));
+    const sql = sqlBytes.toString("utf8");
+    const sourceSha256 = createHash("sha256").update(sqlBytes).digest("hex");
     const client = await pool.connect();
     try {
       await client.query("begin");
       await client.query(sql);
       await client.query(
-        "insert into schema_migrations(version, filename) values ($1, $2)",
-        [version, filename],
+        "insert into schema_migrations(version, filename, source_sha256) values ($1, $2, $3)",
+        [version, filename, sourceSha256],
       );
       await client.query("commit");
       console.log(`Applied ${filename}`);
