@@ -30,6 +30,23 @@ const assertDisposableDatabaseTarget = (connectionString) => {
   }
 };
 assertDisposableDatabaseTarget(process.env.DATABASE_URL);
+
+// Guard behavior is tested before opening any PostgreSQL connection.
+for (const safeUrl of [
+  "postgresql://test:test@localhost:5432/rupaykg",
+  "postgres://test:test@127.0.0.1:5432/rupaykg",
+  "postgres://test:test@[::1]:5432/rupaykg",
+]) {
+  assert.doesNotThrow(() => assertDisposableDatabaseTarget(safeUrl), "loopback target should be accepted: " + safeUrl);
+}
+for (const unsafeUrl of [
+  "postgres://test:test@db.example.com:5432/rupaykg",
+  "postgres://test:test@192.0.2.10:5432/rupaykg",
+  "https://example.com/not-postgres",
+  "not-a-database-url",
+]) {
+  assert.throws(() => assertDisposableDatabaseTarget(unsafeUrl), /Refusing database integration tests/);
+}
 const { Client } = pg;
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fixtureSource = path.join(here, "fixtures", "legacy-migrations");
