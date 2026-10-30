@@ -179,7 +179,24 @@ TRL is evidence-based and provisional. Hardware prototype success alone does not
 - No claim is made here that hardware has been purchased, connected, tested, certified, or accepted by a government authority.
 - No production database, live site, external portal, or deployment is changed by this document.
 
-## 11. Definition of done
+## 11. Integration coordination update — 2026-10-30
+
+A read-only source audit and local API test batch has been completed. The detailed inventory is in `docs/HARDWARE_IOT_CANONICAL_INTEGRATION_AUDIT.md`.
+
+Important existing work to reconcile before adding runtime code:
+- PR #47: fail-closed hardware/instrumentation approval register and site/methodology HOLD.
+- PR #49: model-specific hardware approval before MRV eligibility.
+- PR #51: evidence-bound instrument approval and parameter specifications.
+- PR #59: pan-India architecture and software-only synthetic simulation plan.
+- This PR #128 is for integration reconciliation and missing end-to-end acceptance tests, not a replacement for those changes.
+
+Read-only inspection of the workstation checkout `C:\\Users\\Vishal\\rupaykg-live` on `fix/guardian-hedera-gate-20261010` found existing field-device enrollment/verification, organization-scoped inventory, sync envelopes with idempotency/sequence/hash/server cursor, offline field capture, and activity/measurement/evidence operations. Field-device identity remains distinct from instrument model approval and calibration.
+
+**Targeted test evidence:** `npm test -w @rupaykg/api` completed with exit code 0: 69 tests, 64 passed, 0 failed, 5 skipped. Skips include environment-gated database/integration checks; this is not full PostgreSQL acceptance, hardware-in-the-loop, or production certification. The local checkout had unrelated pre-existing uncommitted changes; they were preserved and not modified by this workstream.
+
+Next: refresh current PR heads and merge status; reconcile migrations/routes/evidence-vault contract; run the relevant isolated PostgreSQL tests where the approved test database is available; then implement only the missing adapter/calibration gate and negative tests. Do not create duplicate tables or bypass the existing canonical sync/evidence path.
+
+## 12. Definition of done
 
 The hardware/IoT stack is complete only when a real instrument can be securely enrolled, produce a reproducible and authenticated observation, survive offline/replay/failure conditions, preserve immutable source lineage, pass an instrument-specific calibration gate, bind to the correct methodology/activity/custody/site, reach the existing RupayKg MRV workflow, and pass security, legal applicability, site acceptance and independent Shakti review. Until then, status is **ENGINEERING IN PROGRESS / PRODUCTION HOLD**.
 
