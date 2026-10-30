@@ -120,3 +120,12 @@ CI result IDs above were checked against the exact current head SHAs, not copied
 - Obtain an actual candidate weighbridge/instrument packet (make/model/serial, OEM manual and interface, calibration certificate and scope, firmware/security lifecycle, evidence-vault artifact version/hash, official approval/applicability evidence) before designing a protocol adapter or BOM.
 - Continue separate RupayKg TRL execution plan/evidence ledger work; do not create a competing hardware TRL authority.
 - Retain **ENGINEERING ONLY / PRODUCTION CERTIFICATION HOLD-OFF** until independent review, exact-model and calibration evidence, bench/reference comparison, site acceptance, operations readiness and applicable statutory/methodology gates are closed.
+
+
+## CI log verification follow-up — 2026-10-30 15:35Z
+
+- Workflow run `41081341586` (run #3463) for IoT checkpoint commit `ef76a378589a6bef28bf88fe92edd4f549101259` is **completed/success**.
+- Retrieved the actual `validate` job log, not only the run summary. Confirmed `RUPAYKG_RUN_DB_INTEGRATION_TESTS=1`, PostgreSQL 16.15 startup, all 13 configured job steps completed successfully, and the disposable-PostgreSQL acceptance step succeeded.
+- The job log shows seven Node test-suite summaries with test counts `99, 22, 2, 29, 1, 19, 2`; each reported `fail 0` and `skipped 0` (174 reported top-level tests across those suite summaries). This is evidence for this checkpoint commit's current configured suite only; it is **not** evidence that PR #122's distinct `async-mirror-worker.postgres.test.ts` ran at its corrected head.
+- Rechecked PR #122 head `86bff3db61d4881fc83507a5de03810c20c3299b`: workflow lookup still returns no PR-triggered run. PR #141 has no recorded review submissions. Do not infer acceptance of #122 from #128's green CI.
+- Next gate remains an authorized independent review of PR #141, followed by an exact-head PostgreSQL run for PR #122. No review was fabricated, no PR merged, and no production/staging write or deployment occurred.
