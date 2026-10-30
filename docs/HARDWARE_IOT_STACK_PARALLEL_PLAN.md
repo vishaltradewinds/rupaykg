@@ -169,3 +169,8 @@ These are starting points for dated applicability review, not evidence that a se
 - Latest test commit: `e40fa72ea685996379e19626ab0aaefc89a9144a`.
 - GitHub Actions runs observed for earlier commits remain `in_progress`; no exact-head run/result for the latest commit was returned at the time of this checkpoint. **CI status: PENDING.** Do not mark this batch passed or merge on the strength of earlier-head CI.
 - No protocol driver, physical hardware, approval register, evidence-vault, database schema, production ingestion path, or deployment was changed in this batch.
+
+### Validator correction — 2026-10-30
+
+- Review of the generated source caught over-escaped regex metacharacters before the latest CI run completed. Corrected the timestamp regex to standard TypeScript/JavaScript regex syntax in commit `5d40c6a68e3c612a43e6658f5cb06ee06e5da630`.
+- The exact-head CI must validate this corrected head; the earlier queued run is not sufficient. Status remains **PENDING** until the latest head's checks finish.
