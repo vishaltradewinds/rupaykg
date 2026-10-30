@@ -134,6 +134,7 @@ test("reconciliation reports unresolved statuses and expired leases read-only", 
   });
   assert.equal(statements.length, 2);
   assert.match(statements[0]!.sql, /group by status/i);
+  assert.match(statements[1]!.sql, /lease_until is null or lease_until < now\(\)/i);
 });
 
 
