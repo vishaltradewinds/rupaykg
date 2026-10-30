@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { randomUUID } from "node:crypto";
+import { Pool } from "pg";
 import type { Pool as PoolType } from "pg";
 import { runMigrations } from "./migrate.js";
 
@@ -102,3 +104,56 @@ test("failed advisory lock acquisition releases connection without database muta
     assert.equal(getReleaseCount(), 1);
   });
 });
+
+
+test(
+  "real PostgreSQL serializes concurrent migration runners in an isolated schema",
+  { skip: process.env.RUPAYKG_RUN_DB_INTEGRATION_TESTS !== "1" || !process.env.DATABASE_URL },
+  async () => {
+    const adminPool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      max: 2,
+      ...(process.env.DATABASE_SSL === "false" ? { ssl: false } : {}),
+    });
+    const schema = `rk_migration_test_${randomUUID().replace(/-/g, "")}`;
+    let migrationPool: Pool | undefined;
+    try {
+      await adminPool.query(`create schema "${schema}"`);
+      migrationPool = new Pool({
+        connectionString: process.env.DATABASE_URL,
+        max: 2,
+        options: `-c search_path=${schema}`,
+        ...(process.env.DATABASE_SSL === "false" ? { ssl: false } : {}),
+      });
+      const dir = await mkdtemp(path.join(os.tmpdir(), "rupaykg-real-pg-migrations-"));
+      try {
+        await writeFile(
+          path.join(dir, "001_lock_test.sql"),
+          "select pg_sleep(0.25); create table migration_probe (id integer);",
+          "utf8",
+        );
+
+        await Promise.all([
+          runMigrations(migrationPool as unknown as PoolType, dir),
+          runMigrations(migrationPool as unknown as PoolType, dir),
+        ]);
+
+        const ledger = await adminPool.query(
+          `select version, filename from "${schema}".schema_migrations order by version`,
+        );
+        const probe = await adminPool.query(
+          "select to_regclass($1)::text as probe",
+          [`${schema}.migration_probe`],
+        );
+        assert.deepEqual(ledger.rows, [{ version: "001", filename: "001_lock_test.sql" }]);
+        assert.equal(probe.rows[0]?.probe, `${schema}.migration_probe`);
+      } finally {
+        await rm(dir, { recursive: true, force: true });
+      }
+    } finally {
+      await migrationPool?.end();
+      await adminPool.query(`drop schema if exists "${schema}" cascade`);
+      await adminPool.end();
+    }
+  },
+);
