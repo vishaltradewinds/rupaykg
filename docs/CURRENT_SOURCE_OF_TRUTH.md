@@ -80,3 +80,8 @@ Apply the Shakti Standards lifecycle: reality/context discovery → evidence →
 ## 8. Repository cleanup progress
 
 The repository cleanup and open-work triage inventory is recorded in [REPOSITORY_CLEANUP_TRIAGE_2026-10-30.md](REPOSITORY_CLEANUP_TRIAGE_2026-10-30.md). As of the first cleanup batch, obsolete marker-only PRs #5–#9 and superseded worker PR #144 were closed without merging. Duplicate branch refs have been identified but not deleted because deletion requires a supported write path and a final dependency check. See draft [PR #151](https://github.com/vishaltradewinds/rupaykg/pull/151); it remains unmerged pending review.
+
+
+## 9. Newly confirmed migration identity collision across candidate branches
+
+During cleanup, PR #104 (`audit/pr97-merge-candidate-validation-2026-10-28`) and PR #106 (`shakti/batch-a-combined-pr97-validation`) were inspected. Both contain `migrations/096_epr_acceptance_evidence_immutability.sql` (Git blob `28ea4b350fe5074d2e59e59fc38c714019d00c10`) and `migrations/102_verification_authorization_provenance.sql` (Git blob `258b1f4534efbf915688f78aa84d4ec24a47cbc0`). The latter is the same Git blob as the historical `096_verification_authorization_provenance.sql` retrieved from commit `ca8f410...`. Thus candidate branches assign migration identity 096 to a different EPR migration and place the authorization-provenance SQL at 102. This is a cross-branch identity collision requiring full-history reconciliation; it is not safe to delete either candidate as a mere duplicate, nor to merge or renumber migrations blindly.
