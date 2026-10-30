@@ -96,11 +96,16 @@ test("PostgreSQL enforces MRV instrument approval evidence and append-only decis
     )).rows[0]!.id;
 
     const gatewayApprovalWithoutSecurity = "update mrv_instruments set approval_status='VERIFIED',meity_certificate_id='MEITY-GW-TEST',meity_issuer='Official authority',meity_certificate_scope='Exact gateway model and revision',meity_verification_url='https://official.example.gov/gateway',meity_evidence_reference='evidence://meity-gateway',meity_evidence_sha256=$3,meity_verified_at=now(),meity_validity_basis='VALID_UNTIL',meity_valid_until=now()+interval '1 year',calibration_required=false,calibration_status='NOT_APPLICABLE_WITH_JUSTIFICATION',calibration_not_required_reason='Gateway does not perform a physical measurement',reviewed_by_identity_id=$2,reviewed_at=now(),review_note='test gateway without security evidence' where id=$1";
-    await rejectsInSavepoint(client, () => client.query(gatewayApprovalWithoutSecurity, [gatewayId, identityId, "d".repeat(64)]), /Firmware-enabled instrument requires current support and reviewed security lifecycle evidence/i);
+    await rejectsInSavepoint(client, () => client.query(gatewayApprovalWithoutSecurity, [gatewayId, reviewerId, "d".repeat(64)]), /Firmware-enabled instrument requires current support and reviewed security lifecycle evidence/i);
+
+    await rejectsInSavepoint(client, () => client.query(
+      "update mrv_instruments set approval_status='VERIFIED',meity_certificate_id='MEITY-GW-SELF-TEST',meity_issuer='Official authority',meity_certificate_scope='Exact gateway model and revision',meity_verification_url='https://official.example.gov/gateway',meity_evidence_reference='evidence://meity-gateway-self',meity_evidence_sha256=$3,meity_verified_at=now(),meity_validity_basis='VALID_UNTIL',meity_valid_until=now()+interval '1 year',calibration_required=false,calibration_status='NOT_APPLICABLE_WITH_JUSTIFICATION',calibration_not_required_reason='Gateway does not measure a physical parameter',security_review_status='VERIFIED',security_evidence_reference='evidence://gateway-security-review',security_evidence_sha256=$4,security_reviewed_at=now(),reviewed_by_identity_id=$2,reviewed_at=now(),review_note='self approval must fail' where id=$1",
+      [gatewayId, identityId, "c".repeat(64), "d".repeat(64)],
+    ), /reviewer distinct from the registrant/i);
 
     const gatewayApproved = await client.query<{ approval_status: string }>(
       "update mrv_instruments set approval_status='VERIFIED',meity_certificate_id='MEITY-GW-TEST',meity_issuer='Official authority',meity_certificate_scope='Exact gateway model and revision',meity_verification_url='https://official.example.gov/gateway',meity_evidence_reference='evidence://meity-gateway',meity_evidence_sha256=$3,meity_verified_at=now(),meity_validity_basis='VALID_UNTIL',meity_valid_until=now()+interval '1 year',calibration_required=false,calibration_status='NOT_APPLICABLE_WITH_JUSTIFICATION',calibration_not_required_reason='Gateway does not perform a physical measurement',security_review_status='VERIFIED',security_evidence_reference='evidence://gateway-security-review',security_evidence_sha256=$4,security_reviewed_at=now(),reviewed_by_identity_id=$2,reviewed_at=now(),review_note='test gateway with reviewed security evidence' where id=$1 returning approval_status",
-      [gatewayId, identityId, "e".repeat(64), "f".repeat(64)],
+      [gatewayId, reviewerId, "e".repeat(64), "f".repeat(64)],
     );
     assert.equal(gatewayApproved.rows[0]?.approval_status, "VERIFIED");
 
