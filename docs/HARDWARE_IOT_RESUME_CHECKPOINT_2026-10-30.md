@@ -66,3 +66,11 @@ No physical instrument is selected or connected. No purchase, calibration, field
 - Exact-head CI run #3358 (run ID `41056559100`) completed successfully, including all configured validation and production-container build steps.
 - PR #51 current head `e5388fd1db1533db1d5abcf7bd5f52fc5f09ad2b` also passed exact-head CI run #3357 (run ID `41056362508`). This does not resolve the overlapping approval-route/migration ownership between #49 and #51; do not merge either until an explicit integration order and independent review are recorded.
 - PR #47/#49/#51/#59/#128 remain open drafts and unmerged. Physical hardware qualification, official exact-model approval, calibration, bench/site acceptance, methodology eligibility and production release remain HOLD.
+
+
+## 2026-10-30 12:45Z — follow-up batch
+- PR #128 head `852c6109b178e6313ed60c8674dd96e6730f5a2e`: exact-head CI run #3359 (`41057080062`) passed all configured steps, including disposable PostgreSQL acceptance and production-container build.
+- PR #59 head `22904460e48fdbaada958a6b0a79bd6db8723ce0`: exact-head CI run #3360 (`41057128338`) passed all configured steps, including disposable PostgreSQL acceptance and production-container build.
+- PR #51 head `e5388fd1db1533db1d5abcf7bd5f52fc5f09ad2b`: exact-head CI run #3357 (`41056362508`) passed all configured steps.
+- The stateful replay/integrity matrix has been added to the simulation plan. It remains an acceptance specification; individual cases are not claimed passed unless backed by exact-head test evidence.
+- PRs #47, #49, #51, #59 and #128 remain draft/unmerged. Resolve overlapping route/migration ownership between #49 and #51 before integration. Independent review, actual instrument/certificate/calibration packet, evidence-vault production contract, methodology/site eligibility, and bench/site qualification remain HOLD.
