@@ -72,3 +72,18 @@ These are Git SHA-1 blob identifiers, not SHA-256 attestations of the deployed S
 Current assessment: **TRL 3 (analytical/experimental proof-of-concept evidence for migration preflight and isolated acceptance harness only)**, pending review of the evidence packet. This is not a TRL assessment of the full RupayKg platform, the live production deployment, or statutory compliance.
 
 The gate is not passed until evidence, independent reviews, integrated test results, recovery readiness, operations controls and an authorized release decision are all recorded. Golden rule remains: **ONE SHAKTI STANDARD. MANY PROJECT-SPECIFIC OPERATING SYSTEMS.**
+
+
+## 8. Follow-up integration review — PR #120 runner guard (2026-10-30)
+
+**Finding: the current #108 runner guard and the #120 proposed guard are complementary, not interchangeable.**
+
+- The #108 implementation calls `assertNoOrphanedMigrationRecords`, which catches ledger filenames absent from the current catalog. Its per-file loop also catches a filename mismatch when the same version already exists.
+- The #120 implementation in `apps/src/migration-history.ts` adds a preflight check that the recorded `version` equals the version prefix parsed from the recorded `filename`, before any pending migration SQL runs.
+- The second check closes a distinct malformed-ledger case: a catalog filename can exist in the release directory while a ledger row records that filename under a different version. Filename-only orphan detection would not reject that row; the runner could then consider the catalog's correct version unapplied and attempt to execute the SQL again.
+
+**Disposition:** carry the #120 version/filename preflight semantics into the coordinated final runner, retaining the #108 orphan-source guard and its actual-runner acceptance tests. Do not merge PR #120 independently to obtain this safeguard. Add an actual-runner negative fixture with an available filename recorded under the wrong version, and assert the runner fails before any pending SQL is executed. Also assert a normal existing version/filename match remains a no-op.
+
+**Evidence boundary:** this is a code-review finding from the PR #120 patch compared with the #108 working branch, not proof that any live ledger contains this malformed state. No database was queried or changed for this review. The latest exact-head CI success for #108 remains evidence for that head only; it does not test the combined #108 + #120 code.
+
+**Required integration gate:** one combined candidate must pass the existing dual-ledger actual-runner suite plus the malformed version/filename negative case, all migration 088–091 tests, GRI package tests, and schema/data-preservation assertions against both disposable ledger shapes. Keep production and scheduler HOLD/OFF until independent review and the full release gate pass.
