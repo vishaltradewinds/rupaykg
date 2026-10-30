@@ -5,7 +5,12 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { Pool } from "pg";
 import type { Pool as PoolType } from "pg";
 import { migrationHistoryConflicts } from "./migration-history.js";
+import { readProductionConfig } from "./production-config.js";
 
+/**
+ * Apply migrations only after validating the complete applied-history ledger.
+ * Missing source files and version/filename mismatches fail before pending SQL.
+ */
 export async function runMigrations(pool: PoolType, migrationDir: string): Promise<void> {
   if (!existsSync(migrationDir)) throw new Error(`Migration directory not found: ${migrationDir}`);
   const files = (await readdir(migrationDir))
@@ -20,14 +25,13 @@ export async function runMigrations(pool: PoolType, migrationDir: string): Promi
     )
   `);
 
-  // Reconcile every applied ledger row before running any migration-file SQL.
-  // Missing sources and version/filename mismatches must fail before the loop.
+  // Reconcile every recorded row before executing any pending migration SQL.
   const applied = await pool.query<{ version: string; filename: string }>(
     "select version, filename from schema_migrations order by version",
   );
-  const historyConflicts = migrationHistoryConflicts(applied.rows, new Set(files));
-  if (historyConflicts.length) {
-    const detail = historyConflicts.map((row) => `${row.version}:${row.filename}:${row.reason}`).join(", ");
+  const conflicts = migrationHistoryConflicts(applied.rows, new Set(files));
+  if (conflicts.length) {
+    const detail = conflicts.map((row) => `${row.version}:${row.filename}:${row.reason}`).join(", ");
     throw new Error(`MIGRATION_HISTORY_UNRESOLVED: reconcile the applied migration ledger before applying SQL: ${detail}`);
   }
 
@@ -39,7 +43,8 @@ export async function runMigrations(pool: PoolType, migrationDir: string): Promi
     );
     if (existing.rows[0]) {
       if (existing.rows[0].filename !== filename) {
-        throw new Error(`Migration version ${version} is already recorded as ${existing.rows[0].filename}, not ${filename}`);
+        // Defensive assertion; the complete-ledger preflight above should catch this.
+        throw new Error(`MIGRATION_HISTORY_UNRESOLVED: migration version ${version} is recorded as ${existing.rows[0].filename}, not ${filename}`);
       }
       continue;
     }
@@ -70,19 +75,43 @@ async function main(): Promise<void> {
   const databaseUrl = process.env.DATABASE_URL;
   if (!databaseUrl) throw new Error("DATABASE_URL is required");
 
+  const productionConfig = process.env.NODE_ENV === "production" ? readProductionConfig() : null;
   const pool = new Pool({
-    connectionString: databaseUrl,
+    connectionString: productionConfig?.databaseUrl ?? databaseUrl,
     max: 1,
-    ssl: process.env.DATABASE_SSL === "false" ? undefined : { rejectUnauthorized: false },
+    ...(productionConfig?.databaseSsl === "false" || (!productionConfig && process.env.DATABASE_SSL === "false")
+      ? {}
+      : {
+          ssl: {
+            // Production requires verified TLS; non-production retains the
+            // existing developer/test behavior unless TLS is explicitly disabled.
+            rejectUnauthorized: productionConfig !== null || process.env.DATABASE_SSL === "require",
+            ...((productionConfig?.databaseCaCert || process.env.DATABASE_CA_CERT)
+              ? { ca: productionConfig?.databaseCaCert || process.env.DATABASE_CA_CERT }
+              : {}),
+          },
+        }),
   });
 
   try {
     // Support source execution (/repo/apps/src) and production container
-    // execution (/app/apps/dist/src) without runtime-selectable catalog overrides.
+    // execution (/app/apps/dist/src) without a runtime-selectable production catalog.
     const here = path.dirname(fileURLToPath(import.meta.url));
     const candidates = [path.resolve(here, "../../migrations"), path.resolve(here, "../../../migrations")];
-    const migrationDir = candidates.find((candidate) => existsSync(candidate));
-    if (!migrationDir) throw new Error(`Migration directory not found. Checked: ${candidates.join(", ")}`);
+
+    // Isolated acceptance tests may supply a disposable catalog only when the
+    // explicit test flag is set. Never allow this override in production.
+    const testMigrationDir = process.env.NODE_ENV !== "production" &&
+      process.env.RUPAYKG_RUN_DUAL_LEDGER_TESTS === "1"
+      ? process.env.RUPAYKG_TEST_MIGRATIONS_DIR
+      : undefined;
+    const migrationDir = testMigrationDir
+      ? path.resolve(testMigrationDir)
+      : candidates.find((candidate) => existsSync(candidate));
+    if (!migrationDir || !existsSync(migrationDir)) {
+      throw new Error(`Migration directory not found. Checked: ${[testMigrationDir, ...candidates].filter(Boolean).join(", ")}`);
+    }
+
     await runMigrations(pool, migrationDir);
   } finally {
     await pool.end();
