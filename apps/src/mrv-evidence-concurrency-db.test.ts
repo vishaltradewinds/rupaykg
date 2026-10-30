@@ -87,7 +87,6 @@ test("HTTP routes reject stale evidence and refuse MRV instrument approval", {
   try {
     const suffix = randomUUID();
     const fixture = await createFixture(pool, suffix);
-    await pool.query("update mrv_instruments set approval_status='HOLD' where id=$1", [fixture.instrumentId]);
     const token = issueOpaqueToken();
     await pool.query("update identities set status='VERIFIED' where id=$1", [fixture.reviewerId]);
     const role = await pool.query<{id:string}>(
@@ -128,13 +127,14 @@ test("HTTP routes reject stale evidence and refuse MRV instrument approval", {
       },
     });
     assert.equal(approval.statusCode, 409, approval.body);
-    assert.equal(approval.json().code, "MRV_INSTRUMENT_REVIEW_BLOCKED");
-    const state = await pool.query<{ evidence_status: string; approval_status: string }>(
-      "select e.status::text evidence_status,i.approval_status from evidence e cross join mrv_instruments i where e.id=$1 and i.id=$2",
+    assert.equal(approval.json().code, "MRV_INSTRUMENT_EVIDENCE_STALE");
+    const state = await pool.query<{ evidence_status: string; approval_status: string; evidence_current: boolean }>(
+      "select e.status::text evidence_status,i.approval_status,mrv_instrument_evidence_is_current(i.id) evidence_current from evidence e cross join mrv_instruments i where e.id=$1 and i.id=$2",
       [fixture.evidenceId, fixture.instrumentId],
     );
     assert.equal(state.rows[0]?.evidence_status, "REJECTED");
-    assert.equal(state.rows[0]?.approval_status, "HOLD");
+    assert.equal(state.rows[0]?.approval_status, "VERIFIED");
+    assert.equal(state.rows[0]?.evidence_current, false);
   } finally {
     await app.close();
     await pool.end();
