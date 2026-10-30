@@ -22,6 +22,15 @@ declare
   instrument_row record;
   activity_organization_id uuid;
 begin
+  -- Once a reading has an instrument binding, preserve that provenance permanently.
+  -- Corrections must be represented as a new measurement, not by unlinking or rebinding it.
+  if tg_op = 'UPDATE'
+     and old.mrv_instrument_id is not null
+     and (new.mrv_instrument_id is distinct from old.mrv_instrument_id
+       or new.parameter_code is distinct from old.parameter_code) then
+    raise exception 'instrument-bound measurement provenance is immutable; create a corrected measurement instead';
+  end if;
+
   -- Legacy/unlinked measurements remain readable, but are not instrument-certified.
   if new.mrv_instrument_id is null then
     if new.parameter_code is not null then
