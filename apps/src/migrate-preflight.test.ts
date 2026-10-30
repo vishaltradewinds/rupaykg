@@ -14,14 +14,19 @@ function fakePool(options: {
   ledgerExists: boolean;
   applied?: Array<{ version: string; filename: string }>;
   lockFails?: boolean;
+  unlockFails?: boolean;
 }) {
   const calls: string[] = [];
   let releaseCount = 0;
+  const releaseErrors: Array<Error | boolean | undefined> = [];
   async function query(sql: string): Promise<QueryResult> {
     const normalized = sql.replace(/\\s+/g, " ").trim();
     calls.push(normalized);
     if (normalized.startsWith("select pg_advisory_lock") && options.lockFails) {
       throw new Error("simulated advisory lock failure");
+    }
+    if (normalized.startsWith("select pg_advisory_unlock") && options.unlockFails) {
+      throw new Error("simulated advisory unlock failure");
     }
     if (normalized.includes("to_regclass('schema_migrations')")) {
       return { rows: [{ ledger_exists: options.ledgerExists ? "schema_migrations" : null }] };
@@ -41,13 +46,14 @@ function fakePool(options: {
     async connect() {
       return {
         query,
-        release() {
+        release(error?: Error | boolean) {
           releaseCount += 1;
+          releaseErrors.push(error);
         },
       };
     },
   };
-  return { pool: pool as unknown as PoolType, calls, getReleaseCount: () => releaseCount };
+  return { pool: pool as unknown as PoolType, calls, getReleaseCount: () => releaseCount, releaseErrors };
 }
 
 async function withCatalog(run: (dir: string) => Promise<void>): Promise<void> {
@@ -202,3 +208,17 @@ test(
     }
   },
 );
+
+
+test("failed advisory unlock destroys the session instead of returning it to the pool", async () => {
+  await withCatalog(async (dir) => {
+    const { pool, calls, getReleaseCount, releaseErrors } = fakePool({
+      ledgerExists: false,
+      unlockFails: true,
+    });
+    await assert.rejects(runMigrations(pool, dir), /simulated advisory unlock failure/);
+    assert.ok(calls.at(-1)?.startsWith("select pg_advisory_unlock"));
+    assert.equal(getReleaseCount(), 1);
+    assert.ok(releaseErrors[0] instanceof Error);
+  });
+});
