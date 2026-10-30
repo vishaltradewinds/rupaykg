@@ -233,3 +233,10 @@ A source review of draft PR #137 found that the initial candidate allowed the re
 - API and migration documentation updated to state the dual-control rule.
 
 Remediation commits: `6a706b55bb2a3e57db29c64c133817a8d939d9db`, `964df30e3a7174f4c5d0228c5476626d140f4409`, `aae901fa7557edd3143180388c4a66df1d895375`, `8e283a076d5afbc3ce1d56f03fdcca72c445276f`. The latest amended head requires a fresh exact-head CI run; the earlier green run does not validate these changes. Keep PR #137 Draft until CI and independent review pass.
+
+
+## 14. Verified-state downgrade bypass and durable immutability correction
+
+A second source review found that locking fields only while `old.approval_status = 'VERIFIED'` would permit an operator to downgrade to HOLD and then mutate the previously verified model/evidence. Migration 088 now checks the append-only decision history for any prior `VERIFIED` decision; model identity, instrument classification, parameter mapping, MeitY/calibration/security evidence, and registration provenance remain immutable thereafter. Reviewer metadata can change only alongside an explicit status transition, whose decision is appended to the decision history; this preserves the ability to place a previously verified instrument on HOLD/EXPIRED without opening an evidence-mutation bypass. The database test exercises VERIFIED → HOLD → attempted model substitution and expects rejection, rolling the test sequence back afterward.
+
+Latest amended candidate head: `365bd3f28026c79cfbbe33fabb8b5d581c92bf64`. Fresh CI run #3426 / `41070461964` is in progress. Earlier runs validate earlier commits only; do not mark the latest candidate green until this exact run passes. PR #137 remains Draft, unmerged, and undeployed.
