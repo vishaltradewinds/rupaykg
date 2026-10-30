@@ -255,3 +255,21 @@ Commits in this batch: migration `8d27110165f3026d30df8d02198b85307ab58b88`, tes
 CI run #3430 / `41073290199` completed successfully on the preceding head `592f4494a1bf30a3e9cb9c75558eec5876c32290`. It does **not** validate the subsequent measurement-fact immutability changes. A new exact-head run is required; as of this checkpoint, no CI run was returned for the latest head.
 
 Disposition remains HOLD: PR #137 is Draft and unmerged. Independent review, exact-head CI, migration provenance reconciliation, supported upgrade-path validation, exact-model device evidence and physical/site acceptance remain outstanding. No deployment, live database migration, procurement or certification is authorized.
+
+
+## 16. Measurement quality/metadata/delete protections and exact-head CI — 2026-10-30 15:00Z
+
+This addendum supersedes the exact-head status recorded in section 15.
+
+Independent review of PR #137 found that instrument-bound measurements could still have their quality status or metadata rewritten, or be deleted outright. The candidate now:
+- Treats `quality_status` and `metadata` as immutable once an instrument-bound reading exists.
+- Rejects deletion of instrument-bound measurements; corrections must be represented as a superseding measurement while retaining the original record.
+- Includes PostgreSQL acceptance assertions for quality-status rewrite, metadata rewrite and deletion attempts.
+- Documents the broader immutability rule in the migration README.
+
+Decision-ledger protections were also extended to reject direct inserts not emitted by the instrument lifecycle trigger and to reject truncation. Acceptance tests cover both attempts.
+
+Latest PR #137 candidate head: `58e50aa8c1853862caf5b4aa4d8cdd586c06bac0`.
+Exact-head CI run #3452 / `41076530688` completed **SUCCESS** at that exact head: dependency/security audit, migration validation, fresh PostgreSQL migration execution, TypeScript typecheck, build, production-web browser smoke test, tests including disposable PostgreSQL acceptance, and production-container build all passed.
+
+This remains an engineering candidate only. The PR is still Draft and unmerged. CI does not resolve production/staging migration provenance, establish physical instrument qualification, prove official approval evidence genuine, or establish site/methodology eligibility or TRL advancement. No production migration, deployment, procurement or certification occurred.
