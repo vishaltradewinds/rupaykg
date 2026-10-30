@@ -11,11 +11,16 @@ type QueryResult = { rows: Array<Record<string, unknown>> };
 function fakePool(options: {
   ledgerExists: boolean;
   applied?: Array<{ version: string; filename: string }>;
+  lockFails?: boolean;
 }) {
   const calls: string[] = [];
+  let releaseCount = 0;
   async function query(sql: string): Promise<QueryResult> {
     const normalized = sql.replace(/\\s+/g, " ").trim();
     calls.push(normalized);
+    if (normalized.startsWith("select pg_advisory_lock") && options.lockFails) {
+      throw new Error("simulated advisory lock failure");
+    }
     if (normalized.includes("to_regclass('schema_migrations')")) {
       return { rows: [{ ledger_exists: options.ledgerExists ? "schema_migrations" : null }] };
     }
@@ -34,11 +39,13 @@ function fakePool(options: {
     async connect() {
       return {
         query,
-        release() {},
+        release() {
+          releaseCount += 1;
+        },
       };
     },
   };
-  return { pool: pool as unknown as PoolType, calls };
+  return { pool: pool as unknown as PoolType, calls, getReleaseCount: () => releaseCount };
 }
 
 async function withCatalog(run: (dir: string) => Promise<void>): Promise<void> {
@@ -53,7 +60,7 @@ async function withCatalog(run: (dir: string) => Promise<void>): Promise<void> {
 
 test("conflicting existing ledger fails before ledger DDL and pending SQL, then releases lock", async () => {
   await withCatalog(async (dir) => {
-    const { pool, calls } = fakePool({
+    const { pool, calls, getReleaseCount } = fakePool({
       ledgerExists: true,
       applied: [{ version: "096", filename: "096_missing_from_catalogue.sql" }],
     });
@@ -63,12 +70,13 @@ test("conflicting existing ledger fails before ledger DDL and pending SQL, then 
     assert.equal(calls.some((sql) => sql === "select 1;"), false);
     assert.ok(calls[0].startsWith("select pg_advisory_lock"));
     assert.ok(calls.at(-1)?.startsWith("select pg_advisory_unlock"));
+    assert.equal(getReleaseCount(), 1);
   });
 });
 
 test("fresh database validates empty history before creating ledger and applying SQL", async () => {
   await withCatalog(async (dir) => {
-    const { pool, calls } = fakePool({ ledgerExists: false });
+    const { pool, calls, getReleaseCount } = fakePool({ ledgerExists: false });
     await runMigrations(pool, dir);
 
     const lockIndex = calls.findIndex((sql) => sql.startsWith("select pg_advisory_lock"));
@@ -81,5 +89,16 @@ test("fresh database validates empty history before creating ledger and applying
     assert.ok(createIndex > preflightIndex);
     assert.ok(pendingSqlIndex > createIndex);
     assert.ok(unlockIndex > pendingSqlIndex);
+    assert.equal(getReleaseCount(), 1);
+  });
+});
+
+test("failed advisory lock acquisition releases connection without database mutation", async () => {
+  await withCatalog(async (dir) => {
+    const { pool, calls, getReleaseCount } = fakePool({ ledgerExists: false, lockFails: true });
+    await assert.rejects(runMigrations(pool, dir), /simulated advisory lock failure/);
+    assert.equal(calls.length, 1);
+    assert.ok(calls[0].startsWith("select pg_advisory_lock"));
+    assert.equal(getReleaseCount(), 1);
   });
 });
