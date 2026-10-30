@@ -311,7 +311,7 @@ export async function reconcileGovernmentInbox(pool: Pool): Promise<{
   );
   const leases = await pool.query<{ count: string }>(
     `select count(*)::text as count from async_mirror_inbox
-      where status='PROCESSING' and lease_until < now()`,
+      where status='PROCESSING' and (lease_until is null or lease_until < now())`,
   );
   const byStatus: Record<string, number> = {};
   let oldestUnresolvedAt: string | null = null;
