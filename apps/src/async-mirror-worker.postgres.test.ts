@@ -73,6 +73,13 @@ test("real government inbox worker obeys PostgreSQL status constraints and prese
       create trigger async_mirror_inbox_event_after_change
         after insert or update on async_mirror_inbox
         for each row execute function record_async_mirror_inbox_event();
+      create function reject_async_mirror_event_mutation() returns trigger language plpgsql as $
+      begin
+        raise exception 'async_mirror_inbox_events is append-only';
+      end $;
+      create trigger async_mirror_inbox_events_immutable
+        before update or delete on async_mirror_inbox_events
+        for each row execute function reject_async_mirror_event_mutation();
 
       create table authoritative_source_snapshots (
         id uuid primary key,
@@ -181,6 +188,91 @@ test("real government inbox worker obeys PostgreSQL status constraints and prese
     );
     assert.equal(records.rows[0]?.inbox_count, 2, "inbox records must remain preserved");
     assert.ok(events.rows[0]?.event_count >= 5, "append-only status/attempt event history must be preserved");
+    const eventId = (await pool.query(
+      "select id from async_mirror_inbox_events where inbox_id=$1 order by id limit 1",
+      [correctedSchemaId],
+    )).rows[0]?.id;
+    assert.ok(eventId, "status transition must have an event row");
+    await assert.rejects(
+      pool.query("update async_mirror_inbox_events set error_code='tampered' where id=$1", [eventId]),
+      /append-only/,
+      "event UPDATE must be rejected",
+    );
+    await assert.rejects(
+      pool.query("delete from async_mirror_inbox_events where id=$1", [eventId]),
+      /append-only/,
+      "event DELETE must be rejected",
+    );
+
+    // Retry exhaustion must quarantine the row rather than process it again.
+    const exhaustedId = randomUUID();
+    const exhaustedBatchId = randomUUID();
+    const exhaustedPayload = makePayload(exhaustedBatchId);
+    await pool.query(
+      `insert into async_mirror_inbox
+        (id,authority_code,municipal_code,batch_id,sync_window_timestamp,payload,payload_sha256,attempts,status,next_attempt_at)
+       values ($1,$2,$3,$4,$5,$6::jsonb,$7,5,'RETRY',now())`,
+      [exhaustedId,"TEST-AUTHORITY","TEST-MUNICIPALITY",exhaustedBatchId,"2026-10-19T02:30:00Z",JSON.stringify(exhaustedPayload),canonicalGovBridgeHash(exhaustedPayload)],
+    );
+    await runGovernmentInboxWorker(pool, undefined, { batchSize: 1, maxAttempts: 5 });
+    const exhaustedState = (await pool.query(
+      "select status,last_error_code,lease_token,lease_until,quarantined_at from async_mirror_inbox where id=$1",
+      [exhaustedId],
+    )).rows[0];
+    assert.equal(exhaustedState.status, "QUARANTINED");
+    assert.equal(exhaustedState.last_error_code, "WORKER_ATTEMPTS_EXHAUSTED");
+    assert.equal(exhaustedState.lease_token, null);
+    assert.equal(exhaustedState.lease_until, null);
+    assert.ok(exhaustedState.quarantined_at);
+
+    // Expired leases are recoverable, but the row must still end unresolved
+    // when no verified current jurisdiction crosswalk exists.
+    const expiredId = randomUUID();
+    const expiredBatchId = randomUUID();
+    const expiredPayload = makePayload(expiredBatchId);
+    await pool.query(
+      `insert into async_mirror_inbox
+        (id,authority_code,municipal_code,batch_id,sync_window_timestamp,payload,payload_sha256,attempts,status,lease_token,lease_until)
+       values ($1,$2,$3,$4,$5,$6::jsonb,$7,1,'PROCESSING',$8,now()-interval '1 minute')`,
+      [expiredId,"TEST-AUTHORITY","TEST-MUNICIPALITY",expiredBatchId,"2026-10-19T02:30:00Z",JSON.stringify(expiredPayload),canonicalGovBridgeHash(expiredPayload),randomUUID()],
+    );
+    const expiredResult = await runGovernmentInboxWorker(pool, undefined, { batchSize: 1, maxAttempts: 5 });
+    assert.equal(expiredResult.claimed, 1, "expired lease must be reclaimed");
+    const expiredState = (await pool.query(
+      "select status,lease_token,lease_until,validation_summary from async_mirror_inbox where id=$1",
+      [expiredId],
+    )).rows[0];
+    assert.equal(expiredState.status, "UNRESOLVED");
+    assert.equal(expiredState.lease_token, null);
+    assert.equal(expiredState.lease_until, null);
+    assert.equal(expiredState.validation_summary?.officialAcceptance, false);
+    assert.equal(expiredState.validation_summary?.authoritativeMrvMutation, false);
+    assert.equal(expiredState.validation_summary?.guardianSubmission, false);
+
+    // A stale worker must not finalize a row after another claimant rotates
+    // the fencing token. The callback simulates that intervening claimant.
+    const staleId = randomUUID();
+    const staleBatchId = randomUUID();
+    const stalePayload = makePayload(staleBatchId);
+    await pool.query(
+      `insert into async_mirror_inbox
+        (id,authority_code,municipal_code,batch_id,sync_window_timestamp,payload,payload_sha256)
+       values ($1,$2,$3,$4,$5,$6::jsonb,$7)`,
+      [staleId,"TEST-AUTHORITY","TEST-MUNICIPALITY",staleBatchId,"2026-10-19T02:30:00Z",JSON.stringify(stalePayload),canonicalGovBridgeHash(stalePayload)],
+    );
+    const staleResult = await runGovernmentInboxWorker(pool, async (input) => {
+      await pool.query("update async_mirror_inbox set lease_token=$2 where id=$1", [input.id, randomUUID()]);
+      return { valid: false, errorCode: "STALE_WORKER_SIMULATION" };
+    }, { batchSize: 1, maxAttempts: 5 });
+    assert.equal(staleResult.claimed, 1);
+    assert.equal(staleResult.rejected, 0, "stale worker must not count a transition it did not own");
+    const staleState = (await pool.query(
+      "select status,lease_token,last_error_code from async_mirror_inbox where id=$1",
+      [staleId],
+    )).rows[0];
+    assert.equal(staleState.status, "PROCESSING", "stale worker must not finalize another claimant's row");
+    assert.ok(staleState.lease_token);
+    assert.notEqual(staleState.last_error_code, "STALE_WORKER_SIMULATION");
   } finally {
     await pool?.end();
     await admin.query(`drop schema if exists "${schema}" cascade`).catch(() => undefined);
