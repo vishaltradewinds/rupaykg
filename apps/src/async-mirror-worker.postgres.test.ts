@@ -81,6 +81,13 @@ test("real government inbox worker obeys PostgreSQL status constraints and prese
         before update or delete on async_mirror_inbox_events
         for each row execute function reject_async_mirror_event_mutation();
 
+      create table official_acceptance_records (id uuid primary key);
+      create table authoritative_mrv_records (id uuid primary key);
+      create table guardian_hcs_submissions (id uuid primary key);
+      insert into official_acceptance_records values ('10000000-0000-4000-8000-000000000001');
+      insert into authoritative_mrv_records values ('10000000-0000-4000-8000-000000000002');
+      insert into guardian_hcs_submissions values ('10000000-0000-4000-8000-000000000003');
+
       create table authoritative_source_snapshots (
         id uuid primary key,
         validation_status text not null,
@@ -159,6 +166,12 @@ test("real government inbox worker obeys PostgreSQL status constraints and prese
     const migrationPath = migrationCandidates.find((candidate) => existsSync(candidate));
     assert.ok(migrationPath, "corrective migration source must exist in the test checkout");
     await pool.query(readFileSync(migrationPath, "utf8"));
+    const authoritativeBefore = await pool.query(`
+      select
+        (select count(*)::int from official_acceptance_records) as official_acceptance,
+        (select count(*)::int from authoritative_mrv_records) as authoritative_mrv,
+        (select count(*)::int from guardian_hcs_submissions) as guardian_hcs
+    `);
     const correctedSchemaId = await insertInbox();
     const correctedResult = await runGovernmentInboxWorker(pool, undefined, { batchSize: 1, maxAttempts: 5 });
     assert.equal(correctedResult.claimed, 1);
@@ -173,6 +186,17 @@ test("real government inbox worker obeys PostgreSQL status constraints and prese
     assert.equal(correctedState.rows[0]?.validation_summary?.officialAcceptance, false);
     assert.equal(correctedState.rows[0]?.validation_summary?.authoritativeMrvMutation, false);
     assert.equal(correctedState.rows[0]?.validation_summary?.guardianSubmission, false);
+    const authoritativeAfter = await pool.query(`
+      select
+        (select count(*)::int from official_acceptance_records) as official_acceptance,
+        (select count(*)::int from authoritative_mrv_records) as authoritative_mrv,
+        (select count(*)::int from guardian_hcs_submissions) as guardian_hcs
+    `);
+    assert.deepEqual(
+      authoritativeAfter.rows[0],
+      authoritativeBefore.rows[0],
+      "UNRESOLVED must not mutate official acceptance, authoritative MRV, or Guardian/HCS submission tables",
+    );
 
     await assert.rejects(
       pool.query("update async_mirror_inbox set status='MADE_UP_STATUS' where id=$1", [correctedSchemaId]),
