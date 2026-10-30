@@ -15,6 +15,8 @@ function fakePool(options: {
   applied?: Array<{ version: string; filename: string }>;
   lockFails?: boolean;
   unlockFails?: boolean;
+  migrationFails?: boolean;
+  rollbackFails?: boolean;
 }) {
   const calls: string[] = [];
   let releaseCount = 0;
@@ -27,6 +29,12 @@ function fakePool(options: {
     }
     if (normalized.startsWith("select pg_advisory_unlock") && options.unlockFails) {
       throw new Error("simulated advisory unlock failure");
+    }
+    if (normalized === "select 1;" && options.migrationFails) {
+      throw new Error("simulated migration SQL failure");
+    }
+    if (normalized === "rollback" && options.rollbackFails) {
+      throw new Error("simulated rollback failure");
     }
     if (normalized.includes("to_regclass('schema_migrations')")) {
       return { rows: [{ ledger_exists: options.ledgerExists ? "schema_migrations" : null }] };
@@ -221,5 +229,27 @@ test("failed advisory unlock destroys the session instead of returning it to the
     assert.ok(calls.at(-1)?.startsWith("select pg_advisory_unlock"));
     assert.equal(getReleaseCount(), 1);
     assert.ok(releaseErrors[0] instanceof Error);
+  });
+});
+
+test("failed rollback destroys the session and does not attempt to unlock an uncertain connection", async () => {
+  await withCatalog(async (dir) => {
+    const { pool, calls, getReleaseCount, releaseErrors } = fakePool({
+      ledgerExists: false,
+      migrationFails: true,
+      rollbackFails: true,
+    });
+
+    await assert.rejects(
+      runMigrations(pool, dir),
+      /Migration 001_safe\.sql failed and rollback failed/,
+    );
+    assert.ok(calls.includes("begin"));
+    assert.ok(calls.includes("select 1;"));
+    assert.ok(calls.includes("rollback"));
+    assert.equal(calls.some((sql) => sql.startsWith("select pg_advisory_unlock")), false);
+    assert.equal(getReleaseCount(), 1);
+    assert.ok(releaseErrors[0] instanceof Error);
+    assert.match(releaseErrors[0]!.message, /rollback also failed; destroying database connection/);
   });
 });
