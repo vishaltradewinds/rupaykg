@@ -93,6 +93,9 @@ begin
    order by e.id
    for share;
 
+  -- Preserve the pre-existing lifecycle for credentials with no instrument-linked
+  -- MRV inputs. If instrument-linked inputs exist, the current-evidence checks below
+  -- must pass; observations without an instrument identity still fail closed.
   if not exists (
     select 1 from mrv_observations mo where mo.activity_id = activity_id_value
     union all
@@ -100,6 +103,11 @@ begin
      where mm.activity_id = activity_id_value
        and mm.mrv_instrument_id is not null
   ) then
+    if not exists (
+      select 1 from mrv_observations mo where mo.activity_id = activity_id_value
+    ) then
+      return true;
+    end if;
     return false;
   end if;
 
