@@ -253,3 +253,25 @@ These results are exact-head software CI evidence only. They do not establish re
 - Keep overall TRL 9 and production certification **HOLD/OFF**.
 - Keep the TRL plan (#90), evidence ledger (#93), hardware adapter/sync work (#128/#129), and hardware approval work (#49/#51) coordinated as one dependency graph; do not create duplicate readiness or instrument registers.
 - No production mutation, merge, deployment, procurement, or physical-hardware qualification is authorized by this update.
+
+
+## 14. Hardware approval integration decision — 2026-10-30 13:20Z
+
+### Exact-head CI and branch topology
+- Baseline audit head `d14d13fbd3202c5f11f1f95a3324029af7ddf3f8`: CI run #3381 (run ID `41061552022`) completed successfully. The single configured `validate` job passed dependency audit, migration validation/execution, typecheck, build, browser smoke, disposable PostgreSQL acceptance tests, production-container build and cleanup.
+- Hardware approval PR #49 head: `4d606e188b31b890eb894aa8dfdd275f7c8ee4c4`; exact-head CI run #2147 passed.
+- Evidence-bound instrument PR #51 head: `1824d2a342ab64850575c9488a544edf3c80cbd5`; exact-head CI run #3368 passed.
+- Commit comparison establishes that #49's head is an ancestor of #51's head: #51 is 118 commits ahead of #49 and not behind it. Relative to current `main` SHA `54a7fe1ceb41b37a68720a71c10a1dd03af30dea`, #51 is 121 commits ahead and 2 commits behind, so it is not current-main integrated.
+
+### Integration recommendation (not merge authorization)
+Treat **PR #51 as the single hardware-approval integration candidate**, because its history already contains PR #49 and adds the evidence-vault artifact-version binding, structured parameter specifications, current-evidence checks, replay integrity, concurrency tests and strict field-sync timestamp validation. Do not merge #49 separately and do not maintain two competing canonical copies of the same migration/routes. Keep #49 open/draft as a traceable source of the initial gate until the owner formally supersedes or closes it after review.
+
+Before #51 can be considered for integration:
+1. Reconcile its two commits behind current `main` using a reviewed, non-destructive update; inspect the exact commits and resulting diff rather than force-pushing or rewriting history blindly.
+2. Confirm the migration namespace against the current release catalogue and the separately confirmed production/staging ledger mismatch. The feature migrations `088`, `089`, and the date-prefixed evidence/current-credential guards must not be merged or applied until the canonical release-catalogue decision packet and disposable dual-history acceptance are complete.
+3. Run the full configured CI against the resulting exact head and repeat the concurrency tests for both lock-order outcomes, including evidence rejection racing with credential issuance, transfer and settlement. Verify persisted state and ensure lock ordering remains instrument UUID order then evidence UUID order across all value-bearing paths.
+4. Obtain independent review of route authorization, evidence-vault scope, reviewer separation, byte/hash/size recomputation, latest-review semantics, expiry/calibration/firmware validity, and production evidence-store compatibility.
+5. Keep all hardware approvals in HOLD until actual device model, serial/identity, intended-use applicability, official approval evidence, calibration/metrology packet, firmware lifecycle and site/methodology eligibility are independently verified.
+
+### Safety disposition
+No branch was merged or rebased in this batch. No migration was applied to a live database. No deployment, procurement, hardware qualification or TRL advancement is claimed. Overall TRL 9 and production certification remain **HOLD/OFF**. The IoT stack and TRL execution plan remain one coordinated dependency graph; PR #90 is the execution plan and PR #93 is the evidence ledger, not parallel competing readiness registers.
