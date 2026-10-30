@@ -20,6 +20,22 @@ export async function runMigrations(pool: PoolType, migrationDir: string): Promi
   // Reject empty/ambiguous release catalogues before any database DDL.
   assertMigrationCatalogConsistent(files);
 
+  // Inspect whether the ledger exists before any DDL. A conflicting existing
+  // ledger must fail closed without even bootstrapping schema_migrations.
+  const ledger = await pool.query<{ ledger_exists: string | null }>(
+    "select to_regclass('schema_migrations')::text as ledger_exists",
+  );
+  const applied = ledger.rows[0]?.ledger_exists
+    ? await pool.query<{ version: string; filename: string }>(
+        "select version, filename from schema_migrations order by version",
+      )
+    : { rows: [] as { version: string; filename: string }[] };
+
+  // For a fresh database this validates an empty history; for an existing one,
+  // it reconciles the complete ledger. Both paths stop before DDL on conflict.
+  assertMigrationHistoryConsistent(applied.rows, files);
+
+  // Only bootstrap the ledger after catalogue/history preflight succeeds.
   await pool.query(`
     create table if not exists schema_migrations (
       version text primary key,
@@ -27,12 +43,6 @@ export async function runMigrations(pool: PoolType, migrationDir: string): Promi
       applied_at timestamptz not null default now()
     )
   `);
-
-  // Reconcile every recorded row before executing any pending migration SQL.
-  const applied = await pool.query<{ version: string; filename: string }>(
-    "select version, filename from schema_migrations order by version",
-  );
-  assertMigrationHistoryConsistent(applied.rows, files);
 
   for (const filename of files) {
     const version = filename.split("_", 1)[0];
