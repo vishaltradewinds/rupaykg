@@ -228,7 +228,7 @@ try {
   for (const name of names.slice(1)) await copyFile(path.join(migrationDir, name), path.join(missingDir, name));
   const orphan = runRunner(stagingSchema, missingDir);
   assert.notEqual(orphan.status, 0, "actual runner must fail when ledger references a missing migration file");
-  assert.match(orphan.stderr + orphan.stdout, /recorded migration|orphan|absent/i);
+  assert.match(orphan.stderr + orphan.stdout, /MIGRATION_HISTORY_UNRESOLVED|recorded migration|orphan|absent/i);
   console.log("PASS: actual migrate.ts runner applied production-shaped fixture, skipped staging ledger matches, preserved 12 inbox + 12 event rows, no-op repeat runs, failed closed for missing historical ledger files, and verified recovered 096 authorization binding plus APPROVED→REJECTED→APPROVED snapshot semantics in an isolated PostgreSQL schema.");
 } finally {
   if (connected) {
