@@ -141,6 +141,165 @@ test("HTTP routes reject stale evidence and refuse MRV instrument approval", {
   }
 });
 
+
+test("HTTP review routes serialize evidence rejection against instrument approval in both lock orders", {
+  skip: !url || !enabled,
+  timeout: 120_000,
+}, async () => {
+  assert.ok(url);
+  await exerciseHttpRouteRace("approval-first");
+  await exerciseHttpRouteRace("rejection-first");
+});
+
+async function exerciseHttpRouteRace(winner: "approval-first" | "rejection-first"): Promise<void> {
+  const suffix = randomUUID();
+  const applicationName = `mrv-http-race-${suffix.slice(0, 8)}`;
+  const pool = new Pool({
+    connectionString: url!,
+    max: 8,
+    application_name: applicationName,
+    ssl: process.env.DATABASE_SSL === "false" ? undefined : { rejectUnauthorized: false },
+  });
+  const app = Fastify({ logger: false });
+  const observer = await pool.connect();
+  const blocker = await pool.connect();
+  try {
+    const fixture = await createFixture(pool, suffix);
+    await pool.query("update mrv_instruments set approval_status='HOLD' where id=$1", [fixture.instrumentId]);
+    await pool.query("update identities set status='VERIFIED' where id=$1", [fixture.reviewerId]);
+    const role = await pool.query<{ id: string }>(
+      "insert into roles(organization_id,name,permissions) values($1,$2,'[\"VERIFY_EVIDENCE\",\"evidence:review\",\"guardian:operate\"]'::jsonb) returning id",
+      [fixture.organizationId, `MRV-HTTP-RACE-REVIEWER-${suffix}`],
+    );
+    await pool.query(
+      "insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED')",
+      [fixture.reviewerId, fixture.organizationId, role.rows[0]!.id],
+    );
+    const token = issueOpaqueToken();
+    await pool.query(
+      "insert into identity_sessions(identity_id,token_hash,expires_at) values($1,$2,now()+interval '15 minutes')",
+      [fixture.reviewerId, createHash("sha256").update(token).digest("hex")],
+    );
+    await registerEvidenceVaultRoutes(app, pool);
+    await registerMrvInstrumentRoutes(app, pool);
+    const headers = { authorization: `Bearer ${token}`, "x-rupaykg-organization-id": fixture.organizationId };
+    // Reuse the exact evidence already bound to this instrument. Its immutable
+    // identity guard must not be weakened merely to exercise a concurrent review.
+    const existing = await pool.query<{
+      meity_certificate_id: string; meity_issuer: string; meity_certificate_scope: string;
+      meity_verification_url: string; meity_evidence_reference: string; meity_evidence_sha256: string;
+      meity_evidence_artifact_version_id: string; meity_verified_at: string;
+      meity_validity_basis: string; meity_valid_until: string | null; calibration_required: boolean;
+      calibration_status: string; calibration_certificate_id: string | null;
+      calibration_evidence_reference: string | null; calibration_evidence_sha256: string | null;
+      calibration_evidence_artifact_version_id: string | null; calibration_lab: string | null;
+      calibration_traceability: string | null; calibration_uncertainty: string | number | null;
+      calibration_valid_until: string | null; security_review_status: string;
+      security_evidence_reference: string | null; security_evidence_sha256: string | null;
+      security_evidence_artifact_version_id: string | null; security_reviewed_at: string | null;
+      security_not_applicable_reason: string | null; firmware_version: string | null;
+      firmware_support_until: string | null;
+    }>(
+      "select meity_certificate_id,meity_issuer,meity_certificate_scope,meity_verification_url,meity_evidence_reference,meity_evidence_sha256,meity_evidence_artifact_version_id,meity_verified_at::text meity_verified_at,meity_validity_basis,meity_valid_until::text meity_valid_until,calibration_required,calibration_status,calibration_certificate_id,calibration_evidence_reference,calibration_evidence_sha256,calibration_evidence_artifact_version_id,calibration_lab,calibration_traceability,calibration_uncertainty,calibration_valid_until::text calibration_valid_until,security_review_status,security_evidence_reference,security_evidence_sha256,security_evidence_artifact_version_id,security_reviewed_at::text security_reviewed_at,security_not_applicable_reason,firmware_version,firmware_support_until::text firmware_support_until from mrv_instruments where id=$1",
+      [fixture.instrumentId],
+    );
+    const evidence = existing.rows[0]!;
+    const approvalRequest = () => app.inject({
+      method: "POST",
+      url: `/api/v1/mrv/instruments/${fixture.instrumentId}/review`,
+      headers,
+      payload: {
+        decision: "VERIFIED", note: "Deterministic HTTP concurrency acceptance test",
+        meityCertificateId: evidence.meity_certificate_id, meityIssuer: evidence.meity_issuer,
+        meityCertificateScope: evidence.meity_certificate_scope, meityVerificationUrl: evidence.meity_verification_url,
+        meityEvidenceReference: evidence.meity_evidence_reference, meityEvidenceSha256: evidence.meity_evidence_sha256,
+        meityEvidenceArtifactVersionId: evidence.meity_evidence_artifact_version_id, meityVerifiedAt: evidence.meity_verified_at,
+        meityValidityBasis: evidence.meity_validity_basis, meityValidUntil: evidence.meity_valid_until,
+        calibrationRequired: evidence.calibration_required, calibrationStatus: evidence.calibration_status,
+        calibrationCertificateId: evidence.calibration_certificate_id, calibrationEvidenceReference: evidence.calibration_evidence_reference,
+        calibrationEvidenceSha256: evidence.calibration_evidence_sha256, calibrationEvidenceArtifactVersionId: evidence.calibration_evidence_artifact_version_id,
+        calibrationLab: evidence.calibration_lab, calibrationTraceability: evidence.calibration_traceability,
+        calibrationUncertainty: evidence.calibration_uncertainty == null ? null : Number(evidence.calibration_uncertainty),
+        calibrationValidUntil: evidence.calibration_valid_until, securityReviewStatus: evidence.security_review_status,
+        securityEvidenceReference: evidence.security_evidence_reference, securityEvidenceSha256: evidence.security_evidence_sha256,
+        securityEvidenceArtifactVersionId: evidence.security_evidence_artifact_version_id,
+        securityReviewedAt: evidence.security_reviewed_at, securityNotApplicableReason: evidence.security_not_applicable_reason,
+        firmwareVersion: evidence.firmware_version, firmwareSupportUntil: evidence.firmware_support_until,
+      },
+    });
+    const rejectionRequest = () => app.inject({
+      method: "POST",
+      url: `/api/v1/evidence-vault/${fixture.evidenceId}/review`,
+      headers,
+      payload: { decision: "REJECTED", rationale: "Deterministic HTTP race revocation test" },
+    });
+
+    await blocker.query("select set_config('application_name',$1,false)", [`mrv-http-blocker-${suffix.slice(0, 8)}`]);
+    await blocker.query("begin");
+    await blocker.query("select id from mrv_instruments where id=$1 for update", [fixture.instrumentId]);
+
+    const firstIsApproval = winner === "approval-first";
+    const first = firstIsApproval ? approvalRequest() : rejectionRequest();
+    await waitUntilBlockedByQuery(
+      observer,
+      applicationName,
+      firstIsApproval
+        ? "%from mrv_instruments where id=$1 for update%"
+        : "%select i.id from mrv_instruments i where i.meity_evidence_artifact_version_id%",
+    );
+    const second = firstIsApproval ? rejectionRequest() : approvalRequest();
+    await waitUntilBlockedByQuery(
+      observer,
+      applicationName,
+      firstIsApproval
+        ? "%select i.id from mrv_instruments i where i.meity_evidence_artifact_version_id%"
+        : "%from mrv_instruments where id=$1 for update%",
+    );
+    await blocker.query("commit");
+
+    const [firstResponse, secondResponse] = await Promise.all([first, second]);
+    const approvalResponse = firstIsApproval ? firstResponse : secondResponse;
+    const rejectionResponse = firstIsApproval ? secondResponse : firstResponse;
+    assert.equal(rejectionResponse.statusCode, 200, rejectionResponse.body);
+    assert.equal(rejectionResponse.json().data.status, "REJECTED");
+    if (winner === "approval-first") {
+      assert.equal(approvalResponse.statusCode, 200, approvalResponse.body);
+    } else {
+      assert.equal(approvalResponse.statusCode, 409, approvalResponse.body);
+      assert.equal(approvalResponse.json().code, "MRV_INSTRUMENT_REVIEW_BLOCKED");
+    }
+
+    const state = await pool.query<{ evidence_status: string; approval_status: string; evidence_current: boolean }>(
+      "select e.status::text evidence_status,i.approval_status,mrv_instrument_evidence_is_current(i.id) evidence_current from evidence e cross join mrv_instruments i where e.id=$1 and i.id=$2",
+      [fixture.evidenceId, fixture.instrumentId],
+    );
+    assert.equal(state.rows[0]?.evidence_status, "REJECTED");
+    assert.equal(state.rows[0]?.evidence_current, false);
+    if (winner === "rejection-first") assert.notEqual(state.rows[0]?.approval_status, "VERIFIED");
+  } catch (error) {
+    await blocker.query("rollback").catch(() => undefined);
+    throw new Error(`HTTP evidence rejection / instrument approval / ${winner} failed: ${String(error)}`, { cause: error });
+  } finally {
+    await app.close();
+    blocker.release();
+    observer.release();
+    await pool.end();
+  }
+}
+
+async function waitUntilBlockedByQuery(observer: PoolClient, applicationName: string, queryPattern: string): Promise<void> {
+  const deadline = Date.now() + 10_000;
+  while (Date.now() < deadline) {
+    const result = await observer.query<{ blocked: boolean }>(
+      "select exists(select 1 from pg_stat_activity where application_name=$1 and wait_event_type='Lock' and state='active' and query ilike $2) blocked",
+      [applicationName, queryPattern],
+    );
+    if (result.rows[0]?.blocked) return;
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  throw new Error(`Timed out waiting for PostgreSQL route lock: ${applicationName} / ${queryPattern}`);
+}
+
 async function exerciseApprovalRace(pool: Pool, winner: "approval-first" | "rejection-first"): Promise<void> {
   const suffix = randomUUID();
   const fixture = await createFixture(pool, suffix);
