@@ -234,3 +234,22 @@ These results are exact-head software CI evidence only. They do not establish re
 5. Recheck all open PR heads and base SHAs, then update the TRL evidence ledger with links to the exact CI/review artifacts.
 
 **Batch A remains partially complete.** No TRL advancement is claimed. Physical instrument inventory, exact-model official certificates, calibration/security packets, intended-site and methodology applicability, hardware-in-the-loop/field acceptance, and sustained operational evidence remain separate gates. Production certification remains HOLD/OFF. No merge, deployment, procurement, or production database change is authorized by this addendum.
+
+
+## 13. Follow-up CI and concurrency review — 2026-10-30 13:13Z
+
+### Baseline-document CI
+- Exact head: `c55055c6255648f5967658cd8ed20876da162995` on `readiness/trl9-baseline-20261030`.
+- GitHub Actions CI run **#3380** (run ID `41060292614`) completed successfully. Its configured steps passed: production dependency audit, migration validation, migration execution in the disposable CI environment, typecheck, build, browser smoke, tests including disposable PostgreSQL acceptance, production-container build, and cleanup.
+- This confirms the documentation branch's exact-head configured CI. It does not establish live production/staging safety, resolve the migration-catalogue mismatch, qualify physical hardware, or advance TRL.
+
+### Evidence-revocation / credential issuance lock-order review
+- Reviewed the current `feat/mrv-evidence-bound-parameters` versions of `migrations/20261027_credential_current_mrv_instrument_evidence.sql` and `apps/src/evidence-vault-routes.ts`.
+- The credential trigger locks the relevant instrument rows in UUID order, then the related evidence rows, before checking current evidence for value-bearing credential states. The evidence-review route also locks affected instrument rows in UUID order before locking the evidence row and appending the review decision. The intended instrument→evidence lock order is therefore consistent in these two inspected paths and is designed to serialize evidence rejection against credential issuance.
+- The review route permits an independent reviewer to append a terminal REJECTED review for a previously VERIFIED artifact; the current-evidence check requires the latest review to be APPROVED and the stored bytes/hash/size to match. The inspected logic supports fail-closed rejection of revoked evidence for new use.
+- **Scope limitation:** this was a source-level review of the current branch files, not an independent security sign-off or a proof of every transaction interleaving. The combined #49/#51 candidate still needs a single integration owner, exact combined-head CI, concurrency acceptance on the combined candidate, independent review, and production evidence-store contract confirmation. Both PRs remain draft/unmerged/undeployed.
+
+### Current gate decision
+- Keep overall TRL 9 and production certification **HOLD/OFF**.
+- Keep the TRL plan (#90), evidence ledger (#93), hardware adapter/sync work (#128/#129), and hardware approval work (#49/#51) coordinated as one dependency graph; do not create duplicate readiness or instrument registers.
+- No production mutation, merge, deployment, procurement, or physical-hardware qualification is authorized by this update.
