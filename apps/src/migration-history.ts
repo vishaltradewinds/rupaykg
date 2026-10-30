@@ -19,10 +19,11 @@ export function findMigrationCatalogVersionConflicts(availableFilenames: readonl
   const byVersion = new Map<string, string[]>();
   for (const filename of availableFilenames) {
     const match = /^(\d+)_.*\.sql$/.exec(filename);
-    if (!match) continue;
-    const entries = byVersion.get(match[1]) ?? [];
+    if (!match?.[1]) continue;
+    const version = match[1];
+    const entries = byVersion.get(version) ?? [];
     entries.push(filename);
-    byVersion.set(match[1], entries);
+    byVersion.set(version, entries);
   }
   return [...byVersion.entries()].filter(([, filenames]) => filenames.length > 1)
     .map(([version, filenames]) => `${version}:${filenames.sort().join("|")}`);
