@@ -138,7 +138,7 @@ export async function runGovernmentInboxWorker(
         where attempts < $3
           and (
             (status in ('RECEIVED','RETRY') and (next_attempt_at is null or next_attempt_at <= now()))
-            or (status='PROCESSING' and lease_until < now())
+            or (status='PROCESSING' and (lease_until is null or lease_until < now()))
           )
         order by received_at asc
         for update skip locked
