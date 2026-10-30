@@ -75,3 +75,10 @@ Migration `086_reserved_role_restoration_db_guard.sql` protects status reactivat
 ## Acceptance fixture registry exclusion
 
 Migration `087_acceptance_fixture_registry_exclusion.sql` prevents activities or evidence explicitly marked with `metadata.acceptanceFixture=true` from backing credentials in value-bearing states. It also binds the database gate to the exact activity, verification, and evidence tuple. The MRV API reports acceptance fixtures as not registry eligible even after real Guardian/Hedera/Mirror Node verification. External anchoring proves message integrity and consensus; it does not validate the underlying activity as a real eligible carbon project.
+
+
+## Migration source checksum policy
+
+The migration runner records `source_sha256` (SHA-256 over the exact SQL file bytes) with each newly applied migration in the same transaction as the SQL and ledger entry. On later runs, a non-null recorded digest must match the exact bytes available in the release catalog; a malformed or mismatching digest fails closed before pending migration SQL executes.
+
+Older ledgers may not have this column. The runner validates the full existing filename/version ledger before adding the nullable column. Existing rows are left `NULL` and therefore explicitly **legacy/unattested**; the current checkout must never be used to fabricate historical deployment hashes. Once the column exists, the runner continues to leave those rows unattested and hashes only newly applied migrations. A matching digest establishes byte consistency with the recorded hash, not independent proof of who deployed the file or that the migration was approved. Live checksum enforcement remains subject to source provenance review, disposable rehearsal, recovery planning and release authorization.
