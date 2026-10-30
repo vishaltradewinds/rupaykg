@@ -11,6 +11,25 @@ if (process.env.RUPAYKG_RUN_DUAL_LEDGER_TESTS !== "1") {
   process.exit(0);
 }
 if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is required.");
+const assertDisposableDatabaseTarget = (connectionString) => {
+  let parsed;
+  try { parsed = new URL(connectionString); } catch {
+    throw new Error("Refusing database integration tests: DATABASE_URL is not a valid URL.");
+  }
+  if (!["postgres:", "postgresql:"].includes(parsed.protocol)) {
+    throw new Error("Refusing database integration tests: DATABASE_URL must use postgres:// or postgresql://.");
+  }
+  // WHATWG URL.hostname keeps brackets around IPv6 literals in Node.
+  const hostname = parsed.hostname.replace(/^\[|\]$/g, "").toLowerCase();
+  const safeHosts = new Set(["localhost", "127.0.0.1", "::1"]);
+  if (!safeHosts.has(hostname)) {
+    throw new Error(
+      `Refusing destructive schema-based acceptance tests against host "${hostname}". ` +
+      "Use a dedicated disposable PostgreSQL instance bound to loopback; these tests create and drop schemas.",
+    );
+  }
+};
+assertDisposableDatabaseTarget(process.env.DATABASE_URL);
 const { Client } = pg;
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fixtureSource = path.join(here, "fixtures", "legacy-migrations");
