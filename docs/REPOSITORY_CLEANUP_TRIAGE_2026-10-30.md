@@ -43,9 +43,9 @@ These overlap, but are not interchangeable without reviewing each diff and its b
 - #149 — rebased null-lease reconciliation correction.
 - #150 — real PostgreSQL worker regression tests stacked on the recovery head.
 - #143 — CI routing for worker PostgreSQL validation.
-- #122 — older unresolved real-worker test proposal.
+- #122 — closed as superseded by #150 after exact file-patch comparison.
 
-#144 is now closed as superseded by #149. Review the dependency chain before merging the remaining stack.
+#144 is closed as superseded by #149. #122 is closed as superseded by #150: the worker PostgreSQL test patch and CORS runtime test patch were confirmed byte-for-byte identical; #150 carries them on the current recovery head. Its workflow-routing intent is represented by #142/#143. Both closures preserve branch/history and do not merge code. Review the remaining dependency chain before any merge.
 
 ### Authorization provenance
 - #139 and #140 are separate test/forward-fix proposals on different bases. Do not merge both blindly; compare their test coverage and dependency assumptions against the observed Neon main schema and the missing source migration 096.
