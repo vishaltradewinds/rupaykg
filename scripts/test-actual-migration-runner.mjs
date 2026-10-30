@@ -229,6 +229,146 @@ try {
   await client.query("update roles set permissions=$2::jsonb where id=$1", [ids.role, JSON.stringify(["VERIFY_EVIDENCE"])]);
   await client.query("update verifications set evidence_id=evidence_id where id=$1", [ids.verification]);
 
+  // Install a disposable-only candidate guard after reproducing the legacy defect.
+  // This is not a numbered migration and is not applied to any live database.
+  // Approved decision linkage is immutable; unrelated updates preserve the original
+  // authorization snapshot; a fresh transition into APPROVED rechecks live authority.
+  await client.query(`
+    create or replace function prevent_invalid_verification()
+    returns trigger
+    language plpgsql
+    as $candidate$
+    declare
+      resolved_activity_id uuid;
+      activity_actor uuid;
+      activity_organization_id uuid;
+      membership_row record;
+      evidence_activity_id uuid;
+    begin
+      if tg_op = 'UPDATE' then
+        if old.decision = 'APPROVED' and (
+          new.verifier_identity_id is distinct from old.verifier_identity_id
+          or new.activity_id is distinct from old.activity_id
+          or new.evidence_id is distinct from old.evidence_id
+        ) then
+          raise exception 'approved verification linkage is immutable; use an audited correction path';
+        end if;
+
+        if new.decision <> 'APPROVED' or old.decision = 'APPROVED' then
+          new.authorization_membership_id := old.authorization_membership_id;
+          new.authorization_role_id := old.authorization_role_id;
+          new.authorization_permissions_snapshot := old.authorization_permissions_snapshot;
+          new.authorization_checked_at := old.authorization_checked_at;
+
+          if old.decision = 'APPROVED' and new.decision = 'APPROVED' then
+            return new;
+          end if;
+
+          if new.decision <> 'APPROVED' then
+            return new;
+          end if;
+        end if;
+      end if;
+
+      resolved_activity_id := new.activity_id;
+      if new.evidence_id is not null then
+        select e.activity_id into evidence_activity_id from evidence e where e.id = new.evidence_id;
+        if evidence_activity_id is null then
+          raise exception 'verification evidence must be bound to an activity';
+        end if;
+        if resolved_activity_id is not null and resolved_activity_id is distinct from evidence_activity_id then
+          raise exception 'verification activity must match the evidence activity';
+        end if;
+        resolved_activity_id := evidence_activity_id;
+        new.activity_id := evidence_activity_id;
+      end if;
+
+      if resolved_activity_id is not null then
+        select a.actor_identity_id, a.organization_id into activity_actor, activity_organization_id
+        from activities a where a.id = resolved_activity_id;
+      end if;
+
+      if new.decision = 'APPROVED' then
+        if activity_organization_id is null then
+          raise exception 'approved verification requires an activity with an organization';
+        end if;
+        if activity_actor is not null and activity_actor = new.verifier_identity_id then
+          raise exception 'activity actor cannot verify its own evidence';
+        end if;
+
+        select m.id as membership_id, m.role_id, r.permissions into membership_row
+        from organization_memberships m
+        join roles r on r.id = m.role_id
+        join identities i on i.id = m.identity_id
+        where m.identity_id = new.verifier_identity_id
+          and m.organization_id = activity_organization_id
+          and m.status = 'VERIFIED'
+          and i.status = 'VERIFIED'
+          and i.suspended_at is null
+          and (
+            r.permissions @> '["VERIFY_EVIDENCE"]'::jsonb
+            or r.permissions @> '["verification:approve"]'::jsonb
+            or r.permissions @> '["verification.approve"]'::jsonb
+          )
+        order by m.created_at desc
+        limit 1;
+
+        if membership_row.membership_id is null then
+          raise exception 'approved verification requires active verifier permission in the activity organization';
+        end if;
+
+        new.authorization_membership_id := membership_row.membership_id;
+        new.authorization_role_id := membership_row.role_id;
+        new.authorization_permissions_snapshot := membership_row.permissions;
+        new.authorization_checked_at := now();
+      end if;
+
+      return new;
+    end;
+    $candidate$;
+  `);
+
+  const candidateBaseline = (await client.query(
+    "select authorization_membership_id,authorization_role_id,authorization_permissions_snapshot,authorization_checked_at from verifications where id=$1",
+    [ids.verification],
+  )).rows[0];
+  await client.query("update roles set permissions=$2::jsonb where id=$1", [ids.role, JSON.stringify(["VERIFY_EVIDENCE", "UNRELATED_PERMISSION"])]);
+  await client.query("update verifications set evidence_id=evidence_id where id=$1", [ids.verification]);
+  const afterCandidateUnrelatedUpdate = (await client.query(
+    "select authorization_membership_id,authorization_role_id,authorization_permissions_snapshot,authorization_checked_at from verifications where id=$1",
+    [ids.verification],
+  )).rows[0];
+  assert.equal(afterCandidateUnrelatedUpdate.authorization_membership_id, candidateBaseline.authorization_membership_id);
+  assert.equal(afterCandidateUnrelatedUpdate.authorization_role_id, candidateBaseline.authorization_role_id);
+  assert.deepEqual(afterCandidateUnrelatedUpdate.authorization_permissions_snapshot, candidateBaseline.authorization_permissions_snapshot,
+    "candidate guard must preserve the decision-time permissions snapshot on unrelated updates");
+  assert.equal(afterCandidateUnrelatedUpdate.authorization_checked_at.getTime(), candidateBaseline.authorization_checked_at.getTime(),
+    "candidate guard must preserve the decision-time timestamp on unrelated updates");
+
+  await assert.rejects(
+    client.query("update verifications set evidence_id=null where id=$1", [ids.verification]),
+    /approved verification linkage is immutable/,
+    "approved evidence linkage must not be silently swapped",
+  );
+  await client.query("update verifications set authorization_permissions_snapshot='[]'::jsonb where id=$1", [ids.verification]);
+  const afterForgedSnapshotAttempt = (await client.query(
+    "select authorization_permissions_snapshot,authorization_checked_at from verifications where id=$1",
+    [ids.verification],
+  )).rows[0];
+  assert.deepEqual(afterForgedSnapshotAttempt.authorization_permissions_snapshot, candidateBaseline.authorization_permissions_snapshot,
+    "direct snapshot edits must not overwrite decision-time provenance");
+  assert.equal(afterForgedSnapshotAttempt.authorization_checked_at.getTime(), candidateBaseline.authorization_checked_at.getTime());
+
+  // Revoking the role after approval must not rewrite historical provenance.
+  await client.query("update roles set permissions='[]'::jsonb where id=$1", [ids.role]);
+  await client.query("update verifications set evidence_id=evidence_id where id=$1", [ids.verification]);
+  const afterRevocationUnrelatedUpdate = (await client.query(
+    "select authorization_permissions_snapshot,authorization_checked_at from verifications where id=$1",
+    [ids.verification],
+  )).rows[0];
+  assert.deepEqual(afterRevocationUnrelatedUpdate.authorization_permissions_snapshot, candidateBaseline.authorization_permissions_snapshot);
+  assert.equal(afterRevocationUnrelatedUpdate.authorization_checked_at.getTime(), candidateBaseline.authorization_checked_at.getTime());
+
   // The legacy trigger stores decision-time authorization provenance but does
   // not clear it when current decision changes. Assert the distinction so
   // consumers must gate current approval on decision='APPROVED', not snapshot presence.
@@ -244,6 +384,12 @@ try {
   assert.ok(rejected.authorization_checked_at);
 
   // Re-approval must pass the trigger's live authorization checks again.
+  await assert.rejects(
+    client.query("update verifications set decision='APPROVED' where id=$1", [ids.verification]),
+    /requires active verifier permission/,
+    "re-approval after revocation must fail closed",
+  );
+  await client.query("update roles set permissions=$2::jsonb where id=$1", [ids.role, JSON.stringify(["VERIFY_EVIDENCE"])]);
   await client.query("update verifications set decision='APPROVED' where id=$1", [ids.verification]);
   const reapproved = (await client.query(
     "select decision,authorization_membership_id,authorization_role_id,authorization_permissions_snapshot,authorization_checked_at from verifications where id=$1",
