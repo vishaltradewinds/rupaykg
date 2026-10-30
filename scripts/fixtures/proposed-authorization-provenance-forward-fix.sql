@@ -55,9 +55,7 @@ begin
     new.authorization_permissions_snapshot := OLD.authorization_permissions_snapshot;
     new.authorization_checked_at := OLD.authorization_checked_at;
 
-    if NEW.decision = 'APPROVED' or NEW.decision <> 'APPROVED' then
-      return new;
-    end if;
+    return new;
   end if;
 
   if new.decision = 'APPROVED' then
