@@ -73,7 +73,7 @@ test("real government inbox worker obeys PostgreSQL status constraints and prese
       create trigger async_mirror_inbox_event_after_change
         after insert or update on async_mirror_inbox
         for each row execute function record_async_mirror_inbox_event();
-      create function reject_async_mirror_event_mutation() returns trigger language plpgsql as $
+      create function reject_async_mirror_event_mutation() returns trigger language plpgsql as $$
       begin
         raise exception 'async_mirror_inbox_events is append-only';
       end $$;
