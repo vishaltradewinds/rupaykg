@@ -36,6 +36,12 @@ However, **field-device identity verification is not equivalent to exact-model i
 
 PR descriptions report CI results for earlier exact heads, but all listed PRs must be checked for their *current* state/head, review status and whether changes are already included in main before any implementation decision. A green CI run on a draft PR does not mean the change is merged or production accepted.
 
+## Parallel PR status refreshed — 2026-10-30 08:06 UTC
+
+The current heads were refreshed: #47 `7812f6f`, #49 `4d606e1`, #51 `e526914`, and #59 `0d9c2e4`. All four remain open draft PRs; none is merged. #49 and #51 both change the MRV instrument approval routes and migrations `088_mrv_instrument_approval_register.sql` and `089_measurement_instrument_binding_guard.sql`; #51 also adds parameter-spec, evidence-vault and MRV-freeze migrations. This overlap confirms that this workstream must not add its own approval table, route, or evidence store. The implementation on this branch is intentionally limited to a package-local adapter-output validator and synthetic tests pending a canonical decision on those draft PRs.
+
+The latest edge contract is under `packages/hardware-edge`. Root `build` now includes `@rupaykg/hardware-edge`, so it is not omitted from the normal production build chain. CI for commit `21d39d2e26ef2331d108e461a6e8935c4b7fcbba` was queued at the time of this update.
+
 ## Highest-priority gaps
 
 1. **Establish the live main baseline.** Determine whether PR #49/#51 and relevant migrations have merged since the workstation checkout was created. Do not apply a duplicate schema or migration.
