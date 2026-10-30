@@ -44,7 +44,7 @@ const validTime = (value: unknown): value is string => {
   // Require a full RFC3339-style timestamp with an explicit timezone; date-only
   // and timezone-naive values are ambiguous across edge devices.
   if (typeof value !== "string") return false;
-  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,3})?(Z|([+-])(\d{2}):(\d{2}))$/.exec(value);
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\\.\\d+)?(Z|([+-])(\d{2}):(\d{2}))$/.exec(value);
   if (!match) return false;
   const year = Number(match[1]);
   const month = Number(match[2]);
@@ -56,7 +56,8 @@ const validTime = (value: unknown): value is string => {
   const offsetMinute = match[8] ? Number(match[10]) : 0;
   const leapYear = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
   const daysInMonth = [31, leapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-  return month >= 1 && month <= 12
+  return year >= 1
+    && month >= 1 && month <= 12
     && day >= 1 && day <= (daysInMonth[month - 1] ?? 0)
     && hour <= 23 && minute <= 59 && second <= 59
     && offsetHour <= 23 && offsetMinute <= 59
