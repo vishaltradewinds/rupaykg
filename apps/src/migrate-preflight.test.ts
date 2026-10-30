@@ -103,11 +103,12 @@ test("fresh database validates empty history before creating ledger and applying
 
 test("failed advisory lock acquisition releases connection without database mutation", async () => {
   await withCatalog(async (dir) => {
-    const { pool, calls, getReleaseCount } = fakePool({ ledgerExists: false, lockFails: true });
+    const { pool, calls, getReleaseCount, releaseErrors } = fakePool({ ledgerExists: false, lockFails: true });
     await assert.rejects(runMigrations(pool, dir), /simulated advisory lock failure/);
     assert.equal(calls.length, 1);
     assert.ok(calls[0].startsWith("select pg_advisory_lock"));
     assert.equal(getReleaseCount(), 1);
+    assert.ok(releaseErrors[0] instanceof Error);
   });
 });
 
