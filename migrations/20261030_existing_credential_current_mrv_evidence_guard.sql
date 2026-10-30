@@ -9,7 +9,7 @@ create or replace function credential_has_current_mrv_instrument_evidence(p_cred
 returns boolean
 language plpgsql
 volatile
-as $
+as $function$
 declare
   activity_id_value uuid;
   activity_org uuid;
