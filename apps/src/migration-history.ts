@@ -31,6 +31,7 @@ export function findMigrationCatalogVersionConflicts(availableFilenames: readonl
 }
 
 export function assertMigrationCatalogConsistent(availableFilenames: readonly string[]): void {
+  if (availableFilenames.length === 0) throw new Error("MIGRATION_CATALOG_EMPTY: no numbered SQL migrations found");
   const conflicts = findMigrationCatalogVersionConflicts(availableFilenames);
   if (conflicts.length) throw new Error(`MIGRATION_CATALOG_CONFLICT: duplicate numeric migration prefixes: ${conflicts.join(", ")}`);
 }
