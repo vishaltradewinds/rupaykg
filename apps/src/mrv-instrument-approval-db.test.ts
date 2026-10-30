@@ -30,7 +30,7 @@ test("PostgreSQL enforces MRV instrument approval evidence and append-only decis
       [`mrv-instrument-reviewer-${suffix}`, "MRV instrument reviewer"],
     )).rows[0]!.id;
     const reviewerRoleId = (await client.query<{ id: string }>(
-      "insert into roles(organization_id,name,permissions) values($1,$2,'[\"VERIFY_EVIDENCE\"]'::jsonb) returning id",
+      "insert into roles(organization_id,name,permissions) values($1,$2,'[\"VERIFY_EVIDENCE\",\"TRANSFER_CREDENTIAL\"]'::jsonb) returning id",
       [organizationId, `MRV-REVIEWER-${suffix}`],
     )).rows[0]!.id;
     await client.query(
@@ -283,8 +283,8 @@ test("PostgreSQL enforces MRV instrument approval evidence and append-only decis
     assert.equal(evidenceCurrentAfterRejection.rows[0]?.current, false);
 
     await rejectsInSavepoint(client, () => client.query(
-      "insert into registry_events(credential_id,event_type,event_hash,from_owner_id,to_owner_id) values($1,'TRANSFERRED',$2,$3,$4)",
-      [credentialId, "f".repeat(64), organizationId, foreignOrganizationId],
+      "insert into registry_events(credential_id,event_type,event_hash,from_owner_id,to_owner_id,recorded_by_identity_id) values($1,'TRANSFERRED',$2,$3,$4,$5)",
+      [credentialId, "f".repeat(64), organizationId, foreignOrganizationId, reviewerIdentityId],
     ), /REGISTRY_MRV_EVIDENCE_STALE/i);
 
     await rejectsInSavepoint(client, () => client.query(
