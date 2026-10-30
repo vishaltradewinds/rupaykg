@@ -155,6 +155,8 @@ test("explicit RFC3339 timezone offsets remain valid timestamps", () => {
 
 test("impossible calendar dates and clock fields are quarantined", () => {
   for (const timestamp of [
+    "0000-02-29T07:00:00Z",
+    "1900-02-29T07:00:00Z",
     "2026-02-30T07:00:00Z",
     "2026-13-01T07:00:00Z",
     "2026-10-30T25:00:00Z",
@@ -165,4 +167,11 @@ test("impossible calendar dates and clock fields are quarantined", () => {
     assert.equal(result.disposition, "QUARANTINED");
     assert.ok(result.blockers.includes("INVALID_OBSERVED_AT"));
   }
+});
+
+
+test("fractional seconds beyond milliseconds remain accepted consistently", () => {
+  const value = { ...goodObservation(), observedAt: "2026-10-30T07:00:00.123456Z" };
+  const result = validateEdgeObservation(value);
+  assert.equal(result.disposition, "READY_FOR_REVIEW");
 });
