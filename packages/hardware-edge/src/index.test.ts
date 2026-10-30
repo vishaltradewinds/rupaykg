@@ -152,3 +152,17 @@ test("explicit RFC3339 timezone offsets remain valid timestamps", () => {
   const result = validateEdgeObservation(value);
   assert.equal(result.disposition, "READY_FOR_REVIEW");
 });
+
+test("impossible calendar dates and clock fields are quarantined", () => {
+  for (const timestamp of [
+    "2026-02-30T07:00:00Z",
+    "2026-13-01T07:00:00Z",
+    "2026-10-30T25:00:00Z",
+    "2026-10-30T07:61:00Z",
+  ]) {
+    const value = { ...goodObservation(), observedAt: timestamp };
+    const result = validateEdgeObservation(value);
+    assert.equal(result.disposition, "QUARANTINED");
+    assert.ok(result.blockers.includes("INVALID_OBSERVED_AT"));
+  }
+});
