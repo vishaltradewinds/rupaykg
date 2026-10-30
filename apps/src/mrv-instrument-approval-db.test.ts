@@ -63,6 +63,12 @@ test("PostgreSQL enforces MRV instrument approval evidence and append-only decis
     );
     assert.equal(approved.rows[0]?.approval_status, "VERIFIED");
 
+    const approvalSnapshot = await client.query<{ evidence_snapshot: { meityCertificateScope?: string } }>(
+      "select evidence_snapshot from mrv_instrument_decisions where instrument_id=$1 and new_status='VERIFIED' order by created_at desc limit 1",
+      [instrumentId.id],
+    );
+    assert.equal(approvalSnapshot.rows[0]?.evidence_snapshot.meityCertificateScope, "Exact manufacturer/model/SKU revision");
+
     const validMeasurement = await client.query<{ id: string }>(
       "insert into measurements(activity_id,value,unit,method,source,measured_at,mrv_instrument_id,parameter_code) values($1,2,'m3/h','test','instrument test',now(),$2,'gas_flow') returning id",
       [activityId, instrumentId.id],
