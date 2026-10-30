@@ -137,3 +137,18 @@ test("revoked device identity is quarantined", () => {
   assert.equal(result.disposition, "QUARANTINED");
   assert.ok(result.blockers.includes("DEVICE_NOT_AUTHENTICATED"));
 });
+
+test("timezone-naive and date-only timestamps are quarantined", () => {
+  for (const timestamp of ["2026-10-30", "2026-10-30T07:00:00", "2026-10-30 07:00:00"]) {
+    const value = { ...goodObservation(), observedAt: timestamp };
+    const result = validateEdgeObservation(value);
+    assert.equal(result.disposition, "QUARANTINED");
+    assert.ok(result.blockers.includes("INVALID_OBSERVED_AT"));
+  }
+});
+
+test("explicit RFC3339 timezone offsets remain valid timestamps", () => {
+  const value = { ...goodObservation(), observedAt: "2026-10-30T08:00:00+01:00" };
+  const result = validateEdgeObservation(value);
+  assert.equal(result.disposition, "READY_FOR_REVIEW");
+});
