@@ -191,3 +191,12 @@ Production's `schema_migrations` query returned exactly one row for version `096
 ### Operational consequence
 
 The production/staging release-catalog mismatch is confirmed by a fresh direct read-only check, not only by an old PR description. Keep the migration runner fail-closed. Keep the async worker scheduler off. No production migration, schema repair, ledger mutation or data change is authorized. The next engineering task remains a single reviewed reconciliation candidate that passes exact-head CI and complete disposable PostgreSQL acceptance against both ledger shapes.
+
+
+## 12. Acceptance-test target safety dependency
+
+PR #115 records a test-safety defect: migration acceptance scripts that create/drop temporary PostgreSQL schemas could operate on a remote production/staging URL if a developer accidentally supplied it. The proposed guard restricts these tests to loopback PostgreSQL hosts.
+
+Because PR #108 introduces/uses actual-runner and dual-ledger acceptance scripts that create/drop isolated schemas, **the combined migration candidate must include or otherwise independently prove the #115 host guard**. Required negative test: remote hostname is rejected before database connection or schema creation. Required positive test: the same acceptance suite passes against the CI-provisioned localhost PostgreSQL service. Do not merge #108 without this dependency being resolved and exact-head CI plus review passing.
+
+This is an engineering test-safety control, separate from the already confirmed production/staging schema divergence. No live database was changed.
