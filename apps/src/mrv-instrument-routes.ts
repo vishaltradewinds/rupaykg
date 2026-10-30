@@ -197,20 +197,26 @@ export async function registerMrvInstrumentRoutes(app: FastifyInstance, pool: Po
     if (!["VERIFIED", "HOLD", "EXPIRED", "REJECTED"].includes(decision ?? "") || !note) {
       return reply.code(400).send({ error: "decision must be VERIFIED, HOLD, EXPIRED or REJECTED and note is required", code: "MRV_INSTRUMENT_REVIEW_INVALID" });
     }
+    const client = await pool.connect();
+    let transactionOpen = false;
     try {
-      const current = await pool.query<{ id: string; organization_id: string; approval_status: string; firmware_version: string | null; firmware_support_until: Date | string | null }>("select id,organization_id,approval_status,firmware_version,firmware_support_until from mrv_instruments where id=$1", [instrumentId]);
+      await client.query("begin");
+      transactionOpen = true;
+      const current = await client.query<{ id: string; organization_id: string; approval_status: string; firmware_version: string | null; firmware_support_until: Date | string | null }>("select id,organization_id,approval_status,firmware_version,firmware_support_until from mrv_instruments where id=$1 for update", [instrumentId]);
       const row = current.rows[0];
       if (!row) return reply.code(404).send({ error: "MRV instrument not found", code: "MRV_INSTRUMENT_NOT_FOUND" });
-      if (!await canManageInstrument(pool, auth, row.organization_id)) return reply.code(403).send({ error: "MRV instrument review permission required", code: "MRV_INSTRUMENT_PERMISSION_REQUIRED" });
+      if (!await canManageInstrument(client as unknown as Pool, auth, row.organization_id)) return reply.code(403).send({ error: "MRV instrument review permission required", code: "MRV_INSTRUMENT_PERMISSION_REQUIRED" });
       if (row.approval_status === "VERIFIED") {
         if (decision === "VERIFIED") return reply.code(200).send({ source: "postgresql", syntheticData: false, replay: true, instrumentId, approvalStatus: "VERIFIED" });
       }
 
       if (decision !== "VERIFIED") {
-        const updated = await pool.query(
+        const updated = await client.query(
           "update mrv_instruments set approval_status=$2,reviewed_by_identity_id=$3,reviewed_at=now(),review_note=$4 where id=$1 returning *",
           [instrumentId, decision, auth.identityId, note],
         );
+        await client.query("commit");
+        transactionOpen = false;
         return { source: "postgresql", syntheticData: false, instrument: updated.rows[0] };
       }
 
@@ -269,12 +275,16 @@ export async function registerMrvInstrumentRoutes(app: FastifyInstance, pool: Po
       } else if (firmwareSupportUntil || securityReviewStatus !== "NOT_APPLICABLE_WITH_JUSTIFICATION" || !securityNotApplicableReason || securityEvidenceArtifactVersionId) {
         return reply.code(400).send({ error: "Instrument without firmware requires a written security-lifecycle not-applicable rationale", code: "MRV_INSTRUMENT_SECURITY_RATIONALE_REQUIRED" });
       }
-      const update = await pool.query(
+      const update = await client.query(
         "update mrv_instruments set approval_status='VERIFIED',meity_certificate_id=$2,meity_issuer=$3,meity_certificate_scope=$4,meity_verification_url=$5,meity_evidence_reference=$6,meity_evidence_sha256=$7,meity_verified_at=$8,meity_validity_basis=$9,meity_valid_until=$10,calibration_required=$11,calibration_status=$12,calibration_certificate_id=$13,calibration_evidence_reference=$14,calibration_evidence_sha256=$15,calibration_lab=$16,calibration_traceability=$17,calibration_uncertainty=$18,calibration_valid_until=$19,calibration_not_required_reason=$20,firmware_version=$21,firmware_support_until=$22,security_review_status=$23,security_evidence_reference=$24,security_evidence_sha256=$25,security_reviewed_at=$26,security_not_applicable_reason=$27,reviewed_by_identity_id=$28,reviewed_at=now(),review_note=$29,meity_evidence_artifact_version_id=$30,calibration_evidence_artifact_version_id=$31,security_evidence_artifact_version_id=$32 where id=$1 returning *",
         [instrumentId, certificateId, issuer, scope, verificationUrl, meityEvidenceReference, meityEvidenceSha256, verifiedAt, validityBasis, validityBasis === "VALID_UNTIL" ? validUntil : null, calibrationRequired, calibrationStatus, calibrationCertificateId, calibrationRequired ? calibrationEvidenceReference : null, calibrationRequired ? calibrationEvidenceSha256 : null, calibrationLab, calibrationTraceability, calibrationUncertainty, calibrationRequired ? calibrationValidUntil : null, calibrationNotRequiredReason, firmwareVersion, firmwareSupportUntil, securityReviewStatus, firmwareVersion ? securityEvidenceReference : null, firmwareVersion ? securityEvidenceSha256 : null, firmwareVersion ? securityReviewedAt : null, firmwareVersion ? null : securityNotApplicableReason, auth.identityId, note, meityEvidenceArtifactVersionId, calibrationRequired ? calibrationEvidenceArtifactVersionId : null, firmwareVersion ? securityEvidenceArtifactVersionId : null],
       );
+      await client.query("commit");
+      transactionOpen = false;
       return { source: "postgresql", syntheticData: false, instrument: update.rows[0], message: "Exact-model evidence recorded. Human reviewer is responsible for confirming that the official source matches this exact model and scope." };
     } catch (error) {
+      if (transactionOpen) await client.query("rollback").catch(() => undefined);
+      transactionOpen = false;
       request.log.error(error);
       const pgCode = error && typeof error === "object" && "code" in error ? String(error.code) : "";
       const rejectedByPolicy = pgCode === "P0001" || pgCode.startsWith("23");
@@ -283,6 +293,9 @@ export async function registerMrvInstrumentRoutes(app: FastifyInstance, pool: Po
         code: rejectedByPolicy ? "MRV_INSTRUMENT_REVIEW_BLOCKED" : "MRV_INSTRUMENT_REVIEW_UNAVAILABLE",
         syntheticData: false,
       });
+    } finally {
+      if (transactionOpen) await client.query("rollback").catch(() => undefined);
+      client.release();
     }
   });
 
