@@ -312,3 +312,7 @@ for each row execute function require_mrv_instrument_decision_trigger_context();
 create trigger mrv_instrument_decisions_append_only
 before update or delete on mrv_instrument_decisions
 for each row execute function prevent_mrv_instrument_decision_mutation();
+
+create trigger mrv_instrument_decisions_no_truncate
+before truncate on mrv_instrument_decisions
+for each statement execute function prevent_mrv_instrument_decision_mutation();
