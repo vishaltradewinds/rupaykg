@@ -75,3 +75,8 @@ Apply the Shakti Standards lifecycle: reality/context discovery → evidence →
 - [Current main commit at checkpoint](https://github.com/vishaltradewinds/rupaykg/commit/54a7fe1ceb41b37a68720a71c10a1dd03af30dea)
 
 **Checkpoint is a record of observed evidence and blockers, not a release authorization.**
+
+
+## 8. Repository cleanup progress
+
+The repository cleanup and open-work triage inventory is recorded in [REPOSITORY_CLEANUP_TRIAGE_2026-10-30.md](REPOSITORY_CLEANUP_TRIAGE_2026-10-30.md). As of the first cleanup batch, obsolete marker-only PRs #5–#9 and superseded worker PR #144 were closed without merging. Duplicate branch refs have been identified but not deleted because deletion requires a supported write path and a final dependency check. See draft [PR #151](https://github.com/vishaltradewinds/rupaykg/pull/151); it remains unmerged pending review.
