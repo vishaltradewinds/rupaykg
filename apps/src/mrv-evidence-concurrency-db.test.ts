@@ -26,6 +26,7 @@ test("PostgreSQL serializes evidence rejection against credential issuance, tran
   assert.ok(url);
   // The CI job runs against a disposable PostgreSQL database. Use distinct sessions
   // and committed fixtures: an uncommitted fixture in one session is invisible to the other.
+  // Every run uses a unique UUID suffix so no scenario can reuse another scenario's evidence.
   const pool = new Pool({
     connectionString: url,
     max: 8,
