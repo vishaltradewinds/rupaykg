@@ -116,12 +116,25 @@ export async function runMigrations(pool: PoolType, migrationDir: string): Promi
   } finally {
     if (lockAcquired) {
       try {
-        await client.query("select pg_advisory_unlock($1, $2)", [...lockKeys]);
+        const unlock = await client.query<{ pg_advisory_unlock: boolean }>(
+          "select pg_advisory_unlock($1, $2)",
+          [...lockKeys],
+        );
+        if (unlock.rows[0]?.pg_advisory_unlock !== true) {
+          // PostgreSQL returns false when this session does not own the lock.
+          // Treat that as an integrity failure and discard the connection.
+          const unlockError = new Error("Migration advisory lock ownership could not be confirmed during release");
+          client.release(unlockError);
+          clientReleased = true;
+          throw unlockError;
+        }
       } catch (unlockError) {
         // A session-level lock may still be held if unlock fails. Destroy the
         // connection instead of returning a possibly locked session to the pool.
-        client.release(unlockError instanceof Error ? unlockError : new Error("Failed to release migration advisory lock"));
-        clientReleased = true;
+        if (!clientReleased) {
+          client.release(unlockError instanceof Error ? unlockError : new Error("Failed to release migration advisory lock"));
+          clientReleased = true;
+        }
         throw unlockError;
       }
     }
