@@ -322,7 +322,10 @@ async function exerciseApprovalRace(pool: Pool, winner: "approval-first" | "reje
       await approval.query("begin");
       await approval.query("select id from mrv_instruments where id=$1 for update", [fixture.instrumentId]);
       await lockInstrumentEvidence(approval, fixture);
-      await assertEvidenceCurrent(approval, fixture);
+      // mrv_instrument_evidence_is_current() includes approval_status='VERIFIED',
+      // so it is an eligibility predicate, not a pre-approval evidence predicate.
+      // The database approval trigger validates the reviewed evidence bundle atomically
+      // as this HOLD -> VERIFIED transition occurs.
       await approval.query("update mrv_instruments set approval_status='VERIFIED',reviewed_by_identity_id=$2,reviewed_at=now(),review_note='two-session approval race test' where id=$1", [fixture.instrumentId, fixture.reviewerId]);
       await review.query("begin");
       const rejection = rejectEvidence(review, fixture);
@@ -337,13 +340,14 @@ async function exerciseApprovalRace(pool: Pool, winner: "approval-first" | "reje
       const approvalAttempt = (async () => {
         await approval.query("select id from mrv_instruments where id=$1 for update", [fixture.instrumentId]);
         await lockInstrumentEvidence(approval, fixture);
-        await assertEvidenceCurrent(approval, fixture);
+        // Let the database's evidence-binding trigger decide against the locked,
+        // latest review state. A prior eligibility predicate is not valid while HOLD.
         await approval.query("update mrv_instruments set approval_status='VERIFIED',reviewed_by_identity_id=$2,reviewed_at=now(),review_note='two-session approval race test' where id=$1", [fixture.instrumentId, fixture.reviewerId]);
       })();
       await waitUntilBlocked(observer, approvalApp);
       await rejectEvidenceAfterLocks(review, fixture);
       await review.query("commit");
-      await assert.rejects(approvalAttempt, /MRV_APPROVAL_EVIDENCE_STALE/);
+      await assert.rejects(approvalAttempt, /MeitY evidence must resolve to an approved, verified same-organization evidence-vault artifact with matching recomputed SHA-256/);
       await approval.query("rollback");
     }
 
@@ -371,11 +375,6 @@ async function lockInstrumentEvidence(client: PoolClient, f: Fixture): Promise<v
     "select e.id from evidence e where e.id in (select v.evidence_id from evidence_artifact_versions v where v.id in (select i.meity_evidence_artifact_version_id from mrv_instruments i where i.id=$1 union select i.calibration_evidence_artifact_version_id from mrv_instruments i where i.id=$1 union select i.security_evidence_artifact_version_id from mrv_instruments i where i.id=$1 union select ps.source_evidence_artifact_version_id from mrv_instrument_parameter_specs ps where ps.instrument_id=$1)) order by e.id for update",
     [f.instrumentId],
   );
-}
-
-async function assertEvidenceCurrent(client: PoolClient, f: Fixture): Promise<void> {
-  const result = await client.query<{ current: boolean }>("select mrv_instrument_evidence_is_current($1) current", [f.instrumentId]);
-  if (result.rows[0]?.current !== true) throw new Error("MRV_APPROVAL_EVIDENCE_STALE: instrument approval requires current reviewed evidence");
 }
 
 async function exerciseRace(
