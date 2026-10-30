@@ -184,3 +184,31 @@ This audit intentionally narrows the next implementation step: the safe next act
 The matrix is a scoped review disposition, not approval to merge any source branch. Build the candidate from current main and take the smallest coherent set: core register/route/measurement/sync enforcement, migration 088/089 once, parameter-spec/evidence-vault dependencies only after prerequisite proof, aligned tests and API documentation. Keep timestamp hardening tracked in the parallel IoT workstream. Treat credential-currentness, post-submission freeze, Guardian/Hedera, registry and settlement changes as explicit scope decisions rather than accidental imports.
 
 Before writing application code, verify the latest source heads and compare the actual current-main versions of every selected shared file. The production/staging migration provenance blocker is unchanged; no live database action is authorized.
+
+
+## 11. Minimal current-main integration candidate opened — 2026-10-30 13:57Z
+
+Draft PR #137: https://github.com/vishaltradewinds/rupaykg/pull/137  
+Branch: `integration/instrument-approval-minimal-2026-10-30`  
+Base SHA: `54a7fe1ceb41b37a68720a71c10a1dd03af30dea`  
+Candidate head at opening: `e8b46f74f3b01b9df08cb90c9fdacacda4407924`  
+Exact-head CI run #3412 / run ID `41068514359`: **IN PROGRESS** at first check.
+
+### Selected candidate scope
+
+- Adds the instrument approval module and organization-scoped register routes.
+- Enforces instrument+parameter approval for direct measurement writes and offline `MEASUREMENT_CREATE` sync.
+- Rechecks instrument approval before MRV submission.
+- Adds migrations 088 and 089 once, focused tests and API/migration documentation.
+- Reconciles the three shared application files against current `main` rather than replacing them with complete old-branch snapshots.
+- Candidate is Draft, not merge-authorized, and not deployed.
+
+### Deliberate exclusions and limitations
+
+- Does not include migration 20261022 parameter-spec/evidence-vault schema extensions, 20261026 measurement freeze, 20261027/20261030 credential-currentness migrations, Guardian/Hedera changes, or the future-dated 20261031 migration. Those need separate dependency and scope decisions.
+- Does not resolve production/staging migration ledger/source provenance.
+- Does not prove exact-model statutory approval, calibration, device identity/security lifecycle, physical bench/site acceptance, methodology eligibility or TRL advancement.
+
+### Required next gate
+
+Wait for run #3412 to finish and repair any actual failures on the candidate branch. Then independently inspect the full combined diff, migration ordering and all fail-closed paths. Keep Draft until exact-head CI is green, independent review is complete, supported upgrade paths are established and migration provenance has a separate authorized reconciliation packet. No merge, deployment, live DB operation, device procurement or certification is authorized by opening this candidate.
