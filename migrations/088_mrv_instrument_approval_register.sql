@@ -92,6 +92,11 @@ begin
     select 1 from mrv_instrument_decisions d where d.instrument_id = old.id and d.new_status = 'VERIFIED'
   )) and (
     new.organization_id is distinct from old.organization_id
+    or new.registered_by_identity_id is distinct from old.registered_by_identity_id
+    or new.registered_at is distinct from old.registered_at
+    or new.reviewed_by_identity_id is distinct from old.reviewed_by_identity_id
+    or new.reviewed_at is distinct from old.reviewed_at
+    or new.review_note is distinct from old.review_note
     or new.instrument_code is distinct from old.instrument_code
     or new.instrument_type is distinct from old.instrument_type
     or new.manufacturer is distinct from old.manufacturer
