@@ -208,6 +208,27 @@ try {
   assert.deepEqual(snapshot.authorization_permissions_snapshot, ["VERIFY_EVIDENCE"]);
   assert.ok(snapshot.authorization_checked_at, "approval must capture decision-time authorization timestamp");
 
+  // Security regression reproduction: an UPDATE that does not change the
+  // decision currently refreshes the supposedly historical authorization
+  // snapshot. This is diagnostic evidence against the recovered legacy trigger,
+  // not an assertion that this behavior is acceptable.
+  await client.query("update roles set permissions='[\\"VERIFY_EVIDENCE\\",\\"UNRELATED_PERMISSION\\"]'::jsonb where id=$1", [ids.role]);
+  await client.query("update verifications set evidence_id=evidence_id where id=$1", [ids.verification]);
+  const afterUnrelatedUpdate = (await client.query(
+    "select authorization_membership_id,authorization_role_id,authorization_permissions_snapshot,authorization_checked_at from verifications where id=$1",
+    [ids.verification],
+  )).rows[0];
+  assert.equal(afterUnrelatedUpdate.authorization_membership_id, ids.membership);
+  assert.equal(afterUnrelatedUpdate.authorization_role_id, ids.role);
+  assert.deepEqual(afterUnrelatedUpdate.authorization_permissions_snapshot, ["VERIFY_EVIDENCE", "UNRELATED_PERMISSION"],
+    "REPRODUCED DEFECT: unrelated update rewrites the decision-time permissions snapshot from the current role");
+  assert.notEqual(afterUnrelatedUpdate.authorization_checked_at.getTime(), snapshot.authorization_checked_at.getTime(),
+    "REPRODUCED DEFECT: unrelated update refreshes the purported decision-time authorization timestamp");
+  // Restore the fixture's original role permission set and refresh the test row
+  // so subsequent assertions remain isolated to the intended decision path.
+  await client.query("update roles set permissions='[\\"VERIFY_EVIDENCE\\"]'::jsonb where id=$1", [ids.role]);
+  await client.query("update verifications set evidence_id=evidence_id where id=$1", [ids.verification]);
+
   // The legacy trigger stores decision-time authorization provenance but does
   // not clear it when current decision changes. Assert the distinction so
   // consumers must gate current approval on decision='APPROVED', not snapshot presence.
