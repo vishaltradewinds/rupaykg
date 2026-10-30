@@ -200,3 +200,37 @@ PR #115 records a test-safety defect: migration acceptance scripts that create/d
 Because PR #108 introduces/uses actual-runner and dual-ledger acceptance scripts that create/drop isolated schemas, **the combined migration candidate must include or otherwise independently prove the #115 host guard**. Required negative test: remote hostname is rejected before database connection or schema creation. Required positive test: the same acceptance suite passes against the CI-provisioned localhost PostgreSQL service. Do not merge #108 without this dependency being resolved and exact-head CI plus review passing.
 
 This is an engineering test-safety control, separate from the already confirmed production/staging schema divergence. No live database was changed.
+
+
+## 13. Hardware/IoT and TRL coordination refresh — 2026-10-30 13:04Z
+
+This addendum supersedes only the earlier **in-progress** CI labels in the PR snapshot; it does not replace the full inventory or authorize a merge.
+
+### Exact-head engineering CI observed
+
+| PR | Workstream | Head SHA | CI run | Result |
+|---|---|---|---|---|
+| #90 | TRL 4→9 execution plan | `b361e75dfbc4a110626afeba0098f7822c8ba3d2` | `41057840083` | Completed successfully |
+| #128 | Hardware-edge observation contract | `b561c941c3658197e3d469b92163b5a73c1e3566` | `41057869797` | Completed successfully |
+| #59 | Hardware simulation/acceptance plan | `a1ddd1b5d93f571daf64f6bdce6bc36381bbe8b3` | `41059092409` | Completed successfully |
+| #51 | Instrument approval/evidence-bound parameter specifications | `1824d2a342ab64850575c9488a544edf3c80cbd5` | `41058468210` | Completed successfully |
+
+These results are exact-head software CI evidence only. They do not establish real hardware qualification, regulatory approval, field acceptance, methodology eligibility, external Guardian/Hedera acceptance, independent TRL assessment, or production readiness.
+
+### Updated dependency constraints
+
+- PR #49 remains draft at `4d606e188b31b890eb894aa8dfdd275f7c8ee4c4`; PR #51 remains draft at `1824d2a342ab64850575c9488a544edf3c80cbd5`. Both change the hardware approval/evidence implementation and overlap in 14 files. PR #51 is 121 commits ahead and 2 behind `main` at the latest comparison. Do not merge either branch independently.
+- PR #128 is a separate hardware-edge contract and simulation package; it must consume the canonical approval/evidence model after integration rather than introduce a second registry or persistence path.
+- PR #59 documents acceptance and isolation requirements. Its isolation-control requirements are a plan unless actual negative-control tests prove that credentials are stripped, outbound network is denied by default, only disposable local services are allow-listed, and target validation blocks remote database URLs. Do not report isolation as proven from documentation alone.
+- TRL execution-plan PR #90 is 2 commits ahead and 2 behind `main` at the latest comparison. Reconcile its documentation against this baseline before finalizing the Batch A exit.
+- Eight previously tracked inline review threads on PR #51 now report resolved, including the credential issuance/evidence-revocation serialization thread. Resolution state does not replace independent review of the current combined diff or exact-head integrated tests.
+
+### Required next integration batch
+
+1. Select one canonical integration order and migration/route ownership for #49/#51; inspect all shared files, migration order and authorization semantics.
+2. Verify both race orderings for instrument approval/evidence rejection and for credential issuance, transfer and settlement, including persisted state after both transactions finish. Preserve the requirement that evidence rejection invalidates subsequent value-bearing uses while retirement remains possible.
+3. Integrate the hardware-edge contract (#128) with the approved instrument and parameter model without creating duplicate registries.
+4. Run migration validation, full disposable PostgreSQL acceptance, typecheck/build, browser smoke, production-container build and security review on the **exact integrated commit**.
+5. Recheck all open PR heads and base SHAs, then update the TRL evidence ledger with links to the exact CI/review artifacts.
+
+**Batch A remains partially complete.** No TRL advancement is claimed. Physical instrument inventory, exact-model official certificates, calibration/security packets, intended-site and methodology applicability, hardware-in-the-loop/field acceptance, and sustained operational evidence remain separate gates. Production certification remains HOLD/OFF. No merge, deployment, procurement, or production database change is authorized by this addendum.
