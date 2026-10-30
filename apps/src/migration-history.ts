@@ -13,7 +13,7 @@ export function findMigrationHistoryConflicts(
       conflicts.push({ ...record, reason: "SOURCE_MISSING" });
       continue;
     }
-    const match = /^(\\d+)_.*\\.sql$/.exec(record.filename);
+    const match = /^(\d+)_.*\.sql$/.exec(record.filename);
     if (!match || record.version !== match[1]) conflicts.push({ ...record, reason: "VERSION_FILENAME_MISMATCH" });
   }
   return conflicts;
@@ -23,7 +23,7 @@ export function findMigrationHistoryConflicts(
 export function findMigrationCatalogVersionConflicts(availableFilenames: readonly string[]): string[] {
   const byVersion = new Map<string, string[]>();
   for (const filename of availableFilenames) {
-    const match = /^(\\d+)_.*\\.sql$/.exec(filename);
+    const match = /^(\d+)_.*\.sql$/.exec(filename);
     if (!match) continue;
     const entries = byVersion.get(match[1]) ?? [];
     entries.push(filename);
