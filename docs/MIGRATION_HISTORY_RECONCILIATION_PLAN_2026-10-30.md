@@ -179,3 +179,12 @@ Read the source SQL for the recovered async/AI migration family and the current 
 3. **P0-C — Canonical catalogue/ledger contract:** independently review PR #134 and integrate the missing-source/version-filename/duplicate-prefix checks with the dual-ledger and startup preflight work only through one coordinated exact-head candidate.
 4. **P0-D — Release-shaped acceptance:** run fresh-install and supported upgrade tests against the final combined migration inventory, with production/staging-like ledger snapshots; prove failures occur before any pending SQL and ledger stays unchanged.
 5. **Only then:** independent security/release approval, staged rollout and rollback/compensation plan. Until then production certification stays HOLD/OFF.
+
+
+## 12. Exact PR #122 head/CI reconciliation (2026-10-30)
+
+The current GitHub PR metadata for [PR #122](https://github.com/vishaltradewinds/rupaykg/pull/122) reports head `660ab729e613ffdd3629f4fdcdbf86a0e9054441`, base `intelligence/ai-evidence-intake-middleware` at `84cb4394dbd21f46d96e3b4757dfe2db4e5dfa8d`, draft/open, unmerged. The earlier passing CI comment refers to run `40891694084` on older head `23d405bde272fb5cefe441db8f0ab496f0adc2b7`; the available commit-workflow lookup returned no PR-triggered workflow runs for current head `660ab729...`. Therefore, **do not mark the current PR #122 head CI-verified based solely on the older run**. Confirm the GitHub Actions run directly on the exact head and its integration-test gate before accepting the test evidence.
+
+The later commit `c3fbe3be779dfc221e55ef6344f538ee89e6cfec` changes the test to apply the exact proposed `20261101_async_mirror_unresolved_crosswalk.sql` in a disposable schema. It is an ancestor of the current PR head, but the passing run cited in the PR comment predates that change. The exact proposed migration source on the PR branch has blob SHA `4f9776bc449025e795cb0d5c93e8bace9dea280b`. This is useful review evidence, not release approval.
+
+**Acceptance requirement:** a successful CI run on exact PR head `660ab729...` must visibly execute `RUPAYKG_RUN_DB_INTEGRATION_TESTS=1` against disposable PostgreSQL and prove both the historical constraint retry path and the exact forward-migration path, including the non-authoritative UNRESOLVED assertions. If CI cannot be obtained on the current head, rerun through the repository's authorized workflow mechanism; do not alter production/staging to produce the evidence.
