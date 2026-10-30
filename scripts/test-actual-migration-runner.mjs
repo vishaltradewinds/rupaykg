@@ -52,6 +52,7 @@ const stagingSchema = "runner_stage_" + suffix;
 const productionHistorySchema = "runner_prod_history_" + suffix;
 const stagingHistorySchema = "runner_stage_history_" + suffix;
 const verificationSchema = "runner_verification_" + suffix;
+const versionMismatchSchema = "runner_version_mismatch_" + suffix;
 const q = (s) => '"' + s.replaceAll('"', '""') + '"';
 const setSchema = (schema) => client.query("set search_path to " + q(schema) + ", public");
 const prereqs = async () => {
@@ -78,7 +79,7 @@ const schemas = [];
 try {
   await client.connect();
   connected = true;
-  for (const schema of [productionSchema, stagingSchema, productionHistorySchema, stagingHistorySchema, verificationSchema]) {
+  for (const schema of [productionSchema, stagingSchema, productionHistorySchema, stagingHistorySchema, verificationSchema, versionMismatchSchema]) {
     await client.query("create schema " + q(schema));
     schemas.push(schema);
     await setSchema(schema);
@@ -163,6 +164,31 @@ try {
   assert.match(stageHistory.stderr + stageHistory.stdout, /20261022_async_mirror_inbox\.sql/);
   assert.match(stageHistory.stderr + stageHistory.stdout, /20261025_ai_evidence_intake_jobs\.sql/);
 
+  // The filename exists in the release catalog, but the ledger records it
+  // under the wrong version. The actual runner must reject before applying
+  // any pending SQL or changing the existing ledger.
+  await setSchema(versionMismatchSchema);
+  await client.query("create table schema_migrations(version text primary key, filename text not null, applied_at timestamptz not null default now())");
+  await client.query(
+    "insert into schema_migrations(version,filename) values ($1,$2)",
+    ["999", "20261018_cpcb_swm_stakeholder_workspaces.sql"],
+  );
+  const mismatchBefore = (await client.query("select version, filename from schema_migrations order by version")).rows;
+  const versionMismatch = runRunner(versionMismatchSchema, historicalCatalog);
+  assert.notEqual(versionMismatch.status, 0, "actual runner must reject a ledger version that disagrees with an existing catalog filename prefix");
+  assert.match(versionMismatch.stderr + versionMismatch.stdout, /version\\/filename prefix mismatch/i);
+  await setSchema(versionMismatchSchema);
+  assert.deepEqual(
+    (await client.query("select version, filename from schema_migrations order by version")).rows,
+    mismatchBefore,
+    "version-prefix mismatch must fail before any migration ledger changes",
+  );
+  assert.equal(
+    (await client.query("select to_regclass($1) is not null as yes", [versionMismatchSchema + ".organizations"])).rows[0].yes,
+    false,
+    "version-prefix mismatch must fail before applying pending migration SQL",
+  );
+
   // Execute the recovered 096 SQL as an isolated disposable-schema acceptance
   // fixture, not as a release migration. Validate authorization binding and snapshot.
   await setSchema(verificationSchema);
@@ -221,7 +247,7 @@ try {
   const orphan = runRunner(stagingSchema, missingDir);
   assert.notEqual(orphan.status, 0, "actual runner must fail when ledger references a missing migration file");
   assert.match(orphan.stderr + orphan.stdout, /recorded migration|orphan|absent/i);
-  console.log("PASS: actual migrate.ts runner applied production-shaped fixture, skipped staging ledger matches, preserved 12 inbox + 12 event rows, no-op repeat runs, failed closed for missing historical ledger files, and verified recovered 096 authorization binding/snapshot behavior in an isolated PostgreSQL schema.");
+  console.log("PASS: actual migrate.ts runner applied production-shaped fixture, skipped staging ledger matches, preserved 12 inbox + 12 event rows, no-op repeat runs, failed closed for missing historical ledger files and wrong version prefixes, and verified recovered 096 authorization binding/snapshot behavior in an isolated PostgreSQL schema.");
 } finally {
   if (connected) {
     for (const schema of schemas.reverse()) {
