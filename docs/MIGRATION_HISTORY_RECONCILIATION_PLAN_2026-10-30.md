@@ -203,3 +203,27 @@ This finding does not alter the provenance conclusion: Render logs and the produ
 ## 14. Staging schema evidence — status constraint confirmed
 
 Read-only staging schema inspection confirms `async_mirror_inbox_status_check` permits `RECEIVED, PROCESSING, PROCESSED, VALIDATED, REJECTED, RETRY, QUARANTINED` and excludes `UNRESOLVED`. The event trigger `async_mirror_inbox_event_after_change` exists. The recovered migration 20261023 source has the same status list and adds the event table/append-only event machinery, so the schema is consistent with that candidate. It is still not proof that the recovered candidate SQL bytes are identical to those executed on 20 October.
+
+
+## 15. Required authorization-snapshot regression acceptance matrix
+
+This is a test contract for a disposable PostgreSQL acceptance test; it is not a claim that the tests have run or that the issue is exploitable. The currently recovered function body provides enough evidence to require the following checks before migration 096 is accepted:
+
+| Case | Setup/action | Required outcome |
+|---|---|---|
+| A — first approval | Insert a valid APPROVED verification with active, same-organization verified membership and verifier permission | All four authorization fields populated from the decision-time membership/role and one stable decision timestamp |
+| B — unrelated update | Change a non-authorization field on that already-APPROVED row | Original membership, role, permission snapshot and authorization timestamp remain byte/value-identical |
+| C — attempted approved identity swap | Update verifier, evidence, or activity linkage while row remains APPROVED | Reject the update unless a separately specified and authorized re-approval/correction workflow exists; never silently relabel the original decision's authorizer |
+| D — subsequent role change | Change role permissions/membership status after approval, then update an unrelated verification field | Historical snapshot remains unchanged; current role state must not rewrite decision-time evidence |
+| E — new approval transition | Change a non-approved row to APPROVED | Revalidate same-organization active membership, identity status, non-self-verification and allowed permission; record fresh snapshot only for this transition |
+| F — revoked/corrected decision | Exercise any supported approved-to-rejected/revoked transition | Require explicit authorization and immutable/auditable correction history; do not silently erase original approval provenance |
+| G — concurrent authorization change | Race approval with membership/role revocation or permission change | Defined transaction/locking semantics; either valid snapshot at a well-defined serialization point or fail closed |
+| H — privilege boundary | Attempt direct writes to the four authorization fields using the application's runtime role | Runtime role cannot forge/overwrite the audit snapshot; trusted trigger/procedure owns the fields |
+
+The test should use the actual production trigger/function source recovered from commit `ca8f410...` in an isolated schema with minimal faithful fixtures. First demonstrate the present behavior in a regression test (especially B and D), then add a separately reviewed forward-only migration and prove the corrected behavior. Keep the test and proposed fix out of live databases until source history and migration numbering are reconciled. Do not pick migration number `097` or another release prefix while the overlapping migration branches remain unresolved.
+
+## 16. Application reachability and exact-head CI status
+
+The available GitHub code-search connector returned no matching results for `UPDATE verifications`, `insert into verifications`, or `authorization_membership_id` on the default branch; this is not proof that the application lacks such paths because the migration source is absent from the default branch and code-search coverage is limited. Therefore API/runtime-role reachability remains **not established** and needs repository-wide branch-aware review plus role/privilege inspection.
+
+The current PR #122 head remains `660ab729e613ffdd3629f4fdcdbf86a0e9054441`. The available commit-workflow lookup returned no PR-triggered workflow runs for that SHA. No exact-head CI result is claimed. The proposed `20261101_async_mirror_unresolved_crosswalk.sql` has not been applied to staging or production.
