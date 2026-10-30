@@ -273,6 +273,31 @@ test("real government inbox worker obeys PostgreSQL status constraints and prese
     assert.equal(expiredState.validation_summary?.authoritativeMrvMutation, false);
     assert.equal(expiredState.validation_summary?.guardianSubmission, false);
 
+    // A PROCESSING row with a NULL lease is recoverable too. The quarantine
+    // predicate already treats this as expired; claim must use the same rule.
+    const nullLeaseId = randomUUID();
+    const nullLeaseBatchId = randomUUID();
+    const nullLeasePayload = makePayload(nullLeaseBatchId);
+    await pool.query(
+      `insert into async_mirror_inbox
+        (id,authority_code,municipal_code,batch_id,sync_window_timestamp,payload,payload_sha256,attempts,status,lease_token,lease_until)
+       values ($1,$2,$3,$4,$5,$6::jsonb,$7,1,'PROCESSING',$8,null)`,
+      [nullLeaseId,"TEST-AUTHORITY","TEST-MUNICIPALITY",nullLeaseBatchId,"2026-10-19T02:30:00Z",JSON.stringify(nullLeasePayload),canonicalGovBridgeHash(nullLeasePayload),randomUUID()],
+    );
+    const nullLeaseResult = await runGovernmentInboxWorker(pool, undefined, { batchSize: 1, maxAttempts: 5 });
+    assert.equal(nullLeaseResult.claimed, 1, "PROCESSING row with NULL lease must be reclaimed");
+    assert.equal(nullLeaseResult.unresolved, 1, "reclaimed row without a verified crosswalk must remain unresolved");
+    const nullLeaseState = (await pool.query(
+      "select status,lease_token,lease_until,validation_summary from async_mirror_inbox where id=$1",
+      [nullLeaseId],
+    )).rows[0];
+    assert.equal(nullLeaseState.status, "UNRESOLVED");
+    assert.equal(nullLeaseState.lease_token, null);
+    assert.equal(nullLeaseState.lease_until, null);
+    assert.equal(nullLeaseState.validation_summary?.officialAcceptance, false);
+    assert.equal(nullLeaseState.validation_summary?.authoritativeMrvMutation, false);
+    assert.equal(nullLeaseState.validation_summary?.guardianSubmission, false);
+
     // A stale worker must not finalize a row after another claimant rotates
     // the fencing token. The callback simulates that intervening claimant.
     const staleId = randomUUID();
