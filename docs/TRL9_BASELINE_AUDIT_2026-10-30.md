@@ -275,3 +275,24 @@ Before #51 can be considered for integration:
 
 ### Safety disposition
 No branch was merged or rebased in this batch. No migration was applied to a live database. No deployment, procurement, hardware qualification or TRL advancement is claimed. Overall TRL 9 and production certification remain **HOLD/OFF**. The IoT stack and TRL execution plan remain one coordinated dependency graph; PR #90 is the execution plan and PR #93 is the evidence ledger, not parallel competing readiness registers.
+
+
+## 15. Reconciliation blocker confirmed from current-main catalogue — 2026-10-30 13:22Z
+
+### Evidence from current main and the proposed hardware candidate
+- Current `main` SHA remains `54a7fe1ceb41b37a68720a71c10a1dd03af30dea` at the latest metadata check.
+- The current `main:migrations/README.md` catalogues migrations through `087_acceptance_fixture_registry_exclusion.sql` and has no hardware instrument migration entries `088`/ `089` or the date-prefixed MRV evidence guards.
+- The `feat/mrv-evidence-bound-parameters` branch's migration README adds the hardware register and evidence-bound guards, including `088`, `089`, and date-prefixed migrations `20261022`, `20261026`, `20261027`, `20261030`, and `20261031`. These are feature-branch artifacts, not proof that the authorised production/staging migration ledger contains or safely supports them.
+- Current `main` also lacks `migrations/096_verification_authorization_provenance.sql`; its removal commit explicitly states that an unreviewed verification migration was removed. The candidate must not silently reintroduce that migration or any equivalent unreviewed authorization change as a side effect of reconciling branch history.
+- GitHub commit comparison confirms PR #51 is 121 commits ahead and 2 behind current `main`, with merge base `0ddcf6087620880e21ea60f954c9f05d6b759469`. The two-behind divergence includes the mainline removal of the unreviewed migration; do not blindly merge/rebase or merge #51 before reviewing both mainline commits and the full resulting migration tree.
+
+### Immediate P0 decision
+**Do not rebase, merge, cherry-pick or apply #49/#51 migrations yet.** First complete the controlled reconciliation packet owned by database-safety work (#91/#108/#126): exact mainline commits, canonical migration manifest, duplicate/renamed/removed migration analysis, production and staging ledger evidence from an authorized read-only source, schema fingerprints, and disposable fresh-install plus upgrade-path acceptance for both supported histories. Any mismatch must fail closed; do not rewrite a live migration ledger to make checks pass.
+
+The candidate hardware implementation remains a single integration proposal under PR #51, but its migration set is not approved. PR #49 remains draft and should not be merged independently. The exact-head CI run #3382 for this audit is still in progress at this update: dependency audit, migration validation/execution, typecheck, build, browser smoke and disposable PostgreSQL acceptance have completed successfully; production-container build and cleanup are not yet complete. Do not report the run as passed until the job concludes successfully.
+
+### Guardrails
+- No live database access or mutation was performed in this batch.
+- No production migration, rebase, merge, deployment, procurement or hardware qualification was performed.
+- No TRL advancement is claimed; overall TRL 9 and production certification remain **HOLD/OFF**.
+- Continue coordinating the IoT stack with the single TRL execution plan (#90) and evidence ledger (#93); this section adds evidence to the existing audit rather than creating another readiness register.
