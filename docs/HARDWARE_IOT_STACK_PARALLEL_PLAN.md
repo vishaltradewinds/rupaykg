@@ -219,3 +219,26 @@ The Jabalpur/Kathonda hardware cannot be selected on the assumption that BM WA03
 5. Do not modify migrations or shared routes until the owner of the overlapping PRs and the canonical evidence-store contract are clear.
 
 **Audit outcome:** architecture direction is confirmed; the overlapping approval work is identified; production hardware choice and runtime implementation remain blocked on integration reconciliation and real instrument/site evidence.
+
+
+## 13. Isolated edge contract implementation — 2026-10-30
+
+Added workspace `@rupaykg/hardware-edge` under `packages/hardware-edge`, without changing canonical application routes, database schema or existing approval migrations.
+
+### Implemented
+
+- Versioned adapter observation type with device/instrument/site/organization identity, parameter code, observed and received times, sequence, value/unit, raw-payload SHA-256, firmware, calibration reference/state, authentication state, clock quality and quality flags.
+- Deterministic validation dispositions: `QUARANTINED`, `CALIBRATION_BLOCKED`, and `READY_FOR_REVIEW`.
+- Unit tests for a valid observation, unauthenticated device, malformed numeric/digest data, expired calibration, uncertain clock, invalid sequence and missing reviewed calibration exception.
+- Workspace package and lockfile entries so the package can be built/tested through npm workspace commands.
+
+### Explicit limitations
+
+- `READY_FOR_REVIEW` is not a verification or compliance approval. The module does not authenticate a real device, recompute the digest from actual raw bytes, retrieve or verify evidence-vault artifacts, validate calibration certificates, persist observations, or authorize MRV submission.
+- No protocol-specific RS-232/RS-485/Modbus parser was added because the real instrument model and manual are not available. Adding a generic parser without a confirmed wire protocol would be unsafe.
+- This change does not duplicate the `mrv_instruments` approval registry or shared route/migration work proposed in PR #49/#51.
+- Tests and workspace install/build have **not yet been executed in a clean checkout**; CI evidence is pending. Do not claim the new package is tested until exact-head CI or a reproducible clean local run passes.
+
+### Next gate
+
+Run clean-checkout `npm ci`, `npm test --workspace @rupaykg/hardware-edge`, workspace typecheck, full repository tests/build and migration validation. Fix any failures before expanding the adapter. Then map this contract to the reconciled canonical sync/evidence contract and only implement the first physical protocol after instrument documentation and calibration evidence are supplied.
