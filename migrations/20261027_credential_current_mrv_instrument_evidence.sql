@@ -90,16 +90,9 @@ begin
    order by e.id
    for share;
 
-  if not exists (
-       select 1 from mrv_observations mo where mo.activity_id = new.activity_id
-     )
-     and not exists (
-       select 1 from measurements mm
-        where mm.activity_id = new.activity_id and mm.mrv_instrument_id is not null
-     ) then
-    raise exception 'CREDENTIAL_MRV_INSTRUMENT_EVIDENCE_REQUIRED: instrument-linked MRV readings are required';
-  end if;
-
+  -- Preserve the legacy lifecycle for activities with no instrument-linked MRV inputs.
+  -- When observations exist, the checks below still fail closed on missing/unverified
+  -- instrument identity; instrument-linked measurements must also pass current evidence.
   if exists (
     select 1
       from mrv_observations mo
