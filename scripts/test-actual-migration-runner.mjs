@@ -264,6 +264,79 @@ try {
     /must match the evidence activity/,
   );
 
+  // Apply the proposed forward-only function in this disposable schema only.
+  // The SQL is deliberately unnumbered and is not a production migration.
+  await client.query(await readFile(path.join(here, "fixtures", "proposed-authorization-provenance-forward-fix.sql"), "utf8"));
+  const approvedBeforeFixTest = (await client.query(
+    "select authorization_membership_id,authorization_role_id,authorization_permissions_snapshot,authorization_checked_at from verifications where id=$1",
+    [ids.verification],
+  )).rows[0];
+  await client.query("update roles set permissions=$2::jsonb where id=$1", [ids.role, JSON.stringify(["VERIFY_EVIDENCE", "UNRELATED_PERMISSION"])]);
+  await client.query("update verifications set evidence_id=evidence_id where id=$1", [ids.verification]);
+  const approvedAfterUnrelatedUpdate = (await client.query(
+    "select authorization_membership_id,authorization_role_id,authorization_permissions_snapshot,authorization_checked_at from verifications where id=$1",
+    [ids.verification],
+  )).rows[0];
+  assert.equal(approvedAfterUnrelatedUpdate.authorization_membership_id, approvedBeforeFixTest.authorization_membership_id);
+  assert.equal(approvedAfterUnrelatedUpdate.authorization_role_id, approvedBeforeFixTest.authorization_role_id);
+  assert.deepEqual(approvedAfterUnrelatedUpdate.authorization_permissions_snapshot, approvedBeforeFixTest.authorization_permissions_snapshot,
+    "forward-fix fixture must preserve decision-time permissions across unrelated updates");
+  assert.equal(approvedAfterUnrelatedUpdate.authorization_checked_at.getTime(), approvedBeforeFixTest.authorization_checked_at.getTime(),
+    "forward-fix fixture must preserve decision-time timestamp across unrelated updates");
+
+  const replacementActivity = "10000000-0000-4000-8000-000000000012";
+  const replacementEvidence = "10000000-0000-4000-8000-000000000013";
+  await client.query("insert into activities(id,actor_identity_id,organization_id) values ($1,$2,$3)", [replacementActivity, ids.actor, ids.org]);
+  await client.query("insert into evidence(id,activity_id) values ($1,$2)", [replacementEvidence, replacementActivity]);
+  await assert.rejects(
+    client.query("update verifications set activity_id=$2,evidence_id=$3 where id=$1", [ids.verification, replacementActivity, replacementEvidence]),
+    /approved verification linkage is immutable/,
+    "forward-fix fixture must reject changing the evidence/activity bound to an approved decision",
+  );
+
+  // Revoking current role permission must not rewrite prior approval evidence.
+  await client.query("update roles set permissions='[]'::jsonb where id=$1", [ids.role]);
+  await client.query("update verifications set evidence_id=evidence_id where id=$1", [ids.verification]);
+  const afterRoleRevocation = (await client.query(
+    "select authorization_permissions_snapshot,authorization_checked_at from verifications where id=$1",
+    [ids.verification],
+  )).rows[0];
+  assert.deepEqual(afterRoleRevocation.authorization_permissions_snapshot, approvedBeforeFixTest.authorization_permissions_snapshot);
+  assert.equal(afterRoleRevocation.authorization_checked_at.getTime(), approvedBeforeFixTest.authorization_checked_at.getTime());
+  await client.query("update roles set permissions='[\\"VERIFY_EVIDENCE\\"]'::jsonb where id=$1", [ids.role]);
+
+  // A fresh transition to APPROVED must re-check live authorization; non-approved
+  // inserts must not be allowed to carry caller-supplied provenance.
+  const pendingVerification = "10000000-0000-4000-8000-000000000014";
+  await client.query(
+    "insert into verifications(id,activity_id,evidence_id,verifier_identity_id,decision,authorization_membership_id,authorization_role_id,authorization_permissions_snapshot,authorization_checked_at) values ($1,$2,$3,$4,'PENDING',$5,$6,$7,now())",
+    [pendingVerification, ids.activity, ids.evidence, ids.verifier, ids.membership, ids.role, JSON.stringify(["FORGED_PERMISSION"])],
+  );
+  const pending = (await client.query(
+    "select authorization_membership_id,authorization_role_id,authorization_permissions_snapshot,authorization_checked_at from verifications where id=$1",
+    [pendingVerification],
+  )).rows[0];
+  assert.equal(pending.authorization_membership_id, null);
+  assert.equal(pending.authorization_role_id, null);
+  assert.equal(pending.authorization_permissions_snapshot, null);
+  assert.equal(pending.authorization_checked_at, null);
+  await client.query("update roles set permissions='[]'::jsonb where id=$1", [ids.role]);
+  await assert.rejects(
+    client.query("update verifications set decision='APPROVED' where id=$1", [pendingVerification]),
+    /requires active verifier permission/,
+    "transition from a non-approved state must re-check current authorization",
+  );
+  await client.query("update roles set permissions='[\\"VERIFY_EVIDENCE\\"]'::jsonb where id=$1", [ids.role]);
+  await client.query("update verifications set decision='APPROVED' where id=$1", [pendingVerification]);
+  const newlyApproved = (await client.query(
+    "select authorization_membership_id,authorization_role_id,authorization_permissions_snapshot,authorization_checked_at from verifications where id=$1",
+    [pendingVerification],
+  )).rows[0];
+  assert.equal(newlyApproved.authorization_membership_id, ids.membership);
+  assert.equal(newlyApproved.authorization_role_id, ids.role);
+  assert.deepEqual(newlyApproved.authorization_permissions_snapshot, ["VERIFY_EVIDENCE"]);
+  assert.ok(newlyApproved.authorization_checked_at);
+
   // Fail-closed negative case: recorded file is absent from the release directory.
   const missingDir = path.join(temp, "missing-file-release");
   await mkdir(missingDir);
