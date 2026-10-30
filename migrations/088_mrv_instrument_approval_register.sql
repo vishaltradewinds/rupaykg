@@ -88,7 +88,9 @@ begin
     return new;
   end if;
 
-  if old.approval_status = 'VERIFIED' and (
+  if (old.approval_status = 'VERIFIED' or exists (
+    select 1 from mrv_instrument_decisions d where d.instrument_id = old.id and d.new_status = 'VERIFIED'
+  )) and (
     new.organization_id is distinct from old.organization_id
     or new.instrument_code is distinct from old.instrument_code
     or new.instrument_type is distinct from old.instrument_type
