@@ -86,11 +86,17 @@ export async function runMigrations(pool: PoolType, migrationDir: string): Promi
 
     console.log(`Database migrations are current (${files.length} files).`);
   } finally {
-    try {
-      if (lockAcquired) await client.query("select pg_advisory_unlock($1, $2)", [...lockKeys]);
-    } finally {
-      client.release();
+    if (lockAcquired) {
+      try {
+        await client.query("select pg_advisory_unlock($1, $2)", [...lockKeys]);
+      } catch (unlockError) {
+        // A session-level lock may still be held if unlock fails. Destroy the
+        // connection instead of returning a possibly locked session to the pool.
+        client.release(unlockError instanceof Error ? unlockError : new Error("Failed to release migration advisory lock"));
+        throw unlockError;
+      }
     }
+    client.release();
   }
 }
 
