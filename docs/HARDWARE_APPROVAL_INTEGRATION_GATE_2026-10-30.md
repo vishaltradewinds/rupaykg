@@ -285,3 +285,21 @@ Follow-up independent review of PR #137 found two additional integrity considera
 Migration README updated. Latest PR #137 head: `b18ef022df97b9c2ac886c450dcbec8de8ebfdae`. Exact-head CI run #3458 / `41078052561` completed **SUCCESS**: dependency/security audit, migration catalogue validation, fresh PostgreSQL migration execution, typecheck, build, browser smoke test, PostgreSQL acceptance tests and production-container build all passed.
 
 This remains engineering evidence only. PR #137 remains Draft/unmerged. Migration history reconciliation, independent authorization review, physical instrument evidence and calibration, site/methodology eligibility, TRL evidence and production approval remain open. No live migration, deployment, procurement or certification occurred.
+
+
+## 18. Migration-history preflight review — 2026-10-30 15:20Z
+
+Reviewed the current PR #108 migration preflight implementation and actual-runner acceptance test on branch `shakti/dual-ledger-compatibility-tests`, head `678e38f3bac89ef7607c15df5b591b2b482ca7ff`.
+
+Confirmed in source:
+
+- The runner validates the complete applied ledger before executing pending SQL.
+- Missing recorded source files fail closed.
+- A recorded filename whose numeric prefix disagrees with the ledger version fails closed before pending SQL; the disposable PostgreSQL test verifies the sentinel SQL was not executed and the original ledger row remains unchanged.
+- Duplicate version prefixes in the release catalog are rejected before ledger reconciliation.
+- The acceptance harness exercises the actual `apps/src/migrate.ts` runner against isolated schemas, including production-shaped `096` and staging-shaped `20261022`–`20261025` ledger records. Those cases are expected to fail closed against the current catalog. Recovered `096` authorization SQL is exercised only in a disposable schema as a review fixture, not as a release migration.
+- The same harness checks that an exact recorded filename/version is skipped on repeat runs and that representative staging inbox/event rows remain unchanged in the fixture.
+
+The associated CI run #3432 / `41073420333` completed **SUCCESS**. This confirms engineering behavior at the referenced candidate head; it does not resolve historical deployment artifact attestation, complete production/staging object reconciliation, or approval of a canonical forward-only migration plan. PR #108 remains Draft/unmerged, and the live production/staging databases remain untouched.
+
+**Disposition:** retain the fail-closed guard; do not merge PR #108 or apply live migrations until independent database/security review, source/deployment provenance assessment, complete schema/object dependency inventory, integrated exact-head acceptance and authorized Shakti release approval are complete. Production/staging writes, historical SQL replay, worker scheduler activation and production certification remain **HOLD/OFF**.
