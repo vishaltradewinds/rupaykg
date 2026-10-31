@@ -86,5 +86,13 @@ jobs:
         env:
           RUPAYKG_RUN_DB_INTEGRATION_TESTS: "1"
         run: npm test
+      - name: Upload production-shaped migration evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: production-shaped-migration-report
+          path: artifacts/production-shaped-migration-report.json
+          if-no-files-found: warn
+          retention-days: 30
       - name: Build production container
         run: docker build --pull --tag rupaykg:ci .
