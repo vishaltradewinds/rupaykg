@@ -83,6 +83,8 @@ export type WorkerPrincipalAttestation = {
   public_reference_acl: boolean;
   public_scope_function_execute: boolean;
   inbox_select: boolean;
+  inbox_insert: boolean;
+  inbox_delete: boolean;
   inbox_table_update: boolean;
   inbox_update_status: boolean;
   inbox_update_attempts: boolean;
@@ -167,6 +169,8 @@ export async function assertGovernmentInboxWorkerPrincipal(
            and acl.grantee=0 and acl.privilege_type='EXECUTE'
        ) as public_scope_function_execute,
        has_table_privilege(r.oid, 'public.async_mirror_inbox', 'SELECT') as inbox_select,
+       has_table_privilege(r.oid, 'public.async_mirror_inbox', 'INSERT') as inbox_insert,
+       has_table_privilege(r.oid, 'public.async_mirror_inbox', 'DELETE') as inbox_delete,
        has_table_privilege(r.oid, 'public.async_mirror_inbox', 'UPDATE') as inbox_table_update,
        has_column_privilege(r.oid, 'public.async_mirror_inbox', 'status', 'UPDATE') as inbox_update_status,
        has_column_privilege(r.oid, 'public.async_mirror_inbox', 'attempts', 'UPDATE') as inbox_update_attempts,
@@ -208,6 +212,8 @@ export async function assertGovernmentInboxWorkerPrincipal(
   if (role.public_reference_acl) violations.push("PUBLIC_REFERENCE_PRIVILEGE");
   if (role.public_scope_function_execute) violations.push("PUBLIC_SCOPE_FUNCTION_EXECUTE");
   if (!role.inbox_select) violations.push("INBOX_SELECT_MISSING");
+  if (role.inbox_insert) violations.push("INBOX_INSERT_NOT_ALLOWED");
+  if (role.inbox_delete) violations.push("INBOX_DELETE_NOT_ALLOWED");
   if (role.inbox_table_update) violations.push("INBOX_TABLE_LEVEL_UPDATE_TOO_BROAD");
   const updateColumns: Array<[keyof WorkerPrincipalAttestation, string]> = [
     ["inbox_update_status", "INBOX_STATUS_UPDATE_MISSING"],
