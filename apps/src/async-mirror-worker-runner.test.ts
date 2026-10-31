@@ -4,6 +4,7 @@ import type { Pool, PoolConfig } from "pg";
 import {
   assertGovernmentInboxWorkerSchema,
   assertGovernmentInboxWorkerPrincipal,
+  assertGovernmentInboxWorkerReady,
   createGovernmentInboxWorkerPool,
   type GovernmentInboxWorkerPoolFactory,
 } from "./async-mirror-worker-runner.js";
@@ -288,4 +289,40 @@ test("worker principal attestation rejects malformed application database identi
     () => assertGovernmentInboxWorkerPrincipal(principalPool(leastPrivilegePrincipal), "not-a-url"),
     /GOVERNMENT_INBOX_APPLICATION_PRINCIPAL_INVALID/,
   );
+});
+
+
+test("combined worker readiness runs schema attestation before principal attestation", async () => {
+  const calls: string[] = [];
+  const pool = {
+    query: async (sql: string) => {
+      if (/from pg_roles r where r\.rolname=current_user/.test(sql)) {
+        calls.push("principal");
+        return { rows: [leastPrivilegePrincipal], rowCount: 1 };
+      }
+      calls.push("schema");
+      return { rows: [readySchema], rowCount: 1 };
+    },
+  } as unknown as Pool;
+  await assert.doesNotReject(() => assertGovernmentInboxWorkerReady(
+    pool,
+    "postgres://web:secret@db.example/rupaykg",
+  ));
+  assert.deepEqual(calls, ["schema", "principal"]);
+});
+
+test("combined worker readiness stops before principal query when schema is incomplete", async () => {
+  const calls: string[] = [];
+  const pool = {
+    query: async (sql: string) => {
+      if (/from pg_roles r where r\.rolname=current_user/.test(sql)) {
+        calls.push("principal");
+        return { rows: [leastPrivilegePrincipal], rowCount: 1 };
+      }
+      calls.push("schema");
+      return { rows: [{ ...readySchema, inbox_table: null }], rowCount: 1 };
+    },
+  } as unknown as Pool;
+  await assert.rejects(() => assertGovernmentInboxWorkerReady(pool), /GOVERNMENT_INBOX_SCHEMA_NOT_READY/);
+  assert.deepEqual(calls, ["schema"]);
 });
