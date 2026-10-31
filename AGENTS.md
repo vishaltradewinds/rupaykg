@@ -18,7 +18,7 @@ Before any engineering work, every contributor/agent must:
 2. Read the latest dated immutable checkpoint and all linked current decision records.
 3. Check the actual Git branch and HEAD; compare with the recorded SHA and stop on unexplained drift.
 4. Check current PR metadata, base/head relationships, merge state and CI for the exact HEAD; never rely on an earlier commit's green check.
-5. Recheck Neon project, default/primary production branch, branch protection, database/table/migration state, role attributes and RLS catalog. Read-only by default; do not print secrets.
+5. Recheck Neon project, default/primary production branch, branch protection, database/table/migration state, role attributes and RLS catalog. Read-only by default; do not print secrets. Verify application deployment/runtime identity only against the provider and service configuration evidenced by the repository; do not assume or introduce a provider-specific workflow.
 6. Recheck the deployed Render service, commit and runtime identity where accessible. Never infer runtime identity from the Neon inspection role.
 7. Write a dated session-start/preflight note or append to the engineering session log with the exact evidence snapshot and unresolved discrepancies **before making code, documentation, database or deployment changes**.
 8. Inspect relevant code/tests and reconcile drift. Do not silently switch branches or treat a rehearsal as production.
