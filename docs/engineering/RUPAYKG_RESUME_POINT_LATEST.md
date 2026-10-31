@@ -148,3 +148,50 @@ Compare deployed main commit `862512c8c904cef0f604df0350f02672318953af` with the
 - Immutable checkpoint: `docs/engineering/checkpoints/2026-10-31-gate1-current-candidate.md`.
 - This checkpoint supersedes older route counts and direct-pool findings where the current source has since adopted transaction-local tenant context.
 - Read the current-candidate review and checkpoint before continuing; next batch begins with server overview/geography and intelligence access-context review.
+
+
+## Latest mandatory checkpoint — hybrid national ingestion and production security (2026-10-31)
+
+**Checkpoint:** `docs/engineering/checkpoints/2026-10-31-hybrid-national-ingestion-security-release.md`  
+**Checkpoint commit:** `a513949384605265ebe0ae8548d48103eb38f834`  
+**Session preflight:** `docs/engineering/session-logs/2026-10-31-hybrid-security-batch-preflight.md`  
+**Governing rule:** `AGENTS.md` section 2 now requires start-of-session GitHub/Neon/Render preflight and a dated preflight record before work, plus an immutable end checkpoint and exact-head CI recheck.
+
+### Architecture decision
+Hybrid target architecture selected: **national system-level public-source ingestion + organization-scoped downstream execution**. National worker authority is limited to named queue/source snapshot/crosswalk/resolver capabilities; it cannot read private tenant evidence. Minimal dispatch envelopes feed separately authorized tenant workflows. Security/compliance sign-off and production release approval remain pending.
+
+### Four deliverables
+1. Revised ADR: `docs/architecture/ADR-20261031-government-inbox-worker-authority-scope.md`.
+2. Production authorization/RLS gap assessment: `docs/security/PRODUCTION_AUTHORIZATION_RLS_GAP_ASSESSMENT_2026-10-31.md`.
+3. DB identity/privilege matrix: `docs/security/DATABASE_IDENTITY_PRIVILEGE_MATRIX_2026-10-31.md`.
+4. Integrated migration/worker release plan: `docs/engineering/INTEGRATED_MIGRATION_WORKER_RELEASE_PLAN_2026-10-31.md`.
+
+### Fresh live Neon facts — read-only
+- Sole authoritative DB remains Neon project `steep-mud-79906940`, branch `main` / `br-restless-base-b44cip2h`, database `rupaykg`.
+- 67 public tables; 0 RLS enabled; 0 FORCE RLS; 0 policies; 92 migration rows through `20261021`.
+- All 67 tables owned by `rupaykg`; 23 direct organization_id, 8 direct identity_id, 3 overlap.
+- Role `rupaykg` has LOGIN, BYPASSRLS, CREATEROLE, CREATEDB, REPLICATION and is member of `neon_superuser`; not suitable for routine app/worker service identity.
+- No explicit non-owner or PUBLIC table ACL entries found. 115 public functions; no SECURITY DEFINER public functions in snapshot.
+- Production branch `protected=false`; project history retention 21,600 seconds (6 hours); independent restore proof not established.
+- Neon inspection session identity is not proof of Render runtime identity. Render runtime principal remains NOT VERIFIED.
+
+### GitHub / CI state
+- Branch: `shakti/atomic-inbox-claim-2026-10-31`.
+- Last immutable checkpoint parent HEAD: `2bf8e69a54264dab4c9f7eb764181746ffd00f92`.
+- Checkpoint commit: `a513949384605265ebe0ae8548d48103eb38f834`.
+- PR #175 and #161 remain open/draft on same head branch with different bases; PR #173 and #160 remain separate open/draft workstreams. No merge.
+- Exact-head CI for `a513949384605265ebe0ae8548d48103eb38f834` had not yet appeared in check-runs at checkpoint verification; mark PENDING/NOT YET REPORTED. Prior exact-head CI for `d36ef5b81c3fcfbfe047f90b5ca8f9d45d9b3934` run #3922 / `41214177450` SUCCESS.
+- Recheck branch HEAD and CI before next engineering action. Any resume-pointer commit will itself change HEAD and requires a fresh exact-head check.
+
+### Safety / release
+- No production SQL writes, DDL/DML, role/grant/credential changes, Neon branch-protection changes, backup configuration changes, migration, worker activation, deployment or certification performed.
+- Production security foundation P0/P1 HOLD. RLS NOT IMPLEMENTED. Actual Render role NOT VERIFIED. Worker OFF. TRL 9 NOT ESTABLISHED.
+
+### Next executable batch
+1. Resolve backup/restore and production branch protection as an approved operational change.
+2. Verify Render runtime DB identity using a controlled non-public diagnostic.
+3. Finish full route × statement × table × operation × principal × tenant-context mapping, including FK child tables and DB objects.
+4. Build table-specific RLS/grant plan and exact-role negative tests on a production-shaped disposable clone.
+5. Reconcile migrations preserving production migration 096.
+6. Deploy the national worker only after least privilege, scope isolation, operations and independent approval.
+7. Implement/test tenant-scoped downstream dispatch.
