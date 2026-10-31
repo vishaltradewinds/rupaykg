@@ -186,3 +186,12 @@ On 2026-10-31, `POST /api/v1/activities/:activityId/measurements` was moved from
 - This remains a partial route migration. Read paths, other write routes, worker/system paths, and the full table-policy map remain outstanding. No RLS policy or live database change is authorized by this code change.
 
 Exact-head CI must validate the new commit before this adoption is treated as engineering-pass evidence.
+
+## 12. Third tenant-scoped route adoption — evidence upload
+
+On 2026-10-31, `POST /api/v1/evidence-vault/upload` was moved to the shared transaction-local tenant context helper.
+
+- Activity ownership, active-organization equality, geography scope, and evidence-upload permission are now checked on the same checked-out client used for evidence-series creation, evidence metadata, artifact-version bytes, and the final content-URI update.
+- Series validation and all evidence writes are part of one transaction. A scope/permission/series rejection returns without committing any partial evidence writes; unexpected failures roll back through the shared transaction helper.
+- Tenant context is derived from the server-verified active membership. Request body and headers are not trusted to select a tenant.
+- Evidence listing, download, and review routes remain separate follow-up work; this adoption does not imply full evidence-vault tenant isolation or database-enforced RLS.
