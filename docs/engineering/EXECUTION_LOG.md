@@ -323,3 +323,11 @@ Read this log and `docs/engineering/2026-10-31-migration-reconciliation-audit.md
 - Code/migration/test commits on the stacked branch: worker transaction implementation a83601b023b3282ff0f3caa6b2bd5ba8c324df94; worker key-lock follow-up 630c17382afa0413ab66916f0649ab269a516073; migration 3fefa4fbb4d1d7b7fd69ed9556d69976795b09a5; unit test 23e77100e9720e4e26e32b0ceb9b802f461608d9; DB race test f020cf11f1d2db43c9c84a93286d6db5c71ed061; gate documentation 274c22814baa4e4ec23d70ff8cccbf5ea1ca2d1b; final validation note 658a047d8ebe1425989c9ef6074741ac5d5f2e10.
 - Attempted to obtain exact-head CI after temporarily retargeting PR #161 to main and pushing a synchronization documentation commit. GitHub exposed no workflow run or combined status for head 658a047d8ebe1425989c9ef6074741ac5d5f2e10. Restored PR #161 to its original stacked base; do not claim CI pass. Exact-head migration/typecheck/unit/disposable-PostgreSQL/container validation remains pending.
 - No live Neon SQL/data/schema/role/grant changes, Render changes, deployment, merge, queue processing, worker/scheduler activation or external submission occurred. Production HOLD; worker OFF; global-vs-row-scoped queue governance and RLS remain open; lease renewal/strict validation timeout remains open; production migration-principal authority and full production-derived rehearsal remain release gates. TRL 9 unclaimed.
+
+
+### 133. Transaction outcome accounting correction — 2026-10-31
+
+- Follow-up review found that worker result counters were incremented before the SERIALIZABLE transaction COMMIT. A commit/serialization failure could therefore report a successful validation even though the terminal transaction rolled back.
+- Corrected the worker to stage the terminal outcome count and increment validated/unresolved/rejected counters only after successful transaction completion. The existing retry/quarantine path remains responsible for failed transactions.
+- Commit: 464bf26f1a809b9edd8e1792f39a9296db03c136 on shakti/atomic-inbox-claim-2026-10-31.
+- Exact-head CI remains unavailable/not triggered through the connected GitHub action surface; no pass claim. PR #161 remains draft/open/unmerged and stacked on PR #157. Production/staging untouched; production HOLD; worker OFF; TRL 9 unclaimed.
