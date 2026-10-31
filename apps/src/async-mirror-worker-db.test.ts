@@ -518,7 +518,7 @@ test("government inbox worker persists retry recovery, quarantine and append-onl
     let pausedTerminal = false;
     const lockHoldingPool = {
       query: (sql: string, values?: unknown[]) => {
-        if (/^with exhausted as \\(/i.test(sql)) {
+        if (/^with exhausted as \(/i.test(sql)) {
           const isolatedClaim = sql.replace("where attempts < $3", "where id=$4 and attempts < $3");
           return pool.query(isolatedClaim, [...(values ?? []), provenanceRow.id] as never[]);
         }
