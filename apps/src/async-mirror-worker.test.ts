@@ -46,7 +46,7 @@ test("worker claims a bounded batch and marks structurally valid payloads as int
   const result = await runGovernmentInboxWorker(pool);
   assert.deepEqual(result, { claimed: 1, validated: 1, rejected: 0, unresolved: 0, retried: 0, quarantined: 0 });
   assert.equal(statements.length, 7, "atomic claim, lease refresh, serializable key lock and source resolution, fenced terminal update, and commit");
-  assert.match(statements[0]!.sql, /with exhausted as \(/i);
+  assert.match(statements[0]!.sql, /with exhausted_candidates as \(/i);
   assert.match(statements[0]!.sql, /for update skip locked/i);
   assert.match(statements[0]!.sql, /returning inbox\.id/i);
   assert.match(statements[2]!.sql, /begin isolation level serializable/i);
@@ -163,7 +163,7 @@ test("worker quarantines exhausted unclaimed inbox rows instead of leaving them 
   assert.match(statements[0]!.sql, /attempts >= \$3/i);
   assert.match(statements[0]!.sql, /status in \('RECEIVED','RETRY'\)/i);
   assert.match(statements[0]!.sql, /lease_until is null or lease_until < now\(\)/i);
-  assert.match(statements[0]!.sql, /with exhausted as \(/i);
+  assert.match(statements[0]!.sql, /with exhausted_candidates as \(/i);
   assert.match(statements[0]!.sql, /for update skip locked/i);
 });
 
