@@ -50,3 +50,18 @@ Production also has `096_verification_authorization_provenance.sql` recorded in 
 ## Status
 
 Read-only audit completed. Production remains unchanged. Staging and rehearsal remain unchanged. No live worker is installed or active. Production HOLD; scheduler OFF; certification OFF; TRL 9 not established.
+
+
+## Follow-up schema comparison evidence — 2026-10-31
+
+Neon schema comparison was run read-only across the three live branches:
+
+| Comparison | Added lines | Removed lines | Diff hunks | Interpretation |
+|---|---:|---:|---:|---|
+| Staging vs production | 355 | 82 | 9 | Staging has the async inbox/AI intake schema absent from production, while lacking production's verifier authorization snapshot columns and stronger verifier function. |
+| Rehearsal vs production | 362 | 82 | 9 | Same core divergence, plus rehearsal-only internal UNRESOLVED status/comment. |
+| Rehearsal vs staging | 8 | 1 | 2 | Difference is limited to the UNRESOLVED status constraint and its explanatory comment. |
+
+The diff independently confirms that staging/rehearsal do not preserve the production verifier authorization provenance. The proposed 20261026–20261111 migration chain does not redefine `prevent_invalid_verification()` or drop the production authorization snapshot columns; nevertheless, production-equivalent reconstruction must prove this on a disposable clone before application.
+
+These comparisons are schema-only snapshots; they do not prove data equivalence, migration-history equivalence, runtime parity or operational readiness. No branch was modified.
