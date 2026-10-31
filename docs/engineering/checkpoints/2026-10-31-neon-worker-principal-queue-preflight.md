@@ -101,3 +101,19 @@ It does **not yet** query `pg_roles` to reject `SUPERUSER`, `CREATEDB`, `CREATER
 The candidate PR #157 branch's `apps/package.json` scripts expose only the API start, migration and acceptance-seed commands. Its production Dockerfile starts `node apps/dist/src/production-server.js`. A source search of `apps/src/server.ts` found no worker import, worker startup, scheduler registration or worker loop.
 
 Therefore, even after schema and role blockers are resolved, the worker still needs a separately designed and tested process entrypoint/service lifecycle. Do not start it inside the web API process. The intended deployment should be a distinct background service with explicit environment variables, health/heartbeat observability, graceful shutdown, bounded concurrency, and independent scale/rollback controls. No Render service was created or changed.
+
+
+## Implemented code gate — worker principal least-privilege attestation
+
+Following the read-only Neon findings, the candidate worker runner now includes a read-only principal attestation in `apps/src/async-mirror-worker-runner.ts`:
+
+- Requires a login role and rejects SUPERUSER, CREATEDB, CREATEROLE, REPLICATION, BYPASSRLS, INHERIT, and any role memberships.
+- Rejects ownership of queue/reference tables, ownership of the public schema, and CREATE on the public schema.
+- Requires SELECT and UPDATE on the inbox; SELECT on the jurisdiction crosswalk, approved source snapshots and activities; EXECUTE on both geography-scope functions.
+- Rejects direct SELECT/INSERT/UPDATE/DELETE on the append-only inbox event table; the trigger-owned writer remains the intended event append path.
+- Rejects reuse of the application database role and malformed application database identity.
+- Exposes a combined readiness function that checks schema first, then role privilege posture, before queue claims can be attempted.
+
+Regression coverage added for least-privilege success, elevated flags, role membership, object/schema ownership, schema CREATE, event-table direct access, missing required grants, application-role reuse, missing catalog row, malformed application URL, and ordered fail-closed behavior.
+
+**Important boundary:** This is a reusable guard and tests; no worker entrypoint currently calls it because the candidate still has no separate process entrypoint. It is not runtime activation. The exact-head CI must pass before treating this implementation as validated. The required privileges are based on reviewed worker SQL and the existing candidate integration fixture; the final grants must still be validated on a disposable production-shaped Neon branch, including inherited/PUBLIC grants and column-level permissions.
