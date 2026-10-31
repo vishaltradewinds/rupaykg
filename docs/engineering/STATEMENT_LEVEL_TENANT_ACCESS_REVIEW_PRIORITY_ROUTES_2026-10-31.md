@@ -142,3 +142,15 @@ File: `apps/src/server.ts`
 This review is source-level and bounded to the named files. It does not establish runtime behavior for the deployed service, does not prove the actual Render database role, and does not prove complete tenant isolation. It is not an RLS policy specification or production approval.
 
 No production/staging DDL or DML, role/grant change, deployment, worker activation, external government submission, Guardian/Hedera submission, carbon-credit issuance, or certification was performed. RLS remains disabled. PR #157 remains draft; production release remains HOLD.
+
+
+## Current-candidate reconciliation — 2026-10-31
+
+This priority review was written against an earlier PR #157 candidate and its parent commit. It is a useful historical risk analysis, but its "remaining direct-pool BWG writes" and "statutory direct-pool writes" findings are stale against current branch `shakti/atomic-inbox-claim-2026-10-31`, HEAD `ca71c1857a71ed73ca700bbeb2d49be251e85f49`.
+
+Current route registration and transaction-boundary facts are in `docs/engineering/GATE1_CURRENT_CANDIDATE_SOURCE_REVIEW_2026-10-31.md`. In particular:
+- BWG profile, reporting-period, waste/EPR/ESG report handlers now use `createTenantTransaction`.
+- Statutory handlers now use `createTenantTransaction` and are registered by `registerMrvRoutes`.
+- The priority gaps still include intelligence direct-pool reads, server overview/geography reads, auth/control-plane transactions, onboarding reviewer authority revalidation, platform-admin authorization boundaries, device-specific sync context, registry bilateral policy and MRV advisory-lock lifecycle.
+
+Keep the original review as evidence of historical findings and progress; do not treat it as the current implementation map.
