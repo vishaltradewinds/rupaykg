@@ -160,3 +160,16 @@ The PR #122 PostgreSQL integration test is explicitly skipped unless both `RUPAY
 3. Do not backfill production's missing async-mirror tables or staging's missing verifier snapshot controls from guessed SQL.
 4. Require an exact-head CI run that proves the PostgreSQL integration test executed (zero relevant skips), plus independent reviewer approval and disposable full-history reconstruction.
 5. Continue production HOLD, scheduler OFF and certification OFF. No database writes or schema changes were made during this follow-up.
+
+
+### Provenance correction — migration 096 historical source recovered
+
+A targeted Git path-history query found the original migration 096 source in repository history:
+- Original source commit: `ca8f4100782e13f8d72106187fafc8e1e446214f` — “Bind verification to organization and snapshot authority”.
+- Original path: `migrations/096_verification_authorization_provenance.sql`.
+- Git blob SHA: `258b1f4534efbf915688f78aa84d4ec24a47cbc0`.
+- The next commit, `54a7fe1ceb41b37a68720a71c10a1dd03af30dea`, explicitly deleted that 97-line file with commit message “Remove accidentally placed unreviewed verification migration from main”.
+
+Therefore migration 096 is not an unrecoverable source gap: its historical SQL and Git provenance are recovered. It remains absent from current `main` and the migration-history branch because it was explicitly removed as unreviewed. Do not re-add it automatically or rewrite the production ledger. Its original SQL must be independently reviewed against the live production trigger/function, column definitions, foreign keys and the rationale for the removal commit before deciding whether to restore the source as a historical immutable migration record or document it as an applied out-of-band migration.
+
+The four async migration sources `20261022`–`20261025` remain absent from the current migration catalogues and no Git path history was found for those exact paths in the repository. Their original source/provenance remains unresolved. The distinction is important: migration 096 has a recoverable historical source; the four async migrations do not yet have a verified source in the checked repository history.
