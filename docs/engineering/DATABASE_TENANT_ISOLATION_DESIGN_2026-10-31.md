@@ -208,3 +208,14 @@ On 2026-10-31, the remaining evidence-vault routes were moved to the shared tran
 The download response is emitted only after the transaction completes and the stored bytes pass size and SHA-256 verification. The filename used in the response header is sanitized against quote, backslash, CR and LF injection.
 
 These adoptions close the known evidence-vault route-level pool/client split. They do not close the platform-wide RLS blocker: other route modules, auth/bootstrap paths, background workers, exact Render runtime role identification, cross-tenant negative tests, pooled-connection context-leak tests, and clone-based policy/rollback rehearsal remain open. No RLS migration, live role/grant change, merge or deployment is authorized.
+
+
+## 14. MRV status and provenance read/verification adoption
+
+On 2026-10-31, the following MRV routes were moved to the transaction-local tenant helper:
+
+- `GET /api/v1/mrv/status`: requires an explicit verified active organization and checks `guardian:read` on the same tenant-context transaction. The prior fallback to the first membership was removed.
+- `GET /api/v1/mrv/provenance/:activityId`: activity ownership, active-organization equality, geography scope, permission, provenance retrieval and acceptance-fixture eligibility checks share one transaction.
+- `GET /api/v1/mrv/hedera/verify/:consensusTimestamp`: provenance lookup and authorization run in a tenant transaction; external Mirror Node verification runs outside the DB transaction; before persisting verification time, the route rechecks active organization, geography and permission in a new tenant transaction and conditionally updates the exact provenance row. Acceptance-fixture status is read in that same persistence transaction.
+
+This deliberately avoids holding a database transaction open during external Hedera network I/O. It also closes the authorization time-of-check/time-of-use gap before persisting the external verification result. The MRV submission route, statutory routes, and other route modules remain outstanding. No RLS migration or live DB change is authorized.
