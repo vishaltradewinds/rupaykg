@@ -86,3 +86,18 @@ References:
 - Ministry of Panchayati Raj direction on adoption of LGD codes (17 May 2017): https://mohua.gov.in/upload/whatsnew/59df106d75154ADOPTION_OF-LOCAL-GOVRNMENT-DIRECTORY-CODES-min.pdf
 
 These sources establish the directory's role and code maintenance, not the correctness of any individual platform mapping. Every mapping still needs a source snapshot, evidence and authorized review.
+
+
+## Source-scope implementation follow-up — 2026-10-31
+
+The source-scope finding is now addressed in draft source by migration `20261110_government_source_scope_geography_binding.sql` and the worker resolver:
+- snapshots with `INDIA` scope are national and carry no narrower scope code/node;
+- `STATE_UT`, `DISTRICT`, and `LOCAL_BODY` scopes require an exact external code bound to a geography node and a checksum/version-verified `geography_sources` record named `Local Government Directory (LGD)`;
+- the target geography must be that node or a descendant in the stored parent hierarchy;
+- `OTHER` scope is exact-geography only;
+- approved snapshot scope identity, geography code/hierarchy binding, and directory source provenance are immutable; source status revocation causes the resolver to fail closed;
+- both crosswalk approval triggers and the worker resolver enforce the scope check.
+
+The disposable PostgreSQL acceptance test now builds synthetic STATE_UT, DISTRICT and LOCAL_BODY scope nodes, verifies descendant coverage, rejects unrelated geography, and checks that approved scope/directory provenance cannot be rewritten. These are synthetic CI fixtures, not real LGD records.
+
+The initial migration-only CI run failed because the old test fixture had not yet been updated for the new required scope fields. The fixture was updated in the next commit; a fresh exact-head CI run is required. This is an intentional fail-fast outcome, not a green gate. Independent security review must still inspect the scope model and actual LGD ingestion process before merge.
