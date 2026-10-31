@@ -189,3 +189,12 @@ The four async migration sources were recovered from the historical branch `test
 The same branch contains `20261101_async_mirror_unresolved_crosswalk.sql`, source commit `3270e4cee4552efe51f84d96a9ab2f02bc068b81`, blob `4f9776bc449025e795cb0d5c93e8bace9dea280b`. It adds the internal-only `UNRESOLVED` status and explains the staging/rehearsal constraint difference.
 
 This supersedes the earlier statement that the four async sources were not recoverable. Their exact SQL objects and source commits are identified. They remain absent from current `main`; this recovery does not authorize restoring them or applying them. Next gates: validate exact object checksums, compare each SQL effect to the live branch objects, reconcile dependency order, rehearse on disposable PostgreSQL, and obtain independent review. Migration 096's separate deletion rationale remains under review. No database was changed.
+
+
+## Worker acceptance execution evidence — 2026-10-31
+
+The historical PR #122 head `b46b1afecdbe97c15ede94f6e8413b8fa5d2e4a3` has an exact-head GitHub Actions CI run #3487 (`41099285533`) completed successfully. Its workflow provisions PostgreSQL 16, sets `DATABASE_URL`, and explicitly sets `RUPAYKG_RUN_DB_INTEGRATION_TESTS=1` for `npm test`; the disposable PostgreSQL acceptance step completed successfully. The test's skip guard therefore evaluates enabled in that CI environment. This is execution evidence for the PR #122 branch's then-current worker implementation, not evidence that the same code is merged or deployed to production.
+
+PR #142 head `7d73517997e902af0550f2773763b585abc2fc4e` also has exact-head CI run #3485 completed successfully; PR #143 head `51abd113748b73f8cf4920b2c1937efecd040eb7` has exact-head CI run #3471 completed successfully. PR #122 is closed and draft; PR #142 remains open and draft; PR #143 remains open and non-draft; PR #144 is closed and draft. None of these statuses constitutes merge approval. The PR #122 branch remains unsuitable for wholesale merge due its 580-ahead/4-behind divergence.
+
+PR #154's latest documentation head `d064baa3d5543f22f1c2a1c557ceebaf51231100` has a new exact-head CI run #3522 queued at the time of this update; no completed result is claimed. Production remains unchanged and on HOLD.
