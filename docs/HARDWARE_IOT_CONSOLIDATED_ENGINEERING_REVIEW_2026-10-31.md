@@ -101,3 +101,19 @@ The edge contract and synthetic tests are software engineering evidence only. Th
 The instrument approval implementation validates exact-model evidence, calibration status, parameter unit/range/resolution and accuracy metadata. A source audit identified that the current calibration uncertainty is stored as one instrument-level scalar, while a multi-parameter instrument can have different uncertainty values and units for each parameter. Parameter specifications do not yet carry a complete reviewed per-parameter uncertainty statement, and the instrument-bound measurement path does not persist that uncertainty into each MRV observation.
 
 See `docs/MRV_INSTRUMENT_UNCERTAINTY_LINEAGE_GAP_2026-10-31.md`. Do not use a generic uncertainty ratio or invent a universal threshold. A parameter-specific uncertainty model and immutable measurement/MRV lineage must be designed from the actual calibration certificate, applicable standard and methodology before production MRV eligibility. Until then, instrument approval code is an engineering foundation, not complete metrological qualification.
+
+
+## SITE-JBP-01 official source refresh — 2026-10-31
+
+The site/methodology HOLD is supported by official NGT-hosted records:
+
+- MPPCB's **Status-cum-Inspection Report in O.A. 819/2024**, dated 15 May 2026 and based on an 8 May 2026 inspection, describes Kathonda as a mass-incineration Waste-to-Energy plant processing mixed municipal solid waste. It states that the WtE plant was recommissioned in January 2026 after overhaul, and that its Consent to Operate and SWM authorization were renewed through 28 February 2028. It separately describes a proposed 100 TPD Bio-CNG plant under CITIIS 2.0 as a project to be established during the execution phase, not as an already operating methane-recovery asset.
+- The NGT-hosted CPCB reply in O.A. 819/2024 (25 September 2024) describes Kathonda as a mass-burning WtE facility, with a stated 600 TPD design and 11.5 MW generation capacity.
+- The NGT portal lists a further Jabalpur Municipal Corporation progress report in O.A. 819/2024 uploaded 10 July 2026. Its contents and subsequent orders must be obtained and reviewed before final site decisions.
+
+Implication: do not treat the existing Kathonda WtE plant as a landfill-methane recovery project or assume BM WA03.001 eligibility. The proposed Bio-CNG project must be treated as a separate project boundary and its current approval, construction, commissioning and operating status must be independently evidenced. No methane-specific hardware procurement or carbon methodology claim is justified from these records alone.
+
+Official sources:
+- MPPCB status-cum-inspection report (NGT-hosted, 15 May 2026): https://www.greentribunal.gov.in/sites/default/files/news_updates/STATUS%20CUM%20INSPECTION%20REPORT%20BY%20MPPCB%20IN%20OA%20NO.%20819%20of%202024%20NEWS%20ITEM%20TITLED%20JABALPUR%20KATHAUNDA%20PLANT%20MEIN%20KACHARA%20JALNE%20KE%20BAAD%20DUR%20DUR%20TAK%20FAIL%20RAHE%20DHOOL%20KE%20KAN.pdf
+- CPCB reply (NGT-hosted, 25 September 2024): https://www.greentribunal.gov.in/sites/default/files/news_updates/REPLY%20BY%20CPCB%20IN%20OA%20NO.%20819%20of%202024%20NEWS%20ITEM%20TITLED%20JABALPUR%20KATHAUNDA%20PLANT%20MEIN%20KACHARA%20JALNE%20KE%20BAAD%20DUR%20DUR%20TAK%20FAIL%20RAHE%20DHOOL%20KE%20KAN.pdf
+- NGT portal report listing (10 July 2026): https://www.greentribunal.gov.in/index.php?page=1183
