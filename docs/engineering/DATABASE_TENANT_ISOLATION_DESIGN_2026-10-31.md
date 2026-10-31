@@ -276,3 +276,21 @@ On 2026-10-31, all three routes in `apps/src/cpcb-swm-routes.ts` were moved to t
 - `PATCH /api/v1/cpcb-swm/workspaces/:workspaceId`: permission, optional geography authorization, row lock, update, status-history append and audit event share one transaction.
 
 The routes now use the verified active organization rather than a request-selected tenant. Audit writes remain in the same transaction as the governed workspace mutation. Exact-head CI is pending. Statutory status remains explicitly user-reported/unverified; this refactor does not represent a CPCB filing or government acceptance.
+
+
+## 20. Workspace API tenant transaction adoption
+
+On 2026-10-31, the workspace API was refactored to use one explicit active organization and one transaction-local tenant context per route:
+
+- `GET /api/v1/workspaces/resource-flows`
+- `GET /api/v1/workspaces/mrv`
+- `GET /api/v1/workspaces/compliance`
+- `GET /api/v1/workspaces/carbon`
+- `GET /api/v1/workspaces/registry`
+- `GET /api/v1/workspaces/settlement`
+- `GET /api/v1/workspaces/esg`
+- `POST /api/v1/evidence/:evidenceId/verification`
+
+The previous pre-handler authorization hook and pool-level permission/geography queries were removed. Each route now performs its workspace permission check, optional geography authorization and all data reads on the same checked-out client. Evidence verification additionally locks the evidence row, verifies activity ownership and geography, checks the verifier's explicit permission, inserts the verification and updates evidence status in one transaction.
+
+For these routes, cross-organization multi-membership aggregation was replaced with an explicit active-organization context. Registry/settlement visibility remains subject to the existing issuer/current-owner and payer/payee business filters; those bilateral/ownership policies still need independent review before RLS policy design. Exact-head CI is pending.
