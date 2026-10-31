@@ -225,3 +225,116 @@ test("BWG reporting-period HTTP route maps the exact live applicability trigger 
   assert.equal(response.json().code, "BWG_APPLICABILITY_NOT_VERIFIED");
   assert.ok(fake.statements.includes("ROLLBACK"));
 });
+
+
+import { createHash, randomUUID } from "node:crypto";
+import { Pool } from "pg";
+
+const bwgDbAcceptanceEnabled = process.env.CI === "true"
+  && process.env.NODE_ENV !== "production"
+  && process.env.RUPAYKG_RUN_DB_INTEGRATION_TESTS === "1"
+  && Boolean(process.env.DATABASE_URL);
+
+test("BWG authenticated HTTP authorization fails closed against disposable PostgreSQL", {
+  skip: !bwgDbAcceptanceEnabled ? "requires CI disposable PostgreSQL and applied migrations" : false,
+}, async () => {
+  const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: process.env.DATABASE_SSL === "false" ? undefined : { rejectUnauthorized: true },
+    max: 4,
+  });
+  const fixtures: Array<{ identityId: string; organizationId: string; geographyId: string; tokenHash: string }> = [];
+  const makeFixture = async (permissions: string[], membershipStatus = "VERIFIED") => {
+    const identityId = randomUUID();
+    const organizationId = randomUUID();
+    const geographyId = randomUUID();
+    const roleId = randomUUID();
+    const token = randomUUID() + randomUUID();
+    const tokenHash = createHash("sha256").update(token).digest("hex");
+    const suffix = randomUUID().replaceAll("-", "");
+
+    await pool.query("insert into identities(id, display_name, status) values ($1,$2,'VERIFIED')", [identityId, "BWG HTTP acceptance " + suffix]);
+    await pool.query("insert into organizations(id, name, organization_type, status) values ($1,$2,'ACCEPTANCE_TEST','VERIFIED')", [organizationId, "BWG HTTP acceptance " + suffix]);
+    await pool.query("insert into roles(id, organization_id, name, permissions, geography_scope) values ($1,$2,$3,$4::jsonb,'[]'::jsonb)", [roleId, organizationId, "BWG HTTP acceptance " + suffix, JSON.stringify(permissions)]);
+    await pool.query("insert into organization_memberships(identity_id, organization_id, role_id, status) values ($1,$2,$3,$4)", [identityId, organizationId, roleId, membershipStatus]);
+    await pool.query("insert into geography(id, kind, code, name, source, source_version) values ($1,'CLUSTER',$2,$3,'RupayKG disposable BWG HTTP fixture','v1')", [geographyId, "BWG-HTTP-" + suffix, "BWG HTTP geography " + suffix]);
+    await pool.query("insert into identity_sessions(identity_id, expires_at, token_hash, request_context) values ($1, now() + interval '10 minutes', $2, $3::jsonb)", [identityId, tokenHash, JSON.stringify({ purpose: "disposable-bwg-http-acceptance" })]);
+    const fixture = { identityId, organizationId, geographyId, tokenHash };
+    fixtures.push(fixture);
+    return { ...fixture, token };
+  };
+
+  const app = Fastify({ logger: false });
+  try {
+    await registerValueRoutes(app, pool);
+
+    // Verified member with no reports:read or profile-update permission.
+    const noPermission = await makeFixture([]);
+    const workspaceDenied = await app.inject({
+      method: "GET",
+      url: "/api/v1/workspaces/bwg",
+      headers: { authorization: "Bearer " + noPermission.token, "x-rupaykg-organization-id": noPermission.organizationId },
+    });
+    assert.equal(workspaceDenied.statusCode, 403, workspaceDenied.body);
+    assert.equal(workspaceDenied.json().code, "BWG_WORKSPACE_READ_FORBIDDEN");
+
+    const profileDenied = await app.inject({
+      method: "POST",
+      url: "/api/v1/bwg/profile",
+      headers: { authorization: "Bearer " + noPermission.token, "x-rupaykg-organization-id": noPermission.organizationId },
+      payload: { organizationId: noPermission.organizationId, jurisdictionId: noPermission.geographyId, floorAreaSqm: 10, waterConsumptionLpd: 20, wasteGenerationKgDay: 30, establishmentType: "HOTEL" },
+    });
+    assert.equal(profileDenied.statusCode, 403, profileDenied.body);
+    assert.equal(profileDenied.json().code, "BWG_PROFILE_FORBIDDEN");
+
+    // A PENDING membership is not returned by authentication's VERIFIED membership query.
+    const unverified = await makeFixture(["profile:update"], "PENDING");
+    const unverifiedDenied = await app.inject({
+      method: "POST",
+      url: "/api/v1/bwg/profile",
+      headers: { authorization: "Bearer " + unverified.token },
+      payload: { organizationId: unverified.organizationId, jurisdictionId: unverified.geographyId, floorAreaSqm: 10, waterConsumptionLpd: 20, wasteGenerationKgDay: 30, establishmentType: "HOTEL" },
+    });
+    assert.equal(unverifiedDenied.statusCode, 403, unverifiedDenied.body);
+    assert.equal(unverifiedDenied.json().code, "ORG_FORBIDDEN");
+
+    // The caller cannot select a different organization through the request body.
+    const scoped = await makeFixture(["profile:update"]);
+    const crossOrganizationDenied = await app.inject({
+      method: "POST",
+      url: "/api/v1/bwg/profile",
+      headers: { authorization: "Bearer " + scoped.token, "x-rupaykg-organization-id": scoped.organizationId },
+      payload: { organizationId: randomUUID(), jurisdictionId: scoped.geographyId, floorAreaSqm: 10, waterConsumptionLpd: 20, wasteGenerationKgDay: 30, establishmentType: "HOTEL" },
+    });
+    assert.equal(crossOrganizationDenied.statusCode, 403, crossOrganizationDenied.body);
+    assert.equal(crossOrganizationDenied.json().code, "ORG_FORBIDDEN");
+
+    // Even an authorized profile writer is denied a jurisdiction outside the organization's verified geography scope.
+    const geographyDeniedFixture = await makeFixture(["profile:update"]);
+    const geographyDenied = await app.inject({
+      method: "POST",
+      url: "/api/v1/bwg/profile",
+      headers: { authorization: "Bearer " + geographyDeniedFixture.token, "x-rupaykg-organization-id": geographyDeniedFixture.organizationId },
+      payload: { organizationId: geographyDeniedFixture.organizationId, jurisdictionId: geographyDeniedFixture.geographyId, floorAreaSqm: 10, waterConsumptionLpd: 20, wasteGenerationKgDay: 30, establishmentType: "HOTEL" },
+    });
+    assert.equal(geographyDenied.statusCode, 403, geographyDenied.body);
+    assert.equal(geographyDenied.json().code, "GEOGRAPHY_FORBIDDEN");
+
+    // The route-level checks above must leave no BWG profile rows behind.
+    const profileRows = await pool.query("select count(*)::int as count from bwg_profiles where organization_id = any($1::uuid[])", [fixtures.map((fixture) => fixture.organizationId)]);
+    assert.equal(profileRows.rows[0]?.count, 0);
+  } finally {
+    await app.close();
+    for (const fixture of fixtures.reverse()) {
+      await pool.query("delete from identity_sessions where token_hash=$1", [fixture.tokenHash]);
+      await pool.query("delete from organization_memberships where identity_id=$1 and organization_id=$2", [fixture.identityId, fixture.organizationId]);
+      await pool.query("delete from roles where organization_id=$1", [fixture.organizationId]);
+      await pool.query("delete from organization_geography_scopes where organization_id=$1", [fixture.organizationId]);
+      await pool.query("delete from bwg_profiles where organization_id=$1", [fixture.organizationId]);
+      await pool.query("delete from geography where id=$1", [fixture.geographyId]);
+      await pool.query("delete from organizations where id=$1", [fixture.organizationId]);
+      await pool.query("delete from identities where id=$1", [fixture.identityId]);
+    }
+    await pool.end();
+  }
+});
