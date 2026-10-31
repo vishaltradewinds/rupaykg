@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import type { Pool, PoolClient } from "pg";
-import { createTenantTransaction } from "./database-context.js";
+import { createTenantTransaction, tenantDatabaseContextFromAuth } from "./database-context.js";
 
 const context = {
   identityId: "11111111-1111-4111-8111-111111111111",
@@ -77,4 +77,31 @@ test("invalid identity or organization context fails before acquiring a connecti
   );
   assert.equal(fake.calls.length, 0);
   assert.equal(fake.released(), 0);
+});
+
+test("tenant context is derived only from a verified active membership", () => {
+  const auth = {
+    identityId: context.identityId,
+    activeOrganizationId: context.organizationId,
+    memberships: [{ organization_id: context.organizationId, role_id: "role-1", status: "VERIFIED" }],
+  };
+  assert.deepEqual(tenantDatabaseContextFromAuth(auth), context);
+});
+
+test("tenant context rejects missing or unverified active membership", () => {
+  assert.throws(
+    () => tenantDatabaseContextFromAuth({
+      identityId: context.identityId,
+      memberships: [{ organization_id: context.organizationId, role_id: "role-1", status: "VERIFIED" }],
+    }),
+    /verified active organization is required/,
+  );
+  assert.throws(
+    () => tenantDatabaseContextFromAuth({
+      identityId: context.identityId,
+      activeOrganizationId: context.organizationId,
+      memberships: [{ organization_id: context.organizationId, role_id: "role-1", status: "PENDING" }],
+    }),
+    /verified active organization is required/,
+  );
 });
