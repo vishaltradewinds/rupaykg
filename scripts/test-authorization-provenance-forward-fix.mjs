@@ -104,6 +104,10 @@ try {
     client.query("update verifications set decision='REJECTED',activity_id=$2,evidence_id=$3 where id=$1", [ids.verification, replacementActivity, replacementEvidence]),
     /approved verification linkage is immutable/,
   );
+  await assert.rejects(
+    client.query("update verifications set decision='REJECTED',verifier_identity_id=$2 where id=$1", [ids.verification, ids.actor]),
+    /approved verification linkage is immutable/,
+  );
 
   // Transitioning away from APPROVED without changing the linkage retains
   // the original authorization snapshot as historical provenance.
