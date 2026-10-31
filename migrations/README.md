@@ -30,7 +30,7 @@ Apply migrations in filename order against a fresh PostgreSQL database:
 26. `027_verification_permission_guard.sql` — database verification authorization guard requiring explicit `VERIFY_EVIDENCE` permission rather than legacy role-name elevation.
 27. `028_settlement_retired_credential_guard.sql` — prevents settlement creation for retired credentials and prevents retirement while an attached settlement remains open.
 
-Migration `023` is intentionally absent from the current repository history; do not renumber later migrations to fill the gap. Migration numbering is identity, not a requirement for contiguous integers.
+Migration `023_lifecycle_state_guards.sql` is present in the current repository and version `023` is recorded in the inspected production and staging ledgers. Any older checkpoint claiming that migration 023 is absent is superseded. Do not renumber migrations to fill historical gaps; migration numbering is identity, not a requirement for contiguous integers.
 
 Migration files are intentionally ordered and each numbered migration must have one authoritative owner. Do not reintroduce duplicate numbered migrations containing the same tables or enums.
 
@@ -75,3 +75,14 @@ Migration `086_reserved_role_restoration_db_guard.sql` protects status reactivat
 ## Acceptance fixture registry exclusion
 
 Migration `087_acceptance_fixture_registry_exclusion.sql` prevents activities or evidence explicitly marked with `metadata.acceptanceFixture=true` from backing credentials in value-bearing states. It also binds the database gate to the exact activity, verification, and evidence tuple. The MRV API reports acceptance fixtures as not registry eligible even after real Guardian/Hedera/Mirror Node verification. External anchoring proves message integrity and consensus; it does not validate the underlying activity as a real eligible carbon project.
+
+
+## Live ledger/source reconciliation — 2026-10-31
+
+The read-only live inventory is recorded in [the authoritative database policy](../docs/engineering/RUPAYKG_AUTHORITATIVE_DATABASE_AND_REPOSITORY_POLICY_2026-10-31.md). Do not assume the current `main` migration directory contains every SQL file represented in a live ledger:
+
+- Production main records migration version `096` (`096_verification_authorization_provenance.sql`), but that file is absent from repository `main`. The exact historical Git blob is present on the draft worker PR stack; this does not prove the exact deployed SQL bytes or Render target.
+- Staging records `20261022`–`20261025`, but those four SQL files are absent from repository `main`; they are present on the draft worker PR stack. Staging does not record `096`.
+- Repository `main` contains migrations through `20261021`. The ledger/file mismatch is a release blocker, not permission to rewrite ledgers or replay selected migrations.
+
+Before merging migration-bearing PRs, compare the full ordered SQL set, dependencies, migration runner behavior, production/staging ledgers and actual schema on a fresh disposable branch from production main. Retain exact SQL-byte SHA-256 evidence, schema diff and migration report. Do not apply individual migrations to production or stale staging to make counts match.
