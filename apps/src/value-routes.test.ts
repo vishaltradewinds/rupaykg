@@ -440,6 +440,20 @@ test("BWG authenticated HTTP authorization fails closed against disposable Postg
     assert.equal(unverifiedEpr.statusCode, 409, unverifiedEpr.body);
     assert.equal(unverifiedEpr.json().code, "EVIDENCE_NOT_VERIFIED");
 
+    const verifiedEprEvidenceId = await uploadEvidence(eprWriter, eprActivityId);
+    const verifiedEprVerificationId = await approveEvidence(eprWriter, verifiedEprEvidenceId);
+    const verifiedEpr = await app.inject({
+      method: "POST",
+      url: "/api/v1/bwg/reporting-periods/" + eprPeriodId + "/epr",
+      headers: { authorization: "Bearer " + eprWriter.token, "x-rupaykg-organization-id": eprWriter.organizationId },
+      payload: { schemeId, categoryCode: "PLASTIC", obligatedQuantity: 10, fulfilledQuantity: 8, evidenceId: verifiedEprEvidenceId, verificationId: verifiedEprVerificationId },
+    });
+    assert.equal(verifiedEpr.statusCode, 201, verifiedEpr.body);
+    assert.equal(verifiedEpr.json().externalSubmission, "NOT_SUBMITTED");
+    assert.equal(verifiedEpr.json().eprReport.status, "VERIFIED");
+    assert.equal(verifiedEpr.json().eprReport.evidence_id, verifiedEprEvidenceId);
+    assert.equal(verifiedEpr.json().eprReport.verification_id, verifiedEprVerificationId);
+
     const esgWriter = await makeFixture(["esg:write", "evidence:upload"]);
     await pool.query("insert into bwg_profiles (organization_id, applicability_status, status) values ($1,'APPLICABLE','VERIFIED')", [esgWriter.organizationId]);
     const esgPeriod = await pool.query("insert into bwg_reporting_periods (organization_id,period_start,period_end,reporting_basis) values ($1,'2026-04-01','2026-04-30','MONTHLY') returning id", [esgWriter.organizationId]);
@@ -464,6 +478,19 @@ test("BWG authenticated HTTP authorization fails closed against disposable Postg
     });
     assert.equal(unverifiedEsg.statusCode, 409, unverifiedEsg.body);
     assert.equal(unverifiedEsg.json().code, "EVIDENCE_NOT_VERIFIED");
+
+    const verifiedEsgEvidenceId = await uploadEvidence(esgWriter, esgActivityId);
+    const verifiedEsgVerificationId = await approveEvidence(esgWriter, verifiedEsgEvidenceId);
+    const verifiedEsg = await app.inject({
+      method: "POST",
+      url: "/api/v1/bwg/reporting-periods/" + esgPeriodId + "/esg",
+      headers: { authorization: "Bearer " + esgWriter.token, "x-rupaykg-organization-id": esgWriter.organizationId },
+      payload: { metricCode: "WATER", scope: "SCOPE_1", unit: "KL", value: 10, evidenceId: verifiedEsgEvidenceId, verificationId: verifiedEsgVerificationId },
+    });
+    assert.equal(verifiedEsg.statusCode, 201, verifiedEsg.body);
+    assert.equal(verifiedEsg.json().esgReport.status, "VERIFIED");
+    assert.equal(verifiedEsg.json().esgReport.evidence_id, verifiedEsgEvidenceId);
+    assert.equal(verifiedEsg.json().esgReport.verification_id, verifiedEsgVerificationId);
 
 
     assert.equal(workspaceDenied.statusCode, 403, workspaceDenied.body);
