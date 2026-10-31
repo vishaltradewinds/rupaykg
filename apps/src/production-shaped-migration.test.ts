@@ -169,6 +169,7 @@ test("production-shaped migration order preserves 023 and production-only verifi
         { name: "proposed_upgrade_after_096", result: "PASS" },
         { name: "verifier_provenance_columns_preserved", result: "PASS" },
         { name: "verifier_function_guard_markers_preserved", result: "PASS" },
+        { name: "source_scope_triggers_revalidate_status_transitions", result: "PASS" },
       ],
       exit_status: "PASS",
       limitations: [
