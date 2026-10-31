@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
-import { compareMigrationFilenames } from "./migration-order.js";
+import { selectMigrationFilenames, type MigrationPhase } from "./migration-order.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) throw new Error("DATABASE_URL is required");
@@ -29,23 +29,9 @@ try {
   const candidates = [path.resolve(here, "../../migrations"), path.resolve(here, "../../../migrations")];
   const migrationDir = candidates.find((candidate) => existsSync(candidate));
   if (!migrationDir) throw new Error(`Migration directory not found. Checked: ${candidates.join(", ")}`);
-  const allFiles = (await readdir(migrationDir))
-    .filter((name) => /^\d+_.+\.sql$/.test(name))
-    .sort(compareMigrationFilenames);
-  const phase = process.env.RUPAYKG_MIGRATION_PHASE ?? "all";
-  if (!["all", "production-baseline", "production-upgrade"].includes(phase)) {
-    throw new Error(`Unsupported RUPAYKG_MIGRATION_PHASE: ${phase}`);
-  }
-  const files = allFiles.filter((filename) => {
-    if (phase === "all") return true;
-    const version = filename.split("_", 1)[0];
-    if (phase === "production-baseline") {
-      if (/^\d{8}$/.test(version)) return Number(version) <= 20261021;
-      if (/^\d+$/.test(version)) return Number(version) <= 87 || version === "096";
-      return false;
-    }
-    return /^\d{8}_/.test(filename) && Number(version) >= 20261022;
-  });
+  const allFiles = (await readdir(migrationDir)).filter((name) => /^\d+_.+\.sql$/.test(name));
+  const phase = (process.env.RUPAYKG_MIGRATION_PHASE ?? "all") as MigrationPhase;
+  const files = selectMigrationFilenames(allFiles, phase);
 
   for (const filename of files) {
     const version = filename.split("_", 1)[0];
