@@ -86,3 +86,10 @@ The read-only live inventory is recorded in [the authoritative database policy](
 - Repository `main` contains migrations through `20261021`. The ledger/file mismatch is a release blocker, not permission to rewrite ledgers or replay selected migrations.
 
 Before merging migration-bearing PRs, compare the full ordered SQL set, dependencies, migration runner behavior, production/staging ledgers and actual schema on a fresh disposable branch from production main. Retain exact SQL-byte SHA-256 evidence, schema diff and migration report. Do not apply individual migrations to production or stale staging to make counts match.
+
+
+## Production-applied authorization provenance migration
+
+Migration `096_verification_authorization_provenance.sql` is restored to the canonical repository from the exact Git blob already present on the reviewed worker stack (blob SHA `258b1f4534efbf915688f78aa84d4ec24a47cbc0`). Read-only inspection of the authoritative production database confirmed all four columns introduced by this migration exist on `public.verifications`: `authorization_membership_id`, `authorization_role_id`, `authorization_permissions_snapshot`, and `authorization_checked_at`.
+
+This migration is numbered `096` because that exact version/filename is already recorded in the authoritative production `schema_migrations` ledger. Do not renumber it or reapply it to production. The restoration repairs source provenance; it is not a new production migration.
