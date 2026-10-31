@@ -387,3 +387,14 @@ Read this log and `docs/engineering/2026-10-31-migration-reconciliation-audit.md
 - Current PR #161 head `c44e53ba9467eaf6f42cb191f30043825c87624c`; exact-head workflow runs and combined statuses returned empty. A temporary retarget to main did not expose a run; PR base was immediately restored to `shakti/integrate-government-inbox-worker-2026-10-31`. PR remains draft/open/unmerged, stacked on PR #157.
 - No local test/build was run, and no exact-head CI pass is claimed. Earlier CI at `19b431008e96598d7306455374474934cd9a7cfc` passed, but does not cover the latest heartbeat failure change.
 - No live Neon/Render writes, role/grant/RLS changes, queue replay, worker/scheduler activation, deployment, merge, or statutory/Guardian/Hedera submission. Production HOLD; worker OFF; certification OFF; TRL 9 unclaimed.
+
+
+### 139. Exact-head CI pass for heartbeat failure cancellation — 2026-10-31
+
+- Triggered the repository's main-targeted CI using temporary validation-only PR #167 because engineering PR #161 is intentionally stacked on PR #157 and the CI workflow only runs on PRs targeting `main`.
+- Exact tested head: `c44e53ba9467eaf6f42cb191f30043825c87624c`; GitHub Actions run [#41204073487](https://github.com/vishaltradewinds/rupaykg/actions/runs/41204073487), run number 3850, conclusion SUCCESS.
+- All workflow steps passed: dependency install; production dependency audit; migration validation; production-baseline reconstruction; pre-upgrade schema/verifier capture; proposed migration-chain application; migration runner idempotency; TypeScript typecheck; build; production web browser smoke; unit and disposable PostgreSQL integration tests; production-shaped migration report upload; production container build; container cleanup.
+- This run includes the new test forcing a PostgreSQL lease-heartbeat failure during active validation, asserting AbortSignal cancellation and stable `LEASE_RENEWAL_FAILED` fenced retry. Thus the latest runtime code change is now exact-head CI-verified.
+- Artifact `production-shaped-migration-report` uploaded, ID `13044036562`, 54,004 bytes. PR #161 description/comment updated with exact-head evidence.
+- Temporary validation-only PR #167 was closed unmerged after the successful run. Main engineering PR #161 remains draft/open/unmerged, base `shakti/integrate-government-inbox-worker-2026-10-31`, head `c44e53ba9467eaf6f42cb191f30043825c87624c`.
+- This is engineering CI evidence only. It does not resolve the proposed global queue vs tenant-scoped worker authority decision, RLS policy/role design, exact deployment credential principal, production-derived full-chain rehearsal, independent security review, or authorize deployment. No live Neon/Render changes, queue replay, worker/scheduler activation, merge, or external statutory/Guardian/Hedera submissions occurred. Production HOLD; worker OFF; certification OFF; TRL 9 unclaimed.
