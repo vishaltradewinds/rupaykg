@@ -67,3 +67,26 @@ Central `apps/src/server.ts` also contains additional handlers and direct `pool.
 ## Next action
 
 Continue Gate 1 by completing the route-to-table matrix. Inspect central server handlers and each route module's full SQL, identify global/system-level versus tenant-owned tables, classify read/write verbs and authorization source, then inventory every Pool constructor and connection-string name. Only after that should the least-privilege role matrix and table-specific RLS design be proposed. Validate in a disposable/production-derived rehearsal database; preserve production migration 096 and do not touch production until the reviewed gate is approved.
+
+
+## Addendum — live Render service and deployed-code comparison (2026-10-31)
+
+Read-only Render connector inspection identified the existing RupayKg web service:
+- Service name: `rupaykg`; service ID `srv-daki4d7qj5pc73b8qksg`.
+- Repository: `vishaltradewinds/rupaykg`; deployed branch: `main`; runtime Docker; region Singapore; health check `/health`; one instance; service currently not suspended.
+- Latest deployment observed: `dep-dbis4nm417fc73a8m7ng`, status `live`, deployed commit `862512c8c904cef0f604df0350f02672318953af` (2026-10-31 10:28 UTC).
+- Render account inventory returned no Render-hosted Postgres instances. This is consistent with Neon being the database provider, but does not by itself identify the connection endpoint or database role.
+- The live service metadata does not expose the secret environment-variable values, and no environment-variable read operation was available in this inspection. No secrets were requested or copied.
+- A Render log query for `database_role_diagnostic` returned no matching logs. More importantly, the deployed `main` source at the inspected ref does NOT contain the `readDatabaseRoleDiagnostic` call or the tenant database-context helper that exist on the review branch. Therefore the review-branch diagnostic cannot be used as evidence of the currently deployed runtime identity.
+- The deployed main commit is older than the review branch security work. PR #175 is not deployed; its draft status is not approval to deploy.
+
+## Updated Gate 1 conclusions
+
+1. **VERIFIED:** the existing Render service deploys from `main`, not the review branch.
+2. **VERIFIED:** latest observed live deploy is commit `862512c8c904cef0f604df0350f02672318953af`.
+3. **NOT VERIFIED:** actual live Neon DB role/user and its grants. No credential or secret inspection was performed.
+4. **NOT VERIFIED:** whether Render environment variable `DATABASE_URL` targets Neon production `main` or another endpoint; prior Neon context indicates `main` is the only authority, but the Render secret value was intentionally not accessed.
+5. **P1:** deployed code and review-branch code differ. Do not claim the branch's role diagnostic, tenant context helper or RLS readiness are deployed.
+6. Do not add or change Render environment variables, deploy the review branch, or create a worker until role separation, migration/rollback, security tests and deployment approvals are complete.
+
+Next: compare the exact deployed main commit against the review branch and inspect the complete main-to-review security delta; then complete the route/table/permission matrix on the intended release candidate. Obtain live DB identity through an approved, non-secret diagnostic deployed via a reviewed release—not by extracting connection strings.
