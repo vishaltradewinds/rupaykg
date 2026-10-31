@@ -17,21 +17,45 @@ test("government inbox worker persists retry recovery, quarantine and append-onl
     max: 4,
   });
   const suffix = randomUUID();
-  const provisionCrosswalk = async (authorityCode: string, municipalCode: string, timestamp: string): Promise<{ organizationId: string; geographyId: string; sourceSnapshotId: string }> => {
+  const provisionCrosswalk = async (
+    authorityCode: string,
+    municipalCode: string,
+    timestamp: string,
+    scopeKind: "OTHER" | "STATE_UT" | "DISTRICT" | "LOCAL_BODY" = "OTHER",
+  ): Promise<{ organizationId: string; geographyId: string; sourceSnapshotId: string }> => {
     const organizationId = randomUUID();
     const requesterId = randomUUID();
     const approverId = randomUUID();
     const geographyId = randomUUID();
+    const scopeGeographyId = scopeKind === "OTHER" ? geographyId : randomUUID();
+    const scopeDirectorySourceId = randomUUID();
+    const scopeCode = "SYNTH-SCOPE-" + authorityCode;
+    const scopeGeoKind = scopeKind === "STATE_UT" ? "STATE_UT" : scopeKind === "DISTRICT" ? "DISTRICT" : scopeKind === "LOCAL_BODY" ? "ULB" : "CLUSTER";
     const reason = "Synthetic worker crosswalk acceptance fixture";
     const effectiveFrom = new Date(Date.parse(timestamp) - 24 * 60 * 60 * 1000);
     await pool.query("insert into organizations(id,name,organization_type) values($1,$2,'TEST_FIXTURE')", [organizationId, "Worker crosswalk " + authorityCode]);
     await pool.query("insert into identities(id,display_name) values($1,$2),($3,$4)", [requesterId, "Worker crosswalk requester " + authorityCode, approverId, "Worker crosswalk approver " + authorityCode]);
-    await pool.query("insert into geography(id,kind,code,name,source,source_version) values($1,'CLUSTER',$2,$3,'Synthetic worker fixture','v1')", [geographyId, "WORKER-GEO-" + authorityCode, "Worker crosswalk geography " + authorityCode]);
+    if (scopeKind !== "OTHER") {
+      await pool.query(
+        "insert into geography(id,kind,code,name,source,source_version) values($1,$2,$3,$4,'Synthetic worker fixture','v1')",
+        [scopeGeographyId, scopeGeoKind, "WORKER-SCOPE-" + authorityCode, "Worker source scope " + authorityCode],
+      );
+    }
+    await pool.query(
+      "insert into geography(id,parent_id,kind,code,name,source,source_version) values($1,$2,'CLUSTER',$3,$4,'Synthetic worker fixture','v1')",
+      [geographyId, scopeKind === "OTHER" ? null : scopeGeographyId, "WORKER-GEO-" + authorityCode, "Worker crosswalk geography " + authorityCode],
+    );
     await pool.query("insert into organization_geography_scopes(organization_id,geography_id,status) values($1,$2,'VERIFIED')", [organizationId, geographyId]);
     const activityId = randomUUID();
     await pool.query("insert into activities(id,organization_id,geography_id,activity_type,status) values($1,$2,$3,'WASTE_WEIGHT_MEASUREMENT','COMPLETED')", [activityId, organizationId, geographyId]);
     const uploaderBytes = Buffer.from("Synthetic reviewed worker crosswalk evidence " + authorityCode);
     const evidenceSha256 = createHash("sha256").update(uploaderBytes).digest("hex");
+    const directoryName = scopeKind === "OTHER" ? "Synthetic scope directory" : "Local Government Directory (LGD)";
+    await pool.query(
+      "insert into geography_sources(id,source_name,source_uri,source_version,checksum,status) values($1,$2,$3,$4,$5,'VERIFIED')",
+      [scopeDirectorySourceId, directoryName, "synthetic://scope-directory/" + authorityCode, "synthetic-directory-v1-" + authorityCode, evidenceSha256],
+    );
+    await pool.query("update geography set external_code=$2,source_id=$3 where id=$1", [scopeGeographyId, scopeCode, scopeDirectorySourceId]);
     const evidenceId = randomUUID();
     const seriesId = randomUUID();
     const artifactVersionId = randomUUID();
@@ -41,8 +65,8 @@ test("government inbox worker persists retry recovery, quarantine and append-onl
     const evidenceReference = "db://evidence-vault/" + artifactVersionId;
     const sourceSnapshotId = randomUUID();
     await pool.query(
-      "insert into authoritative_source_snapshots(id,authority_code,source_owner,dataset_code,source_url,source_version,scope_kind,content_sha256,record_count,accepted_record_count,unresolved_record_count,validation_status,usage_terms_reference,retrieved_at,retrieved_by_identity_id,reviewed_by_identity_id,reviewed_at) values($1,$2,$2,$3,'https://example.invalid/worker-crosswalk-source','synthetic-source-v1','OTHER',$4,1,1,0,'APPROVED','synthetic://worker-fixture-terms',now(),$5,$6,now())",
-      [sourceSnapshotId, authorityCode, "WORKER_SOURCE_" + authorityCode, evidenceSha256, requesterId, approverId],
+      "insert into authoritative_source_snapshots(id,authority_code,source_owner,dataset_code,source_url,source_version,scope_kind,scope_code,scope_geography_id,scope_directory_source_id,content_sha256,record_count,accepted_record_count,unresolved_record_count,validation_status,usage_terms_reference,retrieved_at,retrieved_by_identity_id,reviewed_by_identity_id,reviewed_at) values($1,$2,$2,$3,'https://example.invalid/worker-crosswalk-source','synthetic-source-v1',$4,$5,$6,$7,$8,1,1,0,'APPROVED','synthetic://worker-fixture-terms',now(),$9,$10,now())",
+      [sourceSnapshotId, authorityCode, "WORKER_SOURCE_" + authorityCode, scopeKind, scopeCode, scopeGeographyId, scopeDirectorySourceId, evidenceSha256, requesterId, approverId],
     );
     const requestHash = sha(JSON.stringify({ authorityCode, municipalCode, sourceVersion: "synthetic-source-v1", sourceSnapshotId, organizationId, geographyId, evidenceSha256, effectiveFrom }));
     const request = await pool.query<{ id: string }>(
@@ -87,6 +111,27 @@ test("government inbox worker persists retry recovery, quarantine and append-onl
     const recoverableAuthority = "TST-" + suffix.slice(0, 8).toUpperCase();
     const expectedCrosswalk = await provisionCrosswalk(recoverableAuthority, "TEST-MUNI", new Date().toISOString());
     const recoverable = await makeRow(recoverableAuthority);
+
+    // Administrative source scope codes must resolve through a verified, versioned LGD node.
+    for (const kind of ["STATE_UT", "DISTRICT", "LOCAL_BODY"] as const) {
+      const authority = "SCP-" + kind.slice(0, 3) + "-" + suffix.slice(0, 6).toUpperCase();
+      const scoped = await provisionCrosswalk(authority, "TEST-MUNI", new Date().toISOString(), kind);
+      const covered = await pool.query<{ covered: boolean }>(
+        "select government_source_scope_covers_geography($1,$2) as covered",
+        [scoped.sourceSnapshotId, scoped.geographyId],
+      );
+      assert.equal(covered.rows[0]?.covered, true, kind + " scope must cover its descendant geography");
+      const outsideId = randomUUID();
+      await pool.query(
+        "insert into geography(id,kind,code,name,source,source_version) values($1,'CLUSTER',$2,$3,'Synthetic unrelated fixture','v1')",
+        [outsideId, "OUTSIDE-" + kind + "-" + suffix.slice(0, 6), "Outside scope " + kind],
+      );
+      const outside = await pool.query<{ covered: boolean }>(
+        "select government_source_scope_covers_geography($1,$2) as covered",
+        [scoped.sourceSnapshotId, outsideId],
+      );
+      assert.equal(outside.rows[0]?.covered, false, kind + " scope must not cover unrelated geography");
+    }
     const first = await runGovernmentInboxWorker(pool, async () => { throw new Error("SyntheticTransientFailure"); }, { batchSize: 10, maxAttempts: 3 });
     assert.ok(first.retried >= 1, "transient validator failure must be persisted as RETRY");
     const retryRow = await pool.query<{ status: string; attempts: number; lease_token: string | null }>(
