@@ -225,3 +225,11 @@ No live production schema/data/ledger/role/grant/RLS changes, Render secret chan
 - Tests now cover role reuse after password rotation, URL-encoded role names, endpoint/port aliases, TLS verification by default, custom CA propagation and explicit TLS opt-out.
 - **Still NOT DONE:** no actual worker login is provisioned; no real worker credential has been tested; exact role membership/ownership/grants are not yet verified with the deployment credential; no worker entrypoint or service is registered; no runtime is activated.
 - **Next gate:** implement a read-only principal-and-grant preflight that runs with the actual candidate worker credential and checks role attributes, membership, ownership, schema privileges, queue column grants, reference-data SELECT, and denial of event-table INSERT / unrelated tenant data. Rehearse the exact least-privilege grant set on a disposable production-shaped branch only. Do not create production roles or secrets.
+
+
+## Worker queue boundedness and observability addendum
+
+- The exhausted-attempt sweep is now bounded by the configured batch size and uses `FOR UPDATE SKIP LOCKED`, rather than updating every exhausted row in one potentially unbounded statement.
+- The atomic claim statement now returns both the claimed batch and the number of exhausted rows quarantined by that sweep. The worker's `quarantined` counter therefore includes sweep-driven quarantines as well as rows quarantined after a final failed attempt.
+- Lease heartbeat configuration is now constrained to no more than half of the lease lifetime (with a 300-second absolute cap); invalid or excessive values fall back to a safe interval. This prevents a misconfigured heartbeat interval from exceeding a short lease.
+- Unit coverage added for bounded sweep/count reporting and heartbeat interval bounds. Exact-head CI is pending for the newest code/documentation commits.
