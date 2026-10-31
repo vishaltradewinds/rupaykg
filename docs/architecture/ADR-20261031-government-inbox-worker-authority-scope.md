@@ -1,6 +1,6 @@
 # ADR: Government inbox worker authority scope
 
-- Status: PROPOSED — NOT APPROVED
+- Status: HYBRID ARCHITECTURE BASELINE SELECTED — security/compliance sign-off and production release approval PENDING
 - Date: 2026-10-31
 - Applies to: RupayKg government inbox ingestion and jurisdiction crosswalk worker
 - Safety posture: FAIL-CLOSED; production worker OFF
