@@ -61,6 +61,31 @@ test("worker claims a bounded batch and marks structurally valid payloads as int
   assert.equal(statements[5]!.sql, "COMMIT");
 });
 
+test("worker aborts and retries a validator that exceeds its strict deadline", async () => {
+  const { pool, statements } = fakePool([row]);
+  let observedSignal: AbortSignal | undefined;
+  const result = await runGovernmentInboxWorker(pool, async (input) => {
+    observedSignal = input.signal;
+    return new Promise(() => undefined);
+  }, { validationTimeoutSeconds: 1 });
+  assert.equal(result.retried, 1);
+  assert.equal(observedSignal?.aborted, true);
+  const retry = statements.find((entry) => entry.sql.includes("next_attempt_at=case when"));
+  assert.equal(retry?.values[4], "VALIDATION_TIMEOUT");
+});
+
+test("worker renews all claimed leases while a validator is running", async () => {
+  const { pool, statements } = fakePool([row]);
+  const result = await runGovernmentInboxWorker(pool, async () => {
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+    return { valid: true, summary: { validation: "TEST" } };
+  }, { leaseSeconds: 15, leaseRenewalSeconds: 1, validationTimeoutSeconds: 5 });
+  assert.equal(result.validated, 1);
+  const renewal = statements.find((entry) => entry.sql.includes("update async_mirror_inbox inbox") && entry.sql.includes("unnest"));
+  assert.ok(renewal, "a live lease renewal must be issued during validation");
+  assert.match(renewal!.sql, /lease_until > now\(\)/i);
+});
+
 test("worker keeps structurally valid but unmapped batches unresolved", async () => {
   const { pool, statements } = fakePool([row], []);
   const result = await runGovernmentInboxWorker(pool);
