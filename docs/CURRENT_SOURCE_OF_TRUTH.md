@@ -43,3 +43,8 @@ Apply Shakti Standards across discovery, evidence, statutory boundaries, feasibi
 ## Newly confirmed migration provenance blocker
 
 The production-main migration ledger contains version `096` (`096_verification_authorization_provenance.sql`), but the file is absent from repository `main`. Staging records `20261022`–`20261025`, but those four migration files are also absent from repository `main`; staging does not record `096`. These files are present on the unmerged worker PR stack. This is a material ledger/source-control gap. Preserve both live ledgers and do not replay or renumber migrations. Full reconciliation and disposable production-main-derived rehearsal are required before migration-bearing PRs can merge or deploy. Details: [authoritative database policy](engineering/RUPAYKG_AUTHORITATIVE_DATABASE_AND_REPOSITORY_POLICY_2026-10-31.md).
+
+
+## Render runtime identity boundary
+
+Read-only Render metadata confirms the live service `rupaykg` deploys `vishaltradewinds/rupaykg` branch `main`; latest live deploy source is commit `862512c8c904cef0f604df0350f02672318953af`. This does not reveal the service's Neon connection target. The secret was not retrieved. Confirm the runtime database identity through a safe non-secret metadata check before claiming the live application is connected to the authoritative Neon main branch.
