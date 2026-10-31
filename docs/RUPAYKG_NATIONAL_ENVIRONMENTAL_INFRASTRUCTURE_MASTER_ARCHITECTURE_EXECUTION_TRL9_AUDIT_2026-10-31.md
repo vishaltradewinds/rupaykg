@@ -271,3 +271,12 @@ RupayKg has substantial application, database, compliance, carbon, evidence, ver
 The inspected evidence does not establish a complete national regulatory operating system, database-enforced tenant isolation, verified live database binding for Render, sustained real-world material-chain operations or TRL 9. The highest-value next work is to establish canonical truth, remove risky deployment side effects, close security boundaries, validate statutory authority and demonstrate real end-to-end operations.
 
 **Final status: engineering foundation exists; national infrastructure qualification remains in progress; production HOLD; worker OFF; scheduler OFF; certification OFF; TRL 9 not claimed.**
+
+
+## 14. Tenant isolation catalog and role finding — 2026-10-31
+
+A second read-only catalog pass enumerated all 67 public base tables, direct organization columns, multi-party organization references and foreign-key relationships. The provisional table-by-table classification and RLS security model are recorded in [Tenant Isolation and PostgreSQL RLS ADR — Draft](engineering/RUPAYKG_TENANT_ISOLATION_RLS_ADR_DRAFT_2026-10-31.md).
+
+A significant additional finding: the inspected Neon session role rupaykg has rolbypassrls=true, rolcreaterole=true, rolcreatedb=true, rolsuper=false and rolcanlogin=true. This is the inspection login; it does not establish that Render uses the same login. The actual Render runtime principal remains unverified. This role is privileged and cannot be treated as a least-privilege web or worker identity.
+
+The ADR rejects plain caller-controlled PostgreSQL custom settings as sole identity proof, because a database session can set arbitrary custom GUC values. A signed short-lived request context or tenant-specific database identities must be evaluated in a disposable rehearsal with adversarial SQL-injection and pool-reuse tests. No production role, grant, policy or schema changes were made.
