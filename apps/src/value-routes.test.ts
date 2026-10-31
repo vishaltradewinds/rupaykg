@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { bwgProfileReviewBasis, canReadBwgWorkspace } from "./value-routes.js";
+import { bwgProfileReviewBasis, bwgEprQuantityError, canReadBwgWorkspace, isBwgEprFulfilledObligationConstraintViolation } from "./value-routes.js";
 
 test("BWG profile intake never self-asserts statutory applicability or external registration", () => {
   const basis = bwgProfileReviewBasis();
@@ -45,4 +45,31 @@ test("BWG workspace read fails closed when reports:read is absent or organizatio
   assert.equal(await canReadBwgWorkspace(deniedClient, auth, "org-1"), false);
   assert.equal(await canReadBwgWorkspace(deniedClient, auth, "org-2"), false);
   assert.equal(queryCount, 1);
+});
+
+test("BWG EPR quantities reject fulfilled amounts above the obligation and accept exact boundaries", () => {
+  assert.equal(bwgEprQuantityError(10, 0), null);
+  assert.equal(bwgEprQuantityError(10, 10), null);
+  assert.equal(bwgEprQuantityError(10, 10.01), "BWG_EPR_FULFILLED_EXCEEDS_OBLIGATED");
+  assert.equal(bwgEprQuantityError(0, 0), null);
+  assert.equal(bwgEprQuantityError(null, 0), "BWG_EPR_REQUIRED");
+  assert.equal(bwgEprQuantityError(10, null), "BWG_EPR_REQUIRED");
+  assert.equal(bwgEprQuantityError(-1, 0), "BWG_EPR_REQUIRED");
+  assert.equal(bwgEprQuantityError(10, -1), "BWG_EPR_REQUIRED");
+});
+
+test("BWG EPR database conflict mapping is restricted to the exact production check constraint", () => {
+  assert.equal(isBwgEprFulfilledObligationConstraintViolation({
+    code: "23514",
+    constraint: "bwg_epr_reports_fulfilled_le_obligated",
+  }), true);
+  assert.equal(isBwgEprFulfilledObligationConstraintViolation({
+    code: "23514",
+    constraint: "bwg_epr_reports_fulfilled_quantity_check",
+  }), false);
+  assert.equal(isBwgEprFulfilledObligationConstraintViolation({
+    code: "23505",
+    constraint: "bwg_epr_reports_fulfilled_le_obligated",
+  }), false);
+  assert.equal(isBwgEprFulfilledObligationConstraintViolation(null), false);
 });
