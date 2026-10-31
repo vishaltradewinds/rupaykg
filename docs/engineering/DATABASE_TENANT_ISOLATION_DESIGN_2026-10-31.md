@@ -331,3 +331,24 @@ A read-only catalog recheck expanded the earlier role inventory:
 - `pg_stat_activity` showed no active application connections during the observation; therefore the exact Render service login role remains unknown.
 
 **Decision:** neither `rupaykg` nor `neon_service` is acceptable as a least-privilege tenant runtime identity. If the Render service uses either, application SQL can bypass RLS; the `rupaykg` owner can additionally delete/truncate verification records and alter triggers. This reinforces the P1 release blocker. Do not revoke grants, transfer ownership, rotate credentials or change Render environment variables in this PR. A separate production-shaped role split and credential cutover must be rehearsed with positive/negative tenant tests, worker access, migration-owner access, pool reset tests, backup/rollback evidence and an explicit maintenance window.
+
+
+## 11. Non-secret runtime database-role diagnostic — 2026-10-31
+
+A read-only diagnostic has been added to the API startup path on this non-production PR branch. It executes one catalog query and logs only:
+- `current_user` and `session_user`;
+- superuser, BYPASSRLS, CREATEROLE and CREATEDB flags;
+- CREATE privilege on the public schema;
+- DELETE, TRUNCATE and TRIGGER privileges on `public.verifications` when that relation exists.
+
+It does not read or log `DATABASE_URL`, passwords, tokens, environment-variable values, connection strings, or application row data. If the diagnostic query fails, startup continues and emits an error event; it does not change application authorization or readiness. Unit tests cover the output shape, secret exclusion and missing-role fail-closed behavior.
+
+**Deployment boundary:** this change exists only on the draft PR branch and has not been deployed. Do not merge or deploy it merely to identify the role. First obtain exact-head CI, inspect the startup log behavior and confirm the Render log access boundary. If approved in a later change window, the first boot after deployment should provide the observed login role without exposing credentials.
+
+**Role split target (design only):**
+- API runtime: LOGIN, NOSUPERUSER, NOBYPASSRLS, NOCREATEROLE, NOCREATEDB; no schema ownership, no DDL, no TRUNCATE/TRIGGER; only required table/view/function privileges and tenant policies.
+- Worker runtime: separate LOGIN and grants limited to its inbox/lease/event tables and narrowly scoped functions; no general application-table ownership.
+- Migration owner: NOLOGIN owner role; DDL credentials held only by a controlled migration job, not the web process.
+- Read-only operations: separate read-only role, no tenant writes and no bypass privileges.
+
+Do not apply this role design to production until the exact current runtime identity is observed, a full table/sequence/function privilege inventory is mapped, table-specific RLS policies and all route/worker paths are tested on a production-shaped clone, connection-pool tenant context reset is proven, and credential rotation/rollback is rehearsed. No live role, grant, ownership, password or Render environment change is authorized by this design note.
