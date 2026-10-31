@@ -178,3 +178,12 @@ The first simulation attempt was incomplete because it did not model database ow
 Exact-head CI run [#41203528525](https://github.com/vishaltradewinds/rupaykg/actions/runs/41203528525) (run 3845) passed at commit 19b431008e96598d7306455374474934cd9a7cfc. All 17 workflow steps passed, including dependency audit, migration validation, production-baseline reconstruction, migration application/idempotency, typecheck, build, browser smoke, serial unit + disposable PostgreSQL acceptance, migration report artifact upload and production container build.
 
 The PR remains draft/open/unmerged. The CI run does not authorize applying the migration to staging/production. The exact deployment secret principal still needs to be confirmed separately; the audit establishes the Neon database-owner role model only.
+
+
+## Crosswalk/source-snapshot row-lock regression — exact-head CI passed 2026-10-31
+
+Added disposable PostgreSQL acceptance that replays the same candidate-selection query and lock mode used by the worker (`FOR SHARE OF c,s`) inside an open transaction. While those selected rows are locked, a second connection attempts crosswalk DELETE and approved source-snapshot retirement; both must fail with PostgreSQL lock timeout. After the locking transaction commits, both mutations must succeed. The worker unit test separately asserts its resolution query contains `FOR SHARE OF c,s` before the fenced terminal update.
+
+The exact worker branch head `fd2e52e3f73d03f73632bdccd0f0b6a03193f8b5` passed full CI run [#41205115744](https://github.com/vishaltradewinds/rupaykg/actions/runs/41205115744), including TypeScript typecheck, build, browser smoke, all unit/disposable PostgreSQL suites, production-shaped migration report upload and production container build. Artifact `production-shaped-migration-report` ID `13043707493`.
+
+Test-harness corrections before the passing run: an initial attempt could select an older eligible synthetic row; the next isolated attempt exposed a TypeScript regex-literal typo; a further attempt exposed duplicate/missing fixture locals. The final test avoids asynchronous worker barriers and deterministically replays the exact PostgreSQL row-lock query. The CI result validates database lock semantics plus the worker query assertion; it is not a live Neon test and does not approve production privileges or activation.
