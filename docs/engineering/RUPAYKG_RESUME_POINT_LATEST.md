@@ -3,17 +3,20 @@
 > Read `AGENTS.md` first. This is the active hand-off; dated checkpoints are immutable.
 
 ## Latest work — national stakeholder work/reporting contract (2026-10-31)
+- BWG route-gap clarification commit: `f95cd24d926187de6c959cbf9d4c1f6b6f6e8883`.
+- BWG API gap checkpoint commit: `668426a1b5be685aeb7eada2276fc7a1f2c02fde`.
 - Repository: `vishaltradewinds/rupaykg`; branch: `shakti/atomic-inbox-claim-2026-10-31`.
-- Matrix document commit: `4e5a4cb66df0fee409708d4187ea7fe7b111ac9a`.
-- Immutable matrix checkpoint commit: `15f52d616c78fad8218565dddd59f0534232d26d`.
+- Matrix document commit: `4e5a4cb66df0fee409708d4187ea7fe7b111ac9a` (CI run #3947 / ID `41217457750` SUCCESS on that exact SHA).
+- Immutable matrix checkpoint commit: `15f52d616c78fad8218565dddd59f0534232d`.
 - Controlling product contract: [National Stakeholder Work-and-Reporting Matrix](../product/NATIONAL_STAKEHOLDER_WORK_AND_REPORTING_MATRIX_2026-10-31.md).
 - Immutable checkpoint: [National stakeholder work/reporting matrix checkpoint](./checkpoints/2026-10-31-national-stakeholder-work-reporting-matrix.md).
+- Latest route-gap checkpoint: [BWG API contract gap confirmed](./checkpoints/2026-10-31-bwg-api-contract-gap-confirmed.md).
 - Matrix covers household/citizen, all generator types, BWG, waste picker/collector, contractor, transporter, aggregator, MRF, recycler/processor, treatment/disposal, PIBO, PRO, buyer/offtaker, verifier, ULB, Gram Panchayat/district, regulator, carbon/MRV, registry/trust rail, funder/insurer/CSR and platform operator.
 - Generator explicitly first-class and distinct from BWG. Source code shows BWG reporting panel, statutory assessment, citizen/farmer panel and general generation field capture; a complete all-generator lifecycle is not yet proven.
 - Specific unresolved route issue: BWG UI calls `GET /api/v1/workspaces/bwg`; no matching handler was found in the route modules inspected. Trace server registration and add HTTP acceptance before claiming BWG reporting is fully operational.
 - Field-capture quantity is declared metadata, not calibrated weighment or receiver-accepted quantity.
 - Workspace APIs inspected return bounded recent rows; period aggregation, export, pagination and reproducibility need explicit tests.
-- Exact-head CI run #3947 / ID `41217457750` on matrix commit was IN_PROGRESS at checkpoint creation. Recheck before claiming pass.
+- Confirmed BWG route gap: issue [#176](https://github.com/vishaltradewinds/rupaykg/issues/176). UI expects six `/api/v1/workspaces/bwg` and `/api/v1/bwg/*` paths absent from the registered server route graph; see latest checkpoint.
 
 ## Repository-wide readiness audit (2026-10-31)
 - Audit report: [RupayKg repository-wide readiness and execution audit](./RUPAYKG_REPOSITORY_READINESS_AND_EXECUTION_AUDIT_2026-10-31.md).
