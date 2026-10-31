@@ -103,3 +103,19 @@ The fixtures are synthetic and run only in disposable CI PostgreSQL. They intent
 ### Concurrency-test harness correction — 2026-10-31
 
 The first CI execution exposed a test-barrier design error: the worker processes each claimed row sequentially, so waiting for all four validators to enter before releasing any validator deadlocked both worker loops after their first row. The test barrier now releases when both worker invocations have entered their first validation call; each then proceeds through its second row. This is a test-only correction, not a production-worker behavior change. Re-run the full CI suite on the corrected head before accepting the batch.
+
+
+## Source snapshot / crosswalk transaction integrity — 2026-10-31
+
+The atomic-claim worker follow-up now resolves a candidate jurisdiction crosswalk and persists the inbox terminal decision within one SERIALIZABLE PostgreSQL transaction.
+
+- Before reading candidates, the worker takes a transaction-scoped advisory lock keyed by authority code, municipal code and source version (unit-separator-delimited, hashtextextended). This prevents a concurrent matching crosswalk INSERT/UPDATE from creating a phantom candidate during resolution.
+- New forward-only migration 20261113_government_crosswalk_resolution_key_lock.sql installs a BEFORE INSERT/UPDATE trigger on government_jurisdiction_crosswalks. The trigger takes the same lock; on key changes it locks old/new keys in deterministic lexical order to avoid lock-order deadlocks.
+- Candidate selection uses FOR SHARE OF c,s for the verified crosswalk and approved source snapshot. Snapshot retirement and crosswalk status changes therefore cannot commit between the resolution read and the fenced inbox terminal update.
+- The same transaction writes VALIDATED or UNRESOLVED, retains the lease-token and unexpired-lease fence, and commits before releasing the connection. A failed/expired fence commits no successful terminal transition.
+- Validation evidence now persists the exact source snapshot ID, content SHA-256, dataset code, scope kind/code, scope geography ID and scope directory source ID alongside the crosswalk ID/version.
+- Serialization/lock failures roll back the resolution transaction and enter the existing fenced retry path. No live Neon migration, role, grant, queue, worker or scheduler change is authorized.
+
+Unit tests now assert transaction ordering, the advisory lock, row locks and persisted snapshot identity/hash. Disposable PostgreSQL acceptance adds a competing crosswalk-revocation test: mutation must time out while the same jurisdiction-key lock is held, then succeed after release.
+
+This closes the previously identified read-to-terminal-update gap for matching crosswalk inserts/updates and source/crosswalk retirement/revocation, subject to exact-head CI and independent review. It does not solve the separate global-vs-row-scoped queue governance decision, RLS, worker lease renewal/strict validator timeout, or production migration-principal authority. PR #161 remains draft/unmerged; production remains HOLD; worker OFF; TRL 9 unclaimed.
