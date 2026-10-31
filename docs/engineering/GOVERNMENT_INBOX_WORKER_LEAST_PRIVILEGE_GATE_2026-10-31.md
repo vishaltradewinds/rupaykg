@@ -60,3 +60,14 @@ Neither login may own tenant tables or bypass RLS. Worker access to cross-organi
 ## Non-actions
 
 No role, grant, ownership, password, secret, Render environment, migration, database row, queue lease, deployment or scheduler was changed. No staging or production worker was run. The eight expired staging PROCESSING leases remain preserved. RLS remains disabled. Production remains HOLD.
+
+
+## New finding: append-only event trigger requires a separate capability owner — 2026-10-31
+
+Fresh live staging catalog inspection found `record_async_mirror_inbox_event()` is currently SECURITY INVOKER, has no pinned `search_path`, and is owned by the over-privileged `rupaykg` role. The trigger inserts into `async_mirror_inbox_events`. With invoker semantics, a least-privilege worker would need direct INSERT on the event table, allowing it to forge audit events independently of inbox state transitions. Granting worker INSERT is therefore rejected.
+
+Added proposed migration `20261112_inbox_event_trigger_security_definer.sql` on this draft PR. It creates a dedicated NOLOGIN, non-superuser, non-BYPASSRLS capability role `rupaykg_inbox_event_writer`; grants only schema USAGE, event-table INSERT and event-sequence USAGE; transfers the trigger function to that owner; pins `search_path`; fully qualifies the target table; and revokes public function execution. It does not grant worker identities direct event-table INSERT.
+
+Added `apps/src/async-mirror-worker-privileges-db.test.ts`, which connects using a genuinely separate temporary PostgreSQL login in disposable CI. It checks the definer owner attributes and privileges, verifies that the worker can update permitted inbox columns and the trigger appends an event, and verifies that direct event INSERT, inbox DELETE, payload-hash rewrite, unrelated evidence SELECT and schema DDL are denied.
+
+CI run `41199041215` is pending. Do not treat this migration or test as passing until the entire run completes. The migration is proposed code only; it has not been applied to any Neon branch. Independent review must examine role ownership transfer, function search_path, trigger execution semantics and role grant/revoke behaviour before merge.
