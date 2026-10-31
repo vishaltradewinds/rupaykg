@@ -34,3 +34,6 @@
 ## Safety
 
 No live Neon schema/data/role/grant/RLS writes, migration replay/rollback, worker or scheduler activation, Render changes, production deployment or certification is authorized by this status file.
+
+
+**Additional migration blocker:** Production main ledger has version `096` but repository `main` lacks its SQL file. Staging has versions `20261022`–`20261025` but repository `main` lacks those files, and staging lacks `096`. The unmerged worker PR stack contains these files. Full ordered-chain reconciliation is mandatory before merging migration-bearing code; do not edit/replay either live ledger.
