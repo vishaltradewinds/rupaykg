@@ -43,7 +43,7 @@ However, the exhaustion sweep, claim, crosswalk lookup and each row finalization
 
 ## CI status
 
-The compatibility-documentation commit `6450a6ec49f2cf0055995624201a3897223d4e2d` triggered CI run `41197792228`. At the time of this assessment, migration validation, migration application, typecheck, build, and browser smoke had passed; disposable PostgreSQL tests were still running. Do not describe the database suite as passed until the run concludes successfully.
+The compatibility-documentation commit `6450a6ec49f2cf0055995624201a3897223d4e2d` completed CI run `41197792228` successfully. All steps passed, including migration validation, exact production-baseline reconstruction, migration upgrade/idempotency, typecheck, build, browser smoke, the disposable PostgreSQL integration suite, and production container build. This validates the existing worker tests and migration chain on a fresh CI PostgreSQL instance only; it does not validate live Neon staging/production schema or the deployed Render database identity. The later coverage-documentation commit `9efffe304d39eecc9feab2747c531153e4bf3eba` triggered CI run `41197918035`, which was still in progress when this note was updated.
 
 ## Gate decision
 
