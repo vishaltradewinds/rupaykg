@@ -121,3 +121,15 @@ On the next session, do not start with a generic repo audit. Read `AGENTS.md` an
 
 ### Next Gate 1 action
 Complete central-server and route-module SQL authorization mapping, then inventory every `new Pool`/database connection variable across worker, scripts and tests. After that prepare a least-privilege role matrix and table-specific RLS design plus negative cross-tenant tests. Rehearse only in a disposable/production-derived branch; do not modify production.
+
+
+## Live deployment discovery — 2026-10-31
+- Render read-only inventory found the live service `rupaykg` (`srv-daki4d7qj5pc73b8qksg`), deploying from `main` in Singapore. Latest observed live deploy: `dep-dbis4nm417fc73a8m7ng`, commit `862512c8c904cef0f604df0350f02672318953af`, status `live`.
+- Render inventory showed no Render-hosted Postgres instances. Neon remains the database authority per the prior Neon inspection.
+- The deployed `main` source does not include the review-branch DB-role diagnostic or tenant transaction context helper. A search of service logs found no matching role diagnostic. Therefore the actual live database role is NOT VERIFIED.
+- Render service metadata did not expose environment variable values, and no secret values were accessed. Whether the live `DATABASE_URL` points to Neon production `main` is still NOT VERIFIED.
+- Detailed evidence and interpretation are in `docs/engineering/GATE1_DATABASE_SECURITY_PRELIMINARY_INVENTORY_2026-10-31.md` (updated commit `6da4490ec89187037839cd87847701ec88e23c9f`).
+- This reinforces the P1 gate: deployed main and review branch differ; do not claim review-branch security code is live or deploy it before independent review and release gates.
+
+## Next exact action
+Compare deployed main commit `862512c8c904cef0f604df0350f02672318953af` with the review candidate, then complete the full route × table × operation × tenant × permission matrix and enumerate every database pool/connection string (including worker, scripts and tests). Only then design least-privilege DB roles and per-table RLS policies. No production writes or deploys.
