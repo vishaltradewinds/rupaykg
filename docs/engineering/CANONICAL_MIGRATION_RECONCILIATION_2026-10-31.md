@@ -92,3 +92,9 @@ PR #122 was based on PR #142's feature branch; PR #142 itself was based on `inte
 6. Complete backup/restore rehearsal, operational monitoring, rate-limit and security review, deployment plan, rollback plan, and explicit production approval.
 
 No SQL writes, DDL, production migration, staging migration, deployment, worker activation, scheduler activation, merge, or certification occurred during this reconciliation. Documentation, source recovery and CI do not advance TRL.
+
+## Worker feature dependency boundary
+
+A direct comparison of current `main` with `intelligence/ai-evidence-intake-middleware` shows that feature branch is 567 commits ahead and 4 behind, with a broad application/schema change set. The worker source and related routes, scheduler, crosswalk, evidence-intake and governance migrations are not present on current `main`; the feature branch includes additional migrations 20261026 onward and multiple supporting application files. PR #142 is based on that feature branch, and PR #122 is stacked on PR #142. Therefore the four-migration source restoration in PR #155 is deliberately not described as a complete worker integration. Worker code must not be cherry-picked in isolation until its schema, API, authorization, scheduler and operational-alert dependency closure is identified and reviewed. The historical worker PostgreSQL test passing on PR #122 remains useful evidence for that historical feature branch only.
+
+PR #155's current CI run #3525 has completed migration validation, applied the ordered migration runner to disposable PostgreSQL, type-check, build, browser smoke test and the repository's current PostgreSQL acceptance test suite successfully. Its production-container build is still running at the latest check. Note: PR #155 does not contain `apps/src/async-mirror-worker.postgres.test.ts` or the worker runtime, so this run is not a worker-specific PostgreSQL acceptance result.
