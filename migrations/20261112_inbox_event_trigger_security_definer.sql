@@ -37,10 +37,14 @@ begin
 end;
 $$;
 
-alter function public.record_async_mirror_inbox_event() owner to rupaykg_inbox_event_writer;
-revoke create on schema public from rupaykg_inbox_event_writer;
-revoke rupaykg_inbox_event_writer from current_user;
+-- Complete all owner-only ACL/comment changes before transferring ownership.
 revoke all on function public.record_async_mirror_inbox_event() from public;
 
 comment on function public.record_async_mirror_inbox_event() is
   'SECURITY DEFINER trigger owned by a NOLOGIN role limited to appending payload-free inbox events; fixed search_path and fully qualified target.';
+
+-- Ownership transfer is the final function-level operation: after this point
+-- the migration login must no longer act as the function owner.
+alter function public.record_async_mirror_inbox_event() owner to rupaykg_inbox_event_writer;
+revoke create on schema public from rupaykg_inbox_event_writer;
+revoke rupaykg_inbox_event_writer from current_user;
