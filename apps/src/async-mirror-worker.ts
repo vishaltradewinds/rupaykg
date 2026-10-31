@@ -119,20 +119,23 @@ export async function runGovernmentInboxWorker(
   const leaseSeconds = boundedInteger(options.leaseSeconds, DEFAULT_LEASE_SECONDS, 15, 900);
   const maxAttempts = boundedInteger(options.maxAttempts, DEFAULT_MAX_ATTEMPTS, 1, 20);
 
-  await pool.query(
-    `update async_mirror_inbox
-        set status='QUARANTINED', quarantined_at=now(), lease_token=null, lease_until=null,
-            last_error_code=coalesce(last_error_code, 'WORKER_ATTEMPTS_EXHAUSTED')
-      where attempts >= $1
-        and (
-          status in ('RECEIVED','RETRY')
-          or (status='PROCESSING' and (lease_until is null or lease_until < now()))
-        )`,
-    [maxAttempts],
-  );
-
+  // One PostgreSQL statement is the transaction boundary for exhaustion handling
+  // and claiming. Concurrent workers cannot observe a gap between the sweep and claim.
+  // Validation happens only after this statement commits, so no row locks are held
+  // while application code performs potentially slow work.
   const claimed = await pool.query<ClaimedInboxRow>(
-    `with candidates as (
+    `with exhausted as (
+       update async_mirror_inbox
+          set status='QUARANTINED', quarantined_at=now(), lease_token=null, lease_until=null,
+              last_error_code=coalesce(last_error_code, 'WORKER_ATTEMPTS_EXHAUSTED')
+        where attempts >= $3
+          and (
+            status in ('RECEIVED','RETRY')
+            or (status='PROCESSING' and (lease_until is null or lease_until < now()))
+          )
+       returning id
+     ),
+     candidates as (
        select id
          from async_mirror_inbox
         where attempts < $3
