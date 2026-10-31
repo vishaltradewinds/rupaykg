@@ -352,3 +352,19 @@ It does not read or log `DATABASE_URL`, passwords, tokens, environment-variable 
 - Read-only operations: separate read-only role, no tenant writes and no bypass privileges.
 
 Do not apply this role design to production until the exact current runtime identity is observed, a full table/sequence/function privilege inventory is mapped, table-specific RLS policies and all route/worker paths are tested on a production-shaped clone, connection-pool tenant context reset is proven, and credential rotation/rollback is rehearsed. No live role, grant, ownership, password or Render environment change is authorized by this design note.
+
+
+## 2026-10-31 follow-up — protected runtime identity diagnostic
+
+A read-only operator diagnostic has been added to the implementation branch:
+
+- Route: `GET /api/v1/admin/database-runtime-identity`
+- Authorization: existing Super Admin authorization plus `admin:security`
+- Reports: PostgreSQL `session_user` and `current_user`, role attribute booleans (superuser, BYPASSRLS, CREATEROLE, CREATEDB), public-schema CREATE privilege, and TRUNCATE/TRIGGER privilege on `public.verifications`.
+- Does not report: DATABASE_URL, host, port, database name, password, credential material, raw grant lists, or role membership names.
+- It is a read-only SELECT; it does not alter roles, grants, ownership, policies, or application configuration.
+- Added route tests for authorized response shape and denial of non-admin users.
+
+This route is code only and is not deployed. It will identify the runtime identity only when called through the actual deployed application connection pool. A CI/test invocation will identify the test database role, not production. Before any production observation, require review of the route, exact-head CI, controlled deployment approval and operator access. Do not enable or deploy it automatically.
+
+The diagnostic does not resolve the RLS blocker: the current tenant transaction helper sets transaction-local identity/organization context, but explicitly warns that callers must not assume RLS is enabled until reviewed policies are applied. Role least privilege, RLS policy coverage, connection pool context reset, worker/migration role separation, and rollback rehearsal remain separate release gates.
