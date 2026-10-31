@@ -35,8 +35,9 @@ async function applyOperation(client: PoolClient, auth: NonNullable<AuthContext>
   }
   if (operationType === "MEASUREMENT_CREATE") {
     const activityId = stringValue(payload, "activityId"); const value = positiveNumber(payload, "value"); const unit = stringValue(payload, "unit"); const method = stringValue(payload, "method"); const source = stringValue(payload, "source"); const measuredAt = dateValue(payload, "measuredAt"); const instrumentCode = stringValue(payload, "instrumentCode"); const parameterCode = stringValue(payload, "parameterCode");
-    if (!activityId || !isUuid(activityId) || value === null || !unit || !method || !source || !measuredAt || !instrumentCode || !parameterCode) throw Object.assign(new Error("MEASUREMENT_CREATE requires activityId, positive value, unit, method, source, valid measuredAt, instrumentCode and parameterCode"), { code: "INVALID_OPERATION" });
-    const activity = await client.query<{ organization_id: string }>(`select a.organization_id from activities a where a.id = $1`, [activityId]); const organizationId = activity.rows[0]?.organization_id;
+    const uncertaintyRecordId = stringValue(payload, "uncertaintyRecordId"); const rawFrameArtifactVersionId = stringValue(payload, "rawFrameArtifactVersionId");
+    if (!activityId || !isUuid(activityId) || value === null || !unit || !method || !source || !measuredAt || !instrumentCode || !parameterCode || !uncertaintyRecordId || !isUuid(uncertaintyRecordId) || !rawFrameArtifactVersionId || !isUuid(rawFrameArtifactVersionId)) throw Object.assign(new Error("MEASUREMENT_CREATE requires activityId, positive value, unit, method, source, measuredAt, instrumentCode, parameterCode, uncertaintyRecordId and rawFrameArtifactVersionId"), { code: "INVALID_OPERATION" });
+    const activity = await client.query<{ organization_id: string }>("select a.organization_id from activities a where a.id = $1", [activityId]); const organizationId = activity.rows[0]?.organization_id;
     if (!organizationId || !await hasOrganizationPermission(client, auth, organizationId, ["waste:record"])) throw Object.assign(new Error("Waste recording permission required for measurement creation"), { code: "OPERATION_FORBIDDEN" });
     if (!await activityGeographyAccess(client, auth, activityId)) throw Object.assign(new Error("Activity is outside organization authorization scope or has no authorized geography"), { code: "OPERATION_FORBIDDEN" });
     const instrument = await client.query<MrvInstrumentApprovalEvidence & { id: string }>(
@@ -55,9 +56,25 @@ async function applyOperation(client: PoolClient, auth: NonNullable<AuthContext>
     );
     const parameterFailure = instrumentParameterFailure(instrumentCode, parameterCode, unit, value, parameterSpecs.rows);
     if (parameterFailure) throw Object.assign(new Error(parameterFailure), { code: "INSTRUMENT_NOT_APPROVED" });
+    const uncertainty = await client.query<{ id: string }>(
+      "select id from mrv_instrument_parameter_uncertainty where id=$1 and instrument_id=$2 and lower(parameter_code)=lower($3) and parameter_unit=$4 and mrv_parameter_uncertainty_is_current(id)",
+      [uncertaintyRecordId, instrumentId, parameterCode, unit],
+    );
+    if (!uncertainty.rows[0]) throw Object.assign(new Error("Current independently reviewed parameter uncertainty record is required"), { code: "MRV_MEASUREMENT_INTEGRITY_REQUIRED" });
+    const rawFrame = await client.query<{ sha256: string; content: Buffer; size_bytes: number; media_type: string; evidence_status: string; activity_id: string; organization_id: string; evidence_id: string; uploaded_by_identity_id: string }>(
+      `select v.sha256,v.content,v.size_bytes,v.media_type,e.status::text evidence_status,s.activity_id,s.organization_id,e.id evidence_id,v.uploaded_by_identity_id from evidence_artifact_versions v join evidence e on e.id=v.evidence_id join evidence_artifact_series s on s.id=v.series_id where v.id=$1`,
+      [rawFrameArtifactVersionId],
+    );
+    const frame = rawFrame.rows[0];
+    if (!frame || frame.activity_id !== activityId || frame.organization_id !== organizationId || frame.media_type !== "application/octet-stream" || frame.evidence_status !== "VERIFIED" || frame.content.length !== Number(frame.size_bytes) || createHash("sha256").update(frame.content).digest("hex") !== frame.sha256) throw Object.assign(new Error("Raw instrument frame must be an exact, verified evidence-vault artifact for this activity and organization"), { code: "MRV_MEASUREMENT_INTEGRITY_REQUIRED" });
+    const rawFrameReview = await client.query<{ approved: boolean }>(
+      `select exists(select 1 from evidence_artifact_reviews r where r.evidence_id=$1 and r.artifact_version_id=$2 and r.reviewer_identity_id<>$3 and r.decision='APPROVED' and r.id=(select latest.id from evidence_artifact_reviews latest where latest.evidence_id=r.evidence_id and latest.artifact_version_id=r.artifact_version_id order by latest.review_sequence desc limit 1)) approved`,
+      [frame.evidence_id, rawFrameArtifactVersionId, frame.uploaded_by_identity_id],
+    );
+    if (rawFrameReview.rows[0]?.approved !== true) throw Object.assign(new Error("Raw instrument frame requires a latest independent APPROVED evidence review"), { code: "MRV_MEASUREMENT_INTEGRITY_REQUIRED" });
     const result = await client.query<{ id: string }>(
-      `insert into measurements (activity_id, value, unit, method, source, measured_at, metadata, mrv_instrument_id, parameter_code) values ($1,$2,$3,$4,$5,$6,$7,$8,$9) returning id`,
-      [activityId, value, unit, method, source, measuredAt, payload.metadata ?? {}, instrumentId, parameterCode],
+      `insert into measurements (activity_id,value,unit,method,source,measured_at,metadata,mrv_instrument_id,parameter_code,mrv_uncertainty_record_id,raw_frame_artifact_version_id,raw_frame_sha256) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) returning id`,
+      [activityId, value, unit, method, source, measuredAt, payload.metadata ?? {}, instrumentId, parameterCode, uncertaintyRecordId, rawFrameArtifactVersionId, frame.sha256],
     );
     return { entityType: "measurement", entityId: result.rows[0]!.id };
   }
