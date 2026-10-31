@@ -33,14 +33,10 @@ function sameDatabasePrincipal(left: string, right: string): boolean {
   try {
     const a = new URL(left);
     const b = new URL(right);
-    return a.protocol === b.protocol
-      && a.hostname === b.hostname
-      && a.port === b.port
-      && a.pathname === b.pathname
-      && a.pathname === b.pathname
-      // PostgreSQL principal identity is the role name, not the password.
-      // A rotated password must never make the same role look dedicated.
-      && decodeURIComponent(a.username) === decodeURIComponent(b.username);
+    // A dedicated worker principal means a distinct PostgreSQL role name.
+    // Compare role identity independent of password, endpoint aliases, ports,
+    // or database path: those are not proof of a separate database principal.
+    return decodeURIComponent(a.username) === decodeURIComponent(b.username);
   } catch {
     // Invalid URLs are rejected by pg on connection; never treat malformed
     // values as proof that the worker principal is distinct.
