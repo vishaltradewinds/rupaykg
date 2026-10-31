@@ -565,9 +565,18 @@ test("production-shaped non-superuser migration principal can transfer a SECURIT
   const functionName = "ci_record_event_" + suffix;
   const triggerName = "ci_capture_event_" + suffix;
   const client = await pool.connect();
+  let databaseName = "";
+  let originalDatabaseOwner = "";
   try {
-    // Match the live Neon migration principal's observed role attributes, not CI postgres.
+    const identity = await client.query<{ database_name: string; original_owner: string }>(
+      "select current_database() as database_name,current_user as original_owner",
+    );
+    databaseName = identity.rows[0]!.database_name;
+    originalDatabaseOwner = identity.rows[0]!.original_owner;
+    // Match the live Neon migration principal's observed role attributes and database ownership,
+    // which makes it an implicit member of pg_database_owner (owner of public schema).
     await client.query(`create role "${principal}" nologin nosuperuser createdb createrole replication bypassrls`);
+    await client.query(`alter database "${databaseName}" owner to "${principal}"`);
     await client.query(`create table public."${target}" (id bigserial primary key, value text not null)`);
     await client.query(`create table public."${source}" (value text not null)`);
     await client.query(`grant usage, create on schema public to "${principal}"`);
@@ -623,6 +632,9 @@ test("production-shaped non-superuser migration principal can transfer a SECURIT
     await client.query(`drop table if exists public."${source}", public."${target}" cascade`).catch(() => undefined);
     await client.query(`drop owned by "${writer}"`).catch(() => undefined);
     await client.query(`drop role if exists "${writer}"`).catch(() => undefined);
+    if (databaseName && originalDatabaseOwner) {
+      await client.query(`alter database "${databaseName}" owner to "${originalDatabaseOwner}"`).catch(() => undefined);
+    }
     await client.query(`drop owned by "${principal}"`).catch(() => undefined);
     await client.query(`drop role if exists "${principal}"`).catch(() => undefined);
     client.release();
