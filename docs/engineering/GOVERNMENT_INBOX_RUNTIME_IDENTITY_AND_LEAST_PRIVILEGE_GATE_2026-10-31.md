@@ -68,3 +68,13 @@ The worker also uses a broad injected `Pool` API. A future runner must construct
 ## Gate decision
 
 No production deployment, merge, secret update, role creation, grant, migration, worker process, scheduler or inbox mutation is authorized by this work. Worker remains **OFF**.
+
+
+## Render workspace inventory follow-up
+
+A read-only service inventory of workspace `tea-dakh7k142hec73aj2kr0` returned seven services: six web services and one static site. No Render cron-job service was present in that returned inventory. This narrows the Render-managed scheduler risk within this workspace, but does not rule out:
+- a worker process embedded in another web service;
+- an external scheduler, GitHub Actions workflow, Neon function, or third-party host;
+- another Render workspace/account not represented by this workspace query.
+
+No service configuration, environment values, logs beyond the documented RupayKg health-check window, or secrets were changed or exposed. External deployment inventory remains an open assurance item.
