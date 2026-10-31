@@ -36,7 +36,7 @@
 No live Neon schema/data/role/grant/RLS writes, migration replay/rollback, worker or scheduler activation, Render changes, production deployment or certification is authorized by this status file.
 
 
-**Additional migration blocker:** Production main ledger has version `096` but repository `main` lacks its SQL file. Staging has versions `20261022`–`20261025` but repository `main` lacks those files, and staging lacks `096`. The unmerged worker PR stack contains these files. Full ordered-chain reconciliation is mandatory before merging migration-bearing code; do not edit/replay either live ledger.
+**Migration source status:** production-applied migration `096_verification_authorization_provenance.sql` has been restored to the cleanup review branch and its four expected production columns were confirmed read-only. It is not yet merged to `main`. Staging-only migrations `20261022`–`20261025` remain pending feature history on the worker PR stack; they are not part of the production baseline. Do not edit or replay either live ledger.
 
 
 **Migration source repair in review:** exact production-applied migration `096_verification_authorization_provenance.sql` has been restored to the cleanup branch; live production catalog confirms its four expected verification columns. It is not yet merged to `main`. Staging-only migrations `20261022`–`20261025` remain pending feature history and are not part of the production baseline.
