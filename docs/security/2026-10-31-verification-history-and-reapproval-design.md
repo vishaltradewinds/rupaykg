@@ -124,3 +124,16 @@ Updated in this branch:
 ## Test determinism refinement — 2026-10-31
 
 The two-session tests now poll PostgreSQL `pg_stat_activity` for the main connection's `wait_event_type='Lock'` instead of relying on a fixed sleep. This proves that the competing statement actually reached and waited on a row lock before the revocation transaction commits. The tests exercise membership, role-permission and identity-suspension races in both lock orderings where applicable. Exact-head CI remains required before treating these tests as passing.
+
+
+## Production database role/grant inspection — 2026-10-31 (read-only)
+
+A deeper catalog query found the tenant-isolation/runtime-role concern is stronger than the earlier single-role observation:
+
+- `public.verifications` is owned by `rupaykg`.
+- `rupaykg` has BYPASSRLS, CREATEROLE and CREATEDB, is a member of `neon_superuser`, and has SELECT/INSERT/UPDATE/DELETE/TRUNCATE/TRIGGER privileges on `verifications` plus CREATE on `public`.
+- `neon_service` also has BYPASSRLS, CREATEROLE and CREATEDB, is a member of `neon_superuser`, and has SELECT/INSERT/UPDATE/DELETE on `verifications`.
+- `cloud_admin` is a superuser. These are the only three login roles observed.
+- No active production application connection was present in `pg_stat_activity` during the read-only inspection, so the actual Render service connection role could not be identified from live sessions.
+
+**Security conclusion:** neither `rupaykg` nor `neon_service` is suitable as a least-privilege tenant runtime role. If Render uses either one, the app has broad bypass/deletion/administration capabilities. This remains a P1 production blocker independent of the trigger fix. Do not change live roles, grants, ownership, passwords or connection strings in this batch; design a separate migration/credential cutover with disposable-clone validation and rollback evidence.
