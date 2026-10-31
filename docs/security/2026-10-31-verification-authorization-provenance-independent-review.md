@@ -114,3 +114,20 @@ The follow-up schema/API inspection and revised disposable proposal narrow and a
 Current proposal head at this update: `93df55631072428e1523ab2128642bc5f3bb83ce`.
 
 This update does not approve a numbered migration. PR #140 and PR #157 remain draft/unmerged; production and staging remain untouched.
+
+
+## Second supplemental review update — 2026-10-31
+
+Further correction from direct production catalog evidence: `verification_decision` is a PostgreSQL enum with exactly two values, `APPROVED` and `REJECTED`; there is no PENDING state. The disposable fixture and regression have been aligned to those real values. The lifecycle marker now has only `APPROVED_HISTORY` and `REJECTED_TERMINAL`; legacy REJECTED rows fail closed and must be corrected by a new evidence/verification record.
+
+The unnumbered fixture now also:
+- schema-qualifies all referenced tables;
+- pins function `search_path` to `pg_catalog, public`;
+- locks membership, role and identity rows with `FOR SHARE` during approval;
+- tests caller-supplied provenance forgery;
+- tests a hostile caller search_path with a shadow membership table;
+- includes two-session races for membership revocation, role permission change and identity suspension.
+
+Latest recorded commit: `37bee6c7be93ef4ce602faf410234b97b907ec97`. The GitHub workflow lookup has not yet exposed an exact-head CI run for this commit. Earlier CI #41192563451 passed on a prior documentation-only commit and does **not** validate the new SQL/test changes.
+
+Remaining blockers: actual Render runtime-role identification, least-privilege grants/RLS and trigger bypass review; correction lineage/audit-event design; migration chronology and 20261101 drift; independent reviewer sign-off. No production migration is approved.
