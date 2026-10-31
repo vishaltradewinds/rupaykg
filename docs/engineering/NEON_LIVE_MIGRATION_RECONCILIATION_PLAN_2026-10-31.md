@@ -79,3 +79,13 @@ The proposed repository chain now contains two additional PR-local hardening mig
 - `20261111_prevent_approved_source_scope_hierarchy_expansion.sql`
 
 The second closes a discovered scope-expansion path through new geography descendants or reparenting. Both migrations passed the ordered CI PostgreSQL 16 disposable migration run at PR #157 head `c8d251489260acf8eb3308d212764e6b1be00e1e` (run 41179522126), and the worker DB acceptance test passed with zero skips. These are CI-only results. Neither migration nor any earlier proposed chain migration has been applied to production, staging or rehearsal. The three live Neon branches remain unchanged and divergent; production verifier provenance remains preserved.
+
+
+## Schema comparison confirmation — 2026-10-31
+
+Read-only Neon schema comparisons:
+- staging vs production: 355 additions, 82 removals across 9 diff hunks;
+- rehearsal vs production: 362 additions, 82 removals across 9 hunks;
+- rehearsal vs staging: 8 additions, 1 removal across 2 hunks.
+
+The staging/rehearsal additions include async inbox/lease and AI intake schema; production-only verifier authorization columns/function are missing from staging/rehearsal. Rehearsal's only difference from staging is its unledgered UNRESOLVED status constraint and comment. This corroborates the branch-by-branch inventory above and reinforces the no-copy/no-replay release gate. All comparisons were read-only; no branch was modified.
