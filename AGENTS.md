@@ -12,14 +12,18 @@ The latest resume point must include: timestamp (UTC), repository, branch, exact
 
 Never mark a task complete without evidence. Clearly label facts as VERIFIED, INFERRED, PROPOSED, BLOCKED, or NOT ASSESSED. If a check cannot be run, record that limitation. Do not overwrite historical checkpoint files; create a new dated checkpoint and update the LATEST pointer.
 
-## 2. Mandatory resume procedure
-Before any new work:
+## 2. Mandatory resume procedure — start every session here
+Before any engineering work, every contributor/agent must:
 1. Read this file and `docs/engineering/RUPAYKG_RESUME_POINT_LATEST.md`.
-2. Read the latest dated checkpoint and any linked decision records.
-3. Check the actual Git branch and HEAD; compare with the recorded SHA.
-4. Check current PR metadata and CI for the exact HEAD; never rely on an earlier commit's green check.
-5. Inspect the relevant code, tests, database and deployment evidence before acting.
-6. Reconcile any drift and update the resume point before proceeding.
+2. Read the latest dated immutable checkpoint and all linked current decision records.
+3. Check the actual Git branch and HEAD; compare with the recorded SHA and stop on unexplained drift.
+4. Check current PR metadata, base/head relationships, merge state and CI for the exact HEAD; never rely on an earlier commit's green check.
+5. Recheck Neon project, default/primary production branch, branch protection, database/table/migration state, role attributes and RLS catalog. Read-only by default; do not print secrets.
+6. Recheck the deployed Render service, commit and runtime identity where accessible. Never infer runtime identity from the Neon inspection role.
+7. Write a dated session-start/preflight note or append to the engineering session log with the exact evidence snapshot and unresolved discrepancies **before making code, documentation, database or deployment changes**.
+8. Inspect relevant code/tests and reconcile drift. Do not silently switch branches or treat a rehearsal as production.
+
+At the end of every coherent batch, update the LATEST resume pointer and create an immutable checkpoint with the exact final HEAD, exact-head CI state and next executable step. If CI is still running, explicitly mark it PENDING and recheck before claiming completion.
 
 If the recorded branch/commit is unavailable or stale, stop and report the discrepancy; do not silently switch to another branch or recreate state from assumptions.
 
