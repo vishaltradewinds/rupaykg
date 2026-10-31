@@ -547,27 +547,25 @@ test("BWG authenticated HTTP authorization fails closed against disposable Postg
         await pool.query("delete from bwg_reporting_periods where id=$1", [periodId]);
       }
       for (const activityId of fixture.activityIds ?? []) {
+        // Evidence review records are intentionally append-only. Preserve their evidence,
+        // artifact versions, activity and identities in this disposable CI database.
         await pool.query("delete from verifications where activity_id=$1", [activityId]);
-        await pool.query("delete from evidence_artifact_reviews where evidence_id in (select id from evidence where activity_id=$1)", [activityId]);
-        await pool.query("delete from evidence_artifact_versions where evidence_id in (select id from evidence where activity_id=$1)", [activityId]);
-        await pool.query("delete from evidence where activity_id=$1", [activityId]);
-        await pool.query("delete from evidence_artifact_series where activity_id=$1", [activityId]);
-        await pool.query("delete from activities where id=$1", [activityId]);
       }
       for (const schemeId of fixture.schemeIds ?? []) await pool.query("delete from epr_schemes where id=$1", [schemeId]);
       for (const tokenHash of fixture.verifierTokenHashes ?? []) await pool.query("delete from identity_sessions where token_hash=$1", [tokenHash]);
       for (const verifierIdentityId of fixture.verifierIdentityIds ?? []) {
         await pool.query("delete from organization_memberships where identity_id=$1", [verifierIdentityId]);
-        await pool.query("delete from identities where id=$1", [verifierIdentityId]);
       }
       await pool.query("delete from identity_sessions where token_hash=$1", [fixture.tokenHash]);
       await pool.query("delete from organization_memberships where organization_id=$1", [fixture.organizationId]);
       await pool.query("delete from roles where organization_id=$1", [fixture.organizationId]);
       await pool.query("delete from organization_geography_scopes where organization_id=$1", [fixture.organizationId]);
       await pool.query("delete from bwg_profiles where organization_id=$1", [fixture.organizationId]);
-      for (const geographyId of [fixture.geographyId, ...(fixture.extraGeographyIds ?? [])]) await pool.query("delete from geography where id=$1", [geographyId]);
-      await pool.query("delete from organizations where id=$1", [fixture.organizationId]);
-      await pool.query("delete from identities where id=$1", [fixture.identityId]);
+      if (!(fixture.activityIds?.length)) {
+        for (const geographyId of [fixture.geographyId, ...(fixture.extraGeographyIds ?? [])]) await pool.query("delete from geography where id=$1", [geographyId]);
+        await pool.query("delete from organizations where id=$1", [fixture.organizationId]);
+        await pool.query("delete from identities where id=$1", [fixture.identityId]);
+      }
     }    await pool.end();
   }
 });
