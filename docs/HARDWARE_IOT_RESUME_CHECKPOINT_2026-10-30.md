@@ -1,4 +1,17 @@
-# RupayKg Hardware/IoT Stack — Resume Checkpoint
+# RupayKg Hardware/IoT Stack — Historical Resume Checkpoint
+
+> **Superseded on 2026-10-31.** Use [HARDWARE_IOT_CONSOLIDATED_ENGINEERING_REVIEW_2026-10-31.md](./HARDWARE_IOT_CONSOLIDATED_ENGINEERING_REVIEW_2026-10-31.md) and consolidated draft PR #160 for the current integration path. This file preserves the accepted 2026-10-30 checkpoint for audit history only; its exact-head SHA and CI run are historical, not current release evidence.
+
+## Current consolidated status — 2026-10-31
+
+- Integrated review branch: `shakti/hardware-iot-integrated-review-2026-10-31`.
+- Base source: PR #51 evidence-bound instrument approval and parameter-spec implementation.
+- Added: PR #128 isolated `@rupaykg/hardware-edge` validator and root build integration.
+- Documentation consolidated from #47 (instrument/site evidence intake) and #59 (pan-India architecture/open hardware/synthetic simulation).
+- PR #49 is a duplicate/earlier approval implementation candidate; the broader #51 path contains the same 088/089 migration blobs plus evidence-bound follow-on protections. Do not merge #49 separately.
+- Current branch is engineering review only. Exact-head CI and independent review are required; no procurement, device connection, production deployment or certification is authorized.
+
+---
 
 **Checkpoint date:** 2026-10-30  
 **Repository:** `vishaltradewinds/rupaykg`  
