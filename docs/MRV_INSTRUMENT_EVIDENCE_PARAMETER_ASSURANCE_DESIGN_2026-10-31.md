@@ -286,3 +286,31 @@ PR #155 was closed because it was superseded by PR #156, which restored the comp
 PR #157 exact head `929df289bf239e4d834fee5e6f902ffe5cd18e23` passed CI run #41180186785, including the disposable PostgreSQL worker acceptance suite. This is engineering acceptance on CI, not live database acceptance or deployment. Its migration set includes 20261022–20261111. The 20261101 unresolved-crosswalk migration remains a schema-history reconciliation issue because neither staging nor rehearsal ledger records it, although rehearsal currently has its schema effect. It must not be replayed into rehearsal or promoted based solely on the feature branch.
 
 The current branch #157 includes the recovered 20261022–20261025 source files and dependency chain, so this PR #137 branch deliberately documents rather than duplicates those migration files. PR #157 remains draft/unmerged; production remains HOLD, and no worker/scheduler activation is authorized.
+
+
+## 12. Cross-PR verification and remaining metrology/lineage blockers — 2026-10-31
+
+### 12.1 Exact-head CI evidence
+- PR #137 head `802e6784f84ec65aafc9a95655f8f01e512c6ead` passed exact-head CI run #41181846423, including dependency audit, migration validation, disposable PostgreSQL migration application, typecheck/build, browser smoke, PostgreSQL acceptance and production container build.
+- PR #158 hardware/instrument integration head `cdfbed60a107bc290b56c377b2eabe1fe6f483b1` passed exact-head CI run #41182084138, including the same gates and disposable PostgreSQL acceptance. A single failing assertion in the preceding run was traced to an inconsistent test fixture (not a production validator defect) and corrected by explicitly nulling the calibration serial in the negative-case fixture.
+- PR #140's forward-fix regression candidate passed run #41073680266.
+- PR #157's canonical worker integration passed run #41180186785 and later branch run #41176490672.
+- These are CI engineering results only. All four PRs remain draft/unmerged. No production migration, deployment, worker activation, or certification is implied.
+
+### 12.2 Measurement-to-observation lineage remains incomplete
+The current Guardian submission path reads `mrv_observations` and separately appends directly instrument-bound `measurements` that do not already have an observation row. This prevents one common duplicate case, but does not establish a canonical one-to-one provenance join for every observation. In particular:
+- an existing `mrv_observations` row may have a nullable `measurement_id`;
+- the submission path does not yet require every authoritative observation to join to exactly one measurement in the same organization and activity;
+- a free-text `instrument_id` remains in the observation payload rather than an immutable UUID FK to `mrv_instruments`;
+- the separate measurement fallback is not a substitute for validating an existing observation's source measurement;
+- measurement/observation value, unit, method and timestamp equivalence is not yet required at the submission boundary.
+
+Required follow-on implementation must bind each authoritative observation to one exact persisted measurement, validate organization/activity ownership, match or explicitly version-transform parameter/value/unit/method/time, bind the exact instrument UUID and parameter-spec revision, and build the Guardian payload/hash from the canonical joined rows. Legacy text-only observations may remain readable as historical data but must not be treated as instrument-certified authoritative evidence.
+
+### 12.3 Parameter-specific uncertainty is an additional P1/P0 gate
+PR #158 adds a design record at `docs/MRV_INSTRUMENT_UNCERTAINTY_LINEAGE_GAP_2026-10-31.md`. The current instrument-level scalar `calibration_uncertainty` and parameter-spec accuracy fields are insufficient to preserve a multi-parameter uncertainty budget. Measurements currently have no uncertainty snapshot fields, and the direct measurement submission projection currently emits `null` uncertainty.
+
+Do not invent a universal uncertainty ratio or threshold. The next schema and runtime design must capture, per parameter, uncertainty magnitude and unit, standard-versus-expanded basis, coverage factor/confidence where stated, the applicable decision rule and authority, and exact reviewed calibration artifact version. Each captured measurement must retain an immutable uncertainty snapshot and provenance even if the instrument approval is later revoked or expires. Acceptance criteria must be derived from the actual selected instrument certificate/manual, applicable statutory/technical standards and methodology.
+
+### 12.4 Release gate
+PR #137 and PR #158 are CI-green engineering candidates, not production-ready certifications. Continue to HOLD authoritative Guardian submission for readings without canonical measurement lineage and complete uncertainty evidence. Do not add a guessed migration number or apply SQL to live Neon until the complete migration source/checksum/ordering manifest and production/staging/rehearsal drift are reconciled, including production-only 096 and the rehearsal unledgered unresolved-crosswalk effect.
