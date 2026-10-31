@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type { Pool, PoolClient } from "pg";
-import { authenticate, canActForOrganization, hasOrganizationPermission, type AuthContext } from "./auth.js";
+import { authenticate, hasOrganizationPermission, type AuthContext } from "./auth.js";
 import { executeGuardianMrv, guardianStatus } from "./guardian-mrv.js";
 import { hederaStatus, integrityHash, submitHcsAnchor, verifyHcsMessage } from "./hedera-anchor.js";
 import { registerStatutoryRoutes } from "./statutory-routes.js";
@@ -16,48 +16,6 @@ async function authFor(request: Request, reply: Reply, pool: Pool | null): Promi
   if (!pool) { reply.code(503).send({ error: "Database unavailable", code: "DATABASE_UNAVAILABLE" }); return null; }
   try { const auth = await authenticate(request as never, pool); if (!auth) { reply.code(401).send({ error: "Authenticated session required", code: "AUTH_REQUIRED" }); return null; } return auth; }
   catch (error) { request.log.error(error); reply.code(503).send({ error: "Authentication service unavailable", code: "AUTH_UNAVAILABLE" }); return null; }
-}
-
-async function requirePermission(pool: Pool, auth: AuthContext, organizationId: string, permissions: readonly string[]): Promise<boolean> {
-  return hasOrganizationPermission(pool, auth, organizationId, permissions);
-}
-
-async function activityInAuthorizedGeography(pool: Pool, auth: AuthContext, activityId: string, organizationId: string): Promise<boolean> {
-  const result = await pool.query<{ ok: boolean }>(
-    `select exists(
-       select 1 from activities a
-       where a.id=$1 and a.organization_id=$2 and a.geography_id is not null
-         and organization_has_geography_scope(a.organization_id,a.geography_id)
-     ) as ok`,
-    [activityId, organizationId],
-  );
-  if (result.rows[0]?.ok !== true) return false;
-  const membership = await pool.query<{ ok: boolean }>(
-    `select exists(
-       select 1 from organization_memberships om
-       join activities a on a.organization_id=om.organization_id
-       where om.identity_id=$1 and om.organization_id=$2 and om.status='VERIFIED'
-         and a.id=$3 and a.geography_id is not null
-         and organization_has_geography_scope(om.organization_id,a.geography_id)
-     ) as ok`,
-    [auth.identityId, organizationId, activityId],
-  );
-  return membership.rows[0]?.ok === true;
-}
-
-/**
- * Acceptance fixtures may exercise the real external trust rail, but they are
- * never evidence of a real carbon project and must not be presented as registry eligible.
- */
-async function isAcceptanceFixture(pool: Pool, activityId: string): Promise<boolean> {
-  const result = await pool.query<{ is_fixture: boolean }>(
-    `select
-       exists(select 1 from activities a where a.id=$1 and a.metadata->>'acceptanceFixture'='true')
-       or exists(select 1 from evidence e where e.activity_id=$1 and e.metadata->>'acceptanceFixture'='true')
-       as is_fixture`,
-    [activityId],
-  );
-  return result.rows[0]?.is_fixture === true;
 }
 
 export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null): Promise<void> {
