@@ -147,6 +147,7 @@ test("inbox event trigger appends through a restricted NOLOGIN definer without e
     );
   } finally {
     if (worker) await worker.end();
+    await admin.query(`drop owned by "${roleName}"`);
     await admin.query(`drop role if exists "${roleName}"`);
     await admin.end();
   }
