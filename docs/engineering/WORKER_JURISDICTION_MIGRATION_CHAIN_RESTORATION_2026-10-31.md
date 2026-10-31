@@ -83,3 +83,19 @@ The migrations must be reviewed in order against the actual current-main schema.
 `migrations/20261110_government_source_scope_geography_binding.sql` is a new Shakti hardening migration authored in this PR. It is not part of the 19-file historical blob recovery list above. It binds non-national source snapshot scope codes to versioned geography-directory records and verifies that crosswalk target geography is inside the approved source scope. Administrative scope uses verified LGD code bindings; OTHER is exact-geography only; INDIA is national. It freezes approved scope/geography/directory provenance and is enforced both at crosswalk write time and during worker resolution.
 
 This follow-on migration requires separate code review and fresh disposable PostgreSQL CI. It has not been applied to any live Neon branch.
+
+
+## Subsequent security hardening migrations — 2026-10-31
+
+The original 19 historical migrations above are followed by two newly authored, PR-local hardening migrations (not historical restorations):
+
+| Order | Migration | Purpose |
+|---:|---|---|
+| 20 | 20261110_government_source_scope_geography_binding.sql | Bind non-national source snapshot scope codes to verified, versioned geography-directory nodes and enforce target ancestry; freeze approved scope metadata and existing hierarchy. |
+| 21 | 20261111_prevent_approved_source_scope_hierarchy_expansion.sql | Close the INSERT/reparenting gap by rejecting new descendants or outside nodes moved beneath an approved/retired non-national source scope. |
+
+The second migration was added after adversarial review found that freezing existing descendants alone did not prevent the hierarchy from expanding. The new PostgreSQL acceptance test verifies child insertion, grandchild insertion and unrelated-node reparenting are rejected for STATE_UT, DISTRICT and LOCAL_BODY fixtures.
+
+Latest exact-head CI run 41179522126 passed all steps, including ordered application of both migrations in disposable PostgreSQL and the worker DB acceptance test. The 111-test group passed 111/111 with zero failures and zero skips; all other reported test groups also had zero skips.
+
+**Current total: 21 migrations = 19 historical source restorations + 2 new scope-security migrations.** None of these proposed migrations has been applied to live Neon.
