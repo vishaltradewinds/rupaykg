@@ -67,3 +67,12 @@ This is a disposable PostgreSQL reconstruction, not a production data clone, liv
 No live Neon DDL/data writes were performed. No merge, deployment, worker/scheduler activation, Guardian/HCS submission, authoritative MRV mutation or certification is authorized by this CI result.
 
 **Disposition: engineering CI gate passed; production release gate remains HOLD pending authorized independent migration/security review, live drift reconciliation, backup/restore evidence, approved change window and rollback plan.**
+
+
+## Follow-up security hardening found during source-scope review
+
+A manual review of the source-scope trigger event lists identified a legacy-row transition edge case: the scope guard ran on INSERT and updates to the source snapshot/geography columns, but did not explicitly rerun when a pending request or crosswalk changed status. New rows were already checked, and the dual-control/request binding provided additional protection, but status-transition revalidation is the safer fail-closed contract for any rows that may predate the guard.
+
+The candidate migration `20261110_government_source_scope_geography_binding.sql` now includes `status` in the UPDATE event columns for both the request and verified-crosswalk source-scope triggers. The production-shaped acceptance test asserts that both installed trigger definitions include `UPDATE OF ... status`.
+
+This is a hardening change to be validated by a fresh exact-head CI run. It has not been applied to any live Neon branch. The earlier run evidence above applies to commit `fd90b9c3e954c3b120f33f24066d0f42b08604eb`; it does not certify this follow-up patch until the new run passes.
