@@ -209,3 +209,25 @@ Candidate correction:
 - A unit test asserts the profile intake basis cannot claim a statutory determination or external registration.
 
 The separate `/api/v1/statutory/bwg/assess` path remains the assessment workflow and requires its evidence/verification binding plus the dedicated statutory permission. This correction is source-level only until the newest exact-head CI passes; it has not changed any live database.
+
+
+## 11. Additional open findings from deeper statutory and external-trust review
+
+### F-12 — BWG statutory assessment is not yet bound to an approved rule-version record
+
+**Severity: P1 / regulatory provenance. Status: OPEN.**
+
+The dedicated `/api/v1/statutory/bwg/assess` path is safer than profile intake: it requires statutory write permission and organization/geography-bound verified evidence plus an approved verification. It nevertheless calculates applicability from hard-coded threshold constants and writes a string basis `SWM_RULES_2026_S_O_388_E`. The schema now includes `regulatory_rule_versions` and `organization_bwg_assessments.rule_version_id`, but the route does not bind its assessment to an APPROVED rule-version row and its approved source snapshot. Until that binding is implemented and tested, an assessment remains an internal preparation result, not a source-version-proven statutory determination. The API already returns `INTERNAL_APPLICABILITY_PREPARATION_ONLY`; retain that boundary.
+
+### F-13 — Approved source snapshots lack database-enforced separation of duties
+
+**Severity: P1 / governance integrity. Status: OPEN.**
+
+Migration `20261104_source_snapshot_and_regulatory_rule_versions.sql` requires a retrieved timestamp, content hash, record counts, usage-terms reference, reviewer identity and review timestamp for an APPROVED snapshot. The inspected schema/trigger chain does not enforce that `reviewed_by_identity_id` differs from `retrieved_by_identity_id`, or that both identities are active/verified at approval time. Crosswalk requests do have a dual-control guard, but that does not automatically establish independent approval of the underlying source snapshot. Add a database-level lifecycle guard and adversarial tests before source snapshots are treated as approved authority data.
+
+### F-14 — Guardian response correlation and Hedera ambiguous-submit idempotency need independent proof
+
+**Severity: P1 / external trust integrity. Status: OPEN REVIEW.**
+
+The Guardian client sends correlation and idempotency identifiers and requires an execution identifier for a VERIFIED response, but the reviewed client does not require returned correlation/idempotency values to match the request. The Hedera client requires a consensus timestamp and Mirror Node verification exists, but a timeout/ambiguous provider response can occur after a transaction was accepted and before the client persisted its transaction/consensus identifiers. Retrying that incomplete attempt may submit a second HCS message. The MRV route has an advisory lock and sequential reuse of complete persisted provenance, but this does not by itself prove exactly-once behaviour across ambiguous external timeouts/process crashes. Require a provider-supported idempotency/reconciliation contract, pre-retry Mirror Node lookup or an explicit at-least-once/duplicate-detection design, then test timeout-after-acceptance and process-crash recovery. Do not describe external submission as exactly-once until proven.
+
