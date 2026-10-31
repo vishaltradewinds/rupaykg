@@ -114,3 +114,8 @@ Verification provenance integrity is NOT COMPLETE. Do not edit/replay migration 
 
 ### Current security gate
 Do not integrate the proposed trigger into a numbered migration until latest exact-head tests pass and independent review addresses concurrency, audit/reapproval workflow, trigger privileges/search_path, and historical data. PR #157 remains draft and production release HOLD.
+
+
+### Rehearsal drift refinement — 2026-10-31
+38. Rechecked the staging-derived rehearsal after applying 096. Confirmed its `async_mirror_inbox_status_check` still includes `UNRESOLVED` and its status comment still matches the candidate 20261101 migration effect; staging lacks both.
+39. Confirmed neither staging nor rehearsal ledger contains version `20261101`. Classified the rehearsal as schema-effect match / ledger provenance unresolved; no replay or ledger edit performed.
