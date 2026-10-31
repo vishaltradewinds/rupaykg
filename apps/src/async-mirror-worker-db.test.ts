@@ -547,3 +547,83 @@ test("government inbox worker persists retry recovery, quarantine and append-onl
     await pool.end();
   }
 });
+
+
+test("production-shaped non-superuser migration principal can transfer a SECURITY DEFINER trigger to a NOLOGIN capability role", {
+  skip: !enabled ? "requires disposable CI PostgreSQL" : false,
+}, async () => {
+  const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: process.env.DATABASE_SSL === "false" ? undefined : { rejectUnauthorized: true },
+    max: 2,
+  });
+  const suffix = randomUUID().replace(/-/g, "").slice(0, 16);
+  const principal = "ci_migration_" + suffix;
+  const writer = "ci_event_writer_" + suffix;
+  const target = "ci_events_" + suffix;
+  const source = "ci_source_" + suffix;
+  const functionName = "ci_record_event_" + suffix;
+  const triggerName = "ci_capture_event_" + suffix;
+  const client = await pool.connect();
+  try {
+    // Match the live Neon migration principal's observed role attributes, not CI postgres.
+    await client.query(`create role "${principal}" nologin nosuperuser createdb createrole replication bypassrls`);
+    await client.query(`create table public."${target}" (id bigserial primary key, value text not null)`);
+    await client.query(`create table public."${source}" (value text not null)`);
+    await client.query(`grant usage, create on schema public to "${principal}"`);
+    await client.query(`grant insert on table public."${target}" to "${principal}"`);
+    await client.query(`grant usage, select on sequence public."${target}_id_seq" to "${principal}"`);
+
+    await client.query(`set role "${principal}"`);
+    await client.query(`create role "${writer}" nologin nosuperuser nocreatedb nocreaterole noinherit nobypassrls`);
+    await client.query(`grant usage on schema public to "${writer}"`);
+    await client.query(`grant insert on table public."${target}" to "${writer}"`);
+    await client.query(`grant create on schema public to "${writer}"`);
+    await client.query(`grant "${writer}" to current_user`);
+    await client.query(`
+      create function public."${functionName}"() returns trigger
+      language plpgsql security definer
+      set search_path = pg_catalog, public
+      as $$
+      begin
+        insert into public."${target}"(value) values(new.value);
+        return new;
+      end
+      $$`);
+    await client.query(`alter function public."${functionName}"() owner to "${writer}"`);
+    await client.query(`revoke create on schema public from "${writer}"`);
+    await client.query(`revoke "${writer}" from current_user`);
+    await client.query(`revoke all on function public."${functionName}"() from public`);
+    await client.query("reset role");
+
+    await client.query(`create trigger "${triggerName}" before insert on public."${source}" for each row execute function public."${functionName}"()`);
+    await client.query(`insert into public."${source}"(value) values('least-privilege-trigger-ok')`);
+    const verification = await client.query<{ owner: string; security_definer: boolean; config: string[] | null; inserted: string }>(
+      `select pg_get_userbyid(p.proowner) as owner,p.prosecdef as security_definer,p.proconfig as config,
+              (select value from public."${target}" order by id desc limit 1) as inserted
+         from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+        where n.nspname='public' and p.proname=$1`,
+      [functionName],
+    );
+    assert.equal(verification.rows[0]?.owner, writer);
+    assert.equal(verification.rows[0]?.security_definer, true);
+    assert.ok(verification.rows[0]?.config?.some((value) => value.includes("search_path=pg_catalog, public")));
+    assert.equal(verification.rows[0]?.inserted, "least-privilege-trigger-ok");
+    const writerRole = await client.query<{ rolcanlogin: boolean; rolsuper: boolean; rolcreaterole: boolean; rolcreatedb: boolean; rolbypassrls: boolean }>(
+      "select rolcanlogin,rolsuper,rolcreaterole,rolcreatedb,rolbypassrls from pg_roles where rolname=$1",
+      [writer],
+    );
+    assert.deepEqual(writerRole.rows[0], {
+      rolcanlogin: false, rolsuper: false, rolcreaterole: false, rolcreatedb: false, rolbypassrls: false,
+    });
+  } finally {
+    await client.query("reset role").catch(() => undefined);
+    await client.query(`drop trigger if exists "${triggerName}" on public."${source}"`).catch(() => undefined);
+    await client.query(`drop function if exists public."${functionName}"()`).catch(() => undefined);
+    await client.query(`drop table if exists public."${source}", public."${target}" cascade`).catch(() => undefined);
+    await client.query(`drop role if exists "${writer}"`).catch(() => undefined);
+    await client.query(`drop role if exists "${principal}"`).catch(() => undefined);
+    client.release();
+    await pool.end();
+  }
+});
