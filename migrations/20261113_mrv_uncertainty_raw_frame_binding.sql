@@ -74,6 +74,8 @@ begin
      where r.evidence_id=(select evidence_id from evidence_artifact_versions where id=new.calibration_artifact_version_id)
        and r.artifact_version_id=new.calibration_artifact_version_id
        and r.reviewer_identity_id <> (select uploaded_by_identity_id from evidence_artifact_versions where id=new.calibration_artifact_version_id)
+       and r.reviewer_identity_id = new.reviewed_by_identity_id
+       and new.reviewed_at >= r.created_at
        and r.id=(select latest.id from evidence_artifact_reviews latest
                   where latest.evidence_id=r.evidence_id and latest.artifact_version_id=r.artifact_version_id
                   order by latest.review_sequence desc limit 1)
@@ -145,7 +147,7 @@ begin
     end if;
   end if;
   if new.raw_frame_artifact_version_id is not null then
-    select v.sha256,v.content,v.size_bytes,s.activity_id,s.organization_id
+    select v.sha256,v.content,v.size_bytes,v.media_type,s.activity_id,s.organization_id
       into raw_frame
       from evidence_artifact_versions v
       join evidence e on e.id=v.evidence_id
@@ -153,6 +155,7 @@ begin
      where v.id=new.raw_frame_artifact_version_id;
     if not found or raw_frame.activity_id <> new.activity_id
        or raw_frame.organization_id <> activity_org
+       or raw_frame.media_type <> 'application/octet-stream'
        or raw_frame.sha256 <> lower(new.raw_frame_sha256)
        or octet_length(raw_frame.content) <> raw_frame.size_bytes
        or encode(digest(raw_frame.content,'sha256'),'hex') <> raw_frame.sha256 then
@@ -194,7 +197,7 @@ begin
     end if;
   end if;
   if new.raw_frame_artifact_version_id is not null then
-    select v.sha256,v.content,v.size_bytes,s.activity_id
+    select v.sha256,v.content,v.size_bytes,v.media_type,s.activity_id
       into raw_frame from evidence_artifact_versions v join evidence_artifact_series s on s.id=v.series_id
      where v.id=new.raw_frame_artifact_version_id;
     if not found or raw_frame.activity_id <> new.activity_id
