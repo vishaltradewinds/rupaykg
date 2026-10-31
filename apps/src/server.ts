@@ -136,7 +136,41 @@ app.post("/api/v1/resource-flows", async (request, reply) => {
     return reply.code(503).send({ error: "Resource flow creation unavailable", syntheticData: false });
   }
 });
-app.post("/api/v1/activities/:activityId/measurements", async (request, reply) => { const auth=await requireAuth(request,reply);if(!auth)return;const {activityId}=request.params as {activityId:string};const body=bodyOf(request);const value=requiredPositiveNumber(body,"value"),unit=requiredString(body,"unit"),method=requiredString(body,"method"),source=requiredString(body,"source"),measuredAt=requiredString(body,"measuredAt");if(value===null||!unit||!method||!source||!measuredAt||Number.isNaN(Date.parse(measuredAt)))return reply.code(400).send({error:"positive value, unit, method, source and valid measuredAt are required"});try{if(!await canWriteActivity(pool!,auth,activityId))return reply.code(403).send({error:"Activity is outside organization authorization scope or lacks waste recording permission",code:"ACTIVITY_FORBIDDEN"});const rows=await query("insert into measurements(activity_id,value,unit,method,source,measured_at) values($1,$2,$3,$4,$5,$6) returning *",[activityId,value,unit,method,source,measuredAt]);return reply.code(201).send({source:"postgresql",syntheticData:false,measurement:rows[0]});}catch(error){request.log.error(error);return reply.code(503).send({error:"Measurement recording unavailable",syntheticData:false});}});
+app.post("/api/v1/activities/:activityId/measurements", async (request, reply) => {
+  const auth = await requireAuth(request, reply);
+  if (!auth) return;
+  const { activityId } = request.params as { activityId: string };
+  const body = bodyOf(request);
+  const value = requiredPositiveNumber(body, "value");
+  const unit = requiredString(body, "unit");
+  const method = requiredString(body, "method");
+  const source = requiredString(body, "source");
+  const measuredAt = requiredString(body, "measuredAt");
+  if (value === null || !unit || !method || !source || !measuredAt || Number.isNaN(Date.parse(measuredAt))) {
+    return reply.code(400).send({ error: "positive value, unit, method, source and valid measuredAt are required" });
+  }
+  if (!withTenantTransaction) return reply.code(503).send({ error: "Database unavailable", syntheticData: false });
+  try {
+    const outcome = await withTenantTransaction(tenantDatabaseContextFromAuth(auth), async (client) => {
+      if (!await canWriteActivity(client, auth, activityId)) {
+        return { status: 403, body: { error: "Activity is outside organization authorization scope or lacks waste recording permission", code: "ACTIVITY_FORBIDDEN" } };
+      }
+      const owner = await client.query<{ organization_id: string }>("select organization_id from activities where id=$1", [activityId]);
+      if (owner.rows[0]?.organization_id !== auth.activeOrganizationId) {
+        return { status: 403, body: { error: "Activity does not belong to the active organization", code: "ORG_FORBIDDEN" } };
+      }
+      const rows = await client.query(
+        "insert into measurements(activity_id,value,unit,method,source,measured_at) values($1,$2,$3,$4,$5,$6) returning *",
+        [activityId, value, unit, method, source, measuredAt],
+      );
+      return { status: 201, body: { source: "postgresql", syntheticData: false, measurement: rows.rows[0] } };
+    });
+    return reply.code(outcome.status).send(outcome.body);
+  } catch (error) {
+    request.log.error(error);
+    return reply.code(503).send({ error: "Measurement recording unavailable", syntheticData: false });
+  }
+});
 
 await registerOnboardingHierarchyRoutes(app, pool);
 await registerValueRoutes(app, pool);
