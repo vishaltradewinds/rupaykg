@@ -140,3 +140,12 @@ Safety properties:
 - Pool closure runs in a finally block.
 
 This is source-code implementation only. The script is not configured as a Render service, no worker secrets exist or were added, and no service is enabled. The Docker image build must prove the compiled entrypoint is present. Before any dedicated service is created, complete the disposable exact-grant PostgreSQL rehearsal, resolve the national system-queue vs tenant isolation governance decision, and perform independent security review. Production worker remains OFF.
+
+
+### Additional privilege and CI hardening — 2026-10-31 18:38 UTC
+
+- The principal attestation now also rejects worker data/function privileges granted to PostgreSQL PUBLIC, and requires public-schema USAGE while prohibiting schema CREATE. This prevents an apparently dedicated worker role from passing merely because required permissions were accidentally made globally available.
+- Added a dedicated worker process entrypoint and `start:government-inbox-worker` package command. It requires explicit enablement, runs schema and role checks before the first claim, processes one bounded batch at a time, logs aggregate counters only, handles SIGTERM/SIGINT, and closes its pool. It is not configured or activated in Render.
+- Runtime API acceptance tests now choose a random port by default to avoid collisions between overlapping CI runs. A preceding intermediate run failed on the fixed port 43128 with EADDRINUSE; the full source head before this correction passed, and the port-collision fix is now under exact-head CI.
+- Latest principal/worker source head at this checkpoint: `65c08f35166b2cfbb846e1f46dfe50c93ebb8539`; exact-head CI run [#41230356772](https://github.com/vishaltradewinds/rupaykg/actions/runs/41230356772) is in progress. Do not mark the new ACL checks or process entrypoint accepted until this run passes.
+- No production or staging database, roles, grants, secrets, Render service or deployment has been changed. Worker OFF; production HOLD.
