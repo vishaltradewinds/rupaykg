@@ -101,3 +101,44 @@ The repository `package.json` exposes `validate:migrations` and `ecosystem:recon
 ## Audit integrity
 
 All database operations in this batch were read-only SELECT/catalog queries. This document is evidence of observations at the stated branch IDs and time; it is not an approval to mutate production or staging. Re-run the read-only inventory immediately before any later change because live environments can change.
+
+
+## Follow-up read-only findings — 2026-10-31
+
+### Trigger function parity is definitively FAIL
+
+Catalog hashes of `public.prevent_invalid_verification()`:
+- Production: `934a7be13f08c034bbd15e96285eb1be`
+- Staging: `43e9af83f5031460689f7943d697a50a`
+
+The function bodies were fetched and compared. Production implements the migration-096 decision-time authorization snapshot: it binds evidence to the activity, verifies active membership in the activity organization, checks verifier permission, prevents self-review, and writes the four authorization snapshot fields. Staging still uses the older `has_verification_permission(verifier_identity_id)` check and does not set the four snapshot fields. Thus the same trigger name in both environments masks materially different authorization behavior. Migration 096 is not just a ledger discrepancy; it represents a real security-control divergence.
+
+Staging-only function hashes:
+- `record_async_mirror_inbox_event()`: `4cb57a43e325f4aa536eb7ad37e54c8f`
+- `prevent_async_mirror_inbox_event_mutation()`: `25e5a58589b7f3075b6dd71e81919a55`
+
+Production does not have these functions because the corresponding inbox/event relations do not exist.
+
+### Staging worker queue requires explicit recovery analysis
+
+Staging `async_mirror_inbox` status distribution at audit time:
+| Status | Rows |
+|---|---:|
+| PROCESSING | 8 |
+| QUARANTINED | 1 |
+| RECEIVED | 1 |
+| RETRY | 1 |
+| VALIDATED | 1 |
+| Total | 12 |
+
+All eight `PROCESSING` rows had a non-null lease token and lease expiry, but all eight leases were expired at query time. Earliest recorded expiry: `2026-10-20T10:17:01.399Z`; latest: `2026-10-20T10:17:32.753Z`. These rows must not be reset, replayed, or deleted as part of a migration-ledger fix. A separate idempotent recovery protocol and payload-free forensic review are required before worker activation.
+
+The two AI intake tables created by 20261024 and 20261025 are present in staging and both currently contain zero rows. This is evidence for this snapshot only.
+
+### Updated next gate
+
+Before migration source restoration:
+1. Build an exact schema/function diff for 096 and 20261022–20261025.
+2. Reconcile why production has the 096 security enhancement while staging retains the older trigger body.
+3. Preserve the eight expired PROCESSING rows and define a separately tested, auditable worker-lease recovery procedure.
+4. Test the ordered migration source on a disposable production-shaped database and a staging-shaped database; do not run it against either live branch.
