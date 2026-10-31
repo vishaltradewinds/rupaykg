@@ -244,3 +244,21 @@ This establishes the production source lineage with high confidence. It does not
 Source links:
 - Original migration commit: https://github.com/vishaltradewinds/rupaykg/commit/ca8f4100782e13f8d72106187fafc8e1e446214f
 - Removal commit: https://github.com/vishaltradewinds/rupaykg/commit/54a7fe1ceb41b37a68720a71c10a1dd03af30dea
+
+
+## 10. Recovered async mirror / AI intake migration sources
+
+Four migration sources were recovered byte-for-byte as Git objects from the historical worker branch and restored in source-only PR #155, which was later closed without merge. That branch is a provenance archive, not canonical repository history.
+
+| Migration | Recovered Git blob | Observed live placement |
+|---|---|---|
+| `20261022_async_mirror_inbox.sql` | `4d08607e03561b9fbb4ce502b4c4211127237050` | staging + rehearsal |
+| `20261023_async_mirror_worker_leases.sql` | `33cb4d5d2e29a4a111340e5a0ac34170a0081895` | staging + rehearsal |
+| `20261024_ai_intake_rate_limits.sql` | `87b51fe60a96a4e0752c8b0a9a170c81f9936dbb` | staging + rehearsal |
+| `20261025_ai_evidence_intake_jobs.sql` | `6a0ae54530b7b756dac33589eaf18df3b071d8f2` | staging + rehearsal |
+
+PR #155 verified each restored file's Git blob SHA against its historical source object. Its exact-head disposable CI run #3525 passed migration catalogue validation, ordered PostgreSQL migration application, typecheck, build, browser smoke test, existing PostgreSQL acceptance and production-container build. That run did not include the worker runtime or worker-specific PostgreSQL acceptance test.
+
+The exact source objects and live ledger/schema placement are now known. This does not prove that current staging/rehearsal objects are byte-for-byte the result of those files: out-of-band drift may exist, and rehearsal-only `UNRESOLVED` status is not ledgered. Do not replay these migrations into live branches or promote them to production until SQL effects, object/constraint/function equivalence and chronology are independently reviewed.
+
+Integrate source restoration through the canonical migration-history review path (PR #154 / PR #134), not by merging the historical worker branch or cherry-picking worker runtime code. Worker implementation dependencies remain separately gated.
