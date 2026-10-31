@@ -244,5 +244,6 @@ test("lease heartbeat interval cannot exceed half of the lease lifetime", () => 
   assert.equal(normalizeLeaseRenewalSeconds(undefined, 15), 5);
   assert.equal(normalizeLeaseRenewalSeconds(300, 15), 5);
   assert.equal(normalizeLeaseRenewalSeconds(100, 120), 40);
-  assert.equal(normalizeLeaseRenewalSeconds(10, 15), 7);
+  assert.equal(normalizeLeaseRenewalSeconds(7, 15), 7);
+  assert.equal(normalizeLeaseRenewalSeconds(10, 15), 5);
 });
