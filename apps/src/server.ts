@@ -6,6 +6,7 @@ import { resolve } from "node:path";
 import { Pool, type PoolClient, type PoolConfig } from "pg";
 import { authenticate, bearerChallenge, canActForOrganization, hasOrganizationPermission, type AuthContext } from "./auth.js";
 import { databaseTlsConfig } from "./database-tls.js";
+import { readDatabaseRoleDiagnostic } from "./database-role-diagnostic.js";
 import { createTenantTransaction, tenantDatabaseContextFromAuth } from "./database-context.js";
 import { registerOnboardingHierarchyRoutes } from "./onboarding-hierarchy-routes.js";
 import { registerValueRoutes } from "./value-routes.js";
@@ -32,6 +33,15 @@ const databaseSsl = databaseTlsConfig(
 );
 if (databaseSsl) poolConfig.ssl = databaseSsl;
 const pool = databaseUrl ? new Pool(poolConfig) : null;
+if (pool) {
+  try {
+    const roleDiagnostic = await readDatabaseRoleDiagnostic(pool);
+    app.log.info({ event: "database_role_diagnostic", ...roleDiagnostic }, "Read-only database role privilege diagnostic");
+  } catch (error) {
+    // Do not make service startup depend on an observability-only query.
+    app.log.error({ err: error }, "Database role privilege diagnostic unavailable");
+  }
+}
 const withTenantTransaction = pool ? createTenantTransaction(pool) : null;
 async function query<T extends Record<string, unknown>>(text: string, values: unknown[] = []): Promise<T[]> { if (!pool) throw new Error("DATABASE_URL is not configured"); return (await pool.query<T>(text, values)).rows; }
 function bodyOf(request: { body: unknown }): Record<string, unknown> { return (request.body && typeof request.body === "object" ? request.body : {}) as Record<string, unknown>; }
