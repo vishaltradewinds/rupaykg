@@ -54,7 +54,7 @@ Conservative classification during forward migration:
 
 No timestamp, membership, role, permission snapshot or prior approval event is fabricated. A rejected legacy row is not reopened merely because its earlier history is unknowable. This matches the reviewed API's terminal evidence-review behavior and its new-evidence-row correction path. There is no PENDING decision state in the current production enum; the test fixture has been corrected to use only APPROVED and REJECTED.
 
-The trigger sets lifecycle state itself on INSERT and UPDATE, so a caller cannot choose a weaker state. It preserves provenance fields on all later updates to an approved-history row. It rejects linkage changes and decision changes on rejected-terminal rows. A new approved record is authorized against the current organization membership, identity and role.
+The trigger sets lifecycle state itself on INSERT and UPDATE, so a caller cannot choose a weaker state. The migration replaces the legacy trigger function **before** running the lifecycle-state backfill; this ordering is essential because migration 096's old trigger would otherwise refresh timestamps/snapshots on approved rows during the backfill. The new trigger preserves existing provenance fields, including NULL legacy timestamps, while classifying the lifecycle state. It preserves provenance fields on all later updates to an approved-history row. It rejects linkage changes and decision changes on rejected-terminal rows. A new approved record is authorized against the current organization membership, identity and role.
 
 This remains a proposal: historical data distributions and API semantics must be validated against the complete production schema before a numbered migration is authored.
 
