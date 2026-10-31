@@ -40,9 +40,9 @@ The current implementation repository is authoritative; the former `rupaykg-aist
 Apply Shakti Standards across discovery, evidence, statutory boundaries, feasibility, design, engineering, testing, independent review, approval, deployment, operation, measurement and continuous assurance. CI is engineering evidence only. TRL 9 is not claimed.
 
 
-## Newly confirmed migration provenance blocker
+## Migration provenance status after source repair
 
-The production-main migration ledger contains version `096` (`096_verification_authorization_provenance.sql`), but the file is absent from repository `main`. Staging records `20261022`–`20261025`, but those four migration files are also absent from repository `main`; staging does not record `096`. These files are present on the unmerged worker PR stack. This is a material ledger/source-control gap. Preserve both live ledgers and do not replay or renumber migrations. Full reconciliation and disposable production-main-derived rehearsal are required before migration-bearing PRs can merge or deploy. Details: [authoritative database policy](engineering/RUPAYKG_AUTHORITATIVE_DATABASE_AND_REPOSITORY_POLICY_2026-10-31.md).
+The production-applied migration `096_verification_authorization_provenance.sql` has been restored to this review branch from the exact reviewed worker-stack Git blob. Read-only production catalog inspection confirms its four expected columns exist. The file is not yet merged to `main`. Staging migrations `20261022`–`20261025` are staging/feature history only; they are not in the production ledger and must remain on the pending worker/feature stack until independently reviewed and rehearsed. Preserve both live ledgers; do not replay or renumber migrations. Details: [authoritative database policy](engineering/RUPAYKG_AUTHORITATIVE_DATABASE_AND_REPOSITORY_POLICY_2026-10-31.md).
 
 
 ## Render runtime identity boundary
