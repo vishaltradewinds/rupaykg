@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import type { Pool, PoolClient } from "pg";
+import { Pool, type PoolClient } from "pg";
 import { createTenantTransaction, tenantDatabaseContextFromAuth } from "./database-context.js";
 
 const context = {
@@ -104,4 +104,51 @@ test("tenant context rejects missing or unverified active membership", () => {
     }),
     /verified active organization is required/,
   );
+});
+
+const databaseIntegrationEnabled = process.env.CI === "true"
+  && process.env.NODE_ENV !== "production"
+  && process.env.RUPAYKG_RUN_DB_INTEGRATION_TESTS === "1"
+  && Boolean(process.env.DATABASE_URL);
+
+test("tenant context does not leak when a pooled PostgreSQL connection is reused", {
+  skip: !databaseIntegrationEnabled ? "requires CI disposable PostgreSQL and applied migrations" : false,
+}, async () => {
+  const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: process.env.DATABASE_SSL === "false" ? undefined : { rejectUnauthorized: true },
+    max: 1,
+  });
+  try {
+    const run = createTenantTransaction(pool);
+    const first = {
+      identityId: "33333333-3333-4333-8333-333333333333",
+      organizationId: "44444444-4444-4444-8444-444444444444",
+    };
+    const second = {
+      identityId: "55555555-5555-4555-8555-555555555555",
+      organizationId: "66666666-6666-4666-8666-666666666666",
+    };
+    const readContext = async (client: PoolClient) => {
+      const result = await client.query<{ identity_id: string | null; organization_id: string | null }>(
+        "select current_setting('rupaykg.identity_id', true) identity_id, current_setting('rupaykg.organization_id', true) organization_id",
+      );
+      return result.rows[0];
+    };
+    assert.deepEqual(await run(first, readContext), {
+      identity_id: first.identityId,
+      organization_id: first.organizationId,
+    });
+    const afterCommit = await pool.query<{ identity_id: string | null; organization_id: string | null }>(
+      "select current_setting('rupaykg.identity_id', true) identity_id, current_setting('rupaykg.organization_id', true) organization_id",
+    );
+    assert.equal(afterCommit.rows[0]?.identity_id, null);
+    assert.equal(afterCommit.rows[0]?.organization_id, null);
+    assert.deepEqual(await run(second, readContext), {
+      identity_id: second.identityId,
+      organization_id: second.organizationId,
+    });
+  } finally {
+    await pool.end();
+  }
 });
