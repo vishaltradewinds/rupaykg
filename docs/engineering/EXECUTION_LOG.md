@@ -103,3 +103,14 @@ Review PR #157's exact-head migration ordering, baseline manifest, worker/securi
 
 ### Updated release gate
 Verification provenance integrity is NOT COMPLETE. Do not edit/replay migration 096, do not change live Neon, and do not merge PR #157 until the forward-only correction has exact-head acceptance and independent security/database review.
+
+
+### Verification provenance lifecycle refinement — 2026-10-31
+33. Reviewed the first PR #140 forward-fix proposal beyond the immediate transition: found that a later update after APPROVED→REJECTED could clear the snapshot, and direct reapproval could be accepted without a separate audited path.
+34. Refined the unnumbered fixture to preserve provenance whenever the row is currently APPROVED or has a prior authorization timestamp; reject linkage changes after approval; and reject direct reapproval of a previously approved row pending a separate audited workflow.
+35. Added disposable PostgreSQL assertions for repeated post-rejection updates, linkage mutation after rejection, and direct reapproval rejection.
+36. Prior PR #140 head `5229e8299ba5a49af86748730e3fea42374e9d22` passed exact-head CI #41191863577. Latest head `f7e4ff12be336058b99bc19a8b729cdd3b636707` is under CI #41192000600; not yet validated.
+37. Updated PR #157 and PR #140 comments; no versioned migration assigned and no live database touched.
+
+### Current security gate
+Do not integrate the proposed trigger into a numbered migration until latest exact-head tests pass and independent review addresses concurrency, audit/reapproval workflow, trigger privileges/search_path, and historical data. PR #157 remains draft and production release HOLD.
