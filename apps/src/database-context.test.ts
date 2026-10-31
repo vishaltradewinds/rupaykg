@@ -13,7 +13,7 @@ function fakePool(options: { failAt?: string } = {}) {
   let released = 0;
   const client = {
     async query(sql: string, values?: unknown[]) {
-      calls.push({ sql, values });
+      calls.push(values === undefined ? { sql } : { sql, values });
       if (options.failAt === sql) throw new Error("simulated database failure");
       return { rows: [] };
     },
