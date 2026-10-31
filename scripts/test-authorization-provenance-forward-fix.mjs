@@ -85,7 +85,10 @@ try {
   await client.query("alter table verifications enable trigger verifications_integrity_guard");
 
   // Apply proposed semantics only in this disposable schema.
-  await client.query(await readFile(path.join(fixtureDir, "proposed-authorization-provenance-forward-fix.sql"), "utf8"));
+  let proposedSql = await readFile(path.join(fixtureDir, "proposed-authorization-provenance-forward-fix.sql"), "utf8");
+  proposedSql = proposedSql.replaceAll("public.", q(schema) + ".")
+    .replace("set search_path = pg_catalog, public", "set search_path = pg_catalog, " + q(schema));
+  await client.query(proposedSql);
   const legacyRows = await client.query(
     "select id,decision,authorization_history_state,authorization_checked_at from verifications where id=any($1::uuid[]) order by id",
     [[legacyApprovedId, legacyRejectedId]],
