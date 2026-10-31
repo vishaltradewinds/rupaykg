@@ -12,6 +12,14 @@ const bodyOf=(r:Req):B=>r.body&&typeof r.body==="object"?r.body as B:{};
 const str=(b:B,k:string):string|null=>typeof b[k]==="string"&&b[k].trim()?b[k].trim():null;
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+export function isIsoCalendarDate(value:string):boolean {
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(value))return false;
+ const year=Number(value.slice(0,4)),month=Number(value.slice(5,7)),day=Number(value.slice(8,10));
+ if(year<1||month<1||month>12||day<1)return false;
+ const days=[31,(year%4===0&&(year%100!==0||year%400===0))?29:28,31,30,31,30,31,31,30,31,30,31];
+ return day<=days[month-1]!;
+}
+
 export function sanitizeEvidenceFileName(value:string):string|null {
  const name=value.normalize("NFKC").replace(/[\\/\u0000-\u001f\u007f]/g,"_").replace(/^\.+/,"").trim();
  return !name||name.length>180||name==="."||name===".."?null:name;
@@ -61,7 +69,8 @@ export async function registerEvidenceVaultRoutes(app:FastifyInstance,pool:Pool|
   if(!bytes)return reply.code(413).send({error:"File must be valid base64 and between 1 byte and 5 MiB",code:"EVIDENCE_FILE_SIZE_INVALID"});
   if(!evidencePayloadMatchesMediaType(bytes,mediaType))return reply.code(415).send({error:"File signature/content does not match the declared media type",code:"EVIDENCE_MEDIA_MISMATCH"});
   if(seriesId&&!UUID.test(seriesId))return reply.code(400).send({error:"Invalid seriesId",code:"EVIDENCE_SERIES_INVALID"});
-  if((periodStart&&!/^\d{4}-\d{2}-\d{2}$/.test(periodStart))||(periodEnd&&!/^\d{4}-\d{2}-\d{2}$/.test(periodEnd))||(periodStart&&periodEnd&&periodEnd<periodStart))return reply.code(400).send({error:"Measurement period must use ISO dates with end on/after start",code:"EVIDENCE_PERIOD_INVALID"});
+  if((periodStart&&!isIsoCalendarDate(periodStart))||(periodEnd&&!isIsoCalendarDate(periodEnd))||(periodStart&&periodEnd&&periodEnd<periodStart))return reply.code(400).send({error:"Measurement period must use real ISO calendar dates with end on/after start",code:"EVIDENCE_PERIOD_INVALID"});
+  if(sourceReference&&sourceReference.length>2048)return reply.code(400).send({error:"sourceReference must be at most 2048 characters",code:"EVIDENCE_SOURCE_REFERENCE_INVALID"});
   const ctx=await activityContext(pool,auth,activityId);if(!ctx)return reply.code(403).send({error:"Activity outside active organization/geography scope",code:"EVIDENCE_SCOPE_FORBIDDEN"});
   if(!await hasOrganizationPermission(pool,auth,ctx.organization_id,["evidence:upload"]))return reply.code(403).send({error:"Evidence upload permission required",code:"EVIDENCE_UPLOAD_FORBIDDEN"});
   const sha=createHash("sha256").update(bytes).digest("hex"),client=await pool.connect();

@@ -41,6 +41,10 @@ describe("production configuration", () => {
     assert.throws(() => readProductionConfig({ ...valid, DATABASE_URL: "postgresql://localhost:5432/rupaykg" }), /must not target localhost/);
   });
 
+  it("fails closed for IPv6 loopback database targets", () => {
+    assert.throws(() => readProductionConfig({ ...valid, DATABASE_URL: "postgresql://[::1]:5432/rupaykg" }), /must not target localhost/);
+  });
+
   it("requires TLS database configuration", () => {
     assert.throws(() => readProductionConfig({ ...valid, DATABASE_SSL: "false" }), /DATABASE_SSL must be require/);
   });
@@ -49,12 +53,47 @@ describe("production configuration", () => {
     assert.throws(() => readProductionConfig({ ...valid, DATABASE_CA_CERT: "" }), /DATABASE_CA_CERT must contain a PEM certificate/);
   });
 
+  it("does not allow connection-string SSL parameters to override the verified TLS policy", () => {
+    const config = readProductionConfig({
+      ...valid,
+      DATABASE_URL: "postgresql://prod.example.invalid:5432/rupaykg?sslmode=require&application_name=rupaykg",
+    });
+    assert.equal(config.databaseUrl, "postgresql://prod.example.invalid:5432/rupaykg?application_name=rupaykg");
+    assert.equal(config.databaseSsl, "require");
+    assert.equal(config.databaseCaCert, valid.DATABASE_CA_CERT);
+  });
+
+  it("does not classify a Render database URL with sslmode=require as an internal no-TLS connection", () => {
+    const config = readProductionConfig({
+      ...valid,
+      DATABASE_URL: "postgresql://dpg-example123:5432/rupaykg?sslmode=require",
+    });
+    assert.equal(config.databaseUrl, "postgresql://dpg-example123:5432/rupaykg");
+    assert.equal(config.databaseSsl, "require");
+    assert.equal(config.databaseCaCert, valid.DATABASE_CA_CERT);
+  });
+
+  it("rejects sslmode=require as a substitute for a trusted CA certificate", () => {
+    assert.throws(
+      () => readProductionConfig({
+        ...valid,
+        DATABASE_URL: "postgresql://prod.example.invalid:5432/rupaykg?sslmode=require",
+        DATABASE_CA_CERT: "",
+      }),
+      /DATABASE_CA_CERT must contain a PEM certificate/,
+    );
+  });
+
   it("requires real authentication", () => {
     assert.throws(() => readProductionConfig({ ...valid, RUPAYKG_AUTH_MODE: "demo" }), /RUPAYKG_AUTH_MODE must be real/);
   });
 
   it("forbids production synthetic-data mode", () => {
     assert.throws(() => readProductionConfig({ ...valid, RUPAYKG_SYNTHETIC_DATA: "true" }), /synthetic data is forbidden/);
+  });
+
+  it("forbids acceptance fixture seeding in production", () => {
+    assert.throws(() => readProductionConfig({ ...valid, RUPAYKG_ACCEPTANCE_SEED_ON_START: "true" }), /acceptance seed is forbidden in production/);
   });
 
   it("forbids a client-bundled workspace session token in production", () => {

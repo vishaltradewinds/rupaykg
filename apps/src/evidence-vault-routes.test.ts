@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { decodeEvidenceBase64, evidencePayloadMatchesMediaType, sanitizeEvidenceFileName } from "./evidence-vault-routes.js";
+import { decodeEvidenceBase64, evidencePayloadMatchesMediaType, isIsoCalendarDate, sanitizeEvidenceFileName } from "./evidence-vault-routes.js";
 
 test("evidence filenames are normalized and cannot retain path traversal", () => {
   assert.equal(sanitizeEvidenceFileName("../../meter-reading.pdf"), "_.._meter-reading.pdf");
@@ -23,4 +23,13 @@ test("evidence media type must match basic file signature or text content", () =
   assert.equal(evidencePayloadMatchesMediaType(Buffer.from("{\"reading\":12}"), "application/json"), true);
   assert.equal(evidencePayloadMatchesMediaType(Buffer.from("{bad json"), "application/json"), false);
   assert.equal(evidencePayloadMatchesMediaType(Buffer.from([0,1,2]), "text/plain"), false);
+});
+
+test("measurement dates must be real ISO calendar dates", () => {
+  assert.equal(isIsoCalendarDate("2024-02-29"), true);
+  assert.equal(isIsoCalendarDate("2026-10-23"), true);
+  assert.equal(isIsoCalendarDate("2025-02-29"), false);
+  assert.equal(isIsoCalendarDate("2026-04-31"), false);
+  assert.equal(isIsoCalendarDate("2026-13-01"), false);
+  assert.equal(isIsoCalendarDate("2026-1-01"), false);
 });
