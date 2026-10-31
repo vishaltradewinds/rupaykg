@@ -117,3 +117,33 @@ This TLS fix does not resolve the RLS/tenant-isolation blocker.
 **HOLD.** Do not enable production RLS, change production roles/grants, rotate connection credentials, merge, deploy, or run migrations based solely on this design. Required evidence is the verified runtime role, complete table/route mapping, disposable-clone migration, cross-tenant tests, connection-pool isolation tests, rollback proof and independent review.
 
 No live database writes were made for this design.
+
+
+## 8. Initial route/data-access inspection (static source review)
+
+A targeted static review of API modules confirms that RLS cannot safely be switched on yet. The following is an initial map of access patterns, not a complete exhaustive SQL table inventory:
+
+| Module | Current pattern observed | RLS readiness |
+|---|---|---|
+| `server.ts` | Shared `pool.query` helper plus `withClient`; authenticated overview and several endpoints query through pool | Not ready; context wrapper required |
+| `auth-routes.ts` | Session issuance, identity, membership and onboarding routes use pool-level queries | Separate identity/bootstrap policy class required |
+| `evidence-vault-routes.ts` | Pool-level authorization/lookups mixed with explicit transactions for artifact upload/review | Not ready; every query in tenant flow must share context transaction |
+| `cpcb-swm-routes.ts` | Pool-level reads/permission checks mixed with client transactions for workspace changes | Not ready |
+| `registry-routes.ts` | Transaction helper used for high-risk registry/settlement mutations; authentication and some permission checks occur outside it | Partial foundation only |
+| `sync-routes.ts` | Device checks and sync operations use both pool and client transactions | Separate device/service context required |
+| `value-routes.ts` | Many tenant-sensitive pool-level queries and mutations across carbon, EPR, ESG and BWG data | Not ready |
+| `mrv-routes.ts` | Multiple pool-level queries across activity, evidence, verification and provenance | Not ready |
+| `workspace-routes.ts` | Pool-level reads plus isolated client transaction for some writes | Not ready |
+| `bwg-routes.ts` | Pool-level queries for EPR obligations and reports | Not ready |
+| `onboarding-hierarchy-routes.ts` | Pool-level onboarding review-queue query | Separate approval/administration policy required |
+| `async-mirror-worker.ts` | Pool-level claim/update/query operations | Must use a dedicated worker role and narrow system policies, never human tenant context |
+
+### Refactor order
+
+1. Introduce a typed transaction-context helper with transaction-local GUC setup, rollback-on-error and guaranteed release; test that context is cleared on pooled connection reuse.
+2. Refactor central server helpers and high-volume tenant modules (value, workspace, BWG, MRV, CPCB, evidence) so authentication, permission checks and all data queries use one context-bearing client.
+3. Refactor registry and sync modules with explicit bilateral and device contexts.
+4. Keep auth/bootstrap and worker paths separate, with dedicated roles and narrow functions/policies.
+5. Only after the complete route × table × permission map is signed off, create an RLS migration against a disposable clone and add exhaustive positive/negative acceptance tests.
+
+Do not retrofit transaction-local context by setting a GUC in one pool query and assuming later pool queries inherit it; that is incorrect under connection pooling and creates cross-request risk.
