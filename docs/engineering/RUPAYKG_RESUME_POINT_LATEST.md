@@ -1,5 +1,50 @@
 # RupayKg — Latest Engineering Resume Point
 
+## Session refresh — 2026-10-31 17:23 UTC (authoritative current-state override)
+
+This section supersedes stale status/next-step statements in the historical notes below. Resume from the exact branch/HEAD and recheck pending CI before further changes.
+
+### Exact repository and review state
+- Repository: `vishaltradewinds/rupaykg`.
+- Branch: `shakti/atomic-inbox-claim-2026-10-31`.
+- Current branch HEAD at this pointer update: `8db2940f35698347ef31a11b5d3cc5f77d85ec78` (immutable cross-tenant evidence checkpoint documentation commit).
+- Latest tested code SHA: `b5849670e06d6b397456cdd51873c87600f796c6`.
+- PR #175: OPEN/DRAFT/unmerged; PR #161 is also OPEN/DRAFT/unmerged and shares the same branch/head on a stacked base. Both had zero reviews and zero inline review threads at preflight. Keep both draft; no merge/rebase.
+- Exact tested code CI #4032 / run ID `41224099854`: PENDING/IN_PROGRESS at last check. Dependency audit, migration validation/reconstruction/upgrade/idempotency, typecheck, build, browser smoke, disposable PostgreSQL acceptance (including cross-tenant cases), and evidence upload all passed; production-container build remained IN_PROGRESS. URL: https://github.com/vishaltradewinds/rupaykg/actions/runs/41224099854.
+- Preflight documentation CI #4031 / run ID `41224059390`: PENDING/IN_PROGRESS at last check.
+- CI for current docs-only HEAD `8db2940f35698347ef31a11b5d3cc5f77d85ec78`: not yet returned by commit workflow-run lookup; NOT OBSERVED. Recheck before claiming exact-head CI.
+- Latest immutable checkpoint: `docs/engineering/checkpoints/2026-10-31-bwg-cross-tenant-evidence-acceptance.md`.
+- Latest session preflight log: `docs/engineering/session-logs/2026-10-31-1718-utc-resume-preflight.md`.
+
+### Latest completed batch
+- Commit `b5849670e06d6b397456cdd51873c87600f796c6` adds three DB-backed authenticated HTTP tests: cross-organization evidence rejection for BWG waste, EPR and ESG report routes. Each asserts HTTP 409 / `EVIDENCE_NOT_VERIFIED` and no report-row write.
+- EPR route-level quantity rejection and exact production constraint mapping tests already exist in `apps/src/value-routes.test.ts`; the previous resume pointer's statement that these tests were NOT DONE was stale.
+- Issue #176 was updated with the cross-tenant test and pending CI evidence.
+- No production changes.
+
+### Current authoritative database and critical risks
+- Sole production authority remains Neon project `rupaykg-production-fresh` (`steep-mud-79906940`), primary/default branch `main` (`br-restless-base-b44cip2h`), database `rupaykg`.
+- Read-only catalog: 67 public base tables; zero RLS-enabled tables; zero public RLS policies; 92 migration rows through version `20261021`.
+- Inspected roles `rupaykg` and `neon_service` have LOGIN/CREATEROLE/CREATEDB/REPLICATION/BYPASSRLS; `cloud_admin` is SUPERUSER/BYPASSRLS. Application runtime principal NOT ESTABLISHED.
+- Neon production branch protection is disabled. GitHub main protection is NOT ASSESSED (403). Working branch is unprotected.
+- Render runtime/service is NOT ASSESSED; connector requires explicit workspace selection before service listing. Do not infer runtime identity from Neon inspection identity.
+- Production HOLD; worker OFF; scheduler OFF; certification OFF; TRL 9 NOT ESTABLISHED.
+
+### Statutory BWG workflow — verified unresolved boundary
+- Official Gazette S.O. 388(E), SWM Rules 2026: BWG threshold is any one of 20,000 sq.m. floor area, 40,000 L/day water consumption, or 100 kg/day solid waste. Rule 6 requires local-body registration through the centralised online portal and EBWGR obligations; local bodies issue EBWGR certificates.
+- `POST /api/v1/statutory/bwg/assess` writes a computed internal assessment to `organization_bwg_assessments`; BWG profile intake writes `bwg_profiles` as `REVIEW_REQUIRED/PENDING`. There is no approved, independently reviewed transition binding these records to a verified profile.
+- Migration 044 blocks reporting-period creation unless the profile is `APPLICABLE/VERIFIED`. Preserve this fail-closed gate. Never auto-promote an internal calculation or user assertion to statutory approval/registration.
+
+### Ordered next execution
+1. Recheck CI #4032, #4031 and CI for current docs HEAD; fix any failure and record exact-head conclusions.
+2. Design tenant-scoped idempotency for BWG waste/EPR/ESG writes before implementation. Repository search found no idempotency implementation. Cover replay, key/payload mismatch, concurrency, atomic response storage and duplicate prevention.
+3. Design an evidence-backed, dual-control BWG applicability workflow separating intake, internal calculation, independent review, local-body registration proof, verified profile and reporting eligibility.
+4. Continue the all-route UI/API/schema/permission/report/test crosswalk and P0 tenant isolation, table-specific RLS, trusted tenant context and least-privilege runtime identity work.
+5. Reconcile production migration ledger/schema divergence only on disposable production-derived branches; keep production read-only. Obtain independent worker/security review, backup/restore evidence and required approvals before any production change.
+6. Keep PRs draft. Do not claim production readiness, regulator acceptance, external certificate issuance, or TRL 9.
+
+---
+
 > Mandatory start: read root `AGENTS.md`, this hand-off, the latest immutable checkpoint and linked decision records. Resume from the exact branch below; do not restart from memory.
 
 ## Current repository state — 2026-10-31
