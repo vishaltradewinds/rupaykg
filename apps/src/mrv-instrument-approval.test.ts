@@ -126,6 +126,7 @@ test("non-measuring instrument requires written calibration rationale and cannot
   assert.match(instrumentApprovalFailure("OTHER", [{ instrument_id: "EDGE-GW-01", parameter_code: "gas_flow" }], [approvedInstrument({
     instrument_code: "EDGE-GW-01",
     supported_parameter_codes: [],
+    calibration_serial_number: null,
     calibration_required: false,
     calibration_status: "NOT_APPLICABLE_WITH_JUSTIFICATION",
     calibration_not_required_reason: null,
