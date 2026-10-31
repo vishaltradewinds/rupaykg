@@ -207,3 +207,11 @@ Read this log and `docs/engineering/2026-10-31-migration-reconciliation-audit.md
 ### Sync lock-order correction and final device scope — 2026-10-31 11:24 UTC
 84. Follow-up sync commits `3250e478b976648767eb6ac620546e1c0b11c257` and `c09cbf3358ef5b34f6d8d08071eeff5d7395a93c` establish a consistent device-before-envelope row-lock order for both intake and apply. Apply now first resolves the device ID, locks and validates the device for the active organization, then locks the envelope constrained to that device and identity; the organization passed to operation application comes directly from the locked device row.
 85. Updated device control document in commit `e7856769150f440c91cafb827a4e38505a8a873f` to record lock order and deadlock rationale. These latest code/documentation commits require exact-head CI; earlier CI results do not validate them.
+
+
+### Verification update — statutory and device-sync batches — 2026-10-31 11:25 UTC
+86. Exact-head CI for BWG code commit `85bb6ae...` completed successfully (run #41196566577): migration validation, exact production baseline reconstruction, upgrade/idempotency, typecheck, build, browser smoke, disposable PostgreSQL acceptance, evidence upload and production container build all passed.
+87. Exact-head CI for statutory transaction commit `9b9a316...` completed successfully (run #41196781856): all workflow steps passed, including disposable PostgreSQL acceptance and production container build. This run validates the statutory code commit.
+88. Exact-head CI for the first device-binding sync commit `38062ff...` completed successfully (run #41196883067): all workflow steps passed. Later sync lock-order and type-narrowing corrections are newer commits and are not covered by that run.
+89. Latest sync CI run #41196987657, associated with commit `c09cbf3...`, had passed migration validation and production-baseline/upgrade/idempotency stages; TypeScript typecheck was in progress. Subsequent sync/documentation commits `f8d76a3...` and `e785676...` are not yet verified by exact-head CI.
+90. Current PR #157 head at log time: `f8d76a33c46a709e8ae6ce97153c3c37b42b0e4d`. Keep draft until exact-head CI passes and the device replay/organization spoofing integration tests and independent security review are complete.
