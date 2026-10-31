@@ -231,3 +231,62 @@ Migration `20261104_source_snapshot_and_regulatory_rule_versions.sql` requires a
 
 The Guardian client sends correlation and idempotency identifiers and requires an execution identifier for a VERIFIED response, but the reviewed client does not require returned correlation/idempotency values to match the request. The Hedera client requires a consensus timestamp and Mirror Node verification exists, but a timeout/ambiguous provider response can occur after a transaction was accepted and before the client persisted its transaction/consensus identifiers. Retrying that incomplete attempt may submit a second HCS message. The MRV route has an advisory lock and sequential reuse of complete persisted provenance, but this does not by itself prove exactly-once behaviour across ambiguous external timeouts/process crashes. Require a provider-supported idempotency/reconciliation contract, pre-retry Mirror Node lookup or an explicit at-least-once/duplicate-detection design, then test timeout-after-acceptance and process-crash recovery. Do not describe external submission as exactly-once until proven.
 
+
+
+## 10. Follow-up exact-head CI and live environment confirmation (09:20 UTC)
+
+### Exact candidate validation — passed
+
+The current PR head at the time of this follow-up is `c9a67b78d35eb0a4ff7e56e62b916c7dda0e6ac2`. GitHub Actions run [#41188053521](https://github.com/vishaltradewinds/rupaykg/actions/runs/41188053521) completed successfully on that exact candidate head.
+
+All steps passed:
+- production dependency audit and migration validator
+- exact 92-row production baseline reconstruction
+- pre-upgrade catalog/verifier capture
+- proposed upgrade and second-run idempotency
+- typecheck and build
+- browser smoke test
+- disposable PostgreSQL acceptance tests
+- artifact upload
+- production Docker image build
+
+Artifact `production-shaped-migration-report`:
+- Artifact ID: `13038026877`
+- SHA-256: `463f67e7d8dde85faa256b5622a9678da774ee53058d8da4182c7ca16d445bc6`
+- Candidate commit in report: `c9a67b78d35eb0a4ff7e56e62b916c7dda0e6ac2`
+- Workflow merge commit recorded separately: `187656bb2fd3e2f5620bf4ba0d3b54fac138ef9f`
+- Report exit status: `PASS`
+- 92 baseline migration identities; 113 post-upgrade migration entries.
+- Verifier function SHA-256 unchanged: `d3cad74b92990cf3729862e35833f726d7fd95e085c26c3a53145597dfe6a291`.
+- All seven report assertions passed, including the source-scope status-transition trigger assertion.
+
+The run demonstrates disposable PostgreSQL reconstruction and build correctness for this candidate. It does not prove live data migration safety, official acceptance, or production readiness.
+
+### Fresh read-only Neon branch snapshot
+
+A fresh read-only catalog/ledger query was run against all three known Neon branches:
+
+| Environment | Branch ID | Public tables | Public columns | Ledger rows | Max version | Migration 096 | Verifier provenance columns |
+|---|---|---:|---:|---:|---|---|---:|
+| Production | `br-restless-base-b44cip2h` | 67 | 756 | 92 | 20261021 | Present | 4/4 |
+| Staging | `br-spring-hill-b4544vz5` | 71 | 800 | 95 | 20261025 | Absent | 0/4 |
+| Rehearsal | `br-broad-glade-b46npw8o` | 71 | 800 | 95 | 20261025 | Absent | 0/4 |
+
+All three databases report `rupaykg`. Migration `20261101` remains absent from the staging and rehearsal ledgers. Prior read-only evidence remains: rehearsal has the schema effect associated with 20261101 but no matching ledger row; provenance is unresolved. This is not authorization to replay or repair it.
+
+**Required consequence:** production's migration 096 authorization controls must not be weakened or dropped to align staging/rehearsal. Staging and rehearsal must be reconciled through a reviewed, evidence-backed process; do not copy one branch over another or run the entire migration chain blindly.
+
+### Fresh Render deployment configuration
+
+Render service `srv-daki4d7qj5pc73b8qksg` (`rupaykg`) is configured to deploy branch `main`, with automatic deploy on commit, Docker runtime, health check `/health`, region Singapore and one instance. The latest deployment returned by Render is live at commit `54a7fe1ceb41b37a68720a71c10a1dd03af30dea` (27 Oct 2026). Therefore the current PR feature branch is not deployed by this service configuration. No deployment was triggered.
+
+The service is configured with a public IP allowlist entry `0.0.0.0/0`; this means the service endpoint is publicly reachable subject to application authentication and other controls. Confirm whether this exposure is intended and keep privileged administrative routes strongly authenticated and rate-limited.
+
+### Updated disposition
+
+- Candidate CI gate: **PASS** for `c9a67b78...`.
+- Current live production schema: **unchanged by this work**; 92-row ledger and migration 096 present.
+- Staging/rehearsal drift: **OPEN**; no writes performed.
+- Render: still on `main` / commit `54a7fe1...`; candidate not deployed.
+- Independent review, live clone rehearsal, backup/restore proof, approved change window and rollback remain outstanding.
+- Production release and certification remain **HOLD**; TRL 9 remains **NOT ESTABLISHED**.
