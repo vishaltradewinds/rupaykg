@@ -140,9 +140,18 @@ language plpgsql
 as $$
 begin
   if exists (
-    select 1 from authoritative_source_snapshots s
-     where s.scope_geography_id = old.id
-       and s.validation_status in ('APPROVED','RETIRED')
+    with recursive frozen_geographies(scope_kind, id) as (
+      select s.scope_kind, s.scope_geography_id
+        from authoritative_source_snapshots s
+       where s.scope_geography_id is not null
+         and s.validation_status in ('APPROVED','RETIRED')
+      union
+      select frozen.scope_kind, child.id
+        from geography child
+        join frozen_geographies frozen on child.parent_id = frozen.id
+       where frozen.scope_kind <> 'OTHER'
+    )
+    select 1 from frozen_geographies where id = old.id
   ) and (
     new.parent_id is distinct from old.parent_id
     or new.kind is distinct from old.kind
