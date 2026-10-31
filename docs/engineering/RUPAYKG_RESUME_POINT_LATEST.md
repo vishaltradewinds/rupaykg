@@ -5,11 +5,11 @@
 ## Current repository state — 2026-10-31
 - Repository: `vishaltradewinds/rupaykg`.
 - Working branch: `shakti/atomic-inbox-claim-2026-10-31`.
-- Latest implementation commit: `3a94f5304e0365779aeda5132eb94be3b841287b` (BWG authenticated PostgreSQL HTTP acceptance; positive profile intake path, geography-scope fixture and TypeScript fixture typing corrections). Latest session log commit: `82673c480b09ea5f64a37954561b07ed541f2511`. Verify exact live HEAD and CI before further code changes.
+- Latest implementation commit: `3a94f5304e0365779aeda5132eb94be3b841287b` (BWG authenticated PostgreSQL HTTP acceptance; positive profile intake path, geography-scope fixture and TypeScript fixture typing corrections). Latest session log commit: `5393df6bdaad3b3a9b7ca6f1bfe795c3ab8a2608`. Verify exact live HEAD and CI before further code changes.
 - Main base: `862512c8c904cef0f604df0350f02672318953af`.
 - PR #175: OPEN/DRAFT, unmerged; do not merge or rebase without dependency, independent review, migration and security gates. PR URL: https://github.com/vishaltradewinds/rupaykg/pull/175.
 - Branch divergence freshly measured at 16:31 UTC: 320 ahead / 1 behind main.
-- Latest checkpoint: [BWG authenticated PostgreSQL HTTP acceptance](./checkpoints/2026-10-31-bwg-authenticated-postgres-http-acceptance.md). Latest execution log: [BWG test fixture type correction](./session-logs/2026-10-31-1647-utc-bwg-test-type-correction.md). Previous checkpoint: [Autonomous Neon security and BWG acceptance](./checkpoints/2026-10-31-autonomous-neon-security-bwg-acceptance.md).
+- Latest checkpoint: [BWG authenticated PostgreSQL HTTP acceptance](./checkpoints/2026-10-31-bwg-authenticated-postgres-http-acceptance.md). Latest execution log: [Authoritative tenant baseline and geography-scope default](./session-logs/2026-10-31-1649-utc-authoritative-tenant-baseline.md). Previous execution log: [BWG test fixture type correction](./session-logs/2026-10-31-1647-utc-bwg-test-type-correction.md). Previous checkpoint: [Autonomous Neon security and BWG acceptance](./checkpoints/2026-10-31-autonomous-neon-security-bwg-acceptance.md).
 - Latest preflight: [Autonomous execution preflight — 16:33 UTC](./session-logs/2026-10-31-1633-utc-autonomous-preflight.md).
 
 ## Latest completed work
