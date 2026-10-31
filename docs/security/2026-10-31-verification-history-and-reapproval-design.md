@@ -74,13 +74,13 @@ The fixture now includes two-session disposable PostgreSQL tests for membership 
 
 ## 4. Execution context / search path gate remains OPEN
 
-The live trigger function is SECURITY INVOKER, which is the intended safer default unless a separate privileged design is justified. It currently has no pinned function-level `search_path` and uses unqualified relation names. The final migration must:
+The live trigger function is SECURITY INVOKER, which is the intended safer default unless a separate privileged design is justified. It currently has no pinned function-level `search_path` and uses unqualified relation names. The unnumbered proposal now sets `search_path = pg_catalog, public` and schema-qualifies referenced tables. Its disposable regression also sets a hostile caller search_path with a shadow `organization_memberships` table and verifies the pinned function still uses its intended schema. The final migration must:
 1. Schema-qualify every referenced relation.
 2. Set a fixed trusted function `search_path` (including `pg_catalog`) after confirming deployed schema and extension requirements.
 3. Preserve SECURITY INVOKER unless a reviewed need proves otherwise.
 4. Inspect PUBLIC and runtime-role schema/table/function grants, table ownership, RLS policies and trigger execution behavior.
 5. Verify the actual Render service connection role using safe role-name/privilege diagnostics; do not infer it from the Neon inspection role.
-6. Run tests as the least-privilege application role, including search-path shadowing, provenance-column write attempts, trigger-disable/bypass attempts and RLS behavior.
+6. Run tests as the actual least-privilege application role, including provenance-column write attempts, trigger-disable/bypass attempts and RLS behavior. The current disposable search-path test is not a substitute for production role/grant validation.
 
 The currently observed `rupaykg` role is privileged (`BYPASSRLS`, `CREATEROLE`, `CREATEDB` true); that alone is a production tenant-isolation blocker but does not establish which credential the API uses.
 
@@ -100,8 +100,8 @@ Current production `audit_events` is empty and no trigger was found on it. The r
 ## 6. Current implementation checkpoint
 
 Updated in this branch:
-- `scripts/fixtures/authorization-provenance/proposed-authorization-provenance-forward-fix.sql`: adds lifecycle marker/backfill and share locks; remains outside `migrations/`.
-- `scripts/test-authorization-provenance-forward-fix.mjs`: adds legacy approved/rejected NULL-provenance scenarios and a two-session membership-revocation race test.
+- `scripts/fixtures/authorization-provenance/proposed-authorization-provenance-forward-fix.sql`: adds two-state lifecycle marker/backfill, share locks, schema-qualified references and a pinned search_path; remains outside `migrations/`.
+- `scripts/test-authorization-provenance-forward-fix.mjs`: covers legacy approved/rejected NULL-provenance scenarios, forged provenance writes, hostile search_path shadowing, and two-session membership/role/identity revocation races.
 - Existing migration 096 remains unchanged.
 - No numbered migration created.
 - No Neon DDL/DML executed; all live database queries this batch were read-only.
