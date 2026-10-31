@@ -1,5 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import Fastify from "fastify";
+import { registerValueRoutes } from "./value-routes.js";
 import { bwgProfileReviewBasis, bwgEprQuantityError, canReadBwgWorkspace, isBwgApplicabilityNotVerifiedConflict, isBwgEprFulfilledObligationConstraintViolation } from "./value-routes.js";
 
 test("BWG profile intake never self-asserts statutory applicability or external registration", () => {
@@ -88,4 +90,26 @@ test("BWG reporting-period applicability conflict is mapped only for the exact l
     message: "BWG applicability must be verified before creating a reporting period",
   }), false);
   assert.equal(isBwgApplicabilityNotVerifiedConflict(null), false);
+});
+
+
+test("BWG HTTP routes fail closed with 401 when no authenticated database session exists", async (t) => {
+  const app = Fastify({ logger: false });
+  await registerValueRoutes(app, null);
+  t.after(async () => app.close());
+
+  const requests = [
+    { method: "GET" as const, url: "/api/v1/workspaces/bwg" },
+    { method: "POST" as const, url: "/api/v1/bwg/profile", payload: {} },
+    { method: "POST" as const, url: "/api/v1/bwg/reporting-periods", payload: {} },
+    { method: "POST" as const, url: "/api/v1/bwg/reporting-periods/00000000-0000-4000-8000-000000000001/waste", payload: {} },
+    { method: "POST" as const, url: "/api/v1/bwg/reporting-periods/00000000-0000-4000-8000-000000000001/epr", payload: {} },
+    { method: "POST" as const, url: "/api/v1/bwg/reporting-periods/00000000-0000-4000-8000-000000000001/esg", payload: {} },
+  ];
+
+  for (const request of requests) {
+    const response = await app.inject(request);
+    assert.equal(response.statusCode, 401, request.method + " " + request.url + ": " + response.body);
+    assert.equal(response.json().code, "AUTH_REQUIRED");
+  }
 });
