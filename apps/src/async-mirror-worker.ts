@@ -182,7 +182,22 @@ export async function runGovernmentInboxWorker(
         [leases.map(([id]) => id), leases.map(([, token]) => token), leaseSeconds],
       );
       if ((renewed.rowCount ?? 0) !== leases.length) {
-        throw new Error("LEASE_RENEWAL_FENCE_LOST");
+        const current = await pool.query<{ id: string; status: string; lease_token: string | null; lease_until: Date | string | null }>(
+          "select id,status,lease_token,lease_until from async_mirror_inbox where id=any($1::uuid[])",
+          [leases.map(([id]) => id)],
+        );
+        const byId = new Map(current.rows.map((entry) => [entry.id, entry]));
+        for (const [id, token] of leases) {
+          const entry = byId.get(id);
+          if (!entry) throw new Error("LEASE_RENEWAL_ROW_MISSING");
+          if (entry.status !== "PROCESSING") {
+            activeLeases.delete(id);
+            continue;
+          }
+          if (entry.lease_token !== token || !entry.lease_until || new Date(entry.lease_until).getTime() <= Date.now()) {
+            throw new Error("LEASE_RENEWAL_FENCE_LOST");
+          }
+        }
       }
     } catch (error) {
       renewalFailure = error instanceof Error ? error : new Error("LEASE_RENEWAL_FAILED");
