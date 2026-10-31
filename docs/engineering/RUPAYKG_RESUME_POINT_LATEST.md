@@ -5,12 +5,12 @@
 ## Current repository state — 2026-10-31
 - Repository: `vishaltradewinds/rupaykg`.
 - Working branch: `shakti/atomic-inbox-claim-2026-10-31`.
-- Latest recorded branch HEAD before this pointer refresh: `a2fc40643ff61721fd5c14114a5361fd2a61914c` (BWG HTTP authentication boundary checkpoint commit). Verify live branch HEAD before continuing.
+- Latest verified branch HEAD before this pointer refresh: `4e7a2d3612ae24a9d648b8cd014ad24553419140` (autonomous Neon security/BWG acceptance checkpoint). This pointer refresh will create the next commit; verify exact live HEAD and CI before further code changes.
 - Main base: `862512c8c904cef0f604df0350f02672318953af`.
 - PR #175: OPEN/DRAFT, unmerged; do not merge or rebase without dependency, independent review, migration and security gates. PR URL: https://github.com/vishaltradewinds/rupaykg/pull/175.
-- Branch divergence last freshly measured: 307 ahead / 1 behind main (16:19 UTC preflight); remeasure before integration decisions.
-- Latest checkpoint: [BWG HTTP authentication boundary tests](./checkpoints/2026-10-31-bwg-http-auth-boundary-tests.md). Previous governance checkpoint: [Autonomous execution and Founder time protection](./checkpoints/2026-10-31-autonomous-execution-founder-time-protection.md).
-- Latest preflight: [Autonomous execution protocol preflight](./session-logs/2026-10-31-1624-utc-autonomous-execution-protocol.md).
+- Branch divergence freshly measured at 16:31 UTC: 320 ahead / 1 behind main.
+- Latest checkpoint: [Autonomous Neon security and BWG acceptance](./checkpoints/2026-10-31-autonomous-neon-security-bwg-acceptance.md). Previous checkpoint: [BWG HTTP authentication boundary tests](./checkpoints/2026-10-31-bwg-http-auth-boundary-tests.md).
+- Latest preflight: [Autonomous execution preflight — 16:33 UTC](./session-logs/2026-10-31-1633-utc-autonomous-preflight.md).
 
 ## Latest completed work
 ### Autonomous execution / Shakti governance
@@ -37,9 +37,9 @@
 - CI #3960 / ID `41218598855`: SUCCESS on `4ae53077a37d023818879f9470fce71bb795dcd1`; validate job included dependency audit, migration validation, production-baseline reconstruction, proposed migration upgrade/idempotency, typecheck, build, browser smoke, disposable PostgreSQL acceptance tests, evidence upload and container build.
 - CI #3965 / ID `41219392554`: SUCCESS on `62a9ab9e0dee51bac9b69853d17af0224c8b826a`.
 - CI #3967 / ID `41219650791`: SUCCESS on governance commit `ec3a2b2a3fe46a1e3fcae7be994f7f775e2699ef`.
-- CI #3971 / ID `41219851252`: IN_PROGRESS on BWG HTTP test commit `f9cb9b8ccbd1f4971b06884fabfe1041200782a8`; recheck exact SHA.
-- Checkpoint commit `a2fc40643ff61721fd5c14114a5361fd2a61914c` had no exact-head CI run returned at checkpoint creation.
-- Checkpoint commit `b2fe65d5fa5634aa7fcaa70557dfb16a48841c8c` had no run returned by exact-head query at checkpoint creation. Check latest Actions before claiming current-head CI.
+- CI #3971 / ID `41219851252`: SUCCESS on BWG HTTP test commit `f9cb9b8ccbd1f4971b06884fabfe1041200782a8`.
+- CI #3972 / ID `41219932994`: SUCCESS on checkpoint commit `a2fc40643ff61721fd5c14114a5361fd2a61914c`.
+- CI #3973 / ID `41219963254`: SUCCESS on resume-pointer commit `1570e1850dc0b7a44c557e9dec35f18c029254c6`.
 - Never infer a current-head pass from a prior SHA.
 
 ## BWG remaining work — verified NOT DONE
@@ -66,9 +66,9 @@ Generator must be first-class and distinct from BWG. A complete general generato
 - Neon project: `rupaykg-production-fresh`, ID `steep-mud-79906940`.
 - Sole production branch: `main`, ID `br-restless-base-b44cip2h`.
 - Database: `rupaykg`.
-- Latest read-only catalog in 16:19 UTC preflight: 67 public base tables; 0 RLS-enabled; 0 FORCE RLS; 0 public policies; five BWG tables; migration ledger 92 rows through `20261021`.
+- Latest read-only catalog at 16:33 UTC: 67 public base tables; 0 RLS-enabled; 0 FORCE RLS; 0 public policies; five BWG tables; migration ledger 92 rows through `20261021` (`20261021_evidence_artifact_vault.sql`).
 - Inspected roles `rupaykg` and `neon_service` have LOGIN/BYPASSRLS and elevated role/database/replication attributes; `cloud_admin` is SUPERUSER/BYPASSRLS. Least-privilege runtime identity NOT ESTABLISHED.
-- Neon primary branch protection and GitHub main branch protection were disabled at last recorded check.
+- Neon primary branch protection freshly confirmed DISABLED (`protected=false`) at 16:33 UTC; all listed staging/rehearsal branches are also unprotected. GitHub main branch protection was disabled at the last recorded check (not refreshed in this batch).
 - Actual deployed application runtime DB principal NOT ASSESSED. Latest recorded live deployment was main commit `862512c8c904cef0f604df0350f02672318953af`; recheck only through authorized provider evidence.
 - Production SQL read-only by default. No production DDL/DML, migrations, grants/RLS/role changes, production branch operations, deployment, worker activation or scheduler activation without all required gates and explicit Founder approval.
 - Production HOLD; tenant isolation NOT ESTABLISHED; worker OFF; scheduler OFF; certification OFF.
@@ -79,16 +79,16 @@ Generator must be first-class and distinct from BWG. A complete general generato
 - TRL 9 is NOT ESTABLISHED. Do not claim national production readiness.
 
 ## Ordered next execution
-1. Re-poll CI #3971 on exact test SHA `f9cb9b8ccbd1f4971b06884fabfe1041200782a8` and check newer exact-head runs.
-2. Add DB-backed authenticated HTTP tests for missing `reports:read`/write permission, unverified membership, cross-organization payload mismatch and geography denial.
-3. Design and test the evidence-backed, dual-control statutory BWG assessment → verified-profile transition; preserve separation of duties and source/version provenance.
-4. Complete EPR route-level quantity and DB error mapping tests.
-5. Continue the all-route UI/API/schema/permission/report/test crosswalk and generator-to-processor lifecycle.
-6. Prioritise P0 tenant isolation, table-specific RLS design, ACL/function/sequence ownership, trusted identity context and least-privilege API/migration/worker principals.
-7. Reconcile production migration history against candidate migrations on a disposable production-derived Neon branch; never copy rehearsal schema wholesale or rewrite production ledger.
-8. Inventory PR dependency graph; maintain one controlled integration spine. Do not merge/rebase PR #175 without independent review and approval.
-9. Complete worker authority approval, tenant consumer, runtime identity, monitoring and recovery before activation.
-10. Validate statutory sources/external interfaces, qualify hardware, run representative field trials, and prove operational SLOs, backup restore, privacy, support and multi-site operations before certification or TRL advancement.
+1. Add DB-backed authenticated HTTP tests using disposable CI PostgreSQL fixtures for missing `reports:read`/write permission, unverified membership, cross-organization payload mismatch and geography denial.
+2. Add EPR route-level quantity and exact database-constraint mapping tests.
+3. Trace statutory BWG assessment/profile authority and design a dual-control, evidence-backed transition; never auto-promote.
+4. Continue the all-route UI/API/schema/permission/report/test crosswalk and generator-to-processor lifecycle.
+5. Prioritise P0 tenant isolation, table-specific RLS, ACL/function/sequence ownership, trusted identity context and least-privilege API/migration/worker principals.
+6. Reconcile production migration history on a disposable production-derived Neon branch only; never rewrite production ledger.
+7. Keep PR #175 draft. It currently has zero submitted reviews and zero inline review threads; do not merge/rebase until independent review, migration/security and release gates pass.
+8. Assess actual Render runtime DB principal using provider evidence; do not infer it from Neon inspection identity.
+9. Complete worker authority, tenant consumer, runtime identity, monitoring and recovery before activation.
+10. Validate statutory sources/external interfaces, qualify hardware, run representative field trials, and prove SLOs, restore, privacy, support and multi-site operations before certification or TRL advancement.
 
 ## Resume instruction
 Act as autonomous CTO execution owner under Shakti Standards. Discover and prioritise the next safe task without waiting for routine Founder prompts. Execute the largest coherent batch possible, continue independent work around blockers, test and preserve evidence, create immutable checkpoints and update this pointer. Escalate only decisions/approvals that genuinely require Founder authority. Report material verified progress, critical risks and indispensable Founder decisions only.
