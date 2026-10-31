@@ -194,4 +194,17 @@ On 2026-10-31, `POST /api/v1/evidence-vault/upload` was moved to the shared tran
 - Activity ownership, active-organization equality, geography scope, and evidence-upload permission are now checked on the same checked-out client used for evidence-series creation, evidence metadata, artifact-version bytes, and the final content-URI update.
 - Series validation and all evidence writes are part of one transaction. A scope/permission/series rejection returns without committing any partial evidence writes; unexpected failures roll back through the shared transaction helper.
 - Tenant context is derived from the server-verified active membership. Request body and headers are not trusted to select a tenant.
-- Evidence listing, download, and review routes remain separate follow-up work; this adoption does not imply full evidence-vault tenant isolation or database-enforced RLS.
+- Evidence listing, download, and review were subsequently migrated in the next implementation batch (Section 13); this adoption does not imply full platform tenant isolation or database-enforced RLS.
+
+
+## 13. Fourth through sixth tenant-scoped route adoptions — evidence vault
+
+On 2026-10-31, the remaining evidence-vault routes were moved to the shared transaction-local tenant helper:
+
+- `GET /api/v1/evidence-vault?activityId=...`: activity ownership, active-organization equality, geography scope, read permission, and artifact listing now run on the same checked-out client and transaction.
+- `GET /api/v1/evidence-vault/:evidenceId`: evidence lookup, active-organization check, geography scope, permission check, content-size/hash integrity verification, and retrieval run in one tenant-context transaction. Cross-organization evidence is returned as not found.
+- `POST /api/v1/evidence-vault/:evidenceId/review`: evidence row lock, active-organization/geography/permission checks, independent-reviewer check, immutable-state check, review record, verification record, and evidence status update now share one tenant-context transaction. The uploader cannot review their own artifact.
+
+The download response is emitted only after the transaction completes and the stored bytes pass size and SHA-256 verification. The filename used in the response header is sanitized against quote, backslash, CR and LF injection.
+
+These adoptions close the known evidence-vault route-level pool/client split. They do not close the platform-wide RLS blocker: other route modules, auth/bootstrap paths, background workers, exact Render runtime role identification, cross-tenant negative tests, pooled-connection context-leak tests, and clone-based policy/rollback rehearsal remain open. No RLS migration, live role/grant change, merge or deployment is authorized.
