@@ -138,3 +138,8 @@ Remaining blockers: actual Render runtime-role identification, least-privilege g
 A further code review caught an important migration-order hazard: if lifecycle-state backfill runs while migration 096's legacy BEFORE UPDATE trigger is still installed, that trigger rewrites authorization timestamps/snapshots on APPROVED rows during the backfill. The unnumbered fixture has been reordered to replace the trigger function first and run the backfill second. The new function recognizes OLD.decision='APPROVED' even with a NULL timestamp and preserves the existing provenance fields while setting APPROVED_HISTORY. The disposable legacy-row test asserts that the timestamp remains NULL.
 
 This ordering is mandatory for any future migration. It remains unverified until exact-head disposable CI runs. Latest recorded branch head at this update is 3cab48c58ac17ace419bbfbc9ddb047d03021b97; no exact-head workflow run is visible. Do not promote this fixture to migrations/ or apply it to a live database.
+
+
+## Concurrency-test determinism update — 2026-10-31
+
+The two-session regression now polls pg_stat_activity for the main connection's actual Lock wait event before releasing the competing revocation transaction. This avoids a false positive from merely sleeping while a query has not yet reached PostgreSQL. It exercises membership revocation, role-permission change and identity suspension. Latest recorded commit: 330ad804840aad69569949a6916838b5af282a1d. Exact-head CI is still not visible; all new tests remain unverified until CI runs on this exact head.
