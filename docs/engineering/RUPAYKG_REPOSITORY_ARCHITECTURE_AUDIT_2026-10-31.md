@@ -195,3 +195,19 @@ TRL must be assessed separately for software, hardware and the integrated servic
 - Production remains HOLD; worker/scheduler OFF; certification OFF; TRL 9 NOT ESTABLISHED.
 
 This report is an engineering architecture and evidence assessment, not legal advice, independent security certification, regulator acceptance or production authorization.
+
+
+## 10. Resume-point and exact-head addendum — 2026-10-31
+
+This addendum supersedes only the earlier snapshot metadata above; it does not erase the historical audit scope or findings.
+
+- The audit document was first committed as `571aef12d9dbe54389ec50b8c80c1d5bbfab355a`.
+- Exact-head CI for that commit completed successfully: run #3908 / ID `41213087762`; job `validate` SUCCESS.
+- Following that audit, mandatory repository continuity files were added:
+  - `AGENTS.md` — mandatory engineering, database safety, Shakti Standards, TRL, batch and resume rules.
+  - `docs/engineering/RUPAYKG_RESUME_POINT_LATEST.md` — canonical current hand-off pointer.
+  - `docs/engineering/checkpoints/2026-10-31-engineering-resume.md` — immutable dated checkpoint.
+- Documentation commits: rules `5e358706a5fad88f6842e3b94d9a0a05709eb603`; resume pointer `d16bb63d155b8dc6b82a17c2228aee2ae418934b`; immutable checkpoint `d23bb60e347f8a8c5ea18242e682b6d5bb7482b6`.
+- These documentation-only commits do not change the application runtime or production database. Revalidate actual branch HEAD and exact-head CI before the next engineering change.
+- The branch remains a review branch and PR #175 remains draft; do not merge without independent review and all release gates.
+- Next work remains Gate 1 database security foundation. No production DDL/DML, migration, role/grant change, worker activation or deployment was performed.
