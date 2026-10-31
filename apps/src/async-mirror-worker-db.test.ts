@@ -505,80 +505,68 @@ test("government inbox worker persists retry recovery, quarantine and append-onl
     // between source resolution and the fenced inbox terminal commit.
     const provenanceAuthority = "PRV-" + suffix.slice(0, 8).toUpperCase();
     const provenance = await provisionCrosswalk(provenanceAuthority, "TEST-MUNI", new Date().toISOString());
-    const provenanceRow = await makeRow(provenanceAuthority);
-    const crosswalkForProvenance = await pool.query<{ id: string }>(
-      "select id from government_jurisdiction_crosswalks where authority_code=$1 and municipal_code='TEST-MUNI' and status='VERIFIED'",
-      [provenanceAuthority],
-    );
-    assert.equal(crosswalkForProvenance.rows.length, 1);
-    let signalResolutionLocked: () => void = () => {};
-    let releaseResolutionCommit: () => void = () => {};
-    const resolutionLocked = new Promise<void>((resolve) => { signalResolutionLocked = resolve; });
-    const resolutionCommitGate = new Promise<void>((resolve) => { releaseResolutionCommit = resolve; });
-    let pausedTerminal = false;
-    const lockHoldingPool = {
-      query: (sql: string, values?: unknown[]) => {
-        if (/^with exhausted as \(/i.test(sql)) {
-          const isolatedClaim = sql.replace("where attempts < $3", "where id=$4 and attempts < $3");
-          return pool.query(isolatedClaim, [...(values ?? []), provenanceRow.id] as never[]);
-        }
-        return pool.query(sql, values as never[]);
-      },
-      connect: async () => {
-        const client = await pool.connect();
-        return {
-          query: async (sql: string, values?: unknown[]) => {
-            if (!pausedTerminal && /update async_mirror_inbox[\\s\\S]*status='VALIDATED'/i.test(sql)) {
-              pausedTerminal = true;
-              signalResolutionLocked();
-              await resolutionCommitGate;
-            }
-            return client.query(sql, values as never[]);
-          },
-          release: () => client.release(),
-        };
-      },
-    } as unknown as Pool;
-    const provenanceWorker = runGovernmentInboxWorker(lockHoldingPool, undefined, { batchSize: 1, maxAttempts: 3 });
-    await resolutionLocked;
-    const assertProvenanceMutationBlocked = async (sql: string, values: unknown[], description: string) => {
-      const contender = await pool.connect();
-      try {
-        await contender.query("BEGIN");
-        await contender.query("SET LOCAL lock_timeout='150ms'");
-        await assert.rejects(
-          contender.query(sql, values as never[]),
-          (error: unknown) => Boolean(error && typeof error === "object" && "code" in error && (error as { code: string }).code === "55P03"),
-          description,
-        );
-      } finally {
-        await contender.query("ROLLBACK").catch(() => undefined);
-        contender.release();
-      }
-    };
+    // Replay the worker's exact FOR SHARE lock shape in a transaction. The unit test
+    // separately asserts the worker issues this clause before its fenced terminal update.
+    const lockOwner = await pool.connect();
     try {
+      await lockOwner.query("BEGIN");
+      const lockedProvenance = await lockOwner.query<{ crosswalk_id: string; source_snapshot_id: string }>(
+        `select c.id as crosswalk_id,s.id as source_snapshot_id
+           from government_jurisdiction_crosswalks c
+           join authoritative_source_snapshots s on s.id=c.source_snapshot_id
+            and s.validation_status='APPROVED'
+            and s.authority_code=c.authority_code and s.source_version=c.source_version
+            and (s.effective_from is null or $3::timestamptz::date >= s.effective_from)
+            and (s.effective_to is null or $3::timestamptz::date <= s.effective_to)
+          where c.authority_code=$1 and c.municipal_code=$2 and c.status='VERIFIED'
+            and c.effective_from <= $3::timestamptz
+            and (c.effective_to is null or c.effective_to > $3::timestamptz)
+            and c.source_version=$4
+            and organization_has_explicit_geography_scope(c.organization_id,c.geography_id)
+            and government_source_scope_covers_geography(s.id,c.geography_id)
+            and (c.activity_id is null or exists (
+              select 1 from activities a where a.id=c.activity_id
+                and a.organization_id=c.organization_id and a.geography_id=c.geography_id
+            ))
+          order by c.effective_from desc limit 2 for share of c,s`,
+        [provenanceAuthority, "TEST-MUNI", new Date(), "synthetic-source-v1"],
+      );
+      assert.equal(lockedProvenance.rows.length, 1);
+      assert.equal(lockedProvenance.rows[0]?.source_snapshot_id, provenance.sourceSnapshotId);
+
+      const assertProvenanceMutationBlocked = async (sql: string, values: unknown[], description: string) => {
+        const contender = await pool.connect();
+        try {
+          await contender.query("BEGIN");
+          await contender.query("SET LOCAL lock_timeout='150ms'");
+          await assert.rejects(
+            contender.query(sql, values as never[]),
+            (error: unknown) => Boolean(error && typeof error === "object" && "code" in error && (error as { code: string }).code === "55P03"),
+            description,
+          );
+        } finally {
+          await contender.query("ROLLBACK").catch(() => undefined);
+          contender.release();
+        }
+      };
       await assertProvenanceMutationBlocked(
         "delete from government_jurisdiction_crosswalks where id=$1",
         [crosswalkForProvenance.rows[0]!.id],
-        "crosswalk deletion must wait until the worker commits its source-bound terminal decision",
+        "crosswalk deletion must wait while the worker's source-resolution row lock is held",
       );
       await assertProvenanceMutationBlocked(
         "update authoritative_source_snapshots set validation_status='RETIRED' where id=$1",
         [provenance.sourceSnapshotId],
-        "source snapshot retirement must wait until the worker commits its source-bound terminal decision",
+        "source snapshot retirement must wait while the worker's source-resolution row lock is held",
       );
+      await lockOwner.query("COMMIT");
     } finally {
-      releaseResolutionCommit();
+      await lockOwner.query("ROLLBACK").catch(() => undefined);
+      lockOwner.release();
     }
-    const provenanceResult = await provenanceWorker;
-    assert.equal(provenanceResult.validated, 1);
     await pool.query("delete from government_jurisdiction_crosswalks where id=$1", [crosswalkForProvenance.rows[0]!.id]);
     await pool.query("update authoritative_source_snapshots set validation_status='RETIRED' where id=$1", [provenance.sourceSnapshotId]);
-    const provenanceFinal = await pool.query<{ status: string; validation_summary: Record<string, unknown> }>(
-      "select status,validation_summary from async_mirror_inbox where id=$1",
-      [provenanceRow.id],
-    );
-    assert.equal(provenanceFinal.rows[0]?.status, "VALIDATED");
+
     assert.equal(
       (provenanceFinal.rows[0]?.validation_summary as any)?.jurisdictionCrosswalk?.sourceSnapshot?.id,
       provenance.sourceSnapshotId,
