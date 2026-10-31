@@ -1,4 +1,5 @@
 import type { Pool, PoolClient } from "pg";
+import type { AuthContext } from "./auth.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -11,6 +12,23 @@ export type TenantTransaction = <T>(
   context: TenantDatabaseContext,
   work: (client: PoolClient) => Promise<T>,
 ) => Promise<T>;
+
+/**
+ * Derive tenant context only from the server-verified authentication result.
+ * Multi-organization identities without an explicitly selected active
+ * organization fail closed; request payload values are never consulted.
+ */
+export function tenantDatabaseContextFromAuth(auth: AuthContext): TenantDatabaseContext {
+  const organizationId = auth.activeOrganizationId;
+  if (!organizationId || !auth.memberships.some(
+    (membership) => membership.organization_id === organizationId && membership.status === "VERIFIED",
+  )) {
+    throw new Error("TENANT_DATABASE_CONTEXT_INVALID: verified active organization is required");
+  }
+  const context = { identityId: auth.identityId, organizationId };
+  assertTenantDatabaseContext(context);
+  return context;
+}
 
 export function assertTenantDatabaseContext(context: TenantDatabaseContext): void {
   if (!UUID_RE.test(context.identityId)) {
