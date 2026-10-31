@@ -493,6 +493,63 @@ test("BWG authenticated HTTP authorization fails closed against disposable Postg
     assert.equal(verifiedEsg.json().esgReport.verification_id, verifiedEsgVerificationId);
 
 
+    // Evidence verified in another organization must not be accepted by any BWG report writer.
+    // Assert both the authorization result and the absence of a report-row write.
+    const crossTenantWasteBefore = await pool.query<{ count: string }>(
+      "select count(*)::text as count from bwg_waste_reports where reporting_period_id=$1",
+      [wastePeriodId],
+    );
+    const crossTenantWaste = await app.inject({
+      method: "POST",
+      url: "/api/v1/bwg/reporting-periods/" + wastePeriodId + "/waste",
+      headers: { authorization: "Bearer " + wasteWriter.token, "x-rupaykg-organization-id": wasteWriter.organizationId },
+      payload: { wasteStream: "DRY", unit: "KG", generatedQuantity: 10, segregatedQuantity: 9, channelizedQuantity: 8, processedQuantity: 7, evidenceId: verifiedEprEvidenceId, verificationId: verifiedEprVerificationId },
+    });
+    assert.equal(crossTenantWaste.statusCode, 409, crossTenantWaste.body);
+    assert.equal(crossTenantWaste.json().code, "EVIDENCE_NOT_VERIFIED");
+    const crossTenantWasteAfter = await pool.query<{ count: string }>(
+      "select count(*)::text as count from bwg_waste_reports where reporting_period_id=$1",
+      [wastePeriodId],
+    );
+    assert.equal(crossTenantWasteAfter.rows[0]?.count, crossTenantWasteBefore.rows[0]?.count);
+
+    const crossTenantEprBefore = await pool.query<{ count: string }>(
+      "select count(*)::text as count from bwg_epr_reports where reporting_period_id=$1",
+      [eprPeriodId],
+    );
+    const crossTenantEpr = await app.inject({
+      method: "POST",
+      url: "/api/v1/bwg/reporting-periods/" + eprPeriodId + "/epr",
+      headers: { authorization: "Bearer " + eprWriter.token, "x-rupaykg-organization-id": eprWriter.organizationId },
+      payload: { schemeId, categoryCode: "PLASTIC", obligatedQuantity: 10, fulfilledQuantity: 8, evidenceId: verifiedEsgEvidenceId, verificationId: verifiedEsgVerificationId },
+    });
+    assert.equal(crossTenantEpr.statusCode, 409, crossTenantEpr.body);
+    assert.equal(crossTenantEpr.json().code, "EVIDENCE_NOT_VERIFIED");
+    const crossTenantEprAfter = await pool.query<{ count: string }>(
+      "select count(*)::text as count from bwg_epr_reports where reporting_period_id=$1",
+      [eprPeriodId],
+    );
+    assert.equal(crossTenantEprAfter.rows[0]?.count, crossTenantEprBefore.rows[0]?.count);
+
+    const crossTenantEsgBefore = await pool.query<{ count: string }>(
+      "select count(*)::text as count from bwg_esg_reports where reporting_period_id=$1",
+      [esgPeriodId],
+    );
+    const crossTenantEsg = await app.inject({
+      method: "POST",
+      url: "/api/v1/bwg/reporting-periods/" + esgPeriodId + "/esg",
+      headers: { authorization: "Bearer " + esgWriter.token, "x-rupaykg-organization-id": esgWriter.organizationId },
+      payload: { metricCode: "WATER", scope: "SCOPE_1", unit: "KL", value: 10, evidenceId: verifiedEprEvidenceId, verificationId: verifiedEprVerificationId },
+    });
+    assert.equal(crossTenantEsg.statusCode, 409, crossTenantEsg.body);
+    assert.equal(crossTenantEsg.json().code, "EVIDENCE_NOT_VERIFIED");
+    const crossTenantEsgAfter = await pool.query<{ count: string }>(
+      "select count(*)::text as count from bwg_esg_reports where reporting_period_id=$1",
+      [esgPeriodId],
+    );
+    assert.equal(crossTenantEsgAfter.rows[0]?.count, crossTenantEsgBefore.rows[0]?.count);
+
+
     assert.equal(workspaceDenied.statusCode, 403, workspaceDenied.body);
     assert.equal(workspaceDenied.json().code, "BWG_WORKSPACE_READ_FORBIDDEN");
 
