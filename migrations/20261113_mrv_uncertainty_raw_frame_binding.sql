@@ -1,4 +1,9 @@
 -- Forward-only MRV measurement integrity records.
+-- Extend the evidence-vault media allow-list for byte-exact instrument frames.
+alter table evidence_artifact_versions drop constraint if exists evidence_artifact_versions_media_type_check;
+alter table evidence_artifact_versions add constraint evidence_artifact_versions_media_type_check
+  check (media_type in ('application/pdf','image/jpeg','image/png','text/csv','text/plain','application/json','application/octet-stream'));
+
 -- This migration stores reviewed parameter uncertainty as immutable, evidence-bound
 -- records and binds exact raw-frame evidence-vault versions to measurement rows.
 -- It does not establish a universal uncertainty acceptance threshold.
@@ -140,7 +145,7 @@ begin
     end if;
   end if;
   if new.raw_frame_artifact_version_id is not null then
-    select v.sha256,v.content,v.size_bytes,e.activity_id,s.organization_id
+    select v.sha256,v.content,v.size_bytes,s.activity_id,s.organization_id
       into raw_frame
       from evidence_artifact_versions v
       join evidence e on e.id=v.evidence_id
@@ -189,8 +194,8 @@ begin
     end if;
   end if;
   if new.raw_frame_artifact_version_id is not null then
-    select v.sha256,v.content,v.size_bytes,e.activity_id
-      into raw_frame from evidence_artifact_versions v join evidence e on e.id=v.evidence_id
+    select v.sha256,v.content,v.size_bytes,s.activity_id
+      into raw_frame from evidence_artifact_versions v join evidence_artifact_series s on s.id=v.series_id
      where v.id=new.raw_frame_artifact_version_id;
     if not found or raw_frame.activity_id <> new.activity_id
        or raw_frame.sha256 <> lower(new.raw_frame_sha256)
