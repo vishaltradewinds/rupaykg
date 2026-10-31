@@ -177,3 +177,12 @@ Sources:
 - MPPCB status-cum-inspection report (NGT-hosted, 15 May 2026): https://www.greentribunal.gov.in/sites/default/files/news_updates/STATUS%20CUM%20INSPECTION%20REPORT%20BY%20MPPCB%20IN%20OA%20NO.%20819%20of%202024%20NEWS%20ITEM%20TITLED%20JABALPUR%20KATHAUNDA%20PLANT%20MEIN%20KACHARA%20JALNE%20KE%20BAAD%20DUR%20DUR%20TAK%20FAIL%20RAHE%20DHOOL%20KE%20KAN.pdf
 - CPCB reply (NGT-hosted, 25 September 2024): https://www.greentribunal.gov.in/sites/default/files/news_updates/REPLY%20BY%20CPCB%20IN%20OA%20NO.%20819%20of%202024%20NEWS%20ITEM%20TITLED%20JABALPUR%20KATHAUNDA%20PLANT%20MEIN%20KACHARA%20JALNE%20KE%20BAAD%20DUR%20DUR%20TAK%20FAIL%20RAHE%20DHOOL%20KE%20KAN.pdf
 - NGT portal report listing (10 July 2026): https://www.greentribunal.gov.in/index.php?page=1183
+
+
+### 13 July 2026 NGT order update
+
+The NGT order dated 13 July 2026, considering the JMC progress report dated 10 July 2026, states that the Kathonda WtE plant had been operating continuously since January 2026 and exported 30,759.50 MWh to the grid from January through June 2026. It reports that MoHUA had approved the proposed 100 TPD Bio-CNG project under CITIIS 2.0, PDMC feasibility analysis/DPR preparation was underway, and finalization before the Central Government remained pending. The Tribunal disposed of O.A. 819/2024 after considering the progress report.
+
+Sources: NGT portal listing of the JMC report uploaded 10 July 2026: https://www.greentribunal.gov.in/index.php?page=1183. Reproduced 13 July 2026 NGT order: https://indiankanoon.org/doc/76746794/.
+
+This does not make the Bio-CNG plant operational or establish methodology eligibility. The WtE and Bio-CNG project boundaries remain separate.
