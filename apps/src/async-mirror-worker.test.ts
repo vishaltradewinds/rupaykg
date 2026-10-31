@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import type { Pool } from "pg";
-import { isValidSyncWindowTimestamp, reconcileGovernmentInbox, runGovernmentInboxWorker, validateGovernmentInboxPayload } from "./async-mirror-worker.js";
+import { isValidSyncWindowTimestamp, normalizeLeaseRenewalSeconds, reconcileGovernmentInbox, runGovernmentInboxWorker, validateGovernmentInboxPayload } from "./async-mirror-worker.js";
 import { canonicalGovBridgeHash } from "./government-inbox-hash.js";
 
 function fakePool(rows: unknown[], crosswalkRows?: unknown[], exhaustedQuarantined = 0) {
@@ -237,4 +237,12 @@ test("worker bounds exhausted-row quarantine and reports the swept count", async
   assert.match(statements[0]!.sql, /for update skip locked/i);
   assert.match(statements[0]!.sql, /limit \$1/i);
   assert.match(statements[0]!.sql, /select count\(\*\)::int from exhausted/i);
+});
+
+
+test("lease heartbeat interval cannot exceed half of the lease lifetime", () => {
+  assert.equal(normalizeLeaseRenewalSeconds(undefined, 15), 5);
+  assert.equal(normalizeLeaseRenewalSeconds(300, 15), 5);
+  assert.equal(normalizeLeaseRenewalSeconds(100, 120), 40);
+  assert.equal(normalizeLeaseRenewalSeconds(10, 15), 7);
 });
