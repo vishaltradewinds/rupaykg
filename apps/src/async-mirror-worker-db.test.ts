@@ -580,8 +580,8 @@ test("production-shaped non-superuser migration principal can transfer a SECURIT
     await client.query(`create table public."${target}" (id bigserial primary key, value text not null)`);
     await client.query(`create table public."${source}" (value text not null)`);
     await client.query(`grant usage, create on schema public to "${principal}"`);
-    await client.query(`grant insert on table public."${target}" to "${principal}"`);
-    await client.query(`grant usage, select on sequence public."${target}_id_seq" to "${principal}"`);
+    await client.query(`alter table public."${target}" owner to "${principal}"`);
+    await client.query(`alter sequence public."${target}_id_seq" owner to "${principal}"`);
 
     await client.query(`set role "${principal}"`);
     await client.query(`create role "${writer}" nologin nosuperuser nocreatedb nocreaterole noinherit nobypassrls`);
