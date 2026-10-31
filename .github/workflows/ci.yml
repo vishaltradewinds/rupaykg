@@ -3,8 +3,8 @@ name: CI
 on:
   push:
     branches: [main]
+  # Run for every target branch, including stacked Shakti engineering PRs.
   pull_request:
-    branches: [main]
 
 permissions:
   contents: read
