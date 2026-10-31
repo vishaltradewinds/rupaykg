@@ -5,6 +5,10 @@ export interface MrvObservationInstrumentRef {
 
 export interface MrvInstrumentApprovalEvidence {
   instrument_code: string;
+  measurement_instrument: boolean;
+  manufacturer_serial_number: string | null;
+  asset_tag: string | null;
+  calibration_serial_number: string | null;
   supported_parameter_codes: string[];
   approval_status: string;
   meity_certificate_id: string | null;
@@ -126,6 +130,18 @@ export function instrumentApprovalFailure(
     if (!instrument) return `Instrument "${code}" is not registered for this organization; MRV eligibility is blocked.`;
     if (instrument.approval_status !== "VERIFIED") {
       return `Instrument "${code}" is not VERIFIED; MRV eligibility is blocked.`;
+    }
+    if (instrument.measurement_instrument && !present(instrument.manufacturer_serial_number)) {
+      return `Instrument "${code}" lacks its exact manufacturer serial number; physical-unit traceability is required.`;
+    }
+    if (!instrument.measurement_instrument && !present(instrument.manufacturer_serial_number) && !present(instrument.asset_tag)) {
+      return `Instrument "${code}" lacks a physical serial number or organization asset tag.`;
+    }
+    if (instrument.calibration_required && instrument.calibration_serial_number !== instrument.manufacturer_serial_number) {
+      return `Instrument "${code}" calibration certificate serial does not match the registered physical unit.`;
+    }
+    if (!instrument.calibration_required && instrument.calibration_serial_number !== null) {
+      return `Instrument "${code}" has an inconsistent calibration serial despite calibration being marked not required.`;
     }
     if (!present(instrument.meity_certificate_id)
       || !present(instrument.meity_issuer)
