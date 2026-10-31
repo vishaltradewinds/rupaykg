@@ -50,6 +50,7 @@ export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool |
     const body = bodyOf(request);
     const requestedOrganizationId = requiredString(body, "organizationId");
     const organizationId = auth.activeOrganizationId;
+    if (!organizationId) return reply.code(403).send({ error: "Verified active organization required", code: "ORG_FORBIDDEN" });
     const schemeId = requiredString(body, "schemeId");
     const obligationId = requiredString(body, "obligationId");
     const periodStart = requiredString(body, "periodStart");
