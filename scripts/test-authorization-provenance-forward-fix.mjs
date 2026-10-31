@@ -174,30 +174,51 @@ try {
     /approved verification linkage is immutable/,
   );
 
-  // Non-approved rows cannot bring caller-supplied snapshots, and approval
-  // transitions re-check current role permissions.
-  const pendingId = "10000000-0000-4000-8000-000000000014";
+  // The production enum has only APPROVED and REJECTED. New rejected rows
+  // cannot carry caller-supplied authorization provenance or be reopened.
+  const rejectedId = "10000000-0000-4000-8000-000000000014";
   await client.query(
-    "insert into verifications(id,activity_id,evidence_id,verifier_identity_id,decision,authorization_membership_id,authorization_role_id,authorization_permissions_snapshot,authorization_checked_at) values ($1,$2,$3,$4,'PENDING',$5,$6,$7,now())",
-    [pendingId, ids.activity, ids.evidence, ids.verifier, ids.membership, ids.role, JSON.stringify(["FORGED"])],
+    "insert into verifications(id,activity_id,evidence_id,verifier_identity_id,decision,authorization_membership_id,authorization_role_id,authorization_permissions_snapshot,authorization_checked_at) values ($1,$2,$3,$4,'REJECTED',$5,$6,$7,now())",
+    [rejectedId, ids.activity, ids.evidence, ids.verifier, ids.membership, ids.role, JSON.stringify(["FORGED"])],
   );
-  const pending = (await client.query("select authorization_membership_id,authorization_role_id,authorization_permissions_snapshot,authorization_checked_at from verifications where id=$1", [pendingId])).rows[0];
-  assert.equal(pending.authorization_membership_id, null);
-  assert.equal(pending.authorization_role_id, null);
-  assert.equal(pending.authorization_permissions_snapshot, null);
-  assert.equal(pending.authorization_checked_at, null);
+  const rejected = (await client.query(
+    "select authorization_membership_id,authorization_role_id,authorization_permissions_snapshot,authorization_checked_at,authorization_history_state from verifications where id=$1",
+    [rejectedId],
+  )).rows[0];
+  assert.equal(rejected.authorization_membership_id, null);
+  assert.equal(rejected.authorization_role_id, null);
+  assert.equal(rejected.authorization_permissions_snapshot, null);
+  assert.equal(rejected.authorization_checked_at, null);
+  assert.equal(rejected.authorization_history_state, "REJECTED_TERMINAL");
   await assert.rejects(
-    client.query("update verifications set decision='APPROVED' where id=$1", [pendingId]),
+    client.query("update verifications set decision='APPROVED' where id=$1", [rejectedId]),
+    /rejected verification is terminal/,
+  );
+
+  // A new approval is denied while the role permission is revoked, then
+  // succeeds only after the current permission is restored.
+  const approvedNewId = "10000000-0000-4000-8000-000000000015";
+  await assert.rejects(
+    client.query(
+      "insert into verifications(id,activity_id,evidence_id,verifier_identity_id,decision) values ($1,$2,$3,$4,'APPROVED')",
+      [approvedNewId, ids.activity, ids.evidence, ids.verifier],
+    ),
     /requires active verifier permission/,
   );
   await client.query("update roles set permissions=$2::jsonb where id=$1", [ids.role, JSON.stringify(["VERIFY_EVIDENCE"])]);
-  await client.query("update verifications set decision='APPROVED' where id=$1", [pendingId]);
-  const approvedAgain = (await client.query("select authorization_membership_id,authorization_role_id,authorization_permissions_snapshot,authorization_checked_at from verifications where id=$1", [pendingId])).rows[0];
-  assert.equal(approvedAgain.authorization_membership_id, ids.membership);
-  assert.equal(approvedAgain.authorization_role_id, ids.role);
-  assert.deepEqual(approvedAgain.authorization_permissions_snapshot, ["VERIFY_EVIDENCE"]);
-  assert.ok(approvedAgain.authorization_checked_at);
-  assert.equal(approvedAgain.authorization_history_state, "APPROVED_HISTORY");
+  await client.query(
+    "insert into verifications(id,activity_id,evidence_id,verifier_identity_id,decision) values ($1,$2,$3,$4,'APPROVED')",
+    [approvedNewId, ids.activity, ids.evidence, ids.verifier],
+  );
+  const approvedNew = (await client.query(
+    "select authorization_membership_id,authorization_role_id,authorization_permissions_snapshot,authorization_checked_at,authorization_history_state from verifications where id=$1",
+    [approvedNewId],
+  )).rows[0];
+  assert.equal(approvedNew.authorization_membership_id, ids.membership);
+  assert.equal(approvedNew.authorization_role_id, ids.role);
+  assert.deepEqual(approvedNew.authorization_permissions_snapshot, ["VERIFY_EVIDENCE"]);
+  assert.ok(approvedNew.authorization_checked_at);
+  assert.equal(approvedNew.authorization_history_state, "APPROVED_HISTORY");
   // Two-session lock-order checks: revocation that wins the lock must be
   // observed by approval; approval that wins must commit before revocation.
   const concurrentClient = new Client({
