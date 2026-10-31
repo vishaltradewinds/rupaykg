@@ -294,3 +294,8 @@ On 2026-10-31, the workspace API was refactored to use one explicit active organ
 The previous pre-handler authorization hook and pool-level permission/geography queries were removed. Each route now performs its workspace permission check, optional geography authorization and all data reads on the same checked-out client. Evidence verification additionally locks the evidence row, verifies activity ownership and geography, checks the verifier's explicit permission, inserts the verification and updates evidence status in one transaction.
 
 For these routes, cross-organization multi-membership aggregation was replaced with an explicit active-organization context. Registry/settlement visibility remains subject to the existing issuer/current-owner and payer/payee business filters; those bilateral/ownership policies still need independent review before RLS policy design. Exact-head CI is pending.
+
+
+### Workspace validation correction
+
+The first workspace CI attempt caught a duplicate helper declaration left by the source transformation (`WorkspaceName` and `WORKSPACE_READ_PERMISSIONS`, plus a stale reference to the removed multi-organization helper). The obsolete duplicate block was removed in code commit `a4a2c1bac1db1210fc686b5986de9e4b852e63af`. The failed run is not treated as validation; a fresh exact-head CI run is required.
