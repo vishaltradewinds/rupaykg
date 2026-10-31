@@ -189,7 +189,7 @@ export async function registerMrvInstrumentRoutes(app: FastifyInstance, pool: Po
       || !Number.isFinite(uncertaintyValue) || uncertaintyValue < 0 || !uncertaintyUnit
       || !["STANDARD", "EXPANDED"].includes(uncertaintyExpression ?? "")
       || (uncertaintyExpression === "EXPANDED" && (coverageFactor === null || !Number.isFinite(coverageFactor) || coverageFactor <= 0))
-      || (coverageFactor !== null && (!Number.isFinite(coverageFactor) || coverageFactor <= 0))
+      || (coverageFactor !== null && (!Number.isFinite(coverageFactor) || coverageFactor <= 0)) || (uncertaintyExpression === "STANDARD" && coverageFactor !== null)
       || (confidenceLevelPercent !== null && (!Number.isFinite(confidenceLevelPercent) || confidenceLevelPercent <= 0 || confidenceLevelPercent >= 100))
       || !calibrationArtifactVersionId || !uuid(calibrationArtifactVersionId) || !calibrationArtifactSha256 || !/^[0-9a-f]{64}$/.test(calibrationArtifactSha256)
       || !decisionRuleId || decisionRuleId.length > 200) {
