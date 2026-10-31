@@ -299,3 +299,16 @@ For these routes, cross-organization multi-membership aggregation was replaced w
 ### Workspace validation correction
 
 The first workspace CI attempt caught a duplicate helper declaration left by the source transformation (`WorkspaceName` and `WORKSPACE_READ_PERMISSIONS`, plus a stale reference to the removed multi-organization helper). The obsolete duplicate block was removed in code commit `a4a2c1bac1db1210fc686b5986de9e4b852e63af`. The failed run is not treated as validation; a fresh exact-head CI run is required.
+
+
+## 21. Carbon, EPR assessment and ESG metric write tenant adoption
+
+The following three value workflows were moved to `withTenantTransaction(tenantDatabaseContextFromAuth(auth), ...)`:
+
+- `POST /api/v1/carbon/calculations`: requires a verified active organization; activity ownership must match it; permission, geography, evidence ownership/status/provenance, approved verification, methodology lookup and calculation insert execute on the same transaction client.
+- `POST /api/v1/epr/obligations/:obligationId/assess`: obligation lookup is scoped to the active organization; assessment permission, jurisdiction scope, eligible evidence/verification query and obligation update execute on the same transaction client.
+- `POST /api/v1/esg/reporting-periods/:periodId/metrics`: reporting period is scoped to the active organization; permission, evidence/geography checks, verification ownership check and metric insert execute on the same transaction client.
+
+No statutory methodology is newly approved by this change. Generic carbon arithmetic remains blocked for official BEE CCTS methodologies unless a reviewed method-specific adapter is available. This is a code refactor only; exact-head CI has not yet reported a run for commit `428da313d5a63391b55259725f3324b2ba1231a9`.
+
+BWG workspace and profile/reporting write routes are not yet migrated in this commit. They remain explicitly open for the next batch.
