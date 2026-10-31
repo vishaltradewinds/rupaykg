@@ -52,3 +52,30 @@ The first restored inbox migration's status check does not include `UNRESOLVED`;
 - Production database writes/DDL, merge, deployment, scheduler activation, and certification: **HOLD / OFF**.
 - TRL 9: **not established**; CI and source inspection do not demonstrate sustained operation in a real environment.
 
+
+
+## Follow-up migration source recovery
+
+On 2026-10-31, the historical `20261101_async_mirror_unresolved_crosswalk.sql` source was restored to draft PR #155 as a fifth source-only migration. Its current Git blob SHA `4f9776bc449025e795cb0d5c93e8bace9dea280b` exactly matches the historical blob. This is a source restoration for review and CI only; it has not been applied to staging, rehearsal, or production.
+
+This migration is required for the worker's `UNRESOLVED` write path because the 20261022/20261023 base inbox status constraints do not include that internal status. The migration must remain sequenced after the inbox and worker-lease migrations. Its presence in PR #155 does not authorize production replay or resolve the independent live schema-ledger drift.
+
+## Worker query dependency chain confirmed from source
+
+The worker's verified-crosswalk resolution query joins:
+- `government_jurisdiction_crosswalks` (introduced in 20261031),
+- `authoritative_source_snapshots` and its `authority_code` / `validation_status` / effective-date fields (introduced in 20261104, with authority code added in 20261105),
+- `source_snapshot_id` on crosswalk rows (added in 20261105),
+- `organization_has_explicit_geography_scope(uuid,uuid)` (introduced in 20261030),
+- `activities` (pre-existing core table).
+
+Therefore, restoring only 20261022–20261025 plus 20261101 is not enough to make the worker query executable. At minimum, the schema dependency path includes 20261030, 20261031, 20261104 and 20261105. The integrity of evidence binding, dual-control crosswalk approvals, approved-snapshot immutability and expiry/retirement controls also depends on the associated 20261102 and 20261107–20261109 migrations. Those later files must be reviewed as a coherent governance chain, not cherry-picked to make tests pass.
+
+The current feature branch has additional migrations and API/runtime changes well beyond this closure. Do not restore that branch's entire migration sequence into `main` as a shortcut. First reconstruct the exact base schema and dependencies, then decide which controls are appropriate for a focused, independently reviewed integration.
+
+## New PR #155 state
+
+- Fifth source file restored: `migrations/20261101_async_mirror_unresolved_crosswalk.sql`.
+- Historical blob equality: verified.
+- PR #155 remains draft; no merge or database application.
+- CI for the new head: pending / not yet observed at audit time.
