@@ -76,3 +76,10 @@ The migrations must be reviewed in order against the actual current-main schema.
 - Merge/deployment: HOLD.
 - Scheduler: OFF.
 - Production certification and TRL 9: not established.
+
+
+## Follow-on scope integrity migration (new in this PR, not historical recovery)
+
+`migrations/20261110_government_source_scope_geography_binding.sql` is a new Shakti hardening migration authored in this PR. It is not part of the 19-file historical blob recovery list above. It binds non-national source snapshot scope codes to versioned geography-directory records and verifies that crosswalk target geography is inside the approved source scope. Administrative scope uses verified LGD code bindings; OTHER is exact-geography only; INDIA is national. It freezes approved scope/geography/directory provenance and is enforced both at crosswalk write time and during worker resolution.
+
+This follow-on migration requires separate code review and fresh disposable PostgreSQL CI. It has not been applied to any live Neon branch.
