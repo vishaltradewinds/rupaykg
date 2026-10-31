@@ -1,4 +1,4 @@
-import type { Pool } from "pg";
+import type { Pool, PoolClient } from "pg";
 import { canonicalGovBridgeHash } from "./government-inbox-hash.js";
 
 export type GovernmentInboxValidation = {
@@ -159,6 +159,7 @@ export async function runGovernmentInboxWorker(
 
   const result = { claimed: claimed.rows.length, validated: 0, rejected: 0, unresolved: 0, retried: 0, quarantined: 0 };
   for (const row of claimed.rows) {
+    let sourceResolutionClient: PoolClient | null = null;
     try {
       let outcome: GovernmentInboxValidation;
       if (canonicalGovBridgeHash(row.payload) !== row.payload_sha256) {
@@ -188,29 +189,34 @@ export async function runGovernmentInboxWorker(
         }
       }
       if (outcome.valid) {
-        const mapped = await pool.query<{
-          id: string; organization_id: string; geography_id: string; activity_id: string | null; source_version: string;
+        // Resolve and persist the terminal decision in one SERIALIZABLE transaction.
+        // Row locks serialize retirement/revocation; SERIALIZABLE protects lookup predicates.
+        sourceResolutionClient = await pool.connect();
+        await sourceResolutionClient.query("BEGIN ISOLATION LEVEL SERIALIZABLE");
+        const mapped = await sourceResolutionClient.query<{
+          id: string; organization_id: string; geography_id: string; activity_id: string | null;
+          source_version: string; source_snapshot_id: string; snapshot_content_sha256: string;
+          snapshot_dataset_code: string; snapshot_scope_kind: string; snapshot_scope_code: string | null;
+          snapshot_scope_geography_id: string | null; snapshot_scope_directory_source_id: string | null;
         }>(
-          `select c.id,c.organization_id,c.geography_id,c.activity_id,c.source_version
-             from government_jurisdiction_crosswalks c
-             join authoritative_source_snapshots s on s.id=c.source_snapshot_id
-               and s.validation_status='APPROVED'
-               and s.authority_code=c.authority_code
-               and s.source_version=c.source_version
-               and (s.effective_from is null or $3::timestamptz::date >= s.effective_from)
-               and (s.effective_to is null or $3::timestamptz::date <= s.effective_to)
-            where c.authority_code=$1 and c.municipal_code=$2 and c.status='VERIFIED'
-              and c.effective_from <= $3::timestamptz
-              and (c.effective_to is null or c.effective_to > $3::timestamptz)
-              and c.source_version = $4
-              and organization_has_explicit_geography_scope(c.organization_id,c.geography_id)
-              and government_source_scope_covers_geography(s.id,c.geography_id)
-              and (c.activity_id is null or exists (
-                select 1 from activities a where a.id=c.activity_id
-                  and a.organization_id=c.organization_id and a.geography_id=c.geography_id
-              ))
-            order by c.effective_from desc
-            limit 2`,
+          [
+            "select c.id,c.organization_id,c.geography_id,c.activity_id,c.source_version, s.id as source_snapshot_id,",
+            "       s.content_sha256 as snapshot_content_sha256,s.dataset_code as snapshot_dataset_code,",
+            "       s.scope_kind as snapshot_scope_kind,s.scope_code as snapshot_scope_code,",
+            "       s.scope_geography_id as snapshot_scope_geography_id,s.scope_directory_source_id as snapshot_scope_directory_source_id",
+            "  from government_jurisdiction_crosswalks c",
+            "  join authoritative_source_snapshots s on s.id=c.source_snapshot_id",
+            "   and s.validation_status='APPROVED' and s.authority_code=c.authority_code and s.source_version=c.source_version",
+            "   and (s.effective_from is null or $3::timestamptz::date >= s.effective_from)",
+            "   and (s.effective_to is null or $3::timestamptz::date <= s.effective_to)",
+            " where c.authority_code=$1 and c.municipal_code=$2 and c.status='VERIFIED'",
+            "   and c.effective_from <= $3::timestamptz and (c.effective_to is null or c.effective_to > $3::timestamptz)",
+            "   and c.source_version=$4",
+            "   and organization_has_explicit_geography_scope(c.organization_id,c.geography_id)",
+            "   and government_source_scope_covers_geography(s.id,c.geography_id)",
+            "   and (c.activity_id is null or exists (select 1 from activities a where a.id=c.activity_id and a.organization_id=c.organization_id and a.geography_id=c.geography_id))",
+            " order by c.effective_from desc limit 2 for share of c,s"
+          ].join("\n"),
           [row.authority_code, row.municipal_code, row.sync_window_timestamp, (row.payload as { batchMetadata?: { sourceVersion?: unknown } })?.batchMetadata?.sourceVersion],
         );
         if (mapped.rows.length !== 1) {
@@ -241,6 +247,7 @@ export async function runGovernmentInboxWorker(
                 geographyId: mapping.geography_id,
                 activityId: mapping.activity_id,
                 sourceVersion: mapping.source_version,
+                sourceSnapshot: { id: mapping.source_snapshot_id, contentSha256: mapping.snapshot_content_sha256, datasetCode: mapping.snapshot_dataset_code, scopeKind: mapping.snapshot_scope_kind, scopeCode: mapping.snapshot_scope_code, scopeGeographyId: mapping.snapshot_scope_geography_id, scopeDirectorySourceId: mapping.snapshot_scope_directory_source_id },
               },
               domainBinding: "NOT_PERFORMED",
               officialAcceptance: false,
@@ -250,8 +257,9 @@ export async function runGovernmentInboxWorker(
           };
         }
       }
+      const terminalDb = sourceResolutionClient ?? pool;
       if (outcome.valid) {
-        const updated = await pool.query(
+        const updated = await terminalDb.query(
           `update async_mirror_inbox
               set status='VALIDATED', processed_at=now(), lease_token=null, lease_until=null,
                   next_attempt_at=null, last_error_code=null, validation_summary=$3::jsonb
@@ -260,7 +268,7 @@ export async function runGovernmentInboxWorker(
         );
         if ((updated.rowCount ?? 0) === 1) result.validated += 1;
       } else if (outcome.state === "UNRESOLVED") {
-        const updated = await pool.query(
+        const updated = await terminalDb.query(
           `update async_mirror_inbox
               set status='UNRESOLVED', processed_at=now(), lease_token=null, lease_until=null,
                   next_attempt_at=null, last_error_code=$3, validation_summary=$4::jsonb
@@ -270,7 +278,7 @@ export async function runGovernmentInboxWorker(
         if ((updated.rowCount ?? 0) === 1) result.unresolved += 1;
       } else {
         const code = (outcome.errorCode ?? "PAYLOAD_VALIDATION_REJECTED").replace(/[^A-Z0-9_.-]/gi, "_").slice(0, 100);
-        const updated = await pool.query(
+        const updated = await terminalDb.query(
           `update async_mirror_inbox
               set status='REJECTED', processed_at=now(), lease_token=null, lease_until=null,
                   next_attempt_at=null, last_error_code=$3, validation_summary=$4::jsonb
@@ -279,7 +287,15 @@ export async function runGovernmentInboxWorker(
         );
         if ((updated.rowCount ?? 0) === 1) result.rejected += 1;
       }
+      if (sourceResolutionClient) {
+        await sourceResolutionClient.query("COMMIT");
+        sourceResolutionClient.release();
+        sourceResolutionClient = null;
+      }
     } catch (error) {
+      if (sourceResolutionClient) {
+        try { await sourceResolutionClient.query("ROLLBACK"); } finally { sourceResolutionClient.release(); sourceResolutionClient = null; }
+      }
       const exhausted = row.attempts >= maxAttempts;
       const code = error instanceof Error ? error.name.replace(/[^A-Z0-9_.-]/gi, "_").slice(0, 100) : "UNKNOWN_VALIDATION_ERROR";
       const delaySeconds = Math.min(60 * (2 ** Math.max(0, row.attempts - 1)), 3600);
