@@ -72,7 +72,7 @@ No production deployment, merge, secret update, role creation, grant, migration,
 
 ## Render workspace inventory follow-up
 
-A read-only service inventory of workspace `tea-dakh7k142hec73aj2kr0` returned seven services: six web services and one static site. No Render cron-job service was present in that returned inventory. This narrows the Render-managed scheduler risk within this workspace, but does not rule out:
+A read-only service inventory of workspace `tea-dakh7k142hec73aj2kr0` returned seven services: five web services and two static sites. No Render cron-job service was present in that returned inventory. This narrows the Render-managed scheduler risk within this workspace, but does not rule out:
 - a worker process embedded in another web service;
 - an external scheduler, GitHub Actions workflow, Neon function, or third-party host;
 - another Render workspace/account not represented by this workspace query.
