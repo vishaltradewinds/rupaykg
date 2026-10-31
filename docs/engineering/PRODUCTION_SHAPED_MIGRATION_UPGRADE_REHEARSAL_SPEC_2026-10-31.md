@@ -10,15 +10,15 @@ Prove that the PR #157 date-prefixed migration chain can upgrade a PostgreSQL sc
 
 1. Production's already-applied migration version `096` remains identified as `096_verification_authorization_provenance.sql`. Never reuse `096` for EPR immutability or any other SQL.
 2. Do not insert, delete, rename, or rewrite rows in the production migration ledger during reconciliation.
-3. Do not recreate intentionally absent migration `023_lifecycle_state_guards.sql` merely to make environments look alike.
+3. Preserve migration `023_lifecycle_state_guards.sql`; it is present in the production ledger and is part of the 92-row production baseline. Never omit it from the reconstruction.
 4. The production verifier's authorization semantics must remain intact: activity/evidence binding, organization lookup, self-verification prevention, verified membership and identity, active identity, permission aliases, and immutable authorization snapshot fields.
 5. The rehearsal database must be isolated and disposable. No Neon production/staging/rehearsal branch is a test target.
 
 ## Baseline construction
 
-Build a schema-only PostgreSQL 16 baseline from the exact ordered set of migrations recorded as applied in the production ledger as of the audit snapshot (92 rows). The fixture must carry an explicit manifest containing, for every row, the exact version, filename identity, checksum if available, and applied order/time if available.
+Build a schema-only PostgreSQL 16 baseline from the exact ordered set of migrations recorded as applied in the production ledger as of the audit snapshot (92 rows): versions `001`–`087`, dated migrations `20261018`–`20261021`, then production-only version `096`. The live ledger confirms migration `023` is present. A machine-readable manifest records each version, filename and applied timestamp. The migration runner must preserve this chronology: numbered legacy migrations first, `20261018`–`20261021` next, historical `096` next, and the proposed `20261022+` chain after it.
 
-The legacy production `096_verification_authorization_provenance.sql` source must be sourced from the recovered immutable Git blob recorded in the audit (blob SHA `258b1f4534efbf915688f78aa84d4ec24a47cbc0`), not from a same-number migration in a candidate branch. If source/checksum identity cannot be verified, stop the rehearsal and report the missing artifact; do not guess or substitute.
+The production `096_verification_authorization_provenance.sql` source has been restored byte-for-byte from immutable Git blob `258b1f4534efbf915688f78aa84d4ec24a47cbc0`; the resulting repository blob SHA must remain identical. It is now part of the candidate branch solely to reconstruct the observed production chronology and must never be repurposed.
 
 Seed only the minimum synthetic rows required to exercise authorization and worker upgrade behavior. Never copy production personal, organizational, or evidence data.
 
@@ -52,3 +52,13 @@ Use the existing GitHub Actions PostgreSQL 16 service. Add a separate job or tes
 ## Exit criteria
 
 PASS only when all invariants and tests above pass on the exact candidate head, with an attached machine-readable report. Until then PR #157 remains engineering-only; do not merge/apply its migrations to any Neon environment.
+
+
+## Implementation update — 2026-10-31
+
+- The exact production ledger order was queried read-only from Neon. It contains 92 rows: `001`–`087`, `20261018`–`20261021`, `096`.
+- Migration `023_lifecycle_state_guards.sql` is present in production; the prior claim that it was absent was incorrect and has been corrected here.
+- The exact recovered `096` source is restored to `migrations/096_verification_authorization_provenance.sql`. Its Git blob SHA is `258b1f4534efbf915688f78aa84d4ec24a47cbc0`.
+- The migration runner now uses an explicit chronology comparator so production-only `096` runs after `20261021` and before the proposed `20261022+` chain.
+- Unit tests cover that ordering. A PostgreSQL acceptance test checks ledger order, migration 023 presence, migration 096 identity, all four authorization provenance columns, and verifier function guard markers.
+- This is still a disposable CI reconstruction, not a clone of production data or an authorized live migration. CI must pass on the exact head before the rehearsal can be called successful.
