@@ -30,6 +30,15 @@
 - Render RupayKg service is on main, live deployment commit `862512c8c904cef0f604df0350f02672318953af`; runtime DB principal remains NOT ASSESSED.
 - Working branch diverged from main by 300 ahead / 1 behind; PR #175 OPEN/DRAFT and unmerged. Production HOLD; no production writes, migration, deployment or worker activation.
 
+
+## CI and release-governance follow-up — 2026-10-31
+- BWG workspace authorization code commit `825d430a4b8140b7e3072a536508632db8547359`: CI run #3955 / ID `41218341622` SUCCESS on exact SHA.
+- BWG permission unit-test commit `824acb8d0c3866651d9038d369565dc7073a62b4`: CI run #3956 / ID `41218359754` SUCCESS on exact SHA.
+- Current branch HEAD before this pointer refresh: `d8f44be89f35fc0f7d66daaa06f754c9b118172a`; exact-head CI run #3959 / ID `41218482666` was IN_PROGRESS at last poll. Re-poll; do not infer success from the two prior runs.
+- Older matrix CI run #3957 / ID `41218377380` on `d8f13a9abcd7618c4525958ad0972ef45341256c` remains IN_PROGRESS at last poll and is not the latest code/test evidence.
+- Fresh GitHub/Neon branch-protection and DB-role findings were added as a comment to Shakti whole-platform audit issue #112 (comment ID `6545902109`). GitHub main protection and Neon main protected flag are both disabled; production RLS remains 0/67; runtime principal is NOT ASSESSED.
+- Exact code and test changes are in the PR branch only; Render live remains on main commit `862512c8c904cef0f604df0350f02672318953af`. No deployment or production database changes.
+
 ## Repository-wide readiness audit (2026-10-31)
 - Audit report: [RupayKg repository-wide readiness and execution audit](./RUPAYKG_REPOSITORY_READINESS_AND_EXECUTION_AUDIT_2026-10-31.md).
 - Immutable checkpoint: [Repository readiness and execution audit](./checkpoints/2026-10-31-repository-readiness-execution-audit.md).
