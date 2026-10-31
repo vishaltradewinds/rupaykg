@@ -213,19 +213,19 @@ export async function runGovernmentInboxWorker(
   for (const row of claimed.rows) {
     let sourceResolutionClient: PoolClient | null = null;
     let terminalCount: "validated" | "unresolved" | "rejected" | null = null;
+    const pauseAndRefreshLease = async (): Promise<void> => {
+      pausedLeases.add(row.id);
+      while (renewalInFlight) await new Promise((resolve) => setTimeout(resolve, 10));
+      const refreshed = await pool.query(
+        `update async_mirror_inbox
+            set lease_until=now() + ($3 * interval '1 second')
+          where id=$1 and status='PROCESSING' and lease_token=$2 and lease_until > now()
+          returning id`,
+        [row.id, row.lease_token, leaseSeconds],
+      );
+      if ((refreshed.rowCount ?? 0) !== 1) throw new Error("LEASE_RENEWAL_FENCE_LOST");
+    };
     try {
-      const pauseAndRefreshLease = async (): Promise<void> => {
-        pausedLeases.add(row.id);
-        while (renewalInFlight) await new Promise((resolve) => setTimeout(resolve, 10));
-        const refreshed = await pool.query(
-          `update async_mirror_inbox
-              set lease_until=now() + ($3 * interval '1 second')
-            where id=$1 and status='PROCESSING' and lease_token=$2 and lease_until > now()
-            returning id`,
-          [row.id, row.lease_token, leaseSeconds],
-        );
-        if ((refreshed.rowCount ?? 0) !== 1) throw new Error("LEASE_RENEWAL_FENCE_LOST");
-      };
       let outcome: GovernmentInboxValidation;
       if (canonicalGovBridgeHash(row.payload) !== row.payload_sha256) {
         outcome = { valid: false, errorCode: "BATCH_PAYLOAD_HASH_MISMATCH" };
