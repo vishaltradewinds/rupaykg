@@ -242,7 +242,7 @@ test("BWG authenticated HTTP authorization fails closed against disposable Postg
     ssl: process.env.DATABASE_SSL === "false" ? undefined : { rejectUnauthorized: true },
     max: 4,
   });
-  const fixtures: Array<{ identityId: string; organizationId: string; geographyId: string; tokenHash: string; extraGeographyIds?: string[]; periodIds?: string[]; schemeIds?: string[] }> = [];
+  const fixtures: Array<{ identityId: string; organizationId: string; geographyId: string; tokenHash: string; extraGeographyIds?: string[]; periodIds?: string[]; schemeIds?: string[]; activityIds?: string[]; evidenceIds?: string[]; verificationIds?: string[]; verifierIdentityIds?: string[] }> = [];
   const makeFixture = async (permissions: string[], membershipStatus = "VERIFIED") => {
     const identityId = randomUUID();
     const organizationId = randomUUID();
@@ -258,9 +258,34 @@ test("BWG authenticated HTTP authorization fails closed against disposable Postg
     await pool.query("insert into organization_memberships(identity_id, organization_id, role_id, status) values ($1,$2,$3,$4)", [identityId, organizationId, roleId, membershipStatus]);
     await pool.query("insert into geography(id, kind, code, name, source, source_version) values ($1,'CLUSTER',$2,$3,'RupayKG disposable BWG HTTP fixture','v1')", [geographyId, "BWG-HTTP-" + suffix, "BWG HTTP geography " + suffix]);
     await pool.query("insert into identity_sessions(identity_id, expires_at, token_hash, request_context) values ($1, now() + interval '10 minutes', $2, $3::jsonb)", [identityId, tokenHash, JSON.stringify({ purpose: "disposable-bwg-http-acceptance" })]);
-    const fixture = { identityId, organizationId, geographyId, tokenHash, token, extraGeographyIds: [] as string[], periodIds: [] as string[], schemeIds: [] as string[] };
+    const fixture = { identityId, organizationId, geographyId, tokenHash, token, extraGeographyIds: [] as string[], periodIds: [] as string[], schemeIds: [] as string[], activityIds: [] as string[], evidenceIds: [] as string[], verificationIds: [] as string[], verifierIdentityIds: [] as string[] };
     fixtures.push(fixture);
     return fixture;
+  };
+
+  const seedEvidence = async (fixture: (typeof fixtures)[number], status: "CAPTURED" | "VERIFIED") => {
+    await pool.query("insert into organization_geography_scopes(organization_id, geography_id, status) values ($1,$2,'VERIFIED') on conflict (organization_id,geography_id) do update set status='VERIFIED'", [fixture.organizationId, fixture.geographyId]);
+    const activityId = randomUUID();
+    await pool.query("insert into activities(id,organization_id,actor_identity_id,geography_id,activity_type) values ($1,$2,$3,$4,'BWG_WASTE_GENERATION')", [activityId, fixture.organizationId, fixture.identityId, fixture.geographyId]);
+    const evidenceId = randomUUID();
+    await pool.query("insert into evidence(id,activity_id,evidence_type,status,captured_at,content_hash,captured_by_identity_id) values ($1,$2,'DISPOSABLE_ACCEPTANCE_EVIDENCE',$3,now(),$4,$5)", [evidenceId, activityId, status, createHash("sha256").update(randomUUID()).digest("hex"), fixture.identityId]);
+    fixture.activityIds?.push(activityId);
+    fixture.evidenceIds?.push(evidenceId);
+    return { activityId, evidenceId };
+  };
+
+  const approveEvidence = async (fixture: (typeof fixtures)[number], evidenceId: string) => {
+    const verifierIdentityId = randomUUID();
+    const verifierRoleId = randomUUID();
+    const verificationId = randomUUID();
+    const suffix = randomUUID().replaceAll("-", "");
+    await pool.query("insert into identities(id,display_name,status) values ($1,$2,'VERIFIED')", [verifierIdentityId, "BWG HTTP verifier " + suffix]);
+    await pool.query("insert into roles(id,organization_id,name,permissions,geography_scope) values ($1,$2,$3,$4::jsonb,'[]'::jsonb)", [verifierRoleId, fixture.organizationId, "BWG HTTP verifier " + suffix, JSON.stringify(["VERIFY_EVIDENCE"])]);
+    await pool.query("insert into organization_memberships(identity_id,organization_id,role_id,status) values ($1,$2,$3,'VERIFIED')", [verifierIdentityId, fixture.organizationId, verifierRoleId]);
+    await pool.query("insert into verifications(id,evidence_id,verifier_identity_id,decision,scope,rationale) values ($1,$2,$3,'APPROVED','BWG_REPORT_ACCEPTANCE','Independent disposable CI acceptance verifier')", [verificationId, evidenceId, verifierIdentityId]);
+    fixture.verifierIdentityIds?.push(verifierIdentityId);
+    fixture.verificationIds?.push(verificationId);
+    return verificationId;
   };
 
   const app = Fastify({ logger: false });
@@ -325,6 +350,40 @@ test("BWG authenticated HTTP authorization fails closed against disposable Postg
     assert.equal(wasteCreated.statusCode, 201, wasteCreated.body);
     assert.equal(wasteCreated.json().wasteReport.status, "PENDING");
 
+    const validEvidence = await seedEvidence(wasteWriter, "VERIFIED");
+    const validVerificationId = await approveEvidence(wasteWriter, validEvidence.evidenceId);
+    const mismatchedEvidence = await seedEvidence(wasteWriter, "VERIFIED");
+    const unverifiedEvidence = await seedEvidence(wasteWriter, "CAPTURED");
+
+    const unverifiedWaste = await app.inject({
+      method: "POST",
+      url: "/api/v1/bwg/reporting-periods/" + wastePeriodId + "/waste",
+      headers: { authorization: "Bearer " + wasteWriter.token, "x-rupaykg-organization-id": wasteWriter.organizationId },
+      payload: { wasteStream: "DRY", unit: "KG", generatedQuantity: 10, segregatedQuantity: 9, channelizedQuantity: 8, processedQuantity: 7, evidenceId: unverifiedEvidence.evidenceId },
+    });
+    assert.equal(unverifiedWaste.statusCode, 409, unverifiedWaste.body);
+    assert.equal(unverifiedWaste.json().code, "EVIDENCE_NOT_VERIFIED");
+
+    const mismatchedWaste = await app.inject({
+      method: "POST",
+      url: "/api/v1/bwg/reporting-periods/" + wastePeriodId + "/waste",
+      headers: { authorization: "Bearer " + wasteWriter.token, "x-rupaykg-organization-id": wasteWriter.organizationId },
+      payload: { wasteStream: "DRY", unit: "KG", generatedQuantity: 10, segregatedQuantity: 9, channelizedQuantity: 8, processedQuantity: 7, evidenceId: mismatchedEvidence.evidenceId, verificationId: validVerificationId },
+    });
+    assert.equal(mismatchedWaste.statusCode, 409, mismatchedWaste.body);
+    assert.equal(mismatchedWaste.json().code, "VERIFICATION_INVALID");
+
+    const verifiedWaste = await app.inject({
+      method: "POST",
+      url: "/api/v1/bwg/reporting-periods/" + wastePeriodId + "/waste",
+      headers: { authorization: "Bearer " + wasteWriter.token, "x-rupaykg-organization-id": wasteWriter.organizationId },
+      payload: { wasteStream: "DRY", unit: "KG", generatedQuantity: 10, segregatedQuantity: 9, channelizedQuantity: 8, processedQuantity: 7, evidenceId: validEvidence.evidenceId, verificationId: validVerificationId },
+    });
+    assert.equal(verifiedWaste.statusCode, 201, verifiedWaste.body);
+    assert.equal(verifiedWaste.json().wasteReport.status, "VERIFIED");
+    assert.equal(verifiedWaste.json().wasteReport.evidence_id, validEvidence.evidenceId);
+    assert.equal(verifiedWaste.json().wasteReport.verification_id, validVerificationId);
+
     const eprWriter = await makeFixture(["epr:manage"]);
     await pool.query("insert into bwg_profiles (organization_id, applicability_status, status) values ($1,'APPLICABLE','VERIFIED')", [eprWriter.organizationId]);
     const eprPeriod = await pool.query("insert into bwg_reporting_periods (organization_id,period_start,period_end,reporting_basis) values ($1,'2026-03-01','2026-03-31','MONTHLY') returning id", [eprWriter.organizationId]);
@@ -343,6 +402,16 @@ test("BWG authenticated HTTP authorization fails closed against disposable Postg
     assert.equal(eprCreated.json().externalSubmission, "NOT_SUBMITTED");
     assert.equal(eprCreated.json().eprReport.status, "PENDING");
 
+    const unverifiedEprEvidence = await seedEvidence(eprWriter, "CAPTURED");
+    const unverifiedEpr = await app.inject({
+      method: "POST",
+      url: "/api/v1/bwg/reporting-periods/" + eprPeriodId + "/epr",
+      headers: { authorization: "Bearer " + eprWriter.token, "x-rupaykg-organization-id": eprWriter.organizationId },
+      payload: { schemeId, categoryCode: "PLASTIC", obligatedQuantity: 10, fulfilledQuantity: 8, evidenceId: unverifiedEprEvidence.evidenceId },
+    });
+    assert.equal(unverifiedEpr.statusCode, 409, unverifiedEpr.body);
+    assert.equal(unverifiedEpr.json().code, "EVIDENCE_NOT_VERIFIED");
+
     const esgWriter = await makeFixture(["esg:write"]);
     await pool.query("insert into bwg_profiles (organization_id, applicability_status, status) values ($1,'APPLICABLE','VERIFIED')", [esgWriter.organizationId]);
     const esgPeriod = await pool.query("insert into bwg_reporting_periods (organization_id,period_start,period_end,reporting_basis) values ($1,'2026-04-01','2026-04-30','MONTHLY') returning id", [esgWriter.organizationId]);
@@ -356,6 +425,16 @@ test("BWG authenticated HTTP authorization fails closed against disposable Postg
     });
     assert.equal(esgCreated.statusCode, 201, esgCreated.body);
     assert.equal(esgCreated.json().esgReport.status, "PENDING");
+
+    const unverifiedEsgEvidence = await seedEvidence(esgWriter, "CAPTURED");
+    const unverifiedEsg = await app.inject({
+      method: "POST",
+      url: "/api/v1/bwg/reporting-periods/" + esgPeriodId + "/esg",
+      headers: { authorization: "Bearer " + esgWriter.token, "x-rupaykg-organization-id": esgWriter.organizationId },
+      payload: { metricCode: "WATER", scope: "SCOPE_1", unit: "KL", value: 10, evidenceId: unverifiedEsgEvidence.evidenceId },
+    });
+    assert.equal(unverifiedEsg.statusCode, 409, unverifiedEsg.body);
+    assert.equal(unverifiedEsg.json().code, "EVIDENCE_NOT_VERIFIED");
 
 
     assert.equal(workspaceDenied.statusCode, 403, workspaceDenied.body);
@@ -442,7 +521,14 @@ test("BWG authenticated HTTP authorization fails closed against disposable Postg
         await pool.query("delete from bwg_esg_reports where reporting_period_id=$1", [periodId]);
         await pool.query("delete from bwg_reporting_periods where id=$1", [periodId]);
       }
+      for (const verificationId of fixture.verificationIds ?? []) await pool.query("delete from verifications where id=$1", [verificationId]);
+      for (const evidenceId of fixture.evidenceIds ?? []) await pool.query("delete from evidence where id=$1", [evidenceId]);
+      for (const activityId of fixture.activityIds ?? []) await pool.query("delete from activities where id=$1", [activityId]);
       for (const schemeId of fixture.schemeIds ?? []) await pool.query("delete from epr_schemes where id=$1", [schemeId]);
+      for (const verifierIdentityId of fixture.verifierIdentityIds ?? []) {
+        await pool.query("delete from organization_memberships where identity_id=$1", [verifierIdentityId]);
+        await pool.query("delete from identities where id=$1", [verifierIdentityId]);
+      }
       await pool.query("delete from bwg_profiles where organization_id=$1", [fixture.organizationId]);
       for (const geographyId of [fixture.geographyId, ...(fixture.extraGeographyIds ?? [])]) await pool.query("delete from geography where id=$1", [geographyId]);
       await pool.query("delete from organizations where id=$1", [fixture.organizationId]);
