@@ -5,11 +5,11 @@
 ## Current repository state — 2026-10-31
 - Repository: `vishaltradewinds/rupaykg`.
 - Working branch: `shakti/atomic-inbox-claim-2026-10-31`.
-- Latest implementation commit: `ce270eb9068172da677456be57bdcdb93c04d346` (BWG authenticated PostgreSQL HTTP acceptance; positive profile intake path and geography-scope fixture correction). Latest session log commit: `f8e3277a40f4d2ddcf2a57199eb86d64669aea2d`. Verify exact live HEAD and CI before further code changes.
+- Latest implementation commit: `3a94f5304e0365779aeda5132eb94be3b841287b` (BWG authenticated PostgreSQL HTTP acceptance; positive profile intake path, geography-scope fixture and TypeScript fixture typing corrections). Latest session log commit: `82673c480b09ea5f64a37954561b07ed541f2511`. Verify exact live HEAD and CI before further code changes.
 - Main base: `862512c8c904cef0f604df0350f02672318953af`.
 - PR #175: OPEN/DRAFT, unmerged; do not merge or rebase without dependency, independent review, migration and security gates. PR URL: https://github.com/vishaltradewinds/rupaykg/pull/175.
 - Branch divergence freshly measured at 16:31 UTC: 320 ahead / 1 behind main.
-- Latest checkpoint: [BWG authenticated PostgreSQL HTTP acceptance](./checkpoints/2026-10-31-bwg-authenticated-postgres-http-acceptance.md). Latest execution log: [BWG CI corrections and positive acceptance path](./session-logs/2026-10-31-1644-utc-bwg-ci-corrections.md). Previous checkpoint: [Autonomous Neon security and BWG acceptance](./checkpoints/2026-10-31-autonomous-neon-security-bwg-acceptance.md).
+- Latest checkpoint: [BWG authenticated PostgreSQL HTTP acceptance](./checkpoints/2026-10-31-bwg-authenticated-postgres-http-acceptance.md). Latest execution log: [BWG test fixture type correction](./session-logs/2026-10-31-1647-utc-bwg-test-type-correction.md). Previous checkpoint: [Autonomous Neon security and BWG acceptance](./checkpoints/2026-10-31-autonomous-neon-security-bwg-acceptance.md).
 - Latest preflight: [Autonomous execution preflight — 16:33 UTC](./session-logs/2026-10-31-1633-utc-autonomous-preflight.md).
 
 ## Latest completed work
@@ -79,7 +79,7 @@ Generator must be first-class and distinct from BWG. A complete general generato
 - TRL 9 is NOT ESTABLISHED. Do not claim national production readiness.
 
 ## Ordered next execution
-1. Verify CI #3986 / run `41220915961` on code commit `ce270eb9068172da677456be57bdcdb93c04d346`. The DB-backed HTTP integration test covers missing `reports:read`/profile permission, unverified membership, cross-organization payload mismatch, geography denial, no-write-on-denial and a positive profile-intake path that remains REVIEW_REQUIRED/UNKNOWN. Intermediate CI #3978/#3982 failed at typecheck; fixes and fixture corrections are in the latest code SHA.
+1. Verify CI #3989 / run `41221030798` on code commit `3a94f5304e0365779aeda5132eb94be3b841287b`. The DB-backed HTTP integration test covers missing `reports:read`/profile permission, unverified membership, cross-organization payload mismatch, geography denial, no-write-on-denial and positive profile intake remaining REVIEW_REQUIRED/UNKNOWN. Intermediate #3978/#3982/#3986 failed at typecheck on earlier SHAs; import and fixture typing fixes are recorded in session logs.
 2. Add EPR route-level quantity and exact database-constraint mapping tests.
 3. Trace statutory BWG assessment/profile authority and design a dual-control, evidence-backed transition; never auto-promote.
 4. Continue the all-route UI/API/schema/permission/report/test crosswalk and generator-to-processor lifecycle.
