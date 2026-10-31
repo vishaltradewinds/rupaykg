@@ -295,3 +295,14 @@ A fresh direct catalog comparison after the 096 rehearsal reconfirmed an additio
 The rehearsal's constraint/comment match the schema effect of candidate migration `20261101_async_mirror_unresolved_crosswalk.sql` in PR #157, but the ledger has no corresponding row. Classify this as **schema-effect match / ledger provenance unresolved**. Do not replay the migration or fabricate a ledger row. Preserve the rehearsal state until an approved evidence-backed reconciliation decision.
 
 The 096 rehearsal changed only verifier provenance columns/function/trigger on this branch; the unledgered UNRESOLVED constraint and comment remain as found. The branch compute has been suspended.
+
+
+## Final CI and handoff status — 2026-10-31
+
+- PR #157 exact head `b3655259ce0f9d650477c34fa07a2a61d4a72f75`: CI #41190853951 SUCCESS across production-baseline reconstruction, upgrade/idempotency, disposable PostgreSQL acceptance and container build. PR remains draft because of independent review, live drift, tenant-isolation and verifier snapshot immutability gates.
+- PR #140 exact head `f7e4ff12be336058b99bc19a8b729cdd3b636707`: CI #41192000600 SUCCESS, including the disposable authorization-provenance regression/forward-fix test, typecheck, build, browser smoke, DB acceptance and container build. This validates an unnumbered proposal fixture only; no production migration is approved.
+- PR #159 prior exact head `e11ccf5c7c6a44c29c5109b7cf4bdfa125f4e30d`: CI #41191756563 SUCCESS. Later audit/log commits are documentation-only; no exact-head CI run was returned for the latest docs commit `374097a317455afc154b631ce8a03445b502da63` at handoff time.
+- Issue #123 and PR #157/PR #140 comments were updated with the final security, rehearsal and release-gate findings.
+
+### Resume pointer
+Start the next session by reading this audit and `docs/engineering/EXECUTION_LOG.md`, then inspect the latest PR #157, PR #140 and CI heads. Do not restart repository discovery. Do not merge/deploy or change production/staging. First implementation task is to convert the reviewed verifier snapshot-preservation semantics into a separate forward-only migration and integrate it into the production-shaped migration acceptance only after independent review.
