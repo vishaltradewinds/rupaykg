@@ -98,3 +98,19 @@ Required:
 3. Add concurrency and least-privilege disposable tests.
 4. Reconcile migration chronology before assigning any migration number.
 5. Only then draft a separately numbered forward-only migration and production-shaped CI acceptance.
+
+
+## Supplemental review update — 2026-10-31
+
+The follow-up schema/API inspection and revised disposable proposal narrow and address parts of the earlier findings:
+
+- Production currently has zero verification rows, zero evidence-artifact review rows, and zero audit-event rows. Therefore no current production row needs a provenance backfill at this observation time. The migration must still classify any rows present when eventually applied.
+- The evidence-vault API already treats VERIFIED/REJECTED evidence as terminal and creates a new evidence row plus a new verification record for each uploaded artifact version in the same series. It writes `evidence_artifact_reviews` but not `audit_events`. Explicit prior-verification correction lineage and independently verifiable audit-event semantics remain open.
+- The disposable proposal now adds `authorization_history_state`: current legacy APPROVED rows are marked APPROVED_HISTORY, current REJECTED rows REJECTED_TERMINAL, and other rows NEVER_APPROVED. It does not invent missing timestamps or permission snapshots. This intentionally fails closed by prohibiting in-place reapproval of legacy rejected rows.
+- The authorization query now requests `FOR SHARE OF m, r, i`, and disposable two-session tests cover membership revocation, role permission changes, and identity suspension racing with approval. These tests are pending exact-head CI; they are not yet proven.
+- The live production function is SECURITY INVOKER, has no pinned function search_path, and remains unqualified. Search-path/schema qualification, actual runtime role, grants/RLS, and least-privilege acceptance remain release blockers.
+- The inspection role named `rupaykg` reports BYPASSRLS/CREATEROLE/CREATEDB privileges, but the Render runtime role has not been identified. Do not assume they are the same.
+
+Current proposal head at this update: `93df55631072428e1523ab2128642bc5f3bb83ce`.
+
+This update does not approve a numbered migration. PR #140 and PR #157 remain draft/unmerged; production and staging remain untouched.
