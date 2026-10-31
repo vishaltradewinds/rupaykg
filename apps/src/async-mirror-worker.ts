@@ -160,6 +160,7 @@ export async function runGovernmentInboxWorker(
   const result = { claimed: claimed.rows.length, validated: 0, rejected: 0, unresolved: 0, retried: 0, quarantined: 0 };
   for (const row of claimed.rows) {
     let sourceResolutionClient: PoolClient | null = null;
+    let terminalCount: "validated" | "unresolved" | "rejected" | null = null;
     try {
       let outcome: GovernmentInboxValidation;
       if (canonicalGovBridgeHash(row.payload) !== row.payload_sha256) {
@@ -271,7 +272,7 @@ export async function runGovernmentInboxWorker(
             where id=$1 and status='PROCESSING' and lease_token=$2 and lease_until > now()`,
           [row.id, row.lease_token, JSON.stringify(outcome.summary ?? {})],
         );
-        if ((updated.rowCount ?? 0) === 1) result.validated += 1;
+        if ((updated.rowCount ?? 0) === 1) terminalCount = "validated";
       } else if (outcome.state === "UNRESOLVED") {
         const updated = await terminalDb.query(
           `update async_mirror_inbox
@@ -280,7 +281,7 @@ export async function runGovernmentInboxWorker(
             where id=$1 and status='PROCESSING' and lease_token=$2 and lease_until > now()`,
           [row.id, row.lease_token, outcome.errorCode ?? "GOVERNMENT_CROSSWALK_UNRESOLVED", JSON.stringify(outcome.summary ?? {})],
         );
-        if ((updated.rowCount ?? 0) === 1) result.unresolved += 1;
+        if ((updated.rowCount ?? 0) === 1) terminalCount = "unresolved";
       } else {
         const code = (outcome.errorCode ?? "PAYLOAD_VALIDATION_REJECTED").replace(/[^A-Z0-9_.-]/gi, "_").slice(0, 100);
         const updated = await terminalDb.query(
@@ -290,13 +291,16 @@ export async function runGovernmentInboxWorker(
             where id=$1 and status='PROCESSING' and lease_token=$2 and lease_until > now()`,
           [row.id, row.lease_token, code, JSON.stringify(outcome.summary ?? {})],
         );
-        if ((updated.rowCount ?? 0) === 1) result.rejected += 1;
+        if ((updated.rowCount ?? 0) === 1) terminalCount = "rejected";
       }
       if (sourceResolutionClient) {
         await sourceResolutionClient.query("COMMIT");
         sourceResolutionClient.release();
         sourceResolutionClient = null;
       }
+      if (terminalCount === "validated") result.validated += 1;
+      else if (terminalCount === "unresolved") result.unresolved += 1;
+      else if (terminalCount === "rejected") result.rejected += 1;
     } catch (error) {
       if (sourceResolutionClient) {
         try { await sourceResolutionClient.query("ROLLBACK"); } finally { sourceResolutionClient.release(); sourceResolutionClient = null; }
