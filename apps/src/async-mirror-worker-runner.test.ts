@@ -192,6 +192,8 @@ const leastPrivilegePrincipal = {
   inherits_privileges: false,
   has_role_memberships: false,
   owns_worker_tables: false,
+  owns_public_schema: false,
+  has_public_schema_create: false,
   inbox_select: true,
   inbox_update: true,
   crosswalk_select: true,
@@ -230,6 +232,8 @@ test("worker principal attestation rejects elevated attributes, memberships, own
     bypasses_rls: true,
     has_role_memberships: true,
     owns_worker_tables: true,
+    owns_public_schema: true,
+    has_public_schema_create: true,
     event_table_insert: true,
   };
   await assert.rejects(
@@ -240,6 +244,8 @@ test("worker principal attestation rejects elevated attributes, memberships, own
       assert.match(error.message, /BYPASSRLS/);
       assert.match(error.message, /ROLE_MEMBERSHIP/);
       assert.match(error.message, /WORKER_TABLE_OWNERSHIP/);
+      assert.match(error.message, /PUBLIC_SCHEMA_OWNERSHIP/);
+      assert.match(error.message, /PUBLIC_SCHEMA_CREATE/);
       assert.match(error.message, /EVENT_TABLE_DIRECT_ACCESS/);
       return true;
     },
