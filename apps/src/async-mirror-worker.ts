@@ -201,6 +201,7 @@ export async function runGovernmentInboxWorker(
               and (c.effective_to is null or c.effective_to > $3::timestamptz)
               and c.source_version = $4
               and organization_has_explicit_geography_scope(c.organization_id,c.geography_id)
+              and government_source_scope_covers_geography(s.id,c.geography_id)
               and (c.activity_id is null or exists (
                 select 1 from activities a where a.id=c.activity_id
                   and a.organization_id=c.organization_id and a.geography_id=c.geography_id
