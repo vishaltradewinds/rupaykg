@@ -101,3 +101,18 @@ The source-scope finding is now addressed in draft source by migration `20261110
 The disposable PostgreSQL acceptance test now builds synthetic STATE_UT, DISTRICT and LOCAL_BODY scope nodes, verifies descendant coverage, rejects unrelated geography, and checks that approved scope/directory provenance cannot be rewritten. These are synthetic CI fixtures, not real LGD records.
 
 The initial migration-only CI run failed because the old test fixture had not yet been updated for the new required scope fields. The fixture was updated in the next commit; a fresh exact-head CI run is required. This is an intentional fail-fast outcome, not a green gate. Independent security review must still inspect the scope model and actual LGD ingestion process before merge.
+
+
+## Follow-up source-scope hierarchy expansion finding — 2026-10-31
+
+A further adversarial review of migration 20261110 found that its immutability trigger froze existing scope nodes and descendants against UPDATE, but did not prevent a new geography INSERT beneath an approved scope or an existing unrelated node being reparented into that scope. Either operation could silently expand the set of geographies covered by an already approved source snapshot.
+
+Fail-closed correction added in migration `20261111_prevent_approved_source_scope_hierarchy_expansion.sql`:
+- rejects INSERT where the new parent is inside an approved/retired non-national source scope tree;
+- rejects UPDATE that reparents an outside geography under that frozen tree;
+- preserves the existing protection against changing/removing nodes already in the frozen tree;
+- applies to descendants at every depth through a recursive, cycle-safe set.
+
+The PostgreSQL acceptance test now exercises three attack paths for each synthetic administrative scope (STATE_UT, DISTRICT, LOCAL_BODY): adding a child under the scope root, reparenting an unrelated node into the scope, and adding a grandchild under an existing descendant. These must fail with `APPROVED_SOURCE_SCOPE_HIERARCHY_EXPANSION_FORBIDDEN`.
+
+This is a source-code/migration correction only. It is not yet CI-verified. The migration must be included in the ordered disposable PostgreSQL run and the worker acceptance test must pass with zero skips before this finding can be closed. No live Neon changes were made.
