@@ -253,3 +253,15 @@ On 2026-10-31, `GET /api/v1/epr/obligations` in `apps/src/bwg-routes.ts` was mov
 - The organization filter is bound to the verified active organization derived from the authenticated context.
 
 The BWG registration function also registers `epr-return-routes.ts`; that separate route module remains outstanding and is not covered by this adoption. This is one route only, not a completed EPR/BWG tenant boundary. Exact-head CI is pending.
+
+
+## 18. EPR return lifecycle route adoption
+
+On 2026-10-31, all four routes in `apps/src/epr-return-routes.ts` were moved to the tenant-context helper:
+
+- `GET /api/v1/epr/returns`: active-organization permission and listing query share one transaction.
+- `POST /api/v1/epr/returns`: optional request organization must equal the verified active organization; scheme/obligation eligibility and draft creation share one transaction.
+- `POST /api/v1/epr/returns/:returnId/submit`: return/obligation row locks, permission, evidence and approved-verification binding, geography scope, balance checks, return submission and obligation fulfillment update share one transaction.
+- `POST /api/v1/epr/returns/:returnId/external-reference`: row lock, active-organization check, permission, state/immutability checks and reference update share one transaction.
+
+The EPR return module no longer performs tenant-sensitive pool-level queries or manual transactions. The parent BWG module's EPR obligation listing was separately migrated in Section 17. Exact-head CI for the full EPR route batch is pending; EPR statutory workflows still require business-rule, authorization, evidence and duplicate/balance acceptance tests, plus independent compliance review. No external government submission is performed by these routes.
