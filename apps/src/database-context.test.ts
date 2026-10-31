@@ -142,8 +142,9 @@ test("tenant context does not leak when a pooled PostgreSQL connection is reused
     const afterCommit = await pool.query<{ identity_id: string | null; organization_id: string | null }>(
       "select current_setting('rupaykg.identity_id', true) identity_id, current_setting('rupaykg.organization_id', true) organization_id",
     );
-    assert.equal(afterCommit.rows[0]?.identity_id, null);
-    assert.equal(afterCommit.rows[0]?.organization_id, null);
+    // PostgreSQL returns an empty string for a custom setting that was reset at transaction end.
+    assert.equal(afterCommit.rows[0]?.identity_id, "");
+    assert.equal(afterCommit.rows[0]?.organization_id, "");
     assert.deepEqual(await run(second, readContext), {
       identity_id: second.identityId,
       organization_id: second.organizationId,
