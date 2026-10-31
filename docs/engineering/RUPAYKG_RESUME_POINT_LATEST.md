@@ -17,7 +17,18 @@
 - Specific unresolved route issue: BWG UI calls `GET /api/v1/workspaces/bwg`; no matching handler was found in the route modules inspected. Trace server registration and add HTTP acceptance before claiming BWG reporting is fully operational.
 - Field-capture quantity is declared metadata, not calibrated weighment or receiver-accepted quantity.
 - Workspace APIs inspected return bounded recent rows; period aggregation, export, pagination and reproducibility need explicit tests.
-- Confirmed BWG route gap: issue [#176](https://github.com/vishaltradewinds/rupaykg/issues/176). UI expects six `/api/v1/workspaces/bwg` and `/api/v1/bwg/*` paths absent from the registered server route graph; see latest checkpoint.
+- Corrected BWG finding: issue [#176](https://github.com/vishaltradewinds/rupaykg/issues/176) now tracks the remaining authorization, statutory approval linkage, quantity/error semantics and HTTP acceptance work. This batch added a PostgreSQL-backed `reports:read` gate to the BWG workspace GET plus unit tests. Corrected matrix and immutable checkpoint: [BWG API correction and read authorization](./checkpoints/2026-10-31-bwg-api-correction-and-read-authorization.md).
+
+
+## Latest correction and authorization batch — 2026-10-31
+- Session preflight log: [BWG route re-audit preflight](./session-logs/2026-10-31-1608-utc-bwg-route-reaudit-preflight.md).
+- BWG workspace permission fix: `825d430a4b8140b7e3072a536508632db8547359`; tests: `824acb8d0c3866651d9038d369565dc7073a62b4`; corrected stakeholder matrix: `d8f13a9abcd7618c4525958ad0972ef45341256c`; checkpoint: `c44830746bd58d73c54d3860cc86460a80e85835`.
+- Exact CI run #3957 / ID `41218377380` was IN_PROGRESS on matrix SHA `d8f13a9abcd7618c4525958ad0972ef45341256c`; re-poll current branch HEAD after this resume-pointer update.
+- Verified BWG read path now requires explicit `reports:read`. Unit tests cover allow, permission denial and organization-scope mismatch; full HTTP acceptance remains NOT DONE.
+- Remaining statutory blocker: separate `organization_bwg_assessments` vs `bwg_profiles` state; no authorized dual-control transition to APPLICABLE/VERIFIED has been established. Do not auto-promote.
+- Fresh live recheck: Neon main still 67 public tables, 0 RLS, 0 policies, five BWG tables, 92 migration rows through `20261021`; runtime roles retain BYPASSRLS/elevated attributes. Neon main branch and GitHub main branch protection are both disabled.
+- Render RupayKg service is on main, live deployment commit `862512c8c904cef0f604df0350f02672318953af`; runtime DB principal remains NOT ASSESSED.
+- Working branch diverged from main by 300 ahead / 1 behind; PR #175 OPEN/DRAFT and unmerged. Production HOLD; no production writes, migration, deployment or worker activation.
 
 ## Repository-wide readiness audit (2026-10-31)
 - Audit report: [RupayKg repository-wide readiness and execution audit](./RUPAYKG_REPOSITORY_READINESS_AND_EXECUTION_AUDIT_2026-10-31.md).
@@ -59,8 +70,8 @@ Mandatory Shakti Standards apply. Golden Rule: **ONE SHAKTI STANDARD. MANY PROJE
 
 ## Next executable sequence
 1. Recheck branch HEAD and exact-head CI after each documentation or code batch. Matrix CI run #3947 / ID `41217457750` completed SUCCESS on exact matrix SHA `4e5a4cb66df0fee409708d4187ea7fe7b111ac9a`.
-2. Trace `/api/v1/workspaces/bwg` from UI through server registration, handler, SQL, permission checks and HTTP tests.
-3. Build route → UI → table → report → permission → test crosswalk for all 14 route families.
+2. Add full BWG HTTP acceptance tests and finish read/write permission denial tests. Trace the statutory BWG assessment-to-verified-profile approval path; migration 044 blocks reporting periods unless `bwg_profiles` is APPLICABLE and VERIFIED, while current profile intake remains REVIEW_REQUIRED/PENDING.
+3. Add EPR fulfilled<=obligated route validation and map known database constraint failures to stable client errors. Then build route → UI → table → report → permission → test crosswalk for all 14 route families.
 4. Implement/verify general generator journey: site/stream profile → segregation/storage → pickup schedule → bilateral handover → transport → destination receipt → reconciliation → reports. Do not conflate declared quantity with calibrated measurement.
 5. Complete collector/contractor/transporter/MRF/processor physical handoffs, inventory and mass balance.
 6. Define report definitions, periods, aggregation, pagination/export, reproducible snapshots and permission scopes for each stakeholder.
