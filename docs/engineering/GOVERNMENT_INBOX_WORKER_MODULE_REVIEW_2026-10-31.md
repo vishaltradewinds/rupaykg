@@ -47,3 +47,8 @@ The worker implementation source includes the null-or-expired lease recovery cor
 ## Release posture
 
 No live database writes/DDL, no merge, no deployment, no scheduler activation. Production HOLD. TRL 9 not established.
+
+
+## Consolidated review branch
+
+This PR is now retargeted directly to `main` and contains the complete 19-migration dependency chain from former draft PR #156 plus the four worker source/test files above. It is the single consolidated review path; the migration-only draft is superseded. The PR CI workflow runs on the consolidated exact head and includes disposable PostgreSQL acceptance tests with `RUPAYKG_RUN_DB_INTEGRATION_TESTS=1`.
