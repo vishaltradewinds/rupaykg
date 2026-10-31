@@ -610,6 +610,11 @@ test("PostgreSQL enforces parameter uncertainty, immutable raw-frame bytes and M
       ),
       /exact measurement uncertainty and raw-frame bindings/,
     );
+    await pool.query("update evidence set status='REJECTED' where id=$1", [evidenceId]);
+    await assert.rejects(
+      pool.query("update measurements set raw_frame_sha256=raw_frame_sha256 where id=$1", [measurement.rows[0]!.id]),
+      /raw-frame artifact must be an exact server-hashed evidence version/,
+    );
   } finally {
     await pool.end();
   }
