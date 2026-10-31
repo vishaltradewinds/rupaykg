@@ -107,3 +107,17 @@ On the next session, do not start with a generic repo audit. Read `AGENTS.md` an
 - Architecture audit addendum commit: `76218ff3893fff11529d66664849cbf0e80d78a0`.
 - This resume pointer is now being refreshed after those documentation commits. On the next session, verify actual branch HEAD and exact-head CI before proceeding; documentation commits must not be mistaken for application changes.
 - Exact-head CI run #3908 passed for the application/audit baseline commit `571aef12d9dbe54389ec50b8c80c1d5bbfab355a`. CI for subsequent continuity-documentation commits must be rechecked against the latest branch HEAD.
+
+
+## Gate 1 progress — 2026-10-31 (read-only source discovery)
+- Added `docs/engineering/GATE1_DATABASE_SECURITY_PRELIMINARY_INVENTORY_2026-10-31.md` (commit `d3c585ec50f7e6fbbb82acf5f381762c064d4c82`).
+- Confirmed in source: Render manifest defines one web service and one `DATABASE_URL`; API bootstrap builds one Pool from `DATABASE_URL`; production migration runner creates a separate pool but also uses `DATABASE_URL`. Separate pools/processes do not establish separate DB principals.
+- Tenant transaction helper sets identity and organization using transaction-local settings, but helper comments and source usage show it is not universal. Prior Neon read-only catalog inspection found no RLS policies on inspected public tables.
+- Preliminary route-module inventory now exists for 11 imported route modules. It is explicitly not yet the complete route × operation × table × tenant × permission matrix.
+- Actual Render runtime DB role remains UNVERIFIED. Do not infer from Neon inspection role or expose connection secrets.
+- PR search confirms PR #175 remains open/draft; overlapping open drafts include #173, #161, #160 and #159. Their scope and dependencies require triage; do not merge or close automatically.
+- CI run #3908 passed for `571aef12d9dbe54389ec50b8c80c1d5bbfab355a`. The GitHub commit-workflow lookup returned no PR-triggered run for the documentation pointer head `f0b1f47285d2bdd34f53b56d3f7835520c0158cf`; do not claim the subsequent documentation commits have passed exact-head CI until a run is found.
+- No application code, production DB, RLS, grants, role, migration, worker or deployment was changed in Gate 1 discovery.
+
+### Next Gate 1 action
+Complete central-server and route-module SQL authorization mapping, then inventory every `new Pool`/database connection variable across worker, scripts and tests. After that prepare a least-privilege role matrix and table-specific RLS design plus negative cross-tenant tests. Rehearse only in a disposable/production-derived branch; do not modify production.
