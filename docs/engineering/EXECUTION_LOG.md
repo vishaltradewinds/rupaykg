@@ -61,3 +61,23 @@ Never mark a gate complete without durable evidence. Never replace historical en
 The `verifications_integrity_guard` trigger name is the same in both databases, but its function body is not. Production enforces decision-time organization-specific verifier authority and records the authorization snapshot; staging does not. Treat this as a security-control divergence, not a cosmetic schema mismatch.
 
 The 8 expired PROCESSING inbox rows are preserved and must not be automatically replayed or reset. Worker recovery is a separate reviewed workstream.
+
+
+### Disposable migration rehearsals — 2026-10-31
+15. Inspected existing rehearsal branch ancestry and confirmed it is a staging-derived branch; no production/staging parent was modified.
+16. Applied the exact historical migration 096 SQL transactionally to the staging-derived rehearsal branch `br-broad-glade-b46npw8o`. Verified all four provenance columns, one integrity trigger, and function fingerprint equal to production. Verification rows remained zero and ledger remained unchanged. Schema/function rehearsal PASS.
+17. Created a dedicated production-derived Neon rehearsal branch `br-frosty-term-b47k7ayc` from production branch `br-restless-base-b44cip2h`. An initial branch-create request using a custom suspend timeout was rejected by account policy; retried with account defaults and branch creation succeeded. No production changes.
+18. Applied exact migration SQL 20261022–20261025 in filename order inside one transaction on the production-derived rehearsal branch only.
+19. Compared schema fingerprints against staging: columns, constraints, indexes and triggers matched; normalized function fingerprints matched.
+20. Ran a rollback-contained synthetic trigger test: inbox insert created one event, status transition created a second, append-only event mutation was rejected, and all synthetic rows were rolled back. Post-test inbox/event row counts were zero.
+21. Confirmed source migration filenames match live ledger filenames in the environments where they are already applied. Reviewed `apps/src/migrate.ts`: lexical ordering, version+filename identity, transactional per-migration application, stop on first failure.
+22. Documented that the migration runner does not verify source-content checksums; this is a follow-up integrity gap, not changed in this batch.
+
+### Current state after rehearsals
+- 096 staging-shaped schema/function rehearsal: PASS.
+- 20261022–20261025 production-shaped DDL and worker-trigger rehearsal: PASS.
+- Full migration-runner rehearsal: NOT YET RUN.
+- API-level verifier authorization acceptance: NOT YET RUN.
+- Production/staging migration ledgers: UNCHANGED.
+- Worker queue records: UNCHANGED; eight expired PROCESSING leases remain preserved.
+- Production deployment and scheduler: HOLD/OFF.
