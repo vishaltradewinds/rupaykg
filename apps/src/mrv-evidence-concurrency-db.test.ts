@@ -90,8 +90,8 @@ test("HTTP routes reject stale evidence and refuse MRV instrument approval", {
     const token = issueOpaqueToken();
     await pool.query("update identities set status='VERIFIED' where id=$1", [fixture.reviewerId]);
     const role = await pool.query<{id:string}>(
-      "insert into roles(organization_id,name,permissions) values($1,$2,'[\"VERIFY_EVIDENCE\",\"evidence:review\",\"guardian:operate\"]'::jsonb) returning id",
-      [fixture.organizationId, `MRV-ROUTE-REVIEWER-${suffix}`],
+      "insert into roles(organization_id,name,permissions) values($1,$2,$3::jsonb) returning id",
+      [organizationId, `MRV-CONCURRENCY-REVIEWER-${suffix}`, JSON.stringify(["VERIFY_EVIDENCE", "TRANSFER_CREDENTIAL", "ISSUE_CREDENTIAL"])],
     );
     await pool.query("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED')", [fixture.reviewerId, fixture.organizationId, role.rows[0]!.id]);
     await pool.query("insert into identity_sessions(identity_id,token_hash,expires_at) values($1,$2,now()+interval '15 minutes')", [fixture.reviewerId, createHash("sha256").update(token).digest("hex")]);
