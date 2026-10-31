@@ -655,8 +655,8 @@ async function createFixture(pool: Pool, suffix: string): Promise<Fixture> {
       [`mrv-concurrency-reviewer-${suffix}`, "MRV concurrency reviewer"],
     )).rows[0]!.id;
     const reviewerRoleId = (await c.query<{ id: string }>(
-      "insert into roles(organization_id,name,permissions) values($1,$2,'[\"VERIFY_EVIDENCE\",\"TRANSFER_CREDENTIAL\",\"ISSUE_CREDENTIAL\"]'::jsonb) returning id",
-      [organizationId, `MRV-CONCURRENCY-REVIEWER-${suffix}`],
+      "insert into roles(organization_id,name,permissions) values($1,$2,$3::jsonb) returning id",
+      [organizationId, `MRV-CONCURRENCY-REVIEWER-${suffix}`, JSON.stringify(["VERIFY_EVIDENCE", "TRANSFER_CREDENTIAL", "ISSUE_CREDENTIAL"])],
     )).rows[0]!.id;
     await c.query(
       "insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED')",
