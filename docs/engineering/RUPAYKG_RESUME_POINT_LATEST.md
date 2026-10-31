@@ -5,11 +5,11 @@
 ## Current repository state — 2026-10-31
 - Repository: `vishaltradewinds/rupaykg`.
 - Working branch: `shakti/atomic-inbox-claim-2026-10-31`.
-- Latest verified branch HEAD before this pointer refresh: `4e7a2d3612ae24a9d648b8cd014ad24553419140` (autonomous Neon security/BWG acceptance checkpoint). This pointer refresh will create the next commit; verify exact live HEAD and CI before further code changes.
+- Latest implementation commit: `4730c7f86c82c49d6fa8eff7954af5f37d36aae2` (BWG authenticated PostgreSQL HTTP acceptance tests). Latest immutable checkpoint commit: `a4718b832f302d73c7fe9a8c24c9c5ae069a933e`. Verify exact live HEAD and CI before further code changes.
 - Main base: `862512c8c904cef0f604df0350f02672318953af`.
 - PR #175: OPEN/DRAFT, unmerged; do not merge or rebase without dependency, independent review, migration and security gates. PR URL: https://github.com/vishaltradewinds/rupaykg/pull/175.
 - Branch divergence freshly measured at 16:31 UTC: 320 ahead / 1 behind main.
-- Latest checkpoint: [Autonomous Neon security and BWG acceptance](./checkpoints/2026-10-31-autonomous-neon-security-bwg-acceptance.md). Previous checkpoint: [BWG HTTP authentication boundary tests](./checkpoints/2026-10-31-bwg-http-auth-boundary-tests.md).
+- Latest checkpoint: [BWG authenticated PostgreSQL HTTP acceptance](./checkpoints/2026-10-31-bwg-authenticated-postgres-http-acceptance.md). Previous checkpoint: [Autonomous Neon security and BWG acceptance](./checkpoints/2026-10-31-autonomous-neon-security-bwg-acceptance.md).
 - Latest preflight: [Autonomous execution preflight — 16:33 UTC](./session-logs/2026-10-31-1633-utc-autonomous-preflight.md).
 
 ## Latest completed work
@@ -79,7 +79,7 @@ Generator must be first-class and distinct from BWG. A complete general generato
 - TRL 9 is NOT ESTABLISHED. Do not claim national production readiness.
 
 ## Ordered next execution
-1. Add DB-backed authenticated HTTP tests using disposable CI PostgreSQL fixtures for missing `reports:read`/write permission, unverified membership, cross-organization payload mismatch and geography denial.
+1. Verify CI on exact commit `4730c7f86c82c49d6fa8eff7954af5f37d36aae2`; the new DB-backed HTTP integration test covers missing `reports:read`/profile permission, unverified membership, cross-organization payload mismatch, geography denial and no-write-on-denial.
 2. Add EPR route-level quantity and exact database-constraint mapping tests.
 3. Trace statutory BWG assessment/profile authority and design a dual-control, evidence-backed transition; never auto-promote.
 4. Continue the all-route UI/API/schema/permission/report/test crosswalk and generator-to-processor lifecycle.
