@@ -82,3 +82,15 @@ The runner's read-only schema gate was cross-checked against the staging catalog
 The staging catalog query found only the two async inbox tables among the required objects. The crosswalk/source-snapshot tables, scope functions, and expected trigger were not present in the inspected staging branch. Therefore the runner readiness gate would fail closed there. The production branch lacks even the two queue tables.
 
 This shows the next work is not simply to create a worker login. The candidate migration chain must first be reconciled and applied to a disposable production-shaped branch, and the complete required object graph verified. Then exact object-level worker grants can be designed and negatively tested. Do not activate the worker or provision credentials yet.
+
+
+## Additional code-to-catalog security gap
+
+Source review of the current worker runner shows that it:
+- Requires a separate username in `GOVERNMENT_INBOX_DATABASE_URL`.
+- Rejects a worker URL that uses the same decoded role name as `DATABASE_URL`.
+- Verifies required schema objects exist before queue operations.
+
+It does **not yet** query `pg_roles` to reject `SUPERUSER`, `CREATEDB`, `CREATEROLE`, `REPLICATION`, or `BYPASSRLS`; it does not check whether the worker is a member of the application role; and it does not prove the exact table/function grants required by the worker. The current `rupaykg` role's elevated attributes show why username separation alone is insufficient.
+
+**Required next code gate:** add a read-only runtime principal/grant attestation that fails closed on elevated attributes and unsafe role membership, then verifies only the specific SELECT/UPDATE and function EXECUTE permissions required by the worker. Add negative tests for inherited application privileges, elevated attributes, table ownership, missing grants and unexpected write/delete access. This must be tested with a dedicated role on a disposable branch before any live worker credential exists. Do not create the role or change grants in production.
