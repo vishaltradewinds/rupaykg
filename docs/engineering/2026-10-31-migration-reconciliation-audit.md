@@ -190,3 +190,41 @@ The runner does not persist or compare a source-content checksum. Same-version/s
 - No application API-level authorization acceptance test was executed against representative verifier memberships.
 - No worker queue rows were replayed or reset.
 - Independent review and exact-head CI remain required before source restoration is merged or any live migration runs.
+
+
+## Coordination with the existing canonical implementation PR — 2026-10-31
+
+A repository-wide open-PR search found that **PR #157 is already the canonical implementation/reconciliation path**. Do not create a duplicate migration-source restoration PR.
+
+- PR: https://github.com/vishaltradewinds/rupaykg/pull/157
+- Branch: `shakti/integrate-government-inbox-worker-2026-10-31`
+- Exact head inspected: `b3655259ce0f9d650477c34fa07a2a61d4a72f75`
+- Base: `main` at `54a7fe1ceb41b37a68720a71c10a1dd03af30dea`
+- Exact-head CI run: https://github.com/vishaltradewinds/rupaykg/actions/runs/41190853951
+- CI conclusion: SUCCESS. All steps passed, including migration validation, exact production-baseline reconstruction, schema/verifier capture, proposed upgrade chain, second-run idempotency, typecheck, build, browser smoke, disposable PostgreSQL acceptance, evidence upload and production-container build.
+
+PR #157 contains the exact recovered source blobs for migration 096 and 20261022–20261025; their blob SHAs match the independently recovered historical sources recorded above. It also contains the broader 20261026–20261111 chain, migration-order phase handling, production-shaped reconstruction/upgrade tests, worker implementation and DB acceptance tests. The exact-head run is stronger CI evidence than the documentation-only PR #159 run and should remain the primary implementation review.
+
+PR #159 remains a separate documentation/handoff PR only. No duplicate migration-source PR was opened.
+
+## Additional Neon rehearsal branch and cost containment
+
+A dedicated production-derived Neon branch was created for the limited 20261022–20261025 DDL rehearsal:
+- Branch: `rupaykg-migration-rehearsal-prod-2026-10-31`
+- Branch ID: `br-frosty-term-b47k7ayc`
+- Parent: production `br-restless-base-b44cip2h`
+- Its read-write compute endpoint was suspended after testing: `ep-polished-hat-b4y8wpnp`; final observed state: `idle`.
+- The existing staging-derived rehearsal endpoint `ep-red-bar-b4ywq6ug` was also suspended after testing; final observed state: `idle`.
+
+The new Neon branch itself remains present and contains a production-derived data snapshot plus the rehearsed DDL. Compute is suspended. Branch deletion was not performed; obtain explicit user approval before deleting it. Do not reactivate either endpoint unless a new rehearsal is approved.
+
+The initial create request with a custom suspend timeout was rejected by account policy; retrying with account defaults succeeded. No billing-free guarantee is inferred from the tool response. Check current Neon pricing/usage before further branch or compute use.
+
+## Consolidated execution decision
+
+- Use PR #157 as the sole migration/worker implementation review path.
+- Keep PR #159 as the durable execution log and audit trail.
+- Do not merge either PR automatically.
+- Production and staging remain unchanged; migration/deployment HOLD.
+- Worker scheduler OFF; eight expired staging PROCESSING rows remain preserved.
+- Independent review, live drift reconciliation, explicit change approval and recovery plan remain mandatory.
