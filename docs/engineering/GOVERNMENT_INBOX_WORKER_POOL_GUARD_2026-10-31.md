@@ -47,7 +47,7 @@ This is a safe foundation, not a production worker runner:
 
 ## CI
 
-The new files trigger CI run `41198239381`. Results must be checked before treating the implementation as passing.
+CI run `41198239381` completed successfully end-to-end for PR #157 head `6054fcd0045fa387afd5300293c86202ea116a59`: dependency audit, migration validation, exact production-baseline reconstruction, migration upgrade/idempotency, typecheck, build, browser smoke, disposable PostgreSQL acceptance, evidence upload and production container build all passed. This verifies the new TypeScript files and unit tests, but does not verify a live worker database role or live Neon/Render schema.
 
 ## Safety
 
