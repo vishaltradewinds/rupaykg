@@ -95,6 +95,8 @@ Example payload for the existing sync envelope's `MEASUREMENT_CREATE` operation:
   "measuredAt": "<ISO-8601 timestamp>",
   "instrumentCode": "SITE-DEVICE-001",
   "parameterCode": "gas_flow"
+  "uncertaintyRecordId": "<reviewed-parameter-uncertainty-uuid>",
+  "rawFrameArtifactVersionId": "<verified-raw-frame-artifact-version-uuid>"
 }
 ```
 
