@@ -94,3 +94,10 @@ The edge contract and synthetic tests are software engineering evidence only. Th
 - Production MRV eligibility from edge package alone: prohibited.
 - Production deployment / scheduler / external submission: not authorized by this document.
 - Hardware qualification and TRL 9: not established.
+
+
+## Additional open metrology gate: parameter-specific uncertainty
+
+The instrument approval implementation validates exact-model evidence, calibration status, parameter unit/range/resolution and accuracy metadata. A source audit identified that the current calibration uncertainty is stored as one instrument-level scalar, while a multi-parameter instrument can have different uncertainty values and units for each parameter. Parameter specifications do not yet carry a complete reviewed per-parameter uncertainty statement, and the instrument-bound measurement path does not persist that uncertainty into each MRV observation.
+
+See `docs/MRV_INSTRUMENT_UNCERTAINTY_LINEAGE_GAP_2026-10-31.md`. Do not use a generic uncertainty ratio or invent a universal threshold. A parameter-specific uncertainty model and immutable measurement/MRV lineage must be designed from the actual calibration certificate, applicable standard and methodology before production MRV eligibility. Until then, instrument approval code is an engineering foundation, not complete metrological qualification.
