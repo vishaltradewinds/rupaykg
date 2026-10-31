@@ -110,7 +110,7 @@ try {
     client.query("update verifications set decision='APPROVED' where id=$1", [legacyRejectedId]),
     /rejected verification is terminal/,
   );
-  await client.query("update verifications set rationale='legacy rejected unchanged' where id=$1", [legacyRejectedId]);
+  await client.query("update verifications set decision='REJECTED' where id=$1", [legacyRejectedId]);
   console.log("PASS: legacy approved rows with NULL timestamps retain approval history; legacy rejected rows fail closed.");
 
   const baseline = await selectSnapshot();
