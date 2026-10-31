@@ -117,3 +117,10 @@ Following the read-only Neon findings, the candidate worker runner now includes 
 Regression coverage added for least-privilege success, elevated flags, role membership, object/schema ownership, schema CREATE, event-table direct access, missing required grants, application-role reuse, missing catalog row, malformed application URL, and ordered fail-closed behavior.
 
 **Important boundary:** This is a reusable guard and tests; no worker entrypoint currently calls it because the candidate still has no separate process entrypoint. It is not runtime activation. The exact-head CI must pass before treating this implementation as validated. The required privileges are based on reviewed worker SQL and the existing candidate integration fixture; the final grants must still be validated on a disposable production-shaped Neon branch, including inherited/PUBLIC grants and column-level permissions.
+
+
+### Follow-on hardening: column-scoped queue updates
+
+The principal gate was tightened after reviewing every worker UPDATE statement. It now requires UPDATE only on the exact inbox columns used by claim, heartbeat, retry, quarantine and terminal transitions: `status`, `attempts`, `lease_token`, `lease_until`, `quarantined_at`, `last_error_code`, `next_attempt_at`, `processed_at`, and `validation_summary`. A table-level UPDATE grant is explicitly rejected. The regression suite includes a negative case for broad table UPDATE even when the expected column-level grants are present.
+
+This is still a code-side ACL attestation, not a proof that Neon currently grants precisely these permissions. A disposable PostgreSQL/Neon grant fixture must verify the catalog semantics and the actual SQL workload before any live role is provisioned. Exact-head CI for the latest source commit is pending.
