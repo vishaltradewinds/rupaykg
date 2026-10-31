@@ -117,7 +117,7 @@ test("HTTP routes reject stale evidence and refuse MRV instrument approval", {
         meityCertificateScope: "Exact model/SKU revision", meityVerificationUrl: "https://official.example.gov/test",
         meityEvidenceReference: "evidence://meity-test", meityEvidenceSha256: fixture.meitySha256,
         meityEvidenceArtifactVersionId: fixture.artifactId, meityVerifiedAt: new Date().toISOString(),
-        meityValidityBasis: "VALID_UNTIL", meityValidUntil: future, calibrationRequired: true,
+        meityValidityBasis: "VALID_UNTIL", meityValidUntil: future, calibrationRequired: true, calibrationSerialNumber: `SERIAL-CONCURRENCY-${suffix}`,
         calibrationStatus: "VERIFIED", calibrationCertificateId: "CAL-CONC-TEST",
         calibrationEvidenceReference: "evidence://cal-test", calibrationEvidenceSha256: fixture.calibrationSha256,
         calibrationEvidenceArtifactVersionId: fixture.calibrationArtifactId, calibrationLab: "Traceable test lab",
@@ -200,7 +200,7 @@ async function exerciseHttpRouteRace(winner: "approval-first" | "rejection-first
       security_not_applicable_reason: string | null; firmware_version: string | null;
       firmware_support_until: string | null;
     }>(
-      "select meity_certificate_id,meity_issuer,meity_certificate_scope,meity_verification_url,meity_evidence_reference,meity_evidence_sha256,meity_evidence_artifact_version_id,meity_verified_at::text meity_verified_at,meity_validity_basis,meity_valid_until::text meity_valid_until,calibration_required,calibration_status,calibration_certificate_id,calibration_evidence_reference,calibration_evidence_sha256,calibration_evidence_artifact_version_id,calibration_lab,calibration_traceability,calibration_uncertainty,calibration_valid_until::text calibration_valid_until,security_review_status,security_evidence_reference,security_evidence_sha256,security_evidence_artifact_version_id,security_reviewed_at::text security_reviewed_at,security_not_applicable_reason,firmware_version,firmware_support_until::text firmware_support_until from mrv_instruments where id=$1",
+      "select meity_certificate_id,meity_issuer,meity_certificate_scope,meity_verification_url,meity_evidence_reference,meity_evidence_sha256,meity_evidence_artifact_version_id,meity_verified_at::text meity_verified_at,meity_validity_basis,meity_valid_until::text meity_valid_until,calibration_required,calibration_status,calibration_certificate_id,calibration_serial_number,calibration_evidence_reference,calibration_evidence_sha256,calibration_evidence_artifact_version_id,calibration_lab,calibration_traceability,calibration_uncertainty,calibration_valid_until::text calibration_valid_until,security_review_status,security_evidence_reference,security_evidence_sha256,security_evidence_artifact_version_id,security_reviewed_at::text security_reviewed_at,security_not_applicable_reason,firmware_version,firmware_support_until::text firmware_support_until from mrv_instruments where id=$1",
       [fixture.instrumentId],
     );
     const evidence = existing.rows[0]!;
@@ -215,7 +215,7 @@ async function exerciseHttpRouteRace(winner: "approval-first" | "rejection-first
         meityEvidenceReference: evidence.meity_evidence_reference, meityEvidenceSha256: evidence.meity_evidence_sha256,
         meityEvidenceArtifactVersionId: evidence.meity_evidence_artifact_version_id, meityVerifiedAt: evidence.meity_verified_at,
         meityValidityBasis: evidence.meity_validity_basis, meityValidUntil: evidence.meity_valid_until,
-        calibrationRequired: evidence.calibration_required, calibrationStatus: evidence.calibration_status,
+        calibrationRequired: evidence.calibration_required, calibrationStatus: evidence.calibration_status, calibrationSerialNumber: evidence.calibration_serial_number,
         calibrationCertificateId: evidence.calibration_certificate_id, calibrationEvidenceReference: evidence.calibration_evidence_reference,
         calibrationEvidenceSha256: evidence.calibration_evidence_sha256, calibrationEvidenceArtifactVersionId: evidence.calibration_evidence_artifact_version_id,
         calibrationLab: evidence.calibration_lab, calibrationTraceability: evidence.calibration_traceability,
@@ -565,16 +565,16 @@ async function createFixture(pool: Pool, suffix: string): Promise<Fixture> {
     const datasheet = await createReviewedArtifact(c, organizationId, activityId, identityId, reviewerId, "MANUFACTURER_DATASHEET", `Parameter datasheet ${suffix}`);
 
     const instrumentId = (await c.query<{ id: string }>(
-      "insert into mrv_instruments(organization_id,instrument_code,instrument_type,manufacturer,model,sku_revision,intended_use,supported_parameter_codes,registered_by_identity_id) values($1,$2,'GAS_FLOW','Test Manufacturer','Flow Model 1','Rev A','Concurrency test flow measurement',array['gas_flow'],$3) returning id",
-      [organizationId, `FLOW-CONCURRENCY-${suffix}`, identityId],
+      "insert into mrv_instruments(organization_id,instrument_code,instrument_type,manufacturer,model,sku_revision,manufacturer_serial_number,intended_use,supported_parameter_codes,registered_by_identity_id) values($1,$2,'GAS_FLOW','Test Manufacturer','Flow Model 1','Rev A',$3,'Concurrency test flow measurement',array['gas_flow'],$4) returning id",
+      [organizationId, `FLOW-CONCURRENCY-${suffix}`, `SERIAL-CONCURRENCY-${suffix}`, identityId],
     )).rows[0]!.id;
     await c.query(
       "insert into mrv_instrument_parameter_specs(instrument_id,parameter_code,unit,minimum_value,maximum_value,resolution,accuracy_absolute,accuracy_basis,source_evidence_artifact_version_id,created_by_identity_id) values($1,'gas_flow','m3/h',0,500,0.1,0.5,'concurrency test specification',$2,$3)",
       [instrumentId, datasheet.id, identityId],
     );
     await c.query(
-      "update mrv_instruments set approval_status='VERIFIED',meity_certificate_id='MEITY-CONC-TEST',meity_issuer='Test authority',meity_certificate_scope='Exact model/SKU revision',meity_verification_url='https://official.example.gov/test',meity_evidence_reference='evidence://meity-test',meity_evidence_sha256=$2,meity_evidence_artifact_version_id=$3,meity_verified_at=now(),meity_validity_basis='VALID_UNTIL',meity_valid_until=now()+interval '1 year',calibration_required=true,calibration_status='VERIFIED',calibration_certificate_id='CAL-CONC-TEST',calibration_evidence_reference='evidence://cal-test',calibration_evidence_sha256=$4,calibration_evidence_artifact_version_id=$5,calibration_lab='Traceable test lab',calibration_traceability='Test national standard traceability',calibration_uncertainty=0.2,calibration_valid_until=now()+interval '1 year',security_review_status='NOT_APPLICABLE_WITH_JUSTIFICATION',security_not_applicable_reason='Non-firmware test instrument',reviewed_by_identity_id=$6,reviewed_at=now(),review_note='Concurrency test instrument approval' where id=$1",
-      [instrumentId, meity.sha256, meity.id, calibration.sha256, calibration.id, reviewerId],
+      "update mrv_instruments set approval_status='VERIFIED',meity_certificate_id='MEITY-CONC-TEST',meity_issuer='Test authority',meity_certificate_scope='Exact model/SKU revision',meity_verification_url='https://official.example.gov/test',meity_evidence_reference='evidence://meity-test',meity_evidence_sha256=$2,meity_evidence_artifact_version_id=$3,meity_verified_at=now(),meity_validity_basis='VALID_UNTIL',meity_valid_until=now()+interval '1 year',calibration_required=true,calibration_status='VERIFIED',calibration_certificate_id='CAL-CONC-TEST',calibration_evidence_reference='evidence://cal-test',calibration_evidence_sha256=$4,calibration_evidence_artifact_version_id=$5,calibration_lab='Traceable test lab',calibration_traceability='Test national standard traceability',calibration_uncertainty=0.2,calibration_valid_until=now()+interval '1 year',security_review_status='NOT_APPLICABLE_WITH_JUSTIFICATION',security_not_applicable_reason='Non-firmware test instrument',reviewed_by_identity_id=$6,reviewed_at=now(),review_note='Concurrency test instrument approval',calibration_serial_number=$7 where id=$1",
+      [instrumentId, meity.sha256, meity.id, calibration.sha256, calibration.id, reviewerId, `SERIAL-CONCURRENCY-${suffix}`],
     );
     await c.query(
       "insert into measurements(activity_id,value,unit,method,source,measured_at,mrv_instrument_id,parameter_code) values($1,2,'m3/h','test','two-session concurrency fixture',now(),$2,'gas_flow')",
