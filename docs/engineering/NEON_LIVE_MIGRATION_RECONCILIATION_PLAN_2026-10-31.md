@@ -89,3 +89,10 @@ Read-only Neon schema comparisons:
 - rehearsal vs staging: 8 additions, 1 removal across 2 hunks.
 
 The staging/rehearsal additions include async inbox/lease and AI intake schema; production-only verifier authorization columns/function are missing from staging/rehearsal. Rehearsal's only difference from staging is its unledgered UNRESOLVED status constraint and comment. This corroborates the branch-by-branch inventory above and reinforces the no-copy/no-replay release gate. All comparisons were read-only; no branch was modified.
+
+
+### Gate C evidence refinement — exact rehearsal drift attribution (2026-10-31)
+
+Read-only catalog inspection confirms the rehearsal branch's `async_mirror_inbox_status_check` includes `UNRESOLVED` and its status-column comment exactly matches the SQL in repository migration `20261101_async_mirror_unresolved_crosswalk.sql`. Staging lacks both changes. The `20261101` migration-ledger row is absent from both 95-row ledgers. The migration SQL changes only that status constraint and column comment.
+
+Disposition: classify rehearsal as **schema-effect match / ledger provenance unresolved**. This narrows the reconciliation question but does not establish execution provenance. No replay, ledger edit, rollback, or live branch change is authorized. Preserve the observed state pending an approved evidence-backed reconciliation record.
