@@ -104,6 +104,8 @@ test("worker quarantines exhausted unclaimed inbox rows instead of leaving them 
   assert.match(statements[0]!.sql, /lease_until is null or lease_until < now\(\)/i);
   assert.match(statements[0]!.sql, /with exhausted as \(/i);
   assert.match(statements[0]!.sql, /for update skip locked/i);
+  assert.match(statements[0]!.sql, /with exhausted as \(/i);
+  assert.match(statements[0]!.sql, /for update skip locked/i);
 });
 
 test("worker retries transient errors and quarantines an exhausted attempt", async () => {
