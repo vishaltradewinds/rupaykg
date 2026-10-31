@@ -190,7 +190,7 @@ async function exerciseHttpRouteRace(winner: "approval-first" | "rejection-first
       meity_verification_url: string; meity_evidence_reference: string; meity_evidence_sha256: string;
       meity_evidence_artifact_version_id: string; meity_verified_at: string;
       meity_validity_basis: string; meity_valid_until: string | null; calibration_required: boolean;
-      calibration_status: string; calibration_certificate_id: string | null;
+      calibration_status: string; calibration_certificate_id: string | null; calibration_serial_number: string | null;
       calibration_evidence_reference: string | null; calibration_evidence_sha256: string | null;
       calibration_evidence_artifact_version_id: string | null; calibration_lab: string | null;
       calibration_traceability: string | null; calibration_uncertainty: string | number | null;
