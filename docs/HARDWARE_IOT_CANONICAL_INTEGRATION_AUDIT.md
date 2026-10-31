@@ -1,3 +1,5 @@
+> **Historical snapshot — superseded 2026-10-31.** Historical source audit dated 2026-10-30. Its workstation checkout evidence is a preserved historical snapshot, not a current branch/runtime assertion. The consolidated current review is `docs/HARDWARE_IOT_CONSOLIDATED_ENGINEERING_REVIEW_2026-10-31.md` and draft PR #158.
+
 # RupayKg Hardware/IoT Canonical Integration Audit
 
 **Audit date:** 2026-10-30  
