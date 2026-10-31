@@ -6,14 +6,15 @@ import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import path from "node:path";
 
-const enabled = process.env.RUPAYKG_RUN_DB_INTEGRATION_TESTS === "1" && Boolean(process.env.DATABASE_URL);
+const enabled = process.env.CI === "true" && process.env.NODE_ENV !== "production"
+  && process.env.RUPAYKG_RUN_DB_INTEGRATION_TESTS === "1" && Boolean(process.env.DATABASE_URL);
 
 test("production-shaped migration order preserves 023 and production-only verifier provenance", {
   skip: !enabled ? "requires CI disposable PostgreSQL and applied migrations" : false,
 }, async () => {
   const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
-    ssl: process.env.DATABASE_SSL === "true" ? { rejectUnauthorized: false } : undefined,
+    ssl: process.env.DATABASE_SSL === "false" ? undefined : { rejectUnauthorized: true },
     max: 2,
   });
   try {
