@@ -124,6 +124,12 @@ This closes the previously identified read-to-terminal-update gap for matching c
 Validation note: the stacked worker branch is temporarily targeted at main solely to run the full production-baseline CI workflow; it remains draft and unmerged, and its original stacked base will be restored after the exact-head run.
 
 
+### Heartbeat failure cancellation acceptance — 2026-10-31
+
+Added a unit regression test that forces the periodic PostgreSQL lease-renewal query to fail while a validator is active. The test confirms the worker aborts the validator through its AbortSignal and persists a token-fenced RETRY with `LEASE_RENEWAL_FAILED`, rather than allowing a potentially orphaned validation to continue as trusted work. This complements the disposable PostgreSQL success-path test for renewal beyond the original lease interval and the timeout/retry acceptance.
+
+The new test is committed but must pass on the current exact head before this gate is accepted. It does not prove that arbitrary validators ignoring AbortSignal can be forcibly stopped; production validators must be cooperative and side-effect-free.
+
 ## Bounded validation and lease renewal — 2026-10-31
 
 The worker now has a bounded validation deadline and lease heartbeat:
