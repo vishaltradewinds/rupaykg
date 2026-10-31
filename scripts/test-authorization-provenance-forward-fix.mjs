@@ -118,7 +118,10 @@ try {
 
   const baseline = await selectSnapshot();
   await client.query("update roles set permissions=$2::jsonb where id=$1", [ids.role, JSON.stringify(["VERIFY_EVIDENCE", "ROLE_CHANGED"])]);
-  await client.query("update verifications set evidence_id=evidence_id where id=$1", [ids.verification]);
+  await client.query(
+    "update verifications set evidence_id=evidence_id,authorization_membership_id=null,authorization_role_id=null,authorization_permissions_snapshot='[\\"FORGED\\"]'::jsonb,authorization_checked_at=now() where id=$1",
+    [ids.verification],
+  );
   const afterUnrelatedUpdate = await selectSnapshot();
   assert.equal(afterUnrelatedUpdate.authorization_membership_id, baseline.authorization_membership_id);
   assert.equal(afterUnrelatedUpdate.authorization_role_id, baseline.authorization_role_id);
@@ -222,6 +225,27 @@ try {
   assert.deepEqual(approvedNew.authorization_permissions_snapshot, ["VERIFY_EVIDENCE"]);
   assert.ok(approvedNew.authorization_checked_at);
   assert.equal(approvedNew.authorization_history_state, "APPROVED_HISTORY");
+
+  // A hostile caller search_path cannot shadow the trigger's trusted objects.
+  const shadowSchema = "authorization_shadow_" + Date.now();
+  await client.query("create schema " + q(shadowSchema));
+  await client.query(
+    "create table " + q(shadowSchema) + ".organization_memberships(id uuid,identity_id uuid,organization_id uuid,role_id uuid,status text,created_at timestamptz)",
+  );
+  await client.query("set search_path to " + q(shadowSchema) + ", " + q(schema) + ", public");
+  const functionConfig = await client.query(
+    "select proconfig from pg_proc where proname='prevent_invalid_verification' and pronamespace=$1::regnamespace",
+    [schema],
+  );
+  assert.ok(functionConfig.rows[0]?.proconfig?.some((value) => value.startsWith("search_path=pg_catalog")));
+  await client.query(
+    "insert into verifications(id,activity_id,evidence_id,verifier_identity_id,decision) values ($1,$2,$3,$4,'APPROVED')",
+    ["10000000-0000-4000-8000-000000000016", ids.activity, ids.evidence, ids.verifier],
+  );
+  await client.query("set search_path to " + q(schema) + ", public");
+  await client.query("drop schema " + q(shadowSchema) + " cascade");
+  console.log("PASS: pinned trigger search_path resists caller-controlled shadow schema.");
+
   // Two-session lock-order checks: revocation that wins the lock must be
   // observed by approval; approval that wins must commit before revocation.
   const concurrentClient = new Client({
