@@ -41,24 +41,22 @@ The zero production verification/audit counts mean there are no current producti
 
 The earlier timestamp-only guard was insufficient: legacy approvals may have NULL `authorization_checked_at`, and rejected rows may have no reliable record of whether they were previously approved.
 
-The updated disposable proposal adds `authorization_history_state` with three states:
+A read-only catalog query confirmed the production `verification_decision` enum has exactly two values: `APPROVED` and `REJECTED`. The updated disposable proposal therefore uses two lifecycle states:
 
 | State | Meaning | In-place approval allowed? |
 |---|---|---|
-| `NEVER_APPROVED` | New/pending row with no prior approval | Only after fresh authorization validation |
 | `APPROVED_HISTORY` | Current or historical approval exists | No; immutable history |
 | `REJECTED_TERMINAL` | Rejected decision is terminal | No; create a new evidence/verification record |
 
 Conservative classification during forward migration:
 - Current `APPROVED` rows -> `APPROVED_HISTORY`, even if all authorization snapshot columns are NULL.
 - Current `REJECTED` rows -> `REJECTED_TERMINAL`; this intentionally prevents in-place reapproval even where older history cannot be reconstructed.
-- Other current states -> `NEVER_APPROVED`.
 
-No timestamp, membership, role, permission snapshot or prior approval event is fabricated. A rejected legacy row is not reopened merely because its earlier history is unknowable. This matches the reviewed API's terminal evidence-review behavior and its new-evidence-row correction path.
+No timestamp, membership, role, permission snapshot or prior approval event is fabricated. A rejected legacy row is not reopened merely because its earlier history is unknowable. This matches the reviewed API's terminal evidence-review behavior and its new-evidence-row correction path. There is no PENDING decision state in the current production enum; the test fixture has been corrected to use only APPROVED and REJECTED.
 
 The trigger sets lifecycle state itself on INSERT and UPDATE, so a caller cannot choose a weaker state. It preserves provenance fields on all later updates to an approved-history row. It rejects linkage changes and decision changes on rejected-terminal rows. A new approved record is authorized against the current organization membership, identity and role.
 
-This remains a proposal: enum values, all decision states, historical data distributions and API semantics must be validated against the complete production schema before a numbered migration is authored.
+This remains a proposal: historical data distributions and API semantics must be validated against the complete production schema before a numbered migration is authored.
 
 ## 3. Authorization/revocation serialization proposal
 
@@ -72,7 +70,7 @@ Expected semantics:
 - If approval obtains the share locks first, revocation waits until the approval transaction commits; the approval is ordered before revocation.
 - This is a database serialization point, not a claim that a revocation retroactively invalidates a decision already committed.
 
-The fixture now includes a two-session disposable PostgreSQL test for membership revocation vs approval. The same test pattern must be extended to role-permission changes and identity suspension. Deadlock analysis must inspect every multi-row admin workflow and maintain a consistent lock order. The production trigger must not be approved until exact CI proves these tests and the query plans/lock behavior against the supported PostgreSQL version.
+The fixture now includes two-session disposable PostgreSQL tests for membership revocation, role-permission changes and identity suspension racing with approval. Deadlock analysis must inspect every multi-row admin workflow and maintain a consistent lock order. The production trigger must not be approved until exact CI proves these tests and the query plans/lock behavior against the supported PostgreSQL version.
 
 ## 4. Execution context / search path gate remains OPEN
 
