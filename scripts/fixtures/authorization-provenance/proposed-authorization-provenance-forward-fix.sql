@@ -9,26 +9,27 @@
 -- The lifecycle marker is populated from the current decision without
 -- fabricating historical timestamps or permission snapshots.
 
-alter table verifications
+alter table public.verifications
   add column if not exists authorization_history_state text not null default 'REJECTED_TERMINAL';
 
-alter table verifications
+alter table public.verifications
   drop constraint if exists verifications_authorization_history_state_check;
 
-alter table verifications
+alter table public.verifications
   add constraint verifications_authorization_history_state_check
   check (authorization_history_state in ('APPROVED_HISTORY','REJECTED_TERMINAL'));
 
-update verifications
+update public.verifications
 set authorization_history_state = case
   when decision = 'APPROVED' then 'APPROVED_HISTORY'
   else 'REJECTED_TERMINAL'
 end;
 
-create or replace function prevent_invalid_verification()
+create or replace function public.prevent_invalid_verification()
 returns trigger
 language plpgsql
-as $$
+set search_path = pg_catalog, public
+as $
 declare
   resolved_activity_id uuid;
   activity_actor uuid;
@@ -40,7 +41,7 @@ begin
 
   if new.evidence_id is not null then
     select e.activity_id into evidence_activity_id
-    from evidence e where e.id = new.evidence_id;
+    from public.evidence e where e.id = new.evidence_id;
 
     if evidence_activity_id is null then
       raise exception 'verification evidence must be bound to an activity';
@@ -110,7 +111,7 @@ begin
     if resolved_activity_id is not null then
       select a.actor_identity_id, a.organization_id
         into activity_actor, activity_organization_id
-      from activities a where a.id = resolved_activity_id;
+      from public.activities a where a.id = resolved_activity_id;
     end if;
 
     if activity_organization_id is null then
@@ -123,9 +124,9 @@ begin
 
     select m.id as membership_id, m.role_id, r.permissions
       into membership_row
-    from organization_memberships m
-    join roles r on r.id = m.role_id
-    join identities i on i.id = m.identity_id
+    from public.organization_memberships m
+    join public.roles r on r.id = m.role_id
+    join public.identities i on i.id = m.identity_id
     where m.identity_id = new.verifier_identity_id
       and m.organization_id = activity_organization_id
       and m.status = 'VERIFIED'
