@@ -7,12 +7,12 @@ This section supersedes stale status/next-step statements in the historical note
 ### Exact repository and review state
 - Repository: `vishaltradewinds/rupaykg`.
 - Branch: `shakti/atomic-inbox-claim-2026-10-31`.
-- Current branch HEAD at this pointer update: `8db2940f35698347ef31a11b5d3cc5f77d85ec78` (immutable cross-tenant evidence checkpoint documentation commit).
+- Current branch HEAD at this pointer update: `04d33e92512393a2ef709466d44d26e8f3f03725` (latest resume-pointer documentation commit).
 - Latest tested code SHA: `b5849670e06d6b397456cdd51873c87600f796c6`.
-- PR #175: OPEN/DRAFT/unmerged; PR #161 is also OPEN/DRAFT/unmerged and shares the same branch/head on a stacked base. Both had zero reviews and zero inline review threads at preflight. Keep both draft; no merge/rebase.
-- Exact tested code CI #4032 / run ID `41224099854`: PENDING/IN_PROGRESS at last check. Dependency audit, migration validation/reconstruction/upgrade/idempotency, typecheck, build, browser smoke, disposable PostgreSQL acceptance (including cross-tenant cases), and evidence upload all passed; production-container build remained IN_PROGRESS. URL: https://github.com/vishaltradewinds/rupaykg/actions/runs/41224099854.
-- Preflight documentation CI #4031 / run ID `41224059390`: PENDING/IN_PROGRESS at last check.
-- CI for current docs-only HEAD `8db2940f35698347ef31a11b5d3cc5f77d85ec78`: not yet returned by commit workflow-run lookup; NOT OBSERVED. Recheck before claiming exact-head CI.
+- PR #175: OPEN/DRAFT/unmerged, current head `04d33e92512393a2ef709466d44d26e8f3f03725`; PR #161 is also OPEN/DRAFT/unmerged and shares the same branch/head on a stacked base. Both had zero reviews and zero inline review threads at preflight. Keep both draft; no merge/rebase.
+- Exact tested code CI #4032 / run ID `41224099854`: SUCCESS on code SHA `b5849670e06d6b397456cdd51873c87600f796c6`. All workflow steps passed, including the three new cross-tenant evidence rejection/no-write tests, dependency audit, migration validation/reconstruction/upgrade/idempotency, typecheck, build, browser smoke, evidence upload and production-container build. URL: https://github.com/vishaltradewinds/rupaykg/actions/runs/41224099854.
+- Preflight documentation CI #4031 / run ID `41224059390`: SUCCESS on SHA `91e608f1d70a1707cf97306126a258e3c0970457`.
+- Checkpoint documentation CI #4033 / run ID `41224278337`: IN_PROGRESS on prior docs checkpoint SHA `8db2940f35698347ef31a11b5d3cc5f77d85ec78`. The current pointer HEAD `04d33e92512393a2ef709466d44d26e8f3f03725` has no exact-head workflow run observed yet; do not claim its CI passed. Recheck branch workflow runs.
 - Latest immutable checkpoint: `docs/engineering/checkpoints/2026-10-31-bwg-cross-tenant-evidence-acceptance.md`.
 - Latest session preflight log: `docs/engineering/session-logs/2026-10-31-1718-utc-resume-preflight.md`.
 
