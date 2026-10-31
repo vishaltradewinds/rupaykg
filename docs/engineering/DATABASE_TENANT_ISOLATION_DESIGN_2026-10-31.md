@@ -242,3 +242,14 @@ The MRV route batch still requires exact-head CI, route integration tests, provi
 Added a disposable-PostgreSQL integration test to `apps/src/database-context.test.ts`. It runs the transaction helper with a pool capped at one connection, verifies the first identity/organization inside the transaction, checks that both custom settings are NULL after commit when the same pooled connection is queried outside a transaction, and then verifies that a second tenant context is applied correctly on reuse.
 
 The test is gated to CI, non-production mode, the explicit database-integration flag and a configured disposable `DATABASE_URL`. It does not run against live Neon. Exact-code-head validation is running in CI #41189912605 after an initial typecheck caught escaped SQL template delimiters in the MRV submission refactor; those delimiters were corrected in commit `e5cfed11ff11c72e060ccda3877819165c2fdeb4`. Await this run before treating the MRV batch and new pool-reuse test as validated.
+
+
+## 17. EPR obligation listing route adoption
+
+On 2026-10-31, `GET /api/v1/epr/obligations` in `apps/src/bwg-routes.ts` was moved to the tenant-context helper:
+
+- The route now requires an explicit verified active organization and no longer accepts `x-rupaykg-organization-id` as a fallback tenant selector.
+- `epr:read` / `epr:manage` / `reports:read` permission evaluation and the obligation listing query run on the same checked-out client and transaction.
+- The organization filter is bound to the verified active organization derived from the authenticated context.
+
+The BWG registration function also registers `epr-return-routes.ts`; that separate route module remains outstanding and is not covered by this adoption. This is one route only, not a completed EPR/BWG tenant boundary. Exact-head CI is pending.
