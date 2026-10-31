@@ -118,6 +118,23 @@ try {
   assert.deepEqual(afterRejection.authorization_permissions_snapshot, baseline.authorization_permissions_snapshot);
   assert.equal(afterRejection.authorization_checked_at.getTime(), baseline.authorization_checked_at.getTime());
 
+  // Historical provenance remains immutable on subsequent updates after the
+  // row has left APPROVED, and direct reapproval requires a separate audited path.
+  await client.query("update verifications set decision='REJECTED' where id=$1", [ids.verification]);
+  const afterSecondUpdate = await selectSnapshot();
+  assert.equal(afterSecondUpdate.authorization_membership_id, baseline.authorization_membership_id);
+  assert.equal(afterSecondUpdate.authorization_role_id, baseline.authorization_role_id);
+  assert.deepEqual(afterSecondUpdate.authorization_permissions_snapshot, baseline.authorization_permissions_snapshot);
+  assert.equal(afterSecondUpdate.authorization_checked_at.getTime(), baseline.authorization_checked_at.getTime());
+  await assert.rejects(
+    client.query("update verifications set decision='APPROVED' where id=$1", [ids.verification]),
+    /explicit audited reapproval workflow/,
+  );
+  await assert.rejects(
+    client.query("update verifications set evidence_id=$2 where id=$1", [ids.verification, replacementEvidence]),
+    /approved verification linkage is immutable/,
+  );
+
   // Non-approved rows cannot bring caller-supplied snapshots, and approval
   // transitions re-check current role permissions.
   const pendingId = "10000000-0000-4000-8000-000000000014";
