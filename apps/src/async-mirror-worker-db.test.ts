@@ -267,7 +267,7 @@ test("government inbox worker persists retry recovery, quarantine and append-onl
     assert.equal(expiredRow.rows[0]?.last_error_code, "GOVERNMENT_CROSSWALK_NOT_FOUND");
 
     // Revoked mappings must not resolve future batches.
-    await pool.query("update government_jurisdiction_crosswalks set status='UNAVAILABLE', effective_to=null, revoked_at=now() where id=$1", [resolvedCrosswalk.rows[0]!.id]);
+    await pool.query("update government_jurisdiction_crosswalks set status='REVOKED', effective_to=null, revoked_at=now() where id=$1", [resolvedCrosswalk.rows[0]!.id]);
     const revokedTimestamp = new Date().toISOString();
     const revokedBatchId = randomUUID();
     const revokedPayload = {
