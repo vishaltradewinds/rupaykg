@@ -97,7 +97,7 @@ Added disposable PostgreSQL integration tests:
 
 The fixtures are synthetic and run only in disposable CI PostgreSQL. They intentionally leave append-only event history in that ephemeral database; no staging or production queue rows are touched.
 
-**Limits still open:** this does not renew a lease during long validation. If validation exceeds the lease, the final fenced update is correctly rejected, but the row may remain PROCESSING until a later worker reclaims it. Crosswalk reads are still not bound to an immutable/versioned snapshot transaction. These are separate follow-up gates; do not infer them as solved by atomic claiming. Actual deployed worker identity, RLS/global authority scope approval, migration-principal semantics, and production-derived full-chain rehearsal remain release blockers. No worker service, schedule, secret, role, live database or deployment was activated or changed.
+**Limits still open:** this does not renew a lease during long validation. If validation exceeds the lease, the final fenced update is correctly rejected, but the row may remain PROCESSING until a later worker reclaims it. Crosswalk reads are still not bound to an immutable/versioned snapshot transaction. These were separate follow-up gates at the time of this entry; the later section “Bounded validation and lease renewal” records the engineering implementation and tests. Actual deployed worker identity, RLS/global authority scope approval, migration-principal semantics, exact-head CI and production-derived full-chain rehearsal remain release blockers. No worker service, schedule, secret, role, live database or deployment was activated or changed.
 
 
 ### Concurrency-test harness correction — 2026-10-31
@@ -118,7 +118,7 @@ The atomic-claim worker follow-up now resolves a candidate jurisdiction crosswal
 
 Unit tests now assert transaction ordering, the advisory lock, row locks and persisted snapshot identity/hash. Disposable PostgreSQL acceptance adds a competing crosswalk-revocation test: mutation must time out while the same jurisdiction-key lock is held, then succeed after release.
 
-This closes the previously identified read-to-terminal-update gap for matching crosswalk inserts/updates and source/crosswalk retirement/revocation, subject to exact-head CI and independent review. It does not solve the separate global-vs-row-scoped queue governance decision, RLS, worker lease renewal/strict validator timeout, or production migration-principal authority. PR #161 remains draft/unmerged; production remains HOLD; worker OFF; TRL 9 unclaimed.
+This closes the previously identified read-to-terminal-update gap for matching crosswalk inserts/updates and source/crosswalk retirement/revocation, subject to exact-head CI and independent review. It does not solve the separate global-vs-row-scoped queue governance decision, RLS, exact-head CI or production migration-principal authority. The later “Bounded validation and lease renewal” section records the follow-on engineering implementation. PR #161 remains draft/unmerged; production remains HOLD; worker OFF; TRL 9 unclaimed.
 
 
 Validation note: the stacked worker branch is temporarily targeted at main solely to run the full production-baseline CI workflow; it remains draft and unmerged, and its original stacked base will be restored after the exact-head run.
