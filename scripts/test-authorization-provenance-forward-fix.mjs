@@ -167,7 +167,7 @@ try {
   assert.equal(afterSecondUpdate.authorization_checked_at.getTime(), baseline.authorization_checked_at.getTime());
   await assert.rejects(
     client.query("update verifications set decision='APPROVED' where id=$1", [ids.verification]),
-    /explicit audited reapproval workflow/,
+    /new audited verification record/,
   );
   await assert.rejects(
     client.query("update verifications set activity_id=$2,evidence_id=$3 where id=$1", [ids.verification, replacementActivity, replacementEvidence]),
