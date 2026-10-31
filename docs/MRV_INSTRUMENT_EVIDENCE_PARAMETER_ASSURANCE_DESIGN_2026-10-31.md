@@ -262,3 +262,18 @@ PR #155 verified each restored file's Git blob SHA against its historical source
 The exact source objects and live ledger/schema placement are now known. This does not prove that current staging/rehearsal objects are byte-for-byte the result of those files: out-of-band drift may exist, and rehearsal-only `UNRESOLVED` status is not ledgered. Do not replay these migrations into live branches or promote them to production until SQL effects, object/constraint/function equivalence and chronology are independently reviewed.
 
 Integrate source restoration through the canonical migration-history review path (PR #154 / PR #134), not by merging the historical worker branch or cherry-picking worker runtime code. Worker implementation dependencies remain separately gated.
+
+
+## 11. Production verifier migration 096 — forward-only security defect
+
+A separate disposable-PostgreSQL regression candidate in PR #140 reproduced a defect in the recovered 096 trigger: because the trigger executes on every UPDATE, an unrelated update to an already-approved verification can refresh `authorization_permissions_snapshot` and `authorization_checked_at`. This rewrites decision-time provenance and may cause historical approval evidence to reflect later role permissions rather than the original decision.
+
+PR #140 exact-head CI run #41073680266 passed its disposable regression and proposed forward-fix tests. The proposal exercises:
+- preserving the original snapshot on unrelated updates and later role-permission revocation;
+- rejecting verifier/evidence/activity linkage changes on already-approved rows;
+- clearing caller-supplied authorization fields on non-approved inserts;
+- rechecking current authorization when a row transitions to APPROVED.
+
+This is an identified defect and a proposed forward-fix, not an approved production remediation. Independent database/security review must assess approved-row immutability, legitimate correction/revocation workflows, concurrency/locking, trigger privileges and search_path, runtime-role write reachability, and API readers. Do not restore/replay 096 blindly or replace the live function with the historical source without a separately reviewed forward-only correction.
+
+**Release impact:** preserve production's current verifier controls, but classify decision-time authorization snapshot immutability as an open security assurance gap pending the forward-only fix and review. No live SQL has been changed.
