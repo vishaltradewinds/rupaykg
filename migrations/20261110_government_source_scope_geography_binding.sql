@@ -35,7 +35,7 @@ as $$
     select g.id, g.parent_id
       from geography g
      where g.id = p_target_geography_id
-    union all
+    union
     select parent.id, parent.parent_id
       from geography parent
       join target_lineage child on child.parent_id = parent.id
