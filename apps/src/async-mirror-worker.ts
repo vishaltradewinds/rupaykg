@@ -347,7 +347,6 @@ export async function runGovernmentInboxWorker(
           };
         }
       }
-      if (!sourceResolutionClient) await pauseAndRefreshLease();
       const terminalDb = sourceResolutionClient ?? pool;
       if (outcome.valid) {
         const updated = await terminalDb.query(
@@ -390,7 +389,6 @@ export async function runGovernmentInboxWorker(
       if (sourceResolutionClient) {
         try { await sourceResolutionClient.query("ROLLBACK"); } finally { sourceResolutionClient.release(); sourceResolutionClient = null; }
       }
-      await pauseAndRefreshLease().catch(() => undefined);
       const exhausted = row.attempts >= maxAttempts;
       const knownFailure = error instanceof Error && /^(VALIDATION_TIMEOUT|LEASE_RENEWAL_FENCE_LOST|LEASE_RENEWAL_FAILED|LEASE_RENEWAL_ROW_MISSING)$/.test(error.message)
         ? error.message
