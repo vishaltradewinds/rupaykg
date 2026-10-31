@@ -196,7 +196,16 @@ const leastPrivilegePrincipal = {
   owns_public_schema: false,
   has_public_schema_create: false,
   inbox_select: true,
-  inbox_update: true,
+  inbox_table_update: false,
+  inbox_update_status: true,
+  inbox_update_attempts: true,
+  inbox_update_lease_token: true,
+  inbox_update_lease_until: true,
+  inbox_update_quarantined_at: true,
+  inbox_update_last_error_code: true,
+  inbox_update_next_attempt_at: true,
+  inbox_update_processed_at: true,
+  inbox_update_validation_summary: true,
   crosswalk_select: true,
   source_snapshot_select: true,
   activity_select: true,
@@ -256,13 +265,13 @@ test("worker principal attestation rejects elevated attributes, memberships, own
 test("worker principal attestation rejects missing operational grants", async () => {
   const incomplete = {
     ...leastPrivilegePrincipal,
-    inbox_update: false,
+    inbox_update_validation_summary: false,
     crosswalk_select: false,
     source_scope_execute: false,
   };
   await assert.rejects(
     () => assertGovernmentInboxWorkerPrincipal(principalPool(incomplete)),
-    /INBOX_UPDATE_MISSING,CROSSWALK_SELECT_MISSING,SOURCE_SCOPE_EXECUTE_MISSING/,
+    /INBOX_VALIDATION_SUMMARY_UPDATE_MISSING,CROSSWALK_SELECT_MISSING,SOURCE_SCOPE_EXECUTE_MISSING/,
   );
 });
 
@@ -325,4 +334,14 @@ test("combined worker readiness stops before principal query when schema is inco
   } as unknown as Pool;
   await assert.rejects(() => assertGovernmentInboxWorkerReady(pool), /GOVERNMENT_INBOX_SCHEMA_NOT_READY/);
   assert.deepEqual(calls, ["schema"]);
+});
+
+
+test("worker principal attestation rejects table-wide inbox UPDATE even when column grants exist", async () => {
+  await assert.rejects(
+    () => assertGovernmentInboxWorkerPrincipal(
+      principalPool({ ...leastPrivilegePrincipal, inbox_table_update: true }),
+    ),
+    /INBOX_TABLE_LEVEL_UPDATE_TOO_BROAD/,
+  );
 });
