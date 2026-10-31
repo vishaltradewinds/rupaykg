@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { Pool } from "pg";
 import { readFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import path from "node:path";
 
 const enabled = process.env.RUPAYKG_RUN_DB_INTEGRATION_TESTS === "1" && Boolean(process.env.DATABASE_URL);
@@ -19,7 +20,13 @@ test("production-shaped migration order preserves 023 and production-only verifi
       "select version, filename from schema_migrations order by applied_at, version",
     );
     const entries = ledger.rows;
-    const manifestPath = path.resolve(process.cwd(), "docs/engineering/PRODUCTION_MIGRATION_LEDGER_MANIFEST_2026-10-31.json");
+    const manifestRelativePath = "docs/engineering/PRODUCTION_MIGRATION_LEDGER_MANIFEST_2026-10-31.json";
+    const manifestCandidates = [
+      path.resolve(process.cwd(), manifestRelativePath),
+      path.resolve(process.cwd(), "..", manifestRelativePath),
+    ];
+    const manifestPath = manifestCandidates.find((candidate) => existsSync(candidate));
+    assert.ok(manifestPath, "production migration manifest must be available from repository or workspace root");
     const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as {
       count: number;
       production_migration_order: Array<{ version: string; filename: string }>;
