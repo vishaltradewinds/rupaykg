@@ -2,6 +2,7 @@ import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { Pool } from "pg";
 import { randomUUID } from "node:crypto";
+import { createCurrentInstrumentReading } from "./mrv-instrument-test-fixture.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 const pool = databaseUrl ? new Pool({ connectionString: databaseUrl, max: 2 }) : null;
@@ -26,6 +27,7 @@ before(async () => {
     const retiredActivity = (await c.query<{ id: string }>("insert into activities(organization_id,actor_identity_id,geography_id,activity_type,status,completed_at) values($1,$2,$3,'COLLECTION','COMPLETED',now()) returning id", [owner, actor, geography])).rows[0]!.id;
     const retiredEvidence = (await c.query<{ id: string }>("insert into evidence(activity_id,evidence_type,status,captured_at,content_hash) values($1,'SETTLEMENT_GUARD','VERIFIED',now(),$2) returning id", [retiredActivity, `settlement-guard-retired-${suffix}`])).rows[0]!.id;
     const retiredVerification = (await c.query<{ id: string }>("insert into verifications(evidence_id,activity_id,verifier_identity_id,decision,scope,rationale) values($1,$2,$3,'APPROVED','settlement-guard','independent database guard test') returning id", [retiredEvidence, retiredActivity, verifier])).rows[0]!.id;
+    await createCurrentInstrumentReading(c, { organizationId: owner, activityId: retiredActivity, uploaderIdentityId: actor, reviewerIdentityId: verifier, label: "retired-credential-fixture" });
     await c.query("insert into mrv_provenance_events(activity_id,verification_id,evidence_id,guardian_policy_id,guardian_execution_id,guardian_status,hcs_status,hcs_topic_id,hcs_transaction_id,hcs_consensus_timestamp,integrity_hash,metadata,mirror_node_verified_at) values($1,$2,$3,'settlement-guard-policy','settlement-guard-guardian','VERIFIED','CONSENSUS_CONFIRMED','0.0.123',$4,$5,$6,'{\"testFixture\":true}',clock_timestamp())", [retiredActivity, retiredVerification, retiredEvidence, `retired-tx-${suffix}`, `retired-consensus-${suffix}`, `retired-hash-${suffix}`]);
     retiredCredentialId = (await c.query<{ id: string }>("insert into credentials(activity_id,issuer_organization_id,trust_root_id,status,verification_id,quantity,unit,issued_at) values($1,$2,$3,'ELIGIBLE',$4,1,'kg',now()) returning id", [retiredActivity, owner, `settlement-guard-retired-root-${suffix}`, retiredVerification])).rows[0]!.id;
     await c.query("update credentials set status='ISSUED' where id=$1", [retiredCredentialId]);
@@ -36,6 +38,7 @@ before(async () => {
     const openActivity = (await c.query<{ id: string }>("insert into activities(organization_id,actor_identity_id,geography_id,activity_type,status,completed_at) values($1,$2,$3,'COLLECTION','COMPLETED',now()) returning id", [owner, actor, geography])).rows[0]!.id;
     const openEvidence = (await c.query<{ id: string }>("insert into evidence(activity_id,evidence_type,status,captured_at,content_hash) values($1,'SETTLEMENT_GUARD','VERIFIED',now(),$2) returning id", [openActivity, `settlement-guard-open-${suffix}`])).rows[0]!.id;
     const openVerification = (await c.query<{ id: string }>("insert into verifications(evidence_id,activity_id,verifier_identity_id,decision,scope,rationale) values($1,$2,$3,'APPROVED','settlement-guard','independent database guard test') returning id", [openEvidence, openActivity, verifier])).rows[0]!.id;
+    await createCurrentInstrumentReading(c, { organizationId: owner, activityId: openActivity, uploaderIdentityId: actor, reviewerIdentityId: verifier, label: "open-settlement-fixture" });
     await c.query("insert into mrv_provenance_events(activity_id,verification_id,evidence_id,guardian_policy_id,guardian_execution_id,guardian_status,hcs_status,hcs_topic_id,hcs_transaction_id,hcs_consensus_timestamp,integrity_hash,metadata,mirror_node_verified_at) values($1,$2,$3,'settlement-guard-policy','settlement-guard-guardian','VERIFIED','CONSENSUS_CONFIRMED','0.0.123',$4,$5,$6,'{\"testFixture\":true}',clock_timestamp())", [openActivity, openVerification, openEvidence, `open-tx-${suffix}`, `open-consensus-${suffix}`, `open-hash-${suffix}`]);
     openSettlementCredentialId = (await c.query<{ id: string }>("insert into credentials(activity_id,issuer_organization_id,trust_root_id,status,verification_id,quantity,unit,issued_at) values($1,$2,$3,'ELIGIBLE',$4,2,'kg',now()) returning id", [openActivity, owner, `settlement-guard-open-root-${suffix}`, openVerification])).rows[0]!.id;
     await c.query("update credentials set status='ISSUED' where id=$1", [openSettlementCredentialId]);

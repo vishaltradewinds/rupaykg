@@ -2,6 +2,7 @@ import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { Pool } from "pg";
 import { randomUUID } from "node:crypto";
+import { createCurrentInstrumentReading } from "./mrv-instrument-test-fixture.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 const pool = databaseUrl ? new Pool({ connectionString: databaseUrl }) : null;
@@ -55,6 +56,10 @@ before(async () => {
     "insert into verifications(evidence_id,activity_id,verifier_identity_id,decision,scope,rationale) values($1,$2,$3,'APPROVED','settlement-reconciliation','independent database guard test') returning id",
     [evidence, activity, verifier],
   )).rows[0]!.id;
+  const fixtureClient = await pool.connect();
+  try {
+    await createCurrentInstrumentReading(fixtureClient, { organizationId: owner, activityId: activity, uploaderIdentityId: actor, reviewerIdentityId: verifier, label: "settlement-reconciliation-fixture" });
+  } finally { fixtureClient.release(); }
   await pool.query(
     "insert into mrv_provenance_events(activity_id,verification_id,evidence_id,guardian_policy_id,guardian_execution_id,guardian_status,hcs_status,hcs_topic_id,hcs_transaction_id,hcs_consensus_timestamp,integrity_hash,metadata,mirror_node_verified_at) values($1,$2,$3,$4,$5,'VERIFIED','CONSENSUS_CONFIRMED','0.0.123',$6,now(),$7,$8::jsonb,clock_timestamp())",
     [

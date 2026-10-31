@@ -57,7 +57,11 @@ The official open-source Guardian distribution includes an `mrv-sender` service.
 
 ## Acceptance-fixture boundary
 
-The optional `RUPAYKG_ACCEPTANCE_SEED_ON_START=true` dataset is a test fixture. It may be used to exercise the real external Guardian/Hedera/Mirror Node integration, but it is not evidence of a real waste activity or a carbon-credit project. Activities/evidence marked `metadata.acceptanceFixture=true` must remain ineligible for registry issuance even when external anchoring succeeds. PostgreSQL independently rejects any credential transition into a value-bearing state for these fixtures; MRV API responses must also report `eligibleForRegistry=false`.
+The legacy `RUPAYKG_ACCEPTANCE_SEED_ON_START=true` synthetic dataset is **disabled for authoritative MRV submission**. It creates synthetic measurements/evidence and cannot satisfy the real instrument-approval, evidence-vault, or physical-evidence requirements. The seed now fails closed with an explanatory error instead of creating a fixture that cannot validly pass the live submit route.
+
+The manual Guardian/Hedera/Mirror Node workflow must use a real completed activity, approved verification, verified evidence, and instrument-bound readings whose instrument approval and current evidence-vault artifacts pass the MRV gates. Do not use a synthetic fixture to claim Guardian/Hedera production acceptance or registry eligibility.
+
+Any legacy activity/evidence marked `metadata.acceptanceFixture=true` must remain ineligible for registry issuance even if external anchoring succeeds. PostgreSQL independently rejects value-bearing credential transitions for such fixtures; MRV API responses must report `eligibleForRegistry=false`. The manual live workflow's registry-eligibility assertion applies only to an eligible real activity, not to a synthetic acceptance fixture.
 
 ## Negative acceptance cases
 

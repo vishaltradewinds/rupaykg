@@ -4,13 +4,24 @@ import type { Pool } from "pg";
 import { authenticate, bearerChallenge, canActForOrganization, canVerifyEvidence, hasOrganizationPermission, type AuthContext } from "./auth.js";
 
 const MAX_BYTES = 5 * 1024 * 1024;
-const MEDIA = new Set(["application/pdf", "image/jpeg", "image/png", "text/csv", "text/plain", "application/json"]);
+const MEDIA = new Set(["application/pdf", "image/jpeg", "image/png", "text/csv", "text/plain", "application/json", "application/octet-stream"]);
 type B = Record<string, unknown>;
 type Req = { body: unknown; params: Record<string,string>; query?: unknown; log: { error: (e:unknown)=>void } };
 type Rep = { code:(n:number)=>{send:(v:unknown)=>unknown}; header:(k:string,v:string)=>unknown; type:(v:string)=>unknown; send:(v:unknown)=>unknown };
 const bodyOf=(r:Req):B=>r.body&&typeof r.body==="object"?r.body as B:{};
 const str=(b:B,k:string):string|null=>typeof b[k]==="string"&&b[k].trim()?b[k].trim():null;
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export function evidenceReviewTransitionFailure(currentStatus:string, decision:string):string|null {
+ if(decision!=="APPROVED"&&decision!=="REJECTED")return "Decision must be APPROVED or REJECTED.";
+ if(currentStatus==="CAPTURED")return null;
+ // A reviewer must be able to revoke evidence already used to approve an MRV instrument.
+ // Rejection is terminal for this immutable artifact version; replacement requires a new version.
+ if(currentStatus==="VERIFIED"&&decision==="REJECTED")return null;
+ if(currentStatus==="VERIFIED")return "Verified evidence can only be revoked by a rejection review; upload a new version to submit replacement evidence.";
+ if(currentStatus==="REJECTED")return "Rejected evidence is terminal; upload a new version for a new review.";
+ return "Evidence status does not permit review.";
+}
 
 export function sanitizeEvidenceFileName(value:string):string|null {
  const name=value.normalize("NFKC").replace(/[\\/\u0000-\u001f\u007f]/g,"_").replace(/^\.+/,"").trim();
@@ -30,6 +41,7 @@ export function decodeEvidenceBase64(value:string):Buffer|null {
  return !bytes.length||bytes.length>MAX_BYTES||bytes.toString("base64")!==value?null:bytes;
 }
 export function evidencePayloadMatchesMediaType(bytes:Buffer,mediaType:string):boolean {
+ if(mediaType==="application/octet-stream")return bytes.length>0;
  if(mediaType==="application/pdf")return bytes.subarray(0,5).toString("ascii")==="%PDF-";
  if(mediaType==="image/jpeg")return bytes.length>=3&&bytes[0]===0xff&&bytes[1]===0xd8&&bytes[2]===0xff;
  if(mediaType==="image/png")return bytes.length>=8&&bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10]));
@@ -108,11 +120,15 @@ export async function registerEvidenceVaultRoutes(app:FastifyInstance,pool:Pool|
   if(!UUID.test(id))return reply.code(400).send({error:"Invalid evidenceId",code:"EVIDENCE_ID_INVALID"});
   if((decision!=="APPROVED"&&decision!=="REJECTED")||!rationale||rationale.length<5||rationale.length>2000)return reply.code(400).send({error:"Decision and 5–2000 character rationale required",code:"EVIDENCE_REVIEW_FIELDS_INVALID"});
   const client=await pool.connect();try{await client.query("begin");
+   // Match credential issuance lock order: lock affected instrument rows in UUID order before locking evidence.
+   // This serializes rejection against issuance and instrument review without introducing an evidence→instrument inversion.
+   await client.query("select i.id from mrv_instruments i where i.meity_evidence_artifact_version_id in (select v.id from evidence_artifact_versions v where v.evidence_id=$1) or i.calibration_evidence_artifact_version_id in (select v.id from evidence_artifact_versions v where v.evidence_id=$1) or i.security_evidence_artifact_version_id in (select v.id from evidence_artifact_versions v where v.evidence_id=$1) or exists (select 1 from mrv_instrument_parameter_specs ps join evidence_artifact_versions v on v.id=ps.source_evidence_artifact_version_id where ps.instrument_id=i.id and v.evidence_id=$1) order by i.id for update",[id]);
    const q=await client.query<{organization_id:string;activity_id:string;geography_id:string|null;status:string;artifact_id:string;uploaded_by_identity_id:string}>("select a.organization_id,a.id activity_id,a.geography_id,e.status::text status,v.id artifact_id,v.uploaded_by_identity_id from evidence e join activities a on a.id=e.activity_id join evidence_artifact_versions v on v.evidence_id=e.id where e.id=$1 for update of e",[id]),row=q.rows[0];
    if(!row||!row.geography_id||!canActForOrganization(auth,row.organization_id)){await client.query("rollback");return reply.code(404).send({error:"Evidence not found",code:"EVIDENCE_NOT_FOUND"});}
    const g=await client.query<{ok:boolean}>("select organization_has_geography_scope($1::uuid,$2::uuid) ok",[row.organization_id,row.geography_id]);
    if(!g.rows[0]?.ok||!await hasOrganizationPermission(client,auth,row.organization_id,["evidence:review"])||!await canVerifyEvidence(client,auth.identityId,id)){await client.query("rollback");return reply.code(403).send({error:"Evidence review permission and geography scope required",code:"EVIDENCE_REVIEW_FORBIDDEN"});}
-   if(row.status==="VERIFIED"||row.status==="REJECTED"){await client.query("rollback");return reply.code(409).send({error:"Reviewed evidence is immutable; upload a new version",code:"EVIDENCE_ALREADY_REVIEWED"});}
+   const transitionFailure=evidenceReviewTransitionFailure(row.status,decision);
+   if(transitionFailure){await client.query("rollback");return reply.code(409).send({error:transitionFailure,code:row.status==="REJECTED"?"EVIDENCE_ALREADY_REJECTED":"EVIDENCE_REVIEW_TRANSITION_FORBIDDEN"});}
    if(row.uploaded_by_identity_id===auth.identityId){await client.query("rollback");return reply.code(403).send({error:"Evidence uploader cannot review their own artifact",code:"EVIDENCE_SELF_REVIEW_FORBIDDEN"});}
    const status=decision==="APPROVED"?"VERIFIED":"REJECTED";
    await client.query("insert into evidence_artifact_reviews(evidence_id,artifact_version_id,reviewer_identity_id,decision,rationale) values($1,$2,$3,$4,$5)",[id,row.artifact_id,auth.identityId,decision,rationale]);
