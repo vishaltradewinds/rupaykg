@@ -277,3 +277,12 @@ PR #140 exact-head CI run #41073680266 passed its disposable regression and prop
 This is an identified defect and a proposed forward-fix, not an approved production remediation. Independent database/security review must assess approved-row immutability, legitimate correction/revocation workflows, concurrency/locking, trigger privileges and search_path, runtime-role write reachability, and API readers. Do not restore/replay 096 blindly or replace the live function with the historical source without a separately reviewed forward-only correction.
 
 **Release impact:** preserve production's current verifier controls, but classify decision-time authorization snapshot immutability as an open security assurance gap pending the forward-only fix and review. No live SQL has been changed.
+
+
+### 10.1 Consolidated worker migration chain supersedes source-only PRs
+
+PR #155 was closed because it was superseded by PR #156, which restored the complete 19-file jurisdiction/worker migration chain. PR #156 was then closed because PR #157 consolidates that migration chain with the isolated worker module, hash logic, and real-PostgreSQL worker acceptance tests. PR #157 is the single current draft integration path for this worker feature; do not separately merge PR #155 or #156 or cherry-pick their migrations into another feature branch.
+
+PR #157 exact head `929df289bf239e4d834fee5e6f902ffe5cd18e23` passed CI run #41180186785, including the disposable PostgreSQL worker acceptance suite. This is engineering acceptance on CI, not live database acceptance or deployment. Its migration set includes 20261022–20261111. The 20261101 unresolved-crosswalk migration remains a schema-history reconciliation issue because neither staging nor rehearsal ledger records it, although rehearsal currently has its schema effect. It must not be replayed into rehearsal or promoted based solely on the feature branch.
+
+The current branch #157 includes the recovered 20261022–20261025 source files and dependency chain, so this PR #137 branch deliberately documents rather than duplicates those migration files. PR #157 remains draft/unmerged; production remains HOLD, and no worker/scheduler activation is authorized.
