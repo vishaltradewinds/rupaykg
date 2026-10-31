@@ -38,3 +38,24 @@ test("governance separation is preserved", () => {
 test("unknown roles fail closed", () => {
   assert.deepEqual(getPermissionsForRole("not-a-role"), []);
 });
+
+test("facility management is limited to operational stakeholder profiles", () => {
+  const facilityOperators = [
+    "fpo",
+    "municipal_admin",
+    "municipal_generator",
+    "aggregator",
+    "processor",
+    "industry_generator",
+    "commercial_generator",
+    "institution_generator",
+    "platform_admin",
+    "super_admin",
+  ];
+  for (const role of facilityOperators) {
+    assert.ok(getPermissionsForRole(role).includes("facility:manage"), `${role} must manage facilities in its authorized organization`);
+  }
+  for (const role of ["citizen", "farmer", "safai_mitra", "ccc_buyer", "ACVA_USER"]) {
+    assert.equal(getPermissionsForRole(role).includes("facility:manage"), false, `${role} must not manage facilities by default`);
+  }
+});
