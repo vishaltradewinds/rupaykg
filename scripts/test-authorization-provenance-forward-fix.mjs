@@ -205,6 +205,7 @@ try {
     ssl: process.env.DATABASE_SSL === "false" ? undefined : { rejectUnauthorized: false },
   });
   await concurrentClient.connect();
+  await concurrentClient.query("set search_path to " + q(schema) + ", public");
   try {
     await concurrentClient.query("BEGIN");
     await concurrentClient.query("update organization_memberships set status='REVOKED' where id=$1", [ids.membership]);
