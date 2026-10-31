@@ -12,9 +12,11 @@ if (!Number.isInteger(pollIntervalMs) || pollIntervalMs < 1000 || pollIntervalMs
 
 const pool = createGovernmentInboxWorkerPool();
 let stopping = false;
+const sleepController = new AbortController();
 const stop = (signal: string): void => {
   if (stopping) return;
   stopping = true;
+  sleepController.abort();
   process.stdout.write(JSON.stringify({ event: "government_inbox_worker_stopping", signal }) + "\n");
 };
 process.once("SIGTERM", () => stop("SIGTERM"));
@@ -33,7 +35,7 @@ try {
       const code = error instanceof Error ? error.message : "WORKER_CYCLE_FAILED";
       process.stderr.write(JSON.stringify({ event: "government_inbox_worker_cycle_failed", code }) + "\n");
     }
-    if (!stopping) await delay(pollIntervalMs);
+    if (!stopping) await delay(pollIntervalMs, undefined, { signal: sleepController.signal }).catch(() => undefined);
   }
 } finally {
   await pool.end();
