@@ -26,8 +26,6 @@ create unique index if not exists mrv_instruments_physical_serial_identity_idx
   on mrv_instruments(
     organization_id,
     lower(btrim(manufacturer)),
-    lower(btrim(model)),
-    lower(btrim(sku_revision)),
     lower(btrim(manufacturer_serial_number))
   )
   where manufacturer_serial_number is not null;
