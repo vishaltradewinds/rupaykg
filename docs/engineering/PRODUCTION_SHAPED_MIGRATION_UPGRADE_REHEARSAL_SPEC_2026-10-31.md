@@ -61,4 +61,5 @@ PASS only when all invariants and tests above pass on the exact candidate head, 
 - The exact recovered `096` source is restored to `migrations/096_verification_authorization_provenance.sql`. Its Git blob SHA is `258b1f4534efbf915688f78aa84d4ec24a47cbc0`.
 - The migration runner now uses an explicit chronology comparator so production-only `096` runs after `20261021` and before the proposed `20261022+` chain.
 - Unit tests cover that ordering. A PostgreSQL acceptance test checks ledger order, migration 023 presence, migration 096 identity, all four authorization provenance columns, and verifier function guard markers.
-- This is still a disposable CI reconstruction, not a clone of production data or an authorized live migration. CI must pass on the exact head before the rehearsal can be called successful.
+- CI now has separate `production-baseline` and `production-upgrade` phases: it reconstructs the exact 92-row schema baseline first, then applies only the proposed `20261022+` chain, then reruns the upgrade phase to prove idempotency. The PostgreSQL acceptance test compares the first 92 migration identities against the captured live manifest.
+- This is a disposable CI reconstruction, not a clone of production data or an authorized live migration. CI must pass on the exact head before the rehearsal can be called successful.
