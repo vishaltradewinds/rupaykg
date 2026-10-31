@@ -46,8 +46,8 @@ test("PostgreSQL enforces MRV instrument approval evidence and append-only decis
       [reviewerIdentityId, organizationId, reviewerRoleId],
     );
     const instrumentId = (await client.query<{ id: string; approval_status: string }>(
-      "insert into mrv_instruments(organization_id,instrument_code,instrument_type,manufacturer,model,sku_revision,intended_use,supported_parameter_codes,registered_by_identity_id) values($1,$2,'GAS_FLOW','Test Manufacturer','Flow Model 1','Rev A','Landfill methane recovery flow measurement',array['gas_flow'],$3) returning id,approval_status",
-      [organizationId, `FLOW-${suffix}`, identityId],
+      "insert into mrv_instruments(organization_id,instrument_code,instrument_type,manufacturer,model,sku_revision,manufacturer_serial_number,asset_tag,intended_use,supported_parameter_codes,registered_by_identity_id) values($1,$2,'GAS_FLOW','Test Manufacturer','Flow Model 1','Rev A',$3,$4,'Landfill methane recovery flow measurement',array['gas_flow'],$5) returning id,approval_status",
+      [organizationId, `FLOW-${suffix}`, `SERIAL-FLOW-${suffix}`, `ASSET-FLOW-${suffix}`, identityId],
     )).rows[0]!;
     assert.equal(instrumentId.approval_status, "HOLD");
 
@@ -105,12 +105,12 @@ test("PostgreSQL enforces MRV instrument approval evidence and append-only decis
       [instrumentId.id, identityId],
     ), /exact-model MeitY approval evidence/i);
 
-    const approvalSql = "update mrv_instruments set approval_status='VERIFIED',meity_certificate_id='MEITY-CERT-TEST',meity_issuer='Official authority',meity_certificate_scope='Exact manufacturer/model/SKU revision',meity_verification_url='https://official.example.gov/cert',meity_evidence_reference='evidence://meity-test',meity_evidence_sha256=$3,meity_evidence_artifact_version_id=$5,meity_verified_at=now(),meity_validity_basis='VALID_UNTIL',meity_valid_until=now()+interval '1 year',calibration_required=true,calibration_status='VERIFIED',calibration_certificate_id='CAL-TEST',calibration_evidence_reference='evidence://cal-test',calibration_evidence_sha256=$4,calibration_evidence_artifact_version_id=$6,calibration_lab='Traceable lab',calibration_traceability='National standard traceability',calibration_uncertainty=0.2,calibration_valid_until=now()+interval '1 year',security_review_status='NOT_APPLICABLE_WITH_JUSTIFICATION',security_not_applicable_reason='Test fixture uses no firmware; test-only written rationale',reviewed_by_identity_id=$2,reviewed_at=now(),review_note='test exact-model approval and calibration evidence' where id=$1 returning approval_status";
-    await rejectsInSavepoint(client, () => client.query(approvalSql, [instrumentId.id, identityId, "a".repeat(64), calibrationArtifact.sha256, meityArtifact.id, calibrationArtifact.id]), /matching recomputed SHA-256/i);
-    await rejectsInSavepoint(client, () => client.query(approvalSql, [instrumentId.id, identityId, foreignMeityArtifact.sha256, calibrationArtifact.sha256, foreignMeityArtifact.id, calibrationArtifact.id]), /same-organization evidence-vault artifact/i);
+    const approvalSql = "update mrv_instruments set approval_status='VERIFIED',meity_certificate_id='MEITY-CERT-TEST',meity_issuer='Official authority',meity_certificate_scope='Exact manufacturer/model/SKU revision',meity_verification_url='https://official.example.gov/cert',meity_evidence_reference='evidence://meity-test',meity_evidence_sha256=$3,meity_evidence_artifact_version_id=$5,meity_verified_at=now(),meity_validity_basis='VALID_UNTIL',meity_valid_until=now()+interval '1 year',calibration_required=true,calibration_status='VERIFIED',calibration_certificate_id='CAL-TEST',calibration_evidence_reference='evidence://cal-test',calibration_evidence_sha256=$4,calibration_evidence_artifact_version_id=$6,calibration_lab='Traceable lab',calibration_traceability='National standard traceability',calibration_uncertainty=0.2,calibration_valid_until=now()+interval '1 year',security_review_status='NOT_APPLICABLE_WITH_JUSTIFICATION',security_not_applicable_reason='Test fixture uses no firmware; test-only written rationale',reviewed_by_identity_id=$2,reviewed_at=now(),review_note='test exact-model approval and calibration evidence',calibration_serial_number=$7 where id=$1 returning approval_status";
+    await rejectsInSavepoint(client, () => client.query(approvalSql, [instrumentId.id, identityId, "a".repeat(64), calibrationArtifact.sha256, meityArtifact.id, calibrationArtifact.id, `SERIAL-FLOW-${suffix}`]), /matching recomputed SHA-256/i);
+    await rejectsInSavepoint(client, () => client.query(approvalSql, [instrumentId.id, identityId, foreignMeityArtifact.sha256, calibrationArtifact.sha256, foreignMeityArtifact.id, calibrationArtifact.id, `SERIAL-FLOW-${suffix}`]), /same-organization evidence-vault artifact/i);
     const approved = await client.query<{ approval_status: string }>(
       approvalSql,
-      [instrumentId.id, identityId, meityArtifact.sha256, calibrationArtifact.sha256, meityArtifact.id, calibrationArtifact.id],
+      [instrumentId.id, identityId, meityArtifact.sha256, calibrationArtifact.sha256, meityArtifact.id, calibrationArtifact.id, `SERIAL-FLOW-${suffix}`],
     );
     assert.equal(approved.rows[0]?.approval_status, "VERIFIED");
 
@@ -194,7 +194,7 @@ test("PostgreSQL enforces MRV instrument approval evidence and append-only decis
     );
     await rejectsInSavepoint(client, () => client.query(
       approvalSql,
-      [incompleteInstrumentId, identityId, meityArtifact.sha256, calibrationArtifact.sha256, meityArtifact.id, calibrationArtifact.id],
+      [incompleteInstrumentId, identityId, meityArtifact.sha256, calibrationArtifact.sha256, meityArtifact.id, calibrationArtifact.id, `SERIAL-INCOMPLETE-${suffix}`],
     ), /structured unit\/range\/resolution\/accuracy specification for every supported parameter/i);
 
     const decisionCount = await client.query<{ count: string }>(
@@ -222,8 +222,8 @@ test("PostgreSQL enforces MRV instrument approval evidence and append-only decis
     ), /append-only/i);
 
     const gatewayId = (await client.query<{ id: string }>(
-      "insert into mrv_instruments(organization_id,instrument_code,instrument_type,manufacturer,model,sku_revision,intended_use,measurement_instrument,non_measurement_reason,supported_parameter_codes,firmware_version,firmware_support_until,registered_by_identity_id) values($1,$2,'INDUSTRIAL_GATEWAY','Test Manufacturer','Gateway Model 1','Rev A','Authenticated MRV data transport',false,'Gateway transports data but does not measure a physical parameter','{}','1.0.0',now()+interval '1 year',$3) returning id",
-      [organizationId, `GATEWAY-${suffix}`, identityId],
+      "insert into mrv_instruments(organization_id,instrument_code,instrument_type,manufacturer,model,sku_revision,manufacturer_serial_number,asset_tag,intended_use,measurement_instrument,non_measurement_reason,supported_parameter_codes,firmware_version,firmware_support_until,registered_by_identity_id) values($1,$2,'INDUSTRIAL_GATEWAY','Test Manufacturer','Gateway Model 1','Rev A',$3,$4,'Authenticated MRV data transport',false,'Gateway transports data but does not measure a physical parameter','{}','1.0.0',now()+interval '1 year',$5) returning id",
+      [organizationId, `GATEWAY-${suffix}`, `SERIAL-GATEWAY-${suffix}`, `ASSET-GATEWAY-${suffix}`, identityId],
     )).rows[0]!.id;
 
     const gatewayApprovalWithoutSecurity = "update mrv_instruments set approval_status='VERIFIED',meity_certificate_id='MEITY-GW-TEST',meity_issuer='Official authority',meity_certificate_scope='Exact gateway model and revision',meity_verification_url='https://official.example.gov/gateway',meity_evidence_reference='evidence://meity-gateway',meity_evidence_sha256=$3,meity_verified_at=now(),meity_validity_basis='VALID_UNTIL',meity_valid_until=now()+interval '1 year',calibration_required=false,calibration_status='NOT_APPLICABLE_WITH_JUSTIFICATION',calibration_not_required_reason='Gateway does not perform a physical measurement',reviewed_by_identity_id=$2,reviewed_at=now(),review_note='test gateway without security evidence' where id=$1";
