@@ -65,3 +65,15 @@ Neon schema comparison was run read-only across the three live branches:
 The diff independently confirms that staging/rehearsal do not preserve the production verifier authorization provenance. The proposed 20261026–20261111 migration chain does not redefine `prevent_invalid_verification()` or drop the production authorization snapshot columns; nevertheless, production-equivalent reconstruction must prove this on a disposable clone before application.
 
 These comparisons are schema-only snapshots; they do not prove data equivalence, migration-history equivalence, runtime parity or operational readiness. No branch was modified.
+
+
+## Exact rehearsal-only UNRESOLVED drift reconciliation evidence — 2026-10-31
+
+A second read-only catalog query captured the exact `async_mirror_inbox_status_check` definition and `status` column comment in staging and rehearsal:
+
+- Staging allows `RECEIVED, PROCESSING, PROCESSED, VALIDATED, REJECTED, RETRY, QUARANTINED` only; the status column has no explanatory comment.
+- Rehearsal allows the same values plus `UNRESOLVED` and has the exact explanatory comment found in repository migration `20261101_async_mirror_unresolved_crosswalk.sql`.
+- The repository migration drops/recreates only the status check constraint and adds the status column comment. Its SQL matches the observed rehearsal constraint and comment.
+- The `20261101` ledger row is absent from the previously captured staging and rehearsal ledgers (both remain 95 rows through `20261025`).
+
+This is strong evidence that the rehearsal schema contains the exact schema effect of migration 20261101 without a corresponding ledger record. It does **not** prove how or by whom that SQL was applied. Treat the branch as out-of-band drift until provenance is established. Do not replay the migration, edit the ledger, or automatically roll back the constraint. Preserve the current rehearsal state and require a reviewed reconciliation record before any branch change.
