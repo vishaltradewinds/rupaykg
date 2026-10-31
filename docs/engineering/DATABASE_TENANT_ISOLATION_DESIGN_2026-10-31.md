@@ -239,7 +239,7 @@ The MRV route batch still requires exact-head CI, route integration tests, provi
 
 ## 16. Pooled-connection context-leak acceptance test
 
-Added a disposable-PostgreSQL integration test to `apps/src/database-context.test.ts`. It runs the transaction helper with a pool capped at one connection, verifies the first identity/organization inside the transaction, checks that both custom settings are NULL after commit when the same pooled connection is queried outside a transaction, and then verifies that a second tenant context is applied correctly on reuse.
+Added a disposable-PostgreSQL integration test to `apps/src/database-context.test.ts`. It runs the transaction helper with a pool capped at one connection, verifies the first identity/organization inside the transaction, checks that both custom settings are empty after commit when the same pooled connection is queried outside a transaction (PostgreSQL returns an empty string for a reset custom setting), and then verifies that a second tenant context is applied correctly on reuse.
 
 The test is gated to CI, non-production mode, the explicit database-integration flag and a configured disposable `DATABASE_URL`. It does not run against live Neon. Exact-code-head validation is running in CI #41189912605 after an initial typecheck caught escaped SQL template delimiters in the MRV submission refactor; those delimiters were corrected in commit `e5cfed11ff11c72e060ccda3877819165c2fdeb4`. Await this run before treating the MRV batch and new pool-reuse test as validated.
 
