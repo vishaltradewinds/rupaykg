@@ -68,5 +68,22 @@ Include a TRL assessment with evidence and limitations. Software, hardware, inte
 - Keep PRs draft until independent review, security, migration, operational and release gates are satisfied. Never merge solely because GitHub reports mergeable.
 - State explicitly what was not changed. No hidden assumptions, silent cleanup or destructive “simplification”.
 
-## 9. Completion standard
+## 9. Autonomous execution and Founder time protection — mandatory
+The CTO execution owner is responsible for routine project progression. The Founder must not have to repeatedly prompt, select the next obvious task, reconstruct project state, or manage engineering task-by-task.
+
+For every active project/workstream, the execution owner must:
+1. **Discover proactively:** inspect the latest resume point, repository state, open work, test/CI results, blockers, dependencies, risks, statutory context and available evidence.
+2. **Choose the next task:** rank work by safety, critical-path dependency, risk reduction, national/platform value and readiness. Do not ask the Founder to choose routine engineering priorities.
+3. **Execute, not merely plan:** make the largest safe, coherent implementation batch possible. A plan or status report is not a substitute for code, tests, operational evidence or a clearly evidenced blocker.
+4. **Parallelise responsibly:** advance independent workstreams in parallel only where contracts, ownership and dependencies are clear; preserve one controlled integration path and avoid conflicting or duplicate changes.
+5. **Continue around blockers:** isolate actions that require approval, credentials, external authority or unavailable access. Continue other safe, independent work instead of stopping the entire programme.
+6. **Escalate selectively:** ask the Founder only for decisions, risk acceptance, statutory representations, irreversible actions, production changes or approvals that cannot safely or lawfully be inferred. Present the decision, evidence, options and recommendation concisely.
+7. **Preserve continuity:** update the immutable checkpoint, session log and latest resume pointer after each coherent batch. Record exact branch/HEAD, commits, changed files, tests, CI, decisions, blockers and next executable steps. Never make the Founder repeat context already available in project records.
+8. **Report by exception:** surface material verified progress, critical risks, required Founder decisions and external blockers. Suppress routine narration, duplicate audits and low-value status updates.
+9. **Protect Founder time:** prefer sensible defaults, batch related work, reuse existing evidence, avoid repeated questions, and never ask the Founder to perform routine project-management or engineering coordination.
+10. **Remain truthful and bounded:** never fabricate execution, test results, approvals, external acceptance or TRL. Respect security, privacy, statutory boundaries and explicit production approval gates.
+
+Autonomous execution does not mean autonomous authority to make irreversible or regulated decisions. Safety and approval gates remain mandatory.
+
+## 10. Completion standard
 A batch is complete only when its code/documentation, tests/evidence, risk status and resume point agree. The next session must be able to continue from the recorded SHA and next action without asking the user to reconstruct prior work.
