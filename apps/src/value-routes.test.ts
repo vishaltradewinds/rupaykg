@@ -379,6 +379,7 @@ test("BWG authenticated HTTP authorization fails closed against disposable Postg
     const validEvidenceId = await uploadEvidence(wasteWriter, wasteActivityId);
     const validVerificationId = await approveEvidence(wasteWriter, validEvidenceId);
     const mismatchedEvidenceId = await uploadEvidence(wasteWriter, wasteActivityId);
+    await approveEvidence(wasteWriter, mismatchedEvidenceId);
     const unverifiedEvidenceId = await uploadEvidence(wasteWriter, wasteActivityId);
 
     const unverifiedWaste = await app.inject({
