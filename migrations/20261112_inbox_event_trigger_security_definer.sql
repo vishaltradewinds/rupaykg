@@ -52,11 +52,20 @@ revoke rupaykg_inbox_event_writer from current_user;
 -- Some managed PostgreSQL providers retain a provider-owned, non-inheriting
 -- membership row for the database owner. Fail closed if the migration login
 -- can still SET ROLE or inherit the capability after its temporary grant is revoked.
-do $$
+do $
+declare migration_login_is_superuser boolean;
 begin
-  if pg_has_role(current_user, 'rupaykg_inbox_event_writer', 'SET')
-     or pg_has_role(current_user, 'rupaykg_inbox_event_writer', 'USAGE') then
+  select rolsuper into migration_login_is_superuser
+    from pg_roles where rolname=current_user;
+
+  -- PostgreSQL superusers can SET ROLE to any role by definition; the
+  -- production migration login must instead be unable to SET or inherit it.
+  if not coalesce(migration_login_is_superuser, false)
+     and (
+       pg_has_role(current_user, 'rupaykg_inbox_event_writer', 'SET')
+       or pg_has_role(current_user, 'rupaykg_inbox_event_writer', 'USAGE')
+     ) then
     raise exception 'INBOX_EVENT_WRITER_MUST_NOT_BE_SET_OR_INHERITED_BY_MIGRATION_LOGIN';
   end if;
 end
-$$;
+$;
