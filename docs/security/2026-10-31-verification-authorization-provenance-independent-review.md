@@ -131,3 +131,10 @@ The unnumbered fixture now also:
 Latest recorded commit: `37bee6c7be93ef4ce602faf410234b97b907ec97`. The GitHub workflow lookup has not yet exposed an exact-head CI run for this commit. Earlier CI #41192563451 passed on a prior documentation-only commit and does **not** validate the new SQL/test changes.
 
 Remaining blockers: actual Render runtime-role identification, least-privilege grants/RLS and trigger bypass review; correction lineage/audit-event design; migration chronology and 20261101 drift; independent reviewer sign-off. No production migration is approved.
+
+
+## Backfill-order safety correction — 2026-10-31
+
+A further code review caught an important migration-order hazard: if lifecycle-state backfill runs while migration 096's legacy BEFORE UPDATE trigger is still installed, that trigger rewrites authorization timestamps/snapshots on APPROVED rows during the backfill. The unnumbered fixture has been reordered to replace the trigger function first and run the backfill second. The new function recognizes OLD.decision='APPROVED' even with a NULL timestamp and preserves the existing provenance fields while setting APPROVED_HISTORY. The disposable legacy-row test asserts that the timestamp remains NULL.
+
+This ordering is mandatory for any future migration. It remains unverified until exact-head disposable CI runs. Latest recorded branch head at this update is 3cab48c58ac17ace419bbfbc9ddb047d03021b97; no exact-head workflow run is visible. Do not promote this fixture to migrations/ or apply it to a live database.
