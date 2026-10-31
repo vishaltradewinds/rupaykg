@@ -268,7 +268,7 @@ test("BWG authenticated HTTP authorization fails closed against disposable Postg
     await registerValueRoutes(app, pool);
 
     // Verified member with no reports:read or profile-update permission.
-    const noPermission = await makeFixture([]);
+    const noPermission = await makeFixture(["guardian:read"]);
     const workspaceDenied = await app.inject({
       method: "GET",
       url: "/api/v1/workspaces/bwg",
