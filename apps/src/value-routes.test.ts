@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import Fastify from "fastify";
+import type { Pool } from "pg";
 import { registerValueRoutes } from "./value-routes.js";
 import { bwgProfileReviewBasis, bwgEprQuantityError, canReadBwgWorkspace, isBwgApplicabilityNotVerifiedConflict, isBwgEprFulfilledObligationConstraintViolation } from "./value-routes.js";
 
@@ -93,6 +94,51 @@ test("BWG reporting-period applicability conflict is mapped only for the exact l
 });
 
 
+
+const bwgTestIdentityId = "11111111-1111-4111-8111-111111111111";
+const bwgTestOrganizationId = "22222222-2222-4222-8222-222222222222";
+
+function authenticatedBwgTestPool(options: {
+  permissionGranted?: boolean;
+  eprInsertError?: unknown;
+  periodInsertError?: unknown;
+} = {}) {
+  const statements: string[] = [];
+  let connectCount = 0;
+  const pool = {
+    async query(sql: string) {
+      if (sql.includes("from identity_sessions s")) return { rows: [{ identity_id: bwgTestIdentityId }] };
+      if (sql.includes("from organization_memberships") && sql.includes("status = 'VERIFIED'")) {
+        return { rows: [{ organization_id: bwgTestOrganizationId, role_id: "bwg-test-role", status: "VERIFIED" }] };
+      }
+      throw new Error("Unexpected authentication query: " + sql);
+    },
+    async connect() {
+      connectCount += 1;
+      return {
+        async query(sql: string) {
+          statements.push(sql);
+          if (sql === "BEGIN" || sql === "COMMIT" || sql === "ROLLBACK" || sql.startsWith("select set_config")) return { rows: [] };
+          if (sql.includes("join roles r")) return { rows: [{ ok: options.permissionGranted ?? true }] };
+          if (sql.includes("select organization_id from bwg_reporting_periods")) return { rows: [{ organization_id: bwgTestOrganizationId }] };
+          if (sql.includes("select id from epr_schemes")) return { rows: [{ id: "bwg-test-scheme" }] };
+          if (sql.includes("insert into bwg_epr_reports")) {
+            if (options.eprInsertError) throw options.eprInsertError;
+            return { rows: [{ id: "bwg-test-epr-report" }] };
+          }
+          if (sql.includes("insert into bwg_reporting_periods")) {
+            if (options.periodInsertError) throw options.periodInsertError;
+            return { rows: [{ id: "bwg-test-period" }] };
+          }
+          throw new Error("Unexpected BWG transaction query: " + sql);
+        },
+        release() {},
+      };
+    },
+  };
+  return { pool: pool as unknown as Pool, statements, connectCount: () => connectCount };
+}
+
 test("BWG HTTP routes fail closed with 401 when no authenticated database session exists", async (t) => {
   const app = Fastify({ logger: false });
   await registerValueRoutes(app, null);
@@ -112,4 +158,70 @@ test("BWG HTTP routes fail closed with 401 when no authenticated database sessio
     assert.equal(response.statusCode, 401, request.method + " " + request.url + ": " + response.body);
     assert.equal(response.json().code, "AUTH_REQUIRED");
   }
+});
+
+test("BWG EPR HTTP route rejects fulfilled quantity above obligation before opening a database transaction", async (t) => {
+  const fake = authenticatedBwgTestPool();
+  const app = Fastify({ logger: false });
+  await registerValueRoutes(app, fake.pool);
+  t.after(async () => app.close());
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/api/v1/bwg/reporting-periods/33333333-3333-4333-8333-333333333333/epr",
+    headers: { authorization: "Bearer bwg-http-test-session" },
+    payload: { schemeId: "bwg-test-scheme", categoryCode: "PLASTIC", obligatedQuantity: 10, fulfilledQuantity: 11 },
+  });
+
+  assert.equal(response.statusCode, 400);
+  assert.equal(response.json().code, "BWG_EPR_FULFILLED_EXCEEDS_OBLIGATED");
+  assert.equal(fake.connectCount(), 0, "invalid quantity must be rejected before any transaction or insert");
+});
+
+test("BWG EPR HTTP route maps only the exact production check-constraint failure to 409", async (t) => {
+  const dbError = Object.assign(new Error("check constraint failed"), {
+    code: "23514",
+    constraint: "bwg_epr_reports_fulfilled_le_obligated",
+  });
+  const fake = authenticatedBwgTestPool({ eprInsertError: dbError });
+  const app = Fastify({ logger: false });
+  await registerValueRoutes(app, fake.pool);
+  t.after(async () => app.close());
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/api/v1/bwg/reporting-periods/33333333-3333-4333-8333-333333333333/epr",
+    headers: { authorization: "Bearer bwg-http-test-session" },
+    payload: { schemeId: "bwg-test-scheme", categoryCode: "PLASTIC", obligatedQuantity: 10, fulfilledQuantity: 9 },
+  });
+
+  assert.equal(response.statusCode, 409);
+  assert.equal(response.json().code, "BWG_EPR_FULFILLED_EXCEEDS_OBLIGATED");
+  assert.ok(fake.statements.includes("ROLLBACK"));
+});
+
+test("BWG reporting-period HTTP route maps the exact live applicability trigger rejection to 409", async (t) => {
+  const triggerError = Object.assign(new Error("BWG applicability must be verified before creating a reporting period"), {
+    code: "23514",
+  });
+  const fake = authenticatedBwgTestPool({ periodInsertError: triggerError });
+  const app = Fastify({ logger: false });
+  await registerValueRoutes(app, fake.pool);
+  t.after(async () => app.close());
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/api/v1/bwg/reporting-periods",
+    headers: { authorization: "Bearer bwg-http-test-session" },
+    payload: {
+      organizationId: bwgTestOrganizationId,
+      periodStart: "2026-01-01",
+      periodEnd: "2026-01-31",
+      reportingBasis: "MONTHLY",
+    },
+  });
+
+  assert.equal(response.statusCode, 409);
+  assert.equal(response.json().code, "BWG_APPLICABILITY_NOT_VERIFIED");
+  assert.ok(fake.statements.includes("ROLLBACK"));
 });
