@@ -65,3 +65,20 @@ This inspection uses the Neon connector's privileged database connection, not th
 - Production inbox schema: NOT PRESENT at time of inspection.
 - No production or staging database objects, roles, grants, secrets or deployment settings were changed by this inspection.
 - TRL 9: NOT ESTABLISHED.
+
+
+## Additional worker readiness dependency check
+
+The runner's read-only schema gate was cross-checked against the staging catalog. It requires all of the following before any queue operation:
+- `public.async_mirror_inbox`
+- `public.async_mirror_inbox_events`
+- `public.government_jurisdiction_crosswalks`
+- `public.authoritative_source_snapshots`
+- `public.organization_has_explicit_geography_scope(uuid,uuid)`
+- `public.government_source_scope_covers_geography(uuid,uuid)`
+- An inbox status constraint supporting `UNRESOLVED`
+- Trigger `async_mirror_inbox_event_after_change`
+
+The staging catalog query found only the two async inbox tables among the required objects. The crosswalk/source-snapshot tables, scope functions, and expected trigger were not present in the inspected staging branch. Therefore the runner readiness gate would fail closed there. The production branch lacks even the two queue tables.
+
+This shows the next work is not simply to create a worker login. The candidate migration chain must first be reconciled and applied to a disposable production-shaped branch, and the complete required object graph verified. Then exact object-level worker grants can be designed and negatively tested. Do not activate the worker or provision credentials yet.
