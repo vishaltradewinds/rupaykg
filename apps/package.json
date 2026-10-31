@@ -12,7 +12,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "migrate": "tsx src/migrate.ts",
     "test": "npm run build && node --test --test-concurrency=1 \"dist/**/*.test.js\"",
-    "capture:production-baseline": "tsx src/production-shaped-baseline.ts"
+    "capture:production-baseline": "tsx src/production-shaped-baseline.ts",
+    "start:government-inbox-worker": "node dist/src/government-inbox-worker-process.js"
   },
   "dependencies": {
     "@fastify/cors": "^11.0.0",
