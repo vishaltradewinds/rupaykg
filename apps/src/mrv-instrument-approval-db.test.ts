@@ -51,6 +51,15 @@ test("PostgreSQL enforces MRV instrument approval evidence and append-only decis
     )).rows[0]!;
     assert.equal(instrumentId.approval_status, "HOLD");
 
+    await rejectsInSavepoint(
+      client,
+      () => client.query(
+        "insert into mrv_instruments(organization_id,instrument_code,instrument_type,manufacturer,model,sku_revision,manufacturer_serial_number,intended_use,supported_parameter_codes,registered_by_identity_id) values($1,$2,'GAS_FLOW','Test Manufacturer','Flow Model 1','Rev A',$3,'Duplicate serial fixture',array['gas_flow'],$4)",
+        [organizationId, `DUPLICATE-SERIAL-${suffix}`, `SERIAL-FLOW-${suffix}`, identityId],
+      ),
+      /duplicate key/i,
+    );
+
     const activityId = (await client.query<{ id: string }>(
       "insert into activities(organization_id,actor_identity_id,geography_id,activity_type,occurred_at) values($1,$2,$3,'MRV_INSTRUMENT_TEST',now()) returning id",
       [organizationId, identityId, geographyId],
@@ -107,12 +116,18 @@ test("PostgreSQL enforces MRV instrument approval evidence and append-only decis
 
     const approvalSql = "update mrv_instruments set approval_status='VERIFIED',meity_certificate_id='MEITY-CERT-TEST',meity_issuer='Official authority',meity_certificate_scope='Exact manufacturer/model/SKU revision',meity_verification_url='https://official.example.gov/cert',meity_evidence_reference='evidence://meity-test',meity_evidence_sha256=$3,meity_evidence_artifact_version_id=$5,meity_verified_at=now(),meity_validity_basis='VALID_UNTIL',meity_valid_until=now()+interval '1 year',calibration_required=true,calibration_status='VERIFIED',calibration_certificate_id='CAL-TEST',calibration_evidence_reference='evidence://cal-test',calibration_evidence_sha256=$4,calibration_evidence_artifact_version_id=$6,calibration_lab='Traceable lab',calibration_traceability='National standard traceability',calibration_uncertainty=0.2,calibration_valid_until=now()+interval '1 year',security_review_status='NOT_APPLICABLE_WITH_JUSTIFICATION',security_not_applicable_reason='Test fixture uses no firmware; test-only written rationale',reviewed_by_identity_id=$2,reviewed_at=now(),review_note='test exact-model approval and calibration evidence',calibration_serial_number=$7 where id=$1 returning approval_status";
     await rejectsInSavepoint(client, () => client.query(approvalSql, [instrumentId.id, identityId, "a".repeat(64), calibrationArtifact.sha256, meityArtifact.id, calibrationArtifact.id, `SERIAL-FLOW-${suffix}`]), /matching recomputed SHA-256/i);
+    await rejectsInSavepoint(client, () => client.query(approvalSql, [instrumentId.id, identityId, meityArtifact.sha256, calibrationArtifact.sha256, meityArtifact.id, calibrationArtifact.id, "MISMATCHED-CALIBRATION-SERIAL"]), /calibration certificate serial must exactly match/i);
     await rejectsInSavepoint(client, () => client.query(approvalSql, [instrumentId.id, identityId, foreignMeityArtifact.sha256, calibrationArtifact.sha256, foreignMeityArtifact.id, calibrationArtifact.id, `SERIAL-FLOW-${suffix}`]), /same-organization evidence-vault artifact/i);
     const approved = await client.query<{ approval_status: string }>(
       approvalSql,
       [instrumentId.id, identityId, meityArtifact.sha256, calibrationArtifact.sha256, meityArtifact.id, calibrationArtifact.id, `SERIAL-FLOW-${suffix}`],
     );
     assert.equal(approved.rows[0]?.approval_status, "VERIFIED");
+    await rejectsInSavepoint(
+      client,
+      () => client.query("update mrv_instruments set manufacturer_serial_number='CHANGED-SERIAL' where id=$1", [instrumentId.id]),
+      /physical unit identity and calibration serial are immutable/i,
+    );
 
     const validMeasurement = await client.query<{ id: string }>(
       "insert into measurements(activity_id,value,unit,method,source,measured_at,mrv_instrument_id,parameter_code) values($1,2,'m3/h','test','instrument test',now(),$2,'gas_flow') returning id",
