@@ -170,78 +170,125 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
   });
 
   app.post("/api/v1/bwg/profile", async (request, reply) => {
-    const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
+    const auth = await authFor(request as never, reply, pool); if (!auth || !pool || !withTenantTransaction) return;
     const body = bodyOf(request as never); const organizationId = str(body, "organizationId"); const jurisdictionId = str(body, "jurisdictionId");
     const floorArea = nonNegative(body, "floorAreaSqm"); const water = nonNegative(body, "waterConsumptionLpd"); const waste = nonNegative(body, "wasteGenerationKgDay"); const establishmentType = str(body, "establishmentType");
     if (!organizationId || !jurisdictionId || floorArea === null || water === null || waste === null || !establishmentType) return reply.code(400).send({ error: "organizationId, jurisdictionId, floorAreaSqm, waterConsumptionLpd, wasteGenerationKgDay and establishmentType are required", code: "BWG_PROFILE_REQUIRED" });
-    if (!canActForOrganization(auth, organizationId)) return reply.code(403).send({ error: "Organization access denied", code: "ORG_FORBIDDEN" });
-    if (!await hasOrganizationPermission(pool, auth, organizationId, ["profile:update", "waste:record"])) return reply.code(403).send({ error: "Profile update and waste recording permissions are required", code: "BWG_PROFILE_FORBIDDEN" });
-    const geography = await pool.query<{ ok: boolean }>("select exists(select 1 from organization_memberships om where om.identity_id=$1 and om.organization_id=$2 and om.status='VERIFIED' and organization_has_geography_scope(om.organization_id,$3)) as ok", [auth.identityId, organizationId, jurisdictionId]);
-    if (geography.rows[0]?.ok !== true) return reply.code(403).send({ error: "Jurisdiction is outside organization authorization scope", code: "GEOGRAPHY_FORBIDDEN" });
-    const applicabilityBasis = bwgProfileReviewBasis();
+    if (!canActForOrganization(auth, organizationId) || auth.activeOrganizationId !== organizationId) return reply.code(403).send({ error: "Select this verified organization as the active organization", code: "ORG_FORBIDDEN" });
     try {
-      const row = await pool.query("insert into bwg_profiles (organization_id,jurisdiction_id,floor_area_sqm,water_consumption_lpd,waste_generation_kg_day,establishment_type,applicability_status,applicability_basis,status,updated_at) values ($1,$2,$3,$4,$5,$6,'REVIEW_REQUIRED',$7,'PENDING',now()) on conflict (organization_id) do update set jurisdiction_id=excluded.jurisdiction_id,floor_area_sqm=excluded.floor_area_sqm,water_consumption_lpd=excluded.water_consumption_lpd,waste_generation_kg_day=excluded.waste_generation_kg_day,establishment_type=excluded.establishment_type,applicability_status='REVIEW_REQUIRED',applicability_basis=excluded.applicability_basis,status='PENDING',updated_at=now() returning *", [organizationId, jurisdictionId, floorArea, water, waste, establishmentType, JSON.stringify(applicabilityBasis)]);
-      return reply.code(201).send({ source: "postgresql", syntheticData: false, authoritativeMutation: true, statutoryBoundary: "PROFILE_INTAKE_ONLY_NOT_A_STATUTORY_DETERMINATION", profile: row.rows[0] });
+      const tenantResponse = await withTenantTransaction(tenantDatabaseContextFromAuth(auth), async (client) => {
+        if (!await hasOrganizationPermission(client, auth, organizationId, ["profile:update", "waste:record"])) return { denied: "BWG_PROFILE_FORBIDDEN" as const };
+        const geography = await client.query<{ ok: boolean }>("select exists(select 1 from organization_memberships om where om.identity_id=$1 and om.organization_id=$2 and om.status='VERIFIED' and organization_has_geography_scope(om.organization_id,$3)) as ok", [auth.identityId, organizationId, jurisdictionId]);
+        if (geography.rows[0]?.ok !== true) return { denied: "GEOGRAPHY_FORBIDDEN" as const };
+        const applicabilityBasis = bwgProfileReviewBasis();
+        const row = await client.query("insert into bwg_profiles (organization_id,jurisdiction_id,floor_area_sqm,water_consumption_lpd,waste_generation_kg_day,establishment_type,applicability_status,applicability_basis,status,updated_at) values ($1,$2,$3,$4,$5,$6,'REVIEW_REQUIRED',$7,'PENDING',now()) on conflict (organization_id) do update set jurisdiction_id=excluded.jurisdiction_id,floor_area_sqm=excluded.floor_area_sqm,water_consumption_lpd=excluded.water_consumption_lpd,waste_generation_kg_day=excluded.waste_generation_kg_day,establishment_type=excluded.establishment_type,applicability_status='REVIEW_REQUIRED',applicability_basis=excluded.applicability_basis,status='PENDING',updated_at=now() returning *", [organizationId, jurisdictionId, floorArea, water, waste, establishmentType, JSON.stringify(applicabilityBasis)]);
+        return { profile: row.rows[0] };
+      });
+      if ("denied" in tenantResponse) return reply.code(403).send({ error: tenantResponse.denied === "GEOGRAPHY_FORBIDDEN" ? "Jurisdiction is outside organization authorization scope" : "Profile update and waste recording permissions are required", code: tenantResponse.denied });
+      return reply.code(201).send({ source: "postgresql", syntheticData: false, authoritativeMutation: true, statutoryBoundary: "PROFILE_INTAKE_ONLY_NOT_A_STATUTORY_DETERMINATION", profile: tenantResponse.profile });
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "BWG profile unavailable", code: "BWG_PROFILE_UNAVAILABLE", syntheticData: false }); }
   });
 
   app.post("/api/v1/bwg/reporting-periods", async (request, reply) => {
-    const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
+    const auth = await authFor(request as never, reply, pool); if (!auth || !pool || !withTenantTransaction) return;
     const body = bodyOf(request as never); const organizationId = str(body, "organizationId"); const start = str(body, "periodStart"); const end = str(body, "periodEnd"); const basis = str(body, "reportingBasis");
     if (!organizationId || !start || !end || !basis || Number.isNaN(Date.parse(start)) || Number.isNaN(Date.parse(end)) || start > end) return reply.code(400).send({ error: "organizationId, valid periodStart, periodEnd and reportingBasis are required", code: "BWG_PERIOD_REQUIRED" });
-    if (!canActForOrganization(auth, organizationId)) return reply.code(403).send({ error: "Organization access denied", code: "ORG_FORBIDDEN" });
-    if (!await hasOrganizationPermission(pool, auth, organizationId, ["reports:read", "waste:record"])) return reply.code(403).send({ error: "Reporting and waste recording permissions are required", code: "BWG_PERIOD_FORBIDDEN" });
-    try { const row = await pool.query("insert into bwg_reporting_periods (organization_id,period_start,period_end,reporting_basis) values ($1,$2,$3,$4) on conflict (organization_id,period_start,period_end,reporting_basis) do update set reporting_basis=excluded.reporting_basis returning *", [organizationId,start,end,basis]); return reply.code(201).send({ source: "postgresql", syntheticData: false, authoritativeMutation: true, period: row.rows[0] }); }
-    catch (error) { request.log.error(error); return reply.code(503).send({ error: "BWG reporting period unavailable", code: "BWG_PERIOD_UNAVAILABLE", syntheticData: false }); }
+    if (!canActForOrganization(auth, organizationId) || auth.activeOrganizationId !== organizationId) return reply.code(403).send({ error: "Select this verified organization as the active organization", code: "ORG_FORBIDDEN" });
+    try {
+      const tenantResponse = await withTenantTransaction(tenantDatabaseContextFromAuth(auth), async (client) => {
+        if (!await hasOrganizationPermission(client, auth, organizationId, ["reports:read", "waste:record"])) return { denied: true as const };
+        const row = await client.query("insert into bwg_reporting_periods (organization_id,period_start,period_end,reporting_basis) values ($1,$2,$3,$4) on conflict (organization_id,period_start,period_end,reporting_basis) do update set reporting_basis=excluded.reporting_basis returning *", [organizationId,start,end,basis]);
+        return { period: row.rows[0] };
+      });
+      if ("denied" in tenantResponse) return reply.code(403).send({ error: "Reporting and waste recording permissions are required", code: "BWG_PERIOD_FORBIDDEN" });
+      return reply.code(201).send({ source: "postgresql", syntheticData: false, authoritativeMutation: true, period: tenantResponse.period });
+    } catch (error) { request.log.error(error); return reply.code(503).send({ error: "BWG reporting period unavailable", code: "BWG_PERIOD_UNAVAILABLE", syntheticData: false }); }
   });
 
   app.post("/api/v1/bwg/reporting-periods/:periodId/waste", async (request, reply) => {
-    const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
+    const auth = await authFor(request as never, reply, pool); if (!auth || !pool || !withTenantTransaction) return;
     const periodId = (request.params as { periodId: string }).periodId; const body = bodyOf(request as never); const wasteStream = str(body, "wasteStream"); const unit = str(body, "unit");
     const generated = nonNegative(body, "generatedQuantity"); const segregated = nonNegative(body, "segregatedQuantity") ?? 0; const channelized = nonNegative(body, "channelizedQuantity") ?? 0; const processed = nonNegative(body, "processedQuantity") ?? 0;
     if (!wasteStream || !unit || generated === null || segregated > generated || channelized > generated || processed > channelized) return reply.code(400).send({ error: "wasteStream, unit, generatedQuantity and valid segregated/channelized/processed quantities are required", code: "BWG_WASTE_REQUIRED" });
+    const activeOrganizationId = auth.activeOrganizationId;
+    if (!activeOrganizationId || !canActForOrganization(auth, activeOrganizationId)) return reply.code(403).send({ error: "Select a verified active organization", code: "ORG_FORBIDDEN" });
     try {
-      const period = await pool.query<{ organization_id: string }>("select organization_id from bwg_reporting_periods where id=$1", [periodId]); if (!period.rows[0]) return reply.code(404).send({ error: "BWG reporting period not found" });
-      const organizationId = period.rows[0].organization_id; if (!canActForOrganization(auth, organizationId)) return reply.code(403).send({ error: "Organization access denied", code: "ORG_FORBIDDEN" });
-      if (!await hasOrganizationPermission(pool, auth, organizationId, ["waste:record"])) return reply.code(403).send({ error: "Waste recording permission required", code: "BWG_WASTE_FORBIDDEN" });
-      const evidenceId = str(body, "evidenceId"); const verificationId = str(body, "verificationId"); if (verificationId && !evidenceId) return reply.code(400).send({ error: "verificationId requires evidenceId" });
-      if (evidenceId && !await evidenceIsVerified(pool, evidenceId, organizationId)) return reply.code(409).send({ error: "Verified, provenance-backed evidence is required", code: "EVIDENCE_NOT_VERIFIED" });
-      if (verificationId) { const v = await pool.query("select 1 from verifications where id=$1 and evidence_id=$2 and decision='APPROVED'", [verificationId,evidenceId]); if (!v.rows[0]) return reply.code(409).send({ error: "Approved verification is required", code: "VERIFICATION_INVALID" }); }
-      const row = await pool.query("insert into bwg_waste_reports (reporting_period_id,waste_stream,generated_quantity,segregated_quantity,channelized_quantity,processed_quantity,unit,evidence_id,verification_id,status,metadata) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) returning *", [periodId,wasteStream,generated,segregated,channelized,processed,unit,evidenceId,verificationId,evidenceId && verificationId ? 'VERIFIED' : 'PENDING',body.metadata ?? {}]);
-      return reply.code(201).send({ source: "postgresql", syntheticData: false, authoritativeMutation: true, wasteReport: row.rows[0] });
+      const tenantResponse = await withTenantTransaction(tenantDatabaseContextFromAuth(auth), async (client) => {
+        const period = await client.query<{ organization_id: string }>("select organization_id from bwg_reporting_periods where id=$1 and organization_id=$2 for update", [periodId, activeOrganizationId]);
+        if (!period.rows[0]) return { missing: true as const };
+        if (!await hasOrganizationPermission(client, auth, activeOrganizationId, ["waste:record"])) return { denied: true as const };
+        const evidenceId = str(body, "evidenceId"); const verificationId = str(body, "verificationId");
+        if (verificationId && !evidenceId) return { invalid: "VERIFICATION_INVALID" as const };
+        if (evidenceId && !await evidenceIsVerified(client, evidenceId, activeOrganizationId)) return { invalid: "EVIDENCE_NOT_VERIFIED" as const };
+        if (evidenceId && verificationId) {
+          const v = await client.query("select 1 from verifications v join evidence e on e.id=v.evidence_id join activities a on a.id=e.activity_id where v.id=$1 and v.evidence_id=$2 and v.decision='APPROVED' and a.organization_id=$3 and e.status='VERIFIED' and organization_has_geography_scope(a.organization_id,a.geography_id)", [verificationId,evidenceId,activeOrganizationId]);
+          if (!v.rows[0]) return { invalid: "VERIFICATION_INVALID" as const };
+        }
+        const row = await client.query("insert into bwg_waste_reports (reporting_period_id,waste_stream,generated_quantity,segregated_quantity,channelized_quantity,processed_quantity,unit,evidence_id,verification_id,status,metadata) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) returning *", [periodId,wasteStream,generated,segregated,channelized,processed,unit,evidenceId,verificationId,evidenceId && verificationId ? 'VERIFIED' : 'PENDING',body.metadata ?? {}]);
+        return { report: row.rows[0] };
+      });
+      if ("missing" in tenantResponse) return reply.code(404).send({ error: "BWG reporting period not found" });
+      if ("denied" in tenantResponse) return reply.code(403).send({ error: "Waste recording permission required", code: "BWG_WASTE_FORBIDDEN" });
+      if ("invalid" in tenantResponse) return reply.code(409).send({ error: tenantResponse.invalid === "EVIDENCE_NOT_VERIFIED" ? "Verified, provenance-backed evidence is required" : "Approved verification is required", code: tenantResponse.invalid });
+      return reply.code(201).send({ source: "postgresql", syntheticData: false, authoritativeMutation: true, wasteReport: tenantResponse.report });
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "BWG waste report unavailable", code: "BWG_WASTE_UNAVAILABLE", syntheticData: false }); }
   });
 
   app.post("/api/v1/bwg/reporting-periods/:periodId/epr", async (request, reply) => {
-    const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
+    const auth = await authFor(request as never, reply, pool); if (!auth || !pool || !withTenantTransaction) return;
     const periodId = (request.params as { periodId: string }).periodId; const body = bodyOf(request as never); const schemeId = str(body, "schemeId"); const categoryCode = str(body, "categoryCode"); const obligated = nonNegative(body, "obligatedQuantity"); const fulfilled = nonNegative(body, "fulfilledQuantity");
     if (!schemeId || !categoryCode || obligated === null || fulfilled === null) return reply.code(400).send({ error: "schemeId, categoryCode and non-negative obligated/fulfilled quantities are required", code: "BWG_EPR_REQUIRED" });
+    const activeOrganizationId = auth.activeOrganizationId;
+    if (!activeOrganizationId || !canActForOrganization(auth, activeOrganizationId)) return reply.code(403).send({ error: "Select a verified active organization", code: "ORG_FORBIDDEN" });
     try {
-      const period = await pool.query<{ organization_id: string }>("select organization_id from bwg_reporting_periods where id=$1", [periodId]); if (!period.rows[0]) return reply.code(404).send({ error: "BWG reporting period not found" });
-      const organizationId = period.rows[0].organization_id; if (!canActForOrganization(auth, organizationId)) return reply.code(403).send({ error: "Organization access denied", code: "ORG_FORBIDDEN" });
-      if (!await hasOrganizationPermission(pool, auth, organizationId, ["epr:manage"])) return reply.code(403).send({ error: "EPR management permission required", code: "BWG_EPR_FORBIDDEN" });
-      const scheme = await pool.query("select id from epr_schemes where id=$1 and status='VERIFIED'", [schemeId]); if (!scheme.rows[0]) return reply.code(404).send({ error: "Authoritative EPR scheme not found" });
-      const evidenceId = str(body, "evidenceId"); const verificationId = str(body, "verificationId"); if (verificationId && !evidenceId) return reply.code(400).send({ error: "verificationId requires evidenceId" });
-      if (evidenceId && !await evidenceIsVerified(pool, evidenceId, organizationId)) return reply.code(409).send({ error: "Verified, provenance-backed evidence is required", code: "EVIDENCE_NOT_VERIFIED" });
-      if (verificationId) { const v = await pool.query("select 1 from verifications where id=$1 and evidence_id=$2 and decision='APPROVED'", [verificationId,evidenceId]); if (!v.rows[0]) return reply.code(409).send({ error: "Approved verification is required", code: "VERIFICATION_INVALID" }); }
-      const row = await pool.query("insert into bwg_epr_reports (reporting_period_id,scheme_id,category_code,obligated_quantity,fulfilled_quantity,evidence_id,verification_id,status,metadata) values ($1,$2,$3,$4,$5,$6,$7,$8,$9) returning *", [periodId,schemeId,categoryCode,obligated,fulfilled,evidenceId,verificationId,evidenceId && verificationId ? 'VERIFIED' : 'PENDING',body.metadata ?? {}]);
-      return reply.code(201).send({ source: "postgresql", syntheticData: false, authoritativeMutation: true, externalSubmission: "NOT_SUBMITTED", eprReport: row.rows[0] });
+      const tenantResponse = await withTenantTransaction(tenantDatabaseContextFromAuth(auth), async (client) => {
+        const period = await client.query<{ organization_id: string }>("select organization_id from bwg_reporting_periods where id=$1 and organization_id=$2 for update", [periodId, activeOrganizationId]);
+        if (!period.rows[0]) return { missing: true as const };
+        if (!await hasOrganizationPermission(client, auth, activeOrganizationId, ["epr:manage"])) return { denied: true as const };
+        const scheme = await client.query("select id from epr_schemes where id=$1 and status='VERIFIED'", [schemeId]);
+        if (!scheme.rows[0]) return { invalid: "EPR_SCHEME_INVALID" as const };
+        const evidenceId = str(body, "evidenceId"); const verificationId = str(body, "verificationId");
+        if (verificationId && !evidenceId) return { invalid: "VERIFICATION_INVALID" as const };
+        if (evidenceId && !await evidenceIsVerified(client, evidenceId, activeOrganizationId)) return { invalid: "EVIDENCE_NOT_VERIFIED" as const };
+        if (evidenceId && verificationId) {
+          const v = await client.query("select 1 from verifications v join evidence e on e.id=v.evidence_id join activities a on a.id=e.activity_id where v.id=$1 and v.evidence_id=$2 and v.decision='APPROVED' and a.organization_id=$3 and e.status='VERIFIED' and organization_has_geography_scope(a.organization_id,a.geography_id)", [verificationId,evidenceId,activeOrganizationId]);
+          if (!v.rows[0]) return { invalid: "VERIFICATION_INVALID" as const };
+        }
+        const row = await client.query("insert into bwg_epr_reports (reporting_period_id,scheme_id,category_code,obligated_quantity,fulfilled_quantity,evidence_id,verification_id,status,metadata) values ($1,$2,$3,$4,$5,$6,$7,$8,$9) returning *", [periodId,schemeId,categoryCode,obligated,fulfilled,evidenceId,verificationId,evidenceId && verificationId ? 'VERIFIED' : 'PENDING',body.metadata ?? {}]);
+        return { report: row.rows[0] };
+      });
+      if ("missing" in tenantResponse) return reply.code(404).send({ error: "BWG reporting period not found" });
+      if ("denied" in tenantResponse) return reply.code(403).send({ error: "EPR management permission required", code: "BWG_EPR_FORBIDDEN" });
+      if ("invalid" in tenantResponse) return reply.code(tenantResponse.invalid === "EPR_SCHEME_INVALID" ? 404 : 409).send({ error: tenantResponse.invalid === "EPR_SCHEME_INVALID" ? "Authoritative EPR scheme not found" : tenantResponse.invalid === "EVIDENCE_NOT_VERIFIED" ? "Verified, provenance-backed evidence is required" : "Approved verification is required", code: tenantResponse.invalid });
+      return reply.code(201).send({ source: "postgresql", syntheticData: false, authoritativeMutation: true, externalSubmission: "NOT_SUBMITTED", eprReport: tenantResponse.report });
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "BWG EPR report unavailable", code: "BWG_EPR_UNAVAILABLE", syntheticData: false }); }
   });
 
   app.post("/api/v1/bwg/reporting-periods/:periodId/esg", async (request, reply) => {
-    const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
+    const auth = await authFor(request as never, reply, pool); if (!auth || !pool || !withTenantTransaction) return;
     const periodId = (request.params as { periodId: string }).periodId; const body = bodyOf(request as never); const metricCode = str(body, "metricCode"); const scope = str(body, "scope"); const unit = str(body, "unit"); const value = nonNegative(body, "value");
     if (!metricCode || !scope || !unit || value === null) return reply.code(400).send({ error: "metricCode, scope, unit and non-negative value are required", code: "BWG_ESG_REQUIRED" });
+    const activeOrganizationId = auth.activeOrganizationId;
+    if (!activeOrganizationId || !canActForOrganization(auth, activeOrganizationId)) return reply.code(403).send({ error: "Select a verified active organization", code: "ORG_FORBIDDEN" });
     try {
-      const period = await pool.query<{ organization_id: string }>("select organization_id from bwg_reporting_periods where id=$1", [periodId]); if (!period.rows[0]) return reply.code(404).send({ error: "BWG reporting period not found" });
-      const organizationId = period.rows[0].organization_id; if (!canActForOrganization(auth, organizationId)) return reply.code(403).send({ error: "Organization access denied", code: "ORG_FORBIDDEN" });
-      if (!await hasValuePermission(pool, "can_write_esg", auth.identityId, organizationId)) return reply.code(403).send({ error: "ESG metric write permission required", code: "BWG_ESG_FORBIDDEN" });
-      const evidenceId = str(body, "evidenceId"); const verificationId = str(body, "verificationId"); if (verificationId && !evidenceId) return reply.code(400).send({ error: "verificationId requires evidenceId" });
-      if (evidenceId && !await evidenceIsVerified(pool, evidenceId, organizationId)) return reply.code(409).send({ error: "Verified, provenance-backed evidence is required", code: "EVIDENCE_NOT_VERIFIED" });
-      if (verificationId) { const v = await pool.query("select 1 from verifications where id=$1 and evidence_id=$2 and decision='APPROVED'", [verificationId,evidenceId]); if (!v.rows[0]) return reply.code(409).send({ error: "Approved verification is required", code: "VERIFICATION_INVALID" }); }
-      const row = await pool.query("insert into bwg_esg_reports (reporting_period_id,metric_code,scope,value,unit,evidence_id,verification_id,status,metadata) values ($1,$2,$3,$4,$5,$6,$7,$8,$9) returning *", [periodId,metricCode,scope,value,unit,evidenceId,verificationId,evidenceId && verificationId ? 'VERIFIED' : 'PENDING',body.metadata ?? {}]);
-      return reply.code(201).send({ source: "postgresql", syntheticData: false, authoritativeMutation: true, esgReport: row.rows[0] });
+      const tenantResponse = await withTenantTransaction(tenantDatabaseContextFromAuth(auth), async (client) => {
+        const period = await client.query<{ organization_id: string }>("select organization_id from bwg_reporting_periods where id=$1 and organization_id=$2 for update", [periodId, activeOrganizationId]);
+        if (!period.rows[0]) return { missing: true as const };
+        if (!await hasValuePermission(client, "can_write_esg", auth.identityId, activeOrganizationId)) return { denied: true as const };
+        const evidenceId = str(body, "evidenceId"); const verificationId = str(body, "verificationId");
+        if (verificationId && !evidenceId) return { invalid: "VERIFICATION_INVALID" as const };
+        if (evidenceId && !await evidenceIsVerified(client, evidenceId, activeOrganizationId)) return { invalid: "EVIDENCE_NOT_VERIFIED" as const };
+        if (evidenceId && verificationId) {
+          const v = await client.query("select 1 from verifications v join evidence e on e.id=v.evidence_id join activities a on a.id=e.activity_id where v.id=$1 and v.evidence_id=$2 and v.decision='APPROVED' and a.organization_id=$3 and e.status='VERIFIED' and organization_has_geography_scope(a.organization_id,a.geography_id)", [verificationId,evidenceId,activeOrganizationId]);
+          if (!v.rows[0]) return { invalid: "VERIFICATION_INVALID" as const };
+        }
+        const row = await client.query("insert into bwg_esg_reports (reporting_period_id,metric_code,scope,value,unit,evidence_id,verification_id,status,metadata) values ($1,$2,$3,$4,$5,$6,$7,$8,$9) returning *", [periodId,metricCode,scope,value,unit,evidenceId,verificationId,evidenceId && verificationId ? 'VERIFIED' : 'PENDING',body.metadata ?? {}]);
+        return { report: row.rows[0] };
+      });
+      if ("missing" in tenantResponse) return reply.code(404).send({ error: "BWG reporting period not found" });
+      if ("denied" in tenantResponse) return reply.code(403).send({ error: "ESG metric write permission required", code: "BWG_ESG_FORBIDDEN" });
+      if ("invalid" in tenantResponse) return reply.code(409).send({ error: tenantResponse.invalid === "EVIDENCE_NOT_VERIFIED" ? "Verified, provenance-backed evidence is required" : "Approved verification is required", code: tenantResponse.invalid });
+      return reply.code(201).send({ source: "postgresql", syntheticData: false, authoritativeMutation: true, esgReport: tenantResponse.report });
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "BWG ESG report unavailable", code: "BWG_ESG_UNAVAILABLE", syntheticData: false }); }
   });
 }
