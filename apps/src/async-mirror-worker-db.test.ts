@@ -517,7 +517,13 @@ test("government inbox worker persists retry recovery, quarantine and append-onl
     const resolutionCommitGate = new Promise<void>((resolve) => { releaseResolutionCommit = resolve; });
     let pausedTerminal = false;
     const lockHoldingPool = {
-      query: (sql: string, values?: unknown[]) => pool.query(sql, values as never[]),
+      query: (sql: string, values?: unknown[]) => {
+        if (/^with exhausted as \\(/i.test(sql)) {
+          const isolatedClaim = sql.replace("where attempts < $3", "where id=$4 and attempts < $3");
+          return pool.query(isolatedClaim, [...(values ?? []), provenanceRow.id] as never[]);
+        }
+        return pool.query(sql, values as never[]);
+      },
       connect: async () => {
         const client = await pool.connect();
         return {
