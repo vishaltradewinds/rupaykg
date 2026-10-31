@@ -621,7 +621,9 @@ test("production-shaped non-superuser migration principal can transfer a SECURIT
     await client.query(`drop trigger if exists "${triggerName}" on public."${source}"`).catch(() => undefined);
     await client.query(`drop function if exists public."${functionName}"()`).catch(() => undefined);
     await client.query(`drop table if exists public."${source}", public."${target}" cascade`).catch(() => undefined);
+    await client.query(`drop owned by "${writer}"`).catch(() => undefined);
     await client.query(`drop role if exists "${writer}"`).catch(() => undefined);
+    await client.query(`drop owned by "${principal}"`).catch(() => undefined);
     await client.query(`drop role if exists "${principal}"`).catch(() => undefined);
     client.release();
     await pool.end();
