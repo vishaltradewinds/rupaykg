@@ -16,3 +16,11 @@ Append-only resume log. Record concrete actions, exact evidence, limitations and
 - Worker PR #161 remains draft/open/unmerged. Runtime SHA `fd2e52e3f73d03f73632bdccd0f0b6a03193f8b5` passed CI [#41205115744](https://github.com/vishaltradewinds/rupaykg/actions/runs/41205115744); current head `1b0d972b3b8899f4960e5030856fff645b177941` is docs-only beyond the tested runtime SHA.
 - No live Neon writes, migrations, role/grant/RLS changes, branch/endpoint changes, Render secret/config/deployment changes, worker/scheduler activation or statutory/Guardian/Hedera submissions occurred.
 - Remaining gates: complete migration-chain rehearsal from authoritative main; queue authority approval; RLS/tenant-isolation decision; deployment-principal verification; independent security review; exact-head CI for later runtime changes; explicit deployment approval. Production HOLD; worker OFF; scheduler OFF; certification OFF; TRL 9 not claimed.
+
+
+## 2026-10-31 — Cleanup review PR opened
+
+- Opened draft PR [#173](https://github.com/vishaltradewinds/rupaykg/pull/173), base `main`, head `engineering/authoritative-db-repository-cleanup-2026-10-31`.
+- PR contains 10 changed files: canonical database policy, source-of-truth checkpoint, execution status/log, README index, archive of four CI marker blob IDs, and removal of the four transient marker documents.
+- GitHub reports the PR is mergeable; it remains draft/open/unmerged. No CI run is claimed because the changes are documentation-only.
+- The four marker deletions are present only on the review branch until PR approval/merge. Main is unchanged. Historical migration files, legacy reference documents, live database branches and endpoints are retained.
