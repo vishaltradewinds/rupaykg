@@ -273,7 +273,7 @@ test("BWG authenticated HTTP authorization fails closed against disposable Postg
   };
 
   const uploadEvidence = async (fixture: (typeof fixtures)[number], activityId: string) => {
-    const bytes = Buffer.from("%PDF-1.7\\nRupayKg disposable evidence fixture\\n");
+    const bytes = Buffer.from("%PDF-1.7\nRupayKg disposable evidence fixture\n");
     const response = await app.inject({
       method: "POST",
       url: "/api/v1/evidence-vault/upload",
@@ -292,12 +292,12 @@ test("BWG authenticated HTTP authorization fails closed against disposable Postg
     const token = randomUUID() + randomUUID();
     const tokenHash = createHash("sha256").update(token).digest("hex");
     const suffix = randomUUID().replaceAll("-", "");
+    fixture.verifierIdentityIds?.push(verifierIdentityId);
+    fixture.verifierTokenHashes?.push(tokenHash);
     await pool.query("insert into identities(id,display_name,status) values ($1,$2,'VERIFIED')", [verifierIdentityId, "BWG HTTP verifier " + suffix]);
     await pool.query("insert into roles(id,organization_id,name,permissions,geography_scope) values ($1,$2,$3,$4::jsonb,'[]'::jsonb)", [verifierRoleId, fixture.organizationId, "BWG HTTP verifier " + suffix, JSON.stringify(["evidence:review", "VERIFY_EVIDENCE"])]);
     await pool.query("insert into organization_memberships(identity_id,organization_id,role_id,status) values ($1,$2,$3,'VERIFIED')", [verifierIdentityId, fixture.organizationId, verifierRoleId]);
     await pool.query("insert into identity_sessions(identity_id,expires_at,token_hash,request_context) values ($1,now()+interval '10 minutes',$2,$3::jsonb)", [verifierIdentityId, tokenHash, JSON.stringify({ purpose: "disposable-bwg-independent-evidence-review" })]);
-    fixture.verifierIdentityIds?.push(verifierIdentityId);
-    fixture.verifierTokenHashes?.push(tokenHash);
     const response = await app.inject({
       method: "POST",
       url: "/api/v1/evidence-vault/" + evidenceId + "/review",
@@ -546,14 +546,14 @@ test("BWG authenticated HTTP authorization fails closed against disposable Postg
         await pool.query("delete from bwg_esg_reports where reporting_period_id=$1", [periodId]);
         await pool.query("delete from bwg_reporting_periods where id=$1", [periodId]);
       }
-      for (const verificationId of fixture.verificationIds ?? []) await pool.query("delete from verifications where id=$1", [verificationId]);
-      for (const evidenceId of fixture.evidenceIds ?? []) {
-        await pool.query("delete from evidence_artifact_reviews where evidence_id=$1", [evidenceId]);
-        await pool.query("delete from evidence_artifact_versions where evidence_id=$1", [evidenceId]);
-        await pool.query("delete from evidence where id=$1", [evidenceId]);
+      for (const activityId of fixture.activityIds ?? []) {
+        await pool.query("delete from verifications where activity_id=$1", [activityId]);
+        await pool.query("delete from evidence_artifact_reviews where evidence_id in (select id from evidence where activity_id=$1)", [activityId]);
+        await pool.query("delete from evidence_artifact_versions where evidence_id in (select id from evidence where activity_id=$1)", [activityId]);
+        await pool.query("delete from evidence where activity_id=$1", [activityId]);
+        await pool.query("delete from evidence_artifact_series where activity_id=$1", [activityId]);
+        await pool.query("delete from activities where id=$1", [activityId]);
       }
-      for (const activityId of fixture.activityIds ?? []) await pool.query("delete from evidence_artifact_series where activity_id=$1", [activityId]);
-      for (const activityId of fixture.activityIds ?? []) await pool.query("delete from activities where id=$1", [activityId]);
       for (const schemeId of fixture.schemeIds ?? []) await pool.query("delete from epr_schemes where id=$1", [schemeId]);
       for (const tokenHash of fixture.verifierTokenHashes ?? []) await pool.query("delete from identity_sessions where token_hash=$1", [tokenHash]);
       for (const verifierIdentityId of fixture.verifierIdentityIds ?? []) {
