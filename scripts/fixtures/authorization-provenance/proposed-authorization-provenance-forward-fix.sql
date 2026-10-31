@@ -29,7 +29,7 @@ create or replace function public.prevent_invalid_verification()
 returns trigger
 language plpgsql
 set search_path = pg_catalog, public
-as $
+as $fn$
 declare
   resolved_activity_id uuid;
   activity_actor uuid;
@@ -160,4 +160,4 @@ begin
 
   return new;
 end;
-$$;
+$fn$;
