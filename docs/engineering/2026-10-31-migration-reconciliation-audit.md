@@ -262,3 +262,23 @@ Before PR #157 can be considered for merge/release:
 5. Rehearse on disposable PostgreSQL and review before any live migration request.
 
 No live Neon function or trigger was changed. Production remains on the existing function. Staging remains on the older function. This is a P0/P1 security release blocker pending reviewed remediation.
+
+
+### Forward-fix lifecycle refinement — 2026-10-31
+
+A second lifecycle edge case was found while reviewing the first proposal: preserving the snapshot only on the first transition away from APPROVED is insufficient. On the next update, `OLD.decision` is no longer APPROVED and a naïve trigger falls through to the non-approved branch, clearing the historical snapshot. Directly setting the decision back to APPROVED could also bypass an explicit audited reapproval process.
+
+The unnumbered proposal in PR #140 was refined to:
+- recognize a previously approved row by `OLD.decision = 'APPROVED'` **or** a non-null historical `OLD.authorization_checked_at`;
+- preserve all four provenance fields on every later update;
+- keep verifier/evidence/activity linkage immutable for the lifetime of that recorded approval;
+- reject direct reapproval of a previously approved row unless a separate audited reapproval workflow exists;
+- continue to clear caller-supplied provenance on never-approved, non-approved rows and to check current permission on first approval.
+
+Regression coverage was added for a second update after rejection, linkage mutation after rejection, and direct reapproval rejection.
+
+CI evidence:
+- Prior proposal head `5229e8299ba5a49af86748730e3fea42374e9d22` passed run [#41191863577](https://github.com/vishaltradewinds/rupaykg/actions/runs/41191863577). This run does not validate the subsequent lifecycle refinement.
+- Current proposal head `f7e4ff12be336058b99bc19a8b729cdd3b636707` is under exact-head run [#41192000600](https://github.com/vishaltradewinds/rupaykg/actions/runs/41192000600), IN PROGRESS. No pass claim until it completes.
+
+The proposal remains a disposable-only, unnumbered fixture. It is not approved for production. Independent review must still assess row locking/concurrency, trigger security/search_path, API audit/reapproval design, legacy approved rows and caller privilege boundaries.
