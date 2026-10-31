@@ -21,10 +21,12 @@ This file is the durable, append-only session handoff for repository work. New s
 8. Confirmed production has migration 096 provenance columns while staging does not; production verification table had zero rows at audit time.
 9. Created this durable log and the companion migration reconciliation audit.
 
-### Actions explicitly NOT performed
-- No SQL writes, DDL, migration execution, migration-ledger edits, data copy, row deletion, or queue mutation.
+### Actions explicitly NOT performed in the initial read-only inventory segment
+- No production/staging SQL writes, DDL, migration execution, migration-ledger edits, data copy, row deletion, or queue mutation.
 - No deployment, scheduler activation, external Guardian/Hedera submission, certification, or credit issuance.
-- No source migration was restored to the working branch in this batch; that requires the full schema/function and source-chain review described in the audit.
+- No source migration was restored to this documentation branch; canonical source files are already present in the existing implementation PR #157.
+
+Later append-only entries record separate additive DDL rehearsals on isolated Neon rehearsal branches. They did not modify production or staging.
 
 ### Current gate
 - P0 migration/schema reconciliation: IN_PROGRESS / BLOCKED pending exact DDL/function and rehearsal evidence.
