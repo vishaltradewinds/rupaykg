@@ -90,7 +90,8 @@ try {
   assert.deepEqual(afterRevocation.authorization_permissions_snapshot, baseline.authorization_permissions_snapshot);
   assert.equal(afterRevocation.authorization_checked_at.getTime(), baseline.authorization_checked_at.getTime());
 
-  // An approved verifier/evidence/activity swap is rejected.
+  // Linkage must remain immutable even when an approved row is transitioned
+  // away from APPROVED; otherwise the preserved snapshot can be rebound.
   const replacementActivity = "10000000-0000-4000-8000-000000000012";
   const replacementEvidence = "10000000-0000-4000-8000-000000000013";
   await client.query("insert into activities(id,actor_identity_id,organization_id) values ($1,$2,$3)", [replacementActivity, ids.actor, ids.org]);
@@ -99,6 +100,19 @@ try {
     client.query("update verifications set activity_id=$2,evidence_id=$3 where id=$1", [ids.verification, replacementActivity, replacementEvidence]),
     /approved verification linkage is immutable/,
   );
+  await assert.rejects(
+    client.query("update verifications set decision='REJECTED',activity_id=$2,evidence_id=$3 where id=$1", [ids.verification, replacementActivity, replacementEvidence]),
+    /approved verification linkage is immutable/,
+  );
+
+  // Transitioning away from APPROVED without changing the linkage retains
+  // the original authorization snapshot as historical provenance.
+  await client.query("update verifications set decision='REJECTED' where id=$1", [ids.verification]);
+  const afterRejection = await selectSnapshot();
+  assert.equal(afterRejection.authorization_membership_id, baseline.authorization_membership_id);
+  assert.equal(afterRejection.authorization_role_id, baseline.authorization_role_id);
+  assert.deepEqual(afterRejection.authorization_permissions_snapshot, baseline.authorization_permissions_snapshot);
+  assert.equal(afterRejection.authorization_checked_at.getTime(), baseline.authorization_checked_at.getTime());
 
   // Non-approved rows cannot bring caller-supplied snapshots, and approval
   // transitions re-check current role permissions.
