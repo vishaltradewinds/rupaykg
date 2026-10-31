@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
-import { selectMigrationFilenames, type MigrationPhase } from "./migration-order.js";
+import { assertProductionMigrationGate, selectMigrationFilenames, type MigrationPhase } from "./migration-order.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) throw new Error("DATABASE_URL is required");
@@ -19,14 +19,8 @@ const pool = new Pool({
 
 try {
   const phase = (process.env.RUPAYKG_MIGRATION_PHASE ?? "all") as MigrationPhase;
+  assertProductionMigrationGate(process.env);
   if (process.env.NODE_ENV === "production") {
-    if (process.env.RUPAYKG_ALLOW_PRODUCTION_MIGRATIONS !== "true"
-      || process.env.RUPAYKG_PRODUCTION_MIGRATION_APPROVED !== "true"
-      || !process.env.RUPAYKG_PRODUCTION_CHANGE_ID?.trim()
-      || !process.env.RUPAYKG_PRODUCTION_BACKUP_REFERENCE?.trim()
-      || phase !== "production-upgrade") {
-      throw new Error("PRODUCTION_MIGRATION_BLOCKED: require explicit approval, change ID, backup reference and production-upgrade phase");
-    }
     const ledgerExists = await pool.query<{ present: boolean }>(
       "select to_regclass('public.schema_migrations') is not null as present",
     );
