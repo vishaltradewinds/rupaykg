@@ -1,3 +1,42 @@
+## Autonomous CTO refresh — 2026-10-31 18:06 UTC
+
+**Supersedes all older status/next-step statements below.** Resume from the live branch ref and exact-head CI, not from a historical SHA.
+
+### Current repository/review state
+- Repository `vishaltradewinds/rupaykg`; working branch `shakti/atomic-inbox-claim-2026-10-31`.
+- Branch HEAD before this pointer update: `f8c949f2a3d55a6da2600fc60eeb79d7c768a1b9` (documentation-only stacked-CI trigger test).
+- Main HEAD: `b5e91241d84a6712ff544d3deec1805702f45efd`.
+- Canonical worker PR #161: OPEN / DRAFT / unmerged; base `shakti/integrate-government-inbox-worker-2026-10-31`.
+- PR #175: CLOSED / unmerged as duplicate/temporary CI mirror; no branch or commit deleted.
+- PR #157, #178 and #179 remain OPEN / DRAFT / unmerged.
+- PR #161 now triggers CI with PR #175 closed. New exact-head runs #41227672733 and #41227672742 were created for SHA `5207574483fd2620c0d6c9a8ef706c15329c3a54`; GitHub run metadata lists only PR #161 and its non-main base branch. This verifies the workflow trigger change. These runs were IN PROGRESS at last check.
+
+### Latest engineering milestone
+- Implementation/workflow SHA `19ee83a52f5f29617df0b135bbce9129b746be13` passed full CI runs #41227554040 and #41227554234. All steps passed: dependency audit, migration validation, production baseline reconstruction, migration upgrade/idempotency, typecheck, build, browser smoke, full unit + disposable PostgreSQL acceptance, evidence upload and production container build.
+- The three commits after that tested implementation SHA were documentation-only (resume pointer, immutable checkpoint and session logs). No runtime code changed after the green CI.
+- Worker hardening includes fail-closed PostgreSQL principal identity, verified TLS by default, bounded exhausted-row quarantine with accurate counters, and heartbeat intervals limited to half the lease duration.
+- Immutable checkpoint: `docs/engineering/checkpoints/2026-10-31-worker-security-bounded-queue.md`.
+- Latest session log: `docs/engineering/session-logs/2026-10-31-1810-utc-stacked-pr-ci-trigger-check.md`.
+
+### Production posture and blockers
+- Sole authoritative live database remains Neon project `rupaykg-production-fresh` (`steep-mud-79906940`), primary branch `br-restless-base-b44cip2h`, database `rupaykg`.
+- Render-to-Neon runtime binding and actual runtime role remain NOT VERIFIED.
+- No production DB DDL/DML, role/grant, secret, Render setting, deployment, queue row or lease changed.
+- Worker OFF; scheduler OFF; certification OFF; production HOLD; TRL 9 NOT ESTABLISHED.
+- Actual least-privilege worker login/grants are not provisioned or verified. A read-only principal/grant preflight using the actual candidate credential on a disposable production-shaped branch is still required.
+- RLS/tenant isolation remains a production release blocker; do not blanket-enable RLS.
+- PR #157/161 stack remains four commits behind current main at its base; reconcile the four intervening commits and historical migration 096/source-ledger provenance before any merge.
+
+### Next ordered actions
+1. Poll #41227672733 / #41227672742 and confirm exact-head CI; fix failures if any.
+2. Verify subsequent PR #161 pushes continue to trigger CI with PR #175 closed.
+3. Build read-only principal/grant preflight and run only on a disposable production-shaped Neon branch.
+4. Reconcile current-main drift, migration ledger and 096 historical source exception.
+5. Independent review of worker SQL, least privilege, tenant boundary, migration chain, rollback and operational recovery.
+6. Continue safe work autonomously; seek founder approval only for irreversible production changes, statutory representations or risk acceptance.
+
+---
+
 ## Autonomous CTO session refresh — 2026-10-31 18:05 UTC
 
 **This section supersedes all older status and next-step statements below.** Start by checking the live branch ref and exact-head CI; this pointer update is documentation-only.
