@@ -375,3 +375,15 @@ Read this log and `docs/engineering/2026-10-31-migration-reconciliation-audit.md
 - Copied proposed ADR docs/architecture/ADR-20261031-government-inbox-worker-authority-scope.md into worker branch shakti/atomic-inbox-claim-2026-10-31 (commit 140f200ce0bf2f39bba3772f1015742ec8ef6f44), so the unresolved global-national-queue vs tenant-scoped-worker decision travels with PR #161 rather than existing only on the engineering checkpoint branch.
 - Updated PR #161 description to distinguish the exact passing runtime-code head 19b431008e96598d7306455374474934cd9a7cfc (CI run #41203528525, all 17 steps passed) from the subsequent documentation-only commits 5eb978ef27fe61fa93573229096f93a3be981c3f and 140f200ce0bf2f39bba3772f1015742ec8ef6f44. No runtime code changed after the passing CI head.
 - PR #161 remains draft/open/unmerged, stacked on PR #157. Production remains HOLD; worker OFF; certification OFF; no live Neon/Render changes. ADR status remains PROPOSED — NOT APPROVED. Exact deployment secret principal, explicit queue-scope/security approval, RLS policies, production-derived full-chain rehearsal and independent security review remain open. TRL 9 unclaimed.
+
+
+### 138. Lease-heartbeat failure cancellation hardening — 2026-10-31
+
+- Re-audited PR #161 current worker branch before continuing. Lease renewal and bounded validator timeout were already implemented; did not duplicate that work.
+- Identified a reliability gap in heartbeat error reporting: an arbitrary PostgreSQL renewal exception could be propagated as its generic JavaScript error name instead of the stable queue failure code.
+- Normalized heartbeat renewal failures to `LEASE_RENEWAL_FAILED`. Added a unit regression test that injects a heartbeat-query failure while validation is active and asserts cooperative AbortSignal cancellation plus a fenced RETRY carrying the stable failure code.
+- Updated `docs/engineering/GOVERNMENT_INBOX_WORKER_LEAST_PRIVILEGE_GATE_2026-10-31.md` with the new acceptance requirement and limitation that AbortSignal cannot forcibly terminate non-cooperative validators.
+- Worker branch commits: test + gate documentation `bbd3e5b1cfd0a9469e8f55de3d3ec27a0bb968e5`, `6c6d4721135e37e09e481efb08ff919a98ec3fe6`; heartbeat failure-code normalization `c44e53ba9467eaf6f42cb191f30043825c87624c`. PR #161 description and comment updated to distinguish prior passing CI from current unverified runtime head.
+- Current PR #161 head `c44e53ba9467eaf6f42cb191f30043825c87624c`; exact-head workflow runs and combined statuses returned empty. A temporary retarget to main did not expose a run; PR base was immediately restored to `shakti/integrate-government-inbox-worker-2026-10-31`. PR remains draft/open/unmerged, stacked on PR #157.
+- No local test/build was run, and no exact-head CI pass is claimed. Earlier CI at `19b431008e96598d7306455374474934cd9a7cfc` passed, but does not cover the latest heartbeat failure change.
+- No live Neon/Render writes, role/grant/RLS changes, queue replay, worker/scheduler activation, deployment, merge, or statutory/Guardian/Hedera submission. Production HOLD; worker OFF; certification OFF; TRL 9 unclaimed.
