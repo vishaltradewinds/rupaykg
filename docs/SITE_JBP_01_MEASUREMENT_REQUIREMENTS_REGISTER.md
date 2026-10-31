@@ -121,3 +121,12 @@ A failed mandatory gate blocks progression. Passing application CI does not esta
 ## 8. Next practical action
 
 Collect the evidence listed in Section 1 from the site owner/operator and identify the actual process. Then produce the methodology-to-parameter map before selecting sensors or edge hardware. No purchase or paid service is authorized by this register.
+
+
+## 2.2 July 2026 NGT status update
+
+The NGT order dated 13 July 2026, considering JMC's 10 July 2026 progress report in O.A. 819/2024, records continuous operation of the Kathonda WtE plant since January 2026 and 30,759.50 MWh electricity exported to the grid from January through June 2026. It states that MoHUA had approved the proposed 100 TPD Bio-CNG project under CITIIS 2.0, PDMC feasibility analysis and DPR preparation were underway, and finalization before the Central Government remained pending. The Tribunal disposed of O.A. 819/2024 after considering the report.
+
+Sources: NGT portal report listing (10 July 2026): https://www.greentribunal.gov.in/index.php?page=1183. Reproduced NGT order (13 July 2026): https://indiankanoon.org/doc/76746794/.
+
+This is not evidence that the Bio-CNG plant is commissioned or that a methane-recovery activity exists. Treat WtE and Bio-CNG as separate project boundaries and obtain current operator/JMC records before any instrument selection or methodology decision.
