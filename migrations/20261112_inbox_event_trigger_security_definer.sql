@@ -4,7 +4,7 @@
 do $$
 begin
   if not exists (select 1 from pg_roles where rolname='rupaykg_inbox_event_writer') then
-    create role rupaykg_inbox_event_writer nologin nosuperuser nocreatedb nocreaterole noinherit nobypassrls;
+    execute 'create role rupaykg_inbox_event_writer nologin nosuperuser nocreatedb nocreaterole noinherit nobypassrls';
   end if;
 end
 $$;
