@@ -163,3 +163,17 @@ Final disposition: HOLD / APPROVED FOR NEXT CONTROLLED STAGE (select one; approv
 As of this record, the reviewed repository does not contain an evidenced exact Kathonda instrument inventory with model numbers, certificates, calibration records and interface manuals. No hardware model is VERIFIED. This is an evidence gap, not proof that no eligible device exists.
 
 The next real-world dependency is receipt of the completed intake and supporting evidence from an authorized site/operator representative. Until then, continue only with software-side fail-closed controls and test fixtures clearly marked as synthetic; do not fabricate field measurements or claim site validation.
+
+
+## Official site status refresh — 2026-10-31
+
+The MPPCB Status-cum-Inspection Report filed in NGT O.A. 819/2024 on 15 May 2026 (inspection 8 May 2026) describes the Kathonda facility as a mass-incineration WtE plant processing mixed MSW. It reports recommissioning in January 2026 after overhaul and renewed CTO/SWM authorization through 28 February 2028. It describes a separate proposed 100 TPD Bio-CNG project under CITIIS 2.0 as planned for the execution phase, not an operating methane-recovery asset.
+
+The NGT portal also lists a Jabalpur Municipal Corporation progress report in O.A. 819/2024 uploaded 10 July 2026; obtain the report and subsequent orders before freezing any site boundary or procurement decision.
+
+**Site decision:** Kathonda WtE and the proposed Bio-CNG project are separate project boundaries. Do not infer landfill methane recovery, BM WA03.001 applicability, methane instrument requirements or carbon-credit eligibility from the existence of the WtE plant. Confirm the Bio-CNG project's current approvals, site, construction/commissioning status, operator, feedstock, process design, metering, emissions/leakage and methodology before any hardware selection.
+
+Sources:
+- MPPCB status-cum-inspection report (NGT-hosted, 15 May 2026): https://www.greentribunal.gov.in/sites/default/files/news_updates/STATUS%20CUM%20INSPECTION%20REPORT%20BY%20MPPCB%20IN%20OA%20NO.%20819%20of%202024%20NEWS%20ITEM%20TITLED%20JABALPUR%20KATHAUNDA%20PLANT%20MEIN%20KACHARA%20JALNE%20KE%20BAAD%20DUR%20DUR%20TAK%20FAIL%20RAHE%20DHOOL%20KE%20KAN.pdf
+- CPCB reply (NGT-hosted, 25 September 2024): https://www.greentribunal.gov.in/sites/default/files/news_updates/REPLY%20BY%20CPCB%20IN%20OA%20NO.%20819%20of%202024%20NEWS%20ITEM%20TITLED%20JABALPUR%20KATHAUNDA%20PLANT%20MEIN%20KACHARA%20JALNE%20KE%20BAAD%20DUR%20DUR%20TAK%20FAIL%20RAHE%20DHOOL%20KE%20KAN.pdf
+- NGT portal report listing (10 July 2026): https://www.greentribunal.gov.in/index.php?page=1183
