@@ -96,10 +96,11 @@ Required worker contract:
 
 File: `apps/src/acceptance-seed.ts`
 
-- Creates its own PostgreSQL pool from `DATABASE_URL` and performs a sequence of fixture queries and writes inside a transaction.
+- Creates its own PostgreSQL pool from `DATABASE_URL` with `max: 1`, then performs sequential fixture queries/writes between `pool.query("begin")` and `pool.query("commit")`. Because the pool is explicitly capped at one connection and the statements are sequential, the reviewed current path is effectively pinned to that sole connection; the earlier generic concern that the statements might hop among pool connections does not apply to this exact configuration.
+- Nevertheless, a checked-out `PoolClient` is the clearer and more robust transaction contract. If pool max is raised or concurrent work is introduced, the current pattern becomes unsafe; refactor to `const client = await pool.connect()` and use `client.query` for every statement between BEGIN/COMMIT/ROLLBACK.
 - This is not a web-request tenant context. It should only run against disposable CI PostgreSQL with isolated credentials and deterministic fixture identity/cleanup.
 - Production image/start command must never invoke it; the current PR #157 Docker command removes automatic seed execution. Retain a separate explicit CI script and fail closed if production environment or non-disposable target is detected.
-- Verify that the seed transaction uses a checked-out client consistently; a pool-level `BEGIN` followed by pool-level queries is not guaranteed to stay on one connection. If the source uses `pool.query("begin")` and subsequent `pool.query`, replace with a checked-out client transaction before any acceptance claims. This is a specific implementation check to resolve before treating the seed as safe.
+- Add explicit target safety checks and a cleanup/retention policy for the fixture session and fixture data. Do not run this against production/staging.
 
 ## 7. Workspace cross-check
 
