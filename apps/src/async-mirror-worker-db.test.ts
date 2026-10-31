@@ -587,6 +587,7 @@ test("production-shaped non-superuser migration principal can transfer a SECURIT
     await client.query(`create role "${writer}" nologin nosuperuser nocreatedb nocreaterole noinherit nobypassrls`);
     await client.query(`grant usage on schema public to "${writer}"`);
     await client.query(`grant insert on table public."${target}" to "${writer}"`);
+    await client.query(`grant usage, select on sequence public."${target}_id_seq" to "${writer}"`);
     await client.query(`grant create on schema public to "${writer}"`);
     await client.query(`grant "${writer}" to current_user`);
     await client.query(`
