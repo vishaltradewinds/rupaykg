@@ -133,3 +133,60 @@ comment on column authoritative_source_snapshots.scope_directory_source_id is
   'Versioned, checksum-verified geography directory source used to bind scope_code to scope_geography_id; administrative scopes require Local Government Directory (LGD).';
 comment on function government_source_scope_covers_geography(uuid,uuid) is
   'Fail-closed source-scope gate: India-wide sources may cover all geographies; state/district/local-body sources require a verified, versioned LGD code bound to a geography ancestor; OTHER is exact-geography only.';
+
+create or replace function prevent_approved_scope_geography_mutation()
+returns trigger
+language plpgsql
+as $$
+begin
+  if exists (
+    select 1 from authoritative_source_snapshots s
+     where s.scope_geography_id = old.id
+       and s.validation_status in ('APPROVED','RETIRED')
+  ) and (
+    new.parent_id is distinct from old.parent_id
+    or new.kind is distinct from old.kind
+    or new.external_code is distinct from old.external_code
+    or new.source_id is distinct from old.source_id
+  ) then
+    raise exception 'APPROVED_SOURCE_SCOPE_GEOGRAPHY_IMMUTABLE';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists approved_scope_geography_immutable on geography;
+create trigger approved_scope_geography_immutable
+before update on geography
+for each row execute function prevent_approved_scope_geography_mutation();
+
+create or replace function prevent_approved_scope_directory_source_mutation()
+returns trigger
+language plpgsql
+as $$
+begin
+  if exists (
+    select 1 from authoritative_source_snapshots s
+     where s.scope_directory_source_id = old.id
+       and s.validation_status in ('APPROVED','RETIRED')
+  ) and (
+    new.source_name is distinct from old.source_name
+    or new.source_uri is distinct from old.source_uri
+    or new.source_version is distinct from old.source_version
+    or new.checksum is distinct from old.checksum
+  ) then
+    raise exception 'APPROVED_SOURCE_SCOPE_DIRECTORY_IMMUTABLE';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists approved_scope_directory_source_immutable on geography_sources;
+create trigger approved_scope_directory_source_immutable
+before update on geography_sources
+for each row execute function prevent_approved_scope_directory_source_mutation();
+
+comment on function prevent_approved_scope_geography_mutation() is
+  'Once an approved source snapshot references a scope geography, its parent hierarchy, kind, external code and directory source binding are immutable.';
+comment on function prevent_approved_scope_directory_source_mutation() is
+  'Once an approved source snapshot references a geography directory version, its identity, URI, version and checksum are immutable; status may be changed to revoke trust.';
