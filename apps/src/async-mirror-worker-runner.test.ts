@@ -200,6 +200,8 @@ const leastPrivilegePrincipal = {
   public_reference_acl: false,
   public_scope_function_execute: false,
   inbox_select: true,
+  inbox_insert: false,
+  inbox_delete: false,
   inbox_table_update: false,
   inbox_update_status: true,
   inbox_update_attempts: true,
@@ -356,4 +358,17 @@ test("worker principal attestation rejects table-wide inbox UPDATE even when col
     ),
     /INBOX_TABLE_LEVEL_UPDATE_TOO_BROAD/,
   );
+});
+
+
+test("worker principal attestation rejects inbox INSERT and DELETE privileges", async () => {
+  for (const unsafe of [
+    { ...leastPrivilegePrincipal, inbox_insert: true },
+    { ...leastPrivilegePrincipal, inbox_delete: true },
+  ]) {
+    await assert.rejects(
+      () => assertGovernmentInboxWorkerPrincipal(principalPool(unsafe)),
+      /INBOX_(INSERT_NOT_ALLOWED|DELETE_NOT_ALLOWED)/,
+    );
+  }
 });
