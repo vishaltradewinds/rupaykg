@@ -12,7 +12,7 @@ This review and implementation batch covers `apps/src/sync-routes.ts` on PR #157
    - authenticated identity ownership;
    - VERIFIED device status;
    - device organization equals the active organization selected by the authenticated session.
-3. Envelope application now locks the envelope and joined device row in one query, requiring:
+3. Envelope application first resolves the envelope's device ID, then locks the verified device row, then locks the envelope row. This preserves the same device-before-envelope lock order used by intake and reduces deadlock risk. The locked checks require:
    - envelope identity equals authenticated identity;
    - device identity equals envelope identity;
    - device remains VERIFIED;
@@ -20,7 +20,7 @@ This review and implementation batch covers `apps/src/sync-routes.ts` on PR #157
 4. `applyOperation` receives the organization obtained from the locked database device row; it does not derive device organization from payload.
 5. `ACTIVITY_CREATE` and `RESOURCE_FLOW_CREATE` require payload organization to equal the locked device organization.
 6. `MEASUREMENT_CREATE` and `EVIDENCE_CREATE` resolve the referenced activity only when its organization equals the locked device organization. This prevents a device enrolled for one organization from using an activity belonging to another organization.
-7. Existing permission and geography checks remain in the same checked-out client transaction as the authoritative write. Idempotency, sequence collision, cursor lock, envelope persistence and device last-seen update remain in the intake transaction.
+7. Existing permission and geography checks remain in the same checked-out client transaction as the authoritative write. Idempotency, sequence collision, cursor lock, envelope persistence and device last-seen update remain in the intake transaction. Intake and apply both acquire the device lock before an envelope lock to keep lock ordering consistent.
 
 ## Security boundary and limitations
 
