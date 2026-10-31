@@ -196,6 +196,6 @@ before update on geography_sources
 for each row execute function prevent_approved_scope_directory_source_mutation();
 
 comment on function prevent_approved_scope_geography_mutation() is
-  'Once an approved source snapshot references a scope geography, its parent hierarchy, kind, external code and directory source binding are immutable.';
+  'Once an approved source snapshot references an administrative scope, the full descendant hierarchy and its kind, external code and directory source bindings are immutable; OTHER scopes freeze only the exact bound geography.';
 comment on function prevent_approved_scope_directory_source_mutation() is
   'Once an approved source snapshot references a geography directory version, its identity, URI, version and checksum are immutable; status may be changed to revoke trust.';
