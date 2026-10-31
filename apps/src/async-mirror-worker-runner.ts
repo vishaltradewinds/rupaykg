@@ -24,6 +24,10 @@ export function createGovernmentInboxWorkerPool(
     throw new Error("GOVERNMENT_INBOX_DATABASE_URL_REQUIRED");
   }
 
+  if (!hasExplicitDatabasePrincipal(workerUrl)) {
+    throw new Error("GOVERNMENT_INBOX_DATABASE_PRINCIPAL_REQUIRED");
+  }
+
   const applicationUrl = env.DATABASE_URL?.trim();
   if (applicationUrl && sameDatabasePrincipal(workerUrl, applicationUrl)) {
     throw new Error("GOVERNMENT_INBOX_DATABASE_PRINCIPAL_MUST_BE_DEDICATED");
@@ -38,18 +42,25 @@ export function createGovernmentInboxWorkerPool(
   });
 }
 
+function hasExplicitDatabasePrincipal(url: string): boolean {
+  try {
+    return decodeURIComponent(new URL(url).username).length > 0;
+  } catch {
+    return false;
+  }
+}
+
 function sameDatabasePrincipal(left: string, right: string): boolean {
   try {
-    const a = new URL(left);
-    const b = new URL(right);
-    // A dedicated worker principal means a distinct PostgreSQL role name.
+    const leftRole = decodeURIComponent(new URL(left).username);
+    const rightRole = decodeURIComponent(new URL(right).username);
+    // Missing or malformed identity is not proof of a distinct PostgreSQL role.
     // Compare role identity independent of password, endpoint aliases, ports,
     // or database path: those are not proof of a separate database principal.
-    return decodeURIComponent(a.username) === decodeURIComponent(b.username);
+    return !leftRole || !rightRole || leftRole === rightRole;
   } catch {
-    // Invalid URLs are rejected by pg on connection; never treat malformed
-    // values as proof that the worker principal is distinct.
-    return left === right;
+    // Fail closed: malformed URLs cannot establish distinct principals.
+    return true;
   }
 }
 
