@@ -185,3 +185,14 @@ This is source-code implementation only. The script is not configured as a Rende
 - The migration and updated acceptance test are not yet accepted. Exact-head CI must rerun with the updated PR #157 base and current PR #161 head. No production/staging function ACL or schema change was made.
 - Production RLS remains absent on all 67 inspected public base tables (0 RLS-enabled, 0 FORCE RLS, 0 policies). Staging queue rows still lack tenant identifiers. Tenant isolation remains a separate hard release blocker.
 - Worker OFF; scheduler OFF; production HOLD; TRL 9 not established.
+
+
+### Exact PostgreSQL catalog attestation — remediation validated — 2026-10-31 18:55 UTC
+
+- Parent migration PR #157 exact-head CI [#41231609311](https://github.com/vishaltradewinds/rupaykg/actions/runs/41231609311) passed on migration head `4d7567afe771f618691e4b3a1d3d7e4742e48053`.
+- Worker PR #161 exact-head CI [#41231642460](https://github.com/vishaltradewinds/rupaykg/actions/runs/41231642460) passed on worker head `51951d5d324019bcac24eb35ac976881725c54de`; it includes the updated parent base and the live PostgreSQL principal-attestation acceptance.
+- The disposable PostgreSQL test now proves the actual catalog attestation accepts the exact dedicated NOINHERIT/NOBYPASSRLS test role with explicit grants after migration 20261114 revokes PUBLIC EXECUTE on both scope helpers. Negative checks still reject direct event access, inbox DELETE/INSERT, payload hash UPDATE, unrelated evidence SELECT and schema DDL.
+- All 17 workflow steps passed on each exact head, including production dependency audit, migration validation and production-baseline reconstruction, migration application/idempotency, typecheck, build, browser smoke, disposable PostgreSQL acceptance, evidence upload and production container build.
+- This validates the candidate migration and ACL behavior in disposable CI PostgreSQL only. It does not establish live Neon production schema/role/grants, Render database identity or tenant isolation.
+- Tenant isolation remains a separate release blocker: production snapshot has 67 public base tables, 0 RLS-enabled, 0 FORCE RLS, 0 policies; staging inbox and event rows lack tenant keys. No production/staging changes were made.
+- PRs #157 and #161 remain draft/open/unmerged. Worker OFF; scheduler OFF; production HOLD; TRL 9 not established.
