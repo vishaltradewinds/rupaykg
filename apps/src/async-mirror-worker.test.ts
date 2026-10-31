@@ -4,10 +4,11 @@ import type { Pool } from "pg";
 import { isValidSyncWindowTimestamp, reconcileGovernmentInbox, runGovernmentInboxWorker, validateGovernmentInboxPayload } from "./async-mirror-worker.js";
 import { canonicalGovBridgeHash } from "./government-inbox-hash.js";
 
-function fakePool(rows: unknown[], crosswalkRows?: unknown[]) {
+function fakePool(rows: unknown[], crosswalkRows?: unknown[], exhaustedQuarantined = 0) {
   const statements: Array<{ sql: string; values: unknown[] }> = [];
   const query = async (sql: string, values: unknown[] = []) => {
     statements.push({ sql, values });
+    if (sql.includes("as claimed_rows")) return { rows: [{ claimed_rows: rows, exhausted_quarantined: exhaustedQuarantined }], rowCount: 1 };
     if (sql.includes("returning inbox.id")) return { rows, rowCount: rows.length };
     if (sql.includes("from government_jurisdiction_crosswalks c")) return { rows: crosswalkRows ?? [{
       id: "crosswalk-id", organization_id: "organization-id", geography_id: "geography-id", activity_id: null,
@@ -224,4 +225,16 @@ test("government inbox timestamp validation checks calendar, clock, precision, a
   for (const [timestamp, expected] of cases) {
     assert.equal(isValidSyncWindowTimestamp(timestamp), expected, timestamp);
   }
+});
+
+
+test("worker bounds exhausted-row quarantine and reports the swept count", async () => {
+  const { pool, statements } = fakePool([], undefined, 2);
+  const result = await runGovernmentInboxWorker(pool, undefined, { batchSize: 3, maxAttempts: 3 });
+  assert.equal(result.claimed, 0);
+  assert.equal(result.quarantined, 2);
+  assert.match(statements[0]!.sql, /exhausted_candidates as/i);
+  assert.match(statements[0]!.sql, /for update skip locked/i);
+  assert.match(statements[0]!.sql, /limit \$1/i);
+  assert.match(statements[0]!.sql, /select count\(\*\)::int from exhausted/i);
 });
