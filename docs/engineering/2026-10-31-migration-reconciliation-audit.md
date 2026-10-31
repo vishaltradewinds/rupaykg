@@ -282,3 +282,16 @@ CI evidence:
 - Current proposal head `f7e4ff12be336058b99bc19a8b729cdd3b636707` is under exact-head run [#41192000600](https://github.com/vishaltradewinds/rupaykg/actions/runs/41192000600), IN PROGRESS. No pass claim until it completes.
 
 The proposal remains a disposable-only, unnumbered fixture. It is not approved for production. Independent review must still assess row locking/concurrency, trigger security/search_path, API audit/reapproval design, legacy approved rows and caller privilege boundaries.
+
+
+## Rehearsal-only unledgered 20261101 schema effect — 2026-10-31
+
+A fresh direct catalog comparison after the 096 rehearsal reconfirmed an additional pre-existing drift between staging and the staging-derived rehearsal branch:
+
+- Staging `br-spring-hill-b4544vz5` status CHECK allows `RECEIVED, PROCESSING, PROCESSED, VALIDATED, REJECTED, RETRY, QUARANTINED`; status column comment is NULL.
+- Rehearsal `br-broad-glade-b46npw8o` allows the same values plus `UNRESOLVED`; its status column comment explains that UNRESOLVED is an internal state for structurally valid intake lacking one unambiguous current verified jurisdiction crosswalk, not official rejection/acceptance.
+- Both ledgers have zero rows for version `20261101`.
+
+The rehearsal's constraint/comment match the schema effect of candidate migration `20261101_async_mirror_unresolved_crosswalk.sql` in PR #157, but the ledger has no corresponding row. Classify this as **schema-effect match / ledger provenance unresolved**. Do not replay the migration or fabricate a ledger row. Preserve the rehearsal state until an approved evidence-backed reconciliation decision.
+
+The 096 rehearsal changed only verifier provenance columns/function/trigger on this branch; the unledgered UNRESOLVED constraint and comment remain as found. The branch compute has been suspended.
