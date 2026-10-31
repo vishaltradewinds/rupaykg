@@ -51,7 +51,10 @@ export function assertTenantDatabaseContext(context: TenantDatabaseContext): voi
  * migration has been applied.
  */
 export function createTenantTransaction(pool: Pool): TenantTransaction {
-  return async function withTenantTransaction<T>(context, work): Promise<T> {
+  return async function withTenantTransaction<T>(
+    context: TenantDatabaseContext,
+    work: (client: PoolClient) => Promise<T>,
+  ): Promise<T> {
     assertTenantDatabaseContext(context);
     const client = await pool.connect();
     let transactionOpen = false;
