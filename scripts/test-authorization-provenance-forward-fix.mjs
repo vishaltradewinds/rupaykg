@@ -236,7 +236,35 @@ try {
     await client.query("COMMIT");
     await blockedRevocation;
     await client.query("update organization_memberships set status='VERIFIED' where id=$1", [ids.membership]);
-    console.log("PASS: two-session PostgreSQL test serializes approval and membership revocation.");
+
+    await concurrentClient.query("BEGIN");
+    await concurrentClient.query("update roles set permissions='[]'::jsonb where id=$1", [ids.role]);
+    let roleApprovalSettled = false;
+    const blockedByRoleRevocation = client.query(
+      "insert into verifications(id,activity_id,evidence_id,verifier_identity_id,decision) values ($1,$2,$3,$4,'APPROVED')",
+      ["10000000-0000-4000-8000-000000000033", ids.activity, ids.evidence, ids.verifier],
+    ).then(() => { roleApprovalSettled = true; return null; }, (error) => { roleApprovalSettled = true; return error; });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    assert.equal(roleApprovalSettled, false, "approval must wait for in-flight role permission change");
+    await concurrentClient.query("COMMIT");
+    const roleApprovalError = await blockedByRoleRevocation;
+    assert.match(roleApprovalError?.message ?? "", /requires active verifier permission/);
+    await client.query("update roles set permissions=$2::jsonb where id=$1", [ids.role, JSON.stringify(["VERIFY_EVIDENCE"])]);
+
+    await concurrentClient.query("BEGIN");
+    await concurrentClient.query("update identities set suspended_at=now() where id=$1", [ids.verifier]);
+    let identityApprovalSettled = false;
+    const blockedBySuspension = client.query(
+      "insert into verifications(id,activity_id,evidence_id,verifier_identity_id,decision) values ($1,$2,$3,$4,'APPROVED')",
+      ["10000000-0000-4000-8000-000000000034", ids.activity, ids.evidence, ids.verifier],
+    ).then(() => { identityApprovalSettled = true; return null; }, (error) => { identityApprovalSettled = true; return error; });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    assert.equal(identityApprovalSettled, false, "approval must wait for in-flight identity suspension");
+    await concurrentClient.query("COMMIT");
+    const identityApprovalError = await blockedBySuspension;
+    assert.match(identityApprovalError?.message ?? "", /requires active verifier permission/);
+    await client.query("update identities set suspended_at=null where id=$1", [ids.verifier]);
+    console.log("PASS: two-session PostgreSQL tests serialize approval against membership revocation, role permission changes, and identity suspension.");
   } finally {
     await concurrentClient.end();
   }
