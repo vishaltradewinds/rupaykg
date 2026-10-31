@@ -593,6 +593,19 @@ test("PostgreSQL enforces parameter uncertainty, immutable raw-frame bytes and M
       /immutable/,
     );
 
+    await pool.query("update evidence set status='REJECTED' where id=$1", [fixture.calibrationEvidenceId]);
+    await assert.rejects(
+      pool.query("update measurements set mrv_uncertainty_record_id=mrv_uncertainty_record_id where id=$1", [measurement.rows[0]!.id]),
+      /measurement uncertainty record does not match its instrument, parameter and unit/,
+    );
+    await pool.query("update evidence set status='VERIFIED' where id=$1", [fixture.calibrationEvidenceId]);
+    await pool.query("update evidence set status='REJECTED' where id=$1", [evidenceId]);
+    await assert.rejects(
+      pool.query("update measurements set raw_frame_sha256=raw_frame_sha256 where id=$1", [measurement.rows[0]!.id]),
+      /raw-frame artifact must be an exact server-hashed evidence version/,
+    );
+    await pool.query("update evidence set status='VERIFIED' where id=$1", [evidenceId]);
+
     await pool.query(
       `insert into mrv_observations
        (activity_id,measurement_id,parameter_code,observed_value,unit,method,instrument_id,observed_at,
@@ -610,36 +623,25 @@ test("PostgreSQL enforces parameter uncertainty, immutable raw-frame bytes and M
       ),
       /exact measurement uncertainty and raw-frame bindings/,
     );
-    await pool.query("update evidence set status='REJECTED' where id=$1", [fixture.calibrationEvidenceId]);
-    await assert.rejects(
-      pool.query("update measurements set mrv_uncertainty_record_id=mrv_uncertainty_record_id where id=$1", [measurement.rows[0]!.id]),
-      /measurement uncertainty record does not match its instrument, parameter and unit/,
-    );
-    await pool.query("update evidence set status='VERIFIED' where id=$1", [fixture.calibrationEvidenceId]);
-    await pool.query("update evidence set status='REJECTED' where id=$1", [evidenceId]);
-    await assert.rejects(
-      pool.query("update measurements set raw_frame_sha256=raw_frame_sha256 where id=$1", [measurement.rows[0]!.id]),
-      /raw-frame artifact must be an exact server-hashed evidence version/,
-    );
-    await pool.query("update evidence set status='VERIFIED' where id=$1", [evidenceId]);
 
     await pool.query(
-      \`insert into mrv_observations
+      `insert into mrv_observations
        (activity_id,measurement_id,parameter_code,observed_value,unit,method,instrument_id,observed_at,
         mrv_uncertainty_record_id,raw_frame_artifact_version_id,raw_frame_sha256)
-       values($1,$2,'gas_flow',2,'m3/h','test',$3,now(),$4,$5,$6)\`,
+       values($1,$2,'gas_flow',2,'m3/h','test',$3,now(),$4,$5,$6)`,
       [fixture.activityId, measurement.rows[0]!.id, fixture.instrumentId, uncertaintyId, artifactId, rawHash],
     );
     await assert.rejects(
       pool.query(
-        \`insert into mrv_observations
+        `insert into mrv_observations
          (activity_id,measurement_id,parameter_code,observed_value,unit,method,instrument_id,observed_at,
           mrv_uncertainty_record_id,raw_frame_artifact_version_id,raw_frame_sha256)
-         values($1,$2,'gas_flow',2,'m3/h','test',$3,now(),$4,$5,$6)\`,
+         values($1,$2,'gas_flow',2,'m3/h','test',$3,now(),$4,$5,$6)`,
         [fixture.activityId, measurement.rows[0]!.id, fixture.instrumentId, uncertaintyId, artifactId, "f".repeat(64)],
       ),
       /exact measurement uncertainty and raw-frame bindings/,
     );
+
   } finally {
     await pool.end();
   }
