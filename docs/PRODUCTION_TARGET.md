@@ -26,7 +26,7 @@ Guardian integration is therefore a separate external-trust state. A locally `VE
 
 ## Production configuration contract
 
-Production startup uses `apps/src/production-server.ts` (compiled as `apps/dist/src/production-server.js`), not the development `server.ts` entrypoint directly. The production Fastify server also serves the built web application from `apps/web/dist`.
+Production startup uses `apps/src/production-server.ts` (compiled as `apps/dist/src/production-server.js`), not the development `server.ts` entrypoint directly. The production Fastify server also serves the built web application from `apps/web/dist`. The web container starts the API only; database migrations and acceptance-fixture seeding are separate, explicitly approved one-off operations. A deployment/restart must never implicitly apply pending migrations.
 
 Startup fails closed unless all of the following are true:
 

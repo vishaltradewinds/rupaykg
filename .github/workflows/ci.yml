@@ -39,7 +39,22 @@ jobs:
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=high
       - run: npm run validate:migrations
-      - run: npm run migrate -w @rupaykg/api
+      - name: Reconstruct exact production migration baseline
+        env:
+          RUPAYKG_MIGRATION_PHASE: production-baseline
+        run: npm run migrate -w @rupaykg/api
+      - name: Capture pre-upgrade schema and verifier baseline
+        env:
+          RUPAYKG_CANDIDATE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: npm run capture:production-baseline -w @rupaykg/api
+      - name: Apply proposed migration upgrade chain
+        env:
+          RUPAYKG_MIGRATION_PHASE: production-upgrade
+        run: npm run migrate -w @rupaykg/api
+      - name: Verify upgrade runner idempotency
+        env:
+          RUPAYKG_MIGRATION_PHASE: production-upgrade
+        run: npm run migrate -w @rupaykg/api
       - run: npm run typecheck
       - run: npm run build
       - name: Browser smoke test production web build
@@ -74,6 +89,17 @@ jobs:
       - name: Run tests including disposable PostgreSQL acceptance
         env:
           RUPAYKG_RUN_DB_INTEGRATION_TESTS: "1"
+          RUPAYKG_CANDIDATE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: npm test
+      - name: Upload production-shaped migration evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: production-shaped-migration-report
+          path: |
+            artifacts/production-shaped-baseline.json
+            artifacts/production-shaped-migration-report.json
+          if-no-files-found: warn
+          retention-days: 30
       - name: Build production container
         run: docker build --pull --tag rupaykg:ci .

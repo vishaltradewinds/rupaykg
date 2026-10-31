@@ -5,6 +5,9 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { Pool, type PoolClient, type PoolConfig } from "pg";
 import { authenticate, bearerChallenge, canActForOrganization, hasOrganizationPermission, type AuthContext } from "./auth.js";
+import { databaseTlsConfig } from "./database-tls.js";
+import { readDatabaseRoleDiagnostic } from "./database-role-diagnostic.js";
+import { createTenantTransaction, tenantDatabaseContextFromAuth } from "./database-context.js";
 import { registerOnboardingHierarchyRoutes } from "./onboarding-hierarchy-routes.js";
 import { registerValueRoutes } from "./value-routes.js";
 import { registerRegistryRoutes } from "./registry-routes.js";
@@ -24,9 +27,22 @@ const webRoot = resolve(process.cwd(), "apps/web/dist");
 if (existsSync(webRoot)) await app.register(fastifyStatic, { root: webRoot, wildcard: false });
 const databaseUrl = process.env.DATABASE_URL;
 const poolConfig: PoolConfig = { connectionString: databaseUrl, max: 10 };
-if (process.env.DATABASE_SSL === "require") poolConfig.ssl = { rejectUnauthorized: true, ca: process.env.DATABASE_CA_CERT };
-else if (process.env.DATABASE_SSL !== "false") poolConfig.ssl = { rejectUnauthorized: false };
+const databaseSsl = databaseTlsConfig(
+  process.env.DATABASE_SSL === "require" ? "require" : process.env.DATABASE_SSL === "false" ? "false" : undefined,
+  process.env.DATABASE_CA_CERT,
+);
+if (databaseSsl) poolConfig.ssl = databaseSsl;
 const pool = databaseUrl ? new Pool(poolConfig) : null;
+if (pool) {
+  try {
+    const roleDiagnostic = await readDatabaseRoleDiagnostic(pool);
+    app.log.info({ event: "database_role_diagnostic", ...roleDiagnostic }, "Read-only database role privilege diagnostic");
+  } catch (error) {
+    // Do not make service startup depend on an observability-only query.
+    app.log.error({ err: error }, "Database role privilege diagnostic unavailable");
+  }
+}
+const withTenantTransaction = pool ? createTenantTransaction(pool) : null;
 async function query<T extends Record<string, unknown>>(text: string, values: unknown[] = []): Promise<T[]> { if (!pool) throw new Error("DATABASE_URL is not configured"); return (await pool.query<T>(text, values)).rows; }
 function bodyOf(request: { body: unknown }): Record<string, unknown> { return (request.body && typeof request.body === "object" ? request.body : {}) as Record<string, unknown>; }
 function requiredString(body: Record<string, unknown>, key: string): string | null { return typeof body[key] === "string" && body[key].trim() ? body[key].trim() : null; }
@@ -87,8 +103,84 @@ app.post("/api/v1/operations/sync", async (request, reply) => {
   const organizationId = request.headers["x-rupaykg-organization-id"]; const clientSequenceValue = Number(body.clientSequence ?? body.sequence ?? Date.now()); const clientSequence = Number.isSafeInteger(clientSequenceValue) && clientSequenceValue > 0 ? clientSequenceValue : Date.now();
   try { const intake = await app.inject({ method: "POST", url: "/api/v1/field-sync/envelopes", headers: { authorization, "x-rupaykg-organization-id": organizationId, "content-type": "application/json" }, payload: { idempotencyKey, deviceId, clientSequence, capturedAt, payload } }); const intakeBody = intake.json() as Record<string, unknown>; if (intake.statusCode >= 400) return reply.code(intake.statusCode).send(intakeBody); const envelope = intakeBody.envelope as Record<string, unknown> | undefined; const envelopeId = typeof envelope?.id === "string" ? envelope.id : null; if (!envelopeId) return reply.code(503).send({ error: "Authoritative field sync envelope was not returned", code: "FIELD_SYNC_ENVELOPE_MISSING", syntheticData: false }); if (intakeBody.replay === true && envelope?.status === "APPLIED") return reply.code(200).send({ source: "postgresql", syntheticData: false, replay: true, authoritativeMutation: true, entityType: envelope.applied_entity_type, entityId: envelope.applied_entity_id, envelopeId }); const applied = await app.inject({ method: "POST", url: `/api/v1/field-sync/envelopes/${envelopeId}/apply`, headers: { authorization, "x-rupaykg-organization-id": organizationId, "content-type": "application/json" }, payload: {} }); return reply.code(applied.statusCode).send(applied.json()); } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Authoritative operation application unavailable", code: "OPERATION_SYNC_UNAVAILABLE", syntheticData: false }); }
 });
-app.post("/api/v1/resource-flows", async (request, reply) => { const auth = await requireAuth(request, reply); if (!auth) return; const body = bodyOf(request); const organizationId = requiredString(body,"organizationId"); const originType = requiredString(body,"originType"); const resourceForm = requiredString(body,"resourceForm"); const materialCode = requiredString(body,"materialCode"); const unit = requiredString(body,"unit"); const quantity = requiredPositiveNumber(body,"quantity"); if (!organizationId || !originType || !resourceForm || !materialCode || !unit || quantity === null) return reply.code(400).send({ error:"organizationId, originType, resourceForm, positive quantity and unit are required" }); if (!requireOrganization(auth,organizationId,reply)) return; try { if (!pool || !await hasOrganizationPermission(pool, auth, organizationId, ['waste:record'])) return reply.code(403).send({ error:"Waste recording permission required", code:"PERMISSION_FORBIDDEN" }); } catch (error) { request.log.error(error); return reply.code(503).send({ error:"Authorization service unavailable", code:"AUTHORIZATION_UNAVAILABLE" }); } const sourceGeographyId = requiredString(body,"sourceGeographyId"); const destinationGeographyId = requiredString(body,"destinationGeographyId"); if (!sourceGeographyId && !destinationGeographyId) return reply.code(400).send({ error:"At least one authorized sourceGeographyId or destinationGeographyId is required", code:"GEOGRAPHY_REQUIRED" }); try { if (sourceGeographyId && !await canWriteGeography(pool!,auth,organizationId,sourceGeographyId)) return reply.code(403).send({ error:"Source geography is outside organization authorization scope", code:"GEOGRAPHY_FORBIDDEN" }); if (destinationGeographyId && !await canWriteGeography(pool!,auth,organizationId,destinationGeographyId)) return reply.code(403).send({ error:"Destination geography is outside organization authorization scope", code:"GEOGRAPHY_FORBIDDEN" }); const rows = await query("insert into resource_flows (organization_id,origin_type,resource_form,material_code,declared_quantity,unit,source_geography_id,destination_geography_id) values($1,$2,$3,$4,$5,$6,$7,$8) returning *",[organizationId,originType,resourceForm,materialCode,quantity,unit,sourceGeographyId,destinationGeographyId]); return reply.code(201).send({source:"postgresql",syntheticData:false,resourceFlow:rows[0]}); } catch (error) { request.log.error(error); return reply.code(503).send({error:"Resource flow creation unavailable",syntheticData:false}); } });
-app.post("/api/v1/activities/:activityId/measurements", async (request, reply) => { const auth=await requireAuth(request,reply);if(!auth)return;const {activityId}=request.params as {activityId:string};const body=bodyOf(request);const value=requiredPositiveNumber(body,"value"),unit=requiredString(body,"unit"),method=requiredString(body,"method"),source=requiredString(body,"source"),measuredAt=requiredString(body,"measuredAt");if(value===null||!unit||!method||!source||!measuredAt||Number.isNaN(Date.parse(measuredAt)))return reply.code(400).send({error:"positive value, unit, method, source and valid measuredAt are required"});try{if(!await canWriteActivity(pool!,auth,activityId))return reply.code(403).send({error:"Activity is outside organization authorization scope or lacks waste recording permission",code:"ACTIVITY_FORBIDDEN"});const rows=await query("insert into measurements(activity_id,value,unit,method,source,measured_at) values($1,$2,$3,$4,$5,$6) returning *",[activityId,value,unit,method,source,measuredAt]);return reply.code(201).send({source:"postgresql",syntheticData:false,measurement:rows[0]});}catch(error){request.log.error(error);return reply.code(503).send({error:"Measurement recording unavailable",syntheticData:false});}});
+app.post("/api/v1/resource-flows", async (request, reply) => {
+  const auth = await requireAuth(request, reply);
+  if (!auth) return;
+  const body = bodyOf(request);
+  const organizationId = requiredString(body, "organizationId");
+  const originType = requiredString(body, "originType");
+  const resourceForm = requiredString(body, "resourceForm");
+  const materialCode = requiredString(body, "materialCode");
+  const unit = requiredString(body, "unit");
+  const quantity = requiredPositiveNumber(body, "quantity");
+  if (!organizationId || !originType || !resourceForm || !materialCode || !unit || quantity === null) {
+    return reply.code(400).send({ error: "organizationId, originType, resourceForm, positive quantity and unit are required" });
+  }
+  if (!requireOrganization(auth, organizationId, reply)) return;
+  const sourceGeographyId = requiredString(body, "sourceGeographyId");
+  const destinationGeographyId = requiredString(body, "destinationGeographyId");
+  if (!sourceGeographyId && !destinationGeographyId) {
+    return reply.code(400).send({ error: "At least one authorized sourceGeographyId or destinationGeographyId is required", code: "GEOGRAPHY_REQUIRED" });
+  }
+  if (!withTenantTransaction) return reply.code(503).send({ error: "Database unavailable", syntheticData: false });
+  try {
+    const outcome = await withTenantTransaction(tenantDatabaseContextFromAuth(auth), async (client) => {
+      if (!await hasOrganizationPermission(client, auth, organizationId, ["waste:record"])) {
+        return { status: 403, body: { error: "Waste recording permission required", code: "PERMISSION_FORBIDDEN" } };
+      }
+      if (sourceGeographyId && !await canWriteGeography(client, auth, organizationId, sourceGeographyId)) {
+        return { status: 403, body: { error: "Source geography is outside organization authorization scope", code: "GEOGRAPHY_FORBIDDEN" } };
+      }
+      if (destinationGeographyId && !await canWriteGeography(client, auth, organizationId, destinationGeographyId)) {
+        return { status: 403, body: { error: "Destination geography is outside organization authorization scope", code: "GEOGRAPHY_FORBIDDEN" } };
+      }
+      const rows = await client.query(
+        "insert into resource_flows (organization_id,origin_type,resource_form,material_code,declared_quantity,unit,source_geography_id,destination_geography_id) values($1,$2,$3,$4,$5,$6,$7,$8) returning *",
+        [organizationId, originType, resourceForm, materialCode, quantity, unit, sourceGeographyId, destinationGeographyId],
+      );
+      return { status: 201, body: { source: "postgresql", syntheticData: false, resourceFlow: rows.rows[0] } };
+    });
+    return reply.code(outcome.status).send(outcome.body);
+  } catch (error) {
+    request.log.error(error);
+    return reply.code(503).send({ error: "Resource flow creation unavailable", syntheticData: false });
+  }
+});
+app.post("/api/v1/activities/:activityId/measurements", async (request, reply) => {
+  const auth = await requireAuth(request, reply);
+  if (!auth) return;
+  const { activityId } = request.params as { activityId: string };
+  const body = bodyOf(request);
+  const value = requiredPositiveNumber(body, "value");
+  const unit = requiredString(body, "unit");
+  const method = requiredString(body, "method");
+  const source = requiredString(body, "source");
+  const measuredAt = requiredString(body, "measuredAt");
+  if (value === null || !unit || !method || !source || !measuredAt || Number.isNaN(Date.parse(measuredAt))) {
+    return reply.code(400).send({ error: "positive value, unit, method, source and valid measuredAt are required" });
+  }
+  if (!withTenantTransaction) return reply.code(503).send({ error: "Database unavailable", syntheticData: false });
+  try {
+    const outcome = await withTenantTransaction(tenantDatabaseContextFromAuth(auth), async (client) => {
+      if (!await canWriteActivity(client, auth, activityId)) {
+        return { status: 403, body: { error: "Activity is outside organization authorization scope or lacks waste recording permission", code: "ACTIVITY_FORBIDDEN" } };
+      }
+      const owner = await client.query<{ organization_id: string }>("select organization_id from activities where id=$1", [activityId]);
+      if (owner.rows[0]?.organization_id !== auth.activeOrganizationId) {
+        return { status: 403, body: { error: "Activity does not belong to the active organization", code: "ORG_FORBIDDEN" } };
+      }
+      const rows = await client.query(
+        "insert into measurements(activity_id,value,unit,method,source,measured_at) values($1,$2,$3,$4,$5,$6) returning *",
+        [activityId, value, unit, method, source, measuredAt],
+      );
+      return { status: 201, body: { source: "postgresql", syntheticData: false, measurement: rows.rows[0] } };
+    });
+    return reply.code(outcome.status).send(outcome.body);
+  } catch (error) {
+    request.log.error(error);
+    return reply.code(503).send({ error: "Measurement recording unavailable", syntheticData: false });
+  }
+});
 
 await registerOnboardingHierarchyRoutes(app, pool);
 await registerValueRoutes(app, pool);
