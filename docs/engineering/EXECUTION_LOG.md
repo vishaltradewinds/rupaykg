@@ -176,3 +176,11 @@ Read this log and `docs/engineering/2026-10-31-migration-reconciliation-audit.md
 64. This new documentation commit has not yet produced an exact-head CI run. Do not infer that prior run #41195996022 validates it. PR #157 remains draft/unmerged.
 65. No application code, schema, RLS policy, live DB, Render configuration, role/grant, credentials, deployment, worker activation, government submission, Guardian/Hedera submission or carbon-credit issuance changed. Production remains HOLD.
 66. Next: continue statement-level inventory for auth/onboarding, platform-admin, workspace, BWG, migration/worker/seed and helper internals; then design a separate transaction context for statutory writes and verified field devices. Do not enable RLS until full mapping, non-owner role and cross-tenant/bilateral/device negative tests are complete.
+
+
+### BWG tenant-transaction remediation — 2026-10-31 11:20 UTC
+67. Updated `apps/src/value-routes.ts` on PR #157 branch, commit `85bb6ae9f7b8180f37d65d6395eff6f6bca0c862`.
+68. BWG profile and reporting-period writes now execute inside `createTenantTransaction`, require the selected verified active organization to match the request organization, and perform permission/geography checks on the same transaction client as the write.
+69. BWG waste/EPR/ESG report paths now open a tenant transaction from the server-verified active organization, select the reporting period constrained by that organization with `FOR UPDATE`, perform permission, scheme, evidence and approved-verification binding checks on the same client, then insert the report on that client. A foreign-organization period ID now returns not-found instead of revealing its owner.
+70. This is a code change, not a verified RLS guarantee. The transaction helper installs transaction-local tenant context but RLS remains disabled. No new route-specific integration tests have yet run; exact-head CI for `85bb6ae...` must pass before this batch is accepted. The existing test file `apps/src/value-routes.test.ts` only covers statutory-boundary basis logic, not these route transaction paths.
+71. No production/staging DB, Render environment, role/grant, deployment, worker activation, Guardian/Hedera submission or carbon-credit issuance changed. PR #157 remains draft and production HOLD.
