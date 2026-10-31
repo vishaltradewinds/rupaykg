@@ -227,3 +227,20 @@ The Guardian payload and its integrity hash must be built from the canonical joi
 ### 9.3 Current result
 
 This is a confirmed source-level and schema-level gap, not just a future enhancement. Until the canonical join and snapshot contract are implemented, an MRV submission can contain observations that are not demonstrably derived from the same instrument-bound measurements represented by the separate top-level quantity. Instrument-linked data must therefore remain ineligible for authoritative Guardian/registry submission until the new gate is implemented and accepted. Legacy text-only observations remain readable for historical context but cannot be upgraded by inference.
+
+
+### 8.5 Recovery of the production-applied 096 source
+
+The exact 97-line migration source was recovered from commit `ca8f4100782e13f8d72106187fafc8e1e446214f` (commit message: “Bind verification to organization and snapshot authority”). The subsequent main-branch commit `54a7fe1ceb41b37a68720a71c10a1dd03af30dea` explicitly removed it with the message “Remove accidentally placed unreviewed verification migration from main”.
+
+The recovered source was compared with live production:
+- all four `verifications.authorization_*` columns exist with the expected UUID/JSONB/timestamptz types;
+- the live `verifications_integrity_guard` trigger is BEFORE INSERT OR UPDATE and invokes `prevent_invalid_verification()`;
+- the live function body contains the same organization-scoped membership/identity/permission checks and decision-time snapshot assignments as the recovered source;
+- staging has none of the four authorization snapshot columns.
+
+This establishes the production source lineage with high confidence. It does not cancel the historical review concern recorded by the removal commit. The migration source is intentionally referenced here rather than silently reintroduced as an approved migration. A reviewer must reconcile the original removal reason and approve the recovered source before it is restored to the canonical migration directory or used in any upgrade path.
+
+Source links:
+- Original migration commit: https://github.com/vishaltradewinds/rupaykg/commit/ca8f4100782e13f8d72106187fafc8e1e446214f
+- Removal commit: https://github.com/vishaltradewinds/rupaykg/commit/54a7fe1ceb41b37a68720a71c10a1dd03af30dea
