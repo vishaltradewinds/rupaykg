@@ -173,3 +173,15 @@ This is source-code implementation only. The script is not configured as a Rende
 - Previous exact-head CI run [#41230844594](https://github.com/vishaltradewinds/rupaykg/actions/runs/41230844594) passed all 17 workflow steps at source head `72cc1f1c1647e0d3309ffa49220a39897eb109e8`. Newer grant-hardening source heads have separate in-progress runs; the previous pass does not validate those later changes.
 - No production/staging DDL, DML, roles, grants, RLS policies, secrets, Render service or deployment changes were made.
 - Worker OFF; scheduler OFF; production HOLD; TRL 9 not established.
+
+
+### Disposable PostgreSQL ACL semantics finding and remediation — 2026-10-31 18:53 UTC
+
+- Extended `apps/src/async-mirror-worker-privileges-db.test.ts` to create a restricted worker login on disposable CI PostgreSQL, grant the intended schema/table/column/function privileges, and execute the actual `assertGovernmentInboxWorkerPrincipal` query against that live catalog.
+- The first real-catalog run [#41231391032](https://github.com/vishaltradewinds/rupaykg/actions/runs/41231391032) FAILED as intended: PostgreSQL reported PUBLIC EXECUTE on the two geography-scope helper functions. The code gate correctly rejected the role with `PUBLIC_SCOPE_FUNCTION_EXECUTE`. This was a genuine ACL finding, not a flaky test.
+- Root cause: PostgreSQL grants EXECUTE on newly created functions to PUBLIC by default. Migrations `20261030_explicit_geography_scope.sql` and `20261110_government_source_scope_geography_binding.sql` created the helpers without revoking PUBLIC.
+- Added migration `20261114_restrict_government_scope_function_public_execute.sql` on parent migration PR #157 to revoke PUBLIC execution on both helper functions. The application owner retains owner rights; isolated worker principals must receive explicit EXECUTE grants.
+- The disposable DB acceptance fixture explicitly grants those two EXECUTE permissions to its temporary worker login and then runs the actual principal attestation. It continues to assert direct event INSERT, inbox DELETE, immutable payload hash UPDATE, unrelated evidence SELECT and schema DDL are denied.
+- The migration and updated acceptance test are not yet accepted. Exact-head CI must rerun with the updated PR #157 base and current PR #161 head. No production/staging function ACL or schema change was made.
+- Production RLS remains absent on all 67 inspected public base tables (0 RLS-enabled, 0 FORCE RLS, 0 policies). Staging queue rows still lack tenant identifiers. Tenant isolation remains a separate hard release blocker.
+- Worker OFF; scheduler OFF; production HOLD; TRL 9 not established.
