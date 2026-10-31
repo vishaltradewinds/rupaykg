@@ -501,6 +501,84 @@ test("government inbox worker persists retry recovery, quarantine and append-onl
       lockContender.release();
     }
 
+    // The worker's FOR SHARE locks must prevent crosswalk deletion and approved-source retirement
+    // between source resolution and the fenced inbox terminal commit.
+    const provenanceAuthority = "PRV-" + suffix.slice(0, 8).toUpperCase();
+    const provenance = await provisionCrosswalk(provenanceAuthority, "TEST-MUNI", new Date().toISOString());
+    const provenanceRow = await makeRow(provenanceAuthority);
+    const crosswalkForProvenance = await pool.query<{ id: string }>(
+      "select id from government_jurisdiction_crosswalks where authority_code=$1 and municipal_code='TEST-MUNI' and status='VERIFIED'",
+      [provenanceAuthority],
+    );
+    assert.equal(crosswalkForProvenance.rows.length, 1);
+    let signalResolutionLocked: () => void = () => {};
+    let releaseResolutionCommit: () => void = () => {};
+    const resolutionLocked = new Promise<void>((resolve) => { signalResolutionLocked = resolve; });
+    const resolutionCommitGate = new Promise<void>((resolve) => { releaseResolutionCommit = resolve; });
+    let pausedTerminal = false;
+    const lockHoldingPool = {
+      query: (sql: string, values?: unknown[]) => pool.query(sql, values as never[]),
+      connect: async () => {
+        const client = await pool.connect();
+        return {
+          query: async (sql: string, values?: unknown[]) => {
+            if (!pausedTerminal && /update async_mirror_inbox[\\s\\S]*status='VALIDATED'/i.test(sql)) {
+              pausedTerminal = true;
+              signalResolutionLocked();
+              await resolutionCommitGate;
+            }
+            return client.query(sql, values as never[]);
+          },
+          release: () => client.release(),
+        };
+      },
+    } as unknown as Pool;
+    const provenanceWorker = runGovernmentInboxWorker(lockHoldingPool, undefined, { batchSize: 1, maxAttempts: 3 });
+    await resolutionLocked;
+    const assertProvenanceMutationBlocked = async (sql: string, values: unknown[], description: string) => {
+      const contender = await pool.connect();
+      try {
+        await contender.query("BEGIN");
+        await contender.query("SET LOCAL lock_timeout='150ms'");
+        await assert.rejects(
+          contender.query(sql, values as never[]),
+          (error: unknown) => Boolean(error && typeof error === "object" && "code" in error && (error as { code: string }).code === "55P03"),
+          description,
+        );
+      } finally {
+        await contender.query("ROLLBACK").catch(() => undefined);
+        contender.release();
+      }
+    };
+    try {
+      await assertProvenanceMutationBlocked(
+        "delete from government_jurisdiction_crosswalks where id=$1",
+        [crosswalkForProvenance.rows[0]!.id],
+        "crosswalk deletion must wait until the worker commits its source-bound terminal decision",
+      );
+      await assertProvenanceMutationBlocked(
+        "update authoritative_source_snapshots set validation_status='RETIRED' where id=$1",
+        [provenance.sourceSnapshotId],
+        "source snapshot retirement must wait until the worker commits its source-bound terminal decision",
+      );
+    } finally {
+      releaseResolutionCommit();
+    }
+    const provenanceResult = await provenanceWorker;
+    assert.equal(provenanceResult.validated, 1);
+    await pool.query("delete from government_jurisdiction_crosswalks where id=$1", [crosswalkForProvenance.rows[0]!.id]);
+    await pool.query("update authoritative_source_snapshots set validation_status='RETIRED' where id=$1", [provenance.sourceSnapshotId]);
+    const provenanceFinal = await pool.query<{ status: string; validation_summary: Record<string, unknown> }>(
+      "select status,validation_summary from async_mirror_inbox where id=$1",
+      [provenanceRow.id],
+    );
+    assert.equal(provenanceFinal.rows[0]?.status, "VALIDATED");
+    assert.equal(
+      (provenanceFinal.rows[0]?.validation_summary as any)?.jurisdictionCrosswalk?.sourceSnapshot?.id,
+      provenance.sourceSnapshotId,
+      "the terminal decision must preserve the exact source snapshot that was locked through commit",
+    );
+
     // Strict validator deadline aborts cooperative work and persists a bounded retry.
     const timeoutRow = await makeRow("TMO-" + suffix.slice(8, 16).toUpperCase());
     let timeoutSignal: AbortSignal | undefined;
