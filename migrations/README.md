@@ -75,3 +75,12 @@ Migration `086_reserved_role_restoration_db_guard.sql` protects status reactivat
 ## Acceptance fixture registry exclusion
 
 Migration `087_acceptance_fixture_registry_exclusion.sql` prevents activities or evidence explicitly marked with `metadata.acceptanceFixture=true` from backing credentials in value-bearing states. It also binds the database gate to the exact activity, verification, and evidence tuple. The MRV API reports acceptance fixtures as not registry eligible even after real Guardian/Hedera/Mirror Node verification. External anchoring proves message integrity and consensus; it does not validate the underlying activity as a real eligible carbon project.
+
+
+## Government inbox event-writer capability migration (20261112)
+
+`20261112_inbox_event_trigger_security_definer.sql` creates a dedicated NOLOGIN, non-superuser, non-BYPASSRLS owner for the append-only inbox event trigger. The function is SECURITY DEFINER with fixed `search_path=pg_catalog, public`; PUBLIC EXECUTE is revoked. The owner role receives only schema USAGE, event-table INSERT and event-sequence USAGE. The worker login must not receive direct event-table INSERT.
+
+Owner-only ACL revocation and function COMMENT occur before the final ownership transfer. The migration temporarily grants the migration principal a non-admin, non-inheriting, SET-capable membership only for the ownership transfer, then revokes that temporary membership and verifies a non-superuser migration login cannot SET ROLE or inherit the capability. PostgreSQL superuser test runners are exempt from the SET/INHERIT guard because superusers can SET ROLE to any role by definition. On managed Neon, the provider may retain a provider-owned membership row with SET=false and INHERIT=false; that row does not allow role switching or privilege inheritance and must be checked during independent review.
+
+The complete ordered migration chain was rehearsed on a disposable branch derived from production main. Full CI passed at worker code head `9159ddfafa1282f65b1ae78a2aaa076cbc48d765`, run [#41208097244](https://github.com/vishaltradewinds/rupaykg/actions/runs/41208097244). This is engineering evidence only; it does not authorize production migration, queue activation or deployment.
