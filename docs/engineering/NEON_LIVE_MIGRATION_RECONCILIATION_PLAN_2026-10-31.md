@@ -70,3 +70,12 @@ A disposable Neon clone has not been created because the prior branch-provisioni
 - Migrations 20261026–20261110: not applied to any live branch.
 - Worker activation/deployment: OFF.
 - Production certification and TRL 9: not established.
+
+
+## Follow-up security migrations — 2026-10-31
+
+The proposed repository chain now contains two additional PR-local hardening migrations after the 19 historical source restorations:
+- `20261110_government_source_scope_geography_binding.sql`
+- `20261111_prevent_approved_source_scope_hierarchy_expansion.sql`
+
+The second closes a discovered scope-expansion path through new geography descendants or reparenting. Both migrations passed the ordered CI PostgreSQL 16 disposable migration run at PR #157 head `c8d251489260acf8eb3308d212764e6b1be00e1e` (run 41179522126), and the worker DB acceptance test passed with zero skips. These are CI-only results. Neither migration nor any earlier proposed chain migration has been applied to production, staging or rehearsal. The three live Neon branches remain unchanged and divergent; production verifier provenance remains preserved.
