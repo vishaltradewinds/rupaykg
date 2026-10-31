@@ -100,6 +100,32 @@ Example payload for the existing sync envelope's `MEASUREMENT_CREATE` operation:
 
 The sample is illustrative only. The `instrumentCode` and `parameterCode` must match a verified organization-scoped register entry; do not copy the placeholder values into production.
 
+## Parameter-specific uncertainty record (required for authoritative instrument MRV)
+
+After the exact instrument and its calibration artifact are VERIFIED, an authorized instrument manager who also holds `evidence:review` permission must register the uncertainty interpretation with:
+`POST /api/v1/mrv/instruments/{instrumentId}/parameter-uncertainties`.
+
+The request binds one exact parameter specification to the exact current calibration evidence artifact version and its SHA-256. Required fields are `parameterSpecId`, `parameterCode`, `parameterUnit`, `uncertaintyKind` (`ABSOLUTE` or `RELATIVE`), non-negative `uncertaintyValue`, `uncertaintyUnit` (the parameter unit for absolute or `%` for relative), `uncertaintyExpression` (`STANDARD` or `EXPANDED`), `calibrationArtifactVersionId`, `calibrationArtifactSha256`, and `decisionRuleId`. `EXPANDED` uncertainty requires a positive `coverageFactor`; `confidenceLevelPercent` is optional but, when supplied, must be between 0 and 100.
+
+The reviewer must be the latest independent APPROVED reviewer of the exact calibration artifact and cannot be its uploader. The database rechecks the instrument's current calibration-artifact binding, byte length, SHA-256, evidence status and latest review. Records are append-only; corrections require a new reviewed record. No universal uncertainty ratio or acceptance threshold is assumed.
+
+## Raw instrument frame and field measurement binding
+
+Upload the original binary frame through `POST /api/v1/evidence-vault/upload` using `mediaType: application/octet-stream` and base64-encoded exact bytes. The server decodes the bytes, computes SHA-256 and stores the immutable artifact version. Obtain an independent APPROVED review so the evidence status becomes `VERIFIED`.
+
+The field-sync `MEASUREMENT_CREATE` operation now requires both `uncertaintyRecordId` and `rawFrameArtifactVersionId` in addition to the instrument/parameter/value fields. The server verifies that the uncertainty record is current and matches the exact instrument, parameter and unit; it loads the raw-frame artifact, verifies activity and organization scope, checks the latest independent APPROVED review, and recomputes SHA-256 over the stored bytes. It stores the server-computed digest and immutable artifact-version ID on the measurement. PostgreSQL independently repeats the critical binding and byte-integrity checks. Missing or mismatched evidence returns HTTP 409 and remains registry-ineligible.
+
+Example additional sync fields:
+
+```json
+{
+  "uncertaintyRecordId": "<reviewed-parameter-uncertainty-uuid>",
+  "rawFrameArtifactVersionId": "<verified-raw-frame-artifact-version-uuid>"
+}
+```
+
+These software controls do not replace the site's physical acceptance, metrological suitability, measurement uncertainty budget, calibration traceability, applicable methodology decision rule or independent validation/verification.
+
 ## Operational acceptance
 
 1. Obtain the actual instrument nameplate, manual, interface documentation and site measurement-point details.
