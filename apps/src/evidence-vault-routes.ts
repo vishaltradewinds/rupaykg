@@ -40,7 +40,8 @@ export function decodeEvidenceBase64(value:string):Buffer|null {
  const bytes=Buffer.from(value,"base64");
  return !bytes.length||bytes.length>MAX_BYTES||bytes.toString("base64")!==value?null:bytes;
 }
-export function evidencePayloadMatchesMediaType(bytes:Buffer,mediaType:string):boolean {\n if(mediaType==="application/octet-stream")return bytes.length>0;
+export function evidencePayloadMatchesMediaType(bytes:Buffer,mediaType:string):boolean {
+ if(mediaType==="application/octet-stream")return bytes.length>0;
  if(mediaType==="application/pdf")return bytes.subarray(0,5).toString("ascii")==="%PDF-";
  if(mediaType==="image/jpeg")return bytes.length>=3&&bytes[0]===0xff&&bytes[1]===0xd8&&bytes[2]===0xff;
  if(mediaType==="image/png")return bytes.length>=8&&bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10]));
