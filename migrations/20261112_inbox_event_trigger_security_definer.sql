@@ -52,7 +52,7 @@ revoke rupaykg_inbox_event_writer from current_user;
 -- Some managed PostgreSQL providers retain a provider-owned, non-inheriting
 -- membership row for the database owner. Fail closed if the migration login
 -- can still SET ROLE or inherit the capability after its temporary grant is revoked.
-do $
+do $$
 declare migration_login_is_superuser boolean;
 begin
   select rolsuper into migration_login_is_superuser
@@ -68,4 +68,4 @@ begin
     raise exception 'INBOX_EVENT_WRITER_MUST_NOT_BE_SET_OR_INHERITED_BY_MIGRATION_LOGIN';
   end if;
 end
-$;
+$$;
