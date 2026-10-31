@@ -71,3 +71,13 @@ Added proposed migration `20261112_inbox_event_trigger_security_definer.sql` on 
 Added `apps/src/async-mirror-worker-privileges-db.test.ts`, which connects using a genuinely separate temporary PostgreSQL login in disposable CI. It checks the definer owner attributes and privileges, verifies that the worker can update permitted inbox columns and the trigger appends an event, and verifies that direct event INSERT, inbox DELETE, payload-hash rewrite, unrelated evidence SELECT and schema DDL are denied.
 
 CI run `41199041215` is pending. Do not treat this migration or test as passing until the entire run completes. The migration is proposed code only; it has not been applied to any Neon branch. Independent review must examine role ownership transfer, function search_path, trigger execution semantics and role grant/revoke behaviour before merge.
+
+## CI result and production sequencing review — 2026-10-31
+
+CI run `41199424164` completed successfully across migration validation, production-baseline reconstruction, migration application/idempotency, typecheck, build, browser smoke, disposable PostgreSQL acceptance (including the separate worker login), migration evidence upload, and production container build. This is an engineering CI pass, not a live deployment or certification.
+
+Read-only staging catalog check: `async_mirror_inbox_events` currently has RLS disabled and is owned by `rupaykg`. The dedicated NOLOGIN event-writer role has no RLS bypass and only the narrow insert/sequence capability required by the trigger. The separate worker-login test proves trigger-driven append succeeds while direct event INSERT, inbox DELETE, immutable hash rewrite, unrelated evidence SELECT and schema DDL are denied.
+
+**Production sequencing remains blocked.** Authoritative production `main` did not contain `async_mirror_inbox_events` or its parent inbox schema at the audit point. The event-trigger migration must not be applied standalone, and staging/rehearsal must not be treated as the production baseline. First reconcile and rehearse the complete ordered migration chain against a fresh production-derived disposable branch. Independently review PostgreSQL role-membership and function ownership-transfer semantics in that environment.
+
+No live role/grant/ownership changes, schema migration, secrets, queue changes, deployment, or worker activation occurred.
