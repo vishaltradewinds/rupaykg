@@ -133,3 +133,10 @@ Complete central-server and route-module SQL authorization mapping, then invento
 
 ## Next exact action
 Compare deployed main commit `862512c8c904cef0f604df0350f02672318953af` with the review candidate, then complete the full route × table × operation × tenant × permission matrix and enumerate every database pool/connection string (including worker, scripts and tests). Only then design least-privilege DB roles and per-table RLS policies. No production writes or deploys.
+
+
+## Latest immutable Gate 1 checkpoint
+- `docs/engineering/checkpoints/2026-10-31-gate1-readonly-discovery.md` — records Render deployment identity, deployed commit, review-branch divergence, source inspection, security findings, CI caveat and next action.
+- Checkpoint commit: `0dae27c9bc88c1466e5741dbc0f7defc32e1045a`.
+- Compare at checkpoint time: deployed main commit `862512c8c904cef0f604df0350f02672318953af` vs review branch; 259 ahead / 1 behind / 84 files. Recompute before any action.
+- Exact-head CI remains unverified for the latest documentation-only branch head; run #3908 is verified only for `571aef12d9dbe54389ec50b8c80c1d5bbfab355a`.
