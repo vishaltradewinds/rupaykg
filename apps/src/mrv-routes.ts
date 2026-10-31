@@ -199,6 +199,7 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
       const instrumentMeasurements = await pool.query(
         `select m.id, m.parameter_code, m.value::text as observed_value, m.unit, m.method,
                 i.instrument_code as instrument_id, m.measured_at as observed_at,
+                m.mrv_uncertainty_record_id, m.raw_frame_artifact_version_id, m.raw_frame_sha256,
                 null::numeric as uncertainty, null::text as quality_status, m.metadata
            from measurements m
            join mrv_instruments i on i.id = m.mrv_instrument_id
