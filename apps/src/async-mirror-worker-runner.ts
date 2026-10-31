@@ -76,6 +76,8 @@ export type WorkerPrincipalAttestation = {
   inherits_privileges: boolean;
   has_role_memberships: boolean;
   owns_worker_tables: boolean;
+  owns_public_schema: boolean;
+  has_public_schema_create: boolean;
   inbox_select: boolean;
   inbox_update: boolean;
   crosswalk_select: boolean;
@@ -128,6 +130,8 @@ export async function assertGovernmentInboxWorkerPrincipal(
              'government_jurisdiction_crosswalks','authoritative_source_snapshots','activities')
            and c.relowner=r.oid
        ) as owns_worker_tables,
+       exists (select 1 from pg_namespace n where n.nspname='public' and n.nspowner=r.oid) as owns_public_schema,
+       has_schema_privilege(r.oid, 'public', 'CREATE') as has_public_schema_create,
        has_table_privilege(r.oid, 'public.async_mirror_inbox', 'SELECT') as inbox_select,
        has_table_privilege(r.oid, 'public.async_mirror_inbox', 'UPDATE') as inbox_update,
        has_table_privilege(r.oid, 'public.government_jurisdiction_crosswalks', 'SELECT') as crosswalk_select,
@@ -154,6 +158,8 @@ export async function assertGovernmentInboxWorkerPrincipal(
   if (role.inherits_privileges) violations.push("INHERIT");
   if (role.has_role_memberships) violations.push("ROLE_MEMBERSHIP");
   if (role.owns_worker_tables) violations.push("WORKER_TABLE_OWNERSHIP");
+  if (role.owns_public_schema) violations.push("PUBLIC_SCHEMA_OWNERSHIP");
+  if (role.has_public_schema_create) violations.push("PUBLIC_SCHEMA_CREATE");
   if (!role.inbox_select) violations.push("INBOX_SELECT_MISSING");
   if (!role.inbox_update) violations.push("INBOX_UPDATE_MISSING");
   if (!role.crosswalk_select) violations.push("CROSSWALK_SELECT_MISSING");
