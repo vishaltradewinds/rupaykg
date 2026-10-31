@@ -312,3 +312,8 @@ The following three value workflows were moved to `withTenantTransaction(tenantD
 No statutory methodology is newly approved by this change. Generic carbon arithmetic remains blocked for official BEE CCTS methodologies unless a reviewed method-specific adapter is available. This is a code refactor only; exact-head CI has not yet reported a run for commit `428da313d5a63391b55259725f3324b2ba1231a9`.
 
 BWG workspace and profile/reporting write routes are not yet migrated in this commit. They remain explicitly open for the next batch.
+
+
+## 22. BWG reporting workspace read adoption
+
+The `GET /api/v1/workspaces/bwg` projection now requires the verified active organization (no fallback to the first membership) and performs profile, reporting-period, waste/EPR/ESG report, jurisdiction, scheme and permission reads on the same tenant-context transaction client. Organization permission indicators are computed inside that transaction. BWG write endpoints remain open; this read-only adoption does not establish statutory applicability or government filing status.
