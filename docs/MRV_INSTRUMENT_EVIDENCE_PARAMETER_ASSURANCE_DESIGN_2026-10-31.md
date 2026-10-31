@@ -314,3 +314,20 @@ Do not invent a universal uncertainty ratio or threshold. The next schema and ru
 
 ### 12.4 Release gate
 PR #137 and PR #158 are CI-green engineering candidates, not production-ready certifications. Continue to HOLD authoritative Guardian submission for readings without canonical measurement lineage and complete uncertainty evidence. Do not add a guessed migration number or apply SQL to live Neon until the complete migration source/checksum/ordering manifest and production/staging/rehearsal drift are reconciled, including production-only 096 and the rehearsal unledgered unresolved-crosswalk effect.
+
+
+## 13. Live Neon schema gate — read-only reconciliation, 2026-10-31
+
+Read-only schema inspection was repeated against all three named Neon branches (database `rupaykg`):
+
+| Branch | `mrv_instruments` | measurement instrument binding columns | `mrv_observations.measurement_id` | instrument migration ledger entries |
+|---|---:|---:|---:|---:|
+| Production `br-restless-base-b44cip2h` | absent | 0 | present | 0 |
+| Staging `br-spring-hill-b4544vz5` | absent | 0 | present | 0 |
+| Rehearsal `br-broad-glade-b46npw8o` | absent | 0 | present | 0 |
+
+The live `measurements` tables in these three branches do not yet have `mrv_instrument_id` or `parameter_code`. The live `mrv_observations` table has nullable `measurement_id`, but no instrument UUID linkage. The `schema_migrations` ledger uses `version`, `filename`, `applied_at`; a targeted read found no instrument-approval or measurement-instrument migration entries in any branch.
+
+Read-only counts on 2026-10-31 returned zero rows in `mrv_observations` in all three branches. This is only a current data-volume observation; it does not validate the lineage controls or make the schema ready.
+
+**Decision:** migrations 088/089 exist in the PR candidate branch and pass disposable PostgreSQL CI, but are not installed in production, staging or rehearsal. Do not deploy code that assumes those columns/tables exist, and do not run the candidate migrations in any live branch. The previously documented migration provenance/drift gate remains controlling. Before a new canonical migration is selected, reconcile the complete migration tree, checksums, filenames and live ledgers across all environments; then run the exact candidate chain on a fresh disposable PostgreSQL database and obtain independent review. No production or staging writes were made during this inspection.
