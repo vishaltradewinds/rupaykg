@@ -179,6 +179,16 @@ export async function assertGovernmentInboxWorkerPrincipal(
   }
 }
 
+
+/** Run both read-only gates in order before the worker claims or mutates queue rows. */
+export async function assertGovernmentInboxWorkerReady(
+  pool: PoolType,
+  applicationDatabaseUrl?: string,
+): Promise<void> {
+  await assertGovernmentInboxWorkerSchema(pool);
+  await assertGovernmentInboxWorkerPrincipal(pool, applicationDatabaseUrl);
+}
+
 type WorkerSchemaReadiness = {
   inbox_table: string | null;
   inbox_events_table: string | null;
