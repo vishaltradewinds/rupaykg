@@ -463,6 +463,44 @@ test("government inbox worker persists retry recovery, quarantine and append-onl
     assert.equal(staleFinal.rows[0]?.status, "PROCESSING", "stale worker must not commit a terminal status after its lease token is replaced");
     assert.equal(staleFinal.rows[0]?.lease_token, supersededToken, "newer lease token must remain authoritative");
 
+    // The migration's per-jurisdiction advisory lock serializes crosswalk mutation
+    // with the worker's resolution+terminal transaction, including concurrent inserts.
+    const lockedAuthority = "LCK-" + suffix.slice(0, 8).toUpperCase();
+    await provisionCrosswalk(lockedAuthority, "LOCK-MUNI", new Date().toISOString());
+    const lockedCrosswalk = await pool.query<{ id: string }>(
+      "select id from government_jurisdiction_crosswalks where authority_code=$1 and municipal_code='LOCK-MUNI' and status='VERIFIED'",
+      [lockedAuthority],
+    );
+    assert.equal(lockedCrosswalk.rows.length, 1);
+    const resolutionKey = [lockedAuthority, "LOCK-MUNI", "synthetic-source-v1"].join(String.fromCharCode(31));
+    const lockOwner = await pool.connect();
+    const lockContender = await pool.connect();
+    try {
+      await lockOwner.query("BEGIN");
+      await lockOwner.query("select pg_advisory_xact_lock(hashtextextended($1, 0))", [resolutionKey]);
+      await lockContender.query("BEGIN");
+      await lockContender.query("SET LOCAL lock_timeout='150ms'");
+      await assert.rejects(
+        lockContender.query(
+          "update government_jurisdiction_crosswalks set status='REVOKED', revoked_at=now() where id=$1",
+          [lockedCrosswalk.rows[0]!.id],
+        ),
+        (error: unknown) => Boolean(error && typeof error === "object" && "code" in error && (error as { code: string }).code === "55P03"),
+        "crosswalk revocation must wait while an inbox resolution owns the jurisdiction key",
+      );
+      await lockContender.query("ROLLBACK");
+      await lockOwner.query("COMMIT");
+      await lockContender.query(
+        "update government_jurisdiction_crosswalks set status='REVOKED', revoked_at=now() where id=$1",
+        [lockedCrosswalk.rows[0]!.id],
+      );
+    } finally {
+      await lockOwner.query("ROLLBACK").catch(() => undefined);
+      await lockContender.query("ROLLBACK").catch(() => undefined);
+      lockOwner.release();
+      lockContender.release();
+    }
+
   } finally {
     await pool.end();
   }
