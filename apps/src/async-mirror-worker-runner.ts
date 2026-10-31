@@ -78,6 +78,10 @@ export type WorkerPrincipalAttestation = {
   owns_worker_tables: boolean;
   owns_public_schema: boolean;
   has_public_schema_create: boolean;
+  has_public_schema_usage: boolean;
+  public_inbox_acl: boolean;
+  public_reference_acl: boolean;
+  public_scope_function_execute: boolean;
   inbox_select: boolean;
   inbox_table_update: boolean;
   inbox_update_status: boolean;
@@ -141,6 +145,27 @@ export async function assertGovernmentInboxWorkerPrincipal(
        ) as owns_worker_tables,
        exists (select 1 from pg_namespace n where n.nspname='public' and n.nspowner=r.oid) as owns_public_schema,
        has_schema_privilege(r.oid, 'public', 'CREATE') as has_public_schema_create,
+       has_schema_privilege(r.oid, 'public', 'USAGE') as has_public_schema_usage,
+       exists (
+         select 1 from pg_class c, lateral aclexplode(coalesce(c.relacl, acldefault('r',c.relowner))) acl
+         where c.oid in ('public.async_mirror_inbox'::regclass)
+           and acl.grantee=0
+       ) as public_inbox_acl,
+       exists (
+         select 1 from pg_class c, lateral aclexplode(coalesce(c.relacl, acldefault('r',c.relowner))) acl
+         where c.oid in ('public.government_jurisdiction_crosswalks'::regclass,
+                         'public.authoritative_source_snapshots'::regclass,
+                         'public.activities'::regclass)
+           and acl.grantee=0
+       ) as public_reference_acl,
+       exists (
+         select 1 from pg_proc p, lateral aclexplode(coalesce(p.proacl, acldefault('f',p.proowner))) acl
+         where p.oid in (
+           'public.organization_has_explicit_geography_scope(uuid,uuid)'::regprocedure,
+           'public.government_source_scope_covers_geography(uuid,uuid)'::regprocedure
+         )
+           and acl.grantee=0 and acl.privilege_type='EXECUTE'
+       ) as public_scope_function_execute,
        has_table_privilege(r.oid, 'public.async_mirror_inbox', 'SELECT') as inbox_select,
        has_table_privilege(r.oid, 'public.async_mirror_inbox', 'UPDATE') as inbox_table_update,
        has_column_privilege(r.oid, 'public.async_mirror_inbox', 'status', 'UPDATE') as inbox_update_status,
@@ -178,6 +203,10 @@ export async function assertGovernmentInboxWorkerPrincipal(
   if (role.owns_worker_tables) violations.push("WORKER_TABLE_OWNERSHIP");
   if (role.owns_public_schema) violations.push("PUBLIC_SCHEMA_OWNERSHIP");
   if (role.has_public_schema_create) violations.push("PUBLIC_SCHEMA_CREATE");
+  if (!role.has_public_schema_usage) violations.push("PUBLIC_SCHEMA_USAGE_MISSING");
+  if (role.public_inbox_acl) violations.push("PUBLIC_INBOX_PRIVILEGE");
+  if (role.public_reference_acl) violations.push("PUBLIC_REFERENCE_PRIVILEGE");
+  if (role.public_scope_function_execute) violations.push("PUBLIC_SCOPE_FUNCTION_EXECUTE");
   if (!role.inbox_select) violations.push("INBOX_SELECT_MISSING");
   if (role.inbox_table_update) violations.push("INBOX_TABLE_LEVEL_UPDATE_TOO_BROAD");
   const updateColumns: Array<[keyof WorkerPrincipalAttestation, string]> = [
