@@ -78,3 +78,14 @@ The production-applied migration `096_verification_authorization_provenance.sql`
 - Validation-only PR #174 was closed unmerged after the final pass. Engineering PR #161 remains draft/open/unmerged, stacked on PR #157.
 - The passing CI reconstructs and upgrades a disposable PostgreSQL baseline; the separate Neon production-derived rehearsal applied the 23 proposed migrations and verified the trigger/role behavior. Neither is production deployment approval.
 - Production main was rechecked and remains at 92 migration rows with worker relations absent. No live production writes or Render changes. Production HOLD; worker OFF; scheduler OFF; certification OFF; TRL 9 not claimed.
+
+
+## 2026-10-31 — Master architecture audit and runtime hardening checkpoint
+
+The controlling audit is [RupayKg National Environmental Infrastructure — Master Architecture, Execution and TRL 9 Assurance Audit](RUPAYKG_NATIONAL_ENVIRONMENTAL_INFRASTRUCTURE_MASTER_ARCHITECTURE_EXECUTION_TRL9_AUDIT_2026-10-31.md). The separate Render runtime findings are in [Render Runtime and Deployment Security Audit](engineering/RENDER_RUNTIME_DEPLOYMENT_SECURITY_AUDIT_2026-10-31.md).
+
+- Production main was inspected read-only: 67 public base tables, zero RLS-enabled tables, zero FORCE RLS tables and zero public RLS policies. Tenant isolation is not database-enforced; worker activation remains blocked.
+- Render confirms the deployed source branch is main and the latest observed deployment SHA is 862512c8c904cef0f604df0350f02672318953af. The effective Neon database target remains unverified; no Render secrets were accessed.
+- The previous Docker startup command ran database migrations and the acceptance seed before starting the API. The cleanup review branch now makes web startup migration-free and fixture-free; acceptance seeding explicitly rejects NODE_ENV=production. This is review-only and has not been merged or deployed.
+- Added a test for the production acceptance-seed prohibition. Exact-head CI is pending.
+- Production remains HOLD; worker OFF; scheduler OFF; certification OFF; TRL 9 not claimed.
