@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { Pool } from "pg";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 
 const enabled = process.env.RUPAYKG_RUN_DB_INTEGRATION_TESTS === "1" && Boolean(process.env.DATABASE_URL);
 
@@ -17,6 +19,17 @@ test("production-shaped migration order preserves 023 and production-only verifi
       "select version, filename from schema_migrations order by applied_at, version",
     );
     const entries = ledger.rows;
+    const manifestPath = path.resolve(process.cwd(), "docs/engineering/PRODUCTION_MIGRATION_LEDGER_MANIFEST_2026-10-31.json");
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as {
+      count: number;
+      production_migration_order: Array<{ version: string; filename: string }>;
+    };
+    assert.equal(manifest.count, 92, "production manifest must contain all 92 observed rows");
+    const baseline = manifest.production_migration_order;
+    assert.equal(baseline.length, 92);
+    const baselineActual = entries.slice(0, baseline.length).map(({ version, filename }) => ({ version, filename }));
+    assert.deepEqual(baselineActual, baseline.map(({ version, filename }) => ({ version, filename })),
+      "the first 92 applied migration identities must exactly match the live production ledger manifest");
     const indexOf = (version: string) => entries.findIndex((entry) => entry.version === version);
     for (const version of ["001", "023", "087", "20261018", "20261019", "20261020", "20261021", "096", "20261022"]) {
       assert.notEqual(indexOf(version), -1, "expected migration " + version + " in reconstructed baseline/upgrade");
