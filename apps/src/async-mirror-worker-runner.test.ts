@@ -38,6 +38,7 @@ test("worker pool uses only the dedicated URL and a bounded connection pool", ()
   assert.equal(captured?.connectionString, "postgres://worker:other@db.example/rupaykg");
   assert.equal(captured?.max, 2);
   assert.equal(captured?.application_name, "rupaykg-government-inbox-worker");
+  assert.deepEqual(captured?.ssl, { rejectUnauthorized: true }, "worker TLS must verify the server certificate by default");
 });
 
 function schemaPool(row: Record<string, unknown>): Pool {
@@ -126,4 +127,32 @@ test("worker pool rejects the same role across endpoint aliases and ports", () =
     }),
     /GOVERNMENT_INBOX_DATABASE_PRINCIPAL_MUST_BE_DEDICATED/,
   );
+});
+
+
+test("worker database pool verifies TLS by default and accepts an explicit CA certificate", () => {
+  let captured: PoolConfig | undefined;
+  createGovernmentInboxWorkerPool({
+    GOVERNMENT_INBOX_DATABASE_URL: "postgres://worker:secret@db.example/rupaykg",
+    DATABASE_CA_CERT: "-----BEGIN CERTIFICATE-----\\nTEST\\n-----END CERTIFICATE-----",
+  }, (config) => {
+    captured = config;
+    return {} as Pool;
+  });
+  assert.deepEqual(captured?.ssl, {
+    rejectUnauthorized: true,
+    ca: "-----BEGIN CERTIFICATE-----\\nTEST\\n-----END CERTIFICATE-----",
+  });
+});
+
+test("worker database pool only disables TLS when explicitly configured", () => {
+  let captured: PoolConfig | undefined;
+  createGovernmentInboxWorkerPool({
+    GOVERNMENT_INBOX_DATABASE_URL: "postgres://worker:secret@db.example/rupaykg",
+    DATABASE_SSL: "false",
+  }, (config) => {
+    captured = config;
+    return {} as Pool;
+  });
+  assert.equal(captured?.ssl, undefined);
 });
