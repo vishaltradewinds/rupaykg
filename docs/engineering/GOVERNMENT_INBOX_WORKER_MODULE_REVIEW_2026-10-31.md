@@ -52,3 +52,16 @@ No live database writes/DDL, no merge, no deployment, no scheduler activation. P
 ## Consolidated review branch
 
 This PR is now retargeted directly to `main` and contains the complete 19-migration dependency chain from former draft PR #156 plus the four worker source/test files above. It is the single consolidated review path; the migration-only draft is superseded. The PR CI workflow runs on the consolidated exact head and includes disposable PostgreSQL acceptance tests with `RUPAYKG_RUN_DB_INTEGRATION_TESTS=1`.
+
+
+## Additional lease-expiry hardening — 2026-10-31
+
+Code review identified that completion updates previously fenced on status and lease token but did not independently require the lease to remain unexpired. A worker could therefore finish after its lease deadline if no replacement worker had yet changed the token. This is now hardened: all four success/unresolved/rejection/retry-or-quarantine completion updates require `lease_until > now()`. Expiry itself revokes completion authority; a later worker must reclaim with a fresh token.
+
+The disposable PostgreSQL test now explicitly covers:
+- recovery of a PROCESSING row with a NULL lease/token;
+- an in-flight worker whose lease expires before completion, proving it cannot finalize;
+- successful reclamation and completion by the next worker under a new lease;
+- the existing superseded-token fencing case.
+
+This is a conservative fail-closed correction. The exact-head CI run must pass again before the change is accepted. Independent review remains outstanding.
