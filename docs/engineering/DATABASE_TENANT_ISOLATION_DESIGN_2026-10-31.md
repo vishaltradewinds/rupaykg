@@ -175,3 +175,14 @@ The `POST /api/v1/resource-flows` route now uses the transaction-local tenant he
 - Any failed check returns a denial and the transaction commits no resource-flow mutation; thrown database failures roll back.
 
 This is the first route adoption, not platform-wide tenant isolation. Read paths and other mutation routes remain to be inventoried/refactored. The production RLS gate remains closed until all tenant-sensitive SQL paths, worker roles, shared/system tables and cross-tenant tests are covered.
+
+## 11. Second tenant-scoped route adoption — activity measurements
+
+On 2026-10-31, `POST /api/v1/activities/:activityId/measurements` was moved from separate pool-level authorization and insert operations into `withTenantTransaction(tenantDatabaseContextFromAuth(auth), ...)`.
+
+- The activity authorization/permission lookup and measurement insert now execute on the same checked-out client and transaction.
+- The route additionally requires the activity owner organization to equal the server-verified active organization; a cross-organization activity is denied before mutation.
+- The transaction-local context is derived from the verified active membership, not from request body or header tenant identifiers.
+- This remains a partial route migration. Read paths, other write routes, worker/system paths, and the full table-policy map remain outstanding. No RLS policy or live database change is authorized by this code change.
+
+Exact-head CI must validate the new commit before this adoption is treated as engineering-pass evidence.
