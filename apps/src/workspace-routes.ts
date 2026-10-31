@@ -42,17 +42,6 @@ type WorkspaceName = "resourceFlows" | "mrv" | "compliance" | "carbon" | "regist
 const WORKSPACE_READ_PERMISSIONS: Record<WorkspaceName, readonly string[]> = {
   resourceFlows: ["waste:read"], mrv: ["evidence:upload", "evidence:review", "guardian:read"], compliance: ["reports:read", "swm:read", "epr:read", "audit:read"], carbon: ["reports:read", "credits:read", "projects:read"], registry: ["registry:read", "credits:read"], settlement: ["credits:read", "settlement:authorize", "settlement:settle", "AUTHORIZE_SETTLEMENT", "SETTLE_FUNDS"], esg: ["reports:read", "epr:read", "csr:read", "audit:read"],
 };
-type WorkspaceName = "resourceFlows" | "mrv" | "compliance" | "carbon" | "registry" | "settlement" | "esg";
-const WORKSPACE_READ_PERMISSIONS: Record<WorkspaceName, readonly string[]> = {
-  resourceFlows: ["waste:read"], mrv: ["evidence:upload", "evidence:review", "guardian:read"], compliance: ["reports:read", "swm:read", "epr:read", "audit:read"], carbon: ["reports:read", "credits:read", "projects:read"], registry: ["registry:read", "credits:read"], settlement: ["credits:read", "settlement:authorize", "settlement:settle", "AUTHORIZE_SETTLEMENT", "SETTLE_FUNDS"], esg: ["reports:read", "epr:read", "csr:read", "audit:read"],
-};
-async function authorizeWorkspaceRead(pool: Pool, auth: AuthContext, workspace: WorkspaceName): Promise<boolean> {
-  const organizations = orgIds(auth); if (!organizations.length) return false;
-  const permissions = WORKSPACE_READ_PERMISSIONS[workspace];
-  for (const organizationId of organizations) if (!await hasOrganizationPermission(pool, auth, organizationId, permissions)) return false;
-  return true;
-}
-
 export async function registerWorkspaceRoutes(app: FastifyInstance, pool: Pool | null): Promise<void> {
   const withTenantTransaction = pool ? createTenantTransaction(pool) : null;
 
