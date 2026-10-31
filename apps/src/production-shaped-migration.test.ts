@@ -40,9 +40,9 @@ test("production-shaped migration order preserves 023 and production-only verifi
       schema: Record<string, Array<Record<string, unknown>>>;
     };
     assert.deepEqual(
-      baselineSnapshot.ledger.map(({ version, filename, applied_at }) => ({ version, filename, applied_at })),
-      manifest.production_migration_order.map(({ version, filename, applied_at }) => ({ version, filename, applied_at })),
-      "pre-upgrade snapshot must match the exact captured production ledger manifest",
+      baselineSnapshot.ledger.map(({ version, filename }) => ({ version, filename })),
+      manifest.production_migration_order.map(({ version, filename }) => ({ version, filename })),
+      "pre-upgrade snapshot must match the exact captured production migration identities; applied_at is regenerated in the disposable fixture",
     );
     assert.equal(manifest.count, 92, "production manifest must contain all 92 observed rows");
     const baseline = manifest.production_migration_order;
@@ -130,6 +130,7 @@ test("production-shaped migration order preserves 023 and production-only verifi
         manifest_sha256: createHash("sha256").update(manifestText).digest("hex"),
         migration_count: baseline.length,
         ordered_migration_identities: baseline.map(({ version, filename, applied_at }) => ({ version, filename, applied_at })),
+        reconstructed_fixture_ledger: baselineSnapshot.ledger,
       },
       upgraded_ledger: entries,
       schema_diff: schemaDiff,
