@@ -95,3 +95,24 @@ test("schema readiness fails closed on an empty catalog response", async () => {
     /GOVERNMENT_INBOX_SCHEMA_READINESS_QUERY_EMPTY/,
   );
 });
+
+
+test("worker pool rejects the same database role even when its password differs", () => {
+  assert.throws(
+    () => createGovernmentInboxWorkerPool({
+      DATABASE_URL: "postgres://shared_app:old-secret@db.example/rupaykg",
+      GOVERNMENT_INBOX_DATABASE_URL: "postgres://shared_app:new-secret@db.example/rupaykg",
+    }),
+    /GOVERNMENT_INBOX_DATABASE_PRINCIPAL_MUST_BE_DEDICATED/,
+  );
+});
+
+test("worker pool rejects URL-encoded variants of the same database role", () => {
+  assert.throws(
+    () => createGovernmentInboxWorkerPool({
+      DATABASE_URL: "postgres://shared%5Fapp:old-secret@db.example/rupaykg",
+      GOVERNMENT_INBOX_DATABASE_URL: "postgres://shared_app:new-secret@db.example/rupaykg",
+    }),
+    /GOVERNMENT_INBOX_DATABASE_PRINCIPAL_MUST_BE_DEDICATED/,
+  );
+});
