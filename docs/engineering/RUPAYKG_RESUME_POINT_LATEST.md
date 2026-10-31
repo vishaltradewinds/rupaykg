@@ -5,9 +5,10 @@
 ## Latest work — national stakeholder work/reporting contract (2026-10-31)
 - BWG route-gap clarification commit: `f95cd24d926187de6c959cbf9d4c1f6b6f6e8883`.
 - BWG API gap checkpoint commit: `668426a1b5be685aeb7eada2276fc7a1f2c02fde`.
+- Previous resume-pointer commit before this correction: `ce2dcbad4293d6a30eb593a35776cb6f8b2cce4b`.
 - Repository: `vishaltradewinds/rupaykg`; branch: `shakti/atomic-inbox-claim-2026-10-31`.
 - Matrix document commit: `4e5a4cb66df0fee409708d4187ea7fe7b111ac9a` (CI run #3947 / ID `41217457750` SUCCESS on that exact SHA).
-- Immutable matrix checkpoint commit: `15f52d616c78fad8218565dddd59f0534232d`.
+- Immutable matrix checkpoint commit: `15f52d616c78fad8218565dddd59f0534232d26d`.
 - Controlling product contract: [National Stakeholder Work-and-Reporting Matrix](../product/NATIONAL_STAKEHOLDER_WORK_AND_REPORTING_MATRIX_2026-10-31.md).
 - Immutable checkpoint: [National stakeholder work/reporting matrix checkpoint](./checkpoints/2026-10-31-national-stakeholder-work-reporting-matrix.md).
 - Latest route-gap checkpoint: [BWG API contract gap confirmed](./checkpoints/2026-10-31-bwg-api-contract-gap-confirmed.md).
@@ -21,7 +22,7 @@
 ## Repository-wide readiness audit (2026-10-31)
 - Audit report: [RupayKg repository-wide readiness and execution audit](./RUPAYKG_REPOSITORY_READINESS_AND_EXECUTION_AUDIT_2026-10-31.md).
 - Immutable checkpoint: [Repository readiness and execution audit](./checkpoints/2026-10-31-repository-readiness-execution-audit.md).
-- Pre-audit exact-head CI run #3942 / ID `41216157154`? The verified CI run was #3942 / ID `41216157190`, SUCCESS on `afbbfeffdc60c614332acee965964de1785ceb1b`.
+- Pre-audit exact-head CI run #3942 / ID `41216157190`, SUCCESS on `afbbfeffdc60c614332acee965964de1785ceb1b`.
 - Audit preflight log: [repository readiness audit preflight](./session-logs/2026-10-31-1550-utc-repository-readiness-audit-preflight.md).
 - Audit verdict: ENGINEERING CANDIDATE; NATIONAL PRODUCTION EXECUTION = NO-GO / HOLD.
 - Recursive inventory at audited HEAD: 396 blobs; 61 API source files; 43 web files; 50 tests; 115 SQL migrations plus README; 103 docs; 36 shared-package files; 14 route-family files; five shared packages.
@@ -57,7 +58,7 @@ Mandatory Shakti Standards apply. Golden Rule: **ONE SHAKTI STANDARD. MANY PROJE
 - No complete all-stakeholder operational journey/report contract was previously established; the new matrix is now the controlling product acceptance contract.
 
 ## Next executable sequence
-1. Recheck branch HEAD and exact-head CI. Matrix CI run #3947 must be checked; do not infer success.
+1. Recheck branch HEAD and exact-head CI after each documentation or code batch. Matrix CI run #3947 / ID `41217457750` completed SUCCESS on exact matrix SHA `4e5a4cb66df0fee409708d4187ea7fe7b111ac9a`.
 2. Trace `/api/v1/workspaces/bwg` from UI through server registration, handler, SQL, permission checks and HTTP tests.
 3. Build route → UI → table → report → permission → test crosswalk for all 14 route families.
 4. Implement/verify general generator journey: site/stream profile → segregation/storage → pickup schedule → bilateral handover → transport → destination receipt → reconciliation → reports. Do not conflate declared quantity with calibrated measurement.
