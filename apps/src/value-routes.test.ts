@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { bwgProfileReviewBasis, bwgEprQuantityError, canReadBwgWorkspace, isBwgEprFulfilledObligationConstraintViolation } from "./value-routes.js";
+import { bwgProfileReviewBasis, bwgEprQuantityError, canReadBwgWorkspace, isBwgApplicabilityNotVerifiedConflict, isBwgEprFulfilledObligationConstraintViolation } from "./value-routes.js";
 
 test("BWG profile intake never self-asserts statutory applicability or external registration", () => {
   const basis = bwgProfileReviewBasis();
@@ -72,4 +72,20 @@ test("BWG EPR database conflict mapping is restricted to the exact production ch
     constraint: "bwg_epr_reports_fulfilled_le_obligated",
   }), false);
   assert.equal(isBwgEprFulfilledObligationConstraintViolation(null), false);
+});
+
+test("BWG reporting-period applicability conflict is mapped only for the exact live trigger error", () => {
+  assert.equal(isBwgApplicabilityNotVerifiedConflict({
+    code: "23514",
+    message: "BWG applicability must be verified before creating a reporting period",
+  }), true);
+  assert.equal(isBwgApplicabilityNotVerifiedConflict({
+    code: "23514",
+    message: "a different check constraint failed",
+  }), false);
+  assert.equal(isBwgApplicabilityNotVerifiedConflict({
+    code: "23505",
+    message: "BWG applicability must be verified before creating a reporting period",
+  }), false);
+  assert.equal(isBwgApplicabilityNotVerifiedConflict(null), false);
 });
