@@ -198,7 +198,49 @@ try {
   assert.deepEqual(approvedAgain.authorization_permissions_snapshot, ["VERIFY_EVIDENCE"]);
   assert.ok(approvedAgain.authorization_checked_at);
   assert.equal(approvedAgain.authorization_history_state, "APPROVED_HISTORY");
-  console.log("PASS: proposed forward-only semantics preserve snapshots, reject linkage swaps, clear forged pending snapshots, and re-check authorization on approval transition.");
+  // Two-session lock-order checks: revocation that wins the lock must be
+  // observed by approval; approval that wins must commit before revocation.
+  const concurrentClient = new Client({
+    connectionString: process.env.DATABASE_URL,
+    ssl: process.env.DATABASE_SSL === "false" ? undefined : { rejectUnauthorized: false },
+  });
+  await concurrentClient.connect();
+  try {
+    await concurrentClient.query("BEGIN");
+    await concurrentClient.query("update organization_memberships set status='REVOKED' where id=$1", [ids.membership]);
+    let approvalSettled = false;
+    const blockedApproval = client.query(
+      "insert into verifications(id,activity_id,evidence_id,verifier_identity_id,decision) values ($1,$2,$3,$4,'APPROVED')",
+      ["10000000-0000-4000-8000-000000000031", ids.activity, ids.evidence, ids.verifier],
+    ).then(() => { approvalSettled = true; return null; }, (error) => { approvalSettled = true; return error; });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    assert.equal(approvalSettled, false, "approval must wait for in-flight membership revocation");
+    await concurrentClient.query("COMMIT");
+    const revokedApprovalError = await blockedApproval;
+    assert.match(revokedApprovalError?.message ?? "", /requires active verifier permission/);
+    await client.query("update organization_memberships set status='VERIFIED' where id=$1", [ids.membership]);
+
+    await client.query("BEGIN");
+    await client.query(
+      "insert into verifications(id,activity_id,evidence_id,verifier_identity_id,decision) values ($1,$2,$3,$4,'APPROVED')",
+      ["10000000-0000-4000-8000-000000000032", ids.activity, ids.evidence, ids.verifier],
+    );
+    let revocationSettled = false;
+    const blockedRevocation = concurrentClient.query(
+      "update organization_memberships set status='REVOKED' where id=$1",
+      [ids.membership],
+    ).then((result) => { revocationSettled = true; return result; });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    assert.equal(revocationSettled, false, "revocation must wait for approval transaction holding the authorization lock");
+    await client.query("COMMIT");
+    await blockedRevocation;
+    await client.query("update organization_memberships set status='VERIFIED' where id=$1", [ids.membership]);
+    console.log("PASS: two-session PostgreSQL test serializes approval and membership revocation.");
+  } finally {
+    await concurrentClient.end();
+  }
+
+    console.log("PASS: proposed forward-only semantics preserve snapshots, reject linkage swaps, clear forged pending snapshots, and re-check authorization on approval transition.");
 } finally {
   try { await client.query("drop schema if exists " + q(schema) + " cascade"); } catch {}
   await client.end().catch(() => {});
