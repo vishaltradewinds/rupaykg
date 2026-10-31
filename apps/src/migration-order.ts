@@ -34,7 +34,7 @@ export function selectMigrationFilenames(files: string[], phase: MigrationPhase)
 
   return files
     .filter((filename) => {
-      const version = filename.split("_", 1)[0];
+      const version = filename.split("_", 1)[0]!;
       if (phase === "production-baseline") {
         if (/^\d{8}$/.test(version)) return Number(version) <= 20261021;
         if (/^\d+$/.test(version)) return Number(version) <= 87 || version === "096";
