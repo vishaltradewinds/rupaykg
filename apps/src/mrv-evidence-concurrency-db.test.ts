@@ -91,13 +91,23 @@ test("HTTP routes reject stale evidence and refuse MRV instrument approval", {
     await pool.query("update identities set status='VERIFIED' where id=$1", [fixture.reviewerId]);
     const role = await pool.query<{id:string}>(
       "insert into roles(organization_id,name,permissions) values($1,$2,$3::jsonb) returning id",
-      [fixture.organizationId, `MRV-ROUTE-REVIEWER-${suffix}`, JSON.stringify(["VERIFY_EVIDENCE", "evidence:review", "TRANSFER_CREDENTIAL", "ISSUE_CREDENTIAL"])],
+      [fixture.organizationId, `MRV-ROUTE-REVIEWER-${suffix}`, JSON.stringify(["VERIFY_EVIDENCE", "evidence:review", "guardian:operate", "TRANSFER_CREDENTIAL", "ISSUE_CREDENTIAL"])],
     );
     await pool.query("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED')", [fixture.reviewerId, fixture.organizationId, role.rows[0]!.id]);
     await pool.query("insert into identity_sessions(identity_id,token_hash,expires_at) values($1,$2,now()+interval '15 minutes')", [fixture.reviewerId, createHash("sha256").update(token).digest("hex")]);
     await registerEvidenceVaultRoutes(app, pool);
     await registerMrvInstrumentRoutes(app, pool);
     const headers = { authorization: `Bearer ${token}`, "x-rupaykg-organization-id": fixture.organizationId };
+    const parameterSpec = await pool.query<{ id: string }>("select id from mrv_instrument_parameter_specs where instrument_id=$1 and parameter_code='gas_flow' and unit='m3/h'", [fixture.instrumentId]);
+    assert.ok(parameterSpec.rows[0]?.id);
+    const uncertaintyRegistration = await app.inject({
+      method: "POST",
+      url: `/api/v1/mrv/instruments/${fixture.instrumentId}/parameter-uncertainties`,
+      headers,
+      payload: { parameterSpecId: parameterSpec.rows[0]!.id, parameterCode: "gas_flow", parameterUnit: "m3/h", uncertaintyKind: "ABSOLUTE", uncertaintyValue: 0.2, uncertaintyUnit: "m3/h", uncertaintyExpression: "STANDARD", calibrationArtifactVersionId: fixture.calibrationArtifactId, calibrationArtifactSha256: fixture.calibrationSha256, decisionRuleId: "TEST-DECISION-RULE" },
+    });
+    assert.equal(uncertaintyRegistration.statusCode, 201, uncertaintyRegistration.body);
+    assert.ok(uncertaintyRegistration.json().uncertaintyRecordId);
     const rejection = await app.inject({
       method: "POST",
       url: `/api/v1/evidence-vault/${fixture.evidenceId}/review`,
