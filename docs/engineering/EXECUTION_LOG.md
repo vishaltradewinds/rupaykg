@@ -49,3 +49,12 @@ Append-only resume log. Record concrete actions, exact evidence, limitations and
 - Latest observed live deployment is `dep-dbis4nm417fc73a8m7ng`, source commit `862512c8c904cef0f604df0350f02672318953af`.
 - This confirms the production code source branch, not the database connection target. Render secret values were not accessed or exposed; exact Neon branch/database used by the running service remains unverified.
 - Updated the authoritative database policy to preserve this distinction. No Render settings, secrets or deployment were changed.
+
+
+## 2026-10-31 — Restore production-applied migration 096 source
+
+- Retrieved `096_verification_authorization_provenance.sql` from the worker PR stack and restored it to the cleanup review branch. The restored source Git blob SHA is `258b1f4534efbf915688f78aa84d4ec24a47cbc0`, matching the exact reviewed source blob already on that stack; file size 3,877 UTF-8 bytes.
+- Read-only query against authoritative Neon production main confirmed the four migration-defined columns exist on `public.verifications`: `authorization_membership_id` (uuid), `authorization_role_id` (uuid), `authorization_permissions_snapshot` (jsonb), and `authorization_checked_at` (timestamptz).
+- This closes the known production-applied migration-file omission on the cleanup branch. It does not change main until PR #173 is reviewed/merged.
+- Clarified that staging ledger migrations `20261022`–`20261025` are not production-applied. They remain with the pending worker/feature stack and must not be promoted to the production baseline or applied to Neon without full migration review and separate approval.
+- No production SQL, migration ledger, schema, role, grant, RLS, Render secret, deployment or service was changed. Worker/scheduler remain OFF; production HOLD; certification OFF; TRL 9 not claimed.
