@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { compareMigrationFilenames, selectMigrationFilenames } from "./migration-order.js";
+import { assertProductionMigrationGate, compareMigrationFilenames, selectMigrationFilenames } from "./migration-order.js";
 
 test("orders historical production migrations before production-only 096 and proposed chain after it", () => {
   const files = [
@@ -42,4 +42,31 @@ test("splits the exact production baseline from the proposed upgrade chain", () 
   assert.deepEqual(baseline, files.slice(0, 6));
   assert.deepEqual(upgrade, files.slice(6));
   assert.deepEqual(selectMigrationFilenames(files, "all"), files);
+});
+
+
+test("production migration runner fails closed without explicit release evidence", () => {
+  assert.throws(() => assertProductionMigrationGate({
+    NODE_ENV: "production",
+    RUPAYKG_MIGRATION_PHASE: "all",
+  }), /PRODUCTION_MIGRATION_BLOCKED/);
+  assert.throws(() => assertProductionMigrationGate({
+    NODE_ENV: "production",
+    RUPAYKG_MIGRATION_PHASE: "production-upgrade",
+    RUPAYKG_ALLOW_PRODUCTION_MIGRATIONS: "true",
+    RUPAYKG_PRODUCTION_MIGRATION_APPROVED: "true",
+    RUPAYKG_PRODUCTION_CHANGE_ID: "CHG-123",
+  }), /PRODUCTION_MIGRATION_BLOCKED/);
+});
+
+test("production migration runner accepts only explicit approved upgrade envelope", () => {
+  assert.doesNotThrow(() => assertProductionMigrationGate({
+    NODE_ENV: "production",
+    RUPAYKG_MIGRATION_PHASE: "production-upgrade",
+    RUPAYKG_ALLOW_PRODUCTION_MIGRATIONS: "true",
+    RUPAYKG_PRODUCTION_MIGRATION_APPROVED: "true",
+    RUPAYKG_PRODUCTION_CHANGE_ID: "CHG-123",
+    RUPAYKG_PRODUCTION_BACKUP_REFERENCE: "backup://verified/2026-10-31",
+  }));
+  assert.doesNotThrow(() => assertProductionMigrationGate({ NODE_ENV: "test" }));
 });
