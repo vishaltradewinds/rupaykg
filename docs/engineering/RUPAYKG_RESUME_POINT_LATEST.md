@@ -98,3 +98,12 @@ RupayKg is intended as **pan-India national environmental infrastructure** for e
 
 ## Mandatory resume instruction
 On the next session, do not start with a generic repo audit. Read `AGENTS.md` and this file, verify the recorded HEAD/CI/PR state, then begin **Gate 1, step 1**. If branch/HEAD has changed, reconcile and update this checkpoint before making changes.
+
+
+## Continuity-documentation commits (2026-10-31)
+- `AGENTS.md` rules commit: `5e358706a5fad88f6842e3b94d9a0a05709eb603`.
+- Initial resume pointer commit: `d16bb63d155b8dc6b82a17c2228aee2ae418934b`.
+- Immutable checkpoint commit: `d23bb60e347f8a8c5ea18242e682b6d5bb7482b6`.
+- Architecture audit addendum commit: `76218ff3893fff11529d66664849cbf0e80d78a0`.
+- This resume pointer is now being refreshed after those documentation commits. On the next session, verify actual branch HEAD and exact-head CI before proceeding; documentation commits must not be mistaken for application changes.
+- Exact-head CI run #3908 passed for the application/audit baseline commit `571aef12d9dbe54389ec50b8c80c1d5bbfab355a`. CI for subsequent continuity-documentation commits must be rechecked against the latest branch HEAD.
