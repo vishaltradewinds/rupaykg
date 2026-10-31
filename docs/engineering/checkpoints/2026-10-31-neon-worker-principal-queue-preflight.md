@@ -124,3 +124,19 @@ Regression coverage added for least-privilege success, elevated flags, role memb
 The principal gate was tightened after reviewing every worker UPDATE statement. It now requires UPDATE only on the exact inbox columns used by claim, heartbeat, retry, quarantine and terminal transitions: `status`, `attempts`, `lease_token`, `lease_until`, `quarantined_at`, `last_error_code`, `next_attempt_at`, `processed_at`, and `validation_summary`. A table-level UPDATE grant is explicitly rejected. The regression suite includes a negative case for broad table UPDATE even when the expected column-level grants are present.
 
 This is still a code-side ACL attestation, not a proof that Neon currently grants precisely these permissions. A disposable PostgreSQL/Neon grant fixture must verify the catalog semantics and the actual SQL workload before any live role is provisioned. Exact-head CI for the latest source commit is pending.
+
+
+## Standalone worker process implementation — 2026-10-31
+
+A separate process entrypoint now exists at `apps/src/government-inbox-worker-process.ts`, with package command `start:government-inbox-worker`.
+
+Safety properties:
+- It refuses to start unless `GOVERNMENT_INBOX_WORKER_ENABLED=true` is explicitly supplied.
+- It creates only the dedicated worker pool from `GOVERNMENT_INBOX_DATABASE_URL`; there is no application-pool fallback.
+- It performs schema readiness followed by read-only least-privilege principal attestation before the first queue claim.
+- It runs one bounded worker batch at a time and waits a bounded configurable poll interval (1–60 seconds; default 5 seconds) between cycles.
+- It emits aggregate cycle counters only; it does not log payloads or connection strings.
+- SIGTERM/SIGINT stop future cycles; the active bounded batch is allowed to finish, with lease fencing supporting crash recovery.
+- Pool closure runs in a finally block.
+
+This is source-code implementation only. The script is not configured as a Render service, no worker secrets exist or were added, and no service is enabled. The Docker image build must prove the compiled entrypoint is present. Before any dedicated service is created, complete the disposable exact-grant PostgreSQL rehearsal, resolve the national system-queue vs tenant isolation governance decision, and perform independent security review. Production worker remains OFF.
