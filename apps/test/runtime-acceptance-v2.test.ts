@@ -1,11 +1,11 @@
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomInt, randomUUID } from "node:crypto";
 import { spawn, type ChildProcess } from "node:child_process";
 import { Pool } from "pg";
 
 const databaseUrl = process.env.DATABASE_URL;
-const port = Number(process.env.RUNTIME_ACCEPTANCE_PORT ?? 43127);
+const port = Number(process.env.RUNTIME_ACCEPTANCE_PORT ?? randomInt(20000, 50000));
 const baseUrl = `http://127.0.0.1:${port}`;
 const pool = databaseUrl ? new Pool({ connectionString: databaseUrl, max: 4 }) : null;
 const suffix = randomUUID();
