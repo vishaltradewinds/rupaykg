@@ -152,14 +152,14 @@ test("government inbox worker persists retry recovery, quarantine and append-onl
       assert.equal(outside.rows[0]?.covered, false, kind + " scope must not cover unrelated geography");
 
       await pool.query(
-        "update geography_sources set status='REVOKED' where id=$1",
+        "update geography_sources set status='UNAVAILABLE' where id=$1",
         [scopeBinding.rows[0]!.scope_directory_source_id],
       );
-      const revokedDirectory = await pool.query<{ covered: boolean }>(
+      const unavailableDirectory = await pool.query<{ covered: boolean }>(
         "select government_source_scope_covers_geography($1,$2) as covered",
         [scoped.sourceSnapshotId, scoped.geographyId],
       );
-      assert.equal(revokedDirectory.rows[0]?.covered, false, kind + " scope must stop resolving when its directory trust is revoked");
+      assert.equal(unavailableDirectory.rows[0]?.covered, false, kind + " scope must stop resolving when its directory source is unavailable");
 
       await assert.rejects(
         pool.query(
@@ -267,7 +267,7 @@ test("government inbox worker persists retry recovery, quarantine and append-onl
     assert.equal(expiredRow.rows[0]?.last_error_code, "GOVERNMENT_CROSSWALK_NOT_FOUND");
 
     // Revoked mappings must not resolve future batches.
-    await pool.query("update government_jurisdiction_crosswalks set status='REVOKED', effective_to=null, revoked_at=now() where id=$1", [resolvedCrosswalk.rows[0]!.id]);
+    await pool.query("update government_jurisdiction_crosswalks set status='UNAVAILABLE', effective_to=null, revoked_at=now() where id=$1", [resolvedCrosswalk.rows[0]!.id]);
     const revokedTimestamp = new Date().toISOString();
     const revokedBatchId = randomUUID();
     const revokedPayload = {
