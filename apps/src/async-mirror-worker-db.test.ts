@@ -121,6 +121,20 @@ test("government inbox worker persists retry recovery, quarantine and append-onl
         [scoped.sourceSnapshotId, scoped.geographyId],
       );
       assert.equal(covered.rows[0]?.covered, true, kind + " scope must cover its descendant geography");
+      const scopeBinding = await pool.query<{ scope_geography_id: string; scope_directory_source_id: string }>(
+        "select scope_geography_id,scope_directory_source_id from authoritative_source_snapshots where id=$1",
+        [scoped.sourceSnapshotId],
+      );
+      await assert.rejects(
+        pool.query("update geography set external_code=$2 where id=$1", [scopeBinding.rows[0]!.scope_geography_id, "MUTATED-SCOPE-CODE"]),
+        /APPROVED_SOURCE_SCOPE_GEOGRAPHY_IMMUTABLE/,
+        "approved scope geography code binding must be immutable",
+      );
+      await assert.rejects(
+        pool.query("update geography_sources set checksum=$2 where id=$1", [scopeBinding.rows[0]!.scope_directory_source_id, "0".repeat(64)]),
+        /APPROVED_SOURCE_SCOPE_DIRECTORY_IMMUTABLE/,
+        "approved directory source checksum must be immutable",
+      );
       const outsideId = randomUUID();
       await pool.query(
         "insert into geography(id,kind,code,name,source,source_version) values($1,'CLUSTER',$2,$3,'Synthetic unrelated fixture','v1')",
