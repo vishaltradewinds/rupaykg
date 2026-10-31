@@ -311,3 +311,32 @@ The application has substantial application-layer authorization helpers (verifie
 
 This finding upgrades tenant isolation to a release-blocking gate. Existing application-level authorization is useful but must not be represented as database-enforced isolation. No role, grant, RLS policy or live data was changed.
 
+
+
+## 11. Follow-up implementation batch — TLS fail-closed and RLS design (09:24 UTC)
+
+### PostgreSQL TLS default hardened
+
+Manual inspection of `apps/src/server.ts` found a remaining insecure fallback: when `DATABASE_SSL` was neither `require` nor `false`, the API client silently used `rejectUnauthorized: false`. Production config explicitly passes `require` for external TLS or `false` only for its validated internal Render database case, but the fallback was still unsafe for other launch paths.
+
+Candidate code change:
+- Added `apps/src/database-tls.ts`; TLS verifies certificates by default.
+- Only an explicit `DATABASE_SSL=false` disables TLS; explicit CA material is passed through.
+- Updated `apps/src/server.ts` to use the helper.
+- Added `apps/src/database-tls.test.ts` covering default verification, explicit require, CA pass-through and explicit disable.
+
+This change is not yet validated until exact-head CI completes.
+
+### Tenant isolation implementation design
+
+Added `docs/engineering/DATABASE_TENANT_ISOLATION_DESIGN_2026-10-31.md`:
+- Categorizes the schema into organization-owned, activity-child, registry, bilateral, identity, audit, device/sync, shared-reference and system-control data classes.
+- Defines a transaction-local identity/organization context contract.
+- Defines least-privilege role separation and table-specific policy principles.
+- Requires route × table × permission mapping, cross-tenant negative tests, pool context-leak tests, SECURITY DEFINER review, production-clone rehearsal and rollback proof.
+
+No RLS migration was authored or applied. This is intentional: existing authenticated route code uses both pool-level and checked-out-client queries, so enabling RLS before refactoring every relevant query into a context-bearing transaction would either break valid workflows or invite unsafe bypasses. Render's exact runtime role also remains unverified.
+
+### Latest exact-head CI evidence before this batch
+
+Run [#41188331227](https://github.com/vishaltradewinds/rupaykg/actions/runs/41188331227) passed on commit `8f2e551c1babda21ddb1c2b90da6c92f74f1c120`, including the complete production-shaped disposable PostgreSQL acceptance and Docker build. It does not validate the subsequent TLS helper changes.
