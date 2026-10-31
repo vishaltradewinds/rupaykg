@@ -4,7 +4,7 @@ import type { Pool } from "pg";
 import { authenticate, bearerChallenge, canActForOrganization, canVerifyEvidence, hasOrganizationPermission, type AuthContext } from "./auth.js";
 
 const MAX_BYTES = 5 * 1024 * 1024;
-const MEDIA = new Set(["application/pdf", "image/jpeg", "image/png", "text/csv", "text/plain", "application/json"]);
+const MEDIA = new Set(["application/pdf", "image/jpeg", "image/png", "text/csv", "text/plain", "application/json", "application/octet-stream"]);
 type B = Record<string, unknown>;
 type Req = { body: unknown; params: Record<string,string>; query?: unknown; log: { error: (e:unknown)=>void } };
 type Rep = { code:(n:number)=>{send:(v:unknown)=>unknown}; header:(k:string,v:string)=>unknown; type:(v:string)=>unknown; send:(v:unknown)=>unknown };
@@ -40,7 +40,7 @@ export function decodeEvidenceBase64(value:string):Buffer|null {
  const bytes=Buffer.from(value,"base64");
  return !bytes.length||bytes.length>MAX_BYTES||bytes.toString("base64")!==value?null:bytes;
 }
-export function evidencePayloadMatchesMediaType(bytes:Buffer,mediaType:string):boolean {
+export function evidencePayloadMatchesMediaType(bytes:Buffer,mediaType:string):boolean {\n if(mediaType==="application/octet-stream")return bytes.length>0;
  if(mediaType==="application/pdf")return bytes.subarray(0,5).toString("ascii")==="%PDF-";
  if(mediaType==="image/jpeg")return bytes.length>=3&&bytes[0]===0xff&&bytes[1]===0xd8&&bytes[2]===0xff;
  if(mediaType==="image/png")return bytes.length>=8&&bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10]));
