@@ -308,6 +308,19 @@ test("BWG authenticated HTTP authorization fails closed against disposable Postg
     assert.equal(crossOrganizationDenied.statusCode, 403, crossOrganizationDenied.body);
     assert.equal(crossOrganizationDenied.json().code, "ORG_FORBIDDEN");
 
+    // A permitted member with a matching verified geography can submit intake, but it remains review-required.
+    const profileWriteFixture = await makeFixture(["profile:update"]);
+    await pool.query("insert into organization_geography_scopes(organization_id, geography_id, status) values ($1,$2,'VERIFIED')", [profileWriteFixture.organizationId, profileWriteFixture.geographyId]);
+    const profileCreated = await app.inject({
+      method: "POST",
+      url: "/api/v1/bwg/profile",
+      headers: { authorization: "Bearer " + profileWriteFixture.token, "x-rupaykg-organization-id": profileWriteFixture.organizationId },
+      payload: { organizationId: profileWriteFixture.organizationId, jurisdictionId: profileWriteFixture.geographyId, floorAreaSqm: 10, waterConsumptionLpd: 20, wasteGenerationKgDay: 30, establishmentType: "HOTEL" },
+    });
+    assert.equal(profileCreated.statusCode, 201, profileCreated.body);
+    assert.equal(profileCreated.json().profile.applicability_status, "REVIEW_REQUIRED");
+    assert.equal(profileCreated.json().profile.regulatory_registration_status, "UNKNOWN");
+
     // Even an authorized profile writer is denied a jurisdiction outside the organization's verified geography scope.
     const geographyDeniedFixture = await makeFixture(["profile:update"]);
     const allowedGeographyId = randomUUID();
@@ -325,7 +338,8 @@ test("BWG authenticated HTTP authorization fails closed against disposable Postg
     assert.equal(geographyDenied.json().code, "GEOGRAPHY_FORBIDDEN");
 
     // The route-level checks above must leave no BWG profile rows behind.
-    const profileRows = await pool.query("select count(*)::int as count from bwg_profiles where organization_id = any($1::uuid[])", [fixtures.map((fixture) => fixture.organizationId)]);
+    const deniedOrganizationIds = [noPermission.organizationId, unverified.organizationId, scoped.organizationId, geographyDeniedFixture.organizationId];
+    const profileRows = await pool.query("select count(*)::int as count from bwg_profiles where organization_id = any($1::uuid[])", [deniedOrganizationIds]);
     assert.equal(profileRows.rows[0]?.count, 0);
   } finally {
     await app.close();
