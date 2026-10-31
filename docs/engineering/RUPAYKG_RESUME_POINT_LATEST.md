@@ -1,3 +1,53 @@
+## Autonomous CTO session refresh — 2026-10-31 18:05 UTC
+
+**This section supersedes all older status and next-step statements below.** Start by checking the live branch ref and exact-head CI; this pointer update is documentation-only.
+
+### Exact current state before this pointer update
+- Repository: `vishaltradewinds/rupaykg`.
+- Working branch: `shakti/atomic-inbox-claim-2026-10-31`.
+- Implementation/workflow head: `19ee83a52f5f29617df0b135bbce9129b746be13`.
+- Current main: `b5e91241d84a6712ff544d3deec1805702f45efd`.
+- Canonical worker review: PR #161, OPEN / DRAFT / unmerged, stacked on PR #157.
+- Temporary CI mirror: PR #175, OPEN / DRAFT / unmerged, same branch/head, targets main. Close after exact-head CI is recorded and PR #161 is confirmed to receive CI on its stacked base.
+- PR #157: OPEN / DRAFT / unmerged; based on old main `54a7fe1ceb41b37a68720a71c10a1dd03af30dea`. Current main is four commits ahead. Reconcile before merge.
+- PR #178 (agentic swarm) and #179 (migration ledger parity) remain separate draft workstreams.
+- Sole authoritative production DB remains Neon project `rupaykg-production-fresh` (`steep-mud-79906940`), primary branch `br-restless-base-b44cip2h`, database `rupaykg`. Render-to-Neon runtime identity remains unverified.
+
+### Material work completed
+- Worker database pool requires a dedicated URL and explicit PostgreSQL role name; no fallback to `DATABASE_URL`.
+- Role identity compares decoded PostgreSQL usernames, not passwords/endpoints. Missing or malformed identity fails closed.
+- Worker pool uses shared TLS policy, verifies certificates by default, supports configured CA, and only disables TLS via explicit `DATABASE_SSL=false`.
+- Exhausted inbox quarantine is batch-bounded with `SKIP LOCKED`; sweep quarantine count is returned to metrics.
+- Heartbeat interval is capped at half the lease duration and 300 seconds; unsafe values fall back safely.
+- Regression coverage added for role identity, TLS, bounded sweep/count and heartbeat limits.
+- CI workflow now runs for pull requests targeting any base branch, including stacked PR #161.
+- Duplicate PR #175 was closed, then reopened only as a temporary CI mirror when it became clear the previous workflow did not run on PR #161's non-main base. No branch or commit was deleted.
+- Immutable checkpoint: `docs/engineering/checkpoints/2026-10-31-worker-security-bounded-queue.md` (checkpoint captures implementation head `19ee83a52f5f29617df0b135bbce9129b746be13`).
+
+### Exact CI evidence / current status
+- Code + TLS tests at `30ea27b13921661bbf0364af71dc177b64f673f0`: CI #41227038280 SUCCESS.
+- Documentation head `26f2e46a27a5c689d541d45b14b9c93b6b3b979a`: CI #41227119005 SUCCESS.
+- Intermediate queue hardening CI runs #41227203012, #41227214839, #41227234273, #41227243507, #41227259635 and #41227322837 failed only because two unit assertions still expected the previous CTE name. The new bounded-sweep test and disposable PostgreSQL concurrency, stale-fencing, worker retry/recovery and restricted event-writer tests passed. Assertions corrected in `bc2f4221b01a887c75ce92dc16bb7016cc3ad47b`.
+- Current implementation/workflow head `19ee83a52f5f29617df0b135bbce9129b746be13`: runs #41227554040 and #41227554234 were IN PROGRESS at last check. Recheck exact-head status; no green claim yet.
+- This resume-pointer update and checkpoint are documentation-only commits after the implementation head. Re-read the actual branch ref on next resume.
+
+### Production and readiness posture
+- No production DB DDL/DML, role/grant, secret, Render configuration, deployment, queue row or lease was changed.
+- Worker OFF; scheduler OFF; certification OFF; production HOLD; TRL 9 NOT ESTABLISHED.
+- No actual worker login or grants have been tested with the deployment credential. No worker entrypoint/service is registered.
+- RLS/tenant isolation remains a release blocker. Do not blanket-enable RLS.
+- Migration 096 source/ledger exception and four-commit main drift remain unresolved.
+
+### Ordered next execution
+1. Poll runs #41227554040 and #41227554234; inspect logs and fix any failures. Then confirm the latest branch SHA has CI on exact head.
+2. Close temporary PR #175 after PR #161 receives CI on its stacked base; verify future stacked PR changes continue to trigger CI.
+3. Implement read-only principal/grant preflight for an actual worker login on a disposable production-shaped Neon branch; no production role/secret changes.
+4. Reconcile PR #157's four-commit drift against current main and migration 096 provenance; no wholesale merge.
+5. Independently review queue SQL, lease/fencing/retry, role privileges, source/crosswalk migration chain, tenant boundaries and rollback/backup evidence.
+6. Continue safe independent work; ask Founder only for irreversible production changes, statutory representations or explicit risk approvals.
+
+---
+
 # RupayKg — Latest Engineering Resume Point
 
 ## Render production deployment verification — 2026-10-31 17:28 UTC
