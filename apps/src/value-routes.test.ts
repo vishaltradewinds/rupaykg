@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import Fastify from "fastify";
-import type { Pool } from "pg";
+import { Pool } from "pg";
 import { registerValueRoutes } from "./value-routes.js";
 import { bwgProfileReviewBasis, bwgEprQuantityError, canReadBwgWorkspace, isBwgApplicabilityNotVerifiedConflict, isBwgEprFulfilledObligationConstraintViolation } from "./value-routes.js";
 
