@@ -150,6 +150,28 @@ test("government inbox worker persists retry recovery, quarantine and append-onl
         [scoped.sourceSnapshotId, outsideId],
       );
       assert.equal(outside.rows[0]?.covered, false, kind + " scope must not cover unrelated geography");
+
+      await assert.rejects(
+        pool.query(
+          "insert into geography(id,parent_id,kind,code,name,source,source_version) values($1,$2,'CLUSTER',$3,$4,'Synthetic expansion attempt','v1')",
+          [randomUUID(), scopeBinding.rows[0]!.scope_geography_id, "EXPAND-ROOT-" + kind + "-" + suffix.slice(0, 6), "Attempted child under approved scope"],
+        ),
+        /APPROVED_SOURCE_SCOPE_HIERARCHY_EXPANSION_FORBIDDEN/,
+        "new descendants must not expand an approved source scope",
+      );
+      await assert.rejects(
+        pool.query("update geography set parent_id=$2 where id=$1", [outsideId, scopeBinding.rows[0]!.scope_geography_id]),
+        /APPROVED_SOURCE_SCOPE_HIERARCHY_EXPANSION_FORBIDDEN/,
+        "an unrelated geography must not be reparented into an approved source scope",
+      );
+      await assert.rejects(
+        pool.query(
+          "insert into geography(id,parent_id,kind,code,name,source,source_version) values($1,$2,'CLUSTER',$3,$4,'Synthetic expansion attempt','v1')",
+          [randomUUID(), scoped.geographyId, "EXPAND-DESC-" + kind + "-" + suffix.slice(0, 6), "Attempted grandchild under approved descendant"],
+        ),
+        /APPROVED_SOURCE_SCOPE_HIERARCHY_EXPANSION_FORBIDDEN/,
+        "new descendants must not expand an approved source scope below its root",
+      );
     }
     const first = await runGovernmentInboxWorker(pool, async () => { throw new Error("SyntheticTransientFailure"); }, { batchSize: 10, maxAttempts: 3 });
     assert.ok(first.retried >= 1, "transient validator failure must be persisted as RETRY");
