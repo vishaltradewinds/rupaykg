@@ -208,3 +208,23 @@ A swarm that is only proposed, documented or represented by a demo is not an imp
 No project may claim SHAKTI conformance or pass a relevant release/readiness gate while the mandatory swarm architecture or its applicable controls are absent or unverified. No waiver or project-level exemption is permitted. Implementation sequencing may be staged, but the requirement itself cannot be deferred or removed.
 
 **Principal rule:** ONE SHAKTI STANDARD. MANY PROJECT-SPECIFIC OPERATING SYSTEMS. MANDATORY COORDINATED AGENTIC AI SWARMS THROUGHOUT.
+
+
+## 8. Principal Standard PD-02 — Digital Public Infrastructure (DPI)
+
+**Directive status:** Founder-directed universal architecture standard.  
+**Applicability:** All SHAKTI-governed projects creating shared public-purpose digital infrastructure, multi-stakeholder platforms, registries, sector networks or interoperable services.
+
+A DPI must be designed as reusable, interoperable and governed shared infrastructure—not as a closed application or data silo. It must support public purpose, inclusion, open standards, federation, data rights, privacy/security by design, neutrality, portability, verifiability, transparency and sustainable operations.
+
+Mandatory architecture concerns include participant and organisation identity; governed registries and reference data; lawful purpose, consent where applicable and policy enforcement; versioned APIs, schemas and event contracts; traceable workflows; evidence/provenance and trust; controlled analytics and AI; and resilient operations. Applicability must be documented; unnecessary centralisation and duplication of authoritative public registries must be avoided.
+
+The platform operator does not acquire statutory authority by operating the DPI. Government determinations, institutional research, laboratory results, professional certifications and participant records retain their respective authority and ownership boundaries. The system must distinguish participant attestation, automated validation, operator checks, independent verification and statutory approval.
+
+Every DPI project must maintain stakeholder/authority maps, governance and grievance procedures, data-rights and retention matrices, authoritative-source registers, versioned schemas/APIs, interoperability conformance tests, privacy/security/resilience evidence, agentic swarm controls under PD-01, funding and stewardship plans, vendor-exit paths, TRL records and independent release decisions.
+
+National-scale claims require representative multi-region, multi-institution, multi-language and real operating-condition evidence plus sustained operations. A prototype, mock integration, internal test, memorandum or single-site pilot is not national operational readiness. Missing critical authority, data-rights, identity, tenant-isolation, security, interoperability, recovery or operating-owner evidence blocks release.
+
+The complete requirements, architecture, lifecycle gates and evidence artifacts are defined in [SHAKTI Digital Public Infrastructure Standard v0.1](SHAKTI_DIGITAL_PUBLIC_INFRASTRUCTURE_STANDARD_0_1.md). This is a SHAKTI design and assurance standard, not a government notification, statutory standard or claim of official DPI recognition.
+
+**Principal rule:** Shared public-purpose infrastructure; open interoperability; federated trust; protected data rights; evidence-led scale.
