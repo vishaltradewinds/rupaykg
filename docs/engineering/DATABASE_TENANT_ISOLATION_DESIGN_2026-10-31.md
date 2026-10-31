@@ -147,3 +147,20 @@ A targeted static review of API modules confirms that RLS cannot safely be switc
 5. Only after the complete route × table × permission map is signed off, create an RLS migration against a disposable clone and add exhaustive positive/negative acceptance tests.
 
 Do not retrofit transaction-local context by setting a GUC in one pool query and assuming later pool queries inherit it; that is incorrect under connection pooling and creates cross-request risk.
+
+
+## 9. Transaction-local context infrastructure — implemented, not yet adopted by routes
+
+Added:
+- `apps/src/database-context.ts`
+- `apps/src/database-context.test.ts`
+
+The helper:
+- Derives identity and organization only from an `AuthContext` with an explicitly active, VERIFIED membership.
+- Rejects missing/malformed identity or organization UUIDs before acquiring a connection.
+- Checks out one PostgreSQL client, begins a transaction, sets identity and organization using transaction-local `set_config(..., true)`, executes caller work on that same client, commits, rolls back on failure and always releases the client.
+- Preserves the original application error if rollback itself fails.
+
+Tests cover transaction ordering, same-client work, rollback, release, invalid context rejection and verified-membership derivation.
+
+**Important boundary:** this helper is infrastructure only and is not yet wired into production routes. Existing route handlers still use pool-level queries. No RLS policy should be enabled until those call sites are refactored and tested. The custom transaction-local settings are a context carrier for the trusted application server; they are not cryptographic claims and do not defend against a fully compromised application database credential or arbitrary SQL execution. Policies must independently check active membership and the threat model must include this limitation.
