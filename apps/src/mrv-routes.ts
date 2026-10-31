@@ -38,6 +38,9 @@ export function mrvObservationSetHash(rows: Array<Record<string, unknown>>): str
     instrumentId: String(o.instrument_id ?? ""),
     observedAt: o.observed_at == null ? "" : new Date(o.observed_at as string | number | Date).toISOString(),
     uncertainty: o.uncertainty == null ? null : String(o.uncertainty),
+    uncertaintyRecordId: String(o.mrv_uncertainty_record_id ?? ""),
+    rawFrameArtifactVersionId: String(o.raw_frame_artifact_version_id ?? ""),
+    rawFrameSha256: String(o.raw_frame_sha256 ?? ""),
     qualityStatus: String(o.quality_status ?? ""),
     metadata: canonicalizeObservationValue(o.metadata ?? null),
   })).sort((a, b) => a.id.localeCompare(b.id));
@@ -189,7 +192,7 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
       if (!await activityInAuthorizedGeography(pool, auth, activityId, row.organization_id)) return reply.code(403).send({ error: "Activity geography is outside organization authorization scope", code: "GEOGRAPHY_FORBIDDEN" });
       if (row.activity_status !== "COMPLETED" || row.decision !== "APPROVED" || row.evidence_status !== "VERIFIED" || row.evidence_activity_id !== activityId) return reply.code(409).send({ error: "Completed activity, approved verification and VERIFIED evidence are required before Guardian MRV", code: "MRV_PRECONDITION_FAILED" });
 
-      const observations = await pool.query("select id, parameter_code, observed_value, unit, method, instrument_id, observed_at, uncertainty, quality_status, metadata from mrv_observations where activity_id=$1 order by observed_at", [activityId]);
+      const observations = await pool.query("select id, parameter_code, observed_value, unit, method, instrument_id, observed_at, uncertainty, quality_status, metadata, mrv_uncertainty_record_id, raw_frame_artifact_version_id, raw_frame_sha256 from mrv_observations where activity_id=$1 order by observed_at", [activityId]);
       // Direct and offline field-sync MEASUREMENT_CREATE persist to measurements.
       // Include only readings with an explicit instrument+parameter binding; never infer
       // a physical source from legacy free-text source fields.
@@ -209,6 +212,21 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
         [activityId],
       );
       observations.rows.push(...instrumentMeasurements.rows);
+      // Instrument-linked observations must carry reviewed parameter uncertainty
+      // and exact server-hashed raw-frame evidence before authoritative MRV.
+      const integrityGap = observations.rows.find((observation) =>
+        typeof observation.instrument_id === "string" && observation.instrument_id.trim()
+        && (!observation.mrv_uncertainty_record_id || !observation.raw_frame_artifact_version_id
+          || typeof observation.raw_frame_sha256 !== "string" || !/^[0-9a-f]{64}$/i.test(observation.raw_frame_sha256)),
+      );
+      if (integrityGap) {
+        return reply.code(409).send({
+          error: "Instrument-linked MRV observations require an immutable reviewed uncertainty record and server-hashed raw-frame artifact.",
+          code: "MRV_MEASUREMENT_INTEGRITY_EVIDENCE_REQUIRED",
+          eligibleForRegistry: false,
+          syntheticData: false,
+        });
+      }
       const instrumentCodes = [...new Set(observations.rows.map((observation) => typeof observation.instrument_id === "string" ? observation.instrument_id.trim() : "").filter(Boolean))];
       const registeredInstruments = instrumentCodes.length
         ? await pool.query<MrvInstrumentApprovalEvidence>(
