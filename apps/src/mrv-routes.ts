@@ -55,11 +55,11 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
       lockAcquired = true;
       const preflight = await withTenantTransaction(tenantContext, async (client) => {
         const context = await client.query<{ organization_id: string; geography_id: string | null; activity_status: string; decision: string; evidence_status: string; evidence_activity_id: string | null; evidence_count: string; observation_count: string }>(
-          \`select a.organization_id,a.geography_id,a.status activity_status,v.decision,e.status evidence_status,e.activity_id evidence_activity_id,
+          `select a.organization_id,a.geography_id,a.status activity_status,v.decision,e.status evidence_status,e.activity_id evidence_activity_id,
                   (select count(*)::text from evidence e2 where e2.activity_id=a.id) evidence_count,
                   (select count(*)::text from mrv_observations mo where mo.activity_id=a.id) observation_count
              from activities a join verifications v on v.id=$2 and v.activity_id=a.id
-             join evidence e on e.id=$3 and e.activity_id=a.id where a.id=$1\`,
+             join evidence e on e.id=$3 and e.activity_id=a.id where a.id=$1`,
           [activityId,verificationId,evidenceId]);
         const row=context.rows[0];
         if(!row)return {status:409 as const,body:{error:"Activity, verification and evidence must be bound to the same activity",code:"MRV_BINDING_INVALID"}};
@@ -74,13 +74,13 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
         const quantity=quantityRow.rows[0]?.value?Number(quantityRow.rows[0].value):undefined;
         const unit=quantityRow.rows[0]?.unit||undefined;
         const prior=await client.query<ExistingProvenanceRow>(
-          \`select * from mrv_provenance_events where activity_id=$1 and verification_id=$2 and evidence_id=$3 and guardian_policy_id=$4
+          `select * from mrv_provenance_events where activity_id=$1 and verification_id=$2 and evidence_id=$3 and guardian_policy_id=$4
              and guardian_status='VERIFIED' and hcs_status='CONSENSUS_CONFIRMED'
              and guardian_execution_id is not null and btrim(guardian_execution_id)<>''
              and hcs_topic_id is not null and btrim(hcs_topic_id)<>''
              and hcs_transaction_id is not null and btrim(hcs_transaction_id)<>''
              and hcs_consensus_timestamp is not null and btrim(hcs_consensus_timestamp)<>''
-           order by created_at desc\`,
+           order by created_at desc`,
           [activityId,verificationId,evidenceId,policyId]);
         const existing=prior.rows.find(record=>record.guardian_execution_id&&integrityHash({
           schema:"rupaykg:mrv:v1",activityId,verificationId,evidenceId,guardianPolicyId:policyId,
@@ -119,19 +119,19 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
       });
       const persisted=await withTenantTransaction(tenantContext,async(client)=>{
         const current=await client.query<{organization_id:string;geography_id:string|null;activity_status:string;decision:string;evidence_status:string}>(
-          \`select a.organization_id,a.geography_id,a.status activity_status,v.decision,e.status evidence_status
+          `select a.organization_id,a.geography_id,a.status activity_status,v.decision,e.status evidence_status
              from activities a join verifications v on v.id=$2 and v.activity_id=a.id
-             join evidence e on e.id=$3 and e.activity_id=a.id where a.id=$1\`,
+             join evidence e on e.id=$3 and e.activity_id=a.id where a.id=$1`,
           [activityId,verificationId,evidenceId]);
         const row=current.rows[0];
         if(!row||row.organization_id!==auth.activeOrganizationId||!row.geography_id||row.activity_status!=="COMPLETED"||row.decision!=="APPROVED"||row.evidence_status!=="VERIFIED")return null;
         const scope=await client.query<{ok:boolean}>("select organization_has_geography_scope($1::uuid,$2::uuid) ok",[row.organization_id,row.geography_id]);
         if(!scope.rows[0]?.ok||!await hasOrganizationPermission(client,auth,row.organization_id,["guardian:operate"]))return null;
         return client.query(
-          \`insert into mrv_provenance_events(activity_id,verification_id,evidence_id,guardian_policy_id,guardian_execution_id,guardian_status,hcs_status,hcs_topic_id,hcs_transaction_id,hcs_consensus_timestamp,integrity_hash,methodology_code,metadata)
+          `insert into mrv_provenance_events(activity_id,verification_id,evidence_id,guardian_policy_id,guardian_execution_id,guardian_status,hcs_status,hcs_topic_id,hcs_transaction_id,hcs_consensus_timestamp,integrity_hash,methodology_code,metadata)
            values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
            on conflict(activity_id,verification_id,integrity_hash) do update set guardian_execution_id=excluded.guardian_execution_id,guardian_status=excluded.guardian_status,hcs_status=excluded.hcs_status,hcs_topic_id=excluded.hcs_topic_id,hcs_transaction_id=excluded.hcs_transaction_id,hcs_consensus_timestamp=excluded.hcs_consensus_timestamp,metadata=excluded.metadata,mirror_node_verified_at=null
-           returning *\`,
+           returning *`,
           [activityId,verificationId,evidenceId,policyId,guardian.executionId,guardian.status,anchor.status,anchor.topicId||null,anchor.transactionId,anchor.consensusTimestamp,anchor.integrityHash,methodologyCode||null,JSON.stringify({guardian:guardian.raw??null})]);
       });
       if(!persisted)return reply.code(403).send({error:"MRV authorization or preconditions changed during external submission; provider result was not persisted",code:"MRV_AUTHORIZATION_CHANGED",syntheticData:false});
