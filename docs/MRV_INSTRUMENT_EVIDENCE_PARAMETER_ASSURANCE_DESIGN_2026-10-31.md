@@ -153,3 +153,45 @@ This design does not establish that any device is MeitY/STQC/BIS/WPC/Legal Metro
 No purchase, physical commissioning, production migration, deployment, Guardian submission or certification is authorized by this design document. Synthetic tests are never site evidence.
 
 **Current posture:** PR #137 remains draft pending independent review; issue #50 remains open until the evidence binding, parameter specification and canonical MRV lineage gates are implemented and tested. Production HOLD; hardware/site acceptance HOLD; TRL 9 not established.
+
+
+## 8. Live migration-ledger reconciliation — 2026-10-31
+
+Read-only inspection was performed against Neon project `steep-mud-79906940`, database `rupaykg`, using the recorded production, staging and rehearsal branch IDs. No schema or data was changed.
+
+### 8.1 Observed ledger state
+
+| Environment | Ledger rows | Relevant tail entries |
+|---|---:|---|
+| Production | 92 | `20261018`–`20261021`, plus `096:096_verification_authorization_provenance.sql` |
+| Government inbox staging | 95 | `20261018`–`20261025` |
+| Migration rehearsal | 95 | `20261018`–`20261025` |
+
+Production's `096_verification_authorization_provenance.sql` ledger entry has no corresponding migration file in the inspected `main` tree or PR #137 branch. The live production function `prevent_invalid_verification()` confirms this is not an inert ledger row: it enforces organization-scoped VERIFIED membership and identity, non-suspended identity, explicit permission, self-verification prevention, and stores membership ID, role ID, permission snapshot and authorization timestamp on the verification row.
+
+Staging and rehearsal do not have those two authorization snapshot columns and their corresponding function does not persist that snapshot. This production control must be preserved. The missing migration source must be recovered from trusted Git history/release artifact or reconstructed from verified production DDL and independently reviewed; it must not be recreated by guessing.
+
+Staging and rehearsal contain the `20261022`, `20261023`, `20261024` and `20261025` ledger entries and async/AI intake schema objects that are absent from production and absent from the inspected PR #137 branch. The existence of those objects does not establish that their current definitions are authoritative or production-ready. The worker-lease object name must be resolved against the exact migration SQL before any dependency statement is made.
+
+### 8.2 Repository-history discrepancies
+
+- The inspected migration directory contains `023_lifecycle_state_guards.sql`, while `migrations/README.md` says migration 023 is intentionally absent.
+- The migration directory contains `027_verification_permission_hardening.sql`, while the README describes `027_verification_permission_guard.sql`.
+- The PR #137 branch contains migrations 088 and 089, but neither is recorded in any of the three inspected live ledgers.
+- The production-only ledger row 096 is absent from the inspected source tree. The source file must be recovered before the repository can safely claim to represent production migration history.
+
+### 8.3 Migration policy decision
+
+1. Do not renumber 088/089, overwrite 096, delete production-only controls, or copy staging/rehearsal schemas wholesale.
+2. Treat the three environments as separate schema histories until every migration source and every out-of-band change is accounted for.
+3. Reconstruct a canonical, ordered migration manifest from the union of verified source files and verified applied-ledger records. Each migration must have a unique immutable identity and checksum; filenames alone are insufficient evidence of identical SQL.
+4. Recover the exact 096 source and reconcile the production verifier schema/function before any new instrument/evidence migration is assigned a version.
+5. Recover and review the exact 20261022–20261025 source files, dependency order and current schema definitions before staging/rehearsal worker work is promoted or replayed.
+6. Correct README and migration validation so they validate actual repository history and detect missing applied migration sources, duplicate identities, changed checksums, and unapplied source migrations. Do not make the validator silently accept an unknown applied migration.
+7. Only after reconciliation, choose new immutable migration identities for exact artifact-version binding, parameter specifications and canonical MRV lineage. Run fresh-install and upgrade-path tests on disposable PostgreSQL, then perform independent review.
+
+### 8.4 Evidence and limitations
+
+The observations above are direct read-only database results from 2026-10-31. They establish ledger and selected schema/function differences, not a complete byte-for-byte schema equivalence audit. No production writes, staging writes, rehearsal writes, migration execution, worker activation, deployment or certification occurred.
+
+**Release gate:** migration provenance is currently FAIL-CLOSED. PR #137 remains a draft engineering candidate; migrations 088/089 are not authorized for application to any live branch. Production verifier provenance must remain intact.
