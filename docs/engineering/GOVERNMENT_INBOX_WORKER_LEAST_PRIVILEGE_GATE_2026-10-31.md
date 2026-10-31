@@ -187,3 +187,30 @@ Added disposable PostgreSQL acceptance that replays the same candidate-selection
 The exact worker branch head `fd2e52e3f73d03f73632bdccd0f0b6a03193f8b5` passed full CI run [#41205115744](https://github.com/vishaltradewinds/rupaykg/actions/runs/41205115744), including TypeScript typecheck, build, browser smoke, all unit/disposable PostgreSQL suites, production-shaped migration report upload and production container build. Artifact `production-shaped-migration-report` ID `13043707493`.
 
 Test-harness corrections before the passing run: an initial attempt could select an older eligible synthetic row; the next isolated attempt exposed a TypeScript regex-literal typo; a further attempt exposed duplicate/missing fixture locals. The final test avoids asynchronous worker barriers and deterministically replays the exact PostgreSQL row-lock query. The CI result validates database lock semantics plus the worker query assertion; it is not a live Neon test and does not approve production privileges or activation.
+
+
+## Production-derived migration rehearsal and corrected event-writer ownership transfer — 2026-10-31
+
+A disposable Neon branch derived from authoritative production main (`br-restless-base-b44cip2h`, parent LSN `0/2ABCA50`) successfully applied the proposed migration sequence `20261022`–`20261113` in order: 23 migrations, 115 total ledger rows. The branch is retained as rehearsal evidence and its compute endpoint is suspended. Production main remains at 92 ledger rows and was not modified.
+
+### Migration 20261112 defect and correction
+
+The first production-derived rehearsal attempt exposed that `20261112_inbox_event_trigger_security_definer.sql` transferred function ownership before revoking PUBLIC EXECUTE and adding the function comment. Those owner-only operations then failed under the Neon non-superuser migration login. The migration was corrected so all owner-only ACL/comment work occurs before ownership transfer; ownership transfer is the final function-level operation.
+
+The temporary role membership is now explicitly `ADMIN FALSE, INHERIT FALSE, SET TRUE` for the transfer, then revoked. A final guard checks that a non-superuser migration login cannot SET ROLE or inherit the capability. The guard is superuser-aware because PostgreSQL superusers can SET ROLE to any role by definition; this avoids a false CI failure while retaining the production non-superuser check.
+
+Exact-head full CI PASS: `9159ddfafa1282f65b1ae78a2aaa076cbc48d765`, run [#41208097244](https://github.com/vishaltradewinds/rupaykg/actions/runs/41208097244), run number 3879. All workflow steps passed, including the exact 92-row production baseline reconstruction, proposed migration application, idempotency replay, dependency audit, typecheck, build, browser smoke, disposable PostgreSQL acceptance, production-shaped evidence upload and production container build. The temporary validation-only PR #174 was closed unmerged after the run.
+
+### Neon rehearsal observations
+
+- Dedicated `rupaykg_inbox_event_writer` role: NOLOGIN, NOSUPERUSER, NOCREATEROLE, NOCREATEDB, NOBYPASSRLS.
+- `record_async_mirror_inbox_event()`: owned by that capability role; SECURITY DEFINER; pinned `search_path=pg_catalog, public`; PUBLIC EXECUTE revoked.
+- Capability role: INSERT on event table and USAGE on event sequence only; no event SELECT/UPDATE/DELETE, no inbox SELECT/UPDATE, no schema CREATE.
+- Migration login: read-only `pg_has_role(...,'SET')=false` and `pg_has_role(...,'USAGE')=false`. Neon retains a provider-managed membership row with SET=false/INHERIT=false; it is not an effective role switch or inherited grant. This provider-specific membership detail remains part of independent security review.
+- Synthetic inbox insert followed by PROCESSING transition created exactly two append-only event rows. Direct event UPDATE failed with `async_mirror_inbox_events is append-only`.
+
+### Remaining hard blockers
+
+RLS is still disabled with no policies on the inbox, event, crosswalk, source-snapshot and regulatory-rule-version relations. The worker claim remains global across the national inbox. The authority-scope ADR remains PROPOSED / NOT APPROVED. Do not activate the worker, create its login, or grant queue access until the national system-queue versus tenant-scoped model and RLS design are explicitly approved and positive/negative tests run using the actual worker login.
+
+No live production schema/data/ledger/role/grant/RLS changes, Render secret changes, worker deployment, scheduler activation or certification occurred.
