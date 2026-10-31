@@ -501,6 +501,48 @@ test("government inbox worker persists retry recovery, quarantine and append-onl
       lockContender.release();
     }
 
+    // Strict validator deadline aborts cooperative work and persists a bounded retry.
+    const timeoutRow = await makeRow("TMO-" + suffix.slice(8, 16).toUpperCase());
+    let timeoutSignal: AbortSignal | undefined;
+    const timeoutResult = await runGovernmentInboxWorker(pool, async (input) => {
+      timeoutSignal = input.signal;
+      return new Promise((_resolve, reject) => {
+        input.signal?.addEventListener("abort", () => reject(input.signal?.reason ?? new Error("aborted")), { once: true });
+      });
+    }, { batchSize: 1, leaseSeconds: 15, validationTimeoutSeconds: 1, leaseRenewalSeconds: 1, maxAttempts: 3 });
+    assert.equal(timeoutResult.retried, 1);
+    assert.equal(timeoutSignal?.aborted, true);
+    const timedOut = await pool.query<{ status: string; last_error_code: string }>(
+      "select status,last_error_code from async_mirror_inbox where id=$1", [timeoutRow.id],
+    );
+    assert.equal(timedOut.rows[0]?.status, "RETRY");
+    assert.equal(timedOut.rows[0]?.last_error_code, "VALIDATION_TIMEOUT");
+
+    // A long but bounded validator keeps its lease alive through periodic renewal.
+    const renewedAuthority = "REN-" + suffix.slice(8, 16).toUpperCase();
+    await provisionCrosswalk(renewedAuthority, "TEST-MUNI", new Date().toISOString());
+    const renewedRow = await makeRow(renewedAuthority);
+    let signalRenewalValidation: () => void = () => {};
+    const renewalValidationStarted = new Promise<void>((resolve) => { signalRenewalValidation = resolve; });
+    const renewedWorker = runGovernmentInboxWorker(pool, async () => {
+      signalRenewalValidation();
+      await new Promise((resolve) => setTimeout(resolve, 6200));
+      return { valid: true, summary: { officialAcceptance: false, authoritativeMrvMutation: false, guardianSubmission: false } };
+    }, { batchSize: 1, leaseSeconds: 15, validationTimeoutSeconds: 10, leaseRenewalSeconds: 1, maxAttempts: 3 });
+    await renewalValidationStarted;
+    await new Promise((resolve) => setTimeout(resolve, 1300));
+    const leaseDuringValidation = await pool.query<{ lease_until: Date }>(
+      "select lease_until from async_mirror_inbox where id=$1", [renewedRow.id],
+    );
+    assert.ok(leaseDuringValidation.rows[0]!.lease_until.getTime() > Date.now() + 10_000,
+      "the active lease must be extended beyond its original 15-second window");
+    const renewedResult = await renewedWorker;
+    assert.equal(renewedResult.validated, 1);
+    const renewedFinal = await pool.query<{ status: string }>(
+      "select status from async_mirror_inbox where id=$1", [renewedRow.id],
+    );
+    assert.equal(renewedFinal.rows[0]?.status, "VALIDATED");
+
   } finally {
     await pool.end();
   }
