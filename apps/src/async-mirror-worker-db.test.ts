@@ -463,7 +463,254 @@ test("government inbox worker persists retry recovery, quarantine and append-onl
     assert.equal(staleFinal.rows[0]?.status, "PROCESSING", "stale worker must not commit a terminal status after its lease token is replaced");
     assert.equal(staleFinal.rows[0]?.lease_token, supersededToken, "newer lease token must remain authoritative");
 
+    // The migration's per-jurisdiction advisory lock serializes crosswalk mutation
+    // with the worker's resolution+terminal transaction, including concurrent inserts.
+    const lockedAuthority = "LCK-" + suffix.slice(0, 8).toUpperCase();
+    await provisionCrosswalk(lockedAuthority, "LOCK-MUNI", new Date().toISOString());
+    const lockedCrosswalk = await pool.query<{ id: string }>(
+      "select id from government_jurisdiction_crosswalks where authority_code=$1 and municipal_code='LOCK-MUNI' and status='VERIFIED'",
+      [lockedAuthority],
+    );
+    assert.equal(lockedCrosswalk.rows.length, 1);
+    const resolutionKey = [lockedAuthority, "LOCK-MUNI", "synthetic-source-v1"].join(String.fromCharCode(31));
+    const lockOwner = await pool.connect();
+    const lockContender = await pool.connect();
+    try {
+      await lockOwner.query("BEGIN");
+      await lockOwner.query("select pg_advisory_xact_lock(hashtextextended($1, 0))", [resolutionKey]);
+      await lockContender.query("BEGIN");
+      await lockContender.query("SET LOCAL lock_timeout='150ms'");
+      await assert.rejects(
+        lockContender.query(
+          "update government_jurisdiction_crosswalks set status='REVOKED', revoked_at=now() where id=$1",
+          [lockedCrosswalk.rows[0]!.id],
+        ),
+        (error: unknown) => Boolean(error && typeof error === "object" && "code" in error && (error as { code: string }).code === "55P03"),
+        "crosswalk revocation must wait while an inbox resolution owns the jurisdiction key",
+      );
+      await lockContender.query("ROLLBACK");
+      await lockOwner.query("COMMIT");
+      await lockContender.query(
+        "update government_jurisdiction_crosswalks set status='REVOKED', revoked_at=now() where id=$1",
+        [lockedCrosswalk.rows[0]!.id],
+      );
+    } finally {
+      await lockOwner.query("ROLLBACK").catch(() => undefined);
+      await lockContender.query("ROLLBACK").catch(() => undefined);
+      lockOwner.release();
+      lockContender.release();
+    }
+
+    // The worker's FOR SHARE locks must prevent crosswalk deletion and approved-source retirement
+    // between source resolution and the fenced inbox terminal commit.
+    const provenanceAuthority = "PRV-" + suffix.slice(0, 8).toUpperCase();
+    const provenance = await provisionCrosswalk(provenanceAuthority, "TEST-MUNI", new Date().toISOString());
+    const crosswalkForProvenance = await pool.query<{ id: string }>(
+      "select id from government_jurisdiction_crosswalks where authority_code=$1 and municipal_code='TEST-MUNI' and status='VERIFIED'",
+      [provenanceAuthority],
+    );
+    assert.equal(crosswalkForProvenance.rows.length, 1);
+    // Replay the worker's exact FOR SHARE lock shape in a transaction. The unit test
+    // separately asserts the worker issues this clause before its fenced terminal update.
+    const provenanceLockOwner = await pool.connect();
+    try {
+      await provenanceLockOwner.query("BEGIN");
+      const lockedProvenance = await provenanceLockOwner.query<{ crosswalk_id: string; source_snapshot_id: string }>(
+        `select c.id as crosswalk_id,s.id as source_snapshot_id
+           from government_jurisdiction_crosswalks c
+           join authoritative_source_snapshots s on s.id=c.source_snapshot_id
+            and s.validation_status='APPROVED'
+            and s.authority_code=c.authority_code and s.source_version=c.source_version
+            and (s.effective_from is null or $3::timestamptz::date >= s.effective_from)
+            and (s.effective_to is null or $3::timestamptz::date <= s.effective_to)
+          where c.authority_code=$1 and c.municipal_code=$2 and c.status='VERIFIED'
+            and c.effective_from <= $3::timestamptz
+            and (c.effective_to is null or c.effective_to > $3::timestamptz)
+            and c.source_version=$4
+            and organization_has_explicit_geography_scope(c.organization_id,c.geography_id)
+            and government_source_scope_covers_geography(s.id,c.geography_id)
+            and (c.activity_id is null or exists (
+              select 1 from activities a where a.id=c.activity_id
+                and a.organization_id=c.organization_id and a.geography_id=c.geography_id
+            ))
+          order by c.effective_from desc limit 2 for share of c,s`,
+        [provenanceAuthority, "TEST-MUNI", new Date(), "synthetic-source-v1"],
+      );
+      assert.equal(lockedProvenance.rows.length, 1);
+      assert.equal(lockedProvenance.rows[0]?.source_snapshot_id, provenance.sourceSnapshotId);
+
+      const assertProvenanceMutationBlocked = async (sql: string, values: unknown[], description: string) => {
+        const contender = await pool.connect();
+        try {
+          await contender.query("BEGIN");
+          await contender.query("SET LOCAL lock_timeout='150ms'");
+          await assert.rejects(
+            contender.query(sql, values as never[]),
+            (error: unknown) => Boolean(error && typeof error === "object" && "code" in error && (error as { code: string }).code === "55P03"),
+            description,
+          );
+        } finally {
+          await contender.query("ROLLBACK").catch(() => undefined);
+          contender.release();
+        }
+      };
+      await assertProvenanceMutationBlocked(
+        "delete from government_jurisdiction_crosswalks where id=$1",
+        [crosswalkForProvenance.rows[0]!.id],
+        "crosswalk deletion must wait while the worker's source-resolution row lock is held",
+      );
+      await assertProvenanceMutationBlocked(
+        "update authoritative_source_snapshots set validation_status='RETIRED' where id=$1",
+        [provenance.sourceSnapshotId],
+        "source snapshot retirement must wait while the worker's source-resolution row lock is held",
+      );
+      await provenanceLockOwner.query("COMMIT");
+    } finally {
+      await provenanceLockOwner.query("ROLLBACK").catch(() => undefined);
+      provenanceLockOwner.release();
+    }
+    await pool.query("delete from government_jurisdiction_crosswalks where id=$1", [crosswalkForProvenance.rows[0]!.id]);
+    await pool.query("update authoritative_source_snapshots set validation_status='RETIRED' where id=$1", [provenance.sourceSnapshotId]);
+
+
+    // Strict validator deadline aborts cooperative work and persists a bounded retry.
+    const timeoutRow = await makeRow("TMO-" + suffix.slice(8, 16).toUpperCase());
+    let timeoutSignal: AbortSignal | undefined;
+    const timeoutResult = await runGovernmentInboxWorker(pool, async (input) => {
+      timeoutSignal = input.signal;
+      return new Promise((_resolve, reject) => {
+        input.signal?.addEventListener("abort", () => reject(input.signal?.reason ?? new Error("aborted")), { once: true });
+      });
+    }, { batchSize: 1, leaseSeconds: 15, validationTimeoutSeconds: 1, leaseRenewalSeconds: 1, maxAttempts: 3 });
+    assert.equal(timeoutResult.retried, 1);
+    assert.equal(timeoutSignal?.aborted, true);
+    const timedOut = await pool.query<{ status: string; last_error_code: string }>(
+      "select status,last_error_code from async_mirror_inbox where id=$1", [timeoutRow.id],
+    );
+    assert.equal(timedOut.rows[0]?.status, "RETRY");
+    assert.equal(timedOut.rows[0]?.last_error_code, "VALIDATION_TIMEOUT");
+
+    // A long but bounded validator keeps its lease alive through periodic renewal.
+    const renewedAuthority = "REN-" + suffix.slice(8, 16).toUpperCase();
+    await provisionCrosswalk(renewedAuthority, "TEST-MUNI", new Date().toISOString());
+    const renewedRow = await makeRow(renewedAuthority);
+    let signalRenewalValidation: () => void = () => {};
+    const renewalValidationStarted = new Promise<void>((resolve) => { signalRenewalValidation = resolve; });
+    const renewedWorker = runGovernmentInboxWorker(pool, async () => {
+      signalRenewalValidation();
+      await new Promise((resolve) => setTimeout(resolve, 6200));
+      return { valid: true, summary: { officialAcceptance: false, authoritativeMrvMutation: false, guardianSubmission: false } };
+    }, { batchSize: 1, leaseSeconds: 15, validationTimeoutSeconds: 10, leaseRenewalSeconds: 1, maxAttempts: 3 });
+    await renewalValidationStarted;
+    await new Promise((resolve) => setTimeout(resolve, 1300));
+    const leaseDuringValidation = await pool.query<{ lease_until: Date }>(
+      "select lease_until from async_mirror_inbox where id=$1", [renewedRow.id],
+    );
+    assert.ok(leaseDuringValidation.rows[0]!.lease_until.getTime() > Date.now() + 10_000,
+      "the active lease must be extended beyond its original 15-second window");
+    const renewedResult = await renewedWorker;
+    assert.equal(renewedResult.validated, 1);
+    const renewedFinal = await pool.query<{ status: string }>(
+      "select status from async_mirror_inbox where id=$1", [renewedRow.id],
+    );
+    assert.equal(renewedFinal.rows[0]?.status, "VALIDATED");
+
   } finally {
+    await pool.end();
+  }
+});
+
+
+test("production-shaped non-superuser migration principal can transfer a SECURITY DEFINER trigger to a NOLOGIN capability role", {
+  skip: !enabled ? "requires disposable CI PostgreSQL" : false,
+}, async () => {
+  const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: process.env.DATABASE_SSL === "false" ? undefined : { rejectUnauthorized: true },
+    max: 2,
+  });
+  const suffix = randomUUID().replace(/-/g, "").slice(0, 16);
+  const principal = "ci_migration_" + suffix;
+  const writer = "ci_event_writer_" + suffix;
+  const target = "ci_events_" + suffix;
+  const source = "ci_source_" + suffix;
+  const functionName = "ci_record_event_" + suffix;
+  const triggerName = "ci_capture_event_" + suffix;
+  const client = await pool.connect();
+  let databaseName = "";
+  let originalDatabaseOwner = "";
+  try {
+    const identity = await client.query<{ database_name: string; original_owner: string }>(
+      "select current_database() as database_name,current_user as original_owner",
+    );
+    databaseName = identity.rows[0]!.database_name;
+    originalDatabaseOwner = identity.rows[0]!.original_owner;
+    // Match the live Neon migration principal's observed role attributes and database ownership,
+    // which makes it an implicit member of pg_database_owner (owner of public schema).
+    await client.query(`create role "${principal}" nologin nosuperuser createdb createrole replication bypassrls`);
+    await client.query(`alter database "${databaseName}" owner to "${principal}"`);
+    await client.query(`create table public."${target}" (id bigserial primary key, value text not null)`);
+    await client.query(`create table public."${source}" (value text not null)`);
+    await client.query(`grant usage, create on schema public to "${principal}"`);
+    await client.query(`alter table public."${target}" owner to "${principal}"`);
+    await client.query(`alter sequence public."${target}_id_seq" owner to "${principal}"`);
+
+    await client.query(`set role "${principal}"`);
+    await client.query(`create role "${writer}" nologin nosuperuser nocreatedb nocreaterole noinherit nobypassrls`);
+    await client.query(`grant usage on schema public to "${writer}"`);
+    await client.query(`grant insert on table public."${target}" to "${writer}"`);
+    await client.query(`grant usage, select on sequence public."${target}_id_seq" to "${writer}"`);
+    await client.query(`grant create on schema public to "${writer}"`);
+    await client.query(`grant "${writer}" to current_user`);
+    await client.query(`
+      create function public."${functionName}"() returns trigger
+      language plpgsql security definer
+      set search_path = pg_catalog, public
+      as $$
+      begin
+        insert into public."${target}"(value) values(new.value);
+        return new;
+      end
+      $$`);
+    await client.query(`alter function public."${functionName}"() owner to "${writer}"`);
+    await client.query(`revoke create on schema public from "${writer}"`);
+    await client.query(`revoke "${writer}" from current_user`);
+    await client.query(`revoke all on function public."${functionName}"() from public`);
+    await client.query("reset role");
+
+    await client.query(`create trigger "${triggerName}" before insert on public."${source}" for each row execute function public."${functionName}"()`);
+    await client.query(`insert into public."${source}"(value) values('least-privilege-trigger-ok')`);
+    const verification = await client.query<{ owner: string; security_definer: boolean; config: string[] | null; inserted: string }>(
+      `select pg_get_userbyid(p.proowner) as owner,p.prosecdef as security_definer,p.proconfig as config,
+              (select value from public."${target}" order by id desc limit 1) as inserted
+         from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+        where n.nspname='public' and p.proname=$1`,
+      [functionName],
+    );
+    assert.equal(verification.rows[0]?.owner, writer);
+    assert.equal(verification.rows[0]?.security_definer, true);
+    assert.ok(verification.rows[0]?.config?.some((value) => value.includes("search_path=pg_catalog, public")));
+    assert.equal(verification.rows[0]?.inserted, "least-privilege-trigger-ok");
+    const writerRole = await client.query<{ rolcanlogin: boolean; rolsuper: boolean; rolcreaterole: boolean; rolcreatedb: boolean; rolbypassrls: boolean }>(
+      "select rolcanlogin,rolsuper,rolcreaterole,rolcreatedb,rolbypassrls from pg_roles where rolname=$1",
+      [writer],
+    );
+    assert.deepEqual(writerRole.rows[0], {
+      rolcanlogin: false, rolsuper: false, rolcreaterole: false, rolcreatedb: false, rolbypassrls: false,
+    });
+  } finally {
+    await client.query("reset role").catch(() => undefined);
+    await client.query(`drop trigger if exists "${triggerName}" on public."${source}"`).catch(() => undefined);
+    await client.query(`drop function if exists public."${functionName}"()`).catch(() => undefined);
+    await client.query(`drop table if exists public."${source}", public."${target}" cascade`).catch(() => undefined);
+    await client.query(`drop owned by "${writer}"`).catch(() => undefined);
+    await client.query(`drop role if exists "${writer}"`).catch(() => undefined);
+    if (databaseName && originalDatabaseOwner) {
+      await client.query(`alter database "${databaseName}" owner to "${originalDatabaseOwner}"`).catch(() => undefined);
+    }
+    await client.query(`drop owned by "${principal}"`).catch(() => undefined);
+    await client.query(`drop role if exists "${principal}"`).catch(() => undefined);
+    client.release();
     await pool.end();
   }
 });

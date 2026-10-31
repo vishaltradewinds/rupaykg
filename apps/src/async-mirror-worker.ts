@@ -1,4 +1,4 @@
-import type { Pool } from "pg";
+import type { Pool, PoolClient } from "pg";
 import { canonicalGovBridgeHash } from "./government-inbox-hash.js";
 
 export type GovernmentInboxValidation = {
@@ -14,12 +14,15 @@ export type GovernmentInboxValidator = (input: {
   municipalCode: string;
   batchId: string;
   payload: unknown;
+  signal?: AbortSignal;
 }) => Promise<GovernmentInboxValidation>;
 
 export type GovernmentInboxWorkerOptions = {
   batchSize?: number;
   leaseSeconds?: number;
   maxAttempts?: number;
+  validationTimeoutSeconds?: number;
+  leaseRenewalSeconds?: number;
 };
 
 type ClaimedInboxRow = {
@@ -40,6 +43,13 @@ const DEFAULT_MAX_ATTEMPTS = 5;
 
 function boundedInteger(value: number | undefined, fallback: number, min: number, max: number): number {
   return Number.isInteger(value) && value! >= min && value! <= max ? value! : fallback;
+}
+
+/** Keep heartbeats comfortably inside the lease window, even when misconfigured. */
+export function normalizeLeaseRenewalSeconds(requested: number | undefined, leaseSeconds: number): number {
+  const maximum = Math.max(1, Math.min(300, Math.floor(leaseSeconds / 2)));
+  const fallback = Math.max(1, Math.min(maximum, Math.floor(leaseSeconds / 3)));
+  return boundedInteger(requested, fallback, 1, maximum);
 }
 
 /** Strict calendar/time validation; Date.parse alone normalizes some impossible dates. */
@@ -118,21 +128,35 @@ export async function runGovernmentInboxWorker(
   const batchSize = boundedInteger(options.batchSize, DEFAULT_BATCH_SIZE, 1, 100);
   const leaseSeconds = boundedInteger(options.leaseSeconds, DEFAULT_LEASE_SECONDS, 15, 900);
   const maxAttempts = boundedInteger(options.maxAttempts, DEFAULT_MAX_ATTEMPTS, 1, 20);
+  const validationTimeoutSeconds = boundedInteger(options.validationTimeoutSeconds, Math.min(60, leaseSeconds - 2), 1, Math.min(600, leaseSeconds - 2));
+  const leaseRenewalSeconds = normalizeLeaseRenewalSeconds(options.leaseRenewalSeconds, leaseSeconds);
 
-  await pool.query(
-    `update async_mirror_inbox
-        set status='QUARANTINED', quarantined_at=now(), lease_token=null, lease_until=null,
-            last_error_code=coalesce(last_error_code, 'WORKER_ATTEMPTS_EXHAUSTED')
-      where attempts >= $1
-        and (
-          status in ('RECEIVED','RETRY')
-          or (status='PROCESSING' and (lease_until is null or lease_until < now()))
-        )`,
-    [maxAttempts],
-  );
-
-  const claimed = await pool.query<ClaimedInboxRow>(
-    `with candidates as (
+  // One PostgreSQL statement is the transaction boundary for exhaustion handling
+  // and claiming. Concurrent workers cannot observe a gap between the sweep and claim.
+  // Validation happens only after this statement commits, so no row locks are held
+  // while application code performs potentially slow work.
+  const claim = await pool.query<{ claimed_rows: ClaimedInboxRow[]; exhausted_quarantined: number }>(
+    `with exhausted_candidates as (
+       select id
+         from async_mirror_inbox
+        where attempts >= $3
+          and (
+            status in ('RECEIVED','RETRY')
+            or (status='PROCESSING' and (lease_until is null or lease_until < now()))
+          )
+        order by received_at asc
+        for update skip locked
+        limit $1
+     ),
+     exhausted as (
+       update async_mirror_inbox inbox
+          set status='QUARANTINED', quarantined_at=now(), lease_token=null, lease_until=null,
+              last_error_code=coalesce(last_error_code, 'WORKER_ATTEMPTS_EXHAUSTED')
+         from exhausted_candidates
+        where inbox.id=exhausted_candidates.id
+       returning inbox.id
+     ),
+     candidates as (
        select id
          from async_mirror_inbox
         where attempts < $3
@@ -143,31 +167,124 @@ export async function runGovernmentInboxWorker(
         order by received_at asc
         for update skip locked
         limit $1
+     ),
+     claimed as (
+       update async_mirror_inbox inbox
+          set status='PROCESSING', attempts=inbox.attempts+1,
+              lease_token=gen_random_uuid(), lease_until=now() + ($2 * interval '1 second')
+         from candidates
+        where inbox.id=candidates.id
+       returning inbox.id, inbox.authority_code, inbox.municipal_code, inbox.batch_id,
+                 inbox.sync_window_timestamp, inbox.payload, inbox.payload_sha256, inbox.attempts, inbox.lease_token
      )
-     update async_mirror_inbox inbox
-        set status='PROCESSING', attempts=inbox.attempts+1,
-            lease_token=gen_random_uuid(), lease_until=now() + ($2 * interval '1 second')
-       from candidates
-      where inbox.id=candidates.id
-     returning inbox.id, inbox.authority_code, inbox.municipal_code, inbox.batch_id,
-               inbox.sync_window_timestamp, inbox.payload, inbox.payload_sha256, inbox.attempts, inbox.lease_token`,
+     select coalesce(jsonb_agg(to_jsonb(claimed)) filter (where claimed.id is not null), '[]'::jsonb) as claimed_rows,
+            (select count(*)::int from exhausted) as exhausted_quarantined
+       from claimed`,
     [batchSize, leaseSeconds, maxAttempts],
   );
 
-  const result = { claimed: claimed.rows.length, validated: 0, rejected: 0, unresolved: 0, retried: 0, quarantined: 0 };
-  for (const row of claimed.rows) {
+  const claimedRows = claim.rows[0]?.claimed_rows ?? [];
+  const result = {
+    claimed: claimedRows.length,
+    validated: 0,
+    rejected: 0,
+    unresolved: 0,
+    retried: 0,
+    quarantined: Number(claim.rows[0]?.exhausted_quarantined ?? 0),
+  };
+  const activeLeases = new Map(claimedRows.map((row) => [row.id, row.lease_token]));
+  let renewalFailure: Error | null = null;
+  let renewalInFlight = false;
+  const pausedLeases = new Set<string>();
+  let activeValidationController: AbortController | null = null;
+  const renewalTimer = setInterval(async () => {
+    if (renewalInFlight || activeLeases.size === 0 || renewalFailure) return;
+    renewalInFlight = true;
+    try {
+      const leases = [...activeLeases.entries()].filter(([id]) => !pausedLeases.has(id));
+      if (leases.length === 0) return;
+      const renewed = await pool.query(
+        `update async_mirror_inbox inbox
+            set lease_until=now() + ($3 * interval '1 second')
+           from unnest($1::uuid[], $2::uuid[]) as lease(id, token)
+          where inbox.id=lease.id and inbox.lease_token=lease.token
+            and inbox.status='PROCESSING' and inbox.lease_until > now()
+          returning inbox.id`,
+        [leases.map(([id]) => id), leases.map(([, token]) => token), leaseSeconds],
+      );
+      if ((renewed.rowCount ?? 0) !== leases.length) {
+        const current = await pool.query<{ id: string; status: string; lease_token: string | null; lease_until: Date | string | null }>(
+          "select id,status,lease_token,lease_until from async_mirror_inbox where id=any($1::uuid[])",
+          [leases.map(([id]) => id)],
+        );
+        const byId = new Map(current.rows.map((entry) => [entry.id, entry]));
+        for (const [id, token] of leases) {
+          const entry = byId.get(id);
+          if (!entry) throw new Error("LEASE_RENEWAL_ROW_MISSING");
+          if (entry.status !== "PROCESSING") {
+            activeLeases.delete(id);
+            continue;
+          }
+          if (entry.lease_token !== token || !entry.lease_until || new Date(entry.lease_until).getTime() <= Date.now()) {
+            throw new Error("LEASE_RENEWAL_FENCE_LOST");
+          }
+        }
+      }
+    } catch (error) {
+      renewalFailure = new Error("LEASE_RENEWAL_FAILED");
+      activeValidationController?.abort(renewalFailure);
+    } finally {
+      renewalInFlight = false;
+    }
+  }, leaseRenewalSeconds * 1000);
+  renewalTimer.unref?.();
+  try {
+  for (const row of claimedRows) {
+    let sourceResolutionClient: PoolClient | null = null;
+    let terminalCount: "validated" | "unresolved" | "rejected" | null = null;
+    const pauseAndRefreshLease = async (): Promise<void> => {
+      pausedLeases.add(row.id);
+      while (renewalInFlight) await new Promise((resolve) => setTimeout(resolve, 10));
+      const refreshed = await pool.query(
+        `update async_mirror_inbox
+            set lease_until=now() + ($3 * interval '1 second')
+          where id=$1 and status='PROCESSING' and lease_token=$2 and lease_until > now()
+          returning id`,
+        [row.id, row.lease_token, leaseSeconds],
+      );
+      if ((refreshed.rowCount ?? 0) !== 1) throw new Error("LEASE_RENEWAL_FENCE_LOST");
+    };
     try {
       let outcome: GovernmentInboxValidation;
       if (canonicalGovBridgeHash(row.payload) !== row.payload_sha256) {
         outcome = { valid: false, errorCode: "BATCH_PAYLOAD_HASH_MISMATCH" };
       } else {
-        outcome = await validate({
-          id: row.id,
-          authorityCode: row.authority_code,
-          municipalCode: row.municipal_code,
-          batchId: row.batch_id,
-          payload: row.payload,
-        });
+        if (renewalFailure) throw renewalFailure;
+        const controller = new AbortController();
+        activeValidationController = controller;
+        let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+        try {
+          const validation = validate({
+            id: row.id,
+            authorityCode: row.authority_code,
+            municipalCode: row.municipal_code,
+            batchId: row.batch_id,
+            payload: row.payload,
+            signal: controller.signal,
+          });
+          const timeout = new Promise<never>((_resolve, reject) => {
+            timeoutHandle = setTimeout(() => {
+              const error = new Error("VALIDATION_TIMEOUT");
+              controller.abort(error);
+              reject(error);
+            }, validationTimeoutSeconds * 1000);
+          });
+          outcome = await Promise.race([validation, timeout]);
+          if (renewalFailure) throw renewalFailure;
+        } finally {
+          if (timeoutHandle) clearTimeout(timeoutHandle);
+          activeValidationController = null;
+        }
         if (outcome.valid) {
           const metadata = row.payload && typeof row.payload === "object" && !Array.isArray(row.payload)
             ? (row.payload as Record<string, unknown>).batchMetadata
@@ -185,29 +302,40 @@ export async function runGovernmentInboxWorker(
         }
       }
       if (outcome.valid) {
-        const mapped = await pool.query<{
-          id: string; organization_id: string; geography_id: string; activity_id: string | null; source_version: string;
+        await pauseAndRefreshLease();
+        // Resolve and persist the terminal decision in one SERIALIZABLE transaction.
+        // Row locks serialize retirement/revocation; SERIALIZABLE protects lookup predicates.
+        sourceResolutionClient = await pool.connect();
+        await sourceResolutionClient.query("BEGIN ISOLATION LEVEL SERIALIZABLE");
+        const sourceVersion = (row.payload as { batchMetadata?: { sourceVersion?: unknown } })?.batchMetadata?.sourceVersion;
+        await sourceResolutionClient.query(
+          "select pg_advisory_xact_lock(hashtextextended($1 || chr(31) || $2 || chr(31) || $3, 0))",
+          [row.authority_code, row.municipal_code, sourceVersion],
+        );
+        const mapped = await sourceResolutionClient.query<{
+          id: string; organization_id: string; geography_id: string; activity_id: string | null;
+          source_version: string; source_snapshot_id: string; snapshot_content_sha256: string;
+          snapshot_dataset_code: string; snapshot_scope_kind: string; snapshot_scope_code: string | null;
+          snapshot_scope_geography_id: string | null; snapshot_scope_directory_source_id: string | null;
         }>(
-          `select c.id,c.organization_id,c.geography_id,c.activity_id,c.source_version
-             from government_jurisdiction_crosswalks c
-             join authoritative_source_snapshots s on s.id=c.source_snapshot_id
-               and s.validation_status='APPROVED'
-               and s.authority_code=c.authority_code
-               and s.source_version=c.source_version
-               and (s.effective_from is null or $3::timestamptz::date >= s.effective_from)
-               and (s.effective_to is null or $3::timestamptz::date <= s.effective_to)
-            where c.authority_code=$1 and c.municipal_code=$2 and c.status='VERIFIED'
-              and c.effective_from <= $3::timestamptz
-              and (c.effective_to is null or c.effective_to > $3::timestamptz)
-              and c.source_version = $4
-              and organization_has_explicit_geography_scope(c.organization_id,c.geography_id)
-              and government_source_scope_covers_geography(s.id,c.geography_id)
-              and (c.activity_id is null or exists (
-                select 1 from activities a where a.id=c.activity_id
-                  and a.organization_id=c.organization_id and a.geography_id=c.geography_id
-              ))
-            order by c.effective_from desc
-            limit 2`,
+          [
+            "select c.id,c.organization_id,c.geography_id,c.activity_id,c.source_version, s.id as source_snapshot_id,",
+            "       s.content_sha256 as snapshot_content_sha256,s.dataset_code as snapshot_dataset_code,",
+            "       s.scope_kind as snapshot_scope_kind,s.scope_code as snapshot_scope_code,",
+            "       s.scope_geography_id as snapshot_scope_geography_id,s.scope_directory_source_id as snapshot_scope_directory_source_id",
+            "  from government_jurisdiction_crosswalks c",
+            "  join authoritative_source_snapshots s on s.id=c.source_snapshot_id",
+            "   and s.validation_status='APPROVED' and s.authority_code=c.authority_code and s.source_version=c.source_version",
+            "   and (s.effective_from is null or $3::timestamptz::date >= s.effective_from)",
+            "   and (s.effective_to is null or $3::timestamptz::date <= s.effective_to)",
+            " where c.authority_code=$1 and c.municipal_code=$2 and c.status='VERIFIED'",
+            "   and c.effective_from <= $3::timestamptz and (c.effective_to is null or c.effective_to > $3::timestamptz)",
+            "   and c.source_version=$4",
+            "   and organization_has_explicit_geography_scope(c.organization_id,c.geography_id)",
+            "   and government_source_scope_covers_geography(s.id,c.geography_id)",
+            "   and (c.activity_id is null or exists (select 1 from activities a where a.id=c.activity_id and a.organization_id=c.organization_id and a.geography_id=c.geography_id))",
+            " order by c.effective_from desc limit 2 for share of c,s"
+          ].join("\n"),
           [row.authority_code, row.municipal_code, row.sync_window_timestamp, (row.payload as { batchMetadata?: { sourceVersion?: unknown } })?.batchMetadata?.sourceVersion],
         );
         if (mapped.rows.length !== 1) {
@@ -238,6 +366,7 @@ export async function runGovernmentInboxWorker(
                 geographyId: mapping.geography_id,
                 activityId: mapping.activity_id,
                 sourceVersion: mapping.source_version,
+                sourceSnapshot: { id: mapping.source_snapshot_id, contentSha256: mapping.snapshot_content_sha256, datasetCode: mapping.snapshot_dataset_code, scopeKind: mapping.snapshot_scope_kind, scopeCode: mapping.snapshot_scope_code, scopeGeographyId: mapping.snapshot_scope_geography_id, scopeDirectorySourceId: mapping.snapshot_scope_directory_source_id },
               },
               domainBinding: "NOT_PERFORMED",
               officialAcceptance: false,
@@ -247,38 +376,53 @@ export async function runGovernmentInboxWorker(
           };
         }
       }
+      const terminalDb = sourceResolutionClient ?? pool;
       if (outcome.valid) {
-        const updated = await pool.query(
+        const updated = await terminalDb.query(
           `update async_mirror_inbox
               set status='VALIDATED', processed_at=now(), lease_token=null, lease_until=null,
                   next_attempt_at=null, last_error_code=null, validation_summary=$3::jsonb
             where id=$1 and status='PROCESSING' and lease_token=$2 and lease_until > now()`,
           [row.id, row.lease_token, JSON.stringify(outcome.summary ?? {})],
         );
-        if ((updated.rowCount ?? 0) === 1) result.validated += 1;
+        if ((updated.rowCount ?? 0) === 1) terminalCount = "validated";
       } else if (outcome.state === "UNRESOLVED") {
-        const updated = await pool.query(
+        const updated = await terminalDb.query(
           `update async_mirror_inbox
               set status='UNRESOLVED', processed_at=now(), lease_token=null, lease_until=null,
                   next_attempt_at=null, last_error_code=$3, validation_summary=$4::jsonb
             where id=$1 and status='PROCESSING' and lease_token=$2 and lease_until > now()`,
           [row.id, row.lease_token, outcome.errorCode ?? "GOVERNMENT_CROSSWALK_UNRESOLVED", JSON.stringify(outcome.summary ?? {})],
         );
-        if ((updated.rowCount ?? 0) === 1) result.unresolved += 1;
+        if ((updated.rowCount ?? 0) === 1) terminalCount = "unresolved";
       } else {
         const code = (outcome.errorCode ?? "PAYLOAD_VALIDATION_REJECTED").replace(/[^A-Z0-9_.-]/gi, "_").slice(0, 100);
-        const updated = await pool.query(
+        const updated = await terminalDb.query(
           `update async_mirror_inbox
               set status='REJECTED', processed_at=now(), lease_token=null, lease_until=null,
                   next_attempt_at=null, last_error_code=$3, validation_summary=$4::jsonb
             where id=$1 and status='PROCESSING' and lease_token=$2 and lease_until > now()`,
           [row.id, row.lease_token, code, JSON.stringify(outcome.summary ?? {})],
         );
-        if ((updated.rowCount ?? 0) === 1) result.rejected += 1;
+        if ((updated.rowCount ?? 0) === 1) terminalCount = "rejected";
       }
+      if (sourceResolutionClient) {
+        await sourceResolutionClient.query("COMMIT");
+        sourceResolutionClient.release();
+        sourceResolutionClient = null;
+      }
+      if (terminalCount === "validated") result.validated += 1;
+      else if (terminalCount === "unresolved") result.unresolved += 1;
+      else if (terminalCount === "rejected") result.rejected += 1;
     } catch (error) {
+      if (sourceResolutionClient) {
+        try { await sourceResolutionClient.query("ROLLBACK"); } finally { sourceResolutionClient.release(); sourceResolutionClient = null; }
+      }
       const exhausted = row.attempts >= maxAttempts;
-      const code = error instanceof Error ? error.name.replace(/[^A-Z0-9_.-]/gi, "_").slice(0, 100) : "UNKNOWN_VALIDATION_ERROR";
+      const knownFailure = error instanceof Error && /^(VALIDATION_TIMEOUT|LEASE_RENEWAL_FENCE_LOST|LEASE_RENEWAL_FAILED|LEASE_RENEWAL_ROW_MISSING)$/.test(error.message)
+        ? error.message
+        : error instanceof Error ? error.name : "UNKNOWN_VALIDATION_ERROR";
+      const code = knownFailure.replace(/[^A-Z0-9_.-]/gi, "_").slice(0, 100);
       const delaySeconds = Math.min(60 * (2 ** Math.max(0, row.attempts - 1)), 3600);
       const updated = await pool.query(
         `update async_mirror_inbox
@@ -293,7 +437,13 @@ export async function runGovernmentInboxWorker(
         if (exhausted) result.quarantined += 1;
         else result.retried += 1;
       }
+    } finally {
+      activeLeases.delete(row.id);
+      pausedLeases.delete(row.id);
     }
+  }
+  } finally {
+    clearInterval(renewalTimer);
   }
   return result;
 }

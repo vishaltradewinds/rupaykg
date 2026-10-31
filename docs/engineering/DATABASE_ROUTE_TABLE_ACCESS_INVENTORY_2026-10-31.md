@@ -121,3 +121,18 @@ This classification is an architecture target. Exact ownership paths and foreign
 **Current decision: HOLD.** This inventory is documentation-only. No RLS policy migration, role/grant change, credential change, production deployment, worker activation or data mutation was performed by this batch. The diagnostic endpoint has not been deployed to Render, so the actual Render runtime role remains unknown. The observed Neon role findings must not be treated as proof of which role the Render application uses.
 
 **TRL note:** this work is an engineering/security discovery artifact. It does not establish field validation, operational reliability, regulatory acceptance, or TRL 9.
+
+
+## Current-candidate reconciliation — 2026-10-31
+
+This first-pass inventory was authored against branch `shakti/integrate-government-inbox-worker-2026-10-31` at tree `ca66168a61da5efafc9f5abd67e22eda0586a51e`. It is a historical discovery snapshot, not the latest route state.
+
+The current route-registration and transaction-context review is now maintained in `docs/engineering/GATE1_CURRENT_CANDIDATE_SOURCE_REVIEW_2026-10-31.md`, reviewed at branch `shakti/atomic-inbox-claim-2026-10-31`, HEAD `ca71c1857a71ed73ca700bbeb2d49be251e85f49`, with exact-head CI run #3918 SUCCESS.
+
+Key corrections:
+- `statutory-routes.ts` now uses the tenant transaction helper for its five handlers and is registered by `registerMrvRoutes`; the old claim that these handlers remain direct-pool paths is stale.
+- `value-routes.ts` now uses the tenant transaction helper across carbon/EPR/ESG/BWG routes; helper functions typed as `Pool | PoolClient` are called with the checked-out client in the reviewed transaction paths.
+- The remaining gaps are not simply "no helper in module": auth/identity, governance, platform-admin, field-device sync, intelligence, server overview/geography, registry/settlement and worker contexts require distinct trust-domain analysis.
+- Do not enable RLS based on either this first-pass inventory or the current-candidate review alone. The latter is still bounded source review, not a complete statement-level audit or independent certification.
+
+Preserve this historical snapshot; do not delete it. Use the current-candidate review as the source for present route-registration and transaction-boundary status.

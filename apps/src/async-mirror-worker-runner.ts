@@ -1,9 +1,12 @@
 import { Pool, type PoolConfig } from "pg";
 import type { Pool as PoolType } from "pg";
+import { databaseTlsConfig } from "./database-tls.js";
 
 export type GovernmentInboxWorkerEnvironment = {
   GOVERNMENT_INBOX_DATABASE_URL?: string;
   DATABASE_URL?: string;
+  DATABASE_SSL?: "require" | "false";
+  DATABASE_CA_CERT?: string;
 };
 
 export type GovernmentInboxWorkerPoolFactory = (config: PoolConfig) => PoolType;
@@ -21,29 +24,236 @@ export function createGovernmentInboxWorkerPool(
     throw new Error("GOVERNMENT_INBOX_DATABASE_URL_REQUIRED");
   }
 
+  if (!hasExplicitDatabasePrincipal(workerUrl)) {
+    throw new Error("GOVERNMENT_INBOX_DATABASE_PRINCIPAL_REQUIRED");
+  }
+
   const applicationUrl = env.DATABASE_URL?.trim();
   if (applicationUrl && sameDatabasePrincipal(workerUrl, applicationUrl)) {
     throw new Error("GOVERNMENT_INBOX_DATABASE_PRINCIPAL_MUST_BE_DEDICATED");
   }
 
-  return poolFactory({ connectionString: workerUrl, max: 2, application_name: "rupaykg-government-inbox-worker" });
+  const ssl = databaseTlsConfig(env.DATABASE_SSL, env.DATABASE_CA_CERT);
+  return poolFactory({
+    connectionString: workerUrl,
+    max: 2,
+    application_name: "rupaykg-government-inbox-worker",
+    ...(ssl ? { ssl } : {}),
+  });
+}
+
+function hasExplicitDatabasePrincipal(url: string): boolean {
+  try {
+    return decodeURIComponent(new URL(url).username).length > 0;
+  } catch {
+    return false;
+  }
 }
 
 function sameDatabasePrincipal(left: string, right: string): boolean {
   try {
-    const a = new URL(left);
-    const b = new URL(right);
-    return a.protocol === b.protocol
-      && a.hostname === b.hostname
-      && a.port === b.port
-      && a.pathname === b.pathname
-      && decodeURIComponent(a.username) === decodeURIComponent(b.username)
-      && decodeURIComponent(a.password) === decodeURIComponent(b.password);
+    const leftRole = decodeURIComponent(new URL(left).username);
+    const rightRole = decodeURIComponent(new URL(right).username);
+    // Missing or malformed identity is not proof of a distinct PostgreSQL role.
+    // Compare role identity independent of password, endpoint aliases, ports,
+    // or database path: those are not proof of a separate database principal.
+    return !leftRole || !rightRole || leftRole === rightRole;
   } catch {
-    // Invalid URLs are rejected by pg on connection; never treat malformed
-    // values as proof that the worker principal is distinct.
-    return left === right;
+    // Fail closed: malformed URLs cannot establish distinct principals.
+    return true;
   }
+}
+
+
+export type WorkerPrincipalAttestation = {
+  role_name: string;
+  can_login: boolean;
+  is_superuser: boolean;
+  can_create_database: boolean;
+  can_create_role: boolean;
+  can_replicate: boolean;
+  bypasses_rls: boolean;
+  inherits_privileges: boolean;
+  has_role_memberships: boolean;
+  owns_worker_tables: boolean;
+  owns_public_schema: boolean;
+  has_public_schema_create: boolean;
+  has_public_schema_usage: boolean;
+  public_inbox_acl: boolean;
+  public_reference_acl: boolean;
+  public_scope_function_execute: boolean;
+  inbox_select: boolean;
+  inbox_insert: boolean;
+  inbox_delete: boolean;
+  inbox_table_update: boolean;
+  inbox_update_status: boolean;
+  inbox_update_attempts: boolean;
+  inbox_update_lease_token: boolean;
+  inbox_update_lease_until: boolean;
+  inbox_update_quarantined_at: boolean;
+  inbox_update_last_error_code: boolean;
+  inbox_update_next_attempt_at: boolean;
+  inbox_update_processed_at: boolean;
+  inbox_update_validation_summary: boolean;
+  crosswalk_select: boolean;
+  source_snapshot_select: boolean;
+  activity_select: boolean;
+  geography_scope_execute: boolean;
+  source_scope_execute: boolean;
+  event_table_select: boolean;
+  event_table_insert: boolean;
+  event_table_update: boolean;
+  event_table_delete: boolean;
+};
+
+/**
+ * Read-only least-privilege attestation for the connected worker principal.
+ * The worker must not inherit application/owner capabilities or own queue
+ * objects. It may read the scoped reference tables and update the inbox, but
+ * cannot directly read or mutate the append-only event table.
+ */
+export async function assertGovernmentInboxWorkerPrincipal(
+  pool: PoolType,
+  applicationDatabaseUrl?: string,
+): Promise<void> {
+  let applicationRole: string | null = null;
+  if (applicationDatabaseUrl?.trim()) {
+    try {
+      applicationRole = decodeURIComponent(new URL(applicationDatabaseUrl).username);
+    } catch {
+      throw new Error("GOVERNMENT_INBOX_APPLICATION_PRINCIPAL_INVALID");
+    }
+    if (!applicationRole) throw new Error("GOVERNMENT_INBOX_APPLICATION_PRINCIPAL_INVALID");
+  }
+
+  const result = await pool.query<WorkerPrincipalAttestation>(
+    `select
+       r.rolname as role_name,
+       r.rolcanlogin as can_login,
+       r.rolsuper as is_superuser,
+       r.rolcreatedb as can_create_database,
+       r.rolcreaterole as can_create_role,
+       r.rolreplication as can_replicate,
+       r.rolbypassrls as bypasses_rls,
+       r.rolinherit as inherits_privileges,
+       exists (select 1 from pg_auth_members m where m.member=r.oid) as has_role_memberships,
+       exists (
+         select 1 from pg_class c
+         join pg_namespace n on n.oid=c.relnamespace
+         where n.nspname='public'
+           and c.relname in ('async_mirror_inbox','async_mirror_inbox_events',
+             'government_jurisdiction_crosswalks','authoritative_source_snapshots','activities')
+           and c.relowner=r.oid
+       ) as owns_worker_tables,
+       exists (select 1 from pg_namespace n where n.nspname='public' and n.nspowner=r.oid) as owns_public_schema,
+       has_schema_privilege(r.oid, 'public', 'CREATE') as has_public_schema_create,
+       has_schema_privilege(r.oid, 'public', 'USAGE') as has_public_schema_usage,
+       exists (
+         select 1 from pg_class c, lateral aclexplode(coalesce(c.relacl, acldefault('r',c.relowner))) acl
+         where c.oid in ('public.async_mirror_inbox'::regclass)
+           and acl.grantee=0
+       ) as public_inbox_acl,
+       exists (
+         select 1 from pg_class c, lateral aclexplode(coalesce(c.relacl, acldefault('r',c.relowner))) acl
+         where c.oid in ('public.government_jurisdiction_crosswalks'::regclass,
+                         'public.authoritative_source_snapshots'::regclass,
+                         'public.activities'::regclass)
+           and acl.grantee=0
+       ) as public_reference_acl,
+       exists (
+         select 1 from pg_proc p, lateral aclexplode(coalesce(p.proacl, acldefault('f',p.proowner))) acl
+         where p.oid in (
+           'public.organization_has_explicit_geography_scope(uuid,uuid)'::regprocedure,
+           'public.government_source_scope_covers_geography(uuid,uuid)'::regprocedure
+         )
+           and acl.grantee=0 and acl.privilege_type='EXECUTE'
+       ) as public_scope_function_execute,
+       has_table_privilege(r.oid, 'public.async_mirror_inbox', 'SELECT') as inbox_select,
+       has_table_privilege(r.oid, 'public.async_mirror_inbox', 'INSERT') as inbox_insert,
+       has_table_privilege(r.oid, 'public.async_mirror_inbox', 'DELETE') as inbox_delete,
+       has_table_privilege(r.oid, 'public.async_mirror_inbox', 'UPDATE') as inbox_table_update,
+       has_column_privilege(r.oid, 'public.async_mirror_inbox', 'status', 'UPDATE') as inbox_update_status,
+       has_column_privilege(r.oid, 'public.async_mirror_inbox', 'attempts', 'UPDATE') as inbox_update_attempts,
+       has_column_privilege(r.oid, 'public.async_mirror_inbox', 'lease_token', 'UPDATE') as inbox_update_lease_token,
+       has_column_privilege(r.oid, 'public.async_mirror_inbox', 'lease_until', 'UPDATE') as inbox_update_lease_until,
+       has_column_privilege(r.oid, 'public.async_mirror_inbox', 'quarantined_at', 'UPDATE') as inbox_update_quarantined_at,
+       has_column_privilege(r.oid, 'public.async_mirror_inbox', 'last_error_code', 'UPDATE') as inbox_update_last_error_code,
+       has_column_privilege(r.oid, 'public.async_mirror_inbox', 'next_attempt_at', 'UPDATE') as inbox_update_next_attempt_at,
+       has_column_privilege(r.oid, 'public.async_mirror_inbox', 'processed_at', 'UPDATE') as inbox_update_processed_at,
+       has_column_privilege(r.oid, 'public.async_mirror_inbox', 'validation_summary', 'UPDATE') as inbox_update_validation_summary,
+       has_table_privilege(r.oid, 'public.government_jurisdiction_crosswalks', 'SELECT') as crosswalk_select,
+       has_table_privilege(r.oid, 'public.authoritative_source_snapshots', 'SELECT') as source_snapshot_select,
+       has_table_privilege(r.oid, 'public.activities', 'SELECT') as activity_select,
+       has_function_privilege(r.oid, 'public.organization_has_explicit_geography_scope(uuid,uuid)', 'EXECUTE') as geography_scope_execute,
+       has_function_privilege(r.oid, 'public.government_source_scope_covers_geography(uuid,uuid)', 'EXECUTE') as source_scope_execute,
+       has_table_privilege(r.oid, 'public.async_mirror_inbox_events', 'SELECT') as event_table_select,
+       has_table_privilege(r.oid, 'public.async_mirror_inbox_events', 'INSERT') as event_table_insert,
+       has_table_privilege(r.oid, 'public.async_mirror_inbox_events', 'UPDATE') as event_table_update,
+       has_table_privilege(r.oid, 'public.async_mirror_inbox_events', 'DELETE') as event_table_delete
+      from pg_roles r where r.rolname=current_user`,
+  );
+  const role = result.rows[0];
+  if (!role) throw new Error("GOVERNMENT_INBOX_WORKER_PRINCIPAL_NOT_FOUND");
+
+  const violations: string[] = [];
+  if (!role.can_login) violations.push("LOGIN_REQUIRED");
+  if (role.is_superuser) violations.push("SUPERUSER");
+  if (role.can_create_database) violations.push("CREATEDB");
+  if (role.can_create_role) violations.push("CREATEROLE");
+  if (role.can_replicate) violations.push("REPLICATION");
+  if (role.bypasses_rls) violations.push("BYPASSRLS");
+  if (role.inherits_privileges) violations.push("INHERIT");
+  if (role.has_role_memberships) violations.push("ROLE_MEMBERSHIP");
+  if (role.owns_worker_tables) violations.push("WORKER_TABLE_OWNERSHIP");
+  if (role.owns_public_schema) violations.push("PUBLIC_SCHEMA_OWNERSHIP");
+  if (role.has_public_schema_create) violations.push("PUBLIC_SCHEMA_CREATE");
+  if (!role.has_public_schema_usage) violations.push("PUBLIC_SCHEMA_USAGE_MISSING");
+  if (role.public_inbox_acl) violations.push("PUBLIC_INBOX_PRIVILEGE");
+  if (role.public_reference_acl) violations.push("PUBLIC_REFERENCE_PRIVILEGE");
+  if (role.public_scope_function_execute) violations.push("PUBLIC_SCOPE_FUNCTION_EXECUTE");
+  if (!role.inbox_select) violations.push("INBOX_SELECT_MISSING");
+  if (role.inbox_insert) violations.push("INBOX_INSERT_NOT_ALLOWED");
+  if (role.inbox_delete) violations.push("INBOX_DELETE_NOT_ALLOWED");
+  if (role.inbox_table_update) violations.push("INBOX_TABLE_LEVEL_UPDATE_TOO_BROAD");
+  const updateColumns: Array<[keyof WorkerPrincipalAttestation, string]> = [
+    ["inbox_update_status", "INBOX_STATUS_UPDATE_MISSING"],
+    ["inbox_update_attempts", "INBOX_ATTEMPTS_UPDATE_MISSING"],
+    ["inbox_update_lease_token", "INBOX_LEASE_TOKEN_UPDATE_MISSING"],
+    ["inbox_update_lease_until", "INBOX_LEASE_UNTIL_UPDATE_MISSING"],
+    ["inbox_update_quarantined_at", "INBOX_QUARANTINED_AT_UPDATE_MISSING"],
+    ["inbox_update_last_error_code", "INBOX_LAST_ERROR_UPDATE_MISSING"],
+    ["inbox_update_next_attempt_at", "INBOX_NEXT_ATTEMPT_UPDATE_MISSING"],
+    ["inbox_update_processed_at", "INBOX_PROCESSED_AT_UPDATE_MISSING"],
+    ["inbox_update_validation_summary", "INBOX_VALIDATION_SUMMARY_UPDATE_MISSING"],
+  ];
+  for (const [column, code] of updateColumns) {
+    if (!role[column]) violations.push(code);
+  }
+  if (!role.crosswalk_select) violations.push("CROSSWALK_SELECT_MISSING");
+  if (!role.source_snapshot_select) violations.push("SOURCE_SNAPSHOT_SELECT_MISSING");
+  if (!role.activity_select) violations.push("ACTIVITY_SELECT_MISSING");
+  if (!role.geography_scope_execute) violations.push("GEOGRAPHY_SCOPE_EXECUTE_MISSING");
+  if (!role.source_scope_execute) violations.push("SOURCE_SCOPE_EXECUTE_MISSING");
+  if (role.event_table_select || role.event_table_insert || role.event_table_update || role.event_table_delete) {
+    violations.push("EVENT_TABLE_DIRECT_ACCESS");
+  }
+  if (applicationRole && role.role_name === applicationRole) {
+    violations.push("APPLICATION_ROLE_REUSE");
+  }
+
+  if (violations.length) {
+    throw new Error(`GOVERNMENT_INBOX_WORKER_PRINCIPAL_NOT_LEAST_PRIVILEGE: ${violations.join(",")}`);
+  }
+}
+
+
+/** Run both read-only gates in order before the worker claims or mutates queue rows. */
+export async function assertGovernmentInboxWorkerReady(
+  pool: PoolType,
+  applicationDatabaseUrl?: string,
+): Promise<void> {
+  await assertGovernmentInboxWorkerSchema(pool);
+  await assertGovernmentInboxWorkerPrincipal(pool, applicationDatabaseUrl);
 }
 
 type WorkerSchemaReadiness = {

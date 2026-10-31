@@ -1,21 +1,26 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import type { Pool } from "pg";
-import { isValidSyncWindowTimestamp, reconcileGovernmentInbox, runGovernmentInboxWorker, validateGovernmentInboxPayload } from "./async-mirror-worker.js";
+import { isValidSyncWindowTimestamp, normalizeLeaseRenewalSeconds, reconcileGovernmentInbox, runGovernmentInboxWorker, validateGovernmentInboxPayload } from "./async-mirror-worker.js";
 import { canonicalGovBridgeHash } from "./government-inbox-hash.js";
 
-function fakePool(rows: unknown[], crosswalkRows?: unknown[]) {
+function fakePool(rows: unknown[], crosswalkRows?: unknown[], exhaustedQuarantined = 0) {
   const statements: Array<{ sql: string; values: unknown[] }> = [];
-  const pool = {
-    query: async (sql: string, values: unknown[] = []) => {
-      statements.push({ sql, values });
-      if (sql.includes("returning inbox.id")) return { rows, rowCount: rows.length };
-      if (sql.includes("from government_jurisdiction_crosswalks c")) return { rows: crosswalkRows ?? [{ id: "crosswalk-id", organization_id: "organization-id", geography_id: "geography-id", activity_id: null, source_version: "synthetic-v1" }], rowCount: (crosswalkRows ?? [{}]).length };
-      if (sql.includes("group by status")) return { rows };
-      if (sql.includes("lease_until < now()")) return { rows: [{ count: "2" }] };
-      return { rows: [], rowCount: 1 };
-    },
+  const query = async (sql: string, values: unknown[] = []) => {
+    statements.push({ sql, values });
+    if (sql.includes("as claimed_rows")) return { rows: [{ claimed_rows: rows, exhausted_quarantined: exhaustedQuarantined }], rowCount: 1 };
+    if (sql.includes("returning inbox.id")) return { rows, rowCount: rows.length };
+    if (sql.includes("from government_jurisdiction_crosswalks c")) return { rows: crosswalkRows ?? [{
+      id: "crosswalk-id", organization_id: "organization-id", geography_id: "geography-id", activity_id: null,
+      source_version: "synthetic-v1", source_snapshot_id: "snapshot-id", snapshot_content_sha256: "a".repeat(64),
+      snapshot_dataset_code: "SYNTHETIC", snapshot_scope_kind: "OTHER", snapshot_scope_code: "TEST",
+      snapshot_scope_geography_id: "geography-id", snapshot_scope_directory_source_id: "directory-id",
+    }], rowCount: (crosswalkRows ?? [{}]).length };
+    if (sql.includes("group by status")) return { rows };
+    if (sql.includes("lease_until < now()")) return { rows: [{ count: "2" }] };
+    return { rows: [], rowCount: 1 };
   };
+  const pool = { query, connect: async () => ({ query, release: () => undefined }) };
   return { pool: pool as unknown as Pool, statements };
 }
 
@@ -40,17 +45,77 @@ test("worker claims a bounded batch and marks structurally valid payloads as int
   const { pool, statements } = fakePool([row]);
   const result = await runGovernmentInboxWorker(pool);
   assert.deepEqual(result, { claimed: 1, validated: 1, rejected: 0, unresolved: 0, retried: 0, quarantined: 0 });
-  assert.match(statements[1]!.sql, /for update skip locked/i);
-  assert.match(statements[3]!.sql, /lease_token=\$2/i);
-  assert.match(statements[3]!.sql, /status='VALIDATED'/i);
+  assert.equal(statements.length, 7, "atomic claim, lease refresh, serializable key lock and source resolution, fenced terminal update, and commit");
+  assert.match(statements[0]!.sql, /with exhausted_candidates as \(/i);
+  assert.match(statements[0]!.sql, /for update skip locked/i);
+  assert.match(statements[0]!.sql, /returning inbox\.id/i);
+  assert.match(statements[2]!.sql, /begin isolation level serializable/i);
+  assert.match(statements[3]!.sql, /pg_advisory_xact_lock/i);
+  assert.match(statements[4]!.sql, /for share of c,s/i);
+  assert.match(statements[4]!.sql, /content_sha256/i);
+  assert.match(statements[5]!.sql, /lease_token=\$2/i);
+  assert.match(statements[5]!.sql, /lease_until > now\(\)/i);
+  assert.match(statements[5]!.sql, /status='VALIDATED'/i);
+  const validationSummary = JSON.parse(String(statements[5]!.values[2])) as Record<string, any>;
+  assert.equal(validationSummary.jurisdictionCrosswalk.sourceSnapshot.id, "snapshot-id");
+  assert.equal(validationSummary.jurisdictionCrosswalk.sourceSnapshot.contentSha256, "a".repeat(64));
+  assert.equal(statements[6]!.sql, "COMMIT");
+});
+
+test("worker aborts and retries a validator that exceeds its strict deadline", async () => {
+  const { pool, statements } = fakePool([row]);
+  let observedSignal: AbortSignal | undefined;
+  const result = await runGovernmentInboxWorker(pool, async (input) => {
+    observedSignal = input.signal;
+    return new Promise(() => undefined);
+  }, { validationTimeoutSeconds: 1 });
+  assert.equal(result.retried, 1);
+  assert.equal(observedSignal?.aborted, true);
+  const retry = statements.find((entry) => entry.sql.includes("next_attempt_at=case when"));
+  assert.equal(retry?.values[4], "VALIDATION_TIMEOUT");
+});
+
+test("worker renews all claimed leases while a validator is running", async () => {
+  const { pool, statements } = fakePool([row]);
+  const result = await runGovernmentInboxWorker(pool, async () => {
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+    return { valid: true, summary: { validation: "TEST" } };
+  }, { leaseSeconds: 15, leaseRenewalSeconds: 1, validationTimeoutSeconds: 5 });
+  assert.equal(result.validated, 1);
+  const renewal = statements.find((entry) => entry.sql.includes("update async_mirror_inbox inbox") && entry.sql.includes("unnest"));
+  assert.ok(renewal, "a live lease renewal must be issued during validation");
+  assert.match(renewal!.sql, /lease_until > now\(\)/i);
+});
+
+test("worker aborts active validation and retries when lease heartbeat fails", async () => {
+  const base = fakePool([row]);
+  let observedSignal: AbortSignal | undefined;
+  const query = async (sql: string, values: unknown[] = []) => {
+    if (sql.includes("update async_mirror_inbox inbox") && sql.includes("unnest")) {
+      throw new Error("simulated heartbeat database outage");
+    }
+    return base.pool.query(sql, values);
+  };
+  const pool = { query, connect: async () => base.pool.connect() } as unknown as Pool;
+  const result = await runGovernmentInboxWorker(pool, async (input) => {
+    observedSignal = input.signal;
+    return new Promise((_resolve, reject) => {
+      input.signal?.addEventListener("abort", () => reject(input.signal?.reason ?? new Error("aborted")), { once: true });
+    });
+  }, { leaseSeconds: 15, leaseRenewalSeconds: 1, validationTimeoutSeconds: 5 });
+  assert.equal(result.retried, 1);
+  assert.equal(observedSignal?.aborted, true);
+  const retry = base.statements.find((entry) => entry.sql.includes("next_attempt_at=case when"));
+  assert.equal(retry?.values[4], "LEASE_RENEWAL_FAILED");
 });
 
 test("worker keeps structurally valid but unmapped batches unresolved", async () => {
   const { pool, statements } = fakePool([row], []);
   const result = await runGovernmentInboxWorker(pool);
   assert.deepEqual(result, { claimed: 1, validated: 0, rejected: 0, unresolved: 1, retried: 0, quarantined: 0 });
-  assert.match(statements[3]!.sql, /status='UNRESOLVED'/i);
-  assert.equal(statements[3]!.values[2], "GOVERNMENT_CROSSWALK_NOT_FOUND");
+  assert.match(statements[5]!.sql, /status='UNRESOLVED'/i);
+  assert.equal(statements[5]!.values[2], "GOVERNMENT_CROSSWALK_NOT_FOUND");
+  assert.equal(statements[6]!.sql, "COMMIT");
 });
 
 test("worker keeps ambiguous crosswalk candidates unresolved instead of choosing one", async () => {
@@ -61,9 +126,9 @@ test("worker keeps ambiguous crosswalk candidates unresolved instead of choosing
   const { pool, statements } = fakePool([row], candidates);
   const result = await runGovernmentInboxWorker(pool);
   assert.deepEqual(result, { claimed: 1, validated: 0, rejected: 0, unresolved: 1, retried: 0, quarantined: 0 });
-  assert.match(statements[3]!.sql, /status='UNRESOLVED'/i);
-  assert.equal(statements[3]!.values[2], "GOVERNMENT_CROSSWALK_AMBIGUOUS");
-  const summary = JSON.parse(String(statements[3]!.values[3])) as Record<string, unknown>;
+  assert.match(statements[5]!.sql, /status='UNRESOLVED'/i);
+  assert.equal(statements[5]!.values[2], "GOVERNMENT_CROSSWALK_AMBIGUOUS");
+  const summary = JSON.parse(String(statements[5]!.values[3])) as Record<string, unknown>;
   assert.equal(summary.reason, "MULTIPLE_VERIFIED_JURISDICTION_CROSSWALKS");
   assert.equal(summary.officialAcceptance, false);
   assert.equal(summary.authoritativeMrvMutation, false);
@@ -82,34 +147,36 @@ test("worker rejects payload changes that do not match the stored canonical hash
   const { pool, statements } = fakePool([{ ...row, payload: changedPayload }]);
   const result = await runGovernmentInboxWorker(pool);
   assert.equal(result.rejected, 1);
-  assert.equal(statements[2]!.values[2], "BATCH_PAYLOAD_HASH_MISMATCH");
+  assert.equal(statements[1]!.values[2], "BATCH_PAYLOAD_HASH_MISMATCH");
 });
 
 test("worker rejects payload/database sync-window timestamp divergence", async () => {
   const { pool, statements } = fakePool([{ ...row, sync_window_timestamp: new Date("2026-10-20T02:30:00Z") }]);
   const result = await runGovernmentInboxWorker(pool);
   assert.equal(result.rejected, 1);
-  assert.equal(statements[2]!.values[2], "BATCH_TIMESTAMP_DATABASE_MISMATCH");
+  assert.equal(statements[1]!.values[2], "BATCH_TIMESTAMP_DATABASE_MISMATCH");
 });
 
 test("worker quarantines exhausted unclaimed inbox rows instead of leaving them stuck", async () => {
   const { pool, statements } = fakePool([]);
   await runGovernmentInboxWorker(pool, undefined, { maxAttempts: 3 });
-  assert.match(statements[0]!.sql, /attempts >= \$1/i);
+  assert.match(statements[0]!.sql, /attempts >= \$3/i);
   assert.match(statements[0]!.sql, /status in \('RECEIVED','RETRY'\)/i);
   assert.match(statements[0]!.sql, /lease_until is null or lease_until < now\(\)/i);
+  assert.match(statements[0]!.sql, /with exhausted_candidates as \(/i);
+  assert.match(statements[0]!.sql, /for update skip locked/i);
 });
 
 test("worker retries transient errors and quarantines an exhausted attempt", async () => {
   const { pool, statements } = fakePool([{ ...row, attempts: 1 }]);
   const retry = await runGovernmentInboxWorker(pool, async () => { throw new Error("temporary outage"); }, { maxAttempts: 3 });
   assert.equal(retry.retried, 1);
-  assert.match(statements[2]!.sql, /next_attempt_at=case when \$3='RETRY'/i);
+  assert.match(statements[1]!.sql, /next_attempt_at=case when \$3='RETRY'/i);
 
   const exhaustedPool = fakePool([{ ...row, attempts: 3 }]);
   const exhausted = await runGovernmentInboxWorker(exhaustedPool.pool, async () => { throw new Error("still unavailable"); }, { maxAttempts: 3 });
   assert.equal(exhausted.quarantined, 1);
-  assert.match(exhaustedPool.statements[2]!.sql, /quarantined_at=case when \$3='QUARANTINED'/i);
+  assert.match(exhaustedPool.statements[1]!.sql, /quarantined_at=case when \$3='QUARANTINED'/i);
 });
 
 test("structural validator rejects unknown fields", async () => {
@@ -158,4 +225,25 @@ test("government inbox timestamp validation checks calendar, clock, precision, a
   for (const [timestamp, expected] of cases) {
     assert.equal(isValidSyncWindowTimestamp(timestamp), expected, timestamp);
   }
+});
+
+
+test("worker bounds exhausted-row quarantine and reports the swept count", async () => {
+  const { pool, statements } = fakePool([], undefined, 2);
+  const result = await runGovernmentInboxWorker(pool, undefined, { batchSize: 3, maxAttempts: 3 });
+  assert.equal(result.claimed, 0);
+  assert.equal(result.quarantined, 2);
+  assert.match(statements[0]!.sql, /exhausted_candidates as/i);
+  assert.match(statements[0]!.sql, /for update skip locked/i);
+  assert.match(statements[0]!.sql, /limit \$1/i);
+  assert.match(statements[0]!.sql, /select count\(\*\)::int from exhausted/i);
+});
+
+
+test("lease heartbeat interval cannot exceed half of the lease lifetime", () => {
+  assert.equal(normalizeLeaseRenewalSeconds(undefined, 15), 5);
+  assert.equal(normalizeLeaseRenewalSeconds(300, 15), 5);
+  assert.equal(normalizeLeaseRenewalSeconds(100, 120), 40);
+  assert.equal(normalizeLeaseRenewalSeconds(7, 15), 7);
+  assert.equal(normalizeLeaseRenewalSeconds(10, 15), 5);
 });

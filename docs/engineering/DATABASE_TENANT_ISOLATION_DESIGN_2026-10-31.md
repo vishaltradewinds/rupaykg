@@ -368,3 +368,18 @@ A read-only operator diagnostic has been added to the implementation branch:
 This route is code only and is not deployed. It will identify the runtime identity only when called through the actual deployed application connection pool. A CI/test invocation will identify the test database role, not production. Before any production observation, require review of the route, exact-head CI, controlled deployment approval and operator access. Do not enable or deploy it automatically.
 
 The diagnostic does not resolve the RLS blocker: the current tenant transaction helper sets transaction-local identity/organization context, but explicitly warns that callers must not assume RLS is enabled until reviewed policies are applied. Role least privilege, RLS policy coverage, connection pool context reset, worker/migration role separation, and rollback rehearsal remain separate release gates.
+
+
+## Current candidate source reconciliation — 2026-10-31
+
+This design remains the policy/architecture design authority, but its early "initial route inspection" sections are historical and should not be read as the current route state. Transaction adoption has progressed since those sections were authored.
+
+Use `docs/engineering/GATE1_CURRENT_CANDIDATE_SOURCE_REVIEW_2026-10-31.md` for the current source-registration and transaction-context map at HEAD `ca71c1857a71ed73ca700bbeb2d49be251e85f49` (CI #3918 SUCCESS).
+
+Current corrections:
+- BWG profile and report routes and statutory handlers now use tenant transaction context.
+- Statutory routes are registered by the MRV route registration function.
+- The remaining policy design must explicitly cover identity/auth, reviewer/governance, platform admin, field-device, multi-org aggregates, registry ownership, bilateral settlement and worker/system control-plane contexts.
+- The core rule is unchanged: the helper only sets transaction-local context; no RLS policies are applied and the helper itself does not enforce tenant isolation.
+
+No RLS migration or live role/grant change is authorized by this addendum.
