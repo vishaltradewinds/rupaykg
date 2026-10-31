@@ -15,6 +15,15 @@ async function authFor(request: Request, reply: Reply, pool: Pool | null): Promi
 async function activityAccess(client: Pool | PoolClient, activityId: string, identityId: string): Promise<{ organization_id: string; geography_id: string | null } | null> { const result = await client.query<{ organization_id: string; geography_id: string | null }>(`select a.organization_id, a.geography_id from activities a join organization_memberships om on om.organization_id = a.organization_id where a.id = $1 and om.identity_id = $2 and om.status = 'VERIFIED'`, [activityId, identityId]); return result.rows[0] ?? null; }
 async function assertActivityGeographyScope(client: Pool | PoolClient, geographyId: string | null, identityId: string): Promise<{ ok: boolean; code?: string }> { if (!geographyId) return { ok: false, code: "ACTIVITY_GEOGRAPHY_REQUIRED" }; const result = await client.query<{ ok: boolean }>(`select exists(select 1 from organization_memberships om where om.identity_id = $1 and om.status = 'VERIFIED' and organization_has_geography_scope(om.organization_id, $2)) as ok`, [identityId, geographyId]); return result.rows[0]?.ok === true ? { ok: true } : { ok: false, code: "GEOGRAPHY_FORBIDDEN" }; }
 async function hasValuePermission(pool: Pool, functionName: "can_assess_epr" | "can_write_esg", identityId: string, organizationId: string): Promise<boolean> { const result = await pool.query<{ ok: boolean }>(`select ${functionName}($1,$2) as ok`, [identityId, organizationId]); return result.rows[0]?.ok === true; }
+export function bwgProfileReviewBasis(): Record<string, unknown> {
+  return {
+    sourceRuleReference: "SWM_RULES_2026_S_O_388_E",
+    classification: "REVIEW_REQUIRED",
+    determinationBoundary: "PROFILE_INTAKE_ONLY_NOT_A_STATUTORY_DETERMINATION",
+    evidenceAndIndependentReviewRequired: true,
+    externalRegistrationAsserted: false,
+  };
+}
 async function evidenceIsVerified(pool: Pool, evidenceId: string, organizationId: string): Promise<boolean> { const result = await pool.query<{ ok: boolean }>(`select exists(select 1 from evidence e join activities a on a.id=e.activity_id where e.id=$1 and a.organization_id=$2 and e.status='VERIFIED' and (e.content_hash is not null or e.content_uri is not null) and a.geography_id is not null and organization_has_geography_scope($2,a.geography_id)) as ok`, [evidenceId, organizationId]); return result.rows[0]?.ok === true; }
 
 export async function registerValueRoutes(app: FastifyInstance, pool: Pool | null): Promise<void> {
@@ -137,12 +146,10 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
     if (!await hasOrganizationPermission(pool, auth, organizationId, ["profile:update", "waste:record"])) return reply.code(403).send({ error: "Profile update and waste recording permissions are required", code: "BWG_PROFILE_FORBIDDEN" });
     const geography = await pool.query<{ ok: boolean }>("select exists(select 1 from organization_memberships om where om.identity_id=$1 and om.organization_id=$2 and om.status='VERIFIED' and organization_has_geography_scope(om.organization_id,$3)) as ok", [auth.identityId, organizationId, jurisdictionId]);
     if (geography.rows[0]?.ok !== true) return reply.code(403).send({ error: "Jurisdiction is outside organization authorization scope", code: "GEOGRAPHY_FORBIDDEN" });
-    const criteria = { floorAreaSqm: floorArea >= 20000, waterConsumptionLpd: water >= 40000, wasteGenerationKgDay: waste >= 100 };
-    const applicable = Object.values(criteria).some(Boolean);
-    const applicabilityStatus = applicable ? "APPLICABLE" : "NOT_APPLICABLE";
+    const applicabilityBasis = bwgProfileReviewBasis();
     try {
-      const row = await pool.query("insert into bwg_profiles (organization_id,jurisdiction_id,floor_area_sqm,water_consumption_lpd,waste_generation_kg_day,establishment_type,applicability_status,applicability_basis,status,updated_at) values ($1,$2,$3,$4,$5,$6,$7,$8,'VERIFIED',now()) on conflict (organization_id) do update set jurisdiction_id=excluded.jurisdiction_id,floor_area_sqm=excluded.floor_area_sqm,water_consumption_lpd=excluded.water_consumption_lpd,waste_generation_kg_day=excluded.waste_generation_kg_day,establishment_type=excluded.establishment_type,applicability_status=excluded.applicability_status,applicability_basis=excluded.applicability_basis,status='VERIFIED',updated_at=now() returning *", [organizationId, jurisdictionId, floorArea, water, waste, establishmentType, applicabilityStatus, JSON.stringify(criteria)]);
-      return reply.code(201).send({ source: "postgresql", syntheticData: false, authoritativeMutation: true, profile: row.rows[0] });
+      const row = await pool.query("insert into bwg_profiles (organization_id,jurisdiction_id,floor_area_sqm,water_consumption_lpd,waste_generation_kg_day,establishment_type,applicability_status,applicability_basis,status,updated_at) values ($1,$2,$3,$4,$5,$6,'REVIEW_REQUIRED',$7,'PENDING',now()) on conflict (organization_id) do update set jurisdiction_id=excluded.jurisdiction_id,floor_area_sqm=excluded.floor_area_sqm,water_consumption_lpd=excluded.water_consumption_lpd,waste_generation_kg_day=excluded.waste_generation_kg_day,establishment_type=excluded.establishment_type,applicability_status='REVIEW_REQUIRED',applicability_basis=excluded.applicability_basis,status='PENDING',updated_at=now() returning *", [organizationId, jurisdictionId, floorArea, water, waste, establishmentType, JSON.stringify(applicabilityBasis)]);
+      return reply.code(201).send({ source: "postgresql", syntheticData: false, authoritativeMutation: true, statutoryBoundary: "PROFILE_INTAKE_ONLY_NOT_A_STATUTORY_DETERMINATION", profile: row.rows[0] });
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "BWG profile unavailable", code: "BWG_PROFILE_UNAVAILABLE", syntheticData: false }); }
   });
 
