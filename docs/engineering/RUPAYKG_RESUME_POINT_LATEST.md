@@ -1,5 +1,27 @@
 # RupayKg — Latest Engineering Resume Point
 
+## Render production deployment verification — 2026-10-31 17:28 UTC
+
+- Workspace `My Workspace` (`tea-dakh7k142hec73aj2kr0`) inspected read-only.
+- Live service `rupaykg` (`srv-daki4d7qj5pc73b8qksg`), Docker, Free, Singapore, URL `https://rupaykg.onrender.com`, health check `/health`, tracks `main`, auto-deploy enabled, public IP allow list `0.0.0.0/0`.
+- No Render-hosted Postgres or Key Value services exist in this workspace.
+- Exact live deploy `dep-dbj1r07avr4c73bjc2c0` succeeded on 2026-10-31 16:56:30 UTC for commit `b5e91241d84a6712ff544d3deec1805702f45efd`; GitHub `main` HEAD matches this exact SHA.
+- Runtime app log says `Database migrations are current (91 files)`; live commit tree contains 91 SQL migration files. Repeated `/health` requests returned HTTP 200; filtered error/fatal logs for inspected window empty.
+- PostgreSQL client emits informational future pg/pg-connection-string SSL-mode semantics warning; track explicit TLS configuration before major upgrade.
+- CRITICAL LIMITATION: Render service/deploy metadata does not expose environment values or live process DB target/role. Startup migration log proves a PostgreSQL target was reached but does NOT prove it was the authoritative Neon project or identify runtime role. No credentials were read or printed.
+- Prior read-only Neon evidence still identifies sole authoritative database as project `rupaykg-production-fresh` (`steep-mud-79906940`), primary branch `main` (`br-restless-base-b44cip2h`), database `rupaykg`. Render-to-Neon target binding and runtime DB role remain NOT VERIFIED.
+- Live branch is `main`; Shakti feature branch is separate and has NOT been deployed. Do not trigger deployment or change env vars.
+- Checkpoint: `docs/engineering/checkpoints/2026-10-31-render-live-service-preflight.md`.
+
+### Render/database next gates
+1. Create a temporary authenticated in-process DB identity diagnostic returning only a redacted host/project fingerprint, database, current_user/current_database(), TLS state and safe role flags. Never expose secrets or raw connection strings; restrict to operator and remove/disable after evidence capture.
+2. Reconcile 91 runtime migration files with Neon migration ledger (92 rows) and live schema before any migration.
+3. Resolve explicit TLS mode warning and test.
+4. Complete RLS/tenant isolation and least-privilege runtime design on disposable production-derived branches.
+5. Keep Render on main; production HOLD, worker OFF, scheduler OFF, certification OFF, TRL 9 NOT ESTABLISHED.
+
+---
+
 ## Session refresh — 2026-10-31 17:23 UTC (authoritative current-state override)
 
 This section supersedes stale status/next-step statements in the historical notes below. Resume from the exact branch/HEAD and recheck pending CI before further changes.
