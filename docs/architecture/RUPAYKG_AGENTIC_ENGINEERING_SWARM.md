@@ -203,3 +203,44 @@ The next implementation gate is therefore an integration review of PR #175 again
 - Therefore the swarm is **DESIGNED / NOT ACTIVATED**. Do not describe it as live until deployment, credentials, worker health, queue activity, and end-to-end task evidence have all been verified.
 
 **Decision:** build one governed swarm around the existing RupayKg worker and PostgreSQL foundations; do not build a parallel ungoverned agent platform.
+
+
+## 14. PR #175 integration preflight — 2026-10-31 17:43 UTC
+
+**Decision: do not merge PR #175 as-is. Do not activate its worker.**
+
+Fresh GitHub metadata and source inspection confirm:
+- PR #175 remains OPEN / DRAFT / unmerged. Head: `2e5632d45de89bb3dd944a5d0b86012c2d2d5b1e`; declared base SHA: `862512c8c904cef0f604df0350f02672318953af`.
+- Current `main` at the last verified production deployment is `b5e91241d84a6712ff544d3deec1805702f45efd`. Comparing current `main` with the PR head reports a diverged history: PR side 382 commits ahead and 4 commits behind its merge base. The PR's historical green CI is not exact-head evidence for a reconciled integration.
+- PR scope is 134 files, approximately 11,728 additions and 567 deletions. This is too broad for a single unreviewed merge.
+- The candidate worker implementation exists only on the PR branch; `main` does not contain `async-mirror-worker.ts`, `async-mirror-worker-runner.ts`, or `government-inbox-hash.ts`.
+- The runner has a useful safety seam: it requires `GOVERNMENT_INBOX_DATABASE_URL`, rejects the same DB principal as `DATABASE_URL`, and performs a read-only schema readiness check before queue operations. This is not proof that the dedicated principal exists, is least-privileged, or has been deployed.
+- The worker is dependency-injected with a PostgreSQL Pool and includes atomic claims/leases/fencing. The inspected least-privilege review explicitly says there is no worker entrypoint/service registration in the application source and no evidence that `server.ts` starts it. Thus the worker is code under review, not a running capability.
+- The candidate `server.ts` introduces tenant transaction context and a startup role diagnostic, but its own tenant-context helper explicitly states that callers still need application authorization and that RLS is not enabled by this helper. It must not be presented as tenant isolation.
+- Candidate `migrate.ts` adds production migration gates and ordered phases. However, the candidate migration chronology includes a production-only historical `096` and a future-dated chain. It must be tested from a clean production-shaped baseline; never apply it to live production during integration.
+- Candidate worker tests are gated behind `CI=true`, non-production mode, `RUPAYKG_RUN_DB_INTEGRATION_TESTS=1`, and a database URL. A green run must be checked for actual test execution versus skipped tests, exact SHA, PostgreSQL service and uploaded evidence.
+- The existing main migration runner does not detect orphaned rows in the database ledger whose source file is absent. The known production 096 ledger/source divergence therefore needs an explicit parity rule and baseline manifest, not a blind source restore or ledger edit.
+
+### Integration plan — controlled extraction, not wholesale merge
+
+1. Freeze PR #175 as a draft candidate; no rebase/merge/production deploy.
+2. Reconcile the four current-main commits against the PR's merge base and produce a domain-level dependency map.
+3. Extract the worker core, canonical hash, dedicated-pool/schema gate and focused tests into a fresh branch from current `main`, only after each dependency is mapped.
+4. Keep migration work separate from worker code. First add deterministic migration source/ledger parity validation and a disposable production-shaped baseline test; do not modify production ledger or schema.
+5. Keep tenant-context infrastructure separate from any RLS policy rollout. Map route coverage and test transaction context; do not claim tenant isolation until policies, least-privilege runtime roles and cross-tenant negative tests are demonstrated.
+6. Add a worker entrypoint/deployment design only after the dedicated role/grants and service lifecycle are approved. Keep worker OFF by default and prove no web-process auto-start.
+7. Run exact-head CI on the fresh branch, verify DB integration tests were not skipped, obtain independent review, then open a small focused PR.
+8. Only after review may the orchestrator use this worker substrate for read-only engineering agents. Provider adapters, budget/policy gateway and agent registry remain separate implementation gates.
+
+### Explicit current state
+
+- Worker source: PRESENT on PR #175 branch; ABSENT from current `main`.
+- Worker entrypoint / deployed service: NOT ESTABLISHED.
+- Dedicated worker DB credential and grants: NOT ESTABLISHED.
+- Production migration safety: NOT CLEARED.
+- Tenant isolation / RLS: NOT ESTABLISHED.
+- Agent swarm: DESIGNED, NOT ACTIVATED.
+- Production release: HOLD.
+- TRL 9: NOT ESTABLISHED.
+
+This review is an engineering source inspection, not an independent security sign-off. No production database, Render configuration, deployment, or worker state was changed by this preflight.
