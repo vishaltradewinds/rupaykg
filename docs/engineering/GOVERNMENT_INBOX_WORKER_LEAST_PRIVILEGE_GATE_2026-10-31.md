@@ -122,3 +122,19 @@ This closes the previously identified read-to-terminal-update gap for matching c
 
 
 Validation note: the stacked worker branch is temporarily targeted at main solely to run the full production-baseline CI workflow; it remains draft and unmerged, and its original stacked base will be restored after the exact-head run.
+
+
+## Bounded validation and lease renewal — 2026-10-31
+
+The worker now has a bounded validation deadline and lease heartbeat:
+
+- Validator input receives an optional AbortSignal. Each validator invocation races a strict configurable deadline (default 60 seconds, capped to leave at least two seconds before lease expiry); timeout aborts cooperative validators and routes the row through the existing fenced retry/quarantine transition.
+- Claimed leases are renewed periodically (default one-third of the lease duration) using a single set-based UPDATE joined to exact inbox-ID and lease-token pairs. Renewal requires PROCESSING status and an unexpired lease; an expired or superseded lease is never resurrected.
+- Rows awaiting their turn in the claimed batch are renewed too, preventing sequential batch processing from silently expiring later rows.
+- Before a terminal transition, the worker pauses renewal for that row, waits for any in-flight heartbeat, refreshes the lease under the same token, and then performs the fenced terminal write. This avoids a heartbeat racing the SERIALIZABLE source-resolution transaction or terminal update.
+- If a heartbeat loses a lease or fails, the worker aborts the active validator and stops trusting the affected lease set. All retries and terminal updates remain fenced.
+- Counters still increment only after the source-resolution transaction commits.
+
+Unit tests cover strict timeout/abort, retry error code and heartbeat issuance. Disposable PostgreSQL acceptance now checks that a cooperative validator timeout produces RETRY and that a validator running longer than the original lease window retains a renewed lease and can complete under its original token.
+
+This is an engineering implementation and test addition only. Exact-head CI and independent code review remain mandatory. Validator implementations must honor AbortSignal to stop underlying work promptly; Promise racing prevents the worker from waiting indefinitely but cannot forcibly terminate arbitrary JavaScript or remote operations that ignore cancellation. Keep validators side-effect free. No production/staging queue, schema, role, grant, service, schedule or deployment was changed. Worker OFF; production HOLD; TRL 9 unclaimed.
