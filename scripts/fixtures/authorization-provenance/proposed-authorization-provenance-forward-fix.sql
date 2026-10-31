@@ -19,12 +19,6 @@ alter table public.verifications
   add constraint verifications_authorization_history_state_check
   check (authorization_history_state in ('APPROVED_HISTORY','REJECTED_TERMINAL'));
 
-update public.verifications
-set authorization_history_state = case
-  when decision = 'APPROVED' then 'APPROVED_HISTORY'
-  else 'REJECTED_TERMINAL'
-end;
-
 create or replace function public.prevent_invalid_verification()
 returns trigger
 language plpgsql
@@ -161,3 +155,12 @@ begin
   return new;
 end;
 $fn$;
+
+-- Backfill only after replacing the legacy trigger. This prevents migration
+-- 096's old BEFORE UPDATE function from rewriting NULL decision-time
+-- provenance while lifecycle state is being classified.
+update public.verifications
+set authorization_history_state = case
+  when decision = 'APPROVED' then 'APPROVED_HISTORY'
+  else 'REJECTED_TERMINAL'
+end;
