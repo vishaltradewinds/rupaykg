@@ -242,7 +242,7 @@ test("BWG authenticated HTTP authorization fails closed against disposable Postg
     ssl: process.env.DATABASE_SSL === "false" ? undefined : { rejectUnauthorized: true },
     max: 4,
   });
-  const fixtures: Array<{ identityId: string; organizationId: string; geographyId: string; tokenHash: string; extraGeographyIds?: string[] }> = [];
+  const fixtures: Array<{ identityId: string; organizationId: string; geographyId: string; tokenHash: string; extraGeographyIds?: string[]; periodIds?: string[] }> = [];
   const makeFixture = async (permissions: string[], membershipStatus = "VERIFIED") => {
     const identityId = randomUUID();
     const organizationId = randomUUID();
@@ -258,7 +258,7 @@ test("BWG authenticated HTTP authorization fails closed against disposable Postg
     await pool.query("insert into organization_memberships(identity_id, organization_id, role_id, status) values ($1,$2,$3,$4)", [identityId, organizationId, roleId, membershipStatus]);
     await pool.query("insert into geography(id, kind, code, name, source, source_version) values ($1,'CLUSTER',$2,$3,'RupayKG disposable BWG HTTP fixture','v1')", [geographyId, "BWG-HTTP-" + suffix, "BWG HTTP geography " + suffix]);
     await pool.query("insert into identity_sessions(identity_id, expires_at, token_hash, request_context) values ($1, now() + interval '10 minutes', $2, $3::jsonb)", [identityId, tokenHash, JSON.stringify({ purpose: "disposable-bwg-http-acceptance" })]);
-    const fixture = { identityId, organizationId, geographyId, tokenHash, token, extraGeographyIds: [] as string[] };
+    const fixture = { identityId, organizationId, geographyId, tokenHash, token, extraGeographyIds: [] as string[], periodIds: [] as string[] };
     fixtures.push(fixture);
     return fixture;
   };
@@ -274,6 +274,42 @@ test("BWG authenticated HTTP authorization fails closed against disposable Postg
       url: "/api/v1/workspaces/bwg",
       headers: { authorization: "Bearer " + noPermission.token, "x-rupaykg-organization-id": noPermission.organizationId },
     });
+
+    // Seed a verified applicability profile and period in disposable PostgreSQL so report routes reach their permission checks.
+    const reportDenied = await makeFixture(["guardian:read"]);
+    await pool.query("insert into bwg_profiles (organization_id, applicability_status, status) values ($1,'APPLICABLE','VERIFIED')", [reportDenied.organizationId]);
+    const periodResult = await pool.query("insert into bwg_reporting_periods (organization_id,period_start,period_end,reporting_basis) values ($1,'2026-01-01','2026-01-31','MONTHLY') returning id", [reportDenied.organizationId]);
+    const reportPeriodId = periodResult.rows[0].id as string;
+    reportDenied.periodIds.push(reportPeriodId);
+    const reportHeaders = { authorization: "Bearer " + reportDenied.token, "x-rupaykg-organization-id": reportDenied.organizationId };
+
+    const wasteDenied = await app.inject({
+      method: "POST",
+      url: "/api/v1/bwg/reporting-periods/" + reportPeriodId + "/waste",
+      headers: reportHeaders,
+      payload: { wasteStream: "DRY", unit: "KG", generatedQuantity: 10, segregatedQuantity: 10, channelizedQuantity: 8, processedQuantity: 7 },
+    });
+    assert.equal(wasteDenied.statusCode, 403, wasteDenied.body);
+    assert.equal(wasteDenied.json().code, "BWG_WASTE_FORBIDDEN");
+
+    const eprDenied = await app.inject({
+      method: "POST",
+      url: "/api/v1/bwg/reporting-periods/" + reportPeriodId + "/epr",
+      headers: reportHeaders,
+      payload: { schemeId: randomUUID(), categoryCode: "PLASTIC", obligatedQuantity: 10, fulfilledQuantity: 8 },
+    });
+    assert.equal(eprDenied.statusCode, 403, eprDenied.body);
+    assert.equal(eprDenied.json().code, "BWG_EPR_FORBIDDEN");
+
+    const esgDenied = await app.inject({
+      method: "POST",
+      url: "/api/v1/bwg/reporting-periods/" + reportPeriodId + "/esg",
+      headers: reportHeaders,
+      payload: { metricCode: "WATER", scope: "SCOPE_1", unit: "KL", value: 10 },
+    });
+    assert.equal(esgDenied.statusCode, 403, esgDenied.body);
+    assert.equal(esgDenied.json().code, "BWG_ESG_FORBIDDEN");
+
     assert.equal(workspaceDenied.statusCode, 403, workspaceDenied.body);
     assert.equal(workspaceDenied.json().code, "BWG_WORKSPACE_READ_FORBIDDEN");
 
@@ -341,6 +377,10 @@ test("BWG authenticated HTTP authorization fails closed against disposable Postg
     const deniedOrganizationIds = [noPermission.organizationId, unverified.organizationId, scoped.organizationId, geographyDeniedFixture.organizationId];
     const profileRows = await pool.query("select count(*)::int as count from bwg_profiles where organization_id = any($1::uuid[])", [deniedOrganizationIds]);
     assert.equal(profileRows.rows[0]?.count, 0);
+    for (const [table, periodColumn] of [["bwg_waste_reports", "reporting_period_id"], ["bwg_epr_reports", "reporting_period_id"], ["bwg_esg_reports", "reporting_period_id"]] as const) {
+      const rows = await pool.query(`select count(*)::int as count from ${table} where ${periodColumn} = any($1::uuid[])`, [reportDenied.periodIds]);
+      assert.equal(rows.rows[0]?.count, 0, table + " must remain unchanged after permission denial");
+    }
   } finally {
     await app.close();
     for (const fixture of fixtures.reverse()) {
@@ -348,6 +388,12 @@ test("BWG authenticated HTTP authorization fails closed against disposable Postg
       await pool.query("delete from organization_memberships where identity_id=$1 and organization_id=$2", [fixture.identityId, fixture.organizationId]);
       await pool.query("delete from roles where organization_id=$1", [fixture.organizationId]);
       await pool.query("delete from organization_geography_scopes where organization_id=$1", [fixture.organizationId]);
+      for (const periodId of fixture.periodIds ?? []) {
+        await pool.query("delete from bwg_waste_reports where reporting_period_id=$1", [periodId]);
+        await pool.query("delete from bwg_epr_reports where reporting_period_id=$1", [periodId]);
+        await pool.query("delete from bwg_esg_reports where reporting_period_id=$1", [periodId]);
+        await pool.query("delete from bwg_reporting_periods where id=$1", [periodId]);
+      }
       await pool.query("delete from bwg_profiles where organization_id=$1", [fixture.organizationId]);
       for (const geographyId of [fixture.geographyId, ...(fixture.extraGeographyIds ?? [])]) await pool.query("delete from geography where id=$1", [geographyId]);
       await pool.query("delete from organizations where id=$1", [fixture.organizationId]);
