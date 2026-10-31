@@ -258,9 +258,9 @@ test("BWG authenticated HTTP authorization fails closed against disposable Postg
     await pool.query("insert into organization_memberships(identity_id, organization_id, role_id, status) values ($1,$2,$3,$4)", [identityId, organizationId, roleId, membershipStatus]);
     await pool.query("insert into geography(id, kind, code, name, source, source_version) values ($1,'CLUSTER',$2,$3,'RupayKG disposable BWG HTTP fixture','v1')", [geographyId, "BWG-HTTP-" + suffix, "BWG HTTP geography " + suffix]);
     await pool.query("insert into identity_sessions(identity_id, expires_at, token_hash, request_context) values ($1, now() + interval '10 minutes', $2, $3::jsonb)", [identityId, tokenHash, JSON.stringify({ purpose: "disposable-bwg-http-acceptance" })]);
-    const fixture = { identityId, organizationId, geographyId, tokenHash, extraGeographyIds: [] as string[] };
+    const fixture = { identityId, organizationId, geographyId, tokenHash, token, extraGeographyIds: [] as string[] };
     fixtures.push(fixture);
-    return { ...fixture, token };
+    return fixture;
   };
 
   const app = Fastify({ logger: false });
