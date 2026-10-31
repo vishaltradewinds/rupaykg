@@ -103,7 +103,7 @@ test("worker keeps ambiguous crosswalk candidates unresolved instead of choosing
   const { pool, statements } = fakePool([row], candidates);
   const result = await runGovernmentInboxWorker(pool);
   assert.deepEqual(result, { claimed: 1, validated: 0, rejected: 0, unresolved: 1, retried: 0, quarantined: 0 });
-  assert.match(statements[4]!.sql, /status='UNRESOLVED'/i);
+  assert.match(statements[5]!.sql, /status='UNRESOLVED'/i);
   assert.equal(statements[5]!.values[2], "GOVERNMENT_CROSSWALK_AMBIGUOUS");
   const summary = JSON.parse(String(statements[5]!.values[3])) as Record<string, unknown>;
   assert.equal(summary.reason, "MULTIPLE_VERIFIED_JURISDICTION_CROSSWALKS");
