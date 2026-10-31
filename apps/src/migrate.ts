@@ -40,8 +40,9 @@ try {
     if (phase === "all") return true;
     const version = filename.split("_", 1)[0];
     if (phase === "production-baseline") {
+      if (/^\d{8}$/.test(version)) return Number(version) <= 20261021;
       if (/^\d+$/.test(version)) return Number(version) <= 87 || version === "096";
-      return /^\d{8}_/.test(filename) && Number(version) <= 20261021;
+      return false;
     }
     return /^\d{8}_/.test(filename) && Number(version) >= 20261022;
   });
