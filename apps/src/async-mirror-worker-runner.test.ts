@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import type { Pool, PoolConfig } from "pg";
 import {
   assertGovernmentInboxWorkerSchema,
+  assertGovernmentInboxWorkerPrincipal,
   createGovernmentInboxWorkerPool,
   type GovernmentInboxWorkerPoolFactory,
 } from "./async-mirror-worker-runner.js";
@@ -177,4 +178,108 @@ test("worker pool fails closed when the application role identity is malformed o
       /GOVERNMENT_INBOX_DATABASE_PRINCIPAL_MUST_BE_DEDICATED/,
     );
   }
+});
+
+
+const leastPrivilegePrincipal = {
+  role_name: "rupaykg_inbox_worker",
+  can_login: true,
+  is_superuser: false,
+  can_create_database: false,
+  can_create_role: false,
+  can_replicate: false,
+  bypasses_rls: false,
+  inherits_privileges: false,
+  has_role_memberships: false,
+  owns_worker_tables: false,
+  inbox_select: true,
+  inbox_update: true,
+  crosswalk_select: true,
+  source_snapshot_select: true,
+  activity_select: true,
+  geography_scope_execute: true,
+  source_scope_execute: true,
+  event_table_select: false,
+  event_table_insert: false,
+  event_table_update: false,
+  event_table_delete: false,
+};
+
+function principalPool(row: Record<string, unknown>): Pool {
+  return {
+    query: async (sql: string) => {
+      assert.match(sql, /from pg_roles r where r\.rolname=current_user/);
+      assert.match(sql, /pg_auth_members/);
+      assert.match(sql, /BYPASSRLS|rolbypassrls/);
+      return { rows: [row], rowCount: 1 };
+    },
+  } as unknown as Pool;
+}
+
+test("worker principal attestation accepts a dedicated least-privilege role", async () => {
+  await assert.doesNotReject(() => assertGovernmentInboxWorkerPrincipal(
+    principalPool(leastPrivilegePrincipal),
+    "postgres://web:secret@db.example/rupaykg",
+  ));
+});
+
+test("worker principal attestation rejects elevated attributes, memberships, ownership and event-table access", async () => {
+  const unsafe = {
+    ...leastPrivilegePrincipal,
+    can_create_role: true,
+    bypasses_rls: true,
+    has_role_memberships: true,
+    owns_worker_tables: true,
+    event_table_insert: true,
+  };
+  await assert.rejects(
+    () => assertGovernmentInboxWorkerPrincipal(principalPool(unsafe)),
+    (error: unknown) => {
+      assert.ok(error instanceof Error);
+      assert.match(error.message, /CREATEROLE/);
+      assert.match(error.message, /BYPASSRLS/);
+      assert.match(error.message, /ROLE_MEMBERSHIP/);
+      assert.match(error.message, /WORKER_TABLE_OWNERSHIP/);
+      assert.match(error.message, /EVENT_TABLE_DIRECT_ACCESS/);
+      return true;
+    },
+  );
+});
+
+test("worker principal attestation rejects missing operational grants", async () => {
+  const incomplete = {
+    ...leastPrivilegePrincipal,
+    inbox_update: false,
+    crosswalk_select: false,
+    source_scope_execute: false,
+  };
+  await assert.rejects(
+    () => assertGovernmentInboxWorkerPrincipal(principalPool(incomplete)),
+    /INBOX_UPDATE_MISSING,CROSSWALK_SELECT_MISSING,SOURCE_SCOPE_EXECUTE_MISSING/,
+  );
+});
+
+test("worker principal attestation rejects application role reuse", async () => {
+  await assert.rejects(
+    () => assertGovernmentInboxWorkerPrincipal(
+      principalPool({ ...leastPrivilegePrincipal, role_name: "web" }),
+      "postgres://web:secret@db.example/rupaykg",
+    ),
+    /APPLICATION_ROLE_REUSE/,
+  );
+});
+
+test("worker principal attestation fails closed on missing role catalog row", async () => {
+  const pool = { query: async () => ({ rows: [], rowCount: 0 }) } as unknown as Pool;
+  await assert.rejects(
+    () => assertGovernmentInboxWorkerPrincipal(pool),
+    /GOVERNMENT_INBOX_WORKER_PRINCIPAL_NOT_FOUND/,
+  );
+});
+
+test("worker principal attestation rejects malformed application database identity", async () => {
+  await assert.rejects(
+    () => assertGovernmentInboxWorkerPrincipal(principalPool(leastPrivilegePrincipal), "not-a-url"),
+    /GOVERNMENT_INBOX_APPLICATION_PRINCIPAL_INVALID/,
+  );
 });
