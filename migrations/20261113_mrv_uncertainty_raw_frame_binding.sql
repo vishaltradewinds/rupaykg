@@ -95,7 +95,7 @@ before insert on mrv_instrument_parameter_uncertainty
 for each row execute function guard_mrv_parameter_uncertainty_insert();
 
 create or replace function mrv_parameter_uncertainty_is_current(record_id uuid)
-returns boolean language sql stable as $
+returns boolean language sql stable as $$
   select exists (
     select 1
       from mrv_instrument_parameter_uncertainty u
@@ -122,7 +122,7 @@ returns boolean language sql stable as $
             and r.decision='APPROVED'
        )
   );
-$;
+$$;
 
 create or replace function prevent_mrv_parameter_uncertainty_mutation()
 returns trigger language plpgsql as $$
