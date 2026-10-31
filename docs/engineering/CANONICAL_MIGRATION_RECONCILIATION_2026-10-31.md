@@ -110,3 +110,53 @@ This is an engineering evidence task, not a TRL advancement. Database schema ins
 
 - Release gate and worker CI/review blockers: https://github.com/vishaltradewinds/rupaykg/issues/145
 - Production and staging Neon branch IDs are recorded in the evidence table above.
+
+
+## Follow-up provenance investigation — 2026-10-31 02:46 UTC
+
+### Canonical repository path and source inventory
+
+The actual migration directory is the repository-root `migrations/` directory. The earlier candidate paths under `db/`, `supabase/`, `database/` and `server/db/` were incorrect.
+
+The root migration directory was enumerated on both `main` and `shakti/canonical-migration-history-mainline`. Both contain the same migration catalogue through `20261021_evidence_artifact_vault.sql`, plus `README.md`. Neither catalogue contains:
+- `096_verification_authorization_provenance.sql`
+- `20261022_async_mirror_inbox.sql`
+- `20261023_async_mirror_worker_leases.sql`
+- `20261024_ai_intake_rate_limits.sql`
+- `20261025_ai_evidence_intake_jobs.sql`
+
+This is now a confirmed repository-source gap, not merely an unlocated file path. The production ledger records migration 096, while staging/rehearsal ledgers record 20261022–20261025. Those applied database effects therefore cannot currently be reconstructed from the checked `main` or migration-history branch migration catalogues. Do not fabricate replacement SQL, infer checksums from database objects, or mark these sources reconciled.
+
+The migration-history branch is nine commits ahead of `main` and changes only:
+- `apps/src/migrate.ts`
+- `apps/src/migration-history.ts`
+- `apps/src/migration-history.test.ts`
+
+The new migration-history guard rejects duplicate numeric prefixes, missing source filenames and version/filename prefix mismatches before migration application. Its tests cover those catalogue/ledger conflict cases. It does not provide the missing SQL source files, and the runner as inspected validates filenames rather than cryptographic content checksums. It is not sufficient by itself to reconcile the live branch histories.
+
+### Corrected live table inventory
+
+A complete user-table inventory confirms:
+- Production has no `async_mirror_inbox`, `async_mirror_inbox_events`, `ai_intake_rate_limits` or `ai_evidence_intake_jobs` tables.
+- Staging and rehearsal have those four tables.
+- The staging inbox status constraint allows `RECEIVED, PROCESSING, PROCESSED, VALIDATED, REJECTED, RETRY, QUARANTINED`, but not `UNRESOLVED`.
+- Rehearsal permits `UNRESOLVED` as a non-authoritative internal state.
+- Production retains the stronger migration-096 verification authorization snapshot controls described above.
+
+### Worker PR source review (patch-level, not execution evidence)
+
+The changed-file inventory and patches for PRs #122, #142, #143 and #144 were inspected:
+- PR #122 adds `apps/src/async-mirror-worker.postgres.test.ts` (354 lines) and touches the CI workflow and CORS runtime tests.
+- PR #142 changes worker claim eligibility so a PROCESSING row with a NULL lease is treated as expired/reclaimable.
+- PR #144 changes the read-only reconciliation count to include NULL leases and adds a matching unit assertion.
+- PR #143 changes only the CI workflow trigger.
+
+The PR #122 PostgreSQL integration test is explicitly skipped unless both `RUPAYKG_RUN_DB_INTEGRATION_TESTS=1` and `DATABASE_URL` are set. The test itself creates an isolated schema and tests quarantine, expired/NULL lease recovery, unresolved non-authoritative handling, append-only event history and stale-token fencing. However, the source-level existence of these assertions is not proof they executed. A run with the integration flag unset would skip the test and cannot satisfy the release gate.
+
+### Updated decision
+
+1. Treat the migration-history branch as a migration-runner safety improvement candidate, not as the canonical SQL migration history.
+2. Keep PR #154 draft until original migration SQL and immutable provenance are recovered from an authoritative source (such as the original commit/object or a trusted backup/export), then verify byte-for-byte checksums.
+3. Do not backfill production's missing async-mirror tables or staging's missing verifier snapshot controls from guessed SQL.
+4. Require an exact-head CI run that proves the PostgreSQL integration test executed (zero relevant skips), plus independent reviewer approval and disposable full-history reconstruction.
+5. Continue production HOLD, scheduler OFF and certification OFF. No database writes or schema changes were made during this follow-up.
