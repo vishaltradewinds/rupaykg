@@ -48,3 +48,8 @@ The production-main migration ledger contains version `096` (`096_verification_a
 ## Render runtime identity boundary
 
 Read-only Render metadata confirms the live service `rupaykg` deploys `vishaltradewinds/rupaykg` branch `main`; latest live deploy source is commit `862512c8c904cef0f604df0350f02672318953af`. This does not reveal the service's Neon connection target. The secret was not retrieved. Confirm the runtime database identity through a safe non-secret metadata check before claiming the live application is connected to the authoritative Neon main branch.
+
+
+## Migration source restoration update — 2026-10-31
+
+The production-applied migration `096_verification_authorization_provenance.sql` has now been restored to the canonical-source cleanup branch from the exact reviewed Git blob already on the worker stack. Read-only production catalog inspection confirms all four columns introduced by it exist on `public.verifications`. This repairs the source-control omission on the review branch; main remains unchanged until PR review/merge. Staging migrations `20261022`–`20261025` remain feature/staging history, not production-applied migrations, and must not be promoted to production without the full release gate.
