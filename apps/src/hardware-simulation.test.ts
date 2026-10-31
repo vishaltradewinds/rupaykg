@@ -32,6 +32,10 @@ const simulatedParameterSpec: MrvInstrumentParameterSpec = {
 function syntheticApproval(overrides: Partial<MrvInstrumentApprovalEvidence> = {}): MrvInstrumentApprovalEvidence {
   return {
     instrument_code: simulatedInstrumentCode,
+    measurement_instrument: true,
+    manufacturer_serial_number: null,
+    asset_tag: null,
+    calibration_serial_number: null,
     supported_parameter_codes: ["mass_kg"],
     approval_status: "PENDING",
     meity_certificate_id: null,
