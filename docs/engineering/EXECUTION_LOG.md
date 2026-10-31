@@ -48,3 +48,16 @@ Append a dated entry recording:
 - approval status before any production-affecting action.
 
 Never mark a gate complete without durable evidence. Never replace historical entries; append corrections with timestamps.
+
+
+### Follow-up actions — 2026-10-31 (same audit batch)
+10. Compared `prevent_invalid_verification()` function definitions by live catalog hash and fetched both bodies. Confirmed a material security difference: production has decision-time organization membership/role/permission snapshot enforcement; staging retains the older generic permission check.
+11. Captured staging worker queue status distribution: 8 PROCESSING, 1 QUARANTINED, 1 RECEIVED, 1 RETRY, 1 VALIDATED.
+12. Confirmed all 8 PROCESSING leases are expired (expiry timestamps 2026-10-20); all have non-null lease token and lease_until. No rows were altered.
+13. Confirmed `ai_intake_rate_limits` and `ai_evidence_intake_jobs` are present in staging and currently empty.
+14. Updated the audit with these findings and a stricter security/worker recovery gate.
+
+### New critical blocker
+The `verifications_integrity_guard` trigger name is the same in both databases, but its function body is not. Production enforces decision-time organization-specific verifier authority and records the authorization snapshot; staging does not. Treat this as a security-control divergence, not a cosmetic schema mismatch.
+
+The 8 expired PROCESSING inbox rows are preserved and must not be automatically replayed or reset. Worker recovery is a separate reviewed workstream.
