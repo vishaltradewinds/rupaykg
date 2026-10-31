@@ -93,7 +93,8 @@ begin
         or r.permissions @> '["verification.approve"]'::jsonb
       )
     order by m.created_at desc
-    limit 1;
+    limit 1
+    for share of m, r, i;
 
     if membership_row.membership_id is null then
       raise exception 'approved verification requires active verifier permission in the activity organization';
