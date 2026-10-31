@@ -72,3 +72,17 @@ This is a conservative fail-closed correction. The exact-head CI run must pass a
 A follow-up source review found that source snapshots carry `scope_kind` and `scope_code`, and the regulatory-rule source gate (20261106) enforces compatible scope. However, the government crosswalk snapshot-binding trigger (20261105) currently verifies snapshot approval, authority code, source version and effective date, but does not enforce compatibility between the snapshot's jurisdiction scope and the target geography. The worker resolver likewise joins on snapshot approval/authority/version/effective dates but does not independently validate `scope_kind`/`scope_code`.
 
 This is recorded as an OPEN design/security finding, not as an accepted behaviour. Before merge, an independent reviewer must decide and prove a deterministic scope-compatibility rule (including national, state/UT, district, local-body and OTHER cases) using the actual geography hierarchy and authoritative code crosswalks. Do not invent mappings or treat a broad snapshot as supporting a narrower jurisdiction without an explicit, reviewed rule. Until resolved, the worker PR remains draft and all live migration/activation gates remain closed.
+
+
+### Authoritative directory reference for resolving this item
+
+The Ministry of Panchayati Raj's Local Government Directory (LGD) is described by the Government of India's Open Government Data platform as the maintained directory of land/revenue regions and rural/urban local governments. The LGD catalog and local-body dataset are refreshed monthly; the local-body dataset exposes LGD codes. The Ministry's 17 May 2017 direction describes LGD as the standard location directory and requests adoption of LGD codes across government schemes and e-governance applications.
+
+Design implication: use a versioned, evidence-backed mapping from the source snapshot's scope code to a platform geography node, with an explicit directory/source identity and effective period. A narrower source scope may support a target only where the target geography is demonstrably within that scope through a reviewed hierarchy. Do not derive jurisdiction from free-text names or assume that a municipality code, district code and local-body code are interchangeable.
+
+References:
+- Government of India OGD, Local Government Directory catalog: https://data.gov.in/catalog/local-government-directory-lgd
+- Government of India OGD, LGD Local Bodies dataset (updated 28 October 2026): https://data.gov.in/resource/local-government-directory-lgd-local-bodies
+- Ministry of Panchayati Raj direction on adoption of LGD codes (17 May 2017): https://mohua.gov.in/upload/whatsnew/59df106d75154ADOPTION_OF-LOCAL-GOVRNMENT-DIRECTORY-CODES-min.pdf
+
+These sources establish the directory's role and code maintenance, not the correctness of any individual platform mapping. Every mapping still needs a source snapshot, evidence and authorized review.
