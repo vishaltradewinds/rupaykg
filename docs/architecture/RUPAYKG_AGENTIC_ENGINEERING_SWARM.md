@@ -179,7 +179,22 @@ Before enabling write-capable agents, pass CI, concurrency/lease tests, duplicat
 
 Every task and agent must carry Shakti stage, evidence type, risk, regulatory boundary, validation result and TRL relevance. Agent orchestration does not itself increase product TRL. TRL 9 requires successful operation in the actual intended environment, sustained performance, real stakeholder acceptance and independently reviewable evidence; it cannot be inferred from CI or agent activity.
 
-## 11. Current activation status (honest baseline)
+
+
+## 12. Existing worker foundation discovered — do not duplicate it
+
+A deeper inspection of the current GitHub work identified a substantial existing candidate in draft PR #175:
+- PR #175 is titled **Harden government inbox worker lease fencing and migration assurance**.
+- It currently contains 134 changed files and 382 commits, and its head is `2e5632d45de89bb3dd944a5d0b86012c2d2d5b1e`.
+- Its candidate changes include an asynchronous mirror worker and runner, atomic claim/lease/fencing and concurrency tests, worker privilege tests, database context and role diagnostics, migration-order checks, production-shaped migration rehearsal, route authorization changes, and repository operating rules in `AGENTS.md`.
+- The PR description explicitly says production remains HOLD and prohibits production migration, writes, cutover, worker/scheduler activation or certification activation until independent review and migration divergence resolution.
+- Its base SHA is `862512c8c904cef0f604df0350f02672318953af`, while the inspected current main deployment is at `b5e91241d84a6712ff544d3deec1805702f45efd`. The base drift must be reconciled before merge; the PR must not be merged just because a CI run passed.
+
+**Architecture decision:** treat PR #175 as the primary existing worker/control-plane candidate to inspect, reconcile and potentially extend. The swarm must reuse its queue/lease/fencing/evidence foundations where they are sound. Do not create a second queue, second scheduler, duplicate worker service, or parallel control plane. The 11 specialist roles in this document are logical agent roles; they may be dispatched by one orchestrator over the existing durable task substrate. Do not activate them until a concrete model/tool adapter, scoped credentials, policy enforcement, budget controls, observability and recovery tests exist.
+
+The next implementation gate is therefore an integration review of PR #175 against current `main`, not a fresh greenfield agent runtime. Review the exact diff by domain and dependency, refresh CI against a reconciled base, independently review worker security and concurrency, and only then decide whether to merge selected commits or rebuild a smaller clean PR. Production activation remains a later separately approved gate.
+
+## 13. Current activation status (honest baseline)
 
 - This document defines the target swarm and controlled delivery plan.
 - The current application has an existing TypeScript/Fastify API, PostgreSQL authority, CI workflow and separate worker-related engineering work.
