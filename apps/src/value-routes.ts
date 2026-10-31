@@ -12,6 +12,20 @@ type Request = { body: unknown; params: Record<string, string>; log: { error: (e
 function bodyOf(request: Request): Record<string, unknown> { return request.body && typeof request.body === "object" ? request.body as Record<string, unknown> : {}; }
 function str(body: Record<string, unknown>, key: string): string | null { return typeof body[key] === "string" && body[key].trim() ? body[key].trim() : null; }
 function nonNegative(body: Record<string, unknown>, key: string): number | null { const n = Number(body[key]); return Number.isFinite(n) && n >= 0 ? n : null; }
+
+export type BwgEprQuantityError = "BWG_EPR_REQUIRED" | "BWG_EPR_FULFILLED_EXCEEDS_OBLIGATED";
+
+export function bwgEprQuantityError(obligated: number | null, fulfilled: number | null): BwgEprQuantityError | null {
+  if (obligated === null || fulfilled === null || !Number.isFinite(obligated) || !Number.isFinite(fulfilled) || obligated < 0 || fulfilled < 0) return "BWG_EPR_REQUIRED";
+  if (fulfilled > obligated) return "BWG_EPR_FULFILLED_EXCEEDS_OBLIGATED";
+  return null;
+}
+
+export function isBwgEprFulfilledObligationConstraintViolation(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const candidate = error as { code?: unknown; constraint?: unknown };
+  return candidate.code === "23514" && candidate.constraint === "bwg_epr_reports_fulfilled_le_obligated";
+}
 async function authFor(request: Request, reply: Reply, pool: Pool | null): Promise<AuthContext | null> { try { const auth = await authenticate(request as never, pool); if (!auth) { reply.code(401).send({ error: "Authenticated session required", code: "AUTH_REQUIRED" }); return null; } return auth; } catch (error) { request.log.error(error); reply.code(503).send({ error: "Authentication service unavailable", code: "AUTH_UNAVAILABLE" }); return null; } }
 async function activityAccess(client: Pool | PoolClient, activityId: string, identityId: string): Promise<{ organization_id: string; geography_id: string | null } | null> { const result = await client.query<{ organization_id: string; geography_id: string | null }>(`select a.organization_id, a.geography_id from activities a join organization_memberships om on om.organization_id = a.organization_id where a.id = $1 and om.identity_id = $2 and om.status = 'VERIFIED'`, [activityId, identityId]); return result.rows[0] ?? null; }
 async function assertActivityGeographyScope(client: Pool | PoolClient, geographyId: string | null, identityId: string, organizationId: string): Promise<{ ok: boolean; code?: string }> {
@@ -244,7 +258,9 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
   app.post("/api/v1/bwg/reporting-periods/:periodId/epr", async (request, reply) => {
     const auth = await authFor(request as never, reply, pool); if (!auth || !pool || !withTenantTransaction) return;
     const periodId = (request.params as { periodId: string }).periodId; const body = bodyOf(request as never); const schemeId = str(body, "schemeId"); const categoryCode = str(body, "categoryCode"); const obligated = nonNegative(body, "obligatedQuantity"); const fulfilled = nonNegative(body, "fulfilledQuantity");
-    if (!schemeId || !categoryCode || obligated === null || fulfilled === null) return reply.code(400).send({ error: "schemeId, categoryCode and non-negative obligated/fulfilled quantities are required", code: "BWG_EPR_REQUIRED" });
+    const quantityError = bwgEprQuantityError(obligated, fulfilled);
+    if (!schemeId || !categoryCode || quantityError === "BWG_EPR_REQUIRED") return reply.code(400).send({ error: "schemeId, categoryCode and non-negative obligated/fulfilled quantities are required", code: "BWG_EPR_REQUIRED" });
+    if (quantityError === "BWG_EPR_FULFILLED_EXCEEDS_OBLIGATED") return reply.code(400).send({ error: "Fulfilled quantity cannot exceed obligated quantity", code: quantityError });
     const activeOrganizationId = auth.activeOrganizationId;
     if (!activeOrganizationId || !canActForOrganization(auth, activeOrganizationId)) return reply.code(403).send({ error: "Select a verified active organization", code: "ORG_FORBIDDEN" });
     try {
@@ -268,7 +284,11 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
       if ("denied" in tenantResponse) return reply.code(403).send({ error: "EPR management permission required", code: "BWG_EPR_FORBIDDEN" });
       if ("invalid" in tenantResponse) return reply.code(tenantResponse.invalid === "EPR_SCHEME_INVALID" ? 404 : 409).send({ error: tenantResponse.invalid === "EPR_SCHEME_INVALID" ? "Authoritative EPR scheme not found" : tenantResponse.invalid === "EVIDENCE_NOT_VERIFIED" ? "Verified, provenance-backed evidence is required" : "Approved verification is required", code: tenantResponse.invalid });
       return reply.code(201).send({ source: "postgresql", syntheticData: false, authoritativeMutation: true, externalSubmission: "NOT_SUBMITTED", eprReport: tenantResponse.report });
-    } catch (error) { request.log.error(error); return reply.code(503).send({ error: "BWG EPR report unavailable", code: "BWG_EPR_UNAVAILABLE", syntheticData: false }); }
+    } catch (error) {
+      if (isBwgEprFulfilledObligationConstraintViolation(error)) return reply.code(409).send({ error: "Fulfilled quantity cannot exceed obligated quantity", code: "BWG_EPR_FULFILLED_EXCEEDS_OBLIGATED" });
+      request.log.error(error);
+      return reply.code(503).send({ error: "BWG EPR report unavailable", code: "BWG_EPR_UNAVAILABLE", syntheticData: false });
+    }
   });
 
   app.post("/api/v1/bwg/reporting-periods/:periodId/esg", async (request, reply) => {
