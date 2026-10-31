@@ -72,8 +72,47 @@ try {
   assert.notEqual(legacyAfterUpdate.authorization_checked_at.getTime(), original.authorization_checked_at.getTime());
   console.log("PASS: reproduced legacy authorization snapshot rewrite on unrelated UPDATE.");
 
+  // Seed rows that predate migration 096: their new provenance columns must
+  // remain NULL when the forward migration is applied. The trigger is disabled
+  // only in this isolated disposable schema to model that historical state.
+  const legacyApprovedId = "10000000-0000-4000-8000-000000000021";
+  const legacyRejectedId = "10000000-0000-4000-8000-000000000022";
+  await client.query("alter table verifications disable trigger verifications_integrity_guard");
+  await client.query(
+    "insert into verifications(id,activity_id,evidence_id,verifier_identity_id,decision) values ($1,$3,$4,$5,'APPROVED'),($2,$3,$4,$5,'REJECTED')",
+    [legacyApprovedId, legacyRejectedId, ids.activity, ids.evidence, ids.verifier],
+  );
+  await client.query("alter table verifications enable trigger verifications_integrity_guard");
+
   // Apply proposed semantics only in this disposable schema.
   await client.query(await readFile(path.join(fixtureDir, "proposed-authorization-provenance-forward-fix.sql"), "utf8"));
+  const legacyRows = await client.query(
+    "select id,decision,authorization_history_state,authorization_checked_at from verifications where id=any($1::uuid[]) order by id",
+    [[legacyApprovedId, legacyRejectedId]],
+  );
+  const legacyApproved = legacyRows.rows.find((row) => row.id === legacyApprovedId);
+  const legacyRejected = legacyRows.rows.find((row) => row.id === legacyRejectedId);
+  assert.equal(legacyApproved.authorization_history_state, "APPROVED_HISTORY");
+  assert.equal(legacyApproved.authorization_checked_at, null, "do not fabricate legacy approval timestamp");
+  assert.equal(legacyRejected.authorization_history_state, "REJECTED_TERMINAL");
+  await client.query("update verifications set decision='REJECTED' where id=$1", [legacyApprovedId]);
+  const legacyApprovedAfterRejection = (await client.query(
+    "select authorization_history_state,authorization_checked_at from verifications where id=$1",
+    [legacyApprovedId],
+  )).rows[0];
+  assert.equal(legacyApprovedAfterRejection.authorization_history_state, "APPROVED_HISTORY");
+  assert.equal(legacyApprovedAfterRejection.authorization_checked_at, null);
+  await assert.rejects(
+    client.query("update verifications set decision='APPROVED' where id=$1", [legacyApprovedId]),
+    /reapproval of a previously approved verification/,
+  );
+  await assert.rejects(
+    client.query("update verifications set decision='APPROVED' where id=$1", [legacyRejectedId]),
+    /rejected verification is terminal/,
+  );
+  await client.query("update verifications set rationale='legacy rejected unchanged' where id=$1", [legacyRejectedId]);
+  console.log("PASS: legacy approved rows with NULL timestamps retain approval history; legacy rejected rows fail closed.");
+
   const baseline = await selectSnapshot();
   await client.query("update roles set permissions=$2::jsonb where id=$1", [ids.role, JSON.stringify(["VERIFY_EVIDENCE", "ROLE_CHANGED"])]);
   await client.query("update verifications set evidence_id=evidence_id where id=$1", [ids.verification]);
@@ -158,6 +197,7 @@ try {
   assert.equal(approvedAgain.authorization_role_id, ids.role);
   assert.deepEqual(approvedAgain.authorization_permissions_snapshot, ["VERIFY_EVIDENCE"]);
   assert.ok(approvedAgain.authorization_checked_at);
+  assert.equal(approvedAgain.authorization_history_state, "APPROVED_HISTORY");
   console.log("PASS: proposed forward-only semantics preserve snapshots, reject linkage swaps, clear forged pending snapshots, and re-check authorization on approval transition.");
 } finally {
   try { await client.query("drop schema if exists " + q(schema) + " cascade"); } catch {}
