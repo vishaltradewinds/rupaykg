@@ -151,3 +151,13 @@ This is source-code implementation only. The script is not configured as a Rende
 - No production or staging database, roles, grants, secrets, Render service or deployment has been changed. Worker OFF; production HOLD.
 
 - Graceful-shutdown review also made the idle poll sleep abortable, so SIGTERM/SIGINT does not wait out a full 60-second configured idle interval. The active bounded batch still finishes or reaches its own lease/validation timeout before the pool closes.
+
+
+### Exact-head consolidated CI result — 2026-10-31 18:43 UTC
+
+- Branch head verified unchanged at `226cac5aa6a71f78e75de5fc657b34f25a17cbce`.
+- Exact-head workflow run [#41230428453](https://github.com/vishaltradewinds/rupaykg/actions/runs/41230428453) completed successfully.
+- All workflow steps passed, including production dependency audit, migration validation, exact production migration-baseline reconstruction, proposed migration-chain application and idempotency, TypeScript typecheck, application build, browser smoke, unit/disposable PostgreSQL acceptance, evidence upload, and production-container build.
+- This validates the current source branch and disposable CI environment only. It does not prove that production Neon has the required schema/role/grants, that Render uses the intended database identity, or that the worker is deployed.
+- PR #161 remains draft/open/unmerged. Worker OFF; scheduler OFF; production HOLD; certification OFF; TRL 9 not claimed.
+- No live Neon schema/role/grant/policy changes, Render service/secrets/deployment changes, or production data mutations were made.
