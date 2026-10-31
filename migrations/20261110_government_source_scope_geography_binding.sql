@@ -94,13 +94,13 @@ $$;
 
 drop trigger if exists government_crosswalk_request_source_scope on government_jurisdiction_crosswalk_requests;
 create trigger government_crosswalk_request_source_scope
-before insert or update of source_snapshot_id, geography_id
+before insert or update of source_snapshot_id, geography_id, status
 on government_jurisdiction_crosswalk_requests
 for each row execute function enforce_government_crosswalk_source_scope();
 
 drop trigger if exists government_crosswalk_source_scope on government_jurisdiction_crosswalks;
 create trigger government_crosswalk_source_scope
-before insert or update of source_snapshot_id, geography_id
+before insert or update of source_snapshot_id, geography_id, status
 on government_jurisdiction_crosswalks
 for each row when (new.status = 'VERIFIED')
 execute function enforce_government_crosswalk_source_scope();
