@@ -117,3 +117,16 @@ Official sources:
 - MPPCB status-cum-inspection report (NGT-hosted, 15 May 2026): https://www.greentribunal.gov.in/sites/default/files/news_updates/STATUS%20CUM%20INSPECTION%20REPORT%20BY%20MPPCB%20IN%20OA%20NO.%20819%20of%202024%20NEWS%20ITEM%20TITLED%20JABALPUR%20KATHAUNDA%20PLANT%20MEIN%20KACHARA%20JALNE%20KE%20BAAD%20DUR%20DUR%20TAK%20FAIL%20RAHE%20DHOOL%20KE%20KAN.pdf
 - CPCB reply (NGT-hosted, 25 September 2024): https://www.greentribunal.gov.in/sites/default/files/news_updates/REPLY%20BY%20CPCB%20IN%20OA%20NO.%20819%20of%202024%20NEWS%20ITEM%20TITLED%20JABALPUR%20KATHAUNDA%20PLANT%20MEIN%20KACHARA%20JALNE%20KE%20BAAD%20DUR%20DUR%20TAK%20FAIL%20RAHE%20DHOOL%20KE%20KAN.pdf
 - NGT portal report listing (10 July 2026): https://www.greentribunal.gov.in/index.php?page=1183
+
+
+## Additional open integration gaps
+
+### Physical-unit serial identity
+
+The proposed `mrv_instruments` register stores instrument code, manufacturer, model and SKU revision, but the current schema does not store a dedicated manufacturer serial number/physical unit identifier. Calibration certificates and service/repair histories can be unit-specific. Before physical onboarding, add an immutable unit serial/asset identifier and bind the calibration evidence and field-device association to that exact physical unit. Do not assume a model-level approval record proves a particular unit's calibration.
+
+### Raw-frame retention and server recomputation
+
+The `@rupaykg/hardware-edge` contract currently carries a `rawPayloadSha256` string but not the raw frame bytes or an immutable raw-frame artifact reference. The validator checks digest format; it cannot independently recompute the digest of bytes it does not receive. The edge package is therefore only a shape/quality pre-validator. A real adapter must retain the raw frame in a durable, integrity-protected spool or evidence artifact, submit the corresponding bytes/reference through the canonical authenticated ingestion path, and have the server recompute and persist the digest before the observation can become authoritative. A client-supplied hash alone is not evidence.
+
+These two gaps, together with the parameter-specific uncertainty lineage finding, remain open before hardware-backed MRV eligibility. They are not filled by synthetic tests or CI.
