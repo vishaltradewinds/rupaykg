@@ -47,7 +47,7 @@ test("inbox event trigger appends through a restricted NOLOGIN definer without e
     );
     assert.equal(functionOwner.rows[0]?.owner, "rupaykg_inbox_event_writer");
     assert.equal(functionOwner.rows[0]?.security_definer, true);
-    assert.ok(functionOwner.rows[0]?.config?.some((v) => v.replace(/\\s/g, "") === "search_path=pg_catalog,public"));
+    assert.ok(functionOwner.rows[0]?.config?.some((v) => v.replaceAll(" ", "") === "search_path=pg_catalog,public"));
 
     const ownerPrivileges = await admin.query<{ insert_allowed: boolean; usage_allowed: boolean; select_allowed: boolean; delete_allowed: boolean }>(
       `select has_table_privilege('rupaykg_inbox_event_writer','public.async_mirror_inbox_events','INSERT') as insert_allowed,
