@@ -142,3 +142,51 @@ Before migration source restoration:
 2. Reconcile why production has the 096 security enhancement while staging retains the older trigger body.
 3. Preserve the eight expired PROCESSING rows and define a separately tested, auditable worker-lease recovery procedure.
 4. Test the ordered migration source on a disposable production-shaped database and a staging-shaped database; do not run it against either live branch.
+
+
+## Disposable rehearsal evidence — 2026-10-31
+
+### Rehearsal A: restore migration 096 on staging-shaped branch
+
+- Branch: `shakti-unresolved-migration-rehearsal-20261028`
+- Neon branch ID: `br-broad-glade-b46npw8o`
+- Parent: staging branch `br-spring-hill-b4544vz5`
+- Before: 95 ledger rows; four authorization columns absent; `prevent_invalid_verification()` fingerprint `43e9af83f5031460689f7943d697a50a`; zero verification rows.
+- Applied the exact historical migration-096 SQL in one transaction on this rehearsal branch only.
+- After: all four authorization columns present; exactly one integrity trigger; function fingerprint `934a7be13f08c034bbd15e96285eb1be`, matching production; zero verification rows; ledger unchanged at 95.
+- Result: **schema/function rehearsal PASS**. This did not test the full API workflow or authorization behavior using representative actors and records.
+
+### Rehearsal B: apply migrations 20261022–20261025 on production-shaped branch
+
+- Created Neon branch: `rupaykg-migration-rehearsal-prod-2026-10-31`
+- Neon branch ID: `br-frosty-term-b47k7ayc`
+- Parent: production branch `br-restless-base-b44cip2h`; created from production at 2026-10-31T10:07:49Z.
+- Applied the exact SQL from the four recovered migration files, in filename order, inside one transaction on this rehearsal branch only.
+- Result: all four relations exist; columns, constraints and indexes match staging fingerprints; trigger definitions match; normalized worker-function fingerprints match staging:
+  - `record_async_mirror_inbox_event()`: `27d1cd516b798e678c808db7f1e95b82`
+  - `prevent_async_mirror_inbox_event_mutation()`: `dd40421c9482dac007f52bd2e20380bb`
+- Trigger behavior test: a synthetic inbox insert generated one event; transition to VALIDATED generated a second event; an attempted event mutation was rejected by the append-only trigger. The test was wrapped in a subtransaction and deliberately rolled back. Post-test counts remained zero for inbox and event tables.
+- AI rate-limit and AI intake-job tables were created successfully and remain empty in this rehearsal.
+- Rehearsal ledger remains at 92 because this was a DDL rehearsal, not execution through the migration runner. No ledger rows were fabricated.
+
+### Migration runner compatibility review
+
+Current `apps/src/migrate.ts`:
+- sorts migration filenames lexically;
+- checks existing version and filename identity;
+- skips a migration only when the recorded filename matches;
+- runs each new migration and its ledger insert in a transaction;
+- stops on the first failure.
+
+The live ledger filenames exactly match the recovered source filenames for migration 096 in production and 20261022–20261025 in staging. Therefore, once the exact files are restored to the canonical migration directory, the runner should skip those already-recorded migrations and apply only the missing set in each environment. This conclusion is conditional on exact source restoration and runner execution; it is not a production approval.
+
+The runner does not persist or compare a source-content checksum. Same-version/same-filename source edits are therefore not detected by the current ledger. Record this as a migration-integrity improvement requirement; do not change the ledger format in this batch.
+
+### Rehearsal limitations and remaining gates
+
+- The production-derived rehearsal is a branch clone and must remain isolated; it has not been promoted or merged into production.
+- The staging-derived rehearsal has not been promoted or merged into staging.
+- No production/staging migration ledger was changed.
+- No application API-level authorization acceptance test was executed against representative verifier memberships.
+- No worker queue rows were replayed or reset.
+- Independent review and exact-head CI remain required before source restoration is merged or any live migration runs.
