@@ -89,3 +89,8 @@ The controlling audit is [RupayKg National Environmental Infrastructure — Mast
 - The previous Docker startup command ran database migrations and the acceptance seed before starting the API. The cleanup review branch now makes web startup migration-free and fixture-free; acceptance seeding explicitly rejects NODE_ENV=production. This is review-only and has not been merged or deployed.
 - Added a test for the production acceptance-seed prohibition. Exact-head CI is pending.
 - Production remains HOLD; worker OFF; scheduler OFF; certification OFF; TRL 9 not claimed.
+
+
+## 2026-10-31 — Runtime startup hardening CI result
+
+Review-branch code head `88ce5125ff658c4401d892d0b501d89d3a07eb03` passed GitHub Actions CI run [#41211914512](https://github.com/vishaltradewinds/rupaykg/actions/runs/41211914512), run 3896. Dependency audit, migration validation, disposable PostgreSQL migration, typecheck, build, browser smoke, disposable PostgreSQL acceptance tests and production Docker image build all passed. This is engineering validation only; no production database or Render deployment was changed. PR #173 remains unmerged. Production HOLD; worker OFF; scheduler OFF; certification OFF; TRL 9 not claimed.
