@@ -52,11 +52,11 @@ test("two concurrent workers claim disjoint rows under PostgreSQL SKIP LOCKED", 
     const insertedIds = await insertInboxRows(pool, 4);
     const observedIds: string[] = [];
     let release!: () => void;
-    const allFourEntered = new Promise<void>((resolve) => { release = resolve; });
+    const bothStarted = new Promise<void>((resolve) => { release = resolve; });
     const validate = async (input: { id: string }) => {
       observedIds.push(input.id);
-      if (observedIds.length === 4) release();
-      await allFourEntered;
+      if (observedIds.length === 2) release();
+      await bothStarted;
       return { valid: false, errorCode: "CI_CONCURRENCY_FIXTURE" };
     };
 
