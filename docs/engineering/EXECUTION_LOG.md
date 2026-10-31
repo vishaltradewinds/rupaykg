@@ -34,3 +34,10 @@ Append-only resume log. Record concrete actions, exact evidence, limitations and
 - Repository `main` currently contains migrations through `20261021`; production main has `096` and staging has `20261022`–`20261025`. This is a material source-control/database migration provenance gap.
 - Git blob identity is not a SHA-256 of deployed SQL bytes and does not prove exact Render execution provenance. No SQL, migration ledger or database state was changed.
 - Added the exact discrepancy and resolution gates to the authoritative database policy. Preserve both live ledgers; do not renumber, rewrite or replay migrations. Reconcile the entire ordered migration chain on a fresh production-main-derived disposable branch before merging migration-bearing worker code.
+
+
+## 2026-10-31 — Migration README contradiction corrected
+
+- Corrected the obsolete statement that migration 023 was intentionally absent. The actual canonical repository contains `023_lifecycle_state_guards.sql`, and production/staging ledgers record version `023`.
+- Added the live ledger/source-control gap to `migrations/README.md`: production records `096` while repository main lacks the file; staging records `20261022`–`20261025` while repository main lacks those files; the unmerged worker PR stack contains them.
+- No SQL migration, live ledger or database was changed. The migration gap remains a merge/deploy blocker until full-chain reconciliation and disposable rehearsal.
