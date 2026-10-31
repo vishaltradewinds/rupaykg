@@ -1,76 +1,69 @@
 # RupayKg — Latest Engineering Resume Point
 
-> Current hand-off pointer. Read `AGENTS.md` first. This pointer is updated after each coherent work batch; historical checkpoints are immutable.
+> Read `AGENTS.md` first. This pointer is the active hand-off; historical checkpoints are immutable.
 
-## Current snapshot
-- Checkpoint: 2026-10-31 15:27 UTC.
-- Repository: `vishaltradewinds/rupaykg`.
-- Working branch: `shakti/atomic-inbox-claim-2026-10-31`.
-- Pre-documentation verified HEAD: `f51acf7fcf5a8730e0e15d115a119f87b02a05b2`.
-- This batch added a preflight log and immutable checkpoint; their commits advance HEAD. **Next session must query the branch API for the actual final HEAD** rather than assume the pre-documentation SHA.
+## Current verified snapshot — 2026-10-31 15:34 UTC
+- Repository: `vishaltradewinds/rupaykg`
+- Working branch: `shakti/atomic-inbox-claim-2026-10-31`
+- Last verified pre-pointer HEAD: `e5d2f864543d250485b14dc9c93a3742e5c1e7d4`. Query the branch ref at session start for the pointer commit's final HEAD; do not assume it.
 - PR #175: OPEN / DRAFT, base `main`, not merged.
-- PR #161: OPEN / DRAFT, stacked on `shakti/integrate-government-inbox-worker-2026-10-31`, shares the head branch; do not merge separately.
-- PR #173: OPEN / DRAFT, separate DB/repository cleanup workstream; reconcile dependencies before any merge.
-- PR #160: diagnostic candidate only; not deployed.
-- CI for pre-documentation SHA: run #3928 / ID `41214689174`, COMPLETED / SUCCESS. This does NOT certify the documentation commits. Recheck exact final HEAD CI.
-- Branch protection for this feature branch: disabled. Production branch protection also needs separate verification/approval.
-
-## Read first
-1. `AGENTS.md` — mandatory session procedure, safety and Shakti rules.
-2. [Immutable 2026-10-31 comprehensive checkpoint](./checkpoints/2026-10-31-national-infrastructure-security-resume.md).
-3. [Session preflight evidence](./session-logs/2026-10-31-1527-utc-resume-checkpoint-preflight.md).
-4. [Hybrid government inbox architecture ADR](../architecture/ADR-20261031-government-inbox-worker-authority-scope.md).
-5. [Production authorization/RLS gap assessment](../security/PRODUCTION_AUTHORIZATION_RLS_GAP_ASSESSMENT_2026-10-31.md).
-6. [Database identity/privilege matrix](../security/DATABASE_IDENTITY_PRIVILEGE_MATRIX_2026-10-31.md).
-7. [Integrated migration/worker release plan](./INTEGRATED_MIGRATION_WORKER_RELEASE_PLAN_2026-10-31.md).
-8. [Repository architecture audit](./RUPAYKG_REPOSITORY_ARCHITECTURE_AUDIT_2026-10-31.md).
+- PR #161: OPEN / DRAFT, stacked on `shakti/integrate-government-inbox-worker-2026-10-31`; shares this head branch. Do not merge separately.
+- PR #173: OPEN / DRAFT, separate database/repository cleanup stream; reconcile before merge.
+- Exact-head CI before this documentation batch: run #3931 / ID `41215002551`, SUCCESS for `4833e607c56176a7d0aff55dec7de88e77063037`. The final documentation HEAD requires its own exact-head CI check.
+- Latest immutable checkpoint: [2026-10-31 production catalog security refresh](./checkpoints/2026-10-31-production-catalog-security-refresh.md).
+- Latest preflight: [2026-10-31 15:34 UTC security preflight](./session-logs/2026-10-31-1534-utc-security-preflight.md).
 
 ## Product and architecture
-RupayKg's goal is pan-India national environmental infrastructure for waste/environmental operations, statutory/EPR compliance, digital MRV and governed environmental-value workflows. Current baseline is a PostgreSQL-centred modular monolith: React/Vite/TypeScript frontend, Fastify/Node/TypeScript API, PostgreSQL system of record, shared domain packages, controlled workers and external adapters. Preserve this architecture absent measured evidence for decomposition.
+RupayKg's goal is pan-India national environmental infrastructure for waste/environmental operations, statutory/EPR compliance, digital MRV and governed environmental-value workflows. Current baseline is a PostgreSQL-centred modular monolith: React/Vite/TypeScript frontend, Fastify/Node/TypeScript API, shared domain packages, PostgreSQL operational system of record, controlled workers and external adapters. Do not split into microservices without measured evidence.
 
-Truth lifecycle remains distinct: LOCAL_CAPTURED → SYNC_RECEIVED → AUTHORITATIVE → VERIFIED → VALUE_ELIGIBLE → CERTIFIED/ISSUED → REGISTERED → TRANSFERRED/RETIRED → SETTLED → REPORTED. No state may be implied by a prior state.
+Truth lifecycle remains distinct:
+`LOCAL_CAPTURED → SYNC_RECEIVED → AUTHORITATIVE → VERIFIED → VALUE_ELIGIBLE → CERTIFIED/ISSUED → REGISTERED → TRANSFERRED/RETIRED → SETTLED → REPORTED`.
+No state may be inferred from a prior state.
 
-## Completed engineering foundations
-- Government inbox: atomic bounded claims (`FOR UPDATE SKIP LOCKED`), leases/fencing, heartbeat/abort, timeout, retries/backoff/quarantine, canonical payload/timestamp validation, scoped source/crosswalk resolution, unresolved ambiguity handling and append-only payload-free transition events. Tests cover concurrency, fencing, retry/quarantine and crosswalk ambiguity.
-- Hybrid national-ingestion / tenant-execution architecture is selected as the review baseline: public government source ingestion at national level; worker has narrowly named queue/snapshot/crosswalk/resolver access only; no private tenant evidence/measurement reads; minimal dispatch envelope; tenant-bound consumer revalidates membership, organization, jurisdiction, rule version and evidence.
-- Repository session continuity rule in `AGENTS.md`: preflight before writes; exact HEAD/PR/CI/Neon/Render checks; immutable checkpoint plus latest pointer after every coherent batch.
-- Comprehensive current checkpoint records architecture, completed work, evidence, database posture, release blockers, explicit NOT DONE items and ordered next steps.
+Mandatory Shakti Standards apply: reality/context, evidence, statutory boundaries, feasibility, validation, design, engineering, testing, approval, certification, deployment, operation, measurement and continuous assurance.
+Golden Rule: **ONE SHAKTI STANDARD. MANY PROJECT-SPECIFIC OPERATING SYSTEMS.**
+Assess software, hardware, integrated service and operational TRL separately. TRL 9 is NOT ESTABLISHED.
 
 ## Authoritative database — rechecked
-- Neon project `rupaykg-production-fresh`, ID `steep-mud-79906940`.
-- Sole authoritative production branch `main`, ID `br-restless-base-b44cip2h`, primary/default/ready.
-- Read-only SQL to database `rupaykg`: 67 public base tables; 0 RLS-enabled; 0 public policies; 92 migration ledger rows; max version `20261021`; inspection connection principal `rupaykg`.
-- Project history retention 6 hours; production branch protection reports false.
-- The inspected Neon principal is not proven to be Render's runtime identity.
-- Staging and rehearsal branches are non-authoritative. Do not promote, reset or delete them based on newer migration counts.
-- No production DDL/DML, migrations, role/grant changes, branch operations or deployment occurred.
+- Neon project: `rupaykg-production-fresh`, ID `steep-mud-79906940`.
+- Sole authoritative production branch: `main`, ID `br-restless-base-b44cip2h`, primary/default/ready.
+- Database: `rupaykg`.
+- Read-only live catalog: 67 public base tables; 0 RLS-enabled; 0 public policies; 92 migration rows; max version `20261021`.
+- Principal: `session_user=current_user=rupaykg`. Role has LOGIN, BYPASSRLS, CREATEDB, CREATEROLE and REPLICATION; member of `neon_superuser`. Do not assume this is a least-privilege application/worker identity.
+- Branch protection reports `protected=false`; project history retention is 21,600 seconds (6 hours).
+- Other branches are staging/rehearsal only. Do not promote, reset or delete them merely because their schema/migration count is newer.
+- No production DDL/DML, migration, role/grant/policy change, branch operation, deployment or worker activation occurred.
 
-## Release blockers / not done
-- Tenant isolation is NOT ESTABLISHED: no RLS policies are enabled; no table-by-table classification and full route × SQL × table × operation × principal × tenant map yet.
-- Render service/deployment/runtime principal NOT VERIFIED. Render tools could not proceed because no workspace is selected; ask user to choose the correct workspace. Do not guess.
-- Independent backup/restore rehearsal, RPO/RTO and production recovery proof NOT VERIFIED.
-- Migration ledger/source divergence remains unresolved; preserve production migration 096 and its four verifier authorization provenance columns. Never copy a rehearsal schema wholesale or rewrite ledgers.
-- Separate least-privilege API/migration/worker/event-writer/operations DB identities not yet established.
-- Worker process/scheduler, dedicated production worker principal, tenant-scoped consumer and production activation NOT DONE.
-- Official CPCB/BEE source contract, signed transport, acknowledgement/regulator acceptance NOT PROVEN.
-- Guardian/Hedera external consensus, registry issuance, payment settlement and nationwide operation NOT PROVEN.
-- Hardware/IoT approval, calibration, field operations and integrated service TRL NOT ESTABLISHED.
-- Software TRL estimate around 4–5 is provisional internal assessment only; TRL 9 NOT ESTABLISHED. Production certification remains BLOCKED.
+## Current security assessment
+- Database-enforced tenant isolation is NOT ESTABLISHED: RLS is disabled on all 67 public tables.
+- Direct `organization_id`: 23 tables. Direct `identity_id`: 8 tables. Three overlap. 39 tables have neither direct key and require FK-derived and semantic classification.
+- Full route → SQL → table → operation → principal → tenant-context map is incomplete.
+- Table-by-table classification must include child-FK ownership, multi-party records, global reference/control plane, identity-private data, append-only evidence/audit and maintenance-only tables.
+- Views, triggers, functions, sequences, grants/default privileges and SECURITY DEFINER paths require inventory.
+- Caller-controlled GUC alone is not a sufficient security boundary.
+- Backup/restore independent rehearsal, RPO/RTO and actual application runtime principal remain unverified.
+- Production release posture: HOLD. Worker OFF. Scheduler OFF. Certification OFF. TRL 9 not claimed.
 
-## Exact next execution sequence
-1. Verify actual branch HEAD, PR relationships and exact-head CI for the latest docs commit.
-2. Ask user to select the correct Render workspace; then inspect services/deployments and verify deployed commit/database target/runtime principal without exposing secrets.
-3. Establish backup/PITR/recovery options, RPO/RTO and independent restore rehearsal. Do not alter production settings without approval.
-4. Complete route × SQL × table × operation × principal × tenant-context mapping and classify all production tables, including FK children, multi-party records, views, triggers, functions, sequences and grants.
-5. Design least-privilege identities and signed/verified tenant context; plain caller-controlled GUC-only enforcement is not acceptable.
-6. Reconcile exact migration SQL bytes, ledger and schema in a disposable production-derived rehearsal; preserve migration 096.
-7. Prototype table-specific RLS and adversarial cross-tenant, forged-context, pooling, revocation and append-only tests. Obtain independent review before production.
-8. Only then operationalize the hybrid inbox worker and tenant consumer with narrow privileges, monitoring, recovery and explicit approval.
-9. Continue statutory source, Guardian/Hedera, hardware, pan-India operations and Shakti/TRL assurance work.
-10. At end of every batch, rerun relevant tests, verify exact-head CI, add immutable checkpoint and update this pointer.
+## Completed in latest batch
+- Exact-head CI verified for starting HEAD: run #3931 SUCCESS.
+- Rechecked PR state and Neon production branch.
+- Captured read-only production table/RLS/migration counts and elevated role attributes.
+- Added `docs/security/PRODUCTION_CATALOG_SECURITY_INVENTORY_2026-10-31.md`.
+- Updated `AGENTS.md` to make deployment/runtime verification provider-neutral and evidence-led.
+- Added immutable checkpoint and session preflight record.
+- No production changes or deployment actions.
 
-## Production safety
-**Production remains HOLD.** No merge, production migration, production data mutation, role/grant change, branch promotion/deletion, Render environment change, worker activation, certification activation or deployment is authorized by this checkpoint.
+## Next executable sequence
+1. Verify current branch HEAD and exact-head CI; reconcile PR #175/#161/#173 dependency relationships.
+2. Complete route/repository/query → table → operation → principal → tenant-context mapping.
+3. Classify all 67 production tables, including FK ownership and multi-party/global/identity/audit semantics.
+4. Inventory views, triggers, functions, sequences, ACLs/default privileges and SECURITY DEFINER paths.
+5. Design least-privilege API, migration, worker, event-writer and operations roles plus non-forgeable tenant context.
+6. Establish Neon backup/PITR/restore options, retention, RPO/RTO and independent restore rehearsal; no production setting change without explicit approval.
+7. Rehearse table-specific RLS and migration reconciliation on a disposable production-derived Neon branch; test cross-tenant denial, pooling, revoked memberships and forged context.
+8. Obtain independent review and explicit approval before any production DDL/DML, role/grant/RLS change, migration or worker activation.
+9. Continue official statutory-source contracts, Guardian/Hedera external verification, field hardware, pan-India operating evidence and Shakti/TRL assurance.
+10. At the end of each coherent batch, add an immutable checkpoint and update this pointer with exact evidence.
 
 ## Resume instruction
-Do not restart with a generic repository audit. Read `AGENTS.md` and the checkpoint above, verify the actual branch/HEAD/PR/CI, obtain the user's Render workspace selection, then execute next step 2. Preserve the authoritative Neon production branch and all existing evidence.
+Do not restart with a generic repository audit. Read `AGENTS.md`, this pointer and the latest checkpoint. Verify actual branch/HEAD/PR/CI and Neon authority. Continue at step 1 above. Production remains read-only until the security, recovery, review and approval gates pass.
