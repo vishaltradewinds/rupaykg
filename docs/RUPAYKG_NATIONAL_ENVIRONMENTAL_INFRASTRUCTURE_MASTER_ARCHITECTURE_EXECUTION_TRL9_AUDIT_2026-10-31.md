@@ -252,7 +252,7 @@ The following proposed changes are recorded on the existing cleanup review branc
 - Acceptance seed now rejects `NODE_ENV=production`.
 - This audit and runtime security assessment are documented here and in the append-only execution log.
 
-These changes are not merged, deployed or applied to the live database. CI and reviewer validation are still required.
+These changes are not merged, deployed or applied to the live database. Review-branch code head `88ce5125ff658c4401d892d0b501d89d3a07eb03` passed GitHub Actions run [#41211914512](https://github.com/vishaltradewinds/rupaykg/actions/runs/41211914512); independent reviewer validation remains required.
 
 ## 12. Open evidence requests
 
