@@ -91,3 +91,16 @@ The worker integration stack contains the missing migration files. In particular
 **Required resolution:** preserve production main as the only authoritative database; do not edit either live ledger or apply isolated migrations. Before merging the migration-bearing worker stack, compare the exact source migration blobs, all migration ordering/dependencies, the production baseline and staging ledger history. Rehearse the full ordered migration chain from a fresh disposable branch of production main and retain SQL-byte hashes, migration report and schema diff. Independent review must decide whether the worker migrations are a valid forward-only addition or require a separately governed migration-history reconciliation.
 
 This finding is a blocker for merging/deploying migration-bearing work until reconciled. It does not invalidate the earlier worker CI result, which ran against disposable PostgreSQL and is not live Neon evidence.
+
+
+## 9. Render source/deployment cross-check — 2026-10-31
+
+Read-only Render service metadata for service `rupaykg` (`srv-daki4d7qj5pc73b8qksg`) confirms:
+- repository: `https://github.com/vishaltradewinds/rupaykg`;
+- deploy branch: `main`;
+- auto-deploy: enabled on commit;
+- runtime: Docker using repository `Dockerfile`;
+- public URL: `https://rupaykg.onrender.com`;
+- latest observed live deployment: `dep-dbis4nm417fc73a8m7ng`, source commit `862512c8c904cef0f604df0350f02672318953af`.
+
+This corroborates that the live Render service deploys the canonical repository's main branch. **It does not prove which Neon branch/database the service currently connects to.** Render service metadata did not expose the `DATABASE_URL` value, and this audit did not retrieve or disclose secrets. Therefore the Neon production main target is the authoritative database-of-record by Neon primary/default status and live schema evidence, but the deployed application's exact connection target remains unverified until a safe runtime identity check is performed without exposing credentials.
