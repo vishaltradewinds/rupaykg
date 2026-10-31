@@ -1,3 +1,5 @@
+> **Historical snapshot — superseded 2026-10-31.** Historical execution plan dated 2026-10-30. Use `docs/HARDWARE_IOT_CONSOLIDATED_ENGINEERING_REVIEW_2026-10-31.md` and draft PR #158 for the current integrated path. The prior branch/checkpoint details below are retained for traceability only.
+
 # RupayKg Hardware & IoT Stack — Parallel Execution Plan
 
 **Date:** 2026-10-30  
