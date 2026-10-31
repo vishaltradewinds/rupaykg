@@ -1,3 +1,56 @@
+# Latest CTO resume pointer — 2026-10-31 18:13 UTC
+
+**Current repository:** `vishaltradewinds/rupaykg`  
+**Current working branch:** `shakti/atomic-inbox-claim-2026-10-31`  
+**Latest implementation/evidence head before this pointer commit:** `c3f486847d2fb9b033d4518b5907508caee253b8`  
+**Canonical worker/security PR:** #161 (OPEN / DRAFT / unmerged), stacked on #157.  
+**Temporary duplicate PR:** #175 (CLOSED).  
+**Production:** HOLD. Worker OFF. Scheduler OFF. Certification OFF. TRL 9 NOT ESTABLISHED.
+
+## Verified CI milestones
+- PR #157 head `5142781530620b2fca330e7e8f0fe4f53447ea5b`, retargeted to current main `b5e91241d84a6712ff544d3deec1805702f45efd`: exact-head CI [#41200068648](https://github.com/vishaltradewinds/rupaykg/actions/runs/41200068648) PASS. Migration baseline reconstruction, upgrade/idempotency, PostgreSQL acceptance, typecheck, build, browser smoke, evidence upload and container build passed.
+- PR #161 worker code head `797fd76222c601974f9544d05c275371766b8912`: exact-head CI [#41227789668](https://github.com/vishaltradewinds/rupaykg/actions/runs/41227789668) PASS.
+- PR #161 Neon evidence head `4614258d8b753b1a280bfe3a4e7f7799582bd158`: exact-head CI [#41228104125](https://github.com/vishaltradewinds/rupaykg/actions/runs/41228104125) PASS.
+- PR #161 current evidence head `c3f486847d2fb9b033d4518b5907508caee253b8`: exact-head CI [#41228249211](https://github.com/vishaltradewinds/rupaykg/actions/runs/41228249211) PASS.
+- PR #178 agentic swarm architecture head `61f6a969547f3febc9ab37189621754dc6213e87`: exact-head CI [#41228161084](https://github.com/vishaltradewinds/rupaykg/actions/runs/41228161084) PASS.
+- PR #179 migration ledger parity head `4c07fc731daa5e8565771a6301249fbc9c2b9bf0`: exact-head CI [#41226611261](https://github.com/vishaltradewinds/rupaykg/actions/runs/41226611261) PASS.
+
+## Latest read-only Neon findings
+Project `rupaykg-production-fresh` (`steep-mud-79906940`), production branch `br-restless-base-b44cip2h`, staging branch `br-spring-hill-b4544vz5`, database `rupaykg`.
+- Production main has none of the async inbox tables or required worker dependency objects queried.
+- Staging has only `async_mirror_inbox` and `async_mirror_inbox_events` among the required worker schema objects; the runner readiness gate's jurisdiction crosswalk, source snapshot, geography-scope functions and event trigger are absent. Current staging fails the readiness gate.
+- No dedicated worker role exists in Neon role inventory.
+- Existing `rupaykg` login has `BYPASSRLS`, `CREATEDB`, `CREATEROLE`, and `REPLICATION`, and owns staging queue tables. It is not a least-privilege worker identity.
+- Runner code checks distinct role name and schema presence but does not yet attest role attributes, inherited membership, object ownership or exact object-level privileges. This is a required code gate.
+- Detailed evidence: `docs/engineering/checkpoints/2026-10-31-neon-worker-principal-queue-preflight.md`.
+
+## Completed engineering work
+- Worker DB URL is mandatory; no fallback to application URL.
+- Distinct role identity compares decoded username, independent of password/endpoint; malformed or missing identity fails closed.
+- Worker TLS verification enabled by default; CA supported; explicit TLS disable only.
+- Exhausted queue sweep bounded using `SKIP LOCKED`, with quarantine count surfaced.
+- Heartbeat interval bounded relative to lease duration.
+- Regression tests added for role identity, TLS, bounded quarantine and heartbeat.
+- CI now triggers on PRs targeting any base branch; stacked PR #161 is validated without a duplicate main-target PR.
+- PR #157 base reconciled to current main; no code merge was performed.
+- PR #175 closed as duplicate; PR #161 remains canonical.
+- Agent swarm architecture updated to use the canonical worker PR; swarm remains design-only.
+- All checkpoints/session logs are committed in the repository.
+
+## Ordered next gates
+1. Design and implement read-only runtime worker-principal/grant attestation: reject elevated role flags, application-role membership, unsafe ownership, missing required SELECT/column UPDATE/function EXECUTE, and unnecessary event-table writes. Add positive/negative tests.
+2. Rehearse the complete migration dependency chain on a disposable production-shaped Neon branch. Do not apply to production.
+3. Resolve migration 096 source/ledger exception and verify authoritative runtime DB identity for Render without exposing secrets.
+4. Reconcile tenant authorization and RLS using a controlled staged role/policy migration; no blanket RLS enablement.
+5. Extract/review only focused worker components; no wholesale merge of PR #157/#161.
+6. Only after worker role, schema, entrypoint, service lifecycle, budgets, monitoring and recovery gates pass, activate in staging. Production activation requires explicit founder approval.
+7. Continue agent-swarm implementation only on the single governed durable worker/task substrate; no duplicate queue or scheduler.
+
+## Explicit non-actions
+No production/staging DDL/DML, role/grant changes, secrets, Render configuration, deployments, queue state or scheduler state were changed. No worker was activated. CI success is not deployment, certification, independent security sign-off or TRL 9 evidence.
+
+---
+
 ## Autonomous CTO refresh — 2026-10-31 18:06 UTC
 
 **Supersedes all older status/next-step statements below.** Resume from the live branch ref and exact-head CI, not from a historical SHA.
