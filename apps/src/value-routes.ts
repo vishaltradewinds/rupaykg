@@ -32,6 +32,11 @@ export function bwgProfileReviewBasis(): Record<string, unknown> {
     externalRegistrationAsserted: false,
   };
 }
+
+/** BWG reporting data is visible only to members with the explicit report-read capability. */
+export async function canReadBwgWorkspace(client: Pool | PoolClient, auth: AuthContext, organizationId: string): Promise<boolean> {
+  return hasOrganizationPermission(client, auth, organizationId, ["reports:read"]);
+}
 async function evidenceIsVerified(pool: Pool | PoolClient, evidenceId: string, organizationId: string): Promise<boolean> { const result = await pool.query<{ ok: boolean }>(`select exists(select 1 from evidence e join activities a on a.id=e.activity_id where e.id=$1 and a.organization_id=$2 and e.status='VERIFIED' and (e.content_hash is not null or e.content_uri is not null) and a.geography_id is not null and organization_has_geography_scope($2,a.geography_id)) as ok`, [evidenceId, organizationId]); return result.rows[0]?.ok === true; }
 
 export async function registerValueRoutes(app: FastifyInstance, pool: Pool | null): Promise<void> {
@@ -146,6 +151,7 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
     try {
       if (!withTenantTransaction) return reply.code(503).send({ error: "Database unavailable", code: "DATABASE_UNAVAILABLE" });
       const tenantResponse = await withTenantTransaction(tenantDatabaseContextFromAuth(auth), async (client) => {
+      if (!await canReadBwgWorkspace(client, auth, activeOrganizationId)) return { denied: true as const };
       const [profiles, periods, wasteReports, eprReports, esgReports, jurisdictions, schemes] = await Promise.all([
         client.query("select p.*, g.name as jurisdiction_name from bwg_profiles p left join geography g on g.id=p.jurisdiction_id where p.organization_id=any($1::uuid[]) order by p.updated_at desc", [ids]),
         client.query("select * from bwg_reporting_periods where organization_id=any($1::uuid[]) order by period_end desc", [ids]),
@@ -165,6 +171,7 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
       })));
       return { source: "postgresql", syntheticData: false, data: { profiles: profiles.rows, periods: periods.rows, wasteReports: wasteReports.rows, eprReports: eprReports.rows, esgReports: esgReports.rows, jurisdictions: jurisdictions.rows, schemes: schemes.rows, organizations } };
       });
+      if ("denied" in tenantResponse) return reply.code(403).send({ error: "BWG report read permission required", code: "BWG_WORKSPACE_READ_FORBIDDEN" });
       return tenantResponse;
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "BWG reporting workspace unavailable", code: "BWG_WORKSPACE_UNAVAILABLE", syntheticData: false }); }
   });
