@@ -223,3 +223,8 @@ Read this log and `docs/engineering/2026-10-31-migration-reconciliation-audit.md
 93. Added `docs/engineering/GOVERNMENT_INBOX_WORKER_LEAST_PRIVILEGE_GATE_2026-10-31.md` in commit `e5439d5a1cd5c110e52e0d65b054496ca8b1712c`. It records the role split, exact capability matrix, required disposable-clone positive/negative tests, activation prerequisites, and worker lease/crosswalk race risks.
 94. Deliberately did not create role/grant migration or a runner: actual Render runtime identity is unverified, schema-level column/function grants need fresh schema inspection, and eight expired PROCESSING rows in staging must remain untouched. Worker remains OFF; no staging/production queue processing occurred.
 95. Exact-head CI for latest PR #157 device-sync changes remains a required gate. No role/secret/Render/deployment/queue/RLS changes. Production HOLD.
+
+
+### Device-sync exact-head CI confirmation — 2026-10-31 11:30 UTC
+96. CI run #41197036782 for device-sync code commit `f8d76a33c46a709e8ae6ce97153c3c37b42b0e4d` completed successfully. All workflow steps passed: dependency audit, migration validation, exact production baseline reconstruction, pre-upgrade baseline capture, migration upgrade/idempotency, typecheck, build, browser smoke, disposable PostgreSQL acceptance, evidence upload and production container build.
+97. This validates code at `f8d76a3...`; subsequent worker least-privilege documentation commit `e5439d5...` does not change runtime code but is the current PR #157 head. Keep PR draft for outstanding worker-role/runtime-identity and independent-review gates.
