@@ -5,11 +5,11 @@
 ## Current repository state — 2026-10-31
 - Repository: `vishaltradewinds/rupaykg`.
 - Working branch: `shakti/atomic-inbox-claim-2026-10-31`.
-- Latest recorded branch HEAD before this pointer refresh: `b2fe65d5fa5634aa7fcaa70557dfb16a48841c8c` (autonomous execution checkpoint commit). Verify live branch HEAD before continuing.
+- Latest recorded branch HEAD before this pointer refresh: `a2fc40643ff61721fd5c14114a5361fd2a61914c` (BWG HTTP authentication boundary checkpoint commit). Verify live branch HEAD before continuing.
 - Main base: `862512c8c904cef0f604df0350f02672318953af`.
 - PR #175: OPEN/DRAFT, unmerged; do not merge or rebase without dependency, independent review, migration and security gates. PR URL: https://github.com/vishaltradewinds/rupaykg/pull/175.
 - Branch divergence last freshly measured: 307 ahead / 1 behind main (16:19 UTC preflight); remeasure before integration decisions.
-- Latest checkpoint: [Autonomous execution and Founder time protection](./checkpoints/2026-10-31-autonomous-execution-founder-time-protection.md).
+- Latest checkpoint: [BWG HTTP authentication boundary tests](./checkpoints/2026-10-31-bwg-http-auth-boundary-tests.md). Previous governance checkpoint: [Autonomous execution and Founder time protection](./checkpoints/2026-10-31-autonomous-execution-founder-time-protection.md).
 - Latest preflight: [Autonomous execution protocol preflight](./session-logs/2026-10-31-1624-utc-autonomous-execution-protocol.md).
 
 ## Latest completed work
@@ -18,7 +18,7 @@
 - Root `AGENTS.md` policy commit: `ec3a2b2a3fe46a1e3fcae7be994f7f775e2699ef`.
 - Immutable checkpoint commit: `b2fe65d5fa5634aa7fcaa70557dfb16a48841c8c`.
 - Added mandatory section 9, **Autonomous execution and Founder time protection**: proactive discovery and prioritisation; implementation rather than plan-only work; dependency-aware parallelisation; continue safe work around blockers; selective escalation; continuity checkpoints; exception-based reporting; Founder time protection; truthful and bounded authority. Existing completion standard is now section 10.
-- No production, schema, deployment, worker, scheduler or certification changes in this documentation-only batch.
+- No production, schema, deployment, worker, scheduler or certification changes in the governance batch. The follow-on BWG test batch adds HTTP authentication boundary coverage only.
 
 ### BWG/EPR engineering
 - BWG workspace read authorization implementation: `825d430a4b8140b7e3072a536508632db8547359`.
@@ -26,6 +26,7 @@
 - Corrected stakeholder matrix: `d8f13a9abcd7618c4525958ad0972ef45341256c`.
 - EPR quantity validation / narrow database constraint mapping work was present at preflight HEAD `4ae53077a37d023818879f9470fce71bb795dcd1`.
 - Applicability conflict classifier test commit: `62a9ab9e0dee51bac9b69853d17af0224c8b826a`.
+- BWG unauthenticated HTTP boundary test commit: `f9cb9b8ccbd1f4971b06884fabfe1041200782a8`; immutable checkpoint: [BWG HTTP authentication boundary tests](./checkpoints/2026-10-31-bwg-http-auth-boundary-tests.md). All six registered BWG routes are exercised through Fastify injection and must return 401/AUTH_REQUIRED without a session.
 - Correct BWG route finding: all six BWG API paths exist in `apps/src/value-routes.ts` and are registered by `registerValueRoutes()` in `apps/src/server.ts`. Do not create duplicate routes or tables.
 - Production BWG tables: `bwg_profiles`, `bwg_reporting_periods`, `bwg_waste_reports`, `bwg_epr_reports`, `bwg_esg_reports`.
 - Issue #176 tracks remaining authorization, statutory approval linkage, quantity/error semantics and HTTP acceptance: https://github.com/vishaltradewinds/rupaykg/issues/176.
@@ -35,12 +36,14 @@
 - CI #3956 / ID `41218359754`: SUCCESS on `824acb8d0c3866651d9038d369565dc7073a62b4`.
 - CI #3960 / ID `41218598855`: SUCCESS on `4ae53077a37d023818879f9470fce71bb795dcd1`; validate job included dependency audit, migration validation, production-baseline reconstruction, proposed migration upgrade/idempotency, typecheck, build, browser smoke, disposable PostgreSQL acceptance tests, evidence upload and container build.
 - CI #3965 / ID `41219392554`: SUCCESS on `62a9ab9e0dee51bac9b69853d17af0224c8b826a`.
-- CI #3967 / ID `41219650791`: was IN_PROGRESS on governance commit `ec3a2b2a3fe46a1e3fcae7be994f7f775e2699ef` at last poll; recheck it.
+- CI #3967 / ID `41219650791`: SUCCESS on governance commit `ec3a2b2a3fe46a1e3fcae7be994f7f775e2699ef`.
+- CI #3971 / ID `41219851252`: IN_PROGRESS on BWG HTTP test commit `f9cb9b8ccbd1f4971b06884fabfe1041200782a8`; recheck exact SHA.
+- Checkpoint commit `a2fc40643ff61721fd5c14114a5361fd2a61914c` had no exact-head CI run returned at checkpoint creation.
 - Checkpoint commit `b2fe65d5fa5634aa7fcaa70557dfb16a48841c8c` had no run returned by exact-head query at checkpoint creation. Check latest Actions before claiming current-head CI.
 - Never infer a current-head pass from a prior SHA.
 
 ## BWG remaining work — verified NOT DONE
-1. Full HTTP acceptance tests for all six BWG API paths; helper-level unit tests are not sufficient.
+1. Full authenticated HTTP acceptance tests for all six BWG API paths remain NOT DONE. The new unauthenticated HTTP test verifies all six routes return 401/AUTH_REQUIRED without a session; authenticated permission, cross-organization and geography cases still require DB-backed acceptance tests.
 2. Positive and negative HTTP tests for unauthenticated requests, unverified membership, missing read/write permission, cross-organization access and geography scope.
 3. Resolve the statutory workflow boundary: `POST /api/v1/statutory/bwg/assess` writes `organization_bwg_assessments`; BWG profile intake writes `bwg_profiles` as `REVIEW_REQUIRED/PENDING`. Migration 044 requires `APPLICABLE/VERIFIED` before reporting-period creation. No authorized dual-control transition connecting the assessment to verified profile state has been established. Never auto-promote.
 4. Test evidence provenance, verification binding, read-after-write, idempotency, period trigger rejection and error semantics.
@@ -76,8 +79,8 @@ Generator must be first-class and distinct from BWG. A complete general generato
 - TRL 9 is NOT ESTABLISHED. Do not claim national production readiness.
 
 ## Ordered next execution
-1. Re-poll CI #3967 and check whether any newer exact-HEAD run exists.
-2. Complete BWG route-level HTTP acceptance and negative authorization tests.
+1. Re-poll CI #3971 on exact test SHA `f9cb9b8ccbd1f4971b06884fabfe1041200782a8` and check newer exact-head runs.
+2. Add DB-backed authenticated HTTP tests for missing `reports:read`/write permission, unverified membership, cross-organization payload mismatch and geography denial.
 3. Design and test the evidence-backed, dual-control statutory BWG assessment → verified-profile transition; preserve separation of duties and source/version provenance.
 4. Complete EPR route-level quantity and DB error mapping tests.
 5. Continue the all-route UI/API/schema/permission/report/test crosswalk and generator-to-processor lifecycle.
