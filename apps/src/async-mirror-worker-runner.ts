@@ -79,7 +79,16 @@ export type WorkerPrincipalAttestation = {
   owns_public_schema: boolean;
   has_public_schema_create: boolean;
   inbox_select: boolean;
-  inbox_update: boolean;
+  inbox_table_update: boolean;
+  inbox_update_status: boolean;
+  inbox_update_attempts: boolean;
+  inbox_update_lease_token: boolean;
+  inbox_update_lease_until: boolean;
+  inbox_update_quarantined_at: boolean;
+  inbox_update_last_error_code: boolean;
+  inbox_update_next_attempt_at: boolean;
+  inbox_update_processed_at: boolean;
+  inbox_update_validation_summary: boolean;
   crosswalk_select: boolean;
   source_snapshot_select: boolean;
   activity_select: boolean;
@@ -133,7 +142,16 @@ export async function assertGovernmentInboxWorkerPrincipal(
        exists (select 1 from pg_namespace n where n.nspname='public' and n.nspowner=r.oid) as owns_public_schema,
        has_schema_privilege(r.oid, 'public', 'CREATE') as has_public_schema_create,
        has_table_privilege(r.oid, 'public.async_mirror_inbox', 'SELECT') as inbox_select,
-       has_table_privilege(r.oid, 'public.async_mirror_inbox', 'UPDATE') as inbox_update,
+       has_table_privilege(r.oid, 'public.async_mirror_inbox', 'UPDATE') as inbox_table_update,
+       has_column_privilege(r.oid, 'public.async_mirror_inbox', 'status', 'UPDATE') as inbox_update_status,
+       has_column_privilege(r.oid, 'public.async_mirror_inbox', 'attempts', 'UPDATE') as inbox_update_attempts,
+       has_column_privilege(r.oid, 'public.async_mirror_inbox', 'lease_token', 'UPDATE') as inbox_update_lease_token,
+       has_column_privilege(r.oid, 'public.async_mirror_inbox', 'lease_until', 'UPDATE') as inbox_update_lease_until,
+       has_column_privilege(r.oid, 'public.async_mirror_inbox', 'quarantined_at', 'UPDATE') as inbox_update_quarantined_at,
+       has_column_privilege(r.oid, 'public.async_mirror_inbox', 'last_error_code', 'UPDATE') as inbox_update_last_error_code,
+       has_column_privilege(r.oid, 'public.async_mirror_inbox', 'next_attempt_at', 'UPDATE') as inbox_update_next_attempt_at,
+       has_column_privilege(r.oid, 'public.async_mirror_inbox', 'processed_at', 'UPDATE') as inbox_update_processed_at,
+       has_column_privilege(r.oid, 'public.async_mirror_inbox', 'validation_summary', 'UPDATE') as inbox_update_validation_summary,
        has_table_privilege(r.oid, 'public.government_jurisdiction_crosswalks', 'SELECT') as crosswalk_select,
        has_table_privilege(r.oid, 'public.authoritative_source_snapshots', 'SELECT') as source_snapshot_select,
        has_table_privilege(r.oid, 'public.activities', 'SELECT') as activity_select,
@@ -161,7 +179,21 @@ export async function assertGovernmentInboxWorkerPrincipal(
   if (role.owns_public_schema) violations.push("PUBLIC_SCHEMA_OWNERSHIP");
   if (role.has_public_schema_create) violations.push("PUBLIC_SCHEMA_CREATE");
   if (!role.inbox_select) violations.push("INBOX_SELECT_MISSING");
-  if (!role.inbox_update) violations.push("INBOX_UPDATE_MISSING");
+  if (role.inbox_table_update) violations.push("INBOX_TABLE_LEVEL_UPDATE_TOO_BROAD");
+  const updateColumns: Array<[keyof WorkerPrincipalAttestation, string]> = [
+    ["inbox_update_status", "INBOX_STATUS_UPDATE_MISSING"],
+    ["inbox_update_attempts", "INBOX_ATTEMPTS_UPDATE_MISSING"],
+    ["inbox_update_lease_token", "INBOX_LEASE_TOKEN_UPDATE_MISSING"],
+    ["inbox_update_lease_until", "INBOX_LEASE_UNTIL_UPDATE_MISSING"],
+    ["inbox_update_quarantined_at", "INBOX_QUARANTINED_AT_UPDATE_MISSING"],
+    ["inbox_update_last_error_code", "INBOX_LAST_ERROR_UPDATE_MISSING"],
+    ["inbox_update_next_attempt_at", "INBOX_NEXT_ATTEMPT_UPDATE_MISSING"],
+    ["inbox_update_processed_at", "INBOX_PROCESSED_AT_UPDATE_MISSING"],
+    ["inbox_update_validation_summary", "INBOX_VALIDATION_SUMMARY_UPDATE_MISSING"],
+  ];
+  for (const [column, code] of updateColumns) {
+    if (!role[column]) violations.push(code);
+  }
   if (!role.crosswalk_select) violations.push("CROSSWALK_SELECT_MISSING");
   if (!role.source_snapshot_select) violations.push("SOURCE_SNAPSHOT_SELECT_MISSING");
   if (!role.activity_select) violations.push("ACTIVITY_SELECT_MISSING");
