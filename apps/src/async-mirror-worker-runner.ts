@@ -1,9 +1,12 @@
 import { Pool, type PoolConfig } from "pg";
 import type { Pool as PoolType } from "pg";
+import { databaseTlsConfig } from "./database-tls.js";
 
 export type GovernmentInboxWorkerEnvironment = {
   GOVERNMENT_INBOX_DATABASE_URL?: string;
   DATABASE_URL?: string;
+  DATABASE_SSL?: "require" | "false";
+  DATABASE_CA_CERT?: string;
 };
 
 export type GovernmentInboxWorkerPoolFactory = (config: PoolConfig) => PoolType;
@@ -26,7 +29,13 @@ export function createGovernmentInboxWorkerPool(
     throw new Error("GOVERNMENT_INBOX_DATABASE_PRINCIPAL_MUST_BE_DEDICATED");
   }
 
-  return poolFactory({ connectionString: workerUrl, max: 2, application_name: "rupaykg-government-inbox-worker" });
+  const ssl = databaseTlsConfig(env.DATABASE_SSL, env.DATABASE_CA_CERT);
+  return poolFactory({
+    connectionString: workerUrl,
+    max: 2,
+    application_name: "rupaykg-government-inbox-worker",
+    ...(ssl ? { ssl } : {}),
+  });
 }
 
 function sameDatabasePrincipal(left: string, right: string): boolean {
