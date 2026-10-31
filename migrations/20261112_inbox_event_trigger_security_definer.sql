@@ -16,7 +16,7 @@ grant usage on sequence public.async_mirror_inbox_events_id_seq to rupaykg_inbox
 -- PostgreSQL requires the new owner to have CREATE on the containing schema
 -- during ownership transfer. Grant temporarily, transfer ownership, then revoke.
 grant create on schema public to rupaykg_inbox_event_writer;
-grant rupaykg_inbox_event_writer to current_user;
+grant rupaykg_inbox_event_writer to current_user with admin false, inherit false, set true;
 
 create or replace function public.record_async_mirror_inbox_event()
 returns trigger
@@ -48,3 +48,15 @@ comment on function public.record_async_mirror_inbox_event() is
 alter function public.record_async_mirror_inbox_event() owner to rupaykg_inbox_event_writer;
 revoke create on schema public from rupaykg_inbox_event_writer;
 revoke rupaykg_inbox_event_writer from current_user;
+
+-- Some managed PostgreSQL providers retain a provider-owned, non-inheriting
+-- membership row for the database owner. Fail closed if the migration login
+-- can still SET ROLE or inherit the capability after its temporary grant is revoked.
+do $
+begin
+  if pg_has_role(current_user, 'rupaykg_inbox_event_writer', 'SET')
+     or pg_has_role(current_user, 'rupaykg_inbox_event_writer', 'USAGE') then
+    raise exception 'INBOX_EVENT_WRITER_MUST_NOT_BE_SET_OR_INHERITED_BY_MIGRATION_LOGIN';
+  end if;
+end
+$;
