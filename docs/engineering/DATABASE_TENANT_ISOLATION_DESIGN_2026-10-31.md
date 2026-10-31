@@ -265,3 +265,14 @@ On 2026-10-31, all four routes in `apps/src/epr-return-routes.ts` were moved to 
 - `POST /api/v1/epr/returns/:returnId/external-reference`: row lock, active-organization check, permission, state/immutability checks and reference update share one transaction.
 
 The EPR return module no longer performs tenant-sensitive pool-level queries or manual transactions. The parent BWG module's EPR obligation listing was separately migrated in Section 17. Exact-head CI for the full EPR route batch is pending; EPR statutory workflows still require business-rule, authorization, evidence and duplicate/balance acceptance tests, plus independent compliance review. No external government submission is performed by these routes.
+
+
+## 19. CPCB SWM stakeholder workspace route adoption
+
+On 2026-10-31, all three routes in `apps/src/cpcb-swm-routes.ts` were moved to tenant-context transactions:
+
+- `GET /api/v1/cpcb-swm/workspaces`: active-organization permission and workspace/history listing share one transaction.
+- `POST /api/v1/cpcb-swm/workspaces`: permission, optional geography authorization, workspace insert, status-history insert and hash-chain audit event share one transaction.
+- `PATCH /api/v1/cpcb-swm/workspaces/:workspaceId`: permission, optional geography authorization, row lock, update, status-history append and audit event share one transaction.
+
+The routes now use the verified active organization rather than a request-selected tenant. Audit writes remain in the same transaction as the governed workspace mutation. Exact-head CI is pending. Statutory status remains explicitly user-reported/unverified; this refactor does not represent a CPCB filing or government acceptance.
