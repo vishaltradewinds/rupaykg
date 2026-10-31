@@ -1,73 +1,59 @@
 # RupayKg — Latest Engineering Resume Point
 
-> Read `AGENTS.md` first. This pointer is the active hand-off; historical checkpoints are immutable.
+> Read `AGENTS.md` first. This is the active hand-off; dated checkpoints are immutable.
 
-## Current verified snapshot — 2026-10-31
+## Current session — 2026-10-31 repository readiness audit
 - Repository: `vishaltradewinds/rupaykg`
 - Working branch: `shakti/atomic-inbox-claim-2026-10-31`
-- Latest completed immutable checkpoint: `95178ee8cf2c9048287f85200929db139f312015`.
-- Latest production FK/privilege review: [PRODUCTION_FK_OWNERSHIP_AND_PRIVILEGE_REVIEW_2026-10-31.md](../security/PRODUCTION_FK_OWNERSHIP_AND_PRIVILEGE_REVIEW_2026-10-31.md).
-- Latest checkpoint: [2026-10-31 FK ownership and privilege review](./checkpoints/2026-10-31-fk-ownership-privilege-review.md).
-- Previous checkpoint: [API/database authorization mapping](./checkpoints/2026-10-31-api-database-authorization-map.md).
-- Starting HEAD for this batch: `330eac0afa5ff977b6755debbbcf1154b7f75ca8`; exact-head CI run #3939 completed SUCCESS before this documentation batch. New documentation HEAD requires its own exact-head CI check.
-- PRs #175, #161 and #173 remain unmerged in draft status at last verified state; recheck exact current status and dependency graph before any merge.
+- Verified branch HEAD immediately before this pointer update: `1e3d59e1d05d324fb4c78603c3c66ee62987fdd2`.
+- Audit preflight log: [2026-10-31 repository readiness audit preflight](./session-logs/2026-10-31-1550-utc-repository-readiness-audit-preflight.md).
+- Audit report: [RupayKg repository-wide readiness and execution audit](./RUPAYKG_REPOSITORY_READINESS_AND_EXECUTION_AUDIT_2026-10-31.md).
+- Latest immutable checkpoint: [2026-10-31 repository readiness and execution audit](./checkpoints/2026-10-31-repository-readiness-execution-audit.md).
+- Audit report commit: `bf286b5aebade12aafd7cd56011eb1310bea30f0`.
+- Checkpoint commit: `1e3d59e1d05d324fb4c78603c3c66ee62987fdd2`.
+- Pre-audit exact-head CI: run #3942 / ID `41216157190`, SUCCESS on `afbbfeffdc60c614332acee965964de1785ceb1b`.
+- The final pointer update is documentation-only. Its returned commit SHA and exact-head CI must be rechecked immediately after this write; do not infer CI success from run #3942.
+- PR #175 OPEN/DRAFT on this branch; PR #161 OPEN/DRAFT on the same head but stacked; PR #173 OPEN/DRAFT on a separate branch. Do not merge any independently without a reviewed dependency graph.
+- Open PR search returned 84. Branch comparison against main base `862512c8c904cef0f604df0350f02672318953af`: 289 ahead, 1 behind, 101 changed files. Integration governance risk HIGH.
 
 ## Product and architecture
-RupayKg is intended as pan-India national environmental infrastructure for waste/environmental operations, statutory/EPR compliance, digital MRV and governed environmental-value workflows. Current baseline is a PostgreSQL-centred modular monolith: React/Vite/TypeScript frontend, Fastify/Node/TypeScript API, shared domain packages, PostgreSQL operational system of record, controlled workers and external adapters. Do not split into microservices without measured evidence.
+RupayKg is intended as pan-India national environmental infrastructure. Keep the PostgreSQL-centred modular monolith; do not split services without measured evidence. Product capabilities span generation, segregation, collection, transport, aggregation, processing, compliance, evidence/MRV, value workflows and reporting.
 
 Truth lifecycle:
 `LOCAL_CAPTURED → SYNC_RECEIVED → AUTHORITATIVE → VERIFIED → VALUE_ELIGIBLE → CERTIFIED/ISSUED → REGISTERED → TRANSFERRED/RETIRED → SETTLED → REPORTED`.
 No state may be inferred from a prior state.
 
-Mandatory Shakti Standards apply: reality/context, evidence, statutory boundaries, feasibility, validation, design, engineering, testing, approval, certification, deployment, operation, measurement and continuous assurance.
-Golden Rule: **ONE SHAKTI STANDARD. MANY PROJECT-SPECIFIC OPERATING SYSTEMS.**
-Assess software, hardware, integrated service and operational TRL separately. TRL 9 is NOT ESTABLISHED.
+Mandatory Shakti Standards apply. Golden Rule: **ONE SHAKTI STANDARD. MANY PROJECT-SPECIFIC OPERATING SYSTEMS.** Software, hardware, integrated service and operational TRL must be assessed separately. TRL 9 is NOT ESTABLISHED.
 
-## Sole authoritative database
+## Sole authoritative live database
 - Neon project: `rupaykg-production-fresh`, ID `steep-mud-79906940`.
 - Sole authoritative production branch: `main`, ID `br-restless-base-b44cip2h`.
 - Database: `rupaykg`.
-- Verified production catalog baseline: 67 public base tables; 0 RLS-enabled; 0 public policies; 92 migration rows; max version `20261021`.
-- Production FK constraints: 181.
-- Production triggers: 109 trigger rows across 33 tables, 67 distinct trigger functions.
-- Current privileged role catalog: `cloud_admin` is superuser/BYPASSRLS; `neon_service`, `rupaykg` and `neon_superuser` have BYPASSRLS and broad create/replication attributes; `rupaykg` is a member of `neon_superuser`. Do not use any of these as assumed least-privilege runtime roles.
-- Staging/rehearsal branches are non-authoritative. Do not promote, reset or delete them merely because schema/migration counts are newer.
-- No production DDL/DML, migration, role/grant/policy change, branch operation, deployment or worker activation occurred.
+- Latest recorded read-only catalog: 67 public base tables; 0 RLS-enabled; 0 public policies; 92 migration rows through `20261021`; 181 foreign keys; 109 trigger rows across 33 tables/67 trigger functions.
+- Broad BYPASSRLS/role-creation attributes exist in the inspected role catalog; no least-privilege application or worker runtime principal is established.
+- No production DDL/DML, migration, role/grant/RLS change, production branch operation, deployment, worker activation or scheduler activation occurred.
 
-## Current security assessment
-- Database-enforced tenant isolation is NOT ESTABLISHED: RLS disabled on all 67 public tables.
-- Direct `organization_id`: 23 tables. Direct `identity_id`: 8 tables. Three overlap. 39 tables have neither direct key and require FK-derived/semantic classification.
-- FK graph has 181 constraints. Key child-parent cases include BWG reports → reporting periods/evidence/verifications; carbon calculations → activities/projects/methodology/reference; chain of custody → activity/resource flow/evidence/actor organization; SWM status history → workspace/organization/actor; EPR allocations/transfers → credits/obligations/parties/evidence/verifications.
-- Many records are bilateral or multi-party; do not use a single-organization predicate for credentials, transfers, settlements, chain-of-custody or EPR credit movement.
-- Production has 109 trigger rows across 33 tables, invoking 67 distinct trigger functions. These enforce important lifecycle/integrity rules but are not access-control substitutes.
-- Application authentication validates sessions, identities and memberships. Shared tenant transaction helper sets transaction-local GUCs from verified application context, but plain GUCs are forgeable by a direct SQL client and cannot be the only RLS authority.
-- Auth, registry, sync, onboarding hierarchy, intelligence and platform-admin route families have direct/manual DB execution patterns and require distinct identity, bilateral, device, governance or platform-control boundaries.
-- Function inventory is first-pass only; no displayed application SECURITY DEFINER function found, but full definitions/search_path/ACL/execute grants remain unverified.
-- ACL/default privileges/sequence grants review was blocked by the inspection safety layer; this is an evidence gap, not proof of safety.
-- Backup/restore independent rehearsal, RPO/RTO and actual app runtime principal remain unverified.
-- Production release HOLD. Worker OFF. Scheduler OFF. Certification OFF. TRL 9 not claimed.
-
-## Completed latest batch
-- Verified starting HEAD CI run #3939 SUCCESS.
-- Added `docs/security/PRODUCTION_FK_OWNERSHIP_AND_PRIVILEGE_REVIEW_2026-10-31.md`.
-- Added immutable checkpoint `docs/engineering/checkpoints/2026-10-31-fk-ownership-privilege-review.md`.
-- Confirmed 181 FK constraints and 109 trigger rows/33 tables/67 trigger functions.
-- Recorded role privilege issue and table-specific authorization design principles.
-- No production changes.
+## Audit verdict
+**ENGINEERING CANDIDATE; NATIONAL PRODUCTION EXECUTION = NO-GO / HOLD.**
+- Core foundations exist: identity/organization, geography, field/offline sync, resource flows/custody, evidence/MRV, BWG/SWM, EPR, CCTS methodology, ESG, intelligence, registry/settlement controls and proposed government-source intake.
+- Complete end-to-end stakeholder work/reporting contract is not yet established. Generator exists in product concept and BWG/SWM foundations, but full generator-to-destination/reporting journey is not proven.
+- Tenant isolation NOT ESTABLISHED; 0/67 production tables have RLS enabled.
+- Production migration ledger remains 92 rows; worker migration chain is rehearsal/candidate only.
+- Worker OFF; scheduler OFF; national queue authority-scope ADR not approved.
+- External regulatory/registry/Hedera/settlement acceptance, hardware qualification, field operation, backup/restore RPO/RTO, SLOs and TRL 9 are NOT ESTABLISHED.
+- Read full audit report for complete findings and ordered execution gates.
 
 ## Next executable sequence
-1. Verify actual branch HEAD, exact-head CI and PR stack/dependencies.
-2. Complete exhaustive route-handler → SQL callsite → table → operation → principal → tenant/device/platform-context mapping.
-3. Finish ACL, schema/table/sequence/function grants, default privileges, ownership, memberships and effective privilege review with narrowly scoped read-only queries.
-4. Inspect complete function/trigger definitions, SECURITY DEFINER, search_path and dynamic SQL.
-5. Complete table-by-table FK ownership classification for all 67 tables.
-6. Design least-privilege API, auth, migration, worker, event-writer and operations roles. Do not use current broad roles for runtime.
-7. Design cryptographically authenticated tenant/device/platform capability context; GUCs may carry context but cannot be the only authority proof.
-8. Establish Neon backup/PITR/restore options, retention, RPO/RTO and independent restore rehearsal; no production setting change without explicit approval.
-9. Rehearse table-specific RLS and migrations on a disposable production-derived Neon branch; test forged context, cross-tenant, pooling, revoked memberships, bilateral access, platform-admin separation, sync replay and trigger/function behavior.
-10. Independent security review and explicit approval before any production DDL/DML, migration, role/grant/RLS change or worker activation.
-11. Continue statutory source contracts, external Guardian/Hedera verification, field hardware, pan-India operations and Shakti/TRL assurance.
-12. At the end of every coherent batch, add an immutable checkpoint and update this pointer.
+1. Recheck current branch ref, exact-head CI, PR metadata and dependencies. Do not merge from green CI alone.
+2. Create the National Stakeholder Work-and-Reporting Matrix for Generator, collector, transporter, aggregator/MRF, processor, ULB/Panchayat, producer/importer/brand owner, buyer/offtaker, verifier, regulator, carbon/MRV participant, funder/insurer and platform operator.
+3. Trace every workflow against actual UI, route, database tables, evidence, permissions, reports, exception handling and automated/field acceptance tests.
+4. Inventory all open PRs and establish one dependency-controlled integration spine; resolve duplicate, stale and conflicting candidates.
+5. Complete P0 route-to-SQL authorization mapping, all-table/FK ownership, ACL/function/sequence review, least-privilege principals, cryptographically trusted context and table-specific RLS rehearsal.
+6. Reconcile production migration history and candidate migrations on a disposable production-derived Neon branch. No production migration without independent review, restore readiness and explicit approval.
+7. Complete worker authority approval, tenant consumer, runtime identity, monitoring, recovery and negative security tests before activation.
+8. Validate official regulatory sources and external interfaces; qualify hardware and conduct representative field trials.
+9. Prove operational SLOs, backup restore, RPO/RTO, incident response, privacy, support and multi-site operation before production certification or TRL advancement.
+10. At every coherent batch, add an immutable checkpoint and update this pointer.
 
 ## Resume instruction
-Do not restart with a generic repository audit. Read `AGENTS.md`, this pointer and the latest checkpoint. Verify branch/HEAD/PR/exact-head CI and Neon authority. Continue at step 1 above. Production remains read-only until security, recovery, review and approval gates pass.
+Continue from this audit. Do not restart from scratch, do not infer production readiness from CI, and do not modify authoritative Neon production without explicit approval and all Shakti gates.
