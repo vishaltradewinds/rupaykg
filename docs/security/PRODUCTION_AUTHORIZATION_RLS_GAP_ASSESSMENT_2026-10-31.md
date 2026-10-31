@@ -8,7 +8,7 @@
 
 ## 1. Executive assessment
 
-<badge> P0 / P1 RELEASE HOLD </badge>
+**P0 / P1 RELEASE HOLD**
 
 The production database currently has **no database-enforced row-level security on any of its 67 public tables**. The sole application login role `rupaykg` owns all 67 tables, has `BYPASSRLS`, `CREATEROLE`, `CREATEDB`, and `REPLICATION`, and is a member of `neon_superuser`. This is not a least-privilege runtime identity.
 
