@@ -116,3 +116,14 @@ test("worker pool rejects URL-encoded variants of the same database role", () =>
     /GOVERNMENT_INBOX_DATABASE_PRINCIPAL_MUST_BE_DEDICATED/,
   );
 });
+
+
+test("worker pool rejects the same role across endpoint aliases and ports", () => {
+  assert.throws(
+    () => createGovernmentInboxWorkerPool({
+      DATABASE_URL: "postgres://shared_app:old-secret@db-primary.example:5432/rupaykg",
+      GOVERNMENT_INBOX_DATABASE_URL: "postgres://shared_app:new-secret@pooler.example:6432/otherdb",
+    }),
+    /GOVERNMENT_INBOX_DATABASE_PRINCIPAL_MUST_BE_DEDICATED/,
+  );
+});
