@@ -99,6 +99,10 @@ test("expired or incomplete calibration blocks MRV", () => {
 test("non-measuring instrument requires written calibration rationale and cannot back physical measurements", () => {
   const nonMeasuring = approvedInstrument({
     instrument_code: "EDGE-GW-01",
+    measurement_instrument: false,
+    manufacturer_serial_number: null,
+    asset_tag: "ASSET-EDGE-GW-01",
+    calibration_serial_number: null,
     supported_parameter_codes: [],
     calibration_required: false,
     calibration_status: "NOT_APPLICABLE_WITH_JUSTIFICATION",
