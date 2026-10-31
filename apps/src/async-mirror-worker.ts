@@ -193,6 +193,11 @@ export async function runGovernmentInboxWorker(
         // Row locks serialize retirement/revocation; SERIALIZABLE protects lookup predicates.
         sourceResolutionClient = await pool.connect();
         await sourceResolutionClient.query("BEGIN ISOLATION LEVEL SERIALIZABLE");
+        const sourceVersion = (row.payload as { batchMetadata?: { sourceVersion?: unknown } })?.batchMetadata?.sourceVersion;
+        await sourceResolutionClient.query(
+          "select pg_advisory_xact_lock(hashtextextended($1 || chr(31) || $2 || chr(31) || $3, 0))",
+          [row.authority_code, row.municipal_code, sourceVersion],
+        );
         const mapped = await sourceResolutionClient.query<{
           id: string; organization_id: string; geography_id: string; activity_id: string | null;
           source_version: string; source_snapshot_id: string; snapshot_content_sha256: string;
