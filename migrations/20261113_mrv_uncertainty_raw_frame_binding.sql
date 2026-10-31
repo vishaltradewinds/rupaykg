@@ -66,6 +66,7 @@ begin
     select 1 from mrv_instruments i
      where i.id=new.instrument_id and i.organization_id=artifact.organization_id
        and i.approval_status='VERIFIED'
+       and i.calibration_evidence_artifact_version_id=new.calibration_artifact_version_id
   ) then
     raise exception 'MRV uncertainty calibration artifact must belong to the verified instrument organization';
   end if;
@@ -105,6 +106,7 @@ returns boolean language sql stable as $$
       join mrv_instruments i on i.id=u.instrument_id
      where u.id=record_id
        and i.approval_status='VERIFIED'
+       and i.calibration_evidence_artifact_version_id=v.id
        and s.organization_id=i.organization_id
        and v.sha256=lower(u.calibration_artifact_sha256)
        and e.content_hash=v.sha256
