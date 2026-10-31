@@ -138,3 +138,20 @@ The worker now has a bounded validation deadline and lease heartbeat:
 Unit tests cover strict timeout/abort, retry error code and heartbeat issuance. Disposable PostgreSQL acceptance now checks that a cooperative validator timeout produces RETRY and that a validator running longer than the original lease window retains a renewed lease and can complete under its original token.
 
 This is an engineering implementation and test addition only. Exact-head CI and independent code review remain mandatory. Validator implementations must honor AbortSignal to stop underlying work promptly; Promise racing prevents the worker from waiting indefinitely but cannot forcibly terminate arbitrary JavaScript or remote operations that ignore cancellation. Keep validators side-effect free. No production/staging queue, schema, role, grant, service, schedule or deployment was changed. Worker OFF; production HOLD; TRL 9 unclaimed.
+
+
+## Production migration-principal authority reconciliation — 2026-10-31
+
+Read-only Neon inspection reconfirmed the authoritative project and branch identities:
+
+- Project `rupaykg-production-fresh`, project ID `steep-mud-79906940`, PostgreSQL 18.6.
+- Production `main`: `br-restless-base-b44cip2h`; database `rupaykg`.
+- Staging: `br-spring-hill-b4544vz5`; production-derived rehearsal: `br-spring-lab-b4hqez2o` (ready, idle, zero compute time).
+- On production main, current/session user is `rupaykg`. It has CREATEROLE, CREATEDB, REPLICATION and BYPASSRLS, and is a member of `neon_superuser` with SET/INHERIT but not ADMIN OPTION. It has CREATE on schema public. Public schema owner is `pg_database_owner`; the 67 public tables are owned by `rupaykg`; public functions are split between `rupaykg` and `cloud_admin`.
+- Production main currently has no async inbox, inbox event, crosswalk or authoritative source snapshot tables, no `record_async_mirror_inbox_event()` function, and no `rupaykg_inbox_event_writer` role.
+- Staging has `async_mirror_inbox` and `async_mirror_inbox_events`, both owned by `rupaykg`, but both have RLS and FORCE RLS disabled. Its current event trigger function is owned by `rupaykg`, is not SECURITY DEFINER, and the proposed NOLOGIN writer role does not exist there. The proposed migration #12 is not yet applied on staging.
+- This proves the observed production principal has the role-creation attribute and schema CREATE needed by the proposed capability-role migration, and staging's existing event function is owned by that same principal. It does not by itself prove the full GRANT-to-current-user / ALTER FUNCTION OWNER / REVOKE sequence under the non-superuser principal.
+
+Added disposable PostgreSQL acceptance that simulates the observed production role attributes (CREATEROLE, CREATEDB, REPLICATION, BYPASSRLS, non-superuser), creates the NOLOGIN least-privilege event-writer role, grants membership to CURRENT_USER, transfers a SECURITY DEFINER trigger function, revokes temporary CREATE/membership, and proves the function can append to its target table after ownership transfer. The test is not a live Neon rehearsal. Exact-head CI is pending.
+
+No Neon SQL mutations, role/grant changes, compute activation, migration preparation, production/staging schema changes or worker activation occurred. Production HOLD; worker OFF; RLS/global queue governance remains unresolved; TRL 9 unclaimed.
