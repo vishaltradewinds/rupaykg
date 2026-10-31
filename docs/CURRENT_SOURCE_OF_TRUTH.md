@@ -66,3 +66,15 @@ The production-applied migration `096_verification_authorization_provenance.sql`
 - Synthetic rehearsal-only inbox insert and status transition generated exactly two append-only event rows through the trigger. An attempted event-row UPDATE was rejected with `async_mirror_inbox_events is append-only`. No real tenant or production queue rows were touched.
 - RLS remains disabled with zero policies on inbox, event, crosswalk, source-snapshot and regulatory-rule-version tables in the rehearsal. This is a hard worker activation blocker pending approved national-system-queue versus tenant-scoped authority model and separate RLS/security design. Do not claim tenant isolation.
 - Rechecked authoritative production main after rehearsal: still 92 migration rows through `20261021`; inbox, event, crosswalk and source-snapshot tables remain absent. No production SQL/data/ledger/role/grant/RLS change was made. Production HOLD; worker OFF; scheduler OFF; certification OFF; TRL 9 not claimed.
+
+
+## 2026-10-31 — Final exact-head CI result for worker migration correction
+
+- Final worker migration source blob for `20261112_inbox_event_trigger_security_definer.sql`: `dde5e66853e58d8da2a5121c4561e6ceec897bb7`.
+- Exact worker branch head `9159ddfafa1282f65b1ae78a2aaa076cbc48d765` passed full GitHub Actions run [#41208097244](https://github.com/vishaltradewinds/rupaykg/actions/runs/41208097244), run number 3879.
+- All workflow steps passed: dependency audit; migration validation; exact 92-row production-baseline reconstruction; baseline schema capture; proposed upgrade migration application; migration runner idempotency; typecheck; build; browser smoke; disposable PostgreSQL acceptance; production-shaped migration evidence upload; production container build.
+- Artifact `production-shaped-migration-report` ID `13044673842`, SHA-256 `6b5de416512a7e13b8b33532732f2654ff8bc95d1ecdd5dfecd256c547f4ed58`, uploaded successfully.
+- Two preceding failed CI attempts were retained as evidence: run #41207845477 exposed the superuser false-positive in the role guard; run #41208008538 exposed the malformed dollar-quote delimiter. Both were corrected before the final passing head. No failed run was hidden or relabelled.
+- Validation-only PR #174 was closed unmerged after the final pass. Engineering PR #161 remains draft/open/unmerged, stacked on PR #157.
+- The passing CI reconstructs and upgrades a disposable PostgreSQL baseline; the separate Neon production-derived rehearsal applied the 23 proposed migrations and verified the trigger/role behavior. Neither is production deployment approval.
+- Production main was rechecked and remains at 92 migration rows with worker relations absent. No live production writes or Render changes. Production HOLD; worker OFF; scheduler OFF; certification OFF; TRL 9 not claimed.
