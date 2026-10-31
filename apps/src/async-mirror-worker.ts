@@ -14,12 +14,15 @@ export type GovernmentInboxValidator = (input: {
   municipalCode: string;
   batchId: string;
   payload: unknown;
+  signal?: AbortSignal;
 }) => Promise<GovernmentInboxValidation>;
 
 export type GovernmentInboxWorkerOptions = {
   batchSize?: number;
   leaseSeconds?: number;
   maxAttempts?: number;
+  validationTimeoutSeconds?: number;
+  leaseRenewalSeconds?: number;
 };
 
 type ClaimedInboxRow = {
@@ -118,6 +121,8 @@ export async function runGovernmentInboxWorker(
   const batchSize = boundedInteger(options.batchSize, DEFAULT_BATCH_SIZE, 1, 100);
   const leaseSeconds = boundedInteger(options.leaseSeconds, DEFAULT_LEASE_SECONDS, 15, 900);
   const maxAttempts = boundedInteger(options.maxAttempts, DEFAULT_MAX_ATTEMPTS, 1, 20);
+  const validationTimeoutSeconds = boundedInteger(options.validationTimeoutSeconds, Math.min(60, leaseSeconds - 2), 1, Math.min(600, leaseSeconds - 2));
+  const leaseRenewalSeconds = boundedInteger(options.leaseRenewalSeconds, Math.max(1, Math.floor(leaseSeconds / 3)), 1, 300);
 
   // One PostgreSQL statement is the transaction boundary for exhaustion handling
   // and claiming. Concurrent workers cannot observe a gap between the sweep and claim.
@@ -158,6 +163,36 @@ export async function runGovernmentInboxWorker(
   );
 
   const result = { claimed: claimed.rows.length, validated: 0, rejected: 0, unresolved: 0, retried: 0, quarantined: 0 };
+  const activeLeases = new Map(claimed.rows.map((row) => [row.id, row.lease_token]));
+  let renewalFailure: Error | null = null;
+  let renewalInFlight = false;
+  let activeValidationController: AbortController | null = null;
+  const renewalTimer = setInterval(async () => {
+    if (renewalInFlight || activeLeases.size === 0 || renewalFailure) return;
+    renewalInFlight = true;
+    try {
+      const leases = [...activeLeases.entries()];
+      const renewed = await pool.query(
+        `update async_mirror_inbox inbox
+            set lease_until=now() + ($3 * interval '1 second')
+           from unnest($1::uuid[], $2::uuid[]) as lease(id, token)
+          where inbox.id=lease.id and inbox.lease_token=lease.token
+            and inbox.status='PROCESSING' and inbox.lease_until > now()
+          returning inbox.id`,
+        [leases.map(([id]) => id), leases.map(([, token]) => token), leaseSeconds],
+      );
+      if ((renewed.rowCount ?? 0) !== leases.length) {
+        throw new Error("LEASE_RENEWAL_FENCE_LOST");
+      }
+    } catch (error) {
+      renewalFailure = error instanceof Error ? error : new Error("LEASE_RENEWAL_FAILED");
+      activeValidationController?.abort(renewalFailure);
+    } finally {
+      renewalInFlight = false;
+    }
+  }, leaseRenewalSeconds * 1000);
+  renewalTimer.unref?.();
+  try {
   for (const row of claimed.rows) {
     let sourceResolutionClient: PoolClient | null = null;
     let terminalCount: "validated" | "unresolved" | "rejected" | null = null;
@@ -166,13 +201,32 @@ export async function runGovernmentInboxWorker(
       if (canonicalGovBridgeHash(row.payload) !== row.payload_sha256) {
         outcome = { valid: false, errorCode: "BATCH_PAYLOAD_HASH_MISMATCH" };
       } else {
-        outcome = await validate({
-          id: row.id,
-          authorityCode: row.authority_code,
-          municipalCode: row.municipal_code,
-          batchId: row.batch_id,
-          payload: row.payload,
-        });
+        if (renewalFailure) throw renewalFailure;
+        const controller = new AbortController();
+        activeValidationController = controller;
+        let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+        try {
+          const validation = validate({
+            id: row.id,
+            authorityCode: row.authority_code,
+            municipalCode: row.municipal_code,
+            batchId: row.batch_id,
+            payload: row.payload,
+            signal: controller.signal,
+          });
+          const timeout = new Promise<never>((_resolve, reject) => {
+            timeoutHandle = setTimeout(() => {
+              const error = new Error("VALIDATION_TIMEOUT");
+              controller.abort(error);
+              reject(error);
+            }, validationTimeoutSeconds * 1000);
+          });
+          outcome = await Promise.race([validation, timeout]);
+          if (renewalFailure) throw renewalFailure;
+        } finally {
+          if (timeoutHandle) clearTimeout(timeoutHandle);
+          activeValidationController = null;
+        }
         if (outcome.valid) {
           const metadata = row.payload && typeof row.payload === "object" && !Array.isArray(row.payload)
             ? (row.payload as Record<string, unknown>).batchMetadata
@@ -321,7 +375,12 @@ export async function runGovernmentInboxWorker(
         if (exhausted) result.quarantined += 1;
         else result.retried += 1;
       }
+    } finally {
+      activeLeases.delete(row.id);
     }
+  }
+  } finally {
+    clearInterval(renewalTimer);
   }
   return result;
 }
