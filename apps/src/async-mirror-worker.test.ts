@@ -40,17 +40,21 @@ test("worker claims a bounded batch and marks structurally valid payloads as int
   const { pool, statements } = fakePool([row]);
   const result = await runGovernmentInboxWorker(pool);
   assert.deepEqual(result, { claimed: 1, validated: 1, rejected: 0, unresolved: 0, retried: 0, quarantined: 0 });
-  assert.match(statements[1]!.sql, /for update skip locked/i);
-  assert.match(statements[3]!.sql, /lease_token=\$2/i);
-  assert.match(statements[3]!.sql, /status='VALIDATED'/i);
+  assert.equal(statements.length, 3, "atomic claim, crosswalk read, and fenced terminal update");
+  assert.match(statements[0]!.sql, /with exhausted as \(/i);
+  assert.match(statements[0]!.sql, /for update skip locked/i);
+  assert.match(statements[0]!.sql, /returning inbox\.id/i);
+  assert.match(statements[2]!.sql, /lease_token=\$2/i);
+  assert.match(statements[2]!.sql, /lease_until > now\(\)/i);
+  assert.match(statements[2]!.sql, /status='VALIDATED'/i);
 });
 
 test("worker keeps structurally valid but unmapped batches unresolved", async () => {
   const { pool, statements } = fakePool([row], []);
   const result = await runGovernmentInboxWorker(pool);
   assert.deepEqual(result, { claimed: 1, validated: 0, rejected: 0, unresolved: 1, retried: 0, quarantined: 0 });
-  assert.match(statements[3]!.sql, /status='UNRESOLVED'/i);
-  assert.equal(statements[3]!.values[2], "GOVERNMENT_CROSSWALK_NOT_FOUND");
+  assert.match(statements[2]!.sql, /status='UNRESOLVED'/i);
+  assert.equal(statements[2]!.values[2], "GOVERNMENT_CROSSWALK_NOT_FOUND");
 });
 
 test("worker keeps ambiguous crosswalk candidates unresolved instead of choosing one", async () => {
@@ -61,9 +65,9 @@ test("worker keeps ambiguous crosswalk candidates unresolved instead of choosing
   const { pool, statements } = fakePool([row], candidates);
   const result = await runGovernmentInboxWorker(pool);
   assert.deepEqual(result, { claimed: 1, validated: 0, rejected: 0, unresolved: 1, retried: 0, quarantined: 0 });
-  assert.match(statements[3]!.sql, /status='UNRESOLVED'/i);
-  assert.equal(statements[3]!.values[2], "GOVERNMENT_CROSSWALK_AMBIGUOUS");
-  const summary = JSON.parse(String(statements[3]!.values[3])) as Record<string, unknown>;
+  assert.match(statements[2]!.sql, /status='UNRESOLVED'/i);
+  assert.equal(statements[2]!.values[2], "GOVERNMENT_CROSSWALK_AMBIGUOUS");
+  const summary = JSON.parse(String(statements[2]!.values[3])) as Record<string, unknown>;
   assert.equal(summary.reason, "MULTIPLE_VERIFIED_JURISDICTION_CROSSWALKS");
   assert.equal(summary.officialAcceptance, false);
   assert.equal(summary.authoritativeMrvMutation, false);
@@ -82,34 +86,36 @@ test("worker rejects payload changes that do not match the stored canonical hash
   const { pool, statements } = fakePool([{ ...row, payload: changedPayload }]);
   const result = await runGovernmentInboxWorker(pool);
   assert.equal(result.rejected, 1);
-  assert.equal(statements[2]!.values[2], "BATCH_PAYLOAD_HASH_MISMATCH");
+  assert.equal(statements[1]!.values[2], "BATCH_PAYLOAD_HASH_MISMATCH");
 });
 
 test("worker rejects payload/database sync-window timestamp divergence", async () => {
   const { pool, statements } = fakePool([{ ...row, sync_window_timestamp: new Date("2026-10-20T02:30:00Z") }]);
   const result = await runGovernmentInboxWorker(pool);
   assert.equal(result.rejected, 1);
-  assert.equal(statements[2]!.values[2], "BATCH_TIMESTAMP_DATABASE_MISMATCH");
+  assert.equal(statements[1]!.values[2], "BATCH_TIMESTAMP_DATABASE_MISMATCH");
 });
 
 test("worker quarantines exhausted unclaimed inbox rows instead of leaving them stuck", async () => {
   const { pool, statements } = fakePool([]);
   await runGovernmentInboxWorker(pool, undefined, { maxAttempts: 3 });
-  assert.match(statements[0]!.sql, /attempts >= \$1/i);
+  assert.match(statements[0]!.sql, /attempts >= \$3/i);
   assert.match(statements[0]!.sql, /status in \('RECEIVED','RETRY'\)/i);
   assert.match(statements[0]!.sql, /lease_until is null or lease_until < now\(\)/i);
+  assert.match(statements[0]!.sql, /with exhausted as \(/i);
+  assert.match(statements[0]!.sql, /for update skip locked/i);
 });
 
 test("worker retries transient errors and quarantines an exhausted attempt", async () => {
   const { pool, statements } = fakePool([{ ...row, attempts: 1 }]);
   const retry = await runGovernmentInboxWorker(pool, async () => { throw new Error("temporary outage"); }, { maxAttempts: 3 });
   assert.equal(retry.retried, 1);
-  assert.match(statements[2]!.sql, /next_attempt_at=case when \$3='RETRY'/i);
+  assert.match(statements[1]!.sql, /next_attempt_at=case when \$3='RETRY'/i);
 
   const exhaustedPool = fakePool([{ ...row, attempts: 3 }]);
   const exhausted = await runGovernmentInboxWorker(exhaustedPool.pool, async () => { throw new Error("still unavailable"); }, { maxAttempts: 3 });
   assert.equal(exhausted.quarantined, 1);
-  assert.match(exhaustedPool.statements[2]!.sql, /quarantined_at=case when \$3='QUARANTINED'/i);
+  assert.match(exhaustedPool.statements[1]!.sql, /quarantined_at=case when \$3='QUARANTINED'/i);
 });
 
 test("structural validator rejects unknown fields", async () => {
