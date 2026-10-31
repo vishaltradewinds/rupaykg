@@ -1,14 +1,29 @@
 -- UNNUMBERED REVIEW FIXTURE ONLY.
--- This file is deliberately outside migrations/. Do not deploy or assign a
--- migration version until the shared migration chronology is reconciled and
--- independent security/database review approves a forward-only change.
+-- Deliberately outside migrations/. Do not deploy or assign a migration
+-- version until migration chronology and independent review are complete.
 --
--- Proposed semantics:
--- * approval transitions capture a fresh authorization snapshot;
--- * an already-approved decision cannot silently swap verifier/evidence/activity;
--- * updates to an approved row preserve its decision-time snapshot;
--- * moving away from APPROVED preserves the prior snapshot as historical evidence;
--- * non-approved rows cannot carry caller-supplied approval provenance.
+-- Production verification_decision currently has exactly APPROVED and
+-- REJECTED. Rejected decisions are terminal; correction uses a new evidence
+-- row and new verification record, never in-place reapproval.
+--
+-- The lifecycle marker is populated from the current decision without
+-- fabricating historical timestamps or permission snapshots.
+
+alter table verifications
+  add column if not exists authorization_history_state text not null default 'REJECTED_TERMINAL';
+
+alter table verifications
+  drop constraint if exists verifications_authorization_history_state_check;
+
+alter table verifications
+  add constraint verifications_authorization_history_state_check
+  check (authorization_history_state in ('APPROVED_HISTORY','REJECTED_TERMINAL'));
+
+update verifications
+set authorization_history_state = case
+  when decision = 'APPROVED' then 'APPROVED_HISTORY'
+  else 'REJECTED_TERMINAL'
+end;
 
 create or replace function prevent_invalid_verification()
 returns trigger
@@ -39,27 +54,56 @@ begin
     new.activity_id := evidence_activity_id;
   end if;
 
-  if TG_OP = 'UPDATE' and (OLD.decision = 'APPROVED' or OLD.authorization_checked_at is not null) then
-    if (
-      NEW.verifier_identity_id is distinct from OLD.verifier_identity_id
-      or NEW.evidence_id is distinct from OLD.evidence_id
-      or NEW.activity_id is distinct from OLD.activity_id
-    ) then
-      raise exception 'approved verification linkage is immutable; use an explicit audited reapproval workflow';
+  if TG_OP = 'INSERT' then
+    if new.decision = 'APPROVED' then
+      new.authorization_history_state := 'APPROVED_HISTORY';
+    else
+      new.authorization_history_state := 'REJECTED_TERMINAL';
+    end if;
+  else
+    -- Legacy APPROVED rows remain recognizable even when migration 096 left
+    -- authorization_checked_at NULL. Preserve their original snapshot values.
+    if OLD.authorization_history_state = 'APPROVED_HISTORY' or OLD.decision = 'APPROVED' then
+      if (
+        NEW.verifier_identity_id is distinct from OLD.verifier_identity_id
+        or NEW.evidence_id is distinct from OLD.evidence_id
+        or NEW.activity_id is distinct from OLD.activity_id
+      ) then
+        raise exception 'approved verification linkage is immutable; create a new evidence and verification record';
+      end if;
+
+      if OLD.decision <> 'APPROVED' and NEW.decision = 'APPROVED' then
+        raise exception 'reapproval of a previously approved verification requires a new audited verification record';
+      end if;
+
+      new.authorization_history_state := 'APPROVED_HISTORY';
+      new.authorization_membership_id := OLD.authorization_membership_id;
+      new.authorization_role_id := OLD.authorization_role_id;
+      new.authorization_permissions_snapshot := OLD.authorization_permissions_snapshot;
+      new.authorization_checked_at := OLD.authorization_checked_at;
+      return new;
     end if;
 
-    if OLD.decision <> 'APPROVED' and NEW.decision = 'APPROVED' then
-      raise exception 'reapproval of a previously approved verification requires an explicit audited reapproval workflow';
+    -- REJECTED is terminal. Legacy rejected rows are not reopened even if
+    -- their pre-096 decision history cannot be reconstructed.
+    if OLD.authorization_history_state = 'REJECTED_TERMINAL' or OLD.decision = 'REJECTED' then
+      if (
+        NEW.verifier_identity_id is distinct from OLD.verifier_identity_id
+        or NEW.evidence_id is distinct from OLD.evidence_id
+        or NEW.activity_id is distinct from OLD.activity_id
+      ) then
+        raise exception 'rejected verification linkage is immutable; create a new evidence and verification record';
+      end if;
+      if NEW.decision is distinct from OLD.decision then
+        raise exception 'rejected verification is terminal; create a new audited verification record';
+      end if;
+      new.authorization_history_state := 'REJECTED_TERMINAL';
+      new.authorization_membership_id := OLD.authorization_membership_id;
+      new.authorization_role_id := OLD.authorization_role_id;
+      new.authorization_permissions_snapshot := OLD.authorization_permissions_snapshot;
+      new.authorization_checked_at := OLD.authorization_checked_at;
+      return new;
     end if;
-
-    -- Never refresh or clear historical decision-time provenance on later
-    -- updates after the original approval.
-    new.authorization_membership_id := OLD.authorization_membership_id;
-    new.authorization_role_id := OLD.authorization_role_id;
-    new.authorization_permissions_snapshot := OLD.authorization_permissions_snapshot;
-    new.authorization_checked_at := OLD.authorization_checked_at;
-
-    return new;
   end if;
 
   if new.decision = 'APPROVED' then
@@ -103,12 +147,14 @@ begin
     new.authorization_membership_id := membership_row.membership_id;
     new.authorization_role_id := membership_row.role_id;
     new.authorization_permissions_snapshot := membership_row.permissions;
-    new.authorization_checked_at := now();
+    new.authorization_checked_at := clock_timestamp();
+    new.authorization_history_state := 'APPROVED_HISTORY';
   else
     new.authorization_membership_id := null;
     new.authorization_role_id := null;
     new.authorization_permissions_snapshot := null;
     new.authorization_checked_at := null;
+    new.authorization_history_state := 'REJECTED_TERMINAL';
   end if;
 
   return new;
