@@ -39,6 +39,17 @@ returns trigger
 language plpgsql
 as $$
 begin
+  if tg_op = 'UPDATE' and exists (
+    select 1 from mrv_instrument_decisions d
+     where d.instrument_id = old.id and d.new_status = 'VERIFIED'
+  ) and (
+    new.manufacturer_serial_number is distinct from old.manufacturer_serial_number
+    or new.asset_tag is distinct from old.asset_tag
+    or new.calibration_serial_number is distinct from old.calibration_serial_number
+  ) then
+    raise exception 'verified physical unit identity and calibration serial are immutable; register a new instrument record for a different unit';
+  end if;
+
   if new.approval_status = 'VERIFIED' then
     if new.measurement_instrument and nullif(btrim(new.manufacturer_serial_number), '') is null then
       raise exception 'VERIFIED measurement instrument requires exact manufacturer serial number';
@@ -57,17 +68,6 @@ begin
     if not new.calibration_required and new.calibration_serial_number is not null then
       raise exception 'calibration serial must be absent when calibration is explicitly not required';
     end if;
-  end if;
-
-  if tg_op = 'UPDATE' and exists (
-    select 1 from mrv_instrument_decisions d
-     where d.instrument_id = old.id and d.new_status = 'VERIFIED'
-  ) and (
-    new.manufacturer_serial_number is distinct from old.manufacturer_serial_number
-    or new.asset_tag is distinct from old.asset_tag
-    or new.calibration_serial_number is distinct from old.calibration_serial_number
-  ) then
-    raise exception 'verified physical unit identity and calibration serial are immutable; register a new instrument record for a different unit';
   end if;
   return new;
 end;
