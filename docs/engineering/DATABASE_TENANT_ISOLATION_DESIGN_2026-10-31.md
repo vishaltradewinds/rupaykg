@@ -317,3 +317,17 @@ BWG workspace and profile/reporting write routes are not yet migrated in this co
 ## 22. BWG reporting workspace read adoption
 
 The `GET /api/v1/workspaces/bwg` projection now requires the verified active organization (no fallback to the first membership) and performs profile, reporting-period, waste/EPR/ESG report, jurisdiction, scheme and permission reads on the same tenant-context transaction client. Organization permission indicators are computed inside that transaction. BWG write endpoints remain open; this read-only adoption does not establish statutory applicability or government filing status.
+
+
+## 10. Production login-role and grants evidence — 2026-10-31
+
+A read-only catalog recheck expanded the earlier role inventory:
+
+- `public.verifications` owner: `rupaykg`.
+- `rupaykg`: `rolsuper=false`, `rolbypassrls=true`, `rolcreaterole=true`, `rolcreatedb=true`; member of `neon_superuser`; has SELECT/INSERT/UPDATE/DELETE/TRUNCATE/TRIGGER/REFERENCES on `verifications`; has CREATE on `public`.
+- `neon_service`: `rolsuper=false`, `rolbypassrls=true`, `rolcreaterole=true`, `rolcreatedb=true`; member of `neon_superuser`; has SELECT/INSERT/UPDATE/DELETE on `verifications`.
+- `cloud_admin`: superuser.
+- These are the only three login roles returned by the inspected production catalog.
+- `pg_stat_activity` showed no active application connections during the observation; therefore the exact Render service login role remains unknown.
+
+**Decision:** neither `rupaykg` nor `neon_service` is acceptable as a least-privilege tenant runtime identity. If the Render service uses either, application SQL can bypass RLS; the `rupaykg` owner can additionally delete/truncate verification records and alter triggers. This reinforces the P1 release blocker. Do not revoke grants, transfer ownership, rotate credentials or change Render environment variables in this PR. A separate production-shaped role split and credential cutover must be rehearsed with positive/negative tenant tests, worker access, migration-owner access, pool reset tests, backup/rollback evidence and an explicit maintenance window.
