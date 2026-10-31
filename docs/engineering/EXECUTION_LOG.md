@@ -81,3 +81,14 @@ The 8 expired PROCESSING inbox rows are preserved and must not be automatically 
 - Production/staging migration ledgers: UNCHANGED.
 - Worker queue records: UNCHANGED; eight expired PROCESSING leases remain preserved.
 - Production deployment and scheduler: HOLD/OFF.
+
+
+### Coordination and cost-control update — 2026-10-31
+23. Searched existing open migration PRs before creating any source-restoration PR. Found PR #157 already contains the exact source migrations 096 and 20261022–20261025, plus the broader migration chain, migration-order logic, worker and production-shaped CI acceptance. Verified exact blob SHAs for the five recovered source files match the independent historical source evidence. No duplicate migration PR was created.
+24. Verified PR #157 exact head `b3655259ce0f9d650477c34fa07a2a61d4a72f75` CI run #41190853951 passed every listed workflow step, including exact 92-row production baseline reconstruction, upgrade, idempotency, PostgreSQL acceptance and production container build.
+25. Created production-derived Neon rehearsal branch `br-frosty-term-b47k7ayc` from production, applied only 20261022–20261025 DDL in one transaction, ran schema and rollback-contained worker trigger tests, then suspended its compute endpoint `ep-polished-hat-b4y8wpnp`.
+26. Suspended the existing staging-derived rehearsal compute endpoint `ep-red-bar-b4ywq6ug` after the 096 rehearsal. Both endpoints were verified IDLE. The new production-derived branch remains present; deletion requires explicit user approval. No guarantee of zero storage/branch cost is inferred.
+27. Updated the audit to designate PR #157 as the canonical implementation path and PR #159 as documentation-only.
+
+### Current next action
+Review PR #157's exact-head migration ordering, baseline manifest, worker/security acceptance and open review blockers against the newly recorded live evidence. Do not duplicate migration sources, merge, deploy, or reactivate the worker.
