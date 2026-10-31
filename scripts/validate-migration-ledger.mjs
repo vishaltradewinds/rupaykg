@@ -6,7 +6,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const manifestPath = path.join(root, "docs/engineering/PRODUCTION_MIGRATION_LEDGER_MANIFEST_2026-10-31.json");
 const migrationDir = path.join(root, "migrations");
 const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
-const sourceFiles = (await readdir(migrationDir)).filter((name) => /^\\d+_.+\\.sql$/.test(name)).sort();
+const sourceFiles = (await readdir(migrationDir)).filter((name) => /^\d+_.+\.sql$/.test(name)).sort();
 const rows = manifest.rows;
 const exceptions = manifest.source_exceptions ?? [];
 const fail = (message) => { console.error(`MIGRATION_LEDGER_PARITY_FAILED: ${message}`); process.exitCode = 1; };
