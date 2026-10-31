@@ -104,3 +104,12 @@ Read-only Render service metadata for service `rupaykg` (`srv-daki4d7qj5pc73b8qk
 - latest observed live deployment: `dep-dbis4nm417fc73a8m7ng`, source commit `862512c8c904cef0f604df0350f02672318953af`.
 
 This corroborates that the live Render service deploys the canonical repository's main branch. **It does not prove which Neon branch/database the service currently connects to.** Render service metadata did not expose the `DATABASE_URL` value, and this audit did not retrieve or disclose secrets. Therefore the Neon production main target is the authoritative database-of-record by Neon primary/default status and live schema evidence, but the deployed application's exact connection target remains unverified until a safe runtime identity check is performed without exposing credentials.
+
+
+## 10. Migration 096 source restored; staging-only migrations remain pending — 2026-10-31
+
+- Restored `migrations/096_verification_authorization_provenance.sql` to this canonical-source cleanup branch from the exact worker-stack Git blob SHA `258b1f4534efbf915688f78aa84d4ec24a47cbc0`.
+- Read-only production catalog inspection confirmed all four expected `public.verifications` columns exist: `authorization_membership_id`, `authorization_role_id`, `authorization_permissions_snapshot`, and `authorization_checked_at`. This corroborates that migration 096's schema effect exists on the authoritative database; it does not independently prove the deployed SQL bytes, but the restored file's Git blob exactly matches the existing reviewed worker-stack blob.
+- The remaining `20261022`–`20261025` migrations are present in the staging ledger and worker PR stack but absent from production main's ledger. They are staging/feature history, not missing production-applied migrations. Keep them with the pending feature PR stack; do not add them to production main's migration set or apply them to production as part of this source repair.
+- The complete production ledger-to-source gap identified in this batch is therefore narrowed to migration 096, now restored on the review branch. Production main itself remains unchanged until PR review/merge. The staging/feature migration set still requires independent review and disposable rehearsal before any release.
+- No live SQL was executed beyond read-only catalog queries; no migration was applied to Neon.
