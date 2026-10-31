@@ -143,3 +143,10 @@ This ordering is mandatory for any future migration. It remains unverified until
 ## Concurrency-test determinism update — 2026-10-31
 
 The two-session regression now polls pg_stat_activity for the main connection's actual Lock wait event before releasing the competing revocation transaction. This avoids a false positive from merely sleeping while a query has not yet reached PostgreSQL. It exercises membership revocation, role-permission change and identity suspension. Latest recorded commit: 330ad804840aad69569949a6916838b5af282a1d. Exact-head CI is still not visible; all new tests remain unverified until CI runs on this exact head.
+
+
+## Production role/grant blocker — 2026-10-31
+
+Read-only production catalog inspection confirms `public.verifications` is owned by `rupaykg`. That role has BYPASSRLS, CREATEROLE, CREATEDB, membership in `neon_superuser`, and SELECT/INSERT/UPDATE/DELETE/TRUNCATE/TRIGGER plus public-schema CREATE privileges. `neon_service` also has BYPASSRLS, CREATEROLE, CREATEDB, membership in `neon_superuser`, and SELECT/INSERT/UPDATE/DELETE on verifications. `cloud_admin` is superuser. No active app connection was present in pg_stat_activity, so the Render service role remains unidentified.
+
+This is a separate P1 release blocker: neither likely app role is least privilege, and `rupaykg` can delete/truncate verification records or alter trigger definitions. The current function's SECURITY INVOKER status and row-level checks cannot compensate for a runtime identity that can bypass RLS or disable/drop triggers. Do not alter live credentials/grants/ownership without a separately rehearsed migration and rollback plan. This finding is now recorded in the verification history design document and the production tenant-isolation design remains HOLD.
