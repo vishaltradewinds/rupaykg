@@ -119,3 +119,6 @@ The atomic-claim worker follow-up now resolves a candidate jurisdiction crosswal
 Unit tests now assert transaction ordering, the advisory lock, row locks and persisted snapshot identity/hash. Disposable PostgreSQL acceptance adds a competing crosswalk-revocation test: mutation must time out while the same jurisdiction-key lock is held, then succeed after release.
 
 This closes the previously identified read-to-terminal-update gap for matching crosswalk inserts/updates and source/crosswalk retirement/revocation, subject to exact-head CI and independent review. It does not solve the separate global-vs-row-scoped queue governance decision, RLS, worker lease renewal/strict validator timeout, or production migration-principal authority. PR #161 remains draft/unmerged; production remains HOLD; worker OFF; TRL 9 unclaimed.
+
+
+Validation note: the stacked worker branch is temporarily targeted at main solely to run the full production-baseline CI workflow; it remains draft and unmerged, and its original stacked base will be restored after the exact-head run.
