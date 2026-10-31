@@ -196,3 +196,16 @@ The data model and geography authorization are designed for national scope, but 
 - TRL 9: **NOT ESTABLISHED**.
 
 This audit is a working engineering control record. It must be updated as evidence is collected; it is not an independent certification or legal opinion.
+
+
+## 10. Follow-up regulatory workflow correction — BWG profile intake
+
+A deeper route-level review after the initial audit found a second path in `apps/src/value-routes.ts` that wrote a BWG profile with `status='VERIFIED'` and directly classified `APPLICABLE` / `NOT_APPLICABLE` from hard-coded thresholds. This bypassed the dedicated statutory assessment route's evidence/verification preconditions and independent review boundary.
+
+Candidate correction:
+- BWG profile intake now persists `status='PENDING'` and `applicability_status='REVIEW_REQUIRED'`.
+- The stored basis explicitly identifies `SWM_RULES_2026_S_O_388_E`, states that this is profile intake only, requires evidence and independent review, and asserts no external registration.
+- The API response carries `PROFILE_INTAKE_ONLY_NOT_A_STATUTORY_DETERMINATION`.
+- A unit test asserts the profile intake basis cannot claim a statutory determination or external registration.
+
+The separate `/api/v1/statutory/bwg/assess` path remains the assessment workflow and requires its evidence/verification binding plus the dedicated statutory permission. This correction is source-level only until the newest exact-head CI passes; it has not changed any live database.
