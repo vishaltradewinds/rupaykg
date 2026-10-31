@@ -140,3 +140,11 @@ Compare deployed main commit `862512c8c904cef0f604df0350f02672318953af` with the
 - Checkpoint commit: `0dae27c9bc88c1466e5741dbc0f7defc32e1045a`.
 - Compare at checkpoint time: deployed main commit `862512c8c904cef0f604df0350f02672318953af` vs review branch; 259 ahead / 1 behind / 84 files. Recompute before any action.
 - Exact-head CI remains unverified for the latest documentation-only branch head; run #3908 is verified only for `571aef12d9dbe54389ec50b8c80c1d5bbfab355a`.
+
+
+## Latest current-candidate Gate 1 checkpoint — 2026-10-31
+- Current-candidate review: `docs/engineering/GATE1_CURRENT_CANDIDATE_SOURCE_REVIEW_2026-10-31.md`.
+- Historical inventory/design/priority documents have reconciliation addenda; use current-candidate review for present route status.
+- Immutable checkpoint: `docs/engineering/checkpoints/2026-10-31-gate1-current-candidate.md`.
+- This checkpoint supersedes older route counts and direct-pool findings where the current source has since adopted transaction-local tenant context.
+- Read the current-candidate review and checkpoint before continuing; next batch begins with server overview/geography and intelligence access-context review.
