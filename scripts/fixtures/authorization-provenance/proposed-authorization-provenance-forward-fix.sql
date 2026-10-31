@@ -39,7 +39,7 @@ begin
     new.activity_id := evidence_activity_id;
   end if;
 
-  if TG_OP = 'UPDATE' and OLD.decision = 'APPROVED' then
+  if TG_OP = 'UPDATE' and (OLD.decision = 'APPROVED' or OLD.authorization_checked_at is not null) then
     if (
       NEW.verifier_identity_id is distinct from OLD.verifier_identity_id
       or NEW.evidence_id is distinct from OLD.evidence_id
@@ -48,8 +48,12 @@ begin
       raise exception 'approved verification linkage is immutable; use an explicit audited reapproval workflow';
     end if;
 
-    -- Never refresh decision-time provenance during an unrelated UPDATE or
-    -- rewrite it when the current decision is changed away from APPROVED.
+    if OLD.decision <> 'APPROVED' and NEW.decision = 'APPROVED' then
+      raise exception 'reapproval of a previously approved verification requires an explicit audited reapproval workflow';
+    end if;
+
+    -- Never refresh or clear historical decision-time provenance on later
+    -- updates after the original approval.
     new.authorization_membership_id := OLD.authorization_membership_id;
     new.authorization_role_id := OLD.authorization_role_id;
     new.authorization_permissions_snapshot := OLD.authorization_permissions_snapshot;
