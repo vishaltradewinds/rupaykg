@@ -92,3 +92,14 @@ The 8 expired PROCESSING inbox rows are preserved and must not be automatically 
 
 ### Current next action
 Review PR #157's exact-head migration ordering, baseline manifest, worker/security acceptance and open review blockers against the newly recorded live evidence. Do not duplicate migration sources, merge, deploy, or reactivate the worker.
+
+
+### Verification provenance security review — 2026-10-31
+28. Inspected existing PR #140 and its disposable PostgreSQL test. Confirmed the production migration-096 trigger refreshes authorization snapshots on any UPDATE of an approved row; a no-op update after role-permission change rewrites the decision-time snapshot.
+29. Confirmed PR #157's production-shaped upgrade test preserves the existing verifier function hash; this is not a fix for the snapshot mutation defect.
+30. Hardened PR #140's unnumbered proposed fixture so linkage is immutable for every update of an already-approved row, including transitions away from APPROVED. Added regression assertions for decision-away + evidence/activity mutation and verifier identity mutation. Plain transition away preserves the original snapshot.
+31. Latest PR #140 head: `5229e8299ba5a49af86748730e3fea42374e9d22`; exact-head CI #41191863577 is in progress. No pass claim until it completes.
+32. Commented on PR #157 to block security-complete/merge claims until a separately reviewed forward-only migration, API/DB acceptance and independent review address snapshot immutability.
+
+### Updated release gate
+Verification provenance integrity is NOT COMPLETE. Do not edit/replay migration 096, do not change live Neon, and do not merge PR #157 until the forward-only correction has exact-head acceptance and independent security/database review.
