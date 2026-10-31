@@ -45,6 +45,13 @@ function boundedInteger(value: number | undefined, fallback: number, min: number
   return Number.isInteger(value) && value! >= min && value! <= max ? value! : fallback;
 }
 
+/** Keep heartbeats comfortably inside the lease window, even when misconfigured. */
+export function normalizeLeaseRenewalSeconds(requested: number | undefined, leaseSeconds: number): number {
+  const maximum = Math.max(1, Math.min(300, Math.floor(leaseSeconds / 2)));
+  const fallback = Math.max(1, Math.min(maximum, Math.floor(leaseSeconds / 3)));
+  return boundedInteger(requested, fallback, 1, maximum);
+}
+
 /** Strict calendar/time validation; Date.parse alone normalizes some impossible dates. */
 export function isValidSyncWindowTimestamp(value: unknown): value is string {
   if (typeof value !== "string") return false;
@@ -122,7 +129,7 @@ export async function runGovernmentInboxWorker(
   const leaseSeconds = boundedInteger(options.leaseSeconds, DEFAULT_LEASE_SECONDS, 15, 900);
   const maxAttempts = boundedInteger(options.maxAttempts, DEFAULT_MAX_ATTEMPTS, 1, 20);
   const validationTimeoutSeconds = boundedInteger(options.validationTimeoutSeconds, Math.min(60, leaseSeconds - 2), 1, Math.min(600, leaseSeconds - 2));
-  const leaseRenewalSeconds = boundedInteger(options.leaseRenewalSeconds, Math.max(1, Math.floor(leaseSeconds / 3)), 1, 300);
+  const leaseRenewalSeconds = normalizeLeaseRenewalSeconds(options.leaseRenewalSeconds, leaseSeconds);
 
   // One PostgreSQL statement is the transaction boundary for exhaustion handling
   // and claiming. Concurrent workers cannot observe a gap between the sweep and claim.
