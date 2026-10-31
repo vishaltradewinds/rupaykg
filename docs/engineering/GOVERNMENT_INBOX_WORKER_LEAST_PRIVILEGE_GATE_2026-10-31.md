@@ -85,3 +85,16 @@ No live role/grant/ownership changes, schema migration, secrets, queue changes, 
 ## Explicit RLS limitation — 2026-10-31
 
 The read-only staging catalog confirms `async_mirror_inbox_events.relrowsecurity=false` and `relforcerowsecurity=false`; the event table is owned by `rupaykg`. The disposable CI acceptance verifies role/column/table privileges, but it does **not** prove row-level tenant isolation on the inbox or event table because RLS is not enabled there. The current worker candidate is a national cross-authority queue processor and would see every inbox row permitted by its table SELECT grant. Before activation, product/data governance must explicitly approve that global processing scope or require a separate row-scoped design. Do not claim RLS tenant isolation for this queue. Enabling RLS is a separate schema/security change requiring policy design, owner/trigger behavior review, and its own positive/negative PostgreSQL tests; do not bundle it silently into the current trigger migration.
+
+
+## Atomic claim and PostgreSQL concurrency hardening — 2026-10-31
+
+A separate draft engineering branch, `shakti/atomic-inbox-claim-2026-10-31`, changes the worker's exhausted-attempt sweep and batch claim into one PostgreSQL data-modifying CTE statement. This gives the sweep+claim one statement-level transaction boundary; the claim still uses `FOR UPDATE SKIP LOCKED`, and application validation starts only after the statement completes. This avoids holding queue row locks during slow validation and removes the prior inter-statement gap between sweep and claim.
+
+Added disposable PostgreSQL integration tests:
+- Two concurrent worker invocations each claim a bounded batch; the four fixture rows must be claimed exactly once across both invocations.
+- A simulated replacement fencing token during validation prevents the original worker from marking the row REJECTED; the row remains PROCESSING under the replacement token.
+
+The fixtures are synthetic and run only in disposable CI PostgreSQL. They intentionally leave append-only event history in that ephemeral database; no staging or production queue rows are touched.
+
+**Limits still open:** this does not renew a lease during long validation. If validation exceeds the lease, the final fenced update is correctly rejected, but the row may remain PROCESSING until a later worker reclaims it. Crosswalk reads are still not bound to an immutable/versioned snapshot transaction. These are separate follow-up gates; do not infer them as solved by atomic claiming. Actual deployed worker identity, RLS/global authority scope approval, migration-principal semantics, and production-derived full-chain rehearsal remain release blockers. No worker service, schedule, secret, role, live database or deployment was activated or changed.
