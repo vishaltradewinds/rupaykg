@@ -164,7 +164,7 @@ export async function registerEvidenceVaultRoutes(app:FastifyInstance,pool:Pool|
    });
    if(outcome.status!==200)return reply.code(outcome.status).send(outcome.body);
    const row=outcome.row;
-   reply.header("Content-Disposition",'attachment; filename="'+row.file_name.replace(/["\\\\\\r\\n]/g,"_")+'"');
+   reply.header("Content-Disposition",'attachment; filename="'+row.file_name.replaceAll('"',"_").replaceAll("\\","_").replaceAll("\r","_").replaceAll("\n","_")+'"');
    reply.header("X-Content-Type-Options","nosniff");reply.header("X-Evidence-SHA256",row.sha256);reply.header("X-Evidence-Version",String(row.version_number));
    return reply.type(row.media_type).send(row.content);
   }catch(e){request.log.error(e);return reply.code(503).send({error:"Evidence download unavailable",code:"EVIDENCE_VAULT_UNAVAILABLE",syntheticData:false});}
