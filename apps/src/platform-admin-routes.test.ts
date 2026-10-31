@@ -16,6 +16,15 @@ function fakePool(isSuperAdmin: boolean): Pool {
         return { rows: [{ organization_id: organizationId, role_id: roleId, status: "VERIFIED" }] };
       }
       if (sql.includes("r.name = 'super_admin'")) return { rows: [{ ok: isSuperAdmin }] };
+      if (sql.includes('session_user::text as "loginRole"')) return { rows: [{
+        loginRole: "app_runtime", effectiveRole: "app_runtime",
+        loginIsSuperuser: false, loginBypassesRls: false,
+        loginCanCreateRole: false, loginCanCreateDatabase: false,
+        effectiveRoleIsSuperuser: false, effectiveRoleBypassesRls: false,
+        effectiveRoleCanCreateRole: false, effectiveRoleCanCreateDatabase: false,
+        canCreateInPublicSchema: false, canTruncateVerifications: false,
+        canTriggerVerifications: false,
+      }] };
       if (sql.includes('as "verifiedIdentities"')) return { rows: [{
         verifiedIdentities: "12",
         organizations: "7",
@@ -60,6 +69,35 @@ test("platform admin overview denies ordinary verified members", async () => {
   await app.close();
 });
 
+test("database runtime identity diagnostic is read-only and returns only role privilege flags", async () => {
+  const app = Fastify({ logger: false });
+  await registerPlatformAdminRoutes(app, fakePool(true));
+  const response = await app.inject({
+    method: "GET",
+    url: "/api/v1/admin/database-runtime-identity",
+    headers: { authorization: "Bearer test-session", "x-rupaykg-organization-id": organizationId },
+  });
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.json().identity.loginRole, "app_runtime");
+  assert.equal(response.json().identity.loginBypassesRls, false);
+  assert.equal(response.json().identity.canTruncateVerifications, false);
+  assert.equal(response.json().connectionString, undefined);
+  assert.equal(response.json().password, undefined);
+  await app.close();
+});
+
+test("database runtime identity diagnostic denies non-admin users", async () => {
+  const app = Fastify({ logger: false });
+  await registerPlatformAdminRoutes(app, fakePool(false));
+  const response = await app.inject({
+    method: "GET",
+    url: "/api/v1/admin/database-runtime-identity",
+    headers: { authorization: "Bearer test-session", "x-rupaykg-organization-id": organizationId },
+  });
+  assert.equal(response.statusCode, 403);
+  assert.equal(response.json().code, "PLATFORM_ADMIN_FORBIDDEN");
+  await app.close();
+});
 test("Super Admin receives platform-wide aggregate counts only", async () => {
   const app = Fastify({ logger: false });
   await registerPlatformAdminRoutes(app, fakePool(true));
