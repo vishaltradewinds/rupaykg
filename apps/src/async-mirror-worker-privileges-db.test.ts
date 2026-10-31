@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { randomBytes, randomUUID } from "node:crypto";
 import { Pool } from "pg";
+import { assertGovernmentInboxWorkerPrincipal } from "./async-mirror-worker-runner.js";
 
 const enabled = process.env.CI === "true"
   && process.env.NODE_ENV !== "production"
@@ -64,6 +65,8 @@ test("inbox event trigger appends through a restricted NOLOGIN definer without e
     await admin.query(`grant usage on schema public to "${roleName}"`);
     await admin.query(`grant select on public.async_mirror_inbox to "${roleName}"`);
     await admin.query(`grant update (attempts,status,lease_token,lease_until,next_attempt_at,processed_at,quarantined_at,last_error_code,validation_summary) on public.async_mirror_inbox to "${roleName}"`);
+    await admin.query(`grant select on public.government_jurisdiction_crosswalks, public.authoritative_source_snapshots, public.activities to "${roleName}"`);
+    await admin.query(`grant execute on function public.organization_has_explicit_geography_scope(uuid,uuid), public.government_source_scope_covers_geography(uuid,uuid) to "${roleName}"`);
 
     const connection = new URL(process.env.DATABASE_URL!);
     connection.username = roleName;
@@ -84,6 +87,8 @@ test("inbox event trigger appends through a restricted NOLOGIN definer without e
     assert.equal(workerIdentity.rows[0]?.rolbypassrls, false);
     assert.equal(workerIdentity.rows[0]?.rolcreaterole, false);
     assert.equal(workerIdentity.rows[0]?.rolcreatedb, false);
+
+    await assertGovernmentInboxWorkerPrincipal(worker, process.env.DATABASE_URL);
 
     const before = await admin.query<{ count: string }>(
       "select count(*)::text as count from public.async_mirror_inbox_events where inbox_id=$1",
