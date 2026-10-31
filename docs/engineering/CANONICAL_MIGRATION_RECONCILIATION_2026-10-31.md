@@ -1,211 +1,94 @@
-# RupayKg canonical migration reconciliation — 2026-10-31
+# Canonical Migration Reconciliation — 2026-10-31
 
-## Status
+## Executive decision
 
-**Engineering proposal only. Production remains HOLD. Scheduler remains OFF. Certification remains OFF.**
+**Production remains HOLD. Scheduler remains OFF. Certification remains OFF.** This document records verified source and schema evidence and the controlled repository repair path. No production, staging or rehearsal database was modified.
 
-This document records a live, read-only comparison of Neon database branches and defines a safe reconciliation sequence. No database was altered.
+The repository and Neon branches have divergent migration histories. Do not copy a database branch wholesale, rewrite applied ledgers, or infer migration SQL from live objects.
 
-## Evidence captured
+## Live Neon evidence
 
-Neon project: `rupaykg-production-fresh`  
-Project ID: `steep-mud-79906940`  
-Database: `rupaykg`
+Project: `steep-mud-79906940`; database: `rupaykg`.
 
-| Evidence | Production/main | Government inbox staging | Migration rehearsal |
-|---|---|---|---|
-| Neon branch ID | `br-restless-base-b44cip2h` | `br-spring-hill-b4544vz5` | `br-broad-glade-b46npw8o` |
-| `schema_migrations` rows | 92 | 95 | 4 relevant rows confirmed |
-| Migration `096` | Present | Absent | Absent |
-| `20261022`–`20261025` | Absent | All four present | All four present |
-| Verification authorization snapshot columns | Present | Absent | Absent |
-| `prevent_invalid_verification()` | Strong organization-scoped authorization and snapshot implementation | Weaker legacy implementation | Same weaker legacy implementation |
-| `async_mirror_inbox` status constraint | Table not present | Does not allow `UNRESOLVED` | Allows `UNRESOLVED` |
+| Branch | Neon branch ID | Ledger | Observed schema |
+|---|---|---:|---|
+| Production/main | `br-restless-base-b44cip2h` | 92 rows | Has verifier authorization snapshot columns/FKs and stronger `prevent_invalid_verification()`; lacks async mirror and AI intake tables |
+| Government inbox staging | `br-spring-hill-b4544vz5` | 95 rows | Has async mirror inbox, event history, AI rate-limit and AI evidence-intake tables; no `UNRESOLVED` status |
+| Migration rehearsal | `br-broad-glade-b46npw8o` | 95 rows | Same four async/AI tables; inbox status additionally permits `UNRESOLVED` |
 
-### Production verification controls observed
+Production records migration `096_verification_authorization_provenance.sql`; staging and rehearsal do not. Production has these verifier authorization fields and references:
+- `authorization_membership_id`
+- `authorization_role_id`
+- `authorization_permissions_snapshot`
+- `authorization_checked_at`
 
-The production `verifications` table contains `authorization_membership_id`, `authorization_role_id`, `authorization_permissions_snapshot` and `authorization_checked_at`, with foreign keys to `organization_memberships` and `roles`.
+Production's verifier trigger enforces evidence/activity binding, organization-scoped VERIFIED membership and identity, no self-verification, permission validation, and decision-time authorization snapshots. This is the security baseline to preserve.
 
-The production trigger function binds evidence to its activity and rejects mismatches; requires an organization for APPROVED verification; rejects self-verification; requires a VERIFIED membership and VERIFIED, non-suspended identity in the activity's organization; checks verifier permission against that organization's role; and stores the membership, role, permissions snapshot and authorization-check timestamp.
+Staging and rehearsal record migrations 20261022–20261025. Production does not. A schema comparison between staging and rehearsal found the only observed difference to be the inbox status constraint/comment: rehearsal permits `UNRESOLVED`, staging does not. Neither branch's migration ledger records 20261101, so the rehearsal `UNRESOLVED` change is unledgered schema drift.
 
-This is the control baseline. Do not replace it with the weaker function observed in staging/rehearsal.
+## Historical migration provenance
 
-### Async inbox observations
+### Migration 096 — recovered, but intentionally removed
 
-Staging's `async_mirror_inbox` has payload hash validation, unique authority/batch identity, lifecycle timestamps, lease fields, retry metadata and quarantine metadata. Its status check allows:
+- Original source commit: `ca8f4100782e13f8d72106187fafc8e1e446214f`
+- Original path: `migrations/096_verification_authorization_provenance.sql`
+- Git blob: `258b1f4534efbf915688f78aa84d4ec24a47cbc0`
+- Deletion commit: `54a7fe1ceb41b37a68720a71c10a1dd03af30dea`
+- Deletion message: “Remove accidentally placed unreviewed verification migration from main”
 
-`RECEIVED, PROCESSING, PROCESSED, VALIDATED, REJECTED, RETRY, QUARANTINED`
+Do not restore or replay migration 096 automatically. Independently review the deletion rationale and compare its SQL with the live production function, columns and FKs. Preserve the production controls regardless of the repository-history resolution.
 
-The rehearsal branch adds `UNRESOLVED`. Its documented meaning is an internal, non-authoritative state for structurally valid intake that cannot be matched to one unambiguous, current, verified jurisdiction crosswalk. It is not an official acceptance or rejection and must not be represented as an MRV result.
+### Async mirror and AI intake migrations — exact source objects recovered
 
-## Reconciliation decision
+Original sources were recovered from historical branch `test/real-worker-postgres-unresolved`, associated with closed draft PR #122. That branch is a provenance archive only: it is 580 commits ahead and 4 behind current main and contains extensive unrelated changes. Do not merge or cherry-pick it wholesale.
 
-**Do not choose either staging or rehearsal as the new production baseline. Do not copy either branch wholesale.**
-
-The target must be a forward-only, additive reconciliation that preserves production authorization semantics while introducing reviewed async-ingestion capabilities.
-
-## Required source-of-truth work before SQL is authored
-
-1. Identify and pin exact Git commit SHAs and migration source files for migration 096 and migrations 20261022–20261025.
-2. Verify each migration's checksum, ordering, dependencies, idempotency assumptions and whether its effects are already represented in production.
-3. Compare migration source against the live catalog, not only the migration ledger.
-4. Determine whether rehearsal-only `UNRESOLVED` status and worker behavior are represented by reviewed source code and tests.
-5. Build a single canonical ordered migration manifest. Never renumber or rewrite an already-applied migration to conceal branch divergence.
-6. Prepare a new forward migration for any missing production capability. Preserve existing production objects and decision history.
-
-## Implementation sequence
-
-### Gate A — source provenance
-
-- Pin repository commit SHAs for all relevant SQL and worker code.
-- Produce a checksum manifest for each migration.
-- Map every migration to prerequisites and affected objects.
-- Resolve duplicate, renamed or missing migration identities without mutating applied history.
-
-### Gate B — disposable PostgreSQL rehearsal
-
-Use a fresh disposable database, not production and not the only copy of staging.
-
-- Reconstruct production baseline through its recorded migration history.
-- Apply the proposed forward-only migration set.
-- Verify production verification trigger and authorization snapshot semantics remain intact.
-- Apply async inbox, lease, rate-limit and AI evidence-intake migrations in canonical order.
-- Verify `UNRESOLVED` is internal-only, non-authoritative and cannot trigger a carbon-credit, EPR or official authority decision.
-- Test replay behavior, partial failure, recovery and duplicate execution.
-- Compare resulting schema, constraints, indexes, triggers, functions and grants against the intended schema manifest.
-
-### Gate C — security and reliability acceptance
-
-Required automated PostgreSQL tests:
-
-- Unverified, suspended or wrong-organization verifier cannot approve.
-- A verifier cannot approve their own activity's evidence.
-- Evidence/activity mismatch is rejected.
-- Historical authorization snapshot remains unchanged after role or membership changes.
-- `UNRESOLVED` cannot become accepted, verified, issued or settled without required independent authority workflow.
-- Duplicate authority/batch intake is idempotently rejected or deduplicated.
-- Expired worker lease recovery is safe.
-- Stale fencing token cannot commit after a newer lease is acquired.
-- Exhausted retry transitions to quarantine without losing original evidence.
-- No failed or unresolved intake creates authoritative MRV, Guardian, registry or credit side effects.
-- All intended tests execute; no relevant test is skipped.
-
-### Gate D — release review
-
-- Obtain independent review from an authorized reviewer.
-- Require exact-head PR CI and PostgreSQL acceptance evidence.
-- Attach migration checksums, schema diff, test logs and recovery evidence.
-- Require explicit production change approval and tested backup/restore plan before any production migration.
-- Keep scheduler disabled until operational acceptance is complete.
-
-## Explicit non-actions
-
-No production or staging SQL writes, DDL, migration, data copy/deletion, worker activation, deployment, merge or certification were performed.
-
-## TRL and Shakti Standards
-
-This is an engineering evidence task, not a TRL advancement. Database schema inspection and CI do not establish integrated operational readiness or TRL 9. Any TRL claim must be supported by component, subsystem and real operating-environment evidence under Shakti Standards.
-
-## Evidence references
-
-- Release gate and worker CI/review blockers: https://github.com/vishaltradewinds/rupaykg/issues/145
-- Production and staging Neon branch IDs are recorded in the evidence table above.
-
-
-## Follow-up provenance investigation — 2026-10-31 02:46 UTC
-
-### Canonical repository path and source inventory
-
-The actual migration directory is the repository-root `migrations/` directory. The earlier candidate paths under `db/`, `supabase/`, `database/` and `server/db/` were incorrect.
-
-The root migration directory was enumerated on both `main` and `shakti/canonical-migration-history-mainline`. Both contain the same migration catalogue through `20261021_evidence_artifact_vault.sql`, plus `README.md`. Neither catalogue contains:
-- `096_verification_authorization_provenance.sql`
-- `20261022_async_mirror_inbox.sql`
-- `20261023_async_mirror_worker_leases.sql`
-- `20261024_ai_intake_rate_limits.sql`
-- `20261025_ai_evidence_intake_jobs.sql`
-
-This is now a confirmed repository-source gap, not merely an unlocated file path. The production ledger records migration 096, while staging/rehearsal ledgers record 20261022–20261025. Those applied database effects therefore cannot currently be reconstructed from the checked `main` or migration-history branch migration catalogues. Do not fabricate replacement SQL, infer checksums from database objects, or mark these sources reconciled.
-
-The migration-history branch is nine commits ahead of `main` and changes only:
-- `apps/src/migrate.ts`
-- `apps/src/migration-history.ts`
-- `apps/src/migration-history.test.ts`
-
-The new migration-history guard rejects duplicate numeric prefixes, missing source filenames and version/filename prefix mismatches before migration application. Its tests cover those catalogue/ledger conflict cases. It does not provide the missing SQL source files, and the runner as inspected validates filenames rather than cryptographic content checksums. It is not sufficient by itself to reconcile the live branch histories.
-
-### Corrected live table inventory
-
-A complete user-table inventory confirms:
-- Production has no `async_mirror_inbox`, `async_mirror_inbox_events`, `ai_intake_rate_limits` or `ai_evidence_intake_jobs` tables.
-- Staging and rehearsal have those four tables.
-- The staging inbox status constraint allows `RECEIVED, PROCESSING, PROCESSED, VALIDATED, REJECTED, RETRY, QUARANTINED`, but not `UNRESOLVED`.
-- Rehearsal permits `UNRESOLVED` as a non-authoritative internal state.
-- Production retains the stronger migration-096 verification authorization snapshot controls described above.
-
-### Worker PR source review (patch-level, not execution evidence)
-
-The changed-file inventory and patches for PRs #122, #142, #143 and #144 were inspected:
-- PR #122 adds `apps/src/async-mirror-worker.postgres.test.ts` (354 lines) and touches the CI workflow and CORS runtime tests.
-- PR #142 changes worker claim eligibility so a PROCESSING row with a NULL lease is treated as expired/reclaimable.
-- PR #144 changes the read-only reconciliation count to include NULL leases and adds a matching unit assertion.
-- PR #143 changes only the CI workflow trigger.
-
-The PR #122 PostgreSQL integration test is explicitly skipped unless both `RUPAYKG_RUN_DB_INTEGRATION_TESTS=1` and `DATABASE_URL` are set. The test itself creates an isolated schema and tests quarantine, expired/NULL lease recovery, unresolved non-authoritative handling, append-only event history and stale-token fencing. However, the source-level existence of these assertions is not proof they executed. A run with the integration flag unset would skip the test and cannot satisfy the release gate.
-
-### Updated decision
-
-1. Treat the migration-history branch as a migration-runner safety improvement candidate, not as the canonical SQL migration history.
-2. Keep PR #154 draft until original migration SQL and immutable provenance are recovered from an authoritative source (such as the original commit/object or a trusted backup/export), then verify byte-for-byte checksums.
-3. Do not backfill production's missing async-mirror tables or staging's missing verifier snapshot controls from guessed SQL.
-4. Require an exact-head CI run that proves the PostgreSQL integration test executed (zero relevant skips), plus independent reviewer approval and disposable full-history reconstruction.
-5. Continue production HOLD, scheduler OFF and certification OFF. No database writes or schema changes were made during this follow-up.
-
-
-### Provenance correction — migration 096 historical source recovered
-
-A targeted Git path-history query found the original migration 096 source in repository history:
-- Original source commit: `ca8f4100782e13f8d72106187fafc8e1e446214f` — “Bind verification to organization and snapshot authority”.
-- Original path: `migrations/096_verification_authorization_provenance.sql`.
-- Git blob SHA: `258b1f4534efbf915688f78aa84d4ec24a47cbc0`.
-- The next commit, `54a7fe1ceb41b37a68720a71c10a1dd03af30dea`, explicitly deleted that 97-line file with commit message “Remove accidentally placed unreviewed verification migration from main”.
-
-Therefore migration 096 is not an unrecoverable source gap: its historical SQL and Git provenance are recovered. It remains absent from current `main` and the migration-history branch because it was explicitly removed as unreviewed. Do not re-add it automatically or rewrite the production ledger. Its original SQL must be independently reviewed against the live production trigger/function, column definitions, foreign keys and the rationale for the removal commit before deciding whether to restore the source as a historical immutable migration record or document it as an applied out-of-band migration.
-
-The four async migration sources `20261022`–`20261025` remain absent from the current migration catalogues and no Git path history was found for those exact paths in the repository. Their original source/provenance remains unresolved. The distinction is important: migration 096 has a recoverable historical source; the four async migrations do not yet have a verified source in the checked repository history.
-
-
-## Async migration provenance recovery — 2026-10-31
-
-The four async migration sources were recovered from the historical branch `test/real-worker-postgres-unresolved` (closed draft PR #122). This branch is a source archive only: it is 580 commits ahead and 4 behind current `main`, with a large unrelated change set. Do not merge or cherry-pick it wholesale.
-
-| File | Source commit | Git blob |
+| File | Original source commit | Git blob SHA |
 |---|---|---|
 | `20261022_async_mirror_inbox.sql` | `5064e086085dda7f8765047ae8120f9cb6bf0d80` | `4d08607e03561b9fbb4ce502b4c4211127237050` |
 | `20261023_async_mirror_worker_leases.sql` | `a27978f4f450108956b6baa3a17541c07a8ade26`; event-history update `13237f1714510a18021a94601ac9ff7b9f1def37` | `33cb4d5d2e29a4a111340e5a0ac34170a0081895` |
 | `20261024_ai_intake_rate_limits.sql` | `a54fbdf81b0f5c4ae558acec3fc104407f70c48b` | `87b51fe60a96a4e0752c8b0a9a170c81f9936dbb` |
 | `20261025_ai_evidence_intake_jobs.sql` | `fc958c1096baecf4f0f3c08b2f38742dafe708` | `6a0ae54530b7b756dac33589eaf18df3b071d8f2` |
 
-The same branch contains `20261101_async_mirror_unresolved_crosswalk.sql`, source commit `3270e4cee4552efe51f84d96a9ab2f02bc068b81`, blob `4f9776bc449025e795cb0d5c93e8bace9dea280b`. It adds the internal-only `UNRESOLVED` status and explains the staging/rehearsal constraint difference.
+The four source files have been restored to a focused draft PR #155. Each restored file's Git blob SHA was compared with its historical source blob; all four are identical Git objects.
 
-This supersedes the earlier statement that the four async sources were not recoverable. Their exact SQL objects and source commits are identified. They remain absent from current `main`; this recovery does not authorize restoring them or applying them. Next gates: validate exact object checksums, compare each SQL effect to the live branch objects, reconcile dependency order, rehearse on disposable PostgreSQL, and obtain independent review. Migration 096's separate deletion rationale remains under review. No database was changed.
+PR #155: https://github.com/vishaltradewinds/rupaykg/pull/155
 
+### 20261101 — unresolved-state migration
 
-## Worker acceptance execution evidence — 2026-10-31
+Historical source:
+- Commit: `3270e4cee4552efe51f84d96a9ab2f02bc068b81`
+- Git blob: `4f9776bc449025e795cb0d5c93e8bace9dea280b`
 
-The historical PR #122 head `b46b1afecdbe97c15ede94f6e8413b8fa5d2e4a3` has an exact-head GitHub Actions CI run #3487 (`41099285533`) completed successfully. Its workflow provisions PostgreSQL 16, sets `DATABASE_URL`, and explicitly sets `RUPAYKG_RUN_DB_INTEGRATION_TESTS=1` for `npm test`; the disposable PostgreSQL acceptance step completed successfully. The test's skip guard therefore evaluates enabled in that CI environment. This is execution evidence for the PR #122 branch's then-current worker implementation, not evidence that the same code is merged or deployed to production.
+This migration adds `UNRESOLVED` to the internal inbox status constraint and documents that it means a structurally valid intake lacks one unambiguous, current, verified jurisdiction crosswalk. It is not official acceptance/rejection, an MRV result, or a credit decision.
 
-PR #142 head `7d73517997e902af0550f2773763b585abc2fc4e` also has exact-head CI run #3485 completed successfully; PR #143 head `51abd113748b73f8cf4920b2c1937efecd040eb7` has exact-head CI run #3471 completed successfully. PR #122 is closed and draft; PR #142 remains open and draft; PR #143 remains open and non-draft; PR #144 is closed and draft. None of these statuses constitutes merge approval. The PR #122 branch remains unsuitable for wholesale merge due its 580-ahead/4-behind divergence.
+Because the live ledgers do not record this migration and only rehearsal has its schema effect, it is not included in PR #155. It requires a separate explicit review and ledger/schema reconciliation decision.
 
-PR #154's latest documentation head `d064baa3d5543f22f1c2a1c557ceebaf51231100` has a new exact-head CI run #3522 queued at the time of this update; no completed result is claimed. Production remains unchanged and on HOLD.
+## Worker reliability evidence
 
+PR #122's historical PostgreSQL integration test covers:
+- retry exhaustion and quarantine, including PROCESSING rows with NULL leases;
+- expired and NULL-lease recovery;
+- append-only, payload-free event history;
+- stale fencing-token protection;
+- unresolved intake remaining non-authoritative, with no official acceptance, authoritative MRV or Guardian/HCS side effects.
 
-## Live schema-diff and migration-ledger reconciliation — 2026-10-31
+The exact-head CI run for PR #122 (run #3487) completed successfully with PostgreSQL 16, `DATABASE_URL`, and `RUPAYKG_RUN_DB_INTEGRATION_TESTS=1` enabled. PR #142 exact-head CI #3485 and PR #143 exact-head CI #3471 also passed. These are historical feature-branch test results, not evidence that worker code is integrated into current main or deployed.
 
-Neon schema comparison between staging and rehearsal shows the only schema diff in the compared database snapshots is the `async_mirror_inbox.status` check constraint and its column comment: rehearsal permits the internal `UNRESOLVED` state; staging does not. The four async/AI tables and their inspected structures are otherwise aligned across those two branches. The recovered migrations 20261022–20261025 correspond to the tables/columns/indexes/constraints observed in staging and rehearsal.
+PR #122 was based on PR #142's feature branch; PR #142 itself was based on `intelligence/ai-evidence-intake-middleware`, not current main. These stacked feature branches must be reviewed and integrated through a focused dependency-aware PR sequence, not wholesale merged.
 
-A fresh ledger query confirms both staging and rehearsal record only 20261018–20261025. Neither records migration 20261101, despite rehearsal having the `UNRESOLVED` constraint/comment. Therefore the rehearsal-only `UNRESOLVED` schema change is unledgered/out-of-band relative to its own migration ledger. Treat it as schema drift; do not assume the migration runner applied it or that migration 20261101 was formally accepted.
+## CI and rehearsal status
 
-Production-versus-staging schema comparison confirms the four async/AI tables and their inbox-event functions/triggers exist only in staging, while production retains the stronger `prevent_invalid_verification()` implementation and the four authorization snapshot columns/FKs. This is a direct reason not to copy staging or rehearsal wholesale.
+- PR #154 documentation-only head `98f48ea02a9f1681087c03fe7f79931ddf4be2be`: exact-head CI run #3524 completed successfully. It ran migration catalogue validation, the migration runner against disposable CI PostgreSQL, type-check, build, browser smoke test, PostgreSQL acceptance suite and production-container build.
+- PR #155 migration-source restoration head `9e7e6e045694a10c452b97ad36f9fb7bd5451116`: exact-head CI run #3525 was observed in progress at the last check; no pass is claimed until completed.
+- A separate Neon production-clone rehearsal has not been completed. The Neon migration-preparation wrapper rejected a quoted semicolon in a COMMENT statement, and a branch-provision attempt was rejected by account compute/suspend settings. Branch inventory confirmed no new branch was created.
 
-A production-clone rehearsal has not yet been run. Neon temporary-branch preparation failed because the SQL wrapper split a semicolon inside a quoted COMMENT string; a separate branch-provision attempt was rejected by the account's compute/suspend settings. A subsequent branch inventory confirms no new branch was created and no schema writes occurred. Continue using only read-only comparisons until an approved disposable PostgreSQL environment is available. No production/staging/rehearsal database was changed.
+## Required release gates
+
+1. PR #155 exact-head CI passes with the four recovered migrations applied in order on disposable PostgreSQL.
+2. Verify source-to-live object equivalence and dependency ordering; distinguish repository history from the live applied ledgers.
+3. Independently review migration 096's removal rationale and the rehearsal-only 20261101 state.
+4. Integrate worker implementation and PostgreSQL acceptance tests from the stacked feature branches through a focused PR sequence; require zero relevant skips.
+5. Obtain independent authorized review; no reviewer identity is assumed or fabricated.
+6. Complete backup/restore rehearsal, operational monitoring, rate-limit and security review, deployment plan, rollback plan, and explicit production approval.
+
+No SQL writes, DDL, production migration, staging migration, deployment, worker activation, scheduler activation, merge, or certification occurred during this reconciliation. Documentation, source recovery and CI do not advance TRL.
