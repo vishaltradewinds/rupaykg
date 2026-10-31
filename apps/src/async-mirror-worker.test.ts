@@ -86,6 +86,28 @@ test("worker renews all claimed leases while a validator is running", async () =
   assert.match(renewal!.sql, /lease_until > now\(\)/i);
 });
 
+test("worker aborts active validation and retries when lease heartbeat fails", async () => {
+  const base = fakePool([row]);
+  let observedSignal: AbortSignal | undefined;
+  const query = async (sql: string, values: unknown[] = []) => {
+    if (sql.includes("update async_mirror_inbox inbox") && sql.includes("unnest")) {
+      throw new Error("simulated heartbeat database outage");
+    }
+    return base.pool.query(sql, values);
+  };
+  const pool = { query, connect: async () => base.pool.connect() } as unknown as Pool;
+  const result = await runGovernmentInboxWorker(pool, async (input) => {
+    observedSignal = input.signal;
+    return new Promise((_resolve, reject) => {
+      input.signal?.addEventListener("abort", () => reject(input.signal?.reason ?? new Error("aborted")), { once: true });
+    });
+  }, { leaseSeconds: 15, leaseRenewalSeconds: 1, validationTimeoutSeconds: 5 });
+  assert.equal(result.retried, 1);
+  assert.equal(observedSignal?.aborted, true);
+  const retry = base.statements.find((entry) => entry.sql.includes("next_attempt_at=case when"));
+  assert.equal(retry?.values[4], "LEASE_RENEWAL_FAILED");
+});
+
 test("worker keeps structurally valid but unmapped batches unresolved", async () => {
   const { pool, statements } = fakePool([row], []);
   const result = await runGovernmentInboxWorker(pool);
