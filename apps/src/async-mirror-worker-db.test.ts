@@ -5,7 +5,8 @@ import { canonicalGovBridgeHash } from "./government-inbox-hash.js";
 import { Pool } from "pg";
 import { runGovernmentInboxWorker } from "./async-mirror-worker.js";
 
-const enabled = process.env.RUPAYKG_RUN_DB_INTEGRATION_TESTS === "1" && Boolean(process.env.DATABASE_URL);
+const enabled = process.env.CI === "true" && process.env.NODE_ENV !== "production"
+  && process.env.RUPAYKG_RUN_DB_INTEGRATION_TESTS === "1" && Boolean(process.env.DATABASE_URL);
 const sha = canonicalGovBridgeHash;
 
 test("government inbox worker persists retry recovery, quarantine and append-only transition evidence in disposable PostgreSQL", {
@@ -13,7 +14,7 @@ test("government inbox worker persists retry recovery, quarantine and append-onl
 }, async () => {
   const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
-    ssl: process.env.DATABASE_SSL === "true" ? { rejectUnauthorized: false } : undefined,
+    ssl: process.env.DATABASE_SSL === "false" ? undefined : { rejectUnauthorized: true },
     max: 4,
   });
   const suffix = randomUUID();
