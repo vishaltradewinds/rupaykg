@@ -94,6 +94,36 @@ create trigger mrv_parameter_uncertainty_insert_guard
 before insert on mrv_instrument_parameter_uncertainty
 for each row execute function guard_mrv_parameter_uncertainty_insert();
 
+create or replace function mrv_parameter_uncertainty_is_current(record_id uuid)
+returns boolean language sql stable as $
+  select exists (
+    select 1
+      from mrv_instrument_parameter_uncertainty u
+      join evidence_artifact_versions v on v.id=u.calibration_artifact_version_id
+      join evidence e on e.id=v.evidence_id
+      join evidence_artifact_series s on s.id=v.series_id
+      join mrv_instruments i on i.id=u.instrument_id
+     where u.id=record_id
+       and i.approval_status='VERIFIED'
+       and s.organization_id=i.organization_id
+       and v.sha256=lower(u.calibration_artifact_sha256)
+       and e.content_hash=v.sha256
+       and e.status='VERIFIED'
+       and octet_length(v.content)=v.size_bytes
+       and encode(digest(v.content,'sha256'),'hex')=v.sha256
+       and exists (
+         select 1 from evidence_artifact_reviews r
+          where r.evidence_id=e.id and r.artifact_version_id=v.id
+            and r.reviewer_identity_id=u.reviewed_by_identity_id
+            and r.reviewer_identity_id<>v.uploaded_by_identity_id
+            and r.id=(select latest.id from evidence_artifact_reviews latest
+                       where latest.evidence_id=e.id and latest.artifact_version_id=v.id
+                       order by latest.review_sequence desc limit 1)
+            and r.decision='APPROVED'
+       )
+  );
+$;
+
 create or replace function prevent_mrv_parameter_uncertainty_mutation()
 returns trigger language plpgsql as $$
 begin
@@ -142,7 +172,8 @@ begin
     select * into uncertainty from mrv_instrument_parameter_uncertainty where id=new.mrv_uncertainty_record_id;
     if not found or uncertainty.instrument_id <> new.mrv_instrument_id
        or lower(uncertainty.parameter_code) <> lower(btrim(new.parameter_code))
-       or uncertainty.parameter_unit <> btrim(new.unit) then
+       or uncertainty.parameter_unit <> btrim(new.unit)
+       or not mrv_parameter_uncertainty_is_current(new.mrv_uncertainty_record_id) then
       raise exception 'measurement uncertainty record does not match its instrument, parameter and unit';
     end if;
   end if;
@@ -198,7 +229,8 @@ begin
   end if;
   if new.mrv_uncertainty_record_id is not null then
     select * into uncertainty from mrv_instrument_parameter_uncertainty where id=new.mrv_uncertainty_record_id;
-    if not found or uncertainty.parameter_code <> new.parameter_code or uncertainty.parameter_unit <> new.unit then
+    if not found or uncertainty.parameter_code <> new.parameter_code or uncertainty.parameter_unit <> new.unit
+       or not mrv_parameter_uncertainty_is_current(new.mrv_uncertainty_record_id) then
       raise exception 'MRV observation uncertainty does not match its parameter and unit';
     end if;
   end if;
