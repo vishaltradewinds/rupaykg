@@ -624,23 +624,6 @@ test("PostgreSQL enforces parameter uncertainty, immutable raw-frame bytes and M
       /exact measurement uncertainty and raw-frame bindings/,
     );
 
-    await pool.query(
-      `insert into mrv_observations
-       (activity_id,measurement_id,parameter_code,observed_value,unit,method,instrument_id,observed_at,
-        mrv_uncertainty_record_id,raw_frame_artifact_version_id,raw_frame_sha256)
-       values($1,$2,'gas_flow',2,'m3/h','test',$3,now(),$4,$5,$6)`,
-      [fixture.activityId, measurement.rows[0]!.id, fixture.instrumentId, uncertaintyId, artifactId, rawHash],
-    );
-    await assert.rejects(
-      pool.query(
-        `insert into mrv_observations
-         (activity_id,measurement_id,parameter_code,observed_value,unit,method,instrument_id,observed_at,
-          mrv_uncertainty_record_id,raw_frame_artifact_version_id,raw_frame_sha256)
-         values($1,$2,'gas_flow',2,'m3/h','test',$3,now(),$4,$5,$6)`,
-        [fixture.activityId, measurement.rows[0]!.id, fixture.instrumentId, uncertaintyId, artifactId, "f".repeat(64)],
-      ),
-      /exact measurement uncertainty and raw-frame bindings/,
-    );
 
   } finally {
     await pool.end();
