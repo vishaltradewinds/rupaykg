@@ -155,3 +155,21 @@ Read-only Neon inspection reconfirmed the authoritative project and branch ident
 Added disposable PostgreSQL acceptance that simulates the observed production role attributes (CREATEROLE, CREATEDB, REPLICATION, BYPASSRLS, non-superuser), creates the NOLOGIN least-privilege event-writer role, grants membership to CURRENT_USER, transfers a SECURITY DEFINER trigger function, revokes temporary CREATE/membership, and proves the function can append to its target table after ownership transfer. The test is not a live Neon rehearsal. Exact-head CI is pending.
 
 No Neon SQL mutations, role/grant changes, compute activation, migration preparation, production/staging schema changes or worker activation occurred. Production HOLD; worker OFF; RLS/global queue governance remains unresolved; TRL 9 unclaimed.
+
+
+## Production-shaped migration-principal acceptance — passed 2026-10-31
+
+The disposable PostgreSQL acceptance now reproduces the production migration principal's relevant authority model: non-superuser, CREATEROLE, CREATEDB, REPLICATION, BYPASSRLS, and ownership of the database (implicit membership in pg_database_owner) plus the inbox event table and sequence. Under that role it successfully:
+
+- Creates the NOLOGIN, NOSUPERUSER, NOCREATEDB, NOCREATEROLE, NOINHERIT, NOBYPASSRLS event-writer role.
+- Grants the capability role to CURRENT_USER.
+- Grants only schema usage, event-table INSERT and event-sequence usage to the capability role.
+- Creates the fixed-search-path SECURITY DEFINER trigger and transfers its ownership to the capability role.
+- Revokes temporary schema CREATE and role membership from the migration principal.
+- Executes the trigger successfully after transfer; verifies the function owner, SECURITY DEFINER flag, fixed search_path, append result and restricted role attributes.
+
+The first simulation attempt was incomplete because it did not model database ownership or event-table/sequence ownership. The fixture was corrected to match the observed production model; the corrected acceptance passed. This is disposable CI evidence, not a live Neon migration.
+
+Exact-head CI run [#41203528525](https://github.com/vishaltradewinds/rupaykg/actions/runs/41203528525) (run 3845) passed at commit 19b431008e96598d7306455374474934cd9a7cfc. All 17 workflow steps passed, including dependency audit, migration validation, production-baseline reconstruction, migration application/idempotency, typecheck, build, browser smoke, serial unit + disposable PostgreSQL acceptance, migration report artifact upload and production container build.
+
+The PR remains draft/open/unmerged. The CI run does not authorize applying the migration to staging/production. The exact deployment secret principal still needs to be confirmed separately; the audit establishes the Neon database-owner role model only.
