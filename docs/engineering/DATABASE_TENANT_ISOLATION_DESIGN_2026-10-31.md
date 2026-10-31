@@ -219,3 +219,19 @@ On 2026-10-31, the following MRV routes were moved to the transaction-local tena
 - `GET /api/v1/mrv/hedera/verify/:consensusTimestamp`: provenance lookup and authorization run in a tenant transaction; external Mirror Node verification runs outside the DB transaction; before persisting verification time, the route rechecks active organization, geography and permission in a new tenant transaction and conditionally updates the exact provenance row. Acceptance-fixture status is read in that same persistence transaction.
 
 This deliberately avoids holding a database transaction open during external Hedera network I/O. It also closes the authorization time-of-check/time-of-use gap before persisting the external verification result. The MRV submission route, statutory routes, and other route modules remain outstanding. No RLS migration or live DB change is authorized.
+
+
+## 15. MRV submission transaction-boundary adoption
+
+On 2026-10-31, `POST /api/v1/mrv/activities/:activityId/submit` was refactored:
+
+- A verified active-organization context is mandatory; the route no longer relies on a membership fallback.
+- Activity, verification and evidence binding; activity completion and evidence verification preconditions; geography scope; Guardian operation permission; observations; evidence; measurement quantity; prior idempotent provenance; and acceptance-fixture metadata are read within one tenant-context transaction.
+- The session-level advisory lock remains on a dedicated checked-out client solely to serialize the idempotency key. Tenant data reads and writes do not use that lock connection.
+- Guardian execution and Hedera HCS submission remain outside a database transaction to avoid holding pooled DB transactions open across network calls.
+- Before provenance persistence, the route re-reads activity/verification/evidence state, checks active organization, geography scope and permission in a new tenant-context transaction, then persists the provider result on that same client.
+- Obsolete pool-level MRV authorization helpers were removed after all MRV route call sites were migrated.
+
+**Residual control:** external provider submission is not atomically reversible if authorization or source state changes after preflight but before the provider accepts the request. The post-provider transaction prevents persistence after a failed recheck, but it cannot undo an external Guardian/Hedera side effect. A future durable outbox/worker protocol with explicit authorization snapshot, idempotency, cancellation and reconciliation is required before claiming atomic end-to-end authorization. This is not solved by keeping a DB transaction open during network I/O.
+
+The MRV route batch still requires exact-head CI, route integration tests, provider idempotency/replay tests, cross-tenant negative tests and independent review. It does not authorize live Guardian/Hedera submission, RLS activation, merge or deployment.
