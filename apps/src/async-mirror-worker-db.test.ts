@@ -250,6 +250,19 @@ test("government inbox worker persists retry recovery, quarantine and append-onl
     assert.ok(swept.rows.every(item => item.quarantined_at));
     assert.ok(swept.rows.every(item => item.lease_token === null));
 
+    // A PROCESSING row with a NULL lease must be recoverable, not stranded.
+    const nullLease = await makeRow("NUL-" + suffix.slice(0, 8));
+    await pool.query(
+      "update async_mirror_inbox set status='PROCESSING', attempts=1, lease_token=null, lease_until=null where id=$1",
+      [nullLease.id],
+    );
+    await runGovernmentInboxWorker(pool, undefined, { batchSize: 10, maxAttempts: 3 });
+    const nullLeaseRow = await pool.query<{ status: string; attempts: number }>(
+      "select status,attempts from async_mirror_inbox where id=$1", [nullLease.id],
+    );
+    assert.equal(nullLeaseRow.rows[0]?.status, "UNRESOLVED");
+    assert.equal(nullLeaseRow.rows[0]?.attempts, 2);
+
     const events = await pool.query<{ to_status: string; attempt: number; payload_sha256: string }>(
       "select to_status,attempt,payload_sha256 from async_mirror_inbox_events where inbox_id=$1 order by id", [recoverable.id],
     );
@@ -289,6 +302,42 @@ test("government inbox worker persists retry recovery, quarantine and append-onl
     );
     assert.equal(concurrentFinal.rows[0]?.status, "VALIDATED");
     assert.equal(concurrentFinal.rows[0]?.attempts, 1);
+
+    // Lease expiry alone revokes completion authority, even before another worker takes over.
+    const expiredAuthority = "EXP-" + suffix.slice(8, 16).toUpperCase();
+    await provisionCrosswalk(expiredAuthority, "TEST-MUNI", new Date().toISOString());
+    const expiredInFlight = await makeRow(expiredAuthority);
+    let releaseExpiredValidation: () => void = () => {};
+    let signalExpiredValidation: () => void = () => {};
+    const expiredValidationStarted = new Promise<void>(resolve => { signalExpiredValidation = resolve; });
+    const expiredValidationGate = new Promise<void>(resolve => { releaseExpiredValidation = resolve; });
+    const expiredWorker = runGovernmentInboxWorker(pool, async () => {
+      signalExpiredValidation();
+      await expiredValidationGate;
+      return { valid: true, summary: { officialAcceptance: false, authoritativeMrvMutation: false, guardianSubmission: false } };
+    }, { batchSize: 1, leaseSeconds: 15, maxAttempts: 3 });
+    await expiredValidationStarted;
+    await pool.query(
+      "update async_mirror_inbox set lease_until=now()-interval '1 second' where id=$1 and status='PROCESSING'",
+      [expiredInFlight.id],
+    );
+    releaseExpiredValidation();
+    await expiredWorker;
+    const expiredAfterOldWorker = await pool.query<{ status: string; lease_token: string | null; lease_until: Date | null }>(
+      "select status,lease_token,lease_until from async_mirror_inbox where id=$1", [expiredInFlight.id],
+    );
+    assert.equal(expiredAfterOldWorker.rows[0]?.status, "PROCESSING");
+    assert.ok(expiredAfterOldWorker.rows[0]?.lease_token);
+    assert.ok(expiredAfterOldWorker.rows[0]?.lease_until && expiredAfterOldWorker.rows[0]!.lease_until! < new Date());
+
+    // The next worker may reclaim the expired row and commit under its new token.
+    const afterExpiryReclaim = await runGovernmentInboxWorker(pool, undefined, { batchSize: 1, maxAttempts: 3 });
+    assert.equal(afterExpiryReclaim.claimed, 1);
+    const expiredAfterReclaim = await pool.query<{ status: string; attempts: number }>(
+      "select status,attempts from async_mirror_inbox where id=$1", [expiredInFlight.id],
+    );
+    assert.equal(expiredAfterReclaim.rows[0]?.status, "VALIDATED");
+    assert.equal(expiredAfterReclaim.rows[0]?.attempts, 2);
 
     // A worker whose lease token has been superseded must not overwrite the newer lease owner's state.
     const staleAuthority = "STL-" + suffix.slice(0, 8).toUpperCase();
