@@ -251,7 +251,7 @@ export async function runGovernmentInboxWorker(
           `update async_mirror_inbox
               set status='VALIDATED', processed_at=now(), lease_token=null, lease_until=null,
                   next_attempt_at=null, last_error_code=null, validation_summary=$3::jsonb
-            where id=$1 and status='PROCESSING' and lease_token=$2`,
+            where id=$1 and status='PROCESSING' and lease_token=$2 and lease_until > now()`,
           [row.id, row.lease_token, JSON.stringify(outcome.summary ?? {})],
         );
         if ((updated.rowCount ?? 0) === 1) result.validated += 1;
@@ -260,7 +260,7 @@ export async function runGovernmentInboxWorker(
           `update async_mirror_inbox
               set status='UNRESOLVED', processed_at=now(), lease_token=null, lease_until=null,
                   next_attempt_at=null, last_error_code=$3, validation_summary=$4::jsonb
-            where id=$1 and status='PROCESSING' and lease_token=$2`,
+            where id=$1 and status='PROCESSING' and lease_token=$2 and lease_until > now()`,
           [row.id, row.lease_token, outcome.errorCode ?? "GOVERNMENT_CROSSWALK_UNRESOLVED", JSON.stringify(outcome.summary ?? {})],
         );
         if ((updated.rowCount ?? 0) === 1) result.unresolved += 1;
@@ -270,7 +270,7 @@ export async function runGovernmentInboxWorker(
           `update async_mirror_inbox
               set status='REJECTED', processed_at=now(), lease_token=null, lease_until=null,
                   next_attempt_at=null, last_error_code=$3, validation_summary=$4::jsonb
-            where id=$1 and status='PROCESSING' and lease_token=$2`,
+            where id=$1 and status='PROCESSING' and lease_token=$2 and lease_until > now()`,
           [row.id, row.lease_token, code, JSON.stringify(outcome.summary ?? {})],
         );
         if ((updated.rowCount ?? 0) === 1) result.rejected += 1;
@@ -285,7 +285,7 @@ export async function runGovernmentInboxWorker(
                 next_attempt_at=case when $3='RETRY' then now() + ($4 * interval '1 second') else null end,
                 quarantined_at=case when $3='QUARANTINED' then now() else null end,
                 last_error_code=$5
-          where id=$1 and status='PROCESSING' and lease_token=$2`,
+          where id=$1 and status='PROCESSING' and lease_token=$2 and lease_until > now()`,
         [row.id, row.lease_token, exhausted ? "QUARANTINED" : "RETRY", delaySeconds, code],
       );
       if ((updated.rowCount ?? 0) === 1) {
