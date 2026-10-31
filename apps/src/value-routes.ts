@@ -26,6 +26,12 @@ export function isBwgEprFulfilledObligationConstraintViolation(error: unknown): 
   const candidate = error as { code?: unknown; constraint?: unknown };
   return candidate.code === "23514" && candidate.constraint === "bwg_epr_reports_fulfilled_le_obligated";
 }
+
+export function isBwgApplicabilityNotVerifiedConflict(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const candidate = error as { code?: unknown; message?: unknown };
+  return candidate.code === "23514" && candidate.message === "BWG applicability must be verified before creating a reporting period";
+}
 async function authFor(request: Request, reply: Reply, pool: Pool | null): Promise<AuthContext | null> { try { const auth = await authenticate(request as never, pool); if (!auth) { reply.code(401).send({ error: "Authenticated session required", code: "AUTH_REQUIRED" }); return null; } return auth; } catch (error) { request.log.error(error); reply.code(503).send({ error: "Authentication service unavailable", code: "AUTH_UNAVAILABLE" }); return null; } }
 async function activityAccess(client: Pool | PoolClient, activityId: string, identityId: string): Promise<{ organization_id: string; geography_id: string | null } | null> { const result = await client.query<{ organization_id: string; geography_id: string | null }>(`select a.organization_id, a.geography_id from activities a join organization_memberships om on om.organization_id = a.organization_id where a.id = $1 and om.identity_id = $2 and om.status = 'VERIFIED'`, [activityId, identityId]); return result.rows[0] ?? null; }
 async function assertActivityGeographyScope(client: Pool | PoolClient, geographyId: string | null, identityId: string, organizationId: string): Promise<{ ok: boolean; code?: string }> {
@@ -223,7 +229,11 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
       });
       if ("denied" in tenantResponse) return reply.code(403).send({ error: "Reporting and waste recording permissions are required", code: "BWG_PERIOD_FORBIDDEN" });
       return reply.code(201).send({ source: "postgresql", syntheticData: false, authoritativeMutation: true, period: tenantResponse.period });
-    } catch (error) { request.log.error(error); return reply.code(503).send({ error: "BWG reporting period unavailable", code: "BWG_PERIOD_UNAVAILABLE", syntheticData: false }); }
+    } catch (error) {
+      if (isBwgApplicabilityNotVerifiedConflict(error)) return reply.code(409).send({ error: "An independently verified BWG applicability determination is required before creating a reporting period", code: "BWG_APPLICABILITY_NOT_VERIFIED" });
+      request.log.error(error);
+      return reply.code(503).send({ error: "BWG reporting period unavailable", code: "BWG_PERIOD_UNAVAILABLE", syntheticData: false });
+    }
   });
 
   app.post("/api/v1/bwg/reporting-periods/:periodId/waste", async (request, reply) => {
