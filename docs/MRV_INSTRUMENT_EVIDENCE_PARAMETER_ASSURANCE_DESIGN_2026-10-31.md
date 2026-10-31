@@ -195,3 +195,35 @@ Staging and rehearsal contain the `20261022`, `20261023`, `20261024` and `202610
 The observations above are direct read-only database results from 2026-10-31. They establish ledger and selected schema/function differences, not a complete byte-for-byte schema equivalence audit. No production writes, staging writes, rehearsal writes, migration execution, worker activation, deployment or certification occurred.
 
 **Release gate:** migration provenance is currently FAIL-CLOSED. PR #137 remains a draft engineering candidate; migrations 088/089 are not authorized for application to any live branch. Production verifier provenance must remain intact.
+
+## 9. Canonical measurement-to-Guardian lineage — source and live-schema audit
+
+The live production schema and current `main` source were inspected read-only on 2026-10-31.
+
+### 9.1 Existing schema facts
+
+- `measurements` stores activity, numeric value, unit, method, source, measured timestamp, quality status, metadata, capture identity/device and optional geolocation.
+- `mrv_observations` stores activity, nullable `measurement_id`, parameter code, numeric observed value, unit, method, nullable free-text `instrument_id`, observed timestamp, uncertainty, quality status and metadata.
+- `evidence` may point to a measurement, but this is not a substitute for the MRV observation's own measurement lineage.
+- The Guardian submission route currently selects MRV observations by activity without joining them to `measurements`. Separately, it selects the latest measurement for that activity and sends its value/unit as a top-level quantity. That latest measurement is not proven to be the source of each observation.
+- The Guardian request serializes observation rows, including free-text `instrument_id`, but does not establish that the text value is the UUID of an approved `mrv_instruments` record.
+- The current PR #137 migrations 088/089 add instrument binding to `measurements`, but do not add a UUID instrument FK/specification revision to `mrv_observations` or enforce `measurement_id` as NOT NULL for authoritative submissions.
+
+### 9.2 Required transaction and payload contract
+
+Before Guardian submission, resolve every observation through a single canonical join:
+`mrv_observation.measurement_id → measurements.id → mrv_instrument_id → mrv_parameter_specification_revision`.
+
+The authoritative preflight must reject unless:
+- every observation has a non-null `measurement_id` and references a measurement in the same activity and organization;
+- the observation parameter code, value, unit, method and timestamp match the linked measurement under an explicit, versioned transformation rule; default behavior is exact match, no implicit conversion;
+- the measurement's instrument UUID equals the observation's UUID instrument FK and the approved instrument remains current;
+- the exact verified parameter-specification revision covers the observation's parameter, unit, range, resolution, accuracy/uncertainty and operating conditions;
+- the supporting evidence artifact versions and approval reviews remain exact, same-organization, same-activity and immutable;
+- no unrelated “latest measurement” is substituted for the linked observations.
+
+The Guardian payload and its integrity hash must be built from the canonical joined rows and exact immutable IDs/revisions. A retry must recompute the complete canonical payload hash; changed observations, parameter revisions, evidence versions, or instrument approval state must invalidate stale replay/anchor reuse. The preflight and authoritative submission snapshot must be transactionally consistent with approval revocation/expiry and observation mutation. Any asynchronous external call must be preceded by a durable immutable submission snapshot/outbox record, with idempotent status transitions and no lock held across an unbounded network call.
+
+### 9.3 Current result
+
+This is a confirmed source-level and schema-level gap, not just a future enhancement. Until the canonical join and snapshot contract are implemented, an MRV submission can contain observations that are not demonstrably derived from the same instrument-bound measurements represented by the separate top-level quantity. Instrument-linked data must therefore remain ineligible for authoritative Guardian/registry submission until the new gate is implemented and accepted. Legacy text-only observations remain readable for historical context but cannot be upgraded by inference.
