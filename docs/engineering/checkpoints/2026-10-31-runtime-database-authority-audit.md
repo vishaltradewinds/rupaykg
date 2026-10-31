@@ -49,6 +49,17 @@
 
 **Required response:** preserve the production ledger and schema. Recover the exact historical source and provenance for migration 096, compare its SQL and effects with production, and add a deterministic repository/ledger parity gate. Do not delete the ledger row, recreate a guessed migration, or rerun it in production.
 
+### Historical provenance recovered
+
+GitHub file history resolves why the extra ledger row exists:
+- Migration 096 was introduced in commit `ca8f4100782e13f8d72106187fafc8e1e446214f` on 2026-10-27 (message: “Bind verification to organization and snapshot authority”).
+- It was removed from `main` in commit `54a7fe1ceb41b37a68720a71c10a1dd03af30dea` (message: “Remove accidentally placed unreviewed verification migration from main”).
+- The exact historical SQL was recovered from the earlier commit. It adds four authorization snapshot columns to `verifications` and replaces the `prevent_invalid_verification()` trigger function.
+- Production still contains all four columns and the `verifications_integrity_guard` trigger, and its migration ledger records version 096 as applied on 2026-10-27.
+
+This is not a random counting error: production has a schema change whose source was deliberately removed from the current main branch because it was unreviewed. The source has now been recovered for forensic review, but it must **not** be restored to main or treated as approved merely because it exists in historical Git history. Review the SQL, compare the live function/trigger behavior, decide whether to formally adopt or safely supersede it, and record that decision in a reviewed migration. Preserve the production data and current schema throughout.
+
+
 ## Critical database security finding — confirmed
 
 - Production main currently has 0 public tables with RLS enabled.
