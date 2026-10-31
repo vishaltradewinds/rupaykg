@@ -40,7 +40,7 @@ begin
   end if;
 
   if TG_OP = 'UPDATE' and OLD.decision = 'APPROVED' then
-    if NEW.decision = 'APPROVED' and (
+    if (
       NEW.verifier_identity_id is distinct from OLD.verifier_identity_id
       or NEW.evidence_id is distinct from OLD.evidence_id
       or NEW.activity_id is distinct from OLD.activity_id
