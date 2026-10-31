@@ -244,3 +244,16 @@ Fresh GitHub metadata and source inspection confirm:
 - TRL 9: NOT ESTABLISHED.
 
 This review is an engineering source inspection, not an independent security sign-off. No production database, Render configuration, deployment, or worker state was changed by this preflight.
+
+
+## 15. Worker foundation reference refresh — 2026-10-31 18:11 UTC
+
+This section supersedes the PR-number, branch-base and status references in Sections 12 and 14; those sections remain as a historical record of the earlier preflight.
+
+- The original PR #175 was closed as a duplicate review surface after its exact worker head was carried forward into canonical stacked PR #161. PR #175 is now closed and must not be treated as the active review.
+- Canonical worker/security review is [PR #161](https://github.com/vishaltradewinds/rupaykg/pull/161), branch `shakti/atomic-inbox-claim-2026-10-31`, stacked on [PR #157](https://github.com/vishaltradewinds/rupaykg/pull/157).
+- PR #157 was retargeted to current `main` at `b5e91241d84a6712ff544d3deec1805702f45efd`, now reports mergeable/clean, and exact-head CI #41200068648 passed production-shaped migration reconstruction, upgrade, idempotency, PostgreSQL acceptance, build and container steps. It remains draft/unmerged.
+- PR #161 exact head `797fd76222c601974f9544d05c275371766b8912` passed pull-request CI #41227789668. Subsequent evidence checkpoint commits are under exact-head CI; see PR #161 for the current SHA and run.
+- Read-only Neon catalog evidence now confirms production lacks the queue schema, staging lacks several runner readiness dependencies, no separate worker role exists, and the existing `rupaykg` login has elevated role attributes including `BYPASSRLS`. The full evidence is in `docs/engineering/checkpoints/2026-10-31-neon-worker-principal-queue-preflight.md` on the canonical worker branch.
+- The worker is still not activated. No production or staging DDL/DML, roles, grants, secrets, Render settings or deployments were changed. Do not create a duplicate queue or agent scheduler.
+- The agent swarm remains DESIGN ONLY / NOT ACTIVATED. It must use the eventual governed worker substrate after schema, principal, tenant-isolation, deployment, budget, observability and recovery gates pass.
