@@ -166,12 +166,14 @@ export async function runGovernmentInboxWorker(
   const activeLeases = new Map(claimed.rows.map((row) => [row.id, row.lease_token]));
   let renewalFailure: Error | null = null;
   let renewalInFlight = false;
+  const pausedLeases = new Set<string>();
   let activeValidationController: AbortController | null = null;
   const renewalTimer = setInterval(async () => {
     if (renewalInFlight || activeLeases.size === 0 || renewalFailure) return;
     renewalInFlight = true;
     try {
-      const leases = [...activeLeases.entries()];
+      const leases = [...activeLeases.entries()].filter(([id]) => !pausedLeases.has(id));
+      if (leases.length === 0) return;
       const renewed = await pool.query(
         `update async_mirror_inbox inbox
             set lease_until=now() + ($3 * interval '1 second')
@@ -212,6 +214,18 @@ export async function runGovernmentInboxWorker(
     let sourceResolutionClient: PoolClient | null = null;
     let terminalCount: "validated" | "unresolved" | "rejected" | null = null;
     try {
+      const pauseAndRefreshLease = async (): Promise<void> => {
+        pausedLeases.add(row.id);
+        while (renewalInFlight) await new Promise((resolve) => setTimeout(resolve, 10));
+        const refreshed = await pool.query(
+          `update async_mirror_inbox
+              set lease_until=now() + ($3 * interval '1 second')
+            where id=$1 and status='PROCESSING' and lease_token=$2 and lease_until > now()
+            returning id`,
+          [row.id, row.lease_token, leaseSeconds],
+        );
+        if ((refreshed.rowCount ?? 0) !== 1) throw new Error("LEASE_RENEWAL_FENCE_LOST");
+      };
       let outcome: GovernmentInboxValidation;
       if (canonicalGovBridgeHash(row.payload) !== row.payload_sha256) {
         outcome = { valid: false, errorCode: "BATCH_PAYLOAD_HASH_MISMATCH" };
@@ -259,6 +273,7 @@ export async function runGovernmentInboxWorker(
         }
       }
       if (outcome.valid) {
+        await pauseAndRefreshLease();
         // Resolve and persist the terminal decision in one SERIALIZABLE transaction.
         // Row locks serialize retirement/revocation; SERIALIZABLE protects lookup predicates.
         sourceResolutionClient = await pool.connect();
@@ -332,6 +347,7 @@ export async function runGovernmentInboxWorker(
           };
         }
       }
+      if (!sourceResolutionClient) await pauseAndRefreshLease();
       const terminalDb = sourceResolutionClient ?? pool;
       if (outcome.valid) {
         const updated = await terminalDb.query(
@@ -395,6 +411,7 @@ export async function runGovernmentInboxWorker(
       }
     } finally {
       activeLeases.delete(row.id);
+      pausedLeases.delete(row.id);
     }
   }
   } finally {
