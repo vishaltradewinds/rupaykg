@@ -164,3 +164,14 @@ The helper:
 Tests cover transaction ordering, same-client work, rollback, release, invalid context rejection and verified-membership derivation.
 
 **Important boundary:** this helper is infrastructure only and is not yet wired into production routes. Existing route handlers still use pool-level queries. No RLS policy should be enabled until those call sites are refactored and tested. The custom transaction-local settings are a context carrier for the trusted application server; they are not cryptographic claims and do not defend against a fully compromised application database credential or arbitrary SQL execution. Policies must independently check active membership and the threat model must include this limitation.
+
+
+## 10. First route adoption — resource-flow creation
+
+The `POST /api/v1/resource-flows` route now uses the transaction-local tenant helper:
+- Verified active membership context is derived from `AuthContext`.
+- Permission lookup (`waste:record`), source/destination geography authorization and the resource-flow insert run on the same checked-out PostgreSQL client and transaction.
+- The route no longer performs its permission/geography checks and write through separate pool-level operations.
+- Any failed check returns a denial and the transaction commits no resource-flow mutation; thrown database failures roll back.
+
+This is the first route adoption, not platform-wide tenant isolation. Read paths and other mutation routes remain to be inventoried/refactored. The production RLS gate remains closed until all tenant-sensitive SQL paths, worker roles, shared/system tables and cross-tenant tests are covered.
