@@ -44,26 +44,30 @@ test("worker claims a bounded batch and marks structurally valid payloads as int
   const { pool, statements } = fakePool([row]);
   const result = await runGovernmentInboxWorker(pool);
   assert.deepEqual(result, { claimed: 1, validated: 1, rejected: 0, unresolved: 0, retried: 0, quarantined: 0 });
-  assert.equal(statements.length, 5, "atomic claim, serializable source resolution, fenced terminal update, and commit");
+  assert.equal(statements.length, 6, "atomic claim, serializable key lock and source resolution, fenced terminal update, and commit");
   assert.match(statements[0]!.sql, /with exhausted as \(/i);
   assert.match(statements[0]!.sql, /for update skip locked/i);
   assert.match(statements[0]!.sql, /returning inbox\.id/i);
   assert.match(statements[1]!.sql, /begin isolation level serializable/i);
-  assert.match(statements[2]!.sql, /for share of c,s/i);
-  assert.match(statements[2]!.sql, /content_sha256/i);
-  assert.match(statements[3]!.sql, /lease_token=\$2/i);
-  assert.match(statements[3]!.sql, /lease_until > now\(\)/i);
-  assert.match(statements[3]!.sql, /status='VALIDATED'/i);
-  assert.equal(statements[4]!.sql, "COMMIT");
+  assert.match(statements[2]!.sql, /pg_advisory_xact_lock/i);
+  assert.match(statements[3]!.sql, /for share of c,s/i);
+  assert.match(statements[3]!.sql, /content_sha256/i);
+  assert.match(statements[4]!.sql, /lease_token=\$2/i);
+  assert.match(statements[4]!.sql, /lease_until > now\(\)/i);
+  assert.match(statements[4]!.sql, /status='VALIDATED'/i);
+  const validationSummary = JSON.parse(String(statements[4]!.values[2])) as Record<string, any>;
+  assert.equal(validationSummary.jurisdictionCrosswalk.sourceSnapshot.id, "snapshot-id");
+  assert.equal(validationSummary.jurisdictionCrosswalk.sourceSnapshot.contentSha256, "a".repeat(64));
+  assert.equal(statements[5]!.sql, "COMMIT");
 });
 
 test("worker keeps structurally valid but unmapped batches unresolved", async () => {
   const { pool, statements } = fakePool([row], []);
   const result = await runGovernmentInboxWorker(pool);
   assert.deepEqual(result, { claimed: 1, validated: 0, rejected: 0, unresolved: 1, retried: 0, quarantined: 0 });
-  assert.match(statements[3]!.sql, /status='UNRESOLVED'/i);
-  assert.equal(statements[3]!.values[2], "GOVERNMENT_CROSSWALK_NOT_FOUND");
-  assert.equal(statements[4]!.sql, "COMMIT");
+  assert.match(statements[4]!.sql, /status='UNRESOLVED'/i);
+  assert.equal(statements[4]!.values[2], "GOVERNMENT_CROSSWALK_NOT_FOUND");
+  assert.equal(statements[5]!.sql, "COMMIT");
 });
 
 test("worker keeps ambiguous crosswalk candidates unresolved instead of choosing one", async () => {
@@ -74,9 +78,9 @@ test("worker keeps ambiguous crosswalk candidates unresolved instead of choosing
   const { pool, statements } = fakePool([row], candidates);
   const result = await runGovernmentInboxWorker(pool);
   assert.deepEqual(result, { claimed: 1, validated: 0, rejected: 0, unresolved: 1, retried: 0, quarantined: 0 });
-  assert.match(statements[3]!.sql, /status='UNRESOLVED'/i);
-  assert.equal(statements[3]!.values[2], "GOVERNMENT_CROSSWALK_AMBIGUOUS");
-  const summary = JSON.parse(String(statements[3]!.values[3])) as Record<string, unknown>;
+  assert.match(statements[4]!.sql, /status='UNRESOLVED'/i);
+  assert.equal(statements[4]!.values[2], "GOVERNMENT_CROSSWALK_AMBIGUOUS");
+  const summary = JSON.parse(String(statements[4]!.values[3])) as Record<string, unknown>;
   assert.equal(summary.reason, "MULTIPLE_VERIFIED_JURISDICTION_CROSSWALKS");
   assert.equal(summary.officialAcceptance, false);
   assert.equal(summary.authoritativeMrvMutation, false);
