@@ -161,3 +161,15 @@ This is source-code implementation only. The script is not configured as a Rende
 - This validates the current source branch and disposable CI environment only. It does not prove that production Neon has the required schema/role/grants, that Render uses the intended database identity, or that the worker is deployed.
 - PR #161 remains draft/open/unmerged. Worker OFF; scheduler OFF; production HOLD; certification OFF; TRL 9 not claimed.
 - No live Neon schema/role/grant/policy changes, Render service/secrets/deployment changes, or production data mutations were made.
+
+
+### Tenant-isolation audit and worker grant tightening — 2026-10-31 18:47 UTC
+
+- Read-only production catalog audit of public tables found RLS disabled and zero row-level policies across the inspected application tables. This confirms tenant isolation is not database-enforced in the inspected production snapshot; no policy or schema changes were made.
+- Read-only staging column audit found `async_mirror_inbox` and `async_mirror_inbox_events` have no `organization_id` or `tenant_id`. Authority/municipal codes do not substitute for tenant ownership.
+- The candidate queue claims across a shared queue. Crosswalk geography-scope checks are useful data validation but are not a database-enforced tenant boundary. Worker production activation is therefore blocked pending tenant-aware queue ownership and isolation design.
+- Added `docs/security/TENANT_ISOLATION_SYSTEM_QUEUE_DECISION_2026-10-31.md` with observed facts, prohibited shortcuts, recommended target architecture, implementation sequence and release gates. Proposed architecture only; not implemented or certified.
+- Tightened the candidate worker principal attestation to reject inbox INSERT and DELETE privileges in addition to broad table UPDATE, and added regression coverage. The exact source head is undergoing CI; do not treat this grant tightening as accepted until exact-head CI succeeds.
+- Previous exact-head CI run [#41230844594](https://github.com/vishaltradewinds/rupaykg/actions/runs/41230844594) passed all 17 workflow steps at source head `72cc1f1c1647e0d3309ffa49220a39897eb109e8`. Newer grant-hardening source heads have separate in-progress runs; the previous pass does not validate those later changes.
+- No production/staging DDL, DML, roles, grants, RLS policies, secrets, Render service or deployment changes were made.
+- Worker OFF; scheduler OFF; production HOLD; TRL 9 not established.
