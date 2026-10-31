@@ -196,3 +196,15 @@ This is source-code implementation only. The script is not configured as a Rende
 - This validates the candidate migration and ACL behavior in disposable CI PostgreSQL only. It does not establish live Neon production schema/role/grants, Render database identity or tenant isolation.
 - Tenant isolation remains a separate release blocker: production snapshot has 67 public base tables, 0 RLS-enabled, 0 FORCE RLS, 0 policies; staging inbox and event rows lack tenant keys. No production/staging changes were made.
 - PRs #157 and #161 remain draft/open/unmerged. Worker OFF; scheduler OFF; production HOLD; TRL 9 not established.
+
+
+### Founder checkpoint saved — 2026-10-31 19:00 UTC
+
+- Founder requested this engineering state be saved as the durable continuation checkpoint.
+- Latest PR #161 documentation/checkpoint head: `fba1660e670cc1f5487cab37568800c7288e44d3`.
+- Exact-head workflow run [#41231870575](https://github.com/vishaltradewinds/rupaykg/actions/runs/41231870575) completed successfully; its validation job is green.
+- Latest validated code head remains `51951d5d324019bcac24eb35ac976881725c54de`, with exact-head CI run [#41231642460](https://github.com/vishaltradewinds/rupaykg/actions/runs/41231642460) green. The newer commit only records the checkpoint; it does not change the worker implementation.
+- Current engineering decision remains unchanged: tenant isolation is the priority release blocker. Worker OFF; scheduler OFF; production HOLD; all four engineering PRs remain draft/unmerged pending their respective gates and explicit approval.
+- No production/staging database, role, grant, RLS policy, secret, Render service or deployment was changed.
+- TRL 9 is not established. Disposable CI success is not production certification.
+- Next execution: continue tenant ownership/RLS design and table-by-table application query mapping; then implement tenant-aware queue operations and two-tenant positive/negative tests in isolated disposable environments. Preserve fail-closed behavior and do not mutate production.
