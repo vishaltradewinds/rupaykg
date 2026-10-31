@@ -22,4 +22,6 @@ COPY --from=build /app/migrations ./migrations
 
 USER node
 EXPOSE 8080
-CMD ["sh", "-c", "node apps/dist/src/migrate.js && node apps/dist/src/acceptance-seed.js && node apps/dist/src/production-server.js"]
+# Database migrations are an explicit release operation, never a web-service
+# startup side effect. Acceptance fixtures are never seeded by this service.
+CMD ["node", "apps/dist/src/production-server.js"]
