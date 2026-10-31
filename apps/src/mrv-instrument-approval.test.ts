@@ -9,6 +9,10 @@ const gasObservation = { instrument_id: "GAS-FLOW-01", parameter_code: "gas_flow
 function approvedInstrument(overrides: Partial<MrvInstrumentApprovalEvidence> = {}): MrvInstrumentApprovalEvidence {
   return {
     instrument_code: "GAS-FLOW-01",
+    measurement_instrument: true,
+    manufacturer_serial_number: "SERIAL-GAS-FLOW-01",
+    asset_tag: "ASSET-GAS-FLOW-01",
+    calibration_serial_number: "SERIAL-GAS-FLOW-01",
     supported_parameter_codes: ["gas_flow"],
     approval_status: "VERIFIED",
     meity_certificate_id: "MEITY-CERT-001",
@@ -58,6 +62,11 @@ test("instrument-linked MRV fails closed when the exact instrument is not regist
 test("exact-model MeitY evidence, supported parameter and current calibration permit instrument-linked MRV", () => {
   assert.equal(instrumentApprovalFailure("BM WA03.001", [gasObservation], [approvedInstrument()], now), null);
   assert.equal(instrumentApprovalFailure("OTHER", [gasObservation], [approvedInstrument({ meity_validity_basis: "NO_EXPIRY_CONFIRMED", meity_valid_until: null })], now), null);
+});
+
+test("physical measurement approval requires exact unit serial and matching calibration certificate serial", () => {
+  assert.match(instrumentApprovalFailure("OTHER", [gasObservation], [approvedInstrument({ manufacturer_serial_number: null })], now) ?? "", /manufacturer serial number/i);
+  assert.match(instrumentApprovalFailure("OTHER", [gasObservation], [approvedInstrument({ calibration_serial_number: "DIFFERENT-SERIAL" })], now) ?? "", /calibration certificate serial does not match/i);
 });
 
 test("instrument cannot be used for a parameter outside its approved mapping", () => {
