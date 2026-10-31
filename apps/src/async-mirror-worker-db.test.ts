@@ -135,6 +135,11 @@ test("government inbox worker persists retry recovery, quarantine and append-onl
         /APPROVED_SOURCE_SCOPE_DIRECTORY_IMMUTABLE/,
         "approved directory source checksum must be immutable",
       );
+      await assert.rejects(
+        pool.query("update geography set parent_id=null where id=$1", [scoped.geographyId]),
+        /APPROVED_SOURCE_SCOPE_GEOGRAPHY_IMMUTABLE/,
+        "approved source scope descendant hierarchy must be immutable",
+      );
       const outsideId = randomUUID();
       await pool.query(
         "insert into geography(id,kind,code,name,source,source_version) values($1,'CLUSTER',$2,$3,'Synthetic unrelated fixture','v1')",
