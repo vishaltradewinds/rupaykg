@@ -228,3 +228,37 @@ The initial create request with a custom suspend timeout was rejected by account
 - Production and staging remain unchanged; migration/deployment HOLD.
 - Worker scheduler OFF; eight expired staging PROCESSING rows remain preserved.
 - Independent review, live drift reconciliation, explicit change approval and recovery plan remain mandatory.
+
+
+## Security regression discovered in migration 096 — 2026-10-31
+
+### Finding
+
+The production implementation of `prevent_invalid_verification()` refreshes the four authorization provenance fields whenever an UPDATE leaves `NEW.decision = 'APPROVED'`. A no-op or unrelated update to an already-approved verification can therefore replace the supposed decision-time permissions snapshot and timestamp with current role permissions. This makes the historical snapshot mutable.
+
+This behavior was reproduced by the disposable PostgreSQL regression test in PR #140: change the role permissions, issue a no-op UPDATE to the approved verification, and observe the authorization snapshot/timestamp change. This is a material audit-integrity/security defect in the currently deployed function, not merely a staging/production difference.
+
+### Candidate forward-fix hardening
+
+PR #140 is the existing focused test path. Its unnumbered proposal was hardened on 2026-10-31:
+- for any UPDATE where `OLD.decision = 'APPROVED'`, verifier/evidence/activity linkage changes are rejected regardless of the new decision value;
+- an update transitioning away from APPROVED without changing linkage preserves the original snapshot;
+- regression tests cover attempts to change evidence/activity while transitioning away and attempts to change verifier identity while transitioning away.
+
+Latest PR #140 head: `5229e8299ba5a49af86748730e3fea42374e9d22`.
+Exact-head CI: [#41191863577](https://github.com/vishaltradewinds/rupaykg/actions/runs/41191863577), IN PROGRESS at the time of this checkpoint. No pass claim is made.
+
+### Impact on canonical migration PR #157
+
+PR #157 exact-head CI run #41190853951 passes the production-shaped baseline and upgrade, and verifies the historical verifier function hash remains unchanged. That preservation test does **not** fix the snapshot-rewrite behavior; it preserves the current behavior. Treat PR #157's migration chain as engineering-tested but not security-complete for verification provenance.
+
+### Required remediation gate
+
+Before PR #157 can be considered for merge/release:
+1. Finish exact-head CI for PR #140.
+2. Independently review the proposed trigger semantics, especially row-lock/concurrency behavior, approved-row linkage immutability, explicit audited correction/reapproval, trigger privileges and search_path, and handling of historical approved rows.
+3. Convert the reviewed semantics into a separately numbered forward-only migration after the existing candidate chain; never edit migration 096.
+4. Add the migration to production-shaped reconstruction/upgrade/idempotency tests and API-level verifier authorization acceptance.
+5. Rehearse on disposable PostgreSQL and review before any live migration request.
+
+No live Neon function or trigger was changed. Production remains on the existing function. Staging remains on the older function. This is a P0/P1 security release blocker pending reviewed remediation.
