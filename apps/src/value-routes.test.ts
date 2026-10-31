@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import Fastify from "fastify";
+import { createHash, randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { registerValueRoutes } from "./value-routes.js";
 import { bwgProfileReviewBasis, bwgEprQuantityError, canReadBwgWorkspace, isBwgApplicabilityNotVerifiedConflict, isBwgEprFulfilledObligationConstraintViolation } from "./value-routes.js";
@@ -227,8 +228,6 @@ test("BWG reporting-period HTTP route maps the exact live applicability trigger 
 });
 
 
-import { createHash, randomUUID } from "node:crypto";
-import { Pool } from "pg";
 
 const bwgDbAcceptanceEnabled = process.env.CI === "true"
   && process.env.NODE_ENV !== "production"
