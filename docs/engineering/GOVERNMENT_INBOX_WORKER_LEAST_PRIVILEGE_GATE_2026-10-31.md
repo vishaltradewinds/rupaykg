@@ -98,3 +98,8 @@ Added disposable PostgreSQL integration tests:
 The fixtures are synthetic and run only in disposable CI PostgreSQL. They intentionally leave append-only event history in that ephemeral database; no staging or production queue rows are touched.
 
 **Limits still open:** this does not renew a lease during long validation. If validation exceeds the lease, the final fenced update is correctly rejected, but the row may remain PROCESSING until a later worker reclaims it. Crosswalk reads are still not bound to an immutable/versioned snapshot transaction. These are separate follow-up gates; do not infer them as solved by atomic claiming. Actual deployed worker identity, RLS/global authority scope approval, migration-principal semantics, and production-derived full-chain rehearsal remain release blockers. No worker service, schedule, secret, role, live database or deployment was activated or changed.
+
+
+### Concurrency-test harness correction — 2026-10-31
+
+The first CI execution exposed a test-barrier design error: the worker processes each claimed row sequentially, so waiting for all four validators to enter before releasing any validator deadlocked both worker loops after their first row. The test barrier now releases when both worker invocations have entered their first validation call; each then proceeds through its second row. This is a test-only correction, not a production-worker behavior change. Re-run the full CI suite on the corrected head before accepting the batch.
