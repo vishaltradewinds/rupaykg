@@ -1,6 +1,6 @@
 # SHAKTI Standards — Universal Lifecycle and Technology Readiness Requirements
 
-**Standard status:** Proposed controlled baseline; must be reviewed and approved through the project's governance process before being represented as formally ratified.  
+**Standard status:** Founder-designated mandatory principal directive baseline. This repository document records the directive; operational conformance must be evidenced project by project.  
 **Applies to:** All AllianceVentures projects and systems that adopt SHAKTI Standards.  
 **Golden rule:** **ONE SHAKTI STANDARD. MANY PROJECT-SPECIFIC OPERATING SYSTEMS.**
 
@@ -134,3 +134,77 @@ The project owner is responsible for ensuring the register exists; technical, op
 **Universal decision rule:** No skipped gates, no inferred approvals, no inflated readiness claims, no production certification without evidence and authorized sign-off.
 
 **Golden rule:** ONE SHAKTI STANDARD. MANY PROJECT-SPECIFIC OPERATING SYSTEMS.
+
+
+## 7. Principal Directive PD-01 — Mandatory Agentic AI Swarm Systems
+
+**Directive status:** Founder-designated mandatory principal directive.  
+**Applicability:** Universal and without exception across every project, platform, subsystem, phase, engineering activity and operational workflow governed by SHAKTI Standards.
+
+### 7.1 Non-negotiable rule
+
+Every SHAKTI-governed system MUST be designed, engineered, tested and operated with a coordinated Agentic AI Swarm architecture. No project, phase, module, team or delivery owner may omit, waive, downgrade or silently defer this requirement.
+
+This is a principal directive, not an optional recommendation or a discretionary architecture preference. Project-specific implementation may vary; compliance with the directive may not.
+
+### 7.2 Minimum swarm responsibilities
+
+Each project MUST provide explicit agent responsibilities, whether implemented as separate agents or as isolated roles within a shared runtime:
+
+- **Orchestrator:** decomposes objectives, assigns work, manages dependencies and coordinates completion.
+- **Domain specialists:** execute bounded tasks for the project's actual domain and workflows.
+- **Research and evidence:** gathers traceable evidence, evaluates source quality and records uncertainty.
+- **Engineering and operations:** supports implementation, testing, maintenance and operational execution.
+- **Security, safety and compliance:** checks permissions, threat boundaries, statutory requirements and policy constraints.
+- **Quality and verification:** independently checks outputs against acceptance criteria and evidence.
+- **Monitoring and recovery:** detects failures, manages retries/recovery and escalates unresolved risks.
+- **Reporting and audit:** preserves decisions, provenance, task history, results and limitations.
+
+Roles must be separated where independence is needed. A single model may fulfil multiple roles only where the project documents why that does not undermine verification, separation of duties or safety.
+
+### 7.3 Mandatory system controls
+
+Every swarm MUST implement and evidence, proportionate to its operating risk:
+
+1. Defined agent identities, responsibilities, permissions and least-privilege access.
+2. An authoritative task state and shared evidence/provenance record.
+3. Dependency-aware orchestration, prioritisation, idempotency and duplicate-work controls.
+4. Input validation, source trust boundaries and protection against prompt/instruction injection.
+5. Independent verification for material, safety-critical, financial, legal or regulated outputs.
+6. Bounded retries, timeouts, queue limits, failure isolation and human escalation.
+7. Durable audit logs, versioning, traceability and reproducible task outcomes.
+8. Human approval gates for consequential actions and controlled release.
+9. Cost, latency, resource, model and service-availability monitoring.
+10. A safe degraded/fallback mode when models, tools, networks or agents are unavailable.
+11. Data protection, tenant isolation, secrets handling and retention controls.
+12. Continuous evaluation for quality, drift, bias, hallucination, security and operational effectiveness.
+
+### 7.4 Autonomy and reserved authority
+
+Agents are expected to execute authorised research, analysis, drafting, internal coordination, code changes and tests within approved environments. They MUST NOT acquire authority merely by being autonomous.
+
+Production deployment, destructive data changes, financial commitments, purchases, external legal or regulatory submissions, binding representations, physical actuation, safety-critical control and product/quality release remain subject to the applicable explicit human, statutory, professional and change-control approvals. No agent may impersonate an approver or manufacture approval evidence.
+
+### 7.5 Universal lifecycle integration
+
+The swarm requirement applies throughout all SHAKTI lifecycle gates: discovery, context, evidence, compliance, feasibility, validation, design, engineering, testing, approval, certification, deployment, operation, monitoring, measurement and continuous assurance. Agent architecture and controls must be revisited whenever system scope, risk, data, models, integrations or operating conditions materially change.
+
+### 7.6 Acceptance evidence and non-waiver
+
+Each project MUST maintain a versioned swarm register containing:
+
+- Agent/role inventory, owner, purpose, tools and permission boundary.
+- Orchestration and task/data-flow architecture.
+- Human approval and escalation matrix.
+- Security, safety, privacy and compliance threat assessment.
+- Test cases and measured results for normal, adversarial, failure and recovery conditions.
+- Independent verification evidence and unresolved defects.
+- Cost/resource and availability assessment.
+- Operational monitoring, incident, fallback and change-control runbooks.
+- TRL/readiness assessment for technology-bearing swarm components and the integrated system, where applicable.
+
+A swarm that is only proposed, documented or represented by a demo is not an implemented or operational swarm. Status must be stated truthfully and backed by evidence. The requirement remains mandatory even while implementation is incomplete; incomplete implementation is a blocking SHAKTI non-conformance, not an exception.
+
+No project may claim SHAKTI conformance or pass a relevant release/readiness gate while the mandatory swarm architecture or its applicable controls are absent or unverified. No waiver or project-level exemption is permitted. Implementation sequencing may be staged, but the requirement itself cannot be deferred or removed.
+
+**Principal rule:** ONE SHAKTI STANDARD. MANY PROJECT-SPECIFIC OPERATING SYSTEMS. MANDATORY COORDINATED AGENTIC AI SWARMS THROUGHOUT.
