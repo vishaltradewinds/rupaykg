@@ -18,6 +18,14 @@ const client = new Client({
 });
 const schema = "authorization_provenance_" + Date.now() + "_" + Math.floor(Math.random() * 1e6);
 const q = (value) => '"' + value.replaceAll('"', '""') + '"';
+async function waitForLockWait(observer, pid) {
+  for (let attempt = 0; attempt < 50; attempt++) {
+    const result = await observer.query("select wait_event_type from pg_stat_activity where pid=$1", [pid]);
+    if (result.rows[0]?.wait_event_type === "Lock") return true;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  return false;
+}
 try {
   await client.connect();
   await client.query("create schema " + q(schema));
@@ -254,6 +262,7 @@ try {
   });
   await concurrentClient.connect();
   await concurrentClient.query("set search_path to " + q(schema) + ", public");
+  const mainBackendPid = (await client.query("select pg_backend_pid()")).rows[0].pg_backend_pid;
   try {
     await concurrentClient.query("BEGIN");
     await concurrentClient.query("update organization_memberships set status='REVOKED' where id=$1", [ids.membership]);
@@ -262,8 +271,7 @@ try {
       "insert into verifications(id,activity_id,evidence_id,verifier_identity_id,decision) values ($1,$2,$3,$4,'APPROVED')",
       ["10000000-0000-4000-8000-000000000031", ids.activity, ids.evidence, ids.verifier],
     ).then(() => { approvalSettled = true; return null; }, (error) => { approvalSettled = true; return error; });
-    await new Promise((resolve) => setTimeout(resolve, 100));
-    assert.equal(approvalSettled, false, "approval must wait for in-flight membership revocation");
+    assert.equal(await waitForLockWait(concurrentClient, mainBackendPid), true, "approval must be blocked on the membership row lock");
     await concurrentClient.query("COMMIT");
     const revokedApprovalError = await blockedApproval;
     assert.match(revokedApprovalError?.message ?? "", /requires active verifier permission/);
@@ -279,8 +287,7 @@ try {
       "update organization_memberships set status='REVOKED' where id=$1",
       [ids.membership],
     ).then((result) => { revocationSettled = true; return result; });
-    await new Promise((resolve) => setTimeout(resolve, 100));
-    assert.equal(revocationSettled, false, "revocation must wait for approval transaction holding the authorization lock");
+    assert.equal(await waitForLockWait(concurrentClient, mainBackendPid), true, "membership revocation must wait for the approval transaction");
     await client.query("COMMIT");
     await blockedRevocation;
     await client.query("update organization_memberships set status='VERIFIED' where id=$1", [ids.membership]);
@@ -292,8 +299,7 @@ try {
       "insert into verifications(id,activity_id,evidence_id,verifier_identity_id,decision) values ($1,$2,$3,$4,'APPROVED')",
       ["10000000-0000-4000-8000-000000000033", ids.activity, ids.evidence, ids.verifier],
     ).then(() => { roleApprovalSettled = true; return null; }, (error) => { roleApprovalSettled = true; return error; });
-    await new Promise((resolve) => setTimeout(resolve, 100));
-    assert.equal(roleApprovalSettled, false, "approval must wait for in-flight role permission change");
+    assert.equal(await waitForLockWait(concurrentClient, mainBackendPid), true, "approval must be blocked on the role permission row lock");
     await concurrentClient.query("COMMIT");
     const roleApprovalError = await blockedByRoleRevocation;
     assert.match(roleApprovalError?.message ?? "", /requires active verifier permission/);
@@ -306,8 +312,7 @@ try {
       "insert into verifications(id,activity_id,evidence_id,verifier_identity_id,decision) values ($1,$2,$3,$4,'APPROVED')",
       ["10000000-0000-4000-8000-000000000034", ids.activity, ids.evidence, ids.verifier],
     ).then(() => { identityApprovalSettled = true; return null; }, (error) => { identityApprovalSettled = true; return error; });
-    await new Promise((resolve) => setTimeout(resolve, 100));
-    assert.equal(identityApprovalSettled, false, "approval must wait for in-flight identity suspension");
+    assert.equal(await waitForLockWait(concurrentClient, mainBackendPid), true, "approval must be blocked on the identity row lock");
     await concurrentClient.query("COMMIT");
     const identityApprovalError = await blockedBySuspension;
     assert.match(identityApprovalError?.message ?? "", /requires active verifier permission/);
