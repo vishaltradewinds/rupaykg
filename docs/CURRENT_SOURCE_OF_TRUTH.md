@@ -94,3 +94,8 @@ The controlling audit is [RupayKg National Environmental Infrastructure — Mast
 ## 2026-10-31 — Runtime startup hardening CI result
 
 Review-branch code head `88ce5125ff658c4401d892d0b501d89d3a07eb03` passed GitHub Actions CI run [#41211914512](https://github.com/vishaltradewinds/rupaykg/actions/runs/41211914512), run 3896. Dependency audit, migration validation, disposable PostgreSQL migration, typecheck, build, browser smoke, disposable PostgreSQL acceptance tests and production Docker image build all passed. This is engineering validation only; no production database or Render deployment was changed. PR #173 remains unmerged. Production HOLD; worker OFF; scheduler OFF; certification OFF; TRL 9 not claimed.
+
+
+## 2026-10-31 — Tenant isolation and database role finding
+
+The draft [Tenant Isolation and PostgreSQL RLS ADR](engineering/RUPAYKG_TENANT_ISOLATION_RLS_ADR_DRAFT_2026-10-31.md) records the first-pass classification of all 67 public base tables and the proposed tenant isolation model. The inspected Neon session login rupaykg has BYPASSRLS, CREATEROLE and CREATEDB privileges. This does not prove that Render uses the same role; deployed runtime identity remains unverified. Do not use the inspected privileged login as the long-running API or worker identity. No production role, grant, policy or schema change has been made.
