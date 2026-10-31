@@ -119,3 +119,8 @@ Updated in this branch:
 8. Only after independent review, create a separately numbered forward-only migration after the authoritative chain. Never edit or replay migration 096.
 
 **Release decision: HOLD.** No production/staging migration, scheduler/worker activation, deployment, certification or TRL 9 claim is authorized.
+
+
+## Test determinism refinement — 2026-10-31
+
+The two-session tests now poll PostgreSQL `pg_stat_activity` for the main connection's `wait_event_type='Lock'` instead of relying on a fixed sleep. This proves that the competing statement actually reached and waited on a row lock before the revocation transaction commits. The tests exercise membership, role-permission and identity-suspension races in both lock orderings where applicable. Exact-head CI remains required before treating these tests as passing.
