@@ -37,8 +37,10 @@ function sameDatabasePrincipal(left: string, right: string): boolean {
       && a.hostname === b.hostname
       && a.port === b.port
       && a.pathname === b.pathname
-      && decodeURIComponent(a.username) === decodeURIComponent(b.username)
-      && decodeURIComponent(a.password) === decodeURIComponent(b.password);
+      && a.pathname === b.pathname
+      // PostgreSQL principal identity is the role name, not the password.
+      // A rotated password must never make the same role look dedicated.
+      && decodeURIComponent(a.username) === decodeURIComponent(b.username);
   } catch {
     // Invalid URLs are rejected by pg on connection; never treat malformed
     // values as proof that the worker principal is distinct.
