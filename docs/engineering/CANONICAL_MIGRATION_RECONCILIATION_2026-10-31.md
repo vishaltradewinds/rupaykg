@@ -198,3 +198,14 @@ The historical PR #122 head `b46b1afecdbe97c15ede94f6e8413b8fa5d2e4a3` has an ex
 PR #142 head `7d73517997e902af0550f2773763b585abc2fc4e` also has exact-head CI run #3485 completed successfully; PR #143 head `51abd113748b73f8cf4920b2c1937efecd040eb7` has exact-head CI run #3471 completed successfully. PR #122 is closed and draft; PR #142 remains open and draft; PR #143 remains open and non-draft; PR #144 is closed and draft. None of these statuses constitutes merge approval. The PR #122 branch remains unsuitable for wholesale merge due its 580-ahead/4-behind divergence.
 
 PR #154's latest documentation head `d064baa3d5543f22f1c2a1c557ceebaf51231100` has a new exact-head CI run #3522 queued at the time of this update; no completed result is claimed. Production remains unchanged and on HOLD.
+
+
+## Live schema-diff and migration-ledger reconciliation — 2026-10-31
+
+Neon schema comparison between staging and rehearsal shows the only schema diff in the compared database snapshots is the `async_mirror_inbox.status` check constraint and its column comment: rehearsal permits the internal `UNRESOLVED` state; staging does not. The four async/AI tables and their inspected structures are otherwise aligned across those two branches. The recovered migrations 20261022–20261025 correspond to the tables/columns/indexes/constraints observed in staging and rehearsal.
+
+A fresh ledger query confirms both staging and rehearsal record only 20261018–20261025. Neither records migration 20261101, despite rehearsal having the `UNRESOLVED` constraint/comment. Therefore the rehearsal-only `UNRESOLVED` schema change is unledgered/out-of-band relative to its own migration ledger. Treat it as schema drift; do not assume the migration runner applied it or that migration 20261101 was formally accepted.
+
+Production-versus-staging schema comparison confirms the four async/AI tables and their inbox-event functions/triggers exist only in staging, while production retains the stronger `prevent_invalid_verification()` implementation and the four authorization snapshot columns/FKs. This is a direct reason not to copy staging or rehearsal wholesale.
+
+A production-clone rehearsal has not yet been run. Neon temporary-branch preparation failed because the SQL wrapper split a semicolon inside a quoted COMMENT string; a separate branch-provision attempt was rejected by the account's compute/suspend settings. A subsequent branch inventory confirms no new branch was created and no schema writes occurred. Continue using only read-only comparisons until an approved disposable PostgreSQL environment is available. No production/staging/rehearsal database was changed.
