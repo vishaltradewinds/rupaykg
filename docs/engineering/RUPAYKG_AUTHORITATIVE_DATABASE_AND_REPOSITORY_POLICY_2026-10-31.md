@@ -70,3 +70,24 @@ Apply Shakti Standards end-to-end: discovery → evidence → statutory/technica
 ## Safety record
 
 Neon inspection was read-only. No live database writes, migrations, role/grant/RLS changes, endpoint/branch changes, Render configuration changes, deployments, worker activation, scheduler activation or certification occurred.
+
+
+## 8. Migration-ledger versus repository-file reconciliation — 2026-10-31
+
+A read-only comparison of the live `schema_migrations` ledgers against the canonical repository `main` migration directory found a concrete source-control gap:
+
+| Migration identity | Production main ledger | Staging ledger | Repository `main` file | Worker PR #157/#161 stack |
+|---|---|---|---|---|
+| `096_verification_authorization_provenance.sql` | Applied as version `096` | Not present | Missing | Present; Git blob `258b1f4534efbf915688f78aa84d4ec24a47cbc0` |
+| `20261022_async_mirror_inbox.sql` | Not present | Applied | Missing | Present |
+| `20261023_async_mirror_worker_leases.sql` | Not present | Applied | Missing | Present |
+| `20261024_ai_intake_rate_limits.sql` | Not present | Applied | Missing | Present |
+| `20261025_ai_evidence_intake_jobs.sql` | Not present | Applied | Missing | Present |
+
+The production main ledger has 92 rows and ends with version `096` plus date-coded migrations through `20261021`. Staging has 95 rows: it lacks `096` but contains date-coded migrations through `20261025`. Repository `main` currently contains migrations through `20261021` but not the four date-coded staging migrations or migration `096`.
+
+The worker integration stack contains the missing migration files. In particular, the `096_verification_authorization_provenance.sql` file on PR #161 has Git blob SHA `258b1f4534efbf915688f78aa84d4ec24a47cbc0`, matching the previously recorded historical Git blob identity. This is a Git blob ID, **not** a SHA-256 of the deployed SQL artifact and does not by itself prove which exact bytes were executed by the live database or Render deployment.
+
+**Required resolution:** preserve production main as the only authoritative database; do not edit either live ledger or apply isolated migrations. Before merging the migration-bearing worker stack, compare the exact source migration blobs, all migration ordering/dependencies, the production baseline and staging ledger history. Rehearse the full ordered migration chain from a fresh disposable branch of production main and retain SQL-byte hashes, migration report and schema diff. Independent review must decide whether the worker migrations are a valid forward-only addition or require a separately governed migration-history reconciliation.
+
+This finding is a blocker for merging/deploying migration-bearing work until reconciled. It does not invalidate the earlier worker CI result, which ran against disposable PostgreSQL and is not live Neon evidence.
