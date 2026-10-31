@@ -124,14 +124,14 @@ test("worker rejects payload changes that do not match the stored canonical hash
   const { pool, statements } = fakePool([{ ...row, payload: changedPayload }]);
   const result = await runGovernmentInboxWorker(pool);
   assert.equal(result.rejected, 1);
-  assert.equal(statements[2]!.values[2], "BATCH_PAYLOAD_HASH_MISMATCH");
+  assert.equal(statements[1]!.values[2], "BATCH_PAYLOAD_HASH_MISMATCH");
 });
 
 test("worker rejects payload/database sync-window timestamp divergence", async () => {
   const { pool, statements } = fakePool([{ ...row, sync_window_timestamp: new Date("2026-10-20T02:30:00Z") }]);
   const result = await runGovernmentInboxWorker(pool);
   assert.equal(result.rejected, 1);
-  assert.equal(statements[2]!.values[2], "BATCH_TIMESTAMP_DATABASE_MISMATCH");
+  assert.equal(statements[1]!.values[2], "BATCH_TIMESTAMP_DATABASE_MISMATCH");
 });
 
 test("worker quarantines exhausted unclaimed inbox rows instead of leaving them stuck", async () => {
@@ -148,12 +148,12 @@ test("worker retries transient errors and quarantines an exhausted attempt", asy
   const { pool, statements } = fakePool([{ ...row, attempts: 1 }]);
   const retry = await runGovernmentInboxWorker(pool, async () => { throw new Error("temporary outage"); }, { maxAttempts: 3 });
   assert.equal(retry.retried, 1);
-  assert.match(statements[2]!.sql, /next_attempt_at=case when \$3='RETRY'/i);
+  assert.match(statements[1]!.sql, /next_attempt_at=case when \$3='RETRY'/i);
 
   const exhaustedPool = fakePool([{ ...row, attempts: 3 }]);
   const exhausted = await runGovernmentInboxWorker(exhaustedPool.pool, async () => { throw new Error("still unavailable"); }, { maxAttempts: 3 });
   assert.equal(exhausted.quarantined, 1);
-  assert.match(exhaustedPool.statements[2]!.sql, /quarantined_at=case when \$3='QUARANTINED'/i);
+  assert.match(exhaustedPool.statements[1]!.sql, /quarantined_at=case when \$3='QUARANTINED'/i);
 });
 
 test("structural validator rejects unknown fields", async () => {
