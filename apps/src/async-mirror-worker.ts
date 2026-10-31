@@ -128,17 +128,26 @@ export async function runGovernmentInboxWorker(
   // and claiming. Concurrent workers cannot observe a gap between the sweep and claim.
   // Validation happens only after this statement commits, so no row locks are held
   // while application code performs potentially slow work.
-  const claimed = await pool.query<ClaimedInboxRow>(
-    `with exhausted as (
-       update async_mirror_inbox
-          set status='QUARANTINED', quarantined_at=now(), lease_token=null, lease_until=null,
-              last_error_code=coalesce(last_error_code, 'WORKER_ATTEMPTS_EXHAUSTED')
+  const claim = await pool.query<{ claimed_rows: ClaimedInboxRow[]; exhausted_quarantined: number }>(
+    `with exhausted_candidates as (
+       select id
+         from async_mirror_inbox
         where attempts >= $3
           and (
             status in ('RECEIVED','RETRY')
             or (status='PROCESSING' and (lease_until is null or lease_until < now()))
           )
-       returning id
+        order by received_at asc
+        for update skip locked
+        limit $1
+     ),
+     exhausted as (
+       update async_mirror_inbox inbox
+          set status='QUARANTINED', quarantined_at=now(), lease_token=null, lease_until=null,
+              last_error_code=coalesce(last_error_code, 'WORKER_ATTEMPTS_EXHAUSTED')
+         from exhausted_candidates
+        where inbox.id=exhausted_candidates.id
+       returning inbox.id
      ),
      candidates as (
        select id
@@ -151,19 +160,32 @@ export async function runGovernmentInboxWorker(
         order by received_at asc
         for update skip locked
         limit $1
+     ),
+     claimed as (
+       update async_mirror_inbox inbox
+          set status='PROCESSING', attempts=inbox.attempts+1,
+              lease_token=gen_random_uuid(), lease_until=now() + ($2 * interval '1 second')
+         from candidates
+        where inbox.id=candidates.id
+       returning inbox.id, inbox.authority_code, inbox.municipal_code, inbox.batch_id,
+                 inbox.sync_window_timestamp, inbox.payload, inbox.payload_sha256, inbox.attempts, inbox.lease_token
      )
-     update async_mirror_inbox inbox
-        set status='PROCESSING', attempts=inbox.attempts+1,
-            lease_token=gen_random_uuid(), lease_until=now() + ($2 * interval '1 second')
-       from candidates
-      where inbox.id=candidates.id
-     returning inbox.id, inbox.authority_code, inbox.municipal_code, inbox.batch_id,
-               inbox.sync_window_timestamp, inbox.payload, inbox.payload_sha256, inbox.attempts, inbox.lease_token`,
+     select coalesce(jsonb_agg(to_jsonb(claimed)) filter (where claimed.id is not null), '[]'::jsonb) as claimed_rows,
+            (select count(*)::int from exhausted) as exhausted_quarantined
+       from claimed`,
     [batchSize, leaseSeconds, maxAttempts],
   );
 
-  const result = { claimed: claimed.rows.length, validated: 0, rejected: 0, unresolved: 0, retried: 0, quarantined: 0 };
-  const activeLeases = new Map(claimed.rows.map((row) => [row.id, row.lease_token]));
+  const claimedRows = claim.rows[0]?.claimed_rows ?? [];
+  const result = {
+    claimed: claimedRows.length,
+    validated: 0,
+    rejected: 0,
+    unresolved: 0,
+    retried: 0,
+    quarantined: Number(claim.rows[0]?.exhausted_quarantined ?? 0),
+  };
+  const activeLeases = new Map(claimedRows.map((row) => [row.id, row.lease_token]));
   let renewalFailure: Error | null = null;
   let renewalInFlight = false;
   const pausedLeases = new Set<string>();
@@ -210,7 +232,7 @@ export async function runGovernmentInboxWorker(
   }, leaseRenewalSeconds * 1000);
   renewalTimer.unref?.();
   try {
-  for (const row of claimed.rows) {
+  for (const row of claimedRows) {
     let sourceResolutionClient: PoolClient | null = null;
     let terminalCount: "validated" | "unresolved" | "rejected" | null = null;
     const pauseAndRefreshLease = async (): Promise<void> => {
