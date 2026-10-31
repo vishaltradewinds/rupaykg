@@ -22,3 +22,13 @@
 - Successful steps: dependency audit, migration validation, disposable PostgreSQL migration run, typecheck, build, browser smoke test, disposable PostgreSQL acceptance tests (including acceptance-seed production guard tests), and production Docker image build.
 - No production database, Render configuration, deployment or runtime secret was changed. This CI run validates the review-branch code and Docker image only.
 - PR #173 remains draft/open/unmerged. Production HOLD; worker OFF; scheduler OFF; certification OFF; TRL 9 not claimed.
+
+
+## 2026-10-31 — Tenant isolation catalog and RLS ADR draft
+
+- Ran read-only catalog inventory across all 67 public base tables, direct organization_id columns, multi-party organization references and foreign-key relationships.
+- Direct organization_id candidates include activities, audit_events, BWG profiles/reporting, carbon projects, CPCB-SWM workspaces/status history, environmental claims, EPR returns, ESG periods, evidence artifact series, field devices, obligations, organisation assessments/applicability/geography/memberships/statutory profiles/verification evidence, platform access requests, resource flows, roles and stakeholder applications.
+- Multi-party records include BWG waste reports, chain-of-custody links, credentials, EPR credit transfers/credits, settlements and registry events; these require participant-specific policies, not a single active-tenant equality predicate.
+- Read-only pg_roles check confirmed the inspected Neon session login rupaykg is NOSUPERUSER but BYPASSRLS, CREATEROLE and CREATEDB, with LOGIN. This does not prove Render uses that role; runtime principal remains unverified. The inspected role is not suitable as a least-privilege application/worker identity.
+- Added draft RLS ADR with provisional table classification, role separation, signed context versus tenant-specific login options, child-row policy requirements, multi-party semantics and adversarial acceptance tests.
+- No production roles, grants, policies, schema or data were changed. Worker remains OFF; production HOLD; certification OFF; TRL 9 not claimed.
