@@ -41,3 +41,11 @@ Append-only resume log. Record concrete actions, exact evidence, limitations and
 - Corrected the obsolete statement that migration 023 was intentionally absent. The actual canonical repository contains `023_lifecycle_state_guards.sql`, and production/staging ledgers record version `023`.
 - Added the live ledger/source-control gap to `migrations/README.md`: production records `096` while repository main lacks the file; staging records `20261022`–`20261025` while repository main lacks those files; the unmerged worker PR stack contains them.
 - No SQL migration, live ledger or database was changed. The migration gap remains a merge/deploy blocker until full-chain reconciliation and disposable rehearsal.
+
+
+## 2026-10-31 — Render source deployment cross-check
+
+- Read-only Render service inspection confirmed service `rupaykg` (`srv-daki4d7qj5pc73b8qksg`) is connected to repository `vishaltradewinds/rupaykg`, branch `main`, with automatic commit deployments.
+- Latest observed live deployment is `dep-dbis4nm417fc73a8m7ng`, source commit `862512c8c904cef0f604df0350f02672318953af`.
+- This confirms the production code source branch, not the database connection target. Render secret values were not accessed or exposed; exact Neon branch/database used by the running service remains unverified.
+- Updated the authoritative database policy to preserve this distinction. No Render settings, secrets or deployment were changed.
