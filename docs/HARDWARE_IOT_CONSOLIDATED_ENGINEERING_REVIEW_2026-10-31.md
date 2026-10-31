@@ -121,9 +121,11 @@ Official sources:
 
 ## Additional open integration gaps
 
-### Physical-unit serial identity
+### Physical-unit serial identity — schema gate implemented, field evidence pending
 
-The proposed `mrv_instruments` register stores instrument code, manufacturer, model and SKU revision, but the current schema does not store a dedicated manufacturer serial number/physical unit identifier. Calibration certificates and service/repair histories can be unit-specific. Before physical onboarding, add an immutable unit serial/asset identifier and bind the calibration evidence and field-device association to that exact physical unit. Do not assume a model-level approval record proves a particular unit's calibration.
+New migration `20261112_mrv_instrument_physical_unit_identity.sql` adds manufacturer serial number, organization asset tag and calibration-certificate serial. A measurement instrument cannot be VERIFIED without a manufacturer serial; when calibration is required, the certificate serial must exactly match. Serial/asset identity is immutable after the first VERIFIED decision, and measurement inserts require a current VERIFIED physical measurement instrument with a valid serial/calibration binding. Unit tests and disposable PostgreSQL tests cover duplicate serials, mismatched calibration serial and post-verification mutation.
+
+This closes the source-level schema gap but does not supply any real serial number or certificate. A physical device's nameplate and calibration certificate must still be independently inspected and entered before onboarding. A model-level approval does not prove a particular unit's calibration.
 
 ### Raw-frame retention and server recomputation
 
