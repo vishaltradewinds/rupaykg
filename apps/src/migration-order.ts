@@ -44,3 +44,15 @@ export function selectMigrationFilenames(files: string[], phase: MigrationPhase)
     })
     .sort(compareMigrationFilenames);
 }
+
+
+export function assertProductionMigrationGate(env: Record<string, string | undefined>): void {
+  if (env.NODE_ENV !== "production") return;
+  if (env.RUPAYKG_ALLOW_PRODUCTION_MIGRATIONS !== "true"
+    || env.RUPAYKG_PRODUCTION_MIGRATION_APPROVED !== "true"
+    || !env.RUPAYKG_PRODUCTION_CHANGE_ID?.trim()
+    || !env.RUPAYKG_PRODUCTION_BACKUP_REFERENCE?.trim()
+    || env.RUPAYKG_MIGRATION_PHASE !== "production-upgrade") {
+    throw new Error("PRODUCTION_MIGRATION_BLOCKED: require explicit approval, change ID, backup reference and production-upgrade phase");
+  }
+}
