@@ -375,7 +375,10 @@ export async function runGovernmentInboxWorker(
         try { await sourceResolutionClient.query("ROLLBACK"); } finally { sourceResolutionClient.release(); sourceResolutionClient = null; }
       }
       const exhausted = row.attempts >= maxAttempts;
-      const code = error instanceof Error ? error.name.replace(/[^A-Z0-9_.-]/gi, "_").slice(0, 100) : "UNKNOWN_VALIDATION_ERROR";
+      const knownFailure = error instanceof Error && /^(VALIDATION_TIMEOUT|LEASE_RENEWAL_FENCE_LOST|LEASE_RENEWAL_FAILED|LEASE_RENEWAL_ROW_MISSING)$/.test(error.message)
+        ? error.message
+        : error instanceof Error ? error.name : "UNKNOWN_VALIDATION_ERROR";
+      const code = knownFailure.replace(/[^A-Z0-9_.-]/gi, "_").slice(0, 100);
       const delaySeconds = Math.min(60 * (2 ** Math.max(0, row.attempts - 1)), 3600);
       const updated = await pool.query(
         `update async_mirror_inbox
