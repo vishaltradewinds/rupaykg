@@ -70,3 +70,232 @@ test("Guardian MRV accepts VERIFIED only with an authoritative execution id", as
     else process.env.GUARDIAN_MRV_SUBMIT_URL = previousUrl;
   }
 });
+
+
+test("explicit idempotency key differentiates changed source-input digests", async () => {
+  const previousUrl = process.env.GUARDIAN_MRV_SUBMIT_URL;
+  const previousFetch = globalThis.fetch;
+  process.env.GUARDIAN_MRV_SUBMIT_URL = "https://guardian.test/mrv";
+  const seen: string[] = [];
+  globalThis.fetch = async (_input, init) => {
+    seen.push(new Headers(init?.headers).get("idempotency-key") || "");
+    return new Response(JSON.stringify({ status: "VERIFIED", executionId: "guardian-execution-1" }), {
+      status: 200, headers: { "content-type": "application/json" },
+    });
+  };
+  try {
+    await executeGuardianMrv({ ...request, idempotencyKey: "a".repeat(64) });
+    await executeGuardianMrv({ ...request, observations: [{ parameter_code: "mass", observed_value: "11", unit: "kg" }], idempotencyKey: "b".repeat(64) });
+    assert.deepEqual(seen, ["a".repeat(64), "b".repeat(64)]);
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousUrl === undefined) delete process.env.GUARDIAN_MRV_SUBMIT_URL;
+    else process.env.GUARDIAN_MRV_SUBMIT_URL = previousUrl;
+  }
+});
+
+
+test("default Guardian idempotency key binds source observations and evidence", async () => {
+  const previousUrl = process.env.GUARDIAN_MRV_SUBMIT_URL;
+  const previousFetch = globalThis.fetch;
+  process.env.GUARDIAN_MRV_SUBMIT_URL = "https://guardian.test/mrv";
+  const seen: string[] = [];
+  globalThis.fetch = async (_input, init) => {
+    seen.push(new Headers(init?.headers).get("idempotency-key") || "");
+    return new Response(JSON.stringify({ status: "VERIFIED", executionId: "guardian-execution-1" }), {
+      status: 200, headers: { "content-type": "application/json" },
+    });
+  };
+  try {
+    await executeGuardianMrv(request);
+    await executeGuardianMrv({ ...request, observations: [{ parameter_code: "mass", observed_value: "11", unit: "kg" }] });
+    await executeGuardianMrv({ ...request, evidence: [{ id: "evidence-1", content_hash: "def" }] });
+    assert.equal(new Set(seen).size, 3);
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousUrl === undefined) delete process.env.GUARDIAN_MRV_SUBMIT_URL;
+    else process.env.GUARDIAN_MRV_SUBMIT_URL = previousUrl;
+  }
+});
+
+
+test("default Guardian idempotency key is stable across object property order", async () => {
+  const previousUrl = process.env.GUARDIAN_MRV_SUBMIT_URL;
+  const previousFetch = globalThis.fetch;
+  process.env.GUARDIAN_MRV_SUBMIT_URL = "https://guardian.test/mrv";
+  const seen: string[] = [];
+  globalThis.fetch = async (_input, init) => {
+    seen.push(new Headers(init?.headers).get("idempotency-key") || "");
+    return new Response(JSON.stringify({ status: "VERIFIED", executionId: "guardian-execution-1" }), {
+      status: 200, headers: { "content-type": "application/json" },
+    });
+  };
+  try {
+    await executeGuardianMrv({
+      ...request,
+      observations: [{ parameter_code: "mass", observed_value: "10", unit: "kg" }],
+      evidence: [{ id: "evidence-1", content_hash: "abc" }],
+    });
+    await executeGuardianMrv({
+      ...request,
+      observations: [{ unit: "kg", observed_value: "10", parameter_code: "mass" }],
+      evidence: [{ content_hash: "abc", id: "evidence-1" }],
+    });
+    assert.equal(seen[0], seen[1]);
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousUrl === undefined) delete process.env.GUARDIAN_MRV_SUBMIT_URL;
+    else process.env.GUARDIAN_MRV_SUBMIT_URL = previousUrl;
+  }
+});
+
+
+test("default Guardian idempotency key canonicalizes nested evidence objects", async () => {
+  const previousUrl = process.env.GUARDIAN_MRV_SUBMIT_URL;
+  const previousFetch = globalThis.fetch;
+  process.env.GUARDIAN_MRV_SUBMIT_URL = "https://guardian.test/mrv";
+  const seen: string[] = [];
+  globalThis.fetch = async (_input, init) => {
+    seen.push(new Headers(init?.headers).get("idempotency-key") || "");
+    return new Response(JSON.stringify({ status: "VERIFIED", executionId: "guardian-execution-1" }), {
+      status: 200, headers: { "content-type": "application/json" },
+    });
+  };
+  try {
+    await executeGuardianMrv({
+      ...request,
+      evidence: [{ id: "evidence-1", metadata: { capture: { device: "scale-1", site: "site-1" } } }],
+    });
+    await executeGuardianMrv({
+      ...request,
+      evidence: [{ metadata: { capture: { site: "site-1", device: "scale-1" } }, id: "evidence-1" }],
+    });
+    assert.equal(seen[0], seen[1]);
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousUrl === undefined) delete process.env.GUARDIAN_MRV_SUBMIT_URL;
+    else process.env.GUARDIAN_MRV_SUBMIT_URL = previousUrl;
+  }
+});
+
+
+test("default Guardian idempotency key binds request metadata", async () => {
+  const previousUrl = process.env.GUARDIAN_MRV_SUBMIT_URL;
+  const previousFetch = globalThis.fetch;
+  process.env.GUARDIAN_MRV_SUBMIT_URL = "https://guardian.test/mrv";
+  const seen: string[] = [];
+  globalThis.fetch = async (_input, init) => {
+    seen.push(new Headers(init?.headers).get("idempotency-key") || "");
+    return new Response(JSON.stringify({ status: "VERIFIED", executionId: "guardian-execution-1" }), {
+      status: 200, headers: { "content-type": "application/json" },
+    });
+  };
+  try {
+    await executeGuardianMrv({ ...request, metadata: { siteId: "site-1", deviceId: "scale-1" } });
+    await executeGuardianMrv({ ...request, metadata: { siteId: "site-2", deviceId: "scale-1" } });
+    assert.notEqual(seen[0], seen[1]);
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousUrl === undefined) delete process.env.GUARDIAN_MRV_SUBMIT_URL;
+    else process.env.GUARDIAN_MRV_SUBMIT_URL = previousUrl;
+  }
+});
+
+
+test("default Guardian idempotency key canonicalizes nested request metadata", async () => {
+  const previousUrl = process.env.GUARDIAN_MRV_SUBMIT_URL;
+  const previousFetch = globalThis.fetch;
+  process.env.GUARDIAN_MRV_SUBMIT_URL = "https://guardian.test/mrv";
+  const seen: string[] = [];
+  globalThis.fetch = async (_input, init) => {
+    seen.push(new Headers(init?.headers).get("idempotency-key") || "");
+    return new Response(JSON.stringify({ status: "VERIFIED", executionId: "guardian-execution-1" }), {
+      status: 200, headers: { "content-type": "application/json" },
+    });
+  };
+  try {
+    await executeGuardianMrv({
+      ...request,
+      metadata: { capture: { device: "scale-1", location: { site: "site-1", zone: "north" } } },
+    });
+    await executeGuardianMrv({
+      ...request,
+      metadata: { capture: { location: { zone: "north", site: "site-1" }, device: "scale-1" } },
+    });
+    assert.equal(seen[0], seen[1]);
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousUrl === undefined) delete process.env.GUARDIAN_MRV_SUBMIT_URL;
+    else process.env.GUARDIAN_MRV_SUBMIT_URL = previousUrl;
+  }
+});
+
+
+test("default Guardian idempotency key preserves observation array order", async () => {
+  const previousUrl = process.env.GUARDIAN_MRV_SUBMIT_URL;
+  const previousFetch = globalThis.fetch;
+  process.env.GUARDIAN_MRV_SUBMIT_URL = "https://guardian.test/mrv";
+  const seen: string[] = [];
+  globalThis.fetch = async (_input, init) => {
+    seen.push(new Headers(init?.headers).get("idempotency-key") || "");
+    return new Response(JSON.stringify({ status: "VERIFIED", executionId: "guardian-execution-1" }), {
+      status: 200, headers: { "content-type": "application/json" },
+    });
+  };
+  try {
+    const first = { ...request, observations: [
+      { parameter_code: "mass", observed_value: "10", unit: "kg" },
+      { parameter_code: "moisture", observed_value: "5", unit: "%" },
+    ] };
+    const reversed = { ...request, observations: [...first.observations].reverse() };
+    await executeGuardianMrv(first);
+    await executeGuardianMrv(reversed);
+    assert.notEqual(seen[0], seen[1]);
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousUrl === undefined) delete process.env.GUARDIAN_MRV_SUBMIT_URL;
+    else process.env.GUARDIAN_MRV_SUBMIT_URL = previousUrl;
+  }
+});
+
+
+test("Guardian MRV rejects VERIFIED for a different policy identifier", async () => {
+  const previousUrl = process.env.GUARDIAN_MRV_SUBMIT_URL;
+  const previousFetch = globalThis.fetch;
+  process.env.GUARDIAN_MRV_SUBMIT_URL = "https://guardian.test/mrv";
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    status: "VERIFIED",
+    executionId: "guardian-execution-1",
+    policyId: "unexpected-policy",
+  }), { status: 200, headers: { "content-type": "application/json" } });
+  try {
+    const result = await executeGuardianMrv(request);
+    assert.equal(result.status, "UNAVAILABLE");
+    assert.equal(result.executionId, null);
+    assert.match(result.message, /does not match the requested policy/);
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousUrl === undefined) delete process.env.GUARDIAN_MRV_SUBMIT_URL;
+    else process.env.GUARDIAN_MRV_SUBMIT_URL = previousUrl;
+  }
+});
+
+test("Guardian MRV rejects a whitespace-only execution identifier", async () => {
+  const previousUrl = process.env.GUARDIAN_MRV_SUBMIT_URL;
+  const previousFetch = globalThis.fetch;
+  process.env.GUARDIAN_MRV_SUBMIT_URL = "https://guardian.test/mrv";
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    status: "VERIFIED",
+    executionId: "   ",
+  }), { status: 200, headers: { "content-type": "application/json" } });
+  try {
+    const result = await executeGuardianMrv(request);
+    assert.equal(result.status, "UNAVAILABLE");
+    assert.equal(result.executionId, null);
+    assert.match(result.message, /execution identifier/);
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousUrl === undefined) delete process.env.GUARDIAN_MRV_SUBMIT_URL;
+    else process.env.GUARDIAN_MRV_SUBMIT_URL = previousUrl;
+  }
+});

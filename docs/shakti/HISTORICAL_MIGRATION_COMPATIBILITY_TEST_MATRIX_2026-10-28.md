@@ -1,0 +1,307 @@
+# Shakti Standards — Historical Migration Compatibility Test Matrix
+
+Date: 2026-10-28
+Repository: vishaltradewinds/rupaykg
+Scope: validation-only; no production database access or writes.
+Related work: PR #97; validation-only PR #104.
+
+## Current CI evidence
+
+Latest completed validation run before the current test expansion: run 40681738454 / job 122793881189, commit 2e9fb91d807e52f699d98703d847ef47f86db0b7, completed successfully. It passed:
+- production dependency audit
+- migration structure validation
+- clean PostgreSQL migration
+- typecheck and build
+- production web browser smoke test
+- automated tests including the then-current disposable PostgreSQL legacy-identity rejection test
+- production container build
+
+That run proves the single-pair integration regression at that commit. The expanded test covering all four known pairs plus a mixed-ledger fixture is a newer commit and its own CI run must pass before it is considered verified. Clean-install success does not establish compatibility with an existing schema_migrations ledger.
+
+## Historical-state matrix (required before any reconciliation code)
+
+| Fixture | Starting ledger / schema state | Expected safe result |
+|---|---|---|
+| A — empty | Empty disposable PostgreSQL database | Candidate migrations apply in order; all ledger rows match filenames |
+| B — date-prefixed history | Representative schema state and ledger rows for 20261018/19/20/21 filenames | Candidate runner must not re-run equivalent DDL; it must either use a reviewed compatibility path or fail closed with a clear diagnostic |
+| C — ordinal history | Representative schema state and ledger rows for 088/089/090/091 filenames | Candidate runner recognizes exact recorded filenames and does not re-run DDL |
+| D — mixed history | Ledger contains some date-prefixed and some ordinal identities | Must classify each pair explicitly; unknown combinations fail closed rather than guessing |
+| E — content mismatch | Same proposed alias filename but migration SQL differs from approved known content | Fail closed; no ledger mutation |
+| F — conflicting rows | Version and filename disagree, duplicate/equivalent records conflict, or migration is partially applied | Fail closed; no automatic repair |
+| G — transactional failure | Deliberately fail during a migration in disposable PostgreSQL | DDL and ledger write roll back together where PostgreSQL transaction semantics permit |
+| H — rollback direction | Candidate history exists and a later deployment uses date-prefixed main history | Must be explicitly tested or documented unsupported; never assume reverse compatibility |
+
+## Test implementation requirements
+
+1. Use only disposable PostgreSQL instances created by CI. Never point tests at a shared, staging, or production database.
+2. Make fixtures deterministic and self-contained; do not rely on a developer's local migration history.
+3. Verify both database schema effects and exact ledger tuples: version and filename.
+4. Assert that rejected states leave the ledger and schema unchanged.
+5. For a compatibility alias, allowlist exact source filename, target filename, expected SQL/blob digest, and expected ledger state. Do not infer equivalence from filename similarity alone.
+6. Preserve transactionality and log a machine-readable reconciliation event if a future approved implementation records one.
+7. Require independent review of migration-runner changes and fixture coverage before any environment migration.
+8. Run the existing clean-install suite plus the historical-state matrix on every change to migration discovery or ledger handling.
+
+## Release gates
+
+- [x] Candidate clean-install CI passed on run 40681738454 (commit 2e9fb91; prior to expanded matrix test).
+- [x] Migration identity conflict documented with exact filenames and blob identities.
+- [ ] Authorized read-only ledger evidence received for each relevant environment.
+- [ ] Full historical-state matrix implemented and passing on disposable PostgreSQL. Expanded all-four-pairs plus mixed-ledger coverage passed the automated-test step in run 40682490733 (commit 8284c52). A follow-up preflight regression now covers a late migration-version conflict and asserts no candidate DDL; its CI result is pending.
+- [ ] Independent review of any proposed reconciliation logic.
+- [ ] Recovery/rollback procedure approved.
+- [ ] Live non-production Guardian/HCS/Mirror Node acceptance evidence collected separately.
+- [ ] Production release approval.
+
+## Decision
+
+**HOLD.** Do not merge PR #97, do not merge validation-only PR #104, do not rename applied migration files, do not backfill or rewrite a live ledger, and do not enable production certification based solely on clean-install CI. The next work is to verify the expanded historical-ledger regression harness in CI and add the remaining historical-state scenarios. A narrowly allowlisted reconciliation implementation may be considered only if authorized ledger evidence demonstrates that it is needed.
+
+## Engineering progress — fail-closed guard
+
+A fail-closed guard has been added in the validation branch:
+- `apps/src/migration-identity.ts` contains an explicit allowlist of the four observed legacy-to-candidate filename identity pairs.
+- `apps/src/migration-identity.test.ts` covers a legacy conflict, a clean ledger, unrelated names, and mixed historical rows.
+- `apps/src/migration-identity.integration.test.ts` has been expanded to seed each of the four known legacy filenames independently and a mixed legacy-ledger case in separate disposable PostgreSQL databases. Each scenario asserts fail-closed diagnostics, unchanged exact ledger tuples, and no candidate migration DDL. The expanded test is not verified until its corresponding CI run succeeds.
+- `apps/src/migrate.ts` checks the migration ledger before applying candidate migrations and emits `MIGRATION_IDENTITY_CONFLICT` if a known legacy filename is present. It now also preflights all recorded version/filename pairs against the candidate migration tree and emits `MIGRATION_VERSION_CONFLICT` before any candidate DDL when a version maps to a different filename. It does not alias, backfill, rename, or rewrite ledger entries.\n- Unit and disposable-PostgreSQL regression coverage has been added for a version/filename mismatch, asserting the runner rejects before candidate DDL and preserves the ledger. This new coverage is pending its own CI run.
+
+This guard is a safety improvement, **not a compatibility fix**. Historical installations will intentionally stop with a clear error until a reviewed reconciliation path is implemented and tested. The latest completed run validates the earlier single-pair test; the expanded multi-scenario regression has a new commit and must pass its own CI. Do not treat the guard as release-ready until that run passes and independent review is complete.
+
+
+
+## Follow-up hardening — preflight before DDL (2026-10-28)
+
+After the expanded identity guard passed CI, the migration runner was hardened to compare all candidate migration versions against the existing ledger before entering the DDL loop. This prevents a conflicting version that sorts late in the migration tree from being discovered only after earlier candidate migrations have already run.
+
+A new disposable-PostgreSQL integration scenario seeds a conflicting ledger filename for version `091`, expects `MIGRATION_VERSION_CONFLICT` and `No migrations were applied`, and verifies both the exact ledger tuple and absence of candidate-created tables. This change is validation-only and awaits its own CI result. It does not validate content digests, partial migrations, rollback direction, or production histories.
+
+
+## CI verification update — late conflict preflight
+
+Run [40683182559](https://github.com/vishaltradewinds/rupaykg/actions/runs/40683182559) completed successfully on commit `0a5ea6e3d079a92f26ac1a6a3c3ce8966d4d43db`. The workflow passed migration validation, clean migration, strict typecheck, build, browser smoke test, the automated test step (including disposable PostgreSQL integration mode), and production container build.
+
+Intermediate runs failed on transient/incomplete commits while the runner and tests were being updated. The successful run above is the verification point for the consolidated preflight change. This still does not prove the unimplemented historical states listed in the matrix.
+
+
+## Transactional rollback regression — CI verified
+
+A disposable-PostgreSQL integration test now supplies a temporary migration fixture that creates a table and then deliberately fails. The test expects the runner to fail, verifies the failed migration has no ledger row, and verifies the table DDL rolled back. The runner's test-directory override is gated by both `RUPAYKG_RUN_DB_INTEGRATION_TESTS=1` and `NODE_ENV=test`; ordinary runs continue using the normal repository/container migration directory. CI run 40683464471 completed successfully on commit `c51f99072d12d895ecf09d52491bfb055d1b72b8`. The automated-test step and production container build both passed. The run passed the complete workflow: dependency audit, migration validation, clean migration, typecheck, build, browser smoke test, automated tests including disposable PostgreSQL acceptance, and production container build. This verifies the rollback regression on that commit; it does not close the other historical-state gaps below.
+
+
+## CI verification update — transactional rollback (2026-10-28)
+
+Run [40683464471](https://github.com/vishaltradewinds/rupaykg/actions/runs/40683464471) completed with conclusion `success` for commit `c51f99072d12d895ecf09d52491bfb055d1b72b8`. All workflow steps passed, including `Run tests including disposable PostgreSQL acceptance` and `Build production container`. The rollback fixture therefore has CI evidence that the deliberate migration failure leaves no ledger row and rolls back its table DDL in the disposable PostgreSQL test environment.
+
+**Still open:** the current PR head is a later documentation commit; the successful run was on the preceding code commit. Re-run/confirm CI against the latest PR head before treating the complete branch as verified. The full matrix remains incomplete: ordinal already-applied history, content mismatch, partial/conflicting states beyond the covered preflight cases, reverse-deployment compatibility, authorized per-environment ledger evidence, independent review, recovery approval, and separate live Guardian/HCS/Mirror Node acceptance. Production certification remains OFF/HOLD.
+
+
+## Ordinal-history rerun guard regression added (2026-10-28)
+
+A new disposable-PostgreSQL integration test seeds an exact ledger tuple for an ordinal migration identity and supplies a fixture SQL file that would create a probe table if executed. It asserts the runner exits successfully, preserves the exact ledger tuple, and does not create the probe table. This covers the narrow behavior that an exact already-recorded version/filename identity is skipped without rerunning DDL; it does **not** prove that the actual historical schema matches the migration's intended effects or verify production ledger state.
+
+The test is added on the validation branch in commit `5c051a620c02d01f16f73e74aa595e1d456b384e`. CI for this commit must pass before this regression is considered verified. Validation-only scope remains unchanged: no production DB access or writes, no merge, and certification OFF/HOLD.
+
+
+## Reverse-deployment identity guard added (2026-10-28)
+
+Code review of the matrix identified a reverse-direction risk: when a date-prefixed migration tree is deployed against a ledger recording the corresponding ordinal filename, the earlier guard only checked ordinal candidates against date-prefixed ledger rows. The guard now rejects either direction for the four explicit filename pairs. Unit coverage and a disposable-PostgreSQL integration test verify that a date-prefixed candidate against ordinal history emits `MIGRATION_IDENTITY_CONFLICT`, preserves the exact ledger tuple, and applies no candidate DDL. These changes are on the validation branch in commits `647215b4c1121a7302cbe50c80458703e594c8d9`, `5a4fe0096a7acb9f77772ce2c141d1b01fa95d03`, and `3e68ce2395d8b628a45d9c140288a4715b1a4ee0`. They remain unverified until the relevant CI run completes successfully. This closes only the identified fail-closed guard gap; it does not establish bidirectional deployment compatibility.
+
+
+## CI finding and corrective change — reverse guard (2026-10-28)
+
+CI run [40684318481](https://github.com/vishaltradewinds/rupaykg/actions/runs/40684318481) exposed a real gap: the reverse-direction helper test passed, but the integration test showed `migrate.ts` queried only date-prefixed ledger filenames, so an ordinal ledger row was never passed to the reverse-direction conflict checker. Corrected the preflight query to include both keys and values of the explicit identity map in commit `477e01ef99576019c47318b75abfa18a290bd0e9`. The reverse integration test and full CI must pass on this fix before verification. This is a valuable fail-closed test finding, not a release pass.
+
+
+## Latest CI verification — reverse identity guard (2026-10-28)
+
+The corrective change that queries both ordinal and date-prefixed names is now verified by two successful full workflow runs:
+
+- Run [40684760311](https://github.com/vishaltradewinds/rupaykg/actions/runs/40684760311), commit `477e01ef99576019c47318b75abfa18a290bd0e9`: success. All steps passed, including migration validation, clean PostgreSQL migration, strict typecheck, build, browser smoke test, automated tests with disposable PostgreSQL acceptance, and production container build.
+- Run [40684775244](https://github.com/vishaltradewinds/rupaykg/actions/runs/40684775244), commit `4cc753f42a9ef9c775a4494a1abebf3b98ec9580`: success on the latest documentation-updated validation branch head. All workflow steps passed, including the disposable PostgreSQL acceptance suite and production container build.
+
+The reverse-direction regression that failed in run 40684318481 is now covered by successful full CI on the corrective code commit; the later branch-head run is also green. This verifies the current fail-closed guard and existing regression suite, not production-history compatibility or authorization to release.
+
+## Explicit content-integrity decision
+
+The current `schema_migrations` ledger records `version`, `filename`, and `applied_at`, but no migration content digest. Therefore, the ledger alone cannot prove which exact SQL bytes were historically applied. A matching filename/version is not proof of matching content or resulting schema.
+
+- Do not retroactively invent, backfill, or assert historical checksums without independent, environment-specific evidence.
+- For future migrations, consider a versioned checksum ledger or immutable migration manifest, with a controlled rollout and compatibility plan; do not silently change the existing ledger contract.
+- Before any environment-specific reconciliation, obtain authorized read-only ledger/schema evidence, compare it with repository history and deployment records, and require independent review plus an approved recovery plan.
+- Arbitrary partial application cannot be reliably inferred from a missing ledger row alone because migration DDL may have non-transactional or external effects. Keep the runner fail-closed; test known transaction behavior in disposable PostgreSQL and document migration-specific exceptions rather than promising universal rollback.
+
+## Current disposition
+
+The reverse-identity fail-closed regression is CI-verified on the latest validation branch. The full historical-state matrix remains incomplete, including authorized environment evidence, broader partial/conflicting-state characterization, independent review, recovery approval, and separate live Guardian/HCS/Mirror Node acceptance.
+
+**Release remains HOLD.** PRs #97 and #104 remain unmerged; production certification remains OFF. No production database was accessed or modified.
+
+
+## CI verification — malformed ledger fail-closed guard (2026-10-28)
+
+The runner's malformed-ledger guard and its disposable-PostgreSQL regression are now CI-verified:
+
+- Run [40687283301](https://github.com/vishaltradewinds/rupaykg/actions/runs/40687283301), commit `2149a558cbca05fae3a53ce58c988e0de777079f`: success. The runner guard passed the full workflow.
+- Run [40687328797](https://github.com/vishaltradewinds/rupaykg/actions/runs/40687328797), commit `58dd84696f2ad6e626ac5bd766e694ec6cda0d50`: success. The test-containing commit passed the full workflow, including disposable PostgreSQL acceptance. The regression verifies that a ledger missing the required `filename` column is rejected with `MIGRATION_LEDGER_SCHEMA_INVALID`, the existing row and table shape remain unchanged, and no candidate DDL is applied.
+
+The subsequent documentation commit has its own CI run and is not represented by these two code-test results. This closes the malformed-ledger-schema regression for the tested shape; it does not cover arbitrary partially-applied migrations or prove any live environment's history.
+
+## Revised current disposition
+
+CI now verifies the tested fail-closed cases: known identity conflicts in both deployment directions, exact recorded ordinal identity is skipped without rerunning fixture DDL, late version/filename conflicts are preflighted before candidate DDL, transactional rollback for the tested PostgreSQL failure, and rejection of a malformed migration ledger. The full historical-state matrix is still **not complete**.
+
+Open gates remain: partial application and conflicting states beyond the fixtures, historical content integrity (no retroactive checksum claims), authorized read-only ledger/schema evidence per relevant environment, independent review, approved recovery plan, separate live Guardian/HCS/Mirror Node acceptance, and production release approval.
+
+**Release remains HOLD.** PRs #97 and #104 remain unmerged; production certification remains OFF. No production database was accessed or modified.
+
+
+## CI verification — partial DDL and ledger constraints (2026-10-28)
+
+The partial-DDL collision fixture passed in [run 40688756509](https://github.com/vishaltradewinds/rupaykg/actions/runs/40688756509), commit `d6af70441a1c55877dcebffc6350956b4761584f`. In disposable PostgreSQL, an existing candidate table with no matching ledger row causes migration failure; the runner does not insert a false ledger row and the pre-existing table data remains unchanged.
+
+The migration ledger guard was then strengthened to validate the ledger's minimum structural contract before migration discovery/application:
+- Required `version` and `filename` columns must exist.
+- Both columns must be `NOT NULL`.
+- `version` must be the sole primary-key column.
+
+CI run [40689183426](https://github.com/vishaltradewinds/rupaykg/actions/runs/40689183426) passed on runner commit `012c4efd86d50c8c1c5c1339c35db6224a852570`. The disposable-PostgreSQL duplicate-version/no-primary-key regression passed in [run 40689214299](https://github.com/vishaltradewinds/rupaykg/actions/runs/40689214299), commit `36e42bf47aee067c3d161ae591a64833b8220a99`. It verifies the malformed ledger is rejected with `MIGRATION_LEDGER_SCHEMA_INVALID` before candidate DDL, and duplicate historical rows remain unchanged for manual review.
+
+These results cover the tested failure modes only. They do not prove all partial migrations are recoverable, validate every possible schema drift, or establish the state of any live environment.
+
+**Remaining release gates:** authorized read-only per-environment ledger/schema evidence; broader historical-state characterization; independent review and recovery approval; separate live Guardian/HCS/Mirror Node acceptance; production release approval. No production database was accessed or modified. Production certification remains OFF/HOLD.
+
+
+## CI verification — nullable historical filename (2026-10-28)
+
+The disposable-PostgreSQL nullable-filename regression passed in [run 40690102201](https://github.com/vishaltradewinds/rupaykg/actions/runs/40690102201), commit `2c3302fb028dcabbc5a94ecb901494efddfc1902`. The fixture uses a ledger with `version` as its primary key but permits `filename` to be NULL, then seeds a NULL historical filename. The migration runner rejects the ledger with `MIGRATION_LEDGER_SCHEMA_INVALID`, applies no candidate DDL, and preserves the malformed historical row unchanged for manual review.
+
+This verifies the specific nullable-filename case only. It does not establish historical SQL content integrity, infer live-environment migration history, or prove arbitrary partial DDL is recoverable.
+
+**Release remains HOLD.** PRs #97 and #104 remain unmerged; production certification remains OFF. No production database was accessed or modified.
+
+
+## CI verification — duplicate candidate version prefixes (2026-10-28)
+
+The candidate migration directory is now checked for duplicate numeric version prefixes before any migration DDL runs. The runner emits `MIGRATION_CANDIDATE_VERSION_DUPLICATE` and fails closed if two files share a version prefix.
+
+Coverage added:
+- Unit tests for duplicate prefixes, unique prefixes, and filenames without a version separator.
+- A disposable-PostgreSQL integration regression with two `001_*.sql` candidates. It asserts a non-zero runner exit, the duplicate-version diagnostic, an empty migration ledger, and no candidate-created tables.
+
+Verification:
+- Full workflow run [40691758185](https://github.com/vishaltradewinds/rupaykg/actions/runs/40691758185), attempt 2, completed successfully on commit `391833f65379f926f8f27aa004610bda2343f890`.
+- The first attempt failed during an existing legacy-identity fixture because PostgreSQL terminated a connection during administrator cleanup. The retry passed; the duplicate-candidate-version integration test passed in the first attempt as well. The transient first-attempt failure is retained as evidence and not misrepresented as a clean first pass.
+
+This verifies the new candidate-tree uniqueness guard and current tested suite at the stated commit. It does not establish compatibility with any production migration history.
+
+## Updated release disposition
+
+**HOLD remains mandatory.** The new duplicate-prefix regression is CI-verified. Still open: authorized read-only ledger/schema evidence for each relevant environment; broader partial-application and schema-drift characterization; migration-specific review for transaction-incompatible SQL; independent review and approved recovery/rollback; separate live Guardian/HCS/Mirror Node acceptance where in scope; and explicit production release approval. No production database access or writes were performed. PRs #97 and #104 remain unmerged; production certification remains OFF.
+
+
+## CI verification — transaction-safety static screen (2026-10-28)
+
+The new transaction-safety screen initially failed in run [40693200362](https://github.com/vishaltradewinds/rupaykg/actions/runs/40693200362) because the scanner treated `BEGIN` tokens inside dollar-quoted PL/pgSQL function bodies as top-level transaction commands. Inspection of representative findings confirmed this was a scanner false positive, not evidence that those migrations issue runner-level transaction control.
+
+The scanner was corrected to strip dollar-quoted function bodies after removing SQL comments, then check the remaining SQL for explicit transaction control and known transaction-incompatible statements. The corrected code is commit `a79dc21172b85448a77eb33bf1e7607254cf0f8b`.
+
+Full workflow run [40693796240](https://github.com/vishaltradewinds/rupaykg/actions/runs/40693796240) completed successfully on that commit. All workflow checks passed, including migration validation, clean migration, typecheck, build, browser smoke test, automated tests including disposable PostgreSQL acceptance, and production container build.
+
+Scope limitation: this is a static screening test, not a full SQL parser or proof that every migration is safe under every PostgreSQL version/runtime state. Any flagged non-transactional command still requires migration-specific review, and dynamic SQL or unusual syntax may need separate scrutiny.
+
+**Release remains HOLD.** Authorized environment-specific ledger/schema evidence, broader partial-application and schema-drift characterization, independent review, approved recovery plan, separate live Guardian/HCS/Mirror Node acceptance where in scope, and explicit release approval remain outstanding. PRs #97 and #104 remain unmerged; production certification remains OFF. No production database was accessed or modified.
+
+
+## CI verification — disposable PostgreSQL cleanup stability (2026-10-28)
+
+The cleanup failure in run [40694241773](https://github.com/vishaltradewinds/rupaykg/actions/runs/40694241773) was traced to redundant forced termination of PostgreSQL backends while disposable test databases were being torn down. The affected integration scenarios use synchronous child-process execution and close their per-test pools before cleanup; forced backend termination was unnecessary and could surface as an asynchronous connection error in another active test.
+
+Commit `37d96b31066942d854752b42947c205489de1b39` removes those redundant `pg_terminate_backend` cleanup calls from the migration identity integration tests. Full workflow run [40694790907](https://github.com/vishaltradewinds/rupaykg/actions/runs/40694790907) completed successfully on that commit.
+
+This establishes CI success for the cleanup adjustment and the suite at that commit. It does not prove all historical schema states or live environment migration histories. The cleanup remains confined to disposable test databases; no production database was accessed or modified.
+
+**Release remains HOLD.** PRs #97 and #104 remain unmerged; production certification remains OFF. Open gates are unchanged: authorized read-only per-environment ledger/schema evidence, broader partial-application and schema-drift characterization, independent review and approved recovery plan, separate live Guardian/HCS/Mirror Node acceptance where in scope, and explicit production release approval.
+
+
+## Disposable PostgreSQL fixture cleanup reliability — 2026-10-28
+
+The workflow on commit `bbf88f51d464792d176a365171836767f2735d27` failed in the legacy-identity integration suite during fixture cleanup with PostgreSQL error `terminating connection due to administrator command`. This was a cleanup-path failure, not a migration-guard assertion failure. Inspection showed the test runs the migration runner synchronously and closes each per-database pool before cleanup, so the explicit `pg_terminate_backend` cleanup query was redundant and introduced a race with PostgreSQL's own connection lifecycle.
+
+Removed the forced backend-termination calls from `apps/src/migration-identity.integration.test.ts` and retained explicit pool closure followed by disposable database drop. Corrective commit: `37d96b31066942d854752b42947c205489de1b39`.
+
+Verification: [workflow run 40694790907](https://github.com/vishaltradewinds/rupaykg/actions/runs/40694790907) completed successfully on that commit.
+
+This improves test cleanup reliability but does not replace repeated-run/stress testing or per-environment migration ledger inspection. **Release remains HOLD**; PRs #97 and #104 remain unmerged, production certification remains OFF, and no production database was accessed or modified.
+
+
+## Repository migration-tree inventory — 2026-10-28
+
+A read-only inventory of the validation branch's Git tree found 107 numbered SQL migrations, versions 001 through 107, with no missing numeric versions, duplicate prefixes, or non-canonical numeric padding. This is a repository-structure observation only; it does not establish which files have run in any environment or whether a deployed schema matches the repository.
+
+The static transaction-safety regression also passed as part of full CI run [40693796240](https://github.com/vishaltradewinds/rupaykg/actions/runs/40693796240). A limited read of recent migrations found trigger replacement patterns (`DROP TRIGGER IF EXISTS` followed by `CREATE TRIGGER`) and immutable-state guards; the reviewed samples did not show table/column drops, truncation, or concurrent index creation. This sample is not a full destructive-DDL audit of all 107 files and must not be represented as one.
+
+**Remaining audit work:** complete a whole-tree, SQL-aware review of destructive/data-rewriting statements and schema dependencies; compare actual schema/ledger state using authorized read-only evidence per environment; expand partial-application/schema-drift fixtures. No production database was accessed or modified.
+
+
+## Transaction-safety scanner lexical regression — 2026-10-28
+
+The static screen was hardened after adding focused regression tests exposed two scanner limitations: transaction-control commands after a preceding statement were not detected, and inline SQL comments were not stripped unless they began a line. The scanner now masks dollar-quoted bodies and single-quoted literals before stripping block and line comments, and checks for explicit transaction control at statement boundaries. Regression coverage exercises procedural `BEGIN`, quoted literals, inline comments, and top-level `BEGIN` following another statement.
+
+The final correction is commit `397c945523ec513e956a996d65e614ccc9c43322`. [Workflow run 40696331263](https://github.com/vishaltradewinds/rupaykg/actions/runs/40696331263) completed successfully on that commit, including the full test suite, disposable PostgreSQL acceptance, browser smoke test, and production-container build.
+
+Scope limitation remains: this is a lightweight static screen, not a PostgreSQL parser. It does not establish runtime correctness for every SQL dialect feature, dynamic SQL path, database version, or historical schema state. Findings still require migration-specific review.
+
+**Release remains HOLD.** PRs #97 and #104 remain unmerged; production certification remains OFF. Authorized read-only ledger/schema evidence for each target environment, broader historical-state characterization, independent recovery review, applicable live Guardian/HCS/Mirror Node acceptance, and explicit release approval remain outstanding. No production database was accessed or modified.
+
+## Whole-tree destructive-DDL and data-rewrite screening — 2026-10-28
+
+A first-pass static pattern sweep was run against all 107 numbered migration files (001–107) in the validation branch. The sweep looked for table/column/type/schema drops, truncation, direct `DELETE FROM`, direct `UPDATE ... SET`, concurrent index operations, constraint validation markers, and cascade clauses. This is a text-pattern screen, not a full SQL parser or proof that all dynamic SQL, multiline constructs, indirect trigger effects, or dependency risks have been exhaustively characterized.
+
+### Findings requiring explicit review
+
+1. **Migration 043 — check-constraint replacement.** The migration conditionally drops and recreates `bwg_epr_reports_fulfilled_le_obligated` with `fulfilled_quantity <= obligated_quantity`. It does not delete rows, but it can fail if existing rows violate the new check. Before any environment rollout, read-only evidence must establish whether the table exists and whether existing data satisfies the invariant; do not auto-correct historical quantities.
+2. **Migration 066 — foreign-key replacement and cascading deletion semantics.** The migration replaces organization foreign keys on `organization_statutory_profiles`, `organization_bwg_assessments`, `organization_epr_applicability`, and `organization_verification_evidence` with `ON DELETE CASCADE`. This is not a direct data rewrite, but it changes the downstream effect of deleting an organization and may remove associated rows through referential actions. Confirm the intended retention, legal-hold, audit, and tenant-offboarding policy and inspect the actual pre-existing FK definitions before release. The migration drops two possible legacy FK names on `organization_epr_applicability`, which should be checked against actual schema state.
+3. **Migration 087 — fail-closed acceptance-fixture guard.** A preflight aborts if an acceptance-fixture activity/evidence item already backs a value-bearing credential; the migration then replaces a credential trigger to block fixture-backed issuance and require Guardian/HCS/Mirror Node evidence. It intentionally does not rewrite affected historical registry state. This is a safety gate, not proof that external trust-rail evidence is live or independently verified.
+4. **Migration 081 — acceptance-fixture geography seeding.** Adds source-versioned acceptance-only geography with conflict/no-existing-row guards. It is explicitly marked as non-government acceptance metadata; verify it remains excluded from production registry eligibility and never gets represented as official geography.
+5. **Migration 084 — audit-chain head initialization.** Creates the chain-head table and initializes it from the latest existing audit event only when no singleton head exists; this does not retroactively prove that prior audit rows form one complete, verified chain. Existing audit history and cutover semantics require separate evidence.
+6. **Migration 103 — append-only ICVCM internal assessment history.** Adds an internal-draft-only assessment table, tenant/activity binding, and an update/delete guard. The migration comments correctly distinguish internal readiness evidence from certification or credit issuance.
+
+### Static screen outcome and limits
+
+- The sweep found no direct `DROP TABLE`, `DROP COLUMN`, `TRUNCATE`, direct `DELETE FROM`, direct `UPDATE ... SET`, `ALTER TYPE`, or `CREATE/DROP INDEX CONCURRENTLY` command in the scanned migration text.
+- It did find the constraint replacement in 043, FK/constraint replacement in 066, and several expected seed inserts and trigger-replacement patterns. Seed inserts and trigger replacements require idempotency/dependency review; their presence alone is not evidence of a defect.
+- No claim is made that all schema dependencies, dynamic SQL, function side effects, constraint-validation failures, lock duration, table-rewrite risk, or data-retention implications have been cleared. This remains a preliminary whole-tree screen plus targeted inspection, not independent certification.
+
+### Required follow-up before release
+
+- Compare the 043/066 assumptions against authorized read-only schema and data evidence in every target environment.
+- Review organization deletion, retention, audit, and legal-hold requirements against migration 066's cascade behavior.
+- Continue semantic dependency review across all migrations, including trigger/function replacement order, indexes/constraints, table locks, data-volume effects, and partial-application recovery.
+- Expand disposable-PostgreSQL fixtures for violated existing check constraints, FK-name/schema drift, and interrupted application around constraint replacement.
+- Obtain independent review and a documented recovery/rollback plan.
+
+**Disposition remains HOLD.** The latest branch CI run [40696726464](https://github.com/vishaltradewinds/rupaykg/actions/runs/40696726464) completed successfully on the branch head at the time of that run. That run verifies its tested code and documentation snapshot, not the new matrix update below. PRs #97 and #104 remain unmerged; production certification remains OFF. No production database was accessed or modified.
+
+
+### Follow-on semantic review — registry eligibility and trigger interactions
+
+A targeted review was completed for migrations 043, 066, 081, 084, 087, 103, 106, and 107 after the initial text-pattern sweep.
+
+7. **Migrations 106/107 — eligibility evidence binding and credential issuance gate.** Migration 106 adds append-only activity-specific eligibility decisions bound to an approved verification, verified evidence, production-eligible methodology, and the activity's geography. Migration 107 adds a credential trigger that requires a currently effective APPROVED decision and corroborating MRV provenance before a value-bearing credential status. This is an important fail-closed control, but the SQL presence alone does not prove correct behavior for existing databases, trigger order, concurrent state changes, reviewer authorization/separation, or every credential transition. Disposable-PostgreSQL tests must exercise approved/rejected/requires-review decisions, expired/future decisions, mismatched activity/evidence/methodology/geography, missing MRV bindings, and updates/transfers/retirement transitions. Independent review must also verify that all paths that can create or change a value-bearing credential invoke both required guards.
+8. **Migration 087/107 — duplicate MRV guard layers.** Both migrations define credential guards that check acceptance-fixture exclusion and Guardian/HCS/Mirror Node provenance; 107 adds statutory/methodology eligibility on top. Review the effective trigger names and PostgreSQL alphabetical firing order, ensure no guard can be bypassed by trigger replacement or a status transition, and maintain tests for the expected stable error boundary. Do not infer actual live Guardian/HCS/Mirror Node acceptance from stored status fields alone.
+9. **Migration 103 — tenant binding and append-only behavior.** The assessment table binds activity to organization via a trigger and prevents update/delete. Tests should verify mismatched organization/activity rejection, append-only enforcement, duplicate revision rejection, and that internal-draft assessments cannot be mistaken for ICVCM certification or registry eligibility.
+10. **Migration 084 — audit-chain bootstrap boundary.** The migration anchors to the newest existing audit event only if the singleton head is absent. Its own comment explicitly says older writers did not all participate in the chain; therefore this is a cutover anchor, not retrospective proof of complete historical hash continuity. Record a cutover timestamp and independent verification procedure before relying on this chain for assurance.
+11. **Migration 081 — acceptance geography metadata.** The seed marks the source as VERIFIED and inserts a non-government acceptance cluster. This label is local fixture metadata, not proof of official source verification. Production registry eligibility must continue to reject fixture-backed activity/evidence, and no UI/report/export should label this fixture geography as government-authoritative.
+12. **Migration 043/066 — unresolved rollout prerequisites.** The new check constraint in 043 may reject existing violating rows; migration 066 replaces organization foreign keys with cascading deletes. These require environment-specific read-only evidence and retention/legal-hold approval before rollout. No automatic repair, data deletion, or production schema change is authorized by this review.
+
+#### Validation required for the newly reviewed controls
+
+- Add or confirm disposable-PostgreSQL acceptance coverage for the 106/107 eligibility lifecycle and the 087/107 dual-trigger interaction.
+- Verify trigger definitions and constraint/index dependencies from a disposable database built from the complete migration history, not only by reading SQL files.
+- Add tests for 103 append-only/tenant binding and 084 bootstrap behavior with empty, populated, and pre-existing-head states.
+- Obtain legal/compliance approval for the cascade behavior in 066 and authorized read-only data evidence for 043 before any deployment.
+
+This is a targeted semantic review of the named migrations, not a claim that every migration's behavior has been proven under every historical schema, data distribution, PostgreSQL version, or concurrency pattern.
+
+
+13. **Potential gap — acceptance-fixture geography is not explicitly rejected by the credential guards.** Migration 081 marks the seeded acceptance geography in `geography.metadata` (`acceptanceFixture: true`, `nonLgd: true`). The inspected guards in migrations 087 and 107 reject acceptance-fixture activity/evidence metadata, while migration 106 checks that the eligibility decision geography matches the activity geography; the reviewed SQL does not explicitly reject a geography whose own metadata is marked as an acceptance fixture. This is a code-review finding, not proof that issuance is currently exploitable: other application-level or data constraints may limit the path. Nevertheless, database-level registry eligibility should fail closed if the activity's geography is acceptance-only, regardless of activity/evidence flags. Add a regression test using the fixture geography and implement an explicit database guard before release.

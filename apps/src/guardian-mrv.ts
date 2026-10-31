@@ -33,9 +33,31 @@ function timeoutMs(): number {
   return Number.isFinite(parsed) && parsed >= 1000 && parsed <= 60000 ? parsed : 10000;
 }
 
+function canonicalize(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonicalize);
+  if (value !== null && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+        .map(([key, entry]) => [key, canonicalize(entry)]),
+    );
+  }
+  return value;
+}
+
 function deterministicIdempotencyKey(input: GuardianMrvRequest): string {
   return createHash("sha256")
-    .update([input.activityId, input.verificationId, input.evidenceId, input.policyId, input.methodologyCode || ""].join("|"))
+    .update(JSON.stringify(canonicalize({
+      schema: "rupaykg:guardian-mrv-idempotency:v1",
+      activityId: input.activityId,
+      verificationId: input.verificationId,
+      evidenceId: input.evidenceId,
+      policyId: input.policyId,
+      methodologyCode: input.methodologyCode,
+      observations: input.observations,
+      evidence: input.evidence,
+      metadata: input.metadata,
+    })))
     .digest("hex");
 }
 
@@ -92,9 +114,13 @@ export async function executeGuardianMrv(input: GuardianMrvRequest): Promise<Gua
     }
     const body = raw as Record<string, unknown> | null;
     const status = body?.status === "REJECTED" ? "REJECTED" : body?.status === "VERIFIED" ? "VERIFIED" : "UNAVAILABLE";
-    const executionId = typeof body?.executionId === "string" ? body.executionId : typeof body?.id === "string" ? body.id : null;
+    const executionIdValue = typeof body?.executionId === "string" ? body.executionId : typeof body?.id === "string" ? body.id : null;
+    const executionId = executionIdValue?.trim() || null;
     if (status === "VERIFIED" && !executionId) {
       return { status: "UNAVAILABLE", executionId: null, policyId: input.policyId, correlationId, idempotencyKey, raw, message: "Guardian returned VERIFIED without an authoritative execution identifier." };
+    }
+    if (status === "VERIFIED" && typeof body?.policyId === "string" && body.policyId !== input.policyId) {
+      return { status: "UNAVAILABLE", executionId: null, policyId: input.policyId, correlationId, idempotencyKey, raw, message: "Guardian returned VERIFIED for a policy identifier that does not match the requested policy." };
     }
     return {
       status,
