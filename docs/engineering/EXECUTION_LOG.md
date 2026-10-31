@@ -24,3 +24,13 @@ Append-only resume log. Record concrete actions, exact evidence, limitations and
 - PR contains 10 changed files: canonical database policy, source-of-truth checkpoint, execution status/log, README index, archive of four CI marker blob IDs, and removal of the four transient marker documents.
 - GitHub reports the PR is mergeable; it remains draft/open/unmerged. No CI run is claimed because the changes are documentation-only.
 - The four marker deletions are present only on the review branch until PR approval/merge. Main is unchanged. Historical migration files, legacy reference documents, live database branches and endpoints are retained.
+
+
+## 2026-10-31 — Live migration ledger / repository mismatch found
+
+- Read the complete production-main and staging `schema_migrations` ledgers and compared their version/filename pairs with the migration files on repository `main` and the current worker PR stack.
+- Production main ledger: 92 rows; version `096` records `096_verification_authorization_provenance.sql`, while repository `main` does not contain that file. The exact same file exists on the worker PR stack with Git blob SHA `258b1f4534efbf915688f78aa84d4ec24a47cbc0`, matching the historical blob identity already recorded in the legacy checkpoint.
+- Staging ledger: 95 rows; versions `20261022`–`20261025` are applied there, but those four migration files are absent from repository `main`. They are present on the worker PR stack. Staging does not contain version `096`.
+- Repository `main` currently contains migrations through `20261021`; production main has `096` and staging has `20261022`–`20261025`. This is a material source-control/database migration provenance gap.
+- Git blob identity is not a SHA-256 of deployed SQL bytes and does not prove exact Render execution provenance. No SQL, migration ledger or database state was changed.
+- Added the exact discrepancy and resolution gates to the authoritative database policy. Preserve both live ledgers; do not renumber, rewrite or replay migrations. Reconcile the entire ordered migration chain on a fresh production-main-derived disposable branch before merging migration-bearing worker code.
