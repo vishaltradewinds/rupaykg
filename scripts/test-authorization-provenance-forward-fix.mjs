@@ -119,7 +119,7 @@ try {
   const baseline = await selectSnapshot();
   await client.query("update roles set permissions=$2::jsonb where id=$1", [ids.role, JSON.stringify(["VERIFY_EVIDENCE", "ROLE_CHANGED"])]);
   await client.query(
-    "update verifications set evidence_id=evidence_id,authorization_membership_id=null,authorization_role_id=null,authorization_permissions_snapshot='[\\"FORGED\\"]'::jsonb,authorization_checked_at=now() where id=$1",
+    "update verifications set evidence_id=evidence_id,authorization_membership_id=null,authorization_role_id=null,authorization_permissions_snapshot=jsonb_build_array('FORGED'),authorization_checked_at=now() where id=$1",
     [ids.verification],
   );
   const afterUnrelatedUpdate = await selectSnapshot();
