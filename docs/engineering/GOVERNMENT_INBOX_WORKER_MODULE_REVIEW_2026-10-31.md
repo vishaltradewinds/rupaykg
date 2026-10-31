@@ -116,3 +116,6 @@ Fail-closed correction added in migration `20261111_prevent_approved_source_scop
 The PostgreSQL acceptance test now exercises three attack paths for each synthetic administrative scope (STATE_UT, DISTRICT, LOCAL_BODY): adding a child under the scope root, reparenting an unrelated node into the scope, and adding a grandchild under an existing descendant. These must fail with `APPROVED_SOURCE_SCOPE_HIERARCHY_EXPANSION_FORBIDDEN`.
 
 This is a source-code/migration correction only. It is not yet CI-verified. The migration must be included in the ordered disposable PostgreSQL run and the worker acceptance test must pass with zero skips before this finding can be closed. No live Neon changes were made.
+
+
+Additional acceptance assertion: changing a previously VERIFIED scope-directory source to REVOKED must make the scope-coverage predicate return false for new crosswalk resolution. The approved source snapshot and its historical provenance remain immutable; revocation removes current trust without rewriting the evidence record. This assertion was added after the prior CI pass and requires the next exact-head CI run.
