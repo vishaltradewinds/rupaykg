@@ -65,3 +65,10 @@ The disposable PostgreSQL test now explicitly covers:
 - the existing superseded-token fencing case.
 
 This is a conservative fail-closed correction. The exact-head CI run must pass again before the change is accepted. Independent review remains outstanding.
+
+
+## Open security review item: source-snapshot jurisdiction scope
+
+A follow-up source review found that source snapshots carry `scope_kind` and `scope_code`, and the regulatory-rule source gate (20261106) enforces compatible scope. However, the government crosswalk snapshot-binding trigger (20261105) currently verifies snapshot approval, authority code, source version and effective date, but does not enforce compatibility between the snapshot's jurisdiction scope and the target geography. The worker resolver likewise joins on snapshot approval/authority/version/effective dates but does not independently validate `scope_kind`/`scope_code`.
+
+This is recorded as an OPEN design/security finding, not as an accepted behaviour. Before merge, an independent reviewer must decide and prove a deterministic scope-compatibility rule (including national, state/UT, district, local-body and OTHER cases) using the actual geography hierarchy and authoritative code crosswalks. Do not invent mappings or treat a broad snapshot as supporting a narrower jurisdiction without an explicit, reviewed rule. Until resolved, the worker PR remains draft and all live migration/activation gates remain closed.
