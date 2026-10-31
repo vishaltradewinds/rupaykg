@@ -195,6 +195,10 @@ const leastPrivilegePrincipal = {
   owns_worker_tables: false,
   owns_public_schema: false,
   has_public_schema_create: false,
+  has_public_schema_usage: true,
+  public_inbox_acl: false,
+  public_reference_acl: false,
+  public_scope_function_execute: false,
   inbox_select: true,
   inbox_table_update: false,
   inbox_update_status: true,
@@ -244,6 +248,10 @@ test("worker principal attestation rejects elevated attributes, memberships, own
     owns_worker_tables: true,
     owns_public_schema: true,
     has_public_schema_create: true,
+    has_public_schema_usage: false,
+    public_inbox_acl: true,
+    public_reference_acl: true,
+    public_scope_function_execute: true,
     event_table_insert: true,
   };
   await assert.rejects(
@@ -256,6 +264,10 @@ test("worker principal attestation rejects elevated attributes, memberships, own
       assert.match(error.message, /WORKER_TABLE_OWNERSHIP/);
       assert.match(error.message, /PUBLIC_SCHEMA_OWNERSHIP/);
       assert.match(error.message, /PUBLIC_SCHEMA_CREATE/);
+      assert.match(error.message, /PUBLIC_SCHEMA_USAGE_MISSING/);
+      assert.match(error.message, /PUBLIC_INBOX_PRIVILEGE/);
+      assert.match(error.message, /PUBLIC_REFERENCE_PRIVILEGE/);
+      assert.match(error.message, /PUBLIC_SCOPE_FUNCTION_EXECUTE/);
       assert.match(error.message, /EVENT_TABLE_DIRECT_ACCESS/);
       return true;
     },
