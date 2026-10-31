@@ -282,3 +282,13 @@ Read this log and `docs/engineering/2026-10-31-migration-reconciliation-audit.md
 - Worker implementation still performs exhausted-row sweep, claim, crosswalk lookup and terminal transitions as separate pool queries. Fencing protects terminal writes, but transactional sweep/claim, lease-expiry behavior during long validation, crosswalk snapshot consistency and competing-claimer behavior remain open acceptance work.
 - National inbox SELECT scope remains global while inbox/event RLS is disabled. Governance must explicitly approve the global cross-authority processing scope or require a row-scoped design. Do not claim tenant isolation.
 - Added the findings and exact-head CI evidence to PR #157 conversation. No live database writes, role/grant changes, secrets, queue changes, compute activation, merge, deployment, worker activation or external statutory/Guardian/Hedera submission occurred. Production remains HOLD; TRL 9 remains unclaimed.
+
+
+### 129. Atomic inbox claim and PostgreSQL concurrency hardening — 2026-10-31
+
+- Created stacked draft PR #161, based on PR #157 branch `shakti/integrate-government-inbox-worker-2026-10-31`, to keep the diff limited to four files rather than duplicate the full parent PR.
+- Worker exhausted-attempt quarantine and bounded batch claim now execute in one PostgreSQL data-modifying CTE statement. The candidate claim retains `FOR UPDATE SKIP LOCKED`; the validation loop starts after the claim statement completes; terminal writes retain lease-token and unexpired-lease fencing.
+- Added disposable PostgreSQL integration coverage for two concurrent workers claiming four synthetic rows without overlap, and for a stale worker being unable to complete after its fencing token is replaced.
+- Updated the worker least-privilege gate document with design boundaries and remaining risks.
+- PR #161 exact head: `fd2c89bc7224b65532f24d4cca9cb399def20dfe`. CI run [#41200756007](https://github.com/vishaltradewinds/rupaykg/actions/runs/41200756007) was in progress at checkpoint; migration validation and production-baseline reconstruction passed, upgrade-chain application was running. Do not claim the new tests or build pass until the full run completes.
+- Remaining: lease renewal/strict validation timeout, crosswalk immutable snapshot consistency, explicit global queue-scope governance or row-scoped RLS, real production migration-principal authority verification, full production-derived rehearsal. No live DB writes, staging queue changes, role/grant changes, worker activation, secret, deployment, merge or external submission. TRL 9 remains unclaimed.
