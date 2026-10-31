@@ -511,10 +511,7 @@ test("BWG authenticated HTTP authorization fails closed against disposable Postg
   } finally {
     await app.close();
     for (const fixture of fixtures.reverse()) {
-      await pool.query("delete from identity_sessions where token_hash=$1", [fixture.tokenHash]);
-      await pool.query("delete from organization_memberships where identity_id=$1 and organization_id=$2", [fixture.identityId, fixture.organizationId]);
-      await pool.query("delete from roles where organization_id=$1", [fixture.organizationId]);
-      await pool.query("delete from organization_geography_scopes where organization_id=$1", [fixture.organizationId]);
+      // Delete dependent report/verification/evidence records before referenced identities, roles and memberships.
       for (const periodId of fixture.periodIds ?? []) {
         await pool.query("delete from bwg_waste_reports where reporting_period_id=$1", [periodId]);
         await pool.query("delete from bwg_epr_reports where reporting_period_id=$1", [periodId]);
@@ -529,11 +526,14 @@ test("BWG authenticated HTTP authorization fails closed against disposable Postg
         await pool.query("delete from organization_memberships where identity_id=$1", [verifierIdentityId]);
         await pool.query("delete from identities where id=$1", [verifierIdentityId]);
       }
+      await pool.query("delete from identity_sessions where token_hash=$1", [fixture.tokenHash]);
+      await pool.query("delete from organization_memberships where organization_id=$1", [fixture.organizationId]);
+      await pool.query("delete from roles where organization_id=$1", [fixture.organizationId]);
+      await pool.query("delete from organization_geography_scopes where organization_id=$1", [fixture.organizationId]);
       await pool.query("delete from bwg_profiles where organization_id=$1", [fixture.organizationId]);
       for (const geographyId of [fixture.geographyId, ...(fixture.extraGeographyIds ?? [])]) await pool.query("delete from geography where id=$1", [geographyId]);
       await pool.query("delete from organizations where id=$1", [fixture.organizationId]);
       await pool.query("delete from identities where id=$1", [fixture.identityId]);
-    }
-    await pool.end();
+    }    await pool.end();
   }
 });
