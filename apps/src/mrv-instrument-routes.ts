@@ -63,23 +63,25 @@ export async function registerMrvInstrumentRoutes(app: FastifyInstance, pool: Po
     const manufacturer = stringValue(body.manufacturer);
     const model = stringValue(body.model);
     const skuRevision = stringValue(body.skuRevision);
+    const manufacturerSerialNumber = stringValue(body.manufacturerSerialNumber);
+    const assetTag = stringValue(body.assetTag);
     const intendedUse = stringValue(body.intendedUse);
     const measurementInstrument = body.measurementInstrument;
     const nonMeasurementReason = stringValue(body.nonMeasurementReason);
     const rawSupportedCodes = Array.isArray(body.supportedParameterCodes) ? body.supportedParameterCodes : null;
     const supportedCodes = rawSupportedCodes?.map((value) => typeof value === "string" ? value.trim() : "") ?? [];
     const normalizedSupportedCodes = [...new Map(supportedCodes.map((code) => [code.toLowerCase(), code])).values()];
-    if (!organizationId || !uuid(organizationId) || !instrumentCode || !instrumentType || !manufacturer || !model || !skuRevision || !intendedUse || typeof measurementInstrument !== "boolean" || !rawSupportedCodes || rawSupportedCodes.length > 50 || supportedCodes.some((code) => !code || code.length > 100) || (measurementInstrument && normalizedSupportedCodes.length === 0) || (!measurementInstrument && (!nonMeasurementReason || normalizedSupportedCodes.length > 0))) {
+    if (!organizationId || !uuid(organizationId) || !instrumentCode || !instrumentType || !manufacturer || !model || !skuRevision || !intendedUse || typeof measurementInstrument !== "boolean" || !rawSupportedCodes || rawSupportedCodes.length > 50 || supportedCodes.some((code) => !code || code.length > 100) || (measurementInstrument && (!manufacturerSerialNumber || normalizedSupportedCodes.length === 0)) || (!measurementInstrument && (!nonMeasurementReason || normalizedSupportedCodes.length > 0 || (!manufacturerSerialNumber && !assetTag)))) {
       return reply.code(400).send({ error: "organizationId, instrumentCode, instrumentType, exact manufacturer/model/SKU revision, intendedUse, measurementInstrument, and supportedParameterCodes are required; non-measuring devices require a written nonMeasurementReason", code: "MRV_INSTRUMENT_INVALID" });
     }
-    if ([instrumentCode, instrumentType, manufacturer, model, skuRevision, intendedUse].some((value) => value.length > 240)) {
+    if ([instrumentCode, instrumentType, manufacturer, model, skuRevision, intendedUse, ...(manufacturerSerialNumber ? [manufacturerSerialNumber] : []), ...(assetTag ? [assetTag] : [])].some((value) => value.length > 240)) {
       return reply.code(400).send({ error: "Instrument identity fields must not exceed 240 characters", code: "MRV_INSTRUMENT_INVALID" });
     }
     if (!await canManageInstrument(pool, auth, organizationId)) return reply.code(403).send({ error: "MRV instrument management permission required", code: "MRV_INSTRUMENT_PERMISSION_REQUIRED" });
     try {
       const result = await pool.query(
-        "insert into mrv_instruments (organization_id,instrument_code,instrument_type,manufacturer,model,sku_revision,intended_use,measurement_instrument,non_measurement_reason,supported_parameter_codes,interface_protocol,firmware_version,firmware_support_until,registered_by_identity_id,approval_status) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'HOLD') returning *",
-        [organizationId, instrumentCode, instrumentType, manufacturer, model, skuRevision, intendedUse, measurementInstrument, nonMeasurementReason, normalizedSupportedCodes, stringValue(body.interfaceProtocol), stringValue(body.firmwareVersion), stringValue(body.firmwareSupportUntil), auth.identityId],
+        "insert into mrv_instruments (organization_id,instrument_code,instrument_type,manufacturer,model,sku_revision,manufacturer_serial_number,asset_tag,intended_use,measurement_instrument,non_measurement_reason,supported_parameter_codes,interface_protocol,firmware_version,firmware_support_until,registered_by_identity_id,approval_status) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,'HOLD') returning *",
+        [organizationId, instrumentCode, instrumentType, manufacturer, model, skuRevision, manufacturerSerialNumber, assetTag, intendedUse, measurementInstrument, nonMeasurementReason, normalizedSupportedCodes, stringValue(body.interfaceProtocol), stringValue(body.firmwareVersion), stringValue(body.firmwareSupportUntil), auth.identityId],
       );
       return reply.code(201).send({ source: "postgresql", syntheticData: false, instrument: result.rows[0], message: "Instrument registered in HOLD. Exact-model MeitY and required calibration evidence must be reviewed before MRV eligibility." });
     } catch (error) {
@@ -202,7 +204,7 @@ export async function registerMrvInstrumentRoutes(app: FastifyInstance, pool: Po
     try {
       await client.query("begin");
       transactionOpen = true;
-      const current = await client.query<{ id: string; organization_id: string; approval_status: string; firmware_version: string | null; firmware_support_until: Date | string | null }>("select id,organization_id,approval_status,firmware_version,firmware_support_until from mrv_instruments where id=$1 for update", [instrumentId]);
+      const current = await client.query<{ id: string; organization_id: string; approval_status: string; firmware_version: string | null; firmware_support_until: Date | string | null; manufacturer_serial_number: string | null; asset_tag: string | null; measurement_instrument: boolean }>("select id,organization_id,approval_status,firmware_version,firmware_support_until,manufacturer_serial_number,asset_tag,measurement_instrument from mrv_instruments where id=$1 for update", [instrumentId]);
       const row = current.rows[0];
       if (!row) return reply.code(404).send({ error: "MRV instrument not found", code: "MRV_INSTRUMENT_NOT_FOUND" });
       if (!await canManageInstrument(client as unknown as Pool, auth, row.organization_id)) return reply.code(403).send({ error: "MRV instrument review permission required", code: "MRV_INSTRUMENT_PERMISSION_REQUIRED" });
@@ -258,6 +260,7 @@ export async function registerMrvInstrumentRoutes(app: FastifyInstance, pool: Po
       }
       const calibrationStatus = stringValue(body.calibrationStatus);
       const calibrationCertificateId = stringValue(body.calibrationCertificateId);
+      const calibrationSerialNumber = stringValue(body.calibrationSerialNumber);
       const calibrationEvidenceReference = stringValue(body.calibrationEvidenceReference);
       const calibrationEvidenceSha256 = stringValue(body.calibrationEvidenceSha256);
       const calibrationEvidenceArtifactVersionId = stringValue(body.calibrationEvidenceArtifactVersionId);
@@ -276,12 +279,12 @@ export async function registerMrvInstrumentRoutes(app: FastifyInstance, pool: Po
       const securityReviewedAt = stringValue(body.securityReviewedAt);
       const securityNotApplicableReason = stringValue(body.securityNotApplicableReason);
       if (calibrationRequired) {
-        if (calibrationStatus !== "VERIFIED" || !calibrationCertificateId || !calibrationEvidenceReference || !/^[0-9a-f]{64}$/i.test(calibrationEvidenceSha256 ?? "") || !calibrationEvidenceArtifactVersionId || !uuid(calibrationEvidenceArtifactVersionId) || !calibrationLab || !calibrationTraceability
+        if (calibrationStatus !== "VERIFIED" || !calibrationCertificateId || !row.measurement_instrument || !row.manufacturer_serial_number || calibrationSerialNumber !== row.manufacturer_serial_number || !calibrationEvidenceReference || !/^[0-9a-f]{64}$/i.test(calibrationEvidenceSha256 ?? "") || !calibrationEvidenceArtifactVersionId || !uuid(calibrationEvidenceArtifactVersionId) || !calibrationLab || !calibrationTraceability
           || calibrationUncertainty === null || !Number.isFinite(calibrationUncertainty) || calibrationUncertainty < 0
           || !calibrationValidUntil || Number.isNaN(Date.parse(calibrationValidUntil)) || Date.parse(calibrationValidUntil) <= Date.now()) {
           return reply.code(400).send({ error: "Measuring instrument requires current calibration certificate, stored evidence reference/hash and reviewed evidence-vault artifact-version UUID, lab, traceability, non-negative uncertainty and future validity", code: "MRV_INSTRUMENT_CALIBRATION_REQUIRED" });
         }
-      } else if (calibrationStatus !== "NOT_APPLICABLE_WITH_JUSTIFICATION" || !calibrationNotRequiredReason || calibrationEvidenceArtifactVersionId) {
+      } else if (calibrationStatus !== "NOT_APPLICABLE_WITH_JUSTIFICATION" || !calibrationNotRequiredReason || calibrationEvidenceArtifactVersionId || calibrationSerialNumber) {
         return reply.code(400).send({ error: "Non-measuring instrument requires a written calibration-not-required rationale", code: "MRV_INSTRUMENT_CALIBRATION_RATIONALE_REQUIRED" });
       }
       if (firmwareVersion) {
@@ -294,8 +297,8 @@ export async function registerMrvInstrumentRoutes(app: FastifyInstance, pool: Po
         return reply.code(400).send({ error: "Instrument without firmware requires a written security-lifecycle not-applicable rationale", code: "MRV_INSTRUMENT_SECURITY_RATIONALE_REQUIRED" });
       }
       const update = await client.query(
-        "update mrv_instruments set approval_status='VERIFIED',meity_certificate_id=$2,meity_issuer=$3,meity_certificate_scope=$4,meity_verification_url=$5,meity_evidence_reference=$6,meity_evidence_sha256=$7,meity_verified_at=$8,meity_validity_basis=$9,meity_valid_until=$10,calibration_required=$11,calibration_status=$12,calibration_certificate_id=$13,calibration_evidence_reference=$14,calibration_evidence_sha256=$15,calibration_lab=$16,calibration_traceability=$17,calibration_uncertainty=$18,calibration_valid_until=$19,calibration_not_required_reason=$20,firmware_version=$21,firmware_support_until=$22,security_review_status=$23,security_evidence_reference=$24,security_evidence_sha256=$25,security_reviewed_at=$26,security_not_applicable_reason=$27,reviewed_by_identity_id=$28,reviewed_at=now(),review_note=$29,meity_evidence_artifact_version_id=$30,calibration_evidence_artifact_version_id=$31,security_evidence_artifact_version_id=$32 where id=$1 returning *",
-        [instrumentId, certificateId, issuer, scope, verificationUrl, meityEvidenceReference, meityEvidenceSha256, verifiedAt, validityBasis, validityBasis === "VALID_UNTIL" ? validUntil : null, calibrationRequired, calibrationStatus, calibrationCertificateId, calibrationRequired ? calibrationEvidenceReference : null, calibrationRequired ? calibrationEvidenceSha256 : null, calibrationLab, calibrationTraceability, calibrationUncertainty, calibrationRequired ? calibrationValidUntil : null, calibrationNotRequiredReason, firmwareVersion, firmwareSupportUntil, securityReviewStatus, firmwareVersion ? securityEvidenceReference : null, firmwareVersion ? securityEvidenceSha256 : null, firmwareVersion ? securityReviewedAt : null, firmwareVersion ? null : securityNotApplicableReason, auth.identityId, note, meityEvidenceArtifactVersionId, calibrationRequired ? calibrationEvidenceArtifactVersionId : null, firmwareVersion ? securityEvidenceArtifactVersionId : null],
+        "update mrv_instruments set approval_status='VERIFIED',meity_certificate_id=$2,meity_issuer=$3,meity_certificate_scope=$4,meity_verification_url=$5,meity_evidence_reference=$6,meity_evidence_sha256=$7,meity_verified_at=$8,meity_validity_basis=$9,meity_valid_until=$10,calibration_required=$11,calibration_status=$12,calibration_certificate_id=$13,calibration_evidence_reference=$14,calibration_evidence_sha256=$15,calibration_lab=$16,calibration_traceability=$17,calibration_uncertainty=$18,calibration_valid_until=$19,calibration_not_required_reason=$20,firmware_version=$21,firmware_support_until=$22,security_review_status=$23,security_evidence_reference=$24,security_evidence_sha256=$25,security_reviewed_at=$26,security_not_applicable_reason=$27,reviewed_by_identity_id=$28,reviewed_at=now(),review_note=$29,meity_evidence_artifact_version_id=$30,calibration_evidence_artifact_version_id=$31,security_evidence_artifact_version_id=$32,calibration_serial_number=$33 where id=$1 returning *",
+        [instrumentId, certificateId, issuer, scope, verificationUrl, meityEvidenceReference, meityEvidenceSha256, verifiedAt, validityBasis, validityBasis === "VALID_UNTIL" ? validUntil : null, calibrationRequired, calibrationStatus, calibrationCertificateId, calibrationRequired ? calibrationEvidenceReference : null, calibrationRequired ? calibrationEvidenceSha256 : null, calibrationLab, calibrationTraceability, calibrationUncertainty, calibrationRequired ? calibrationValidUntil : null, calibrationNotRequiredReason, firmwareVersion, firmwareSupportUntil, securityReviewStatus, firmwareVersion ? securityEvidenceReference : null, firmwareVersion ? securityEvidenceSha256 : null, firmwareVersion ? securityReviewedAt : null, firmwareVersion ? null : securityNotApplicableReason, auth.identityId, note, meityEvidenceArtifactVersionId, calibrationRequired ? calibrationEvidenceArtifactVersionId : null, firmwareVersion ? securityEvidenceArtifactVersionId : null, calibrationRequired ? calibrationSerialNumber : null],
       );
       await client.query("commit");
       transactionOpen = false;
