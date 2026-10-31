@@ -156,3 +156,25 @@ test("worker database pool only disables TLS when explicitly configured", () => 
   });
   assert.equal(captured?.ssl, undefined);
 });
+
+
+test("worker pool rejects a URL without an explicit PostgreSQL role name", () => {
+  assert.throws(
+    () => createGovernmentInboxWorkerPool({
+      GOVERNMENT_INBOX_DATABASE_URL: "postgres://:secret@db.example/rupaykg",
+    }),
+    /GOVERNMENT_INBOX_DATABASE_PRINCIPAL_REQUIRED/,
+  );
+});
+
+test("worker pool fails closed when the application role identity is malformed or missing", () => {
+  for (const applicationUrl of ["not-a-postgres-url", "postgres://:secret@db.example/rupaykg"]) {
+    assert.throws(
+      () => createGovernmentInboxWorkerPool({
+        DATABASE_URL: applicationUrl,
+        GOVERNMENT_INBOX_DATABASE_URL: "postgres://worker:secret@db.example/rupaykg",
+      }),
+      /GOVERNMENT_INBOX_DATABASE_PRINCIPAL_MUST_BE_DEDICATED/,
+    );
+  }
+});
