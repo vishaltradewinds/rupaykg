@@ -243,7 +243,7 @@ test("BWG authenticated HTTP authorization fails closed against disposable Postg
     ssl: process.env.DATABASE_SSL === "false" ? undefined : { rejectUnauthorized: true },
     max: 4,
   });
-  const fixtures: Array<{ identityId: string; organizationId: string; geographyId: string; tokenHash: string }> = [];
+  const fixtures: Array<{ identityId: string; organizationId: string; geographyId: string; tokenHash: string; extraGeographyIds?: string[] }> = [];
   const makeFixture = async (permissions: string[], membershipStatus = "VERIFIED") => {
     const identityId = randomUUID();
     const organizationId = randomUUID();
@@ -311,6 +311,11 @@ test("BWG authenticated HTTP authorization fails closed against disposable Postg
 
     // Even an authorized profile writer is denied a jurisdiction outside the organization's verified geography scope.
     const geographyDeniedFixture = await makeFixture(["profile:update"]);
+    const allowedGeographyId = randomUUID();
+    const allowedGeographyCode = "BWG-HTTP-ALLOWED-" + randomUUID().replaceAll("-", "");
+    await pool.query("insert into geography(id, kind, code, name, source, source_version) values ($1,'CLUSTER',$2,$3,'RupayKG disposable BWG HTTP fixture','v1')", [allowedGeographyId, allowedGeographyCode, "BWG HTTP allowed geography"]);
+    await pool.query("insert into organization_geography_scopes(organization_id, geography_id, status) values ($1,$2,'VERIFIED')", [geographyDeniedFixture.organizationId, allowedGeographyId]);
+    geographyDeniedFixture.extraGeographyIds = [allowedGeographyId];
     const geographyDenied = await app.inject({
       method: "POST",
       url: "/api/v1/bwg/profile",
@@ -331,7 +336,7 @@ test("BWG authenticated HTTP authorization fails closed against disposable Postg
       await pool.query("delete from roles where organization_id=$1", [fixture.organizationId]);
       await pool.query("delete from organization_geography_scopes where organization_id=$1", [fixture.organizationId]);
       await pool.query("delete from bwg_profiles where organization_id=$1", [fixture.organizationId]);
-      await pool.query("delete from geography where id=$1", [fixture.geographyId]);
+      for (const geographyId of [fixture.geographyId, ...(fixture.extraGeographyIds ?? [])]) await pool.query("delete from geography where id=$1", [geographyId]);
       await pool.query("delete from organizations where id=$1", [fixture.organizationId]);
       await pool.query("delete from identities where id=$1", [fixture.identityId]);
     }
