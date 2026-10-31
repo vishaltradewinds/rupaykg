@@ -290,3 +290,24 @@ The service is configured with a public IP allowlist entry `0.0.0.0/0`; this mea
 - Render: still on `main` / commit `54a7fe1...`; candidate not deployed.
 - Independent review, live clone rehearsal, backup/restore proof, approved change window and rollback remain outstanding.
 - Production release and certification remain **HOLD**; TRL 9 remains **NOT ESTABLISHED**.
+
+
+### F-11 — Production database has no row-level security policies; inspected role bypasses RLS
+
+**Severity: P1 / tenant isolation. Status: OPEN RELEASE BLOCKER; read-only evidence only.**
+
+A fresh read-only catalog query against the live production branch `br-restless-base-b44cip2h` found that **all 67 public base tables have RLS disabled and zero RLS policies**. The Neon query connection role `rupaykg` reports `rolbypassrls=true`, `rolsuper=false`, `rolcreaterole=true` and `rolcreatedb=true`. This is consistent with a privileged owner-like role; it is not a least-privilege runtime role.
+
+The application has substantial application-layer authorization helpers (verified memberships, explicit active organization, geography scopes and permission checks), but there is no database RLS backstop in the inspected production schema. If the Render `DATABASE_URL` uses this same bypass-RLS role, a SQL injection, missed route guard, compromised service credential or future background job could read or mutate across tenants outside intended application authorization. The actual Render connection role cannot be confirmed from the available redacted service metadata, so that mapping remains unverified.
+
+**Do not enable RLS on all tables as a quick fix.** This requires a controlled tenant-boundary design:
+1. Identify the exact Render runtime DB role without exposing its password; confirm its memberships, ownership, grants and `BYPASSRLS` property.
+2. Create a dedicated non-owner runtime role with only required schema/table/function privileges; remove `CREATEROLE`, `CREATEDB`, ownership and `BYPASSRLS` from the runtime path.
+3. Design table-by-table policies for organization-scoped records, shared reference data, identity/session records, system workers, bilateral settlement workflows and approved cross-organization operations.
+4. Ensure connection-pool transaction context cannot leak tenant identity between requests; use transaction-local claims/context and reset semantics.
+5. Test every API route and background job under the actual restricted role, including negative cross-tenant reads/writes, multi-organization identities, settlements, platform-admin workflows and worker operations.
+6. Rehearse on a production clone with rollback and verify no policy bypass by table owner or SECURITY DEFINER functions.
+7. Obtain independent security review before production use.
+
+This finding upgrades tenant isolation to a release-blocking gate. Existing application-level authorization is useful but must not be represented as database-enforced isolation. No role, grant, RLS policy or live data was changed.
+
