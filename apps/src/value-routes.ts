@@ -14,7 +14,14 @@ function str(body: Record<string, unknown>, key: string): string | null { return
 function nonNegative(body: Record<string, unknown>, key: string): number | null { const n = Number(body[key]); return Number.isFinite(n) && n >= 0 ? n : null; }
 async function authFor(request: Request, reply: Reply, pool: Pool | null): Promise<AuthContext | null> { try { const auth = await authenticate(request as never, pool); if (!auth) { reply.code(401).send({ error: "Authenticated session required", code: "AUTH_REQUIRED" }); return null; } return auth; } catch (error) { request.log.error(error); reply.code(503).send({ error: "Authentication service unavailable", code: "AUTH_UNAVAILABLE" }); return null; } }
 async function activityAccess(client: Pool | PoolClient, activityId: string, identityId: string): Promise<{ organization_id: string; geography_id: string | null } | null> { const result = await client.query<{ organization_id: string; geography_id: string | null }>(`select a.organization_id, a.geography_id from activities a join organization_memberships om on om.organization_id = a.organization_id where a.id = $1 and om.identity_id = $2 and om.status = 'VERIFIED'`, [activityId, identityId]); return result.rows[0] ?? null; }
-async function assertActivityGeographyScope(client: Pool | PoolClient, geographyId: string | null, identityId: string): Promise<{ ok: boolean; code?: string }> { if (!geographyId) return { ok: false, code: "ACTIVITY_GEOGRAPHY_REQUIRED" }; const result = await client.query<{ ok: boolean }>(`select exists(select 1 from organization_memberships om where om.identity_id = $1 and om.status = 'VERIFIED' and organization_has_geography_scope(om.organization_id, $2)) as ok`, [identityId, geographyId]); return result.rows[0]?.ok === true ? { ok: true } : { ok: false, code: "GEOGRAPHY_FORBIDDEN" }; }
+async function assertActivityGeographyScope(client: Pool | PoolClient, geographyId: string | null, identityId: string, organizationId: string): Promise<{ ok: boolean; code?: string }> {
+  if (!geographyId) return { ok: false, code: "ACTIVITY_GEOGRAPHY_REQUIRED" };
+  const result = await client.query<{ ok: boolean }>(
+    "select exists(select 1 from organization_memberships om where om.identity_id=$1 and om.organization_id=$3 and om.status='VERIFIED' and organization_has_geography_scope(om.organization_id,$2)) as ok",
+    [identityId, geographyId, organizationId],
+  );
+  return result.rows[0]?.ok === true ? { ok: true } : { ok: false, code: "GEOGRAPHY_FORBIDDEN" };
+}
 async function hasValuePermission(pool: Pool | PoolClient, functionName: "can_assess_epr" | "can_write_esg", identityId: string, organizationId: string): Promise<boolean> { const result = await pool.query<{ ok: boolean }>(`select ${functionName}($1,$2) as ok`, [identityId, organizationId]); return result.rows[0]?.ok === true; }
 export function bwgProfileReviewBasis(): Record<string, unknown> {
   return {
@@ -44,7 +51,7 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
       const tenantResponse = await withTenantTransaction(tenantDatabaseContextFromAuth(auth), async (client) => {
       const access = await activityAccess(client, activityId, auth.identityId); if (!access || access.organization_id !== activeOrganizationId) return reply.code(403).send({ error: "Activity access denied", code: "ACTIVITY_FORBIDDEN" });
       if (!await hasOrganizationPermission(client, auth, access.organization_id, ["projects:manage"])) return reply.code(403).send({ error: "Explicit projects:manage permission is required", code: "CARBON_CALCULATION_FORBIDDEN" });
-      const geography = await assertActivityGeographyScope(pool, access.geography_id, auth.identityId);
+      const geography = await assertActivityGeographyScope(client, access.geography_id, auth.identityId, activeOrganizationId);
       if (!geography.ok) return reply.code(geography.code === "ACTIVITY_GEOGRAPHY_REQUIRED" ? 409 : 403).send({ error: geography.code === "ACTIVITY_GEOGRAPHY_REQUIRED" ? "Activity must have an authorized geography before value calculation" : "Activity geography is outside organization authorization scope", code: geography.code });
       const evidence = await client.query<{ id: string; activity_id: string | null; content_hash: string | null; content_uri: string | null; status: string }>("select id, activity_id, content_hash, content_uri, status from evidence where id = $1", [evidenceId]);
       const evidenceRow = evidence.rows[0];
@@ -120,7 +127,7 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
         if (evidence.rows[0].status !== "VERIFIED") return reply.code(409).send({ error: "Evidence must be verified before ESG metric recording", code: "EVIDENCE_NOT_VERIFIED" });
       }
       if (verificationId) {
-        const verified = await client.query("select 1 from verifications where id = $1 and evidence_id = $2 and decision = 'APPROVED'", [verificationId, evidenceId]);
+        const verified = await client.query("select 1 from verifications v join evidence e on e.id=v.evidence_id join activities a on a.id=e.activity_id where v.id = $1 and v.evidence_id = $2 and v.decision = 'APPROVED' and a.organization_id = $3", [verificationId, evidenceId, organizationId]);
         if (!verified.rows[0]) return reply.code(409).send({ error: "Verification is not an approved verification for the supplied evidence", code: "VERIFICATION_INVALID" });
       }
       const inserted = await client.query("insert into esg_metrics (reporting_period_id, metric_code, scope, value, unit, evidence_id, verification_id, status, metadata) values ($1,$2,$3,$4,$5,$6,$7,$8,$9) returning *", [periodId, metricCode, scope, value, unit, evidenceId, verificationId, state, body.metadata ?? {}]);
