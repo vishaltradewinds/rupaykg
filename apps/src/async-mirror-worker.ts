@@ -202,7 +202,7 @@ export async function runGovernmentInboxWorker(
         }
       }
     } catch (error) {
-      renewalFailure = error instanceof Error ? error : new Error("LEASE_RENEWAL_FAILED");
+      renewalFailure = new Error("LEASE_RENEWAL_FAILED");
       activeValidationController?.abort(renewalFailure);
     } finally {
       renewalInFlight = false;
