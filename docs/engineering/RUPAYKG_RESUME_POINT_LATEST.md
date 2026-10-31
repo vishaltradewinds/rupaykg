@@ -5,11 +5,11 @@
 ## Current repository state — 2026-10-31
 - Repository: `vishaltradewinds/rupaykg`.
 - Working branch: `shakti/atomic-inbox-claim-2026-10-31`.
-- Latest implementation commit: `06a3e3f1429342db06e37d934155f7aa0857399d` (BWG authenticated PostgreSQL HTTP acceptance; role fixture now respects non-empty permissions trigger). Latest session log commit: `91542db4e31734270f2a7780eb816fd025da657e`. Verify exact live HEAD and CI before further code changes.
+- Latest tested implementation commit: `06a3e3f1429342db06e37d934155f7aa0857399d` (BWG authenticated PostgreSQL HTTP acceptance; exact CI #3994 SUCCESS). Latest immutable acceptance checkpoint commit: `79c2591e68a4af83375613b026ff02a142523e2f`. Verify exact live HEAD and CI before further code changes.
 - Main base: `862512c8c904cef0f604df0350f02672318953af`.
 - PR #175: OPEN/DRAFT, unmerged; do not merge or rebase without dependency, independent review, migration and security gates. PR URL: https://github.com/vishaltradewinds/rupaykg/pull/175.
 - Branch divergence freshly measured at 16:31 UTC: 320 ahead / 1 behind main.
-- Latest checkpoint: [BWG authenticated PostgreSQL HTTP acceptance](./checkpoints/2026-10-31-bwg-authenticated-postgres-http-acceptance.md). Latest execution log: [BWG PostgreSQL fixture permission correction](./session-logs/2026-10-31-1652-utc-bwg-postgres-fixture-correction.md). Previous execution log: [Authoritative tenant baseline and geography-scope default](./session-logs/2026-10-31-1649-utc-authoritative-tenant-baseline.md). Previous checkpoint: [Autonomous Neon security and BWG acceptance](./checkpoints/2026-10-31-autonomous-neon-security-bwg-acceptance.md).
+- Latest checkpoint: [BWG authenticated PostgreSQL HTTP acceptance — PASSED](./checkpoints/2026-10-31-bwg-authenticated-postgres-http-acceptance-passed.md). Previous checkpoint: [BWG authenticated PostgreSQL HTTP acceptance](./checkpoints/2026-10-31-bwg-authenticated-postgres-http-acceptance.md). Latest execution log: [BWG PostgreSQL fixture permission correction](./session-logs/2026-10-31-1652-utc-bwg-postgres-fixture-correction.md). Previous execution log: [Authoritative tenant baseline and geography-scope default](./session-logs/2026-10-31-1649-utc-authoritative-tenant-baseline.md). Previous checkpoint: [Autonomous Neon security and BWG acceptance](./checkpoints/2026-10-31-autonomous-neon-security-bwg-acceptance.md).
 - Latest preflight: [Autonomous execution preflight — 16:33 UTC](./session-logs/2026-10-31-1633-utc-autonomous-preflight.md).
 
 ## Latest completed work
@@ -79,7 +79,7 @@ Generator must be first-class and distinct from BWG. A complete general generato
 - TRL 9 is NOT ESTABLISHED. Do not claim national production readiness.
 
 ## Ordered next execution
-1. Verify CI for code commit `06a3e3f1429342db06e37d934155f7aa0857399d`. CI #3989 passed migration, typecheck, build and browser checks but the new PostgreSQL test failed because a VERIFIED role fixture used an empty permission array; latest SHA corrects it to unrelated guardian:read. Do not claim DB acceptance passed until exact-SHA CI completes.
+1. CI #3994 / run `41221192576` on code SHA `06a3e3f1429342db06e37d934155f7aa0857399d` is SUCCESS, including disposable PostgreSQL acceptance, typecheck, build, browser smoke, migration baseline reconstruction/idempotency, evidence upload and container build. See immutable passing checkpoint. Continue extending authenticated route coverage to waste/EPR/ESG.
 2. Add EPR route-level quantity and exact database-constraint mapping tests.
 3. Trace statutory BWG assessment/profile authority and design a dual-control, evidence-backed transition; never auto-promote.
 4. Continue the all-route UI/API/schema/permission/report/test crosswalk and generator-to-processor lifecycle.
