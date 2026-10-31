@@ -150,3 +150,12 @@ The implementation records evidence references and reviewer attestations; it doe
 4. Draft code PR #49 must complete review and be merged before the default branch has the proposed software gate; evidence-store and structured measurement-specification gates remain open.
 
 Next action: first obtain written site/operator confirmation of the real process, operating status, project boundary and methodology eligibility. Only then obtain the actual instrument packet and reconcile every model against official MeitY/other applicable approvals, calibration, firmware/security and interface evidence. Do not purchase or deploy until all relevant gates pass.
+
+
+## 0.1 July 2026 NGT order update
+
+The NGT order dated 13 July 2026, considering the JMC progress report dated 10 July 2026, records continuous WtE operation since January 2026 and 30,759.50 MWh grid export from January through June 2026. It states MoHUA had approved the proposed 100 TPD Bio-CNG project under CITIIS 2.0, PDMC feasibility/DPR preparation was underway, and finalization before the Central Government remained pending. O.A. 819/2024 was disposed of after considering this progress report.
+
+Sources: NGT portal listing: https://www.greentribunal.gov.in/index.php?page=1183. Reproduced order: https://indiankanoon.org/doc/76746794/.
+
+This is a status update, not proof of Bio-CNG commissioning, methane recovery, instrument availability, or carbon-credit eligibility. Keep WtE and Bio-CNG as separate activity boundaries.
