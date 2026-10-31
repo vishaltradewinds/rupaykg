@@ -159,3 +159,14 @@ Direct and field-sync measurement ingestion, plus the MRV submission path, check
 Evidence-vault reviews are append-only. An authorized independent reviewer may submit a later `REJECTED` decision for an artifact that was previously `VERIFIED` when new information invalidates the evidence. The API updates the evidence status to `REJECTED` and appends the decision; instrument eligibility checks consult the latest review, so linked instruments fail closed on subsequent use. A rejected artifact version is terminal: upload a new immutable version and obtain a new independent review rather than re-approving the rejected version. A `VERIFIED` artifact cannot receive another `APPROVED` decision on the same version.
 
 Review ordering uses a monotonic database sequence after the timestamp so later decisions remain authoritative even when multiple review records share the same PostgreSQL transaction timestamp. Revocation does not rewrite historical measurements or prove that past credits should be reversed; it blocks subsequent eligibility and requires an authorized audit/reconciliation decision for any affected historical claim.
+
+
+## Physical-unit identity additions — 2026-10-31
+
+Instrument registration now requires:
+- `manufacturerSerialNumber` for every measurement instrument;
+- `manufacturerSerialNumber` or an organization-controlled `assetTag` for non-measuring hardware.
+
+When a measuring instrument is approved with `calibrationRequired: true`, the reviewer must supply `calibrationSerialNumber` and it must exactly match the registered `manufacturerSerialNumber`. When calibration is declared not required, `calibrationSerialNumber` must be absent and the existing written rationale remains mandatory.
+
+The database enforces organization-scoped manufacturer/serial uniqueness, asset-tag uniqueness, calibration-certificate serial equality, immutable physical identity after first VERIFIED decision, and physical-unit identity on measurement insert/update. This proves data consistency only; a human reviewer must still inspect the actual instrument nameplate and calibration certificate. No synthetic test serial is a real hardware record.
