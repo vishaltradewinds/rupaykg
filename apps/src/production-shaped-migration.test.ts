@@ -81,6 +81,19 @@ test("production-shaped migration order preserves 023 and production-only verifi
     const upgradedVerifierHash = createHash("sha256").update(definition).digest("hex");
     assert.equal(upgradedVerifierHash, baselineVerifierHash, "proposed chain must not alter production verifier function definition");
 
+    const scopeTriggers = await pool.query<{ trigger_name: string; definition: string }>(
+      `select t.tgname as trigger_name, pg_get_triggerdef(t.oid, true) as definition
+         from pg_trigger t
+         join pg_class c on c.oid=t.tgrelid
+         where not t.tgisinternal
+           and t.tgname in ('government_crosswalk_request_source_scope','government_crosswalk_source_scope')
+         order by t.tgname`,
+    );
+    assert.equal(scopeTriggers.rows.length, 2, "both crosswalk source-scope triggers must exist");
+    for (const trigger of scopeTriggers.rows) {
+      assert.match(trigger.definition, /UPDATE OF .*status/i, trigger.trigger_name + " must revalidate source scope on status transitions");
+    }
+
     const pg = await pool.query<{ version: string }>("select version()");
     const tables = await pool.query<{ table_name: string }>(
       "select table_name from information_schema.tables where table_schema='public' and table_type='BASE TABLE' order by table_name",
