@@ -151,6 +151,16 @@ test("government inbox worker persists retry recovery, quarantine and append-onl
       );
       assert.equal(outside.rows[0]?.covered, false, kind + " scope must not cover unrelated geography");
 
+      await pool.query(
+        "update geography_sources set status='REVOKED' where id=$1",
+        [scopeBinding.rows[0]!.scope_directory_source_id],
+      );
+      const revokedDirectory = await pool.query<{ covered: boolean }>(
+        "select government_source_scope_covers_geography($1,$2) as covered",
+        [scoped.sourceSnapshotId, scoped.geographyId],
+      );
+      assert.equal(revokedDirectory.rows[0]?.covered, false, kind + " scope must stop resolving when its directory trust is revoked");
+
       await assert.rejects(
         pool.query(
           "insert into geography(id,parent_id,kind,code,name,source,source_version) values($1,$2,'CLUSTER',$3,$4,'Synthetic expansion attempt','v1')",
