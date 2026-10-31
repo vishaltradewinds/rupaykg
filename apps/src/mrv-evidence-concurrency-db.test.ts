@@ -523,6 +523,98 @@ async function waitUntilBlocked(observer: PoolClient, applicationName: string): 
   throw new Error(`Timed out waiting for PostgreSQL lock wait: ${applicationName}`);
 }
 
+test("PostgreSQL enforces parameter uncertainty, immutable raw-frame bytes and MRV snapshot binding", {
+  skip: !url || !enabled,
+  timeout: 120_000,
+}, async () => {
+  assert.ok(url);
+  const pool = new Pool({
+    connectionString: url,
+    max: 4,
+    application_name: "rupaykg-mrv-uncertainty-raw-frame-db-test",
+    ssl: process.env.DATABASE_SSL === "false" ? undefined : { rejectUnauthorized: false },
+  });
+  try {
+    const suffix = randomUUID();
+    const fixture = await createFixture(pool, suffix);
+    const spec = await pool.query<{id:string}>(
+      "select id from mrv_instrument_parameter_specs where instrument_id=$1 and parameter_code='gas_flow' and unit='m3/h'",
+      [fixture.instrumentId],
+    );
+    assert.ok(spec.rows[0]?.id, "fixture parameter specification exists");
+
+    const uncertainty = await pool.query<{id:string}>(
+      `insert into mrv_instrument_parameter_uncertainty
+       (instrument_id,parameter_spec_id,parameter_code,parameter_unit,uncertainty_kind,uncertainty_value,
+        uncertainty_unit,uncertainty_expression,calibration_artifact_version_id,calibration_artifact_sha256,
+        decision_rule_id,reviewed_by_identity_id,reviewed_at)
+       values($1,$2,'gas_flow','m3/h','ABSOLUTE',0.2,'m3/h','STANDARD',$3,$4,
+        'TEST-DECISION-RULE',$5,now()) returning id`,
+      [fixture.instrumentId, spec.rows[0]!.id, fixture.calibrationArtifactId, fixture.calibrationSha256, fixture.reviewerId],
+    );
+    const uncertaintyId = uncertainty.rows[0]!.id;
+
+    const bytes = Buffer.from([0x00,0x01,0x7f,0x80,0xfe,0xff,0x52,0x4b]);
+    const rawHash = createHash("sha256").update(bytes).digest("hex");
+    const seriesId = (await pool.query<{id:string}>(
+      "insert into evidence_artifact_series(organization_id,activity_id,evidence_type,created_by_identity_id) values($1,$2,'RAW_INSTRUMENT_FRAME',$3) returning id",
+      [fixture.organizationId, fixture.activityId, fixture.identityId],
+    )).rows[0]!.id;
+    const evidenceId = (await pool.query<{id:string}>(
+      "insert into evidence(activity_id,evidence_type,status,captured_at,content_uri,content_hash,metadata) values($1,'RAW_INSTRUMENT_FRAME','VERIFIED',now(),'db://evidence-vault/pending',$2,'{}'::jsonb) returning id",
+      [fixture.activityId, rawHash],
+    )).rows[0]!.id;
+    const artifactId = (await pool.query<{id:string}>(
+      "insert into evidence_artifact_versions(series_id,evidence_id,version_number,file_name,media_type,size_bytes,sha256,content,uploaded_by_identity_id) values($1,$2,1,'raw-frame.bin','application/octet-stream',$3,$4,$5,$6) returning id",
+      [seriesId, evidenceId, bytes.length, rawHash, bytes, fixture.identityId],
+    )).rows[0]!.id;
+    await pool.query("update evidence set content_uri=$2 where id=$1", [evidenceId, `db://evidence-vault/${artifactId}`]);
+    await pool.query(
+      "insert into evidence_artifact_reviews(evidence_id,artifact_version_id,reviewer_identity_id,decision,rationale) values($1,$2,$3,'APPROVED','Independent raw frame acceptance test')",
+      [evidenceId, artifactId, fixture.reviewerId],
+    );
+
+    const measurement = await pool.query<{id:string}>(
+      "select id from measurements where activity_id=$1 and mrv_instrument_id=$2 order by measured_at desc limit 1",
+      [fixture.activityId, fixture.instrumentId],
+    );
+    assert.ok(measurement.rows[0]?.id);
+    await pool.query(
+      "update measurements set mrv_uncertainty_record_id=$2,raw_frame_artifact_version_id=$3,raw_frame_sha256=$4 where id=$1",
+      [measurement.rows[0]!.id, uncertaintyId, artifactId, rawHash],
+    );
+
+    await assert.rejects(
+      pool.query("update measurements set raw_frame_sha256=$2 where id=$1", [measurement.rows[0]!.id, "0".repeat(64)]),
+      /raw-frame artifact must be an exact server-hashed evidence version/,
+    );
+    await assert.rejects(
+      pool.query("update mrv_instrument_parameter_uncertainty set uncertainty_value=99 where id=$1", [uncertaintyId]),
+      /immutable/,
+    );
+
+    await pool.query(
+      `insert into mrv_observations
+       (activity_id,measurement_id,parameter_code,observed_value,unit,method,instrument_id,observed_at,
+        mrv_uncertainty_record_id,raw_frame_artifact_version_id,raw_frame_sha256)
+       values($1,$2,'gas_flow',2,'m3/h','test',$3,now(),$4,$5,$6)`,
+      [fixture.activityId, measurement.rows[0]!.id, fixture.instrumentId, uncertaintyId, artifactId, rawHash],
+    );
+    await assert.rejects(
+      pool.query(
+        `insert into mrv_observations
+         (activity_id,measurement_id,parameter_code,observed_value,unit,method,instrument_id,observed_at,
+          mrv_uncertainty_record_id,raw_frame_artifact_version_id,raw_frame_sha256)
+         values($1,$2,'gas_flow',2,'m3/h','test',$3,now(),$4,$5,$6)`,
+        [fixture.activityId, measurement.rows[0]!.id, fixture.instrumentId, uncertaintyId, artifactId, "f".repeat(64)],
+      ),
+      /exact measurement uncertainty and raw-frame bindings/,
+    );
+  } finally {
+    await pool.end();
+  }
+});
+
 async function createFixture(pool: Pool, suffix: string): Promise<Fixture> {
   const c = await pool.connect();
   try {
