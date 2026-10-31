@@ -243,7 +243,7 @@ test("BWG authenticated HTTP authorization fails closed against disposable Postg
     ssl: process.env.DATABASE_SSL === "false" ? undefined : { rejectUnauthorized: true },
     max: 4,
   });
-  const fixtures: Array<{ identityId: string; organizationId: string; geographyId: string; tokenHash: string; extraGeographyIds?: string[]; periodIds?: string[]; schemeIds?: string[]; activityIds?: string[]; evidenceIds?: string[]; verificationIds?: string[]; verifierIdentityIds?: string[]; verifierTokenHashes?: string[] }> = [];
+  const fixtures: Array<{ identityId: string; organizationId: string; geographyId: string; token: string; tokenHash: string; extraGeographyIds?: string[]; periodIds?: string[]; schemeIds?: string[]; activityIds?: string[]; evidenceIds?: string[]; verificationIds?: string[]; verifierIdentityIds?: string[]; verifierTokenHashes?: string[] }> = [];
   const makeFixture = async (permissions: string[], membershipStatus = "VERIFIED") => {
     const identityId = randomUUID();
     const organizationId = randomUUID();
