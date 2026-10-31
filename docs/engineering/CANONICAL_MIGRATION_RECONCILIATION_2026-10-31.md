@@ -173,3 +173,19 @@ A targeted Git path-history query found the original migration 096 source in rep
 Therefore migration 096 is not an unrecoverable source gap: its historical SQL and Git provenance are recovered. It remains absent from current `main` and the migration-history branch because it was explicitly removed as unreviewed. Do not re-add it automatically or rewrite the production ledger. Its original SQL must be independently reviewed against the live production trigger/function, column definitions, foreign keys and the rationale for the removal commit before deciding whether to restore the source as a historical immutable migration record or document it as an applied out-of-band migration.
 
 The four async migration sources `20261022`–`20261025` remain absent from the current migration catalogues and no Git path history was found for those exact paths in the repository. Their original source/provenance remains unresolved. The distinction is important: migration 096 has a recoverable historical source; the four async migrations do not yet have a verified source in the checked repository history.
+
+
+## Async migration provenance recovery — 2026-10-31
+
+The four async migration sources were recovered from the historical branch `test/real-worker-postgres-unresolved` (closed draft PR #122). This branch is a source archive only: it is 580 commits ahead and 4 behind current `main`, with a large unrelated change set. Do not merge or cherry-pick it wholesale.
+
+| File | Source commit | Git blob |
+|---|---|---|
+| `20261022_async_mirror_inbox.sql` | `5064e086085dda7f8765047ae8120f9cb6bf0d80` | `4d08607e03561b9fbb4ce502b4c4211127237050` |
+| `20261023_async_mirror_worker_leases.sql` | `a27978f4f450108956b6baa3a17541c07a8ade26`; event-history update `13237f1714510a18021a94601ac9ff7b9f1def37` | `33cb4d5d2e29a4a111340e5a0ac34170a0081895` |
+| `20261024_ai_intake_rate_limits.sql` | `a54fbdf81b0f5c4ae558acec3fc104407f70c48b` | `87b51fe60a96a4e0752c8b0a9a170c81f9936dbb` |
+| `20261025_ai_evidence_intake_jobs.sql` | `fc958c1096baecf4f0f3c08b2f38742dafe708` | `6a0ae54530b7b756dac33589eaf18df3b071d8f2` |
+
+The same branch contains `20261101_async_mirror_unresolved_crosswalk.sql`, source commit `3270e4cee4552efe51f84d96a9ab2f02bc068b81`, blob `4f9776bc449025e795cb0d5c93e8bace9dea280b`. It adds the internal-only `UNRESOLVED` status and explains the staging/rehearsal constraint difference.
+
+This supersedes the earlier statement that the four async sources were not recoverable. Their exact SQL objects and source commits are identified. They remain absent from current `main`; this recovery does not authorize restoring them or applying them. Next gates: validate exact object checksums, compare each SQL effect to the live branch objects, reconcile dependency order, rehearse on disposable PostgreSQL, and obtain independent review. Migration 096's separate deletion rationale remains under review. No database was changed.
