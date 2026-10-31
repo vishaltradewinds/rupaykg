@@ -77,3 +77,17 @@ A second read-only catalog query captured the exact `async_mirror_inbox_status_c
 - The `20261101` ledger row is absent from the previously captured staging and rehearsal ledgers (both remain 95 rows through `20261025`).
 
 This is strong evidence that the rehearsal schema contains the exact schema effect of migration 20261101 without a corresponding ledger record. It does **not** prove how or by whom that SQL was applied. Treat the branch as out-of-band drift until provenance is established. Do not replay the migration, edit the ledger, or automatically roll back the constraint. Preserve the current rehearsal state and require a reviewed reconciliation record before any branch change.
+
+
+## Authoritative database and role reconciliation — 2026-10-31 11:51 UTC
+
+A fresh read-only inspection reconfirmed the current branch list and directly queried the live database catalogs:
+- Production default branch is `main` (`br-restless-base-b44cip2h`), ledger 92 rows through `20261021`.
+- Staging (`br-spring-hill-b4544vz5`) and rehearsal (`br-broad-glade-b46npw8o`) each have 95 ledger rows through `20261025`.
+- Production has none of `async_mirror_inbox`, `async_mirror_inbox_events`, `government_jurisdiction_crosswalks`, or `authoritative_source_snapshots`.
+- Staging and rehearsal have the first two but not the latter two. Staging excludes `UNRESOLVED`; rehearsal includes it without a corresponding ledger row.
+- The previous production-derived rehearsal branch `br-frosty-term-b47k7ayc` is absent from the current branch list.
+
+The production inspection connection reports `session_user=current_user='rupaykg'`; this is the Neon inspection identity, not Render runtime evidence. On production, this role is not superuser but has `BYPASSRLS`, `CREATEROLE`, `CREATEDB`, membership in `neon_superuser`, ownership of 67 public tables, and DELETE/INSERT/REFERENCES/SELECT/TRIGGER/TRUNCATE/UPDATE grants across 67 public tables. Staging's `rupaykg` role also has BYPASSRLS/CREATEROLE/CREATEDB and the same broad table privileges across 71 public tables.
+
+**Decision:** neither existing application/owner identity is suitable for a worker. Do not use `rupaykg` or `neon_superuser` for the worker. A new independent login must be proven on disposable PostgreSQL with positive/negative privilege tests. The live schema divergence is unchanged; no migration, role, grant, queue or deployment mutation was performed.
