@@ -2,7 +2,7 @@
 
 ## Status
 
-**P0 / BLOCKED — source history and live schemas are not yet reconciled.** This is a read-only audit and source-provenance checkpoint. No SQL writes, DDL, migration replay, row updates, queue changes, production deploys, or certification actions were performed.
+**P0 / BLOCKED — source history and live schemas are not yet reconciled.** The initial inventory was read-only. Later sections separately document DDL rehearsals on non-production Neon branches only; no production/staging schema, ledger, or data was changed.
 
 ## Scope and exact environment
 
@@ -12,7 +12,7 @@
 - Neon project: `rupaykg-production-fresh` / project ID `steep-mud-79906940`
 - Production branch ID: `br-restless-base-b44cip2h`
 - Staging branch ID: `br-spring-hill-b4544vz5`
-- Rehearsal branch ID: `br-broad-glade-b46npw8o` (branch was found READY in the previous read-only audit; no additional rehearsal SQL was run in this batch)
+- Staging-derived rehearsal branch ID: `br-broad-glade-b46npw8o` (existing branch; later used for the isolated 096 rehearsal)
 
 ## Live migration ledger
 
@@ -100,7 +100,7 @@ The repository `package.json` exposes `validate:migrations` and `ecosystem:recon
 
 ## Audit integrity
 
-All database operations in this batch were read-only SELECT/catalog queries. This document is evidence of observations at the stated branch IDs and time; it is not an approval to mutate production or staging. Re-run the read-only inventory immediately before any later change because live environments can change.
+The initial inventory operations were read-only SELECT/catalog queries. Subsequent sections explicitly record additive DDL rehearsals on isolated non-production Neon branches. No production/staging branch was mutated. This document is evidence of observations at the stated branch IDs and time; it is not an approval to mutate production or staging. Re-run the read-only inventory immediately before any later change because live environments can change.
 
 
 ## Follow-up read-only findings — 2026-10-31
