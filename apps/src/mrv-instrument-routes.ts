@@ -167,6 +167,93 @@ export async function registerMrvInstrumentRoutes(app: FastifyInstance, pool: Po
     } finally { client.release(); }
   });
 
+  app.post("/api/v1/mrv/instruments/:instrumentId/parameter-uncertainties", async (request, reply) => {
+    const auth = await authFor(request as never, reply, pool);
+    if (!auth || !pool) return;
+    const instrumentId = (request.params as { instrumentId: string }).instrumentId;
+    if (!uuid(instrumentId)) return reply.code(400).send({ error: "instrumentId must be a UUID", code: "MRV_INSTRUMENT_ID_INVALID" });
+    const body = bodyOf(request as never);
+    const parameterSpecId = stringValue(body.parameterSpecId);
+    const parameterCode = stringValue(body.parameterCode);
+    const parameterUnit = stringValue(body.parameterUnit);
+    const uncertaintyKind = stringValue(body.uncertaintyKind);
+    const uncertaintyValue = typeof body.uncertaintyValue === "number" ? body.uncertaintyValue : Number.NaN;
+    const uncertaintyUnit = stringValue(body.uncertaintyUnit);
+    const uncertaintyExpression = stringValue(body.uncertaintyExpression);
+    const coverageFactor = body.coverageFactor == null ? null : typeof body.coverageFactor === "number" ? body.coverageFactor : Number.NaN;
+    const confidenceLevelPercent = body.confidenceLevelPercent == null ? null : typeof body.confidenceLevelPercent === "number" ? body.confidenceLevelPercent : Number.NaN;
+    const calibrationArtifactVersionId = stringValue(body.calibrationArtifactVersionId);
+    const calibrationArtifactSha256 = stringValue(body.calibrationArtifactSha256)?.toLowerCase() ?? null;
+    const decisionRuleId = stringValue(body.decisionRuleId);
+    if (!parameterSpecId || !uuid(parameterSpecId) || !parameterCode || !parameterUnit || !["ABSOLUTE", "RELATIVE"].includes(uncertaintyKind ?? "")
+      || !Number.isFinite(uncertaintyValue) || uncertaintyValue < 0 || !uncertaintyUnit
+      || !["STANDARD", "EXPANDED"].includes(uncertaintyExpression ?? "")
+      || (uncertaintyExpression === "EXPANDED" && (coverageFactor === null || !Number.isFinite(coverageFactor) || coverageFactor <= 0))
+      || (coverageFactor !== null && (!Number.isFinite(coverageFactor) || coverageFactor <= 0))
+      || (confidenceLevelPercent !== null && (!Number.isFinite(confidenceLevelPercent) || confidenceLevelPercent <= 0 || confidenceLevelPercent >= 100))
+      || !calibrationArtifactVersionId || !uuid(calibrationArtifactVersionId) || !calibrationArtifactSha256 || !/^[0-9a-f]{64}$/.test(calibrationArtifactSha256)
+      || !decisionRuleId || decisionRuleId.length > 200) {
+      return reply.code(400).send({ error: "Parameter identity, non-negative uncertainty, expression, calibration artifact version/hash and decisionRuleId are required; expanded uncertainty requires a positive coverageFactor", code: "MRV_PARAMETER_UNCERTAINTY_INVALID" });
+    }
+    const client = await pool.connect();
+    try {
+      await client.query("begin");
+      const instrumentResult = await client.query<{ organization_id: string; approval_status: string; calibration_evidence_artifact_version_id: string | null }>(
+        "select organization_id,approval_status,calibration_evidence_artifact_version_id from mrv_instruments where id=$1 for update", [instrumentId],
+      );
+      const instrument = instrumentResult.rows[0];
+      if (!instrument) { await client.query("rollback"); return reply.code(404).send({ error: "MRV instrument not found", code: "MRV_INSTRUMENT_NOT_FOUND" }); }
+      if (instrument.approval_status !== "VERIFIED" || instrument.calibration_evidence_artifact_version_id !== calibrationArtifactVersionId) {
+        await client.query("rollback");
+        return reply.code(409).send({ error: "Uncertainty must reference the exact current calibration artifact of a VERIFIED instrument", code: "MRV_CALIBRATION_ARTIFACT_MISMATCH" });
+      }
+      if (!await canManageInstrument(client as unknown as Pool, auth, instrument.organization_id)
+        || !await hasOrganizationPermission(client as unknown as Pool, auth, instrument.organization_id, ["evidence:review"])) {
+        await client.query("rollback");
+        return reply.code(403).send({ error: "Instrument management and independent evidence-review permissions are required", code: "MRV_PARAMETER_UNCERTAINTY_FORBIDDEN" });
+      }
+      const spec = await client.query<{ id: string; parameter_code: string; unit: string }>(
+        "select id,parameter_code,unit from mrv_instrument_parameter_specs where id=$1 and instrument_id=$2", [parameterSpecId, instrumentId],
+      );
+      const parameter = spec.rows[0];
+      if (!parameter || parameter.parameter_code.toLowerCase() !== parameterCode.toLowerCase() || parameter.unit !== parameterUnit
+        || (uncertaintyKind === "ABSOLUTE" && uncertaintyUnit !== parameterUnit) || (uncertaintyKind === "RELATIVE" && uncertaintyUnit !== "%")) {
+        await client.query("rollback");
+        return reply.code(409).send({ error: "Uncertainty kind, unit and parameter must match the exact instrument specification", code: "MRV_PARAMETER_UNCERTAINTY_PARAMETER_MISMATCH" });
+      }
+      const artifact = await client.query<{ valid: boolean }>(
+        `select (v.sha256=$2 and e.content_hash=v.sha256 and e.status='VERIFIED'
+          and s.organization_id=$3 and octet_length(v.content)=v.size_bytes
+          and encode(digest(v.content,'sha256'),'hex')=v.sha256
+          and exists (select 1 from evidence_artifact_reviews r
+            where r.evidence_id=e.id and r.artifact_version_id=v.id and r.reviewer_identity_id=$4
+              and r.reviewer_identity_id<>v.uploaded_by_identity_id and r.decision='APPROVED'
+              and r.id=(select latest.id from evidence_artifact_reviews latest
+                where latest.evidence_id=e.id and latest.artifact_version_id=v.id
+                order by latest.review_sequence desc limit 1))) valid
+         from evidence_artifact_versions v join evidence e on e.id=v.evidence_id
+         join evidence_artifact_series s on s.id=v.series_id where v.id=$1`,
+        [calibrationArtifactVersionId, calibrationArtifactSha256, instrument.organization_id, auth.identityId],
+      );
+      if (artifact.rows[0]?.valid !== true) {
+        await client.query("rollback");
+        return reply.code(409).send({ error: "Calibration artifact bytes/hash must be current and independently approved by the reviewing identity", code: "MRV_CALIBRATION_REVIEW_REQUIRED" });
+      }
+      const inserted = await client.query<{ id: string }>(
+        `insert into mrv_instrument_parameter_uncertainty
+          (instrument_id,parameter_spec_id,parameter_code,parameter_unit,uncertainty_kind,uncertainty_value,uncertainty_unit,uncertainty_expression,coverage_factor,confidence_level_percent,calibration_artifact_version_id,calibration_artifact_sha256,decision_rule_id,reviewed_by_identity_id,reviewed_at)
+         values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,now()) returning id`,
+        [instrumentId, parameterSpecId, parameterCode, parameterUnit, uncertaintyKind, uncertaintyValue, uncertaintyUnit, uncertaintyExpression, coverageFactor, confidenceLevelPercent, calibrationArtifactVersionId, calibrationArtifactSha256, decisionRuleId, auth.identityId],
+      );
+      await client.query("commit");
+      return reply.code(201).send({ source: "postgresql", syntheticData: false, uncertaintyRecordId: inserted.rows[0]!.id, instrumentId, parameterSpecId, parameterCode, parameterUnit, uncertaintyKind, uncertaintyValue, uncertaintyUnit, uncertaintyExpression, coverageFactor, confidenceLevelPercent, calibrationArtifactVersionId, calibrationArtifactSha256, decisionRuleId, reviewedByIdentityId: auth.identityId });
+    } catch (error) {
+      await client.query("rollback").catch(() => undefined);
+      request.log.error(error);
+      return reply.code(409).send({ error: "Parameter uncertainty record creation failed closed; verify the exact calibration review and parameter binding", code: "MRV_PARAMETER_UNCERTAINTY_WRITE_BLOCKED", syntheticData: false });
+    } finally { client.release(); }
+  });
+
   app.get("/api/v1/mrv/instruments/:instrumentId/parameter-specs", async (request, reply) => {
     const auth = await authFor(request as never, reply, pool);
     if (!auth || !pool) return;
