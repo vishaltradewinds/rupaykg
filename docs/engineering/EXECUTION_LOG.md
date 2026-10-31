@@ -121,3 +121,14 @@ Do not integrate the proposed trigger into a numbered migration until latest exa
 ### Rehearsal drift refinement — 2026-10-31
 38. Rechecked the staging-derived rehearsal after applying 096. Confirmed its `async_mirror_inbox_status_check` still includes `UNRESOLVED` and its status comment still matches the candidate 20261101 migration effect; staging lacks both.
 39. Confirmed neither staging nor rehearsal ledger contains version `20261101`. Classified the rehearsal as schema-effect match / ledger provenance unresolved; no replay or ledger edit performed.
+
+
+### Final handoff — 2026-10-31
+40. PR #140 latest head `f7e4ff12be336058b99bc19a8b729cdd3b636707` passed exact-head CI #41192000600, including disposable authorization provenance tests and full build/container workflow. Proposal remains unnumbered and not approved for deployment.
+41. PR #157 exact head `b3655259ce0f9d650477c34fa07a2a61d4a72f75` passed CI #41190853951; release/merge remains HOLD for verifier snapshot immutability, tenant isolation, live drift and independent review.
+42. PR #159 prior head `e11ccf5c7c6a44c29c5109b7cf4bdfa125f4e30d` passed CI #41191756563. Subsequent changes were documentation-only; exact latest docs-head CI was not returned at handoff.
+43. Updated issue #123 and PR #157/#140 comments with final evidence and blockers.
+44. Final state: production/staging untouched; scheduler OFF; eight expired staging PROCESSING rows preserved; unledgered 20261101 rehearsal drift preserved; both rehearsal compute endpoints idle; new production-derived Neon branch remains present with compute suspended and deletion pending explicit user approval.
+
+### Next-session starting point
+Read this log and `docs/engineering/2026-10-31-migration-reconciliation-audit.md` first. Continue from PR #157 (canonical migration/worker path) and PR #140 (authorization snapshot forward-fix tests). Do not repeat repository/Neon discovery or create duplicate migration-source PRs. First implementation task is a separately reviewed forward-only migration for verifier snapshot immutability, followed by exact production-shaped CI and independent security/database review. No merge/deploy/production mutation is authorized.
