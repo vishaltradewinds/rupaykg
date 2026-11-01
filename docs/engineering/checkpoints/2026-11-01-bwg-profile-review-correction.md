@@ -63,3 +63,23 @@ These HTTP route tests use a controlled fake PostgreSQL Pool. They are useful ro
 Latest exact-head CI before this documentation addendum: workflow #4282 / ID 41326628054 passed at code head b46eca16fb42cbcadfae9b3df60f2613d7296481. All steps succeeded, including migration validation, disposable PostgreSQL migration/acceptance, typecheck, build, browser smoke test, production container build and cleanup.
 
 This remains an engineering pass only. PR #193 is draft/unmerged; independent review is outstanding. Production remains HOLD.
+
+
+## Business-rule error semantics and live disposable PostgreSQL proof — 2026-11-01
+
+Additional source and disposable Neon schema inspection established:
+- The reporting-period trigger raises SQLSTATE 23514 with exact message: `BWG applicability must be verified before creating a reporting period`.
+- The EPR table has exact check constraint `bwg_epr_reports_fulfilled_le_obligated` enforcing fulfilled quantity <= obligated quantity.
+- Before correction, API catches translated these known business-rule failures to generic HTTP 503 responses.
+
+PR #193 now:
+- maps only the exact BWG applicability trigger failure to sanitized HTTP 409 / `BWG_APPLICABILITY_NOT_VERIFIED`;
+- rejects fulfilled quantity greater than obligated quantity before insert with HTTP 400 / `BWG_EPR_FULFILLED_EXCEEDS_OBLIGATED`;
+- maps only the exact EPR check constraint to sanitized HTTP 409 with the same business code; unrelated PostgreSQL errors remain generic service failures;
+- adds helper and route tests for exact matching and no SQL detail leakage.
+
+Added `apps/src/bwg-applicability-postgres.integration.test.ts`, gated by `RUPAYKG_RUN_DB_INTEGRATION_TESTS=1`. It uses a disposable CI PostgreSQL database and the real Fastify routes to prove that an above-threshold profile remains REVIEW_REQUIRED/PENDING, the actual trigger rejects reporting-period creation with HTTP 409, and no period is created.
+
+Exact-head CI #4287 / ID 41327350512 passed at code head `fba4959f08c928eaf4a863a15b2109aa0d4acee4`, including migration validation, disposable PostgreSQL integration tests, typecheck, build, browser smoke test, production container build and cleanup.
+
+This is engineering validation only. PR #193 remains draft/unmerged pending independent review. Production remains HOLD.
