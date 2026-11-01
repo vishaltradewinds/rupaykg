@@ -103,7 +103,7 @@ export async function canVerifyEvidence(client: PoolClient, identityId: string, 
        select 1 from evidence e join activities a on a.id = e.activity_id
        join organization_memberships om on om.identity_id = $2 and om.status = 'VERIFIED'
         and a.geography_id is not null and organization_has_geography_scope(om.organization_id, a.geography_id)
-       join roles r on r.id = om.role_id where e.id = $1
+       join roles r on r.id = om.role_id and r.organization_id = om.organization_id where e.id = $1
         and exists (select 1 from jsonb_array_elements_text(r.permissions) permission where permission = any($3::text[]))
      ) as ok`,
     [evidenceId, identityId, HIGH_RISK_PERMISSIONS.VERIFY_EVIDENCE],
