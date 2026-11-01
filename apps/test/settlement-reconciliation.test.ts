@@ -2,11 +2,21 @@ import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { Pool } from "pg";
 import { randomUUID } from "node:crypto";
+import { createApprovedStakeholderApplicationFixture } from "./approved-stakeholder-application-fixture.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 const pool = databaseUrl ? new Pool({ connectionString: databaseUrl }) : null;
 const suffix = randomUUID();
 let settlementId = "";
+let ownerId = "";
+let counterpartyId = "";
+let geographyId = "";
+let actorId = "";
+let verifierId = "";
+let activityId = "";
+let evidenceId = "";
+let verificationId = "";
+let credentialId = "";
 
 before(async () => {
   if (!pool) return;
@@ -14,14 +24,17 @@ before(async () => {
     "insert into organizations(name,organization_type) values($1,'PROCESSOR') returning id",
     [`settlement-reconciliation-owner-${suffix}`],
   )).rows[0]!.id;
+  ownerId = owner;
   const counterparty = (await pool.query<{ id: string }>(
     "insert into organizations(name,organization_type) values($1,'PROCESSOR') returning id",
     [`settlement-reconciliation-counterparty-${suffix}`],
   )).rows[0]!.id;
+  counterpartyId = counterparty;
   const geography = (await pool.query<{ id: string }>(
     "insert into geography(kind,code,name,source) values('DISTRICT',$1,$2,'test') returning id",
     [`SETTLEMENT-RECON-${suffix}`, `Settlement Reconciliation District ${suffix}`],
   )).rows[0]!.id;
+  geographyId = geography;
   await pool.query(
     "insert into organization_geography_scopes(organization_id,geography_id,status) values($1,$2,'VERIFIED')",
     [owner, geography],
@@ -30,31 +43,39 @@ before(async () => {
     "insert into identities(external_subject,display_name) values($1,$2) returning id",
     [`settlement-reconciliation-actor-${suffix}`, "Settlement Reconciliation Actor"],
   )).rows[0]!.id;
+  actorId = actor;
   const verifier = (await pool.query<{ id: string }>(
     "insert into identities(external_subject,display_name) values($1,$2) returning id",
     [`settlement-reconciliation-verifier-${suffix}`, "Settlement Reconciliation Verifier"],
   )).rows[0]!.id;
+  verifierId = verifier;
   const role = (await pool.query<{ id: string }>(
     "insert into roles(organization_id,name,permissions) values($1,$2,$3::jsonb) returning id",
     [owner, `settlement-reconciliation-role-${suffix}`, JSON.stringify(["VERIFY_EVIDENCE", "ISSUE_CREDENTIAL"])],
   )).rows[0]!.id;
-  await pool.query(
-    "insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED')",
-    [verifier, owner, role],
-  );
+  const fixtureClient = await pool.connect();
+  try {
+    await fixtureClient.query("begin");
+    await createApprovedStakeholderApplicationFixture(fixtureClient, { identityId: verifier, organizationId: owner, roleId: role, requestedRoleKey: "PROCESSOR", requestedOrganizationType: "PROCESSOR", geographyId: geography, reviewerIdentityId: actor, note: "Distinct reviewer approval for disposable settlement reconciliation fixture" });
+    await fixtureClient.query("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED')", [verifier, owner, role]);
+    await fixtureClient.query("commit");
+  } catch (error) { await fixtureClient.query("rollback"); throw error; } finally { fixtureClient.release(); }
 
   const activity = (await pool.query<{ id: string }>(
     "insert into activities(organization_id,actor_identity_id,geography_id,activity_type,status,completed_at) values($1,$2,$3,'COLLECTION','COMPLETED',now()) returning id",
     [owner, actor, geography],
   )).rows[0]!.id;
+  activityId = activity;
   const evidence = (await pool.query<{ id: string }>(
     "insert into evidence(activity_id,evidence_type,status,captured_at,content_hash) values($1,'SETTLEMENT_RECON','VERIFIED',now(),$2) returning id",
     [activity, `settlement-reconciliation-evidence-${suffix}`],
   )).rows[0]!.id;
+  evidenceId = evidence;
   const verification = (await pool.query<{ id: string }>(
     "insert into verifications(evidence_id,activity_id,verifier_identity_id,decision,scope,rationale) values($1,$2,$3,'APPROVED','settlement-reconciliation','independent database guard test') returning id",
     [evidence, activity, verifier],
   )).rows[0]!.id;
+  verificationId = verification;
   await pool.query(
     "insert into mrv_provenance_events(activity_id,verification_id,evidence_id,guardian_policy_id,guardian_execution_id,guardian_status,hcs_status,hcs_topic_id,hcs_transaction_id,hcs_consensus_timestamp,integrity_hash,metadata,mirror_node_verified_at) values($1,$2,$3,$4,$5,'VERIFIED','CONSENSUS_CONFIRMED','0.0.123',$6,now(),$7,$8::jsonb,clock_timestamp())",
     [
@@ -72,6 +93,7 @@ before(async () => {
     "insert into credentials(activity_id,issuer_organization_id,trust_root_id,status,verification_id,quantity,unit,issued_at) values($1,$2,$3,'ELIGIBLE',$4,1,'kg',now()) returning id",
     [activity, owner, `settlement-reconciliation-root-${suffix}`, verification],
   )).rows[0]!.id;
+  credentialId = credential;
   await pool.query("update credentials set status='ISSUED' where id=$1", [credential]);
   await pool.query(
     "insert into registry_events(credential_id,event_type,to_owner_id,verification_id,recorded_by_identity_id,event_hash) values($1,'ISSUED',$2,$3,$4,$5)",
@@ -93,8 +115,31 @@ before(async () => {
 
 after(async () => {
   if (!pool) return;
-  if (settlementId) await pool.query("delete from settlements where id = $1", [settlementId]);
-  await pool.end();
+  try {
+    if (settlementId) await pool.query("delete from settlements where id=$1", [settlementId]);
+    if (credentialId) {
+      await pool.query("delete from registry_events where credential_id=$1", [credentialId]);
+      if (activityId) await pool.query("delete from mrv_provenance_events where activity_id=$1", [activityId]);
+      await pool.query("delete from credentials where id=$1", [credentialId]);
+    }
+    if (verificationId) await pool.query("delete from verifications where id=$1", [verificationId]);
+    if (evidenceId) await pool.query("delete from evidence where id=$1", [evidenceId]);
+    if (activityId) await pool.query("delete from activities where id=$1", [activityId]);
+    if (ownerId) {
+      await pool.query("delete from stakeholder_application_approvals where application_id in (select id from stakeholder_applications where organization_id=$1)", [ownerId]);
+      await pool.query("delete from stakeholder_applications where organization_id=$1", [ownerId]);
+      await pool.query("delete from organization_memberships where organization_id=$1", [ownerId]);
+      await pool.query("delete from roles where organization_id=$1", [ownerId]);
+      await pool.query("delete from organization_geography_scopes where organization_id=$1", [ownerId]);
+      const organizationIds = [ownerId, counterpartyId].filter(Boolean);
+      await pool.query("delete from organization_statutory_profiles where organization_id=any($1::uuid[])", [organizationIds]);
+    }
+    const identityIds = [actorId, verifierId].filter(Boolean);
+    if (identityIds.length) await pool.query("delete from identities where id=any($1::uuid[])", [identityIds]);
+    if (geographyId) await pool.query("delete from geography where id=$1", [geographyId]);
+    const organizationIds = [ownerId, counterpartyId].filter(Boolean);
+    if (organizationIds.length) await pool.query("delete from organizations where id=any($1::uuid[])", [organizationIds]);
+  } finally { await pool.end(); }
 });
 
 describe("settlement reconciliation invariants", () => {
