@@ -298,3 +298,12 @@ Production database, production credentials, staging database, and Render deploy
 - Startup now verifies both roles have USAGE on `auth_private`, no direct auth-table privileges, no public-schema CREATE, no membership in either owner role, and the intended split of auth lifecycle vs app authorization function EXECUTE grants.
 - Owner-role checks now also require NOINHERIT. Role manifest updated to match.
 - Code commit `c7516471e114f5a88458e67ba48613cbe62caf1a`; manifest commit `31522052b03c3689a100895603f2a5fab61813f7`. Exact-head CI pending.
+
+
+## 19. Latest auth integration validation — 2026-11-01 15:49 UTC
+
+- Corrected the route test's escaped SQL identifier regex after CI exposed the assertion mismatch (not an application failure).
+- Final code head before this checkpoint: `c45e55b8420ddaf519cf82f678afa86cae2a376c`.
+- Exact-head CI run `41323088776` **PASS**: migration validation, dependency audit, TypeScript typecheck, production build, browser smoke test, complete test suite including disposable PostgreSQL acceptance, and production container build.
+- Prior auth resolver correction, runtime role preflight, side-effect-free container startup, auth-backed self-application GET, and compatibility audit are included.
+- No production deployment, environment-variable change, database migration, seed, role, grant, or RLS operation was performed.
