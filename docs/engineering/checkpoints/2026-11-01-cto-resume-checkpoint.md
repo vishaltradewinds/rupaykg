@@ -262,3 +262,13 @@ Production database, production credentials, staging database, and Render deploy
 - Proposed app runtime has no direct auth-table access by design. Therefore the current API is NOT yet compatible with proposed least-privilege runtime roles. Successful build/acceptance CI does not prove compatibility with those roles.
 - Auth bootstrap uses resolver mode, but the remaining route families need session-token/authority-bound SECURITY DEFINER functions; application business-table grants must be independently specified from the 67-table classification.
 - No production role, credential, grant, RLS, migration or deployment was applied.
+
+
+## 15. Production container startup safety — 2026-11-01 15:40 UTC
+
+- Found that the live `main` Dockerfile still started the API by running `migrate.js` and `acceptance-seed.js` before `production-server.js`. PR #187 had a separate fix, but it was still draft/unmerged and PR #192 did not yet contain it.
+- Applied the safety change directly to PR #192: Docker CMD now starts only `node apps/dist/src/production-server.js`; API workspace `start` no longer runs acceptance seeding.
+- Dockerfile commit `f0ec442ac75c30f1d630b7158f5e427a65557421`; package script commit `5a3cc6f8284210bda0ede293d63e1942dd78452c`.
+- Exact-head CI for Dockerfile, API package, and checkpoint/docs updates: `41322318000` / `41322311561` / `41322181108` were running when recorded. Previous latest code CI `41321594110` PASS and manifest CI `41321852371` PASS.
+- This changes only the PR branch. Production is still on main and has not been deployed or modified. The existing separate migration workflow is not yet safe to run with the privileged `rupaykg` role; a properly authorized migrator identity and approval controls remain outstanding.
+- No production migrations, data seeding, roles, grants, credentials, RLS, or deployments were executed.
