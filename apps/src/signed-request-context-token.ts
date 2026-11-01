@@ -61,3 +61,33 @@ export function createSignedRequestContextToken(
   const signature = createHmac("sha256", options.secret).update(payload, "utf8").digest("hex");
   return `${payload}.${signature}`;
 }
+
+import type { AuthContext } from "./auth.js";
+
+/**
+ * Derives signed claims from a validated application AuthContext.
+ * The selected organization must be present in the VERIFIED membership set;
+ * callers cannot supply actor or organization IDs independently.
+ */
+export function createSignedRequestContextForAuth(
+  auth: AuthContext,
+  options: SignedRequestContextOptions,
+): string {
+  const organizationId = auth.activeOrganizationId;
+  if (!organizationId) {
+    throw new Error("REQUEST_CONTEXT_UNAVAILABLE: an active organization must be selected");
+  }
+  if (auth.bilateralOrganizationScope) {
+    throw new Error("REQUEST_CONTEXT_BILATERAL_UNSUPPORTED: bilateral operations require a separately designed multi-party RLS context");
+  }
+  if (!auth.memberships.some(
+    (membership) => membership.organization_id.toLowerCase() === organizationId.toLowerCase()
+      && membership.status === "VERIFIED",
+  )) {
+    throw new Error("REQUEST_CONTEXT_FORBIDDEN: active organization membership is not verified");
+  }
+  return createSignedRequestContextToken(
+    { actorIdentityId: auth.identityId, organizationId },
+    options,
+  );
+}
