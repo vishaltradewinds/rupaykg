@@ -28,6 +28,9 @@ const safeRole = {
   inherits: true,
   has_auth_capability: true,
   inherits_privileged_role: false,
+  can_read_public_tables: false,
+  can_create_public_objects: false,
+  can_execute_verifier: true,
 };
 
 test("accepts only a non-privileged login inheriting the auth capability", async () => {
@@ -41,10 +44,10 @@ test("rejects BYPASSRLS and privileged inherited roles", async () => {
   await assert.rejects(() => assertAuthenticationPoolContract(fakePool({ ...safeRole, inherits_privileged_role: true })), /AUTH_DATABASE_ROLE_INVALID/);
 });
 
-test("rejects a login without the restricted capability role", async () => {
+test("rejects direct table access or public-schema object creation", async () => {\n  await assert.rejects(() => assertAuthenticationPoolContract(fakePool({ ...safeRole, can_read_public_tables: true })), /AUTH_DATABASE_ROLE_INVALID/);\n  await assert.rejects(() => assertAuthenticationPoolContract(fakePool({ ...safeRole, can_create_public_objects: true })), /AUTH_DATABASE_ROLE_INVALID/);\n});\n\ntest("rejects a login without the restricted capability role", async () => {
   await assert.rejects(() => assertAuthenticationPoolContract(fakePool({ ...safeRole, has_auth_capability: false })), /AUTH_DATABASE_ROLE_INVALID/);
 });
 
-test("rejects an incorrectly behaving session verifier", async () => {
+test("rejects a login without verifier execution", async () => {\n  await assert.rejects(() => assertAuthenticationPoolContract(fakePool({ ...safeRole, can_execute_verifier: false })), /AUTH_DATABASE_ROLE_INVALID/);\n});\n\ntest("rejects an incorrectly behaving session verifier", async () => {
   await assert.rejects(() => assertAuthenticationPoolContract(fakePool(safeRole, [{ identity_id: "11111111-1111-4111-8111-111111111111" }])), /AUTH_DATABASE_VERIFIER_INVALID/);
 });
