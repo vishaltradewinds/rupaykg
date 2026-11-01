@@ -39,4 +39,5 @@ BEGIN
 END
 $block$;
 
+GRANT USAGE ON SCHEMA public TO rupaykg_auth;
 GRANT EXECUTE ON FUNCTION public.verify_identity_session(text) TO rupaykg_auth;
