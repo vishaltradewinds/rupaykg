@@ -252,3 +252,13 @@ Production database, production credentials, staging database, and Render deploy
 4. Add real-pool integration tests for login/register/logout/me, lockout, revoked/suspended identities, multi-org selection, concurrency, and pool exhaustion.
 5. Complete the 67-table policy matrix before any tenant RLS rollout.
 6. Keep production certification OFF and do not run the production migration workflow until Environment approvals, protected secrets, and least-privilege migrator are verified.
+
+
+## 14. Least-privilege API compatibility audit — 2026-11-01 15:34 UTC
+
+- Added `docs/security/APP_RUNTIME_AUTH_TABLE_COMPATIBILITY_INVENTORY_2026-11-01.md` (commit `8a6917ca0966c96cc30696b022fca979f4fb9263`).
+- Static source scan across 14 API modules confirms protected membership/identity table references remain in server overview/geography, legacy auth fallback, onboarding creation/withdrawal and hierarchy approvals, value, registry, sync/device, workspace, CPCB, intelligence, MRV and platform-admin routes.
+- Platform-admin module alone has 62 source lines matching protected auth/control table references; onboarding hierarchy 4; auth-routes 3; several other modules still depend on direct membership checks. Counts are matching source lines, not executed SQL statements.
+- Proposed app runtime has no direct auth-table access by design. Therefore the current API is NOT yet compatible with proposed least-privilege runtime roles. Successful build/acceptance CI does not prove compatibility with those roles.
+- Auth bootstrap uses resolver mode, but the remaining route families need session-token/authority-bound SECURITY DEFINER functions; application business-table grants must be independently specified from the 67-table classification.
+- No production role, credential, grant, RLS, migration or deployment was applied.
