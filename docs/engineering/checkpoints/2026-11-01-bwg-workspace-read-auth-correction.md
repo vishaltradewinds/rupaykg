@@ -58,3 +58,10 @@ The first CI run identified an invalid disposable fixture value (`NOT_SUBMITTED`
 Exact-head code CI #4300 / ID 41329225214 passed at `9bba408244510553cec79d8e75a2a63db80209ee`, including dependency audit, migration validation, disposable PostgreSQL migration and acceptance, typecheck, build, browser smoke test and production container build. Documentation checkpoint update will receive its own exact-head CI run.
 
 This is an engineering acceptance result only. The synthetic accepted registration fixture is test-only; it does not represent an actual CPCB registration. PR #194 remains draft/unmerged pending independent review. Production remains HOLD.
+
+
+## Exact-head documentation CI confirmation — 2026-11-01
+
+Documentation checkpoint commit `236b8e149e07d6894564c85a0856455cceab96f9` passed CI #4305 / ID 41329412332. All steps passed: dependency audit, migration validation, disposable PostgreSQL migration/acceptance, TypeScript typecheck, build, production web browser smoke test, disposable PostgreSQL workspace authorization acceptance, production container build and cleanup.
+
+The workspace integration test validates both the `reports:read` deny/allow boundary and tenant-scoped result set using real disposable PostgreSQL. PR #194 remains draft/unmerged pending independent review. Production remains HOLD.
