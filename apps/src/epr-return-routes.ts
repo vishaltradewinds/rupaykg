@@ -12,10 +12,10 @@ function positiveNumber(body: Record<string, unknown>, key: string): number | nu
   const value = Number(body[key]);
   return Number.isFinite(value) && value > 0 ? value : null;
 }
-async function authFor(request: Parameters<typeof authenticate>[0], reply: { code: (status: number) => { send: (body: unknown) => unknown } }, pool: Pool | null): Promise<AuthContext | null> {
+async function authFor(request: Parameters<typeof authenticate>[0], reply: { code: (status: number) => { send: (body: unknown) => unknown } }, pool: Pool | null, sessionPool: Pool | null = pool): Promise<AuthContext | null> {
   if (!pool) { reply.code(503).send({ error: "Authoritative API unavailable", code: "DATABASE_UNAVAILABLE", syntheticData: false }); return null; }
   try {
-    const auth = await authenticate(request, pool);
+    const auth = await authenticate(request, sessionPool, pool);
     if (!auth) { reply.code(401).send(bearerChallenge()); return null; }
     return auth;
   } catch (error) {
@@ -28,9 +28,9 @@ function canAct(auth: AuthContext, organizationId: string): boolean {
   return auth.memberships.some((membership) => membership.organization_id === organizationId && membership.status === "VERIFIED");
 }
 
-export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool | null): Promise<void> {
+export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool | null, sessionPool: Pool | null = pool): Promise<void> {
   app.get("/api/v1/epr/returns", async (request, reply) => {
-    const auth = await authFor(request, reply, pool); if (!auth || !pool) return;
+    const auth = await authFor(request, reply, pool, sessionPool); if (!auth || !pool) return;
     const organizationId = typeof request.headers["x-rupaykg-organization-id"] === "string" ? request.headers["x-rupaykg-organization-id"] : auth.activeOrganizationId;
     if (!organizationId || !canAct(auth, organizationId)) return reply.code(403).send({ error: "Verified organization membership required", code: "ORG_FORBIDDEN" });
     if (!await hasOrganizationPermission(pool, auth, organizationId, ["epr:read", "epr:manage", "reports:read"])) return reply.code(403).send({ error: "EPR return read permission required", code: "EPR_RETURN_READ_FORBIDDEN" });
@@ -41,7 +41,7 @@ export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool |
   });
 
   app.post("/api/v1/epr/returns", async (request, reply) => {
-    const auth = await authFor(request, reply, pool); if (!auth || !pool) return;
+    const auth = await authFor(request, reply, pool, sessionPool); if (!auth || !pool) return;
     const body = bodyOf(request);
     const organizationId = requiredString(body, "organizationId") ?? auth.activeOrganizationId;
     const schemeId = requiredString(body, "schemeId");
@@ -67,7 +67,7 @@ export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool |
   });
 
   app.post("/api/v1/epr/returns/:returnId/submit", async (request, reply) => {
-    const auth = await authFor(request, reply, pool); if (!auth || !pool) return;
+    const auth = await authFor(request, reply, pool, sessionPool); if (!auth || !pool) return;
     const { returnId } = request.params as { returnId: string };
     const body = bodyOf(request);
     const evidenceId = requiredString(body, "evidenceId");
@@ -103,7 +103,7 @@ export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool |
   });
 
   app.post("/api/v1/epr/returns/:returnId/external-reference", async (request, reply) => {
-    const auth = await authFor(request, reply, pool); if (!auth || !pool) return;
+    const auth = await authFor(request, reply, pool, sessionPool); if (!auth || !pool) return;
     const body = bodyOf(request); const externalReference = requiredString(body, "externalReference");
     if (!externalReference) return reply.code(400).send({ error: "externalReference is required", code: "EXTERNAL_REFERENCE_REQUIRED" });
     const client = await pool.connect();
