@@ -16,6 +16,14 @@ BEGIN
     END IF;
   END IF;
 
+  IF EXISTS (
+    SELECT 1 FROM pg_catalog.pg_auth_members m
+    JOIN pg_catalog.pg_roles owner_role ON owner_role.oid = m.member
+    WHERE owner_role.rolname = 'rupaykg_auth_verifier_owner'
+  ) THEN
+    RAISE EXCEPTION 'rupaykg_auth_verifier_owner must not be a member of any other role';
+  END IF;
+
   IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = 'rupaykg_auth') THEN
     CREATE ROLE rupaykg_auth
       NOLOGIN INHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
@@ -28,6 +36,14 @@ BEGIN
     ) THEN
       RAISE EXCEPTION 'rupaykg_auth role exists with unsafe attributes';
     END IF;
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM pg_catalog.pg_auth_members m
+    JOIN pg_catalog.pg_roles capability_role ON capability_role.oid = m.member
+    WHERE capability_role.rolname = 'rupaykg_auth'
+  ) THEN
+    RAISE EXCEPTION 'rupaykg_auth capability role must not be a member of any other role';
   END IF;
 END
 $block$;
