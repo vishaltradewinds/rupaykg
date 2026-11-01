@@ -15,8 +15,10 @@ class FakeClient {
   calls: Call[] = [];
   released = false;
   releaseError: Error | boolean | undefined = undefined;
+  failSql: string | undefined = undefined;
   async query(sql: string, values?: unknown[]) {
     this.calls.push({ sql, values });
+    if (sql === this.failSql) throw new Error("synthetic query failure");
     return { rows: [], rowCount: 0, command: sql.split(/\s+/)[0]?.toUpperCase() ?? "" };
   }
   release(error?: Error | boolean) {
@@ -172,4 +174,37 @@ test("bilateral settlement context carries all verified organizations while norm
     "true",
   ]);
   await finishRequestDatabaseContext(bilateral, false);
+});
+
+test("a handled SQL error inside a nested savepoint can roll back locally and keep the outer request usable", async () => {
+  const raw = new FakePool();
+  const context = await beginRequestDatabaseContext(raw as unknown as Pool, auth);
+  const scoped = createContextAwarePool(raw as unknown as Pool);
+  raw.clients[0]!.failSql = "select fail_inside_savepoint";
+
+  await runWithRequestDatabaseContext(context, async () => {
+    const client = await scoped.connect();
+    await client.query("BEGIN");
+    await assert.rejects(() => client.query("select fail_inside_savepoint"), /synthetic query failure/);
+    await client.query("ROLLBACK");
+    await client.query("select after_recovery");
+    client.release();
+  });
+  await finishRequestDatabaseContext(context, true);
+
+  assert.equal(raw.clients[0]!.calls.at(-1)?.sql, "COMMIT");
+  assert.equal(raw.clients[0]!.released, true);
+});
+
+test("an uncontained SQL error marks the request transaction for rollback", async () => {
+  const raw = new FakePool();
+  const context = await beginRequestDatabaseContext(raw as unknown as Pool, auth);
+  const scoped = createContextAwarePool(raw as unknown as Pool);
+  raw.clients[0]!.failSql = "select fail_outside_savepoint";
+
+  await runWithRequestDatabaseContext(context, async () => {
+    await assert.rejects(() => scoped.query("select fail_outside_savepoint"), /synthetic query failure/);
+  });
+  await finishRequestDatabaseContext(context, true);
+  assert.equal(raw.clients[0]!.calls.at(-1)?.sql, "ROLLBACK");
 });
