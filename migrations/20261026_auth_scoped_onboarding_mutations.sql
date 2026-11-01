@@ -212,7 +212,7 @@ create or replace function public.prevent_stakeholder_self_approval()
 returns trigger
 language plpgsql
 set search_path = pg_catalog, pg_temp
-as $
+as $$
 begin
   if new.approved_by_identity_id is not null and exists (
     select 1 from public.stakeholder_applications sa
