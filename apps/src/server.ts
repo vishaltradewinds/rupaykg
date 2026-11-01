@@ -38,8 +38,8 @@ async function assertProductionDatabaseRuntimeContracts(): Promise<void> {
     pool.query<{ current_user: string; current_database: string; rolsuper: boolean; rolbypassrls: boolean; rolcreatedb: boolean; rolcreaterole: boolean; rolreplication: boolean }>(
       `select current_user, current_database(), r.rolsuper, r.rolbypassrls, r.rolcreatedb, r.rolcreaterole, r.rolreplication from pg_roles r where r.rolname=current_user`,
     ),
-    authPool.query<{ current_user: string; current_database: string; rolsuper: boolean; rolbypassrls: boolean }>(
-      `select current_user, current_database(), r.rolsuper, r.rolbypassrls from pg_roles r where r.rolname=current_user`,
+    authPool.query<{ current_user: string; current_database: string; rolsuper: boolean; rolbypassrls: boolean; rolcreatedb: boolean; rolcreaterole: boolean; rolreplication: boolean }>(
+      `select current_user, current_database(), r.rolsuper, r.rolbypassrls, r.rolcreatedb, r.rolcreaterole, r.rolreplication from pg_roles r where r.rolname=current_user`,
     ),
   ]);
   const app = appIdentity.rows[0], auth = authIdentity.rows[0];
