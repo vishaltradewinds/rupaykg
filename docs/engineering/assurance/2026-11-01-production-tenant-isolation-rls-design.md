@@ -50,7 +50,7 @@ Before enabling tenant RLS, implement one central request-scoped database contex
 1. Resolve bearer token using the narrowly scoped authentication connection.
 2. Validate token hash, session expiry/revocation, identity status, and verified memberships.
 3. Acquire one runtime-role client for the protected request.
-4. Start a transaction and set transaction-local values, at minimum `app.actor_identity_id`; add `app.active_organization_id` only where the request has one selected and verified organization.
+4. Start a transaction and set a transaction-local **signed request-context envelope** (for example `app.request_context`), not a plain actor/org GUC. The API signs actor ID, selected organization scope, issued-at, expiry and key ID with HMAC-SHA256. A tightly scoped database helper verifies the signature and expiry against a protected key table before any RLS policy accepts the context.
 5. Execute every protected query and mutation on that same client/transaction. No protected query may silently fall back to the unscoped pool.
 6. Commit only after successful handler completion; otherwise rollback. Always release the client.
 7. For multi-organization views, RLS may expose rows for all verified memberships of the authenticated actor, while application authorization still selects permitted organization IDs. Do not use a caller-supplied organization ID without checking membership.
@@ -63,12 +63,12 @@ The current `server.ts` constructs one `pg.Pool` from `DATABASE_URL`, and route 
 
 Design helper functions only after the runtime role and context contract is implemented and tested. Candidate helpers:
 
-- `app_current_actor_id()`: safely parse transaction-local `app.actor_identity_id`; missing/invalid returns NULL, never a privileged default.
-- `app_actor_has_verified_membership(org_id)`: checks `organization_memberships` for the current actor and `status='VERIFIED'`.
+- `app_current_context_claims()`: reads the transaction-local signed envelope, verifies HMAC-SHA256 and short expiry using a protected key table, and returns actor plus authorized organization scope; missing, malformed, expired or forged context returns NULL.
+- `app_actor_has_verified_membership(org_id)`: checks `organization_memberships` for the signed actor and `status='VERIFIED'`.
 - `app_actor_can_access_activity(activity_id)`: derives the owning organization through `activities` and verified membership.
 - Explicit multi-party helpers for issuer/recycler, sender/recipient, payer/payee, and credential owner access.
 
-If helper functions are `SECURITY DEFINER`, pin `search_path`, schema-qualify every object, revoke PUBLIC execute, grant only required execution, and audit function owner and code. Prefer `SECURITY INVOKER` unless a narrowly justified ownership boundary requires definer rights. Avoid recursive RLS helper calls by using tightly scoped, reviewed helper ownership/policies.
+The plain custom GUC is caller-writable by any SQL session and is not sufficient as a production identity assertion. The disposable mechanics proof initially used a plain actor GUC; it has since been upgraded to a signed-envelope test. Production must use a cryptographically authenticated envelope so a query that can call `set_config` cannot simply change its actor or organization claim. Keep the HMAC key inaccessible to the runtime role; store it in a protected schema/table and in the API secret store, support key IDs/rotation, cap token lifetime (the lab used 120 seconds), and never log the token. Use a narrowly scoped `SECURITY DEFINER` verifier only for signature verification/key lookup: pin `search_path`, schema-qualify every object (including `public.hmac`), revoke PUBLIC execute, grant only required execution, audit the owner and function body, and ensure the runtime role cannot read the key table. Other policy helpers should prefer `SECURITY INVOKER` unless a narrowly justified ownership boundary requires definer rights. Avoid recursive RLS helper calls by using tightly scoped, reviewed helper ownership/policies.
 
 ## 4. Table-by-table classification (67 tables)
 
@@ -343,3 +343,15 @@ A static SQL-reference scan of the 16 inspected API source modules identified di
 The following 15 tables were not directly matched in these 16 route modules: `activity_assignments`, `carbon_market_mechanisms`, `carbon_projects`, `ccts_methodology_registry`, `chain_of_custody_links`, `environmental_attribute_claims`, `epr_credit_allocations`, `epr_credit_transfers`, `evidence_verification_requirements`, `geography_sources`, `identity_credentials`, `methodology_governance_evidence`, `operation_sync_envelopes`, `regulatory_requirements`, `schema_migrations`.
 
 **Do not classify these 15 as obsolete or unused.** Several are written by database triggers, migration/standards processes, or other jobs not included in this route scan. Each requires a trace to its writers/readers before assigning a policy or excluding it from the RLS rollout. The implementation gate must close all 67 table classifications, including indirect database-only paths.
+
+## 12. Signed request-context security boundary
+
+The synthetic RLS lab was upgraded from a caller-writable `app.actor_id` GUC to a signed `app.request_context` envelope. In the lab:
+- Envelope payload contains actor UUID, organization UUID, issued-at, expiry and key ID.
+- HMAC-SHA256 signature is verified by a narrowly scoped `SECURITY DEFINER` function with fixed `search_path = pg_catalog, rls_lab`.
+- The HMAC key lives in `rls_lab.context_keys`, owned by the lab owner role; the runtime role has no table privileges on that key store.
+- Runtime receives only EXECUTE on the signature-verification function.
+- The function returns no claims for missing, malformed, forged or expired envelopes.
+- Membership and record RLS policies derive actor and organization from the verified claims, not from unsigned actor/org GUCs.
+
+This is materially stronger than a plain custom GUC: the runtime can set `app.request_context`, but changing actor/organization claims invalidates the signature. It does not protect against compromise of the API signing key or a malicious trusted API process; those remain in the threat model. Production key storage, rotation, deployment secret delivery and a separate signed service-principal context for background workers must be designed and tested before rollout.
