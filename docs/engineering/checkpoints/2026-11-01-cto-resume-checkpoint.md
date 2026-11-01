@@ -196,3 +196,22 @@ Production database, production credentials, staging database, and Render deploy
 - Application `hasOrganizationPermission` now uses this function in security-definer mode, with no direct-table fallback. Added fail-closed tests.
 - Remaining direct membership/auth-table paths: geography/activity authorization helpers, evidence verification, platform-admin routes, and stakeholder onboarding mutations. These need additional scoped functions before production runtime cutover.
 - No production or staging objects, roles, grants, secrets, migrations, or deployments changed.
+
+
+## 13. Scoped authorization function layer — 2026-11-01
+
+- Added SECURITY DEFINER functions owned by `rupaykg_auth_owner`:
+  - `has_organization_permission(identity_id, organization_id, permissions)`
+  - `organization_has_geography_scope(organization_id, geography_id)`
+  - `can_read_geography(identity_id, geography_id)`
+  - `can_write_geography(identity_id, organization_id, geography_id)`
+  - `can_write_activity(identity_id, activity_id)`
+  - `can_verify_evidence(identity_id, evidence_id)`
+- The geography helper reproduces the existing recursive parent-scope semantics and preserves the current behavior where an organization with no VERIFIED geography scopes is unrestricted by geography.
+- A disposable Neon call initially exposed a search_path defect when calling the old public geography helper from a SECURITY DEFINER function. Replaced that nested call with a schema-qualified, SECURITY DEFINER helper using fully qualified `public.geography` and `public.organization_geography_scopes`; rerun accepted all six function results.
+- Verified lab results: verified role permission true; rejected membership denied; geography read/write true under the existing no-scope semantics; unknown activity/evidence denied.
+- Catalog verification: all six scoped authorization functions are SECURITY DEFINER, owned by `rupaykg_auth_owner`, executable by app runtime only and not auth runtime.
+- Application `hasOrganizationPermission`, geography read/write, activity write and evidence verification helpers now use these functions in security-definer mode with no direct-table fallback.
+- Startup gate now requires all fourteen SECURITY DEFINER functions and exact runtime grants.
+- Remaining direct auth-table paths are mainly platform-admin governance and stakeholder onboarding create/withdraw, plus route-specific direct membership queries. Those remain release blockers.
+- No production or staging database changes, deployments, secrets, or role provisioning.
