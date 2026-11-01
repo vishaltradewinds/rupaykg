@@ -17,7 +17,7 @@ The server checks that the two connections report the same `current_database()` 
 | `rupaykg_app_runtime` | Yes, credential provisioned out-of-band | No | Ordinary API/business queries; may execute only the session resolver among auth-private functions |
 | `rupaykg_auth_runtime` | Yes, credential provisioned out-of-band | No | Calls narrow authentication SECURITY DEFINER functions; no direct auth-table access |
 | `rupaykg_app_owner` | No | No | Future owner for approved application tables/functions after ownership and policy review |
-| `rupaykg_auth_owner` | No | No | Owner of the eight reviewed authentication SECURITY DEFINER functions |
+| `rupaykg_auth_owner` | No | No | Owner of the reviewed authentication and scoped-authorization SECURITY DEFINER functions |
 | `rupaykg_migrator` | Separate controlled login | No SUPERUSER/BYPASSRLS at runtime | Reviewed migration execution only; credentials and DDL authority managed separately |
 
 All runtime roles must also have `NOCREATEDB`, `NOCREATEROLE`, `NOREPLICATION`, and no `CREATE` on schema `public`. Runtime roles must not be members of either owner role.
@@ -46,7 +46,7 @@ All eighteen functions below must be SECURITY DEFINER, have fixed safe `search_p
 18. `auth_private.list_platform_roles(uuid)`
 
 Execution grants:
-- `rupaykg_app_runtime`: EXECUTE on `resolve_session(text)` and the six scoped authorization functions (organization permission, geography scope/read/write, activity write, and evidence verification, platform-admin authority, and the three platform-admin read projections); no credential/session lifecycle or self-context functions.
+- `rupaykg_app_runtime`: EXECUTE on `resolve_session(text)` and all ten scoped authorization functions (organization permission, geography scope/read/write, activity write, evidence verification, platform-admin authority, and the three platform-admin read projections); no credential/session lifecycle or self-context functions.
 - `rupaykg_auth_runtime`: EXECUTE on functions 2–8; no EXECUTE on `resolve_session(text)` or any of the ten scoped application authorization functions.
 - PUBLIC: no EXECUTE on any of the eight functions.
 - Neither runtime role receives SELECT/INSERT/UPDATE/DELETE on `identities`, `identity_sessions`, `identity_password_credentials`, or `organization_memberships`.
