@@ -93,3 +93,14 @@ No production DDL/DML, migration, role/grant/RLS changes, deployments, worker/sc
 - PR #202 latest code CI #4416 / run `41338701474` **PASS** across dependency audit, migration validation, migrations, typecheck, build, browser smoke, all tests and production container build. It isolates session verification behind a restricted auth pool and passes that pool into the onboarding auth handlers.
 - PRs #200 and #202 remain draft. Independent security review, integrated-base CI, production DBA provisioning/secret approvals and all-table RLS route coverage remain open.
 - Production Neon remains unchanged; no production DDL/DML, migration, role/grant/RLS change, deployment, worker activation or certification. Release HOLD; TRL 9 not established.
+
+## 2026-11-02 unified authentication + RLS integration spine
+- Canonical branch is PR #192 `shakti/auth-bootstrap-application-integration-2026-11-01`; checkpoint `docs/engineering/checkpoints/2026-11-02-unified-auth-rls-foundation.md`.
+- Ported PR #200's canonical AuthContext token helper, transaction-scoped `app.request_context` wrapper, rollback/connection-discard logic, signed-context verifier migration and PostgreSQL tests into PR #192.
+- CI now provisions `rupaykg_security_definer` only in disposable PostgreSQL before migrations; production role provisioning remains a DBA/founder approval gate.
+- PR #199 closed unmerged as superseded by #200. PR #200 and #201 are to be closed as superseded only after combined PR #192 exact-head CI passes. PR #202 is an alternate/incomplete auth-pool design and duplicates PR #192's existing comprehensive `auth_private` lifecycle; do not merge it.
+- Standalone RLS foundation CI #4421/#4422 passed; standalone verifier CI #4390 passed; PR #202 CI #4416 passed but is not canonical.
+- Canonical PR #192 combined head `820be17cb4d39fc0eb6546954515f80200e6669d`; exact-head CI #4433 / run `41339529203` IN PROGRESS. Checkpoint commit `2da35440f9ca642dd8c14d359355ea2425cc83cc` triggers a follow-up exact-head run.
+- Read-only production Neon recheck: 67 public tables, 0 RLS enabled, 0 FORCE RLS; 92 applied migrations, latest `20261021`; `rupaykg` remains elevated owner; signed-context schema/function absent. Production unchanged.
+- Remaining P0: one lifecycle integration fixture directly inserts a VERIFIED ordinary membership and now correctly fails the approved-application guard. Replace via real onboarding + two-person authority bootstrap; implement draft bootstrap only with synthetic CI identities/secrets. Founder must approve two distinct initial authority identities and the external two-secret custody ceremony before production execution.
+- No production DDL/DML, migrations, role/grant/RLS changes, branch operations, deployment, worker activation or certification. Production release HOLD.
