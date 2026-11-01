@@ -95,3 +95,16 @@ export function assertProductionMigrationTarget(
     throw new Error("PRODUCTION_MIGRATION_TARGET_MISMATCH: connected database role does not match the approved target");
   }
 }
+
+export function requiresExplicitMigrationTarget(
+  databaseUrl: string,
+  nodeEnvironment: string | undefined = process.env.NODE_ENV,
+): boolean {
+  let hostname: string;
+  try {
+    hostname = new URL(databaseUrl).hostname.toLowerCase();
+  } catch {
+    throw new Error("PRODUCTION_MIGRATION_TARGET_INVALID: DATABASE_URL must be a valid URL");
+  }
+  return nodeEnvironment === "production" || hostname === "neon.tech" || hostname.endsWith(".neon.tech");
+}
