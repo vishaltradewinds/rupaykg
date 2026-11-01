@@ -49,7 +49,7 @@ async function assertProductionDatabaseRuntimeContracts(): Promise<void> {
   if (app.rolsuper || app.rolbypassrls || app.rolcreatedb || app.rolcreaterole || app.rolreplication || auth.rolsuper || auth.rolbypassrls || auth.rolcreatedb || auth.rolcreaterole || auth.rolreplication) {
     throw new Error("PRODUCTION_RUNTIME_ROLE_MUST_NOT_BYPASS_RLS");
   }
-  const appChecks = await pool.query<{ direct_auth_reads: boolean; resolver_execute: boolean; permission_execute: boolean; auth_lifecycle_execute: boolean; owner_membership: boolean }>(
+  const appChecks = await pool.query<{ direct_auth_reads: boolean; resolver_execute: boolean; permission_execute: boolean; scoped_authorization_execute: boolean; auth_lifecycle_execute: boolean; owner_membership: boolean }>(
     `select
        (has_table_privilege(current_user,'public.identities','SELECT') or has_table_privilege(current_user,'public.identities','INSERT') or has_table_privilege(current_user,'public.identities','UPDATE') or has_table_privilege(current_user,'public.identities','DELETE')
         or has_table_privilege(current_user,'public.identity_sessions','SELECT') or has_table_privilege(current_user,'public.identity_sessions','INSERT') or has_table_privilege(current_user,'public.identity_sessions','UPDATE') or has_table_privilege(current_user,'public.identity_sessions','DELETE')
@@ -58,6 +58,10 @@ async function assertProductionDatabaseRuntimeContracts(): Promise<void> {
         or has_schema_privilege(current_user,'public','CREATE')) as direct_auth_reads,
        has_function_privilege(current_user,'auth_private.resolve_session(text)','EXECUTE') as resolver_execute,
        has_function_privilege(current_user,'auth_private.has_organization_permission(uuid,uuid,text[])','EXECUTE') as permission_execute,
+       (has_function_privilege(current_user,'auth_private.can_read_geography(uuid,uuid)','EXECUTE')
+        and has_function_privilege(current_user,'auth_private.can_write_geography(uuid,uuid,uuid)','EXECUTE')
+        and has_function_privilege(current_user,'auth_private.can_write_activity(uuid,uuid)','EXECUTE')
+        and has_function_privilege(current_user,'auth_private.can_verify_evidence(uuid,uuid)','EXECUTE')) as scoped_authorization_execute,
        (has_function_privilege(current_user,'auth_private.find_login_candidate(text)','EXECUTE')
         or has_function_privilege(current_user,'auth_private.record_login_failure(uuid)','EXECUTE')
         or has_function_privilege(current_user,'auth_private.reset_login_failures(uuid)','EXECUTE')
@@ -68,10 +72,10 @@ async function assertProductionDatabaseRuntimeContracts(): Promise<void> {
        pg_has_role(current_user,'rupaykg_auth_owner','MEMBER') or pg_has_role(current_user,'rupaykg_app_owner','MEMBER') as owner_membership`,
   );
   const appCheck = appChecks.rows[0];
-  if (!appCheck || appCheck.direct_auth_reads || !appCheck.resolver_execute || !appCheck.permission_execute || appCheck.auth_lifecycle_execute || appCheck.owner_membership) {
+  if (!appCheck || appCheck.direct_auth_reads || !appCheck.resolver_execute || !appCheck.permission_execute || !appCheck.scoped_authorization_execute || appCheck.auth_lifecycle_execute || appCheck.owner_membership) {
     throw new Error("PRODUCTION_APPLICATION_RUNTIME_PRIVILEGES_INVALID");
   }
-  const authChecks = await authPool.query<{ direct_auth_reads: boolean; required_functions: boolean; permission_execute: boolean; owner_membership: boolean }>(
+  const authChecks = await authPool.query<{ direct_auth_reads: boolean; required_functions: boolean; permission_execute: boolean; scoped_authorization_execute: boolean; owner_membership: boolean }>(
     `select
        (has_table_privilege(current_user,'public.identities','SELECT') or has_table_privilege(current_user,'public.identities','INSERT') or has_table_privilege(current_user,'public.identities','UPDATE') or has_table_privilege(current_user,'public.identities','DELETE')
         or has_table_privilege(current_user,'public.identity_sessions','SELECT') or has_table_privilege(current_user,'public.identity_sessions','INSERT') or has_table_privilege(current_user,'public.identity_sessions','UPDATE') or has_table_privilege(current_user,'public.identity_sessions','DELETE')
@@ -79,6 +83,10 @@ async function assertProductionDatabaseRuntimeContracts(): Promise<void> {
         or has_table_privilege(current_user,'public.identity_password_credentials','SELECT') or has_table_privilege(current_user,'public.identity_password_credentials','INSERT') or has_table_privilege(current_user,'public.identity_password_credentials','UPDATE') or has_table_privilege(current_user,'public.identity_password_credentials','DELETE')
         or has_schema_privilege(current_user,'public','CREATE')) as direct_auth_reads,
        has_function_privilege(current_user,'auth_private.has_organization_permission(uuid,uuid,text[])','EXECUTE') as permission_execute,
+       (has_function_privilege(current_user,'auth_private.can_read_geography(uuid,uuid)','EXECUTE')
+        or has_function_privilege(current_user,'auth_private.can_write_geography(uuid,uuid,uuid)','EXECUTE')
+        or has_function_privilege(current_user,'auth_private.can_write_activity(uuid,uuid)','EXECUTE')
+        or has_function_privilege(current_user,'auth_private.can_verify_evidence(uuid,uuid)','EXECUTE')) as scoped_authorization_execute,
        (has_function_privilege(current_user,'auth_private.find_login_candidate(text)','EXECUTE')
         and has_function_privilege(current_user,'auth_private.record_login_failure(uuid)','EXECUTE')
         and has_function_privilege(current_user,'auth_private.reset_login_failures(uuid)','EXECUTE')
@@ -89,7 +97,7 @@ async function assertProductionDatabaseRuntimeContracts(): Promise<void> {
        pg_has_role(current_user,'rupaykg_auth_owner','MEMBER') as owner_membership`,
   );
   const authCheck = authChecks.rows[0];
-  if (!authCheck || authCheck.direct_auth_reads || !authCheck.required_functions || authCheck.permission_execute || authCheck.owner_membership) {
+  if (!authCheck || authCheck.direct_auth_reads || !authCheck.required_functions || authCheck.permission_execute || authCheck.scoped_authorization_execute || authCheck.owner_membership) {
     throw new Error("PRODUCTION_AUTHENTICATION_RUNTIME_PRIVILEGES_INVALID");
   }
   if ((await authPool.query<{ resolver_execute: boolean }>(
@@ -101,9 +109,9 @@ async function assertProductionDatabaseRuntimeContracts(): Promise<void> {
     `select p.proname as function_name,p.prosecdef as security_definer,pg_get_userbyid(p.proowner) as owner_name
        from pg_proc p join pg_namespace n on n.oid=p.pronamespace
       where n.nspname='auth_private' and p.proname in
-        ('resolve_session','find_login_candidate','record_login_failure','reset_login_failures','issue_session','revoke_session','register_identity','get_self_account_context','has_organization_permission')`,
+        ('resolve_session','find_login_candidate','record_login_failure','reset_login_failures','issue_session','revoke_session','register_identity','get_self_account_context','has_organization_permission','can_read_geography','can_write_geography','can_write_activity','can_verify_evidence')`,
   );
-  if (functionOwners.rows.length !== 9 || functionOwners.rows.some((fn) =>
+  if (functionOwners.rows.length !== 13 || functionOwners.rows.some((fn) =>
     !fn.security_definer || fn.owner_name !== "rupaykg_auth_owner")) {
     throw new Error("PRODUCTION_AUTH_FUNCTION_OWNERSHIP_INVALID");
   }
