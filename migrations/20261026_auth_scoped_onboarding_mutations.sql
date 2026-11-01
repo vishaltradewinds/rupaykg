@@ -20,7 +20,7 @@ create or replace function public.ensure_organization_governance_profile()
 returns trigger
 language plpgsql
 set search_path = pg_catalog, pg_temp
-as $
+as $$
 begin
   insert into public.organization_statutory_profiles
     (organization_id, framework, rule_reference, effective_from, applicability_status, basis)
@@ -32,13 +32,13 @@ begin
   on conflict (organization_id, framework, rule_reference, effective_from) do nothing;
   return new;
 end;
-$;
+$$;
 
 create or replace function public.rupaykg_seed_stakeholder_approval_chain()
 returns trigger
 language plpgsql
 set search_path = pg_catalog, pg_temp
-as $
+as $$
 declare gk public.geography_kind; levels text[]; level_name text; idx integer := 1;
 begin
   select g.kind into gk from public.geography g where g.id=new.geography_id;
@@ -55,13 +55,13 @@ begin
   end loop;
   return new;
 end;
-$;
+$$;
 
 create or replace function public.prevent_incomplete_hierarchical_stakeholder_approval()
 returns trigger
 language plpgsql
 set search_path = pg_catalog, pg_temp
-as $
+as $$
 begin
   if new.status = 'APPROVED' and old.status is distinct from 'APPROVED'
      and exists (select 1 from public.stakeholder_application_approvals a where a.application_id=new.id and a.status<>'APPROVED') then
@@ -69,13 +69,13 @@ begin
   end if;
   return new;
 end;
-$;
+$$;
 
 create or replace function public.prevent_direct_membership_activation()
 returns trigger
 language plpgsql
 set search_path = pg_catalog, pg_temp
-as $
+as $$
 begin
   if new.status='VERIFIED' and old.status is distinct from 'VERIFIED' and not exists (
     select 1 from public.stakeholder_applications sa
@@ -85,13 +85,13 @@ begin
   end if;
   return new;
 end;
-$;
+$$;
 
 create or replace function public.prevent_stakeholder_self_approval()
 returns trigger
 language plpgsql
 set search_path = pg_catalog, pg_temp
-as $
+as $$
 begin
   if new.approved_by_identity_id is not null and exists (
     select 1 from public.stakeholder_applications sa
@@ -101,7 +101,7 @@ begin
   end if;
   return new;
 end;
-$;
+$$;
 
 -- Table grants are issued by the migration principal while it still has the
 -- necessary table-owner/grant-option authority.
