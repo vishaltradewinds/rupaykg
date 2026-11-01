@@ -14,24 +14,31 @@ test("BWG profile intake stays pending and the real PostgreSQL applicability tri
   await registerValueRoutes(app, pool);
   const suffix = randomBytes(8).toString("hex");
   const token = randomBytes(32).toString("base64url");
+  let organizationId: string | undefined;
+  let geographyId: string | undefined;
+  let identityId: string | undefined;
+  let roleId: string | undefined;
   try {
     const org = await pool.query<{ id: string }>(
       "insert into organizations(name,organization_type,status) values($1,'test_fixture','VERIFIED') returning id",
       ["TEST-BWG-APPLICABILITY-" + suffix],
     );
-    const organizationId = org.rows[0]!.id;
+    organizationId = org.rows[0]!.id;
     const geography = await pool.query<{ id: string }>(
       "insert into geography(kind,name,source,source_version) values('STATE_UT',$1,'integration-test','fixture-v1') returning id",
       ["TEST-BWG-GEO-" + suffix],
     );
+    geographyId = geography.rows[0]!.id;
     const identity = await pool.query<{ id: string }>(
       "insert into identities(external_subject,display_name,email,status) values($1,$2,$3,'VERIFIED') returning id",
       ["test-bwg-operator:"+suffix,"BWG Integration Operator","bwg-operator-"+suffix+"@example.invalid"],
     );
+    identityId = identity.rows[0]!.id;
     const role = await pool.query<{ id: string }>(
       "insert into roles(organization_id,name,permissions,geography_scope) values($1,$2,$3::jsonb,'[]') returning id",
       [organizationId,"bwg_operator_"+suffix,JSON.stringify(["profile:update","waste:record","reports:read","epr:manage"])],
     );
+    roleId = role.rows[0]!.id;
     await pool.query("alter table organization_memberships disable trigger stakeholder_membership_application_guard");
     try {
       await pool.query(
@@ -96,6 +103,25 @@ test("BWG profile intake stays pending and the real PostgreSQL applicability tri
     );
     assert.equal(periods.rows[0]?.count, "0");
   } finally {
+    if (organizationId) {
+      await pool.query("delete from bwg_waste_reports where reporting_period_id in (select id from bwg_reporting_periods where organization_id=$1)", [organizationId]);
+      await pool.query("delete from bwg_epr_reports where reporting_period_id in (select id from bwg_reporting_periods where organization_id=$1)", [organizationId]);
+      await pool.query("delete from bwg_esg_reports where reporting_period_id in (select id from bwg_reporting_periods where organization_id=$1)", [organizationId]);
+      await pool.query("delete from bwg_reporting_periods where organization_id=$1", [organizationId]);
+      await pool.query("delete from bwg_profiles where organization_id=$1", [organizationId]);
+      await pool.query("delete from organization_geography_scopes where organization_id=$1", [organizationId]);
+      await pool.query("delete from organization_memberships where organization_id=$1", [organizationId]);
+      await pool.query("delete from organization_statutory_profiles where organization_id=$1", [organizationId]);
+      await pool.query("delete from organization_bwg_assessments where organization_id=$1", [organizationId]);
+      await pool.query("delete from organization_epr_applicability where organization_id=$1", [organizationId]);
+      if (roleId) await pool.query("delete from roles where id=$1", [roleId]);
+      await pool.query("delete from organizations where id=$1", [organizationId]);
+    }
+    if (identityId) {
+      await pool.query("delete from identity_sessions where identity_id=$1", [identityId]);
+      await pool.query("delete from identities where id=$1", [identityId]);
+    }
+    if (geographyId) await pool.query("delete from geography where id=$1", [geographyId]);
     await app.close();
     await pool.end();
   }
