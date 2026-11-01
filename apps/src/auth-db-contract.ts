@@ -11,6 +11,9 @@ type AuthRoleRow = {
   inherits: boolean;
   has_auth_capability: boolean;
   inherits_privileged_role: boolean;
+  can_read_public_tables: boolean;
+  can_create_public_objects: boolean;
+  can_execute_verifier: boolean;
 };
 
 export async function assertAuthenticationPoolContract(pool: Pool): Promise<void> {
@@ -29,7 +32,15 @@ export async function assertAuthenticationPoolContract(pool: Pool): Promise<void
               where (privileged.rolsuper or privileged.rolcreatedb or privileged.rolcreaterole
                      or privileged.rolreplication or privileged.rolbypassrls)
                 and pg_catalog.pg_has_role(current_user, privileged.oid, 'member')
-           ) as inherits_privileged_role
+           ) as inherits_privileged_role,
+           exists (
+             select 1 from pg_catalog.pg_class c
+             join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+              where n.nspname = 'public' and c.relkind in ('r', 'p', 'v', 'm', 'f')
+                and pg_catalog.has_table_privilege(current_user, c.oid, 'SELECT')
+           ) as can_read_public_tables,
+           pg_catalog.has_schema_privilege(current_user, 'public', 'CREATE') as can_create_public_objects,
+           pg_catalog.has_function_privilege(current_user, 'public.verify_identity_session(text)', 'EXECUTE') as can_execute_verifier
       from pg_catalog.pg_roles r
      where r.rolname = current_user
   `);
@@ -43,7 +54,10 @@ export async function assertAuthenticationPoolContract(pool: Pool): Promise<void
       || role.bypasses_rls
       || !role.inherits
       || !role.has_auth_capability
-      || role.inherits_privileged_role) {
+      || role.inherits_privileged_role
+      || role.can_read_public_tables
+      || role.can_create_public_objects
+      || !role.can_execute_verifier) {
     throw new Error("AUTH_DATABASE_ROLE_INVALID: login must inherit only the rupaykg_auth capability and must not hold elevated privileges or BYPASSRLS");
   }
   const verifier = await pool.query<{ identity_id: string | null }>(
