@@ -215,3 +215,12 @@ Production database, production credentials, staging database, and Render deploy
 - Startup gate now requires all fourteen SECURITY DEFINER functions and exact runtime grants.
 - Remaining direct auth-table paths are mainly platform-admin governance and stakeholder onboarding create/withdraw, plus route-specific direct membership queries. Those remain release blockers.
 - No production or staging database changes, deployments, secrets, or role provisioning.
+
+
+## 14. Platform-admin authentication boundary — 2026-11-01
+
+- Added `auth_private.is_platform_admin(identity_id, permission)`, SECURITY DEFINER, fixed search_path, owned by `rupaykg_auth_owner`.
+- Lab verified ordinary identity returns false; catalog confirms EXECUTE only for app runtime (not auth runtime).
+- Platform-admin route `authorize()` now uses this function instead of direct reads from memberships, roles and identities.
+- Startup gate now requires fifteen SECURITY DEFINER functions and their exact runtime grants.
+- This is only the authorization entry point. Platform-admin overview, identity directory, suspend/reactivate, session revocation, role editing, and dual-control membership changes still contain direct data access/mutations and are not production-compatible with the restricted app role yet.
