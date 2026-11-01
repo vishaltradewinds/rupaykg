@@ -11,11 +11,11 @@ function requestedGeography(request: { query: unknown }): string | null {
   return typeof q.geographyId === "string" && q.geographyId.trim() ? q.geographyId.trim() : null;
 }
 
-export async function registerIntelligenceRoutes(app: FastifyInstance, pool: Pool | null): Promise<void> {
+export async function registerIntelligenceRoutes(app: FastifyInstance, pool: Pool | null, authPool: Pool | null = pool): Promise<void> {
   app.get("/api/v1/workspaces/intelligence", async (request, reply) => {
     if (!pool) return reply.code(503).send({ error: "Authoritative API unavailable", code: "DATABASE_UNAVAILABLE", syntheticData: false });
     let auth: AuthContext | null;
-    try { auth = await authenticate(request, pool); } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Authentication service unavailable", code: "AUTH_UNAVAILABLE", syntheticData: false }); }
+    try { auth = await authenticate(request, authPool, pool); } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Authentication service unavailable", code: "AUTH_UNAVAILABLE", syntheticData: false }); }
     if (!auth) return reply.code(401).send(bearerChallenge());
     const ids = orgIds(auth);
     if (!ids.length) return { source: "postgresql", syntheticData: false, findings: [] };
