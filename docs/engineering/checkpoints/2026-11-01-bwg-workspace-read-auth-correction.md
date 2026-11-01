@@ -65,3 +65,9 @@ This is an engineering acceptance result only. The synthetic accepted registrati
 Documentation checkpoint commit `236b8e149e07d6894564c85a0856455cceab96f9` passed CI #4305 / ID 41329412332. All steps passed: dependency audit, migration validation, disposable PostgreSQL migration/acceptance, TypeScript typecheck, build, production web browser smoke test, disposable PostgreSQL workspace authorization acceptance, production container build and cleanup.
 
 The workspace integration test validates both the `reports:read` deny/allow boundary and tenant-scoped result set using real disposable PostgreSQL. PR #194 remains draft/unmerged pending independent review. Production remains HOLD.
+
+## Exact-head checkpoint CI confirmation — 2026-11-01 (run #4309)
+
+The documentation checkpoint commit `74ae29d8fb0a371ab77e2ded779f07f1262789a8` passed exact-head CI #4309 / ID 41329700964. All workflow steps completed successfully, including dependency audit, migration validation, disposable PostgreSQL migration and acceptance, TypeScript typecheck, build, browser smoke test, production container build and cleanup.
+
+This confirms the checkpoint's recorded workspace authorization and tenant-isolation acceptance. It remains engineering CI evidence only; PR #194 remains draft/unmerged pending independent review and production remains HOLD.
