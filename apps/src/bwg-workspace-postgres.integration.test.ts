@@ -69,9 +69,9 @@ test("BWG workspace enforces reports:read in PostgreSQL and scopes returned prof
       [allowedIdentity.rows[0]!.id,hash(allowedToken),deniedIdentity.rows[0]!.id,hash(deniedToken)],
     );
 
-    const profileSql = "insert into bwg_profiles (organization_id,jurisdiction_id,floor_area_sqm,water_consumption_lpd,waste_generation_kg_day,establishment_type,applicability_status,applicability_basis,status,regulatory_registration_status,regulatory_registration_reference) values ($1,$2,25000,50000,150,'INSTITUTIONAL','REVIEW_REQUIRED',$3::jsonb,'PENDING','NOT_SUBMITTED',null) returning id";
-    const profileA = await pool.query<{ id: string }>(profileSql, [orgA.rows[0]!.id,geography.rows[0]!.id,JSON.stringify({ testFixture: true, source: "DISPOSABLE_CI_ONLY" })]);
-    const profileB = await pool.query<{ id: string }>(profileSql, [orgB.rows[0]!.id,geography.rows[0]!.id,JSON.stringify({ testFixture: true, source: "DISPOSABLE_CI_ONLY" })]);
+    const profileSql = "insert into bwg_profiles (organization_id,jurisdiction_id,floor_area_sqm,water_consumption_lpd,waste_generation_kg_day,establishment_type,applicability_status,applicability_basis,status,regulatory_registration_status,regulatory_registration_reference) values ($1,$2,25000,50000,150,'INSTITUTIONAL','REVIEW_REQUIRED',$3::jsonb,'PENDING','ACCEPTED',$4) returning id";
+    const profileA = await pool.query<{ id: string }>(profileSql, [orgA.rows[0]!.id,geography.rows[0]!.id,JSON.stringify({ testFixture: true, source: "DISPOSABLE_CI_ONLY" }),"TEST-CPCB-REG-A-" + suffix]);
+    const profileB = await pool.query<{ id: string }>(profileSql, [orgB.rows[0]!.id,geography.rows[0]!.id,JSON.stringify({ testFixture: true, source: "DISPOSABLE_CI_ONLY" }),"TEST-CPCB-REG-B-" + suffix]);
 
     const denied = await app.inject({
       method: "GET",
