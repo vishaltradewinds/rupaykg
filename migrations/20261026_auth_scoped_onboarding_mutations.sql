@@ -14,19 +14,23 @@ $$;
 
 create role rupaykg_auth_runtime nologin noinherit nosuperuser nocreatedb nocreaterole noreplication nobypassrls;
 
-create schema if not exists auth_private authorization rupaykg_auth_owner;
-alter schema auth_private owner to rupaykg_auth_owner;
-revoke all on schema auth_private from public;
-grant usage on schema auth_private to rupaykg_auth_runtime;
-grant usage on schema public to rupaykg_auth_owner;
-
-grant select on public.identities, public.identity_sessions, public.geography to rupaykg_auth_owner;
-grant select on public.stakeholder_applications to rupaykg_auth_owner;
+-- Table grants are issued by the migration principal while it still has the
+-- necessary table-owner/grant-option authority.
+grant select on public.identities, public.identity_sessions, public.geography,
+  public.stakeholder_applications to rupaykg_auth_owner;
 grant select, insert on public.organizations, public.roles, public.organization_memberships,
   public.organization_geography_scopes, public.organization_verification_evidence,
   public.stakeholder_applications, public.stakeholder_application_approvals to rupaykg_auth_owner;
 grant update on public.organizations, public.organization_memberships,
   public.organization_geography_scopes, public.stakeholder_applications to rupaykg_auth_owner;
+grant usage on schema public to rupaykg_auth_owner;
+
+-- Execute the SECURITY DEFINER DDL as its dedicated NOLOGIN owner.
+grant rupaykg_auth_owner to current_user;
+set role rupaykg_auth_owner;
+create schema if not exists auth_private;
+revoke all on schema auth_private from public;
+grant usage on schema auth_private to rupaykg_auth_runtime;
 
 create or replace function auth_private.create_stakeholder_application(
   p_token_hash text,
@@ -208,9 +212,8 @@ begin
 end;
 $$;
 
-alter function auth_private.create_stakeholder_application(text,text,text,text,text,text,text,uuid,text,text,text,text,text,timestamptz,timestamptz) owner to rupaykg_auth_owner;
-alter function auth_private.withdraw_stakeholder_application(text,uuid) owner to rupaykg_auth_owner;
 revoke all on function auth_private.create_stakeholder_application(text,text,text,text,text,text,text,uuid,text,text,text,text,text,timestamptz,timestamptz) from public;
 revoke all on function auth_private.withdraw_stakeholder_application(text,uuid) from public;
 grant execute on function auth_private.create_stakeholder_application(text,text,text,text,text,text,text,uuid,text,text,text,text,text,timestamptz,timestamptz) to rupaykg_auth_runtime;
 grant execute on function auth_private.withdraw_stakeholder_application(text,uuid) to rupaykg_auth_runtime;
+reset role;
