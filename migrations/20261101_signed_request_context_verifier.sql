@@ -24,6 +24,14 @@ BEGIN
      OR owner_role.rolinherit OR owner_role.rolreplication THEN
     RAISE EXCEPTION 'rupaykg_security_definer must be NOLOGIN, NOSUPERUSER, NOBYPASSRLS, NOCREATEROLE, NOCREATEDB, NOINHERIT and NREPLICATION';
   END IF;
+  IF EXISTS (
+    SELECT 1
+      FROM pg_auth_members m
+      JOIN pg_roles owner_membership ON owner_membership.oid = m.member
+     WHERE owner_membership.rolname = 'rupaykg_security_definer'
+  ) THEN
+    RAISE EXCEPTION 'rupaykg_security_definer must not be a member of any other role';
+  END IF;
 END;
 $$;
 
