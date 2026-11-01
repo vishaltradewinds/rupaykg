@@ -224,3 +224,31 @@ Production database, production credentials, staging database, and Render deploy
 - Platform-admin route `authorize()` now uses this function instead of direct reads from memberships, roles and identities.
 - Startup gate now requires fifteen SECURITY DEFINER functions and their exact runtime grants.
 - This is only the authorization entry point. Platform-admin overview, identity directory, suspend/reactivate, session revocation, role editing, and dual-control membership changes still contain direct data access/mutations and are not production-compatible with the restricted app role yet.
+
+
+## 11. Native authentication route integration — 2026-11-01 15:10 UTC
+
+[PR #192](https://github.com/vishaltradewinds/rupaykg/pull/192) remains draft/open against `main`.
+
+### Implemented in branch
+- Registered `registerAuthRoutes(app, pool, authPool)` in the API server.
+- Added native `POST /api/v1/auth/register`, `POST /api/v1/auth/login`, `GET /api/v1/auth/me`, and `POST /api/v1/auth/logout`.
+- Authentication pool calls narrow functions: `register_identity`, `find_login_candidate`, `record_login_failure`, `reset_login_failures`, `issue_session`, `get_self_account_context`, and `revoke_session`.
+- Password is hashed application-side with scrypt; DB stores hash and salt only. Session token is opaque, only SHA-256 hash is stored, and expiry is eight hours.
+- Production config requires two distinct runtime identities on the same Neon endpoint/database: `rupaykg_app_runtime` and `rupaykg_auth_runtime`, TLS, real auth mode, and security-definer resolver mode.
+- Production server has fail-closed identity, privilege, owner-role and function-definition preflight before registering service routes.
+- The onboarding module is registered with the server, but its database writes are not yet compatible with the least-privilege app role. Do not treat organization-backed onboarding as production-ready until identity-bound write functions and corresponding tests exist.
+
+### CI correction and evidence
+- Failed run `41318800477` was caused by premature conversion of platform-admin routes to `auth_private` functions that did not yet have a reviewed SQL migration. Those route changes were reverted; platform-admin conversion remains deferred until its SQL layer is ready.
+- Corrected code head `0133bbe41b9ae6981576f1d4a8899e32655b9227`: exact-head CI `41319696984` **PASS** (migration validation, dependency audit, TypeScript, build, browser smoke, PostgreSQL integration suite, production container).
+- Docs-only follow-up corrected role-manifest function counts. Current head: `d34eedfa3f58589ee65901faf08fd143fb4d9da8`; exact-head CI `41319769983` was running when checkpoint was written.
+- No production DB changes, credentials, roles, RLS, migrations, or deployment.
+
+### Next execution gates
+1. Obtain exact tested SQL definitions for all required app/auth functions from the disposable Neon branch, including missing scoped-authorization and platform-admin projections.
+2. Consolidate into one versioned, idempotent, reviewed migration with rollback plan; validate on a fresh disposable Neon child branch using exact final role names.
+3. Add identity-bound onboarding create/withdraw and worker/platform-admin pathways; no direct auth-table DML from app runtime.
+4. Add real-pool integration tests for login/register/logout/me, lockout, revoked/suspended identities, multi-org selection, concurrency, and pool exhaustion.
+5. Complete the 67-table policy matrix before any tenant RLS rollout.
+6. Keep production certification OFF and do not run the production migration workflow until Environment approvals, protected secrets, and least-privilege migrator are verified.
