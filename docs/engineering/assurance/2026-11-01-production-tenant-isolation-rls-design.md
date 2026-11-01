@@ -281,3 +281,16 @@ On the existing tenant-isolation lab branch `br-blue-tooth-b4kvuut7`, read-only 
 - The four RLS tables and their policies do not cover application tenant data; their predicates are broad `true` for lab/auth owner roles.
 
 This proves that role names alone do not establish a least-privilege design. The new implementation must verify actual grants, inheritance, SET ROLE reachability, ownership, policy role targets and the live service's connection role. Existing lab role experiments should be treated as disposable research artefacts until reconciled; do not copy their grants or memberships into production.
+
+## 9. Additional schema surface inventory
+
+A read-only Gate A metadata scan on production main found:
+- No public-schema views or materialized views.
+- No public-schema sequences.
+- No partitioned public tables.
+- No public-schema `SECURITY DEFINER` functions in the inspected snapshot.
+- Public-schema default privileges are configured for owner role `cloud_admin` to grant broad table and sequence privileges to Neon-managed `neon_superuser`.
+- The production connection role `rupaykg` inherits `neon_superuser`, so those inherited privileges are part of the effective privilege analysis and must not be overlooked.
+- Application integrity triggers are broadly enabled across activities, evidence, field sync, memberships, registry, settlements, stakeholder approval, and methodology governance. RLS rollout must test trigger execution under the non-owner runtime role; current trigger functions are owned by `rupaykg`, so ownership and execution/grant behaviour must be checked when moving tables/functions to the new owner role.
+
+This reduces the immediate view/sequence/partition surface but does not reduce the tenant isolation blocker. Re-run this inventory after migrations and before each release gate; the live schema can evolve.
