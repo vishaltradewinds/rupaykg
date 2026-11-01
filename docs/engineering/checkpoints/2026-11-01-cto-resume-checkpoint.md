@@ -180,3 +180,19 @@ Production database, production credentials, staging database, and Render deploy
 - Readiness endpoint checks both database pools. Render manifest declares the new secret; it is not provisioned.
 - No production or staging database changes, secret changes, or deployment.
 - Remaining: CI exact-head verification; draft the production migration and role/grant manifest; integrate onboarding mutations and platform-admin governance functions; provision and validate credentials only after reviewed migration and approval.
+
+
+## 12. Named production runtime roles and database authorization function — 2026-11-01
+
+- Disposable Neon child branch `br-blue-tooth-b4kvuut7` now has exact production role names: `rupaykg_app_runtime`, `rupaykg_auth_runtime`, `rupaykg_app_owner`, and `rupaykg_auth_owner`.
+- Both runtime roles were created with LOGIN in the disposable branch, NOBYPASSRLS, NOSUPERUSER, NOCREATEDB, NOCREATEROLE, NOREPLICATION, NOINHERIT. Owner roles are NOLOGIN/NOBYPASSRLS and have no elevated flags.
+- All eight auth SECURITY DEFINER functions were reassigned to `rupaykg_auth_owner`; fixed `search_path = pg_catalog, pg_temp` verified for every function.
+- Runtime privilege matrix checked by PostgreSQL catalog functions:
+  - app runtime can execute session resolver; cannot execute login candidate lookup; no direct SELECT on auth tables; cannot assume owner.
+  - auth runtime cannot execute session resolver; can execute login candidate and self-context functions; no direct SELECT on password credentials; cannot assume owner.
+  - both runtime roles have no superuser/BYPASSRLS/CREATEDB/CREATEROLE/REPLICATION privileges.
+- FORCE RLS remains enabled on identities, sessions, password credentials and memberships in the disposable branch; exact auth-owner policies were added for the renamed function owner.
+- Added `auth_private.has_organization_permission(uuid,uuid,text[])`, SECURITY DEFINER and owned by `rupaykg_auth_owner`; EXECUTE is granted to app runtime only. Catalog verification confirmed auth runtime cannot execute it.
+- Application `hasOrganizationPermission` now uses this function in security-definer mode, with no direct-table fallback. Added fail-closed tests.
+- Remaining direct membership/auth-table paths: geography/activity authorization helpers, evidence verification, platform-admin routes, and stakeholder onboarding mutations. These need additional scoped functions before production runtime cutover.
+- No production or staging objects, roles, grants, secrets, migrations, or deployments changed.
