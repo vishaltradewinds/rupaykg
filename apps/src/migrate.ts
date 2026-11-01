@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
-import { assertProductionMigrationTarget } from "./production-config.js";
+import { assertProductionMigrationTarget, requiresExplicitMigrationTarget } from "./production-config.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) throw new Error("DATABASE_URL is required");
@@ -37,7 +37,7 @@ try {
     throw new Error("Another RupayKg migration run is already active; refusing concurrent execution");
   }
 
-  if (process.env.NODE_ENV === "production") {
+  if (requiresExplicitMigrationTarget(databaseUrl)) {
     const expectedBranchId = process.env.RUPAYKG_EXPECTED_NEON_BRANCH_ID?.trim() ?? "";
     const expectedDatabaseName = process.env.RUPAYKG_EXPECTED_DATABASE_NAME?.trim() ?? "";
     const expectedRoleName = process.env.RUPAYKG_EXPECTED_DATABASE_ROLE?.trim() ?? "";
