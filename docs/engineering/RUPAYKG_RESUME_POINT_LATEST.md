@@ -62,3 +62,12 @@ No production DDL/DML, migration, role/grant/RLS changes, deployments, worker/sc
 - PR #202 CI #4397 / run `41338076306` failed in platform-admin tests because fixtures still expected direct session-table SQL; current code changes those fixtures to recognize `verify_identity_session`. Run #4402 / `41338230513` is checking that fix; run #4403 / `41338270226` is checking the latest checkpoint head `86cab42383b17761ae23e0c1a9cd0166f1ffb995`. At checkpoint update time both are still in progress.
 - PR #202 checkpoint: `docs/engineering/checkpoints/2026-11-02-auth-session-pool-security-assurance.md`.
 - No production DDL/DML, migrations, role/grant/RLS changes, branch operations, deployment, worker activation or certification. Production remains HOLD. No merge or TRL 9 claim.
+
+## 2026-11-02 auth-route production wiring correction
+- PR #202 code review found `apps/src/auth-routes.ts` was not imported or registered by authoritative `apps/src/server.ts`; production start uses `production-server.ts` → `server.ts`. Registered `registerAuthRoutes(app, pool, authPool)` in the server.
+- Updated onboarding handlers inside `auth-routes.ts` to use the separate session-verification pool and return a controlled 503 on auth-pool errors.
+- Added `apps/src/auth-routes.test.ts` for route registration and fail-closed behavior.
+- PR #202 checkpoint updated: `docs/engineering/checkpoints/2026-11-02-auth-session-pool-security-assurance.md`.
+- PR #202 current head `9cda4b65091f08b2a2c478322d9d72d4e54722a5`; exact-head CI #4408 / run `41338438338` IN PROGRESS. Prior code-head run #4406 had migration, typecheck and build in progress after route wiring; #4408 covers the checkpoint commit.
+- PR #201 remains exact-head CI PASS (#4390). Both PRs remain draft and unmerged pending independent security review and controlled integration.
+- Production remains untouched and release HOLD.
