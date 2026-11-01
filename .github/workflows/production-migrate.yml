@@ -45,7 +45,7 @@ jobs:
       - name: Run single-flight migration with exact Neon target verification
         env:
           NODE_ENV: production
-          DATABASE_URL: ${{ secrets.RUPAYKG_PRODUCTION_DATABASE_URL }}
+          DATABASE_URL: ${{ secrets.RUPAYKG_PRODUCTION_MIGRATOR_DATABASE_URL }}
           DATABASE_SSL: require
           DATABASE_CA_CERT: ${{ secrets.RUPAYKG_PRODUCTION_DATABASE_CA_CERT }}
           RUPAYKG_ALLOWED_ORIGINS: ${{ secrets.RUPAYKG_PRODUCTION_ALLOWED_ORIGINS }}
@@ -53,5 +53,5 @@ jobs:
           RUPAYKG_SYNTHETIC_DATA: "false"
           RUPAYKG_EXPECTED_NEON_BRANCH_ID: br-restless-base-b44cip2h
           RUPAYKG_EXPECTED_DATABASE_NAME: rupaykg
-          RUPAYKG_EXPECTED_DATABASE_ROLE: rupaykg
+          RUPAYKG_EXPECTED_DATABASE_ROLE: rupaykg_migrator
         run: npm run migrate:production
