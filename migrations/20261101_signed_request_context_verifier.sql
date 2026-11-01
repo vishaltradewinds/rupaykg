@@ -125,3 +125,6 @@ end;
 $$;
 
 revoke all on function app_security.current_request_context_claims() from public;
+
+-- Return control to the migration principal so the migration runner can record its ledger row.
+reset role;
