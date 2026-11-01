@@ -6,7 +6,7 @@ RETURNS uuid
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-SET search_path = pg_catalog, public
+SET search_path = pg_catalog, pg_temp
 SET row_security = off
 AS $function$
   SELECT s.identity_id
@@ -20,6 +20,7 @@ AS $function$
    LIMIT 1
 $function$;
 
+ALTER FUNCTION public.verify_identity_session(text) OWNER TO rupaykg;
 REVOKE ALL ON FUNCTION public.verify_identity_session(text) FROM PUBLIC;
 
 -- A non-login capability role is the only role that should receive EXECUTE.
@@ -30,6 +31,10 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = 'rupaykg_auth') THEN
     CREATE ROLE rupaykg_auth
       NOLOGIN INHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+  ELSE
+    IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = 'rupaykg_auth' AND (rolcanlogin OR rolsuper OR rolcreatedb OR rolcreaterole OR rolreplication OR rolbypassrls OR NOT rolinherit)) THEN
+      RAISE EXCEPTION 'rupaykg_auth role exists with unsafe attributes';
+    END IF;
   END IF;
 END
 $block$;
