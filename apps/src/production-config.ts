@@ -54,7 +54,7 @@ export function readProductionConfig(env: NodeJS.ProcessEnv = process.env): Prod
   const authDatabaseUrl = productionDatabaseUrl(required(env, "AUTH_DATABASE_URL"), "AUTH_DATABASE_URL");
   const parsedDatabaseUrl = new URL(databaseUrl);
   const parsedAuthDatabaseUrl = new URL(authDatabaseUrl);
-  if (parsedAuthDatabaseUrl.hostname !== parsedDatabaseUrl.hostname || parsedAuthDatabaseUrl.pathname !== parsedDatabaseUrl.pathname) throw new Error("PRODUCTION_CONFIG_INVALID: AUTH_DATABASE_URL must target the same authoritative PostgreSQL host and database as DATABASE_URL");
+  if (parsedAuthDatabaseUrl.hostname !== parsedDatabaseUrl.hostname || parsedAuthDatabaseUrl.port !== parsedDatabaseUrl.port || parsedAuthDatabaseUrl.pathname !== parsedDatabaseUrl.pathname) throw new Error("PRODUCTION_CONFIG_INVALID: AUTH_DATABASE_URL must target the same authoritative PostgreSQL host, port and database as DATABASE_URL");
   if (!parsedAuthDatabaseUrl.username || parsedAuthDatabaseUrl.username === parsedDatabaseUrl.username) throw new Error("PRODUCTION_CONFIG_INVALID: AUTH_DATABASE_URL must use a distinct least-privilege database role");
   if (parsedAuthDatabaseUrl.protocol !== parsedDatabaseUrl.protocol) throw new Error("PRODUCTION_CONFIG_INVALID: AUTH_DATABASE_URL must use the same PostgreSQL protocol as DATABASE_URL");
   const renderInternalDatabase =
