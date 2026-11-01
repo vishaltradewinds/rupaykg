@@ -5,6 +5,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { Pool, type PoolClient, type PoolConfig } from "pg";
 import { authenticate, bearerChallenge, canActForOrganization, hasOrganizationPermission, type AuthContext } from "./auth.js";
+import { registerAuthRoutes } from "./auth-routes.js";
 import { registerOnboardingHierarchyRoutes } from "./onboarding-hierarchy-routes.js";
 import { registerValueRoutes } from "./value-routes.js";
 import { registerRegistryRoutes } from "./registry-routes.js";
@@ -27,6 +28,10 @@ const poolConfig: PoolConfig = { connectionString: databaseUrl, max: 10 };
 if (process.env.DATABASE_SSL === "require") poolConfig.ssl = { rejectUnauthorized: true, ca: process.env.DATABASE_CA_CERT };
 else if (process.env.DATABASE_SSL !== "false") poolConfig.ssl = { rejectUnauthorized: false };
 const pool = databaseUrl ? new Pool(poolConfig) : null;
+const authDatabaseUrl = process.env.AUTH_DATABASE_URL;
+const authPoolConfig: PoolConfig = { ...poolConfig, connectionString: authDatabaseUrl, max: 3 };
+const authPool = authDatabaseUrl ? new Pool(authPoolConfig) : null;
+if (process.env.NODE_ENV === "production" && !authPool) throw new Error("AUTH_DATABASE_URL is required for the dedicated authentication runtime");
 async function query<T extends Record<string, unknown>>(text: string, values: unknown[] = []): Promise<T[]> { if (!pool) throw new Error("DATABASE_URL is not configured"); return (await pool.query<T>(text, values)).rows; }
 function bodyOf(request: { body: unknown }): Record<string, unknown> { return (request.body && typeof request.body === "object" ? request.body : {}) as Record<string, unknown>; }
 function requiredString(body: Record<string, unknown>, key: string): string | null { return typeof body[key] === "string" && body[key].trim() ? body[key].trim() : null; }
@@ -103,4 +108,6 @@ await registerEvidenceVaultRoutes(app, pool);
 await registerPlatformAdminRoutes(app, pool);
 
 if (existsSync(webRoot)) app.get("/*", async (_request, reply) => reply.type("text/html; charset=utf-8").send(readFileSync(resolve(webRoot, "index.html"), "utf8")));
+await registerAuthRoutes(app, pool, authPool);
+app.addHook("onClose", async () => { await Promise.all([pool?.end(), authPool?.end()]); });
 const port = Number(process.env.PORT ?? 3000); const host = process.env.HOST ?? "0.0.0.0"; await app.listen({ port, host });
