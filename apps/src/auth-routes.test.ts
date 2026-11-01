@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { scryptSync } from "node:crypto";
+import { createHash, scryptSync } from "node:crypto";
 import Fastify from "fastify";
 import test from "node:test";
 import type { Pool } from "pg";
@@ -116,4 +116,39 @@ test("logout revokes only the token hash through the auth runtime", async () => 
     assert.match(authPool.calls[0]!.sql, /auth_private\.revoke_session/);
     assert.equal(appPool.calls.length, 0);
   } finally { await app.close(); }
+});
+
+
+test("self onboarding applications are read through auth_private self-context", async () => {
+  const appPool = new FakePool(), authPool = new FakePool();
+  const applications = [{ id: "application-1", status: "PENDING" }];
+  appPool.handler = (sql) => sql.includes("resolve_session")
+    ? { rows: [{ identity_id: identityId, organization_id: organizationId, role_id: "role-a", membership_status: "VERIFIED" }] }
+    : { rows: [] };
+  authPool.handler = (sql) => sql.includes("get_self_account_context")
+    ? { rows: [{ context: { ...accountContext, applications } }] }
+    : { rows: [] };
+  const previousMode = process.env.RUPAYKG_AUTH_RESOLVER_MODE;
+  process.env.RUPAYKG_AUTH_RESOLVER_MODE = "security_definer";
+  const app = await setup(appPool, authPool);
+  try {
+    const token = "self-onboarding-token";
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/v1/onboarding/applications",
+      headers: { authorization: `Bearer ${token}` },
+    });
+    assert.equal(response.statusCode, 200);
+    assert.deepEqual(response.json().applications, applications);
+    assert.equal(appPool.calls.length, 1);
+    assert.match(appPool.calls[0]!.sql, /auth_private\\.resolve_session/);
+    assert.doesNotMatch(appPool.calls[0]!.sql, /identity_sessions|organization_memberships|stakeholder_applications/);
+    assert.equal(authPool.calls.length, 1);
+    assert.match(authPool.calls[0]!.sql, /auth_private\\.get_self_account_context/);
+    assert.deepEqual(authPool.calls[0]!.values, [createHash("sha256").update(token).digest("hex")]);
+  } finally {
+    await app.close();
+    if (previousMode === undefined) delete process.env.RUPAYKG_AUTH_RESOLVER_MODE;
+    else process.env.RUPAYKG_AUTH_RESOLVER_MODE = previousMode;
+  }
 });
