@@ -1,0 +1,65 @@
+name: Controlled production database migration
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_production:
+        description: Select APPLY only after the production change has been reviewed and approved
+        required: true
+        type: choice
+        options:
+          - NO
+          - APPLY
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rupaykg-production-migration
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    if: ${{ github.ref == 'refs/heads/main' && inputs.confirm_production == 'APPLY' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    # Configure this GitHub Environment with required reviewers before first use.
+    environment: production
+    env:
+      NODE_ENV: production
+      DATABASE_URL: ${{ secrets.RUPAYKG_PRODUCTION_DATABASE_URL }}
+      DATABASE_SSL: require
+      DATABASE_CA_CERT: ${{ secrets.RUPAYKG_PRODUCTION_DATABASE_CA_CERT }}
+      RUPAYKG_ALLOWED_ORIGINS: ${{ secrets.RUPAYKG_PRODUCTION_ALLOWED_ORIGINS }}
+      RUPAYKG_AUTH_MODE: real
+      RUPAYKG_SYNTHETIC_DATA: "false"
+      RUPAYKG_EXPECTED_NEON_BRANCH_ID: br-restless-base-b44cip2h
+      RUPAYKG_EXPECTED_DATABASE_NAME: rupaykg
+      RUPAYKG_EXPECTED_DATABASE_ROLE: rupaykg
+    steps:
+      - name: Check out reviewed main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Build immutable migration artifact
+        run: npm run build
+
+      - name: Fail closed when protected environment secrets are missing
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${DATABASE_URL}" || { echo "::error::Missing RUPAYKG_PRODUCTION_DATABASE_URL"; exit 1; }
+          test -n "${RUPAYKG_ALLOWED_ORIGINS}" || { echo "::error::Missing RUPAYKG_PRODUCTION_ALLOWED_ORIGINS"; exit 1; }
+          node -e 'const u = new URL(process.env.DATABASE_URL); if (!["postgres:", "postgresql:"].includes(u.protocol)) process.exit(1); console.log("Production database URL format validated; secret value not displayed.");'
+
+      - name: Run single-flight migration with exact Neon target verification
+        run: npm run migrate:production
