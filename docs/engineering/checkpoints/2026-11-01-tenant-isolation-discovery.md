@@ -82,3 +82,11 @@ Additional boundary review:
 - Interpretation: the checked data is currently consistent for these predicates, but database write integrity is not enforced by composite constraints. Zero current mismatches is not proof against future invalid writes.
 - Updated `docs/security/TENANT_ISOLATION_INTEGRITY_FINDINGS_2026-11-01.md` with production catalog and data preflight evidence. Latest findings doc commit: `b497f57106acf4c769fdba3c93fe9be342d4747b`.
 - All production operations were SELECT-only. No DDL, DML, role/grant, RLS, secret, Render or deployment changes.
+
+
+## Additional route authorization review
+
+- Added TSI-007: field-sync conflict list/resolve are identity-bound but do not re-check current device-organization membership at each read/mutation. Session revocation currently mitigates the common admin membership revocation path; a stale-session/device reassignment test is still required.
+- Added TSI-008: credential issuance high-risk permission is checked before entering the issuance transaction, not revalidated/locked within the transaction. A concurrent permission/membership revocation race must be closed with transactional re-attestation and concurrency tests.
+- These are source-level route authorization design gaps for focused remediation, not evidence of successful unauthorized production operations.
+- Latest integrity findings doc commit: `bb7b2a46bd475ce445b7dbf6439c4b154d915db3`.
