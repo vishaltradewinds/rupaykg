@@ -177,3 +177,11 @@ Corrected:
 - Existing permission helper semantics are unchanged for other routes.
 
 This was identified before independent review and is an additional authorization hardening change. Exact-head CI is pending for the latest code commit `81ae533f7fb56710a5a3c2d449e65767103c19ac`; do not treat the prior CI runs as validation of this correction. PR #193 remains open, ready for review, and unmerged. Production remains HOLD.
+
+## Disposable membership fixture isolation and onboarding boundary finding — 2026-11-01
+
+Removed test-time `ALTER TABLE ... DISABLE/ENABLE TRIGGER` from the BWG applicability and report-write PostgreSQL integration suites. The suites now create their verified memberships as privileged disposable-CI fixtures without toggling a table-wide trigger. Added explicit comments that these fixtures test downstream BWG route authorization, not the stakeholder onboarding approval lifecycle.
+
+A separate schema review found migration 077 defines `stakeholder_membership_application_guard` as `BEFORE UPDATE OF status` only. The supported onboarding API correctly creates memberships as `PENDING`, and the hierarchy approval route changes them to `VERIFIED` only after the application approval chain completes. However, a direct SQL `INSERT` specifying `status='VERIFIED'` is outside the trigger's event coverage. This is a database defense-in-depth gap, not a demonstrated unauthenticated HTTP route bypass. Track and remediate separately with a migration and regression tests; do not represent BWG fixture tests as proof of onboarding enforcement.
+
+Exact-head CI for the latest PR #193 changes is pending. Production remains HOLD.
