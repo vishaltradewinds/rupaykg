@@ -27,6 +27,7 @@ Two synthetic rows were inserted for two synthetic organization UUIDs. No real u
 5. With missing/empty tenant context, SELECT returns zero rows.
 6. Table owner role is also constrained because FORCE ROW LEVEL SECURITY is enabled.
 7. Owner role is NOLOGIN and NOBYPASSRLS.
+8. Runtime role has only USAGE (not CREATE) on the public schema and no SELECT/INSERT privilege on the existing public `activities` table; an attempted read is rejected. It is not a member of the lab owner role.
 
 All assertions ran in a Neon SQL transaction on the child branch and completed successfully.
 
