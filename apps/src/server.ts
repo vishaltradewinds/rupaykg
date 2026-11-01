@@ -43,7 +43,7 @@ async function assertProductionDatabaseRuntimeContracts(): Promise<void> {
     ),
   ]);
   const app = appIdentity.rows[0], auth = authIdentity.rows[0];
-  if (!app || !auth || app.current_database !== auth.current_database || app.current_user === auth.current_user) {
+  if (!app || !auth || app.current_database !== auth.current_database || app.current_user !== "rupaykg_app_runtime" || auth.current_user !== "rupaykg_auth_runtime") {
     throw new Error("PRODUCTION_DATABASE_RUNTIME_IDENTITY_MISMATCH");
   }
   if (app.rolsuper || app.rolbypassrls || auth.rolsuper || auth.rolbypassrls) {
