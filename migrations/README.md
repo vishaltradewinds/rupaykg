@@ -75,3 +75,12 @@ Migration `086_reserved_role_restoration_db_guard.sql` protects status reactivat
 ## Acceptance fixture registry exclusion
 
 Migration `087_acceptance_fixture_registry_exclusion.sql` prevents activities or evidence explicitly marked with `metadata.acceptanceFixture=true` from backing credentials in value-bearing states. It also binds the database gate to the exact activity, verification, and evidence tuple. The MRV API reports acceptance fixtures as not registry eligible even after real Guardian/Hedera/Mirror Node verification. External anchoring proves message integrity and consensus; it does not validate the underlying activity as a real eligible carbon project.
+
+
+## Authentication session-verifier boundary
+
+Migration `20261101_auth_session_verification_function.sql` installs `public.verify_identity_session(text)`, a narrowly scoped SECURITY DEFINER function owned by the trusted `rupaykg` migration/security owner. It returns only the identity UUID for a valid, non-revoked, unexpired session belonging to an active identity. Public execution is revoked. The migration creates the non-login capability role `rupaykg_auth` with no elevated attributes and grants it EXECUTE on this function only.
+
+Provision the API authentication login out of band: create a dedicated LOGIN role with INHERIT, no superuser/CREATEDB/CREATEROLE/REPLICATION/BYPASSRLS attributes, grant membership in `rupaykg_auth`, set its password through the managed database's secure role/secret workflow, and configure `AUTH_DATABASE_URL` to use that login. Do not grant the login direct table privileges. The API checks role attributes, inherited privileged memberships and function execution at startup and fails closed when the contract is not satisfied.
+
+`DATABASE_URL` remains the single operational database connection. `AUTH_DATABASE_URL` must target the same PostgreSQL host and database with a different login. Authentication uses the restricted verifier connection; membership and application authorization queries remain on the operational pool until the separate RLS transaction migration is complete. Do not enable production RLS or deploy the split pool until the exact deployed login grants, migration owner and role membership have been independently verified.
