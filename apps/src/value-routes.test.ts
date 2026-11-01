@@ -11,6 +11,7 @@ const geographyId = "33333333-3333-4333-8333-333333333333";
 
 type FakePoolOptions = {
   permissionAllowed?: boolean;
+  grantedPermissions?: string[];
   geographyAllowed?: boolean;
   memberships?: Array<{ organization_id: string; role_id: string; status: string }>;
 };
@@ -31,7 +32,13 @@ class FakePool {
     if (sql.includes("from organization_memberships") && sql.includes("where identity_id = $1")) {
       return { rows: this.options.memberships };
     }
-    if (sql.includes("jsonb_array_elements_text")) return { rows: [{ ok: this.options.permissionAllowed }] };
+    if (sql.includes("jsonb_array_elements_text")) {
+      const requested = Array.isArray(values?.[2]) ? values[2] as string[] : [];
+      const ok = this.options.grantedPermissions
+        ? requested.some((permission) => this.options.grantedPermissions!.includes(permission))
+        : this.options.permissionAllowed;
+      return { rows: [{ ok }] };
+    }
     if (sql.includes("organization_has_geography_scope")) return { rows: [{ ok: this.options.geographyAllowed }] };
     if (sql.includes("insert into bwg_profiles")) {
       const basis = JSON.parse(String(values?.[7] ?? "{}"));
@@ -146,6 +153,24 @@ test("BWG profile intake rejects cross-organization writes", async () => {
 
 test("BWG profile intake rejects missing profile-update permission", async () => {
   const pool = new FakePool({ permissionAllowed: false });
+  const app = await makeApp(pool);
+  try {
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/v1/bwg/profile",
+      headers: { authorization: "Bearer acceptance-test-token" },
+      payload: validPayload(),
+    });
+    assert.equal(response.statusCode, 403);
+    assert.equal(response.json().code, "BWG_PROFILE_FORBIDDEN");
+    assert.equal(pool.calls.some((call) => call.sql.includes("insert into bwg_profiles")), false);
+  } finally {
+    await app.close();
+  }
+});
+
+test("BWG profile intake cannot be authorized by waste:record without profile:update", async () => {
+  const pool = new FakePool({ grantedPermissions: ["waste:record"] });
   const app = await makeApp(pool);
   try {
     const response = await app.inject({
