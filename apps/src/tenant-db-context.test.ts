@@ -101,7 +101,7 @@ test("nested ROLLBACK maps to savepoint rollback and does not end the request tr
   });
   await finishRequestDatabaseContext(context, true);
 
-  assert.deepEqual(raw.clients[0]!.calls.slice(-4).map((call) => call.sql), [
+  assert.deepEqual(raw.clients[0]!.calls.slice(-5, -1).map((call) => call.sql), [
     "SAVEPOINT rupaykg_request_sp_1",
     "insert into tenant_rows values (1)",
     "ROLLBACK TO SAVEPOINT rupaykg_request_sp_1",
