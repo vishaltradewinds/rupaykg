@@ -39,15 +39,16 @@ test("BWG profile intake stays pending and the real PostgreSQL applicability tri
       [organizationId,"bwg_operator_"+suffix,JSON.stringify(["profile:update","waste:record","reports:read","epr:manage"])],
     );
     roleId = role.rows[0]!.id;
-    await pool.query("alter table organization_memberships disable trigger stakeholder_membership_application_guard");
-    try {
+    // Privileged disposable-CI membership fixture only; this test does not exercise onboarding approval.
       await pool.query(
+        "insert into organization_memberships(identity_id,organization_id,role_id,status) values(      await pool.query(
         "insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED')",
         [identity.rows[0]!.id,organizationId,role.rows[0]!.id],
       );
-    } finally {
-      await pool.query("alter table organization_memberships enable trigger stakeholder_membership_application_guard");
-    }
+,$2,$3,'VERIFIED')",
+        [identity.rows[0]!.id,organizationId,role.rows[0]!.id],
+      );
+
     await pool.query(
       "insert into organization_geography_scopes(organization_id,geography_id,status) values($1,$2,'VERIFIED')",
       [organizationId,geography.rows[0]!.id],
