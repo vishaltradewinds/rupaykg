@@ -22,4 +22,6 @@ COPY --from=build /app/migrations ./migrations
 
 USER node
 EXPOSE 8080
-CMD ["sh", "-c", "node apps/dist/src/migrate.js && node apps/dist/src/acceptance-seed.js && node apps/dist/src/production-server.js"]
+# Application startup must be side-effect-free. Run migrations as a separately
+# authorized, observable release job before deploying this application image.
+CMD ["node", "apps/dist/src/production-server.js"]
