@@ -45,7 +45,7 @@ export async function withRlsRequestTransaction<T>(
   operation: (client: PoolClient) => Promise<T>,
 ): Promise<T> {
   const organizationId = requireVerifiedSingleOrganization(auth);
-  const token = createSignedRequestContextToken({ actorIdentityId: auth.identityId, organizationId }, config);
+  const token = createSignedRequestContextToken({ actorIdentityId: auth.identityId, organizationId }, { secret: config.hmacSecret, keyId: config.keyId, ...(config.ttlSeconds === undefined ? {} : { ttlSeconds: config.ttlSeconds }) });
   const client = await pool.connect();
   let transactionStarted = false;
   try {
