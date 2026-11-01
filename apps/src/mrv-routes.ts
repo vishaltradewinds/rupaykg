@@ -11,9 +11,9 @@ type ExistingProvenanceRow = { activity_id: string; verification_id: string; evi
 const bodyOf = (r: Request): Record<string, unknown> => r.body && typeof r.body === "object" ? r.body as Record<string, unknown> : {};
 const str = (b: Record<string, unknown>, k: string): string | null => typeof b[k] === "string" && b[k].trim() ? b[k].trim() : null;
 
-async function authFor(request: Request, reply: Reply, pool: Pool | null): Promise<AuthContext | null> {
+async function authFor(request: Request, reply: Reply, pool: Pool | null, sessionPool: Pool | null = pool): Promise<AuthContext | null> {
   if (!pool) { reply.code(503).send({ error: "Database unavailable", code: "DATABASE_UNAVAILABLE" }); return null; }
-  try { const auth = await authenticate(request as never, pool); if (!auth) { reply.code(401).send({ error: "Authenticated session required", code: "AUTH_REQUIRED" }); return null; } return auth; }
+  try { const auth = await authenticate(request as never, sessionPool, pool); if (!auth) { reply.code(401).send({ error: "Authenticated session required", code: "AUTH_REQUIRED" }); return null; } return auth; }
   catch (error) { request.log.error(error); reply.code(503).send({ error: "Authentication service unavailable", code: "AUTH_UNAVAILABLE" }); return null; }
 }
 
@@ -59,9 +59,9 @@ async function isAcceptanceFixture(pool: Pool, activityId: string): Promise<bool
   return result.rows[0]?.is_fixture === true;
 }
 
-export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null): Promise<void> {
+export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null, sessionPool: Pool | null = pool): Promise<void> {
   app.get("/api/v1/mrv/status", async (request, reply) => {
-    const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
+    const auth = await authFor(request as never, reply, pool, sessionPool); if (!auth || !pool) return;
     const organizationId = auth.activeOrganizationId || auth.memberships[0]?.organization_id;
     if (!organizationId || !await requirePermission(pool, auth, organizationId, ["guardian:read"])) return reply.code(403).send({ error: "Guardian read permission required", code: "MRV_PERMISSION_REQUIRED" });
     const guardian = guardianStatus();
@@ -76,7 +76,7 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
   });
 
   app.post("/api/v1/mrv/activities/:activityId/submit", async (request, reply) => {
-    const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
+    const auth = await authFor(request as never, reply, pool, sessionPool); if (!auth || !pool) return;
     const activityId = (request.params as { activityId: string }).activityId;
     const body = bodyOf(request as never);
     const verificationId = str(body, "verificationId");
@@ -155,7 +155,7 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
   });
 
   app.get("/api/v1/mrv/provenance/:activityId", async (request, reply) => {
-    const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
+    const auth = await authFor(request as never, reply, pool, sessionPool); if (!auth || !pool) return;
     const activityId = (request.params as { activityId: string }).activityId;
     try {
       const owner = await pool.query<{ organization_id: string }>("select organization_id from activities where id=$1", [activityId]);
@@ -175,7 +175,7 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
   });
 
   app.get("/api/v1/mrv/hedera/verify/:consensusTimestamp", async (request, reply) => {
-    const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
+    const auth = await authFor(request as never, reply, pool, sessionPool); if (!auth || !pool) return;
     const timestamp = (request.params as { consensusTimestamp: string }).consensusTimestamp;
     try {
       const provenance = await pool.query<{ id: string; activity_id: string; verification_id: string; evidence_id: string; guardian_execution_id: string; integrity_hash: string; hcs_topic_id: string | null; mirror_node_verified_at: Date | null }>(
@@ -208,5 +208,5 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Hedera mirror-node verification unavailable", code: "HCS_VERIFY_UNAVAILABLE", syntheticData: false }); }
   });
 
-  await registerStatutoryRoutes(app, pool);
+  await registerStatutoryRoutes(app, pool, sessionPool);
 }
