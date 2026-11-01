@@ -160,3 +160,33 @@ For every finding:
 - TRL 9: NOT ESTABLISHED.
 
 This document is not an approved production migration, security certification, legal opinion or authorization to change live databases.
+
+
+## 7. Read-only production catalog/data preflight — 2026-11-01
+
+Read-only inspection was performed against the previously identified Neon production project `steep-mud-79906940`, branch `br-restless-base-b44cip2h`, database `rupaykg`, using catalog SELECTs only.
+
+### Catalog confirmation
+- The relevant production tables and columns exist, including the organization keys and parent IDs described above.
+- The inspected FK definitions are independent single-column constraints for the key relationships; no composite ownership FKs were present for the evidence series/activity, version/evidence, review/version, CPCB history/workspace, or approval/application geography pairs.
+- `field_devices` has independent identity and organization FKs; `field_sync_envelopes` has independent device and identity FKs; `activity_assignments` has independent activity and identity FKs.
+- `operation_sync_envelopes.device_id` remains text and has no FK to `field_devices`.
+
+### Existing-data mismatch preflight
+The following read-only anti-join checks returned zero rows in the inspected production snapshot:
+
+| Check | Mismatches |
+|---|---:|
+| Evidence series organization vs activity organization | 0 |
+| Artifact version evidence activity vs series activity | 0 |
+| Artifact review evidence vs referenced version evidence | 0 |
+| CPCB history organization vs workspace organization | 0 |
+| Approval geography vs application geography | 0 |
+| Field device identity/organization without verified membership | 0 |
+| Activity assignment without verified organization membership | 0 |
+| Legacy operation-sync actor/device mismatch or missing device | 0 |
+
+**Interpretation:** current sampled production data did not contain mismatches for these specific predicates at the time of inspection. This does not prove that constraints are unnecessary, that no other mismatch exists, or that future writes are safe. The gap is that PostgreSQL does not declaratively enforce several of these relationships.
+
+### Safety
+Only catalog/data SELECT statements were run. No production or staging data, schema, roles, grants, RLS, secrets or deployments were changed. The live branch remains on the previous release posture.
