@@ -18,7 +18,7 @@ Two synthetic rows were inserted for two synthetic organization UUIDs. No real u
 
 ## Results
 
-<badge>PASS — disposable lab only</badge>
+**PASS — disposable lab only**
 
 1. Runtime role has `rolbypassrls=false`, `rolsuper=false`, `rolcreaterole=false`, `rolcreatedb=false`, and `rolreplication=false`.
 2. With tenant A context, SELECT returns only tenant A's row.
