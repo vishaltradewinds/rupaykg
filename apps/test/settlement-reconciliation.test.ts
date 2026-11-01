@@ -13,6 +13,7 @@ let counterpartyId = "";
 let geographyId = "";
 let actorId = "";
 let verifierId = "";
+let reviewerId = "";
 let activityId = "";
 let evidenceId = "";
 let verificationId = "";
@@ -49,6 +50,10 @@ before(async () => {
     [`settlement-reconciliation-verifier-${suffix}`, "Settlement Reconciliation Verifier"],
   )).rows[0]!.id;
   verifierId = verifier;
+  reviewerId = (await pool.query<{ id: string }>(
+    "insert into identities(external_subject,display_name) values($1,$2) returning id",
+    [`settlement-reconciliation-reviewer-${suffix}`, "Settlement Reconciliation Fixture Authority"],
+  )).rows[0]!.id;
   const role = (await pool.query<{ id: string }>(
     "insert into roles(organization_id,name,permissions) values($1,$2,$3::jsonb) returning id",
     [owner, `settlement-reconciliation-role-${suffix}`, JSON.stringify(["VERIFY_EVIDENCE", "ISSUE_CREDENTIAL"])],
@@ -56,7 +61,7 @@ before(async () => {
   const fixtureClient = await pool.connect();
   try {
     await fixtureClient.query("begin");
-    await createApprovedStakeholderApplicationFixture(fixtureClient, { identityId: verifier, organizationId: owner, roleId: role, requestedRoleKey: "PROCESSOR", requestedOrganizationType: "PROCESSOR", geographyId: geography, reviewerIdentityId: actor, note: "Distinct reviewer approval for disposable settlement reconciliation fixture" });
+    await createApprovedStakeholderApplicationFixture(fixtureClient, { identityId: verifier, organizationId: owner, roleId: role, requestedRoleKey: "PROCESSOR", requestedOrganizationType: "PROCESSOR", geographyId: geography, reviewerIdentityId: reviewerId, note: "Distinct reviewer approval for disposable settlement reconciliation fixture" });
     await fixtureClient.query("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED')", [verifier, owner, role]);
     await fixtureClient.query("commit");
   } catch (error) { await fixtureClient.query("rollback"); throw error; } finally { fixtureClient.release(); }
@@ -134,7 +139,7 @@ after(async () => {
       const organizationIds = [ownerId, counterpartyId].filter(Boolean);
       await pool.query("delete from organization_statutory_profiles where organization_id=any($1::uuid[])", [organizationIds]);
     }
-    const identityIds = [actorId, verifierId].filter(Boolean);
+    const identityIds = [actorId, verifierId, reviewerId].filter(Boolean);
     if (identityIds.length) await pool.query("delete from identities where id=any($1::uuid[])", [identityIds]);
     if (geographyId) await pool.query("delete from geography where id=$1", [geographyId]);
     const organizationIds = [ownerId, counterpartyId].filter(Boolean);
