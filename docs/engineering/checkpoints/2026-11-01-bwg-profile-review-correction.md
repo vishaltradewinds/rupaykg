@@ -144,3 +144,10 @@ The first evidence run exposed the actual DB permission requirement `VERIFY_EVID
 Exact-head CI #4297 / ID 41328373072 passed at `00874fca582690781ecad23ff4184a3c50e9502e`, including dependency audit, migration validation, disposable PostgreSQL migration and acceptance tests, typecheck, build, browser smoke test and production container build.
 
 All authority-approved BWG profile and evidence states used by these positive downstream-route tests are inserted only as labelled fixtures in disposable CI PostgreSQL. They are not CPCB submissions, production records, or assertions of actual external registration.
+
+
+## Disposable fixture teardown correction — 2026-11-01
+
+A follow-up review of `apps/src/bwg-applicability-postgres.integration.test.ts` found that the test created disposable organization, geography, identity, role, membership, geography scope, session and BWG profile rows but did not remove them in teardown. Added deterministic cleanup in dependency-safe order, including report/period/profile rows, organization scopes and memberships, role, organization, session, identity and geography. This keeps repeatable CI runs isolated and prevents fixture accumulation.
+
+No production code, schema or production data changed. Exact-head CI #4307 / ID 41329615974 is running at `d0050f8790ba418c4a3568c8b3df0823832f1e46`; do not count this cleanup correction as passed until that run completes.
