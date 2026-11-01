@@ -46,7 +46,8 @@ test("invalid session never queries membership pool", async () => {
 
 test("legacy single-pool mode remains compatible for non-production callers", async () => {
   const shared = fakePool([]);
-  shared.pool.query = async (sql: string, values?: unknown[]) => {
+  const sharedQuery = shared.pool as unknown as { query: (sql: string, values?: unknown[]) => Promise<{ rows: unknown[]; rowCount: number }> };
+  sharedQuery.query = async (sql: string, values?: unknown[]) => {
     shared.calls.push({ sql, ...(values === undefined ? {} : { values }) });
     if (/verify_identity_session/.test(sql)) return { rows: [{ identity_id: "11111111-1111-4111-8111-111111111111" }], rowCount: 1 };
     return { rows: [{ organization_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", role_id: "role-a", status: "VERIFIED" }], rowCount: 1 };
