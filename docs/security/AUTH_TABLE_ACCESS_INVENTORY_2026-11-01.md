@@ -28,6 +28,17 @@
 9. An identity with no verified memberships can authenticate but receives no organization scope.
 10. Stakeholder onboarding creates PENDING memberships; approval and reserved-role dual control must remain database-enforced.
 
+## Dedicated authentication runtime integration delivered in PR #192
+
+- The production server now registers `auth-routes.ts`; the previous server entrypoint did not register this route module at all.
+- Adds a distinct `AUTH_DATABASE_URL` pool (max 3 connections) alongside the ordinary application pool.
+- Registration, login candidate lookup, password-failure tracking, lockout reset, session issue/revoke, and self-account context now call the tested `auth_private` SECURITY DEFINER functions only.
+- `/auth/me` first authenticates via the application resolver, then reads the self-scoped account projection through the auth function.
+- Stakeholder onboarding remains on the application pool and retains its current lifecycle transaction; its RLS migration is still outstanding.
+- Production config requires the two URLs to target the same Neon host, port, and database but use distinct database role names.
+- Production startup verifies both runtime identities are distinct, neither is superuser/BYPASSRLS, the app role cannot access auth tables or auth lifecycle functions, the auth role cannot directly read auth tables or resolve sessions, and the expected SECURITY DEFINER functions are owned by NOLOGIN/NOBYPASSRLS `rupaykg_auth_owner`.
+- Readiness now checks both database pools.
+
 ## Application integration delivered in PR #192
 
 - Adds opt-in `RUPAYKG_AUTH_RESOLVER_MODE=security_definer`.
