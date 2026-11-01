@@ -34,8 +34,11 @@ function productionAuthDatabaseUrl(value: string, databaseUrl: string): string {
       authUrl.port !== appUrl.port || authUrl.pathname !== appUrl.pathname) {
     throw new Error("PRODUCTION_CONFIG_INVALID: AUTH_DATABASE_URL must target the same Neon host, port, and database as DATABASE_URL");
   }
-  if (decodeURIComponent(authUrl.username) === decodeURIComponent(appUrl.username)) {
-    throw new Error("PRODUCTION_CONFIG_INVALID: AUTH_DATABASE_URL must use a distinct least-privilege database role");
+  if (decodeURIComponent(appUrl.username) !== "rupaykg_app_runtime") {
+    throw new Error("PRODUCTION_CONFIG_INVALID: DATABASE_URL must use the rupaykg_app_runtime role");
+  }
+  if (decodeURIComponent(authUrl.username) !== "rupaykg_auth_runtime") {
+    throw new Error("PRODUCTION_CONFIG_INVALID: AUTH_DATABASE_URL must use the rupaykg_auth_runtime role");
   }
   return auth;
 }
