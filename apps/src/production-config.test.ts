@@ -31,8 +31,8 @@ describe("production configuration", () => {
   it("requires a separate least-privilege authentication credential", () => {
     assert.throws(() => readProductionConfig({ ...valid, AUTH_DATABASE_URL: "" }), /AUTH_DATABASE_URL is required/);
     assert.throws(() => readProductionConfig({ ...valid, AUTH_DATABASE_URL: "postgresql://rupaykg_app:other-secret@prod.example.invalid:5432/rupaykg" }), /distinct least-privilege database role/);
-    assert.throws(() => readProductionConfig({ ...valid, AUTH_DATABASE_URL: "postgresql://rupaykg_auth_login:auth-secret@other.example.invalid:5432/rupaykg" }), /same authoritative PostgreSQL host and database/);
-    assert.throws(() => readProductionConfig({ ...valid, AUTH_DATABASE_URL: "postgresql://rupaykg_auth_login:auth-secret@prod.example.invalid:5432/otherdb" }), /same authoritative PostgreSQL host and database/);
+    assert.throws(() => readProductionConfig({ ...valid, AUTH_DATABASE_URL: "postgresql://rupaykg_auth_login:auth-secret@other.example.invalid:5432/rupaykg" }), /same authoritative PostgreSQL host, port and database/);
+    assert.throws(() => readProductionConfig({ ...valid, AUTH_DATABASE_URL: "postgresql://rupaykg_auth_login:auth-secret@prod.example.invalid:5432/otherdb" }), /same authoritative PostgreSQL host, port and database/);
     assert.throws(() => readProductionConfig({ ...valid, AUTH_DATABASE_URL: "postgresql://rupaykg_auth_login:auth-secret@prod.example.invalid:6432/rupaykg" }), /same authoritative PostgreSQL host, port and database/);
   });
 
