@@ -35,8 +35,8 @@ if (process.env.NODE_ENV === "production" && !authPool) throw new Error("AUTH_DA
 async function assertProductionDatabaseRuntimeContracts(): Promise<void> {
   if (!pool || !authPool) throw new Error("PRODUCTION_DATABASE_RUNTIME_UNAVAILABLE");
   const [appIdentity, authIdentity] = await Promise.all([
-    pool.query<{ current_user: string; current_database: string; rolsuper: boolean; rolbypassrls: boolean }>(
-      `select current_user, current_database(), r.rolsuper, r.rolbypassrls from pg_roles r where r.rolname=current_user`,
+    pool.query<{ current_user: string; current_database: string; rolsuper: boolean; rolbypassrls: boolean; rolcreatedb: boolean; rolcreaterole: boolean; rolreplication: boolean }>(
+      `select current_user, current_database(), r.rolsuper, r.rolbypassrls, r.rolcreatedb, r.rolcreaterole, r.rolreplication from pg_roles r where r.rolname=current_user`,
     ),
     authPool.query<{ current_user: string; current_database: string; rolsuper: boolean; rolbypassrls: boolean }>(
       `select current_user, current_database(), r.rolsuper, r.rolbypassrls from pg_roles r where r.rolname=current_user`,
@@ -46,15 +46,16 @@ async function assertProductionDatabaseRuntimeContracts(): Promise<void> {
   if (!app || !auth || app.current_database !== auth.current_database || app.current_user !== "rupaykg_app_runtime" || auth.current_user !== "rupaykg_auth_runtime") {
     throw new Error("PRODUCTION_DATABASE_RUNTIME_IDENTITY_MISMATCH");
   }
-  if (app.rolsuper || app.rolbypassrls || auth.rolsuper || auth.rolbypassrls) {
+  if (app.rolsuper || app.rolbypassrls || app.rolcreatedb || app.rolcreaterole || app.rolreplication || auth.rolsuper || auth.rolbypassrls || auth.rolcreatedb || auth.rolcreaterole || auth.rolreplication) {
     throw new Error("PRODUCTION_RUNTIME_ROLE_MUST_NOT_BYPASS_RLS");
   }
   const appChecks = await pool.query<{ direct_auth_reads: boolean; resolver_execute: boolean; auth_lifecycle_execute: boolean; owner_membership: boolean }>(
     `select
-       (has_table_privilege(current_user,'public.identities','SELECT')
-        or has_table_privilege(current_user,'public.identity_sessions','SELECT')
-        or has_table_privilege(current_user,'public.organization_memberships','SELECT')
-        or has_table_privilege(current_user,'public.identity_password_credentials','SELECT')) as direct_auth_reads,
+       (has_table_privilege(current_user,'public.identities','SELECT') or has_table_privilege(current_user,'public.identities','INSERT') or has_table_privilege(current_user,'public.identities','UPDATE') or has_table_privilege(current_user,'public.identities','DELETE')
+        or has_table_privilege(current_user,'public.identity_sessions','SELECT') or has_table_privilege(current_user,'public.identity_sessions','INSERT') or has_table_privilege(current_user,'public.identity_sessions','UPDATE') or has_table_privilege(current_user,'public.identity_sessions','DELETE')
+        or has_table_privilege(current_user,'public.organization_memberships','SELECT') or has_table_privilege(current_user,'public.organization_memberships','INSERT') or has_table_privilege(current_user,'public.organization_memberships','UPDATE') or has_table_privilege(current_user,'public.organization_memberships','DELETE')
+        or has_table_privilege(current_user,'public.identity_password_credentials','SELECT') or has_table_privilege(current_user,'public.identity_password_credentials','INSERT') or has_table_privilege(current_user,'public.identity_password_credentials','UPDATE') or has_table_privilege(current_user,'public.identity_password_credentials','DELETE')
+        or has_schema_privilege(current_user,'public','CREATE')) as direct_auth_reads,
        has_function_privilege(current_user,'auth_private.resolve_session(text)','EXECUTE') as resolver_execute,
        (has_function_privilege(current_user,'auth_private.find_login_candidate(text)','EXECUTE')
         or has_function_privilege(current_user,'auth_private.record_login_failure(uuid)','EXECUTE')
@@ -71,10 +72,11 @@ async function assertProductionDatabaseRuntimeContracts(): Promise<void> {
   }
   const authChecks = await authPool.query<{ direct_auth_reads: boolean; required_functions: boolean; owner_membership: boolean }>(
     `select
-       (has_table_privilege(current_user,'public.identities','SELECT')
-        or has_table_privilege(current_user,'public.identity_sessions','SELECT')
-        or has_table_privilege(current_user,'public.organization_memberships','SELECT')
-        or has_table_privilege(current_user,'public.identity_password_credentials','SELECT')) as direct_auth_reads,
+       (has_table_privilege(current_user,'public.identities','SELECT') or has_table_privilege(current_user,'public.identities','INSERT') or has_table_privilege(current_user,'public.identities','UPDATE') or has_table_privilege(current_user,'public.identities','DELETE')
+        or has_table_privilege(current_user,'public.identity_sessions','SELECT') or has_table_privilege(current_user,'public.identity_sessions','INSERT') or has_table_privilege(current_user,'public.identity_sessions','UPDATE') or has_table_privilege(current_user,'public.identity_sessions','DELETE')
+        or has_table_privilege(current_user,'public.organization_memberships','SELECT') or has_table_privilege(current_user,'public.organization_memberships','INSERT') or has_table_privilege(current_user,'public.organization_memberships','UPDATE') or has_table_privilege(current_user,'public.organization_memberships','DELETE')
+        or has_table_privilege(current_user,'public.identity_password_credentials','SELECT') or has_table_privilege(current_user,'public.identity_password_credentials','INSERT') or has_table_privilege(current_user,'public.identity_password_credentials','UPDATE') or has_table_privilege(current_user,'public.identity_password_credentials','DELETE')
+        or has_schema_privilege(current_user,'public','CREATE')) as direct_auth_reads,
        (has_function_privilege(current_user,'auth_private.find_login_candidate(text)','EXECUTE')
         and has_function_privilege(current_user,'auth_private.record_login_failure(uuid)','EXECUTE')
         and has_function_privilege(current_user,'auth_private.reset_login_failures(uuid)','EXECUTE')
@@ -103,10 +105,10 @@ async function assertProductionDatabaseRuntimeContracts(): Promise<void> {
     !fn.security_definer || fn.owner_name !== "rupaykg_auth_owner")) {
     throw new Error("PRODUCTION_AUTH_FUNCTION_OWNERSHIP_INVALID");
   }
-  const owners = await authPool.query<{ rolname: string; rolsuper: boolean; rolcanlogin: boolean; rolbypassrls: boolean }>(
-    `select rolname,rolsuper,rolcanlogin,rolbypassrls from pg_roles where rolname in ('rupaykg_auth_owner','rupaykg_app_owner')`,
+  const owners = await authPool.query<{ rolname: string; rolsuper: boolean; rolcanlogin: boolean; rolbypassrls: boolean; rolcreatedb: boolean; rolcreaterole: boolean; rolreplication: boolean }>(
+    `select rolname,rolsuper,rolcanlogin,rolbypassrls,rolcreatedb,rolcreaterole,rolreplication from pg_roles where rolname in ('rupaykg_auth_owner','rupaykg_app_owner')`,
   );
-  if (owners.rows.length !== 2 || owners.rows.some((role) => role.rolsuper || role.rolcanlogin || role.rolbypassrls)) {
+  if (owners.rows.length !== 2 || owners.rows.some((role) => role.rolsuper || role.rolcanlogin || role.rolbypassrls || role.rolcreatedb || role.rolcreaterole || role.rolreplication)) {
     throw new Error("PRODUCTION_FUNCTION_OWNER_ROLES_INVALID");
   }
 }
