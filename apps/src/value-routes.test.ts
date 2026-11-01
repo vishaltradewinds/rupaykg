@@ -22,7 +22,7 @@ class FakePool {
   constructor(options: FakePoolOptions = {}) {
     this.options = {
       permissionAllowed: options.permissionAllowed ?? true,
-      grantedPermissions: options.grantedPermissions,
+      ...(options.grantedPermissions ? { grantedPermissions: options.grantedPermissions } : {}),
       geographyAllowed: options.geographyAllowed ?? true,
       memberships: options.memberships ?? [{ organization_id: organizationId, role_id: "role-a", status: "VERIFIED" }],
     };
