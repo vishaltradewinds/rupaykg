@@ -272,3 +272,12 @@ Production database, production credentials, staging database, and Render deploy
 - Exact-head CI for Dockerfile, API package, and checkpoint/docs updates: `41322318000` / `41322311561` / `41322181108` were running when recorded. Previous latest code CI `41321594110` PASS and manifest CI `41321852371` PASS.
 - This changes only the PR branch. Production is still on main and has not been deployed or modified. The existing separate migration workflow is not yet safe to run with the privileged `rupaykg` role; a properly authorized migrator identity and approval controls remain outstanding.
 - No production migrations, data seeding, roles, grants, credentials, RLS, or deployments were executed.
+
+
+## 16. Render deployment gate verification — 2026-11-01 15:42 UTC
+
+- Render service `rupaykg` / `srv-daki4d7qj5pc73b8qksg` is still configured to track `main`, auto-deploy enabled.
+- Latest live deploy confirmed: commit `b5e91241d84a6712ff544d3deec1805702f45efd`, deploy `dep-dbj1r07avr4c73bjc2c0`, status LIVE. No current draft branch commits have been deployed.
+- Updated PR #192 `render.yaml` to declare secret `AUTH_DATABASE_URL` and `RUPAYKG_AUTH_RESOLVER_MODE=security_definer` (`902fbbf8ffc4cf903f0e66d73576b1263bde67e6`). This is only a repository blueprint change; live Render environment was not changed.
+- Because Render auto-deploys `main`, PR #192 must not be merged until the dedicated auth runtime role/secret and all 18 SQL functions/grants are independently validated, and the app route compatibility inventory is cleared. Startup is designed to fail closed if these are missing.
+- No production deploy, environment-variable change, migration, seeding, role, or grant change performed.
