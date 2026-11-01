@@ -25,15 +25,8 @@ export async function authenticate(request: FastifyRequest, sessionPool: Pool | 
   if (!header?.startsWith("Bearer ")) return null;
   const token = header.slice("Bearer ".length).trim();
   if (!token) return null;
-  const rows = await sessionPool.query<{ identity_id: string }>(
-    `select s.identity_id
-       from identity_sessions s
-       join identities i on i.id = s.identity_id
-      where s.token_hash = $1
-        and s.revoked_at is null
-        and s.expires_at > now()
-        and i.status = 'VERIFIED'
-        and i.suspended_at is null`,
+  const rows = await sessionPool.query<{ identity_id: string | null }>(
+    "select public.verify_identity_session($1) as identity_id",
     [hashToken(token)],
   );
   if (!rows.rows[0]) return null;
