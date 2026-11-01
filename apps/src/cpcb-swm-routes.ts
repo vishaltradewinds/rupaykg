@@ -23,9 +23,9 @@ const bodyOf = (request: Request): Record<string, unknown> => request.body && ty
 const validStakeholder = (value: unknown): value is Stakeholder => typeof value === "string" && (STAKEHOLDERS as readonly string[]).includes(value);
 const validDate = (value: unknown): value is string => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
 
-async function authFor(request: Request, reply: Reply, pool: Pool | null): Promise<AuthContext | null> {
+async function authFor(request: Request, reply: Reply, pool: Pool | null, sessionPool: Pool | null = pool): Promise<AuthContext | null> {
   if (!pool) { reply.code(503).send({ error: "Authoritative API unavailable", code: "DATABASE_UNAVAILABLE", syntheticData: false }); return null; }
-  try { const auth = await authenticate(request as never, pool); if (!auth) { reply.code(401).send(bearerChallenge()); return null; } return auth; }
+  try { const auth = await authenticate(request as never, sessionPool, pool); if (!auth) { reply.code(401).send(bearerChallenge()); return null; } return auth; }
   catch (error) { request.log.error(error); reply.code(503).send({ error: "Authentication service unavailable", code: "AUTH_UNAVAILABLE", syntheticData: false }); return null; }
 }
 export function safeChecklist(value: unknown, stakeholder: Stakeholder): ChecklistItem[] | null {
@@ -88,9 +88,9 @@ async function writeAudit(client: PoolClient, identityId: string, organizationId
   await client.query("insert into audit_events(actor_identity_id,organization_id,action,target_type,target_id,request_id,previous_hash,event_hash,payload) values($1,$2,$3,'cpcb_swm_stakeholder_workspace',$4,$5,$6,$7,$8::jsonb)", [identityId, organizationId, action, targetId, requestId, previousHash, hashEvent(event), JSON.stringify(payload)]);
 }
 
-export async function registerCpcbSwmRoutes(app: FastifyInstance, pool: Pool | null): Promise<void> {
+export async function registerCpcbSwmRoutes(app: FastifyInstance, pool: Pool | null, sessionPool: Pool | null = pool): Promise<void> {
   app.get("/api/v1/cpcb-swm/workspaces", async (request, reply) => {
-    const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
+    const auth = await authFor(request as never, reply, pool, sessionPool); if (!auth || !pool) return;
     const organizationId = auth.activeOrganizationId;
     if (!organizationId || !canActForOrganization(auth, organizationId)) return reply.code(403).send({ error: "Select a verified organization", code: "ORG_FORBIDDEN" });
     if (!await hasOrganizationPermission(pool, auth, organizationId, ["swm:read", "waste:read", "reports:read", "epr:read", "audit:read"])) return reply.code(403).send({ error: "CPCB SWM workspace read permission required", code: "SWM_READ_FORBIDDEN" });
@@ -101,7 +101,7 @@ export async function registerCpcbSwmRoutes(app: FastifyInstance, pool: Pool | n
   });
 
   app.post("/api/v1/cpcb-swm/workspaces", async (request, reply) => {
-    const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
+    const auth = await authFor(request as never, reply, pool, sessionPool); if (!auth || !pool) return;
     const body = bodyOf(request as never), organizationId = auth.activeOrganizationId;
     if (!organizationId || !canActForOrganization(auth, organizationId)) return reply.code(403).send({ error: "Select a verified organization", code: "ORG_FORBIDDEN" });
     if (!await hasOrganizationPermission(pool, auth, organizationId, ["waste:record"])) return reply.code(403).send({ error: "Waste-recording permission required to save stakeholder preparation", code: "SWM_WRITE_FORBIDDEN" });
@@ -140,7 +140,7 @@ export async function registerCpcbSwmRoutes(app: FastifyInstance, pool: Pool | n
   });
 
   app.patch("/api/v1/cpcb-swm/workspaces/:workspaceId", async (request, reply) => {
-    const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
+    const auth = await authFor(request as never, reply, pool, sessionPool); if (!auth || !pool) return;
     const body = bodyOf(request as never), organizationId = auth.activeOrganizationId, id = (request as never as Request).params.workspaceId ?? "";
     if (!organizationId || !canActForOrganization(auth, organizationId)) return reply.code(403).send({ error: "Select a verified organization", code: "ORG_FORBIDDEN" });
     if (!UUID.test(id)) return reply.code(400).send({ error: "Invalid workspace ID", code: "SWM_WORKSPACE_ID_INVALID" });
