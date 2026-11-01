@@ -178,12 +178,13 @@ begin
     raise exception 'INVALID_ONBOARDING_INPUT' using errcode='22023';
   end if;
 
+  perform pg_advisory_xact_lock(hashtextextended(p_token_hash, 0));
   select s.identity_id into v_identity_id
   from public.identity_sessions s
   join public.identities i on i.id=s.identity_id
   where s.token_hash=p_token_hash and s.revoked_at is null and s.expires_at>now()
     and i.status='VERIFIED'::public.record_status and i.suspended_at is null
-  for share of s;
+;
 
   if v_identity_id is null then
     raise exception 'AUTH_REQUIRED' using errcode='28000';
@@ -292,6 +293,7 @@ begin
   if p_token_hash is null or length(p_token_hash) <> 64 then
     raise exception 'AUTH_REQUIRED' using errcode='28000';
   end if;
+  perform pg_advisory_xact_lock(hashtextextended(p_token_hash, 0));
   select s.identity_id into v_identity_id
   from public.identity_sessions s
   join public.identities i on i.id=s.identity_id
@@ -324,8 +326,28 @@ begin
 end;
 $$;
 
+create or replace function auth_private.revoke_session(p_token_hash text)
+returns boolean
+language plpgsql
+security definer
+set search_path = pg_catalog, pg_temp
+as $
+declare v_count integer;
+begin
+  if p_token_hash is null or length(p_token_hash)<>64 then return false; end if;
+  perform pg_advisory_xact_lock(hashtextextended(p_token_hash, 0));
+  update public.identity_sessions
+     set revoked_at=coalesce(revoked_at,now())
+   where token_hash=p_token_hash and revoked_at is null;
+  get diagnostics v_count = row_count;
+  return v_count=1;
+end;
+$;
+
 revoke all on function auth_private.create_stakeholder_application(text,text,text,text,text,text,text,uuid,text,text,text,text,text,timestamptz,timestamptz) from public;
 revoke all on function auth_private.withdraw_stakeholder_application(text,uuid) from public;
+revoke all on function auth_private.revoke_session(text) from public;
 grant execute on function auth_private.create_stakeholder_application(text,text,text,text,text,text,text,uuid,text,text,text,text,text,timestamptz,timestamptz) to rupaykg_auth_runtime;
 grant execute on function auth_private.withdraw_stakeholder_application(text,uuid) to rupaykg_auth_runtime;
+grant execute on function auth_private.revoke_session(text) to rupaykg_auth_runtime;
 reset role;
