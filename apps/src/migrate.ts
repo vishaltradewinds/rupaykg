@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
+import { assertProductionMigrationTarget } from "./production-config.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) throw new Error("DATABASE_URL is required");
@@ -34,6 +35,26 @@ try {
   migrationLockAcquired = lock.rows[0]?.locked === true;
   if (!migrationLockAcquired) {
     throw new Error("Another RupayKg migration run is already active; refusing concurrent execution");
+  }
+
+  if (process.env.NODE_ENV === "production") {
+    const expectedBranchId = process.env.RUPAYKG_EXPECTED_NEON_BRANCH_ID?.trim() ?? "";
+    const expectedDatabaseName = process.env.RUPAYKG_EXPECTED_DATABASE_NAME?.trim() ?? "";
+    const expectedRoleName = process.env.RUPAYKG_EXPECTED_DATABASE_ROLE?.trim() ?? "";
+    const identity = await lockClient.query<{
+      branch_id: string | null;
+      database_name: string;
+      role_name: string;
+    }>(`select current_setting('neon.branch_id', true) as branch_id,
+              current_database() as database_name,
+              current_user as role_name`);
+    const connected = identity.rows[0];
+    if (!connected) throw new Error("PRODUCTION_MIGRATION_TARGET_MISMATCH: database identity could not be read");
+    assertProductionMigrationTarget(
+      { expectedBranchId, expectedDatabaseName, expectedRoleName },
+      connected,
+    );
+    console.log("Verified exact production migration target identity.");
   }
 
   await pool.query(`
