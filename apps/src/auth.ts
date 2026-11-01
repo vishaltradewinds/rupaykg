@@ -87,7 +87,11 @@ async function authenticateWithSecurityDefiner(
   return buildAuthContext(request, identityId, memberships);
 }
 
-export async function authenticate(request: FastifyRequest, pool: Pool | null): Promise<AuthContext | null> {
+export async function authenticate(
+  request: FastifyRequest,
+  pool: Pool | null,
+  mode: AuthResolverMode = getAuthResolverMode(),
+): Promise<AuthContext | null> {
   if (!pool) return null;
   const header = request.headers.authorization;
   if (!header?.startsWith("Bearer ")) return null;
@@ -95,65 +99,29 @@ export async function authenticate(request: FastifyRequest, pool: Pool | null): 
   if (!token) return null;
   const tokenHash = hashToken(token);
 
-  // In production, the app runtime has no direct privileges on auth tables.
-  // Resolve the bearer session through the narrowly granted SECURITY DEFINER function.
-  // There is deliberately no fallback to direct table reads if this call fails.
-  let identityId: string;
-  let memberships: Array<{ organization_id: string; role_id: string; status: string }>;
-  if (process.env.RUPAYKG_AUTH_RESOLVER_MODE === "security_definer") {
-    const resolved = await pool.query<{
-      identity_id: string;
-      organization_id: string | null;
-      role_id: string | null;
-      membership_status: string | null;
-    }>("select * from auth_private.resolve_session($1)", [tokenHash]);
-    if (!resolved.rows[0]?.identity_id) return null;
-    identityId = resolved.rows[0].identity_id;
-    memberships = resolved.rows
-      .filter((row) => row.organization_id && row.role_id && row.membership_status === "VERIFIED")
-      .map((row) => ({ organization_id: row.organization_id!, role_id: row.role_id!, status: row.membership_status! }));
-  } else {
-    const rows = await pool.query<{ identity_id: string }>(
-      `select s.identity_id
-         from identity_sessions s
-         join identities i on i.id = s.identity_id
-        where s.token_hash = $1
-          and s.revoked_at is null
-          and s.expires_at > now()
-          and i.status = 'VERIFIED'
-          and i.suspended_at is null`,
-      [tokenHash],
-    );
-    if (!rows.rows[0]) return null;
-    identityId = rows.rows[0].identity_id;
-    const membershipRows = await pool.query<{ organization_id: string; role_id: string; status: string }>(
-      `select organization_id, role_id, status
-         from organization_memberships
-        where identity_id = $1 and status = 'VERIFIED'`,
-      [identityId],
-    );
-    memberships = membershipRows.rows;
+  if (mode === "security_definer") {
+    return authenticateWithSecurityDefiner(request, pool, tokenHash);
   }
 
-  const requested = request.headers["x-rupaykg-organization-id"];
-  const requestedOrganizationId = typeof requested === "string" && requested.trim() ? requested.trim() : undefined;
-  if (requestedOrganizationId && !UUID_RE.test(requestedOrganizationId)) return null;
-  if (requestedOrganizationId && !memberships.some((m) => m.organization_id === requestedOrganizationId)) return null;
-
-  // All operational records are organization-scoped. A multi-organization identity
-  // must explicitly select the organization before any endpoint can project data or
-  // authorize an action. A single-organization identity is safely scoped implicitly.
-  if (memberships.length > 1 && !requestedOrganizationId) return null;
-  const activeOrganizationId = requestedOrganizationId ?? memberships[0]?.organization_id;
-  const requestPath = ((request.url ?? "").split("?", 1)[0]) ?? "";
-  const bilateralOrganizationScope = requestPath === "/api/v1/settlements"
-    || requestPath.startsWith("/api/v1/settlements/");
-  return {
-    identityId,
-    memberships,
-    ...(activeOrganizationId ? { activeOrganizationId } : {}),
-    ...(bilateralOrganizationScope ? { bilateralOrganizationScope: true } : {}),
-  };
+  const rows = await pool.query<{ identity_id: string }>(
+    `select s.identity_id
+       from identity_sessions s
+       join identities i on i.id = s.identity_id
+      where s.token_hash = $1
+        and s.revoked_at is null
+        and s.expires_at > now()
+        and i.status = 'VERIFIED'
+        and i.suspended_at is null`,
+    [tokenHash],
+  );
+  if (!rows.rows[0]) return null;
+  const memberships = await pool.query<{ organization_id: string; role_id: string; status: string }>(
+    `select organization_id, role_id, status
+       from organization_memberships
+      where identity_id = $1 and status = 'VERIFIED'`,
+    [rows.rows[0].identity_id],
+  );
+  return buildAuthContext(request, rows.rows[0].identity_id, memberships.rows);
 }
 
 export function canActForOrganization(auth: AuthContext, organizationId: string): boolean {
