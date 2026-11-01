@@ -202,7 +202,7 @@ test("security-definer authorization delegates membership and permission checks 
   try {
     assert.equal(await hasOrganizationPermission(pool as unknown as Pool, auth, orgA, ["waste:record"]), true);
     assert.equal(pool.calls.length, 1);
-    assert.match(pool.calls[0]!.sql, /auth_private\\.has_organization_permission/);
+    assert.match(pool.calls[0]!.sql, /auth_private\.has_organization_permission/);
     assert.deepEqual(pool.calls[0]!.values, [identityId, orgA, ["waste:record"]]);
   } finally { delete process.env.RUPAYKG_AUTH_RESOLVER_MODE; }
 });
@@ -219,6 +219,6 @@ test("security-definer authorization fails closed without falling back to direct
   try {
     await assert.rejects(() => hasOrganizationPermission(pool as unknown as Pool, auth, orgA, ["waste:record"]), /authorization function unavailable/);
     assert.equal(pool.calls.length, 1);
-    assert.match(pool.calls[0]!.sql, /auth_private\\.has_organization_permission/);
+    assert.match(pool.calls[0]!.sql, /auth_private\.has_organization_permission/);
   } finally { delete process.env.RUPAYKG_AUTH_RESOLVER_MODE; }
 });
