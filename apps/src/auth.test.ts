@@ -133,3 +133,40 @@ test("resolver mode configuration accepts only explicit supported modes", () => 
   assert.equal(getAuthResolverMode("security_definer"), "security_definer");
   assert.throws(() => getAuthResolverMode("fallback"), /AUTH_RESOLVER_MODE_INVALID/);
 });
+
+
+test("security-definer mode rejects malformed and unverified organization selections", async () => {
+  const pool = new FakePool();
+  pool.rows = [
+    { identity_id: identityId, organization_id: orgA, role_id: "role-a", membership_status: "VERIFIED" },
+    { identity_id: identityId, organization_id: orgB, role_id: "role-b", membership_status: "PENDING" },
+  ];
+
+  assert.equal(await authenticate(request("not-a-uuid"), pool as unknown as Pool, "security_definer"), null);
+  assert.equal(await authenticate(request(orgB), pool as unknown as Pool, "security_definer"), null);
+  const result = await authenticate(request(orgA), pool as unknown as Pool, "security_definer");
+  assert.equal(result?.memberships.length, 1);
+  assert.equal(result?.memberships[0]?.organization_id, orgA);
+});
+
+test("single verified membership is implicitly selected", async () => {
+  const pool = new FakePool();
+  pool.rows = [{
+    identity_id: identityId,
+    organization_id: orgA,
+    role_id: "role-a",
+    membership_status: "VERIFIED",
+  }];
+
+  const result = await authenticate(request(), pool as unknown as Pool, "security_definer");
+  assert.equal(result?.activeOrganizationId, orgA);
+  assert.equal(result?.memberships.length, 1);
+});
+
+test("missing bearer token and missing pool fail closed without querying", async () => {
+  const pool = new FakePool();
+  const noBearer = { headers: {}, url: "/api/v1/overview" } as never;
+  assert.equal(await authenticate(noBearer, pool as unknown as Pool, "security_definer"), null);
+  assert.equal(await authenticate(request(), null, "security_definer"), null);
+  assert.equal(pool.calls.length, 0);
+});
