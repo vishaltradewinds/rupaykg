@@ -14,11 +14,13 @@ type Row = {
 class FakePool {
   calls: Array<{ sql: string; values: unknown[] | undefined }> = [];
   rows: Row[] = [];
+  responseQueue: unknown[][] | undefined;
   failure: Error | undefined;
   async query(sql: string, values?: unknown[]) {
     this.calls.push({ sql, values });
     if (this.failure) throw this.failure;
-    return { rows: this.rows, rowCount: this.rows.length };
+    const rows = this.responseQueue?.shift() ?? this.rows;
+    return { rows, rowCount: rows.length };
   }
 }
 
@@ -169,4 +171,20 @@ test("missing bearer token and missing pool fail closed without querying", async
   assert.equal(await authenticate(noBearer, pool as unknown as Pool, "security_definer"), null);
   assert.equal(await authenticate(request(), null, "security_definer"), null);
   assert.equal(pool.calls.length, 0);
+});
+
+
+test("legacy mode remains available and retains the two-query session and membership path", async () => {
+  const pool = new FakePool();
+  pool.responseQueue = [
+    [{ identity_id: identityId }],
+    [{ organization_id: orgA, role_id: "role-a", status: "VERIFIED" }],
+  ];
+
+  const result = await authenticate(request(), pool as unknown as Pool, "legacy");
+  assert.equal(result?.identityId, identityId);
+  assert.equal(result?.activeOrganizationId, orgA);
+  assert.equal(pool.calls.length, 2);
+  assert.match(pool.calls[0]!.sql, /identity_sessions/);
+  assert.match(pool.calls[1]!.sql, /organization_memberships/);
 });
