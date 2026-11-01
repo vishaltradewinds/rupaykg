@@ -12,13 +12,7 @@ begin
 end
 $$;
 
-do $
-begin
-  if not exists (select 1 from pg_roles where rolname='rupaykg_auth_runtime') then
-    create role rupaykg_auth_runtime nologin noinherit nosuperuser nocreatedb nocreaterole noreplication nobypassrls;
-  end if;
-end
-$;
+create role rupaykg_auth_runtime nologin noinherit nosuperuser nocreatedb nocreaterole noreplication nobypassrls;
 
 create schema if not exists auth_private authorization rupaykg_auth_owner;
 alter schema auth_private owner to rupaykg_auth_owner;
