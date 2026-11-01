@@ -66,7 +66,16 @@ async function authorize(
   }
   try {
     const result = await pool.query<{ ok: boolean }>(
-      `select auth_private.is_platform_admin($1,$2) as ok`,
+      `select exists (
+         select 1 from organization_memberships om
+         join roles r on r.id = om.role_id
+         join identities i on i.id = om.identity_id
+         where om.identity_id = $1 and om.status = 'VERIFIED'
+           and r.name = 'super_admin' and i.suspended_at is null
+           and ($2::text is null or exists (
+             select 1 from jsonb_array_elements_text(r.permissions) p where p = $2
+           ))
+       ) as ok`,
       [auth.identityId, permission],
     );
     if (result.rows[0]?.ok !== true) {
@@ -142,13 +151,22 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
     const context = await authorize(request, reply, pool, null);
     if (!context || !pool) return;
     try {
-      const result = await pool.query<{ counts: Record<string, number> | null }>(
-        `select auth_private.get_platform_admin_overview($1) as counts`,
-        [context.auth.identityId],
+      const result = await pool.query<{
+        verifiedIdentities: string; organizations: string; verifiedMemberships: string;
+        pendingApplications: string; pendingLegalReviews: string; anchoredMrvRecords: string;
+      }>(
+        `select
+          (select count(*)::text from identities where status = 'VERIFIED' and suspended_at is null) as "verifiedIdentities",
+          (select count(*)::text from organizations) as organizations,
+          (select count(*)::text from organization_memberships where status = 'VERIFIED') as "verifiedMemberships",
+          (select count(*)::text from stakeholder_applications where status = 'PENDING') as "pendingApplications",
+          (select count(*)::text from organizations where verification_status in ('UNDER_REVIEW','PENDING')) as "pendingLegalReviews",
+          (select count(*)::text from mrv_provenance_events where guardian_status = 'VERIFIED' and hcs_status = 'CONSENSUS_CONFIRMED') as "anchoredMrvRecords"`,
       );
-      const counts = result.rows[0]?.counts;
-      if (!counts) throw new Error("Platform overview query returned no result");
-      return { source: "postgresql", syntheticData: false, scope: "PLATFORM", counts };
+      const row = result.rows[0];
+      if (!row) throw new Error("Platform overview query returned no result");
+      return { source: "postgresql", syntheticData: false, scope: "PLATFORM",
+        counts: Object.fromEntries(Object.entries(row).map(([key, value]) => [key, Number(value)])) };
     } catch (error) {
       request.log.error(error);
       return routeError(reply, 503, "Platform administration overview unavailable", "PLATFORM_OVERVIEW_UNAVAILABLE");
@@ -163,13 +181,18 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
     const limitValue = Number(query.limit ?? 50);
     const limit = Number.isInteger(limitValue) ? Math.max(1, Math.min(100, limitValue)) : 50;
     try {
-      const result = await pool.query<{ identities: unknown[] | null }>(
-        `select auth_private.list_platform_identities($1,$2,$3) as identities`,
-        [context.auth.identityId, search, limit],
+      const result = await pool.query(
+        `select i.id, i.display_name, i.email, i.status,
+           case when i.suspended_at is null then false else true end as suspended,
+           i.created_at, i.suspended_at, i.last_suspended_by_identity_id, i.last_suspension_reason,
+           (select count(*)::int from organization_memberships om where om.identity_id=i.id and om.status='VERIFIED') as verified_memberships,
+           (select count(*)::int from identity_sessions s where s.identity_id=i.id and s.revoked_at is null and s.expires_at>now()) as active_sessions
+         from identities i
+         where ($1 = '' or i.id::text ilike '%'||$1||'%' or i.display_name ilike '%'||$1||'%' or coalesce(i.email,'') ilike '%'||$1||'%')
+         order by i.created_at desc, i.id limit $2`,
+        [search, limit],
       );
-      const identities = result.rows[0]?.identities;
-      if (!identities) throw new Error("Identity directory query returned no result");
-      return { source: "postgresql", syntheticData: false, identities };
+      return { source: "postgresql", syntheticData: false, identities: result.rows };
     } catch (error) {
       request.log.error(error);
       return routeError(reply, 503, "Identity directory unavailable", "IDENTITY_DIRECTORY_UNAVAILABLE");
@@ -262,13 +285,15 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
     const context = await authorize(request, reply, pool, "admin:roles");
     if (!context || !pool) return;
     try {
-      const result = await pool.query<{ roles: unknown[] | null }>(
-        `select auth_private.list_platform_roles($1) as roles`,
-        [context.auth.identityId],
+      const result = await pool.query(
+        `select r.id,r.organization_id,o.name as organization_name,r.name,r.permissions,
+          (select count(*)::int from organization_memberships om where om.role_id=r.id and om.status='VERIFIED') as verified_memberships,
+          (r.name=any($1::text[])) as reserved
+         from roles r join organizations o on o.id=r.organization_id
+         order by o.name,r.name limit 300`,
+        [[...RESERVED_ROLES]],
       );
-      const roles = result.rows[0]?.roles;
-      if (!roles) throw new Error("Role directory query returned no result");
-      return { source: "postgresql", syntheticData: false, safeEditablePermissions: [...SAFE_PERMISSIONS], roles };
+      return { source: "postgresql", syntheticData: false, safeEditablePermissions: [...SAFE_PERMISSIONS], roles: result.rows };
     } catch (error) {
       request.log.error(error);
       return routeError(reply, 503, "Role directory unavailable", "ROLE_DIRECTORY_UNAVAILABLE");
