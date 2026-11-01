@@ -189,3 +189,7 @@ Exact-head CI for the latest PR #193 changes is pending. Production remains HOLD
 ## Test-fixture cleanup CI correction — 2026-11-01
 
 CI #4325 / ID 41330668131 failed at TypeScript parsing after an automated edit to remove table-wide trigger toggles malformed two membership fixture SQL strings. This was a test-source editing error, not a runtime/application failure. Reconstructed the affected fixture statements and verified the resulting source text. The latest PR #193 code head is now `acc68d8c55037afb877b426a6e2c9254ffd91a5f`; a new exact-head CI run is required and pending.
+
+## Permission fixture typecheck correction — 2026-11-01
+
+Exact-head CI #4332 / ID 41330944671 failed TypeScript typecheck because `exactOptionalPropertyTypes` rejects explicitly assigning `undefined` to the optional `grantedPermissions` test option. Corrected the fixture builder to conditionally spread the property only when supplied. This is a test typing correction; application permission logic is unchanged. New exact-head CI is required for commit `a96ed25acc50c974bf72488ea535af6d01be93fd`.
