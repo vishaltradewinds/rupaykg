@@ -53,9 +53,13 @@ test("stakeholder approvals cannot drift from application geography, including n
       (error: { message?: string }) => error.message?.includes("STAKEHOLDER_APPLICATION_GEOGRAPHY_IMMUTABLE_AFTER_APPROVAL_CHAIN") === true,
     );
 
+    const globalRole = (await client.query<{ id: string }>(
+      "insert into roles(organization_id,name) values($1,$2) returning id",
+      [org, `stakeholder-approval-global-${suffix}`],
+    )).rows[0]!.id;
     const globalApplication = (await client.query<{ id: string }>(
       "insert into stakeholder_applications(identity_id,organization_id,role_id,requested_role_key,requested_organization_type,geography_id) values($1,$2,$3,'TEST_GLOBAL','COLLECTOR',null) returning id",
-      [identity, org, role],
+      [identity, org, globalRole],
     )).rows[0]!.id;
     const globalApproval = await client.query<{ id: string }>(
       "select id from stakeholder_application_approvals where application_id=$1 limit 1",
