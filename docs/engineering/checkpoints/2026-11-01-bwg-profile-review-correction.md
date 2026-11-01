@@ -185,3 +185,7 @@ Removed test-time `ALTER TABLE ... DISABLE/ENABLE TRIGGER` from the BWG applicab
 A schema review first identified migration 077's update-only membership trigger, then checked the superseding migration 086. Migration 086 replaces the guard with `BEFORE INSERT OR UPDATE OF status`, but intentionally returns early for INSERTs whose role is not `super_admin` or `platform_admin`; reserved-role inserts are subject to dual-control approval. The supported public onboarding API creates ordinary memberships as `PENDING`, and the hierarchy approval route promotes them only after the application approval chain completes. Consequently, ordinary-role direct SQL INSERTs with `status='VERIFIED'` are permitted by the current explicit policy exception. This is a policy/threat-model question for independent security review, not a confirmed unauthenticated HTTP bypass. Do not represent BWG privileged fixtures as proof of onboarding enforcement.
 
 Exact-head CI for the latest PR #193 changes is pending. Production remains HOLD.
+
+## Test-fixture cleanup CI correction — 2026-11-01
+
+CI #4325 / ID 41330668131 failed at TypeScript parsing after an automated edit to remove table-wide trigger toggles malformed two membership fixture SQL strings. This was a test-source editing error, not a runtime/application failure. Reconstructed the affected fixture statements and verified the resulting source text. The latest PR #193 code head is now `acc68d8c55037afb877b426a6e2c9254ffd91a5f`; a new exact-head CI run is required and pending.
