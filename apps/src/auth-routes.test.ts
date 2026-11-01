@@ -54,10 +54,10 @@ test("auth routes are registered and login uses only dedicated SECURITY DEFINER 
     assert.equal(body.expiresInSeconds, 28800);
     assert.ok(typeof body.sessionToken === "string");
     assert.equal(appPool.calls.length, 0);
-    assert.deepEqual(authPool.calls.map((call) => call.sql.match(/auth_private\\.([a-z_]+)/)?.[1]), [
+    assert.deepEqual(authPool.calls.map((call) => call.sql.match(/auth_private\.([a-z_]+)/)?.[1]), [
       "find_login_candidate", "reset_login_failures", "issue_session", "get_self_account_context",
     ]);
-    assert.ok(authPool.calls.every((call) => !/\\b(select|insert|update|delete)\\s+.*\\b(identities|identity_sessions|identity_password_credentials|organization_memberships)\\b/i.test(call.sql)));
+    assert.ok(authPool.calls.every((call) => !/\b(select|insert|update|delete)\s+.*\b(identities|identity_sessions|identity_password_credentials|organization_memberships)\b/i.test(call.sql)));
   } finally { await app.close(); }
 });
 
@@ -71,7 +71,7 @@ test("wrong password records a failure through the auth runtime function", async
     const response = await app.inject({ method: "POST", url: "/api/v1/auth/login", payload: { email: "test@example.invalid", password: "wrong-password" } });
     assert.equal(response.statusCode, 401);
     assert.equal(authPool.calls.length, 2);
-    assert.match(authPool.calls[1]!.sql, /auth_private\\.record_login_failure/);
+    assert.match(authPool.calls[1]!.sql, /auth_private\.record_login_failure/);
   } finally { await app.close(); }
 });
 
@@ -83,7 +83,7 @@ test("registration hashes the password in the application and calls the atomic d
     const response = await app.inject({ method: "POST", url: "/api/v1/auth/register", payload: { email: "new@example.invalid", name: "New Identity", password: "long-password-123" } });
     assert.equal(response.statusCode, 201);
     assert.equal(response.json().identity.id, identityId);
-    assert.match(authPool.calls[0]!.sql, /auth_private\\.register_identity/);
+    assert.match(authPool.calls[0]!.sql, /auth_private\.register_identity/);
     assert.equal(authPool.calls[0]!.values?.[0], "new@example.invalid");
     assert.notEqual(authPool.calls[0]!.values?.[2], "long-password-123");
     assert.equal(appPool.calls.length, 0);
@@ -102,8 +102,8 @@ test("me authenticates with the application resolver and returns self-scoped con
     const response = await app.inject({ method: "GET", url: "/api/v1/auth/me", headers: { authorization: "Bearer test-token" } });
     assert.equal(response.statusCode, 200);
     assert.equal(response.json().identity.id, identityId);
-    assert.match(appPool.calls[0]!.sql, /auth_private\\.resolve_session/);
-    assert.match(authPool.calls[0]!.sql, /auth_private\\.get_self_account_context/);
+    assert.match(appPool.calls[0]!.sql, /auth_private\.resolve_session/);
+    assert.match(authPool.calls[0]!.sql, /auth_private\.get_self_account_context/);
   } finally { await app.close(); delete process.env.RUPAYKG_AUTH_RESOLVER_MODE; }
 });
 
@@ -113,7 +113,7 @@ test("logout revokes only the token hash through the auth runtime", async () => 
   try {
     const response = await app.inject({ method: "POST", url: "/api/v1/auth/logout", headers: { authorization: "Bearer test-token" } });
     assert.equal(response.statusCode, 204);
-    assert.match(authPool.calls[0]!.sql, /auth_private\\.revoke_session/);
+    assert.match(authPool.calls[0]!.sql, /auth_private\.revoke_session/);
     assert.equal(appPool.calls.length, 0);
   } finally { await app.close(); }
 });
