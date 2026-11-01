@@ -74,3 +74,35 @@ test("signed request context lifetime is bounded to 120 seconds", () => {
     /between 1 and 120 seconds/,
   );
 });
+
+import { createSignedRequestContextForAuth } from "./signed-request-context-token.js";
+
+test("signed request context derives actor and active organization from verified AuthContext", () => {
+  const token = createSignedRequestContextForAuth({
+    identityId: actorIdentityId,
+    activeOrganizationId: organizationId,
+    memberships: [{ organization_id: organizationId, role_id: "role-1", status: "VERIFIED" }],
+  }, { secret, keyId: "k1" });
+  const payload = token.split(".")[0]!;
+  assert.ok(payload.startsWith(`${actorIdentityId}|${organizationId}|`));
+});
+
+test("signed request context rejects an unselected organization", () => {
+  assert.throws(() => createSignedRequestContextForAuth({
+    identityId: actorIdentityId,
+    memberships: [{ organization_id: organizationId, role_id: "role-1", status: "VERIFIED" }],
+  }, { secret, keyId: "k1" }), /active organization must be selected/);
+});
+
+test("signed request context rejects pending or foreign active membership", () => {
+  assert.throws(() => createSignedRequestContextForAuth({
+    identityId: actorIdentityId,
+    activeOrganizationId: organizationId,
+    memberships: [{ organization_id: organizationId, role_id: "role-1", status: "PENDING" }],
+  }, { secret, keyId: "k1" }), /membership is not verified/);
+  assert.throws(() => createSignedRequestContextForAuth({
+    identityId: actorIdentityId,
+    activeOrganizationId: organizationId,
+    memberships: [{ organization_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", role_id: "role-1", status: "VERIFIED" }],
+  }, { secret, keyId: "k1" }), /membership is not verified/);
+});
