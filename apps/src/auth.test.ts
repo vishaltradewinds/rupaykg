@@ -231,7 +231,7 @@ test("security-definer evidence authorization delegates to the scoped database f
   try {
     assert.equal(await canVerifyEvidence(pool as unknown as import("pg").PoolClient, identityId, orgA), true);
     assert.equal(pool.calls.length, 1);
-    assert.match(pool.calls[0]!.sql, /auth_private\\.can_verify_evidence/);
+    assert.match(pool.calls[0]!.sql, /auth_private\.can_verify_evidence/);
     assert.deepEqual(pool.calls[0]!.values, [identityId, orgA]);
   } finally { delete process.env.RUPAYKG_AUTH_RESOLVER_MODE; }
 });
