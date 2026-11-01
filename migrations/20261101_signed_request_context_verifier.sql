@@ -1,9 +1,36 @@
 -- Signed, short-lived tenant context verifier for database-enforced RLS.
--- The key store and verifier are inert until a dedicated NOBYPASSRLS runtime
--- role is provisioned and explicitly granted schema USAGE + function EXECUTE.
+-- SECURITY PREREQUISITE: a DBA must provision rupaykg_security_definer as
+-- NOLOGIN, NOSUPERUSER, NOBYPASSRLS, NOCREATEROLE, NOCREATEDB, NOINHERIT,
+-- grant it CREATE on this database, and grant membership only to the migration
+-- principal. The application runtime must never be a member of this role.
+-- The role owns this schema, key table and SECURITY DEFINER function so the
+-- verifier never executes with the broad rupaykg application/database owner.
+-- No application-role grants or signing secrets are created by this migration.
 
-create schema app_security;
+DO $$
+DECLARE
+  owner_role record;
+BEGIN
+  SELECT rolcanlogin, rolsuper, rolbypassrls, rolcreaterole, rolcreatedb,
+         rolinherit, rolreplication
+    INTO owner_role
+    FROM pg_roles
+   WHERE rolname = 'rupaykg_security_definer';
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Required NOLOGIN role rupaykg_security_definer must be provisioned by the DBA before this migration';
+  END IF;
+  IF owner_role.rolcanlogin OR owner_role.rolsuper OR owner_role.rolbypassrls
+     OR owner_role.rolcreaterole OR owner_role.rolcreatedb
+     OR owner_role.rolinherit OR owner_role.rolreplication THEN
+    RAISE EXCEPTION 'rupaykg_security_definer must be NOLOGIN, NOSUPERUSER, NOBYPASSRLS, NOCREATEROLE, NOCREATEDB, NOINHERIT and NREPLICATION';
+  END IF;
+END;
+$$;
+
+create schema app_security authorization rupaykg_security_definer;
 revoke all on schema app_security from public;
+set local role rupaykg_security_definer;
+
 
 create table app_security.request_context_keys (
   key_id text primary key check (key_id ~ '^[a-z0-9_-]{1,32}$'),
