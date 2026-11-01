@@ -54,3 +54,10 @@ The first route-wiring conclusion was incorrect: `registerValueRoutes` already c
 - PR #202 route-wiring audit correction: auth routes were already registered through `registerValueRoutes`; removed redundant direct registration. Actual onboarding defect was missing sessionPool argument, now corrected. PR #202 CI #4416 passed migrations, typecheck, build, browser smoke and full tests; container build still running.
 - PR #201 exact-head CI #4390 passed all steps.
 - No production changes. Release HOLD; independent security review and integrated-base assurance remain open.
+
+## Unified RLS foundation batch
+- Ported PR #201 database signed-context verifier migration, restricted owner provisioning workflow step, PostgreSQL integration tests and DBA documentation into PR #200.
+- PR #200 now contains the canonical AuthContext-derived token helper, the stronger RLS transaction wrapper, database verifier and fail-closed tests. PR #199 was closed unmerged as superseded. PR #201 remains open but is no longer to be merged independently; close it only after combined PR #200 CI passes.
+- PR #200 combined CI #4421 passed migration validation, restricted-owner CI provisioning and full migrations; typecheck was running. Checkpoint commit `aa7f4b25990150fb8cdda6636446401797326a8d`.
+- PR #202 exact-head CI #4416 passed all checks including PostgreSQL tests and production container build. The onboarding auth handlers now use the separate session pool; the indirect auth-route registration was preserved (redundant direct registration removed).
+- Updated the canonical resume pointer. No production database, roles, grants, RLS, deployments, workers or certification were changed.
