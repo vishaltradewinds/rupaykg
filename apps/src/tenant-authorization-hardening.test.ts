@@ -52,7 +52,7 @@ test("high-risk authorization lock serializes membership revocation", async () =
       await revoker.query("begin");
       let revocationFinished = false;
       const revocation = revoker.query(
-        "update organization_memberships set status='REVOKED' where id=$1",
+        "update organization_memberships set status='REJECTED',last_revoked_at=now(),last_revocation_reason='integration test revocation' where id=$1",
         [membershipId],
       ).then(() => { revocationFinished = true; });
       await new Promise(resolve => setTimeout(resolve, 100));
@@ -135,7 +135,19 @@ test("field-sync conflict visibility and resolution require current verified dev
     );
     assert.equal(visible.rows.length, 1, "verified member with verified device can access its conflict");
 
-    await client.query("update organization_memberships set status='REVOKED' where id=$1", [membershipId]);
+    await client.query("update field_devices set status='PENDING' where id=$1", [deviceId]);
+    const unverifiedDevice = await client.query<{ id: string }>(
+      `select c.id from field_sync_conflicts c
+        join field_sync_envelopes e on e.id=c.envelope_id
+        join field_devices fd on fd.id=e.device_id and fd.identity_id=e.identity_id and fd.status='VERIFIED'
+       where c.id=$1 and e.identity_id=$2
+         and exists(select 1 from organization_memberships om where om.identity_id=e.identity_id and om.organization_id=fd.organization_id and om.status='VERIFIED')`,
+      [conflictId, identityId],
+    );
+    assert.equal(unverifiedDevice.rows.length, 0, "unverified device must not expose conflicts");
+    await client.query("update field_devices set status='VERIFIED' where id=$1", [deviceId]);
+
+    await client.query("update organization_memberships set status='REJECTED',last_revoked_at=now(),last_revocation_reason='integration test revocation' where id=$1", [membershipId]);
     const revokedRead = await client.query<{ id: string }>(
       `select c.id from field_sync_conflicts c
         join field_sync_envelopes e on e.id=c.envelope_id
@@ -160,17 +172,6 @@ test("field-sync conflict visibility and resolution require current verified dev
     );
     assert.equal(revokedResolve.rows.length, 0, "revoked membership must not resolve a conflict");
 
-    await client.query("update organization_memberships set status='VERIFIED' where id=$1", [membershipId]);
-    await client.query("update field_devices set status='PENDING' where id=$1", [deviceId]);
-    const unverifiedDevice = await client.query<{ id: string }>(
-      `select c.id from field_sync_conflicts c
-        join field_sync_envelopes e on e.id=c.envelope_id
-        join field_devices fd on fd.id=e.device_id and fd.identity_id=e.identity_id and fd.status='VERIFIED'
-       where c.id=$1 and e.identity_id=$2
-         and exists(select 1 from organization_memberships om where om.identity_id=e.identity_id and om.organization_id=fd.organization_id and om.status='VERIFIED')`,
-      [conflictId, identityId],
-    );
-    assert.equal(unverifiedDevice.rows.length, 0, "unverified device must not expose conflicts");
     await client.query("rollback");
   } catch (error) {
     try { await client.query("rollback"); } catch {}
