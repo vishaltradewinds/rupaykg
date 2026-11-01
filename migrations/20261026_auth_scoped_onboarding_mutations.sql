@@ -75,23 +75,144 @@ create or replace function public.prevent_direct_membership_activation()
 returns trigger
 language plpgsql
 set search_path = pg_catalog, pg_temp
-as $$
+as $
+declare
+  role_name text;
+  dual_control_approved boolean := false;
+  access_request_type text;
+  target_membership_id uuid;
+  previous_revoked_at timestamptz;
 begin
-  if new.status='VERIFIED' and old.status is distinct from 'VERIFIED' and not exists (
+  if new.status <> 'VERIFIED' then
+    return new;
+  end if;
+
+  if TG_OP = 'UPDATE' then
+    if old.status = 'VERIFIED' then
+      return new;
+    end if;
+    target_membership_id := old.id;
+    previous_revoked_at := old.last_revoked_at;
+  end if;
+
+  select r.name into role_name
+    from public.roles r
+   where r.id = new.role_id and r.organization_id = new.organization_id;
+
+  -- Reserved platform roles retain the original two-person database guard.
+  if role_name in ('super_admin','platform_admin') then
+    access_request_type := case when TG_OP = 'INSERT' then 'GRANT_RESERVED_ROLE' else 'RESTORE_RESERVED_ROLE' end;
+
+    select exists (
+      select 1
+        from public.platform_access_change_requests q
+        join public.identities requester on requester.id=q.requester_identity_id
+        join public.identities approver on approver.id=q.approver_identity_id
+       where q.request_type=access_request_type
+         and q.target_identity_id=new.identity_id
+         and q.organization_id=new.organization_id
+         and q.role_id=new.role_id
+         and (
+           (TG_OP = 'INSERT' and q.membership_id is null)
+           or
+           (TG_OP = 'UPDATE' and q.membership_id=target_membership_id
+             and previous_revoked_at is not null
+             and q.created_at > previous_revoked_at)
+         )
+         and q.status='APPROVED'
+         and q.applied_at is not null
+         and q.requester_identity_id <> q.approver_identity_id
+         and q.requester_identity_id <> q.target_identity_id
+         and q.approver_identity_id <> q.target_identity_id
+         and requester.status='VERIFIED' and requester.suspended_at is null
+         and approver.status='VERIFIED' and approver.suspended_at is null
+         and exists (
+           select 1 from public.organization_memberships om
+           join public.roles r on r.id=om.role_id
+           join public.organizations o on o.id=om.organization_id and o.status='VERIFIED'
+           where om.identity_id=q.requester_identity_id and om.organization_id=q.organization_id and om.status='VERIFIED'
+             and r.name='super_admin'
+             and exists (select 1 from jsonb_array_elements_text(r.permissions) as permission(value) where permission.value='admin:users')
+         )
+         and exists (
+           select 1 from public.organization_memberships om
+           join public.roles r on r.id=om.role_id
+           join public.organizations o on o.id=om.organization_id and o.status='VERIFIED'
+           where om.identity_id=q.approver_identity_id and om.organization_id=q.organization_id and om.status='VERIFIED'
+             and r.name='super_admin'
+             and exists (select 1 from jsonb_array_elements_text(r.permissions) as permission(value) where permission.value='admin:users')
+         )
+    ) into dual_control_approved;
+
+    if not dual_control_approved then
+      raise exception 'RESERVED_ROLE_REQUIRES_DUAL_CONTROL';
+    end if;
+    return new;
+  end if;
+
+  -- Ordinary memberships require a completed stakeholder application on both
+  -- INSERT and status promotion. Test fixtures must use the governed lifecycle.
+  if not exists (
     select 1 from public.stakeholder_applications sa
-    where sa.identity_id=new.identity_id and sa.organization_id=new.organization_id and sa.role_id=new.role_id and sa.status='APPROVED'
+     where sa.identity_id=new.identity_id
+       and sa.organization_id=new.organization_id
+       and sa.role_id=new.role_id
+       and sa.status='APPROVED'
   ) then
     raise exception 'STAKEHOLDER_MEMBERSHIP_REQUIRES_APPROVED_APPLICATION';
   end if;
   return new;
 end;
-$$;
+$;
+
+create or replace function public.prevent_unauthorized_stakeholder_approval()
+returns trigger
+language plpgsql
+set search_path = pg_catalog, pg_temp
+as $
+begin
+  -- An application must always enter through PENDING intake. Direct INSERT as
+  -- APPROVED would otherwise bypass the UPDATE-only authority and hierarchy gates.
+  if TG_OP = 'INSERT' then
+    if new.status = 'APPROVED' then
+      raise exception 'STAKEHOLDER_APPLICATION_MUST_START_PENDING';
+    end if;
+    return new;
+  end if;
+
+  if new.status = 'APPROVED' and old.status is distinct from 'APPROVED' then
+    if new.reviewed_by_identity_id is null then
+      raise exception 'Stakeholder approval requires a reviewing platform authority';
+    end if;
+    if new.reviewed_by_identity_id = new.identity_id then
+      raise exception 'Stakeholder applications cannot be self-approved';
+    end if;
+    if not exists (
+      select 1
+      from public.organization_memberships om
+      join public.roles r on r.id = om.role_id
+      where om.identity_id = new.reviewed_by_identity_id
+        and om.status = 'VERIFIED'
+        and r.name in ('platform_admin', 'super_admin')
+    ) then
+      raise exception 'Stakeholder approval requires a verified platform_admin or super_admin';
+    end if;
+  end if;
+  return new;
+end;
+$;
+
+drop trigger if exists stakeholder_approval_authority_guard on public.stakeholder_applications;
+create trigger stakeholder_approval_authority_guard
+before insert or update of status, reviewed_by_identity_id
+on public.stakeholder_applications
+for each row execute function public.prevent_unauthorized_stakeholder_approval();
 
 create or replace function public.prevent_stakeholder_self_approval()
 returns trigger
 language plpgsql
 set search_path = pg_catalog, pg_temp
-as $$
+as $
 begin
   if new.approved_by_identity_id is not null and exists (
     select 1 from public.stakeholder_applications sa
@@ -136,14 +257,18 @@ grant update on public.identity_sessions, public.organizations, public.organizat
   public.organization_geography_scopes, public.stakeholder_applications to rupaykg_auth_owner;
 grant usage on schema public to rupaykg_auth_owner;
 grant references on public.identities, public.organizations, public.roles, public.geography, public.stakeholder_applications to rupaykg_auth_owner;
-grant create on database rupaykg to rupaykg_auth_owner;
+grant select on public.platform_access_change_requests to rupaykg_auth_owner;
 
--- Execute the SECURITY DEFINER DDL as its dedicated NOLOGIN owner.
+-- Create the function schema with the migration principal's database CREATE
+-- authority; the function owner does not need CREATE on the database itself.
 grant rupaykg_auth_owner to current_user;
-set role rupaykg_auth_owner;
-create schema if not exists auth_private;
+create schema if not exists auth_private authorization rupaykg_auth_owner;
+alter schema auth_private owner to rupaykg_auth_owner;
 revoke all on schema auth_private from public;
 grant usage on schema auth_private to rupaykg_auth_runtime;
+
+-- Execute the SECURITY DEFINER DDL as its dedicated NOLOGIN owner.
+set role rupaykg_auth_owner;
 
 create or replace function auth_private.create_stakeholder_application(
   p_token_hash text,
