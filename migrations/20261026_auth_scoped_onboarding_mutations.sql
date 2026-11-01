@@ -24,6 +24,7 @@ grant select, insert on public.organizations, public.roles, public.organization_
 grant update on public.organizations, public.organization_memberships,
   public.organization_geography_scopes, public.stakeholder_applications to rupaykg_auth_owner;
 grant usage on schema public to rupaykg_auth_owner;
+grant create on database rupaykg to rupaykg_auth_owner;
 
 -- Execute the SECURITY DEFINER DDL as its dedicated NOLOGIN owner.
 grant rupaykg_auth_owner to current_user;
