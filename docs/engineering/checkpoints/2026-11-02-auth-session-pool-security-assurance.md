@@ -36,3 +36,12 @@
 3. Confirm production DBA provisioning/secret contract without applying any production role changes.
 4. Integrate with PRs #199–#201 only on a controlled integration spine after combined-base CI.
 5. Keep production release HOLD until 67-table RLS policy coverage, all route/worker transaction coverage, migration reconciliation and approvals are complete.
+
+## Additional integration defect found after initial checkpoint
+A route-wiring audit found that `auth-routes.ts` was not imported or registered by the production `server.ts` entry point. The module existed, but its login/register/auth-me/onboarding application endpoints were not part of the authoritative Fastify server. Corrected the branch by:
+- Importing and registering `registerAuthRoutes(app, pool, authPool)` in `server.ts`.
+- Passing `sessionPool` to the onboarding handlers in `auth-routes.ts` that previously fell back to the operational pool.
+- Returning a controlled 503 on authentication-pool failures rather than allowing unhandled exceptions.
+- Adding `apps/src/auth-routes.test.ts` to verify route registration and fail-closed behavior without a database.
+
+Latest head after these corrections: `561aee0649dc90854cd3a09323aec6c3dd9ea6f2`. Exact-head CI #4406 / run `41338395809` is IN PROGRESS. This run includes the full route-wiring correction and integration test. No production changes.
