@@ -25,7 +25,7 @@ END
 $preflight$;
 
 DO $capability_role$
-DECLARE capability_role pg_catalog.pg_roles%ROWTYPE;
+DECLARE capability_role record;
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = 'rupaykg_bootstrap_custodian') THEN
     CREATE ROLE rupaykg_bootstrap_custodian
