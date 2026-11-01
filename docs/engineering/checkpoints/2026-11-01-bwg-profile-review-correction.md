@@ -83,3 +83,27 @@ Added `apps/src/bwg-applicability-postgres.integration.test.ts`, gated by `RUPAY
 Exact-head CI #4287 / ID 41327350512 passed at code head `fba4959f08c928eaf4a863a15b2109aa0d4acee4`, including migration validation, disposable PostgreSQL integration tests, typecheck, build, browser smoke test, production container build and cleanup.
 
 This is engineering validation only. PR #193 remains draft/unmerged pending independent review. Production remains HOLD.
+
+
+## Official SWM Rules 2026 and live CPCB BWG portal verification — 2026-11-01
+
+Reviewed the official Gazette S.O. 388(E) and live CPCB Centralised Portal:
+- Gazette PDF: https://moef.gov.in/uploads/pdf-uploads/pdf_69a16e3b04c107.91022257.pdf
+- CPCB portal: https://swm.cpcb.gov.in/
+- CPCB BWG user guide: https://swmp.cpcb.gov.in/en/user-guide
+- CPCB FAQ: https://swmp.cpcb.gov.in/en/faq
+- CPCB resources: https://swmp.cpcb.gov.in/en/resources
+
+Statutory boundary:
+- Rule 3(1)(i): BWG criteria are >=20,000 sq.m floor area OR >=40,000 L/day water OR >=100 kg/day solid waste, for enumerated categories.
+- Rule 6(a): register with the concerned local body through the centralised portal; certificate carries continuing conditions.
+- Rule 6(h): annual returns due 30 June on portal for local-body processing.
+- Rule 10(1): only the local body generates EBWGR certificates on the portal.
+- Rule 16 assigns CPCB operation of the centralised portal and permits portal-use fees under sub-rule (8).
+- Rule 39(36)-(40) assigns ULB identification/geotagging, certificate cost and issuance, and monthly reporting duties.
+
+The portal is live. Its official guide shows organization account, BWG eligibility assessment, document upload and self-declaration, fee payment, submission, ULB/District Panchayat review, acknowledgement tracking, authority remarks and certificate download. FAQ confirms registration is organization-specific and ULB-specific; account creation is not registration approval.
+
+Repository standard added: `docs/engineering/standards/BWG_STATUTORY_AUTHORITY_BOUNDARY.md`. RupayKg is supplementary MRV/workflow infrastructure, not the statutory portal. It must hand off to CPCB, retain receipt/certificate provenance, and never issue official EBWGR certificates. CPCB's resources page lists a portal User Fee Structure guideline dated 15 October 2026; the actual fee schedule amount is not verified in this checkpoint, so no cost assumption is allowed.
+
+Latest exact code CI #4287 / ID 41327256588 passed. Docs-only CI for the current legal boundary addendum is running as #4291 / ID 41327634618.
