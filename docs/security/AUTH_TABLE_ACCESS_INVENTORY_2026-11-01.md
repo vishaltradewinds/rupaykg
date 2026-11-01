@@ -39,6 +39,7 @@
 - Production startup verifies both runtime identities are distinct, neither is superuser/BYPASSRLS/CREATEDB/CREATEROLE/REPLICATION, the app role cannot access auth tables or auth lifecycle functions, the auth role cannot directly read auth tables or resolve sessions, and the expected SECURITY DEFINER functions are owned by NOLOGIN/NOBYPASSRLS `rupaykg_auth_owner`.
 - In security-definer mode, `hasOrganizationPermission` now calls `auth_private.has_organization_permission(identity_id, organization_id, permissions)` instead of directly querying memberships and roles.
 - Geography/activity/evidence authorization helpers now call `auth_private.organization_has_geography_scope`, `can_read_geography`, `can_write_geography`, `can_write_activity`, and `can_verify_evidence`. These are SECURITY DEFINER, owned by `rupaykg_auth_owner`, and EXECUTE is granted only to `rupaykg_app_runtime`.
+- Platform-admin route authentication now calls `auth_private.is_platform_admin(identity_id, permission)`; the subsequent platform-admin read/write handlers still contain direct table operations and remain blocked from production cutover until separately migrated.
 - Readiness now checks both database pools.
 
 ## Application integration delivered in PR #192
