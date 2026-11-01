@@ -218,3 +218,25 @@ Do not simply revoke BYPASSRLS from the existing owner role without mapping all 
 - [ ] Independent review.
 
 **Release decision: HOLD.** This document is an engineering design baseline, not evidence of RLS implementation or production certification.
+
+
+## 9. Additional executable-surface inventory (disposable branch, read-only)
+
+The fresh rehearsal branch was also inspected for database executable surfaces:
+
+- `pgcrypto` extension is installed (version 1.4), so HMAC/digest primitives are available for a future signed-context prototype; this does not itself validate a context design.
+- No public views were found in `pg_views`.
+- 115 functions exist in schema `public`.
+- 0 of those functions are marked SECURITY DEFINER.
+- 78 functions are owned by `rupaykg`.
+- All 115 resolve to PUBLIC EXECUTE under the effective default ACL.
+- 70 user-defined triggers are present.
+
+This is not automatically a vulnerability: trigger functions and non-definer functions have different invocation and privilege semantics. It is, however, an excessive/unreviewed callable surface that must be classified. Before introducing a restricted runtime role:
+1. Inventory every non-trigger function's callers and required grants.
+2. Revoke PUBLIC EXECUTE from application helper functions by default; grant exact signatures to the intended runtime/security roles.
+3. Review trigger functions and trigger execution under a non-owner role; ensure required writes/reads remain valid without broad table grants.
+4. Move privileged context helpers into a non-public schema with pinned search_path, minimal SECURITY DEFINER ownership, and exact EXECUTE grants.
+5. Test function behavior with RLS active and runtime role non-owner/non-BYPASSRLS, including nested trigger calls.
+
+The current database role owns all application functions and tables; role separation therefore requires coordinated ownership/grant migration, not only a new LOGIN role.
