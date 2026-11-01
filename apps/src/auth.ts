@@ -29,7 +29,7 @@ export async function authenticate(request: FastifyRequest, sessionPool: Pool | 
     "select public.verify_identity_session($1) as identity_id",
     [hashToken(token)],
   );
-  if (!rows.rows[0]) return null;
+  if (!rows.rows[0]?.identity_id) return null;
   const memberships = await membershipPool.query<{ organization_id: string; role_id: string; status: string }>(
     `select organization_id, role_id, status
        from organization_memberships
