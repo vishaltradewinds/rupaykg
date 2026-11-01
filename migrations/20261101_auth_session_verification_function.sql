@@ -54,12 +54,17 @@ AS $function$
    LIMIT 1
 $function$;
 
--- Temporarily allow the migration owner to transfer function ownership.
-GRANT rupaykg_auth_verifier_owner TO rupaykg;
-GRANT CREATE ON SCHEMA public TO rupaykg_auth_verifier_owner;
-ALTER FUNCTION public.verify_identity_session(text) OWNER TO rupaykg_auth_verifier_owner;
-REVOKE CREATE ON SCHEMA public FROM rupaykg_auth_verifier_owner;
-REVOKE rupaykg_auth_verifier_owner FROM rupaykg;
+-- Temporarily grant the actual migration runner the membership/DDL needed
+-- to transfer ownership. Do not assume the runner has a fixed role name.
+DO $ownership$
+BEGIN
+  EXECUTE format('GRANT rupaykg_auth_verifier_owner TO %I', current_user);
+  GRANT CREATE ON SCHEMA public TO rupaykg_auth_verifier_owner;
+  ALTER FUNCTION public.verify_identity_session(text) OWNER TO rupaykg_auth_verifier_owner;
+  REVOKE CREATE ON SCHEMA public FROM rupaykg_auth_verifier_owner;
+  EXECUTE format('REVOKE rupaykg_auth_verifier_owner FROM %I', current_user);
+END
+$ownership$;
 REVOKE ALL ON FUNCTION public.verify_identity_session(text) FROM PUBLIC;
 
 -- The API's non-login capability grants only the function, not table reads.
