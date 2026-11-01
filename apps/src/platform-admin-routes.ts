@@ -66,16 +66,7 @@ async function authorize(
   }
   try {
     const result = await pool.query<{ ok: boolean }>(
-      `select exists (
-         select 1 from organization_memberships om
-         join roles r on r.id = om.role_id
-         join identities i on i.id = om.identity_id
-         where om.identity_id = $1 and om.status = 'VERIFIED'
-           and r.name = 'super_admin' and i.suspended_at is null
-           and ($2::text is null or exists (
-             select 1 from jsonb_array_elements_text(r.permissions) p where p = $2
-           ))
-       ) as ok`,
+      `select auth_private.is_platform_admin($1,$2) as ok`,
       [auth.identityId, permission],
     );
     if (result.rows[0]?.ok !== true) {
