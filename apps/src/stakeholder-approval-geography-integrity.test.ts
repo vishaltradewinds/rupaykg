@@ -78,11 +78,17 @@ test("stakeholder approval geography must match its application, including NULL 
       "STAKEHOLDER_APPLICATION_GEOGRAPHY_IMMUTABLE_AFTER_APPROVAL_CHAIN",
     );
 
+    // A separate identity is required: the schema intentionally allows only
+    // one application per identity/organization/role tuple.
+    ids.nullActor = (await client.query<{id:string}>(
+      "insert into identities(external_subject,display_name) values($1,$2) returning id",
+      [`onboarding-geo-null-actor-${suffix}`, "Onboarding Geography NULL Test"],
+    )).rows[0]!.id;
     ids.nullApplication = (await client.query<{id:string}>(
       `insert into stakeholder_applications
        (identity_id,organization_id,role_id,requested_role_key,requested_organization_type,geography_id)
        values($1,$2,$3,'collector','COLLECTOR',null) returning id`,
-      [ids.actor, ids.org, ids.role],
+      [ids.nullActor, ids.org, ids.role],
     )).rows[0]!.id;
     ids.nullApproval = (await client.query<{id:string}>(
       "select id from stakeholder_application_approvals where application_id=$1 order by step_order limit 1",
