@@ -17,6 +17,8 @@
 
 - The application container entrypoint starts only `production-server.js`.
 - Acceptance/demo seed data must never be run automatically in a production container.
+- The migration command runs through `production-migrate.js`, which validates the same fail-closed production configuration as the API server and propagates the configured TLS trust material.
+- The migration runner acquires a PostgreSQL advisory lock and refuses a concurrent run.
 - The migration command is intentionally explicit and must run only in an approved, separately observable release task.
 - Do not run migrations concurrently from multiple replicas.
 - Do not run a migration until the exact target Neon branch/database identity and migration compatibility have been verified.
