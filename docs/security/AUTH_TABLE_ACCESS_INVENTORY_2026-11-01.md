@@ -51,6 +51,12 @@ The session resolver is only one part of the bootstrap. Do not enable RLS on aut
 9. Explicit runtime role that cannot BYPASSRLS, assume owner roles, or read raw authentication tables.
 10. A migration identity separate from the runtime role, with audited grant boundaries.
 
+## Registration uniqueness finding
+
+- The authoritative production Neon branch was checked using aggregate-only SQL: **0 duplicate case-insensitive email groups** and **0 excess duplicate identity rows** at audit time.
+- Existing `identities_email_idx` is non-unique. It accelerates lookup but does not prevent concurrent duplicate email registration.
+- A unique partial index on `lower(email)` was successfully tested on the disposable branch after a zero-duplicate preflight. A production migration must repeat the preflight immediately before creating the index.
+
 ## Rollout decision
 
 - Production auth resolver mode remains `legacy`.
