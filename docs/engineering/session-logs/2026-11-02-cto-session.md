@@ -69,3 +69,9 @@ The first route-wiring conclusion was incorrect: `registerValueRoutes` already c
 - PR #192 pre-integration CI #4424 exposed one actual failing lifecycle fixture: direct VERIFIED ordinary membership insert rejected by the approved-application guard. This is correct security behavior; remaining dependent suites cancelled. A two-identity/two-secret bootstrap path is required for legitimate CI onboarding fixtures and first production bootstrap.
 - Checkpoint: `docs/engineering/checkpoints/2026-11-02-unified-auth-rls-foundation.md`. Current combined PR #192 code head `820be17cb4d39fc0eb6546954515f80200e6669d`; CI #4433 in progress.
 - Production unchanged; no production DDL/DML, migrations, roles, grants, RLS, branch ops, deployment or certification.
+
+## Duplicate PR cleanup and bootstrap approval gate
+- Closed PRs #199, #200, #201 and #202 unmerged. Their canonical RLS components from #199–#201 are integrated into PR #192; #202 was an alternate auth stack and is superseded by the existing auth_private lifecycle.
+- Combined PR #192 CI #4434 applied the signed-context verifier migration and passed RLS transaction, token and database-verifier tests. One lifecycle fixture remains failing due direct VERIFIED membership insertion without approved application; platform-admin test fixture still disables the trigger. Both require the real two-person bootstrap and approved onboarding lifecycle.
+- Updated issue #195 with a two-identity/two-custodian/two-secret bootstrap trust-model proposal. No identities or secrets were selected/provisioned. Founder approval and independent review remain required before production use.
+- Latest PR #192 code head `820be17cb4d39fc0eb6546954515f80200e6669d`; docs-only follow-up commits recorded in resume pointer. Production remains unchanged.
