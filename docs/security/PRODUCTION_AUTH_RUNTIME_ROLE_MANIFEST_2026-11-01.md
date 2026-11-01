@@ -24,7 +24,7 @@ All runtime roles must also have `NOCREATEDB`, `NOCREATEROLE`, `NOREPLICATION`, 
 
 ## Function ownership and execution grants
 
-All fourteen functions below must be SECURITY DEFINER, have fixed safe `search_path = pg_catalog, pg_temp`, use schema-qualified object references, and be owned by `rupaykg_auth_owner`:
+All fifteen functions below must be SECURITY DEFINER, have fixed safe `search_path = pg_catalog, pg_temp`, use schema-qualified object references, and be owned by `rupaykg_auth_owner`:
 
 1. `auth_private.resolve_session(text)`
 2. `auth_private.find_login_candidate(text)`
@@ -40,10 +40,11 @@ All fourteen functions below must be SECURITY DEFINER, have fixed safe `search_p
 12. `auth_private.can_write_geography(uuid,uuid,uuid)`
 13. `auth_private.can_write_activity(uuid,uuid)`
 14. `auth_private.can_verify_evidence(uuid,uuid)`
+15. `auth_private.is_platform_admin(uuid,text)`
 
 Execution grants:
-- `rupaykg_app_runtime`: EXECUTE on `resolve_session(text)` and the six scoped authorization functions (organization permission, geography scope/read/write, activity write, and evidence verification); no credential/session lifecycle or self-context functions.
-- `rupaykg_auth_runtime`: EXECUTE on functions 2–8; no EXECUTE on `resolve_session(text)` or any of the six scoped application authorization functions.
+- `rupaykg_app_runtime`: EXECUTE on `resolve_session(text)` and the six scoped authorization functions (organization permission, geography scope/read/write, activity write, and evidence verification, and platform-admin authority); no credential/session lifecycle or self-context functions.
+- `rupaykg_auth_runtime`: EXECUTE on functions 2–8; no EXECUTE on `resolve_session(text)` or any of the seven scoped application authorization functions.
 - PUBLIC: no EXECUTE on any of the eight functions.
 - Neither runtime role receives SELECT/INSERT/UPDATE/DELETE on `identities`, `identity_sessions`, `identity_password_credentials`, or `organization_memberships`.
 
@@ -56,10 +57,10 @@ Production startup fails closed unless:
 - usernames are exactly the two runtime role names above;
 - the database identities are distinct and both non-superuser, NOBYPASSRLS, NOCREATEDB, NOCREATEROLE, NOREPLICATION;
 - app runtime has no direct auth-table DML/read privileges and no public-schema CREATE;
-- app runtime can execute the session resolver and the six scoped application authorization functions, but cannot execute credential/session lifecycle or self-context functions;
+- app runtime can execute the session resolver and the seven scoped application authorization functions, but cannot execute credential/session lifecycle or self-context functions;
 - auth runtime has no direct auth-table DML/read privileges or public-schema CREATE, can execute functions 2–8, and cannot execute the session resolver or any scoped application authorization function;
 - both owner roles exist, are NOLOGIN/NOBYPASSRLS and have no elevated database/role/replication privileges;
-- all fourteen functions exist, are SECURITY DEFINER and are owned by `rupaykg_auth_owner`.
+- all fifteen functions exist, are SECURITY DEFINER and are owned by `rupaykg_auth_owner`.
 
 Readiness requires both pools to be reachable.
 
