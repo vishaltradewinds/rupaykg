@@ -65,3 +65,33 @@ export function readProductionConfig(env: NodeJS.ProcessEnv = process.env): Prod
     syntheticData: false,
   };
 }
+
+export type ProductionMigrationTarget = {
+  expectedBranchId: string;
+  expectedDatabaseName: string;
+  expectedRoleName: string;
+};
+
+export type ActualMigrationTarget = {
+  branchId: string | null;
+  databaseName: string;
+  roleName: string;
+};
+
+export function assertProductionMigrationTarget(
+  expected: ProductionMigrationTarget,
+  actual: ActualMigrationTarget,
+): void {
+  if (!expected.expectedBranchId.trim()) throw new Error("PRODUCTION_MIGRATION_TARGET_INVALID: expected Neon branch ID is required");
+  if (!expected.expectedDatabaseName.trim()) throw new Error("PRODUCTION_MIGRATION_TARGET_INVALID: expected database name is required");
+  if (!expected.expectedRoleName.trim()) throw new Error("PRODUCTION_MIGRATION_TARGET_INVALID: expected database role is required");
+  if (!actual.branchId || actual.branchId !== expected.expectedBranchId) {
+    throw new Error("PRODUCTION_MIGRATION_TARGET_MISMATCH: connected Neon branch does not match the approved target");
+  }
+  if (actual.databaseName !== expected.expectedDatabaseName) {
+    throw new Error("PRODUCTION_MIGRATION_TARGET_MISMATCH: connected database does not match the approved target");
+  }
+  if (actual.roleName !== expected.expectedRoleName) {
+    throw new Error("PRODUCTION_MIGRATION_TARGET_MISMATCH: connected database role does not match the approved target");
+  }
+}
