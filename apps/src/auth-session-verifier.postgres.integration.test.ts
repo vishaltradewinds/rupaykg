@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
+import { assertAuthenticationPoolContract } from "./auth-db-contract.js";
 
 const enabled = process.env.RUPAYKG_RUN_DB_INTEGRATION_TESTS === "1" && Boolean(process.env.DATABASE_URL);
 
@@ -78,6 +80,25 @@ test("auth session verifier owner and capability grants are least privilege", { 
       "select public.verify_identity_session(repeat('0', 64)) as identity_id",
     );
     assert.equal(verifier.rows[0]?.identity_id, null);
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      const loginRole = `rupaykg_auth_ci_${randomUUID().replaceAll("-", "")}`;
+      await client.query(`CREATE ROLE "${loginRole}" LOGIN INHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS`);
+      await client.query(`GRANT rupaykg_auth TO "${loginRole}"`);
+      await client.query(`SET ROLE "${loginRole}"`);
+      const scopedPool = { query: client.query.bind(client) } as unknown as Pool;
+      await assertAuthenticationPoolContract(scopedPool);
+      await client.query("RESET ROLE");
+      await client.query("ROLLBACK");
+    } catch (error) {
+      try { await client.query("RESET ROLE"); } catch {}
+      try { await client.query("ROLLBACK"); } catch {}
+      throw error;
+    } finally {
+      client.release();
+    }
   } finally {
     await pool.end();
   }
