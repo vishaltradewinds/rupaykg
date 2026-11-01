@@ -87,3 +87,96 @@ test("high-risk authorization lock serializes membership revocation", async () =
     await pool.end();
   }
 });
+
+
+test("field-sync conflict visibility and resolution require current verified device membership", async () => {
+  if (!databaseUrl) return;
+  const pool = new Pool({ connectionString: databaseUrl, max: 1 });
+  const suffix = randomUUID();
+  const client = await pool.connect();
+  try {
+    await client.query("begin");
+    const organizationId = (await client.query<{ id: string }>(
+      "insert into organizations(name,organization_type) values($1,'COLLECTOR') returning id",
+      [`sync-auth-org-${suffix}`],
+    )).rows[0]!.id;
+    const identityId = (await client.query<{ id: string }>(
+      "insert into identities(external_subject,display_name) values($1,$2) returning id",
+      [`sync-auth-identity-${suffix}`, "Sync Authorization Test"],
+    )).rows[0]!.id;
+    const roleId = (await client.query<{ id: string }>(
+      "insert into roles(organization_id,name,permissions) values($1,$2,'[]'::jsonb) returning id",
+      [organizationId, `sync-auth-role-${suffix}`],
+    )).rows[0]!.id;
+    const membershipId = (await client.query<{ id: string }>(
+      "insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED') returning id",
+      [identityId, organizationId, roleId],
+    )).rows[0]!.id;
+    const deviceId = (await client.query<{ id: string }>(
+      "insert into field_devices(device_id,identity_id,organization_id,status) values($1,$2,$3,'VERIFIED') returning id",
+      [`sync-auth-device-${suffix}`, identityId, organizationId],
+    )).rows[0]!.id;
+    const envelopeId = (await client.query<{ id: string }>(
+      "insert into field_sync_envelopes(device_id,identity_id,idempotency_key,client_sequence,captured_at,payload,payload_hash) values($1,$2,$3,1,now(),'{}'::jsonb,'fixture') returning id",
+      [deviceId, identityId, `sync-auth-envelope-${suffix}`],
+    )).rows[0]!.id;
+    const conflictId = (await client.query<{ id: string }>(
+      "insert into field_sync_conflicts(envelope_id,entity_type,conflict_type,client_version) values($1,'activity','TEST_CONFLICT','{}'::jsonb) returning id",
+      [envelopeId],
+    )).rows[0]!.id;
+
+    const visible = await client.query<{ id: string }>(
+      `select c.id from field_sync_conflicts c
+        join field_sync_envelopes e on e.id=c.envelope_id
+        join field_devices fd on fd.id=e.device_id and fd.identity_id=e.identity_id and fd.status='VERIFIED'
+       where c.id=$1 and e.identity_id=$2
+         and exists(select 1 from organization_memberships om where om.identity_id=e.identity_id and om.organization_id=fd.organization_id and om.status='VERIFIED')`,
+      [conflictId, identityId],
+    );
+    assert.equal(visible.rows.length, 1, "verified member with verified device can access its conflict");
+
+    await client.query("update organization_memberships set status='REVOKED' where id=$1", [membershipId]);
+    const revokedRead = await client.query<{ id: string }>(
+      `select c.id from field_sync_conflicts c
+        join field_sync_envelopes e on e.id=c.envelope_id
+        join field_devices fd on fd.id=e.device_id and fd.identity_id=e.identity_id and fd.status='VERIFIED'
+       where c.id=$1 and e.identity_id=$2
+         and exists(select 1 from organization_memberships om where om.identity_id=e.identity_id and om.organization_id=fd.organization_id and om.status='VERIFIED')`,
+      [conflictId, identityId],
+    );
+    assert.equal(revokedRead.rows.length, 0, "revoked membership must remove conflict visibility");
+    const revokedResolve = await client.query<{ id: string }>(
+      `update field_sync_conflicts c
+          set resolution_status='RESOLVED', resolved_by_identity_id=$2, resolved_at=now()
+        where c.id=$1 and c.resolution_status='OPEN'
+          and exists (
+            select 1 from field_sync_envelopes e
+            join field_devices fd on fd.id=e.device_id and fd.identity_id=e.identity_id and fd.status='VERIFIED'
+            where e.id=c.envelope_id and e.identity_id=$2
+              and exists(select 1 from organization_memberships om where om.identity_id=e.identity_id and om.organization_id=fd.organization_id and om.status='VERIFIED')
+          )
+        returning c.id`,
+      [conflictId, identityId],
+    );
+    assert.equal(revokedResolve.rows.length, 0, "revoked membership must not resolve a conflict");
+
+    await client.query("update organization_memberships set status='VERIFIED' where id=$1", [membershipId]);
+    await client.query("update field_devices set status='PENDING' where id=$1", [deviceId]);
+    const unverifiedDevice = await client.query<{ id: string }>(
+      `select c.id from field_sync_conflicts c
+        join field_sync_envelopes e on e.id=c.envelope_id
+        join field_devices fd on fd.id=e.device_id and fd.identity_id=e.identity_id and fd.status='VERIFIED'
+       where c.id=$1 and e.identity_id=$2
+         and exists(select 1 from organization_memberships om where om.identity_id=e.identity_id and om.organization_id=fd.organization_id and om.status='VERIFIED')`,
+      [conflictId, identityId],
+    );
+    assert.equal(unverifiedDevice.rows.length, 0, "unverified device must not expose conflicts");
+    await client.query("rollback");
+  } catch (error) {
+    try { await client.query("rollback"); } catch {}
+    throw error;
+  } finally {
+    client.release();
+    await pool.end();
+  }
+});
