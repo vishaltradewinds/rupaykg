@@ -215,3 +215,16 @@ The route checks `canActForOrganization` and `canPerformHighRiskActionInDatabase
 **Required design:** revalidate and lock the exact verified membership/role/permission rows in the issuance transaction, using a consistent lock order also used by revocation; make the credential insert and registry event atomic with that authorization decision. Add a concurrency test that races credential issuance against membership or permission revocation.
 
 These are route-level authorization design gaps for remediation review; they are not evidence that a successful unauthorized operation has occurred in production.
+
+
+## 9. Additional live preflight and membership-key correction
+
+Additional read-only production checks returned zero rows for:
+- field devices missing identity or organization;
+- legacy operation-sync envelopes missing actor identity or device identifier;
+- field-sync devices missing identity or organization;
+- activity assignments whose non-null role belongs to a different organization.
+
+The live `organization_memberships` uniqueness key is `(identity_id, organization_id, role_id)`, not `(identity_id, organization_id)`. A person may have multiple roles in one organization. Therefore a direct composite FK from a device's identity + organization to membership is not currently possible without changing the membership model. The preferred narrow option is a `field_devices.organization_membership_id` reference to the exact membership row, with a database check that its identity/organization match the device and that the membership is VERIFIED; revocation must disable/quarantine the device and every operation must re-check membership state. An alternative is a separate organization-person membership root with role grants beneath it.
+
+Also, nullable application/approval geography requires null-safe equality enforcement. A normal composite FK alone can be bypassed under MATCH SIMPLE when a child geography component is NULL; use a null-safe trigger/controlled operation or normalize geography scope to a non-null representation.
