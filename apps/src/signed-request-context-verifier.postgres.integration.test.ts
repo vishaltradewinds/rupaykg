@@ -21,6 +21,47 @@ test("database signed-context verifier authenticates claims and fails closed", {
   const secret = randomBytes(32).toString("hex");
   const now = Math.floor(Date.now() / 1000);
   try {
+    const ownership = await pool.query<{
+      function_owner: string;
+      table_owner: string;
+      can_login: boolean;
+      is_superuser: boolean;
+      bypass_rls: boolean;
+      can_create_roles: boolean;
+      can_create_databases: boolean;
+      inherits_roles: boolean;
+      can_replicate: boolean;
+      public_execute: boolean;
+      public_key_read: boolean;
+    }>(`
+      select pg_get_userbyid(p.proowner) as function_owner,
+             pg_get_userbyid(c.relowner) as table_owner,
+             r.rolcanlogin as can_login,
+             r.rolsuper as is_superuser,
+             r.rolbypassrls as bypass_rls,
+             r.rolcreaterole as can_create_roles,
+             r.rolcreatedb as can_create_databases,
+             r.rolinherit as inherits_roles,
+             r.rolreplication as can_replicate,
+             has_function_privilege('public', p.oid, 'EXECUTE') as public_execute,
+             has_table_privilege('public', c.oid, 'SELECT') as public_key_read
+        from pg_proc p
+        join pg_roles r on r.oid = p.proowner
+        join pg_class c on c.oid = 'app_security.request_context_keys'::regclass
+       where p.oid = 'app_security.current_request_context_claims()'::regprocedure
+    `);
+    assert.equal(ownership.rows[0]?.function_owner, "rupaykg_security_definer");
+    assert.equal(ownership.rows[0]?.table_owner, "rupaykg_security_definer");
+    assert.equal(ownership.rows[0]?.can_login, false);
+    assert.equal(ownership.rows[0]?.is_superuser, false);
+    assert.equal(ownership.rows[0]?.bypass_rls, false);
+    assert.equal(ownership.rows[0]?.can_create_roles, false);
+    assert.equal(ownership.rows[0]?.can_create_databases, false);
+    assert.equal(ownership.rows[0]?.inherits_roles, false);
+    assert.equal(ownership.rows[0]?.can_replicate, false);
+    assert.equal(ownership.rows[0]?.public_execute, false);
+    assert.equal(ownership.rows[0]?.public_key_read, false);
+
     await pool.query("insert into app_security.request_context_keys(key_id,secret,active) values($1,$2,true)", [keyId, secret]);
     await pool.query("create role " + roleName + " nologin nobypassrls");
     await pool.query("grant usage on schema app_security to " + roleName);
