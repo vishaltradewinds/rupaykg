@@ -47,6 +47,10 @@ test("evidence vault enforces activity, organization, series and version ownersh
       "insert into evidence(activity_id,evidence_type,status,captured_at,content_uri,content_hash) values($1,'WEIGHBRIDGE','CAPTURED',now(),'test://a',$2) returning id",
       [ids.activityA, "a".repeat(64)],
     )).rows[0]!.id;
+    ids.evidenceA2 = (await client.query<{id:string}>(
+      "insert into evidence(activity_id,evidence_type,status,captured_at,content_uri,content_hash) values($1,'WEIGHBRIDGE','CAPTURED',now(),'test://a2',$2) returning id",
+      [ids.activityA, "c".repeat(64)],
+    )).rows[0]!.id;
     ids.evidenceB = (await client.query<{id:string}>(
       "insert into evidence(activity_id,evidence_type,status,captured_at,content_uri,content_hash) values($1,'WEIGHBRIDGE','CAPTURED',now(),'test://b',$2) returning id",
       [ids.activityB, "b".repeat(64)],
@@ -58,7 +62,7 @@ test("evidence vault enforces activity, organization, series and version ownersh
 
     await expectFk("wrong_series_activity",
       "insert into evidence_artifact_versions(series_id,evidence_id,activity_id,version_number,file_name,media_type,size_bytes,sha256,content,uploaded_by_identity_id) values($1,$2,$3,2,'b.txt','text/plain',1,$4,$5,$6)",
-      [ids.seriesA, ids.evidenceA, ids.activityB, "b".repeat(64), Buffer.from("b"), ids.actor],
+      [ids.seriesA, ids.evidenceA2, ids.activityB, "c".repeat(64), Buffer.from("b"), ids.actor],
     );
     await expectFk("wrong_evidence_activity",
       "insert into evidence_artifact_versions(series_id,evidence_id,activity_id,version_number,file_name,media_type,size_bytes,sha256,content,uploaded_by_identity_id) values($1,$2,$3,2,'b.txt','text/plain',1,$4,$5,$6)",
