@@ -47,3 +47,19 @@ This is engineering CI evidence only. It is not a production deployment, statuto
 - Use disposable child branches for schema inspection and acceptance only.
 - No production DDL/DML, migrations, deployments, worker/scheduler activation, external submissions, or certification.
 - Production remains HOLD.
+
+
+## Follow-up authenticated HTTP acceptance — 2026-11-01
+
+Expanded Fastify route tests now cover:
+- Profile: authenticated intake remains REVIEW_REQUIRED/PENDING; unauthenticated request, missing verified membership, cross-organization write, missing profile-update permission and geography-scope denial are rejected.
+- Reporting-period creation: permission denial and authorized creation.
+- Waste report: permission denial and authorized intake remains PENDING when no verified evidence is supplied.
+- EPR report: permission denial and authorized intake remains PENDING; response explicitly states NOT_SUBMITTED.
+- ESG report: database-backed permission denial and authorized intake remains PENDING when no verified evidence is supplied.
+
+These HTTP route tests use a controlled fake PostgreSQL Pool. They are useful route-contract/authorization tests but are not a substitute for full authenticated route acceptance against a live disposable PostgreSQL instance.
+
+Latest exact-head CI before this documentation addendum: workflow #4282 / ID 41326628054 passed at code head b46eca16fb42cbcadfae9b3df60f2613d7296481. All steps succeeded, including migration validation, disposable PostgreSQL migration/acceptance, typecheck, build, browser smoke test, production container build and cleanup.
+
+This remains an engineering pass only. PR #193 is draft/unmerged; independent review is outstanding. Production remains HOLD.
