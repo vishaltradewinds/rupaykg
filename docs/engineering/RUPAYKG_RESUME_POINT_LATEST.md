@@ -3,7 +3,9 @@
 **Last updated:** 2026-11-01  
 **Canonical repository:** vishaltradewinds/rupaykg  
 **Current integration branch:** shakti/auth-bootstrap-application-integration-2026-11-01  
-**Current integration head:** 003f4e29bf555660681da3052f8152353fa42013  
+**Last verified code head:** 003f4e29bf555660681da3052f8152353fa42013  
+**Checkpoint/docs commit:** 82b1fca3fe10dcdb074982d3feceed4508f9b357  
+**Resume pointer:** this file is part of the latest branch checkpoint; fetch the live branch HEAD on the next run for any later docs-only update.  
 **Main baseline/live Render commit:** b5e91241d84a6712ff544d3deec1805702f45efd  
 **Release posture:** HOLD — production certification OFF — TRL 9 not established
 
@@ -16,7 +18,7 @@
 6. Auth integration PR: https://github.com/vishaltradewinds/rupaykg/pull/192
 
 ## Exact current state
-- PR #192 branch head 003f4e29bf555660681da3052f8152353fa42013; draft/unmerged. Exact-head CI #4345 (run 41331793993) failed at full disposable PostgreSQL tests. Migration validation, migration execution, dependency audit, typecheck, build and browser smoke passed. New reserved-role and APPROVED-application negative tests passed; see checkpoint.
+- PR #192 code head 003f4e29bf555660681da3052f8152353fa42013; draft/unmerged. Checkpoint/docs commit 82b1fca3fe10dcdb074982d3feceed4508f9b357. Docs-follow-up CI #4350 (run 41332260286) is in progress. Exact-head CI #4345 (run 41331793993) failed at full disposable PostgreSQL tests. Migration validation, migration execution, dependency audit, typecheck, build and browser smoke passed. New reserved-role and APPROVED-application negative tests passed; see checkpoint.
 - Main HEAD b5e91241d84a6712ff544d3deec1805702f45efd; main CI #4007 passed.
 - PR #193 exact-head CI #4335 passed; no independent review.
 - PR #194 exact-head CI #4333 passed; no independent review.
