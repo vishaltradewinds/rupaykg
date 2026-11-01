@@ -20,7 +20,7 @@
 - The migration command runs through `production-migrate.js`, which validates the same fail-closed production configuration as the API server and propagates the configured TLS trust material.
 - The migration runner acquires a PostgreSQL advisory lock and refuses a concurrent run.
 - The migration command is intentionally explicit and must run only in an approved, separately observable release task.
-- The migration runner verifies `current_setting('neon.branch_id')`, `current_database()`, and `current_user` against required expected values before any schema DDL. For the current production target these are branch `br-restless-base-b44cip2h`, database `rupaykg`, role `rupaykg`.
+- The migration runner requires explicit target identity for every Neon-hosted database URL (and every production-mode database) and verifies `current_setting('neon.branch_id')`, `current_database()`, and `current_user` against required expected values before any schema DDL. For the current production target these are branch `br-restless-base-b44cip2h`, database `rupaykg`, role `rupaykg`.
 - The GitHub `production` Environment must be configured with required reviewers before the workflow is used. Add protected environment secrets `RUPAYKG_PRODUCTION_DATABASE_URL`, `RUPAYKG_PRODUCTION_DATABASE_CA_CERT` (if needed), and `RUPAYKG_PRODUCTION_ALLOWED_ORIGINS`. Do not copy secret values into logs or repository files.
 - The workflow currently pins the observed production role `rupaykg`, which has elevated Neon privileges. Do not use this workflow until the privileged role has been reviewed and a least-privilege migration identity has been designed; update the expected role and secret together after that role cutover.
 - Do not run migrations concurrently from multiple replicas.
