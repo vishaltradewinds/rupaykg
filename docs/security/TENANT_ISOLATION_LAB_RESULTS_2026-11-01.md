@@ -30,6 +30,8 @@ Two synthetic rows were inserted for two synthetic organization UUIDs. No real u
 
 All assertions ran in a Neon SQL transaction on the child branch and completed successfully.
 
+A post-test read-only verification on the production parent confirmed branch ID `br-restless-base-b44cip2h`, 67 public tables, 0 RLS-enabled tables, 0 lab roles on production, and 0 `tenant_isolation_lab` schemas on production. This confirms the lab objects remained branch-local.
+
 ## What this proves — and what it does not
 
 Proves the basic Postgres role attributes, policy shape, `USING`, `WITH CHECK`, missing-context fail-closed behavior, and FORCE RLS behavior can be made to work in an isolated branch.
