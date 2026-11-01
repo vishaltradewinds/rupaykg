@@ -70,6 +70,12 @@ Initial FK observations:
 - Operational/control candidates: `platform_audit_chain_head`, `schema_migrations`. Must not be exposed as ordinary tenant CRUD; restrict to controlled functions/migration identity.
 - The table-by-table owner/visibility model is not complete. Do not generate blanket policies from column-name heuristics.
 
+## 4.3 Evidence-backed 67-table access classification
+
+A per-table register was added in [`TENANT_67_TABLE_ACCESS_CLASSIFICATION_2026-11-01.md`](./TENANT_67_TABLE_ACCESS_CLASSIFICATION_2026-11-01.md). It records all 67 production tables with catalog-derived candidate columns, nullability, FK edges and proposed access class (organization-owned, inherited child, bilateral/multi-party, identity/auth, global reference, append-only, device/worker, or platform control). The classifications are design hypotheses, not approved policy SQL. The matrix explicitly flags parent/child alignment, orphan handling, multi-party visibility, identity security, and global-reference governance.
+
+**Coverage update:** classification 67/67; executable policy approval remains 0/67; production RLS remains 0/67.
+
 ## 5. Required RLS policy families
 
 1. Organization-owned rows: match the active verified organization, with INSERT/UPDATE checks and immutable organization ownership where required.
