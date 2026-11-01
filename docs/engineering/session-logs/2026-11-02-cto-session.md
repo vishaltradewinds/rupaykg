@@ -61,3 +61,11 @@ The first route-wiring conclusion was incorrect: `registerValueRoutes` already c
 - PR #200 combined CI #4421 passed migration validation, restricted-owner CI provisioning and full migrations; typecheck was running. Checkpoint commit `aa7f4b25990150fb8cdda6636446401797326a8d`.
 - PR #202 exact-head CI #4416 passed all checks including PostgreSQL tests and production container build. The onboarding auth handlers now use the separate session pool; the indirect auth-route registration was preserved (redundant direct registration removed).
 - Updated the canonical resume pointer. No production database, roles, grants, RLS, deployments, workers or certification were changed.
+
+## Canonical integration spine and production audit
+- Compared PR #192 and PR #202. PR #192 already has the more complete `auth_private` lifecycle and separate auth runtime; PR #202's alternate `public.verify_identity_session` and direct credential-query design is not canonical. Do not merge #202.
+- Ported PR #200's token helper, transaction wrapper, verifier migration and PostgreSQL tests into PR #192; CI now provisions the restricted verifier owner only in disposable PostgreSQL. PR #200/#201 remain separate until combined CI passes.
+- Read-only Neon production audit reconfirmed 67 public tables, 0 RLS-enabled, 0 FORCE RLS; 92 migrations, latest 20261021; broad `rupaykg` owner; no signed-context schema/function in production.
+- PR #192 pre-integration CI #4424 exposed one actual failing lifecycle fixture: direct VERIFIED ordinary membership insert rejected by the approved-application guard. This is correct security behavior; remaining dependent suites cancelled. A two-identity/two-secret bootstrap path is required for legitimate CI onboarding fixtures and first production bootstrap.
+- Checkpoint: `docs/engineering/checkpoints/2026-11-02-unified-auth-rls-foundation.md`. Current combined PR #192 code head `820be17cb4d39fc0eb6546954515f80200e6669d`; CI #4433 in progress.
+- Production unchanged; no production DDL/DML, migrations, roles, grants, RLS, branch ops, deployment or certification.
