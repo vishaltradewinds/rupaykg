@@ -19,13 +19,13 @@ export function issueOpaqueToken(): string {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-export async function authenticate(request: FastifyRequest, pool: Pool | null): Promise<AuthContext | null> {
-  if (!pool) return null;
+export async function authenticate(request: FastifyRequest, sessionPool: Pool | null, membershipPool: Pool | null = sessionPool): Promise<AuthContext | null> {
+  if (!sessionPool || !membershipPool) return null;
   const header = request.headers.authorization;
   if (!header?.startsWith("Bearer ")) return null;
   const token = header.slice("Bearer ".length).trim();
   if (!token) return null;
-  const rows = await pool.query<{ identity_id: string }>(
+  const rows = await sessionPool.query<{ identity_id: string }>(
     `select s.identity_id
        from identity_sessions s
        join identities i on i.id = s.identity_id
@@ -37,7 +37,7 @@ export async function authenticate(request: FastifyRequest, pool: Pool | null): 
     [hashToken(token)],
   );
   if (!rows.rows[0]) return null;
-  const memberships = await pool.query<{ organization_id: string; role_id: string; status: string }>(
+  const memberships = await membershipPool.query<{ organization_id: string; role_id: string; status: string }>(
     `select organization_id, role_id, status
        from organization_memberships
       where identity_id = $1 and status = 'VERIFIED'`,
