@@ -107,3 +107,21 @@ The portal is live. Its official guide shows organization account, BWG eligibili
 Repository standard added: `docs/engineering/standards/BWG_STATUTORY_AUTHORITY_BOUNDARY.md`. RupayKg is supplementary MRV/workflow infrastructure, not the statutory portal. It must hand off to CPCB, retain receipt/certificate provenance, and never issue official EBWGR certificates. CPCB's resources page lists a portal User Fee Structure guideline dated 15 October 2026; the actual fee schedule amount is not verified in this checkpoint, so no cost assumption is allowed.
 
 Latest exact code CI #4287 / ID 41327256588 passed. Docs-only CI for the current legal boundary addendum is running as #4291 / ID 41327634618.
+
+
+## Full BWG report-write PostgreSQL acceptance — 2026-11-01
+
+Added `apps/src/bwg-report-write-postgres.integration.test.ts` (opt-in disposable CI PostgreSQL only). The test creates unique test organization, identities, sessions, tenant roles and geography; inserts an explicitly labelled disposable fixture representing an already authority-verified BWG profile; then exercises real Fastify routes and PostgreSQL:
+
+- Authorized reporting-period creation passes only with the seeded verified BWG profile; external submission remains NOT_SUBMITTED.
+- A verified member without reporting permissions receives 403 and cannot create a period.
+- Authorized waste, EPR and ESG write routes each succeed; every report remains PENDING without verified evidence. EPR external submission remains NOT_SUBMITTED.
+- A verified member with only unrelated guardian:read permission receives 403 on waste, EPR and ESG writes.
+- Database counts confirm denied requests created no extra report rows.
+- All fixtures and rows are cleaned up in finally blocks.
+
+The existing separate integration test continues to prove that an above-threshold self-declared profile remains REVIEW_REQUIRED/PENDING and the real database trigger blocks reporting-period creation with sanitized HTTP 409 and no period row.
+
+Exact-head CI #4293 / ID 41327867697 passed at `a2e9133ae674449496528dcdd768fe38f5326634`, including dependency audit, migration validation, disposable PostgreSQL migrations and acceptance tests, typecheck, build, browser smoke test and production container build.
+
+The authority-approved BWG profile used in the positive route test is an isolated fixture inserted directly into disposable CI PostgreSQL solely to test downstream report routes. It is not an external CPCB registration, not production evidence, and not a production mutation.
