@@ -52,3 +52,23 @@
 - Updated the inventory with coverage limitations: lexical SQL scanning does not resolve dynamic SQL or database function behavior and is not a complete authorization proof.
 - Latest inventory document commit: `fe5d42492dce4ae4a04cb831c4f1bac61f0bf109`.
 - No code, database schema, role, grant, secret, Render configuration or deployment changed.
+
+
+## Second security-review batch — confirmed relational integrity gaps
+
+Created `docs/security/TENANT_ISOLATION_INTEGRITY_FINDINGS_2026-11-01.md` (commit `2ed00d81925d1b03e7c7e6db2af73d06696bc782`).
+
+Source-level findings:
+1. Evidence artifact series can have an organization that does not match its activity; versions/reviews have independent FKs that do not bind exact series/evidence pairs.
+2. CPCB status history can attribute a workspace history row to a different organization than the workspace parent.
+3. Stakeholder approval geography is not constrained to the application's geography.
+4. Field-device identity and organization are separate FKs; route checks and trigger do not yet provide immutable relational membership/tenant binding.
+5. Legacy operation-sync envelopes bind actor to device but have no explicit immutable organization FK and interpret target entity from payload/application path.
+6. Activity assignments do not constrain assigned identity/role to the activity's organization.
+
+Additional boundary review:
+- Registry events and credentials are multi-party provenance; issuer, project organization, current owner and recipient must remain distinct.
+- Settlement routes require payer and payee membership but apply the high-risk permission check to payer; payee consent/approval semantics need business/legal policy confirmation.
+- Onboarding review queue and platform audit are explicit control-plane access paths and must not become blanket tenant bypasses.
+
+**Implementation remains documentation-only.** No application code, schema, database, role, grant, RLS, secret, Render configuration or deployment changed. The new findings are source-confirmed, not a claim of a live production exploit. RLS remains blocked pending integrity remediation and disposable two-tenant tests.
