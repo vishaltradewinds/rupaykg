@@ -302,20 +302,23 @@ On the clean Neon assurance branch `br-red-salad-b4oqb4nx`, I added a strictly i
 - `rupaykg_rls_lab_owner_20261101`: NOLOGIN, NOSUPERUSER, NOBYPASSRLS, NOINHERIT, no role/database creation, no replication.
 - `rupaykg_rls_lab_runtime_20261101`: same restricted role attributes; no table ownership.
 
-Both test tables have RLS enabled and FORCE RLS. The membership table policy exposes only the current actor's membership using transaction-local `app.actor_id`; the records table policy derives tenant visibility and writes through that membership. The lab runtime role receives only schema usage, membership SELECT and record SELECT/INSERT/UPDATE. The temporary database CREATE privilege granted to the owner role to establish the schema was revoked after setup.
+Both test tables have RLS enabled and FORCE RLS. The membership policy derives actor and organization from a transaction-local signed `app.request_context` envelope; the records policy derives tenant visibility and writes through that membership. A SECURITY DEFINER verifier uses fixed `search_path = pg_catalog, rls_lab` and HMAC-SHA256, with the key stored in `rls_lab.context_keys`. The runtime role can execute the verifier but cannot read the key table. The lab runtime role receives only schema usage, membership SELECT and record SELECT/INSERT/UPDATE. The temporary database CREATE privilege granted to the owner role to establish the schema was revoked after setup.
 
 ### Observed test results
-- Actor A sees only the tenant-A synthetic record.
-- Actor B sees only the tenant-B synthetic record.
-- Runtime role with no actor context sees zero records (fail closed).
+- Actor A sees only tenant A's synthetic records; actor B sees only tenant B's record.
+- Runtime role with no context sees zero records (fail closed).
+- A forged HMAC signature sees zero records.
+- An expired signed context sees zero records.
+- Setting the old unsigned `app.actor_id` GUC directly sees zero records; policies do not trust it.
+- Runtime role cannot SELECT the protected `context_keys` table (permission denied).
 - Actor A's cross-tenant UPDATE affects zero rows.
 - Actor A's cross-tenant INSERT is rejected by PostgreSQL with a row-level security violation.
 - Actor A can insert a record into its own organization and then sees both tenant-A records.
-- Table owner role sees zero rows without actor context because FORCE RLS applies and no owner policy exists.
-- The existing `rupaykg` role sees both synthetic records despite FORCE RLS because it has BYPASSRLS; this demonstrates why the privileged owner/inspection role cannot be used as application runtime.
+- Table owner role sees zero rows without signed context because FORCE RLS applies and no owner policy exists.
+- The existing `rupaykg` role sees all three synthetic records despite FORCE RLS because it has BYPASSRLS; this demonstrates why the privileged owner/inspection role cannot be used as application runtime.
 
 ### Scope limitation
-This is a PostgreSQL mechanics proof using synthetic data and a manually set transaction-local actor GUC. It does **not** validate the RupayKg API's authentication-to-context binding, role credentials, pooled request handling, all 67 table policies, worker isolation, or production readiness. It is not a release gate pass by itself. The next implementation step is the API request-scoped database unit-of-work and auth/runtime role split, followed by route-level acceptance under a real NOBYPASSRLS login role.
+This is a PostgreSQL mechanics proof using synthetic data and a test-only HMAC key. It does **not** validate the RupayKg API's signing-key delivery/rotation, authentication-to-context binding, production role credentials, pooled request handling, all 67 table policies, worker isolation, or production readiness. It is not a release gate pass by itself. The next implementation step is the API request-scoped database unit-of-work and auth/runtime role split, followed by route-level acceptance under a real NOBYPASSRLS login role.
 
 ## 11. API route-to-table static inventory
 
