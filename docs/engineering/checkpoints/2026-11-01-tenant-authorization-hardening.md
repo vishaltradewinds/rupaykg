@@ -22,7 +22,8 @@ Two focused route authorization fixes based on the tenant-isolation review:
 - Draft PR #181: https://github.com/vishaltradewinds/rupaykg/pull/181
 - Branch: `security/tenant-revocation-and-issuance-atomicity-2026-11-01`
 - Head: `bbeaabdcb95ed52713c820d4797885c7ee16914f`
-- CI run: `41282033478`, started and still in progress at checkpoint time.
+- Earlier CI run `41282033478` failed on test-fixture mismatches (enum value and role permissions); the fixtures were corrected.
+- Exact-head CI run `41282527046`: **PASS** — validate job completed successfully, including disposable PostgreSQL acceptance tests and container build.
 
 ## Scope and safety
 - Code/tests only on feature branch.
