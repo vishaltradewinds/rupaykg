@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import test from "node:test";
 import type { Pool } from "pg";
-import { authenticate, getAuthResolverMode, hasOrganizationPermission } from "./auth.js";
+import { authenticate, canVerifyEvidence, getAuthResolverMode, hasOrganizationPermission } from "./auth.js";
 
 type Row = {
   identity_id: string;
@@ -220,5 +220,18 @@ test("security-definer authorization fails closed without falling back to direct
     await assert.rejects(() => hasOrganizationPermission(pool as unknown as Pool, auth, orgA, ["waste:record"]), /authorization function unavailable/);
     assert.equal(pool.calls.length, 1);
     assert.match(pool.calls[0]!.sql, /auth_private\.has_organization_permission/);
+  } finally { delete process.env.RUPAYKG_AUTH_RESOLVER_MODE; }
+});
+
+
+test("security-definer evidence authorization delegates to the scoped database function", async () => {
+  const pool = new FakePool();
+  pool.rows = [{ ok: true }];
+  process.env.RUPAYKG_AUTH_RESOLVER_MODE = "security_definer";
+  try {
+    assert.equal(await canVerifyEvidence(pool as unknown as import("pg").PoolClient, identityId, orgA), true);
+    assert.equal(pool.calls.length, 1);
+    assert.match(pool.calls[0]!.sql, /auth_private\\.can_verify_evidence/);
+    assert.deepEqual(pool.calls[0]!.values, [identityId, orgA]);
   } finally { delete process.env.RUPAYKG_AUTH_RESOLVER_MODE; }
 });
