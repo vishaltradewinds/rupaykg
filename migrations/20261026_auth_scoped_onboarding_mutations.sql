@@ -14,6 +14,95 @@ $$;
 
 create role rupaykg_auth_runtime nologin noinherit nosuperuser nocreatedb nocreaterole noreplication nobypassrls;
 
+-- Existing trigger functions must remain safe when invoked inside a SECURITY DEFINER
+-- function with search_path restricted to pg_catalog, pg_temp.
+create or replace function public.ensure_organization_governance_profile()
+returns trigger
+language plpgsql
+set search_path = pg_catalog, pg_temp
+as $
+begin
+  insert into public.organization_statutory_profiles
+    (organization_id, framework, rule_reference, effective_from, applicability_status, basis)
+  values
+    (new.id, 'SWM_BWG', 'SWM_RULES_2026_S_O_388_E', date '2026-04-01', 'UNKNOWN',
+     jsonb_build_object('source', 'RupayKG governance catalogue', 'externalAcceptance', false,
+       'thresholds', jsonb_build_object('floorAreaSqM', 20000,
+         'waterConsumptionLpd', 40000, 'solidWasteKgpd', 100)))
+  on conflict (organization_id, framework, rule_reference, effective_from) do nothing;
+  return new;
+end;
+$;
+
+create or replace function public.rupaykg_seed_stakeholder_approval_chain()
+returns trigger
+language plpgsql
+set search_path = pg_catalog, pg_temp
+as $
+declare gk public.geography_kind; levels text[]; level_name text; idx integer := 1;
+begin
+  select g.kind into gk from public.geography g where g.id=new.geography_id;
+  levels := case
+    when gk in ('ULB','WARD','LOCALITY','GRAM_PANCHAYAT','VILLAGE','CLUSTER') then array['LOCAL','DISTRICT','STATE','PLATFORM']
+    when gk in ('SUB_DISTRICT','DISTRICT') then array['DISTRICT','STATE','PLATFORM']
+    when gk='STATE_UT' then array['STATE','PLATFORM']
+    else array['PLATFORM']
+  end;
+  foreach level_name in array levels loop
+    insert into public.stakeholder_application_approvals(application_id,step_order,approval_level,geography_id)
+    values(new.id,idx,level_name,new.geography_id) on conflict do nothing;
+    idx := idx+1;
+  end loop;
+  return new;
+end;
+$;
+
+create or replace function public.prevent_incomplete_hierarchical_stakeholder_approval()
+returns trigger
+language plpgsql
+set search_path = pg_catalog, pg_temp
+as $
+begin
+  if new.status = 'APPROVED' and old.status is distinct from 'APPROVED'
+     and exists (select 1 from public.stakeholder_application_approvals a where a.application_id=new.id and a.status<>'APPROVED') then
+    raise exception 'STAKEHOLDER_HIERARCHY_INCOMPLETE: all required approval levels must be approved before application activation';
+  end if;
+  return new;
+end;
+$;
+
+create or replace function public.prevent_direct_membership_activation()
+returns trigger
+language plpgsql
+set search_path = pg_catalog, pg_temp
+as $
+begin
+  if new.status='VERIFIED' and old.status is distinct from 'VERIFIED' and not exists (
+    select 1 from public.stakeholder_applications sa
+    where sa.identity_id=new.identity_id and sa.organization_id=new.organization_id and sa.role_id=new.role_id and sa.status='APPROVED'
+  ) then
+    raise exception 'STAKEHOLDER_MEMBERSHIP_REQUIRES_APPROVED_APPLICATION';
+  end if;
+  return new;
+end;
+$;
+
+create or replace function public.prevent_stakeholder_self_approval()
+returns trigger
+language plpgsql
+set search_path = pg_catalog, pg_temp
+as $
+begin
+  if new.approved_by_identity_id is not null and exists (
+    select 1 from public.stakeholder_applications sa
+    where sa.id=new.application_id and sa.identity_id=new.approved_by_identity_id
+  ) then
+    raise exception 'STAKEHOLDER_SELF_APPROVAL_FORBIDDEN';
+  end if;
+  return new;
+end;
+$;
+
 -- Table grants are issued by the migration principal while it still has the
 -- necessary table-owner/grant-option authority.
 grant select on public.identities, public.identity_sessions, public.geography,
