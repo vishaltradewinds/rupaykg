@@ -10,6 +10,7 @@
 - A database trigger uses null-safe `IS DISTINCT FROM` comparison and locks the parent application while validating approval inserts/updates.
 - A second trigger prevents changing application geography after its approval chain exists, avoiding drift after approvals have been seeded.
 - Tests cover matching geography, mismatched insert/update, parent geography drift, and NULL-safe behavior.
+- Initial CI run `41293969590` found that the NULL-scope test fixture reused an identity/organization/role tuple already consumed by the first case, violating the existing unique application constraint before the NULL assertion. The fixture now creates a distinct identity; exact-head CI is required again.
 - No application route behavior, production database, staging database, role, grant, RLS, secret, Render configuration or deployment is changed by this proposal.
 - Required release gates: exact-head CI, disposable PostgreSQL acceptance, review of current production data/catalog, and independent security review.
 - This is one narrow relational integrity control; it does not establish full tenant isolation or TRL 9.
