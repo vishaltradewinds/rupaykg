@@ -134,3 +134,24 @@ PR #190 was closed as superseded by the stronger combined test in PR #191.
 - TRL 9: not established.
 
 **Resume instruction:** continue from this checkpoint and the latest branch heads above. Do not repeat initial repository/Neon discovery unless a new commit or deployment changes the verified baseline.
+
+
+## 12. Full production table classification — 2026-11-01 15:30 UTC
+
+- Read-only Neon catalog inspection on authoritative production branch `br-restless-base-b44cip2h` / database `rupaykg`.
+- Added `docs/security/TENANT_67_TABLE_ACCESS_CLASSIFICATION_2026-11-01.md`: all 67 public base tables classified with candidate attribution columns, FK edges, and proposed access family.
+- Classes distinguish organization-owned, inherited child, bilateral/multi-party, identity/auth, global reference, append-only, device/worker and platform-control data.
+- Added reference to the matrix in `TENANT_ISOLATION_ARCHITECTURE_AND_ROLLOUT_2026-11-01.md`.
+- Classification coverage: 67/67. Executable policy approval: 0/67. Production RLS remains 0 enabled / 0 forced. This is a design register, not a policy or production migration.
+- Commit: `1e431bf6cff3b2f9d1d89164447a276f37713ab5`; architecture link commit: `35ac25d6efbe8f9be340593909a9817132ee9b02`.
+
+## 13. Auth resolver production-path correction — 2026-11-01 15:31 UTC
+
+- Review found a critical gap: although the app runtime is designed to have no direct access to auth tables, the main `authenticate()` function in the PR branch had to be verified to use the existing resolver-mode abstraction on every production route.
+- Restored a single explicit branch: `security_definer` calls `authenticateWithSecurityDefiner()` and `auth_private.resolve_session($1)` once; resolver errors propagate and do not fall back to direct auth-table queries. Legacy mode remains explicit for non-production/test compatibility.
+- Existing `apps/src/auth.test.ts` already contains adversarial coverage for multi-org selection, missing/revoked sessions, malformed/unverified orgs, mixed identity rows, no-fallback behavior, and resolver-mode configuration.
+- A transient implementation attempt was rejected by CI (typecheck failed because it bypassed the established three-argument resolver-mode API); corrected implementation is at `a0c2fe78ff256ea8233c5b71b71bfc37447a3956`, exact-head CI `41321594110` PASS.
+- Runtime grant manifest corrected: PUBLIC execution denied on all 18 functions; app runtime receives resolver plus ten scoped authorization functions. Latest docs commit `15c0ee4ff2b4af07950a99bc19436e9966cbc089`; exact-head CI pending.
+- Disposable Neon branch `br-blue-tooth-b4kvuut7` contains all 18 tested `auth_private` SECURITY DEFINER functions, owned by NOLOGIN/NOBYPASSRLS `rupaykg_auth_owner`; app and auth runtime roles have no direct auth-table privileges and no PUBLIC schema CREATE. Auth owner has SELECT on 13 required tables, INSERT on identities/password credentials/sessions, UPDATE on password credentials/sessions, and no DELETE.
+- Critical remaining blocker: onboarding application create/withdraw handlers still perform direct writes through app pool to organization, role, membership, geography-scope and evidence tables. The app runtime design deliberately lacks membership writes; these endpoints will fail under the target least-privilege role until moved to identity-bound database functions. Platform-admin/worker paths also require dedicated reviewed access functions.
+- No production DB mutations, credentials, role provisioning, RLS, migrations or deployment. Production remains HOLD; certification OFF; TRL 9 not established.
