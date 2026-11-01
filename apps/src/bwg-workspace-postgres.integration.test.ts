@@ -54,15 +54,16 @@ test("BWG workspace enforces reports:read in PostgreSQL and scopes returned prof
       [orgA.rows[0]!.id,"bwg_workspace_denied_" + suffix,JSON.stringify(["guardian:read"])],
     );
 
-    await pool.query("alter table organization_memberships disable trigger stakeholder_membership_application_guard");
-    try {
+    // Privileged disposable-CI membership fixture only; this test does not exercise onboarding approval.
       await pool.query(
+        "insert into organization_memberships(identity_id,organization_id,role_id,status) values(      await pool.query(
         "insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED'),($4,$2,$5,'VERIFIED')",
         [allowedIdentity.rows[0]!.id,orgA.rows[0]!.id,allowedRole.rows[0]!.id,deniedIdentity.rows[0]!.id,deniedRole.rows[0]!.id],
       );
-    } finally {
-      await pool.query("alter table organization_memberships enable trigger stakeholder_membership_application_guard");
-    }
+,$2,$3,'VERIFIED'),($4,$2,$5,'VERIFIED')",
+        [allowedIdentity.rows[0]!.id,orgA.rows[0]!.id,allowedRole.rows[0]!.id,deniedIdentity.rows[0]!.id,deniedRole.rows[0]!.id],
+      );
+
 
     await pool.query(
       "insert into identity_sessions(identity_id,expires_at,token_hash) values($1,now()+interval '1 hour',$2),($3,now()+interval '1 hour',$4)",
