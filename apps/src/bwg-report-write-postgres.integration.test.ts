@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import Fastify from "fastify";
 import { Pool } from "pg";
 import { registerValueRoutes } from "./value-routes.js";
@@ -40,7 +40,11 @@ test("BWG reporting period and authorized/denied waste, EPR and ESG writes use r
       "insert into identities(external_subject,display_name,email,status) values($1,$2,$3,'VERIFIED') returning id",
       ["test-bwg-reader:"+suffix,"BWG Integration Reader","bwg-reader-"+suffix+"@example.invalid"],
     );
-    identityIds.push(allowedIdentity.rows[0]!.id, deniedIdentity.rows[0]!.id);
+    const verifierIdentity = await pool.query<{ id: string }>(
+      "insert into identities(external_subject,display_name,email,status) values($1,$2,$3,'VERIFIED') returning id",
+      ["test-bwg-verifier:"+suffix,"BWG Integration Verifier","bwg-verifier-"+suffix+"@example.invalid"],
+    );
+    identityIds.push(allowedIdentity.rows[0]!.id, deniedIdentity.rows[0]!.id, verifierIdentity.rows[0]!.id);
 
     const allowedRole = await pool.query<{ id: string }>(
       "insert into roles(organization_id,name,permissions,geography_scope) values($1,$2,$3::jsonb,'[]') returning id",
@@ -50,12 +54,16 @@ test("BWG reporting period and authorized/denied waste, EPR and ESG writes use r
       "insert into roles(organization_id,name,permissions,geography_scope) values($1,$2,$3::jsonb,'[]') returning id",
       [organizationId,"bwg_reader_"+suffix,JSON.stringify(["guardian:read"])],
     );
+    const verifierRole = await pool.query<{ id: string }>(
+      "insert into roles(organization_id,name,permissions,geography_scope) values($1,$2,$3::jsonb,'[]') returning id",
+      [organizationId,"bwg_evidence_verifier_"+suffix,JSON.stringify(["verification:approve"])],
+    );
 
     await pool.query("alter table organization_memberships disable trigger stakeholder_membership_application_guard");
     try {
       await pool.query(
-        "insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED'),($4,$2,$5,'VERIFIED')",
-        [allowedIdentity.rows[0]!.id,organizationId,allowedRole.rows[0]!.id,deniedIdentity.rows[0]!.id,deniedRole.rows[0]!.id],
+        "insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED'),($4,$2,$5,'VERIFIED'),($6,$2,$7,'VERIFIED')",
+        [allowedIdentity.rows[0]!.id,organizationId,allowedRole.rows[0]!.id,deniedIdentity.rows[0]!.id,deniedRole.rows[0]!.id,verifierIdentity.rows[0]!.id,verifierRole.rows[0]!.id],
       );
     } finally {
       await pool.query("alter table organization_memberships enable trigger stakeholder_membership_application_guard");
@@ -68,6 +76,23 @@ test("BWG reporting period and authorized/denied waste, EPR and ESG writes use r
     await pool.query(
       "insert into identity_sessions(identity_id,expires_at,token_hash) values($1,now()+interval '1 hour',$2),($3,now()+interval '1 hour',$4)",
       [allowedIdentity.rows[0]!.id,hash(allowedToken),deniedIdentity.rows[0]!.id,hash(deniedToken)],
+    );
+
+    const activity = await pool.query<{ id: string }>(
+      "insert into activities(organization_id,actor_identity_id,geography_id,activity_type,status) values($1,$2,$3,'BWG_REPORT_EVIDENCE_FIXTURE','COMPLETED') returning id",
+      [organizationId,allowedIdentity.rows[0]!.id,geographyId],
+    );
+    const verifiedEvidence = await pool.query<{ id: string }>(
+      "insert into evidence(activity_id,evidence_type,status,captured_at,content_uri,content_hash,metadata) values($1,'WASTE_WEIGHT_TICKET','VERIFIED',now(),'db://integration-test/verified-evidence',$2,$3::jsonb) returning id",
+      [activity.rows[0]!.id,hash("verified-test-evidence-"+suffix),JSON.stringify({ testFixture: true, source: "DISPOSABLE_CI_ONLY" })],
+    );
+    const unverifiedEvidence = await pool.query<{ id: string }>(
+      "insert into evidence(activity_id,evidence_type,status,captured_at,content_uri,content_hash,metadata) values($1,'WASTE_WEIGHT_TICKET','CAPTURED',now(),'db://integration-test/unverified-evidence',$2,$3::jsonb) returning id",
+      [activity.rows[0]!.id,hash("unverified-test-evidence-"+suffix),JSON.stringify({ testFixture: true, source: "DISPOSABLE_CI_ONLY" })],
+    );
+    const verification = await pool.query<{ id: string }>(
+      "insert into verifications(evidence_id,activity_id,verifier_identity_id,decision,scope,rationale) values($1,$2,$3,'APPROVED','BWG_REPORTING','Disposable integration fixture verification') returning id",
+      [verifiedEvidence.rows[0]!.id,activity.rows[0]!.id,verifierIdentity.rows[0]!.id],
     );
 
     // This isolated fixture represents an already authority-verified BWG profile.
@@ -104,10 +129,37 @@ test("BWG reporting period and authorized/denied waste, EPR and ESG writes use r
       method: "POST",
       url: "/api/v1/bwg/reporting-periods/"+periodId+"/waste",
       headers: allowedHeaders,
-      payload: { wasteStream: "ORGANIC", unit: "kg", generatedQuantity: 100, segregatedQuantity: 80, channelizedQuantity: 70, processedQuantity: 60 },
+      payload: { wasteStream: "ORGANIC", unit: "kg", generatedQuantity: 100, segregatedQuantity: 80, channelizedQuantity: 70, processedQuantity: 60, evidenceId: verifiedEvidence.rows[0]!.id, verificationId: verification.rows[0]!.id },
     });
     assert.equal(waste.statusCode, 201, waste.body);
-    assert.equal(waste.json().wasteReport.status, "PENDING");
+    assert.equal(waste.json().wasteReport.status, "VERIFIED");
+
+    const pendingWaste = await app.inject({
+      method: "POST",
+      url: "/api/v1/bwg/reporting-periods/"+periodId+"/waste",
+      headers: allowedHeaders,
+      payload: { wasteStream: "DRY", unit: "kg", generatedQuantity: 20 },
+    });
+    assert.equal(pendingWaste.statusCode, 201, pendingWaste.body);
+    assert.equal(pendingWaste.json().wasteReport.status, "PENDING");
+
+    const unverifiedWaste = await app.inject({
+      method: "POST",
+      url: "/api/v1/bwg/reporting-periods/"+periodId+"/waste",
+      headers: allowedHeaders,
+      payload: { wasteStream: "ORGANIC", unit: "kg", generatedQuantity: 10, evidenceId: unverifiedEvidence.rows[0]!.id },
+    });
+    assert.equal(unverifiedWaste.statusCode, 409, unverifiedWaste.body);
+    assert.equal(unverifiedWaste.json().code, "EVIDENCE_NOT_VERIFIED");
+
+    const mismatchedVerification = await app.inject({
+      method: "POST",
+      url: "/api/v1/bwg/reporting-periods/"+periodId+"/waste",
+      headers: allowedHeaders,
+      payload: { wasteStream: "ORGANIC", unit: "kg", generatedQuantity: 10, evidenceId: verifiedEvidence.rows[0]!.id, verificationId: randomUUID() },
+    });
+    assert.equal(mismatchedVerification.statusCode, 409, mismatchedVerification.body);
+    assert.equal(mismatchedVerification.json().code, "VERIFICATION_INVALID");
 
     const deniedWaste = await app.inject({
       method: "POST",
@@ -164,10 +216,13 @@ test("BWG reporting period and authorized/denied waste, EPR and ESG writes use r
       "select (select count(*) from bwg_waste_reports where reporting_period_id=$1)::text as waste, (select count(*) from bwg_epr_reports where reporting_period_id=$1)::text as epr, (select count(*) from bwg_esg_reports where reporting_period_id=$1)::text as esg",
       [periodId],
     );
-    assert.deepEqual(counts.rows[0], { waste: "1", epr: "1", esg: "1" });
+    assert.deepEqual(counts.rows[0], { waste: "2", epr: "1", esg: "1" });
   } finally {
     if (organizationId) {
       await pool.query("delete from bwg_waste_reports where reporting_period_id in (select id from bwg_reporting_periods where organization_id=$1)", [organizationId]);
+      await pool.query("delete from verifications where evidence_id in (select e.id from evidence e join activities a on a.id=e.activity_id where a.organization_id=$1)", [organizationId]);
+      await pool.query("delete from evidence where activity_id in (select id from activities where organization_id=$1)", [organizationId]);
+      await pool.query("delete from activities where organization_id=$1", [organizationId]);
       await pool.query("delete from bwg_epr_reports where reporting_period_id in (select id from bwg_reporting_periods where organization_id=$1)", [organizationId]);
       await pool.query("delete from bwg_esg_reports where reporting_period_id in (select id from bwg_reporting_periods where organization_id=$1)", [organizationId]);
       await pool.query("delete from bwg_reporting_periods where organization_id=$1", [organizationId]);
