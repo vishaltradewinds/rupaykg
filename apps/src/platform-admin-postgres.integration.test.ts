@@ -399,3 +399,81 @@ test("PostgreSQL serializes concurrent Super Admin revocations and preserves one
     await pool.end();
   }
 });
+
+
+test("PostgreSQL keeps reserved-role INSERTs behind the two-person database guard after auth migration replacement", { skip: !enabled }, async () => {
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  const suffix = randomBytes(8).toString("hex");
+  let organizationId = "";
+  let identityId = "";
+  let roleId = "";
+  try {
+    organizationId = (await pool.query<{ id: string }>(
+      "insert into organizations(name,organization_type,status) values($1,'test_fixture','VERIFIED') returning id",
+      ["TEST-RESERVED-GUARD-" + suffix],
+    )).rows[0]!.id;
+    identityId = (await pool.query<{ id: string }>(
+      "insert into identities(external_subject,display_name,email,status) values($1,$2,$3,'VERIFIED') returning id",
+      ["reserved-guard:" + suffix, "Reserved Guard Target " + suffix, "reserved-guard-" + suffix + "@example.invalid"],
+    )).rows[0]!.id;
+    roleId = (await pool.query<{ id: string }>(
+      "insert into roles(organization_id,name,permissions,geography_scope) values($1,'super_admin','[\\"admin:users\\"]'::jsonb,'[]') returning id",
+      [organizationId],
+    )).rows[0]!.id;
+
+    await assert.rejects(
+      pool.query(
+        "insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED')",
+        [identityId, organizationId, roleId],
+      ),
+      /RESERVED_ROLE_REQUIRES_DUAL_CONTROL/,
+      "auth-scoped onboarding migration must not replace the reserved-role dual-control guard",
+    );
+  } finally {
+    if (organizationId) await pool.query("delete from organization_statutory_profiles where organization_id=$1", [organizationId]);
+    if (organizationId) await pool.query("delete from organization_memberships where organization_id=$1", [organizationId]);
+    if (roleId) await pool.query("delete from roles where id=$1", [roleId]);
+    if (identityId) await pool.query("delete from identities where id=$1", [identityId]);
+    if (organizationId) await pool.query("delete from organizations where id=$1", [organizationId]);
+    await pool.end();
+  }
+});
+
+test("PostgreSQL refuses stakeholder applications inserted directly as APPROVED", { skip: !enabled }, async () => {
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  const suffix = randomBytes(8).toString("hex");
+  let organizationId = "";
+  let identityId = "";
+  let roleId = "";
+  try {
+    organizationId = (await pool.query<{ id: string }>(
+      "insert into organizations(name,organization_type,status) values($1,'test_fixture','PENDING') returning id",
+      ["TEST-APPROVAL-INSERT-GUARD-" + suffix],
+    )).rows[0]!.id;
+    identityId = (await pool.query<{ id: string }>(
+      "insert into identities(external_subject,display_name,email,status) values($1,$2,$3,'VERIFIED') returning id",
+      ["approval-insert:" + suffix, "Approval Insert Applicant " + suffix, "approval-insert-" + suffix + "@example.invalid"],
+    )).rows[0]!.id;
+    roleId = (await pool.query<{ id: string }>(
+      "insert into roles(organization_id,name,permissions,geography_scope) values($1,$2,'[]'::jsonb,'[]') returning id",
+      [organizationId, "test_applicant_" + suffix],
+    )).rows[0]!.id;
+
+    await assert.rejects(
+      pool.query(
+        "insert into stakeholder_applications(identity_id,organization_id,role_id,requested_role_key,requested_organization_type,status) values($1,$2,$3,'citizen','individual','APPROVED')",
+        [identityId, organizationId, roleId],
+      ),
+      /STAKEHOLDER_APPLICATION_MUST_START_PENDING/,
+      "approved applications must only be reached through the governed review transition",
+    );
+  } finally {
+    if (organizationId) await pool.query("delete from stakeholder_application_approvals where application_id in (select id from stakeholder_applications where organization_id=$1)", [organizationId]);
+    if (organizationId) await pool.query("delete from stakeholder_applications where organization_id=$1", [organizationId]);
+    if (organizationId) await pool.query("delete from organization_statutory_profiles where organization_id=$1", [organizationId]);
+    if (roleId) await pool.query("delete from roles where id=$1", [roleId]);
+    if (identityId) await pool.query("delete from identities where id=$1", [identityId]);
+    if (organizationId) await pool.query("delete from organizations where id=$1", [organizationId]);
+    await pool.end();
+  }
+});
