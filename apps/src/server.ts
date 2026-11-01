@@ -32,6 +32,70 @@ const authDatabaseUrl = process.env.AUTH_DATABASE_URL;
 const authPoolConfig: PoolConfig = { ...poolConfig, connectionString: authDatabaseUrl, max: 3 };
 const authPool = authDatabaseUrl ? new Pool(authPoolConfig) : null;
 if (process.env.NODE_ENV === "production" && !authPool) throw new Error("AUTH_DATABASE_URL is required for the dedicated authentication runtime");
+async function assertProductionDatabaseRuntimeContracts(): Promise<void> {
+  if (!pool || !authPool) throw new Error("PRODUCTION_DATABASE_RUNTIME_UNAVAILABLE");
+  const [appIdentity, authIdentity] = await Promise.all([
+    pool.query<{ current_user: string; current_database: string; rolsuper: boolean; rolbypassrls: boolean }>(
+      `select current_user, current_database(), r.rolsuper, r.rolbypassrls from pg_roles r where r.rolname=current_user`,
+    ),
+    authPool.query<{ current_user: string; current_database: string; rolsuper: boolean; rolbypassrls: boolean }>(
+      `select current_user, current_database(), r.rolsuper, r.rolbypassrls from pg_roles r where r.rolname=current_user`,
+    ),
+  ]);
+  const app = appIdentity.rows[0], auth = authIdentity.rows[0];
+  if (!app || !auth || app.current_database !== auth.current_database || app.current_user === auth.current_user) {
+    throw new Error("PRODUCTION_DATABASE_RUNTIME_IDENTITY_MISMATCH");
+  }
+  if (app.rolsuper || app.rolbypassrls || auth.rolsuper || auth.rolbypassrls) {
+    throw new Error("PRODUCTION_RUNTIME_ROLE_MUST_NOT_BYPASS_RLS");
+  }
+  const appChecks = await pool.query<{ direct_auth_reads: boolean; resolver_execute: boolean; auth_lifecycle_execute: boolean; owner_membership: boolean }>(
+    `select
+       (has_table_privilege(current_user,'public.identities','SELECT')
+        or has_table_privilege(current_user,'public.identity_sessions','SELECT')
+        or has_table_privilege(current_user,'public.organization_memberships','SELECT')
+        or has_table_privilege(current_user,'public.identity_password_credentials','SELECT')) as direct_auth_reads,
+       has_function_privilege(current_user,'auth_private.resolve_session(text)','EXECUTE') as resolver_execute,
+       (has_function_privilege(current_user,'auth_private.find_login_candidate(text)','EXECUTE')
+        or has_function_privilege(current_user,'auth_private.record_login_failure(uuid)','EXECUTE')
+        or has_function_privilege(current_user,'auth_private.reset_login_failures(uuid)','EXECUTE')
+        or has_function_privilege(current_user,'auth_private.issue_session(uuid,text,jsonb)','EXECUTE')
+        or has_function_privilege(current_user,'auth_private.revoke_session(text)','EXECUTE')
+        or has_function_privilege(current_user,'auth_private.register_identity(text,text,text,text)','EXECUTE')
+        or has_function_privilege(current_user,'auth_private.get_self_account_context(text)','EXECUTE')) as auth_lifecycle_execute,
+       pg_has_role(current_user,'rupaykg_auth_owner','MEMBER') or pg_has_role(current_user,'rupaykg_app_owner','MEMBER') as owner_membership`,
+  );
+  const appCheck = appChecks.rows[0];
+  if (!appCheck || appCheck.direct_auth_reads || !appCheck.resolver_execute || appCheck.auth_lifecycle_execute || appCheck.owner_membership) {
+    throw new Error("PRODUCTION_APPLICATION_RUNTIME_PRIVILEGES_INVALID");
+  }
+  const authChecks = await authPool.query<{ direct_auth_reads: boolean; required_functions: boolean; owner_membership: boolean }>(
+    `select
+       (has_table_privilege(current_user,'public.identities','SELECT')
+        or has_table_privilege(current_user,'public.identity_sessions','SELECT')
+        or has_table_privilege(current_user,'public.organization_memberships','SELECT')
+        or has_table_privilege(current_user,'public.identity_password_credentials','SELECT')) as direct_auth_reads,
+       (has_function_privilege(current_user,'auth_private.find_login_candidate(text)','EXECUTE')
+        and has_function_privilege(current_user,'auth_private.record_login_failure(uuid)','EXECUTE')
+        and has_function_privilege(current_user,'auth_private.reset_login_failures(uuid)','EXECUTE')
+        and has_function_privilege(current_user,'auth_private.issue_session(uuid,text,jsonb)','EXECUTE')
+        and has_function_privilege(current_user,'auth_private.revoke_session(text)','EXECUTE')
+        and has_function_privilege(current_user,'auth_private.register_identity(text,text,text,text)','EXECUTE')
+        and has_function_privilege(current_user,'auth_private.get_self_account_context(text)','EXECUTE')) as required_functions,
+       pg_has_role(current_user,'rupaykg_auth_owner','MEMBER') as owner_membership`,
+  );
+  const authCheck = authChecks.rows[0];
+  if (!authCheck || authCheck.direct_auth_reads || !authCheck.required_functions || authCheck.owner_membership) {
+    throw new Error("PRODUCTION_AUTHENTICATION_RUNTIME_PRIVILEGES_INVALID");
+  }
+  const owners = await authPool.query<{ rolname: string; rolsuper: boolean; rolcanlogin: boolean; rolbypassrls: boolean }>(
+    `select rolname,rolsuper,rolcanlogin,rolbypassrls from pg_roles where rolname in ('rupaykg_auth_owner','rupaykg_app_owner')`,
+  );
+  if (owners.rows.length !== 2 || owners.rows.some((role) => role.rolsuper || role.rolcanlogin || role.rolbypassrls)) {
+    throw new Error("PRODUCTION_FUNCTION_OWNER_ROLES_INVALID");
+  }
+}
+
 async function query<T extends Record<string, unknown>>(text: string, values: unknown[] = []): Promise<T[]> { if (!pool) throw new Error("DATABASE_URL is not configured"); return (await pool.query<T>(text, values)).rows; }
 function bodyOf(request: { body: unknown }): Record<string, unknown> { return (request.body && typeof request.body === "object" ? request.body : {}) as Record<string, unknown>; }
 function requiredString(body: Record<string, unknown>, key: string): string | null { return typeof body[key] === "string" && body[key].trim() ? body[key].trim() : null; }
@@ -108,6 +172,7 @@ await registerEvidenceVaultRoutes(app, pool);
 await registerPlatformAdminRoutes(app, pool);
 
 if (existsSync(webRoot)) app.get("/*", async (_request, reply) => reply.type("text/html; charset=utf-8").send(readFileSync(resolve(webRoot, "index.html"), "utf8")));
+if (process.env.NODE_ENV === "production") await assertProductionDatabaseRuntimeContracts();
 await registerAuthRoutes(app, pool, authPool);
 app.addHook("onClose", async () => { await Promise.all([pool?.end(), authPool?.end()]); });
 const port = Number(process.env.PORT ?? 3000); const host = process.env.HOST ?? "0.0.0.0"; await app.listen({ port, host });
