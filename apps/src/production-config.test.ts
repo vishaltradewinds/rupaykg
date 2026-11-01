@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { readProductionConfig } from "./production-config.js";
+import { assertProductionMigrationTarget, readProductionConfig } from "./production-config.js";
 
 const valid = {
   NODE_ENV: "production",
@@ -64,5 +64,57 @@ describe("production configuration", () => {
   it("requires HTTPS origins without paths", () => {
     assert.throws(() => readProductionConfig({ ...valid, RUPAYKG_ALLOWED_ORIGINS: "http://app.rupaykg.example" }), /origin must use HTTPS/);
     assert.throws(() => readProductionConfig({ ...valid, RUPAYKG_ALLOWED_ORIGINS: "https://app.rupaykg.example/path" }), /must not contain path/);
+  });
+});
+
+describe("production migration target identity", () => {
+  const expected = {
+    expectedBranchId: "br-restless-base-b44cip2h",
+    expectedDatabaseName: "rupaykg",
+    expectedRoleName: "rupaykg",
+  };
+  const actual = {
+    branchId: "br-restless-base-b44cip2h",
+    databaseName: "rupaykg",
+    roleName: "rupaykg",
+  };
+
+  it("accepts only the exact approved Neon branch, database, and role", () => {
+    assert.doesNotThrow(() => assertProductionMigrationTarget(expected, actual));
+  });
+
+  it("fails closed for a different Neon branch", () => {
+    assert.throws(
+      () => assertProductionMigrationTarget(expected, { ...actual, branchId: "br-spring-hill-b4544vz5" }),
+      /connected Neon branch does not match/,
+    );
+  });
+
+  it("fails closed for a different database", () => {
+    assert.throws(
+      () => assertProductionMigrationTarget(expected, { ...actual, databaseName: "neondb" }),
+      /connected database does not match/,
+    );
+  });
+
+  it("fails closed for a different database role", () => {
+    assert.throws(
+      () => assertProductionMigrationTarget(expected, { ...actual, roleName: "rupaykg_app" }),
+      /connected database role does not match/,
+    );
+  });
+
+  it("fails closed when the connected server is not reporting a Neon branch ID", () => {
+    assert.throws(
+      () => assertProductionMigrationTarget(expected, { ...actual, branchId: null }),
+      /connected Neon branch does not match/,
+    );
+  });
+
+  it("requires every expected target field", () => {
+    assert.throws(
+      () => assertProductionMigrationTarget({ ...expected, expectedBranchId: "" }, actual),
+      /expected Neon branch ID is required/,
+    );
   });
 });
