@@ -46,8 +46,22 @@ jobs:
             NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;
           GRANT CREATE ON DATABASE rupaykg TO rupaykg_security_definer;
           GRANT rupaykg_security_definer TO postgres;
+          CREATE ROLE rupaykg_bootstrap_owner
+            NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS NOREPLICATION;
+          GRANT CREATE ON DATABASE rupaykg TO rupaykg_bootstrap_owner;
+          GRANT rupaykg_bootstrap_owner TO postgres;
           SQL
       - run: npm run migrate -w @rupaykg/api
+      - name: Provision synthetic bootstrap custodians in disposable CI PostgreSQL
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE rupaykg_bootstrap_custodian_a LOGIN
+            NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS NOREPLICATION;
+          CREATE ROLE rupaykg_bootstrap_custodian_b LOGIN
+            NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS NOREPLICATION;
+          GRANT rupaykg_bootstrap_custodian TO rupaykg_bootstrap_custodian_a WITH INHERIT FALSE, SET TRUE;
+          GRANT rupaykg_bootstrap_custodian TO rupaykg_bootstrap_custodian_b WITH INHERIT FALSE, SET TRUE;
+          SQL
       - run: npm run typecheck
       - run: npm run build
       - name: Browser smoke test production web build
