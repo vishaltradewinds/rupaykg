@@ -5,7 +5,7 @@ import test from "node:test";
 import type { Pool } from "pg";
 import { registerAuthRoutes } from "./auth-routes.js";
 
-type QueryCall = { sql: string; values?: unknown[] };
+type QueryCall = { sql: string; values: unknown[] | undefined };
 class FakePool {
   calls: QueryCall[] = [];
   handler: (sql: string, values?: unknown[]) => { rows: unknown[]; rowCount?: number } = () => ({ rows: [] });
