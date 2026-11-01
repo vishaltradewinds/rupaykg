@@ -56,7 +56,7 @@ test("BWG reporting period and authorized/denied waste, EPR and ESG writes use r
     );
     const verifierRole = await pool.query<{ id: string }>(
       "insert into roles(organization_id,name,permissions,geography_scope) values($1,$2,$3::jsonb,'[]') returning id",
-      [organizationId,"bwg_evidence_verifier_"+suffix,JSON.stringify(["verification:approve"])],
+      [organizationId,"bwg_evidence_verifier_"+suffix,JSON.stringify(["VERIFY_EVIDENCE","verification:approve"])],
     );
 
     await pool.query("alter table organization_memberships disable trigger stakeholder_membership_application_guard");
