@@ -32,3 +32,10 @@
 ## Deployment adapter still required
 
 The repository change provides a safe application default and an explicit migration command. The platform-specific one-off job/pre-deploy mechanism must be configured and tested separately for the actual deployment target. Until the GitHub Environment approval rules and required secrets are configured, the workflow is validated on CI, and the production migration identity is separated from the current privileged runtime role, production remains HOLD.
+
+
+## Dedicated migrator identity requirement — 2026-11-01
+
+The manual production workflow now reads only `RUPAYKG_PRODUCTION_MIGRATOR_DATABASE_URL` and asserts `current_user = rupaykg_migrator` in addition to the exact Neon branch and database. Do not reuse the Render application connection string or the historical `rupaykg` login for migration execution.
+
+The role and secret are **not provisioned**. Before first use, independently review the required DDL and ownership privileges, confirm the role cannot log in to the application or bypass RLS, configure required reviewers on the `production` GitHub Environment, and test the workflow against a disposable branch using the same role contract. Until then, the workflow is intentionally unusable and production migration remains HOLD.
