@@ -43,3 +43,6 @@ Production remains HOLD; certification OFF. No PR merged, no production deployme
 - Added PR #202 checkpoint `docs/engineering/checkpoints/2026-11-02-auth-session-pool-security-assurance.md`.
 - Latest PR #202 head `9cda4b65091f08b2a2c478322d9d72d4e54722a5`; exact-head CI #4408 / run `41338438338` in progress. PR #201 exact-head CI #4390 passed.
 - Production still unchanged; both security PRs remain draft and unmerged.
+
+## Route-registration audit correction
+The first route-wiring conclusion was incorrect: `registerValueRoutes` already calls `registerAuthRoutes`, and the server passes `authPool` to `registerValueRoutes`. I removed the redundant direct registration after CI showed Fastify duplicate-route errors. The actual issue was that onboarding handlers in `auth-routes.ts` omitted `sessionPool`; corrected them to use the auth pool. CI #4408 also exposed an outdated error-message assertion in the parallel production-config test suite; current head updates that expectation. PR #202 current head `d67d597de1ada8f89cede1ff7c09fd9ca1627e47`; exact-head CI #4416 / run `41338701474` is in progress.
