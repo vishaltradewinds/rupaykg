@@ -49,10 +49,8 @@ function buildAuthContext(
   const requestPath = ((request.url ?? "").split("?", 1)[0]) ?? "";
   const bilateralOrganizationScope = requestPath === "/api/v1/settlements"
     || requestPath.startsWith("/api/v1/settlements/");
-  if (memberships.length > 1 && !requestedOrganizationId && !bilateralOrganizationScope) return null;
-  const activeOrganizationId = requestedOrganizationId ?? (
-    bilateralOrganizationScope ? undefined : memberships[0]?.organization_id
-  );
+  if (memberships.length > 1 && !requestedOrganizationId) return null;
+  const activeOrganizationId = requestedOrganizationId ?? memberships[0]?.organization_id;
   return {
     identityId,
     memberships,
