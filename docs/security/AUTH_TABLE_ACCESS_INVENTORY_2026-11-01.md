@@ -36,7 +36,8 @@
 - `/auth/me` first authenticates via the application resolver, then reads the self-scoped account projection through the auth function.
 - Stakeholder onboarding remains on the application pool and retains its current lifecycle transaction; its RLS migration is still outstanding.
 - Production config requires the two URLs to target the same Neon host, port, and database but use distinct database role names.
-- Production startup verifies both runtime identities are distinct, neither is superuser/BYPASSRLS, the app role cannot access auth tables or auth lifecycle functions, the auth role cannot directly read auth tables or resolve sessions, and the expected SECURITY DEFINER functions are owned by NOLOGIN/NOBYPASSRLS `rupaykg_auth_owner`.
+- Production startup verifies both runtime identities are distinct, neither is superuser/BYPASSRLS/CREATEDB/CREATEROLE/REPLICATION, the app role cannot access auth tables or auth lifecycle functions, the auth role cannot directly read auth tables or resolve sessions, and the expected SECURITY DEFINER functions are owned by NOLOGIN/NOBYPASSRLS `rupaykg_auth_owner`.
+- In security-definer mode, `hasOrganizationPermission` now calls `auth_private.has_organization_permission(identity_id, organization_id, permissions)` instead of directly querying memberships and roles. The function is SECURITY DEFINER, owned by `rupaykg_auth_owner`, and EXECUTE is granted only to `rupaykg_app_runtime`.
 - Readiness now checks both database pools.
 
 ## Application integration delivered in PR #192
@@ -46,6 +47,11 @@
 - The resolver path has no fallback to direct auth-table SELECTs on missing function, permission error, or database failure.
 - Default mode remains `legacy`; production behavior does not change.
 - Unit tests cover hash binding, no-session results, no-membership identities, multi-organization selection, bilateral settlement semantics, resolver errors, inconsistent resolver output, and invalid configuration.
+
+## Remaining application authorization paths
+
+- The core `hasOrganizationPermission` helper is now function-backed in security-definer mode.
+- Direct auth-table reads/writes still exist in geography/activity authorization helpers, evidence verification, platform-admin routes, and stakeholder onboarding mutations. These must be moved to narrow identity-bound functions before the app runtime can be deployed with no auth-table privileges.
 
 ## Blocking requirements before auth-table RLS
 
