@@ -24,3 +24,7 @@ Engineering primitive added in draft PR #200. This is not an application-wide RL
 ## Safety
 
 No production DB schema, role, secret, deployment or data changes. The PR is draft. Production release remains HOLD until all integration gaps and independent review are complete.
+
+## PostgreSQL connection-reuse test
+
+Added `apps/src/rls-request-transaction-postgres.integration.test.ts`. It uses a one-connection PostgreSQL pool to verify the signed context is visible inside the transaction and cleared after both COMMIT and ROLLBACK before that same pooled connection is reused. This tests transaction-local GUC lifecycle against the disposable CI PostgreSQL service; it does not yet exercise production RLS policies or the API's full authentication path.
