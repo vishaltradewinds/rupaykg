@@ -270,3 +270,14 @@ A follow-up read-only query of the authoritative production branch inspected rol
 The production database credential used for this inspection therefore does not merely bypass RLS: it inherits a highly privileged Neon role and has role/database creation and replication attributes. The deployed API's exact DATABASE_URL role must be verified separately from deployment configuration/telemetry; do not assume it is identical solely from this SQL inspection. Until proven otherwise, treat any service using the `rupaykg` credential as using a privileged administrative identity, not a least-privilege runtime identity. Do not expose it to ordinary API workers. This elevates runtime role separation and credential inventory to a P0 release gate. Neon-managed roles themselves must not be modified; create and validate application roles without inheriting provider-managed elevated roles.
 
 A read-only inspection of the existing tenant-isolation lab also found proposed `rupaykg_app_runtime` / `rupaykg_auth_runtime` roles are not yet granted tenant-table privileges and have no runtime RLS policies; the `rupaykg` lab role has admin-option memberships on multiple lab owner/runtime roles. These role experiments are not proof of a usable production runtime split and must be audited before reuse.
+
+### 8.1 Existing lab role/grant audit
+
+On the existing tenant-isolation lab branch `br-blue-tooth-b4kvuut7`, read-only role/grant inspection found:
+- `rupaykg_app_runtime` is LOGIN / NOBYPASSRLS, but has no table grants and no policies are defined for it.
+- `rupaykg_auth_runtime` is LOGIN / NOBYPASSRLS, but the inspected auth-owner table grants are assigned to the separate NOLOGIN `rupaykg_auth_owner` role, not to `rupaykg_auth_runtime`.
+- `rupaykg_app_owner`, `rupaykg_auth_owner`, `rupaykg_rls_lab_owner_20261101`, and other lab roles exist, but the current `rupaykg` role has admin-option memberships on several of them.
+- `rupaykg` inherits Neon-managed `neon_superuser` and remains BYPASSRLS in that branch.
+- The four RLS tables and their policies do not cover application tenant data; their predicates are broad `true` for lab/auth owner roles.
+
+This proves that role names alone do not establish a least-privilege design. The new implementation must verify actual grants, inheritance, SET ROLE reachability, ownership, policy role targets and the live service's connection role. Existing lab role experiments should be treated as disposable research artefacts until reconciled; do not copy their grants or memberships into production.
