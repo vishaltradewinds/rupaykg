@@ -68,7 +68,7 @@ test("PostgreSQL Super Admin suspension revokes sessions and blocks subsequent a
     targetId = target.rows[0]!.id;
     const role = await pool.query<{ id: string }>(
       "insert into roles(organization_id,name,permissions,geography_scope) values($1,'super_admin',$2::jsonb,'[]') returning id",
-      [organizationId, JSON.stringify(["dashboard:read", "admin:users", "admin:roles", "admin:security"])],
+      [organizationId, JSON.stringify(["admin:users"])],
     );
     roleId = role.rows[0]!.id;
     membershipId = await bootstrapReservedMembership(pool, actorId, organizationId, roleId);
