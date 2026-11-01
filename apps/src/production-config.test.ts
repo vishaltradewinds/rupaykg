@@ -4,8 +4,8 @@ import { readProductionConfig } from "./production-config.js";
 
 const valid = {
   NODE_ENV: "production",
-  DATABASE_URL: "postgresql://app_runtime:app-secret@prod.example.invalid:5432/rupaykg",
-  AUTH_DATABASE_URL: "postgresql://auth_runtime:auth-secret@prod.example.invalid:5432/rupaykg",
+  DATABASE_URL: "postgresql://rupaykg_app_runtime:app-secret@prod.example.invalid:5432/rupaykg",
+  AUTH_DATABASE_URL: "postgresql://rupaykg_auth_runtime:auth-secret@prod.example.invalid:5432/rupaykg",
   DATABASE_SSL: "require",
   DATABASE_CA_CERT: "-----BEGIN CERTIFICATE-----\nproduction-test-ca\n-----END CERTIFICATE-----",
   RUPAYKG_ALLOWED_ORIGINS: "https://app.rupaykg.example",
