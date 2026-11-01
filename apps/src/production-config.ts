@@ -19,9 +19,9 @@ function required(env: NodeJS.ProcessEnv, name: string): string {
 
 function productionDatabaseUrl(value: string, label = "DATABASE_URL"): string {
   let parsed: URL;
-  try { parsed = new URL(value); } catch { throw new Error("PRODUCTION_CONFIG_INVALID: ${label} must be a valid PostgreSQL URL"); }
-  if (parsed.protocol !== "postgres:" && parsed.protocol !== "postgresql:") throw new Error("PRODUCTION_CONFIG_INVALID: ${label} must use postgres:// or postgresql://");
-  if (["localhost", "127.0.0.1", "::1"].includes(parsed.hostname.toLowerCase())) throw new Error("PRODUCTION_CONFIG_INVALID: production ${label} must not target localhost");
+  try { parsed = new URL(value); } catch { throw new Error(`PRODUCTION_CONFIG_INVALID: ${label} must be a valid PostgreSQL URL`); }
+  if (parsed.protocol !== "postgres:" && parsed.protocol !== "postgresql:") throw new Error(`PRODUCTION_CONFIG_INVALID: ${label} must use postgres:// or postgresql://`);
+  if (["localhost", "127.0.0.1", "::1"].includes(parsed.hostname.toLowerCase())) throw new Error(`PRODUCTION_CONFIG_INVALID: production ${label} must not target localhost`);
   return value;
 }
 
