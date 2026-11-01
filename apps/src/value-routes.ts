@@ -4,7 +4,6 @@ import { calculateEmissionReduction, isGenericCalculationMethodAllowed, sha256Ca
 import { assessEprObligation } from "@rupaykg/compliance";
 import { classifyMetric } from "@rupaykg/esg";
 import { authenticate, canActForOrganization, hasOrganizationPermission, type AuthContext } from "./auth.js";
-import { registerAuthRoutes } from "./auth-routes.js";
 
 type Reply = { code: (status: number) => { send: (body: unknown) => unknown } };
 type Request = { body: unknown; params: Record<string, string>; log: { error: (error: unknown) => void }; headers: Record<string, string | undefined> };
@@ -18,7 +17,6 @@ async function hasValuePermission(pool: Pool, functionName: "can_assess_epr" | "
 async function evidenceIsVerified(pool: Pool, evidenceId: string, organizationId: string): Promise<boolean> { const result = await pool.query<{ ok: boolean }>(`select exists(select 1 from evidence e join activities a on a.id=e.activity_id where e.id=$1 and a.organization_id=$2 and e.status='VERIFIED' and (e.content_hash is not null or e.content_uri is not null) and a.geography_id is not null and organization_has_geography_scope($2,a.geography_id)) as ok`, [evidenceId, organizationId]); return result.rows[0]?.ok === true; }
 
 export async function registerValueRoutes(app: FastifyInstance, pool: Pool | null): Promise<void> {
-  await registerAuthRoutes(app, pool);
   app.post("/api/v1/carbon/calculations", async (request, reply) => {
     const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
     const body = bodyOf(request as never);
