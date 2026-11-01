@@ -62,7 +62,8 @@ async function assertProductionDatabaseRuntimeContracts(): Promise<void> {
         and has_function_privilege(current_user,'auth_private.can_read_geography(uuid,uuid)','EXECUTE')
         and has_function_privilege(current_user,'auth_private.can_write_geography(uuid,uuid,uuid)','EXECUTE')
         and has_function_privilege(current_user,'auth_private.can_write_activity(uuid,uuid)','EXECUTE')
-        and has_function_privilege(current_user,'auth_private.can_verify_evidence(uuid,uuid)','EXECUTE')) as scoped_authorization_execute,
+        and has_function_privilege(current_user,'auth_private.can_verify_evidence(uuid,uuid)','EXECUTE')
+        and has_function_privilege(current_user,'auth_private.is_platform_admin(uuid,text)','EXECUTE')) as scoped_authorization_execute,
        (has_function_privilege(current_user,'auth_private.find_login_candidate(text)','EXECUTE')
         or has_function_privilege(current_user,'auth_private.record_login_failure(uuid)','EXECUTE')
         or has_function_privilege(current_user,'auth_private.reset_login_failures(uuid)','EXECUTE')
@@ -88,7 +89,8 @@ async function assertProductionDatabaseRuntimeContracts(): Promise<void> {
         or has_function_privilege(current_user,'auth_private.can_read_geography(uuid,uuid)','EXECUTE')
         or has_function_privilege(current_user,'auth_private.can_write_geography(uuid,uuid,uuid)','EXECUTE')
         or has_function_privilege(current_user,'auth_private.can_write_activity(uuid,uuid)','EXECUTE')
-        or has_function_privilege(current_user,'auth_private.can_verify_evidence(uuid,uuid)','EXECUTE')) as scoped_authorization_execute,
+        or has_function_privilege(current_user,'auth_private.can_verify_evidence(uuid,uuid)','EXECUTE')
+        or has_function_privilege(current_user,'auth_private.is_platform_admin(uuid,text)','EXECUTE')) as scoped_authorization_execute,
        (has_function_privilege(current_user,'auth_private.find_login_candidate(text)','EXECUTE')
         and has_function_privilege(current_user,'auth_private.record_login_failure(uuid)','EXECUTE')
         and has_function_privilege(current_user,'auth_private.reset_login_failures(uuid)','EXECUTE')
@@ -111,9 +113,9 @@ async function assertProductionDatabaseRuntimeContracts(): Promise<void> {
     `select p.proname as function_name,p.prosecdef as security_definer,pg_get_userbyid(p.proowner) as owner_name
        from pg_proc p join pg_namespace n on n.oid=p.pronamespace
       where n.nspname='auth_private' and p.proname in
-        ('resolve_session','find_login_candidate','record_login_failure','reset_login_failures','issue_session','revoke_session','register_identity','get_self_account_context','has_organization_permission','organization_has_geography_scope','can_read_geography','can_write_geography','can_write_activity','can_verify_evidence')`,
+        ('resolve_session','find_login_candidate','record_login_failure','reset_login_failures','issue_session','revoke_session','register_identity','get_self_account_context','has_organization_permission','organization_has_geography_scope','can_read_geography','can_write_geography','can_write_activity','can_verify_evidence','is_platform_admin')`,
   );
-  if (functionOwners.rows.length !== 14 || functionOwners.rows.some((fn) =>
+  if (functionOwners.rows.length !== 15 || functionOwners.rows.some((fn) =>
     !fn.security_definer || fn.owner_name !== "rupaykg_auth_owner")) {
     throw new Error("PRODUCTION_AUTH_FUNCTION_OWNERSHIP_INVALID");
   }
