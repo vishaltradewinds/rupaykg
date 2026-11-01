@@ -71,3 +71,9 @@ No production DDL/DML, migration, role/grant/RLS changes, deployments, worker/sc
 - PR #202 current head `9cda4b65091f08b2a2c478322d9d72d4e54722a5`; exact-head CI #4408 / run `41338438338` IN PROGRESS. Prior code-head run #4406 had migration, typecheck and build in progress after route wiring; #4408 covers the checkpoint commit.
 - PR #201 remains exact-head CI PASS (#4390). Both PRs remain draft and unmerged pending independent security review and controlled integration.
 - Production remains untouched and release HOLD.
+
+## 2026-11-02 route-registration audit correction
+- Correction: `auth-routes.ts` was already registered indirectly by `registerValueRoutes(app, pool, authPool)`; the direct import/registration added during the audit was redundant and has been removed after CI exposed duplicate Fastify routes.
+- The real defect was that onboarding handlers in `auth-routes.ts` omitted `sessionPool` and therefore fell back to the operational pool. They now use the separate auth pool; auth-pool errors fail closed. Module-level route tests remain.
+- The parallel production-config test suite also had an outdated expected error string; current branch test expectation matches the host/port/database validation message.
+- PR #202 latest head `d67d597de1ada8f89cede1ff7c09fd9ca1627e47`; exact-head CI #4416 / run `41338701474` IN PROGRESS. Earlier #4408 failed due duplicate route registration and outdated regex; both corrections are on current head.
