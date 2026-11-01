@@ -331,7 +331,7 @@ returns boolean
 language plpgsql
 security definer
 set search_path = pg_catalog, pg_temp
-as $
+as $$
 declare v_count integer;
 begin
   if p_token_hash is null or length(p_token_hash)<>64 then return false; end if;
@@ -342,7 +342,7 @@ begin
   get diagnostics v_count = row_count;
   return v_count=1;
 end;
-$;
+$$;
 
 revoke all on function auth_private.create_stakeholder_application(text,text,text,text,text,text,text,uuid,text,text,text,text,text,timestamptz,timestamptz) from public;
 revoke all on function auth_private.withdraw_stakeholder_application(text,uuid) from public;
