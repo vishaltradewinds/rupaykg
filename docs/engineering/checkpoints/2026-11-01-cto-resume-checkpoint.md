@@ -290,3 +290,11 @@ Production database, production credentials, staging database, and Render deploy
 - Added route integration test proving the app pool executes only `auth_private.resolve_session`, the auth pool executes `auth_private.get_self_account_context`, and application rows are returned without direct app-role reads of identity/membership/application tables.
 - Code commit: `1ecc0a78e063e3ae3bde8e5fa37169b0ae31ea6c`; test commit: `89bb027e4a2814361cdaadd4048a86b331b883f9`. Exact-head CI pending.
 - Remaining onboarding create/withdraw and hierarchy review/approval writes are still direct SQL and remain blocked pending identity/authority-bound functions.
+
+
+## 18. Runtime privilege preflight hardening — 2026-11-01 15:46 UTC
+
+- Hardened production startup checks to require both app/auth runtime roles to be LOGIN + NOINHERIT + non-superuser + NOBYPASSRLS + NOCREATEDB + NOCREATEROLE + NOREPLICATION.
+- Startup now verifies both roles have USAGE on `auth_private`, no direct auth-table privileges, no public-schema CREATE, no membership in either owner role, and the intended split of auth lifecycle vs app authorization function EXECUTE grants.
+- Owner-role checks now also require NOINHERIT. Role manifest updated to match.
+- Code commit `c7516471e114f5a88458e67ba48613cbe62caf1a`; manifest commit `31522052b03c3689a100895603f2a5fab61813f7`. Exact-head CI pending.
