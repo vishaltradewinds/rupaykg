@@ -48,6 +48,7 @@ export async function withRlsRequestTransaction<T>(
   const token = createSignedRequestContextToken({ actorIdentityId: auth.identityId, organizationId }, { secret: config.hmacSecret, keyId: config.keyId, ...(config.ttlSeconds === undefined ? {} : { ttlSeconds: config.ttlSeconds }) });
   const client = await pool.connect();
   let transactionStarted = false;
+  let releaseError: Error | undefined;
   try {
     await client.query("BEGIN");
     transactionStarted = true;
@@ -57,11 +58,14 @@ export async function withRlsRequestTransaction<T>(
     transactionStarted = false;
     return result;
   } catch (error) {
-    if (transactionStarted) {
-      try { await client.query("ROLLBACK"); } catch { /* Preserve the original error; release discards a broken client. */ }
+    if (!transactionStarted) {
+      releaseError = error instanceof Error ? error : new Error("RLS transaction could not begin");
+    } else {
+      try { await client.query("ROLLBACK"); }
+      catch (rollbackError) { releaseError = rollbackError instanceof Error ? rollbackError : new Error("RLS transaction rollback failed"); }
     }
     throw error;
   } finally {
-    client.release();
+    client.release(releaseError);
   }
 }
