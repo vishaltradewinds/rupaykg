@@ -72,3 +72,13 @@ Additional boundary review:
 - Onboarding review queue and platform audit are explicit control-plane access paths and must not become blanket tenant bypasses.
 
 **Implementation remains documentation-only.** No application code, schema, database, role, grant, RLS, secret, Render configuration or deployment changed. The new findings are source-confirmed, not a claim of a live production exploit. RLS remains blocked pending integrity remediation and disposable two-tenant tests.
+
+
+## Read-only production preflight — 2026-11-01
+
+- Inspected the production Neon catalog for the relevant evidence, CPCB history, onboarding, field-device, sync, assignment, registry and settlement tables.
+- Confirmed the relevant production FK definitions are independent single-column constraints; the composite ownership constraints described in the findings are absent.
+- Ran eight read-only anti-join checks for existing mismatched organization/activity/evidence/history/geography/device/assignment relationships. All eight returned **0 mismatches** in the inspected production snapshot.
+- Interpretation: the checked data is currently consistent for these predicates, but database write integrity is not enforced by composite constraints. Zero current mismatches is not proof against future invalid writes.
+- Updated `docs/security/TENANT_ISOLATION_INTEGRITY_FINDINGS_2026-11-01.md` with production catalog and data preflight evidence. Latest findings doc commit: `b497f57106acf4c769fdba3c93fe9be342d4747b`.
+- All production operations were SELECT-only. No DDL, DML, role/grant, RLS, secret, Render or deployment changes.
