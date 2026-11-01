@@ -158,3 +158,9 @@ No production code, schema or production data changed. Exact-head CI #4307 / ID 
 The disposable applicability fixture teardown correction at code head `d0050f8790ba418c4a3568c8b3df0823832f1e46` passed exact-head CI #4307 / ID 41329615974. All workflow steps passed: dependency audit, migration validation, disposable PostgreSQL migration/acceptance, TypeScript typecheck, build, browser smoke test, tests and production container build. Teardown now executes as part of the passing PostgreSQL acceptance suite.
 
 This remains an engineering CI result. PR #193 remains draft/unmerged pending independent review. Production remains HOLD.
+
+## Exact-head checkpoint CI confirmation — 2026-11-01 (run #4310)
+
+The documentation checkpoint commit `6e22ed2eae03409b81e48f91774ea931f04f6e76` passed exact-head CI #4310 / ID 41329827517. All workflow steps completed successfully, including dependency audit, migration validation, disposable PostgreSQL migration and acceptance, TypeScript typecheck, build, browser smoke test, production container build and cleanup.
+
+This follows the code-head CI #4307 pass for the applicability fixture teardown correction. PR #193 remains draft/unmerged pending independent review and production remains HOLD.
