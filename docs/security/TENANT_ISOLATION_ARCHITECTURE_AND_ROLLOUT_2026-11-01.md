@@ -18,8 +18,8 @@ Verified facts:
 - All 67 public tables are owned by login role `rupaykg`.
 - Current database role `rupaykg` is a member of `neon_superuser`.
 - Role flags: `rolsuper=false`, `rolcreaterole=true`, `rolcreatedb=true`, `rolreplication=true`, `rolbypassrls=true`, `rolcanlogin=true`.
-- 45 tables have at least one direct organization, tenant, workspace, owner, creator, or identity attribution column (this is a discovery bucket, not proof that each table's policy is correct).
-- 22 tables have no such direct column and need explicit inherited-ownership or shared-reference classification.
+- 46 tables have at least one direct organization, tenant, workspace, owner, creator, or identity attribution column (this is a discovery bucket, not proof that each table's policy is correct).
+- 21 tables have no such direct column and need explicit inherited-ownership or shared-reference classification.
 - Every inspected public table is owned by `rupaykg`; enabling RLS alone will not constrain this role while it retains BYPASSRLS.
 
 **Decision:** no RLS migration may be enabled against the current application credential. First split runtime, ownership, and migration authority. Do not revoke existing privileges or rotate credentials until the live application connection and replacement role have been validated in a disposable branch.
@@ -50,7 +50,7 @@ RLS needs an authenticated context for every database transaction:
 
 ## 4. Table classification register
 
-### 4.1 Direct attribution candidates (45)
+### 4.1 Direct attribution candidates (46)
 
 These tables expose one or more organization/workspace/identity/owner attribution columns and require an explicit row-access model:
 
@@ -58,11 +58,11 @@ These tables expose one or more organization/workspace/identity/owner attributio
 
 Important: `identity_id`, `actor_identity_id`, `created_by_identity_id`, or `owner_id` does not automatically mean an organization-level policy. Each table needs an explicit owner/reader/writer matrix. Multi-party tables (for example EPR transfers and credits) need deliberate visibility rules for each party and regulator, not a generic `organization_id = current_org` policy.
 
-### 4.2 No direct tenant/identity attribution (22)
+### 4.2 No direct tenant/identity attribution (21)
 
-`bwg_epr_reports`, `bwg_esg_reports`, `carbon_calculations`, `carbon_market_mechanisms`, `ccts_methodology_registry`, `epr_credit_allocations`, `epr_schemes`, `esg_metrics`, `evidence_verification_requirements`, `field_sync_cursors`, `geography`, `geography_sources`, `methodology_governance_evidence`, `methodology_versions`, `mrv_observations`, `mrv_provenance_events`, `platform_audit_chain_head`, `regulatory_requirements`, `regulatory_sources`, `schema_migrations`, `settlements`, and `(one additional table from the 67-table catalog requires explicit reconciliation before classification)`.
+`bwg_epr_reports`, `bwg_esg_reports`, `carbon_calculations`, `carbon_market_mechanisms`, `ccts_methodology_registry`, `epr_credit_allocations`, `epr_schemes`, `esg_metrics`, `evidence_verification_requirements`, `field_sync_cursors`, `geography`, `geography_sources`, `methodology_governance_evidence`, `methodology_versions`, `mrv_observations`, `mrv_provenance_events`, `platform_audit_chain_head`, `regulatory_requirements`, `regulatory_sources`, `schema_migrations`, `settlements`.
 
-The catalog query identified 21 named rows in the no-direct-key bucket in this report draft; the source audit returned 22. This count discrepancy is intentionally retained as a reconciliation blocker rather than silently guessing the missing table. Re-run the catalog extract and complete this register before policy implementation.
+The catalog count was independently re-run and reconciled: 46 tables have one or more direct attribution columns and 21 have none, totaling all 67 public tables.
 
 Initial FK observations:
 - Child/derived ownership candidates: `bwg_epr_reports`, `bwg_esg_reports`, `carbon_calculations`, `epr_credit_allocations`, `esg_metrics`, `evidence_verification_requirements`, `field_sync_cursors`, `methodology_governance_evidence`, `mrv_observations`, `mrv_provenance_events`, `settlements`. Their effective owner must be derived from and constrained to their referenced tenant-owned parent(s); add composite tenant-aware FKs where necessary.
