@@ -37,7 +37,8 @@
 - Stakeholder onboarding remains on the application pool and retains its current lifecycle transaction; its RLS migration is still outstanding.
 - Production config requires the two URLs to target the same Neon host, port, and database but use distinct database role names.
 - Production startup verifies both runtime identities are distinct, neither is superuser/BYPASSRLS/CREATEDB/CREATEROLE/REPLICATION, the app role cannot access auth tables or auth lifecycle functions, the auth role cannot directly read auth tables or resolve sessions, and the expected SECURITY DEFINER functions are owned by NOLOGIN/NOBYPASSRLS `rupaykg_auth_owner`.
-- In security-definer mode, `hasOrganizationPermission` now calls `auth_private.has_organization_permission(identity_id, organization_id, permissions)` instead of directly querying memberships and roles. The function is SECURITY DEFINER, owned by `rupaykg_auth_owner`, and EXECUTE is granted only to `rupaykg_app_runtime`.
+- In security-definer mode, `hasOrganizationPermission` now calls `auth_private.has_organization_permission(identity_id, organization_id, permissions)` instead of directly querying memberships and roles.
+- Geography/activity/evidence authorization helpers now call `auth_private.organization_has_geography_scope`, `can_read_geography`, `can_write_geography`, `can_write_activity`, and `can_verify_evidence`. These are SECURITY DEFINER, owned by `rupaykg_auth_owner`, and EXECUTE is granted only to `rupaykg_app_runtime`.
 - Readiness now checks both database pools.
 
 ## Application integration delivered in PR #192
@@ -51,7 +52,7 @@
 ## Remaining application authorization paths
 
 - The core `hasOrganizationPermission` helper is now function-backed in security-definer mode.
-- Direct auth-table reads/writes still exist in geography/activity authorization helpers, evidence verification, platform-admin routes, and stakeholder onboarding mutations. These must be moved to narrow identity-bound functions before the app runtime can be deployed with no auth-table privileges.
+- Remaining direct auth-table reads/writes are concentrated in platform-admin routes, stakeholder onboarding mutations, plus route-specific queries outside the shared authorization helpers. These must be moved to narrow identity-bound functions before the app runtime can be deployed with no auth-table privileges.
 
 ## Blocking requirements before auth-table RLS
 
