@@ -65,15 +65,16 @@ test("BWG reporting period and authorized/denied waste, EPR and ESG writes use r
       [organizationId,"bwg_evidence_verifier_"+suffix,JSON.stringify(["VERIFY_EVIDENCE","verification:approve"])],
     );
 
-    await pool.query("alter table organization_memberships disable trigger stakeholder_membership_application_guard");
-    try {
+    // Privileged disposable-CI membership fixture only; this test does not exercise onboarding approval.
       await pool.query(
+        "insert into organization_memberships(identity_id,organization_id,role_id,status) values(      await pool.query(
         "insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED'),($4,$2,$5,'VERIFIED'),($6,$2,$7,'VERIFIED')",
         [allowedIdentity.rows[0]!.id,organizationId,allowedRole.rows[0]!.id,deniedIdentity.rows[0]!.id,deniedRole.rows[0]!.id,verifierIdentity.rows[0]!.id,verifierRole.rows[0]!.id],
       );
-    } finally {
-      await pool.query("alter table organization_memberships enable trigger stakeholder_membership_application_guard");
-    }
+,$2,$3,'VERIFIED'),($4,$2,$5,'VERIFIED'),($6,$2,$7,'VERIFIED')",
+        [allowedIdentity.rows[0]!.id,organizationId,allowedRole.rows[0]!.id,deniedIdentity.rows[0]!.id,deniedRole.rows[0]!.id,verifierIdentity.rows[0]!.id,verifierRole.rows[0]!.id],
+      );
+
 
     await pool.query(
       "insert into organization_geography_scopes(organization_id,geography_id,status) values($1,$2,'VERIFIED')",
