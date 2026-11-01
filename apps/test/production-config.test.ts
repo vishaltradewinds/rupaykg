@@ -4,8 +4,8 @@ import { readProductionConfig } from "../src/production-config.js";
 
 const baseEnv = {
   NODE_ENV: "production",
-  DATABASE_URL: "postgresql://app_runtime:secret@db.example.com:5432/rupaykg",
-  AUTH_DATABASE_URL: "postgresql://auth_runtime:secret@db.example.com:5432/rupaykg",
+  DATABASE_URL: "postgresql://rupaykg_app_runtime:secret@db.example.com:5432/rupaykg",
+  AUTH_DATABASE_URL: "postgresql://rupaykg_auth_runtime:secret@db.example.com:5432/rupaykg",
   DATABASE_SSL: "require",
   DATABASE_CA_CERT: "-----BEGIN CERTIFICATE-----\nproduction-test-ca\n-----END CERTIFICATE-----",
   RUPAYKG_AUTH_MODE: "real",
@@ -33,8 +33,8 @@ test("production config rejects missing or unsafe production requirements", () =
     [{ ...baseEnv, NODE_ENV: "development" }, /NODE_ENV must be production/],
     [{ ...baseEnv, DATABASE_URL: "postgresql://localhost/rupaykg" }, /must not target localhost/],
     [{ ...baseEnv, AUTH_DATABASE_URL: "" }, /AUTH_DATABASE_URL is required/],
-    [{ ...baseEnv, AUTH_DATABASE_URL: "postgresql://app_runtime:other@db.example.com:5432/rupaykg" }, /distinct least-privilege database role/],
-    [{ ...baseEnv, AUTH_DATABASE_URL: "postgresql://auth_runtime:other@other.example.com:5432/rupaykg" }, /same Neon host/],
+    [{ ...baseEnv, AUTH_DATABASE_URL: "postgresql://rupaykg_app_runtime:other@db.example.com:5432/rupaykg" }, /rupaykg_auth_runtime role/],
+    [{ ...baseEnv, AUTH_DATABASE_URL: "postgresql://rupaykg_auth_runtime:other@other.example.com:5432/rupaykg" }, /same Neon host/],
     [{ ...baseEnv, RUPAYKG_AUTH_RESOLVER_MODE: "legacy" }, /must be security_definer/],
     [{ ...baseEnv, DATABASE_SSL: "false" }, /DATABASE_SSL must be require/],
     [{ ...baseEnv, DATABASE_CA_CERT: "" }, /DATABASE_CA_CERT must contain a PEM certificate/],
