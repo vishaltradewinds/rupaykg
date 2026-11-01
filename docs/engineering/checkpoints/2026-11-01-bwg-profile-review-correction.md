@@ -164,3 +164,16 @@ This remains an engineering CI result. PR #193 remains draft/unmerged pending in
 The documentation checkpoint commit `6e22ed2eae03409b81e48f91774ea931f04f6e76` passed exact-head CI #4310 / ID 41329827517. All workflow steps completed successfully, including dependency audit, migration validation, disposable PostgreSQL migration and acceptance, TypeScript typecheck, build, browser smoke test, production container build and cleanup.
 
 This follows the code-head CI #4307 pass for the applicability fixture teardown correction. PR #193 remains draft/unmerged pending independent review and production remains HOLD.
+
+
+## Permission-composition review correction — 2026-11-01
+
+A source-level review found a mismatch between route intent and the shared `hasOrganizationPermission` helper: the helper intentionally checks whether **any** requested permission is present (`permission = any(...)`). Two route calls passed multiple permissions while their response text and tests described an AND requirement. This could allow a caller with only `waste:record` to update a BWG profile, or a caller with only one of `reports:read` / `waste:record` to create a reporting period.
+
+Corrected:
+- BWG profile intake now requires the exact `profile:update` permission; `waste:record` alone is insufficient.
+- Reporting-period creation now checks `reports:read` and `waste:record` separately, requiring both.
+- Added explicit negative tests for waste-only profile update and each single-permission reporting-period case.
+- Existing permission helper semantics are unchanged for other routes.
+
+This was identified before independent review and is an additional authorization hardening change. Exact-head CI is pending for the latest code commit `81ae533f7fb56710a5a3c2d449e65767103c19ac`; do not treat the prior CI runs as validation of this correction. PR #193 remains open, ready for review, and unmerged. Production remains HOLD.
