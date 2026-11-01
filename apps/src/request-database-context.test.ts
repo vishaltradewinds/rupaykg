@@ -22,7 +22,7 @@ function fakePool(failAt?: string) {
   let released = false;
   const client = {
     query: async (sql: string, values?: unknown[]) => {
-      calls.push({ sql, values });
+      calls.push(values === undefined ? { sql } : { sql, values });
       if (sql === failAt) throw new Error("synthetic query failure");
       return { rows: [] };
     },
