@@ -255,3 +255,18 @@ Implementation recommendation:
 - Make transaction lifecycle explicit and centralized; avoid nested BEGIN/COMMIT in handlers.
 - Add a lint/static test that disallows raw `pool.query` outside the DB infrastructure and migration modules.
 - Add an integration test that instruments query acquisition and proves all authenticated tenant data statements execute under the request's transaction-local actor context and runtime role.
+
+## 8. Additional production role privilege finding
+
+A follow-up read-only query of the authoritative production branch inspected role attributes and inherited memberships for `rupaykg`:
+
+- `rolbypassrls=true`
+- `rolcreaterole=true`
+- `rolcreatedb=true`
+- `rolreplication=true`
+- `rolinherit=true`
+- membership in Neon-managed `neon_superuser`
+
+The production application connection therefore does not merely bypass RLS: it inherits a highly privileged Neon role and has role/database creation and replication attributes. Treat the current `rupaykg` credential as a privileged administrative credential, not a least-privilege application runtime identity. Do not expose it to ordinary API workers. This elevates the runtime role separation and credential inventory to a P0 release gate. Neon-managed roles themselves must not be modified; create and validate application roles without inheriting provider-managed elevated roles.
+
+A read-only inspection of the existing tenant-isolation lab also found proposed `rupaykg_app_runtime` / `rupaykg_auth_runtime` roles are not yet granted tenant-table privileges and have no runtime RLS policies; the `rupaykg` lab role has admin-option memberships on multiple lab owner/runtime roles. These role experiments are not proof of a usable production runtime split and must be audited before reuse.
