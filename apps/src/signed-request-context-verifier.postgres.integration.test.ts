@@ -33,6 +33,8 @@ test("database signed-context verifier authenticates claims and fails closed", {
       can_replicate: boolean;
       public_execute: boolean;
       public_key_read: boolean;
+      function_config: string;
+      has_outbound_role_membership: boolean;
     }>(`
       select pg_get_userbyid(p.proowner) as function_owner,
              pg_get_userbyid(c.relowner) as table_owner,
@@ -44,7 +46,9 @@ test("database signed-context verifier authenticates claims and fails closed", {
              r.rolinherit as inherits_roles,
              r.rolreplication as can_replicate,
              exists (select 1 from aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a where a.grantee = 0 and a.privilege_type = 'EXECUTE') as public_execute,
-             exists (select 1 from aclexplode(coalesce(c.relacl, acldefault('r', c.relowner))) a where a.grantee = 0 and a.privilege_type = 'SELECT') as public_key_read
+             exists (select 1 from aclexplode(coalesce(c.relacl, acldefault('r', c.relowner))) a where a.grantee = 0 and a.privilege_type = 'SELECT') as public_key_read,
+             array_to_string(p.proconfig, ',') as function_config,
+             exists (select 1 from pg_auth_members m where m.member = r.oid) as has_outbound_role_membership
         from pg_proc p
         join pg_roles r on r.oid = p.proowner
         join pg_class c on c.oid = 'app_security.request_context_keys'::regclass
@@ -61,6 +65,8 @@ test("database signed-context verifier authenticates claims and fails closed", {
     assert.equal(ownership.rows[0]?.can_replicate, false);
     assert.equal(ownership.rows[0]?.public_execute, false);
     assert.equal(ownership.rows[0]?.public_key_read, false);
+    assert.equal(ownership.rows[0]?.function_config, "search_path=pg_catalog, app_security");
+    assert.equal(ownership.rows[0]?.has_outbound_role_membership, false);
 
     await pool.query("insert into app_security.request_context_keys(key_id,secret,active) values($1,$2,true)", [keyId, secret]);
     await pool.query("create role " + roleName + " nologin nobypassrls");
