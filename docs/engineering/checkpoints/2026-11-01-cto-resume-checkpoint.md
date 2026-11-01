@@ -134,3 +134,35 @@ PR #190 was closed as superseded by the stronger combined test in PR #191.
 - TRL 9: not established.
 
 **Resume instruction:** continue from this checkpoint and the latest branch heads above. Do not repeat initial repository/Neon discovery unless a new commit or deployment changes the verified baseline.
+
+
+## 10. Authentication resolver application slice — PR #192
+
+[PR #192](https://github.com/vishaltradewinds/rupaykg/pull/192)
+- Branch: `shakti/auth-bootstrap-application-integration-2026-11-01`
+- Latest code-validation head: `b31c865d700bface91523d97214398abd582ee32`
+- Exact-head CI run `41315975459`: **PASS**. Migration validation, dependency audit, TypeScript typecheck, build, browser smoke, disposable PostgreSQL acceptance, and production container build passed.
+- Adds opt-in `RUPAYKG_AUTH_RESOLVER_MODE=security_definer`; default remains `legacy`.
+- Security-definer mode calls `auth_private.resolve_session($1)` exactly once and has no direct-table fallback.
+- Tests preserve multi-organization explicit selection, bilateral settlement scope, single-organization implicit selection, no-membership identity behavior, invalid/unverified organization rejection, and legacy path compatibility.
+- PR remains draft and stacked on PR #189. No production migration or application auth-pool integration has been deployed.
+
+### Extended disposable Neon auth lifecycle proof
+
+- On child branch `br-blue-tooth-b4kvuut7`, proved FORCE RLS for identities, sessions, memberships, and password credentials.
+- Proved SECURITY DEFINER functions for login candidate lookup, failed-attempt lockout, reset, session issue/revocation, registration, token-bound account context, and session resolution.
+- Tested ten-failure / 15-minute lockout, reset, eight-hour session issue, revocation, atomic registration, and duplicate email rejection.
+- Proved two runtime principals: application runtime can execute session resolver only; separate auth runtime can execute auth lifecycle functions but cannot directly read password credentials or assume the function-owner role.
+- Production aggregate-only email preflight: zero duplicate case-insensitive email groups. Existing email index is non-unique; unique partial index tested on the disposable branch only.
+- Evidence: `docs/security/TENANT_AUTH_BOOTSTRAP_LAB_2026-11-01.md` and `docs/security/AUTH_TABLE_ACCESS_INVENTORY_2026-11-01.md`.
+
+### Remaining auth integration blockers
+
+1. Add a separately configured auth connection pool and keep the ordinary application pool restricted to session resolution and business runtime operations.
+2. Wire registration/login/lockout/session issue/logout to the auth runtime functions.
+3. Wire `/auth/me` to the token-bound account-context function.
+4. Move stakeholder onboarding membership writes and platform-admin dual-control flows behind approved functions or verified RLS policies.
+5. Add the production migration only after the runtime and migration roles, exact grants, and rollback strategy are independently reviewed.
+6. Do not enable RLS on authentication tables until every direct read/write path has been migrated.
+
+Production database, production credentials, staging database, and Render deployment remain unchanged. Production certification remains OFF / HOLD; TRL 9 is not established.
