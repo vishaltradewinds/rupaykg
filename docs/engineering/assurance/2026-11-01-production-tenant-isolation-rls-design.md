@@ -316,3 +316,30 @@ Both test tables have RLS enabled and FORCE RLS. The membership table policy exp
 
 ### Scope limitation
 This is a PostgreSQL mechanics proof using synthetic data and a manually set transaction-local actor GUC. It does **not** validate the RupayKg API's authentication-to-context binding, role credentials, pooled request handling, all 67 table policies, worker isolation, or production readiness. It is not a release gate pass by itself. The next implementation step is the API request-scoped database unit-of-work and auth/runtime role split, followed by route-level acceptance under a real NOBYPASSRLS login role.
+
+## 11. API route-to-table static inventory
+
+A static SQL-reference scan of the 16 inspected API source modules identified direct SQL references to 52 of the 67 public tables. This is a source scan of `FROM`, `JOIN`, `INSERT INTO`, `UPDATE` and `DELETE FROM` patterns; it is not a complete runtime trace and may miss dynamic SQL, helper functions, trigger side effects, indirect views or database-only workflows.
+
+| API module | Directly referenced tables |
+|---|---|
+| `server.ts` | activities, credentials, evidence, geography, measurements, obligations, organization_geography_scopes, organization_memberships, regulatory_sources, resource_flows, settlements, verifications |
+| `auth.ts` | activities, evidence, identities, identity_sessions, organization_memberships, roles |
+| `auth-routes.ts` | geography, identities, identity_password_credentials, identity_sessions, organization_geography_scopes, organization_memberships, organization_verification_evidence, organizations, roles, stakeholder_applications |
+| `bwg-routes.ts` | epr_obligations, epr_schemes, geography, obligations |
+| `cpcb-swm-routes.ts` | audit_events, cpcb_swm_stakeholder_workspaces, cpcb_swm_status_history, organization_memberships |
+| `epr-return-routes.ts` | activities, epr_obligations, epr_returns, epr_schemes, evidence, obligations, verifications |
+| `evidence-vault-routes.ts` | activities, evidence, evidence_artifact_reviews, evidence_artifact_series, evidence_artifact_versions, verifications |
+| `intelligence-routes.ts` | activities, geography, organization_memberships |
+| `mrv-routes.ts` | activities, evidence, measurements, mrv_observations, mrv_provenance_events, organization_memberships, verifications |
+| `onboarding-hierarchy-routes.ts` | geography, identities, organization_geography_scopes, organization_memberships, organization_verification_evidence, organizations, roles, stakeholder_application_approvals, stakeholder_applications |
+| `platform-admin-routes.ts` | audit_events, identities, identity_sessions, mrv_provenance_events, organization_memberships, organizations, platform_access_change_requests, platform_audit_chain_head, roles, stakeholder_applications |
+| `registry-routes.ts` | activities, credentials, evidence, mrv_provenance_events, organization_memberships, organizations, registry_events, settlement_events, settlements, verifications |
+| `statutory-routes.ts` | activities, epr_schemes, evidence, organization_bwg_assessments, organization_epr_applicability, organization_statutory_profiles, verifications |
+| `sync-routes.ts` | activities, audit_events, evidence, field_devices, field_sync_conflicts, field_sync_cursors, field_sync_envelopes, measurements, organization_memberships, resource_flows |
+| `value-routes.ts` | activities, bwg_epr_reports, bwg_esg_reports, bwg_profiles, bwg_reporting_periods, bwg_waste_reports, carbon_calculations, epr_credits, epr_obligations, epr_schemes, esg_metrics, esg_reporting_periods, evidence, geography, methodology_versions, obligations, organization_geography_scopes, organization_memberships, verifications |
+| `workspace-routes.ts` | activities, carbon_calculations, credentials, esg_metrics, esg_reporting_periods, evidence, geography, measurements, methodology_versions, obligations, organization_memberships, organizations, registry_events, resource_flows, settlements, verifications |
+
+The following 15 tables were not directly matched in these 16 route modules: `activity_assignments`, `carbon_market_mechanisms`, `carbon_projects`, `ccts_methodology_registry`, `chain_of_custody_links`, `environmental_attribute_claims`, `epr_credit_allocations`, `epr_credit_transfers`, `evidence_verification_requirements`, `geography_sources`, `identity_credentials`, `methodology_governance_evidence`, `operation_sync_envelopes`, `regulatory_requirements`, `schema_migrations`.
+
+**Do not classify these 15 as obsolete or unused.** Several are written by database triggers, migration/standards processes, or other jobs not included in this route scan. Each requires a trace to its writers/readers before assigning a policy or excluding it from the RLS rollout. The implementation gate must close all 67 table classifications, including indirect database-only paths.
