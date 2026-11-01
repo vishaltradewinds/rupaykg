@@ -141,10 +141,10 @@ test("self onboarding applications are read through auth_private self-context", 
     assert.equal(response.statusCode, 200);
     assert.deepEqual(response.json().applications, applications);
     assert.equal(appPool.calls.length, 1);
-    assert.match(appPool.calls[0]!.sql, /auth_private\\.resolve_session/);
+    assert.match(appPool.calls[0]!.sql, /auth_private\.resolve_session/);
     assert.doesNotMatch(appPool.calls[0]!.sql, /identity_sessions|organization_memberships|stakeholder_applications/);
     assert.equal(authPool.calls.length, 1);
-    assert.match(authPool.calls[0]!.sql, /auth_private\\.get_self_account_context/);
+    assert.match(authPool.calls[0]!.sql, /auth_private\.get_self_account_context/);
     assert.deepEqual(authPool.calls[0]!.values, [createHash("sha256").update(token).digest("hex")]);
   } finally {
     await app.close();
