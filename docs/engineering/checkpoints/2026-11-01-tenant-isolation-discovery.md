@@ -41,3 +41,14 @@
 6. Independent security review before any explicit production release proposal.
 
 **Decision:** continue tenant-isolation design and evidence gathering. Do not enable RLS globally or activate any worker.
+
+
+## Expanded route scan — 2026-11-01
+
+- Performed a static query/table-reference scan across all route modules in `apps/src` plus `server.ts`.
+- Added additional families to the ownership backlog: MRV observations/provenance events, field-sync cursors, settlement events, EPR returns/obligations/credits, statutory profiles/applicability, audit events and platform-admin governance.
+- Flagged registry and settlement unscoped-ID lookup/locking paths for statement-level authorization and information-disclosure review.
+- Flagged platform onboarding review queue as a dedicated control-plane query, not an ordinary tenant route.
+- Updated the inventory with coverage limitations: lexical SQL scanning does not resolve dynamic SQL or database function behavior and is not a complete authorization proof.
+- Latest inventory document commit: `fe5d42492dce4ae4a04cb831c4f1bac61f0bf109`.
+- No code, database schema, role, grant, secret, Render configuration or deployment changed.
