@@ -20,7 +20,7 @@ The server checks that the two connections report the same `current_database()` 
 | `rupaykg_auth_owner` | No | No | Owner of the reviewed authentication and scoped-authorization SECURITY DEFINER functions |
 | `rupaykg_migrator` | Separate controlled login | No SUPERUSER/BYPASSRLS at runtime | Reviewed migration execution only; credentials and DDL authority managed separately |
 
-All runtime roles must also have `NOCREATEDB`, `NOCREATEROLE`, `NOREPLICATION`, and no `CREATE` on schema `public`. Runtime roles must not be members of either owner role.
+All runtime roles must also have `NOINHERIT`, `NOCREATEDB`, `NOCREATEROLE`, `NOREPLICATION`, `USAGE` on schema `auth_private`, and no `CREATE` on schema `public`. Runtime roles must not be members of either owner role.
 
 ## Function ownership and execution grants
 
@@ -58,8 +58,8 @@ The auth owner receives only the underlying table grants required by the reviewe
 Production startup fails closed unless:
 - both URLs exist and target the same database endpoint/path;
 - usernames are exactly the two runtime role names above;
-- the database identities are distinct and both non-superuser, NOBYPASSRLS, NOCREATEDB, NOCREATEROLE, NOREPLICATION;
-- app runtime has no direct auth-table DML/read privileges and no public-schema CREATE;
+- the database identities are distinct, LOGIN, NOINHERIT, and both non-superuser, NOBYPASSRLS, NOCREATEDB, NOCREATEROLE, NOREPLICATION;
+- both runtimes have `USAGE` on `auth_private`, no direct auth-table DML/read privileges, no public-schema CREATE, and no membership in either owner role;
 - app runtime can execute the session resolver and all ten scoped application authorization functions, but cannot execute credential/session lifecycle or self-context functions;
 - auth runtime has no direct auth-table DML/read privileges or public-schema CREATE, can execute functions 2–8, and cannot execute the session resolver or any scoped application authorization function;
 - both owner roles exist, are NOLOGIN/NOBYPASSRLS and have no elevated database/role/replication privileges;
