@@ -281,3 +281,12 @@ Production database, production credentials, staging database, and Render deploy
 - Updated PR #192 `render.yaml` to declare secret `AUTH_DATABASE_URL` and `RUPAYKG_AUTH_RESOLVER_MODE=security_definer` (`902fbbf8ffc4cf903f0e66d73576b1263bde67e6`). This is only a repository blueprint change; live Render environment was not changed.
 - Because Render auto-deploys `main`, PR #192 must not be merged until the dedicated auth runtime role/secret and all 18 SQL functions/grants are independently validated, and the app route compatibility inventory is cleared. Startup is designed to fail closed if these are missing.
 - No production deploy, environment-variable change, migration, seeding, role, or grant change performed.
+
+
+## 17. Self-onboarding read path moved behind auth function — 2026-11-01 15:44 UTC
+
+- Replaced `GET /api/v1/onboarding/applications` direct queries through the app pool with `auth_private.get_self_account_context(token_hash)` through the dedicated auth pool.
+- The route verifies the session via the app runtime resolver first, then supplies only the hash of the same bearer token to the auth function and checks the returned identity matches the resolver context.
+- Added route integration test proving the app pool executes only `auth_private.resolve_session`, the auth pool executes `auth_private.get_self_account_context`, and application rows are returned without direct app-role reads of identity/membership/application tables.
+- Code commit: `1ecc0a78e063e3ae3bde8e5fa37169b0ae31ea6c`; test commit: `89bb027e4a2814361cdaadd4048a86b331b883f9`. Exact-head CI pending.
+- Remaining onboarding create/withdraw and hierarchy review/approval writes are still direct SQL and remain blocked pending identity/authority-bound functions.
