@@ -23,7 +23,7 @@ Two focused route authorization fixes based on the tenant-isolation review:
 - Branch: `security/tenant-revocation-and-issuance-atomicity-2026-11-01`
 - Head: `bbeaabdcb95ed52713c820d4797885c7ee16914f`
 - Earlier CI run `41282033478` failed on test-fixture mismatches (enum value and role permissions); the fixtures were corrected.
-- Exact-head CI run `41282527046`: **PASS** — validate job completed successfully, including disposable PostgreSQL acceptance tests and container build.
+- CI run `41282527046` on the implementation commit: **PASS** — validate job completed successfully, including disposable PostgreSQL acceptance tests and container build. A documentation-only checkpoint commit followed; no application or migration code changed afterward.
 
 ## Scope and safety
 - Code/tests only on feature branch.
