@@ -227,8 +227,9 @@ Read-only Neon production snapshot:
 
 Disposable branch `br-red-salad-b4oqb4nx`:
 - parent production branch `br-restless-base-b44cip2h` at LSN `0/2EB8568`.
-- 67 public tables, 0 RLS-enabled, 0 policies at baseline.
-- no schema changes made in this branch as part of this design checkpoint.
+- Baseline was 67 public application tables, 0 RLS-enabled, 0 policies.
+- Added only an isolated `rls_lab` schema with two synthetic test tables, two synthetic actors/organizations and two NOLOGIN/NOBYPASSRLS lab roles. No existing application table, row, trigger, or production object was modified.
+- Revoked the temporary CREATE-on-database privilege from the lab owner role after schema creation.
 
 Existing tenant-isolation lab `br-blue-tooth-b4kvuut7`:
 - four tables RLS-enabled and FORCE RLS.
@@ -294,3 +295,24 @@ A read-only Gate A metadata scan on production main found:
 - Application integrity triggers are broadly enabled across activities, evidence, field sync, memberships, registry, settlements, stakeholder approval, and methodology governance. RLS rollout must test trigger execution under the non-owner runtime role; current trigger functions are owned by `rupaykg`, so ownership and execution/grant behaviour must be checked when moving tables/functions to the new owner role.
 
 This reduces the immediate view/sequence/partition surface but does not reduce the tenant isolation blocker. Re-run this inventory after migrations and before each release gate; the live schema can evolve.
+
+## 10. Disposable PostgreSQL RLS mechanics proof
+
+On the clean Neon assurance branch `br-red-salad-b4oqb4nx`, I added a strictly isolated `rls_lab` schema (no changes to any of the 67 application tables) with synthetic actors, organizations and records. Two NOLOGIN roles were created:
+- `rupaykg_rls_lab_owner_20261101`: NOLOGIN, NOSUPERUSER, NOBYPASSRLS, NOINHERIT, no role/database creation, no replication.
+- `rupaykg_rls_lab_runtime_20261101`: same restricted role attributes; no table ownership.
+
+Both test tables have RLS enabled and FORCE RLS. The membership table policy exposes only the current actor's membership using transaction-local `app.actor_id`; the records table policy derives tenant visibility and writes through that membership. The lab runtime role receives only schema usage, membership SELECT and record SELECT/INSERT/UPDATE. The temporary database CREATE privilege granted to the owner role to establish the schema was revoked after setup.
+
+### Observed test results
+- Actor A sees only the tenant-A synthetic record.
+- Actor B sees only the tenant-B synthetic record.
+- Runtime role with no actor context sees zero records (fail closed).
+- Actor A's cross-tenant UPDATE affects zero rows.
+- Actor A's cross-tenant INSERT is rejected by PostgreSQL with a row-level security violation.
+- Actor A can insert a record into its own organization and then sees both tenant-A records.
+- Table owner role sees zero rows without actor context because FORCE RLS applies and no owner policy exists.
+- The existing `rupaykg` role sees both synthetic records despite FORCE RLS because it has BYPASSRLS; this demonstrates why the privileged owner/inspection role cannot be used as application runtime.
+
+### Scope limitation
+This is a PostgreSQL mechanics proof using synthetic data and a manually set transaction-local actor GUC. It does **not** validate the RupayKg API's authentication-to-context binding, role credentials, pooled request handling, all 67 table policies, worker isolation, or production readiness. It is not a release gate pass by itself. The next implementation step is the API request-scoped database unit-of-work and auth/runtime role split, followed by route-level acceptance under a real NOBYPASSRLS login role.
