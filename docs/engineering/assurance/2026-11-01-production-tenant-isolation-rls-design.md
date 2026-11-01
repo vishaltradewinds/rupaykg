@@ -363,3 +363,37 @@ This is materially stronger than a plain custom GUC: the runtime can set `app.re
 ### Verified-membership gate extension
 
 The synthetic membership table was extended with `status` and a `PENDING` actor-A membership in tenant B. The signed context for actor A + tenant B is cryptographically valid but returns zero records because the database membership policy independently requires `status='VERIFIED'`. This verifies that a signed organization claim alone cannot activate access without a verified database membership.
+
+## 13. Route migration sizing and order
+
+A second static scan of the 15 API modules (14 route modules plus the central server) counted direct database access patterns on the current `main` branch. These counts are source-level indicators, not a complete query inventory: helper functions, indirect calls, dynamic SQL and nested injected requests require further tracing.
+
+| Module | Direct `pool.query` calls | Direct `pool.connect` calls | Route handlers |
+|---|---:|---:|---:|
+| `server.ts` | 5 | 1 | 10 |
+| `auth-routes.ts` | 14 | 3 | 8 |
+| `bwg-routes.ts` | 1 | 0 | 1 |
+| `cpcb-swm-routes.ts` | 3 | 2 | 3 |
+| `epr-return-routes.ts` | 2 | 2 | 4 |
+| `evidence-vault-routes.ts` | 5 | 2 | 4 |
+| `intelligence-routes.ts` | 2 | 0 | 1 |
+| `mrv-routes.ts` | 14 | 1 | 4 |
+| `onboarding-hierarchy-routes.ts` | 2 | 2 | 3 |
+| `platform-admin-routes.ts` | 7 | 1 | 15 |
+| `registry-routes.ts` | 0 | 1 | 8 |
+| `statutory-routes.ts` | 10 | 0 | 5 |
+| `sync-routes.ts` | 4 | 4 | 7 |
+| `value-routes.ts` | 34 | 0 | 9 |
+| `workspace-routes.ts` | 13 | 1 | 8 |
+| **Total** | **116** | **20** | **90** |
+
+### Migration order
+
+1. **Authentication bootstrap boundary first.** Split session/token verification from tenant data access. Define a narrowly scoped auth mechanism that can authenticate a session without granting the application runtime broad table access or BYPASSRLS.
+2. **Transaction infrastructure.** Wire the signed request context to the Fastify request lifecycle and a single transaction per request. Ensure every tenant query uses the same checked-out client and the context is cleared before pool reuse. Direct pool-level queries must not silently fall back to an unscoped connection once RLS is required.
+3. **High-risk writes.** Migrate evidence verification, MRV measurement/provenance, EPR returns, BWG reports, registry issuance/transfers/retirements, settlement and field-sync writes. Keep bilateral settlement and multi-party credential flows fail-closed until explicit policy support exists.
+4. **Tenant reads.** Migrate workspace, intelligence, overview, geography and reporting reads with cross-tenant negative tests.
+5. **System/governance paths.** Migrate onboarding, platform administration, regulatory catalogues and background jobs using explicit service-principal contexts and dual-control permissions.
+6. **Global reference and system tables.** Implement only after the 67-table classification and trigger/worker graph are complete; do not apply a generic organization policy to global catalogs or control-plane tables.
+
+The current API has approximately 116 direct pool query sites and 20 direct pool connection acquisitions across these modules. This confirms that the transaction-boundary primitive is only the first integration component; the application-wide refactor must be delivered in controlled route batches with tests at each gate.
