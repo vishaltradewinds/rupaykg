@@ -38,9 +38,9 @@ export function evidencePayloadMatchesMediaType(bytes:Buffer,mediaType:string):b
  if(mediaType==="application/json"){try{JSON.parse(text);return true;}catch{return false;}}
  return !text.includes("\ufffd");
 }
-async function authFor(req:Req,reply:Rep,pool:Pool|null):Promise<AuthContext|null>{
+async function authFor(req:Req,reply:Rep,pool:Pool|null,sessionPool:Pool|null=pool):Promise<AuthContext|null>{
  if(!pool){reply.code(503).send({error:"Database unavailable",code:"DATABASE_UNAVAILABLE"});return null;}
- try{const auth=await authenticate(req as never,pool);if(!auth){reply.code(401).send(bearerChallenge());return null;}return auth;}
+ try{const auth=await authenticate(req as never,sessionPool,pool);if(!auth){reply.code(401).send(bearerChallenge());return null;}return auth;}
  catch(e){req.log.error(e);reply.code(503).send({error:"Authentication service unavailable",code:"AUTH_UNAVAILABLE"});return null;}
 }
 async function activityContext(pool:Pool,auth:AuthContext,id:string):Promise<{organization_id:string;geography_id:string}|null>{
@@ -50,9 +50,9 @@ async function activityContext(pool:Pool,auth:AuthContext,id:string):Promise<{or
  const scope=await pool.query<{ok:boolean}>("select organization_has_geography_scope($1::uuid,$2::uuid) ok",[a.organization_id,a.geography_id]);
  return scope.rows[0]?.ok?{organization_id:a.organization_id,geography_id:a.geography_id}:null;
 }
-export async function registerEvidenceVaultRoutes(app:FastifyInstance,pool:Pool|null):Promise<void>{
+export async function registerEvidenceVaultRoutes(app:FastifyInstance,pool:Pool|null,sessionPool:Pool|null=pool):Promise<void>{
  app.post("/api/v1/evidence-vault/upload",{bodyLimit:7*1024*1024},async(request,reply)=>{
-  const auth=await authFor(request as never,reply,pool);if(!auth||!pool)return;
+  const auth=await authFor(request as never,reply,pool,sessionPool);if(!auth||!pool)return;
   const b=bodyOf(request as never),activityId=str(b,"activityId"),evidenceType=str(b,"evidenceType"),fileNameRaw=str(b,"fileName"),mediaType=str(b,"mediaType")?.toLowerCase(),encoded=str(b,"contentBase64"),seriesId=str(b,"seriesId"),sourceReference=str(b,"sourceReference"),periodStart=str(b,"measurementPeriodStart"),periodEnd=str(b,"measurementPeriodEnd");
   if(!activityId||!evidenceType||evidenceType.length>100||!fileNameRaw||!mediaType||!encoded)return reply.code(400).send({error:"activityId, evidenceType, fileName, mediaType and contentBase64 are required",code:"EVIDENCE_FIELDS_REQUIRED"});
   const fileName=sanitizeEvidenceFileName(fileNameRaw),bytes=decodeEvidenceBase64(encoded);
@@ -84,7 +84,7 @@ export async function registerEvidenceVaultRoutes(app:FastifyInstance,pool:Pool|
   }catch(e){await client.query("rollback").catch(()=>undefined);request.log.error(e);return reply.code(503).send({error:"Evidence upload failed",code:"EVIDENCE_VAULT_UNAVAILABLE",syntheticData:false});}finally{client.release();}
  });
  app.get("/api/v1/evidence-vault",async(request,reply)=>{
-  const auth=await authFor(request as never,reply,pool);if(!auth||!pool)return;
+  const auth=await authFor(request as never,reply,pool,sessionPool);if(!auth||!pool)return;
   const query=(request as unknown as {query?:Record<string,unknown>}).query??{},activityId=typeof query.activityId==="string"?query.activityId:"";
   if(!activityId||!UUID.test(activityId))return reply.code(400).send({error:"Valid activityId is required",code:"EVIDENCE_ACTIVITY_REQUIRED"});
   const ctx=await activityContext(pool,auth,activityId);if(!ctx)return reply.code(403).send({error:"Activity outside active organization/geography scope",code:"EVIDENCE_SCOPE_FORBIDDEN"});
@@ -95,7 +95,7 @@ export async function registerEvidenceVaultRoutes(app:FastifyInstance,pool:Pool|
   return {source:"postgresql",syntheticData:false,data:{artifacts:rows.rows}};
  });
  app.get("/api/v1/evidence-vault/:evidenceId",async(request,reply)=>{
-  const auth=await authFor(request as never,reply,pool);if(!auth||!pool)return;const id=(request.params as {evidenceId:string}).evidenceId;if(!UUID.test(id))return reply.code(400).send({error:"Invalid evidenceId",code:"EVIDENCE_ID_INVALID"});
+  const auth=await authFor(request as never,reply,pool,sessionPool);if(!auth||!pool)return;const id=(request.params as {evidenceId:string}).evidenceId;if(!UUID.test(id))return reply.code(400).send({error:"Invalid evidenceId",code:"EVIDENCE_ID_INVALID"});
   const q=await pool.query<{organization_id:string;geography_id:string|null;artifact_id:string;version_number:number;file_name:string;media_type:string;size_bytes:number;sha256:string;content:Buffer;status:string;source_reference:string|null;measurement_period_start:string|null;measurement_period_end:string|null}>("select a.organization_id,a.geography_id,v.id artifact_id,v.version_number,v.file_name,v.media_type,v.size_bytes,v.sha256,v.content,e.status::text status,v.source_reference,v.measurement_period_start::text,v.measurement_period_end::text from evidence e join activities a on a.id=e.activity_id join evidence_artifact_versions v on v.evidence_id=e.id where e.id=$1",[id]);
   const row=q.rows[0];if(!row||!row.geography_id||!canActForOrganization(auth,row.organization_id))return reply.code(404).send({error:"Evidence not found",code:"EVIDENCE_NOT_FOUND"});
   const g=await pool.query<{ok:boolean}>("select organization_has_geography_scope($1::uuid,$2::uuid) ok",[row.organization_id,row.geography_id]);
@@ -104,7 +104,7 @@ export async function registerEvidenceVaultRoutes(app:FastifyInstance,pool:Pool|
   reply.header("Content-Disposition",'attachment; filename="'+row.file_name.replace(/["\\\r\n]/g,"_")+'"');reply.header("X-Content-Type-Options","nosniff");reply.header("X-Evidence-SHA256",row.sha256);reply.header("X-Evidence-Version",String(row.version_number));return reply.type(row.media_type).send(row.content);
  });
  app.post("/api/v1/evidence-vault/:evidenceId/review",async(request,reply)=>{
-  const auth=await authFor(request as never,reply,pool);if(!auth||!pool)return;const id=(request.params as {evidenceId:string}).evidenceId,b=bodyOf(request as never),decision=str(b,"decision"),rationale=str(b,"rationale");
+  const auth=await authFor(request as never,reply,pool,sessionPool);if(!auth||!pool)return;const id=(request.params as {evidenceId:string}).evidenceId,b=bodyOf(request as never),decision=str(b,"decision"),rationale=str(b,"rationale");
   if(!UUID.test(id))return reply.code(400).send({error:"Invalid evidenceId",code:"EVIDENCE_ID_INVALID"});
   if((decision!=="APPROVED"&&decision!=="REJECTED")||!rationale||rationale.length<5||rationale.length>2000)return reply.code(400).send({error:"Decision and 5–2000 character rationale required",code:"EVIDENCE_REVIEW_FIELDS_INVALID"});
   const client=await pool.connect();try{await client.query("begin");
