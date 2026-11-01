@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { spawn, type ChildProcess } from "node:child_process";
 import { Pool } from "pg";
-import { createApprovedStakeholderApplicationFixture } from "./approved-stakeholder-application-fixture.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 const port = Number(process.env.RUNTIME_ACCEPTANCE_PORT ?? 43127);
@@ -19,7 +18,6 @@ let geographyId = "";
 let outOfScopeGeographyId = "";
 let actorId = "";
 let verifierId = "";
-let reviewerId = "";
 let actorToken = "";
 let verifierToken = "";
 let verifiedDeviceId = "";
@@ -72,11 +70,8 @@ before(async () => {
     await c.query("insert into organization_geography_scopes(organization_id,geography_id) values($1,$2)", [orgId, geographyId]);
     actorId = (await c.query<{ id: string }>("insert into identities(external_subject,display_name) values($1,$2) returning id", [`runtime-actor-${suffix}`, "Runtime Actor"])).rows[0]!.id;
     verifierId = (await c.query<{ id: string }>("insert into identities(external_subject,display_name) values($1,$2) returning id", [`runtime-verifier-${suffix}`, "Runtime Verifier"])).rows[0]!.id;
-    reviewerId = (await c.query<{ id: string }>("insert into identities(external_subject,display_name) values($1,$2) returning id", [`runtime-reviewer-${suffix}`, "Runtime Fixture Authority"])).rows[0]!.id;
     const actorRole = (await c.query<{ id: string }>("insert into roles(organization_id,name,permissions) values($1,$2,'[\"FIELD_SYNC\",\"waste:record\",\"evidence:upload\",\"projects:manage\"]') returning id", [orgId, `ACTOR-${suffix}`])).rows[0]!.id;
     const verifierRole = (await c.query<{ id: string }>("insert into roles(organization_id,name,permissions) values($1,$2,'[\"VERIFY_EVIDENCE\"]') returning id", [orgId, `VERIFIER-${suffix}`])).rows[0]!.id;
-    await createApprovedStakeholderApplicationFixture(c, { identityId: actorId, organizationId: orgId, roleId: actorRole, requestedRoleKey: "COLLECTOR_OPERATOR", requestedOrganizationType: "COLLECTOR", geographyId, reviewerIdentityId: reviewerId, note: "Distinct reviewer approval for disposable runtime acceptance fixture" });
-    await createApprovedStakeholderApplicationFixture(c, { identityId: verifierId, organizationId: orgId, roleId: verifierRole, requestedRoleKey: "COLLECTOR_VERIFIER", requestedOrganizationType: "COLLECTOR", geographyId, reviewerIdentityId: reviewerId, note: "Distinct reviewer approval for disposable runtime acceptance fixture" });
     await c.query("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED'),($4,$2,$5,'VERIFIED')", [actorId, orgId, actorRole, verifierId, verifierRole]);
     actorToken = token(); verifierToken = token();
     await c.query("insert into identity_sessions(identity_id,expires_at,token_hash) values($1,now()+interval '1 hour',$2),($3,now()+interval '1 hour',$4)", [actorId, hash(actorToken), verifierId, hash(verifierToken)]);
@@ -116,7 +111,7 @@ after(async () => {
     await c.query("delete from stakeholder_applications where organization_id=$1", [orgId]);
     await c.query("delete from roles where organization_id=$1", [orgId]);
     await c.query("delete from organization_geography_scopes where organization_id=$1", [orgId]);
-    await c.query("delete from identities where id in ($1,$2,$3)", [actorId, verifierId, reviewerId]);
+    await c.query("delete from identities where id in ($1,$2)", [actorId, verifierId]);
     await c.query("delete from geography where id in ($1,$2)", [geographyId, outOfScopeGeographyId]);
     await c.query("delete from organization_statutory_profiles where organization_id=$1", [orgId]);
     await c.query("delete from organizations where id=$1", [orgId]);
