@@ -36,3 +36,11 @@ Added `apps/src/rls-request-transaction-postgres.integration.test.ts`. It uses a
 - The simpler PR #199 `withSignedRequestDatabaseContext` wrapper is not carried forward; PR #200's transaction wrapper has explicit single-org and bilateral-scope guards, rollback-error handling and pooled-connection discard behavior.
 - Exact-head CI #4414 / run `41338613533` passed all steps for head `bc3a7f083a14410ac101d1d5b4d714ed24e63504`: migration validation, full disposable PostgreSQL migrations, typecheck, build, browser smoke, all unit + PostgreSQL integration tests, production container build and cleanup.
 - PR #199 is now redundant and will be closed as superseded by PR #200. No production changes; PR #200 remains draft pending independent review and integrated-base CI.
+
+## 2026-11-02 database verifier integrated into the RLS foundation
+- Ported PR #201's signed-context verifier migration and PostgreSQL integration test into this PR #200 branch.
+- Ported the CI-only restricted `rupaykg_security_definer` role provisioning step; production DBA role provisioning remains a separate approval gate.
+- Ported the verifier-owner role-attribute/no-outbound-membership checks, pinned search_path assertions, PUBLIC ACL assertions and fail-closed HMAC cases.
+- Appended the verifier DBA prerequisites and no-runtime-grant constraints to migration documentation.
+- This creates one RLS foundation branch containing the canonical AuthContext token helper, transaction wrapper, database verifier and their integration tests. PR #201 remains separate until combined CI passes; if successful it will be closed as superseded, not independently merged.
+- Combined branch head at checkpoint time: `1a8cfb4034eb3730dba5c78e68d9da41a063fa43`; exact-head CI #4421 / run `41338915697` IN PROGRESS. No production changes.
