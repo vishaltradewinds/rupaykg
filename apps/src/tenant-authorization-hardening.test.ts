@@ -181,3 +181,59 @@ test("field-sync conflict visibility and resolution require current verified dev
     await pool.end();
   }
 });
+
+
+test("organization permission cannot be borrowed from another tenant's role", async () => {
+  if (!databaseUrl) return;
+  const pool = new Pool({ connectionString: databaseUrl, max: 1 });
+  const suffix = randomUUID();
+  const client = await pool.connect();
+  let orgA = "";
+  let orgB = "";
+  let identityId = "";
+  let roleB = "";
+  let membershipId = "";
+  try {
+    orgA = (await client.query<{ id: string }>(
+      "insert into organizations(name,organization_type) values($1,'COLLECTOR') returning id",
+      [`cross-role-org-a-${suffix}`],
+    )).rows[0]!.id;
+    orgB = (await client.query<{ id: string }>(
+      "insert into organizations(name,organization_type) values($1,'COLLECTOR') returning id",
+      [`cross-role-org-b-${suffix}`],
+    )).rows[0]!.id;
+    identityId = (await client.query<{ id: string }>(
+      "insert into identities(external_subject,display_name) values($1,$2) returning id",
+      [`cross-role-identity-${suffix}`, "Cross Tenant Role Test"],
+    )).rows[0]!.id;
+    roleB = (await client.query<{ id: string }>(
+      "insert into roles(organization_id,name,permissions) values($1,$2,$3::jsonb) returning id",
+      [orgB, `cross-role-role-b-${suffix}`, JSON.stringify(["ISSUE_CREDENTIAL"])],
+    )).rows[0]!.id;
+    membershipId = (await client.query<{ id: string }>(
+      "insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED') returning id",
+      [identityId, orgA, roleB],
+    )).rows[0]!.id;
+    const auth: AuthContext = {
+      identityId,
+      memberships: [{ organization_id: orgA, role_id: roleB, status: "VERIFIED" }],
+      activeOrganizationId: orgA,
+    };
+    await client.query("begin");
+    assert.equal(
+      await lockOrganizationPermission(client, auth, orgA, ["ISSUE_CREDENTIAL"]),
+      false,
+      "a role owned by another organization must not authorize this tenant",
+    );
+    await client.query("rollback");
+  } finally {
+    try { await client.query("rollback"); } catch {}
+    client.release();
+    if (membershipId) await pool.query("delete from organization_memberships where id=$1", [membershipId]);
+    if (roleB) await pool.query("delete from roles where id=$1", [roleB]);
+    if (identityId) await pool.query("delete from identities where id=$1", [identityId]);
+    if (orgA) await pool.query("delete from organizations where id=$1", [orgA]);
+    if (orgB) await pool.query("delete from organizations where id=$1", [orgB]);
+    await pool.end();
+  }
+});
