@@ -25,3 +25,18 @@ Exact-head CI is pending for PR #194. The CI workflow includes dependency audit,
 - No deployment, worker/scheduler activation, external submission or certification.
 - Draft for independent review; do not merge until exact-head CI and independent review pass.
 - Production remains HOLD.
+
+
+## Exact-head CI result — 2026-11-01
+
+Workflow #4280 / ID 41326506849 passed at PR code head 4724d68c1cfbe594b9751062b98dab3ee1c88135. All steps succeeded:
+- dependency audit
+- migration validation
+- disposable PostgreSQL migration and acceptance
+- TypeScript typecheck
+- full build
+- production web browser smoke test
+- production container build
+- cleanup
+
+This is an engineering CI pass only. PR #194 remains draft/unmerged pending independent review. Production remains HOLD.
