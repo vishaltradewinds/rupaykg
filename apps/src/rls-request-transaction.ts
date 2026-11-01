@@ -1,6 +1,6 @@
 import type { Pool, PoolClient } from "pg";
 import type { AuthContext } from "./auth.js";
-import { createSignedRequestContextToken } from "./signed-request-context-token.js";
+import { createSignedRequestContextForAuth } from "./signed-request-context-token.js";
 
 export type RlsRequestContextConfig = {
   hmacSecret: string;
@@ -45,7 +45,7 @@ export async function withRlsRequestTransaction<T>(
   operation: (client: PoolClient) => Promise<T>,
 ): Promise<T> {
   const organizationId = requireVerifiedSingleOrganization(auth);
-  const token = createSignedRequestContextToken({ actorIdentityId: auth.identityId, organizationId }, { secret: config.hmacSecret, keyId: config.keyId, ...(config.ttlSeconds === undefined ? {} : { ttlSeconds: config.ttlSeconds }) });
+  const token = createSignedRequestContextForAuth(auth, { secret: config.hmacSecret, keyId: config.keyId, ...(config.ttlSeconds === undefined ? {} : { ttlSeconds: config.ttlSeconds }) });
   const client = await pool.connect();
   let transactionStarted = false;
   let releaseError: Error | undefined;
