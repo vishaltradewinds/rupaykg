@@ -107,6 +107,7 @@ $$;
 -- necessary table-owner/grant-option authority.
 grant select on public.identities, public.identity_sessions, public.geography,
   public.stakeholder_applications to rupaykg_auth_owner;
+grant insert on public.organization_statutory_profiles to rupaykg_auth_owner;
 grant select, insert on public.organizations, public.roles, public.organization_memberships,
   public.organization_geography_scopes, public.organization_verification_evidence,
   public.stakeholder_applications, public.stakeholder_application_approvals to rupaykg_auth_owner;
