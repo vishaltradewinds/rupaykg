@@ -40,3 +40,21 @@ Workflow #4280 / ID 41326506849 passed at PR code head 4724d68c1cfbe594b9751062b
 - cleanup
 
 This is an engineering CI pass only. PR #194 remains draft/unmerged pending independent review. Production remains HOLD.
+
+
+## Real PostgreSQL workspace authorization and tenant-isolation acceptance — 2026-11-01
+
+Added `apps/src/bwg-workspace-postgres.integration.test.ts`:
+- Creates two disposable organizations, each with a BWG profile.
+- Creates a verified reader with `reports:read` and a separate verified member without it.
+- Calls the actual Fastify `GET /api/v1/workspaces/bwg` route against disposable PostgreSQL using real session-token authentication and database-backed role permissions.
+- Confirms the member without `reports:read` receives HTTP 403 / `BWG_WORKSPACE_READ_FORBIDDEN`.
+- Confirms the authorized reader receives HTTP 200.
+- Confirms the response contains only the selected organization's BWG profile and organization permission summary, not the second tenant's profile.
+- Cleans up disposable identities, sessions, memberships, roles, profiles, geography and organizations.
+
+The first CI run identified an invalid disposable fixture value (`NOT_SUBMITTED`) for `bwg_profiles.regulatory_registration_status`. The fixture was corrected to the schema-valid `ACCEPTED` enum with synthetic `TEST-CPCB-REG-*` references. No application authorization logic or production data was changed.
+
+Exact-head code CI #4300 / ID 41329225214 passed at `9bba408244510553cec79d8e75a2a63db80209ee`, including dependency audit, migration validation, disposable PostgreSQL migration and acceptance, typecheck, build, browser smoke test and production container build. Documentation checkpoint update will receive its own exact-head CI run.
+
+This is an engineering acceptance result only. The synthetic accepted registration fixture is test-only; it does not represent an actual CPCB registration. PR #194 remains draft/unmerged pending independent review. Production remains HOLD.
