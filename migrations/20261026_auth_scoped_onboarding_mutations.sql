@@ -21,7 +21,7 @@ grant select on public.identities, public.identity_sessions, public.geography,
 grant select, insert on public.organizations, public.roles, public.organization_memberships,
   public.organization_geography_scopes, public.organization_verification_evidence,
   public.stakeholder_applications, public.stakeholder_application_approvals to rupaykg_auth_owner;
-grant update on public.organizations, public.organization_memberships,
+grant update on public.identity_sessions, public.organizations, public.organization_memberships,
   public.organization_geography_scopes, public.stakeholder_applications to rupaykg_auth_owner;
 grant usage on schema public to rupaykg_auth_owner;
 grant create on database rupaykg to rupaykg_auth_owner;
@@ -72,7 +72,7 @@ begin
   join public.identities i on i.id=s.identity_id
   where s.token_hash=p_token_hash and s.revoked_at is null and s.expires_at>now()
     and i.status='VERIFIED'::public.record_status and i.suspended_at is null
-  for share of s, i;
+  for share of s;
 
   if v_identity_id is null then
     raise exception 'AUTH_REQUIRED' using errcode='28000';
