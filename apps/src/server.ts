@@ -38,8 +38,8 @@ async function assertProductionDatabaseRuntimeContracts(): Promise<void> {
     pool.query<{ current_user: string; current_database: string; rolcanlogin: boolean; rolinherit: boolean; rolsuper: boolean; rolbypassrls: boolean; rolcreatedb: boolean; rolcreaterole: boolean; rolreplication: boolean }>(
       `select current_user, current_database(), r.rolcanlogin, r.rolinherit, r.rolsuper, r.rolbypassrls, r.rolcreatedb, r.rolcreaterole, r.rolreplication from pg_roles r where r.rolname=current_user`,
     ),
-    authPool.query<{ current_user: string; current_database: string; rolsuper: boolean; rolbypassrls: boolean; rolcreatedb: boolean; rolcreaterole: boolean; rolreplication: boolean }>(
-      `select current_user, current_database(), r.rolsuper, r.rolbypassrls, r.rolcreatedb, r.rolcreaterole, r.rolreplication from pg_roles r where r.rolname=current_user`,
+    authPool.query<{ current_user: string; current_database: string; rolcanlogin: boolean; rolinherit: boolean; rolsuper: boolean; rolbypassrls: boolean; rolcreatedb: boolean; rolcreaterole: boolean; rolreplication: boolean }>(
+      `select current_user, current_database(), r.rolcanlogin, r.rolinherit, r.rolsuper, r.rolbypassrls, r.rolcreatedb, r.rolcreaterole, r.rolreplication from pg_roles r where r.rolname=current_user`,
     ),
   ]);
   const app = appIdentity.rows[0], auth = authIdentity.rows[0];
@@ -56,8 +56,7 @@ async function assertProductionDatabaseRuntimeContracts(): Promise<void> {
         or has_table_privilege(current_user,'public.organization_memberships','SELECT') or has_table_privilege(current_user,'public.organization_memberships','INSERT') or has_table_privilege(current_user,'public.organization_memberships','UPDATE') or has_table_privilege(current_user,'public.organization_memberships','DELETE')
         or has_table_privilege(current_user,'public.identity_password_credentials','SELECT') or has_table_privilege(current_user,'public.identity_password_credentials','INSERT') or has_table_privilege(current_user,'public.identity_password_credentials','UPDATE') or has_table_privilege(current_user,'public.identity_password_credentials','DELETE')
         or has_schema_privilege(current_user,'public','CREATE')) as direct_auth_reads,
-       has_schema_privilege(current_user,'auth_private','USAGE') as auth_schema_usage,\n       has_function_privilege(current_user,'auth_private.resolve_session(text)','EXECUTE') as resolver_execute,
-       has_schema_privilege(current_user,'auth_private','USAGE') as auth_schema_usage,\n       has_function_privilege(current_user,'auth_private.has_organization_permission(uuid,uuid,text[])','EXECUTE') as permission_execute,
+       has_schema_privilege(current_user,'auth_private','USAGE') as auth_schema_usage,\n       has_function_privilege(current_user,'auth_private.resolve_session(text)','EXECUTE') as resolver_execute,\n       has_function_privilege(current_user,'auth_private.has_organization_permission(uuid,uuid,text[])','EXECUTE') as permission_execute,
        (has_function_privilege(current_user,'auth_private.organization_has_geography_scope(uuid,uuid)','EXECUTE')
         and has_function_privilege(current_user,'auth_private.can_read_geography(uuid,uuid)','EXECUTE')
         and has_function_privilege(current_user,'auth_private.can_write_geography(uuid,uuid,uuid)','EXECUTE')
@@ -87,6 +86,7 @@ async function assertProductionDatabaseRuntimeContracts(): Promise<void> {
         or has_table_privilege(current_user,'public.organization_memberships','SELECT') or has_table_privilege(current_user,'public.organization_memberships','INSERT') or has_table_privilege(current_user,'public.organization_memberships','UPDATE') or has_table_privilege(current_user,'public.organization_memberships','DELETE')
         or has_table_privilege(current_user,'public.identity_password_credentials','SELECT') or has_table_privilege(current_user,'public.identity_password_credentials','INSERT') or has_table_privilege(current_user,'public.identity_password_credentials','UPDATE') or has_table_privilege(current_user,'public.identity_password_credentials','DELETE')
         or has_schema_privilege(current_user,'public','CREATE')) as direct_auth_reads,
+       has_schema_privilege(current_user,'auth_private','USAGE') as auth_schema_usage,
        has_function_privilege(current_user,'auth_private.has_organization_permission(uuid,uuid,text[])','EXECUTE') as permission_execute,
        (has_function_privilege(current_user,'auth_private.organization_has_geography_scope(uuid,uuid)','EXECUTE')
         or has_function_privilege(current_user,'auth_private.can_read_geography(uuid,uuid)','EXECUTE')
