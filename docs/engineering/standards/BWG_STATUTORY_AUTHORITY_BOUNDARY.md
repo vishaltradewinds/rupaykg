@@ -113,3 +113,19 @@ The CPCB resources page lists a "User Fee Structure" guideline for use of the ce
 - Keep draft, submitted, under-review, correction-required, rejected and registered states distinct.
 - Never infer approval from account creation, eligibility assessment, document upload, payment, or acknowledgement receipt.
 - Before any browser automation/API integration, obtain and review CPCB's official integration specification, authorization terms and permitted data access. The user-facing portal is not itself proof that an API or automated submission permission exists.
+
+
+## 9. Portal fee treatment — official CPCB FAQ verification
+
+The CPCB portal FAQ states that all non-government BWGs and Waste Facilities are required to pay a fee for registration and filing annual returns. The FAQ separately states that government entities such as ULBs, District Panchayats and Gram Panchayats are not required to pay registration fees.
+
+Sources:
+- Official CPCB portal FAQ: https://swmp.cpcb.gov.in/en/faq
+- Official CPCB resources page lists the User Fee Structure guideline dated 15 October 2026: https://swmp.cpcb.gov.in/en/resources
+
+Implementation rules:
+- Never advertise statutory CPCB registration or annual-return filing as universally free.
+- Keep CPCB portal fees separate from RupayKg subscription, service or implementation charges.
+- Before quoting any statutory fee, retrieve the current CPCB fee guideline and confirm the entity category, fee basis, effective date, payment stages, amendment/differential fees and applicable exemptions.
+- Do not hard-code a fee amount from secondary summaries or infer that a registration-fee exemption also waives annual-return fees.
+- RupayKg may show an informational statutory fee notice and link to CPCB; the applicant pays CPCB through the official portal.
