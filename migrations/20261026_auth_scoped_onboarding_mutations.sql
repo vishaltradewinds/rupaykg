@@ -75,7 +75,7 @@ create or replace function public.prevent_direct_membership_activation()
 returns trigger
 language plpgsql
 set search_path = pg_catalog, pg_temp
-as $
+as $$
 declare
   role_name text;
   dual_control_approved boolean := false;
@@ -163,13 +163,13 @@ begin
   end if;
   return new;
 end;
-$;
+$$;
 
 create or replace function public.prevent_unauthorized_stakeholder_approval()
 returns trigger
 language plpgsql
 set search_path = pg_catalog, pg_temp
-as $
+as $$
 begin
   -- An application must always enter through PENDING intake. Direct INSERT as
   -- APPROVED would otherwise bypass the UPDATE-only authority and hierarchy gates.
@@ -200,7 +200,7 @@ begin
   end if;
   return new;
 end;
-$;
+$$;
 
 drop trigger if exists stakeholder_approval_authority_guard on public.stakeholder_applications;
 create trigger stakeholder_approval_authority_guard
