@@ -75,3 +75,13 @@ Migration `086_reserved_role_restoration_db_guard.sql` protects status reactivat
 ## Acceptance fixture registry exclusion
 
 Migration `087_acceptance_fixture_registry_exclusion.sql` prevents activities or evidence explicitly marked with `metadata.acceptanceFixture=true` from backing credentials in value-bearing states. It also binds the database gate to the exact activity, verification, and evidence tuple. The MRV API reports acceptance fixtures as not registry eligible even after real Guardian/Hedera/Mirror Node verification. External anchoring proves message integrity and consensus; it does not validate the underlying activity as a real eligible carbon project.
+
+
+## Signed tenant request context verifier
+
+**DBA prerequisite before applying migration `20261101_signed_request_context_verifier.sql`:** provision `rupaykg_security_definer` as `NOLOGIN NOSUPERUSER NOBYPASSRLS NOCREATEROLE NOCREATEDB NOINHERIT NREPLICATION`. Grant it `CREATE` on the target database and grant membership only to the dedicated migration principal so the migration can `SET LOCAL ROLE`. Do not grant membership to the API runtime, authentication runtime, worker, or user-facing roles. The role must not own tenant application tables and must not inherit from a BYPASSRLS role. The migration fails closed if the role is absent or has any forbidden attribute. CI provisions this role only inside its disposable PostgreSQL service.
+
+
+Migration `20261101_signed_request_context_verifier.sql` creates the restricted `app_security` schema, protected HMAC key table and a `SECURITY DEFINER` verifier for short-lived signed request-context envelopes. The verifier validates actor UUID, organization UUID, issue/expiry times, key ID and HMAC-SHA256 signature; malformed, expired, unknown-key and forged contexts return NULL. The function pins its search path and the key table/function are not executable/readable by PUBLIC.
+
+This migration intentionally grants no privileges to application roles. A dedicated NOBYPASSRLS runtime role must be provisioned separately and receive only `USAGE` on `app_security` and `EXECUTE` on the verifier. The runtime role must not receive SELECT on the key table. The signing secret must be provisioned out-of-band and rotated by key ID. This verifier alone does not enable RLS or authorize tenant data; policies on each application table must consume its verified claims.
