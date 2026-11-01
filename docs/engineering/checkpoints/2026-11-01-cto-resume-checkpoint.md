@@ -58,8 +58,8 @@ See PR #188 and `docs/engineering/checkpoints/2026-11-01-neon-branch-reconciliat
 
 [PR #189](https://github.com/vishaltradewinds/rupaykg/pull/189)
 - Branch: `shakti/tenant-isolation-architecture-2026-11-01`
-- Latest checkpoint head: `0986fe0cd583731a77e4408f4cb64af0a6650dd0`
-- Prior exact-head CI `41314197273` PASS; latest checkpoint CI `41314784890` pending at checkpoint time.
+- Branch head and latest CI are authoritative in the live [PR #189](https://github.com/vishaltradewinds/rupaykg/pull/189); do not reuse an older SHA from this document.
+- Last recorded exact-head CI pass before the consolidated checkpoint: `41314197273` PASS; consolidated checkpoint CI `41314840322` was running at the time of this update.
 - Design requires separate NOLOGIN schema owner, least-privilege runtime role, and separately authorized migration identity.
 - Requires transaction-local authenticated identity and verified organization context.
 - Explicitly treats custom GUC context as defense-in-depth, not a cryptographic boundary against arbitrary SQL under the runtime role.
