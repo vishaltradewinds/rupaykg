@@ -71,3 +71,11 @@ The workspace integration test validates both the `reports:read` deny/allow boun
 The documentation checkpoint commit `74ae29d8fb0a371ab77e2ded779f07f1262789a8` passed exact-head CI #4309 / ID 41329700964. All workflow steps completed successfully, including dependency audit, migration validation, disposable PostgreSQL migration and acceptance, TypeScript typecheck, build, browser smoke test, production container build and cleanup.
 
 This confirms the checkpoint's recorded workspace authorization and tenant-isolation acceptance. It remains engineering CI evidence only; PR #194 remains draft/unmerged pending independent review and production remains HOLD.
+
+## Disposable membership fixture isolation and onboarding boundary finding — 2026-11-01
+
+Removed test-time `ALTER TABLE ... DISABLE/ENABLE TRIGGER` from the BWG workspace PostgreSQL integration suite. The test uses a privileged disposable-CI membership fixture to exercise workspace authorization and tenant-scoped reads; it does not exercise the stakeholder onboarding approval lifecycle.
+
+A separate schema review found migration 077 defines `stakeholder_membership_application_guard` as `BEFORE UPDATE OF status` only. The supported onboarding API correctly creates memberships as `PENDING`, and the hierarchy approval route changes them to `VERIFIED` only after the application approval chain completes. A direct SQL `INSERT` specifying `status='VERIFIED'` is outside the trigger's event coverage. This is a database defense-in-depth gap, not a demonstrated unauthenticated HTTP route bypass. Track and remediate separately with a migration and regression tests; do not treat this workspace fixture as proof of onboarding enforcement.
+
+Exact-head CI for the latest PR #194 test-hygiene change is pending. Production remains HOLD.
