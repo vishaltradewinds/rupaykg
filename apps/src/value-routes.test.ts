@@ -18,10 +18,11 @@ type FakePoolOptions = {
 
 class FakePool {
   calls: Array<{ sql: string; values: unknown[] | undefined }> = [];
-  private readonly options: Required<FakePoolOptions>;
+  private readonly options: { permissionAllowed: boolean; grantedPermissions?: string[]; geographyAllowed: boolean; memberships: Array<{ organization_id: string; role_id: string; status: string }> };
   constructor(options: FakePoolOptions = {}) {
     this.options = {
       permissionAllowed: options.permissionAllowed ?? true,
+      grantedPermissions: options.grantedPermissions,
       geographyAllowed: options.geographyAllowed ?? true,
       memberships: options.memberships ?? [{ organization_id: organizationId, role_id: "role-a", status: "VERIFIED" }],
     };
