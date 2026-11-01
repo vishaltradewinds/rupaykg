@@ -7,13 +7,34 @@ import { Pool } from "pg";
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) throw new Error("DATABASE_URL is required");
 
+const ssl =
+  process.env.DATABASE_SSL === "false"
+    ? undefined
+    : process.env.DATABASE_SSL === "require"
+      ? {
+          rejectUnauthorized: true,
+          ...(process.env.DATABASE_CA_CERT ? { ca: process.env.DATABASE_CA_CERT } : {}),
+        }
+      : { rejectUnauthorized: false };
+
 const pool = new Pool({
   connectionString: databaseUrl,
   max: 1,
-  ssl: process.env.DATABASE_SSL === "false" ? undefined : { rejectUnauthorized: false },
+  ssl,
 });
 
+const lockClient = await pool.connect();
+let migrationLockAcquired = false;
+
 try {
+  const lock = await lockClient.query<{ locked: boolean }>(
+    "select pg_try_advisory_lock(20261101, 1) as locked",
+  );
+  migrationLockAcquired = lock.rows[0]?.locked === true;
+  if (!migrationLockAcquired) {
+    throw new Error("Another RupayKg migration run is already active; refusing concurrent execution");
+  }
+
   await pool.query(`
     create table if not exists schema_migrations (
       version text primary key,
@@ -66,5 +87,14 @@ try {
 
   console.log(`Database migrations are current (${files.length} files).`);
 } finally {
+  if (migrationLockAcquired) {
+    try {
+      await lockClient.query("select pg_advisory_unlock(20261101, 1)");
+    } finally {
+      lockClient.release();
+    }
+  } else {
+    lockClient.release();
+  }
   await pool.end();
 }
