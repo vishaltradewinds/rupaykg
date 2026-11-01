@@ -166,3 +166,17 @@ PR #190 was closed as superseded by the stronger combined test in PR #191.
 6. Do not enable RLS on authentication tables until every direct read/write path has been migrated.
 
 Production database, production credentials, staging database, and Render deployment remain unchanged. Production certification remains OFF / HOLD; TRL 9 is not established.
+
+
+## 11. Dedicated auth runtime and route registration — PR #192 continuation
+
+- Found a critical integration defect: `apps/src/auth-routes.ts` existed but was not registered by `apps/src/server.ts`; no `registerAuthRoutes` call was found in the repository at this branch head.
+- Server now registers the auth route module with separate application and authentication pools.
+- `AUTH_DATABASE_URL` is a distinct connection pool (max 3) and must target the same Neon host/port/database as `DATABASE_URL`, but use a different database role.
+- Registration uses `auth_private.register_identity`; login uses `find_login_candidate`, `record_login_failure`, `reset_login_failures`, `issue_session`, and `get_self_account_context`; logout uses `revoke_session`; `/auth/me` authenticates through the app resolver then reads self-scoped context through the auth function.
+- The application pool is not used for password or session writes. No direct-table fallback is implemented in the auth routes.
+- Production config requires `RUPAYKG_AUTH_RESOLVER_MODE=security_definer`, both distinct database URLs, and same target database.
+- Production startup preflight rejects superuser/BYPASSRLS runtime roles, checks direct auth-table reads are denied, checks application runtime can execute only the session resolver, checks auth runtime cannot resolve sessions or directly read auth tables, and checks eight SECURITY DEFINER functions are owned by NOLOGIN/NOBYPASSRLS `rupaykg_auth_owner`.
+- Readiness endpoint checks both database pools. Render manifest declares the new secret; it is not provisioned.
+- No production or staging database changes, secret changes, or deployment.
+- Remaining: CI exact-head verification; draft the production migration and role/grant manifest; integrate onboarding mutations and platform-admin governance functions; provision and validate credentials only after reviewed migration and approval.
