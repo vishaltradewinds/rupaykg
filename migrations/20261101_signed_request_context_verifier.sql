@@ -28,8 +28,8 @@ END;
 $$;
 
 create schema app_security authorization rupaykg_security_definer;
-revoke all on schema app_security from public;
 set local role rupaykg_security_definer;
+revoke all on schema app_security from public;
 
 
 create table app_security.request_context_keys (
