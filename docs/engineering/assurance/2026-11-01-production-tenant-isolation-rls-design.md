@@ -237,3 +237,21 @@ Existing tenant-isolation lab `br-blue-tooth-b4kvuut7`:
 - this is a partial authentication-isolation experiment only; it is not acceptable production tenant isolation.
 
 **Release decision: HOLD.** This document is an engineering plan and inventory, not an implementation certification.
+
+## 3.4 Source-code compatibility inventory (2026-11-01)
+
+A targeted source scan of the production API route modules found the current database access pattern is distributed rather than centralized:
+
+- 118 textual `pool.query` call sites across the inspected server/auth/route modules.
+- 20 explicit `pool.connect` call sites.
+- 221 textual `client.query` call sites in those same modules.
+- Explicit multi-statement transaction handling exists in auth, CPCB SWM, EPR returns, evidence vault, onboarding hierarchy, platform admin, registry, sync and workspace paths.
+
+These are source occurrence counts (not a runtime query count), captured from the files on `main` during this audit. They establish that RLS cannot safely be switched on by a migration alone. The context plumbing work must include every direct pool query, explicit client transaction, auth bootstrap, admin workflow, and worker. Tests must fail if any protected route uses an unscoped connection.
+
+Implementation recommendation:
+- Introduce a typed request-scoped DB unit-of-work abstraction and pass it into route modules instead of a process-wide raw `Pool`.
+- Keep auth bootstrap on its own restricted role/connection.
+- Make transaction lifecycle explicit and centralized; avoid nested BEGIN/COMMIT in handlers.
+- Add a lint/static test that disallows raw `pool.query` outside the DB infrastructure and migration modules.
+- Add an integration test that instruments query acquisition and proves all authenticated tenant data statements execute under the request's transaction-local actor context and runtime role.
