@@ -77,3 +77,11 @@ No production DDL/DML, migration, role/grant/RLS changes, deployments, worker/sc
 - The real defect was that onboarding handlers in `auth-routes.ts` omitted `sessionPool` and therefore fell back to the operational pool. They now use the separate auth pool; auth-pool errors fail closed. Module-level route tests remain.
 - The parallel production-config test suite also had an outdated expected error string; current branch test expectation matches the host/port/database validation message.
 - PR #202 latest head `d67d597de1ada8f89cede1ff7c09fd9ca1627e47`; exact-head CI #4416 / run `41338701474` IN PROGRESS. Earlier #4408 failed due duplicate route registration and outdated regex; both corrections are on current head.
+
+## 2026-11-02 RLS token/transaction consolidation
+- PR #199 duplicated the signed-token file/tests also present in PR #200. Ported the AuthContext-derived `createSignedRequestContextForAuth` helper and tests into PR #200, added explicit bilateral-scope rejection, and changed `withRlsRequestTransaction` to use the canonical helper.
+- PR #200 retains the stronger transaction boundary; PR #199's simpler `withSignedRequestDatabaseContext` wrapper is superseded. Closed PR #199 (not merged) to prevent duplicate implementations.
+- PR #200 exact code-head CI #4414 / run `41338613533` **PASS** across migrations, typecheck, build, browser smoke, all unit/PostgreSQL tests and production container build. Docs checkpoint commit triggers CI #4418 / run `41338785023`, IN PROGRESS.
+- PR #202 route audit correction: auth routes were already registered indirectly by `registerValueRoutes`; redundant direct registration was removed after CI exposed duplicate Fastify routes. Actual defect fixed: onboarding auth handlers now pass the separate session pool. Exact-head CI #4416 / run `41338701474` has passed migration validation, full migration, typecheck, build, browser smoke and all unit/PostgreSQL tests; container build still in progress.
+- PR #201 exact-head CI #4390 / run `41337852165` **PASS**.
+- Production unchanged; PRs #200, #201, #202 remain draft pending independent security review and controlled integration. Production release HOLD.
