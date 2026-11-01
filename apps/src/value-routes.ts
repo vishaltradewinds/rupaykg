@@ -17,6 +17,21 @@ async function assertActivityGeographyScope(client: Pool | PoolClient, geography
 async function hasValuePermission(pool: Pool, functionName: "can_assess_epr" | "can_write_esg", identityId: string, organizationId: string): Promise<boolean> { const result = await pool.query<{ ok: boolean }>(`select ${functionName}($1,$2) as ok`, [identityId, organizationId]); return result.rows[0]?.ok === true; }
 async function evidenceIsVerified(pool: Pool, evidenceId: string, organizationId: string): Promise<boolean> { const result = await pool.query<{ ok: boolean }>(`select exists(select 1 from evidence e join activities a on a.id=e.activity_id where e.id=$1 and a.organization_id=$2 and e.status='VERIFIED' and (e.content_hash is not null or e.content_uri is not null) and a.geography_id is not null and organization_has_geography_scope($2,a.geography_id)) as ok`, [evidenceId, organizationId]); return result.rows[0]?.ok === true; }
 
+export type BwgDatabaseErrorResponse = { status: 409; error: string; code: "BWG_APPLICABILITY_NOT_VERIFIED" | "BWG_EPR_FULFILLED_EXCEEDS_OBLIGATED" };
+
+export function classifyBwgDatabaseError(error: unknown): BwgDatabaseErrorResponse | null {
+  if (!error || typeof error !== "object") return null;
+  const databaseError = error as { code?: unknown; constraint?: unknown; message?: unknown };
+  if (databaseError.code !== "23514") return null;
+  if (databaseError.constraint === "bwg_epr_reports_fulfilled_le_obligated") {
+    return { status: 409, error: "Fulfilled EPR quantity cannot exceed obligated quantity", code: "BWG_EPR_FULFILLED_EXCEEDS_OBLIGATED" };
+  }
+  if (databaseError.message === "BWG applicability must be verified before creating a reporting period") {
+    return { status: 409, error: "Verified BWG applicability is required before creating a reporting period", code: "BWG_APPLICABILITY_NOT_VERIFIED" };
+  }
+  return null;
+}
+
 export async function registerValueRoutes(app: FastifyInstance, pool: Pool | null): Promise<void> {
   await registerAuthRoutes(app, pool);
   app.post("/api/v1/carbon/calculations", async (request, reply) => {
@@ -160,7 +175,7 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
     if (!canActForOrganization(auth, organizationId)) return reply.code(403).send({ error: "Organization access denied", code: "ORG_FORBIDDEN" });
     if (!await hasOrganizationPermission(pool, auth, organizationId, ["reports:read", "waste:record"])) return reply.code(403).send({ error: "Reporting and waste recording permissions are required", code: "BWG_PERIOD_FORBIDDEN" });
     try { const row = await pool.query("insert into bwg_reporting_periods (organization_id,period_start,period_end,reporting_basis) values ($1,$2,$3,$4) on conflict (organization_id,period_start,period_end,reporting_basis) do update set reporting_basis=excluded.reporting_basis returning *", [organizationId,start,end,basis]); return reply.code(201).send({ source: "postgresql", syntheticData: false, authoritativeMutation: true, period: row.rows[0] }); }
-    catch (error) { request.log.error(error); return reply.code(503).send({ error: "BWG reporting period unavailable", code: "BWG_PERIOD_UNAVAILABLE", syntheticData: false }); }
+    catch (error) { const known = classifyBwgDatabaseError(error); if (known) return reply.code(known.status).send({ error: known.error, code: known.code, syntheticData: false }); request.log.error(error); return reply.code(503).send({ error: "BWG reporting period unavailable", code: "BWG_PERIOD_UNAVAILABLE", syntheticData: false }); }
   });
 
   app.post("/api/v1/bwg/reporting-periods/:periodId/waste", async (request, reply) => {
@@ -184,6 +199,7 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
     const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
     const periodId = (request.params as { periodId: string }).periodId; const body = bodyOf(request as never); const schemeId = str(body, "schemeId"); const categoryCode = str(body, "categoryCode"); const obligated = nonNegative(body, "obligatedQuantity"); const fulfilled = nonNegative(body, "fulfilledQuantity");
     if (!schemeId || !categoryCode || obligated === null || fulfilled === null) return reply.code(400).send({ error: "schemeId, categoryCode and non-negative obligated/fulfilled quantities are required", code: "BWG_EPR_REQUIRED" });
+    if (fulfilled > obligated) return reply.code(400).send({ error: "Fulfilled EPR quantity cannot exceed obligated quantity", code: "BWG_EPR_FULFILLED_EXCEEDS_OBLIGATED" });
     try {
       const period = await pool.query<{ organization_id: string }>("select organization_id from bwg_reporting_periods where id=$1", [periodId]); if (!period.rows[0]) return reply.code(404).send({ error: "BWG reporting period not found" });
       const organizationId = period.rows[0].organization_id; if (!canActForOrganization(auth, organizationId)) return reply.code(403).send({ error: "Organization access denied", code: "ORG_FORBIDDEN" });
@@ -194,7 +210,7 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
       if (verificationId) { const v = await pool.query("select 1 from verifications where id=$1 and evidence_id=$2 and decision='APPROVED'", [verificationId,evidenceId]); if (!v.rows[0]) return reply.code(409).send({ error: "Approved verification is required", code: "VERIFICATION_INVALID" }); }
       const row = await pool.query("insert into bwg_epr_reports (reporting_period_id,scheme_id,category_code,obligated_quantity,fulfilled_quantity,evidence_id,verification_id,status,metadata) values ($1,$2,$3,$4,$5,$6,$7,$8,$9) returning *", [periodId,schemeId,categoryCode,obligated,fulfilled,evidenceId,verificationId,evidenceId && verificationId ? 'VERIFIED' : 'PENDING',body.metadata ?? {}]);
       return reply.code(201).send({ source: "postgresql", syntheticData: false, authoritativeMutation: true, externalSubmission: "NOT_SUBMITTED", eprReport: row.rows[0] });
-    } catch (error) { request.log.error(error); return reply.code(503).send({ error: "BWG EPR report unavailable", code: "BWG_EPR_UNAVAILABLE", syntheticData: false }); }
+    } catch (error) { const known = classifyBwgDatabaseError(error); if (known) return reply.code(known.status).send({ error: known.error, code: known.code, syntheticData: false }); request.log.error(error); return reply.code(503).send({ error: "BWG EPR report unavailable", code: "BWG_EPR_UNAVAILABLE", syntheticData: false }); }
   });
 
   app.post("/api/v1/bwg/reporting-periods/:periodId/esg", async (request, reply) => {
