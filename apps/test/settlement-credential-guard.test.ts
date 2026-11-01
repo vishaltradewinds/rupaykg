@@ -14,6 +14,7 @@ let ownerId = "";
 let geographyId = "";
 let actorId = "";
 let verifierId = "";
+let reviewerId = "";
 let counterpartyId = "";
 
 before(async () => {
@@ -30,8 +31,10 @@ before(async () => {
     actorId = actor;
     const verifier = (await c.query<{ id: string }>("insert into identities(external_subject,display_name) values($1,$2) returning id", [`settlement-guard-verifier-${suffix}`, "Settlement Guard Independent Verifier"])).rows[0]!.id;
     verifierId = verifier;
+    const reviewer = (await c.query<{ id: string }>("insert into identities(external_subject,display_name) values($1,$2) returning id", [`settlement-guard-reviewer-${suffix}`, "Settlement Guard Fixture Authority"])).rows[0]!.id;
+    reviewerId = reviewer;
     const verifierRole = (await c.query<{ id: string }>("insert into roles(organization_id,name,permissions) values($1,$2,$3::jsonb) returning id", [owner, `settlement-guard-verifier-role-${suffix}`, JSON.stringify(["VERIFY_EVIDENCE", "ISSUE_CREDENTIAL"])] )).rows[0]!.id;
-    await createApprovedStakeholderApplicationFixture(c, { identityId: verifier, organizationId: owner, roleId: verifierRole, requestedRoleKey: "PROCESSOR", requestedOrganizationType: "PROCESSOR", geographyId: geography, reviewerIdentityId: actor, note: "Distinct reviewer approval for disposable settlement guard fixture" });
+    await createApprovedStakeholderApplicationFixture(c, { identityId: verifier, organizationId: owner, roleId: verifierRole, requestedRoleKey: "PROCESSOR", requestedOrganizationType: "PROCESSOR", geographyId: geography, reviewerIdentityId: reviewer, note: "Distinct reviewer approval for disposable settlement guard fixture" });
     await c.query("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED')", [verifier, owner, verifierRole]);
 
     const retiredActivity = (await c.query<{ id: string }>("insert into activities(organization_id,actor_identity_id,geography_id,activity_type,status,completed_at) values($1,$2,$3,'COLLECTION','COMPLETED',now()) returning id", [owner, actor, geography])).rows[0]!.id;
@@ -62,7 +65,7 @@ after(async () => {
   if (ownerId) {
     const c = await pool.connect();
     const organizationIds = [ownerId, counterpartyId].filter(Boolean);
-    const identityIds = [actorId, verifierId].filter(Boolean);
+    const identityIds = [actorId, verifierId, reviewerId].filter(Boolean);
     try {
       await c.query("begin");
       await c.query("delete from settlements where credential_id in (select id from credentials where issuer_organization_id=$1)", [ownerId]);
