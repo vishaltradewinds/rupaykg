@@ -170,3 +170,18 @@ The final mechanism must prove that a caller cannot impersonate another identity
 - Worker/scheduler: OFF.
 - Production: HOLD.
 - TRL 9: NOT ESTABLISHED.
+
+
+## 10. Membership-key design correction after live catalog inspection
+
+The production `organization_memberships` table has unique `(identity_id, organization_id, role_id)`, not unique `(identity_id, organization_id)`. A person may hold more than one role in an organization. Therefore **do not add a unique constraint on identity + organization** merely to support a field-device FK.
+
+Preferred field-device binding options:
+1. Add `organization_membership_id` to `field_devices` referencing the exact membership row; enforce with a trigger/narrow enrollment operation that the membership identity and organization equal the device identity and organization and status is VERIFIED.
+2. Or introduce a dedicated organization-person membership/grant root distinct from role assignments, then attach one or more role grants to that root.
+
+The first option is smaller, but membership revocation must disable or quarantine enrolled devices, and every device/sync operation must verify the referenced membership remains VERIFIED. The second option is more normalized but requires a broader identity/membership migration. Select only after route and lifecycle review.
+
+Also note nullable geography columns: ordinary composite FKs use MATCH SIMPLE behavior when a child key component is NULL. For stakeholder approval/application geography equality, use a null-safe constraint trigger or normalize scope into a non-null sentinel/domain model; do not claim a composite FK alone solves nullable geography.
+
+Production preflight additionally found zero rows with missing field-device identity/organization, missing operation-sync actor/device, field-sync devices without identity/organization, or activity assignments whose non-null role belongs to a different organization. These are current-data checks only; no write integrity guarantee follows.
