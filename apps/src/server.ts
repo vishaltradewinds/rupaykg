@@ -88,6 +88,21 @@ async function assertProductionDatabaseRuntimeContracts(): Promise<void> {
   if (!authCheck || authCheck.direct_auth_reads || !authCheck.required_functions || authCheck.owner_membership) {
     throw new Error("PRODUCTION_AUTHENTICATION_RUNTIME_PRIVILEGES_INVALID");
   }
+  if ((await authPool.query<{ resolver_execute: boolean }>(
+    `select has_function_privilege(current_user,'auth_private.resolve_session(text)','EXECUTE') as resolver_execute`,
+  )).rows[0]?.resolver_execute) {
+    throw new Error("PRODUCTION_AUTHENTICATION_RUNTIME_MUST_NOT_RESOLVE_SESSIONS");
+  }
+  const functionOwners = await authPool.query<{ function_name: string; security_definer: boolean; owner_name: string }>(
+    `select p.proname as function_name,p.prosecdef as security_definer,pg_get_userbyid(p.proowner) as owner_name
+       from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+      where n.nspname='auth_private' and p.proname in
+        ('resolve_session','find_login_candidate','record_login_failure','reset_login_failures','issue_session','revoke_session','register_identity','get_self_account_context')`,
+  );
+  if (functionOwners.rows.length !== 8 || functionOwners.rows.some((fn) =>
+    !fn.security_definer || fn.owner_name !== "rupaykg_auth_owner")) {
+    throw new Error("PRODUCTION_AUTH_FUNCTION_OWNERSHIP_INVALID");
+  }
   const owners = await authPool.query<{ rolname: string; rolsuper: boolean; rolcanlogin: boolean; rolbypassrls: boolean }>(
     `select rolname,rolsuper,rolcanlogin,rolbypassrls from pg_roles where rolname in ('rupaykg_auth_owner','rupaykg_app_owner')`,
   );
