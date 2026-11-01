@@ -110,7 +110,7 @@ returns jsonb
 language sql
 immutable
 set search_path = pg_catalog, pg_temp
-as $
+as $$
   select case p_role
     when 'citizen' then '["dashboard:read","profile:read","profile:update","reports:read","waste:read","waste:record","evidence:upload"]'::jsonb
     when 'farmer' then '["dashboard:read","profile:read","profile:update","reports:read","waste:read","waste:record","evidence:upload"]'::jsonb
@@ -131,13 +131,13 @@ as $
     when 'regulator' then '["dashboard:read","profile:read","reports:read","profile:update","waste:read","evidence:review","reports:export","swm:read","swm:manage","projects:read","projects:review","projects:verify","acva:manage","registry:read","credits:read","epr:read","epr:manage","csr:read","csr:manage","guardian:read","guardian:operate","audit:read","audit:execute","VERIFY_EVIDENCE","verification:approve","verification.approve"]'::jsonb
     else '[]'::jsonb
   end;
-$;
+$$;
 
 create or replace function public.apply_rupaykg_role_defaults()
 returns trigger
 language plpgsql
 set search_path = pg_catalog, pg_temp
-as $
+as $$
 declare defaults jsonb;
 begin
   if new.permissions is null or jsonb_typeof(new.permissions) <> 'array' then
@@ -149,7 +149,7 @@ begin
   end if;
   return new;
 end;
-$;
+$$;
 
 -- Table grants are issued by the migration principal while it still has the
 -- necessary table-owner/grant-option authority.
