@@ -4,7 +4,8 @@ import { readProductionConfig } from "./production-config.js";
 
 const valid = {
   NODE_ENV: "production",
-  DATABASE_URL: "postgresql://prod.example.invalid:5432/rupaykg",
+  DATABASE_URL: "postgresql://rupaykg_app:main-secret@prod.example.invalid:5432/rupaykg",
+  AUTH_DATABASE_URL: "postgresql://rupaykg_auth_login:auth-secret@prod.example.invalid:5432/rupaykg",
   DATABASE_SSL: "require",
   DATABASE_CA_CERT: "-----BEGIN CERTIFICATE-----\nproduction-test-ca\n-----END CERTIFICATE-----",
   RUPAYKG_ALLOWED_ORIGINS: "https://app.rupaykg.example",
@@ -17,12 +18,21 @@ describe("production configuration", () => {
     assert.deepEqual(config, {
       environment: "production",
       databaseUrl: valid.DATABASE_URL,
+      authDatabaseUrl: valid.AUTH_DATABASE_URL,
       databaseSsl: "require",
       databaseCaCert: valid.DATABASE_CA_CERT,
       allowedOrigins: ["https://app.rupaykg.example"],
       authMode: "real",
       syntheticData: false,
     });
+  });
+
+
+  it("requires a separate least-privilege authentication credential", () => {
+    assert.throws(() => readProductionConfig({ ...valid, AUTH_DATABASE_URL: "" }), /AUTH_DATABASE_URL is required/);
+    assert.throws(() => readProductionConfig({ ...valid, AUTH_DATABASE_URL: "postgresql://rupaykg_app:other-secret@prod.example.invalid:5432/rupaykg" }), /distinct least-privilege database role/);
+    assert.throws(() => readProductionConfig({ ...valid, AUTH_DATABASE_URL: "postgresql://rupaykg_auth_login:auth-secret@other.example.invalid:5432/rupaykg" }), /same authoritative PostgreSQL host and database/);
+    assert.throws(() => readProductionConfig({ ...valid, AUTH_DATABASE_URL: "postgresql://rupaykg_auth_login:auth-secret@prod.example.invalid:5432/otherdb" }), /same authoritative PostgreSQL host and database/);
   });
 
   it("fails closed without real authentication", () => {
