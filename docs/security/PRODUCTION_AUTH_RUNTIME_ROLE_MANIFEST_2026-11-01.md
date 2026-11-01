@@ -48,7 +48,7 @@ All eighteen functions below must be SECURITY DEFINER, have fixed safe `search_p
 Execution grants:
 - `rupaykg_app_runtime`: EXECUTE on `resolve_session(text)` and all ten scoped authorization functions (organization permission, geography scope/read/write, activity write, evidence verification, platform-admin authority, and the three platform-admin read projections); no credential/session lifecycle or self-context functions.
 - `rupaykg_auth_runtime`: EXECUTE on functions 2–8; no EXECUTE on `resolve_session(text)` or any of the ten scoped application authorization functions.
-- PUBLIC: no EXECUTE on any of the eight functions.
+- PUBLIC: no EXECUTE on any of the eighteen functions.
 - Neither runtime role receives SELECT/INSERT/UPDATE/DELETE on `identities`, `identity_sessions`, `identity_password_credentials`, or `organization_memberships`.
 
 The auth owner receives only the underlying table grants required by the reviewed function definitions. Do not grant broad schema ownership or superuser/BYPASSRLS.
@@ -60,7 +60,7 @@ Production startup fails closed unless:
 - usernames are exactly the two runtime role names above;
 - the database identities are distinct and both non-superuser, NOBYPASSRLS, NOCREATEDB, NOCREATEROLE, NOREPLICATION;
 - app runtime has no direct auth-table DML/read privileges and no public-schema CREATE;
-- app runtime can execute the session resolver and the seven scoped application authorization functions, but cannot execute credential/session lifecycle or self-context functions;
+- app runtime can execute the session resolver and all ten scoped application authorization functions, but cannot execute credential/session lifecycle or self-context functions;
 - auth runtime has no direct auth-table DML/read privileges or public-schema CREATE, can execute functions 2–8, and cannot execute the session resolver or any scoped application authorization function;
 - both owner roles exist, are NOLOGIN/NOBYPASSRLS and have no elevated database/role/replication privileges;
 - all eighteen functions exist, are SECURITY DEFINER and are owned by `rupaykg_auth_owner`.
