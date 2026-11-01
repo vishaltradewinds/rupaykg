@@ -95,15 +95,15 @@ app.post("/api/v1/activities/:activityId/measurements", async (request, reply) =
 
 await registerOnboardingHierarchyRoutes(app, pool, authPool);
 await registerValueRoutes(app, pool, authPool);
-await registerRegistryRoutes(app, pool);
+await registerRegistryRoutes(app, pool, authPool);
 await registerSyncRoutes(app, pool, authPool);
-await registerWorkspaceRoutes(app, pool);
-await registerBwgRoutes(app, pool);
-await registerCpcbSwmRoutes(app, pool);
+await registerWorkspaceRoutes(app, pool, authPool);
+await registerBwgRoutes(app, pool, authPool);
+await registerCpcbSwmRoutes(app, pool, authPool);
 await registerIntelligenceRoutes(app, pool, authPool);
 await registerMrvRoutes(app, pool, authPool);
-await registerEvidenceVaultRoutes(app, pool);
-await registerPlatformAdminRoutes(app, pool);
+await registerEvidenceVaultRoutes(app, pool, authPool);
+await registerPlatformAdminRoutes(app, pool, authPool);
 
 if (existsSync(webRoot)) app.get("/*", async (_request, reply) => reply.type("text/html; charset=utf-8").send(readFileSync(resolve(webRoot, "index.html"), "utf8")));
 const port = Number(process.env.PORT ?? 3000); const host = process.env.HOST ?? "0.0.0.0"; await app.listen({ port, host });
