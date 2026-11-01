@@ -13,7 +13,7 @@ type Row = {
 
 class FakePool {
   calls: Array<{ sql: string; values: unknown[] | undefined }> = [];
-  rows: Row[] = [];
+  rows: any[] = [];
   responseQueue: unknown[][] | undefined;
   failure: Error | undefined;
   async query(sql: string, values?: unknown[]) {
