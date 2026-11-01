@@ -105,7 +105,7 @@ test("field-sync conflict visibility and resolution require current verified dev
       [`sync-auth-identity-${suffix}`, "Sync Authorization Test"],
     )).rows[0]!.id;
     const roleId = (await client.query<{ id: string }>(
-      "insert into roles(organization_id,name,permissions) values($1,$2,'["FIELD_SYNC_CONFLICT_RESOLVE"]'::jsonb) returning id",
+      "insert into roles(organization_id,name,permissions) values($1,$2,'[\"FIELD_SYNC_CONFLICT_RESOLVE\"]'::jsonb) returning id",
       [organizationId, `sync-auth-role-${suffix}`],
     )).rows[0]!.id;
     const membershipId = (await client.query<{ id: string }>(
