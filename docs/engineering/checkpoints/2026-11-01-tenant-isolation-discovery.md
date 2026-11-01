@@ -105,3 +105,12 @@ The draft defines:
 - A phased RLS rollout and explicit test/release gates.
 
 This is an architecture proposal only. It does not implement or authorize schema, role, grant, RLS or production changes.
+
+
+## Membership model and nullable-scope refinement
+
+- Read production membership constraints: unique key is `(identity_id, organization_id, role_id)`, not identity+organization. The target model was corrected not to assume one membership row per identity/organization.
+- Proposed smaller field-device design: bind device to an exact `organization_membership_id`, validate identity/org/status, and define device quarantine/revocation behavior; broader alternative is a normalized organization-person root with role grants.
+- Identified nullable geography semantics: composite FK alone is insufficient under MATCH SIMPLE when a geography component is NULL; use null-safe enforcement or normalize scope.
+- Additional read-only checks found zero missing field-device identity/org, missing legacy operation-sync actor/device, field-sync device ownership nulls, or activity assignments with roles belonging to a different organization.
+- Updated target model and integrity findings; latest docs commits: target model `fceffb70def4320fcb2e73a20523dc0ca82e3b24`; findings `d01411c8e780091178059575dc884d6fcd904a63`.
