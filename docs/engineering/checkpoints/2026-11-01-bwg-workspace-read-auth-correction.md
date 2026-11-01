@@ -94,3 +94,9 @@ Read-only inspection of authoritative Neon project `rupaykg-production-fresh`, d
 - `schema_migrations` contains 92 applied rows; latest version `20261021`.
 
 No production writes, DDL, role changes or branch-setting changes were made. Application-level workspace authorization is not a substitute for database tenant isolation. A dedicated P0/P1 follow-up was opened as issue #196: https://github.com/vishaltradewinds/rupaykg/issues/196. The current PR #194 only hardens the BWG workspace HTTP read boundary; it does not remediate RLS or BYPASSRLS. Production remains HOLD pending a complete disposable-branch RLS programme, runtime-role separation, cross-tenant regression coverage and independent review.
+
+## Superseding final exact-head CI result — 2026-11-01
+
+The earlier “CI pending” entries above were superseded by the final exact-head run. PR #194 code head `397756da143488fbc42992940425cbb6c96af990` passed CI #4336 / ID 41331152908. The full workflow completed successfully: dependency audit, migration validation, disposable PostgreSQL migration and acceptance, TypeScript typecheck, build, production browser smoke test, disposable PostgreSQL workspace authorization/tenant-scope acceptance, production container build and cleanup.
+
+PR #194 is open, ready for independent review and unmerged. This validates the current code head only; it does not remediate database RLS or the privileged Neon role findings recorded in issue #196. Production remains HOLD.
