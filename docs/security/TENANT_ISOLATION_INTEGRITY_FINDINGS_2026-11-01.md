@@ -190,3 +190,28 @@ The following read-only anti-join checks returned zero rows in the inspected pro
 
 ### Safety
 Only catalog/data SELECT statements were run. No production or staging data, schema, roles, grants, RLS, secrets or deployments were changed. The live branch remains on the previous release posture.
+
+
+## 8. Route authorization findings requiring focused remediation review
+
+### TSI-007 — Field-sync conflict access is identity-bound but does not re-check current organization membership
+
+**Severity:** Medium; assess revocation and device reassignment semantics  
+**Source:** `apps/src/sync-routes.ts`, routes `GET /api/v1/field-sync/conflicts` and `POST /api/v1/field-sync/conflicts/:conflictId/resolve`.
+
+Both operations authenticate the identity and filter by `field_sync_envelopes.identity_id`. The resolve UPDATE also requires the envelope identity to match the caller. However, these routes do not join the envelope to its device/organization and re-check current verified membership or the applicable field-conflict permission at the time of access/mutation. The database audit trigger derives organization through envelope → device, but audit attribution is not an authorization check.
+
+The admin membership revocation route currently revokes all sessions for the identity, which mitigates one common revocation path. Still, relying on global session revocation is weaker than checking the current organization/device authorization at each operation, especially if membership state changes through another workflow or if device ownership is reassigned.
+
+**Required test:** revoke the identity's membership while preserving a valid session in a second organization; attempt conflict list/read/resolve; prove access is denied. Also test device unbinding/reassignment and stale envelope replay. Add the organization/device membership predicate to the same SQL statement that reads or updates the conflict.
+
+### TSI-008 — Credential issue permission is checked before, not within, the issuance transaction
+
+**Severity:** Medium/High — authorization TOCTOU for high-impact registry action  
+**Source:** `apps/src/registry-routes.ts`, `POST /api/v1/credentials`.
+
+The route checks `canActForOrganization` and `canPerformHighRiskActionInDatabase(..., 'ISSUE_CREDENTIAL')` before entering `tx(...)`. The transaction then locks/validates the verification, evidence and activity and inserts the credential/event, but does not repeat/lock the issuer membership and permission state inside that transaction. A concurrent membership/permission revocation between the pre-check and the credential insert could allow a stale authorization decision to be used.
+
+**Required design:** revalidate and lock the exact verified membership/role/permission rows in the issuance transaction, using a consistent lock order also used by revocation; make the credential insert and registry event atomic with that authorization decision. Add a concurrency test that races credential issuance against membership or permission revocation.
+
+These are route-level authorization design gaps for remediation review; they are not evidence that a successful unauthorized operation has occurred in production.
