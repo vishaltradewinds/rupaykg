@@ -79,3 +79,7 @@ Removed test-time `ALTER TABLE ... DISABLE/ENABLE TRIGGER` from the BWG workspac
 A schema review first identified migration 077's update-only membership trigger, then checked the superseding migration 086. Migration 086 replaces the guard with `BEFORE INSERT OR UPDATE OF status`, but intentionally returns early for INSERTs whose role is not `super_admin` or `platform_admin`; reserved-role inserts are subject to dual-control approval. The supported public onboarding API creates ordinary memberships as `PENDING`, and the hierarchy approval route promotes them only after the application approval chain completes. Consequently, ordinary-role direct SQL INSERTs with `status='VERIFIED'` are permitted by the current explicit policy exception. This is a policy/threat-model question for independent security review, not a confirmed unauthenticated HTTP bypass. Do not treat this workspace privileged fixture as proof of onboarding enforcement.
 
 Exact-head CI for the latest PR #194 test-hygiene change is pending. Production remains HOLD.
+
+## Test-fixture cleanup CI correction — 2026-11-01
+
+The trigger-toggle removal edit malformed one workspace membership fixture SQL string. The prior CI run #4326 at the intermediate head is not accepted as validation. Reconstructed the fixture statement and verified the resulting source text. The latest PR #194 code head is now `a7f1a4fdf318f12b3969c5f45aefaae54e9e1a5b`; a new exact-head CI run is required and pending.
