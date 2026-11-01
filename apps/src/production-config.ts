@@ -3,6 +3,7 @@ const PRODUCTION_ENV = "production";
 export type ProductionConfig = {
   environment: "production";
   databaseUrl: string;
+  authDatabaseUrl: string;
   databaseSsl: "require" | "false";
   databaseCaCert: string;
   allowedOrigins: string[];
@@ -50,7 +51,11 @@ export function readProductionConfig(env: NodeJS.ProcessEnv = process.env): Prod
   if (env.RUPAYKG_AUTH_MODE !== "real") throw new Error("PRODUCTION_CONFIG_INVALID: RUPAYKG_AUTH_MODE must be real");
   if (env.VITE_RUPAYKG_SESSION_TOKEN?.trim()) throw new Error("PRODUCTION_CONFIG_INVALID: VITE_RUPAYKG_SESSION_TOKEN must not be provided in production");
   const databaseUrl = productionDatabaseUrl(required(env, "DATABASE_URL"));
+  const authDatabaseUrl = productionDatabaseUrl(required(env, "AUTH_DATABASE_URL"));
   const parsedDatabaseUrl = new URL(databaseUrl);
+  const parsedAuthDatabaseUrl = new URL(authDatabaseUrl);
+  if (parsedAuthDatabaseUrl.hostname !== parsedDatabaseUrl.hostname || parsedAuthDatabaseUrl.pathname !== parsedDatabaseUrl.pathname) throw new Error("PRODUCTION_CONFIG_INVALID: AUTH_DATABASE_URL must target the same authoritative PostgreSQL host and database as DATABASE_URL");
+  if (!parsedAuthDatabaseUrl.username || parsedAuthDatabaseUrl.username === parsedDatabaseUrl.username) throw new Error("PRODUCTION_CONFIG_INVALID: AUTH_DATABASE_URL must use a distinct least-privilege database role");
   const renderInternalDatabase =
     /^dpg-[a-z0-9-]+$/i.test(parsedDatabaseUrl.hostname) &&
     !parsedDatabaseUrl.searchParams.get("sslmode");
@@ -58,6 +63,7 @@ export function readProductionConfig(env: NodeJS.ProcessEnv = process.env): Prod
   return {
     environment: "production",
     databaseUrl,
+    authDatabaseUrl,
     databaseSsl: renderInternalDatabase ? "false" : "require",
     databaseCaCert: renderInternalDatabase ? "" : productionCaCert(env.DATABASE_CA_CERT?.trim() ?? "", databaseUrl),
     allowedOrigins: origins(required(env, "RUPAYKG_ALLOWED_ORIGINS")),
