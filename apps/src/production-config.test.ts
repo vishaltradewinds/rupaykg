@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { assertProductionMigrationTarget, readProductionConfig } from "./production-config.js";
+import { assertProductionMigrationTarget, readProductionConfig, requiresExplicitMigrationTarget } from "./production-config.js";
 
 const valid = {
   NODE_ENV: "production",
@@ -116,5 +116,20 @@ describe("production migration target identity", () => {
       () => assertProductionMigrationTarget({ ...expected, expectedBranchId: "" }, actual),
       /expected Neon branch ID is required/,
     );
+  });
+});
+
+describe("migration target identity enforcement", () => {
+  it("requires an explicit branch target for every Neon connection, even outside production mode", () => {
+    assert.equal(requiresExplicitMigrationTarget("postgresql://user:pass@ep-example.us-east-1.aws.neon.tech/rupaykg", "test"), true);
+    assert.equal(requiresExplicitMigrationTarget("postgresql://user:pass@ep-example-pooler.us-east-1.aws.neon.tech/rupaykg", "development"), true);
+  });
+
+  it("requires target identity for every production database", () => {
+    assert.equal(requiresExplicitMigrationTarget("postgresql://localhost:5432/rupaykg", "production"), true);
+  });
+
+  it("allows disposable local PostgreSQL migration tests without a Neon branch ID", () => {
+    assert.equal(requiresExplicitMigrationTarget("postgresql://localhost:5432/rupaykg", "test"), false);
   });
 });
