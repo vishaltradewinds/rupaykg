@@ -151,3 +151,10 @@ All authority-approved BWG profile and evidence states used by these positive do
 A follow-up review of `apps/src/bwg-applicability-postgres.integration.test.ts` found that the test created disposable organization, geography, identity, role, membership, geography scope, session and BWG profile rows but did not remove them in teardown. Added deterministic cleanup in dependency-safe order, including report/period/profile rows, organization scopes and memberships, role, organization, session, identity and geography. This keeps repeatable CI runs isolated and prevents fixture accumulation.
 
 No production code, schema or production data changed. Exact-head CI #4307 / ID 41329615974 is running at `d0050f8790ba418c4a3568c8b3df0823832f1e46`; do not count this cleanup correction as passed until that run completes.
+
+
+## Exact-head fixture cleanup CI confirmation — 2026-11-01
+
+The disposable applicability fixture teardown correction at code head `d0050f8790ba418c4a3568c8b3df0823832f1e46` passed exact-head CI #4307 / ID 41329615974. All workflow steps passed: dependency audit, migration validation, disposable PostgreSQL migration/acceptance, TypeScript typecheck, build, browser smoke test, tests and production container build. Teardown now executes as part of the passing PostgreSQL acceptance suite.
+
+This remains an engineering CI result. PR #193 remains draft/unmerged pending independent review. Production remains HOLD.
