@@ -11,7 +11,7 @@ const periodId = "55555555-5555-4555-8555-555555555555";
 class PermissionPool {
   calls: string[] = [];
   writes: Array<{ sql: string; values: unknown[] | undefined }> = [];
-  constructor(private readonly options: { organizationPermission?: boolean; esgPermission?: boolean; periodTriggerError?: boolean; eprConstraintError?: boolean } = {}) {}
+  constructor(private readonly options: { organizationPermission?: boolean; grantedPermissions?: string[]; esgPermission?: boolean; periodTriggerError?: boolean; eprConstraintError?: boolean } = {}) {}
   async query(sql: string, values?: unknown[]) {
     this.calls.push(sql);
     if (sql.startsWith("insert into ")) this.writes.push({ sql, values });
@@ -25,7 +25,13 @@ class PermissionPool {
     if (sql.includes("from organization_memberships") && sql.includes("where identity_id = $1")) {
       return { rows: [{ organization_id: organizationId, role_id: "role-a", status: "VERIFIED" }] };
     }
-    if (sql.includes("jsonb_array_elements_text")) return { rows: [{ ok: this.options.organizationPermission ?? false }] };
+    if (sql.includes("jsonb_array_elements_text")) {
+      const requested = Array.isArray(values?.[2]) ? values[2] as string[] : [];
+      const ok = this.options.grantedPermissions
+        ? requested.some((permission) => this.options.grantedPermissions!.includes(permission))
+        : this.options.organizationPermission ?? false;
+      return { rows: [{ ok }] };
+    }
     if (sql.includes("can_write_esg")) return { rows: [{ ok: this.options.esgPermission ?? false }] };
     if (sql.includes("select organization_id from bwg_reporting_periods")) return { rows: [{ organization_id: organizationId }] };
     if (sql.includes("select id from epr_schemes")) return { rows: [{ id: "scheme-a" }] };
@@ -45,6 +51,42 @@ const auth = { authorization: "Bearer acceptance-test-token" };
 
 test("BWG reporting-period creation requires reports:read and waste:record permission", async () => {
   const pool = new PermissionPool({ organizationPermission: false });
+  const app = await makeApp(pool);
+  try {
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/v1/bwg/reporting-periods",
+      headers: auth,
+      payload: { organizationId, periodStart: "2026-01-01", periodEnd: "2026-03-31", reportingBasis: "QUARTERLY" },
+    });
+    assert.equal(response.statusCode, 403);
+    assert.equal(response.json().code, "BWG_PERIOD_FORBIDDEN");
+    assert.equal(pool.calls.some((sql) => sql.includes("insert into bwg_reporting_periods")), false);
+  } finally {
+    await app.close();
+  }
+});
+
+test("BWG reporting-period creation is denied with reports:read alone", async () => {
+  const pool = new PermissionPool({ grantedPermissions: ["reports:read"] });
+  const app = await makeApp(pool);
+  try {
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/v1/bwg/reporting-periods",
+      headers: auth,
+      payload: { organizationId, periodStart: "2026-01-01", periodEnd: "2026-03-31", reportingBasis: "QUARTERLY" },
+    });
+    assert.equal(response.statusCode, 403);
+    assert.equal(response.json().code, "BWG_PERIOD_FORBIDDEN");
+    assert.equal(pool.calls.some((sql) => sql.includes("insert into bwg_reporting_periods")), false);
+  } finally {
+    await app.close();
+  }
+});
+
+test("BWG reporting-period creation is denied with waste:record alone", async () => {
+  const pool = new PermissionPool({ grantedPermissions: ["waste:record"] });
   const app = await makeApp(pool);
   try {
     const response = await app.inject({
