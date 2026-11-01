@@ -163,6 +163,13 @@ export async function canPerformHighRiskActionInDatabase(client: Pool | PoolClie
 }
 
 export async function canVerifyEvidence(client: PoolClient, identityId: string, evidenceId: string): Promise<boolean> {
+  if (getAuthResolverMode() === "security_definer") {
+    const result = await client.query<{ ok: boolean }>(
+      `select auth_private.can_verify_evidence($1,$2) as ok`,
+      [identityId, evidenceId],
+    );
+    return result.rows[0]?.ok === true;
+  }
   const result = await client.query<{ ok: boolean }>(
     `select exists (
        select 1 from evidence e join activities a on a.id = e.activity_id
