@@ -43,10 +43,10 @@ export function normalizeEprRegistrationInput(reference: string | null, reported
   return { reference, persistedStatus: "NOT_ASSERTED", basis };
 }
 
-async function authFor(request: Request, reply: Reply, pool: Pool | null): Promise<AuthContext | null> {
+async function authFor(request: Request, reply: Reply, pool: Pool | null, sessionPool: Pool | null = pool): Promise<AuthContext | null> {
   if (!pool) { reply.code(503).send({ error: "Database unavailable", code: "DATABASE_UNAVAILABLE" }); return null; }
   try {
-    const auth = await authenticate(request as never, pool);
+    const auth = await authenticate(request as never, sessionPool, pool);
     if (!auth) { reply.code(401).send({ error: "Authenticated session required", code: "AUTH_REQUIRED" }); return null; }
     return auth;
   } catch (error) {
@@ -91,9 +91,9 @@ function bwgStatus(floorArea: number | null | undefined, water: number | null | 
   return floorArea >= 20000 || water >= 40000 || waste >= 100 ? "APPLICABLE" : "NOT_APPLICABLE";
 }
 
-export async function registerStatutoryRoutes(app: FastifyInstance, pool: Pool | null): Promise<void> {
+export async function registerStatutoryRoutes(app: FastifyInstance, pool: Pool | null, sessionPool: Pool | null = pool): Promise<void> {
   app.get("/api/v1/statutory/epr/schemes", async (request, reply) => {
-    const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
+    const auth = await authFor(request as never, reply, pool, sessionPool); if (!auth || !pool) return;
     const organizationId = await organizationFor(auth, pool, request as never, reply); if (!organizationId) return;
     try {
       if (!await hasOrganizationPermission(pool, auth, organizationId, ["epr:read", "reports:read"])) return reply.code(403).send({ error: "EPR scheme catalog read permission required", code: "STATUTORY_PERMISSION_REQUIRED" });
@@ -103,7 +103,7 @@ export async function registerStatutoryRoutes(app: FastifyInstance, pool: Pool |
   });
 
   app.get("/api/v1/statutory/applicability", async (request, reply) => {
-    const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
+    const auth = await authFor(request as never, reply, pool, sessionPool); if (!auth || !pool) return;
     const organizationId = await organizationFor(auth, pool, request as never, reply); if (!organizationId) return;
     try {
       if (!await hasOrganizationPermission(pool, auth, organizationId, ["swm:read", "epr:read", "reports:read"])) return reply.code(403).send({ error: "Statutory applicability read permission required", code: "STATUTORY_PERMISSION_REQUIRED" });
@@ -117,7 +117,7 @@ export async function registerStatutoryRoutes(app: FastifyInstance, pool: Pool |
   });
 
   app.post("/api/v1/statutory/bwg/assess", async (request, reply) => {
-    const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
+    const auth = await authFor(request as never, reply, pool, sessionPool); if (!auth || !pool) return;
     const body = bodyOf(request as never);
     const organizationId = text(body, "organizationId") || auth.activeOrganizationId || auth.memberships[0]?.organization_id || null;
     if (!organizationId || !canActForOrganization(auth, organizationId)) return reply.code(403).send({ error: "No verified membership for organization", code: "ORG_FORBIDDEN" });
@@ -146,7 +146,7 @@ export async function registerStatutoryRoutes(app: FastifyInstance, pool: Pool |
   });
 
   app.post("/api/v1/statutory/epr", async (request, reply) => {
-    const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
+    const auth = await authFor(request as never, reply, pool, sessionPool); if (!auth || !pool) return;
     const body = bodyOf(request as never);
     const organizationId = text(body, "organizationId") || auth.activeOrganizationId || auth.memberships[0]?.organization_id || null;
     if (!organizationId || !canActForOrganization(auth, organizationId)) return reply.code(403).send({ error: "No verified membership for organization", code: "ORG_FORBIDDEN" });
@@ -182,7 +182,7 @@ export async function registerStatutoryRoutes(app: FastifyInstance, pool: Pool |
   });
 
   app.post("/api/v1/statutory/epr/:id/external-registration", async (request, reply) => {
-    const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
+    const auth = await authFor(request as never, reply, pool, sessionPool); if (!auth || !pool) return;
     const body = bodyOf(request as never);
     const id = (request.params as { id: string }).id;
     const report = normalizeExternalRegistrationReport(text(body, "cpcbRegistrationReference"), text(body, "cpcbRegistrationStatus"));
