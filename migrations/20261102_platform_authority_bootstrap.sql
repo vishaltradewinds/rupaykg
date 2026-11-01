@@ -1,7 +1,7 @@
 -- One-time, two-custodian bootstrap of the first platform authority.
 -- Production role provisioning and the ceremony itself require separate founder/DBA approval.
 DO $preflight$
-DECLARE owner_role pg_catalog.pg_roles%ROWTYPE;
+DECLARE owner_role record;
 BEGIN
   SELECT * INTO owner_role FROM pg_catalog.pg_roles WHERE rolname = 'rupaykg_bootstrap_owner';
   IF NOT FOUND THEN
@@ -42,6 +42,17 @@ BEGIN
   END IF;
 END
 $capability_role$;
+
+GRANT USAGE ON SCHEMA public TO rupaykg_bootstrap_owner;
+GRANT SELECT ON public.identities, public.roles, public.organization_memberships,
+  public.organizations, public.stakeholder_applications, public.platform_access_change_requests
+  TO rupaykg_bootstrap_owner;
+GRANT INSERT ON public.organizations, public.roles, public.organization_memberships
+  TO rupaykg_bootstrap_owner;
+GRANT REFERENCES ON public.identities, public.organizations TO rupaykg_bootstrap_owner;
+GRANT EXECUTE ON FUNCTION public.rupaykg_default_role_permissions(text)
+  TO rupaykg_bootstrap_owner;
+GRANT EXECUTE ON FUNCTION public.digest(text, text) TO rupaykg_bootstrap_owner;
 
 CREATE SCHEMA bootstrap_private AUTHORIZATION rupaykg_bootstrap_owner;
 SET LOCAL ROLE rupaykg_bootstrap_owner;
@@ -127,7 +138,8 @@ SECURITY DEFINER
 SET search_path = pg_catalog, pg_temp
 AS $$
 DECLARE
-  custodian_role pg_catalog.pg_roles%ROWTYPE;
+  custodian_role record;
+  capability_member_count integer;
   membership_count integer;
 BEGIN
   IF NOT pg_catalog.pg_has_role(session_user, 'rupaykg_bootstrap_custodian', 'MEMBER') THEN
@@ -147,6 +159,15 @@ BEGIN
   SELECT count(*) INTO membership_count
     FROM pg_catalog.pg_auth_members m
    WHERE m.member = custodian_role.oid;
+  SELECT count(*) INTO capability_member_count
+    FROM pg_catalog.pg_auth_members m
+    JOIN pg_catalog.pg_roles login_role ON login_role.oid = m.member
+    JOIN pg_catalog.pg_roles capability_role ON capability_role.oid = m.roleid
+   WHERE capability_role.rolname = 'rupaykg_bootstrap_custodian'
+     AND login_role.rolcanlogin;
+  IF capability_member_count <> 2 THEN
+    RAISE EXCEPTION 'BOOTSTRAP_REQUIRES_EXACTLY_TWO_CUSTODIAN_LOGINS';
+  END IF;
   IF membership_count <> 1 OR NOT EXISTS (
     SELECT 1
       FROM pg_catalog.pg_auth_members m
@@ -409,7 +430,7 @@ BEGIN
     FROM bootstrap_private.bootstrap_claims
    WHERE ceremony_id = p_ceremony_id
    ORDER BY identity_id
-   OFFSET 1 LIMIT 1;
+   LIMIT 1 OFFSET 1;
 
   SELECT event_hash INTO previous_hash
     FROM bootstrap_private.bootstrap_audit_events
@@ -449,15 +470,6 @@ REVOKE ALL ON FUNCTION bootstrap_private.finalize_initial_platform_authority_boo
 GRANT USAGE ON SCHEMA bootstrap_private TO rupaykg_bootstrap_custodian;
 GRANT EXECUTE ON FUNCTION bootstrap_private.submit_initial_platform_authority_claim(uuid, text) TO rupaykg_bootstrap_custodian;
 GRANT EXECUTE ON FUNCTION bootstrap_private.finalize_initial_platform_authority_bootstrap(uuid) TO rupaykg_bootstrap_custodian;
-
-GRANT USAGE ON SCHEMA public TO rupaykg_bootstrap_owner;
-GRANT SELECT ON public.identities, public.roles, public.organization_memberships,
-  public.organizations, public.stakeholder_applications, public.platform_access_change_requests
-  TO rupaykg_bootstrap_owner;
-GRANT INSERT ON public.organizations, public.roles, public.organization_memberships
-  TO rupaykg_bootstrap_owner;
-GRANT EXECUTE ON FUNCTION public.rupaykg_default_role_permissions(text)
-  TO rupaykg_bootstrap_owner;
 
 ALTER DEFAULT PRIVILEGES FOR ROLE rupaykg_bootstrap_owner IN SCHEMA bootstrap_private
   REVOKE ALL ON TABLES FROM PUBLIC;
