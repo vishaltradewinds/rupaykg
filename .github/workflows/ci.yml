@@ -64,6 +64,10 @@ jobs:
           SQL
       - run: npm run typecheck
       - run: npm run build
+      - name: Exercise two-custodian bootstrap with synthetic CI identities and secrets
+        env:
+          RUPAYKG_RUN_DB_INTEGRATION_TESTS: "1"
+        run: node apps/dist/src/ci-platform-authority-bootstrap.js
       - name: Browser smoke test production web build
         shell: bash
         run: |
