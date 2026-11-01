@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import test from "node:test";
 import type { Pool } from "pg";
-import { authenticate, getAuthResolverMode } from "./auth.js";
+import { authenticate, getAuthResolverMode, hasOrganizationPermission } from "./auth.js";
 
 type Row = {
   identity_id: string;
@@ -187,4 +187,38 @@ test("legacy mode remains available and retains the two-query session and member
   assert.equal(pool.calls.length, 2);
   assert.match(pool.calls[0]!.sql, /identity_sessions/);
   assert.match(pool.calls[1]!.sql, /organization_memberships/);
+});
+
+
+test("security-definer authorization delegates membership and permission checks to the scoped database function", async () => {
+  const pool = new FakePool();
+  pool.rows = [{ ok: true }];
+  const auth = {
+    identityId,
+    memberships: [{ organization_id: orgA, role_id: "role-a", status: "VERIFIED" }],
+    activeOrganizationId: orgA,
+  };
+  process.env.RUPAYKG_AUTH_RESOLVER_MODE = "security_definer";
+  try {
+    assert.equal(await hasOrganizationPermission(pool as unknown as Pool, auth, orgA, ["waste:record"]), true);
+    assert.equal(pool.calls.length, 1);
+    assert.match(pool.calls[0]!.sql, /auth_private\\.has_organization_permission/);
+    assert.deepEqual(pool.calls[0]!.values, [identityId, orgA, ["waste:record"]]);
+  } finally { delete process.env.RUPAYKG_AUTH_RESOLVER_MODE; }
+});
+
+test("security-definer authorization fails closed without falling back to direct membership queries", async () => {
+  const pool = new FakePool();
+  pool.failure = new Error("authorization function unavailable");
+  const auth = {
+    identityId,
+    memberships: [{ organization_id: orgA, role_id: "role-a", status: "VERIFIED" }],
+    activeOrganizationId: orgA,
+  };
+  process.env.RUPAYKG_AUTH_RESOLVER_MODE = "security_definer";
+  try {
+    await assert.rejects(() => hasOrganizationPermission(pool as unknown as Pool, auth, orgA, ["waste:record"]), /authorization function unavailable/);
+    assert.equal(pool.calls.length, 1);
+    assert.match(pool.calls[0]!.sql, /auth_private\\.has_organization_permission/);
+  } finally { delete process.env.RUPAYKG_AUTH_RESOLVER_MODE; }
 });
