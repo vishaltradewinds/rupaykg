@@ -58,7 +58,8 @@ async function assertProductionDatabaseRuntimeContracts(): Promise<void> {
         or has_schema_privilege(current_user,'public','CREATE')) as direct_auth_reads,
        has_function_privilege(current_user,'auth_private.resolve_session(text)','EXECUTE') as resolver_execute,
        has_function_privilege(current_user,'auth_private.has_organization_permission(uuid,uuid,text[])','EXECUTE') as permission_execute,
-       (has_function_privilege(current_user,'auth_private.can_read_geography(uuid,uuid)','EXECUTE')
+       (has_function_privilege(current_user,'auth_private.organization_has_geography_scope(uuid,uuid)','EXECUTE')
+        and has_function_privilege(current_user,'auth_private.can_read_geography(uuid,uuid)','EXECUTE')
         and has_function_privilege(current_user,'auth_private.can_write_geography(uuid,uuid,uuid)','EXECUTE')
         and has_function_privilege(current_user,'auth_private.can_write_activity(uuid,uuid)','EXECUTE')
         and has_function_privilege(current_user,'auth_private.can_verify_evidence(uuid,uuid)','EXECUTE')) as scoped_authorization_execute,
@@ -83,7 +84,8 @@ async function assertProductionDatabaseRuntimeContracts(): Promise<void> {
         or has_table_privilege(current_user,'public.identity_password_credentials','SELECT') or has_table_privilege(current_user,'public.identity_password_credentials','INSERT') or has_table_privilege(current_user,'public.identity_password_credentials','UPDATE') or has_table_privilege(current_user,'public.identity_password_credentials','DELETE')
         or has_schema_privilege(current_user,'public','CREATE')) as direct_auth_reads,
        has_function_privilege(current_user,'auth_private.has_organization_permission(uuid,uuid,text[])','EXECUTE') as permission_execute,
-       (has_function_privilege(current_user,'auth_private.can_read_geography(uuid,uuid)','EXECUTE')
+       (has_function_privilege(current_user,'auth_private.organization_has_geography_scope(uuid,uuid)','EXECUTE')
+        or has_function_privilege(current_user,'auth_private.can_read_geography(uuid,uuid)','EXECUTE')
         or has_function_privilege(current_user,'auth_private.can_write_geography(uuid,uuid,uuid)','EXECUTE')
         or has_function_privilege(current_user,'auth_private.can_write_activity(uuid,uuid)','EXECUTE')
         or has_function_privilege(current_user,'auth_private.can_verify_evidence(uuid,uuid)','EXECUTE')) as scoped_authorization_execute,
@@ -109,9 +111,9 @@ async function assertProductionDatabaseRuntimeContracts(): Promise<void> {
     `select p.proname as function_name,p.prosecdef as security_definer,pg_get_userbyid(p.proowner) as owner_name
        from pg_proc p join pg_namespace n on n.oid=p.pronamespace
       where n.nspname='auth_private' and p.proname in
-        ('resolve_session','find_login_candidate','record_login_failure','reset_login_failures','issue_session','revoke_session','register_identity','get_self_account_context','has_organization_permission','can_read_geography','can_write_geography','can_write_activity','can_verify_evidence')`,
+        ('resolve_session','find_login_candidate','record_login_failure','reset_login_failures','issue_session','revoke_session','register_identity','get_self_account_context','has_organization_permission','organization_has_geography_scope','can_read_geography','can_write_geography','can_write_activity','can_verify_evidence')`,
   );
-  if (functionOwners.rows.length !== 13 || functionOwners.rows.some((fn) =>
+  if (functionOwners.rows.length !== 14 || functionOwners.rows.some((fn) =>
     !fn.security_definer || fn.owner_name !== "rupaykg_auth_owner")) {
     throw new Error("PRODUCTION_AUTH_FUNCTION_OWNERSHIP_INVALID");
   }
