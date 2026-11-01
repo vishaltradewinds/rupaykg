@@ -17,11 +17,11 @@ function required(env: NodeJS.ProcessEnv, name: string): string {
   return value;
 }
 
-function productionDatabaseUrl(value: string): string {
+function productionDatabaseUrl(value: string, label = "DATABASE_URL"): string {
   let parsed: URL;
-  try { parsed = new URL(value); } catch { throw new Error("PRODUCTION_CONFIG_INVALID: DATABASE_URL must be a valid PostgreSQL URL"); }
-  if (parsed.protocol !== "postgres:" && parsed.protocol !== "postgresql:") throw new Error("PRODUCTION_CONFIG_INVALID: DATABASE_URL must use postgres:// or postgresql://");
-  if (["localhost", "127.0.0.1", "::1"].includes(parsed.hostname.toLowerCase())) throw new Error("PRODUCTION_CONFIG_INVALID: production DATABASE_URL must not target localhost");
+  try { parsed = new URL(value); } catch { throw new Error("PRODUCTION_CONFIG_INVALID: ${label} must be a valid PostgreSQL URL"); }
+  if (parsed.protocol !== "postgres:" && parsed.protocol !== "postgresql:") throw new Error("PRODUCTION_CONFIG_INVALID: ${label} must use postgres:// or postgresql://");
+  if (["localhost", "127.0.0.1", "::1"].includes(parsed.hostname.toLowerCase())) throw new Error("PRODUCTION_CONFIG_INVALID: production ${label} must not target localhost");
   return value;
 }
 
@@ -51,11 +51,12 @@ export function readProductionConfig(env: NodeJS.ProcessEnv = process.env): Prod
   if (env.RUPAYKG_AUTH_MODE !== "real") throw new Error("PRODUCTION_CONFIG_INVALID: RUPAYKG_AUTH_MODE must be real");
   if (env.VITE_RUPAYKG_SESSION_TOKEN?.trim()) throw new Error("PRODUCTION_CONFIG_INVALID: VITE_RUPAYKG_SESSION_TOKEN must not be provided in production");
   const databaseUrl = productionDatabaseUrl(required(env, "DATABASE_URL"));
-  const authDatabaseUrl = productionDatabaseUrl(required(env, "AUTH_DATABASE_URL"));
+  const authDatabaseUrl = productionDatabaseUrl(required(env, "AUTH_DATABASE_URL"), "AUTH_DATABASE_URL");
   const parsedDatabaseUrl = new URL(databaseUrl);
   const parsedAuthDatabaseUrl = new URL(authDatabaseUrl);
   if (parsedAuthDatabaseUrl.hostname !== parsedDatabaseUrl.hostname || parsedAuthDatabaseUrl.pathname !== parsedDatabaseUrl.pathname) throw new Error("PRODUCTION_CONFIG_INVALID: AUTH_DATABASE_URL must target the same authoritative PostgreSQL host and database as DATABASE_URL");
   if (!parsedAuthDatabaseUrl.username || parsedAuthDatabaseUrl.username === parsedDatabaseUrl.username) throw new Error("PRODUCTION_CONFIG_INVALID: AUTH_DATABASE_URL must use a distinct least-privilege database role");
+  if (parsedAuthDatabaseUrl.protocol !== parsedDatabaseUrl.protocol) throw new Error("PRODUCTION_CONFIG_INVALID: AUTH_DATABASE_URL must use the same PostgreSQL protocol as DATABASE_URL");
   const renderInternalDatabase =
     /^dpg-[a-z0-9-]+$/i.test(parsedDatabaseUrl.hostname) &&
     !parsedDatabaseUrl.searchParams.get("sslmode");
