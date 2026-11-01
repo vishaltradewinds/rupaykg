@@ -13,7 +13,7 @@ begin
     into application_geography_id
     from public.stakeholder_applications sa
    where sa.id = new.application_id
-   for key share;
+   for share;
 
   if not found then
     raise exception 'STAKEHOLDER_APPLICATION_NOT_FOUND';
