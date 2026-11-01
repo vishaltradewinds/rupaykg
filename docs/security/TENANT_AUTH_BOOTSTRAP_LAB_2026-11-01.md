@@ -64,4 +64,6 @@ Created `auth_lab.resolve_session(token_hash)`:
 6. Verify all auth and request-context SQL uses the same request transaction/client.
 7. Run all tests against a fresh disposable Neon branch before any production change.
 
+Post-test read-only verification on the production parent confirmed branch ID `br-restless-base-b44cip2h`, 67 public tables, 0 RLS-enabled tables, 0 lab roles, and 0 lab schemas. The auth lab remained branch-local.
+
 Production remains HOLD. This proof is not a production authorization or TRL 9 claim.
