@@ -46,3 +46,11 @@ Production remains HOLD; certification OFF. No PR merged, no production deployme
 
 ## Route-registration audit correction
 The first route-wiring conclusion was incorrect: `registerValueRoutes` already calls `registerAuthRoutes`, and the server passes `authPool` to `registerValueRoutes`. I removed the redundant direct registration after CI showed Fastify duplicate-route errors. The actual issue was that onboarding handlers in `auth-routes.ts` omitted `sessionPool`; corrected them to use the auth pool. CI #4408 also exposed an outdated error-message assertion in the parallel production-config test suite; current head updates that expectation. PR #202 current head `d67d597de1ada8f89cede1ff7c09fd9ca1627e47`; exact-head CI #4416 / run `41338701474` is in progress.
+
+## RLS token/transaction consolidation
+- Compared PR #199 and #200; their signed-token files/tests duplicated. Consolidated `createSignedRequestContextForAuth` and its tests into PR #200, added bilateral-scope rejection, and made `withRlsRequestTransaction` use the canonical helper.
+- PR #200 uses the stronger transaction wrapper and supersedes PR #199's simpler wrapper. Closed PR #199 unmerged to remove duplicate implementations.
+- PR #200 exact code CI #4414 passed all steps. Checkpoint/docs commit CI #4418 is in progress.
+- PR #202 route-wiring audit correction: auth routes were already registered through `registerValueRoutes`; removed redundant direct registration. Actual onboarding defect was missing sessionPool argument, now corrected. PR #202 CI #4416 passed migrations, typecheck, build, browser smoke and full tests; container build still running.
+- PR #201 exact-head CI #4390 passed all steps.
+- No production changes. Release HOLD; independent security review and integrated-base assurance remain open.
