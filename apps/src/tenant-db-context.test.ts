@@ -9,12 +9,12 @@ import {
 } from "./tenant-db-context.js";
 import type { AuthContext } from "./auth.js";
 
-type Call = { sql: string; values?: unknown[] };
+type Call = { sql: string; values: unknown[] | undefined };
 
 class FakeClient {
   calls: Call[] = [];
   released = false;
-  releaseError?: Error | boolean;
+  releaseError: Error | boolean | undefined = undefined;
   async query(sql: string, values?: unknown[]) {
     this.calls.push({ sql, values });
     return { rows: [], rowCount: 0, command: sql.split(/\s+/)[0]?.toUpperCase() ?? "" };
