@@ -16,7 +16,7 @@ function fakePool(failOn?: string) {
   let released = 0;
   const client = {
     async query(sql: string, values?: unknown[]) {
-      calls.push({ sql, values });
+      calls.push({ sql, ...(values === undefined ? {} : { values }) });
       if (sql === failOn) throw new Error("synthetic query failure");
       return { rows: [], rowCount: 0, command: "SELECT", oid: 0, fields: [] };
     },
@@ -49,7 +49,7 @@ test("rolls back and releases after an operation failure", async () => {
 test("does not acquire a connection without a verified single organization", async () => {
   let connects = 0;
   const pool = { async connect() { connects += 1; throw new Error("must not connect"); } };
-  const missing = { ...auth, activeOrganizationId: undefined };
+  const missing: AuthContext = { identityId: auth.identityId, memberships: auth.memberships };
   await assert.rejects(withRlsRequestTransaction(pool, missing, config, async () => undefined), (error: unknown) => error instanceof RlsRequestContextError && error.code === "RLS_ORGANIZATION_CONTEXT_REQUIRED");
   const pending = { ...auth, memberships: [{ ...auth.memberships[0]!, status: "PENDING" }] };
   await assert.rejects(withRlsRequestTransaction(pool, pending, config, async () => undefined), (error: unknown) => error instanceof RlsRequestContextError && error.code === "RLS_VERIFIED_MEMBERSHIP_REQUIRED");
