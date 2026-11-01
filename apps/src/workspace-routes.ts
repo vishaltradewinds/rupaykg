@@ -2,9 +2,9 @@ import type { FastifyInstance } from "fastify";
 import type { Pool } from "pg";
 import { authenticate, bearerChallenge, canVerifyEvidence, hasOrganizationPermission, type AuthContext } from "./auth.js";
 
-async function requireAuth(app: FastifyInstance, pool: Pool | null, request: Parameters<typeof authenticate>[0], reply: { code: (status: number) => { send: (body: unknown) => unknown } }): Promise<AuthContext | null> {
+async function requireAuth(app: FastifyInstance, pool: Pool | null, request: Parameters<typeof authenticate>[0], reply: { code: (status: number) => { send: (body: unknown) => unknown } }, sessionPool: Pool | null = pool): Promise<AuthContext | null> {
   if (!pool) { reply.code(503).send({ error: "Authoritative API unavailable", code: "DATABASE_UNAVAILABLE", syntheticData: false }); return null; }
-  try { const auth = await authenticate(request, pool); if (!auth) { reply.code(401).send(bearerChallenge()); return null; } return auth; }
+  try { const auth = await authenticate(request, sessionPool, pool); if (!auth) { reply.code(401).send(bearerChallenge()); return null; } return auth; }
   catch (error) { request.log.error(error); reply.code(503).send({ error: "Authentication service unavailable", code: "AUTH_UNAVAILABLE", syntheticData: false }); return null; }
 }
 function orgIds(auth: AuthContext): string[] { return auth.activeOrganizationId ? [auth.activeOrganizationId] : [...new Set(auth.memberships.map((m) => m.organization_id))]; }
@@ -44,22 +44,22 @@ async function authorizeWorkspaceRead(pool: Pool, auth: AuthContext, workspace: 
   return true;
 }
 
-export async function registerWorkspaceRoutes(app: FastifyInstance, pool: Pool | null): Promise<void> {
+export async function registerWorkspaceRoutes(app: FastifyInstance, pool: Pool | null, sessionPool: Pool | null = pool): Promise<void> {
   app.addHook("preHandler", async (request, reply) => {
     const route = request.routeOptions.url ?? ""; if (!route.startsWith("/api/v1/workspaces/")) return;
     const routeWorkspace = route.split("/").pop() ?? ""; const workspace = routeWorkspace === "resource-flows" ? "resourceFlows" : routeWorkspace as WorkspaceName;
-    if (!(workspace in WORKSPACE_READ_PERMISSIONS)) return; const auth = await requireAuth(app, pool, request, reply); if (!auth || !pool) return;
+    if (!(workspace in WORKSPACE_READ_PERMISSIONS)) return; const auth = await requireAuth(app, pool, request, reply, sessionPool); if (!auth || !pool) return;
     if (!await authorizeWorkspaceRead(pool, auth, workspace)) return reply.code(403).send({ error: "Workspace read permission required", code: "WORKSPACE_READ_FORBIDDEN", workspace });
   });
 
   app.get("/api/v1/workspaces/resource-flows", async (request, reply) => {
-    const auth = await requireAuth(app, pool, request, reply); if (!auth || !pool) return; const ids = orgIds(auth); if (!ids.length) return result({ resourceFlows: [] });
+    const auth = await requireAuth(app, pool, request, reply, sessionPool); if (!auth || !pool) return; const ids = orgIds(auth); if (!ids.length) return result({ resourceFlows: [] });
     const geographyId = requestedGeography(request); if (geographyId && !await authorizeGeography(pool, auth, geographyId)) return reply.code(403).send({ error: "Geography outside organization authorization scope", code: "GEOGRAPHY_FORBIDDEN" });
     try { const params: unknown[]=[ids]; if(geographyId)params.push(geographyId); const rows=await pool.query(`select rf.id,rf.organization_id,o.name as organization_name,rf.origin_type,rf.resource_form,rf.material_code,rf.declared_quantity,rf.unit,rf.status,rf.source_geography_id,sg.name as source_geography_name,rf.destination_geography_id,dg.name as destination_geography_name,rf.created_at from resource_flows rf join organizations o on o.id=rf.organization_id left join geography sg on sg.id=rf.source_geography_id left join geography dg on dg.id=rf.destination_geography_id where rf.organization_id=any($1::uuid[]) and (organization_has_geography_scope(rf.organization_id,rf.source_geography_id) or organization_has_geography_scope(rf.organization_id,rf.destination_geography_id))${geographyId?" and (rf.source_geography_id=$2 or rf.destination_geography_id=$2)":""} order by rf.created_at desc limit 100`,params); return result({resourceFlows:rows.rows}); } catch(error){request.log.error(error);return reply.code(503).send({error:"Resource-flow workspace unavailable",syntheticData:false});}
   });
 
   app.get("/api/v1/workspaces/mrv", async (request, reply) => {
-    const auth = await requireAuth(app, pool, request, reply); if (!auth || !pool) return;
+    const auth = await requireAuth(app, pool, request, reply, sessionPool); if (!auth || !pool) return;
     const ids = orgIds(auth); if (!ids.length) return result({ activities: [], measurements: [], evidence: [], verifications: [] });
     const geographyId = requestedGeography(request);
     if (geographyId && !await authorizeGeography(pool, auth, geographyId)) return reply.code(403).send({ error: "Geography outside organization authorization scope", code: "GEOGRAPHY_FORBIDDEN" });
@@ -111,7 +111,7 @@ export async function registerWorkspaceRoutes(app: FastifyInstance, pool: Pool |
   });
 
   app.get("/api/v1/workspaces/esg", async (request, reply) => {
-    const auth = await requireAuth(app, pool, request, reply); if (!auth || !pool) return;
+    const auth = await requireAuth(app, pool, request, reply, sessionPool); if (!auth || !pool) return;
     const ids = orgIds(auth); if (!ids.length) return result({ reportingPeriods: [], metrics: [] });
     try {
       const periods = await pool.query(`select id,organization_id,period_start,period_end,framework,status,reporting_standard,applicability_status,value_chain_reporting,assurance_mode,external_submission_status,methodology_notes,reporting_boundary from esg_reporting_periods where organization_id=any($1::uuid[]) order by period_end desc,period_start desc limit 100`, [ids]);
