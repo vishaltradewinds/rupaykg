@@ -178,3 +178,35 @@ Use at least two synthetic organizations (A and B), identities (member A, member
 - TRL 9: NOT ESTABLISHED.
 
 **Safety:** No production or staging database changes, role/grant changes, secrets, Render configuration, or deployments are authorized or performed by this document.
+
+
+## 10. Expanded route-source scan — 2026-11-01
+
+A second pass fetched and scanned every TypeScript file in `apps/src` whose filename is a route module, plus `server.ts`. The scan covered authentication, BWG, CPCB-SWM, EPR returns, evidence vault, intelligence, MRV, onboarding hierarchy, platform administration, registry, statutory, field sync, value and workspace routes. This was a static source scan for query call sites and SQL table references; dynamic SQL, helper calls, multiline SQL and database functions still require manual review.
+
+Additional table families discovered and added to the ownership audit backlog:
+
+| Table family | Initial ownership classification | Follow-up |
+|---|---|---|
+| `mrv_observations`, `mrv_provenance_events` | Likely tenant/project evidence lineage, but verify schema FKs to activity/project and immutability | Inspect migration and every MRV route; prove parent organization joins. |
+| `field_sync_cursors` | Inherits field-device ownership | Enforce cursor device FK and ensure cursor reads/writes cannot cross device/organization boundaries. |
+| `settlement_events` | Bilateral settlement ledger | Must inherit settlement parties and be append-only; separate payer/payee visibility. |
+| `epr_returns`, `epr_obligations` | Organization-owned statutory preparation/obligation records | Validate organization consistency between return, obligation and scheme; external submission remains distinct. |
+| `epr_credits` | Cross-organization value-chain record | Issuer/recycler/obligated organization and evidence provenance must be explicit; do not treat it as single-owner by assumption. |
+| `organization_statutory_profiles`, `organization_bwg_assessments`, `organization_epr_applicability` | Direct organization-owned statutory applicability evidence | Separate organization-authored determination from regulator-confirmed status. |
+| `audit_events` | Tenant-scoped events where organization_id is present; platform security events may be platform-owned | Confirm append-only enforcement, tenant visibility and platform access boundaries. |
+| `platform_admin` governance/audit tables | Platform control plane | Restrict to dedicated platform authority and dual-control operations. |
+| `identity_credentials`, `identity_password_credentials`, `identity_sessions` | Identity-private | Ensure no broad tenant query or route returns credential/session material. |
+
+### Query-scan observations
+
+- `workspace-routes.ts` uses organization-ID predicates for core activities, measurements, evidence, obligations, resource flows and ESG periods; several derived records are joined through their tenant-owned parent.
+- `evidence-vault-routes.ts` resolves activity organization and validates series against organization + activity; version/review references still need database-level composite consistency.
+- `sync-routes.ts` scopes envelopes to identity and enrolled device, and applies operations through organization/geography authorization helpers. The device→organization→identity ownership chain needs explicit relational enforcement for all cursor/envelope/conflict rows.
+- `registry-routes.ts` resolves evidence, activity and verification before credential/settlement operations; these are high-risk unscoped-ID lookup paths and require a statement-by-statement disclosure/locking/authorization review.
+- `onboarding-hierarchy-routes.ts` has a platform review queue that loads pending applications before deciding which records the reviewer may see. This must become a narrowly scoped database operation/view rather than general tenant access.
+- `cpcb-swm-routes.ts` and `value-routes.ts` include organization-specific checks; audit/status events and cross-record references still need composite constraints.
+- `auth-routes.ts` includes identity registration/login and returns organization membership/application summaries. Session and password tables remain identity-private.
+- `intelligence-routes.ts` and `mrv-routes.ts` contain helper/dynamic query paths that were not fully classified by this lexical scan; inspect manually before policy design.
+
+**No RLS or schema implementation was attempted.** The scan increases coverage but does not establish that all application SQL is tenant-safe.
