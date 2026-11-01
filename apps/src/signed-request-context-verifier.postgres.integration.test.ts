@@ -43,8 +43,8 @@ test("database signed-context verifier authenticates claims and fails closed", {
              r.rolcreatedb as can_create_databases,
              r.rolinherit as inherits_roles,
              r.rolreplication as can_replicate,
-             has_function_privilege('public', p.oid, 'EXECUTE') as public_execute,
-             has_table_privilege('public', c.oid, 'SELECT') as public_key_read
+             exists (select 1 from aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a where a.grantee = 0 and a.privilege_type = 'EXECUTE') as public_execute,
+             exists (select 1 from aclexplode(coalesce(c.relacl, acldefault('r', c.relowner))) a where a.grantee = 0 and a.privilege_type = 'SELECT') as public_key_read
         from pg_proc p
         join pg_roles r on r.oid = p.proowner
         join pg_class c on c.oid = 'app_security.request_context_keys'::regclass
