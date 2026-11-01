@@ -68,7 +68,7 @@ test("PostgreSQL Super Admin suspension revokes sessions and blocks subsequent a
     targetId = target.rows[0]!.id;
     const role = await pool.query<{ id: string }>(
       "insert into roles(organization_id,name,permissions,geography_scope) values($1,'super_admin',$2::jsonb,'[]') returning id",
-      [organizationId, JSON.stringify(["admin:users"])],
+      [organizationId, JSON.stringify(["dashboard:read", "admin:users", "admin:roles", "admin:security"])],
     );
     roleId = role.rows[0]!.id;
     membershipId = await bootstrapReservedMembership(pool, actorId, organizationId, roleId);
@@ -417,8 +417,8 @@ test("PostgreSQL keeps reserved-role INSERTs behind the two-person database guar
       ["reserved-guard:" + suffix, "Reserved Guard Target " + suffix, "reserved-guard-" + suffix + "@example.invalid"],
     )).rows[0]!.id;
     roleId = (await pool.query<{ id: string }>(
-      "insert into roles(organization_id,name,permissions,geography_scope) values($1,'super_admin','[\\"admin:users\\"]'::jsonb,'[]') returning id",
-      [organizationId],
+      "insert into roles(organization_id,name,permissions,geography_scope) values($1,'super_admin',$2::jsonb,'[]') returning id",
+      [organizationId, JSON.stringify(["admin:users"])],
     )).rows[0]!.id;
 
     await assert.rejects(
