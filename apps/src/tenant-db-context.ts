@@ -28,25 +28,33 @@ function rawQuery(context: RequestDatabaseContext, args: unknown[]): Promise<unk
 }
 
 async function scopedQuery(context: RequestDatabaseContext, args: unknown[]): Promise<unknown> {
-  const command = transactionCommand(args[0]);
-  if (!command) return rawQuery(context, args);
+  try {
+    const command = transactionCommand(args[0]);
+    if (!command) return await rawQuery(context, args);
 
-  if (command === "BEGIN") {
-    const name = `rupaykg_request_sp_${++context.nextSavepoint}`;
-    context.savepoints.push(name);
-    return rawQuery(context, [`SAVEPOINT ${name}`]);
+    if (command === "BEGIN") {
+      const name = `rupaykg_request_sp_${++context.nextSavepoint}`;
+      context.savepoints.push(name);
+      return await rawQuery(context, [`SAVEPOINT ${name}`]);
+    }
+
+    const name = context.savepoints.pop();
+    if (!name) {
+      context.failed = true;
+      throw new Error(`REQUEST_TRANSACTION_BOUNDARY_VIOLATION: ${command} without a matching nested BEGIN`);
+    }
+
+    if (command === "COMMIT") return await rawQuery(context, [`RELEASE SAVEPOINT ${name}`]);
+
+    await rawQuery(context, [`ROLLBACK TO SAVEPOINT ${name}`]);
+    return await rawQuery(context, [`RELEASE SAVEPOINT ${name}`]);
+  } catch (error) {
+    // A failed statement outside a nested savepoint leaves the request
+    // transaction unusable. Inside a savepoint, the route may recover by
+    // issuing its matching ROLLBACK, which restores the outer transaction.
+    if (!context.savepoints.length) context.failed = true;
+    throw error;
   }
-
-  const name = context.savepoints.pop();
-  if (!name) {
-    context.failed = true;
-    throw new Error(`REQUEST_TRANSACTION_BOUNDARY_VIOLATION: ${command} without a matching nested BEGIN`);
-  }
-
-  if (command === "COMMIT") return rawQuery(context, [`RELEASE SAVEPOINT ${name}`]);
-
-  await rawQuery(context, [`ROLLBACK TO SAVEPOINT ${name}`]);
-  return rawQuery(context, [`RELEASE SAVEPOINT ${name}`]);
 }
 
 function scopedClient(context: RequestDatabaseContext): PoolClient {
