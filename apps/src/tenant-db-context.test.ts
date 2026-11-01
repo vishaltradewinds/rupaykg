@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import Fastify from "fastify";
 import type { Pool, PoolClient } from "pg";
 import {
   beginRequestDatabaseContext,
@@ -207,4 +208,66 @@ test("an uncontained SQL error marks the request transaction for rollback", asyn
   });
   await finishRequestDatabaseContext(context, true);
   assert.equal(raw.clients[0]!.calls.at(-1)?.sql, "ROLLBACK");
+});
+
+test("Fastify request hooks bind concurrent pool.query and pool.connect calls to each request transaction", async () => {
+  const raw = new FakePool();
+  const scoped = createContextAwarePool(raw as unknown as Pool);
+  const app = Fastify();
+  const contexts = new WeakMap<object, Awaited<ReturnType<typeof beginRequestDatabaseContext>>>();
+
+  app.addHook("onRequest", (request, _reply, done) => {
+    const identityId = request.url.slice(1);
+    const requestAuth = { ...auth, identityId };
+    beginRequestDatabaseContext(raw as unknown as Pool, requestAuth).then((context) => {
+      contexts.set(request, context);
+      runWithRequestDatabaseContext(context, () => done());
+    }).catch(done);
+  });
+  app.addHook("onSend", (request, reply, payload, done) => {
+    const context = contexts.get(request);
+    if (!context) return done(null, payload);
+    finishRequestDatabaseContext(context, reply.statusCode < 400)
+      .then(() => done(null, payload))
+      .catch(done);
+  });
+  app.addHook("onResponse", async (request) => {
+    const context = contexts.get(request);
+    if (context && !context.finished) await finishRequestDatabaseContext(context, false);
+  });
+  app.get("/:identityId", async (request) => {
+    await scoped.query("select 'direct-pool-query'");
+    const client = await scoped.connect();
+    await client.query("BEGIN");
+    await client.query("update tenant_rows set value='nested-client-query'");
+    await client.query("COMMIT");
+    client.release();
+    return { ok: true, identityId: (request.params as { identityId: string }).identityId };
+  });
+
+  try {
+    const ids = [
+      "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+    ];
+    const responses = await Promise.all(ids.map((identityId) => app.inject({ method: "GET", url: `/${identityId}` })));
+    assert.deepEqual(responses.map((response) => response.statusCode), [200, 200]);
+    assert.deepEqual(responses.map((response) => response.json().identityId), ids);
+    assert.equal(raw.clients.length, 2);
+
+    for (const client of raw.clients) {
+      const identityCall = client.calls[1]!;
+      const identityId = identityCall.values?.[0];
+      assert.ok(ids.includes(identityId as string));
+      assert.ok(client.calls.some((call) => call.sql === "select 'direct-pool-query'"));
+      assert.ok(client.calls.some((call) => call.sql === "update tenant_rows set value='nested-client-query'"));
+      assert.ok(client.calls.some((call) => call.sql.startsWith("SAVEPOINT rupaykg_request_sp_")));
+      assert.ok(client.calls.some((call) => call.sql.startsWith("RELEASE SAVEPOINT rupaykg_request_sp_")));
+      assert.equal(client.calls.at(-1)?.sql, "COMMIT");
+      assert.equal(client.released, true);
+    }
+    assert.notEqual(raw.clients[0], raw.clients[1]);
+  } finally {
+    await app.close();
+  }
 });
