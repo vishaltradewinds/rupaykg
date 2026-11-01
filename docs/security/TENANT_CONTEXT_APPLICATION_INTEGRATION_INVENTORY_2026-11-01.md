@@ -10,7 +10,7 @@
 - `apps/src/auth.ts` performs authentication by querying `identity_sessions`, `identities`, and `organization_memberships` directly through the pool.
 - `AuthContext` contains identity ID, VERIFIED memberships, active organization selected from the `x-rupaykg-organization-id` header, and a bilateral-settlement scope flag.
 - Workspace routes reduce organization scope to the active organization when selected; settlement routes have an explicit bilateral-scope exception.
-- Route modules use both direct `pool.query()` and direct `pool.connect()` calls. They are not currently wrapped in one request-scoped transaction/context abstraction.
+- Route modules use both direct `pool.query()` and direct `pool.connect()` calls. Several of the `connect()` paths explicitly issue `BEGIN`, `COMMIT`, and `ROLLBACK` themselves (notably onboarding, registry, field sync, evidence verification, and MRV flows). They are not currently wrapped in one request-scoped transaction/context abstraction.
 
 ## Direct pool access inventory
 
@@ -41,7 +41,7 @@ Required integration design:
 1. Resolve a session using a narrow database authentication function or another reviewed bootstrap path that remains safe once identity/session tables are protected.
 2. Derive identity and active organization only from the validated session and currently VERIFIED membership. Never trust a client-supplied organization header without membership validation.
 3. Open one transaction per authenticated request and set transaction-local context on that exact client.
-4. Route all request SQL through the same client, including existing direct `pool.query()` calls and `pool.connect()` helpers. Do not let concurrent pooled requests share a context.
+4. Route all request SQL through the same client, including existing direct `pool.query()` calls and `pool.connect()` helpers. Existing route-level transactions must either be refactored or safely mapped to nested savepoints; a naive outer transaction would let route-level `COMMIT`/ `ROLLBACK` commands terminate the request transaction. Do not let concurrent pooled requests share a context.
 5. Commit before a success response is finalized; roll back on unhandled errors; always release the client.
 6. Ensure public endpoints and unauthenticated login/session creation paths remain explicitly separated.
 7. Explicitly model bilateral settlement access, platform/regulator authority, worker identities, and multi-organization workspaces; a single `active_organization_id` GUC is insufficient for every route.
@@ -50,7 +50,7 @@ Required integration design:
 
 ## Design caution
 
-A proxy/AsyncLocalStorage wrapper may reduce the need to rewrite hundreds of call sites, but it must be proven against Fastify's real lifecycle and all `.connect()` usage. A global request transaction can also hold pool connections longer and serialize queries made concurrently through one `PoolClient`; load-test before adoption. Do not patch the application with an unverified context-propagation trick.
+A proxy/AsyncLocalStorage wrapper with nested-savepoint translation may reduce the need to rewrite hundreds of call sites, but it must be proven against Fastify's real lifecycle, all `.connect()` usage, transaction error paths, and connection-release behavior. A global request transaction can also hold pool connections longer and serialize queries made concurrently through one `PoolClient`; load-test before adoption. Do not patch the application with an unverified context-propagation trick.
 
 ## Gate decision
 
