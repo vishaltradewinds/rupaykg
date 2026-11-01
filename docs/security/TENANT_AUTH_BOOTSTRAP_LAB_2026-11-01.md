@@ -85,3 +85,48 @@ To validate the exact schema and function referenced by PR #192, the same dispos
 - Catalog verification confirmed SECURITY DEFINER, NOLOGIN, NOBYPASSRLS, and the expected function owner.
 
 This confirms the application query contract in PR #192 against a disposable Neon branch. It does not install the function in production, provision production credentials, or validate all password/session lifecycle operations. The function schema and role grants still require a separately reviewed production migration and least-privilege cutover.
+
+
+## Extended auth lifecycle and two-runtime-role proof — 2026-11-01
+
+On the same disposable Neon child branch, an extended prototype was tested with FORCE RLS on `identities`, `identity_sessions`, `organization_memberships`, and `identity_password_credentials`.
+
+### Tested SECURITY DEFINER functions
+
+- `auth_private.find_login_candidate(email)`: returns the matching identity and scrypt credential candidate for application-side password verification.
+- `auth_private.record_login_failure(identity_id)`: increments failed attempts and sets a 15-minute lock at ten failures.
+- `auth_private.reset_login_failures(identity_id)`: clears counters after successful verification.
+- `auth_private.issue_session(identity_id, token_hash, request_context)`: issues an eight-hour session only for an active, non-suspended identity.
+- `auth_private.revoke_session(token_hash)`: revokes an active session.
+- `auth_private.register_identity(email, display_name, password_hash, salt)`: atomically creates an identity and scrypt credential; no plaintext password enters PostgreSQL.
+- `auth_private.get_self_account_context(token_hash)`: resolves a live bearer session and returns that identity's profile, membership lifecycle records, and stakeholder applications as JSONB. A revoked session returns no context.
+
+### Additional data-integrity finding
+
+- Production aggregate preflight returned **0 duplicate case-insensitive email groups** and **0 excess duplicate identity rows**.
+- The existing `identities_email_idx` is a non-unique index on `lower(email)`; it does not prevent concurrent duplicate registrations.
+- A unique partial index on `lower(email)` was tested successfully on the disposable branch after a zero-duplicate preflight. A production migration still needs a fresh duplicate preflight immediately before index creation.
+
+### Two-role separation
+
+- Application runtime role: `rupaykg_rls_lab_app_20261101`. It can execute only the session resolver; it cannot read password candidates, register identities, or issue/revoke sessions.
+- Authentication runtime principal: `rupaykg_auth_lab_runtime_20261101` (NOLOGIN in the lab, simulated using `SET ROLE`). It can execute the narrowly scoped authentication functions but has no direct SELECT on password credentials and cannot assume the function-owner role.
+- Both runtime principals are NOBYPASSRLS and are not members of the function-owner role.
+- The auth function owner remains NOLOGIN/NOBYPASSRLS and is the only principal with underlying auth-table grants/policies.
+
+### Acceptance results
+
+- Login candidate lookup returned the synthetic identity's scrypt hash and salt through the auth function.
+- Ten failed-attempt increments triggered the 15-minute lockout; reset cleared the counter and lock.
+- Session issue created an eight-hour session; resolver accepted it; revocation caused subsequent resolver calls to return no rows.
+- Registration created the identity and credential atomically; duplicate email registration failed through the tested unique index.
+- Self-account context preserved both VERIFIED and REJECTED membership lifecycle states while returning only the currently valid session identity.
+- Application runtime could not execute credential/session lifecycle functions.
+- Authentication runtime could execute those functions but could not directly SELECT the credential table or assume the function owner.
+
+### Limits and next requirements
+
+- This is branch-local synthetic acceptance. No production role, grants, RLS, index, function, or application secret was changed.
+- The auth runtime role was NOLOGIN in this test; actual production login credential provisioning and separate connection-pool verification remain outstanding.
+- Application-side integration of the auth pool and functions is not yet complete.
+- Stakeholder onboarding mutations, platform-admin dual-control actions, worker/CLI access, and all remaining auth-table access paths still need explicit handling before production auth-table RLS.
