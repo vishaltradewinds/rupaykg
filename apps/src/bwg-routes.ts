@@ -3,17 +3,17 @@ import type { Pool } from "pg";
 import { authenticate, bearerChallenge, hasOrganizationPermission, type AuthContext } from "./auth.js";
 import { registerEprReturnRoutes } from "./epr-return-routes.js";
 
-async function authFor(request: Parameters<typeof authenticate>[0], reply: { code: (status: number) => { send: (body: unknown) => unknown } }, pool: Pool | null): Promise<AuthContext | null> {
+async function authFor(request: Parameters<typeof authenticate>[0], reply: { code: (status: number) => { send: (body: unknown) => unknown } }, pool: Pool | null, sessionPool: Pool | null = pool): Promise<AuthContext | null> {
   if (!pool) { reply.code(503).send({ error: "Authoritative API unavailable", code: "DATABASE_UNAVAILABLE", syntheticData: false }); return null; }
-  try { const auth = await authenticate(request, pool); if (!auth) { reply.code(401).send(bearerChallenge()); return null; } return auth; }
+  try { const auth = await authenticate(request, sessionPool, pool); if (!auth) { reply.code(401).send(bearerChallenge()); return null; } return auth; }
   catch (error) { request.log.error(error); reply.code(503).send({ error: "Authentication service unavailable", code: "AUTH_UNAVAILABLE", syntheticData: false }); return null; }
 }
 
 /** Compatibility registration point retained for the server's existing BWG registration order. */
-export async function registerBwgRoutes(app: FastifyInstance, pool: Pool | null): Promise<void> {
-  await registerEprReturnRoutes(app, pool);
+export async function registerBwgRoutes(app: FastifyInstance, pool: Pool | null, sessionPool: Pool | null = pool): Promise<void> {
+  await registerEprReturnRoutes(app, pool, sessionPool);
   app.get("/api/v1/epr/obligations", async (request, reply) => {
-    const auth = await authFor(request, reply, pool); if (!auth || !pool) return;
+    const auth = await authFor(request, reply, pool, sessionPool); if (!auth || !pool) return;
     const organizationId = typeof request.headers["x-rupaykg-organization-id"] === "string" ? request.headers["x-rupaykg-organization-id"] : auth.activeOrganizationId;
     if (!organizationId || !auth.memberships.some((membership) => membership.organization_id === organizationId && membership.status === "VERIFIED")) return reply.code(403).send({ error: "Verified organization membership required", code: "ORG_FORBIDDEN" });
     if (!await hasOrganizationPermission(pool, auth, organizationId, ["epr:read", "epr:manage", "reports:read"])) return reply.code(403).send({ error: "EPR obligation read permission required", code: "EPR_OBLIGATION_READ_FORBIDDEN" });
