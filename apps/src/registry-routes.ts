@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type { Pool, PoolClient } from "pg";
-import { authenticate, canActForOrganization, canPerformHighRiskActionInDatabase, hasOrganizationPermission, type AuthContext } from "./auth.js";
+import { authenticate, canActForOrganization, canPerformHighRiskActionInDatabase, hasOrganizationPermission, lockOrganizationPermission, type AuthContext } from "./auth.js";
 
 type Reply={code:(status:number)=>{send:(body:unknown)=>unknown}};
 type Request={body:unknown;params:Record<string,string>;log:{error:(error:unknown)=>void}};
@@ -20,8 +20,8 @@ export async function registerRegistryRoutes(app:FastifyInstance,pool:Pool|null)
     const activityId=str(b,"activityId"),trustRootId=str(b,"trustRootId"),verificationId=str(b,"verificationId"),issuerOrganizationId=str(b,"issuerOrganizationId"),quantity=positive(b,"quantity"),unit=str(b,"unit");
     if(!activityId||!trustRootId||!verificationId||!issuerOrganizationId||quantity===null||!unit)return reply.code(400).send({error:"activityId, trustRootId, verificationId, issuerOrganizationId, positive quantity and unit are required"});
     if(!canActForOrganization(auth,issuerOrganizationId))return reply.code(403).send({error:"Issuer organization access denied",code:"ORG_FORBIDDEN"});
-    if(!await canPerformHighRiskActionInDatabase(pool,auth,issuerOrganizationId,"ISSUE_CREDENTIAL"))return reply.code(403).send({error:"Explicit ISSUE_CREDENTIAL permission is required",code:"HIGH_RISK_PERMISSION_REQUIRED"});
     try{return reply.code(201).send({source:"postgresql",syntheticData:false,credential:await tx(pool,async c=>{
+      if(!await lockOrganizationPermission(c,auth,issuerOrganizationId,["ISSUE_CREDENTIAL","registry:issue","registry.issue"]))throw Object.assign(new Error("Explicit ISSUE_CREDENTIAL permission is required"),{code:"HIGH_RISK_PERMISSION_REQUIRED"});
       const v=await c.query<{evidence_id:string;decision:string;activity_id:string}>("select evidence_id,decision,activity_id from verifications where id=$1 for update",[verificationId]);
       if(!v.rows[0]||v.rows[0].decision!=="APPROVED")throw Object.assign(new Error("Approved verification required"),{code:"VERIFICATION_REQUIRED"});
       if(v.rows[0].activity_id!==activityId)throw Object.assign(new Error("Verification is not bound to the requested activity"),{code:"EVIDENCE_MISMATCH"});
