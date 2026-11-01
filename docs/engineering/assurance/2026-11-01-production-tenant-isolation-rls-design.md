@@ -302,11 +302,12 @@ On the clean Neon assurance branch `br-red-salad-b4oqb4nx`, I added a strictly i
 - `rupaykg_rls_lab_owner_20261101`: NOLOGIN, NOSUPERUSER, NOBYPASSRLS, NOINHERIT, no role/database creation, no replication.
 - `rupaykg_rls_lab_runtime_20261101`: same restricted role attributes; no table ownership.
 
-Both test tables have RLS enabled and FORCE RLS. The membership policy derives actor and organization from a transaction-local signed `app.request_context` envelope; the records policy derives tenant visibility and writes through that membership. A SECURITY DEFINER verifier uses fixed `search_path = pg_catalog, rls_lab` and HMAC-SHA256, with the key stored in `rls_lab.context_keys`. The runtime role can execute the verifier but cannot read the key table. The lab runtime role receives only schema usage, membership SELECT and record SELECT/INSERT/UPDATE. The temporary database CREATE privilege granted to the owner role to establish the schema was revoked after setup.
+Both test tables have RLS enabled and FORCE RLS. The membership policy derives actor and selected organization from a transaction-local signed `app.request_context` envelope and additionally requires `status='VERIFIED'`; the records policy derives tenant visibility and writes through that verified membership. A SECURITY DEFINER verifier uses fixed `search_path = pg_catalog, rls_lab` and HMAC-SHA256, with the key stored in `rls_lab.context_keys`. The runtime role can execute the verifier but cannot read the key table. The lab runtime role receives only schema usage, membership SELECT and record SELECT/INSERT/UPDATE. The temporary database CREATE privilege granted to the owner role to establish the schema was revoked after setup.
 
 ### Observed test results
 - Actor A sees only tenant A's synthetic records; actor B sees only tenant B's record.
 - Runtime role with no context sees zero records (fail closed).
+- A correctly signed actor-A context selecting an organization where actor A has only a `PENDING` membership sees zero records.
 - A forged HMAC signature sees zero records.
 - An expired signed context sees zero records.
 - Setting the old unsigned `app.actor_id` GUC directly sees zero records; policies do not trust it.
@@ -358,3 +359,7 @@ The synthetic RLS lab was upgraded from a caller-writable `app.actor_id` GUC to 
 - Membership and record RLS policies derive actor and organization from the verified claims, not from unsigned actor/org GUCs.
 
 This is materially stronger than a plain custom GUC: the runtime can set `app.request_context`, but changing actor/organization claims invalidates the signature. It does not protect against compromise of the API signing key or a malicious trusted API process; those remain in the threat model. Production key storage, rotation, deployment secret delivery and a separate signed service-principal context for background workers must be designed and tested before rollout.
+
+### Verified-membership gate extension
+
+The synthetic membership table was extended with `status` and a `PENDING` actor-A membership in tenant B. The signed context for actor A + tenant B is cryptographically valid but returns zero records because the database membership policy independently requires `status='VERIFIED'`. This verifies that a signed organization claim alone cannot activate access without a verified database membership.
