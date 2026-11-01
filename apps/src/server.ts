@@ -5,6 +5,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { Pool, type PoolClient, type PoolConfig } from "pg";
 import { authenticate, bearerChallenge, canActForOrganization, hasOrganizationPermission, type AuthContext } from "./auth.js";
+import { assertAuthenticationPoolContract } from "./auth-db-contract.js";
 import { registerOnboardingHierarchyRoutes } from "./onboarding-hierarchy-routes.js";
 import { registerValueRoutes } from "./value-routes.js";
 import { registerRegistryRoutes } from "./registry-routes.js";
@@ -30,6 +31,7 @@ const pool = databaseUrl ? new Pool(poolConfig) : null;
 const authDatabaseUrl = process.env.AUTH_DATABASE_URL;
 if (process.env.NODE_ENV === "production" && !authDatabaseUrl) throw new Error("AUTH_DATABASE_URL is required in production and must use a separate least-privilege PostgreSQL role");
 const authPool = authDatabaseUrl ? new Pool({ ...poolConfig, connectionString: authDatabaseUrl }) : pool;
+if (authDatabaseUrl && authPool) await assertAuthenticationPoolContract(authPool);
 async function query<T extends Record<string, unknown>>(text: string, values: unknown[] = []): Promise<T[]> { if (!pool) throw new Error("DATABASE_URL is not configured"); return (await pool.query<T>(text, values)).rows; }
 function bodyOf(request: { body: unknown }): Record<string, unknown> { return (request.body && typeof request.body === "object" ? request.body : {}) as Record<string, unknown>; }
 function requiredString(body: Record<string, unknown>, key: string): string | null { return typeof body[key] === "string" && body[key].trim() ? body[key].trim() : null; }
