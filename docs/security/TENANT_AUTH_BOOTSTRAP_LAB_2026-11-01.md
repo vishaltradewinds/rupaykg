@@ -67,3 +67,21 @@ Created `auth_lab.resolve_session(token_hash)`:
 Post-test read-only verification on the production parent confirmed branch ID `br-restless-base-b44cip2h`, 67 public tables, 0 RLS-enabled tables, 0 lab roles, and 0 lab schemas. The auth lab remained branch-local.
 
 Production remains HOLD. This proof is not a production authorization or TRL 9 claim.
+
+
+## Application-aligned resolver name proof — 2026-11-01
+
+To validate the exact schema and function referenced by PR #192, the same disposable child branch received a second resolver at `auth_private.resolve_session(text)` (the earlier `auth_lab` proof remains unchanged).
+
+- Function owner: `rupaykg_auth_lab_owner_20261101`, NOLOGIN and NOBYPASSRLS.
+- Runtime role: `rupaykg_rls_lab_app_20261101`, LOGIN and NOBYPASSRLS.
+- Function is SECURITY DEFINER with fixed `search_path = pg_catalog, pg_temp` and fully schema-qualified source tables.
+- PUBLIC execution revoked; EXECUTE granted to the runtime role.
+- FORCE RLS remains enabled on the three auth tables, with SELECT policies restricted to the function owner.
+- Runtime-role acceptance passed for the expected currently VERIFIED membership.
+- Revoked and expired session tokens returned zero rows.
+- Runtime role was denied direct SELECT on all three source tables: `identity_sessions`, `identities`, and `organization_memberships`.
+- Runtime role could not assume the function-owner role.
+- Catalog verification confirmed SECURITY DEFINER, NOLOGIN, NOBYPASSRLS, and the expected function owner.
+
+This confirms the application query contract in PR #192 against a disposable Neon branch. It does not install the function in production, provision production credentials, or validate all password/session lifecycle operations. The function schema and role grants still require a separately reviewed production migration and least-privilege cutover.
