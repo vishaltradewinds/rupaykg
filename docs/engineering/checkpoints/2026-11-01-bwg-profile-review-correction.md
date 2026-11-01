@@ -193,3 +193,9 @@ CI #4325 / ID 41330668131 failed at TypeScript parsing after an automated edit t
 ## Permission fixture typecheck correction — 2026-11-01
 
 Exact-head CI #4332 / ID 41330944671 failed TypeScript typecheck because `exactOptionalPropertyTypes` rejects explicitly assigning `undefined` to the optional `grantedPermissions` test option. Corrected the fixture builder to conditionally spread the property only when supplied. This is a test typing correction; application permission logic is unchanged. New exact-head CI is required for commit `a96ed25acc50c974bf72488ea535af6d01be93fd`.
+
+## Superseding final exact-head CI result — 2026-11-01
+
+The earlier “CI pending” entries above were superseded by the final exact-head run. PR #193 code head `27cc85a25e82dad1f8c917d1952beea57a2185c6` passed CI #4335 / ID 41331148488. The full workflow completed successfully: dependency audit, migration validation, disposable PostgreSQL migration and acceptance, TypeScript typecheck, build, production browser smoke test, disposable PostgreSQL acceptance suite, production container build and cleanup.
+
+PR #193 is open, ready for independent review and unmerged. This validates the current code head only; it does not authorize production deployment or establish database-wide RLS/tenant isolation. Production remains HOLD under issue #196.
