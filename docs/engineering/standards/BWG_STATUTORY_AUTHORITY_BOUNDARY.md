@@ -80,3 +80,36 @@ A user-uploaded certificate without authoritative confirmation remains user-repo
 - The statutory assessment handler, where used, is internal preparation only.
 - No production migration, data mutation, deployment, external portal submission or certification is authorized by this engineering change.
 - Before implementation of the external authority workflow, perform a fresh legal and portal integration review against the then-current Gazette, CPCB directions, local-body by-laws and official portal specifications.
+
+
+## 8. Live CPCB portal verification — 2026-11-01
+
+The CPCB Centralised Portal for Solid Waste Management is live and exposes a BWG registration flow. This is no longer an assumed future dependency.
+
+Official resources inspected:
+- Portal: https://swm.cpcb.gov.in/
+- BWG sign-up: https://swm.cpcb.gov.in/register
+- User guide: https://swmp.cpcb.gov.in/en/user-guide
+- FAQ: https://swmp.cpcb.gov.in/en/faq
+- CPCB resources / fee guidelines: https://swmp.cpcb.gov.in/en/resources
+
+Observed official portal process:
+1. Create an organization account with authorized representative contact details and OTP verification.
+2. Complete the BWG application and eligibility assessment.
+3. Upload supporting documents and attest the self-declaration.
+4. Save a draft or proceed to fee payment and submit.
+5. After submission, application status is Under Review with the appropriate ULB / District Panchayat; applicant can track status and download the acknowledgement receipt.
+6. The applicant may respond to authority remarks, corrections or rejection and download the registration certificate after approval.
+
+The portal FAQ states registration is organization-specific and ULB-specific. It also says an authorized representative may submit for the organization, but details are validated by the concerned local body. Account creation alone does not complete registration. Approval timelines depend on the concerned authority's review.
+
+The CPCB resources page lists a "User Fee Structure" guideline for use of the centralised portal, dated 15 October 2026. Rule 16(8) permits CPCB to charge portal fees. The actual fee schedule amount has not been verified in this audit; therefore no RupayKg business model, customer quote or statutory workflow may assume portal registration/annual-return use is free. RupayKg service pricing and statutory CPCB/local-body fees must remain separate and transparent.
+
+### Immediate implementation decision
+
+- Do not build a parallel BWG registration portal or claim that RupayKg itself registers an entity.
+- Implement a guided hand-off to the official CPCB portal and retain application/acknowledgement references.
+- Ingest the final local-body registration certificate and authority status only through a documented, authorized integration or evidence-backed verification procedure.
+- Keep draft, submitted, under-review, correction-required, rejected and registered states distinct.
+- Never infer approval from account creation, eligibility assessment, document upload, payment, or acknowledgement receipt.
+- Before any browser automation/API integration, obtain and review CPCB's official integration specification, authorization terms and permitted data access. The user-facing portal is not itself proof that an API or automated submission permission exists.
