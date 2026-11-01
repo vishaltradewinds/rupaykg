@@ -83,3 +83,14 @@ Exact-head CI for the latest PR #194 test-hygiene change is pending. Production 
 ## Test-fixture cleanup CI correction — 2026-11-01
 
 The trigger-toggle removal edit malformed one workspace membership fixture SQL string. The prior CI run #4326 at the intermediate head is not accepted as validation. Reconstructed the fixture statement and verified the resulting source text. The latest PR #194 code head is now `a7f1a4fdf318f12b3969c5f45aefaae54e9e1a5b`; a new exact-head CI run is required and pending.
+
+## Production tenant-isolation release blocker — 2026-11-01
+
+Read-only inspection of authoritative Neon project `rupaykg-production-fresh`, default branch `main`, database `rupaykg` confirmed:
+- 67 public ordinary tables; 0 have RLS enabled and 0 have FORCE RLS enabled.
+- All 67 public tables are owned by `rupaykg`.
+- Runtime-connected role `rupaykg` has `rolbypassrls=true`.
+- The Neon default branch is reported as `protected=false`.
+- `schema_migrations` contains 92 applied rows; latest version `20261021`.
+
+No production writes, DDL, role changes or branch-setting changes were made. Application-level workspace authorization is not a substitute for database tenant isolation. A dedicated P0/P1 follow-up was opened as issue #196: https://github.com/vishaltradewinds/rupaykg/issues/196. The current PR #194 only hardens the BWG workspace HTTP read boundary; it does not remediate RLS or BYPASSRLS. Production remains HOLD pending a complete disposable-branch RLS programme, runtime-role separation, cross-tenant regression coverage and independent review.
