@@ -4,11 +4,13 @@ import { readProductionConfig } from "./production-config.js";
 
 const valid = {
   NODE_ENV: "production",
-  DATABASE_URL: "postgresql://prod.example.invalid:5432/rupaykg",
+  DATABASE_URL: "postgresql://app_runtime:app-secret@prod.example.invalid:5432/rupaykg",
+  AUTH_DATABASE_URL: "postgresql://auth_runtime:auth-secret@prod.example.invalid:5432/rupaykg",
   DATABASE_SSL: "require",
   DATABASE_CA_CERT: "-----BEGIN CERTIFICATE-----\nproduction-test-ca\n-----END CERTIFICATE-----",
   RUPAYKG_ALLOWED_ORIGINS: "https://app.rupaykg.example",
   RUPAYKG_AUTH_MODE: "real",
+  RUPAYKG_AUTH_RESOLVER_MODE: "security_definer",
 } as const;
 
 describe("production configuration", () => {
@@ -17,6 +19,8 @@ describe("production configuration", () => {
     assert.deepEqual(config, {
       environment: "production",
       databaseUrl: valid.DATABASE_URL,
+      authDatabaseUrl: valid.AUTH_DATABASE_URL,
+      authResolverMode: "security_definer",
       databaseSsl: "require",
       databaseCaCert: valid.DATABASE_CA_CERT,
       allowedOrigins: ["https://app.rupaykg.example"],
