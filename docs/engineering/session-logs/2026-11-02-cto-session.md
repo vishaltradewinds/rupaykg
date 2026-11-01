@@ -35,3 +35,11 @@ Production remains HOLD; certification OFF. No PR merged, no production deployme
 4. Continue P0 two-identity bootstrap design/fixtures without selecting real identities or creating production secrets.
 5. Keep the integration spine controlled; do not merge independent security PRs until combined-base CI and independent review pass.
 6. Maintain production isolation HOLD until all 67 table policies, route/worker transaction coverage, runtime role separation, migration reconciliation, rollback and approval gates close.
+
+## Additional auth-route integration work
+- Discovered `auth-routes.ts` was not registered in production `server.ts`; added import and `registerAuthRoutes(app, pool, authPool)`.
+- Changed onboarding handlers in auth-routes to use the separate auth session pool; auth-pool exceptions now fail closed with a 503 response.
+- Added `apps/src/auth-routes.test.ts` route registration/fail-closed regression coverage.
+- Added PR #202 checkpoint `docs/engineering/checkpoints/2026-11-02-auth-session-pool-security-assurance.md`.
+- Latest PR #202 head `9cda4b65091f08b2a2c478322d9d72d4e54722a5`; exact-head CI #4408 / run `41338438338` in progress. PR #201 exact-head CI #4390 passed.
+- Production still unchanged; both security PRs remain draft and unmerged.
