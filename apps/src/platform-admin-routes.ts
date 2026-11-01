@@ -47,6 +47,7 @@ async function authorize(
   reply: FastifyReply,
   pool: Pool | null,
   permission: string | null,
+  sessionPool: Pool | null = pool,
 ): Promise<AdminContext | null> {
   if (!pool) {
     routeError(reply, 503, "Database unavailable", "DATABASE_UNAVAILABLE");
@@ -54,7 +55,7 @@ async function authorize(
   }
   let auth: AuthContext | null;
   try {
-    auth = await authenticate(request, pool);
+    auth = await authenticate(request, sessionPool, pool);
   } catch (error) {
     request.log.error(error);
     routeError(reply, 503, "Authentication service unavailable", "AUTH_UNAVAILABLE");
@@ -146,9 +147,9 @@ async function transaction<T>(pool: Pool, work: (client: PoolClient) => Promise<
   }
 }
 
-export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Pool | null): Promise<void> {
+export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Pool | null, sessionPool: Pool | null = pool): Promise<void> {
   app.get("/api/v1/admin/overview", async (request, reply) => {
-    const context = await authorize(request, reply, pool, null);
+    const context = await authorize(request, reply, pool, null, sessionPool);
     if (!context || !pool) return;
     try {
       const result = await pool.query<{
@@ -174,7 +175,7 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
   });
 
   app.get("/api/v1/admin/identities", async (request, reply) => {
-    const context = await authorize(request, reply, pool, "admin:users");
+    const context = await authorize(request, reply, pool, "admin:users", sessionPool);
     if (!context || !pool) return;
     const query = request.query as Record<string, unknown>;
     const search = typeof query.search === "string" ? query.search.trim().slice(0, 120) : "";
@@ -200,7 +201,7 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
   });
 
   app.post("/api/v1/admin/identities/:identityId/suspend", async (request, reply) => {
-    const context = await authorize(request, reply, pool, "admin:users");
+    const context = await authorize(request, reply, pool, "admin:users", sessionPool);
     if (!context || !pool) return;
     const { identityId } = request.params as { identityId: string };
     const reason = text(bodyOf(request), "reason");
@@ -231,7 +232,7 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
   });
 
   app.post("/api/v1/admin/identities/:identityId/reactivate", async (request, reply) => {
-    const context = await authorize(request, reply, pool, "admin:users");
+    const context = await authorize(request, reply, pool, "admin:users", sessionPool);
     if (!context || !pool) return;
     const { identityId } = request.params as { identityId: string };
     const reason = text(bodyOf(request), "reason");
@@ -260,7 +261,7 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
   });
 
   app.post("/api/v1/admin/identities/:identityId/revoke-sessions", async (request, reply) => {
-    const context = await authorize(request, reply, pool, "admin:security");
+    const context = await authorize(request, reply, pool, "admin:security", sessionPool);
     if (!context || !pool) return;
     const { identityId } = request.params as { identityId: string };
     const reason = text(bodyOf(request), "reason");
@@ -282,7 +283,7 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
   });
 
   app.get("/api/v1/admin/roles", async (request, reply) => {
-    const context = await authorize(request, reply, pool, "admin:roles");
+    const context = await authorize(request, reply, pool, "admin:roles", sessionPool);
     if (!context || !pool) return;
     try {
       const result = await pool.query(
@@ -301,7 +302,7 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
   });
 
   app.patch("/api/v1/admin/roles/:roleId/permissions", async (request, reply) => {
-    const context = await authorize(request, reply, pool, "admin:roles");
+    const context = await authorize(request, reply, pool, "admin:roles", sessionPool);
     if (!context || !pool) return;
     const { roleId } = request.params as { roleId: string };
     const body = bodyOf(request);
@@ -341,7 +342,7 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
   });
 
   app.post("/api/v1/admin/access-change-requests", async (request, reply) => {
-    const context = await authorize(request, reply, pool, "admin:users");
+    const context = await authorize(request, reply, pool, "admin:users", sessionPool);
     if (!context || !pool) return;
     const body = bodyOf(request);
     const requestType = text(body, "requestType");
@@ -421,7 +422,7 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
   });
 
   app.get("/api/v1/admin/access-change-requests", async (request, reply) => {
-    const context = await authorize(request, reply, pool, "admin:users");
+    const context = await authorize(request, reply, pool, "admin:users", sessionPool);
     if (!context || !pool) return;
     const query = request.query as Record<string, unknown>;
     const status = typeof query.status === "string" ? query.status : "PENDING";
@@ -443,7 +444,7 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
   });
 
   const decideAccessChange = async (request: FastifyRequest, reply: FastifyReply, decision: "APPROVED" | "REJECTED") => {
-    const context = await authorize(request, reply, pool, "admin:users");
+    const context = await authorize(request, reply, pool, "admin:users", sessionPool);
     if (!context || !pool) return;
     const { requestId } = request.params as { requestId: string };
     const reason = text(bodyOf(request), "reason");
@@ -554,7 +555,7 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
   app.post("/api/v1/admin/access-change-requests/:requestId/reject", async (request, reply) => decideAccessChange(request, reply, "REJECTED"));
 
   app.get("/api/v1/admin/memberships", async (request, reply) => {
-    const context = await authorize(request, reply, pool, "admin:users");
+    const context = await authorize(request, reply, pool, "admin:users", sessionPool);
     if (!context || !pool) return;
     const query = request.query as Record<string, unknown>;
     const identityId = typeof query.identityId === "string" ? query.identityId : "";
@@ -580,7 +581,7 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
   });
 
   app.post("/api/v1/admin/memberships", async (request, reply) => {
-    const context = await authorize(request, reply, pool, "admin:users");
+    const context = await authorize(request, reply, pool, "admin:users", sessionPool);
     if (!context || !pool) return;
     const body = bodyOf(request);
     const identityId = text(body, "identityId");
@@ -639,7 +640,7 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
   });
 
   app.patch("/api/v1/admin/memberships/:membershipId/status", async (request, reply) => {
-    const context = await authorize(request, reply, pool, "admin:users");
+    const context = await authorize(request, reply, pool, "admin:users", sessionPool);
     if (!context || !pool) return;
     const { membershipId } = request.params as { membershipId: string };
     const body = bodyOf(request);
@@ -701,7 +702,7 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
   });
 
   app.get("/api/v1/admin/audit-events", async (request, reply) => {
-    const context = await authorize(request, reply, pool, "admin:security");
+    const context = await authorize(request, reply, pool, "admin:security", sessionPool);
     if (!context || !pool) return;
     const query = request.query as Record<string, unknown>;
     const value = Number(query.limit ?? 50);
