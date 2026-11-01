@@ -1,0 +1,49 @@
+# RupayKg BWG Profile Review Correction — 2026-11-01
+
+## Repository state
+- Repository: vishaltradewinds/rupaykg
+- Base: main
+- Corrective branch: fix/bwg-profile-needs-independent-review-2026-11-01
+- Draft PR: https://github.com/vishaltradewinds/rupaykg/pull/193
+- PR head before this checkpoint: a11db687d840e5fca0d51c7c995ac8aaf53c9033
+- Related engineering issue: #176
+
+## Source finding
+The BWG profile intake route in apps/src/value-routes.ts previously calculated APPLICABLE/NOT_APPLICABLE directly from organization-submitted threshold values and persisted the profile as VERIFIED. The reporting-period database trigger requires a profile to be APPLICABLE and VERIFIED. This created an unsafe trust-boundary: ordinary intake could satisfy the statutory profile gate without independent approval.
+
+A separate statutory BWG assessment handler exists in apps/src/statutory-routes.ts, but current apps/src/server.ts does not register registerStatutoryRoutes. The handler is labelled INTERNAL_APPLICABILITY_PREPARATION_ONLY; it is not an operational external-authority approval process. Do not describe it as such or wire it into production without a reviewed authority/approval model.
+
+## Corrective change in PR #193
+- Submitted threshold measurements are retained as internal screening evidence.
+- Screening metadata is explicitly tagged INTERNAL_SCREENING_ONLY.
+- Intake status is REVIEW_REQUIRED.
+- Persisted profile status is PENDING.
+- No migration or schema change.
+- Added apps/src/value-routes.test.ts Fastify HTTP regression coverage. Above-threshold organization-submitted measurements cannot self-certify statutory applicability or profile verification.
+
+## Exact-head CI evidence
+Workflow run #4276 / ID 41326114062 passed at PR head a11db687d840e5fca0d51c7c995ac8aaf53c9033. All steps succeeded:
+- dependency audit
+- migration validation
+- disposable PostgreSQL migration run
+- TypeScript typecheck
+- full build
+- production web browser smoke test
+- tests including disposable PostgreSQL acceptance
+- production container build
+- cleanup
+
+This is engineering CI evidence only. It is not a production deployment, statutory determination, regulatory approval, or certification.
+
+## Remaining gates
+1. Authenticated HTTP acceptance for all six BWG endpoints: permitted and denied roles, missing permissions, unverified membership, cross-organization mismatch, geography denial, evidence/verification binding, read-after-write, idempotency and quantity boundaries.
+2. Establish the actual statutory applicability authority and independently authorized reviewer/approval evidence. No automatic transition from assessment to APPLICABLE/VERIFIED.
+3. Reconcile the six route-to-UI contracts and distinguish declared, measured, received, reconciled and verified quantities.
+4. Reconcile migration chronology against the authoritative Neon production ledger using disposable production-derived branches only.
+5. Independent review and exact-head CI before PR merge.
+
+## Database and release safety
+- Sole authoritative Neon project remains rupaykg-production-fresh (project ID steep-mud-79906940), primary branch main.
+- Use disposable child branches for schema inspection and acceptance only.
+- No production DDL/DML, migrations, deployments, worker/scheduler activation, external submissions, or certification.
+- Production remains HOLD.
