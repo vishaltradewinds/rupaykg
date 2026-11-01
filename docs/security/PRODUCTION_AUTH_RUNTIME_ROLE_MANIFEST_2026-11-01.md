@@ -24,7 +24,7 @@ All runtime roles must also have `NOCREATEDB`, `NOCREATEROLE`, `NOREPLICATION`, 
 
 ## Function ownership and execution grants
 
-All eight functions below must be SECURITY DEFINER, have fixed safe `search_path = pg_catalog, pg_temp`, use schema-qualified object references, and be owned by `rupaykg_auth_owner`:
+All nine functions below must be SECURITY DEFINER, have fixed safe `search_path = pg_catalog, pg_temp`, use schema-qualified object references, and be owned by `rupaykg_auth_owner`:
 
 1. `auth_private.resolve_session(text)`
 2. `auth_private.find_login_candidate(text)`
@@ -34,10 +34,11 @@ All eight functions below must be SECURITY DEFINER, have fixed safe `search_path
 6. `auth_private.revoke_session(text)`
 7. `auth_private.register_identity(text,text,text,text)`
 8. `auth_private.get_self_account_context(text)`
+9. `auth_private.has_organization_permission(uuid,uuid,text[])`
 
 Execution grants:
-- `rupaykg_app_runtime`: EXECUTE only on `resolve_session(text)` among these eight functions.
-- `rupaykg_auth_runtime`: EXECUTE on functions 2–8; no EXECUTE on `resolve_session(text)`.
+- `rupaykg_app_runtime`: EXECUTE on `resolve_session(text)` and `has_organization_permission(uuid,uuid,text[])`; no credential/session lifecycle or self-context functions.
+- `rupaykg_auth_runtime`: EXECUTE on functions 2–8; no EXECUTE on `resolve_session(text)` or `has_organization_permission(uuid,uuid,text[])`.
 - PUBLIC: no EXECUTE on any of the eight functions.
 - Neither runtime role receives SELECT/INSERT/UPDATE/DELETE on `identities`, `identity_sessions`, `identity_password_credentials`, or `organization_memberships`.
 
@@ -50,10 +51,10 @@ Production startup fails closed unless:
 - usernames are exactly the two runtime role names above;
 - the database identities are distinct and both non-superuser, NOBYPASSRLS, NOCREATEDB, NOCREATEROLE, NOREPLICATION;
 - app runtime has no direct auth-table DML/read privileges and no public-schema CREATE;
-- app runtime can execute the session resolver but cannot execute credential/session lifecycle or self-context functions;
-- auth runtime has no direct auth-table DML/read privileges or public-schema CREATE, can execute functions 2–8, and cannot execute the session resolver;
+- app runtime can execute the session resolver and the scoped organization-permission function, but cannot execute credential/session lifecycle or self-context functions;
+- auth runtime has no direct auth-table DML/read privileges or public-schema CREATE, can execute functions 2–8, and cannot execute the session resolver or application authorization function;
 - both owner roles exist, are NOLOGIN/NOBYPASSRLS and have no elevated database/role/replication privileges;
-- all eight functions exist, are SECURITY DEFINER and are owned by `rupaykg_auth_owner`.
+- all nine functions exist, are SECURITY DEFINER and are owned by `rupaykg_auth_owner`.
 
 Readiness requires both pools to be reachable.
 
