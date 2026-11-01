@@ -16,6 +16,7 @@ test("BWG reporting period and authorized/denied waste, EPR and ESG writes use r
   const allowedToken = randomBytes(32).toString("base64url");
   const deniedToken = randomBytes(32).toString("base64url");
   let organizationId: string | undefined;
+  let otherOrganizationId: string | undefined;
   let geographyId: string | undefined;
   let periodId: string | undefined;
   const identityIds: string[] = [];
@@ -25,6 +26,11 @@ test("BWG reporting period and authorized/denied waste, EPR and ESG writes use r
       ["TEST-BWG-REPORT-WRITES-" + suffix],
     );
     organizationId = organization.rows[0]!.id;
+    const otherOrganization = await pool.query<{ id: string }>(
+      "insert into organizations(name,organization_type,status) values($1,'test_fixture','VERIFIED') returning id",
+      ["TEST-BWG-OTHER-TENANT-" + suffix],
+    );
+    otherOrganizationId = otherOrganization.rows[0]!.id;
 
     const geography = await pool.query<{ id: string }>(
       "insert into geography(kind,name,source,source_version) values('STATE_UT',$1,'integration-test','fixture-v1') returning id",
@@ -90,6 +96,14 @@ test("BWG reporting period and authorized/denied waste, EPR and ESG writes use r
       "insert into evidence(activity_id,evidence_type,status,captured_at,content_uri,content_hash,metadata) values($1,'WASTE_WEIGHT_TICKET','CAPTURED',now(),'db://integration-test/unverified-evidence',$2,$3::jsonb) returning id",
       [activity.rows[0]!.id,hash("unverified-test-evidence-"+suffix),JSON.stringify({ testFixture: true, source: "DISPOSABLE_CI_ONLY" })],
     );
+    const otherTenantActivity = await pool.query<{ id: string }>(
+      "insert into activities(organization_id,actor_identity_id,geography_id,activity_type,status) values($1,$2,$3,'OTHER_TENANT_EVIDENCE_FIXTURE','COMPLETED') returning id",
+      [otherOrganizationId,allowedIdentity.rows[0]!.id,geographyId],
+    );
+    const crossTenantEvidence = await pool.query<{ id: string }>(
+      "insert into evidence(activity_id,evidence_type,status,captured_at,content_uri,content_hash,metadata) values($1,'WASTE_WEIGHT_TICKET','VERIFIED',now(),'db://integration-test/cross-tenant-evidence',$2,$3::jsonb) returning id",
+      [otherTenantActivity.rows[0]!.id,hash("cross-tenant-test-evidence-"+suffix),JSON.stringify({ testFixture: true, source: "DISPOSABLE_CI_ONLY" })],
+    );
     const verification = await pool.query<{ id: string }>(
       "insert into verifications(evidence_id,activity_id,verifier_identity_id,decision,scope,rationale) values($1,$2,$3,'APPROVED','BWG_REPORTING','Disposable integration fixture verification') returning id",
       [verifiedEvidence.rows[0]!.id,activity.rows[0]!.id,verifierIdentity.rows[0]!.id],
@@ -151,6 +165,15 @@ test("BWG reporting period and authorized/denied waste, EPR and ESG writes use r
     });
     assert.equal(unverifiedWaste.statusCode, 409, unverifiedWaste.body);
     assert.equal(unverifiedWaste.json().code, "EVIDENCE_NOT_VERIFIED");
+
+    const crossTenantWaste = await app.inject({
+      method: "POST",
+      url: "/api/v1/bwg/reporting-periods/"+periodId+"/waste",
+      headers: allowedHeaders,
+      payload: { wasteStream: "ORGANIC", unit: "kg", generatedQuantity: 10, evidenceId: crossTenantEvidence.rows[0]!.id },
+    });
+    assert.equal(crossTenantWaste.statusCode, 409, crossTenantWaste.body);
+    assert.equal(crossTenantWaste.json().code, "EVIDENCE_NOT_VERIFIED");
 
     const mismatchedVerification = await app.inject({
       method: "POST",
@@ -218,6 +241,12 @@ test("BWG reporting period and authorized/denied waste, EPR and ESG writes use r
     );
     assert.deepEqual(counts.rows[0], { waste: "2", epr: "1", esg: "1" });
   } finally {
+    if (otherOrganizationId) {
+      await pool.query("delete from evidence where activity_id in (select id from activities where organization_id=$1)", [otherOrganizationId]);
+      await pool.query("delete from activities where organization_id=$1", [otherOrganizationId]);
+      await pool.query("delete from organization_statutory_profiles where organization_id=$1", [otherOrganizationId]);
+      await pool.query("delete from organizations where id=$1", [otherOrganizationId]);
+    }
     if (organizationId) {
       await pool.query("delete from bwg_waste_reports where reporting_period_id in (select id from bwg_reporting_periods where organization_id=$1)", [organizationId]);
       await pool.query("delete from verifications where evidence_id in (select e.id from evidence e join activities a on a.id=e.activity_id where a.organization_id=$1)", [organizationId]);
