@@ -6,18 +6,33 @@ import { registerValueRoutes } from "./value-routes.js";
 
 const identityId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const organizationId = "11111111-1111-4111-8111-111111111111";
+const otherOrganizationId = "22222222-2222-4222-8222-222222222222";
 const geographyId = "33333333-3333-4333-8333-333333333333";
+
+type FakePoolOptions = {
+  permissionAllowed?: boolean;
+  geographyAllowed?: boolean;
+  memberships?: Array<{ organization_id: string; role_id: string; status: string }>;
+};
 
 class FakePool {
   calls: Array<{ sql: string; values: unknown[] | undefined }> = [];
+  private readonly options: Required<FakePoolOptions>;
+  constructor(options: FakePoolOptions = {}) {
+    this.options = {
+      permissionAllowed: options.permissionAllowed ?? true,
+      geographyAllowed: options.geographyAllowed ?? true,
+      memberships: options.memberships ?? [{ organization_id: organizationId, role_id: "role-a", status: "VERIFIED" }],
+    };
+  }
   async query(sql: string, values?: unknown[]) {
     this.calls.push({ sql, values });
     if (sql.includes("from identity_sessions")) return { rows: [{ identity_id: identityId }] };
     if (sql.includes("from organization_memberships") && sql.includes("where identity_id = $1")) {
-      return { rows: [{ organization_id: organizationId, role_id: "role-a", status: "VERIFIED" }] };
+      return { rows: this.options.memberships };
     }
-    if (sql.includes("jsonb_array_elements_text")) return { rows: [{ ok: true }] };
-    if (sql.includes("organization_has_geography_scope")) return { rows: [{ ok: true }] };
+    if (sql.includes("jsonb_array_elements_text")) return { rows: [{ ok: this.options.permissionAllowed }] };
+    if (sql.includes("organization_has_geography_scope")) return { rows: [{ ok: this.options.geographyAllowed }] };
     if (sql.includes("insert into bwg_profiles")) {
       const basis = JSON.parse(String(values?.[7] ?? "{}"));
       return { rows: [{
@@ -33,25 +48,31 @@ class FakePool {
   }
 }
 
-test("BWG profile intake never self-certifies statutory applicability or verification", async () => {
-  const pool = new FakePool();
+async function makeApp(pool: FakePool) {
   const app = Fastify();
   await registerValueRoutes(app, pool as unknown as Pool);
   await app.ready();
+  return app;
+}
 
+const validPayload = (orgId = organizationId) => ({
+  organizationId: orgId,
+  jurisdictionId: geographyId,
+  floorAreaSqm: 25000,
+  waterConsumptionLpd: 50000,
+  wasteGenerationKgDay: 150,
+  establishmentType: "INSTITUTIONAL",
+});
+
+test("BWG profile intake never self-certifies statutory applicability or verification", async () => {
+  const pool = new FakePool();
+  const app = await makeApp(pool);
   try {
     const response = await app.inject({
       method: "POST",
       url: "/api/v1/bwg/profile",
       headers: { authorization: "Bearer acceptance-test-token" },
-      payload: {
-        organizationId,
-        jurisdictionId: geographyId,
-        floorAreaSqm: 25000,
-        waterConsumptionLpd: 50000,
-        wasteGenerationKgDay: 150,
-        establishmentType: "INSTITUTIONAL",
-      },
+      payload: validPayload(),
     });
 
     assert.equal(response.statusCode, 201);
@@ -64,12 +85,96 @@ test("BWG profile intake never self-certifies statutory applicability or verific
       waterConsumptionLpd: 40000,
       wasteGenerationKgDay: 100,
     });
-
     const insert = pool.calls.find((call) => call.sql.includes("insert into bwg_profiles"));
     assert.ok(insert);
     assert.match(insert.sql, /'PENDING'/);
     assert.doesNotMatch(insert.sql, /'VERIFIED'|'APPLICABLE'|'NOT_APPLICABLE'/);
     assert.equal(insert.values?.[6], "REVIEW_REQUIRED");
+  } finally {
+    await app.close();
+  }
+});
+
+test("BWG profile intake rejects unauthenticated HTTP requests", async () => {
+  const pool = new FakePool();
+  const app = await makeApp(pool);
+  try {
+    const response = await app.inject({ method: "POST", url: "/api/v1/bwg/profile", payload: validPayload() });
+    assert.equal(response.statusCode, 401);
+    assert.equal(response.json().code, "AUTH_REQUIRED");
+    assert.equal(pool.calls.some((call) => call.sql.includes("insert into bwg_profiles")), false);
+  } finally {
+    await app.close();
+  }
+});
+
+test("BWG profile intake rejects identities without verified organization membership", async () => {
+  const pool = new FakePool({ memberships: [] });
+  const app = await makeApp(pool);
+  try {
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/v1/bwg/profile",
+      headers: { authorization: "Bearer acceptance-test-token" },
+      payload: validPayload(),
+    });
+    assert.equal(response.statusCode, 403);
+    assert.equal(response.json().code, "ORG_FORBIDDEN");
+    assert.equal(pool.calls.some((call) => call.sql.includes("insert into bwg_profiles")), false);
+  } finally {
+    await app.close();
+  }
+});
+
+test("BWG profile intake rejects cross-organization writes", async () => {
+  const pool = new FakePool();
+  const app = await makeApp(pool);
+  try {
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/v1/bwg/profile",
+      headers: { authorization: "Bearer acceptance-test-token" },
+      payload: validPayload(otherOrganizationId),
+    });
+    assert.equal(response.statusCode, 403);
+    assert.equal(response.json().code, "ORG_FORBIDDEN");
+    assert.equal(pool.calls.some((call) => call.sql.includes("insert into bwg_profiles")), false);
+  } finally {
+    await app.close();
+  }
+});
+
+test("BWG profile intake rejects missing profile-update permission", async () => {
+  const pool = new FakePool({ permissionAllowed: false });
+  const app = await makeApp(pool);
+  try {
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/v1/bwg/profile",
+      headers: { authorization: "Bearer acceptance-test-token" },
+      payload: validPayload(),
+    });
+    assert.equal(response.statusCode, 403);
+    assert.equal(response.json().code, "BWG_PROFILE_FORBIDDEN");
+    assert.equal(pool.calls.some((call) => call.sql.includes("insert into bwg_profiles")), false);
+  } finally {
+    await app.close();
+  }
+});
+
+test("BWG profile intake rejects jurisdictions outside verified organization geography scope", async () => {
+  const pool = new FakePool({ geographyAllowed: false });
+  const app = await makeApp(pool);
+  try {
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/v1/bwg/profile",
+      headers: { authorization: "Bearer acceptance-test-token" },
+      payload: validPayload(),
+    });
+    assert.equal(response.statusCode, 403);
+    assert.equal(response.json().code, "GEOGRAPHY_FORBIDDEN");
+    assert.equal(pool.calls.some((call) => call.sql.includes("insert into bwg_profiles")), false);
   } finally {
     await app.close();
   }
