@@ -14,15 +14,16 @@ const config = { hmacSecret: "unit-test-hmac-secret-material-which-is-long-enoug
 function fakePool(failOn?: string) {
   const calls: Array<{ sql: string; values?: unknown[] }> = [];
   let released = 0;
+  let releaseError: Error | boolean | undefined;
   const client = {
     async query(sql: string, values?: unknown[]) {
       calls.push({ sql, ...(values === undefined ? {} : { values }) });
       if (sql === failOn) throw new Error("synthetic query failure");
       return { rows: [], rowCount: 0, command: "SELECT", oid: 0, fields: [] };
     },
-    release() { released += 1; },
+    release(error?: Error | boolean) { released += 1; releaseError = error; },
   } as unknown as PoolClient;
-  return { calls, get released() { return released; }, pool: { async connect() { return client; } } };
+  return { calls, get released() { return released; }, get releaseError() { return releaseError; }, pool: { async connect() { return client; } } };
 }
 
 test("opens transaction, sets signed context transaction-locally, commits and releases", async () => {
@@ -61,4 +62,12 @@ test("fails closed for bilateral settlement context until multi-party policies e
   const pool = { async connect() { connects += 1; throw new Error("must not connect"); } };
   await assert.rejects(withRlsRequestTransaction(pool, { ...auth, bilateralOrganizationScope: true }, config, async () => undefined), (error: unknown) => error instanceof RlsRequestContextError && error.code === "RLS_BILATERAL_CONTEXT_UNSUPPORTED");
   assert.equal(connects, 0);
+});
+
+test("discards a pooled connection when BEGIN fails", async () => {
+  const fake = fakePool("BEGIN");
+  await assert.rejects(withRlsRequestTransaction(fake.pool, auth, config, async () => undefined), /synthetic query failure/);
+  assert.equal(fake.released, 1);
+  assert.ok(fake.releaseError instanceof Error);
+  assert.equal(fake.calls.some((x) => x.sql === "ROLLBACK"), false);
 });
