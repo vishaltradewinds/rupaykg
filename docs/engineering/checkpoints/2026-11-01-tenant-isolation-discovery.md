@@ -90,3 +90,18 @@ Additional boundary review:
 - Added TSI-008: credential issuance high-risk permission is checked before entering the issuance transaction, not revalidated/locked within the transaction. A concurrent permission/membership revocation race must be closed with transactional re-attestation and concurrency tests.
 - These are source-level route authorization design gaps for focused remediation, not evidence of successful unauthorized production operations.
 - Latest integrity findings doc commit: `bb7b2a46bd475ce445b7dbf6439c4b154d915db3`.
+
+
+## Draft target architecture completed
+
+Created `docs/security/TENANT_ISOLATION_TARGET_MODEL_DRAFT_2026-11-01.md` (commit `c3374e4f087b56a959a36baefe86ee0b71851656`).
+
+The draft defines:
+- Logical tenant ownership graph and data classes.
+- Proposed composite FK relationships for evidence, CPCB history, approvals, field devices, sync envelopes and activity assignments.
+- A requirement for database-verifiable session + membership context; arbitrary caller-settable identity/organization GUCs are explicitly rejected.
+- Least-privilege principal model for API, worker, platform reviewer, migration owner and audit writer.
+- Separate policy models for registry, bilateral settlement and hierarchical onboarding.
+- A phased RLS rollout and explicit test/release gates.
+
+This is an architecture proposal only. It does not implement or authorize schema, role, grant, RLS or production changes.
