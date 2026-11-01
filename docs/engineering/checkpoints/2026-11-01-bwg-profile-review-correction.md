@@ -125,3 +125,22 @@ The existing separate integration test continues to prove that an above-threshol
 Exact-head CI #4293 / ID 41327867697 passed at `a2e9133ae674449496528dcdd768fe38f5326634`, including dependency audit, migration validation, disposable PostgreSQL migrations and acceptance tests, typecheck, build, browser smoke test and production container build.
 
 The authority-approved BWG profile used in the positive route test is an isolated fixture inserted directly into disposable CI PostgreSQL solely to test downstream report routes. It is not an external CPCB registration, not production evidence, and not a production mutation.
+
+
+## Evidence provenance, verifier independence and cross-tenant rejection — 2026-11-01
+
+Expanded `apps/src/bwg-report-write-postgres.integration.test.ts` with real disposable PostgreSQL fixtures:
+- An evidence record with VERIFIED status, content hash/URI, an activity belonging to the requesting organization and a verified geography scope can support a waste report only when paired with an APPROVED verification.
+- The verifier is a distinct identity from the activity actor and has explicit `VERIFY_EVIDENCE` authorization. The test does not weaken or bypass the database's verification gate.
+- The evidence-backed report is marked VERIFIED.
+- Evidence in CAPTURED state is rejected with HTTP 409 / `EVIDENCE_NOT_VERIFIED`.
+- A random/mismatched verification ID is rejected with HTTP 409 / `VERIFICATION_INVALID`.
+- Evidence belonging to another organization is rejected with HTTP 409 / `EVIDENCE_NOT_VERIFIED`, even when its evidence status is VERIFIED.
+- Existing no-evidence report writes remain PENDING; EPR remains NOT_SUBMITTED; unauthorized write requests remain 403 and do not create rows.
+- Evidence, verification, activity, membership, role, identity and organization fixtures are cleaned up in test teardown.
+
+The first evidence run exposed the actual DB permission requirement `VERIFY_EVIDENCE`; the fixture was corrected to carry that explicit permission. No application authorization logic or production permission was weakened.
+
+Exact-head CI #4297 / ID 41328373072 passed at `00874fca582690781ecad23ff4184a3c50e9502e`, including dependency audit, migration validation, disposable PostgreSQL migration and acceptance tests, typecheck, build, browser smoke test and production container build.
+
+All authority-approved BWG profile and evidence states used by these positive downstream-route tests are inserted only as labelled fixtures in disposable CI PostgreSQL. They are not CPCB submissions, production records, or assertions of actual external registration.
