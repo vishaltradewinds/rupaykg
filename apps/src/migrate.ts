@@ -19,7 +19,8 @@ const ssl =
 
 const pool = new Pool({
   connectionString: databaseUrl,
-  max: 1,
+  // One connection holds the advisory lock while a second executes migration SQL.
+  max: 2,
   ssl,
 });
 
