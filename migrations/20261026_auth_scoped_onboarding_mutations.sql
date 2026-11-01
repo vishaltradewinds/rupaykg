@@ -103,35 +103,8 @@ begin
 end;
 $$;
 
--- The role-default trigger must resolve its policy function even under the
--- restricted search_path inherited from the onboarding SECURITY DEFINER call.
-create or replace function public.rupaykg_default_role_permissions(p_role text)
-returns jsonb
-language sql
-immutable
-set search_path = pg_catalog, pg_temp
-as $$
-  select case p_role
-    when 'citizen' then '["dashboard:read","profile:read","profile:update","reports:read","waste:read","waste:record","evidence:upload"]'::jsonb
-    when 'farmer' then '["dashboard:read","profile:read","profile:update","reports:read","waste:read","waste:record","evidence:upload"]'::jsonb
-    when 'safai_mitra' then '["dashboard:read","profile:read","profile:update","reports:read","waste:read","waste:record","evidence:upload"]'::jsonb
-    when 'fpo' then '["dashboard:read","profile:read","profile:update","reports:read","waste:read","waste:record","evidence:upload","swm:read","reports:export"]'::jsonb
-    when 'municipal_admin' then '["dashboard:read","profile:read","reports:read","profile:update","waste:read","evidence:upload","evidence:review","reports:export","swm:read","swm:manage","projects:read","registry:read","credits:read","epr:read","audit:read"]'::jsonb
-    when 'municipal_generator' then '["dashboard:read","profile:read","profile:update","reports:read","waste:read","waste:record","evidence:upload","swm:read","reports:export"]'::jsonb
-    when 'aggregator' then '["dashboard:read","profile:read","profile:update","reports:read","waste:read","waste:record","evidence:upload","reports:export"]'::jsonb
-    when 'processor' then '["dashboard:read","profile:read","profile:update","reports:read","waste:read","waste:record","evidence:upload","reports:export"]'::jsonb
-    when 'industry_generator' then '["dashboard:read","profile:read","profile:update","reports:read","waste:read","waste:record","evidence:upload","reports:export","epr:read"]'::jsonb
-    when 'commercial_generator' then '["dashboard:read","profile:read","profile:update","reports:read","waste:read","waste:record","evidence:upload","reports:export","epr:read"]'::jsonb
-    when 'institution_generator' then '["dashboard:read","profile:read","profile:update","reports:read","waste:read","waste:record","evidence:upload","reports:export","epr:read"]'::jsonb
-    when 'PROJECT_OWNER' then '["dashboard:read","profile:read","reports:read","profile:update","waste:read","evidence:upload","reports:export","projects:read","projects:create","projects:manage","registry:read","credits:read"]'::jsonb
-    when 'ACVA_USER' then '["dashboard:read","profile:read","reports:read","profile:update","evidence:review","reports:export","projects:read","projects:review","projects:verify","registry:read","credits:read","audit:read","audit:execute","VERIFY_EVIDENCE","verification:approve","verification.approve"]'::jsonb
-    when 'ccc_buyer' then '["dashboard:read","profile:read","reports:read","profile:update","reports:export","projects:read","registry:read","credits:read","credits:buy","credits:retire"]'::jsonb
-    when 'epr_partner' then '["dashboard:read","profile:read","reports:read","profile:update","waste:read","reports:export","epr:read","epr:manage","registry:read","credits:read"]'::jsonb
-    when 'csr_partner' then '["dashboard:read","profile:read","reports:read","profile:update","reports:export","csr:read","csr:manage","registry:read","credits:read"]'::jsonb
-    when 'regulator' then '["dashboard:read","profile:read","reports:read","profile:update","waste:read","evidence:review","reports:export","swm:read","swm:manage","projects:read","projects:review","projects:verify","acva:manage","registry:read","credits:read","epr:read","epr:manage","csr:read","csr:manage","guardian:read","guardian:operate","audit:read","audit:execute","VERIFY_EVIDENCE","verification:approve","verification.approve"]'::jsonb
-    else '[]'::jsonb
-  end;
-$$;
+-- Existing policy catalogue is retained; only its lookup is schema-qualified.
+alter function public.rupaykg_default_role_permissions(text) set search_path = pg_catalog, pg_temp;
 
 create or replace function public.apply_rupaykg_role_defaults()
 returns trigger
