@@ -52,7 +52,11 @@ try {
     if (!connected) throw new Error("PRODUCTION_MIGRATION_TARGET_MISMATCH: database identity could not be read");
     assertProductionMigrationTarget(
       { expectedBranchId, expectedDatabaseName, expectedRoleName },
-      connected,
+      {
+        branchId: connected.branch_id,
+        databaseName: connected.database_name,
+        roleName: connected.role_name,
+      },
     );
     console.log("Verified exact production migration target identity.");
   }
