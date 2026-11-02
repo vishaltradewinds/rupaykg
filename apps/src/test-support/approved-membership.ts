@@ -14,7 +14,6 @@ export async function approveTestMembership(
   geographyId: string,
   requestedRoleKey: string,
   requestedOrganizationType: string,
-  grantVerificationPermission = true,
 ): Promise<void> {
   const authority = await client.query<{ id: string }>(
     "select i.id from public.identities i join public.organization_memberships om on om.identity_id=i.id and om.status='VERIFIED' join public.roles r on r.id=om.role_id and r.name='super_admin' join public.organizations o on o.id=om.organization_id and o.status='VERIFIED' where i.status='VERIFIED' and i.suspended_at is null order by i.created_at limit 1",
@@ -22,7 +21,7 @@ export async function approveTestMembership(
   const reviewerId = authority.rows[0]?.id;
   if (!reviewerId) throw new Error("TEST_PLATFORM_AUTHORITY_NOT_BOOTSTRAPPED");
 
-  if (grantVerificationPermission) {
+  {
     const role = await client.query<{ organization_id: string; permissions: unknown }>(
       "select organization_id, permissions from public.roles where id=$1",
       [roleId],
