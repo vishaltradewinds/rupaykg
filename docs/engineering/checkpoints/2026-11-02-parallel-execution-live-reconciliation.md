@@ -346,3 +346,8 @@ This is an initial ledger schema only, not a complete worker. Claim/lease acquis
 The first two disposable PostgreSQL runs (`41458539725`, `41458607059`, and `41458639443`) exposed the same syntax error at character 6806: the append-only trigger body still contained a single-dollar delimiter. The previous correction did not survive the text replacement operation. Re-applied the fix using a callback-based replacement and re-fetched the repository file to verify the exact source now contains `as $$ ... $$;`. Corrected migration commit: `07cf79538700a6fccb233a9d96800090064aeb1d`.
 
 The exact-head CI for `07cf795...` is pending. Do not claim the durable ledger migration/test is accepted until that run applies all migrations and executes the PostgreSQL integration test successfully. This failure is recorded rather than hidden.
+
+
+## MRV job-ledger integration test regression found and corrected
+
+After the delimiter fix, the migration advanced through disposable PostgreSQL and the suite reached the new integration test. The fixture was rejected by the existing independent-verification invariant because it reused the activity actor as verifier. Corrected the test to create a distinct verifier identity; commit `ebb112300a5aa14c36f77b09a398eea8e15eaeb9`. This is a fixture correction, not a weakening of the anti-self-approval rule. Exact-head CI is pending.
