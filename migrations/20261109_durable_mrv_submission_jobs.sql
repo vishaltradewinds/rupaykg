@@ -2,15 +2,31 @@
 -- This migration is intentionally not deployed. Worker implementation and tenant/RLS
 -- review must pass before any production rollout.
 
+-- Composite uniqueness lets the job ledger enforce that all referenced records
+-- belong to the same activity, organization and geography, not merely that each
+-- independently supplied UUID exists.
+create unique index if not exists activities_id_org_geo_uq
+  on activities(id, organization_id, geography_id);
+create unique index if not exists evidence_id_activity_uq
+  on evidence(id, activity_id);
+create unique index if not exists verifications_id_evidence_activity_uq
+  on verifications(id, evidence_id, activity_id);
+
 create table if not exists mrv_submission_jobs (
   id uuid primary key default gen_random_uuid(),
   idempotency_key text not null unique check (length(btrim(idempotency_key)) between 32 and 128),
   payload_hash text not null check (payload_hash ~ '^[a-f0-9]{64}$'),
-  activity_id uuid not null references activities(id),
-  verification_id uuid not null references verifications(id),
-  evidence_id uuid not null references evidence(id),
+  activity_id uuid not null,
+  verification_id uuid not null,
+  evidence_id uuid not null,
   organization_id uuid not null references organizations(id),
   geography_id uuid not null references geography(id),
+  foreign key(activity_id, organization_id, geography_id)
+    references activities(id, organization_id, geography_id),
+  foreign key(evidence_id, activity_id)
+    references evidence(id, activity_id),
+  foreign key(verification_id, evidence_id, activity_id)
+    references verifications(id, evidence_id, activity_id),
   requested_by_identity_id uuid not null,
   guardian_policy_id text not null check (length(btrim(guardian_policy_id)) > 0),
   methodology_code text,
@@ -52,6 +68,57 @@ create table if not exists mrv_submission_jobs (
   check (status not in ('GUARDIAN_VERIFIED','HCS_SUBMITTED','HCS_CONSENSUS_CONFIRMED','MIRROR_VERIFIED','PROVENANCE_PERSISTED','COMPLETED')
       or (guardian_execution_id is not null and guardian_status = 'VERIFIED'))
 );
+
+-- Reject enqueue if the immutable request does not describe a completed,
+-- geographically authorized activity with verified evidence and an approved
+-- independent verification. Composite FKs below keep the cross-record bindings
+-- intact after enqueue; provider workers must still re-check revocation/status.
+create or replace function validate_mrv_submission_job_bindings()
+returns trigger language plpgsql as $
+declare
+  activity_actor uuid;
+  evidence_is_verified boolean;
+  verification_is_approved boolean;
+begin
+  select a.actor_identity_id into activity_actor
+    from activities a
+   where a.id = new.activity_id
+     and a.organization_id = new.organization_id
+     and a.geography_id = new.geography_id
+     and a.status = 'COMPLETED';
+  if not found then
+    raise exception 'MRV_JOB_ACTIVITY_SCOPE_INVALID';
+  end if;
+
+  select (e.status = 'VERIFIED') into evidence_is_verified
+    from evidence e
+   where e.id = new.evidence_id
+     and e.activity_id = new.activity_id;
+  if coalesce(evidence_is_verified, false) is not true then
+    raise exception 'MRV_JOB_EVIDENCE_NOT_VERIFIED';
+  end if;
+
+  select (v.decision = 'APPROVED' and v.verifier_identity_id is distinct from activity_actor)
+    into verification_is_approved
+    from verifications v
+   where v.id = new.verification_id
+     and v.evidence_id = new.evidence_id
+     and v.activity_id = new.activity_id;
+  if coalesce(verification_is_approved, false) is not true then
+    raise exception 'MRV_JOB_VERIFICATION_INVALID';
+  end if;
+
+  if not public.organization_has_geography_scope(new.organization_id, new.geography_id) then
+    raise exception 'MRV_JOB_GEOGRAPHY_SCOPE_INVALID';
+  end if;
+  return new;
+end;
+$;
+
+drop trigger if exists mrv_submission_job_binding_guard on mrv_submission_jobs;
+create trigger mrv_submission_job_binding_guard
+before insert on mrv_submission_jobs
+for each row execute function validate_mrv_submission_job_bindings();
 
 create index if not exists mrv_submission_jobs_claim_idx
   on mrv_submission_jobs(next_attempt_at, created_at)
