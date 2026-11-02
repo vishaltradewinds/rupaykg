@@ -162,3 +162,12 @@ No production DDL/DML, migration, role/grant/RLS changes, deployments, worker/sc
 - Latest code head at CI #4475: `fc02d4982dc659e6bd8a69cfe4f5eaf906752331`; run https://github.com/vishaltradewinds/rupaykg/actions/runs/41399039366.
 - Passed migration validation, disposable PostgreSQL migration, restricted verifier owner provisioning, synthetic two-custodian bootstrap, typecheck, build, browser smoke, and full API/disposable PostgreSQL test suite. Production container build remains in progress; poll #4475 before claiming full CI green.
 - PR #192 remains draft. Production remains HOLD. No production database migration, DDL/DML, grants, bootstrap, secrets, or deployment performed. Founder identity/trust model, independent security review, and DBA authorization remain release blockers.
+
+## 2026-11-02 — bootstrap owner privilege teardown
+
+- Security review found the migration principal's temporary membership in `rupaykg_bootstrap_owner` could otherwise remain after migration.
+- Bootstrap migration now requires a direct temporary owner-role membership with ADMIN OPTION, rejects any additional owner-role members, revokes the migration principal's membership immediately after creating the SECURITY DEFINER objects, and revokes the owner's temporary database CREATE privilege.
+- CI provisioning grants the temporary membership WITH ADMIN OPTION. Added a post-migration CI assertion that the migration principal is no longer a member of the owner role and the owner role no longer has database CREATE.
+- CI #4479 passed all engineering gates on code head `3302c0ebc68cc7558d264e466423c11dd75f17fa`, including 138/138 API tests, two-custodian bootstrap acceptance, browser smoke, and production container build.
+- Exact-head CI #4480 for the privilege-teardown assertion is running: https://github.com/vishaltradewinds/rupaykg/actions/runs/41399782645.
+- PR #192 remains draft; production remains HOLD. No production database changes or deployment. Founder initial-authority selection, independent security review and DBA approval remain release gates.
