@@ -134,31 +134,12 @@ before(async () => {
 
 after(async () => {
   if (!pool) return;
-  try {
-    if (settlementId) await pool.query("delete from settlements where id=$1", [settlementId]);
-    if (credentialId) {
-      await pool.query("delete from registry_events where credential_id=$1", [credentialId]);
-      if (activityId) await pool.query("delete from mrv_provenance_events where activity_id=$1", [activityId]);
-      await pool.query("delete from credentials where id=$1", [credentialId]);
-    }
-    if (verificationId) await pool.query("delete from verifications where id=$1", [verificationId]);
-    if (evidenceId) await pool.query("delete from evidence where id=$1", [evidenceId]);
-    if (activityId) await pool.query("delete from activities where id=$1", [activityId]);
-    if (ownerId) {
-      await pool.query("delete from stakeholder_application_approvals where application_id in (select id from stakeholder_applications where organization_id=$1)", [ownerId]);
-      await pool.query("delete from stakeholder_applications where organization_id=$1", [ownerId]);
-      await pool.query("delete from organization_memberships where organization_id=$1", [ownerId]);
-      await pool.query("delete from roles where organization_id=$1", [ownerId]);
-      await pool.query("delete from organization_geography_scopes where organization_id=$1", [ownerId]);
-      const organizationIds = [ownerId, counterpartyId].filter(Boolean);
-      await pool.query("delete from organization_statutory_profiles where organization_id=any($1::uuid[])", [organizationIds]);
-    }
-    const identityIds = [actorId, verifierId].filter(Boolean);
-    if (identityIds.length) await pool.query("delete from identities where id=any($1::uuid[])", [identityIds]);
-    if (geographyId) await pool.query("delete from geography where id=$1", [geographyId]);
-    const organizationIds = [ownerId, counterpartyId].filter(Boolean);
-    if (organizationIds.length) await pool.query("delete from organizations where id=any($1::uuid[])", [organizationIds]);
-  } finally { await pool.end(); }
+  // The fixture writes an immutable registry event. Its credential, verification,
+  // evidence, activity, identity, organization and geography are retained together
+  // so cleanup cannot mutate or orphan the append-only ledger. CI uses a disposable
+  // PostgreSQL service that is destroyed after this workflow.
+  if (settlementId) await pool.query("delete from settlements where id=$1", [settlementId]);
+  await pool.end();
 });
 
 describe("settlement reconciliation invariants", () => {
