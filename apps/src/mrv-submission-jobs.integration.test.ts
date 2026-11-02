@@ -28,6 +28,18 @@ test("durable MRV job ledger enforces immutable request, legal transitions and a
       "insert into identities(external_subject,display_name) values($1,'MRV Job Test') returning id",
       [`mrv-job-identity-${suffix}`],
     )).rows[0]!.id;
+    const verifierIdentityId = (await client.query<{id:string}>(
+      "insert into identities(external_subject,display_name) values($1,'MRV Job Verifier') returning id",
+      [`mrv-job-verifier-${suffix}`],
+    )).rows[0]!.id;
+    const verifierRoleId = (await client.query<{id:string}>(
+      "select id from roles where upper(name)='VERIFIER' limit 1",
+    )).rows[0]?.id;
+    assert.ok(verifierRoleId, "VERIFIER role fixture must exist");
+    await client.query(
+      "insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED')",
+      [verifierIdentityId, organizationId, verifierRoleId],
+    );
     const activityId = (await client.query<{id:string}>(
       "insert into activities(organization_id,actor_identity_id,geography_id,activity_type,status,completed_at) values($1,$2,$3,'COLLECTION','COMPLETED',now()) returning id",
       [organizationId, identityId, geographyId],
@@ -42,7 +54,7 @@ test("durable MRV job ledger enforces immutable request, legal transitions and a
     )).rows[0]!.id;
     const verificationId = (await client.query<{id:string}>(
       "insert into verifications(evidence_id,activity_id,verifier_identity_id,decision,scope,rationale) values($1,$2,$3,'APPROVED','test','MRV job schema test') returning id",
-      [evidenceId, activityId, identityId],
+      [evidenceId, activityId, verifierIdentityId],
     )).rows[0]!.id;
     const payloadHash = "a".repeat(64);
     const idempotencyKey = "b".repeat(64);
