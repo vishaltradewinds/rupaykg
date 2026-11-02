@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { approveTestMembership } from "./test-support/approved-membership.js";
-import { advanceMrvSubmissionJob, claimNextMrvSubmissionJob } from "./mrv-submission-jobs.js";
+import { advanceMrvSubmissionJob, claimNextMrvSubmissionJob, renewMrvSubmissionJobLease } from "./mrv-submission-jobs.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 const ssl = process.env.DATABASE_SSL === "false" ? undefined : { rejectUnauthorized: false };
@@ -92,6 +92,8 @@ test("durable MRV job ledger enforces immutable request, legal transitions and a
     assert.equal(lease.job.attempt_count, 1);
     const competingLease = await claimNextMrvSubmissionJob(client, "worker-2-" + suffix, 60);
     assert.equal(competingLease, null, "a live lease must prevent a second worker claim");
+    const renewedUntil = await renewMrvSubmissionJobLease(client, jobId, lease.leaseToken, 120);
+    assert.ok(renewedUntil instanceof Date, "the active owner must be able to renew its lease");
     const staleAdvance = await advanceMrvSubmissionJob(client, jobId, randomUUID(), "GUARDIAN_SUBMITTED");
     assert.equal(staleAdvance, null, "a non-owner lease token must not advance a job");
     const advanced = await advanceMrvSubmissionJob(client, jobId, lease.leaseToken, "GUARDIAN_SUBMITTED", { guardian_idempotency_key: "d".repeat(64) });
