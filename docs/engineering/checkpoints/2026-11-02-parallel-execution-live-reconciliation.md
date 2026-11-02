@@ -416,3 +416,8 @@ HCS transaction-ID helper coverage added: `apps/src/hedera-anchor.test.ts` now v
 
 - First regex correction remained over-escaped in the emitted test; exact CI on `dc4d0f4db809ba13eb090bf6ea9369d077ed122e` reproduced the same assertion failure. Replaced regex matching of the full identifier with explicit account-ID equality plus timestamp-component validation using `[.]` in commit `30f6eabb99f3fd0ac29bc1c2f1bffdaf95ef3de2`.
 - Exact-head CI run `41461603873` is currently running; do not treat this test as green until it completes. The broader build for docs checkpoint commit `daf4090ad091aaaaac837d0a674ca324c0874400` passed (`41461340133`).
+
+
+### HCS pre-submit persistence test result — 2026-11-02 14:25 UTC
+
+- Exact-head run `41461603873` for code commit `30f6eabb99f3fd0ac29bc1c2f1bffdaf95ef3de2` has passed migration validation, typecheck, build, browser smoke, and the full disposable PostgreSQL acceptance suite, including the new HCS transaction-ID persistence/replacement-rejection path. Production container build is still in progress; do not mark the whole workflow successful until the run completes.
