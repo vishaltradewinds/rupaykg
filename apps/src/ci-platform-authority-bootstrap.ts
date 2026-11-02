@@ -257,6 +257,20 @@ async function run(): Promise<void> {
     assert.equal(onboardingOwnerPrivileges.rows[0]?.approval_update, true);
     assert.equal(onboardingOwnerPrivileges.rows[0]?.evidence_update, true);
 
+    const onboardingFunctionOwners = await pool.query<{ function_name: string; owner_name: string; security_definer: boolean; governance_trigger_definer: boolean }>(
+      `select p.proname as function_name,pg_get_userbyid(p.proowner) as owner_name,
+              p.prosecdef as security_definer,
+              (select gp.prosecdef from pg_proc gp join pg_namespace gn on gn.oid=gp.pronamespace
+                where gn.nspname='public' and gp.proname='ensure_organization_governance_profile'
+                limit 1) as governance_trigger_definer
+         from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+        where n.nspname='auth_private' and p.proname='create_stakeholder_application'`,
+    );
+    assert.equal(onboardingFunctionOwners.rows[0]?.owner_name, "rupaykg_auth_owner");
+    assert.equal(onboardingFunctionOwners.rows[0]?.security_definer, true);
+    assert.equal(onboardingFunctionOwners.rows[0]?.governance_trigger_definer, false,
+      "governance trigger must not execute with an unrelated SECURITY DEFINER owner");
+
     const applicantIdentity = (await pool.query<{ id: string }>(
       "insert into identities(external_subject,display_name,email,status) values($1,$2,$3,'VERIFIED') returning id",
       [`ci-onboarding-applicant:${suffix}`, "CI Onboarding Applicant", `ci-onboarding-applicant-${suffix}@example.invalid`],
