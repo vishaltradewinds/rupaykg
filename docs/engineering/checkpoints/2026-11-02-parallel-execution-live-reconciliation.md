@@ -494,3 +494,12 @@ The branch now contains an immutable/idempotent enqueue helper, atomic lease cla
 - Repaired the test in commit `3f771a63d4027629da350a79725193858e1a323d`: enqueue same-payload replay and changed-payload rejection assertions now execute inside the fixture's `try` scope; the `catch` only rolls back and rethrows. No assertion or production security check was weakened.
 - PR #192 head is now `3f771a63d4027629da350a79725193858e1a323d`. Exact-head CI has not yet appeared in the commit workflow-run listing at the time of this checkpoint; do not claim this repair passed until its workflow concludes SUCCESS.
 - PR #192 remains draft/open. PR #204 remains documentation-only/draft. Production HOLD; no production changes; TRL 9 NOT ESTABLISHED.
+
+
+### 14:36 UTC — enqueue repair validated; ambiguous Guardian retry test added
+
+- Run `41463161935` for code commit `3f771a63d4027629da350a79725193858e1a323d`: migration validation, restricted verifier-owner provisioning/teardown, disposable migrations, TypeScript typecheck, build, two-custodian bootstrap, browser smoke, and full test suite all **SUCCESS**. Production container build was still running at checkpoint time; do not call the run fully successful until the final job conclusion is SUCCESS.
+- Added test commit `af2f3ed19d558bf172326089fa3df0c121465ec0` to simulate Guardian accepting a request while the client loses the response, then retrying with the exact same persisted idempotency key. The assertion requires both attempts to carry the identical key and the retry to recover the authoritative execution ID. Exact-head run `41463406524` was **QUEUED** at checkpoint time.
+- Run `41463204727` for docs checkpoint commit `69029ca587ca848497643521359398cc6b0bfa9f`: migration validation, typecheck, build, browser smoke, full test suite passed; production container build still running at checkpoint time.
+- No worker runtime is yet verified. Legacy synchronous submit route remains. Do not launch external calls from a background process until signed actor context, exact least-privilege worker role, forced RLS and job-table policies, and tenant-negative tests are accepted.
+- Production HOLD; certification OFF; TRL 9 NOT ESTABLISHED. No production changes or external provider writes.
