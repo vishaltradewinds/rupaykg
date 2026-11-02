@@ -355,7 +355,7 @@ begin
   if p_geography_id is not null and not exists(select 1 from public.geography g where g.id=p_geography_id) then
     raise exception 'GEOGRAPHY_NOT_FOUND' using errcode='22023';
   end if;
-  if exists(select 1 from public.stakeholder_applications sa where sa.identity_id=v_identity_id and sa.status in ('PENDING','APPROVED')) then
+  if exists(select 1 from public.stakeholder_applications sa where sa.identity_id=v_identity_id and sa.status='PENDING') then
     raise exception 'APPLICATION_EXISTS' using errcode='23505';
   end if;
 
