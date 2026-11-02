@@ -251,3 +251,14 @@ No production DDL/DML, migration, role/grant/RLS changes, deployments, worker/sc
 - Exact commit CI #4521 / run `41407079696` is IN PROGRESS. Do not report the test as passed until PostgreSQL acceptance and the complete workflow conclude successfully.
 - Next: add a geography-scope negative test using a valid, approved reviewer membership and a deliberately disjoint verified geography root; assert both queue visibility and decision mutation are denied. Then add concurrency/revocation tests and continue all-table RLS/runtime-access inventory.
 - PR #192 remains draft/open. Production Neon and Render remain unchanged; no production database operations, bootstrap, secret provisioning, deployment, worker activation or certification. Production HOLD; provisional TRL 3; TRL 9 not established.
+
+
+## 2026-11-02 — Full-codebase risk audit and accelerated execution plan
+- Published `docs/engineering/RUPAYKG_FULL_CODEBASE_AUDIT_AND_EXECUTION_PLAN_2026-11-02.md` (commit `cf4169658ff30c16b96aa1d406fa95e24bc1719a`).
+- Audited PR #192's 54 changed files and current API/auth/security/infra/migration surface, plus existing auth compatibility, tenant isolation, disposable lab and TRL evidence. This is a broad initial risk audit; final line-by-line coverage of every package, historical migration, frontend path and worker remains an explicit inventory gate.
+- P0 findings: production remains 0/67 RLS and broad owner role; signed request-context transaction wrapper is not integrated across route SQL; proposed restricted app runtime is not yet compatible with direct SQL in platform-admin and multiple business routes; platform authority production bootstrap still requires founder identity selection, independent review and DBA approval.
+- Current branch source inventory still shows direct SQL call sites in platform-admin, server, value, registry, sync, workspace, CPCB, MRV, intelligence and evidence routes. Do not enable RLS or cut over runtime roles before route/worker/grant matrix is complete.
+- CI #4521 passed on forged-role negative-test code commit `ec5273142094f6abbf7b17179ff579cf4e13f75e`; this remains laboratory acceptance, not production certification.
+- PR #192 remains OPEN/DRAFT; Render auto-deploy path tracks main. No production DDL/DML, grants, RLS, secrets, bootstrap or deployment performed.
+- Execution order: complete route/worker inventory; finish auth/bootstrap negative tests; convert platform-admin and remaining direct authorization paths; integrate request transaction boundary; complete 67-table policy/FK matrix; exact-role disposable Neon; reconcile migration drift; external MRV/regulatory acceptance; calibrated field pilot; independent TRL assurance.
+- Provisional system TRL remains 3. Indicative overall TRL 9 planning range 12–24+ months, contingent on pilot site, calibrated hardware, authorized integrations, sustained operations and independent evaluation. Not a commitment or certification.
