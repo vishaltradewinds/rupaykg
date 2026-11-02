@@ -311,3 +311,14 @@ Critical finding: Guardian adapter already sends a deterministic idempotency key
 MRV route connection consistency correction is commit `bb878aa90c3b348e8ccb85933372d59080522fb4`; its exact-head CI run `41457821676` was still IN_PROGRESS at last check (production container build stage). Latest PR #192 head `9edfb1e91a9377ffc90c076c4d66de15345719a9` run `41457874949` and latest checkpoint head `1874f8c998d8af64a096835fe817318734346dfd` run `41457900115` were still IN_PROGRESS at last check. Earlier code revision `aae20cdedff4832ae95b0ba49ef0ef83576aeb61` passed full CI run `41457510422`; do not extend that success to later code commits.
 
 No production schema, role, data, provider or deployment changes. Production HOLD; certification OFF; TRL 9 not established.
+
+
+## MRV connection-consistency correction — exact CI passed
+
+The MRV route correction commit `bb878aa90c3b348e8ccb85933372d59080522fb4` completed exact-head CI run `41457821676` with **SUCCESS**. Later PR #192 heads also completed successfully:
+- `9edfb1e91a9377ffc90c076c4d66de15345719a9` — run `41457874949`, SUCCESS.
+- `1874f8c998d8af64a096835fe817318734346dfd` — run `41457900115`, SUCCESS.
+
+These verify the MRV same-client connection correction and repository checkpoint state. They do not implement the durable outbox or prove external exactly-once behavior. The new MRV durable execution contract was committed as `8e8f5e1712b0dac01a518e7aabfd93a03bc6a6a3`; its exact-head CI run `41458198658` is IN_PROGRESS. This commit is documentation-only beyond the already CI-verified code.
+
+PR #204 compare against main is cleanly ahead by 13 commits and 0 behind; GitHub PR metadata temporarily reports `mergeable=false`, so recheck mergeability before any merge. PR #192 and #204 remain draft/unmerged. Production remains untouched.
