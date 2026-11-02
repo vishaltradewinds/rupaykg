@@ -96,6 +96,62 @@ BEGIN
 END;
 $function$;
 
+-- The database also has a second BEFORE INSERT trigger on verifications.
+-- Both trigger entry points must share the same activity-bound authorization logic.
+CREATE OR REPLACE FUNCTION public.enforce_verification_independence()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = pg_catalog, pg_temp
+AS $function$
+DECLARE
+  v_activity_id uuid;
+  v_activity_actor uuid;
+BEGIN
+  v_activity_id := NEW.activity_id;
+
+  IF NEW.evidence_id IS NOT NULL THEN
+    IF v_activity_id IS NULL THEN
+      SELECT e.activity_id
+        INTO v_activity_id
+        FROM public.evidence e
+       WHERE e.id = NEW.evidence_id;
+    ELSIF NOT EXISTS (
+      SELECT 1
+        FROM public.evidence e
+       WHERE e.id = NEW.evidence_id
+         AND e.activity_id = v_activity_id
+    ) THEN
+      RAISE EXCEPTION 'verification activity and evidence must reference the same activity';
+    END IF;
+  END IF;
+
+  IF v_activity_id IS NULL THEN
+    RAISE EXCEPTION 'verification requires a resolvable subject activity';
+  END IF;
+
+  SELECT a.actor_identity_id
+    INTO v_activity_actor
+    FROM public.activities a
+   WHERE a.id = v_activity_id;
+
+  IF v_activity_actor IS NOT NULL
+     AND v_activity_actor = NEW.verifier_identity_id THEN
+    RAISE EXCEPTION 'verifier cannot self-approve activity evidence';
+  END IF;
+
+  IF NOT public.has_verification_permission_for_activity(
+    NEW.verifier_identity_id, v_activity_id
+  ) THEN
+    RAISE EXCEPTION 'verifier must be active, verified and authorized in the subject organization and geography';
+  END IF;
+
+  RETURN NEW;
+END;
+$function$;
+
+COMMENT ON FUNCTION public.enforce_verification_independence() IS
+  'The verification_independence_guard trigger entry point: checks self-verification first, then applies the shared activity-tenant verifier authorization predicate to every verification decision.';
+
 COMMENT ON FUNCTION public.has_verification_permission_for_activity(uuid, uuid) IS
   'Fail-closed verifier authorization: active VERIFIED identity, VERIFIED membership and organization, explicit verifier permission, and VERIFIED geography scope for the subject activity tenant.';
 
