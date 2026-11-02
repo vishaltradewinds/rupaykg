@@ -24,6 +24,12 @@ Role attributes are target requirements, not proof that every role should be cre
 
 The existing production rupaykg role is not repurposed in-place as a runtime. Preserve it as the controlled legacy owner/admin only until a reviewed ownership transfer and recovery plan exists.
 
+### MRV worker-specific contract correction
+
+The exact runtime role is rupaykg_mrv_worker_runtime, as asserted by apps/src/mrv-worker-server.ts. The worker currently checks that it is not a member of rupaykg_app_owner or rupaykg_auth_owner, is NOBYPASSRLS/NOINHERIT, has no public CREATE, can execute public.organization_has_geography_scope(uuid,uuid), has its required table grants, and sees FORCE RLS on all 11 worker-required tables. The current source does not define or assert a dedicated MRV worker owner role; do not invent one as a prerequisite without a code/schema design decision. If an owner is introduced, add matching startup assertions and tests.
+
+Read-only production catalog inspection found mrv_submission_jobs and mrv_submission_job_events absent, while mrv_provenance_events exists. The production schema_migrations ledger has no applied MRV submission/worker/queue migration. Consequently the worker cannot satisfy its production startup contract today. Worker remains disabled until a reviewed migration creates and secures the queue tables and full job lifecycle acceptance passes.
+
 ## Rehearsal sequence
 
 1. Create a disposable PostgreSQL instance using the exact production PostgreSQL major version, extensions, schema and migration history.
