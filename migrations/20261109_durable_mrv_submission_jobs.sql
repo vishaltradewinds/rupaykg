@@ -130,11 +130,11 @@ before update on mrv_submission_jobs
 for each row execute function guard_mrv_submission_job_update();
 
 create or replace function reject_mrv_submission_job_event_mutation()
-returns trigger language plpgsql as $
+returns trigger language plpgsql as $$
 begin
   raise exception 'MRV_JOB_EVENT_APPEND_ONLY';
 end;
-$;
+$$;
 
 drop trigger if exists mrv_submission_job_events_no_update on mrv_submission_job_events;
 create trigger mrv_submission_job_events_no_update
