@@ -150,3 +150,56 @@ The canonical 2 November checkpoint is verified at commit `1f15ff2c00257a8f85351
 - Platform-wide TRL 9: NOT ESTABLISHED.
 
 A passing CI run, a disposable database lab, a draft PR, or a planning document is not proof of real-site operational qualification.
+
+
+## Function ACL, ownership and trigger dependency refinement — live read-only query
+
+A follow-up catalog pass refined the earlier aggregate counts on the same authoritative production branch (main, database rupaykg). It did not read or export function bodies.
+
+### Function ownership and PUBLIC EXECUTE
+
+| Owner | Language | Functions | PUBLIC can EXECUTE |
+|---|---:|---:|---:|
+| rupaykg | PL/pgSQL | 71 | 71 |
+| rupaykg | SQL | 7 | 7 |
+| cloud_admin | C | 37 | 37 |
+| **Total** | | **115** | **115** |
+
+- All 78 application-owned functions are executable by PUBLIC according to PostgreSQL privilege evaluation.
+- The 37 C-language functions are owned by cloud_admin and also evaluate as PUBLIC-executable. These appear to be extension-provided functions; their extension membership and intended exposure must be verified before any permission decision.
+- For all 115 functions, proacl is NULL (default ACL behavior), no function-level proconfig is set, and none is marked SECURITY DEFINER.
+- This is stronger evidence than merely counting rows in information_schema.routine_privileges: has_function_privilege('public', oid, 'EXECUTE') returned true for every function in the catalog result.
+- PUBLIC EXECUTE is a real over-broad exposure and must be treated as a P1/P0 candidate pending function-body/call-graph review. It is not by itself proof of remote exploitability: actual reachability depends on API exposure, language, owner rights, argument validation and function behavior.
+
+### Trigger dependency map
+
+- 70 non-internal triggers are installed on 33 public tables.
+- All 70 are enabled in ordinary origin mode (tgenabled='O').
+- They invoke 67 distinct trigger functions; several functions are shared or a table has multiple controls.
+- Trigger functions are part of the effective write authorization and integrity boundary. Any proposed RLS/role/EXECUTE change must preserve their ability to enforce immutable evidence, methodology governance, credential lifecycle, settlement constraints, EPR quantities/evidence, geography and field-device/sync integrity.
+- Do not blindly revoke EXECUTE from trigger functions or transfer ownership: PostgreSQL trigger execution and function privilege semantics must be tested against the exact role model and actual DML paths in a disposable clone.
+
+### Login and role-membership refinement
+
+The live role catalog returned four privileged/service role records:
+- cloud_admin: superuser, login, BYPASSRLS.
+- neon_service: login, CREATEROLE/CREATEDB, BYPASSRLS; member of neon_superuser.
+- neon_superuser: non-login, CREATEROLE/CREATEDB, BYPASSRLS; granted elevated maintenance/read/write roles.
+- rupaykg: login, CREATEROLE/CREATEDB, BYPASSRLS; member of neon_superuser.
+
+This does not mean the application has access to cloud_admin or neon_service credentials. It confirms the production rupaykg login inherits a powerful neon_superuser membership and must not remain the application runtime identity. Neon-managed service roles are platform-managed; do not attempt to modify them as part of app hardening.
+
+### Default ACL observation
+
+The inspected pg_default_acl rows for cloud_admin in public covered tables and sequences and did not return a function default-ACL row. The NULL function ACLs therefore require review against PostgreSQL built-in default function privileges and extension installation behavior, not an assumption that a custom function default-ACL entry exists.
+
+### Next exact engineering actions
+
+1. Inventory all 78 application-owned function definitions in controlled batches; classify pure read helpers, mutation functions, trigger-only functions, privileged operations, dynamic SQL and external effects.
+2. Identify the 37 C functions' owning extensions and extension version/schema provenance; separate vendor-managed functions from application functions.
+3. Generate the full trigger → table → function → affected-data-scope matrix and map each trigger function to its underlying table references.
+4. Inspect PUBLIC EXECUTE callability through API roles and PostgREST/RPC exposure, if any; do not assume every SQL function is externally callable.
+5. Define a least-privilege role split that removes the app's inherited neon_superuser authority, while preserving migration ownership and platform-managed roles.
+6. Prove all intended trigger and application paths under exact proposed roles on a disposable branch before proposing a production migration.
+
+No production role, ACL, function, trigger, schema, table, sequence or data was changed. No function bodies were exported into this checkpoint.
