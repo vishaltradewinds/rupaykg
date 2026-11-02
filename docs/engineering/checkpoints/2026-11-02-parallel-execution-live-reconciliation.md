@@ -239,3 +239,20 @@ Risk interpretation: PUBLIC EXECUTE is confirmed for these functions, and their 
 Required next steps: map all route and worker callsites; introduce actor-bound, organization/geography/bilateral-scoped database APIs where needed; classify trigger-only functions separately; restrict function EXECUTE to the minimum runtime roles in a disposable rehearsal; add negative tests for cross-tenant IDs, wrong actor, unverified membership, missing geography root, stale credential owner and concurrent EPR allocation/release.
 
 No production data, DDL, function definition, ACL, role, schema or trigger was changed. This body review is read-only evidence from the authoritative production branch.
+
+
+## Targeted geography authorization correction — PR #192 branch
+
+A source-level pass of `apps/src/value-routes.ts` found an organization-binding defect: the carbon calculation geography helper previously accepted any verified membership of the actor that passed the geography helper, rather than requiring the activity's actual organization. A multi-organization identity could therefore satisfy the geography predicate using another organization's verified scope. The helper now receives `access.organization_id` and binds the membership query to that organization.
+
+The same branch now contains:
+- `migrations/20261108_geography_scope_fail_closed.sql`: shared geography scope helper returns true only when a VERIFIED scope ancestor exists; missing roots now fail closed.
+- `apps/src/value-routes.test.ts`: unit coverage for exact organization binding, missing geography and failed scope.
+- `apps/src/registry-settlement-runtime.test.ts`: PostgreSQL integration assertion that scoped organization succeeds and unscoped organization is denied.
+- Updated route-to-data audit describing the finding, fix, and mandatory organization onboarding/backfill gate.
+
+Code commit head before documentation-only follow-up: `9d6664ba06f8264655606eaa8853062e518fadd1`; exact-head CI run `41456990898` was QUEUED at last check. The route audit update is documentation-only and follows the code changes on the same PR branch. No production migration was applied. The stricter helper will block existing organizations lacking VERIFIED geography roots, so production rollout requires a complete organization-by-organization scope backfill, negative tests and rollback rehearsal.
+
+## Completed CI confirmation for documentation checkpoint
+
+The prior PR #204 documentation validation run `41456297642` completed SUCCESS across dependency audit, migration validation, migration execution in disposable PostgreSQL, typecheck, build, browser smoke test, disposable PostgreSQL acceptance and production container build. It validates that documentation commit's repository checks, not live production security or platform TRL.
