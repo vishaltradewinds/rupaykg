@@ -578,3 +578,11 @@ The first regression-test CI run (`41464821546`) failed as expected against the 
 - Disposable PostgreSQL integration test now asserts an unleased state change fails with `MRV_JOB_LEASE_REQUIRED`, and an illegal state edge remains rejected even while a valid lease exists. The expired-lease reclaim/fencing test remains included.
 - Commits: migration guard `d5425df4c7b4e67af7f011836115c998de727717`; test import correction `24b0545ede4a118436aa3d609825cac81c1de1ea`; lease-required assertion `28f9d3b2b5c0005b7940a0db0120b21146ace`; final test refinement `4990bd225591e9a0606ea83714cd9a8c6bec6292` (PR #192 head verified at `4990bd225591e9a0606ea83714cd9a8c6bec6292`).
 - CI runs for earlier test and migration commits are in progress; no result is claimed for the combined final head yet. Production remains untouched. This is defence-in-depth only; table grants/RLS are still required to prevent untrusted callers from changing lease columns themselves.
+
+
+### 14:56 UTC — MRV state-machine CI reconciliation
+
+- Exact-head CI for test commit `4990bd225591e9a0606ea83714cd9a8c6bec6292` completed **SUCCESS** (`41466214490`). This run validates the expired-lease recovery/fencing test and prior ledger assertions against disposable PostgreSQL, plus the repository's broader CI stages.
+- The separate lease-trigger change exposed a test-ordering issue: invalid state transitions were being rejected by the lease guard before the transition graph check. CI `41466136572` failed exactly there; the test did not indicate a broken worker lease claim.
+- Reordered the trigger to check legal transition graph first, then lease requirements. Latest migration commit is `1a8981bb5f3a7b3fdd7d1fed413fbc6b54b82fa5`; exact-head CI `41466508579` is in progress. Do not treat earlier SUCCESS as validation of this latest migration change.
+- Earlier corrected test-only commit `24b0545ede4a118436aa3d609825cac81c1de1ea` also passed CI `41465927624`, but it predates the database-level lease guard.
