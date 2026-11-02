@@ -112,6 +112,9 @@ jobs:
           google-chrome --headless=new --no-sandbox --disable-gpu --disable-dev-shm-usage --disable-extensions --no-first-run --user-data-dir=/tmp/rupaykg-chrome-shot --hide-scrollbars --window-size=1440,1200 --screenshot=/tmp/rupaykg-web-smoke.png --virtual-time-budget=2000 http://127.0.0.1:4173/ >/tmp/rupaykg-chrome-shot.out 2>&1
           shot_status=$?
           cat /tmp/rupaykg-chrome-shot.out
+          google-chrome --headless=new --no-sandbox --disable-gpu --disable-dev-shm-usage --disable-extensions --no-first-run --user-data-dir=/tmp/rupaykg-chrome-mobile --hide-scrollbars --window-size=390,844 --screenshot=/tmp/rupaykg-web-mobile.png --virtual-time-budget=2000 http://127.0.0.1:4173/ >/tmp/rupaykg-chrome-mobile.out 2>&1
+          mobile_shot_status=$?
+          cat /tmp/rupaykg-chrome-mobile.out
           set -e
           test -s /tmp/rupaykg-web-dom.html
           grep -q 'RupayKG' /tmp/rupaykg-web-dom.html
@@ -121,7 +124,8 @@ jobs:
           grep -q 'Compliance' /tmp/rupaykg-web-dom.html
           if grep -q 'aria-label="Account access"' /tmp/rupaykg-web-dom.html; then echo 'Account drawer must not obscure initial landing page' >&2; exit 1; fi
           test -s /tmp/rupaykg-web-smoke.png
-          echo "Chrome DOM exit: $dom_status; screenshot exit: $shot_status"
+          test -s /tmp/rupaykg-web-mobile.png
+          echo "Chrome DOM exit: $dom_status; desktop screenshot exit: $shot_status; mobile screenshot exit: $mobile_shot_status"
       - name: Upload landing UX browser evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -129,6 +133,7 @@ jobs:
           name: rupaykg-landing-ux
           path: |
             /tmp/rupaykg-web-smoke.png
+            /tmp/rupaykg-web-mobile.png
             /tmp/rupaykg-web-dom.html
           if-no-files-found: warn
           retention-days: 7
