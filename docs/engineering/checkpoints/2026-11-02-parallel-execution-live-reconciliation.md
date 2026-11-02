@@ -442,3 +442,10 @@ HCS transaction-ID helper coverage added: `apps/src/hedera-anchor.test.ts` now v
 - Mirror Node 404 or empty results are explicitly `PENDING` (indexing lag), never proof of non-submission and never authorization to generate a replacement transaction ID. Network errors are `UNAVAILABLE`; topic/type/payload mismatches are fail-closed; failed transaction results are terminal `FAILED`.
 - Added tests for successful end-to-end transaction lookup + exact payload verification and 404-as-pending (`38ee5b58cd790f970177b683e2bddbb46369ebbe`). CI pending.
 - Reference: Hedera Mirror Node API documents `GET /api/v1/transactions/{transactionId}` and transaction metadata, alongside topic message APIs. See official Mirror Node Swagger: https://mainnet-public.mirrornode.hedera.com/api/v1/docs/ and Hedera docs. This is lookup support only; it is not yet wired into a live worker or the production MRV route.
+
+
+## Durable enqueue contract — 2026-11-02 14:29 UTC
+
+- Added `createMrvSubmissionIdempotencyKey` and `enqueueMrvSubmissionJob` to `apps/src/mrv-submission-jobs.ts` (`c7e0e254b83ac03b30770b49f29f1175eaa13943`). The helper derives a deterministic key from activity/verification/evidence/policy/methodology, canonicalizes the payload snapshot before hashing, inserts the immutable request, returns the same job for an identical replay, and fails closed if the same key is reused with a changed payload.
+- Added PostgreSQL integration coverage for same-request replay and changed-payload rejection (`745e279128a8f0e722e3ee7e0e4389c41759b7de`). Exact-head CI pending.
+- This is the enqueue primitive only. The authenticated HTTP enqueue endpoint remains disabled/not wired, and no worker process is enabled. Both require the tenant-bound runtime context, dedicated non-BYPASSRLS worker identity, forced RLS policies for the jobs/events tables, and the independent security gates.
