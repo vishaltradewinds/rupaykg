@@ -255,3 +255,5 @@ a{color:var(--rk-primary-strong)}
   #rupaykg-national-language-selector select{max-width:135px!important}
   .auth-drawer{position:fixed!important;left:12px!important;right:12px!important;bottom:12px!important;top:auto!important;width:auto!important;max-width:420px;margin:0 auto!important;max-height:calc(100dvh - 24px);overflow:auto;z-index:30}
 }
+#rupaykg-offline-status{border-color:var(--rk-border)!important;background:var(--rk-surface)!important;color:var(--rk-muted)!important;box-shadow:0 16px 48px rgba(0,0,0,.4)!important}
+#rupaykg-offline-status[hidden]{display:none!important}
