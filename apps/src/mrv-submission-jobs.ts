@@ -139,7 +139,7 @@ export async function isMrvSubmissionJobStillAuthorized(client: PoolClient, jobI
     [jobId],
   );
   const quantityResult = await client.query<{ value: string | null; unit: string | null }>(
-    "select value::text value, unit from measurements where activity_id=(select activity_id from mrv_submission_jobs where id=$1) order by measured_at desc limit 1",
+    "select value::text value, unit from measurements where activity_id=(select activity_id from mrv_submission_jobs where id=$1) order by measured_at desc, id desc limit 1",
     [jobId],
   );
   const liveQuantity = quantityResult.rows[0]?.value ? Number(quantityResult.rows[0].value) : undefined;
