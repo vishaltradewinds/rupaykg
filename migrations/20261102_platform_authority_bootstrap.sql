@@ -492,7 +492,7 @@ CREATE OR REPLACE FUNCTION public.enforce_verified_membership_role_permissions()
 RETURNS trigger
 LANGUAGE plpgsql
 SET search_path = pg_catalog, pg_temp
-AS $
+AS $membership_guard$
 BEGIN
   IF NEW.status = 'VERIFIED' THEN
     IF NOT EXISTS (
@@ -507,8 +507,7 @@ BEGIN
   END IF;
   RETURN NEW;
 END;
-$;
-
+$membership_guard$;
 create or replace function public.ensure_organization_governance_profile()
 returns trigger
 language plpgsql
