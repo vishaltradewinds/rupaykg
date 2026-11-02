@@ -34,6 +34,12 @@ BEGIN
   IF pg_catalog.has_table_privilege('rupaykg_app_runtime','app_security.request_context_keys','SELECT') THEN
     RAISE EXCEPTION 'EPR_RLS_APP_ROLE_MUST_NOT_READ_SIGNING_KEYS';
   END IF;
+  IF pg_catalog.has_schema_privilege('rupaykg_app_runtime','public','CREATE') THEN
+    RAISE EXCEPTION 'EPR_RLS_APP_ROLE_MUST_NOT_CREATE_PUBLIC_OBJECTS';
+  END IF;
+  IF pg_catalog.has_database_privilege('rupaykg_app_runtime',current_database(),'CREATE') THEN
+    RAISE EXCEPTION 'EPR_RLS_APP_ROLE_MUST_NOT_CREATE_DATABASES';
+  END IF;
 
   SELECT p.prosecdef, p.proconfig, r.rolname AS owner_name
     INTO verifier
