@@ -134,3 +134,10 @@ This design does not authorize production changes. Do not merge/deploy the migra
 - CI, independent DBA/security review, backup/restore and rollback checks pass.
 
 **Current release posture remains Production HOLD, Certification OFF, and platform-wide TRL 9 NOT ESTABLISHED.**
+
+
+## Implementation progress (2026-11-02)
+
+An initial schema slice is now present in `migrations/20261109_durable_mrv_submission_jobs.sql`: immutable request/payload binding, organization/geography/source references, explicit stage state, lease metadata, provider identifiers, state-transition guard, and append-only event ledger. A disposable-PostgreSQL integration test was added at `apps/src/mrv-submission-jobs.integration.test.ts`.
+
+The first CI attempts caught a malformed dollar-quoted PL/pgSQL delimiter in the append-only trigger function. The migration source was corrected and re-fetched to verify the exact `$$` delimiters in commit `07cf79538700a6fccb233a9d96800090064aeb1d`. Exact-head migration and integration CI remains pending. This is not yet a working outbox: worker claim/lease logic, actor-context enforcement, provider-stage transitions, durable Hedera transaction-ID retry, Mirror Node reconciliation and RLS/grants still need implementation and tests.
