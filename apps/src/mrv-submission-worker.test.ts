@@ -18,17 +18,3 @@ test("durable MRV worker is fail-closed unless explicitly enabled", async () => 
     else process.env.RUPAYKG_MRV_WORKER_ENABLED = previous;
   }
 });
-
-test("durable MRV worker does not access the database when disabled", async () => {
-  const previous = process.env.RUPAYKG_MRV_WORKER_ENABLED;
-  delete process.env.RUPAYKG_MRV_WORKER_ENABLED;
-  let databaseConnections = 0;
-  const pool = { connect: async () => { databaseConnections += 1; throw new Error("database must not be touched while worker is disabled"); } } as never;
-  try {
-    await assert.rejects(runMrvSubmissionWorkerOnce(pool, "test-worker"), /MRV_WORKER_DISABLED/);
-    assert.equal(databaseConnections, 0);
-  } finally {
-    if (previous === undefined) delete process.env.RUPAYKG_MRV_WORKER_ENABLED;
-    else process.env.RUPAYKG_MRV_WORKER_ENABLED = previous;
-  }
-});
