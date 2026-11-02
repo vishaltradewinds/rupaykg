@@ -85,3 +85,54 @@ test("database authority denial is returned as forbidden and never falls back to
     assert.equal(authPool.calls.length,1);assert.equal(appPool.calls.length,1);
   }finally{await app.close();if(previous===undefined)delete process.env.RUPAYKG_AUTH_RESOLVER_MODE;else process.env.RUPAYKG_AUTH_RESOLVER_MODE=previous;}
 });
+
+
+test("missing or revoked session fails closed before the auth runtime is called",async()=>{
+  const appPool=new FakePool(),authPool=new FakePool();
+  appPool.handler=()=>({rows:[]});
+  const previous=process.env.RUPAYKG_AUTH_RESOLVER_MODE;process.env.RUPAYKG_AUTH_RESOLVER_MODE="security_definer";
+  const app=await setup(appPool,authPool);
+  try{
+    const response=await app.inject({method:"GET",url:"/api/v1/onboarding/review-queue",headers:{authorization:"Bearer revoked-or-unknown-token"}});
+    assert.equal(response.statusCode,401);assert.equal(response.json().code,"AUTH_REQUIRED");
+    assert.equal(authPool.calls.length,0);
+    assert.equal(appPool.calls.length,1);assert.match(appPool.calls[0]!.sql,/auth_private\\.resolve_session/);
+  }finally{await app.close();if(previous===undefined)delete process.env.RUPAYKG_AUTH_RESOLVER_MODE;else process.env.RUPAYKG_AUTH_RESOLVER_MODE=previous;}
+});
+
+test("database-side expired or revoked session rejection is mapped to 401 without fallback",async()=>{
+  const appPool=new FakePool(),authPool=new FakePool();authResolver(appPool);
+  authPool.handler=()=>{throw new Error("AUTH_REQUIRED");};
+  const previous=process.env.RUPAYKG_AUTH_RESOLVER_MODE;process.env.RUPAYKG_AUTH_RESOLVER_MODE="security_definer";
+  const app=await setup(appPool,authPool);
+  try{
+    const response=await app.inject({method:"POST",url:`/api/v1/onboarding/applications/${applicationId}/approve`,headers:{authorization:"Bearer expired-session-token"},payload:{}});
+    assert.equal(response.statusCode,401);assert.equal(response.json().code,"AUTH_REQUIRED");
+    assert.equal(authPool.calls.length,1);assert.equal(appPool.calls.length,1);
+  }finally{await app.close();if(previous===undefined)delete process.env.RUPAYKG_AUTH_RESOLVER_MODE;else process.env.RUPAYKG_AUTH_RESOLVER_MODE=previous;}
+});
+
+test("self-approval denial is mapped to forbidden and does not retry through another SQL path",async()=>{
+  const appPool=new FakePool(),authPool=new FakePool();authResolver(appPool);
+  authPool.handler=()=>{throw new Error("STAKEHOLDER_SELF_APPROVAL_FORBIDDEN");};
+  const previous=process.env.RUPAYKG_AUTH_RESOLVER_MODE;process.env.RUPAYKG_AUTH_RESOLVER_MODE="security_definer";
+  const app=await setup(appPool,authPool);
+  try{
+    const response=await app.inject({method:"POST",url:`/api/v1/onboarding/applications/${applicationId}/approve`,headers:{authorization:"Bearer applicant-token"},payload:{}});
+    assert.equal(response.statusCode,403);assert.equal(response.json().code,"ONBOARDING_AUTHORITY_FORBIDDEN");
+    assert.equal(authPool.calls.length,1);assert.equal(appPool.calls.length,1);
+  }finally{await app.close();if(previous===undefined)delete process.env.RUPAYKG_AUTH_RESOLVER_MODE;else process.env.RUPAYKG_AUTH_RESOLVER_MODE=previous;}
+});
+
+test("auth runtime database failure returns 503 and never falls back to application SQL",async()=>{
+  const appPool=new FakePool(),authPool=new FakePool();authResolver(appPool);
+  authPool.handler=()=>{throw new Error("connection unavailable");};
+  const previous=process.env.RUPAYKG_AUTH_RESOLVER_MODE;process.env.RUPAYKG_AUTH_RESOLVER_MODE="security_definer";
+  const app=await setup(appPool,authPool);
+  try{
+    const response=await app.inject({method:"GET",url:"/api/v1/onboarding/review-queue",headers:{authorization:"Bearer valid-session-token"}});
+    assert.equal(response.statusCode,503);assert.equal(response.json().code,"ONBOARDING_QUEUE_UNAVAILABLE");
+    assert.equal(authPool.calls.length,1);assert.equal(appPool.calls.length,1);
+    assert.ok([...appPool.calls,...authPool.calls].every(c=>!/\\b(insert|update|delete)\\b/i.test(c.sql)));
+  }finally{await app.close();if(previous===undefined)delete process.env.RUPAYKG_AUTH_RESOLVER_MODE;else process.env.RUPAYKG_AUTH_RESOLVER_MODE=previous;}
+});
