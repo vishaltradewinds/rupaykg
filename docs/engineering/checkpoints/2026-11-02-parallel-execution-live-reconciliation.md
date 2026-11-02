@@ -514,3 +514,13 @@ The branch now contains an immutable/idempotent enqueue helper, atomic lease cla
 - PR #204 checkpoint head `805da38c95162cf2cfe48724121ce6f3c3ac7749`, exact-head CI `41463466349`: **SUCCESS**.
 
 **Important limit:** provider retry tests and durable lease/provider persistence primitives are not yet a production worker. The legacy synchronous submit route remains. Worker process/queue consumer, signed actor-bound finalize, tenant-isolated worker principal, forced RLS/job-table policy, complete route-to-data matrix and independent DBA/security review remain release blockers. Production HOLD; certification OFF; TRL 9 NOT ESTABLISHED; no production changes or external provider writes.
+
+
+### 14:41 UTC — HCS ambiguous-indexing regression verified
+
+- Exact-head workflow `41463738956` for HCS reconciliation test commit `a73269dbd46158fddc8822b04e55168b68e28cd6`: **SUCCESS**. Migration validation, restricted verifier-owner provisioning/teardown, disposable PostgreSQL migration, typecheck, build, two-custodian bootstrap, browser smoke, complete tests including PostgreSQL acceptance, production container build and cleanup all passed.
+- Guardian retry workflow `41463406524`: **SUCCESS** with the same complete gate set. Its fault injection confirms retry after a lost response uses the same persisted Guardian idempotency key.
+- HCS fault injection confirms first Mirror Node lookup can return PENDING/404, then a subsequent lookup confirms the record while querying the exact same persisted transaction ID. It does not treat 404 as proof of non-submission.
+- PR #204 checkpoint commit `7d2bd99930c0cbf477ce9bfadc096f6639e0ae21` records the HCS CI evidence and remains documentation-only.
+
+**Next engineering gate:** introduce a separate, default-disabled durable enqueue API contract while preserving the legacy synchronous endpoint for compatibility. Do not enable it until route authorization, transaction-local signed actor context, job-table RLS, least-privilege worker role, and two-tenant negative tests are independently verified. No worker runtime activation, production DB changes, deployments, or external writes.
