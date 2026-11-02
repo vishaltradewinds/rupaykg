@@ -99,7 +99,7 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
       await client.query("begin");
       inTransaction = true;
       const binding = await client.query<{
-        organization_id: string; geography_id: string; activity_status: string;
+        organization_id: string; geography_id: string | null; activity_status: string;
         actor_identity_id: string; verification_decision: string; verifier_identity_id: string;
         evidence_status: string; evidence_activity_id: string; organization_status: string;
       }>(
@@ -130,7 +130,7 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
         await client.query("rollback"); inTransaction = false;
         return reply.code(403).send({ error: "Activity geography is outside organization authorization scope", code: "GEOGRAPHY_FORBIDDEN" });
       }
-      if (row.organization_status !== "VERIFIED" || row.activity_status !== "COMPLETED"
+      if (!row.geography_id || row.organization_status !== "VERIFIED" || row.activity_status !== "COMPLETED"
           || row.verification_decision !== "APPROVED" || row.evidence_status !== "VERIFIED"
           || row.evidence_activity_id !== activityId || row.verifier_identity_id === row.actor_identity_id) {
         await client.query("rollback"); inTransaction = false;
