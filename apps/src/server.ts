@@ -251,7 +251,7 @@ await registerOnboardingHierarchyRoutes(app, pool, authPool);
 await registerValueRoutes(app, pool);
 await registerRegistryRoutes(app, pool);
 await registerSyncRoutes(app, pool);
-await registerWorkspaceRoutes(app, pool);
+await registerWorkspaceRoutes(app, pool, requestContextConfig());
 await registerBwgRoutes(app, pool);
 await registerCpcbSwmRoutes(app, pool);
 await registerIntelligenceRoutes(app, pool);
