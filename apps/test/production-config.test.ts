@@ -24,6 +24,7 @@ test("production config accepts the fail-closed production contract", () => {
     authResolverMode: "security_definer",
     requestContextSecret: baseEnv.RUPAYKG_REQUEST_CONTEXT_SECRET,
     requestContextKeyId: baseEnv.RUPAYKG_REQUEST_CONTEXT_KEY_ID,
+    requestContextMode: "disabled",
     databaseSsl: "require",
     databaseCaCert: baseEnv.DATABASE_CA_CERT,
     allowedOrigins: ["https://app.rupaykg.example", "https://admin.rupaykg.example"],
