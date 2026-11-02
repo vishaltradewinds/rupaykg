@@ -3,7 +3,7 @@ import type { Pool } from "pg";
 import { authenticate, bearerChallenge, hasOrganizationPermission } from "./auth.js";
 import { withRlsRequestTransaction, type RlsRequestContextConfig } from "./rls-request-transaction.js";
 
-const EPR_READ_PERMISSIONS = ["epr:read", "epr:manage", "reports:read"] as const;
+const EPR_READ_PERMISSIONS = ["epr:read", "epr:manage", "reports:read"];
 
 const EPR_RETURN_LIST_SQL = `select r.id,r.scheme_id,s.code as scheme_code,s.name as scheme_name,
        r.organization_id,r.obligation_id,r.period_start,r.period_end,r.return_type,
