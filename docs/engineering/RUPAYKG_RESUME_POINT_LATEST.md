@@ -315,3 +315,11 @@ No production DDL/DML, migration, role/grant/RLS changes, deployments, worker/sc
 - P0 UI defect reconfirmed: `apps/web/public/minimal-stakeholder.css` hides `.landing-nav` and `.landing-panel`; this prevents users reaching important public explanatory content. Repair with keyboard-accessible navigation/sections.
 - This was a static comparative audit and specification only. No UI source, production DB, API, deployment or authorization behavior changed in this batch. PR #192 remains draft; production remains HOLD; TRL 9 not established.
 - Next execution: fix landing navigation visibility and browser tests; establish canonical theme token stylesheet and apply to public/authenticated shell; then incrementally restyle shared components and workflows without changing API contracts or permission gates. Validate exact-head CI and browser/mobile behavior before any release.
+
+## 2026-11-02 production Neon read-only re-verification
+- Re-identified the Neon project `rupaykg-production-fresh` (`steep-mud-79906940`) and its sole authoritative production branch `main` (`br-restless-base-b44cip2h`), database `rupaykg`.
+- Read-only catalog/SQL verification: 67 public base tables; 0 RLS-enabled; 0 FORCE RLS; 92 applied migrations, latest `20261021`; database owner `rupaykg`; production schemas `auth_private` and `app_security` absent.
+- This confirms the production security gap remains open: no tenant isolation is enforced by PostgreSQL RLS on the production branch and the signed request-context verifier is not installed there.
+- Several additional Neon branches were observed and classified as staging/rehearsal/lab branches. They are not authoritative production databases. No branch was deleted, reset, or mutated; destructive branch cleanup requires explicit approval and evidence/lineage reconciliation.
+- Detailed evidence: `docs/engineering/checkpoints/2026-11-02-production-neon-readonly-reverification.md`.
+- No production DDL/DML, migration, role/grant/RLS change, secret access, deployment, worker activation or certification. Production remains HOLD; system TRL 9 not established.
