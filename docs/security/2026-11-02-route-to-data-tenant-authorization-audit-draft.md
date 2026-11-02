@@ -331,3 +331,48 @@ Production remains unchanged. This audit is a source-level draft, not an indepen
 The MRV submit route previously acquired a session advisory lock on a checked-out `PoolClient` but performed the authorization reads, payload reads, replay lookup and final provenance write through `pool.query` on potentially different connections. It now keeps the lock and all those submit-path database operations on the same checked-out client. The authorization and geography helper functions accept that client as well. This removes the lock/query connection split and keeps the serialized submit path on one DB session.
 
 **Important limitation:** this is not yet a transaction-local signed RLS context. Queries remain autocommit while the session advisory lock is held, including across Guardian/Hedera network calls. A durable claim/outbox → provider execution → actor-bound finalize design remains the preferred next architecture to avoid long-running transactions while maintaining crash recovery, lease expiry, idempotency and authorization revalidation. Do not claim tenant RLS coverage from this change.
+
+
+## 2026-11-02 source-DDL reconciliation — activity, evidence, MRV and field-device cohorts
+
+This pass reads the canonical migration source at PR #192 code head `2edd251ef404d88b00e4c7f994d89e42ae38e04b`. It is source evidence only; it does not prove that every migration is applied to production or that production columns match. The authoritative production migration ledger still ends at `20261021`.
+
+| Table / relationship | Source-verified columns and constraints | Authorization / integrity consequence | Status |
+|---|---|---|---|
+| `activities` | `001_core.sql`: PK `id`; required `organization_id`; optional `actor_identity_id`, `geography_id`; status and metadata. | Natural tenant root for measurements, evidence, observations and calculations. Geography is a separate required check for regulated writes; activity actor is not equivalent to organization authority. | Source verified |
+| `measurements` | PK `id`; required `activity_id`; value/unit/method/source/measured_at and quality status. | Tenant and geography scope derive through activity. Every join must retain the same activity; do not accept caller-supplied organization ownership. | Source verified |
+| `evidence` | PK `id`; nullable `activity_id` and `measurement_id`; evidence type/status/capture time/content URI/hash. | Evidence may be unbound at schema level; regulated MRV submission must require a non-null exact activity binding and validate any measurement belongs to that same activity. | Source verified; cross-link policy open |
+| `verifications` | PK `id`; nullable `evidence_id` and `activity_id`; required verifier identity; decision/scope/rationale. | Both evidence and activity links must be exact; approval requires independent verifier authority and actor independence. Nullable source columns mean an FK alone does not establish valid MRV scope. | Source verified; cross-link policy open |
+| `activity_assignments` | Composite PK `activity_id, identity_id`; optional role; no direct organization column. | Derive tenant through activity and bind identity; no generic organization_id policy can be applied. | Source verified |
+| `field_devices` | PK `id`; unique `device_id`; optional identity and organization; status and metadata. | Derive authority from verified device enrollment and its organization binding. Device identity must not be substituted with caller-supplied tenant ID. | Source verified |
+| `operation_sync_envelopes` | PK `id`; unique idempotency key; optional actor identity and device ID; JSON payload; replay/status fields; no organization column. | Scope through authenticated actor + verified device enrollment. Every referenced business object inside payload requires independent tenant validation; payload JSON is not an ownership source. | Source verified; payload ownership open |
+| `resource_flows` | Required single `organization_id`; source and destination geography IDs; quantity/material/status. | Existing DDL models one owning organization and two geography endpoints, not necessarily two party ownership. Both geography endpoints must be authorized for the owner. | Source verified |
+| `chain_of_custody_links` | Required parent `resource_flow_id`; sequence; optional `actor_organization_id`, `activity_id`, `evidence_id`; from/to geography; unique parent+sequence. | Child scope must inherit flow owner and additionally bind the actor organization, activity owner and evidence owner. It can represent a different actor organization; keep multi-party review bespoke. | Source verified; cross-parent consistency open |
+| `mrv_observations` | Required `activity_id`; optional `measurement_id`; observed parameter/value/unit/method/time and quality metadata. | Measurement must belong to the same activity. Tenant/geography derive through activity; instrument ID and JSON metadata are not principals. | Source verified; same-activity guard review open |
+| `evidence_verification_requirements` | Required `activity_id`; optional satisfied evidence and verification IDs; unique activity+requirement. | Satisfied evidence and verification must be linked to the same activity. A status boolean alone is not proof of the related evidence/verification chain. | Source verified; cross-parent consistency open |
+| `mrv_provenance_events` | Required activity, verification and evidence FKs; Guardian/HCS result fields; integrity hash. | Three independent FKs do not themselves prove that evidence and verification belong to the same activity. Credential issuance gate checks exact evidence binding in migration 045, but a complete tenant read/write policy remains required. | Source verified; relationship invariant needs broader review |
+| Evidence vault series/version/review | `20261021_evidence_artifact_vault.sql`: series has direct organization+activity; versions point to series and unique evidence; reviews point to evidence+version+reviewer. | Must enforce series organization equals activity organization, version evidence equals series activity, review evidence equals version evidence, and reviewer authority separately. Blob bytes and metadata must share the same tenant boundary. | Source verified; cross-parent guards and storage policy review open |
+| `methodology_governance_evidence` | References methodology version; evidence kind/reference/hash/independent party; immutable content trigger. | Platform-governed evidence, not tenant-owned evidence. Restrict write to governed methodology process and read according to approved public/oversight fields. | Source verified |
+
+### Durable MRV job ledger — new branch-only tables, not part of production's 67-table baseline
+
+The proposed `mrv_submission_jobs` and `mrv_submission_job_events` tables are introduced by branch migration `20261109_durable_mrv_submission_jobs.sql`; they are not included in the existing 67-table production count and are not deployed.
+
+A new source-integrity correction in commit `7c5ce75e5eea683416d0ae79e5cd7fef307e1836` adds composite unique indexes and foreign keys so a job cannot independently combine:
+- an activity with a different organization or geography;
+- evidence from a different activity; or
+- a verification for different evidence/activity.
+
+The insert guard also requires a COMPLETED activity, VERIFIED evidence, APPROVED verification by an identity independent of the activity actor, and verified organization geography scope. Integration coverage added in commit `5a924a40f93f165a85de9cf70cb3c9a2d792e960` exercises wrong-organization, wrong-geography, unverified-evidence and rejected-verification rejection paths.
+
+**Important residual control:** these constraints preserve the identity relationships, but evidence/verification status may later be revoked or changed. A future worker must re-check current evidence, verification, organization membership and geography authority before each irreversible provider stage and again before final provenance persistence. The enqueue API must derive the requester from the authenticated signed context and check a specific MRV submission permission; the database trigger currently validates evidence/verification bindings, not requester authorization.
+
+### Required policy design consequences
+
+1. Keep `IDENTITY_OWNED`, `SHARED_GOVERNED_CATALOG`, `PLATFORM_GOVERNANCE`, `BILATERAL_OR_INTERORG`, `REGISTRY_MULTI_PARTY` and `DERIVED_TENANT_*` policies bespoke.
+2. For every child table, policy generation must identify both the ownership path and same-parent consistency constraints. RLS on a child alone does not repair inconsistent FKs.
+3. Add negative tests for evidence/activity mismatch, measurement/activity mismatch, verifier/evidence/activity mismatch, artifact-series/activity mismatch, and device payload references crossing tenant boundaries.
+4. For the MRV worker, use a dedicated non-owner, NOBYPASSRLS role with narrowly scoped access and actor-bound enqueue/finalize functions. Do not grant direct broad table mutation as a shortcut.
+5. Do not deploy this branch migration or create production policies until the complete live-schema reconciliation, role/grant inventory, two-tenant tests, backup/restore and rollback rehearsal are independently reviewed.
+
+No production database, role, grant, migration, data, deployment or external provider was changed in this pass.
