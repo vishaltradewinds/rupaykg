@@ -61,18 +61,18 @@ test("durable MRV job ledger enforces immutable request, legal transitions and a
     );
     assert.equal(initialEvents.rows[0]?.count, "1", "job creation must be recorded");
 
-    await assert.rejects(
-      client.query("update mrv_submission_jobs set payload_hash=$2 where id=$1", [jobId,"c".repeat(64)]),
-      /MRV_JOB_REQUEST_IMMUTABLE/,
-    );
-    await assert.rejects(
-      client.query("update mrv_submission_jobs set status='COMPLETED' where id=$1", [jobId]),
-      /MRV_JOB_INVALID_STATE_TRANSITION/,
-    );
-    await assert.rejects(
-      client.query("update mrv_submission_job_events set event_code='tampered' where job_id=$1", [jobId]),
-      /MRV_JOB_EVENT_APPEND_ONLY/,
-    );
+    const expectSqlFailure = async (name: string, sql: string, values: unknown[], pattern: RegExp) => {
+      await client.query(`savepoint ${name}`);
+      try {
+        await assert.rejects(client.query(sql, values), pattern);
+      } finally {
+        await client.query(`rollback to savepoint ${name}`);
+        await client.query(`release savepoint ${name}`);
+      }
+    };
+    await expectSqlFailure("immutable_request", "update mrv_submission_jobs set payload_hash=$2 where id=$1", [jobId,"c".repeat(64)], /MRV_JOB_REQUEST_IMMUTABLE/);
+    await expectSqlFailure("invalid_transition", "update mrv_submission_jobs set status='COMPLETED' where id=$1", [jobId], /MRV_JOB_INVALID_STATE_TRANSITION/);
+    await expectSqlFailure("append_only_event", "update mrv_submission_job_events set event_code='tampered' where job_id=$1", [jobId], /MRV_JOB_EVENT_APPEND_ONLY/);
 
     await client.query("rollback");
   } catch (error) {
