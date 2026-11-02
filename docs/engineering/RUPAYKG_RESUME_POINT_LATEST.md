@@ -198,3 +198,12 @@ No production DDL/DML, migration, role/grant/RLS changes, deployments, worker/sc
 - CI #4487 and #4488 passed all gates including container build. CI #4489 (route code commit) and #4490 (route test commit) were still running at checkpoint write; do not infer a pass until final workflow conclusions are confirmed.
 - Remaining onboarding security scope: `apps/src/onboarding-hierarchy-routes.ts` still performs review-queue reads, legal verification writes, hierarchical approval/rejection writes, and authority checks through application-issued SQL. These need identity-bound database functions with least-privilege grants, explicit transaction/concurrency controls, and negative authorization tests. This work is NOT complete.
 - PR #192 remains OPEN/DRAFT. No merge, production migration, role/grant/RLS change, live database mutation, deployment, or certification. Production HOLD; TRL 9 not established.
+
+
+## 2026-11-02 — Onboarding route validation follow-up
+- CI #4489 passed all gates on route implementation commit `2f52b09924bd64f539acdace2f4ae98c1d7ee774`.
+- CI #4490 failed only in the newly added route unit tests: their regex assertions were over-escaped and did not match the valid `auth_private.resolve_session` SQL text. The implementation compiled, built, passed browser smoke and bootstrap acceptance; the test job caught the assertion defect.
+- Corrected route assertions to explicit SQL string checks in commit `11402c42b854579ad4513e7cc8f8907262900e19`. CI #4491 passed all gates including disposable PostgreSQL acceptance and production-container build.
+- CI #4492 is validating the current resume-checkpoint commit; browser smoke was in progress at last poll. Treat #4491 as the latest fully green validation of the route-test fix until #4492 concludes.
+- Next route-isolation gate remains hierarchical review/legal verification: the review queue, legal verification, approval/rejection, authority checks and hierarchy-step writes in `apps/src/onboarding-hierarchy-routes.ts` still execute SQL directly through the application pool. Do not claim the onboarding security boundary is complete.
+- No production operations were performed. PR #192 remains draft/open; production HOLD; TRL 9 not established.
