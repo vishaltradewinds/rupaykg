@@ -4,11 +4,16 @@ import { Pool } from "pg";
 /**
  * Creates one deterministic, idempotent live-acceptance dataset.
  *
- * Safety: this file does nothing unless RUPAYKG_ACCEPTANCE_SEED_ON_START=true.
- * It prefers an existing source-versioned operational geography. If none exists,
- * it uses the dedicated source-versioned acceptance fixture geography created by
- * migration 081; it never invents LGD/government geography data.
+ * Safety: acceptance seeding is forbidden in production and otherwise does
+ * nothing unless RUPAYKG_ACCEPTANCE_SEED_ON_START=true. It prefers an existing
+ * source-versioned operational geography. If none exists, it uses the dedicated
+ * source-versioned acceptance fixture geography created by migration 081; it
+ * never invents LGD/government geography data.
  */
+
+if (process.env.NODE_ENV === "production") {
+  throw new Error("Acceptance seeding is forbidden in production");
+}
 
 if (process.env.RUPAYKG_ACCEPTANCE_SEED_ON_START !== "true") {
   process.exit(0);
@@ -22,7 +27,9 @@ if (!sessionToken) throw new Error("RUPAYKG_ACCEPTANCE_SESSION_TOKEN is required
 const pool = new Pool({
   connectionString: databaseUrl,
   max: 1,
-  ssl: process.env.DATABASE_SSL === "false" ? undefined : { rejectUnauthorized: false },
+  ssl: process.env.DATABASE_SSL === "false"
+    ? undefined
+    : { rejectUnauthorized: true, ca: process.env.DATABASE_CA_CERT },
 });
 
 const tokenHash = createHash("sha256").update(sessionToken).digest("hex");
