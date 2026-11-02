@@ -256,3 +256,11 @@ Code commit head before documentation-only follow-up: `9d6664ba06f8264655606eaa8
 ## Completed CI confirmation for documentation checkpoint
 
 The prior PR #204 documentation validation run `41456297642` completed SUCCESS across dependency audit, migration validation, migration execution in disposable PostgreSQL, typecheck, build, browser smoke test, disposable PostgreSQL acceptance and production container build. It validates that documentation commit's repository checks, not live production security or platform TRL.
+
+
+## Exact CI tracking — geography correction PR #192
+
+- PR #192 code commit `9d6664ba06f8264655606eaa8853062e518fadd1` includes the organization-bound activity geography predicate, fail-closed geography migration, unit tests and PostgreSQL acceptance assertion.
+- Exact code-commit CI run `41456990898` is IN_PROGRESS. At last job inspection: dependency audit, migration validation, restricted owner provisioning, disposable migration application, bootstrap owner teardown and synthetic custodian provisioning passed; typecheck was running; build/bootstrap/browser/PostgreSQL tests/container build were pending.
+- A later documentation-only commit updates the route audit; current PR #192 head is `09d4cd335b4726241cc155884f51ebcc3b3767d7`. CI run `41457065615` was also IN_PROGRESS at last inspection.
+- PR #192 remains draft, open and unmerged. Do not treat queued/in-progress CI as acceptance. Production remains unchanged and the fail-closed migration is not approved for production until the organization geography backfill and rollback gates are satisfied.
