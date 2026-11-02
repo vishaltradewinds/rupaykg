@@ -414,3 +414,33 @@ Production remains unchanged: no RLS, grants, roles, migrations, provider writes
 - The new `isMrvSubmissionJobStillAuthorized` positive and revoked-membership negative assertions passed as part of that exact-head run.
 - The audit documentation update is commit `69748f8549500df56d4f9648370087266d5f31b3`, now the current PR #192 head. It is a documentation-only successor to the tested code commit; no code changed after the green run.
 - This function is not yet called by a real worker loop. It is a security primitive only. No claim of durable provider orchestration or production authorization closure is made.
+
+
+## Evidence Vault route audit — 2026-11-02
+
+Scope reviewed: `apps/src/evidence-vault-routes.ts` and `apps/src/evidence-vault.integration.test.ts`.
+
+### Verified positive controls
+- Upload validates UUID inputs, bounds base64 before decoding, enforces a 5 MiB cap, restricts declared media types, checks file signatures/content, and stores SHA-256 with byte length.
+- Upload uses one checked-out client and transaction for activity/geography ownership, permission, series binding, evidence row, artifact version, and final content URI update.
+- Existing-series upload takes a transaction advisory lock before calculating the next version number.
+- Review uses one checked-out client for row lock, geography, `evidence:review`, verifier eligibility, self-review denial, review record, verification record and evidence status mutation.
+- Download verifies stored byte length and SHA-256 before returning content; response includes `nosniff` and version/hash headers.
+- Existing integration test covers tenant outsider list denial, uploader self-review denial, independent reviewer approval, immutable second review, version increment, content integrity and media spoofing.
+
+### Open security gaps — do not mark tenant-RLS complete
+1. Authentication is resolved before the route transaction using `authenticate()` and ordinary pool queries; it is not yet bound to the signed request-context verifier transaction.
+2. `activityContext()` and the evidence list/download routes use pool-level reads for ownership, geography and permission, then later queries. These checks are application-side only until the exact protected statements run through the canonical checked-out-client tenant transaction and the production RLS policy set exists.
+3. The list/download endpoints do not share a single transaction across ownership, geography, permission and artifact bytes. A future refactor must use one client and recheck tenant scope in the same transaction as the artifact query; download must bind the artifact's evidence/activity/organization in one statement or transaction.
+4. Upload creates a new series without a series-level lock (safe from same-series version races because each new series has a new ID, but concurrent duplicate logical uploads can create separate series). Decide whether this is intended idempotency behavior; if not, add an explicit idempotency key/unique business key.
+5. Integration tests use the legacy auth resolver and ordinary privileged fixture pool. They prove application checks, not runtime-role/RLS isolation. Add two-tenant tests using the exact proposed restricted runtime role and verify no cross-tenant row or blob access when app checks are bypassed.
+6. Review path inserts a verification row and updates evidence status but does not itself prove a complete independent evidence-review workflow against the production verifier policy; confirm role/org/geography and reviewer qualification against the approved hierarchy before production.
+
+### Required remediation
+- Migrate every evidence-vault read/write endpoint to the canonical signed tenant transaction; remove pool fallback for protected data.
+- Introduce least-privilege upload/read/review database functions or narrowly scoped grants after the production table ownership/RLS matrix is approved.
+- Add two-tenant negative tests for guessed evidence UUIDs, series IDs, artifact IDs, query/header org spoofing, revoked membership, geography revocation, pool reuse and concurrent review/upload.
+- Add duplicate-upload idempotency semantics and test them.
+- Keep evidence vault production use behind the same RLS/tenant-isolation gate as MRV and EPR.
+
+This is a static code and test review, not a production penetration test. No production database changes, role/grant changes, storage migration or deployment were made.
