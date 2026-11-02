@@ -98,6 +98,32 @@ P0/P1 release blockers recorded by the route audit:
 
 Required next artifacts are a machine-readable endpoint → SQL/table → client/transaction → owner/geography/bilateral scope matrix; a live-schema-verified 67-table classification; a function/trigger/owner/search_path/EXECUTE-grant inventory; disposable two-tenant negative tests using exact proposed runtime roles; and independent DBA/security review with restore/rollback rehearsal.
 
+## Live database function/trigger/grant audit — read-only, 2026-11-02
+
+A second read-only catalog query was run against the same authoritative Neon production branch. It returned:
+- 115 functions in schema `public`.
+- 0/115 marked `SECURITY DEFINER`.
+- 0/115 with a function-level `proconfig` (no function-specific fixed search_path setting).
+- 78/115 functions owned by login role `rupaykg`.
+- 70 non-internal triggers on public tables.
+- 67/67 public tables appear in `information_schema.role_table_grants`.
+- 115 rows in `information_schema.routine_privileges` for grantee `PUBLIC` and schema `public`.
+
+Interpretation and required caution:
+- The 115 PUBLIC EXECUTE rows are a default-privilege exposure indicator, not by themselves proof that every function is exploitable. Each function's body, volatility, side effects, argument validation, owner privileges, caller reachability and intended public contract must be reviewed.
+- The 0 SECURITY DEFINER result is consistent with the production baseline lacking the newer `auth_private` and `app_security` schemas; it does not mean the production function/trigger surface is harmless.
+- Triggers are executed as part of table DML and their function bodies must be included in the 67-table ownership/policy and least-privilege review.
+- No blanket REVOKE, owner change, search_path change, trigger change or function replacement was performed. Blanket revocation risks breaking legitimate operations and must follow a per-function privilege manifest and disposable acceptance.
+- The production owner `rupaykg` being a login role with BYPASSRLS/CREATEROLE/CREATEDB remains a separate P0 boundary defect.
+
+Next DBA/security gate:
+1. Export the exact 115 function definitions, signatures, owners, ACLs, volatility, language and dependency/call graph.
+2. Map all 70 triggers to their trigger functions and affected table policy classes.
+3. Build an explicit EXECUTE grant manifest: PUBLIC deny by default; narrowly grant only intended safe read/reference functions to appropriate roles.
+4. Identify functions with dynamic SQL, SECURITY INVOKER assumptions, unqualified relation references, external effects or privilege-sensitive operations.
+5. Test the proposed ACL/owner/search_path changes on a disposable clone with the exact future runtime roles and full API/worker acceptance.
+6. Independent DBA/security sign-off before any production change.
+
 ## Immediate critical path
 
 1. Freeze production as read-only / HOLD.
