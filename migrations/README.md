@@ -119,3 +119,12 @@ Migration `20261110_epr_return_read_tenant_rls.sql` is a candidate, not a produc
 The API route is disabled by default through `RUPAYKG_EPR_RETURN_READ_ENABLED=false`. When explicitly enabled, startup checks the actual connection identity, RLS/FORCE RLS, exact policy, table ownership, read-only privileges and verifier ownership/grants before registering only `GET /api/v1/epr/returns`. The route uses the existing explicit `withRlsRequestTransaction` client boundary; authentication occurs first, then permission lookup and EPR row reads use the same signed tenant client. No EPR write route is registered.
 
 This migration must be rehearsed on disposable PostgreSQL with the exact restricted runtime role and two-tenant negative tests. Production migration, role/secret provisioning and feature activation remain blocked pending independent DBA/security approval and explicit founder authorization.
+
+
+## Verifier active-identity and tenant trigger guard (20261111)
+
+Migration `20261111_verifier_active_identity_and_trigger_tenant_guard.sql` closes two verifier authorization gaps. The shared activity authorization predicate now requires the verifier identity itself to be `VERIFIED` and not suspended, a `VERIFIED` membership in the subject activity's organization, a `VERIFIED` subject organization, an explicit verifier permission/recognized verifier role, and a matching `VERIFIED` geography scope. The legacy `VERIFY_EVIDENCE` permission alias remains accepted for compatibility with migration 027.
+
+The `enforce_verification_independence()` trigger now resolves the subject activity from the verification row or its evidence, rejects mismatched activity/evidence pairs, and calls the same tenant-bound authorization predicate for **all** decisions. This preserves the existing trigger's stricter all-decision authorization behavior while removing its global cross-organization membership lookup. Self-verification remains prohibited.
+
+This is a forward-only candidate migration on a review branch. It has not been applied to production. Before merge, CI must apply the full migration chain to disposable PostgreSQL and add/run behavioral trigger tests covering same-tenant authorization, foreign-tenant-only membership, pending membership, suspended and unverified identities, unverified organization, missing/pending geography scope, self-verification, and non-APPROVED decisions. The migration's SQL definition alone is not certification evidence.
