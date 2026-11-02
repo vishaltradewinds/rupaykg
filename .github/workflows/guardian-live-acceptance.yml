@@ -1,0 +1,210 @@
+name: Guardian and Hedera Live Acceptance
+
+on:
+  workflow_dispatch:
+    inputs:
+      rupaykg_base_url:
+        description: "Deployed RupayKG base URL, for example https://rupaykg.example.com"
+        required: true
+        type: string
+      organization_id:
+        description: "Verified RupayKG organization UUID used by the acceptance activity"
+        required: true
+        type: string
+      activity_id:
+        description: "Completed activity UUID with approved verification and verified evidence"
+        required: true
+        type: string
+      verification_id:
+        description: "Approved verification UUID bound to activity_id"
+        required: true
+        type: string
+      evidence_id:
+        description: "Verified evidence UUID bound to activity_id"
+        required: true
+        type: string
+      guardian_policy_id:
+        description: "Published Guardian policy/workflow identifier configured for the RupayKG Guardian adapter"
+        required: true
+        type: string
+      methodology_code:
+        description: "Optional methodology code carried into the authoritative MRV provenance"
+        required: false
+        type: string
+        default: ""
+
+jobs:
+  live-acceptance:
+    name: Authoritative Guardian -> Hedera -> Mirror Node acceptance
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+
+    steps:
+      - name: Validate acceptance inputs
+        env:
+          BASE_URL: ${{ inputs.rupaykg_base_url }}
+          ORGANIZATION_ID: ${{ inputs.organization_id }}
+          ACTIVITY_ID: ${{ inputs.activity_id }}
+          VERIFICATION_ID: ${{ inputs.verification_id }}
+          EVIDENCE_ID: ${{ inputs.evidence_id }}
+          POLICY_ID: ${{ inputs.guardian_policy_id }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os
+          from urllib.parse import urlparse
+
+          required = [
+              "BASE_URL", "ORGANIZATION_ID", "ACTIVITY_ID",
+              "VERIFICATION_ID", "EVIDENCE_ID", "POLICY_ID",
+          ]
+          missing = [name for name in required if not os.environ.get(name, "").strip()]
+          if missing:
+              raise SystemExit("Missing required acceptance input(s): " + ", ".join(missing))
+          parsed = urlparse(os.environ["BASE_URL"].rstrip("/"))
+          if parsed.scheme != "https" or not parsed.netloc:
+              raise SystemExit("rupaykg_base_url must be an HTTPS URL")
+          print("Acceptance inputs validated; no credentials or secrets are printed.")
+          PY
+
+      - name: Check runtime MRV configuration
+        env:
+          BASE_URL: ${{ inputs.rupaykg_base_url }}
+          ORGANIZATION_ID: ${{ inputs.organization_id }}
+          TOKEN: ${{ secrets.RUPAYKG_SESSION_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "$TOKEN" ]; then
+            echo "RUPAYKG_SESSION_TOKEN is required as a GitHub Actions secret."
+            exit 1
+          fi
+          curl --fail-with-body --silent --show-error \
+            --header "Authorization: Bearer $TOKEN" \
+            --header "X-RupayKG-Organization-Id: $ORGANIZATION_ID" \
+            "$BASE_URL/api/v1/mrv/status" > /tmp/mrv-status.json
+          python - <<'PY'
+          import json
+          data = json.load(open('/tmp/mrv-status.json'))
+          if data.get('syntheticData') is not False:
+              raise SystemExit('MRV status is not explicitly non-synthetic.')
+          guardian = data.get('guardian') or {}
+          hedera = data.get('hedera') or {}
+          print('Guardian configured:', guardian.get('configured'))
+          print('Hedera configured:', hedera.get('configured'))
+          if guardian.get('configured') is not True:
+              raise SystemExit('Guardian runtime is not configured.')
+          if hedera.get('configured') is not True:
+              raise SystemExit('Hedera runtime is not configured.')
+          PY
+
+      - name: Submit authoritative MRV
+        env:
+          BASE_URL: ${{ inputs.rupaykg_base_url }}
+          ORGANIZATION_ID: ${{ inputs.organization_id }}
+          ACTIVITY_ID: ${{ inputs.activity_id }}
+          VERIFICATION_ID: ${{ inputs.verification_id }}
+          EVIDENCE_ID: ${{ inputs.evidence_id }}
+          POLICY_ID: ${{ inputs.guardian_policy_id }}
+          METHODOLOGY_CODE: ${{ inputs.methodology_code }}
+          TOKEN: ${{ secrets.RUPAYKG_SESSION_TOKEN }}
+        run: |
+          set -euo pipefail
+          payload=$(python - <<'PY'
+          import json, os
+          body = {
+              'verificationId': os.environ['VERIFICATION_ID'],
+              'evidenceId': os.environ['EVIDENCE_ID'],
+              'guardianPolicyId': os.environ['POLICY_ID'],
+          }
+          if os.environ.get('METHODOLOGY_CODE', '').strip():
+              body['methodologyCode'] = os.environ['METHODOLOGY_CODE'].strip()
+          print(json.dumps(body))
+          PY
+          )
+          http_code=$(curl --silent --show-error --output /tmp/mrv-submit.json --write-out '%{http_code}' \
+            --request POST \
+            --header "Authorization: Bearer $TOKEN" \
+            --header "X-RupayKG-Organization-Id: $ORGANIZATION_ID" \
+            --header 'Content-Type: application/json' \
+            --data "$payload" \
+            "$BASE_URL/api/v1/mrv/activities/$ACTIVITY_ID/submit")
+          if [ "$http_code" != "201" ]; then
+            echo "Authoritative MRV submission returned HTTP $http_code"
+            cat /tmp/mrv-submit.json
+            exit 1
+          fi
+          python - <<'PY'
+          import json
+          data = json.load(open('/tmp/mrv-submit.json'))
+          guardian = data.get('guardian') or {}
+          hedera = data.get('hedera') or {}
+          if guardian.get('status') != 'VERIFIED' or not guardian.get('executionId'):
+              raise SystemExit('Guardian did not return VERIFIED with an authoritative executionId.')
+          if hedera.get('status') != 'CONSENSUS_CONFIRMED':
+              raise SystemExit('Hedera HCS consensus was not confirmed.')
+          if not data.get('eligibleForRegistry'):
+              raise SystemExit('Submission did not become registry-eligible.')
+          timestamp = hedera.get('consensusTimestamp')
+          if not timestamp:
+              raise SystemExit('No Hedera consensus timestamp was returned.')
+          with open('/tmp/acceptance.env', 'w') as f:
+              f.write('CONSENSUS_TIMESTAMP=' + timestamp + '\n')
+          print('Guardian VERIFIED and Hedera CONSENSUS_CONFIRMED.')
+          print('Registry eligibility:', data.get('eligibleForRegistry'))
+          PY
+
+      - name: Verify persisted provenance
+        env:
+          BASE_URL: ${{ inputs.rupaykg_base_url }}
+          ORGANIZATION_ID: ${{ inputs.organization_id }}
+          ACTIVITY_ID: ${{ inputs.activity_id }}
+          TOKEN: ${{ secrets.RUPAYKG_SESSION_TOKEN }}
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --silent --show-error \
+            --header "Authorization: Bearer $TOKEN" \
+            --header "X-RupayKG-Organization-Id: $ORGANIZATION_ID" \
+            "$BASE_URL/api/v1/mrv/provenance/$ACTIVITY_ID" > /tmp/provenance.json
+          python - <<'PY'
+          import json
+          data = json.load(open('/tmp/provenance.json'))
+          if data.get('syntheticData') is not False:
+              raise SystemExit('Persisted provenance is not explicitly non-synthetic.')
+          if not data.get('eligibleForRegistry'):
+              raise SystemExit('Persisted provenance is not registry-eligible.')
+          rows = data.get('provenance') or []
+          confirmed = [r for r in rows if r.get('guardian_status') == 'VERIFIED' and r.get('hcs_status') == 'CONSENSUS_CONFIRMED']
+          if not confirmed:
+              raise SystemExit('No persisted Guardian VERIFIED + HCS CONSENSUS_CONFIRMED provenance row found.')
+          print('Persisted authoritative provenance confirmed.')
+          PY
+
+      - name: Verify Hedera provenance through Mirror Node
+        env:
+          BASE_URL: ${{ inputs.rupaykg_base_url }}
+          ORGANIZATION_ID: ${{ inputs.organization_id }}
+          CONSENSUS_TIMESTAMP: ""
+          TOKEN: ${{ secrets.RUPAYKG_SESSION_TOKEN }}
+        run: |
+          set -euo pipefail
+          source /tmp/acceptance.env
+          curl --fail-with-body --silent --show-error \
+            --header "Authorization: Bearer $TOKEN" \
+            --header "X-RupayKG-Organization-Id: $ORGANIZATION_ID" \
+            "$BASE_URL/api/v1/mrv/hedera/verify/$(python -c 'import os,urllib.parse; print(urllib.parse.quote(os.environ["CONSENSUS_TIMESTAMP"], safe=""))')" > /tmp/hedera-verify.json
+          python - <<'PY'
+          import json
+          data = json.load(open('/tmp/hedera-verify.json'))
+          if data.get('verified') is not True:
+              raise SystemExit('Mirror Node did not verify the persisted Hedera provenance record.')
+          print('Mirror Node verification: true')
+          print('Network:', data.get('network'))
+          print('Consensus timestamp:', data.get('consensusTimestamp'))
+          print('Sequence number:', data.get('sequenceNumber'))
+          PY
+
+      - name: Acceptance result
+        run: |
+          echo "LIVE ACCEPTANCE PASSED: RupayKG -> Guardian VERIFIED -> Hedera HCS CONSENSUS_CONFIRMED -> persisted provenance -> Mirror Node verified."

@@ -1,0 +1,45 @@
+{
+"updateDate":"2026-09-22T00:00:00.000Z",
+"uuid":"8f4c2d91-0b6f-4f4b-9e7a-2a3d5c6e7f80",
+"name":"RupayKg BEE BM WA03.001 Landfill Methane Recovery",
+"version":"1.0",
+"description":"RupayKg Guardian-native dMRV workflow implementing BEE BM WA03.001 Version 1.0.",
+"topicDescription":"RupayKg | BEE BM WA03.001 | Landfill Methane Recovery | v1.0",
+"configFileId":"",
+"creator":"",
+"owner":"",
+"policyRoles":["Project Developer","Verification Body"],
+"policyNavigation":[
+{"role":"Project Developer","steps":[{"name":"WA03.001 Evidence Submission","block":"wa03_submission","level":1},{"name":"Equation 4 Calculation","block":"wa03_equation4","level":1}]},
+{"role":"Verification Body","steps":[{"name":"Independent Verification","block":"wa03_verification","level":1}]},
+{"role":"NO_ROLE","steps":[{"name":"Choose role","block":"Choose Role","level":1}]},
+{"role":"OWNER","steps":[{"name":"Policy Administration","block":"wa03_owner","level":1}]}
+],
+"policyGroups":[],"policyTopics":[],"policyTokens":[],"policyTag":"rupaykg-wa03-001-v1",
+"codeVersion":"1.5.1","hash":"","hashMapFileId":"",
+"importantParameters":{"atValidation":"","monitored":""},
+"typicalProjects":"Landfill methane recovery projects in India",
+"applicabilityConditions":"BEE BM WA03.001 Version 1.0 applicability and evidence requirements must be satisfied.",
+"categories":["Waste","Landfill Methane","BEE BM WA03.001"],
+"categoriesExport":[],"detailsUrl":"","tools":[],
+"config":{
+"id":"8f4c2d91-0b6f-4f4b-9e7a-2a3d5c6e7f81",
+"blockType":"interfaceContainerBlock","permissions":["ANY_ROLE"],"onErrorAction":"no-action","uiMetaData":{"type":"blank","fields":[]},"options":[],"dataSource":"auto","tag":"","children":[
+{"id":"8f4c2d91-0b6f-4f4b-9e7a-2a3d5c6e7f82","blockType":"policyRolesBlock","defaultActive":true,"permissions":["NO_ROLE"],"onErrorAction":"no-action","uiMetaData":{},"roles":["Project Developer","Verification Body"],"tag":"Choose Role","children":[],"events":[],"artifacts":[]},
+{"id":"8f4c2d91-0b6f-4f4b-9e7a-2a3d5c6e7f83","blockType":"interfaceContainerBlock","defaultActive":true,"permissions":["Project Developer"],"onErrorAction":"no-action","uiMetaData":{"type":"blank"},"tag":"Project Developer","children":[
+{"id":"8f4c2d91-0b6f-4f4b-9e7a-2a3d5c6e7f84","blockType":"interfaceStepBlock","defaultActive":true,"permissions":["Project Developer"],"onErrorAction":"no-action","uiMetaData":{},"tag":"wa03_submission","children":[
+{"id":"8f4c2d91-0b6f-4f4b-9e7a-2a3d5c6e7f85","blockType":"requestVcDocumentBlock","defaultActive":true,"permissions":["Project Developer"],"onErrorAction":"no-action","uiMetaData":{"type":"page","title":"WA03.001 Monitoring Evidence"},"presetFields":[],"schema":"#b6d3f2a4-2c0e-4a62-9e55-1b0e3c4d5f02","idType":"UUID","tag":"wa03_monitoring_form","children":[],"events":[],"artifacts":[]},
+{"id":"8f4c2d91-0b6f-4f4b-9e7a-2a3d5c6e7f86","blockType":"customLogicBlock","defaultActive":true,"permissions":["Project Developer"],"onErrorAction":"no-action","uiMetaData":{},"tag":"wa03_equation4","expression":"(function calc(){ const d=(documents&&documents[0]&&documents[0].document&&documents[0].document.credentialSubject&&documents[0].document.credentialSubject[0])||{}; const fPJ=Number(d.FCH4_PJ_y); const fBL=Number(d.FCH4_BL_y); const gwp=Number(d.GWPCH4); const ox=Number(d.OX); const pe=Number(d.PE_y); const le=Number(d.LE_y); if(![fPJ,fBL,gwp,ox,pe,le].every(Number.isFinite)) throw new Error('WA03.001 Equation 4 requires numeric inputs'); if(gwp!==29.8) throw new Error('WA03.001 GWPCH4 must equal 29.8'); if(ox<0||ox>1) throw new Error('WA03.001 OX must be between 0 and 1'); const er=(fPJ-fBL)*gwp*(1-ox)-pe-le; d.ERy_calculated=er; d.methodologyCode='WA03.001'; d.methodologyVersion='1.0'; return documents; })()","children":[],"events":[],"artifacts":[]}
+],"events":[],"artifacts":[]}
+],"events":[],"artifacts":[]},
+{"id":"8f4c2d91-0b6f-4f4b-9e7a-2a3d5c6e7f87","blockType":"interfaceContainerBlock","defaultActive":true,"permissions":["Verification Body"],"onErrorAction":"no-action","uiMetaData":{"type":"blank"},"tag":"Verification Body","children":[
+{"id":"8f4c2d91-0b6f-4f4b-9e7a-2a3d5c6e7f88","blockType":"interfaceStepBlock","defaultActive":true,"permissions":["Verification Body"],"onErrorAction":"no-action","uiMetaData":{},"tag":"wa03_verification","children":[
+{"id":"8f4c2d91-0b6f-4f4b-9e7a-2a3d5c6e7f89","blockType":"informationBlock","defaultActive":true,"permissions":["Verification Body"],"onErrorAction":"no-action","uiMetaData":{"type":"text","title":"WA03.001 Verification Freeze","description":"Independent verification must confirm applicability, BM-T-011 baseline evidence, monitoring/calibration evidence, Equation 4 inputs, calculation result, methodology version 1.0, and provenance references before VERIFIED acceptance."},"tag":"wa03_verification","children":[],"events":[],"artifacts":[]}
+],"events":[],"artifacts":[]}
+],"events":[],"artifacts":[]},
+{"id":"8f4c2d91-0b6f-4f4b-9e7a-2a3d5c6e7f90","blockType":"interfaceContainerBlock","defaultActive":true,"permissions":["OWNER"],"onErrorAction":"no-action","uiMetaData":{"type":"blank"},"tag":"wa03_owner","children":[{"id":"8f4c2d91-0b6f-4f4b-9e7a-2a3d5c6e7f91","blockType":"informationBlock","defaultActive":true,"permissions":["OWNER"],"onErrorAction":"no-action","uiMetaData":{"type":"text","title":"BEE BM WA03.001 v1.0","description":"Controlling methodology. Guardian reference methodologies are implementation patterns only and do not replace BEE authority."},"tag":"wa03_owner_info","children":[],"events":[],"artifacts":[]}
+],"events":[],"artifacts":[]}
+],
+"events":[],"artifacts":[]
+}
+}
