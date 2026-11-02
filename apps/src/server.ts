@@ -79,7 +79,7 @@ async function assertProductionDatabaseRuntimeContracts(): Promise<void> {
   if (!appCheck || appCheck.direct_auth_reads || !appCheck.auth_schema_usage || !appCheck.resolver_execute || !appCheck.permission_execute || !appCheck.scoped_authorization_execute || appCheck.auth_lifecycle_execute || appCheck.owner_membership) {
     throw new Error("PRODUCTION_APPLICATION_RUNTIME_PRIVILEGES_INVALID");
   }
-  const authChecks = await authPool.query<{ direct_auth_reads: boolean; auth_schema_usage: boolean; required_functions: boolean; permission_execute: boolean; scoped_authorization_execute: boolean; owner_membership: boolean }>(
+  const authChecks = await authPool.query<{ direct_auth_reads: boolean; auth_schema_usage: boolean; required_functions: boolean; onboarding_functions: boolean; permission_execute: boolean; scoped_authorization_execute: boolean; owner_membership: boolean }>(
     `select
        (has_table_privilege(current_user,'public.identities','SELECT') or has_table_privilege(current_user,'public.identities','INSERT') or has_table_privilege(current_user,'public.identities','UPDATE') or has_table_privilege(current_user,'public.identities','DELETE')
         or has_table_privilege(current_user,'public.identity_sessions','SELECT') or has_table_privilege(current_user,'public.identity_sessions','INSERT') or has_table_privilege(current_user,'public.identity_sessions','UPDATE') or has_table_privilege(current_user,'public.identity_sessions','DELETE')
@@ -104,10 +104,13 @@ async function assertProductionDatabaseRuntimeContracts(): Promise<void> {
         and has_function_privilege(current_user,'auth_private.revoke_session(text)','EXECUTE')
         and has_function_privilege(current_user,'auth_private.register_identity(text,text,text,text)','EXECUTE')
         and has_function_privilege(current_user,'auth_private.get_self_account_context(text)','EXECUTE')) as required_functions,
+       (has_function_privilege(current_user,'auth_private.get_onboarding_review_queue(text)','EXECUTE')
+        and has_function_privilege(current_user,'auth_private.verify_stakeholder_legal(text,uuid,text,text)','EXECUTE')
+        and has_function_privilege(current_user,'auth_private.review_stakeholder_application(text,uuid,text,text)','EXECUTE')) as onboarding_functions,
        (pg_has_role(current_user,'rupaykg_auth_owner','MEMBER') or pg_has_role(current_user,'rupaykg_app_owner','MEMBER')) as owner_membership`,
   );
   const authCheck = authChecks.rows[0];
-  if (!authCheck || authCheck.direct_auth_reads || !authCheck.auth_schema_usage || !authCheck.required_functions || authCheck.permission_execute || authCheck.scoped_authorization_execute || authCheck.owner_membership) {
+  if (!authCheck || authCheck.direct_auth_reads || !authCheck.auth_schema_usage || !authCheck.required_functions || !authCheck.onboarding_functions || authCheck.permission_execute || authCheck.scoped_authorization_execute || authCheck.owner_membership) {
     throw new Error("PRODUCTION_AUTHENTICATION_RUNTIME_PRIVILEGES_INVALID");
   }
   if ((await authPool.query<{ resolver_execute: boolean }>(
@@ -119,9 +122,9 @@ async function assertProductionDatabaseRuntimeContracts(): Promise<void> {
     `select p.proname as function_name,p.prosecdef as security_definer,pg_get_userbyid(p.proowner) as owner_name
        from pg_proc p join pg_namespace n on n.oid=p.pronamespace
       where n.nspname='auth_private' and p.proname in
-        ('resolve_session','find_login_candidate','record_login_failure','reset_login_failures','issue_session','revoke_session','register_identity','get_self_account_context','has_organization_permission','organization_has_geography_scope','can_read_geography','can_write_geography','can_write_activity','can_verify_evidence','is_platform_admin','get_platform_admin_overview','list_platform_identities','list_platform_roles')`,
+        ('resolve_session','find_login_candidate','record_login_failure','reset_login_failures','issue_session','revoke_session','register_identity','get_self_account_context','has_organization_permission','organization_has_geography_scope','can_read_geography','can_write_geography','can_write_activity','can_verify_evidence','is_platform_admin','get_platform_admin_overview','list_platform_identities','list_platform_roles','get_onboarding_review_queue','verify_stakeholder_legal','review_stakeholder_application')`,
   );
-  if (functionOwners.rows.length !== 18 || functionOwners.rows.some((fn) =>
+  if (functionOwners.rows.length !== 21 || functionOwners.rows.some((fn) =>
     !fn.security_definer || fn.owner_name !== "rupaykg_auth_owner")) {
     throw new Error("PRODUCTION_AUTH_FUNCTION_OWNERSHIP_INVALID");
   }
