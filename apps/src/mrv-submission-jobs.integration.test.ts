@@ -126,8 +126,6 @@ test("durable MRV job ledger enforces immutable request, legal transitions and a
     });
     assert.equal(hcsConfirmed?.status, "HCS_CONSENSUS_CONFIRMED");
     assert.equal(hcsConfirmed?.hedera_transaction_id, transactionId, "the persisted HCS transaction ID must survive stage completion");
-    await client.query("rollback");
-  } catch (error) {
     const enqueueInput = {
       activityId, verificationId, evidenceId, organizationId, geographyId, requestedByIdentityId: identityId,
       guardianPolicyId: "enqueue-test-policy", methodologyCode: "BM WA03.001", payloadSnapshot: { schema: "rupaykg:mrv:v1", observations: [], evidence: [] },
@@ -142,6 +140,8 @@ test("durable MRV job ledger enforces immutable request, legal transitions and a
     );
 
     await client.query("rollback");
+  } catch (error) {
+    await client.query("rollback").catch(() => undefined);
     throw error;
   } finally {
     client.release();
