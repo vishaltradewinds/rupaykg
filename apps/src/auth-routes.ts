@@ -2,7 +2,6 @@ import { createHash, randomBytes, scryptSync, timingSafeEqual } from "node:crypt
 import type { FastifyInstance } from "fastify";
 import type { Pool } from "pg";
 import { authenticate, issueOpaqueToken, type AuthContext } from "./auth.js";
-import { getPermissionsForRole } from "./rbac-policy.js";
 
 type Body = Record<string, unknown>;
 const text = (body: Body, key: string) => typeof body[key] === "string" && body[key].trim() ? body[key].trim() : null;
@@ -86,7 +85,35 @@ export async function registerAuthRoutes(app:FastifyInstance,pool:Pool|null,auth
   return reply.code(204).send();
  });
  app.get("/api/v1/onboarding/options",async()=>({source:"application",syntheticData:false,stakeholders:STAKEHOLDER_OPTIONS.map(([key,label,organizationType])=>({key,label,organizationType}))}));
- app.post("/api/v1/onboarding/applications",async(request,reply)=>{const auth=await requireAuth(request,reply,pool);if(!auth||!pool)return;const body=bodyOf(request),organizationName=text(body,"organizationName"),roleKeyText=text(body,"roleKey"),note=text(body,"applicantNote"),geographyId=text(body,"geographyId");const legalName=text(body,"legalName")??organizationName,legalForm=text(body,"legalForm"),registrationIdentifier=text(body,"registrationIdentifier"),registrationAuthority=text(body,"registrationAuthority"),evidenceType=text(body,"evidenceType"),documentReference=text(body,"documentReference"),contentHash=text(body,"contentHash"),issuerName=text(body,"issuerName"),issuedAt=text(body,"issuedAt"),expiresAt=text(body,"expiresAt");if(!organizationName||!roleKeyText||!roleKeys.has(roleKeyText as StakeholderRoleKey))return reply.code(400).send({error:"organizationName and a supported stakeholder role are required",code:"INVALID_ONBOARDING"});const roleKey=roleKeyText as StakeholderRoleKey;const option=STAKEHOLDER_OPTIONS.find(([key])=>key===roleKey);if(!option)return reply.code(400).send({error:"Unsupported stakeholder role",code:"INVALID_ONBOARDING"});if(organizationRequiresLegalVerification(option[2])&&(!legalName||!legalForm||!registrationIdentifier||!registrationAuthority))return reply.code(400).send({error:"Legal name, legal form, registration identifier and registration authority are required for organization-backed stakeholder onboarding",code:"LEGAL_IDENTITY_REQUIRED"});if(organizationRequiresLegalVerification(option[2])&&(!evidenceType||!documentReference||!contentHash))return reply.code(400).send({error:"At least one legal verification evidence reference and content hash are required for organization-backed stakeholder onboarding",code:"LEGAL_EVIDENCE_REQUIRED"});if(geographyId&&!(await pool.query("select id from geography where id=$1",[geographyId])).rows[0])return reply.code(400).send({error:"Selected geography does not exist",code:"GEOGRAPHY_NOT_FOUND"});if((await pool.query(`select id from stakeholder_applications where identity_id=$1 and status in('PENDING','APPROVED') limit 1`,[auth.identityId])).rows[0])return reply.code(409).send({error:"An active stakeholder application already exists for this identity",code:"APPLICATION_EXISTS"});const client=await pool.connect();try{await client.query("begin");const organization=await client.query<{id:string}>("insert into organizations(name,organization_type,legal_name,legal_form,registration_identifier,registration_authority,status,verification_status) values($1,$2,$3,$4,$5,$6,'PENDING','UNDER_REVIEW') returning id",[organizationName,option[2],legalName,legalForm,registrationIdentifier,registrationAuthority]);const organizationRow=organization.rows[0];if(!organizationRow)throw new Error("Organization insert returned no row");const role=await client.query<{id:string}>("insert into roles(organization_id,name,permissions,geography_scope) values($1,$2,$3,'[]') returning id",[organizationRow.id,roleKey,JSON.stringify(getPermissionsForRole(roleKey))]);const roleRow=role.rows[0];if(!roleRow)throw new Error("Role insert returned no row");await client.query("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'PENDING')",[auth.identityId,organizationRow.id,roleRow.id]);if(geographyId)await client.query("insert into organization_geography_scopes(organization_id,geography_id,status) values($1,$2,'PENDING')",[organizationRow.id,geographyId]);if(evidenceType&&documentReference&&contentHash)await client.query("insert into organization_verification_evidence(organization_id,evidence_type,document_reference,content_hash,issuer_name,issued_at,expires_at,status) values($1,$2,$3,$4,$5,$6,$7,'PENDING')",[organizationRow.id,evidenceType,documentReference,contentHash,issuerName,issuedAt?new Date(issuedAt):null,expiresAt?new Date(expiresAt):null]);const application=await client.query("insert into stakeholder_applications(identity_id,organization_id,role_id,requested_role_key,requested_organization_type,geography_id,status,applicant_note) values($1,$2,$3,$4,$5,$6,'PENDING',$7) returning *",[auth.identityId,organizationRow.id,roleRow.id,roleKey,option[2],geographyId,note]);await client.query("commit");return reply.code(201).send({source:"postgresql",syntheticData:false,application:application.rows[0],legalVerification:{status:"UNDER_REVIEW",evidenceSubmitted:Boolean(evidenceType&&documentReference&&contentHash)},message:"Application submitted. Legal identity evidence must be reviewed by an authorized platform reviewer before operational access is granted."});}catch(error){await client.query("rollback");request.log.error(error);return reply.code(503).send({error:"Stakeholder application could not be created",code:"ONBOARDING_UNAVAILABLE"});}finally{client.release();}});
+ app.post("/api/v1/onboarding/applications",async(request,reply)=>{
+  const auth=await requireAuth(request,reply,pool);if(!auth)return;
+  if(!authPool)return reply.code(503).send({error:"Authentication database unavailable",code:"AUTH_DATABASE_UNAVAILABLE"});
+  const body=bodyOf(request),organizationName=text(body,"organizationName"),roleKeyText=text(body,"roleKey"),note=text(body,"applicantNote"),geographyId=text(body,"geographyId");
+  const legalName=text(body,"legalName")??organizationName,legalForm=text(body,"legalForm"),registrationIdentifier=text(body,"registrationIdentifier"),registrationAuthority=text(body,"registrationAuthority"),evidenceType=text(body,"evidenceType"),documentReference=text(body,"documentReference"),contentHash=text(body,"contentHash"),issuerName=text(body,"issuerName"),issuedAt=text(body,"issuedAt"),expiresAt=text(body,"expiresAt");
+  if(!organizationName||!roleKeyText||!roleKeys.has(roleKeyText as StakeholderRoleKey))return reply.code(400).send({error:"organizationName and a supported stakeholder role are required",code:"INVALID_ONBOARDING"});
+  const roleKey=roleKeyText as StakeholderRoleKey,option=STAKEHOLDER_OPTIONS.find(([key])=>key===roleKey);
+  if(!option)return reply.code(400).send({error:"Unsupported stakeholder role",code:"INVALID_ONBOARDING"});
+  if(organizationRequiresLegalVerification(option[2])&&(!legalName||!legalForm||!registrationIdentifier||!registrationAuthority))return reply.code(400).send({error:"Legal name, legal form, registration identifier and registration authority are required for organization-backed stakeholder onboarding",code:"LEGAL_IDENTITY_REQUIRED"});
+  if(organizationRequiresLegalVerification(option[2])&&(!evidenceType||!documentReference||!contentHash))return reply.code(400).send({error:"At least one legal verification evidence reference and content hash are required for organization-backed stakeholder onboarding",code:"LEGAL_EVIDENCE_REQUIRED"});
+  const header=request.headers.authorization,token=typeof header==="string"&&header.startsWith("Bearer ")?header.slice(7).trim():"";
+  if(!token)return reply.code(401).send({error:"Authenticated session required",code:"AUTH_REQUIRED"});
+  try{
+   const result=await authPool.query<{application_result:any}>(`select auth_private.create_stakeholder_application($1,$2,$3,$4,$5,$6,$7,$8::uuid,$9,$10,$11,$12,$13,$14::timestamptz,$15::timestamptz) as application_result`,[
+    hash(token),organizationName,roleKey,legalName,legalForm,registrationIdentifier,registrationAuthority,geographyId,note,evidenceType,documentReference,contentHash,issuerName,issuedAt?new Date(issuedAt).toISOString():null,expiresAt?new Date(expiresAt).toISOString():null,
+   ]);
+   const value=result.rows[0]?.application_result;
+   if(!value?.application||!value?.organization_id)throw new Error("ONBOARDING_FUNCTION_RETURNED_INVALID_RESULT");
+   return reply.code(201).send({source:"postgresql",syntheticData:false,application:value.application,legalVerification:{status:"UNDER_REVIEW",evidenceSubmitted:Boolean(evidenceType&&documentReference&&contentHash)},message:"Application submitted. Legal identity evidence must be reviewed by an authorized platform reviewer before operational access is granted."});
+  }catch(error){
+   const code=(error as {message?:string})?.message??"";
+   if(code.includes("APPLICATION_EXISTS"))return reply.code(409).send({error:"A pending stakeholder application already exists for this identity",code:"APPLICATION_EXISTS"});
+   if(code.includes("AUTH_REQUIRED"))return reply.code(401).send({error:"Authenticated session required",code:"AUTH_REQUIRED"});
+   if(code.includes("GEOGRAPHY_NOT_FOUND"))return reply.code(400).send({error:"Selected geography does not exist",code:"GEOGRAPHY_NOT_FOUND"});
+   if(code.includes("UNSUPPORTED_STAKEHOLDER_ROLE")||code.includes("INVALID_ONBOARDING_INPUT"))return reply.code(400).send({error:"Invalid stakeholder application",code:"INVALID_ONBOARDING"});
+   if(code.includes("LEGAL_IDENTITY_AND_EVIDENCE_REQUIRED"))return reply.code(400).send({error:"Legal identity and evidence are required",code:"LEGAL_EVIDENCE_REQUIRED"});
+   request.log.error(error);return reply.code(503).send({error:"Stakeholder application could not be created",code:"ONBOARDING_UNAVAILABLE"});
+  }
+ });
  app.get("/api/v1/onboarding/applications",async(request,reply)=>{
   const auth=await requireAuth(request,reply,pool);if(!auth)return;
   if(!authPool)return reply.code(503).send({error:"Authentication database unavailable",code:"AUTH_DATABASE_UNAVAILABLE"});
@@ -99,5 +126,24 @@ export async function registerAuthRoutes(app:FastifyInstance,pool:Pool|null,auth
    return {source:"postgresql",syntheticData:false,applications:context.applications};
   }catch(error){request.log.error(error);return reply.code(503).send({error:"Stakeholder applications unavailable",code:"ONBOARDING_UNAVAILABLE"});}
  });
- app.post("/api/v1/onboarding/applications/:applicationId/withdraw",async(request,reply)=>{const auth=await requireAuth(request,reply,pool);if(!auth||!pool)return;const id=(request.params as {applicationId:string}).applicationId;const client=await pool.connect();try{await client.query("begin");const result=await client.query<{organization_id:string}>(`update stakeholder_applications set status='WITHDRAWN',reviewed_at=now(),review_note=null where id=$1 and identity_id=$2 and status='PENDING' returning organization_id`,[id,auth.identityId]);const row=result.rows[0];if(!row){await client.query("rollback");return reply.code(404).send({error:"Pending stakeholder application not found",code:"APPLICATION_NOT_FOUND"});}await client.query("update organization_memberships set status='REJECTED' where organization_id=$1 and identity_id=$2 and status='PENDING'",[row.organization_id,auth.identityId]);await client.query("update organization_geography_scopes set status='REJECTED' where organization_id=$1 and status='PENDING'",[row.organization_id]);await client.query("update organizations set status='REJECTED',verification_status='REJECTED',verification_note='Application withdrawn by applicant' where id=$1 and status='PENDING'",[row.organization_id]);await client.query("commit");return {source:"postgresql",syntheticData:false,status:"WITHDRAWN",organizationId:row.organization_id};}catch(error){await client.query("rollback");request.log.error(error);return reply.code(503).send({error:"Stakeholder withdrawal could not be finalized",code:"WITHDRAWAL_UNAVAILABLE"});}finally{client.release();}});
+ app.post("/api/v1/onboarding/applications/:applicationId/withdraw",async(request,reply)=>{
+  const auth=await requireAuth(request,reply,pool);if(!auth)return;
+  if(!authPool)return reply.code(503).send({error:"Authentication database unavailable",code:"AUTH_DATABASE_UNAVAILABLE"});
+  const id=(request.params as {applicationId:string}).applicationId;
+  if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id))return reply.code(400).send({error:"Invalid application id",code:"INVALID_APPLICATION_ID"});
+  const header=request.headers.authorization,token=typeof header==="string"&&header.startsWith("Bearer ")?header.slice(7).trim():"";
+  if(!token)return reply.code(401).send({error:"Authenticated session required",code:"AUTH_REQUIRED"});
+  try{
+   const result=await authPool.query<{withdrawal_result:{status:string;organization_id?:string}}>(
+    "select auth_private.withdraw_stakeholder_application($1,$2::uuid) as withdrawal_result",[hash(token),id],
+   );
+   const value=result.rows[0]?.withdrawal_result;
+   if(value?.status==="NOT_FOUND")return reply.code(404).send({error:"Pending stakeholder application not found",code:"APPLICATION_NOT_FOUND"});
+   if(value?.status!=="WITHDRAWN"||!value.organization_id)throw new Error("WITHDRAWAL_FUNCTION_RETURNED_INVALID_RESULT");
+   return {source:"postgresql",syntheticData:false,status:"WITHDRAWN",organizationId:value.organization_id};
+  }catch(error){
+   if((error as {message?:string})?.message?.includes("AUTH_REQUIRED"))return reply.code(401).send({error:"Authenticated session required",code:"AUTH_REQUIRED"});
+   request.log.error(error);return reply.code(503).send({error:"Stakeholder withdrawal could not be finalized",code:"WITHDRAWAL_UNAVAILABLE"});
+  }
+ });
 }
