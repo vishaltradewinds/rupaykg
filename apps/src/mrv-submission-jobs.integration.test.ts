@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { approveTestMembership } from "./test-support/approved-membership.js";
-import { advanceMrvSubmissionJob, claimNextMrvSubmissionJob, persistMrvGuardianIdempotencyKey, persistMrvHcsTransactionId, renewMrvSubmissionJobLease } from "./mrv-submission-jobs.js";
+import { advanceMrvSubmissionJob, claimNextMrvSubmissionJob, enqueueMrvSubmissionJob, persistMrvGuardianIdempotencyKey, persistMrvHcsTransactionId, renewMrvSubmissionJobLease } from "./mrv-submission-jobs.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 const ssl = process.env.DATABASE_SSL === "false" ? undefined : { rejectUnauthorized: false };
@@ -128,6 +128,19 @@ test("durable MRV job ledger enforces immutable request, legal transitions and a
     assert.equal(hcsConfirmed?.hedera_transaction_id, transactionId, "the persisted HCS transaction ID must survive stage completion");
     await client.query("rollback");
   } catch (error) {
+    const enqueueInput = {
+      activityId, verificationId, evidenceId, organizationId, geographyId, requestedByIdentityId: identityId,
+      guardianPolicyId: "enqueue-test-policy", methodologyCode: "BM WA03.001", payloadSnapshot: { schema: "rupaykg:mrv:v1", observations: [], evidence: [] },
+    };
+    const queued = await enqueueMrvSubmissionJob(client, enqueueInput);
+    const replayedQueue = await enqueueMrvSubmissionJob(client, enqueueInput);
+    assert.equal(replayedQueue.id, queued.id, "identical submissions must return the same durable job");
+    await assert.rejects(
+      enqueueMrvSubmissionJob(client, { ...enqueueInput, payloadSnapshot: { schema: "rupaykg:mrv:v1", observations: [{ value: 2 }], evidence: [] } }),
+      /MRV_IDEMPOTENCY_PAYLOAD_CONFLICT/,
+      "changed payload under the same idempotency key must fail closed",
+    );
+
     await client.query("rollback");
     throw error;
   } finally {
