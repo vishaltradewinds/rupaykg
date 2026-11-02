@@ -305,6 +305,43 @@ async function run(): Promise<void> {
     const applicantOrganizationId = createdApplication.rows[0]?.application_result.organization_id;
     assert.ok(applicationId && applicantOrganizationId);
 
+    // A role label and permission JSON cannot turn an ordinary operator
+    // organization into platform authority. The reserved-role trigger must
+    // reject direct activation, and the identity must receive no queue/legal powers.
+    const forgedRole = await pool.query<{ id: string }>(
+      `insert into public.roles(organization_id,name,permissions)
+       values($1,'super_admin','["admin:users"]'::jsonb) returning id`,
+      [applicantOrganizationId],
+    );
+    const forgedRoleId = forgedRole.rows[0]?.id;
+    assert.ok(forgedRoleId);
+    await assert.rejects(
+      pool.query(
+        `insert into public.organization_memberships(identity_id,organization_id,role_id,status)
+         values($1,$2,$3,'VERIFIED')`,
+        [identityC, applicantOrganizationId, forgedRoleId],
+      ),
+      /RESERVED_ROLE_REQUIRES_DUAL_CONTROL/,
+      "a super_admin label in a non-platform organization must not bypass two-person reserved-role activation",
+    );
+    const forgedQueue = await pool.query<{ queue_result: { applications: Array<{ id: string; canReview: boolean; canVerifyLegal: boolean }> } }>(
+      "select auth_private.get_onboarding_review_queue($1) as queue_result",
+      [unauthorizedTokenHash],
+    );
+    assert.equal(
+      forgedQueue.rows[0]?.queue_result.applications.some(row => row.id === applicationId && (row.canReview || row.canVerifyLegal)),
+      false,
+      "a non-platform organization role label must not confer review-queue or legal-verification capability",
+    );
+    await assert.rejects(
+      pool.query(
+        "select auth_private.verify_stakeholder_legal($1,$2,$3,$4)",
+        [unauthorizedTokenHash, applicationId, "VERIFIED", "Forged non-platform role must be denied"],
+      ),
+      /ONBOARDING_AUTHORITY_FORBIDDEN/,
+      "a super_admin role name in an ordinary organization must not authorize legal verification",
+    );
+
     const queue = await pool.query<{ queue_result: { applications: Array<{ id: string; canReview: boolean; canVerifyLegal: boolean }> } }>(
       "select auth_private.get_onboarding_review_queue($1) as queue_result",
       [authorityTokenHash],
