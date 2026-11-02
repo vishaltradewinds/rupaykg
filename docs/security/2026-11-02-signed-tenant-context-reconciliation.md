@@ -98,3 +98,31 @@ The PR #205 patch was inspected against the current PR #192 snapshots. The follo
 ### Integration decision
 
 The patch is not ready to be transplanted as a mechanical six-file overlay. Proceed only with a conflict-aware merge/rebase in a normal Git environment, then run the exact-head CI and disposable-PostgreSQL test suite. No production setting change is authorized by this review.
+
+
+## Existing repository foundation discovered in the current PR #192 head
+
+A further repository-tree pass found that PR #192 already contains a first-generation signed RLS transaction boundary and an opt-in PostgreSQL integration test:
+
+- `apps/src/rls-request-transaction.ts` exports `withRlsRequestTransaction`. It validates a single active organization backed by a VERIFIED membership, rejects bilateral context, opens one client transaction, installs the signed transaction-local `app.request_context`, invokes the operation on that client, and commits/rolls back before releasing it.
+- `apps/src/rls-request-transaction-postgres.integration.test.ts` tests transaction-local context clearing on pooled connection reuse and rollback. It is skipped when `DATABASE_URL` is absent; therefore its existence is not evidence that it ran in CI or against PostgreSQL.
+- `apps/src/rls-request-transaction.test.ts` supplies unit-level coverage.
+- The route SQL inventory already documents 90 HTTP route declarations and 218 direct query/connect call-site indicators in the core route/server/auth cohort; it explicitly says the signed helper is not yet used by those modules.
+- The worker runtime inventory found no dedicated queue consumer, cron or background worker entrypoint; API field sync/offline queue is present. Treat worker support as unproven, not implemented.
+
+### Architecture decision required before transplant
+
+PR #205 introduces a second, broader mechanism: `createContextAwarePool` + `AsyncLocalStorage` + Fastify hooks + implicit transaction/savepoint translation. The existing helper instead uses an explicit callback receiving one `PoolClient`. These are two different transaction integration models.
+
+Do not combine them or enable both by default. The safer initial integration path is to adapt one representative, lower-risk route to the existing explicit `withRlsRequestTransaction` contract, preserving the route's single checked-out client for every protected query. Measure the refactor and test it end-to-end before deciding whether the implicit pool proxy is necessary. This avoids silently translating existing route-level transaction boundaries across the entire application before behavior is proven.
+
+### Suggested staged implementation gate
+
+1. Select one representative read-only or simple single-organization route with no bilateral, sync-device, admin, streaming or nested transaction semantics.
+2. Refactor that route to obtain validated AuthContext, call `withRlsRequestTransaction`, and execute every tenant-owned SQL statement through the provided client; do not leave helper calls using the global pool inside the transaction callback.
+3. Add route-level tests for missing auth, no active organization, unverified membership, tenant A/B isolation and query failure rollback.
+4. Run the existing PostgreSQL integration test and new route-level integration test against a disposable Neon branch with the exact restricted runtime role and a minimal test policy/table.
+5. Only after this passes should the same explicit-client pattern be extended to the next route cohort. Keep auth lifecycle, public catalog, platform-control and bilateral settlement paths separately classified.
+6. Revisit PR #205's proxy only if a measured migration plan proves the explicit-client refactor is impractical; if chosen, it must replace—not duplicate—the first-generation transaction abstraction and must pass the full route/worker matrix.
+
+No route has been modified in this checkpoint. This is an architecture finding and sequencing decision, not a code-completion claim.
