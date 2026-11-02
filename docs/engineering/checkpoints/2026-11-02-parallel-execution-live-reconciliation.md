@@ -322,3 +322,20 @@ The MRV route correction commit `bb878aa90c3b348e8ccb85933372d59080522fb4` compl
 These verify the MRV same-client connection correction and repository checkpoint state. They do not implement the durable outbox or prove external exactly-once behavior. The new MRV durable execution contract was committed as `8e8f5e1712b0dac01a518e7aabfd93a03bc6a6a3`; its exact-head CI run `41458198658` is IN_PROGRESS. This commit is documentation-only beyond the already CI-verified code.
 
 PR #204 compare against main is cleanly ahead by 13 commits and 0 behind; GitHub PR metadata temporarily reports `mergeable=false`, so recheck mergeability before any merge. PR #192 and #204 remain draft/unmerged. Production remains untouched.
+
+
+## Durable MRV job ledger — implementation slice and CI correction
+
+Added migration `migrations/20261109_durable_mrv_submission_jobs.sql` on PR #192 branch:
+- durable idempotent job key and immutable payload hash/snapshot;
+- activity, verification, evidence, organization and geography binding;
+- explicit Guardian/HCS/Mirror Node state fields and bounded lease metadata;
+- status constraints and guarded state transitions;
+- append-only job-event table and mutation rejection trigger;
+- indexes for job claiming, activity/org history and unique Hedera transaction IDs.
+
+Added `apps/src/mrv-submission-jobs.integration.test.ts` to exercise fixture creation, initial event capture, immutable request binding, invalid state-transition rejection and append-only event enforcement. Expected SQL failures use savepoints so the test transaction can continue safely.
+
+**CI caught a real migration defect:** first exact migration CI run `41458539725` failed because a JavaScript string replacement collapsed the PL/pgSQL `$$` function delimiter to `$`. Corrected the migration in commit `34dc6273277ee43b5a1524a72993f13b23f32e0b`. Do not call the migration accepted until the new exact-head CI (including disposable PostgreSQL migration and integration test) passes.
+
+This is an initial ledger schema only, not a complete worker. Claim/lease acquisition, signed actor context, provider-stage persistence, deterministic Hedera transaction-ID retry, Mirror Node reconciliation and least-privilege grants/RLS remain implementation gates. The migration is not deployed to Neon production. Production remains HOLD.
