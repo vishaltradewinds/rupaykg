@@ -339,3 +339,10 @@ Added `apps/src/mrv-submission-jobs.integration.test.ts` to exercise fixture cre
 **CI caught a real migration defect:** first exact migration CI run `41458539725` failed because a JavaScript string replacement collapsed the PL/pgSQL `$$` function delimiter to `$`. Corrected the migration in commit `34dc6273277ee43b5a1524a72993f13b23f32e0b`. Do not call the migration accepted until the new exact-head CI (including disposable PostgreSQL migration and integration test) passes.
 
 This is an initial ledger schema only, not a complete worker. Claim/lease acquisition, signed actor context, provider-stage persistence, deterministic Hedera transaction-ID retry, Mirror Node reconciliation and least-privilege grants/RLS remain implementation gates. The migration is not deployed to Neon production. Production remains HOLD.
+
+
+## Follow-up: PL/pgSQL delimiter fix re-applied and verified in source
+
+The first two disposable PostgreSQL runs (`41458539725`, `41458607059`, and `41458639443`) exposed the same syntax error at character 6806: the append-only trigger body still contained a single-dollar delimiter. The previous correction did not survive the text replacement operation. Re-applied the fix using a callback-based replacement and re-fetched the repository file to verify the exact source now contains `as $$ ... $$;`. Corrected migration commit: `07cf79538700a6fccb233a9d96800090064aeb1d`.
+
+The exact-head CI for `07cf795...` is pending. Do not claim the durable ledger migration/test is accepted until that run applies all migrations and executes the PostgreSQL integration test successfully. This failure is recorded rather than hidden.
