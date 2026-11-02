@@ -176,15 +176,15 @@ export async function persistMrvHcsTransactionId(
   if (!topicId.trim() || !transactionId.trim()) throw new TypeError("Hedera topic and transaction IDs are required");
   const result = await client.query<MrvSubmissionJob>(
     `update mrv_submission_jobs
-        set status = 'HCS_SUBMITTED', hedera_network = $4, hedera_topic_id = $5,
-            hedera_transaction_id = coalesce(hedera_transaction_id, $6)
+        set status = 'HCS_SUBMITTED', hedera_network = $3, hedera_topic_id = $4,
+            hedera_transaction_id = coalesce(hedera_transaction_id, $5)
       where id = $1 and lease_token = $2::uuid and lease_expires_at > now()
         and status in ('GUARDIAN_VERIFIED','HCS_SUBMITTED')
-        and (hedera_transaction_id is null or hedera_transaction_id = $6)
-        and (hedera_topic_id is null or hedera_topic_id = $5)
-        and (hedera_network is null or hedera_network = $4)
+        and (hedera_transaction_id is null or hedera_transaction_id = $5)
+        and (hedera_topic_id is null or hedera_topic_id = $4)
+        and (hedera_network is null or hedera_network = $3)
       returning *`,
-    [jobId, leaseToken, null, network, topicId, transactionId],
+    [jobId, leaseToken, network, topicId, transactionId],
   );
   return result.rows[0] ?? null;
 }
