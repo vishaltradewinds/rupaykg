@@ -29,3 +29,16 @@ Append-only record. Do not rewrite earlier entries.
 - Neon metadata also reports an unprotected primary branch, no IP allowlist entries and public connections not blocked. This is an additional hardening item; no setting was changed.
 - Added immutable checkpoint: docs/engineering/checkpoints/2026-11-02-auth-mrv-convergence-and-release-gates.md. Added session log: docs/engineering/session-logs/2026-11-02-cto-auth-mrv-convergence.md. Updated the latest resume pointer in this documentation branch.
 - No production DDL/DML, migrations, role/grant/RLS changes, Neon branch operations, secrets, deployments, provider writes, worker/scheduler activation or certification occurred. Production HOLD; certification OFF; TRL 9 NOT ESTABLISHED.
+
+
+## 2026-11-02 17:56 UTC — MRV single-path enforcement and worker contract
+
+- Verified code commit 248e997 adds a 30-second heartbeat around Guardian, HCS and Mirror Node calls with 120-second lease renewal. Lease-loss results are discarded; in-flight provider calls are not cancelled, so bounded timeouts and adapter cancellation remain open.
+- Verified commit beef362 fails closed on the legacy synchronous MRV submit route unless explicitly enabled and refuses direct submission whenever the durable worker is enabled. This prevents concurrent direct/worker provider execution.
+- Added apps/src/mrv-routes.test.ts at commit ffab45c64c301f6e38d9678972071546c323d54e. It asserts default-off and worker/direct mutual exclusion before auth/database access. Exact-head CI for ffab45c is pending; no test pass is claimed.
+- Verified commit 739d11 adds a disposable PostgreSQL assertion that NEEDS_RECONCILIATION jobs are not automatically claimed. Run 41495699292 was in progress at browser smoke. Run 41495765539 for the worker contract documentation was in progress at build.
+- Verified exact-head CI 41495348937 SUCCESS on head 461aa5367eed48bfb02524bbf7ca9ea4e56878db, including migration validation, disposable migration/bootstrap, typecheck/build, browser smoke, full tests and container build.
+- Closed PRs #205/#211/#212 unmerged as superseded; branches preserved. PR #213 remains the only EPR read-only candidate pending rebase to current #192 and fresh CI.
+- Production Neon remains 0/67 RLS and the elevated rupaykg login is unchanged. Main is two commits ahead of PR #192's merge base; AUTH_DATABASE_URL/auth-pool contract must be reconciled before merge.
+- Added immutable checkpoint docs/engineering/checkpoints/2026-11-02-mrv-single-path-and-worker-contract.md and session log docs/engineering/session-logs/2026-11-02-cto-mrv-single-path.md; refreshed the resume pointer.
+- No production DDL/DML, migrations, roles/grants/RLS changes, branch operations, secrets, deployments, provider writes, worker/scheduler activation or certification. Production HOLD; worker OFF; certification OFF; TRL 9 NOT ESTABLISHED.
