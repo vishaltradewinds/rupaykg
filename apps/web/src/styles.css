@@ -187,3 +187,15 @@ footer{border-color:var(--rk-border-soft);color:var(--rk-subtle)}
   .journey-grid,.trust-list{grid-template-columns:1fr}
 }
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*::before,*::after{transition-duration:.01ms!important;animation-duration:.01ms!important;animation-iteration-count:1!important}}
+
+
+/* Guided stakeholder selector — public entry journey. */
+.context-switch{display:flex;justify-content:center;gap:6px;width:max-content;max-width:100%;margin:26px auto 20px;padding:6px;border:1px solid var(--rk-border);border-radius:16px;background:rgba(255,255,255,.025)}
+.context-choice{min-width:112px;min-height:44px;padding:10px 18px;border:0!important;border-radius:11px!important;background:transparent!important;color:var(--rk-muted)!important;font-weight:700}
+.context-choice.active{background:var(--rk-primary)!important;color:var(--rk-primary-contrast)!important}
+.stakeholder-card.selected{border-color:rgba(52,211,153,.55)!important;background:rgba(16,185,129,.10)!important;box-shadow:0 10px 30px rgba(16,185,129,.06)}
+.stakeholder-selection{display:flex;align-items:center;justify-content:space-between;gap:24px;margin-top:14px;padding:24px;border:1px solid var(--rk-border);border-radius:22px;background:var(--rk-surface-soft)}
+.stakeholder-selection h3{margin:8px 0;font-size:22px;color:var(--rk-text)}
+.stakeholder-selection p:not(.eyebrow){max-width:650px;color:var(--rk-muted);font-size:13px;line-height:1.65}
+.stakeholder-selection button{flex:none;min-height:46px;padding:12px 18px;border:1px solid var(--rk-primary)!important;border-radius:12px!important;background:var(--rk-primary)!important;color:var(--rk-primary-contrast)!important;font-weight:750}
+@media(max-width:650px){.context-switch{margin:20px auto 14px;width:100%}.context-choice{flex:1;min-width:0}.stakeholder-selection{display:grid;padding:18px;gap:12px}.stakeholder-selection button{width:100%}}
