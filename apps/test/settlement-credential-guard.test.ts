@@ -30,7 +30,7 @@ before(async () => {
     actorId = actor;
     const verifier = (await c.query<{ id: string }>("insert into identities(external_subject,display_name) values($1,$2) returning id", [`settlement-guard-verifier-${suffix}`, "Settlement Guard Independent Verifier"])).rows[0]!.id;
     verifierId = verifier;
-    const verifierRole = (await c.query<{ id: string }>("insert into roles(organization_id,name,permissions) values($1,'verifier',$2::jsonb) returning id", [owner, JSON.stringify(["VERIFY_EVIDENCE", "verification:approve", "credential:issue"])] )).rows[0]!.id;
+    const verifierRole = (await c.query<{ id: string }>("insert into roles(organization_id,name,permissions) values($1,'verifier',$2::jsonb) returning id", [owner, JSON.stringify(["VERIFY_EVIDENCE", "verification:approve", "credential:issue", "ISSUE_CREDENTIAL"])] )).rows[0]!.id;
     await approveTestMembership(c, verifier, owner, verifierRole, geography, "verifier", "processor");
 
     const retiredActivity = (await c.query<{ id: string }>("insert into activities(organization_id,actor_identity_id,geography_id,activity_type,status,completed_at) values($1,$2,$3,'COLLECTION','COMPLETED',now()) returning id", [owner, actor, geography])).rows[0]!.id;
