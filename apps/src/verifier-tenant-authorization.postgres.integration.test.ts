@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { randomUUID } from "node:crypto";
-import { Pool, type PoolClient } from "pg";
+import { Pool } from "pg";
 import { approveTestMembership } from "./test-support/approved-membership.js";
 
 const databaseUrl = process.env.DATABASE_URL;
