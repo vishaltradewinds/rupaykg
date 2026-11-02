@@ -131,8 +131,6 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
       return { source: "postgresql", syntheticData: false, data };
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "BWG reporting workspace unavailable", code: "BWG_WORKSPACE_UNAVAILABLE", syntheticData: false }); }
   });
-    } catch (error) { request.log.error(error); return reply.code(503).send({ error: "BWG reporting workspace unavailable", code: "BWG_WORKSPACE_UNAVAILABLE", syntheticData: false }); }
-  });
 
   app.post("/api/v1/bwg/profile", async (request, reply) => {
     const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
