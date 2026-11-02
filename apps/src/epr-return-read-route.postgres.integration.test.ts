@@ -81,6 +81,42 @@ test("EPR returns RLS isolates two organizations and fails closed without a vali
       [[returnA, returnB]],
     );
     assert.equal(forged.rows[0]?.count, "0");
+
+    // The tenant runtime is deliberately read-only for EPR and must never
+    // obtain direct access to the verifier's signing-key material.
+    const privileges = await client.query<{
+      can_insert: boolean;
+      can_update: boolean;
+      can_delete: boolean;
+      can_read_signing_keys: boolean;
+    }>(
+      `select
+         has_table_privilege(current_user,'public.epr_returns','INSERT') as can_insert,
+         has_table_privilege(current_user,'public.epr_returns','UPDATE') as can_update,
+         has_table_privilege(current_user,'public.epr_returns','DELETE') as can_delete,
+         has_table_privilege(current_user,'app_security.request_context_keys','SELECT') as can_read_signing_keys`,
+    );
+    assert.deepEqual(privileges.rows[0], {
+      can_insert: false,
+      can_update: false,
+      can_delete: false,
+      can_read_signing_keys: false,
+    });
+
+    await assert.rejects(
+      client.query(
+        `insert into public.epr_returns
+          (id,scheme_id,organization_id,period_start,period_end,return_type,reported_quantity)
+         values($1,$2,$3,date '2099-01-01',date '2099-12-31','ANNUAL',1)`,
+        ["d3000000-0000-4000-8000-000000000003", scheme.rows[0]!.id, organizationA],
+      ),
+      /permission denied/i,
+    );
+    await assert.rejects(
+      client.query("select * from app_security.request_context_keys"),
+      /permission denied/i,
+    );
+
     await client.query("ROLLBACK");
   } catch (error) {
     try { await client.query("ROLLBACK"); } catch {}
