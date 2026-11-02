@@ -131,11 +131,11 @@ export async function isMrvSubmissionJobStillAuthorized(client: PoolClient, jobI
   // the immutable JSONB enqueue snapshot; numeric measurement values are
   // deliberately converted to Number on both sides.
   const observations = await client.query(
-    "select id, parameter_code, observed_value, unit, method, instrument_id, observed_at, uncertainty, quality_status, metadata from mrv_observations where activity_id=(select activity_id from mrv_submission_jobs where id=$1) order by observed_at",
+    "select id, parameter_code, observed_value, unit, method, instrument_id, observed_at, uncertainty, quality_status, metadata from mrv_observations where activity_id=(select activity_id from mrv_submission_jobs where id=$1) order by observed_at, id",
     [jobId],
   );
   const evidence = await client.query(
-    "select id, evidence_type, content_uri, content_hash, captured_at, status, metadata from evidence where activity_id=(select activity_id from mrv_submission_jobs where id=$1) order by captured_at",
+    "select id, evidence_type, content_uri, content_hash, captured_at, status, metadata from evidence where activity_id=(select activity_id from mrv_submission_jobs where id=$1) order by captured_at, id",
     [jobId],
   );
   const quantityResult = await client.query<{ value: string | null; unit: string | null }>(
