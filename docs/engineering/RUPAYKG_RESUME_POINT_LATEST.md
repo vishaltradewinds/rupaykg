@@ -171,3 +171,11 @@ No production DDL/DML, migration, role/grant/RLS changes, deployments, worker/sc
 - CI #4479 passed all engineering gates on code head `3302c0ebc68cc7558d264e466423c11dd75f17fa`, including 138/138 API tests, two-custodian bootstrap acceptance, browser smoke, and production container build.
 - Exact-head CI #4480 for the privilege-teardown assertion is running: https://github.com/vishaltradewinds/rupaykg/actions/runs/41399782645.
 - PR #192 remains draft; production remains HOLD. No production database changes or deployment. Founder initial-authority selection, independent security review and DBA approval remain release gates.
+
+## 2026-11-02 — corrected PostgreSQL privilege teardown assertion
+
+- CI #4484 failed because `pg_has_role('postgres', 'rupaykg_bootstrap_owner', 'MEMBER')` reports effective superuser membership semantics, not only a direct role-membership grant.
+- Corrected the assertion to query `pg_catalog.pg_auth_members` for the exact direct membership edge from `postgres` to `rupaykg_bootstrap_owner`. This checks the actual grant the migration revokes.
+- Migration teardown remains: revoke migration principal's temporary owner membership and revoke owner's temporary database CREATE privilege.
+- Commit: `3dd4b378ba3a43bacd37ef968d4e5d31bd078008`; CI #4485: https://github.com/vishaltradewinds/rupaykg/actions/runs/41400170361.
+- Exact-head CI is validating. Do not promote or merge PR #192 until the assertion and all other gates pass. Production remains HOLD.
