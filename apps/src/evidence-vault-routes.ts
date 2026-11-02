@@ -64,17 +64,18 @@ export async function registerEvidenceVaultRoutes(app:FastifyInstance,pool:Pool|
   if(!evidencePayloadMatchesMediaType(bytes,mediaType))return reply.code(415).send({error:"File signature/content does not match the declared media type",code:"EVIDENCE_MEDIA_MISMATCH"});
   if(seriesId&&!UUID.test(seriesId))return reply.code(400).send({error:"Invalid seriesId",code:"EVIDENCE_SERIES_INVALID"});
   if((periodStart&&!/^\d{4}-\d{2}-\d{2}$/.test(periodStart))||(periodEnd&&!/^\d{4}-\d{2}-\d{2}$/.test(periodEnd))||(periodStart&&periodEnd&&periodEnd<periodStart))return reply.code(400).send({error:"Measurement period must use ISO dates with end on/after start",code:"EVIDENCE_PERIOD_INVALID"});
-  const sha=createHash("sha256").update(bytes).digest("hex"),client=await pool.connect();
+  const sha=createHash("sha256").update(bytes).digest("hex"),config=requestContextConfig();
+  if(!config)return reply.code(503).send({error:"Signed tenant context is not configured",code:"TENANT_CONTEXT_UNAVAILABLE"});
   try{
-   await client.query("begin");
+   return await withRlsRequestTransaction(pool,auth,config,async(client)=>{
    const ctx=await activityContext(client,auth,activityId);
-   if(!ctx){await client.query("rollback");return reply.code(403).send({error:"Activity outside active organization/geography scope",code:"EVIDENCE_SCOPE_FORBIDDEN"});}
-   if(!await hasOrganizationPermission(client,auth,ctx.organization_id,["evidence:upload"])){await client.query("rollback");return reply.code(403).send({error:"Evidence upload permission required",code:"EVIDENCE_UPLOAD_FORBIDDEN"});}
+   if(!ctx){return reply.code(403).send({error:"Activity outside active organization/geography scope",code:"EVIDENCE_SCOPE_FORBIDDEN"});}
+   if(!await hasOrganizationPermission(client,auth,ctx.organization_id,["evidence:upload"])){return reply.code(403).send({error:"Evidence upload permission required",code:"EVIDENCE_UPLOAD_FORBIDDEN"});}
    let series:{id:string;evidence_type:string}|undefined;
    if(seriesId){
     await client.query("select pg_advisory_xact_lock(hashtext($1))",[seriesId]);
     const s=await client.query<{id:string;evidence_type:string}>("select id,evidence_type from evidence_artifact_series where id=$1 and organization_id=$2 and activity_id=$3 for update",[seriesId,ctx.organization_id,activityId]);series=s.rows[0];
-    if(!series||series.evidence_type!==evidenceType){await client.query("rollback");return reply.code(409).send({error:"Series must match organization, activity and evidence type",code:"EVIDENCE_SERIES_SCOPE_MISMATCH"});}
+    if(!series||series.evidence_type!==evidenceType){return reply.code(409).send({error:"Series must match organization, activity and evidence type",code:"EVIDENCE_SERIES_SCOPE_MISMATCH"});}
    }else{const s=await client.query<{id:string;evidence_type:string}>("insert into evidence_artifact_series(organization_id,activity_id,evidence_type,created_by_identity_id) values($1,$2,$3,$4) returning id,evidence_type",[ctx.organization_id,activityId,evidenceType,auth.identityId]);series=s.rows[0];}
    if(!series)throw new Error("Evidence series creation failed");
    const vr=await client.query<{n:number}>("select coalesce(max(version_number),0)+1 n from evidence_artifact_versions where series_id=$1",[series.id]),version=Number(vr.rows[0]?.n??1);
@@ -82,9 +83,10 @@ export async function registerEvidenceVaultRoutes(app:FastifyInstance,pool:Pool|
    const evidenceId=ev.rows[0]?.id;if(!evidenceId)throw new Error("Evidence row creation failed");
    const ar=await client.query<{id:string}>("insert into evidence_artifact_versions(series_id,evidence_id,version_number,file_name,media_type,size_bytes,sha256,content,uploaded_by_identity_id,source_reference,measurement_period_start,measurement_period_end) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) returning id",[series.id,evidenceId,version,fileName,mediaType,bytes.length,sha,bytes,auth.identityId,sourceReference,periodStart,periodEnd]);
     const artifactVersionId=ar.rows[0]?.id;if(!artifactVersionId)throw new Error("Evidence artifact version creation failed");
-    await client.query("update evidence set content_uri=$2 where id=$1",[evidenceId,"db://evidence-vault/"+artifactVersionId]);await client.query("commit");
+    await client.query("update evidence set content_uri=$2 where id=$1",[evidenceId,"db://evidence-vault/"+artifactVersionId]);
     return reply.code(201).send({source:"postgresql",syntheticData:false,data:{seriesId:series.id,evidenceId,artifactVersionId,versionNumber:version,fileName,mediaType,sizeBytes:bytes.length,sha256:sha,status:"CAPTURED",reviewStatus:"PENDING",sourceReference,measurementPeriodStart:periodStart,measurementPeriodEnd:periodEnd}});
-  }catch(e){await client.query("rollback").catch(()=>undefined);request.log.error(e);return reply.code(503).send({error:"Evidence upload failed",code:"EVIDENCE_VAULT_UNAVAILABLE",syntheticData:false});}finally{client.release();}
+   });
+  }catch(e){request.log.error(e);return reply.code(503).send({error:"Evidence upload failed",code:"EVIDENCE_VAULT_UNAVAILABLE",syntheticData:false});}
  });
  app.get("/api/v1/evidence-vault",async(request,reply)=>{
    const auth=await authFor(request as never,reply,pool);if(!auth||!pool)return;
@@ -127,18 +129,19 @@ export async function registerEvidenceVaultRoutes(app:FastifyInstance,pool:Pool|
   const auth=await authFor(request as never,reply,pool);if(!auth||!pool)return;const id=(request.params as {evidenceId:string}).evidenceId,b=bodyOf(request as never),decision=str(b,"decision"),rationale=str(b,"rationale");
   if(!UUID.test(id))return reply.code(400).send({error:"Invalid evidenceId",code:"EVIDENCE_ID_INVALID"});
   if((decision!=="APPROVED"&&decision!=="REJECTED")||!rationale||rationale.length<5||rationale.length>2000)return reply.code(400).send({error:"Decision and 5–2000 character rationale required",code:"EVIDENCE_REVIEW_FIELDS_INVALID"});
-  const client=await pool.connect();try{await client.query("begin");
+  const config=requestContextConfig();if(!config)return reply.code(503).send({error:"Signed tenant context is not configured",code:"TENANT_CONTEXT_UNAVAILABLE"});
+  try{return await withRlsRequestTransaction(pool,auth,config,async(client)=>{
    const q=await client.query<{organization_id:string;activity_id:string;geography_id:string|null;status:string;artifact_id:string;uploaded_by_identity_id:string}>("select a.organization_id,a.id activity_id,a.geography_id,e.status::text status,v.id artifact_id,v.uploaded_by_identity_id from evidence e join activities a on a.id=e.activity_id join evidence_artifact_versions v on v.evidence_id=e.id where e.id=$1 for update of e",[id]),row=q.rows[0];
-   if(!row||!row.geography_id||!canActForOrganization(auth,row.organization_id)){await client.query("rollback");return reply.code(404).send({error:"Evidence not found",code:"EVIDENCE_NOT_FOUND"});}
+   if(!row||!row.geography_id||!canActForOrganization(auth,row.organization_id)){return reply.code(404).send({error:"Evidence not found",code:"EVIDENCE_NOT_FOUND"});}
    const g=await client.query<{ok:boolean}>("select organization_has_geography_scope($1::uuid,$2::uuid) ok",[row.organization_id,row.geography_id]);
-   if(!g.rows[0]?.ok||!await hasOrganizationPermission(client,auth,row.organization_id,["evidence:review"])||!await canVerifyEvidence(client,auth.identityId,id)){await client.query("rollback");return reply.code(403).send({error:"Evidence review permission and geography scope required",code:"EVIDENCE_REVIEW_FORBIDDEN"});}
-   if(row.status==="VERIFIED"||row.status==="REJECTED"){await client.query("rollback");return reply.code(409).send({error:"Reviewed evidence is immutable; upload a new version",code:"EVIDENCE_ALREADY_REVIEWED"});}
-   if(row.uploaded_by_identity_id===auth.identityId){await client.query("rollback");return reply.code(403).send({error:"Evidence uploader cannot review their own artifact",code:"EVIDENCE_SELF_REVIEW_FORBIDDEN"});}
+   if(!g.rows[0]?.ok||!await hasOrganizationPermission(client,auth,row.organization_id,["evidence:review"])||!await canVerifyEvidence(client,auth.identityId,id)){return reply.code(403).send({error:"Evidence review permission and geography scope required",code:"EVIDENCE_REVIEW_FORBIDDEN"});}
+   if(row.status==="VERIFIED"||row.status==="REJECTED"){return reply.code(409).send({error:"Reviewed evidence is immutable; upload a new version",code:"EVIDENCE_ALREADY_REVIEWED"});}
+   if(row.uploaded_by_identity_id===auth.identityId){return reply.code(403).send({error:"Evidence uploader cannot review their own artifact",code:"EVIDENCE_SELF_REVIEW_FORBIDDEN"});}
    const status=decision==="APPROVED"?"VERIFIED":"REJECTED";
    await client.query("insert into evidence_artifact_reviews(evidence_id,artifact_version_id,reviewer_identity_id,decision,rationale) values($1,$2,$3,$4,$5)",[id,row.artifact_id,auth.identityId,decision,rationale]);
    await client.query("insert into verifications(evidence_id,activity_id,verifier_identity_id,decision,scope,rationale) values($1,$2,$3,$4,'EVIDENCE_VAULT',$5)",[id,row.activity_id,auth.identityId,decision,rationale]);
    await client.query("update evidence set status=$2 where id=$1",[id,status]);await client.query("commit");
    return {source:"postgresql",syntheticData:false,data:{evidenceId:id,artifactVersionId:row.artifact_id,status,reviewDecision:decision,reviewerIdentityId:auth.identityId}};
-  }catch(e){await client.query("rollback").catch(()=>undefined);request.log.error(e);return reply.code(503).send({error:"Evidence review failed",code:"EVIDENCE_REVIEW_UNAVAILABLE"});}finally{client.release();}
+   });}catch(e){request.log.error(e);return reply.code(503).send({error:"Evidence review failed",code:"EVIDENCE_REVIEW_UNAVAILABLE"});}
  });
 }
