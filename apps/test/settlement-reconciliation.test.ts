@@ -1,3 +1,4 @@
+import { approveTestMembership } from "../src/test-support/approved-membership.js";
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { Pool } from "pg";
@@ -16,29 +17,6 @@ let activityId = "";
 let evidenceId = "";
 let verificationId = "";
 let credentialId = "";
-async function approveFixtureMembership(identityId: string, organizationId: string, roleId: string, geographyId: string): Promise<void> {
-  if (!pool) throw new Error("DATABASE_URL_REQUIRED");
-  const authority = await pool.query<{ id: string }>(
-    "select i.id from public.identities i join public.organization_memberships om on om.identity_id=i.id and om.status='VERIFIED' join public.roles r on r.id=om.role_id and r.name='super_admin' join public.organizations o on o.id=om.organization_id and o.status='VERIFIED' where i.status='VERIFIED' and i.suspended_at is null order by i.created_at limit 1",
-  );
-  const reviewerId = authority.rows[0]?.id;
-  if (!reviewerId) throw new Error("TEST_PLATFORM_AUTHORITY_NOT_BOOTSTRAPPED");
-  const application = await pool.query<{ id: string }>(
-    "insert into public.stakeholder_applications(identity_id,organization_id,role_id,requested_role_key,requested_organization_type,geography_id,status) values($1,$2,$3,'processor','processing_facility',$4,'PENDING') returning id",
-    [identityId, organizationId, roleId, geographyId],
-  );
-  const applicationId = application.rows[0]!.id;
-  await pool.query(
-    "update public.stakeholder_application_approvals set status='APPROVED',approved_by_identity_id=$2,reviewed_at=clock_timestamp(),review_note='Synthetic CI integration fixture' where application_id=$1",
-    [applicationId, reviewerId],
-  );
-  await pool.query(
-    "update public.stakeholder_applications set status='APPROVED',reviewed_by_identity_id=$2,reviewed_at=clock_timestamp() where id=$1",
-    [applicationId, reviewerId],
-  );
-}
-
-
 before(async () => {
   if (!pool) return;
   const owner = (await pool.query<{ id: string }>(
@@ -74,7 +52,7 @@ before(async () => {
     "insert into roles(organization_id,name,permissions) values($1,'verifier',$2::jsonb) returning id",
     [owner, JSON.stringify(["VERIFY_EVIDENCE", "verification:approve", "credential:issue"])],
   )).rows[0]!.id;
-  await approveFixtureMembership(verifier, owner, role, geography);
+  await approveTestMembership(pool, verifier, owner, role, geography, "verifier", "processing_facility");
 
   const activity = (await pool.query<{ id: string }>(
     "insert into activities(organization_id,actor_identity_id,geography_id,activity_type,status,completed_at) values($1,$2,$3,'COLLECTION','COMPLETED',now()) returning id",
