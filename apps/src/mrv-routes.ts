@@ -267,6 +267,7 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
         const quantityRow = await client.query<{ value: string | null; unit: string | null }>("select value::text value, unit from measurements where activity_id=$1 order by measured_at desc limit 1", [activityId]);
         const quantity = quantityRow.rows[0]?.value ? Number(quantityRow.rows[0].value) : undefined;
         const unit = quantityRow.rows[0]?.unit || undefined;
+        const sourceSnapshotHash = integrityHash({ activityId, verificationId, evidenceId, observations: observations.rows, evidence: evidence.rows, quantity, unit });
         const prior = await client.query<ExistingProvenanceRow>(
           `select * from mrv_provenance_events where activity_id=$1 and verification_id=$2 and evidence_id=$3 and guardian_policy_id=$4
              and guardian_status='VERIFIED' and hcs_status='CONSENSUS_CONFIRMED'
@@ -277,7 +278,7 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
           [activityId, verificationId, evidenceId, policyId]);
         const existing = prior.rows.find(record => record.guardian_execution_id && integrityHash({ schema: "rupaykg:mrv:v1", activityId, verificationId, evidenceId, guardianPolicyId: policyId, guardianExecutionId: record.guardian_execution_id, mrvStatus: "VERIFIED", methodologyCode, quantity, unit, metadata: { guardianStatus: "VERIFIED" } }) === record.integrity_hash);
         const acceptanceFixture = await isAcceptanceFixture(client, activityId);
-        return { row, observations: observations.rows, evidence: evidence.rows, quantity, unit, acceptanceFixture, existing };
+        return { row, observations: observations.rows, evidence: evidence.rows, quantity, unit, sourceSnapshotHash, acceptanceFixture, existing };
       });
       if ("response" in prepared) return prepared.response;
       if (prepared.existing?.guardian_execution_id && prepared.existing.hcs_topic_id && prepared.existing.hcs_transaction_id && prepared.existing.hcs_consensus_timestamp) {
@@ -300,6 +301,11 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
         const row = binding.rows[0];
         if (!row || row.organization_id !== auth.activeOrganizationId || row.activity_status !== "COMPLETED" || row.decision !== "APPROVED" || row.evidence_status !== "VERIFIED" || row.evidence_activity_id !== activityId || row.verifier_identity_id === row.actor_identity_id) throw new Error("MRV_SOURCE_BINDING_CHANGED_DURING_PROVIDER_EXECUTION");
         if (!await requirePermission(client, auth, row.organization_id, ["guardian:operate"]) || !await activityInAuthorizedGeography(client, auth, activityId, row.organization_id)) throw new Error("MRV_AUTHORIZATION_CHANGED_DURING_PROVIDER_EXECUTION");
+        const observationsNow = await client.query("select id, parameter_code, observed_value, unit, method, instrument_id, observed_at, uncertainty, quality_status, metadata from mrv_observations where activity_id=$1 order by observed_at", [activityId]);
+        const evidenceNow = await client.query("select id, evidence_type, content_uri, content_hash, captured_at, status, metadata from evidence where activity_id=$1 order by captured_at", [activityId]);
+        const quantityNow = await client.query<{ value: string | null; unit: string | null }>("select value::text value, unit from measurements where activity_id=$1 order by measured_at desc limit 1", [activityId]);
+        const currentSnapshotHash = integrityHash({ activityId, verificationId, evidenceId, observations: observationsNow.rows, evidence: evidenceNow.rows, quantity: quantityNow.rows[0]?.value ? Number(quantityNow.rows[0].value) : undefined, unit: quantityNow.rows[0]?.unit || undefined });
+        if (currentSnapshotHash !== prepared.sourceSnapshotHash) throw new Error("MRV_SOURCE_EVIDENCE_CHANGED_DURING_PROVIDER_EXECUTION");
         return client.query(
           `insert into mrv_provenance_events(activity_id,verification_id,evidence_id,guardian_policy_id,guardian_execution_id,guardian_status,hcs_status,hcs_topic_id,hcs_transaction_id,hcs_consensus_timestamp,integrity_hash,methodology_code,metadata)
            values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
