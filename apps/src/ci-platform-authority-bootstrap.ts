@@ -231,6 +231,150 @@ async function run(): Promise<void> {
     assert.deepEqual(memberships.rows.map(row => row.identity_id).sort(), [identityA, identityB].sort());
     assert.ok(memberships.rows.every(row => row.role_name === "super_admin" && row.status === "VERIFIED"));
 
+    // Exercise the identity-bound onboarding review functions against the same
+    // disposable PostgreSQL database, after the synthetic authority bootstrap.
+    const authorityToken = randomBytes(32).toString("base64url");
+    const authorityTokenHash = sha256(authorityToken);
+    await pool.query(
+      "select auth_private.issue_session($1,$2,$3::jsonb)",
+      [identityA, authorityTokenHash, JSON.stringify({ provider: "ci-onboarding-review" })],
+    );
+    const unauthorizedToken = randomBytes(32).toString("base64url");
+    const unauthorizedTokenHash = sha256(unauthorizedToken);
+    await pool.query(
+      "select auth_private.issue_session($1,$2,$3::jsonb)",
+      [identityC, unauthorizedTokenHash, JSON.stringify({ provider: "ci-onboarding-review" })],
+    );
+
+    const applicantIdentity = (await pool.query<{ id: string }>(
+      "insert into identities(external_subject,display_name,email,status) values($1,$2,$3,'VERIFIED') returning id",
+      [`ci-onboarding-applicant:${suffix}`, "CI Onboarding Applicant", `ci-onboarding-applicant-${suffix}@example.invalid`],
+    )).rows[0]?.id;
+    assert.ok(applicantIdentity);
+    const applicantToken = randomBytes(32).toString("base64url");
+    const applicantTokenHash = sha256(applicantToken);
+    await pool.query(
+      "select auth_private.issue_session($1,$2,$3::jsonb)",
+      [applicantIdentity, applicantTokenHash, JSON.stringify({ provider: "ci-onboarding-review" })],
+    );
+    const createdApplication = await pool.query<{ application_result: { application: { id: string }; organization_id: string } }>(
+      `select auth_private.create_stakeholder_application(
+        $1,$2,$3,$4,$5,$6,$7,$8::uuid,$9,$10,$11,$12,$13,$14::timestamptz,$15::timestamptz
+      ) as application_result`,
+      [
+        applicantTokenHash, "CI Synthetic Recycler", "processor",
+        "CI Synthetic Recycler Private Limited", "Private Limited",
+        `CIN-CI-${suffix}`, "MCA", null, "Synthetic integration fixture",
+        "INCORPORATION_CERTIFICATE", `evidence://ci/${suffix}`, "a".repeat(64),
+        "CI Test Issuer", null, null,
+      ],
+    );
+    const applicationId = createdApplication.rows[0]?.application_result.application.id;
+    const applicantOrganizationId = createdApplication.rows[0]?.application_result.organization_id;
+    assert.ok(applicationId && applicantOrganizationId);
+
+    const queue = await pool.query<{ queue_result: { applications: Array<{ id: string; canReview: boolean; canVerifyLegal: boolean }> } }>(
+      "select auth_private.get_onboarding_review_queue($1) as queue_result",
+      [authorityTokenHash],
+    );
+    const queuedApplication = queue.rows[0]?.queue_result.applications.find(row => row.id === applicationId);
+    assert.ok(queuedApplication, "verified platform authority must see its pending legal-review application");
+    assert.equal(queuedApplication.canReview, true);
+    assert.equal(queuedApplication.canVerifyLegal, true);
+
+    await assert.rejects(
+      pool.query(
+        "select auth_private.verify_stakeholder_legal($1,$2,$3,$4)",
+        [unauthorizedTokenHash, applicationId, "VERIFIED", "Unauthorized test attempt"],
+      ),
+      /ONBOARDING_AUTHORITY_FORBIDDEN/,
+      "an identity without platform authority must not verify legal evidence",
+    );
+    await assert.rejects(
+      pool.query("select auth_private.get_onboarding_review_queue($1)", ["f".repeat(64)]),
+      /AUTH_REQUIRED/,
+      "an unknown session token must not read the review queue",
+    );
+
+    const legalResult = await pool.query<{ verification_result: { status: string; organizationId: string } }>(
+      "select auth_private.verify_stakeholder_legal($1,$2,$3,$4) as verification_result",
+      [authorityTokenHash, applicationId, "VERIFIED", "CI evidence hash and reference verified"],
+    );
+    assert.equal(legalResult.rows[0]?.verification_result.status, "VERIFIED");
+    assert.equal(legalResult.rows[0]?.verification_result.organizationId, applicantOrganizationId);
+
+    const approvalResult = await pool.query<{ decision_result: { status: string; approvalLevel: string } }>(
+      "select auth_private.review_stakeholder_application($1,$2,$3,$4) as decision_result",
+      [authorityTokenHash, applicationId, "approve", "CI platform approval"],
+    );
+    assert.equal(approvalResult.rows[0]?.decision_result.status, "APPROVED");
+    assert.equal(approvalResult.rows[0]?.decision_result.approvalLevel, "PLATFORM");
+    const activated = await pool.query<{ application_status: string; membership_status: string; organization_status: string }>(
+      `select sa.status as application_status,om.status as membership_status,o.status as organization_status
+         from stakeholder_applications sa
+         join organization_memberships om on om.organization_id=sa.organization_id and om.identity_id=sa.identity_id
+         join organizations o on o.id=sa.organization_id
+        where sa.id=$1`,
+      [applicationId],
+    );
+    assert.equal(activated.rows[0]?.application_status, "APPROVED");
+    assert.equal(activated.rows[0]?.membership_status, "VERIFIED");
+    assert.equal(activated.rows[0]?.organization_status, "VERIFIED");
+
+    const selfApplication = await pool.query<{ application_result: { application: { id: string } } }>(
+      `select auth_private.create_stakeholder_application(
+        $1,$2,$3,$4,$5,$6,$7,$8::uuid,$9,$10,$11,$12,$13,$14::timestamptz,$15::timestamptz
+      ) as application_result`,
+      [
+        authorityTokenHash, "CI Authority Self-Approval Attempt", "processor",
+        "CI Authority Self-Approval Attempt Ltd", "Private Limited",
+        `CIN-SELF-${suffix}`, "MCA", null, "Self-approval negative test",
+        "INCORPORATION_CERTIFICATE", `evidence://ci/self/${suffix}`, "b".repeat(64),
+        "CI Test Issuer", null, null,
+      ],
+    );
+    await assert.rejects(
+      pool.query(
+        "select auth_private.review_stakeholder_application($1,$2,$3,$4)",
+        [authorityTokenHash, selfApplication.rows[0]?.application_result.application.id, "approve", "Must not self approve"],
+      ),
+      /STAKEHOLDER_SELF_APPROVAL_FORBIDDEN/,
+      "an applicant must not approve their own application even with platform authority",
+    );
+
+    const deniedApplication = await pool.query<{ application_result: { application: { id: string } } }>(
+      `select auth_private.create_stakeholder_application(
+        $1,$2,$3,$4,$5,$6,$7,$8::uuid,$9,$10,$11,$12,$13,$14::timestamptz,$15::timestamptz
+      ) as application_result`,
+      [
+        applicantTokenHash, "CI Unauthorized Review Attempt", "processor",
+        "CI Unauthorized Review Attempt Ltd", "Private Limited",
+        `CIN-DENIED-${suffix}`, "MCA", null, "Unauthorized reviewer negative test",
+        "INCORPORATION_CERTIFICATE", `evidence://ci/denied/${suffix}`, "c".repeat(64),
+        "CI Test Issuer", null, null,
+      ],
+    );
+    await assert.rejects(
+      pool.query(
+        "select auth_private.review_stakeholder_application($1,$2,$3,$4)",
+        [unauthorizedTokenHash, deniedApplication.rows[0]?.application_result.application.id, "approve", "Unauthorized review"],
+      ),
+      /ONBOARDING_AUTHORITY_FORBIDDEN/,
+      "an identity without the required hierarchy role must not approve an application",
+    );
+
+    const revokedToken = randomBytes(32).toString("base64url");
+    const revokedHash = sha256(revokedToken);
+    await pool.query("select auth_private.issue_session($1,$2,$3::jsonb)", [
+      identityC, revokedHash, JSON.stringify({ provider: "ci-onboarding-review" }),
+    ]);
+    await pool.query("select auth_private.revoke_session($1)", [revokedHash]);
+    await assert.rejects(
+      pool.query("select auth_private.get_onboarding_review_queue($1)", [revokedHash]),
+      /AUTH_REQUIRED/,
+      "a revoked session must not read the review queue",
+    );
+
     const audit = await pool.query<{ event_hash: string; previous_hash: string | null; payload: unknown }>(
       "select event_hash,previous_hash,payload from bootstrap_private.bootstrap_audit_events where ceremony_id=$1",
       [ceremonyId],
