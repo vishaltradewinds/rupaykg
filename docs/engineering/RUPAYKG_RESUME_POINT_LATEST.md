@@ -298,3 +298,9 @@ No production DDL/DML, migration, role/grant/RLS changes, deployments, worker/sc
 - Scope caveat: static source audit only; no live browser/device usability, WCAG certification, Lighthouse/axe, screen-reader or translation review. No UI code changed in this batch.
 - Immediate next change: repair landing navigation/content visibility and add browser tests, then consolidate shell/context/navigation. Keep backend authorization and statutory authority boundaries unchanged.
 - PR #192 remains open/draft; production database and deployment remain untouched.
+
+
+### CI verification follow-up — 2026-11-02
+- Exact-head CI run #4529 (`41408626206`) for geography fixture commit `fe698f9` completed SUCCESS.
+- Exact-head CI run #4530 (`41408644879`) for resume checkpoint commit `b46088d` completed SUCCESS.
+- Later documentation-only UI/UX audit and resume pointer commits have no workflow run returned; no application code was changed in those commits.
