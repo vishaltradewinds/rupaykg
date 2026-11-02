@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { approveTestMembership } from "./test-support/approved-membership.js";
-import { advanceMrvSubmissionJob, claimNextMrvSubmissionJob, renewMrvSubmissionJobLease } from "./mrv-submission-jobs.js";
+import { advanceMrvSubmissionJob, claimNextMrvSubmissionJob, persistMrvHcsTransactionId, renewMrvSubmissionJobLease } from "./mrv-submission-jobs.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 const ssl = process.env.DATABASE_SSL === "false" ? undefined : { rejectUnauthorized: false };
@@ -99,6 +99,31 @@ test("durable MRV job ledger enforces immutable request, legal transitions and a
     const advanced = await advanceMrvSubmissionJob(client, jobId, lease.leaseToken, "GUARDIAN_SUBMITTED", { guardian_idempotency_key: "d".repeat(64) });
     assert.equal(advanced?.status, "GUARDIAN_SUBMITTED");
     assert.equal(advanced?.lease_token, null, "stage advancement must release the lease atomically");
+
+    const guardianLease = await claimNextMrvSubmissionJob(client, "guardian-worker-" + suffix, 60);
+    assert.ok(guardianLease, "the persisted Guardian stage must be resumable");
+    const guardianVerified = await advanceMrvSubmissionJob(client, jobId, guardianLease.leaseToken, "GUARDIAN_VERIFIED", {
+      guardian_execution_id: "guardian-exec-" + suffix,
+      guardian_status: "VERIFIED",
+    });
+    assert.equal(guardianVerified?.status, "GUARDIAN_VERIFIED");
+
+    const hcsLease = await claimNextMrvSubmissionJob(client, "hedera-worker-" + suffix, 60);
+    assert.ok(hcsLease, "the verified Guardian stage must be resumable");
+    const transactionId = "0.0.1234@1791620000.123456789";
+    const persistedHcs = await persistMrvHcsTransactionId(client, jobId, hcsLease.leaseToken, "testnet", "0.0.12345", transactionId);
+    assert.equal(persistedHcs?.status, "HCS_SUBMITTED");
+    assert.equal(persistedHcs?.hedera_transaction_id, transactionId);
+    assert.equal(persistedHcs?.lease_token, hcsLease.leaseToken, "persisting the provider transaction ID must retain the active fence");
+    const conflictingTransaction = await persistMrvHcsTransactionId(client, jobId, hcsLease.leaseToken, "testnet", "0.0.12345", "0.0.1234@1791620001.123456789");
+    assert.equal(conflictingTransaction, null, "a retry must not replace the previously persisted HCS transaction ID");
+
+    const hcsConfirmed = await advanceMrvSubmissionJob(client, jobId, hcsLease.leaseToken, "HCS_CONSENSUS_CONFIRMED", {
+      hedera_consensus_timestamp: "1791620000.123456789",
+      hedera_status: "CONSENSUS_CONFIRMED",
+    });
+    assert.equal(hcsConfirmed?.status, "HCS_CONSENSUS_CONFIRMED");
+    assert.equal(hcsConfirmed?.hedera_transaction_id, transactionId, "the persisted HCS transaction ID must survive stage completion");
     await client.query("rollback");
   } catch (error) {
     await client.query("rollback");
