@@ -110,3 +110,14 @@ Append-only record. Do not rewrite earlier entries.
 ## CI freshness correction — 2026-11-02 18:38 UTC
 
 A subsequent PR-head refresh found PR #193 and #194 each advanced after their earlier successful exact-head runs. Their current heads are #193 `29e1c29254ff81db341bc55da5f2031e68928846` and #194 `5008a04038f2002a48949044c7389acc9eabe66f`; new exact-head CI runs [41500716186](https://github.com/vishaltradewinds/rupaykg/actions/runs/41500716186) and [41500726098](https://github.com/vishaltradewinds/rupaykg/actions/runs/41500726098) are IN PROGRESS. Earlier CI successes apply only to prior heads and do not certify these current heads. Documentation PR #204 current head `69696922911d84f65119e3e440f01ddb3cc010c6` also has exact-head CI [41500770887](https://github.com/vishaltradewinds/rupaykg/actions/runs/41500770887) IN PROGRESS. PR #213 exact-head CI 41499847180 and PR #192 exact-head CI 41498504841 remain SUCCESS. Keep all PRs unmerged pending current exact-head CI and required independent review.
+
+
+## 2026-11-02 — production trigger/tenant-boundary audit continuation
+
+- Read-only Neon inspection enumerated 70 public non-internal trigger instances across the production schema, mapped to 67 distinct application-owned trigger functions and their tables/events. All app trigger functions are SECURITY INVOKER; no function-level pinned search_path observed.
+- Flagged `enforce_verification_independence` global membership lookup; cross-checked `prevent_invalid_verification` second trigger which requires same-activity-organization VERIFIED membership, VERIFIED identity, not suspended and snapshots authorization for APPROVED decisions. This is a defense-in-depth inconsistency requiring a scoped first trigger and tests, not evidence that the approved path is unguarded.
+- Flagged `prevent_unauthorized_stakeholder_approval` global platform role lookup; reserved platform-admin model may be intended but requires explicit governance boundary and active/non-suspended identity checks.
+- Confirmed `organization_has_geography_scope` returns TRUE when no VERIFIED scope exists. Pan-India authority must be explicit verified national scope; missing rows must not silently grant national reach. Founder/authority policy decision and negative tests required.
+- Reaffirmed PR #198 as controlling 67-table RLS design. Trigger audit adds concrete database-side paths, while all 67 table route/worker/trigger call graphs remain not fully closed. No source code change made to production trigger functions.
+- Created immutable report `docs/engineering/checkpoints/2026-11-02-production-trigger-tenant-boundary-audit.md`.
+- Fresh exact-head CI: PR #193 run 41500716186 SUCCESS; PR #194 run 41500726098 SUCCESS; PR #204 run 41500882768 IN PROGRESS. PR #213 remains draft; exact-head CI passed earlier. No merge or production changes.
