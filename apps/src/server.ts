@@ -173,7 +173,6 @@ async function assertEprReturnReadDatabaseContract(): Promise<void> {
   }>(
     `select
        current_user as connection_role,
-       current_setting('role', true) is not distinct from 'rupaykg_app_runtime' as explicit_role_switch,
        r.rolbypassrls as connection_bypass_rls,
        c.relrowsecurity as rls_enabled,
        c.relforcerowsecurity as rls_forced,
