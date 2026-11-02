@@ -667,3 +667,11 @@ The first regression-test CI run (`41464821546`) failed as expected against the 
 - Corrected both sides to `AS $$ ... $$;` in commit `5a60b7fdfbc8fc75de3e8257a76e364d7353489c`. Verified the binding trigger occurs once and the repository tree remains 413 entries with README.
 - This commit is now PR #192 head. A new exact-head workflow has not yet appeared in the Actions listing at the time of this checkpoint; prior failure `41469758436` remains the last result. Do not claim the repaired migration passed until a new run executes disposable PostgreSQL migration + integration tests.
 - No production database, grants, roles, migrations or deployments changed.
+
+
+### 15:19 UTC — migration, disposable PostgreSQL acceptance and platform gates passed
+
+- The previous exact-head CI `41470141794` confirmed the delimiter still reached PostgreSQL as a single `$`; this showed the attempted `$$` repair had not survived the Git content transport. Replaced the PL/pgSQL body with a standard single-quoted function body and doubled only the 14 internal SQL single quotes, in commit `6c13b492016cb7820d2df32243a6790586b75165`.
+- Exact-head CI `41470418440`: migration validation SUCCESS; all migrations executed in disposable PostgreSQL SUCCESS; bootstrap temporary privilege revocation SUCCESS; synthetic two-custodian bootstrap SUCCESS; typecheck SUCCESS; production build SUCCESS; browser smoke SUCCESS; full test suite including disposable PostgreSQL acceptance SUCCESS. Production-container build was still running at 15:19 UTC; do not claim full workflow success until it completes.
+- PR #204 checkpoint CI `41470220098` completed SUCCESS for commit `009706adbec41cd95c70234e7d67bdbfe032f673`.
+- These are CI/disposable-environment results, not production deployment or pilot acceptance. No production DB/roles/grants/migrations changed. PRs remain draft/unmerged.
