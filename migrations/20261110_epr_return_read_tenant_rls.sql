@@ -77,8 +77,8 @@ BEGIN
 END
 $preflight$;
 
-REVOKE ALL ON TABLE public.epr_returns FROM PUBLIC;
-REVOKE ALL ON TABLE public.epr_schemes FROM PUBLIC;
+REVOKE ALL ON TABLE public.epr_returns FROM PUBLIC, rupaykg_app_runtime;
+REVOKE ALL ON TABLE public.epr_schemes FROM PUBLIC, rupaykg_app_runtime;
 GRANT USAGE ON SCHEMA public, app_security TO rupaykg_app_runtime;
 GRANT EXECUTE ON FUNCTION app_security.current_request_context_claims() TO rupaykg_app_runtime;
 GRANT SELECT ON TABLE public.epr_returns, public.epr_schemes TO rupaykg_app_runtime;
