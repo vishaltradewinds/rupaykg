@@ -405,3 +405,12 @@ A fresh read-only query against the authoritative Neon production branch reconfi
 5. Independent security/DBA review, restore/rollback rehearsal and explicit production release approval.
 
 Production remains unchanged: no RLS, grants, roles, migrations, provider writes or deployment were applied.
+
+
+### 15:30 UTC — exact-head MRV reauthorization tests passed
+
+- Commit `b690a5ec19ccc6b38c8d8a2ffc77f142b17af8bf`, workflow `41471858495`: **SUCCESS**.
+- Verified migration execution, typecheck, production build, synthetic two-custodian bootstrap, browser smoke, full integration suite including disposable PostgreSQL acceptance, and production-container build.
+- The new `isMrvSubmissionJobStillAuthorized` positive and revoked-membership negative assertions passed as part of that exact-head run.
+- The audit documentation update is commit `69748f8549500df56d4f9648370087266d5f31b3`, now the current PR #192 head. It is a documentation-only successor to the tested code commit; no code changed after the green run.
+- This function is not yet called by a real worker loop. It is a security primitive only. No claim of durable provider orchestration or production authorization closure is made.
