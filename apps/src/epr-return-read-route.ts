@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type { Pool } from "pg";
-import { authenticate, bearerChallenge, hasOrganizationPermission } from "./auth.js";
+import { authenticate, bearerChallenge, hasOrganizationPermission, type AuthContext } from "./auth.js";
 
 const EPR_READ_PERMISSIONS = ["epr:read", "epr:manage", "reports:read"] as const;
 
@@ -37,7 +37,7 @@ export async function registerEprReturnReadRoute(
       });
     }
 
-    let auth;
+    let auth: AuthContext | null;
     try {
       auth = await authenticate(request, contextAwarePool, "security_definer");
     } catch (error) {
