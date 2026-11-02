@@ -201,6 +201,10 @@ test("durable MRV job ledger enforces immutable request, legal transitions and a
     assert.equal(await isMrvSubmissionJobStillAuthorized(client, queued.id), false, "changed source quantity must invalidate the immutable enqueue snapshot");
     await client.query("update measurements set value=1 where id=$1", [measurementId]);
     assert.equal(await isMrvSubmissionJobStillAuthorized(client, queued.id), true, "restoring the exact source quantity must restore snapshot parity");
+    await client.query("update evidence set content_hash=$2 where id=$1", [evidenceId, "changed-" + suffix]);
+    assert.equal(await isMrvSubmissionJobStillAuthorized(client, queued.id), false, "changed evidence hash must invalidate the immutable enqueue snapshot");
+    await client.query("update evidence set content_hash=$2 where id=$1", [evidenceId, "hash-" + suffix]);
+    assert.equal(await isMrvSubmissionJobStillAuthorized(client, queued.id), true, "restoring the exact evidence hash must restore snapshot parity");
     await client.query("update organization_memberships set status='PENDING' where identity_id=$1 and organization_id=$2", [verifierIdentityId, organizationId]);
     assert.equal(await isMrvSubmissionJobStillAuthorized(client, queued.id), false, "revoked or pending requester membership must block provider work");
     await client.query("update organization_memberships set status='VERIFIED' where identity_id=$1 and organization_id=$2", [verifierIdentityId, organizationId]);
