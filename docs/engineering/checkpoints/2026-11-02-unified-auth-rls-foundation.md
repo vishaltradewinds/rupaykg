@@ -51,3 +51,11 @@ No production DDL/DML, migrations, role/grant/RLS changes, branch operations, de
 4. Integrate the RLS transaction wrapper into all route and worker query boundaries only after signed verifier, role contracts and table-policy mapping are reviewed.
 5. Complete the 67-table policy matrix and migration reconciliation.
 6. Keep production HOLD until founder approval, independent security review, disposable acceptance, all-table policy coverage, route/worker coverage, rollback and release gates pass.
+
+
+## 2026-11-02 migration-validator correction
+- Rechecked canonical PR #192 current head fdf24e18aa4d03e76295ba878f4af27c60b0e059; exact-head CI run #4442 / 41341038683 failed at npm run validate:migrations, so migration provisioning, migration execution, typecheck, build, bootstrap exercise, tests and container build were skipped.
+- Root cause identified in scripts/validate-migrations.mjs: the CREATE TABLE/TYPE regex captured only the first identifier. For schema-qualified objects such as bootstrap_private.bootstrap_ceremonies and bootstrap_private.bootstrap_claims, it treated the schema name as the object name and falsely reported a duplicate. This validator defect is independent of SQL execution.
+- Corrected the validator in commit 384d84dce411e8491fde7da9ecaa42a2afbf4ac6 to parse optional schema-qualified names and compare canonical schema.object identities (defaulting unqualified objects to public).
+- Current PR #192 head is 384d84dce411e8491fde7da9ecaa42a2afbf4ac6. Exact-head CI has not yet been observed; do not claim the fix passes until the new run completes.
+- The two-custodian bootstrap SQL and synthetic CI exercise are draft-only. Founder selection of two distinct initial authority identities, independent custodian/secret custody approval, independent security review and DBA approval remain required for any production ceremony. No production changes or deployment.
