@@ -45,7 +45,8 @@ create table if not exists mrv_submission_jobs (
   completed_at timestamptz,
   check ((lease_owner is null and lease_token is null and lease_expires_at is null)
       or (lease_owner is not null and lease_token is not null and lease_expires_at is not null)),
-  check (status <> 'COMPLETED' or (mirror_verified_at is not null and completed_at is not null)),
+  check (status not in ('MIRROR_VERIFIED','PROVENANCE_PERSISTED','COMPLETED') or mirror_verified_at is not null),
+  check (status <> 'COMPLETED' or completed_at is not null),
   check (status not in ('HCS_CONSENSUS_CONFIRMED','MIRROR_VERIFIED','PROVENANCE_PERSISTED','COMPLETED')
       or (hedera_transaction_id is not null and hedera_consensus_timestamp is not null and hedera_topic_id is not null)),
   check (status not in ('GUARDIAN_VERIFIED','HCS_SUBMITTED','HCS_CONSENSUS_CONFIRMED','MIRROR_VERIFIED','PROVENANCE_PERSISTED','COMPLETED')
@@ -102,7 +103,7 @@ begin
   if new.status is distinct from old.status then
     allowed := case old.status
       when 'REQUESTED' then new.status in ('CLAIMED','CANCELLED')
-      when 'CLAIMED' then new.status in ('GUARDIAN_SUBMITTED','RETRYABLE_FAILURE','PERMANENT_FAILURE','NEEDS_RECONCILIATION','CANCELLED')
+      when 'CLAIMED' then new.status in ('CLAIMED','GUARDIAN_SUBMITTED','RETRYABLE_FAILURE','PERMANENT_FAILURE','NEEDS_RECONCILIATION','CANCELLED')
       when 'GUARDIAN_SUBMITTED' then new.status in ('GUARDIAN_VERIFIED','REJECTED','RETRYABLE_FAILURE','PERMANENT_FAILURE','NEEDS_RECONCILIATION')
       when 'GUARDIAN_VERIFIED' then new.status in ('HCS_SUBMITTED','RETRYABLE_FAILURE','PERMANENT_FAILURE','NEEDS_RECONCILIATION')
       when 'HCS_SUBMITTED' then new.status in ('HCS_CONSENSUS_CONFIRMED','RETRYABLE_FAILURE','PERMANENT_FAILURE','NEEDS_RECONCILIATION')
@@ -127,6 +128,18 @@ drop trigger if exists mrv_submission_job_update_guard on mrv_submission_jobs;
 create trigger mrv_submission_job_update_guard
 before update on mrv_submission_jobs
 for each row execute function guard_mrv_submission_job_update();
+
+create or replace function reject_mrv_submission_job_event_mutation()
+returns trigger language plpgsql as $
+begin
+  raise exception 'MRV_JOB_EVENT_APPEND_ONLY';
+end;
+$;
+
+drop trigger if exists mrv_submission_job_events_no_update on mrv_submission_job_events;
+create trigger mrv_submission_job_events_no_update
+before update or delete on mrv_submission_job_events
+for each row execute function reject_mrv_submission_job_event_mutation();
 
 create or replace function record_mrv_submission_job_event()
 returns trigger language plpgsql as $$
