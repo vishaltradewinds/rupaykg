@@ -96,3 +96,5 @@ The first source-parity CI run correctly rejected the existing ledger integratio
 
 ### Provider request bounds
 Guardian submission already uses an AbortController with a validated configurable timeout. Mirror Node transaction lookup also has a 10-second abort bound; its second-stage topic-message verification fetch now has an explicit 10-second `AbortSignal.timeout` (`4bfc85b`), with a regression assertion (`3c0cd88`). Hedera SDK submission remains a separate timeout-review item; do not infer SDK cancellation solely from the worker lease heartbeat.
+
+The latest ordering refinement also uses `(measured_at DESC, id DESC)` for the single current measurement in the route, worker revalidation, and disposable fixture (`97714a9`, `7aa0022`). This closes the remaining tie-order ambiguity for equal measurement timestamps.
