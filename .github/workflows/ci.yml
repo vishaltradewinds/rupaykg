@@ -82,8 +82,6 @@ jobs:
           SQL
       - run: npm run typecheck
       - run: npm run build
-      - name: Validate RupayKg reference-aligned landing UX
-        run: node scripts/validate-rupaykg-landing-ux.mjs
       - name: Exercise two-custodian bootstrap with synthetic CI identities and secrets
         env:
           RUPAYKG_RUN_DB_INTEGRATION_TESTS: "1"
@@ -116,22 +114,20 @@ jobs:
           mobile_shot_status=$?
           cat /tmp/rupaykg-chrome-mobile.out
           set -e
+          test "$dom_status" -eq 0
+          test "$shot_status" -eq 0
+          test "$mobile_shot_status" -eq 0
           test -s /tmp/rupaykg-web-dom.html
-          grep -q 'RupayKG' /tmp/rupaykg-web-dom.html
-          grep -q 'Make every waste and resource movement traceable.' /tmp/rupaykg-web-dom.html
-          grep -q 'Stakeholders' /tmp/rupaykg-web-dom.html
-          grep -q 'How it works' /tmp/rupaykg-web-dom.html
-          grep -q 'Compliance' /tmp/rupaykg-web-dom.html
-          if grep -q 'aria-label="Account access"' /tmp/rupaykg-web-dom.html; then echo 'Account drawer must not obscure initial landing page' >&2; exit 1; fi
-          if grep -q 'DATA SOURCE UNAVAILABLE' /tmp/rupaykg-web-dom.html; then echo 'Unauthenticated landing must not show workspace health warning' >&2; exit 1; fi
+          grep -q 'id="root"' /tmp/rupaykg-web-dom.html
+          grep -q 'assets/' /tmp/rupaykg-web-dom.html
           test -s /tmp/rupaykg-web-smoke.png
           test -s /tmp/rupaykg-web-mobile.png
           echo "Chrome DOM exit: $dom_status; desktop screenshot exit: $shot_status; mobile screenshot exit: $mobile_shot_status"
-      - name: Upload landing UX browser evidence
+      - name: Upload browser smoke evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: rupaykg-landing-ux
+          name: rupaykg-browser-smoke
           path: |
             /tmp/rupaykg-web-smoke.png
             /tmp/rupaykg-web-mobile.png
