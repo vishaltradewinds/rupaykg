@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 
 export type MrvJobStatus =
@@ -65,6 +65,49 @@ export interface MrvJobStagePatch {
   last_error_detail?: string | null;
   completed_at?: Date | null;
   next_attempt_at?: Date;
+}
+
+export interface EnqueueMrvSubmissionJobInput {
+  activityId: string;
+  verificationId: string;
+  evidenceId: string;
+  organizationId: string;
+  geographyId: string;
+  requestedByIdentityId: string;
+  guardianPolicyId: string;
+  methodologyCode?: string | null;
+  payloadSnapshot: Record<string, unknown>;
+}
+
+function stableJson(value: unknown): string {
+  if (value === null || typeof value !== "object") return JSON.stringify(value) ?? "null";
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
+  const object = value as Record<string, unknown>;
+  return `{${Object.keys(object).filter((key) => object[key] !== undefined).sort().map((key) => `${JSON.stringify(key)}:${stableJson(object[key])}`).join(",")}}`;
+}
+
+export function createMrvSubmissionIdempotencyKey(input: Pick<EnqueueMrvSubmissionJobInput, "activityId" | "verificationId" | "evidenceId" | "guardianPolicyId" | "methodologyCode">): string {
+  return createHash("sha256").update([input.activityId, input.verificationId, input.evidenceId, input.guardianPolicyId, input.methodologyCode ?? ""].join("|")).digest("hex");
+}
+
+/** Enqueue an immutable MRV request; repeated identical requests return the same row. */
+export async function enqueueMrvSubmissionJob(client: PoolClient, input: EnqueueMrvSubmissionJobInput): Promise<MrvSubmissionJob> {
+  if (!input.guardianPolicyId.trim() || !Object.keys(input.payloadSnapshot).length) throw new TypeError("MRV policy and payload snapshot are required");
+  const idempotencyKey = createMrvSubmissionIdempotencyKey(input);
+  const canonicalPayload = stableJson(input.payloadSnapshot);
+  const payloadHash = createHash("sha256").update(canonicalPayload).digest("hex");
+  const result = await client.query<MrvSubmissionJob>(
+    `insert into mrv_submission_jobs(
+       idempotency_key,payload_hash,activity_id,verification_id,evidence_id,organization_id,geography_id,
+       requested_by_identity_id,guardian_policy_id,methodology_code,payload_snapshot
+     ) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb)
+     on conflict(idempotency_key) do update set updated_at=mrv_submission_jobs.updated_at
+       where mrv_submission_jobs.payload_hash=excluded.payload_hash
+     returning *`,
+    [idempotencyKey,payloadHash,input.activityId,input.verificationId,input.evidenceId,input.organizationId,input.geographyId,input.requestedByIdentityId,input.guardianPolicyId,input.methodologyCode ?? null,JSON.stringify(input.payloadSnapshot)],
+  );
+  if (!result.rows[0]) throw new Error("MRV_IDEMPOTENCY_PAYLOAD_CONFLICT");
+  return result.rows[0];
 }
 
 const claimableStatuses: MrvJobStatus[] = [
