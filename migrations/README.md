@@ -110,3 +110,10 @@ This migration installs a **draft-only, one-time two-custodian bootstrap path**.
 - The bootstrap state is globally one-time. Reused, expired, cross-custodian, missing or malformed secrets fail closed.
 - CI uses synthetic identities and synthetic custodian login roles only. No production identities, secrets, claims or logins are created by this migration.
 - Production execution remains blocked until the founder approves the two initial identities and the out-of-band two-custodian secret-custody ceremony, and independent security review passes.
+
+
+## EPR return read-only tenant RLS (20261110)
+
+Migration `20261110_epr_return_read_tenant_rls.sql` is a narrowly scoped read-only policy. It requires a dedicated `rupaykg_app_runtime` LOGIN role with NOBYPASSRLS, NOINHERIT, no elevated attributes, and no role memberships; it also verifies the signed-context verifier and key-table ownership before changing the EPR returns table. It enables and forces RLS on `public.epr_returns`, creates one SELECT-only policy bound to the organization claim returned by `app_security.current_request_context_claims()`, and grants SELECT only on `epr_returns` and the public EPR scheme catalogue. It creates no INSERT/UPDATE/DELETE grants or policies.
+
+The API exposes only `GET /api/v1/epr/returns` when request-context mode is `enforced` and the startup contract confirms the exact tenant SELECT policy, FORCE RLS, least-privilege runtime role, and verifier EXECUTE grants. The legacy EPR write routes remain unregistered. The PostgreSQL integration test proves two-organization isolation, no-context denial, and forged-context denial using a disposable CI database. This is not production activation approval; DBA key provisioning, real restricted-credential acceptance, route CI, and independent review remain mandatory.
