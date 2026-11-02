@@ -74,7 +74,7 @@ create table if not exists mrv_submission_jobs (
 -- independent verification. Composite FKs below keep the cross-record bindings
 -- intact after enqueue; provider workers must still re-check revocation/status.
 create or replace function validate_mrv_submission_job_bindings()
-returns trigger language plpgsql as $mrv_job_binding$
+returns trigger language plpgsql as $
 declare
   activity_actor uuid;
   evidence_is_verified boolean;
@@ -116,7 +116,7 @@ end;
 $;
 
 create or replace function validate_mrv_submission_job_bindings()
-returns trigger language plpgsql as $mrv_job_binding$
+returns trigger language plpgsql as $
 declare
   activity_actor uuid;
   evidence_is_verified boolean;
@@ -155,7 +155,7 @@ begin
   end if;
   return new;
 end;
-$mrv_job_binding$;
+$;
 
 drop trigger if exists mrv_submission_job_binding_guard on mrv_submission_jobs;
 create trigger mrv_submission_job_binding_guard
