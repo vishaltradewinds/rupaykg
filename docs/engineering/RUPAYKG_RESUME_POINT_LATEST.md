@@ -440,3 +440,13 @@ Target verified: Neon project `rupaykg-production-fresh` (`steep-mud-79906940`),
 - Security audit records exact behavior and caveats. Documentation commit: `12ea8f3fc1ef588ff5b8524b004c296a0fda64f9`.
 - NOT VALIDATED: migration has not run in disposable PostgreSQL; no regression suite has been executed; complete schema/enum/role permission assumptions and compatibility must be confirmed. Migration validation + full CI pending.
 - No production schema, roles, grants, or data changed. PR #192 stays draft; production HOLD; TRL 9 not established.
+
+
+## 2026-11-02 verifier migration static compatibility checkpoint
+- Compared migration 20261106 against migrations 004, 008, 012, 20261026 and apps/src/mrv-routes.ts.
+- Confirmed source-level use of record_status for membership/geography status, JSONB role permissions, activity geography, evidence-to-activity linkage, and existing trigger identity/decision fields.
+- Explicit VERIFIED geography-root check prevents the legacy no-root helper fallback from granting approval in this trigger path.
+- Additional required correction before merge: require subject organization.status='VERIFIED'; current migration checks verified membership and verified geography root but not organization status explicitly. Confirm nullability and all role aliases against full schema/catalog.
+- Static source review only. Migration validator, disposable PostgreSQL apply/rollback, regression tests, and CI have NOT run. No green CI claim.
+- Migration commit c15726971ffb57b96c25573bd5f0f6107b6011ad; audit doc update b9b857b2a19969691601eeac33ce308e9bed5841.
+- Production Neon unchanged; PR #192 draft; release HOLD; TRL 9 not established.
