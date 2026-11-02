@@ -190,11 +190,11 @@ test("durable MRV job ledger enforces immutable request, legal transitions and a
     assert.equal(releaseEvent.rows[0]!.actor_reference, "recovery-worker-" + suffix, "worker audit events must identify the lease owner");
 
     const enqueueObservations = await client.query(
-      "select id, parameter_code, observed_value, unit, method, instrument_id, observed_at, uncertainty, quality_status, metadata from mrv_observations where activity_id=$1 order by observed_at",
+      "select id, parameter_code, observed_value, unit, method, instrument_id, observed_at, uncertainty, quality_status, metadata from mrv_observations where activity_id=$1 order by observed_at, id",
       [activityId],
     );
     const enqueueEvidence = await client.query(
-      "select id, evidence_type, content_uri, content_hash, captured_at, status, metadata from evidence where activity_id=$1 order by captured_at",
+      "select id, evidence_type, content_uri, content_hash, captured_at, status, metadata from evidence where activity_id=$1 order by captured_at, id",
       [activityId],
     );
     const enqueueQuantity = await client.query<{ value: string | null; unit: string | null }>(
