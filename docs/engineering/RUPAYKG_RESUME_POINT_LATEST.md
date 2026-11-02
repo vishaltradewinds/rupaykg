@@ -331,3 +331,4 @@ No production DDL/DML, migration, role/grant/RLS changes, deployments, worker/sc
 - This is a structural first pass, not a final RLS predicate or migration. Polymorphic source references, JSON ownership, triggers, function grants, dynamic SQL and worker/service principals remain to be mapped.
 - Production baseline remains 0/67 RLS and 0/67 FORCE RLS. No production changes were made.
 - Next: reconcile the table matrix with route/worker/SQL call sites and function/trigger ownership; validate parent equality and bilateral policies in disposable Neon using exact restricted roles before any RLS rollout.
+- Additional read-only production role catalog: only non-system roles `cloud_admin` and `rupaykg` were visible. `cloud_admin` is SUPERUSER/BYPASSRLS; `rupaykg` is LOGIN/CREATEROLE/CREATEDB/BYPASSRLS. No dedicated least-privilege app/auth/migrator/function-owner roles are present. This is a P0 release blocker for RLS and production auth cutover.
