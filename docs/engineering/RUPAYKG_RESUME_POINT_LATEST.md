@@ -365,3 +365,10 @@ No production DDL/DML, migration, role/grant/RLS changes, deployments, worker/sc
 - Explicitly marked incomplete: full 67-table production schema reconciliation, foreign-key/trigger/function/JSON ownership paths, every SECURITY DEFINER function and grant, and every worker/webhook/cron path.
 - No RLS policies were authored or enabled. Do not treat draft classification as a DBA-approved policy specification.
 - Next: machine-readable per-table ownership register, enumerate all functions/triggers/grants from the full 97-migration set, and build disposable PostgreSQL two-tenant isolation acceptance tests using proposed NOBYPASSRLS runtime role. Keep settlements, registry transfers and inter-org chain-of-custody on separate bilateral authorization design.
+
+
+## 2026-11-02 migration audit continuation
+- Source-reviewed SQL migrations 001–050 (50 ordered files). No RLS enable/force or policy creation statements found in this range.
+- Reviewed integrity routines include field-sync tenant binding, operation/device binding, registry and settlement high-risk permission guards, EPR credit allocation capacity, settlement party integrity, credential geography guards, and field-sync conflict audit.
+- These are integrity and mutation controls, not a complete tenant row-visibility boundary.
+- Remaining review: migrations 051–087 and 20261018–20261105, followed by full catalog inventory and exact per-table owner mapping. Production unchanged; draft PR and HOLD remain.
