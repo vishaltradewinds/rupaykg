@@ -450,3 +450,11 @@ Target verified: Neon project `rupaykg-production-fresh` (`steep-mud-79906940`),
 - Static source review only. Migration validator, disposable PostgreSQL apply/rollback, regression tests, and CI have NOT run. No green CI claim.
 - Migration commit c15726971ffb57b96c25573bd5f0f6107b6011ad; audit doc update b9b857b2a19969691601eeac33ce308e9bed5841.
 - Production Neon unchanged; PR #192 draft; release HOLD; TRL 9 not established.
+
+
+## 2026-11-02 verifier subject-organization gate correction
+- Added forward-only migration `20261107_verifier_subject_org_verified.sql` (commit `41b7fd214c82f5f2b1e3e3c7353fd010071ab36f`).
+- Replaces the activity-scoped verifier helper to require the subject `organizations.status='VERIFIED'` in addition to a VERIFIED same-organization membership, verifier role/permission, non-null activity geography, at least one VERIFIED geography root, and geography-scope match.
+- No production database changes. The CI workflow uses a disposable PostgreSQL 16 service, runs the migration validator, applies migrations through the normal migration runner, and then runs tests/acceptance; it does not connect to production Neon.
+- CI run `41439829393` was observed in progress; initial job state showed PostgreSQL service initialization in progress and no test steps completed yet. Recheck before claiming any result.
+- PR #192 remains draft. No merge/deploy authorization inferred. Release HOLD; TRL 9 not established.
