@@ -561,3 +561,11 @@ The first regression-test CI run (`41464821546`) failed as expected against the 
 - Added a disposable-PostgreSQL integration scenario to `apps/src/mrv-submission-jobs.integration.test.ts` (commit `79e81840b03a6520b103175f9f27400c6bc169ba`): after a confirmed HCS stage, simulate worker interruption by expiring its lease, reclaim with a fresh worker token, assert stage and exact persisted Hedera transaction ID survive, and prove the stale worker cannot advance or replace the HCS transaction ID. The recovery lease is released through the fenced API.
 - Exact-head CI run `41465596068` is queued; no result claimed yet.
 - This extends ledger primitive tests only. It does not implement the worker process, external provider orchestration, tenant RLS, or runtime grants. No worker has been activated.
+
+
+### 14:52 UTC — MRV lease recovery test compile correction
+
+- First exact-head CI for recovery test commit `79e81840b03a6520b103175f9f27400c6bc169ba` failed at TypeScript typecheck: test called `releaseMrvSubmissionJobLease` without importing it. The failure was a test compile error, not a PostgreSQL assertion failure; integration tests had not run.
+- Added the missing named import in commit `24b0545ede4a118436aa3d609825cac81c1de1ea`. No test assertions or production code were weakened/changed.
+- Exact-head CI for corrected commit has not yet appeared in workflow results. Checkpoint update itself is being recorded separately; no success claimed.
+- Next review: once CI starts, confirm the new expired-lease recovery path actually executes in disposable PostgreSQL, including stale-token rejection and preserved HCS ID. Also inspect migration audit findings independently; npm audit --omit=dev --audit-level=high reported moderate fast-uri advisories in the run log, not a high-severity failure.
