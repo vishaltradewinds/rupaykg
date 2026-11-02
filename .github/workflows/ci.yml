@@ -82,6 +82,8 @@ jobs:
           SQL
       - run: npm run typecheck
       - run: npm run build
+      - name: Validate RupayKg reference-aligned landing UX
+        run: node scripts/validate-rupaykg-landing-ux.mjs
       - name: Exercise two-custodian bootstrap with synthetic CI identities and secrets
         env:
           RUPAYKG_RUN_DB_INTEGRATION_TESTS: "1"
