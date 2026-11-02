@@ -151,6 +151,7 @@ export async function reconcileHcsTransaction(
     const transactions = body.transactions ?? [];
     if (!transactions.length) return { status: "PENDING", transactionId: id, message: "Mirror Node returned no transaction record yet" };
     const matching = transactions.find((item) => item.transaction_id === mirrorId || item.transaction_id === id) ?? transactions[0];
+    if (!matching) return { status: "PENDING", transactionId: id, message: "Mirror Node returned no matching transaction record yet" };
     if (matching.name !== "CONSENSUS_SUBMIT_MESSAGE" || matching.entity_id !== topic) {
       return { status: "MISMATCH", transactionId: id, message: "Mirror Node transaction type or topic does not match the persisted HCS submission" };
     }
