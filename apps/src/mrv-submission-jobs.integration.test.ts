@@ -197,6 +197,10 @@ test("durable MRV job ledger enforces immutable request, legal transitions and a
     const replayedQueue = await enqueueMrvSubmissionJob(client, enqueueInput);
     assert.equal(replayedQueue.id, queued.id, "identical submissions must return the same durable job");
     assert.equal(await isMrvSubmissionJobStillAuthorized(client, queued.id), true, "valid requester membership and current MRV bindings authorize provider work");
+    await client.query("update measurements set value=2 where id=$1", [measurementId]);
+    assert.equal(await isMrvSubmissionJobStillAuthorized(client, queued.id), false, "changed source quantity must invalidate the immutable enqueue snapshot");
+    await client.query("update measurements set value=1 where id=$1", [measurementId]);
+    assert.equal(await isMrvSubmissionJobStillAuthorized(client, queued.id), true, "restoring the exact source quantity must restore snapshot parity");
     await client.query("update organization_memberships set status='PENDING' where identity_id=$1 and organization_id=$2", [verifierIdentityId, organizationId]);
     assert.equal(await isMrvSubmissionJobStillAuthorized(client, queued.id), false, "revoked or pending requester membership must block provider work");
     await client.query("update organization_memberships set status='VERIFIED' where identity_id=$1 and organization_id=$2", [verifierIdentityId, organizationId]);
