@@ -11,16 +11,16 @@ test("production lifecycle integration gate", { skip: !url }, async () => {
   const c = await pool.connect();
   try {
     await c.query("begin");
-    const org = (await c.query("insert into organizations(name,organization_type) values('integration','COLLECTOR') returning id")).rows[0].id;
+    const org = (await c.query("insert into organizations(name,organization_type,status) values('integration','COLLECTOR','VERIFIED') returning id")).rows[0].id;
     const buyer = (await c.query("insert into organizations(name,organization_type) values('integration-buyer','INDUSTRY_GENERATOR') returning id")).rows[0].id;
     const geography = (await c.query("insert into geography(kind,code,name,source) values('DISTRICT','INTEGRATION','Integration District','test') returning id")).rows[0].id;
     await c.query("insert into organization_geography_scopes(organization_id,geography_id,status) values($1,$2,'VERIFIED')", [org, geography]);
     const actor = (await c.query("insert into identities(external_subject,display_name) values('integration-actor','actor') returning id")).rows[0].id;
     const verifier = (await c.query("insert into identities(external_subject,display_name) values('integration-verifier','verifier') returning id")).rows[0].id;
-    const role = (await c.query("insert into roles(organization_id,name,permissions) values($1,'VERIFIER','[\"VERIFY_EVIDENCE\",\"ISSUE_CREDENTIAL\"]') returning id", [org])).rows[0].id;
+    const role = (await c.query("insert into roles(organization_id,name,permissions) values($1,'verifier','[\"VERIFY_EVIDENCE\",\"verification:approve\",\"ISSUE_CREDENTIAL\"]') returning id", [org])).rows[0].id;
     await approveTestMembership(c, verifier, org, role, geography, "verifier", "collector");
-    await approveTestMembership(c, actor, org, role, geography, "verifier", "collector");
-    await c.query("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED'),($4,$2,$3,'VERIFIED')", [verifier, org, role, actor]);
+    const actorRole = (await c.query("insert into roles(organization_id,name,permissions) values($1,'operator','[\"FIELD_SYNC\"]') returning id", [org])).rows[0].id;
+    await approveTestMembership(c, actor, org, actorRole, geography, "operator", "collector");
     const verifierGrant = await c.query<{ has_permission: boolean; role_name: string; permissions: unknown; membership_status: string }>("select public.has_verification_permission($1) as has_permission,r.name as role_name,r.permissions,om.status as membership_status from public.organization_memberships om join public.roles r on r.id=om.role_id where om.identity_id=$1 and om.role_id=$2", [verifier, role]);
     assert.equal(verifierGrant.rows[0]?.has_permission, true, JSON.stringify(verifierGrant.rows[0]));
 
