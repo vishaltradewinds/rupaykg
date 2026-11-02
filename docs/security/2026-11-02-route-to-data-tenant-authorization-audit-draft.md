@@ -288,3 +288,19 @@ The migration has not yet been applied to a disposable database, so PostgreSQL c
 - Regression tests: not implemented or executed.
 - CI: no workflow run was returned for migration commit `c15726971ffb57b96c25573bd5f0f6107b6011ad`; no green status is claimed for the new migration.
 - Production: unchanged; no DDL, grants, role or data changes.
+
+
+## Follow-up source-level finding and targeted remediation — activity geography binding
+
+A deeper read of `apps/src/value-routes.ts` found that `assertActivityGeographyScope` originally accepted `(geographyId, identityId)` and queried for any verified membership belonging to the identity whose organization passed the geography helper. It did not bind the membership to the `organization_id` returned by `activityAccess`. For multi-organization identities, a geography scope held in Organization A could therefore satisfy the geography check for an activity owned by Organization B. This is a cross-organization authorization defect in the carbon-calculation route's geography check; actual production reachability remains subject to the current production role/schema and route exposure, but the source-level predicate was insufficient.
+
+Targeted fix committed on this PR branch:
+- `assertActivityGeographyScope` now requires the activity's `organization_id` and constrains `organization_memberships.organization_id` to that exact organization.
+- The carbon-calculation callsite passes `access.organization_id` from the activity lookup.
+- New unit tests assert the exact organization binding, missing-geography denial and failed-scope denial.
+- New migration `20261108_geography_scope_fail_closed.sql` removes the shared helper's compatibility `THEN true` path. An organization with no VERIFIED geography root now fails the helper check.
+- Existing registry/settlement PostgreSQL runtime acceptance now asserts that a verified scoped organization passes while an unscoped counterparty organization fails. This exercises the helper against the disposable CI database after migration application.
+
+Exact code branch head at time of note: `9d6664ba06f8264655606eaa8853062e518fadd1`. Exact-head CI run `41456990898` is QUEUED. No production migration or database change was made. This remediation remains unaccepted until exact-head CI passes and independent review confirms the national onboarding path provisions verified geography roots before geography-bound operations.
+
+**Operational consequence:** existing organizations without verified geography roots will be blocked from geography-bound actions after this migration is deployed. A controlled backfill/onboarding process is required; do not apply this migration to production until all legitimate organizations are classified and a rollback/restore plan is approved.
