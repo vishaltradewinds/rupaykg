@@ -47,3 +47,39 @@ The worker needs a narrow, auditable system-actor execution contract. Preferred 
 ## Release decision
 
 **HOLD.** No worker activation, production grants, RLS migration, deployment, provider credentials or production DB writes are authorized by this engineering checkpoint. Queue remains disabled until the above controls and acceptance evidence pass independent review.
+
+
+## Restricted worker database contract — implementation specification
+
+The worker currently issues direct SQL for claim, authorization, lease renewal, stage persistence and finalization. This is a release blocker: do not solve it by granting the worker broad SELECT/UPDATE/INSERT privileges on tenant tables.
+
+### Runtime identity
+- `rupaykg_mrv_worker_runtime`: LOGIN, NOINHERIT, NOSUPERUSER, NOBYPASSRLS, NOCREATEDB, NOCREATEROLE, NOREPLICATION; no membership in app/auth/owner/security roles; no schema CREATE.
+- Worker runtime receives only EXECUTE on the reviewed worker API functions and CONNECT on the database. It receives no direct table, sequence, view, or signing-key privileges.
+- `rupaykg_mrv_worker_owner`: NOLOGIN, NOINHERIT, NOSUPERUSER, NOBYPASSRLS, NOCREATEDB, NOCREATEROLE, NOREPLICATION. Owns only the narrowly scoped SECURITY DEFINER worker functions, not application tables. Fixed `search_path = pg_catalog, public`; all object references schema-qualified; no dynamic SQL; revoke EXECUTE from PUBLIC.
+- The function owner receives only the table/sequence privileges needed by reviewed function bodies. FORCE RLS remains enabled on every tenant table. A dedicated worker policy for the non-login function owner must be explicitly reviewed per table; it must not become a general-purpose runtime policy. Do not use BYPASSRLS as a shortcut.
+- The worker owner must not own signing keys, request-context key tables, authentication/session tables or general application schemas.
+
+### Required narrow function API
+1. `mrv_worker_claim_next(worker_id, lease_seconds)`: atomically claims one due job with SKIP LOCKED; returns only the immutable job snapshot and lease token needed for the next stage. It must never claim `NEEDS_RECONCILIATION`, `PERMANENT_FAILURE`, `REJECTED`, or `CANCELLED`.
+2. `mrv_worker_authorize_job(job_id)`: rechecks verified requester identity, active organization, verified membership, current guardian:operate permission, completed activity, independent approved verification, verified evidence, and current geography scope. Return a boolean and no unrelated row data.
+3. `mrv_worker_persist_guardian_key(job_id, lease_token, key)`: lease-fenced, immutable idempotency-key write.
+4. `mrv_worker_persist_hcs_binding(job_id, lease_token, network, topic_id, transaction_id)`: lease-fenced, immutable HCS transaction binding.
+5. `mrv_worker_renew_lease(job_id, lease_token, lease_seconds)`: renew only an unexpired matching token; return the new expiry or null.
+6. `mrv_worker_advance_stage(job_id, lease_token, next_status, typed_patch)`: allow-listed state transitions and fields only; append audit event atomically; clear lease atomically.
+7. `mrv_worker_release_lease(job_id, lease_token, retry_at, error_code, detail)`: release only a live matching token and append event.
+8. `mrv_worker_finalize_provenance(job_id, lease_token, digest)`: in one transaction, recheck authorization and all immutable provider bindings, insert-or-verify append-only provenance, transition to completed, append audit event, and clear lease. It must not accept organization/activity/evidence IDs from the caller; derive all identifiers from the locked job row.
+
+Every function must reject missing/expired lease tokens, reject cross-job IDs, use row locks for state transitions, and return the minimum required fields. The worker TypeScript repository must call these functions only; no direct SQL against tenant or MRV ledger tables. The enqueue API remains a separate signed tenant-context transaction and must not receive worker function privileges.
+
+### RLS / ownership test matrix before worker enablement
+- Runtime role cannot SELECT/INSERT/UPDATE/DELETE any application or MRV table, cannot read request-context signing keys, cannot create objects, and cannot SET ROLE to any owner.
+- Runtime role can invoke only the named worker functions; PUBLIC and unrelated roles cannot invoke them.
+- Function owner is non-login and NOBYPASSRLS; no owner membership or table ownership.
+- Under two tenants, a claimed job returns only its own immutable snapshot; authorization fails when requester membership is revoked, role permission removed, evidence unverified, verification revoked, activity changed, or geography scope removed.
+- Wrong job ID, tenant identifiers supplied by a caller, stale lease token, expired lease, replayed stage, duplicate provider result, and attempted provenance mutation all fail closed.
+- Crash injection after every durable boundary proves restart/reconciliation without a new Guardian idempotency key or Hedera transaction ID.
+- Verify function definition hashes, grants, policies, owners, FORCE RLS, and runtime `current_user` from the actual connection in CI and in the pre-deployment rehearsal.
+
+### Current implementation gap
+The worker currently uses direct SQL in `apps/src/mrv-submission-jobs.ts` and finalization in `apps/src/mrv-submission-worker.ts`; `apps/src/mrv-worker-server.ts` currently expects broad table privileges. These must be replaced with the narrow function API before any worker credential is issued or worker is enabled. No production migration or grants are authorized by this specification.
