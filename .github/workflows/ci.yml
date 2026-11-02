@@ -84,7 +84,10 @@ jobs:
           google-chrome --headless=new --no-sandbox --disable-gpu --disable-dev-shm-usage --disable-extensions --no-first-run --user-data-dir=/tmp/rupaykg-chrome-mobile --hide-scrollbars --window-size=390,844 --screenshot=/tmp/rupaykg-web-mobile-smoke.png --virtual-time-budget=2000 http://127.0.0.1:4173/ >/tmp/rupaykg-chrome-mobile.out 2>&1
           cat /tmp/rupaykg-chrome-mobile.out
           test -s /tmp/rupaykg-web-mobile-smoke.png
-          echo "Chrome DOM exit: $dom_status; desktop screenshot exit: $shot_status; mobile screenshot captured"
+          google-chrome --headless=new --no-sandbox --disable-gpu --disable-dev-shm-usage --disable-extensions --no-first-run --user-data-dir=/tmp/rupaykg-chrome-320 --hide-scrollbars --window-size=320,844 --screenshot=/tmp/rupaykg-web-320-smoke.png --virtual-time-budget=2000 http://127.0.0.1:4173/ >/tmp/rupaykg-chrome-320.out 2>&1
+          cat /tmp/rupaykg-chrome-320.out
+          test -s /tmp/rupaykg-web-320-smoke.png
+          echo "Chrome DOM exit: $dom_status; desktop, 390px and 320px screenshots captured"
       - name: Upload landing UX browser evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -93,6 +96,7 @@ jobs:
           path: |
             /tmp/rupaykg-web-smoke.png
             /tmp/rupaykg-web-mobile-smoke.png
+            /tmp/rupaykg-web-320-smoke.png
             /tmp/rupaykg-web-dom.html
           if-no-files-found: warn
           retention-days: 7
