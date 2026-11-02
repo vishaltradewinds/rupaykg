@@ -434,3 +434,11 @@ HCS transaction-ID helper coverage added: `apps/src/hedera-anchor.test.ts` now v
 
 - Run `41461603873` completed SUCCESS for code commit `30f6eabb99f3fd0ac29bc1c2f1bffdaf95ef3de2`: migrations, typecheck, build, browser smoke, disposable PostgreSQL acceptance (including HCS transaction-ID persistence path), and production container build all passed.
 - This validates the HCS persistence helper and preceding lease renewal/worker primitives at CI level. It does not validate the later Guardian idempotency helper/test commits; those are queued/running separately.
+
+
+## Mirror Node reconciliation by persisted HCS transaction ID — 2026-11-02 14:28 UTC
+
+- Added `reconcileHcsTransaction` in `apps/src/hedera-anchor.ts` (commits `265a827d4536b3fd6f28868d42a9011cf2ed7253`, parser correction `82a6a502ab65ab382a8e943ea0ec70068332d29d`). It looks up the already-persisted transaction ID at the network Mirror Node, confirms transaction type `CONSENSUS_SUBMIT_MESSAGE`, exact topic, successful result and consensus timestamp, then verifies the exact HCS message payload/hash and activity/verification/evidence/Guardian execution binding.
+- Mirror Node 404 or empty results are explicitly `PENDING` (indexing lag), never proof of non-submission and never authorization to generate a replacement transaction ID. Network errors are `UNAVAILABLE`; topic/type/payload mismatches are fail-closed; failed transaction results are terminal `FAILED`.
+- Added tests for successful end-to-end transaction lookup + exact payload verification and 404-as-pending (`38ee5b58cd790f970177b683e2bddbb46369ebbe`). CI pending.
+- Reference: Hedera Mirror Node API documents `GET /api/v1/transactions/{transactionId}` and transaction metadata, alongside topic message APIs. See official Mirror Node Swagger: https://mainnet-public.mirrornode.hedera.com/api/v1/docs/ and Hedera docs. This is lookup support only; it is not yet wired into a live worker or the production MRV route.
