@@ -486,6 +486,86 @@ async function run(): Promise<void> {
     assert.equal(activated.rows[0]?.membership_status, "VERIFIED");
     assert.equal(activated.rows[0]?.organization_status, "VERIFIED");
 
+    // Exercise the hierarchy's geography predicate at both the review-queue
+    // and mutation boundaries. The synthetic reviewer has a valid STATE role
+    // in a verified organization whose verified geography root excludes a
+    // sibling state. This is a disposable-PostgreSQL fixture, not production
+    // membership provisioning.
+    const scopedReviewerRole = await pool.query<{ id: string }>(
+      `insert into public.roles(organization_id,name,permissions)
+       values($1,'state_admin','[]'::jsonb) returning id`,
+      [applicantOrganizationId],
+    );
+    const scopedReviewerRoleId = scopedReviewerRole.rows[0]?.id;
+    assert.ok(scopedReviewerRoleId);
+    await pool.query(
+      `insert into public.organization_memberships(identity_id,organization_id,role_id,status)
+       values($1,$2,$3,'VERIFIED')`,
+      [identityC, applicantOrganizationId, scopedReviewerRoleId],
+    );
+
+    const createGeographyApplication = async (name: string, code: string, geographyId: string) => {
+      const created = await pool.query<{ application_result: { application: { id: string } } }>(
+        `select auth_private.create_stakeholder_application(
+          $1,$2,$3,$4,$5,$6,$7,$8::uuid,$9,$10,$11,$12,$13,$14::timestamptz,$15::timestamptz
+        ) as application_result`,
+        [
+          authorityTokenHash, name, "processor", name, "Private Limited",
+          code, "MCA", geographyId, "CI geography-scoped reviewer fixture",
+          "INCORPORATION_CERTIFICATE", `evidence://ci/geography/${suffix}/${code}`,
+          "d".repeat(64), "CI Test Issuer", null, null,
+        ],
+      );
+      const id = created.rows[0]?.application_result.application.id;
+      assert.ok(id);
+      return id;
+    };
+    const inScopeApplicationId = await createGeographyApplication(
+      "CI In-Scope Geography Application", `CIN-IN-${suffix}`, geographyChild,
+    );
+    const outOfScopeApplicationId = await createGeographyApplication(
+      "CI Out-of-Scope Geography Application", `CIN-OUT-${suffix}`, geographyOutside,
+    );
+    const scopedReviewerQueue = await pool.query<{
+      queue_result: { applications: Array<{ id: string; canReview: boolean; nextApproval?: { approval_level?: string } }> }
+    }>(
+      "select auth_private.get_onboarding_review_queue($1) as queue_result",
+      [unauthorizedTokenHash],
+    );
+    const inScopeQueued = scopedReviewerQueue.rows[0]?.queue_result.applications.find(
+      row => row.id === inScopeApplicationId,
+    );
+    assert.ok(inScopeQueued, "a state reviewer must see an application within its verified geography scope");
+    assert.equal(inScopeQueued.canReview, true);
+    assert.equal(
+      scopedReviewerQueue.rows[0]?.queue_result.applications.some(row => row.id === outOfScopeApplicationId),
+      false,
+      "a state reviewer must not see an application outside its verified geography scope",
+    );
+    await assert.rejects(
+      pool.query(
+        "select auth_private.review_stakeholder_application($1,$2,$3,$4)",
+        [unauthorizedTokenHash, outOfScopeApplicationId, "approve", "Out-of-scope review must be denied"],
+      ),
+      /ONBOARDING_AUTHORITY_FORBIDDEN/,
+      "database review mutation must deny an out-of-scope geography",
+    );
+    const inScopeDecision = await pool.query<{ decision_result: { status: string; approvalLevel: string } }>(
+      "select auth_private.review_stakeholder_application($1,$2,$3,$4) as decision_result",
+      [unauthorizedTokenHash, inScopeApplicationId, "approve", "In-scope geography review accepted"],
+    );
+    assert.equal(inScopeDecision.rows[0]?.decision_result.status, "PENDING");
+    assert.equal(inScopeDecision.rows[0]?.decision_result.approvalLevel, "STATE");
+    const afterStateApproval = await pool.query<{ queue_result: { applications: Array<{ id: string }> } }>(
+      "select auth_private.get_onboarding_review_queue($1) as queue_result",
+      [unauthorizedTokenHash],
+    );
+    assert.equal(
+      afterStateApproval.rows[0]?.queue_result.applications.some(row => row.id === inScopeApplicationId),
+      false,
+      "state reviewer must lose queue visibility after its step advances to PLATFORM",
+    );
+
     const selfApplication = await pool.query<{ application_result: { application: { id: string } } }>(
       `select auth_private.create_stakeholder_application(
         $1,$2,$3,$4,$5,$6,$7,$8::uuid,$9,$10,$11,$12,$13,$14::timestamptz,$15::timestamptz
