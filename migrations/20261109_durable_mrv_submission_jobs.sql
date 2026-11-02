@@ -170,7 +170,9 @@ begin
     case when tg_op = 'INSERT' then null
          when old.lease_token is not null then old.lease_owner
          else new.lease_owner end,
-    coalesce(new.lease_token, old.lease_token),
+    case when tg_op = 'INSERT' then new.lease_token
+         when new.lease_token is not null then new.lease_token
+         else old.lease_token end,
     case when tg_op = 'INSERT' then 'JOB_CREATED' else 'JOB_UPDATED' end,
     jsonb_build_object('attemptCount', new.attempt_count, 'lastErrorCode', new.last_error_code)
   );
