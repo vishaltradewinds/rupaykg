@@ -93,6 +93,14 @@ try {
   assert.equal(initial.languageInHeader, true, "language selector must be inside the responsive header");
   assert.equal(initial.offlineHidden, true, "empty offline status must remain hidden");
 
+  await command("Emulation.setDeviceMetricsOverride", { width: 320, height: 844, deviceScaleFactor: 1, mobile: true });
+  const narrowViewport = await evaluate(`(async()=> {
+    await new Promise(resolve => setTimeout(resolve, 80));
+    return { width: window.innerWidth, scrollWidth: document.documentElement.scrollWidth };
+  })()`);
+  assert.ok(narrowViewport.scrollWidth <= narrowViewport.width, "320px viewport must not have horizontal overflow");
+  await command("Emulation.clearDeviceMetricsOverride");
+
   const signIn = await evaluate(`(async()=> {
     document.querySelector('.landing-actions button')?.click();
     ${waitForRender}
