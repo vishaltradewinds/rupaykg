@@ -42,6 +42,7 @@ Direct organization scope, plus operation-specific permission and integrity chec
 - evidence_artifact_series — organization_id plus activity consistency.
 - field_devices — organization_id plus registered identity/device authorization.
 - obligations — organization_id plus jurisdiction.
+- organizations — organization master; self-view requires verified membership, while platform authority access is a separate controlled path. Do not make every tenant row globally visible.
 - organization_bwg_assessments — organization_id.
 - organization_epr_applicability — organization_id.
 - organization_geography_scopes — organization_id; only verified scopes authorize geography.
