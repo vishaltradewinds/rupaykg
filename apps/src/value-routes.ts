@@ -4,6 +4,7 @@ import { calculateEmissionReduction, isGenericCalculationMethodAllowed, sha256Ca
 import { assessEprObligation } from "@rupaykg/compliance";
 import { classifyMetric } from "@rupaykg/esg";
 import { authenticate, canActForOrganization, hasOrganizationPermission, type AuthContext } from "./auth.js";
+import { withRlsRequestTransaction, type RlsRequestContextConfig } from "./rls-request-transaction.js";
 
 type Reply = { code: (status: number) => { send: (body: unknown) => unknown } };
 type Request = { body: unknown; params: Record<string, string>; log: { error: (error: unknown) => void }; headers: Record<string, string | undefined> };
@@ -11,9 +12,10 @@ function bodyOf(request: Request): Record<string, unknown> { return request.body
 function str(body: Record<string, unknown>, key: string): string | null { return typeof body[key] === "string" && body[key].trim() ? body[key].trim() : null; }
 function nonNegative(body: Record<string, unknown>, key: string): number | null { const n = Number(body[key]); return Number.isFinite(n) && n >= 0 ? n : null; }
 async function authFor(request: Request, reply: Reply, pool: Pool | null): Promise<AuthContext | null> { try { const auth = await authenticate(request as never, pool); if (!auth) { reply.code(401).send({ error: "Authenticated session required", code: "AUTH_REQUIRED" }); return null; } return auth; } catch (error) { request.log.error(error); reply.code(503).send({ error: "Authentication service unavailable", code: "AUTH_UNAVAILABLE" }); return null; } }
+function requestContextConfig(): RlsRequestContextConfig | null { const hmacSecret = process.env.RUPAYKG_REQUEST_CONTEXT_SECRET; const keyId = process.env.RUPAYKG_REQUEST_CONTEXT_KEY_ID; if (!hmacSecret || Buffer.byteLength(hmacSecret, "utf8") < 32 || !keyId || !/^[a-z0-9_-]{1,32}$/.test(keyId)) return null; return { hmacSecret, keyId }; }
 async function activityAccess(client: Pool | PoolClient, activityId: string, identityId: string): Promise<{ organization_id: string; geography_id: string | null } | null> { const result = await client.query<{ organization_id: string; geography_id: string | null }>(`select a.organization_id, a.geography_id from activities a join organization_memberships om on om.organization_id = a.organization_id where a.id = $1 and om.identity_id = $2 and om.status = 'VERIFIED'`, [activityId, identityId]); return result.rows[0] ?? null; }
 export async function assertActivityGeographyScope(client: Pool | PoolClient, organizationId: string, geographyId: string | null, identityId: string): Promise<{ ok: boolean; code?: string }> { if (!geographyId) return { ok: false, code: "ACTIVITY_GEOGRAPHY_REQUIRED" }; const result = await client.query<{ ok: boolean }>(`select exists(select 1 from organization_memberships om where om.identity_id = $1 and om.organization_id = $2 and om.status = 'VERIFIED' and organization_has_geography_scope(om.organization_id, $3)) as ok`, [identityId, organizationId, geographyId]); return result.rows[0]?.ok === true ? { ok: true } : { ok: false, code: "GEOGRAPHY_FORBIDDEN" }; }
-async function hasValuePermission(pool: Pool, functionName: "can_assess_epr" | "can_write_esg", identityId: string, organizationId: string): Promise<boolean> { const result = await pool.query<{ ok: boolean }>(`select ${functionName}($1,$2) as ok`, [identityId, organizationId]); return result.rows[0]?.ok === true; }
+async function hasValuePermission(pool: Pool | PoolClient, functionName: "can_assess_epr" | "can_write_esg", identityId: string, organizationId: string): Promise<boolean> { const result = await pool.query<{ ok: boolean }>(`select ${functionName}($1,$2) as ok`, [identityId, organizationId]); return result.rows[0]?.ok === true; }
 async function evidenceIsVerified(pool: Pool, evidenceId: string, organizationId: string): Promise<boolean> { const result = await pool.query<{ ok: boolean }>(`select exists(select 1 from evidence e join activities a on a.id=e.activity_id where e.id=$1 and a.organization_id=$2 and e.status='VERIFIED' and (e.content_hash is not null or e.content_uri is not null) and a.geography_id is not null and organization_has_geography_scope($2,a.geography_id)) as ok`, [evidenceId, organizationId]); return result.rows[0]?.ok === true; }
 
 export async function registerValueRoutes(app: FastifyInstance, pool: Pool | null): Promise<void> {
@@ -97,32 +99,38 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
       const inserted = await pool.query("insert into esg_metrics (reporting_period_id, metric_code, scope, value, unit, evidence_id, verification_id, status, metadata) values ($1,$2,$3,$4,$5,$6,$7,$8,$9) returning *", [periodId, metricCode, scope, value, unit, evidenceId, verificationId, state, body.metadata ?? {}]);
       return reply.code(201).send({ source: "postgresql", syntheticData: false, metric: inserted.rows[0], state });
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "ESG metric recording unavailable", syntheticData: false }); }
-  });
-
   app.get("/api/v1/workspaces/bwg", async (request, reply) => {
     const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
-    const activeOrganizationId = auth.activeOrganizationId ?? auth.memberships[0]?.organization_id;
-    const ids = activeOrganizationId ? [activeOrganizationId] : [];
-    if (!ids.length) return { source: "postgresql", syntheticData: false, data: { profiles: [], periods: [], wasteReports: [], eprReports: [], esgReports: [], jurisdictions: [], schemes: [] } };
+    const organizationId = auth.activeOrganizationId;
+    if (!organizationId) return { source: "postgresql", syntheticData: false, data: { profiles: [], periods: [], wasteReports: [], eprReports: [], esgReports: [], jurisdictions: [], schemes: [] } };
+    if (!canActForOrganization(auth, organizationId)) return reply.code(403).send({ error: "Organization access denied", code: "ORG_FORBIDDEN" });
+    const config = requestContextConfig();
+    if (!config) return reply.code(503).send({ error: "Signed tenant context is not configured", code: "TENANT_CONTEXT_UNAVAILABLE", syntheticData: false });
     try {
-      const [profiles, periods, wasteReports, eprReports, esgReports, jurisdictions, schemes] = await Promise.all([
-        pool.query("select p.*, g.name as jurisdiction_name from bwg_profiles p left join geography g on g.id=p.jurisdiction_id where p.organization_id=any($1::uuid[]) order by p.updated_at desc", [ids]),
-        pool.query("select * from bwg_reporting_periods where organization_id=any($1::uuid[]) order by period_end desc", [ids]),
-        pool.query("select w.*, r.organization_id from bwg_waste_reports w join bwg_reporting_periods r on r.id=w.reporting_period_id where r.organization_id=any($1::uuid[]) order by w.created_at desc", [ids]),
-        pool.query("select e.*, r.organization_id, s.name as scheme_name from bwg_epr_reports e join bwg_reporting_periods r on r.id=e.reporting_period_id join epr_schemes s on s.id=e.scheme_id where r.organization_id=any($1::uuid[]) order by e.created_at desc", [ids]),
-        pool.query("select e.*, r.organization_id from bwg_esg_reports e join bwg_reporting_periods r on r.id=e.reporting_period_id where r.organization_id=any($1::uuid[]) order by e.created_at desc", [ids]),
-        pool.query("select distinct g.id, g.name from geography g join organization_geography_scopes ogs on ogs.geography_id=g.id where ogs.organization_id=any($1::uuid[]) and ogs.status='VERIFIED' order by g.name", [ids]),
-        pool.query("select id, code, name, authority, jurisdiction_id from epr_schemes where status='VERIFIED' order by name"),
-      ]);
-      const organizations = await Promise.all(ids.map(async (organizationId) => ({
-        organizationId,
-        profileUpdate: await hasOrganizationPermission(pool, auth, organizationId, ["profile:update", "waste:record"]),
-        periodCreate: await hasOrganizationPermission(pool, auth, organizationId, ["reports:read", "waste:record"]),
-        wasteRecord: await hasOrganizationPermission(pool, auth, organizationId, ["waste:record"]),
-        eprManage: await hasOrganizationPermission(pool, auth, organizationId, ["epr:manage"]),
-        esgWrite: await hasValuePermission(pool, "can_write_esg", auth.identityId, organizationId),
-      })));
-      return { source: "postgresql", syntheticData: false, data: { profiles: profiles.rows, periods: periods.rows, wasteReports: wasteReports.rows, eprReports: eprReports.rows, esgReports: esgReports.rows, jurisdictions: jurisdictions.rows, schemes: schemes.rows, organizations } };
+      const data = await withRlsRequestTransaction(pool, auth, config, async (client) => {
+        const ids = [organizationId];
+        const [profiles, periods, wasteReports, eprReports, esgReports, jurisdictions, schemes] = await Promise.all([
+          client.query("select p.*, g.name as jurisdiction_name from bwg_profiles p left join geography g on g.id=p.jurisdiction_id where p.organization_id=any($1::uuid[]) order by p.updated_at desc", [ids]),
+          client.query("select * from bwg_reporting_periods where organization_id=any($1::uuid[]) order by period_end desc", [ids]),
+          client.query("select w.*, r.organization_id from bwg_waste_reports w join bwg_reporting_periods r on r.id=w.reporting_period_id where r.organization_id=any($1::uuid[]) order by w.created_at desc", [ids]),
+          client.query("select e.*, r.organization_id, s.name as scheme_name from bwg_epr_reports e join bwg_reporting_periods r on r.id=e.reporting_period_id join epr_schemes s on s.id=e.scheme_id where r.organization_id=any($1::uuid[]) order by e.created_at desc", [ids]),
+          client.query("select e.*, r.organization_id from bwg_esg_reports e join bwg_reporting_periods r on r.id=e.reporting_period_id where r.organization_id=any($1::uuid[]) order by e.created_at desc", [ids]),
+          client.query("select distinct g.id, g.name from geography g join organization_geography_scopes ogs on ogs.geography_id=g.id where ogs.organization_id=any($1::uuid[]) and ogs.status='VERIFIED' order by g.name", [ids]),
+          client.query("select id, code, name, authority, jurisdiction_id from epr_schemes where status='VERIFIED' order by name"),
+        ]);
+        const organizations = [{
+          organizationId,
+          profileUpdate: await hasOrganizationPermission(client, auth, organizationId, ["profile:update", "waste:record"]),
+          periodCreate: await hasOrganizationPermission(client, auth, organizationId, ["reports:read", "waste:record"]),
+          wasteRecord: await hasOrganizationPermission(client, auth, organizationId, ["waste:record"]),
+          eprManage: await hasOrganizationPermission(client, auth, organizationId, ["epr:manage"]),
+          esgWrite: await hasValuePermission(client, "can_write_esg", auth.identityId, organizationId),
+        }];
+        return { profiles: profiles.rows, periods: periods.rows, wasteReports: wasteReports.rows, eprReports: eprReports.rows, esgReports: esgReports.rows, jurisdictions: jurisdictions.rows, schemes: schemes.rows, organizations };
+      });
+      return { source: "postgresql", syntheticData: false, data };
+    } catch (error) { request.log.error(error); return reply.code(503).send({ error: "BWG reporting workspace unavailable", code: "BWG_WORKSPACE_UNAVAILABLE", syntheticData: false }); }
+  });
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "BWG reporting workspace unavailable", code: "BWG_WORKSPACE_UNAVAILABLE", syntheticData: false }); }
   });
 
