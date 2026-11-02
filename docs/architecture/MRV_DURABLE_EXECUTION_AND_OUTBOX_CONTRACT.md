@@ -179,3 +179,23 @@ Implement the worker runner with a stage-by-stage state machine:
 5. revalidate authorization and current evidence/verification again;
 6. persist provenance and job completion atomically, with append-only event attribution;
 7. add crash/retry/fault-injection tests for every boundary.
+
+
+### 2026-11-02 15:42 UTC — worker orchestration implementation checkpoint
+
+A first lease-fenced stage runner is now present at `apps/src/mrv-submission-worker.ts`:
+
+- Claims one due job per invocation using the existing atomic `FOR UPDATE SKIP LOCKED` lease claim.
+- Performs a fresh database authorization check immediately before Guardian submission, before Hedera submission/reconciliation, and before final provenance persistence.
+- Persists Guardian's deterministic idempotency key before its HTTP request. Retries retain the same key.
+- Generates and persists the Hedera transaction ID before the HCS side effect. Ambiguous outcomes are reconciled against that exact ID; no new transaction ID is generated on retry.
+- Reconciles exact Mirror Node transaction, topic, HCS payload and integrity hash before setting MIRROR_VERIFIED.
+- Inserts provenance and advances PROVENANCE_PERSISTED -> COMPLETED inside one transaction under the active lease. A conflicting pre-existing provenance row is checked for matching evidence, Guardian execution, HCS transaction and Mirror verification.
+- All provider network calls occur outside DB transactions. Each stage ends with a lease-fenced update; a stale worker cannot advance after lease expiry.
+- Jobs in NEEDS_RECONCILIATION and the transient PROVENANCE_PERSISTED state are excluded from automatic claims. Manual reconciliation is not silently retried.
+
+The runner requires `RUPAYKG_MRV_WORKER_ENABLED=true` and is not registered as an API startup task or production process. A test asserts that when disabled it makes zero database connections. The queue API remains separately gated by `RUPAYKG_MRV_DURABLE_JOBS_ENABLED=true`.
+
+CI history: the first worker commit had an exact-optional-property TypeScript error; it was corrected by omitting absent optional properties rather than passing `undefined`. Subsequent branch workflows are running. Do not mark worker implementation accepted until the latest exact-head workflow is green and integration tests exercise all stages, lease expiry, retries, provider ambiguity, authorization revocation and finalization on disposable PostgreSQL.
+
+**Not yet proven / not production-ready:** no separately deployed worker process or supervised scheduler; no worker DB role or forced RLS; no live provider test; no real pilot job; no independent review of provenance upsert semantics; no production migration or rollout. Production flags must remain unset. No production database or provider writes have occurred.
