@@ -78,6 +78,73 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
 
   // Durable enqueue is deliberately feature-gated until the worker role, RLS
   // policies and production migration receive independent approval.
+  app.get("/api/v1/mrv/jobs/:jobId", async (request, reply) => {
+    const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
+    if (process.env.RUPAYKG_MRV_DURABLE_JOBS_ENABLED !== "true") {
+      return reply.code(503).send({ error: "Durable MRV queue is not enabled on this deployment", code: "MRV_DURABLE_QUEUE_DISABLED" });
+    }
+    const jobId = (request.params as { jobId: string }).jobId;
+    const client = await pool.connect();
+    try {
+      await client.query("begin");
+      const result = await client.query<{
+        id: string; organization_id: string; activity_id: string; geography_id: string;
+        status: string; attempt_count: number; next_attempt_at: Date; guardian_status: string | null;
+        guardian_execution_id: string | null; hedera_status: string | null; hedera_topic_id: string | null;
+        hedera_transaction_id: string | null; hedera_consensus_timestamp: string | null;
+        mirror_verified_at: Date | null; last_error_code: string | null;
+        created_at: Date; updated_at: Date; completed_at: Date | null;
+      }>(
+        `select j.id,j.organization_id,j.activity_id,j.geography_id,j.status,j.attempt_count,
+                j.next_attempt_at,j.guardian_status,j.guardian_execution_id,j.hedera_status,
+                j.hedera_topic_id,j.hedera_transaction_id,j.hedera_consensus_timestamp,
+                j.mirror_verified_at,j.last_error_code,j.created_at,j.updated_at,j.completed_at
+           from mrv_submission_jobs j where j.id=$1`,
+        [jobId],
+      );
+      const job = result.rows[0];
+      if (!job) {
+        await client.query("rollback");
+        return reply.code(404).send({ error: "MRV job not found", code: "MRV_JOB_NOT_FOUND" });
+      }
+      if (!canActForOrganization(auth, job.organization_id)
+          || !await requirePermission(client, auth, job.organization_id, ["guardian:read"])
+          || !await activityInAuthorizedGeography(client, auth, job.activity_id, job.organization_id)) {
+        await client.query("rollback");
+        return reply.code(403).send({ error: "MRV job access denied", code: "MRV_JOB_FORBIDDEN" });
+      }
+      const events = await client.query<{
+        from_status: string | null; to_status: string; actor_kind: string; event_code: string; created_at: Date;
+      }>(
+        "select from_status,to_status,actor_kind,event_code,created_at from mrv_submission_job_events where job_id=$1 order by created_at,id",
+        [jobId],
+      );
+      await client.query("commit");
+      return {
+        source: "postgresql", syntheticData: false,
+        job: {
+          id: job.id, activityId: job.activity_id, status: job.status, attemptCount: job.attempt_count,
+          nextAttemptAt: job.next_attempt_at, guardianStatus: job.guardian_status,
+          guardianExecutionId: job.guardian_execution_id, hederaStatus: job.hedera_status,
+          hederaTopicId: job.hedera_topic_id, hederaTransactionId: job.hedera_transaction_id,
+          hederaConsensusTimestamp: job.hedera_consensus_timestamp, mirrorVerifiedAt: job.mirror_verified_at,
+          lastErrorCode: job.last_error_code, createdAt: job.created_at, updatedAt: job.updated_at,
+          completedAt: job.completed_at,
+        },
+        events: events.rows.map(event => ({
+          fromStatus: event.from_status, toStatus: event.to_status,
+          actorKind: event.actor_kind, eventCode: event.event_code, createdAt: event.created_at,
+        })),
+      };
+    } catch (error) {
+      await client.query("rollback").catch(() => undefined);
+      request.log.error(error);
+      return reply.code(503).send({ error: "MRV job status unavailable", code: "MRV_JOB_STATUS_UNAVAILABLE", syntheticData: false });
+    } finally {
+      client.release();
+    }
+  });
+
   app.post("/api/v1/mrv/activities/:activityId/jobs", async (request, reply) => {
     const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
     if (process.env.RUPAYKG_MRV_DURABLE_JOBS_ENABLED !== "true") {
