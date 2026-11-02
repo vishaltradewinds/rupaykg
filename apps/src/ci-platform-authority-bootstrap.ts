@@ -328,6 +328,49 @@ async function run(): Promise<void> {
       "an unknown session token must not read the review queue",
     );
 
+    const authorityRole = await pool.query<{ permissions: unknown }>(
+      `select r.permissions
+         from public.organization_memberships om
+         join public.roles r on r.id=om.role_id
+        where om.identity_id=$1 and om.organization_id=$2 and r.name='super_admin'`,
+      [identityA, result.organizationId],
+    );
+    assert.equal(authorityRole.rows.length, 1, "bootstrap must create exactly one super-admin role membership for custodian A");
+    const originalAuthorityPermissions = authorityRole.rows[0]?.permissions;
+    await pool.query(
+      `update public.roles
+          set permissions='[]'::jsonb
+        where organization_id=$1 and name='super_admin'`,
+      [result.organizationId],
+    );
+    const permissionlessQueue = await pool.query<{ queue_result: { applications: Array<{ id: string; canReview: boolean; canVerifyLegal: boolean }> } }>(
+      "select auth_private.get_onboarding_review_queue($1) as queue_result",
+      [authorityTokenHash],
+    );
+    assert.equal(permissionlessQueue.rows[0]?.queue_result.applications.some(row => row.id === applicationId), false,
+      "platform role without admin:users must not see the legal/platform review queue");
+    await assert.rejects(
+      pool.query(
+        "select auth_private.verify_stakeholder_legal($1,$2,$3,$4)",
+        [authorityTokenHash, applicationId, "VERIFIED", "Must fail without admin:users"],
+      ),
+      /ONBOARDING_AUTHORITY_FORBIDDEN/,
+      "platform role without admin:users must not verify legal evidence",
+    );
+    await pool.query(
+      `update public.roles set permissions=$2::jsonb
+        where organization_id=$1 and name='super_admin'`,
+      [result.organizationId, JSON.stringify(originalAuthorityPermissions)],
+    );
+    const restoredAuthorityQueue = await pool.query<{ queue_result: { applications: Array<{ id: string; canReview: boolean; canVerifyLegal: boolean }> } }>(
+      "select auth_private.get_onboarding_review_queue($1) as queue_result",
+      [authorityTokenHash],
+    );
+    const restoredApplication = restoredAuthorityQueue.rows[0]?.queue_result.applications.find(row => row.id === applicationId);
+    assert.ok(restoredApplication, "restored platform authority permission must restore queue visibility");
+    assert.equal(restoredApplication.canReview, true);
+    assert.equal(restoredApplication.canVerifyLegal, true);
+
     const legalResult = await pool.query<{ verification_result: { status: string; organizationId: string } }>(
       "select auth_private.verify_stakeholder_legal($1,$2,$3,$4) as verification_result",
       [authorityTokenHash, applicationId, "VERIFIED", "CI evidence hash and reference verified"],
