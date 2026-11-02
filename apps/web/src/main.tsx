@@ -326,6 +326,16 @@ function App(){
  useEffect(()=>{if(token&&!membership)void loadOnboardingOptions();},[token,membership]);
  useEffect(()=>{if(token&&membership)void loadReviewQueue(token);},[token,membership,orgId]);
  useEffect(()=>{if(token&&visibleWorkspaces.length&&!visibleWorkspaces.some(w=>w.key===selected))setSelected(visibleWorkspaces[0].key);},[token,visibleWorkspaces,selected]);
+ useEffect(()=>{
+  const openMrv=()=>{
+   if(!token||!membership){setMessage("Sign in and complete verified organization onboarding to access authoritative MRV records.");return;}
+   if(!visibleWorkspaces.some(w=>w.key==="mrv")){setError("Your active organization membership does not grant MRV workspace access.");return;}
+   setError("");setMessage("Opening the active organization's authoritative MRV workspace.");setSelected("mrv");
+   if(!data.mrv)void loadWorkspace("mrv");
+  };
+  window.addEventListener("rupaykg:open-mrv-workspace",openMrv);
+  return()=>window.removeEventListener("rupaykg:open-mrv-workspace",openMrv);
+ },[token,membership,visibleWorkspaces,data.mrv]);
  useEffect(()=>{if(!authDrawerOpen)return;const onKeyDown=(event:KeyboardEvent)=>{if(event.key==="Escape")setAuthDrawerOpen(false);};window.addEventListener("keydown",onKeyDown);return()=>window.removeEventListener("keydown",onKeyDown);},[authDrawerOpen]);
  const current=workspaces.find(w=>w.key===selected)??visibleWorkspaces[0]??workspaces[0];const rows=(data[selected]?.[current.collection]??data[selected]?.data?.[current.collection]??[]) as unknown[];
  const stakeholderCards=[["LOCAL PARTICIPANTS","Citizen, farmer, Safai Mitra","Capture activity at source and participate in local circular flows."],["OPERATORS","Collector, aggregator, transporter, processor","Move, measure and evidence material through the chain."],["AUTHORITIES","ULB, rural local body, regulator","Govern operations, compliance and evidence-backed outcomes."],["VALUE PARTNERS","Project owner, EPR/CSR, carbon & ESG buyer, assurance","Convert verified activity into trusted reporting and value."]];
