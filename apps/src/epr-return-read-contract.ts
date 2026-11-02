@@ -18,6 +18,8 @@ type EprReturnReadContractRow = {
   can_update_schemes: boolean;
   can_delete_schemes: boolean;
   can_read_signing_keys: boolean;
+  can_create_public: boolean;
+  can_create_database: boolean;
   verifier_schema_usage: boolean;
   verifier_execute: boolean;
   verifier_valid: boolean;
@@ -52,6 +54,8 @@ const EPR_RETURN_READ_CONTRACT_SQL = `select
   has_table_privilege(current_user,'public.epr_schemes','UPDATE') as can_update_schemes,
   has_table_privilege(current_user,'public.epr_schemes','DELETE') as can_delete_schemes,
   has_table_privilege(current_user,'app_security.request_context_keys','SELECT') as can_read_signing_keys,
+  has_schema_privilege(current_user,'public','CREATE') as can_create_public,
+  has_database_privilege(current_user,current_database(),'CREATE') as can_create_database,
   has_schema_privilege(current_user,'app_security','USAGE') as verifier_schema_usage,
   has_function_privilege(current_user,'app_security.current_request_context_claims()','EXECUTE') as verifier_execute,
   exists (
@@ -92,6 +96,8 @@ export async function assertEprReturnReadDatabaseContract(pool: Pick<Pool, "quer
     row.can_update_schemes ||
     row.can_delete_schemes ||
     row.can_read_signing_keys ||
+    row.can_create_public ||
+    row.can_create_database ||
     !row.verifier_schema_usage ||
     !row.verifier_execute ||
     !row.verifier_valid
