@@ -554,3 +554,10 @@ The first regression-test CI run (`41464821546`) failed as expected against the 
 - Scope of evidence: CI proves the code and regression test in disposable CI; it does not establish Mirror Node production service behavior, real Hedera transaction execution, worker deployment, tenant RLS, or TRL 9.
 
 **Next safe work:** finish a complete stage-by-stage worker execution contract and negative tests, but do not wire or activate a worker until the 67-table tenant RLS policies, exact least-privilege worker role, actor-bound enqueue/finalize transaction context, and two-tenant authorization tests are independently reviewed. The current legacy MRV endpoint still executes provider calls inline under a session advisory lock; durable worker primitives are not a live worker.
+
+
+### 14:50 UTC — expired-lease recovery/fencing regression added; CI queued
+
+- Added a disposable-PostgreSQL integration scenario to `apps/src/mrv-submission-jobs.integration.test.ts` (commit `79e81840b03a6520b103175f9f27400c6bc169ba`): after a confirmed HCS stage, simulate worker interruption by expiring its lease, reclaim with a fresh worker token, assert stage and exact persisted Hedera transaction ID survive, and prove the stale worker cannot advance or replace the HCS transaction ID. The recovery lease is released through the fenced API.
+- Exact-head CI run `41465596068` is queued; no result claimed yet.
+- This extends ledger primitive tests only. It does not implement the worker process, external provider orchestration, tenant RLS, or runtime grants. No worker has been activated.
