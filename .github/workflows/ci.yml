@@ -81,6 +81,17 @@ jobs:
           cat /tmp/rupaykg-chrome-mobile.out
           test -s /tmp/rupaykg-web-mobile-smoke.png
           echo "Chrome DOM exit: $dom_status; desktop screenshot exit: $shot_status; mobile screenshot captured"
+      - name: Upload landing UX browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rupaykg-landing-ux
+          path: |
+            /tmp/rupaykg-web-smoke.png
+            /tmp/rupaykg-web-mobile-smoke.png
+            /tmp/rupaykg-web-dom.html
+          if-no-files-found: warn
+          retention-days: 7
       - name: Run tests including disposable PostgreSQL acceptance
         env:
           RUPAYKG_RUN_DB_INTEGRATION_TESTS: "1"
