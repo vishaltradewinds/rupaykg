@@ -323,3 +323,11 @@ No production DDL/DML, migration, role/grant/RLS changes, deployments, worker/sc
 - Several additional Neon branches were observed and classified as staging/rehearsal/lab branches. They are not authoritative production databases. No branch was deleted, reset, or mutated; destructive branch cleanup requires explicit approval and evidence/lineage reconciliation.
 - Detailed evidence: `docs/engineering/checkpoints/2026-11-02-production-neon-readonly-reverification.md`.
 - No production DDL/DML, migration, role/grant/RLS change, secret access, deployment, worker activation or certification. Production remains HOLD; system TRL 9 not established.
+
+## 2026-11-02 first-pass production 67-table RLS policy matrix
+- Queried live production `information_schema.columns` and foreign-key metadata read-only for all 67 public tables and published the structural ownership map in `docs/security/PRODUCTION_67_TABLE_TENANT_RLS_POLICY_MATRIX_DRAFT_2026-11-02.md`.
+- Classified each table by direct tenant root, parent-derived child, bilateral/multi-party, identity/auth control plane, platform control plane, global reference, or system metadata.
+- Identified critical parent-derived and bilateral edges including activities → measurements/evidence/verifications, reporting periods → BWG/ESG reports, field devices → sync envelopes/cursors/conflicts, payer/payee settlements, EPR issuer/recycler transfers, registry owner transfers and chain-of-custody actor/flow/activity links.
+- This is a structural first pass, not a final RLS predicate or migration. Polymorphic source references, JSON ownership, triggers, function grants, dynamic SQL and worker/service principals remain to be mapped.
+- Production baseline remains 0/67 RLS and 0/67 FORCE RLS. No production changes were made.
+- Next: reconcile the table matrix with route/worker/SQL call sites and function/trigger ownership; validate parent equality and bilateral policies in disposable Neon using exact restricted roles before any RLS rollout.
