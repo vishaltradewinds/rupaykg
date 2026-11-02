@@ -90,3 +90,8 @@ PR #192 and #203 remain draft. Production Neon remains unchanged. Production cer
 - Registry ownership queries remain inconsistent in ordering: some paths order by `created_at DESC` only while settlement creation uses `created_at DESC,id DESC`. A canonical event ordering/ownership function and explicit RETIRED terminal semantics remain required.
 - Verifier migration audit draft identifies a further missing predicate: require subject organization `status='VERIFIED'` in addition to verified membership and geography root before approval. This is a migration correction and disposable-PostgreSQL regression gate; no production change.
 - The current successful CI result is an engineering validation signal only. Production security posture remains HOLD (67/67 tables without RLS, elevated owner/runtime separation unresolved), live integrations remain unverified, and TRL 9 is not established.
+
+
+### Follow-up correction to verifier migration audit note
+- Re-inspection confirms `migrations/20261107_verifier_subject_org_verified.sql` already adds the missing subject-organization predicate (`organizations.status='VERIFIED'`) to `has_verification_permission_for_activity`. The earlier note that this predicate was still missing applied to the intermediate 20261106 migration, not the final 20261107 replacement. Keep disposable-PostgreSQL compilation and the full negative/positive regression matrix as open gates; do not report a production migration or live DB change.
+- Exact-head CI success on `a771446296290a6b139873300a4e06aa97d6d5b5` is confirmed: run `41452808808`, job `validate`, success. No failed steps. This validates the branch workflow only.
