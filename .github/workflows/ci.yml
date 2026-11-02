@@ -123,6 +123,7 @@ jobs:
           grep -q 'How it works' /tmp/rupaykg-web-dom.html
           grep -q 'Compliance' /tmp/rupaykg-web-dom.html
           if grep -q 'aria-label="Account access"' /tmp/rupaykg-web-dom.html; then echo 'Account drawer must not obscure initial landing page' >&2; exit 1; fi
+          if grep -q 'DATA SOURCE UNAVAILABLE' /tmp/rupaykg-web-dom.html; then echo 'Unauthenticated landing must not show workspace health warning' >&2; exit 1; fi
           test -s /tmp/rupaykg-web-smoke.png
           test -s /tmp/rupaykg-web-mobile.png
           echo "Chrome DOM exit: $dom_status; desktop screenshot exit: $shot_status; mobile screenshot exit: $mobile_shot_status"
