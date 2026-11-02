@@ -31,6 +31,10 @@ BEGIN
     RAISE EXCEPTION 'EPR_RLS_APP_ROLE_MEMBERSHIP_INVALID: app runtime must not inherit or assume another role';
   END IF;
 
+  IF pg_catalog.has_table_privilege('rupaykg_app_runtime','app_security.request_context_keys','SELECT') THEN
+    RAISE EXCEPTION 'EPR_RLS_APP_ROLE_MUST_NOT_READ_SIGNING_KEYS';
+  END IF;
+
   SELECT p.prosecdef, r.rolname AS owner_name
     INTO verifier
     FROM pg_catalog.pg_proc p
