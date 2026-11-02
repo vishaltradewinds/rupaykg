@@ -169,87 +169,70 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
       return reply.code(400).send({ error: "verificationId, evidenceId and guardianPolicyId (or GUARDIAN_MRV_POLICY_ID) are required" });
     }
 
-    const client = await pool.connect();
-    let inTransaction = false;
+    const config = requestContextConfig();
+    if (!config) return reply.code(503).send({ error: "Signed tenant context is not configured", code: "TENANT_CONTEXT_UNAVAILABLE", syntheticData: false });
     try {
-      await client.query("begin");
-      inTransaction = true;
-      const binding = await client.query<{
-        organization_id: string; geography_id: string | null; activity_status: string;
-        actor_identity_id: string; verification_decision: string; verifier_identity_id: string;
-        evidence_status: string; evidence_activity_id: string; organization_status: string;
-      }>(
-        `select a.organization_id, a.geography_id, a.status activity_status, a.actor_identity_id,
-                v.decision verification_decision, v.verifier_identity_id,
-                e.status evidence_status, e.activity_id evidence_activity_id, o.status organization_status
-           from activities a
-           join organizations o on o.id=a.organization_id
-           join verifications v on v.id=$2 and v.activity_id=a.id
-           join evidence e on e.id=$3 and e.activity_id=a.id and e.id=v.evidence_id
-          where a.id=$1`,
-        [activityId, verificationId, evidenceId],
-      );
-      const row = binding.rows[0];
-      if (!row) {
-        await client.query("rollback"); inTransaction = false;
-        return reply.code(409).send({ error: "Activity, evidence and verification must be bound to the same record", code: "MRV_BINDING_INVALID" });
-      }
-      if (!canActForOrganization(auth, row.organization_id)) {
-        await client.query("rollback"); inTransaction = false;
-        return reply.code(403).send({ error: "Organization access denied", code: "ORG_FORBIDDEN" });
-      }
-      if (!await requirePermission(client, auth, row.organization_id, ["guardian:operate"])) {
-        await client.query("rollback"); inTransaction = false;
-        return reply.code(403).send({ error: "Guardian MRV operation permission required", code: "MRV_PERMISSION_REQUIRED" });
-      }
-      if (!await activityInAuthorizedGeography(client, auth, activityId, row.organization_id)) {
-        await client.query("rollback"); inTransaction = false;
-        return reply.code(403).send({ error: "Activity geography is outside organization authorization scope", code: "GEOGRAPHY_FORBIDDEN" });
-      }
-      if (!row.geography_id || row.organization_status !== "VERIFIED" || row.activity_status !== "COMPLETED"
-          || row.verification_decision !== "APPROVED" || row.evidence_status !== "VERIFIED"
-          || row.evidence_activity_id !== activityId || row.verifier_identity_id === row.actor_identity_id) {
-        await client.query("rollback"); inTransaction = false;
-        return reply.code(409).send({ error: "Verified organization, completed activity, VERIFIED evidence and independent APPROVED verification are required", code: "MRV_PRECONDITION_FAILED" });
-      }
+      return await withRlsRequestTransaction(pool, auth, config, async (client) => {
+        const binding = await client.query<{
+          organization_id: string; geography_id: string | null; activity_status: string;
+          actor_identity_id: string; verification_decision: string; verifier_identity_id: string;
+          evidence_status: string; evidence_activity_id: string; organization_status: string;
+        }>(
+          `select a.organization_id, a.geography_id, a.status activity_status, a.actor_identity_id,
+                  v.decision verification_decision, v.verifier_identity_id,
+                  e.status evidence_status, e.activity_id evidence_activity_id, o.status organization_status
+             from activities a
+             join organizations o on o.id=a.organization_id
+             join verifications v on v.id=$2 and v.activity_id=a.id
+             join evidence e on e.id=$3 and e.activity_id=a.id and e.id=v.evidence_id
+            where a.id=$1`,
+          [activityId, verificationId, evidenceId],
+        );
+        const row = binding.rows[0];
+        if (!row) return reply.code(409).send({ error: "Activity, evidence and verification must be bound to the same record", code: "MRV_BINDING_INVALID" });
+        if (row.organization_id !== auth.activeOrganizationId || !canActForOrganization(auth, row.organization_id)) return reply.code(403).send({ error: "Organization access denied", code: "ORG_FORBIDDEN" });
+        if (!await requirePermission(client, auth, row.organization_id, ["guardian:operate"])) return reply.code(403).send({ error: "Guardian MRV operation permission required", code: "MRV_PERMISSION_REQUIRED" });
+        if (!await activityInAuthorizedGeography(client, auth, activityId, row.organization_id)) return reply.code(403).send({ error: "Activity geography is outside organization authorization scope", code: "GEOGRAPHY_FORBIDDEN" });
+        if (!row.geography_id || row.organization_status !== "VERIFIED" || row.activity_status !== "COMPLETED"
+            || row.verification_decision !== "APPROVED" || row.evidence_status !== "VERIFIED"
+            || row.evidence_activity_id !== activityId || row.verifier_identity_id === row.actor_identity_id) {
+          return reply.code(409).send({ error: "Verified organization, completed activity, VERIFIED evidence and independent APPROVED verification are required", code: "MRV_PRECONDITION_FAILED" });
+        }
 
-      const observations = await client.query(
-        "select id, parameter_code, observed_value, unit, method, instrument_id, observed_at, uncertainty, quality_status, metadata from mrv_observations where activity_id=$1 order by observed_at",
-        [activityId],
-      );
-      const evidence = await client.query(
-        "select id, evidence_type, content_uri, content_hash, captured_at, status, metadata from evidence where activity_id=$1 order by captured_at",
-        [activityId],
-      );
-      const quantityRow = await client.query<{ value: string | null; unit: string | null }>(
-        "select value::text value, unit from measurements where activity_id=$1 order by measured_at desc limit 1",
-        [activityId],
-      );
-      const quantity = quantityRow.rows[0]?.value ? Number(quantityRow.rows[0].value) : undefined;
-      const unit = quantityRow.rows[0]?.unit || undefined;
-      const job = await enqueueMrvSubmissionJob(client, {
-        activityId, verificationId, evidenceId, organizationId: row.organization_id,
-        geographyId: row.geography_id, requestedByIdentityId: auth.identityId,
-        guardianPolicyId: policyId, methodologyCode,
-        payloadSnapshot: {
-          schema: "rupaykg:mrv:v1", activityId, verificationId, evidenceId,
-          guardianPolicyId: policyId, methodologyCode: methodologyCode ?? null,
-          observations: observations.rows, evidence: evidence.rows, quantity, unit,
-          metadata: { evidenceCount: evidence.rows.length, observationCount: observations.rows.length },
-        },
-      });
-      await client.query("commit"); inTransaction = false;
-      return reply.code(202).send({
-        source: "postgresql", syntheticData: false, queued: true,
-        job: { id: job.id, status: job.status, idempotencyKey: job.idempotency_key, createdAt: job.created_at },
-        message: "MRV submission accepted into the durable queue; provider execution is performed by the separately gated worker.",
+        const observations = await client.query(
+          "select id, parameter_code, observed_value, unit, method, instrument_id, observed_at, uncertainty, quality_status, metadata from mrv_observations where activity_id=$1 order by observed_at",
+          [activityId],
+        );
+        const evidence = await client.query(
+          "select id, evidence_type, content_uri, content_hash, captured_at, status, metadata from evidence where activity_id=$1 order by captured_at",
+          [activityId],
+        );
+        const quantityRow = await client.query<{ value: string | null; unit: string | null }>(
+          "select value::text value, unit from measurements where activity_id=$1 order by measured_at desc limit 1",
+          [activityId],
+        );
+        const quantity = quantityRow.rows[0]?.value ? Number(quantityRow.rows[0].value) : undefined;
+        const unit = quantityRow.rows[0]?.unit || undefined;
+        const job = await enqueueMrvSubmissionJob(client, {
+          activityId, verificationId, evidenceId, organizationId: row.organization_id,
+          geographyId: row.geography_id, requestedByIdentityId: auth.identityId,
+          guardianPolicyId: policyId, methodologyCode,
+          payloadSnapshot: {
+            schema: "rupaykg:mrv:v1", activityId, verificationId, evidenceId,
+            guardianPolicyId: policyId, methodologyCode: methodologyCode ?? null,
+            observations: observations.rows, evidence: evidence.rows, quantity, unit,
+            metadata: { evidenceCount: evidence.rows.length, observationCount: observations.rows.length },
+          },
+        });
+        return reply.code(202).send({
+          source: "postgresql", syntheticData: false, queued: true,
+          job: { id: job.id, status: job.status, idempotencyKey: job.idempotency_key, createdAt: job.created_at },
+          message: "MRV submission accepted into the durable queue; provider execution is performed by the separately gated worker.",
+        });
       });
     } catch (error) {
-      if (inTransaction) await client.query("rollback").catch(() => undefined);
       request.log.error(error);
       return reply.code(503).send({ error: "Unable to enqueue authoritative MRV submission", code: "MRV_ENQUEUE_UNAVAILABLE", syntheticData: false });
-    } finally {
-      client.release();
     }
   });
 
