@@ -118,6 +118,40 @@ async function renewLease(pool: Pool, lease: MrvJobLease): Promise<boolean> {
   });
 }
 
+/**
+ * Keep the lease alive while a provider call runs outside a DB transaction.
+ * If renewal fails, the provider result is deliberately not persisted under
+ * a lease we no longer own; the next owner must reconcile using the same
+ * persisted provider idempotency/transaction binding.
+ */
+async function withLeaseHeartbeat<T>(
+  pool: Pool,
+  lease: MrvJobLease,
+  operation: () => Promise<T>,
+): Promise<{ value: T; leaseValid: boolean }> {
+  let leaseValid = true;
+  let renewing = false;
+  let renewal: Promise<void> | undefined;
+  const timer = setInterval(() => {
+    if (renewing || !leaseValid) return;
+    renewing = true;
+    renewal = renewLease(pool, lease)
+      .then(ok => { if (!ok) leaseValid = false; })
+      .catch(() => { leaseValid = false; })
+      .finally(() => { renewing = false; });
+  }, 30_000);
+  try {
+    const value = await operation();
+    clearInterval(timer);
+    if (renewal) await renewal;
+    return { value, leaseValid };
+  } catch (error) {
+    clearInterval(timer);
+    if (renewal) await renewal;
+    throw error;
+  }
+}
+
 async function persistGuardianKey(pool: Pool, lease: MrvJobLease, key: string): Promise<boolean> {
   return withClient(pool, async client => {
     await client.query("begin");
@@ -176,14 +210,16 @@ export async function runMrvSubmissionWorkerOnce(pool: Pool, workerId: string): 
     const key = job.guardian_idempotency_key ?? job.idempotency_key;
     if (!job.guardian_idempotency_key && !await persistGuardianKey(pool, lease, key)) return { outcome: "STALE_LEASE", jobId: job.id, stage: "GUARDIAN_KEY_PERSIST" };
     if (!await renewLease(pool, lease)) return { outcome: "STALE_LEASE", jobId: job.id, stage: "GUARDIAN_LEASE_RENEWAL" };
-    const guardian = await executeGuardianMrv({
+    const guardianRun = await withLeaseHeartbeat(pool, lease, () => executeGuardianMrv({
       activityId: job.activity_id, verificationId: job.verification_id, evidenceId: job.evidence_id,
       policyId: job.guardian_policy_id,
       ...(job.methodology_code ? { methodologyCode: job.methodology_code } : {}),
       observations: snapshot.observations ?? [], evidence: snapshot.evidence ?? [],
       ...(snapshot.metadata ? { metadata: snapshot.metadata } : {}),
       idempotencyKey: key,
-    });
+    }));
+    if (!guardianRun.leaseValid) return { outcome: "STALE_LEASE", jobId: job.id, stage: "GUARDIAN_LEASE_HEARTBEAT" };
+    const guardian = guardianRun.value;
     if (guardian.status === "UNAVAILABLE" || guardian.status === "NOT_CONFIGURED") {
       const ok = await release(pool, lease, "GUARDIAN_UNAVAILABLE", guardian.message);
       return { outcome: ok ? "RETRY_SCHEDULED" : "STALE_LEASE", jobId: job.id, stage: "GUARDIAN" };
@@ -213,7 +249,9 @@ export async function runMrvSubmissionWorkerOnce(pool: Pool, workerId: string): 
     const txId = createHcsTransactionId();
     if (!await persistHcsId(pool, lease, status.network, status.topicId, txId)) return { outcome: "STALE_LEASE", jobId: job.id, stage: "HCS_TRANSACTION_ID_PERSIST" };
     if (!await renewLease(pool, lease)) return { outcome: "STALE_LEASE", jobId: job.id, stage: "HCS_LEASE_RENEWAL" };
-    const anchor = await submitHcsAnchor(anchorPayload(job), txId);
+    const anchorRun = await withLeaseHeartbeat(pool, lease, () => submitHcsAnchor(anchorPayload(job), txId));
+    if (!anchorRun.leaseValid) return { outcome: "STALE_LEASE", jobId: job.id, stage: "HCS_LEASE_HEARTBEAT" };
+    const anchor = anchorRun.value;
     if (anchor.status === "CONSENSUS_CONFIRMED" && anchor.transactionId === txId && anchor.consensusTimestamp) {
       const ok = await advance(pool, lease, "HCS_CONSENSUS_CONFIRMED", {
         hedera_status: "CONSENSUS_CONFIRMED", hedera_consensus_timestamp: anchor.consensusTimestamp,
@@ -240,7 +278,9 @@ export async function runMrvSubmissionWorkerOnce(pool: Pool, workerId: string): 
     }
     if (!await renewLease(pool, lease)) return { outcome: "STALE_LEASE", jobId: job.id, stage: "MIRROR_LEASE_RENEWAL" };
     const payload = anchorPayload(job);
-    const mirror = await reconcileHcsTransaction(job.hedera_transaction_id, job.hedera_topic_id, integrityHash(payload), job.activity_id, job.verification_id, job.evidence_id, job.guardian_execution_id);
+    const mirrorRun = await withLeaseHeartbeat(pool, lease, () => reconcileHcsTransaction(job.hedera_transaction_id!, job.hedera_topic_id!, integrityHash(payload), job.activity_id, job.verification_id, job.evidence_id, job.guardian_execution_id!));
+    if (!mirrorRun.leaseValid) return { outcome: "STALE_LEASE", jobId: job.id, stage: "MIRROR_LEASE_HEARTBEAT" };
+    const mirror = mirrorRun.value;
     if (mirror.status === "CONFIRMED") {
       const ok = await advance(pool, lease, "MIRROR_VERIFIED", {
         hedera_consensus_timestamp: mirror.consensusTimestamp,
