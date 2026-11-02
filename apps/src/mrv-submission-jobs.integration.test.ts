@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { approveTestMembership } from "./test-support/approved-membership.js";
+import { advanceMrvSubmissionJob, claimNextMrvSubmissionJob } from "./mrv-submission-jobs.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 const ssl = process.env.DATABASE_SSL === "false" ? undefined : { rejectUnauthorized: false };
@@ -84,6 +85,18 @@ test("durable MRV job ledger enforces immutable request, legal transitions and a
     await expectSqlFailure("invalid_transition", "update mrv_submission_jobs set status='COMPLETED' where id=$1", [jobId], /MRV_JOB_INVALID_STATE_TRANSITION/);
     await expectSqlFailure("append_only_event", "update mrv_submission_job_events set event_code='tampered' where job_id=$1", [jobId], /MRV_JOB_EVENT_APPEND_ONLY/);
 
+    const lease = await claimNextMrvSubmissionJob(client, "worker-" + suffix, 60);
+    assert.ok(lease, "a due REQUESTED job must be claimable");
+    assert.equal(lease.job.id, jobId);
+    assert.equal(lease.job.status, "CLAIMED");
+    assert.equal(lease.job.attempt_count, 1);
+    const competingLease = await claimNextMrvSubmissionJob(client, "worker-2-" + suffix, 60);
+    assert.equal(competingLease, null, "a live lease must prevent a second worker claim");
+    const staleAdvance = await advanceMrvSubmissionJob(client, jobId, randomUUID(), "GUARDIAN_SUBMITTED");
+    assert.equal(staleAdvance, null, "a non-owner lease token must not advance a job");
+    const advanced = await advanceMrvSubmissionJob(client, jobId, lease.leaseToken, "GUARDIAN_SUBMITTED", { guardian_idempotency_key: "d".repeat(64) });
+    assert.equal(advanced?.status, "GUARDIAN_SUBMITTED");
+    assert.equal(advanced?.lease_token, null, "stage advancement must release the lease atomically");
     await client.query("rollback");
   } catch (error) {
     await client.query("rollback");
