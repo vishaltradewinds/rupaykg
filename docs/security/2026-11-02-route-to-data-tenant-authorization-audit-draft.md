@@ -108,3 +108,87 @@ The following is a policy-design starting point, not a complete inventory of all
 - Security-definer routines need fixed search_path, explicit schema qualification, minimal EXECUTE grants, no untrusted dynamic SQL, and documented actor/tenant derivation.
 - Bilateral settlement, registry transfer and inter-organization chain-of-custody are separate authorization products, not incidental exceptions to single-organization scope.
 - Reference/catalog rows are read-only for tenants. All mutation authority remains in approved governance functions with audit provenance.
+
+
+## Live production table register — complete name coverage (provisional)
+
+The following 67 rows enumerate every base table returned by the live Neon production table inventory. This is a machine-readable *provisional* authorization register. Classification and scope paths are hypotheses from names, existing route/migration evidence and domain semantics; they are not approved RLS expressions. Every row must be reconciled to live columns, foreign keys, unique constraints, triggers, API/worker call sites and business ownership before policy design.
+
+```csv
+table_name,provisional_class,proposed_scope_path,open_review
+"activities","TENANT_OPERATIONAL","activity.organization_id","PENDING FK/column verification"
+"activity_assignments","TENANT_OPERATIONAL","activity → organization","PENDING FK/column verification"
+"audit_events","AUDIT_GOVERNANCE","tenant actor/organization; platform events separate","PENDING event visibility split"
+"bwg_epr_reports","TENANT_STATUTORY","BWG report/profile organization","PENDING FK/column verification"
+"bwg_esg_reports","TENANT_STATUTORY","BWG report/profile organization","PENDING FK/column verification"
+"bwg_profiles","TENANT_STATUTORY","organization applicability/profile","PENDING FK/column verification"
+"bwg_reporting_periods","TENANT_STATUTORY","BWG profile / applicability","PENDING FK/column verification"
+"bwg_waste_reports","TENANT_STATUTORY","BWG profile / reporting period","PENDING FK/column verification"
+"carbon_calculations","DERIVED_TENANT_CLAIM","project/activity/evidence owner path","JSON/link ownership review required"
+"carbon_market_mechanisms","SHARED_GOVERNED_CATALOG","platform-governed reference","Confirm public read fields"
+"carbon_projects","TENANT_CARBON","organization/project owner","PENDING FK/column verification"
+"ccts_methodology_registry","SHARED_GOVERNED_CATALOG","platform-governed methodology registry","Confirm public read fields"
+"chain_of_custody_links","BILATERAL_OR_INTERORG","source + destination organizations","Dedicated bilateral scope required"
+"cpcb_swm_stakeholder_workspaces","TENANT_STATUTORY","workspace organization","PENDING FK/column verification"
+"cpcb_swm_status_history","TENANT_AUDIT_HISTORY","workspace organization via parent","Append-only and tenant history review"
+"credentials","REGISTRY_MULTI_PARTY","issuer/current owner organization","Transfer/current-owner scope required"
+"environmental_attribute_claims","REGISTRY_MULTI_PARTY","claimant/current owner + source attribute","Double-claim guard; bilateral transfer review"
+"epr_credit_allocations","TENANT_STATUTORY","credit owner / obligation organization","PENDING FK/column verification"
+"epr_credit_transfers","BILATERAL_OR_INTERORG","source + recipient organizations","Dedicated bilateral scope required"
+"epr_credits","TENANT_STATUTORY","credit owner organization","PENDING FK/column verification"
+"epr_obligations","TENANT_STATUTORY","obligated organization","PENDING FK/column verification"
+"epr_returns","TENANT_STATUTORY","returning organization","PENDING FK/column verification"
+"epr_schemes","SHARED_GOVERNED_CATALOG","platform-governed reference","Read-only tenant access"
+"esg_metrics","DERIVED_TENANT_REPORTING","reporting period organization","JSON/source linkage review"
+"esg_reporting_periods","TENANT_REPORTING","reporting organization","PENDING FK/column verification"
+"evidence","TENANT_EVIDENCE","activity organization / uploader","Blob storage access must match metadata scope"
+"evidence_artifact_reviews","TENANT_EVIDENCE_AUDIT","artifact/evidence owner; reviewer actor","Append-only review record"
+"evidence_artifact_series","TENANT_EVIDENCE","evidence/activity organization","PENDING FK/column verification"
+"evidence_artifact_versions","TENANT_EVIDENCE_AUDIT","artifact series organization","Immutable lineage"
+"evidence_verification_requirements","SHARED_GOVERNED_CATALOG","governed requirement catalogue","Verify any tenant-specific overrides"
+"field_devices","TENANT_DEVICE","enrolled organization + device identity","Worker/service identity also required"
+"field_sync_conflicts","TENANT_DEVICE_AUDIT","device/envelope organization","Append-only resolution audit"
+"field_sync_cursors","TENANT_DEVICE","device + organization","Worker/service scope required"
+"field_sync_envelopes","TENANT_DEVICE_AUDIT","device/envelope organization","Append-only/replay protections"
+"geography","SHARED_REFERENCE","approved public geography catalogue","Tenant writes prohibited"
+"geography_sources","SHARED_REFERENCE","approved public source catalogue","Tenant writes prohibited"
+"identities","IDENTITY_OWNED","identity_id","No tenant-wide visibility"
+"identity_credentials","IDENTITY_OWNED","identity_id","Credential material restricted"
+"identity_password_credentials","IDENTITY_OWNED_SECRET","identity_id","Auth-only access; never tenant-readable"
+"identity_sessions","IDENTITY_OWNED_SECRET","identity_id","Auth-only access; revocation-sensitive"
+"measurements","TENANT_OPERATIONAL","activity organization","PENDING FK/column verification"
+"methodology_governance_evidence","PLATFORM_GOVERNED_AUDIT","methodology version / governance actor","Immutable governance evidence"
+"methodology_versions","SHARED_GOVERNED_CATALOG","approved methodology registry","Tenant read-only; governed mutation"
+"mrv_observations","TENANT_OPERATIONAL","activity organization","PENDING FK/column verification"
+"mrv_provenance_events","TENANT_AUDIT_HISTORY","observation/activity organization","Append-only provenance"
+"obligations","TENANT_OPERATIONAL","organization/activity owner","PENDING FK/column verification"
+"operation_sync_envelopes","TENANT_DEVICE_AUDIT","device/organization binding","Worker path must use same scope"
+"organization_bwg_assessments","TENANT_STATUTORY","organization_id","PENDING column/FK verification"
+"organization_epr_applicability","TENANT_STATUTORY","organization_id","PENDING column/FK verification"
+"organization_geography_scopes","TENANT_GOVERNANCE","organization_id + verified geography","Unscoped org must not gain national access"
+"organization_memberships","TENANT_GOVERNANCE","organization_id + identity_id","Identity sees own memberships; org admins constrained"
+"organization_statutory_profiles","TENANT_GOVERNANCE","organization_id","PENDING column/FK verification"
+"organization_verification_evidence","TENANT_GOVERNANCE_AUDIT","organization_id + evidence","Verification authority separately scoped"
+"organizations","TENANT_GOVERNANCE","organization_id","Self/admin/regulator visibility distinct"
+"platform_access_change_requests","PLATFORM_GOVERNANCE","platform requester/approver","Two-custodian; no tenant direct write"
+"platform_audit_chain_head","PLATFORM_AUDIT","platform audit chain","Platform-only, narrow append/update routine"
+"registry_events","REGISTRY_MULTI_PARTY_AUDIT","issuer/current owner/recipient organization","Append-only; transfer parties distinct"
+"regulatory_requirements","SHARED_GOVERNED_CATALOG","approved public regulatory catalogue","Public read only"
+"regulatory_sources","SHARED_GOVERNED_CATALOG","approved public source catalogue","Public read only"
+"resource_flows","BILATERAL_OR_INTERORG","source + destination org/geography","Do not infer single owner without business rule"
+"roles","GOVERNED_AUTHORIZATION","platform defaults + org-specific role assignments","Reserved roles platform controlled"
+"schema_migrations","PLATFORM_OPERATIONS","migration principal only","Never expose to tenant runtime"
+"settlement_events","BILATERAL_AUDIT","payer + payee + credential owner","Append-only, bilateral claims"
+"settlements","BILATERAL_FINANCIAL","payer + payee + current credential owner","Dedicated bilateral scope; no single-org default"
+"stakeholder_application_approvals","GOVERNANCE_WORKFLOW","applicant org + reviewer authority/geography","Hierarchy + separation of duties"
+"stakeholder_applications","GOVERNANCE_WORKFLOW","applicant identity/org + reviewer scope","Hierarchy + applicant privacy"
+"verifications","TENANT_OPERATIONAL","activity/evidence organization + verifier","Verifier independence and geography"
+```
+
+### Coverage and acceptance rule
+
+- Register row count: 67; live base-table count: 67.
+- No table is authorized for a policy merely because its name appears here.
+- `BILATERAL_*`, `REGISTRY_MULTI_PARTY*`, `IDENTITY_*`, `PLATFORM_*`, `SHARED_*` and `DERIVED_*` classes require bespoke access semantics; do not collapse them into `organization_id = active_org`.
+- Before generating any policy, add verified columns, parent-FK path, insert/check semantics, update/delete semantics, actor/role restrictions, geography rule, background-service principal and negative test IDs.
+- A table may require separate SELECT/INSERT/UPDATE/DELETE policies rather than one symmetric predicate. Reference catalogues should be read-only for tenant roles; secrets and auth material should be function-only or auth-runtime-only.
