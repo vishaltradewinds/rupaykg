@@ -35,7 +35,7 @@ test("durable MRV job ledger enforces immutable request, legal transitions and a
     )).rows[0]!.id;
     const verifierRoleId = (await client.query<{id:string}>(
       "insert into roles(organization_id,name,permissions) values($1,'verifier',$2::jsonb) returning id",
-      [organizationId, JSON.stringify(["verification:approve"])],
+      [organizationId, JSON.stringify(["verification:approve", "VERIFY_EVIDENCE"])],
     )).rows[0]!.id;
     await approveTestMembership(client, verifierIdentityId, organizationId, verifierRoleId, geographyId, "verifier", "collector");
     const activityId = (await client.query<{id:string}>(
