@@ -20,6 +20,7 @@ test("production lifecycle integration gate", { skip: !url }, async () => {
     const role = (await c.query("insert into roles(organization_id,name,permissions) values($1,'VERIFIER','[\"VERIFY_EVIDENCE\",\"ISSUE_CREDENTIAL\"]') returning id", [org])).rows[0].id;
     await approveTestMembership(c, verifier, org, role, geography, "verifier", "collector");
     await approveTestMembership(c, actor, org, role, geography, "verifier", "collector");
+    await c.query("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED'),($4,$2,$3,'VERIFIED')", [verifier, org, role, actor]);
     const verifierGrant = await c.query<{ has_permission: boolean; role_name: string; permissions: unknown; membership_status: string }>("select public.has_verification_permission($1) as has_permission,r.name as role_name,r.permissions,om.status as membership_status from public.organization_memberships om join public.roles r on r.id=om.role_id where om.identity_id=$1 and om.role_id=$2", [verifier, role]);
     assert.equal(verifierGrant.rows[0]?.has_permission, true, JSON.stringify(verifierGrant.rows[0]));
 
@@ -40,6 +41,7 @@ test("production lifecycle integration gate", { skip: !url }, async () => {
     const unauthorizedRole = (await c.query("insert into roles(organization_id,name,permissions) values($1,'READER','[\"dashboard:read\"]') returning id", [org])).rows[0].id;
     const unauthorized = (await c.query("insert into identities(external_subject,display_name) values('integration-unauthorized','unauthorized') returning id")).rows[0].id;
     await approveTestMembership(c, unauthorized, org, unauthorizedRole, geography, "reader", "collector");
+    await c.query("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED')", [unauthorized, org, unauthorizedRole]);
     const credential = (await c.query("insert into credentials(activity_id,issuer_organization_id,trust_root_id,status,verification_id,quantity,unit) values($1,$2,'integration-root','ISSUED',$3,100,'kg') returning id", [activity, org, verification])).rows[0].id;
     await reject(c, () => c.query("insert into registry_events(credential_id,event_type,to_owner_id,verification_id,recorded_by_identity_id,event_hash) values($1,'ISSUED',$2,$3,$4,'integration')", [credential, org, verification, unauthorized]), /explicit permission: ISSUE_CREDENTIAL/);
     await c.query("insert into registry_events(credential_id,event_type,to_owner_id,verification_id,recorded_by_identity_id,event_hash) values($1,'ISSUED',$2,$3,$4,'integration')", [credential, org, verification, verifier]);
