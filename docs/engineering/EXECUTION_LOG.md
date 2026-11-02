@@ -131,3 +131,17 @@ Follow-up review of candidate exact head `cd96ec5...` found migrations `20261105
 ## Disposable Neon geography/verifier rehearsal — 2026-11-02
 
 On existing disposable Neon branch `br-red-salad-b4oqb4nx` (not production), applied the candidate PR #213 function definitions corresponding to migrations 20261105–20261108 in one transaction. Seven function replacements succeeded. Missing organization/geography returned FALSE; unknown identity/activity verifier helper returned FALSE; geography and verifier integrity functions show pinned `search_path=pg_catalog, pg_temp`. The legacy `enforce_verification_independence()` trigger function remains unchanged/global. Lab had zero organizations/activities, so this is only missing-context smoke evidence, not a two-tenant integration pass. The branch already has one RLS-enabled public table (`epr_returns`) from prior lab work. Full synthetic two-tenant tests and migration-runner parity remain open. Full details: `checkpoints/2026-11-02-disposable-geography-verifier-rehearsal.md`. Production unchanged.
+
+
+## 2026-11-02 18:37 UTC — security integration and verification boundary
+
+- Integrated EPR read-only tenant route PR #213 onto current PR #192 head with history-preserving merge commit cd96ec5. Exact-head CI 41499847180 passed 22/22. Strengthened non-SELECT privilege, signing-key and app_security CREATE checks; feature flag remains OFF.
+- Rebased BWG PR #193 onto current main with merge commit 29e1c29; exact-head CI 41500716186 passed 17/17.
+- Rebased BWG PR #194 onto current main with merge commit 5008a04; exact-head CI 41500726098 passed 17/17.
+- PR #192 exact-head CI 41498504841 passed 22/22; branch remains 537 commits ahead and 2 behind current main. Do not blindly reconcile AUTH_DATABASE_URL add/revert ancestry.
+- Production Neon remains 67 public tables, 0 RLS, 0 FORCE RLS; 92 migration rows; no organizations, identities, memberships or platform access requests; only elevated rupaykg login role observed.
+- Read-only branch comparison found non-authoritative staging has four extra migration rows/tables and lacks production's applied 096 source. Recovered exact 096 SQL from Git history and archived it outside active migrations. Corrected stale README statement for 023.
+- Production verification table has zero rows and four snapshot columns. Legacy global-membership/role-name trigger remains alongside stricter approved-decision trigger; no dedicated immutable snapshot trigger observed. Candidate 20261106/07 reintroduce role-name fallback; production geography helper fails open when no verified scope exists. Candidate 20261108 is fail-closed but not deployed.
+- Reviewed disposable geography/verifier rehearsal: missing context returned FALSE and search_path was pinned, but zero organizations/activities means no two-tenant acceptance. Created P0 issues #214 and #215; updated #196.
+- GitHub rulesets empty; branch protection endpoint 403. Render workspace selection remains required.
+- No production DDL/DML, migration, role/grant/RLS change, secret write, production branch operation, deployment, provider write, worker activation or certification. Production HOLD; worker OFF; certification OFF; TRL 9 NOT ESTABLISHED.

@@ -30,7 +30,7 @@ Apply migrations in filename order against a fresh PostgreSQL database:
 26. `027_verification_permission_guard.sql` — database verification authorization guard requiring explicit `VERIFY_EVIDENCE` permission rather than legacy role-name elevation.
 27. `028_settlement_retired_credential_guard.sql` — prevents settlement creation for retired credentials and prevents retirement while an attached settlement remains open.
 
-Migration `023` is intentionally absent from the current repository history; do not renumber later migrations to fill the gap. Migration numbering is identity, not a requirement for contiguous integers.
+Migration 023_lifecycle_state_guards.sql is present in this repository and is recorded in the authoritative production ledger (applied 2026-10-17T10:48:22.078Z). The older note claiming version 023 was absent is obsolete. Migration identifiers remain immutable and must never be renumbered.
 
 Migration files are intentionally ordered and each numbered migration must have one authoritative owner. Do not reintroduce duplicate numbered migrations containing the same tables or enums.
 
@@ -75,3 +75,12 @@ Migration `086_reserved_role_restoration_db_guard.sql` protects status reactivat
 ## Acceptance fixture registry exclusion
 
 Migration `087_acceptance_fixture_registry_exclusion.sql` prevents activities or evidence explicitly marked with `metadata.acceptanceFixture=true` from backing credentials in value-bearing states. It also binds the database gate to the exact activity, verification, and evidence tuple. The MRV API reports acceptance fixtures as not registry eligible even after real Guardian/Hedera/Mirror Node verification. External anchoring proves message integrity and consensus; it does not validate the underlying activity as a real eligible carbon project.
+
+
+## Production migration source reconciliation — 2026-11-02
+
+Production ledger contains version 096, filename 096_verification_authorization_provenance.sql, applied 2026-10-27T13:46:14.262Z. The active migrations directory no longer contains that file. Its exact historical source has been preserved for review at docs/engineering/recovered-migrations/096_verification_authorization_provenance.sql and is deliberately not in the migration runner path. See issue #214. Do not replay or restore it to the active migration directory until independent review determines the safe source/ledger reconciliation.
+
+The non-authoritative government-inbox staging branch contains migrations 20261022 through 20261025 and four additional tables that are not present in the current repository migration history. Do not copy those objects into production without recovering and reviewing exact source.
+
+The read-only EPR tenant route and candidate migration 20261110 are tracked in draft PR #213. The feature flag is default OFF. No production migration, role provisioning or activation is authorized by this documentation.
