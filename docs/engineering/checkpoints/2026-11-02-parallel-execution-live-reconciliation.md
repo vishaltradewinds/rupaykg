@@ -300,3 +300,14 @@ Do not extrapolate the earlier success to later commits. Exact latest-head CI ac
 CI run `41457510422` for code commit `aae20cdedff4832ae95b0ba49ef0ef83576aeb61` completed **SUCCESS**. It includes the fail-closed geography migration, fixture-order correction, evidence-upload authorization on the write client, credential issuance authorization on the write client and bilateral settlement permission checks. This is an exact-head successful verification for that code commit, not for later commits.
 
 The latest MRV connection-consistency code is commit `bb878aa90c3b348e8ccb85933372d59080522fb4`. It moves MRV submit-path authorization, source reads, replay lookup and provenance persistence to the same checked-out client that holds the idempotency advisory lock. Exact-head CI run `41457821676` was QUEUED at last check. The code still does not establish a transaction-local signed RLS context; durable claim/outbox and actor-bound finalize remain open.
+
+
+## MRV durable execution contract added
+
+Added `docs/architecture/MRV_DURABLE_EXECUTION_AND_OUTBOX_CONTRACT.md` on PR #192 branch. It defines the staged REQUESTED → CLAIMED → Guardian → HCS → Mirror Node → provenance finalization state machine; unique idempotency key and immutable payload hash; lease-token compare-and-set; actor/organization/geography revalidation; short transaction boundaries; crash recovery; and 12 required negative/concurrency/fault-injection tests.
+
+Critical finding: Guardian adapter already sends a deterministic idempotency key, but safe retry depends on Guardian honoring it. Hedera adapter currently creates a fresh SDK transaction ID internally; a process crash after HCS acceptance but before DB persistence can lead to a duplicate anchor on retry. The contract requires a persisted, reusable Hedera transaction ID or explicit NEEDS_RECONCILIATION state; no blind retry. This adapter and worker implementation remains open.
+
+MRV route connection consistency correction is commit `bb878aa90c3b348e8ccb85933372d59080522fb4`; its exact-head CI run `41457821676` was still IN_PROGRESS at last check (production container build stage). Latest PR #192 head `9edfb1e91a9377ffc90c076c4d66de15345719a9` run `41457874949` and latest checkpoint head `1874f8c998d8af64a096835fe817318734346dfd` run `41457900115` were still IN_PROGRESS at last check. Earlier code revision `aae20cdedff4832ae95b0ba49ef0ef83576aeb61` passed full CI run `41457510422`; do not extend that success to later code commits.
+
+No production schema, role, data, provider or deployment changes. Production HOLD; certification OFF; TRL 9 not established.
