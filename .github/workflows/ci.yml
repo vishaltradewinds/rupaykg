@@ -57,8 +57,12 @@ jobs:
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
           DO $assert_bootstrap_owner$
           BEGIN
-            IF pg_catalog.pg_has_role('postgres', 'rupaykg_bootstrap_owner', 'MEMBER') THEN
-              RAISE EXCEPTION 'bootstrap owner membership must be revoked after migration';
+            IF EXISTS (
+              SELECT 1 FROM pg_catalog.pg_auth_members m
+               WHERE m.roleid = (SELECT oid FROM pg_catalog.pg_roles WHERE rolname = 'rupaykg_bootstrap_owner')
+                 AND m.member = (SELECT oid FROM pg_catalog.pg_roles WHERE rolname = 'postgres')
+            ) THEN
+              RAISE EXCEPTION 'bootstrap owner direct membership must be revoked after migration';
             END IF;
             IF pg_catalog.has_database_privilege('rupaykg_bootstrap_owner', current_database(), 'CREATE') THEN
               RAISE EXCEPTION 'bootstrap owner database CREATE must be revoked after migration';
