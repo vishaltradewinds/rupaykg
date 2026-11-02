@@ -483,3 +483,33 @@ A registration audit of the PR #192 server composition changes the implementatio
 4. Test on disposable PostgreSQL with the actual restricted app role, signed key table, RLS policies and two organizations. Until that evidence exists, keep the helper unused by production routes and keep production HOLD.
 
 **Correction:** The prior matrix accurately records source behavior of the EPR return module but overstates its operational status if read as a live API inventory. Its registration was not found in the inspected server composition. No production route exposure is asserted.
+
+
+## Production request-context environment integration gate — 2026-11-02 16:23Z
+
+A focused source check confirms:
+- `readProductionConfig()` already validates and returns `requestContextSecret` and `requestContextKeyId`.
+- `apps/src/production-server.ts` currently propagates database, TLS, origin, auth-mode and synthetic-data values, but omits `RUPAYKG_REQUEST_CONTEXT_SECRET` and `RUPAYKG_REQUEST_CONTEXT_KEY_ID`.
+- `withRlsRequestTransaction` requires these values to be supplied explicitly as `hmacSecret` and `keyId`; the inspected server composition has no current route integration for that helper.
+- Therefore this is a confirmed future integration defect, but not evidence that currently registered production routes are failing because of it: no inspected route presently calls the helper.
+
+### Isolated patch design and required tests
+
+Implement the environment propagation as a small pure helper, rather than adding secret handling logic to route modules:
+- Input type: `Pick<ProductionConfig, "requestContextSecret" | "requestContextKeyId">`.
+- Output: assign only server-side `RUPAYKG_REQUEST_CONTEXT_SECRET` and `RUPAYKG_REQUEST_CONTEXT_KEY_ID` environment names.
+- Invoke from `production-server.ts` immediately after validated config propagation and before importing `server.js`.
+- Never write either value to Vite-prefixed variables, logs, responses, telemetry, docs, or GitHub Actions output.
+
+Unit tests must prove both values propagate, no `VITE_*` aliases are created, an injected test environment does not mutate global `process.env`, and empty/invalid material remains rejected by `readProductionConfig()`. Build/typecheck and exact-head CI must pass before merging.
+
+### Security boundary
+
+This wiring patch alone does not make RLS operational. Before any route integration:
+1. Confirm the exact runtime environment variable consumer and pass the values explicitly into the helper configuration; avoid hidden ambient secret reads in route code.
+2. Verify the matching protected database key record and verifier function on disposable PostgreSQL.
+3. Test key-id mismatch, expired token, malformed signature, rotation overlap and pooled connection context clearing.
+4. Confirm the runtime role is the dedicated NOBYPASSRLS app role and that the auth runtime has no tenant-data access.
+5. Keep production unchanged until independent review and release approval.
+
+An isolated code branch was created from the exact PR #192 head for this patch. The source mutation was not completed in this execution batch; no code change or test result is claimed.
