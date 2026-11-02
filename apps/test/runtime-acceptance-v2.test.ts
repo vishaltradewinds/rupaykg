@@ -65,17 +65,16 @@ before(async () => {
   const c = await pool.connect();
   try {
     await c.query("BEGIN");
-    orgId = (await c.query<{ id: string }>("insert into organizations(name,organization_type) values($1,'COLLECTOR') returning id", [`runtime-${suffix}`])).rows[0]!.id;
+    orgId = (await c.query<{ id: string }>("insert into organizations(name,organization_type,status) values($1,'COLLECTOR','VERIFIED') returning id", [`runtime-${suffix}`])).rows[0]!.id;
     geographyId = (await c.query<{ id: string }>("insert into geography(kind,code,name) values('STATE_UT',$1,$2) returning id", [`RUNTIME-${suffix}`, `Runtime ${suffix}`])).rows[0]!.id;
     outOfScopeGeographyId = (await c.query<{ id: string }>("insert into geography(kind,code,name) values('STATE_UT',$1,$2) returning id", [`OTHER-${suffix}`, `Other ${suffix}`])).rows[0]!.id;
-    await c.query("insert into organization_geography_scopes(organization_id,geography_id) values($1,$2)", [orgId, geographyId]);
+    await c.query("insert into organization_geography_scopes(organization_id,geography_id,status) values($1,$2,'VERIFIED')", [orgId, geographyId]);
     actorId = (await c.query<{ id: string }>("insert into identities(external_subject,display_name) values($1,$2) returning id", [`runtime-actor-${suffix}`, "Runtime Actor"])).rows[0]!.id;
     verifierId = (await c.query<{ id: string }>("insert into identities(external_subject,display_name) values($1,$2) returning id", [`runtime-verifier-${suffix}`, "Runtime Verifier"])).rows[0]!.id;
     const actorRole = (await c.query<{ id: string }>("insert into roles(organization_id,name,permissions) values($1,$2,'[\"FIELD_SYNC\",\"waste:record\",\"evidence:upload\",\"projects:manage\"]') returning id", [orgId, `ACTOR-${suffix}`])).rows[0]!.id;
-    const verifierRole = (await c.query<{ id: string }>("insert into roles(organization_id,name,permissions) values($1,$2,'[\"VERIFY_EVIDENCE\"]') returning id", [orgId, `VERIFIER-${suffix}`])).rows[0]!.id;
+    const verifierRole = (await c.query<{ id: string }>("insert into roles(organization_id,name,permissions) values($1,'verifier',$2::jsonb) returning id", [orgId, JSON.stringify([\"VERIFY_EVIDENCE\",\"verification:approve\"]))).rows[0]!.id;
     await approveTestMembership(c, actorId, orgId, actorRole, geographyId, "operator", "collector");
     await approveTestMembership(c, verifierId, orgId, verifierRole, geographyId, "verifier", "collector");
-    await c.query("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED'),($4,$2,$5,'VERIFIED')", [actorId, orgId, actorRole, verifierId, verifierRole]);
     actorToken = token(); verifierToken = token();
     await c.query("insert into identity_sessions(identity_id,expires_at,token_hash) values($1,now()+interval '1 hour',$2),($3,now()+interval '1 hour',$4)", [actorId, hash(actorToken), verifierId, hash(verifierToken)]);
     verifiedDeviceId = (await c.query<{ id: string }>("insert into field_devices(device_id,identity_id,organization_id,status) values($1,$2,$3,'VERIFIED') returning id", [`verified-${suffix}`, actorId, orgId])).rows[0]!.id;
