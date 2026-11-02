@@ -203,3 +203,20 @@ The inspected pg_default_acl rows for cloud_admin in public covered tables and s
 6. Prove all intended trigger and application paths under exact proposed roles on a disposable branch before proposing a production migration.
 
 No production role, ACL, function, trigger, schema, table, sequence or data was changed. No function bodies were exported into this checkpoint.
+
+
+## Second live schema pass — table ownership and trigger coverage
+
+Read-only production catalog reconciliation confirms the complete 67-table register against pg_class:
+
+- 67/67 base tables have RLS disabled and FORCE RLS disabled.
+- 67/67 base tables are owned by the current application login role (rupaykg).
+- PUBLIC has no direct SELECT, INSERT, UPDATE or DELETE privilege on these tables according to has_table_privilege checks. This is not a substitute for reviewing inherited role grants, function execution, application endpoints or privileged owner bypass.
+- The 70 enabled non-internal triggers span 33 tables. Highest trigger concentrations are settlements (11), registry_events (7), settlement_events (6), credentials (5), carbon_calculations (3), field_sync_envelopes (3), and stakeholder_applications (3). This highlights where policy and trigger regression coverage must be deepest.
+- The 67-table ownership/RLS matrix already present in the PR #192 audit remains a proposed semantic classification, not approved live policy. Every ownership path and FK must be verified before policy generation.
+
+The production catalog exposes 11 application-owned non-trigger functions: 3 boolean capability helpers (can_assess_epr, can_manage_field_device, can_write_esg), 3 authorization helpers (has_verification_permission, identity_has_permission, organization_has_geography_scope), 3 mutating workflow functions (allocate_environmental_attribute_claim, allocate_epr_credit, release_epr_credit_allocation), one assertion helper, and one immutable role-default helper. All are PUBLIC EXECUTE under the current catalog privilege evaluation. These are first-priority body/callsite review targets; names and return types alone do not prove safety or exploitability.
+
+The 37 C-language functions are extension members of pgcrypto 1.4 in public; preserve extension-managed ownership and versioning. Do not apply application-function ACL scripts to these extension objects.
+
+Validation provenance: production-only catalog reads on authoritative Neon main. No data, DDL, grants, role membership, schema ACL, trigger, function or migration was changed. No disposable compute was started.
