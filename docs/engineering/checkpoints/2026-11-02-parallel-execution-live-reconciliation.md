@@ -503,3 +503,14 @@ The branch now contains an immutable/idempotent enqueue helper, atomic lease cla
 - Run `41463204727` for docs checkpoint commit `69029ca587ca848497643521359398cc6b0bfa9f`: migration validation, typecheck, build, browser smoke, full test suite passed; production container build still running at checkpoint time.
 - No worker runtime is yet verified. Legacy synchronous submit route remains. Do not launch external calls from a background process until signed actor context, exact least-privilege worker role, forced RLS and job-table policies, and tenant-negative tests are accepted.
 - Production HOLD; certification OFF; TRL 9 NOT ESTABLISHED. No production changes or external provider writes.
+
+
+### 14:38 UTC — container build completed; HCS retry/reconciliation regression test added
+
+- Run `41463161935`, code commit `3f771a63d4027629da350a79725193858e1a323d`: **SUCCESS**, including final production container build and job cleanup. This is the exact-head enqueue test scope repair.
+- Run `41463204727`, docs commit `69029ca587ca848497643521359398cc6b0bfa9f`: **SUCCESS**, including production container build.
+- Guardian ambiguous-response retry test commit `af2f3ed19d558bf172326089fa3df0c121465ec0`: workflow `41463406524`; typecheck, build, browser smoke, full test suite and container build all completed successfully; final job cleanup was still in progress at last poll. This test simulates a response lost after provider acceptance and asserts both requests carry the identical persisted Guardian idempotency key.
+- Added HCS Mirror Node regression test commit `a73269dbd46158fddc8822b04e55168b68e28cd6`. It simulates first lookup returning 404/PENDING, then successful indexing, and asserts both reconciliation attempts query the exact same persisted transaction ID. Exact-head CI run `41463738956` is **IN_PROGRESS**.
+- PR #204 checkpoint head `805da38c95162cf2cfe48724121ce6f3c3ac7749`, exact-head CI `41463466349`: **SUCCESS**.
+
+**Important limit:** provider retry tests and durable lease/provider persistence primitives are not yet a production worker. The legacy synchronous submit route remains. Worker process/queue consumer, signed actor-bound finalize, tenant-isolated worker principal, forced RLS/job-table policy, complete route-to-data matrix and independent DBA/security review remain release blockers. Production HOLD; certification OFF; TRL 9 NOT ESTABLISHED; no production changes or external provider writes.
