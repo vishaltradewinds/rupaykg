@@ -305,6 +305,59 @@ async function run(): Promise<void> {
     const applicantOrganizationId = createdApplication.rows[0]?.application_result.organization_id;
     assert.ok(applicationId && applicantOrganizationId);
 
+    // Geography authorization is enforced by PostgreSQL, not merely by API
+    // route filtering. A verified root includes descendants but excludes a
+    // sibling/out-of-scope geography for the same organization.
+    const geographyRoot = (await pool.query<{ id: string }>(
+      `insert into public.geography(kind,name,code,source,source_version)
+       values('STATE','CI Authorized State',concat('CI-STATE-',left($1,8)),'CI synthetic fixture','1')
+       returning id`,
+      [suffix],
+    )).rows[0]?.id;
+    assert.ok(geographyRoot);
+    const geographyChild = (await pool.query<{ id: string }>(
+      `insert into public.geography(parent_id,kind,name,code,source,source_version)
+       values($1,'DISTRICT','CI Authorized District',concat('CI-DIST-',left($2,8)),'CI synthetic fixture','1')
+       returning id`,
+      [geographyRoot, suffix],
+    )).rows[0]?.id;
+    assert.ok(geographyChild);
+    const geographyOutside = (await pool.query<{ id: string }>(
+      `insert into public.geography(kind,name,code,source,source_version)
+       values('STATE','CI Out-of-Scope State',concat('CI-OUT-',left($1,8)),'CI synthetic fixture','1')
+       returning id`,
+      [suffix],
+    )).rows[0]?.id;
+    assert.ok(geographyOutside);
+    await pool.query(
+      `insert into public.organization_geography_scopes(organization_id,geography_id,status)
+       values($1,$2,'VERIFIED')`,
+      [applicantOrganizationId, geographyRoot],
+    );
+    const geographyScope = await pool.query<{ descendant_allowed: boolean; outside_allowed: boolean }>(
+      `select public.organization_has_geography_scope($1,$2) as descendant_allowed,
+              public.organization_has_geography_scope($1,$3) as outside_allowed`,
+      [applicantOrganizationId, geographyChild, geographyOutside],
+    );
+    assert.equal(geographyScope.rows[0]?.descendant_allowed, true,
+      "a verified geography root must authorize its descendants");
+    assert.equal(geographyScope.rows[0]?.outside_allowed, false,
+      "a verified geography root must not authorize a sibling state");
+    await pool.query(
+      `insert into public.activities(organization_id,geography_id,activity_type)
+       values($1,$2,'CI_SCOPE_ALLOWED')`,
+      [applicantOrganizationId, geographyChild],
+    );
+    await assert.rejects(
+      pool.query(
+        `insert into public.activities(organization_id,geography_id,activity_type)
+         values($1,$2,'CI_SCOPE_DENIED')`,
+        [applicantOrganizationId, geographyOutside],
+      ),
+      /activity geography is outside organization authorization scope/,
+      "PostgreSQL activity trigger must reject an out-of-scope geography",
+    );
+
     // A role label and permission JSON cannot turn an ordinary operator
     // organization into platform authority. The reserved-role trigger must
     // reject direct activation, and the identity must receive no queue/legal powers.
