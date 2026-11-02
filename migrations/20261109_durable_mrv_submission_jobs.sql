@@ -74,8 +74,7 @@ create table if not exists mrv_submission_jobs (
 -- independent verification. Composite FKs below keep the cross-record bindings
 -- intact after enqueue; provider workers must still re-check revocation/status.
 create or replace function validate_mrv_submission_job_bindings()
-returns trigger language plpgsql as $
-declare
+returns trigger language plpgsql as 'declare
   activity_actor uuid;
   evidence_is_verified boolean;
   verification_is_approved boolean;
@@ -85,35 +84,34 @@ begin
    where a.id = new.activity_id
      and a.organization_id = new.organization_id
      and a.geography_id = new.geography_id
-     and a.status = 'COMPLETED';
+     and a.status = ''COMPLETED'';
   if not found then
-    raise exception 'MRV_JOB_ACTIVITY_SCOPE_INVALID';
+    raise exception ''MRV_JOB_ACTIVITY_SCOPE_INVALID'';
   end if;
 
-  select (e.status = 'VERIFIED') into evidence_is_verified
+  select (e.status = ''VERIFIED'') into evidence_is_verified
     from evidence e
    where e.id = new.evidence_id
      and e.activity_id = new.activity_id;
   if coalesce(evidence_is_verified, false) is not true then
-    raise exception 'MRV_JOB_EVIDENCE_NOT_VERIFIED';
+    raise exception ''MRV_JOB_EVIDENCE_NOT_VERIFIED'';
   end if;
 
-  select (v.decision = 'APPROVED' and v.verifier_identity_id is distinct from activity_actor)
+  select (v.decision = ''APPROVED'' and v.verifier_identity_id is distinct from activity_actor)
     into verification_is_approved
     from verifications v
    where v.id = new.verification_id
      and v.evidence_id = new.evidence_id
      and v.activity_id = new.activity_id;
   if coalesce(verification_is_approved, false) is not true then
-    raise exception 'MRV_JOB_VERIFICATION_INVALID';
+    raise exception ''MRV_JOB_VERIFICATION_INVALID'';
   end if;
 
   if not public.organization_has_geography_scope(new.organization_id, new.geography_id) then
-    raise exception 'MRV_JOB_GEOGRAPHY_SCOPE_INVALID';
+    raise exception ''MRV_JOB_GEOGRAPHY_SCOPE_INVALID'';
   end if;
   return new;
-end;
-$;
+end;';
 
 drop trigger if exists mrv_submission_job_binding_guard on mrv_submission_jobs;
 create trigger mrv_submission_job_binding_guard
