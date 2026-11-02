@@ -603,3 +603,10 @@ The first regression-test CI run (`41464821546`) failed as expected against the 
 - Integration test now verifies lease release appends one event with `TEST_RELEASE`, `WORKER`, and the exact recovery worker identity.
 - Commits: event columns `cfd497bfb47866fc2a86fe4612628cc460b75d8c`; worker attribution `de0f8044406fdb7e3c2ebae12f44558ba7ad184c`; INSERT safety `52d25cf0bca67537bd14a76723d3ebbce141dc6f`; assertions `392abdbc56c1cd116bee7d0454e0b04d47760a96`.
 - These changes are on PR #192 and await exact-head CI. They remain migration/test work only; no background worker is deployed.
+
+
+### 14:59 UTC — state-transition test expectation corrected
+
+- CI for migration commit `1a8981bb5f3a7b3fdd7d1fed413fbc6b54b82fa5` failed in the integration test because the test attempted REQUESTED → COMPLETED while expecting a lease error. After validation was correctly reordered, the database returned the more specific `MRV_JOB_INVALID_STATE_TRANSITION` (as it should).
+- Corrected the missing-lease test to exercise the legal REQUESTED → CLAIMED edge without supplying a lease, which must return `MRV_JOB_LEASE_REQUIRED`. The separate illegal-edge test is retained. Correction commit `2edd251ef404d88b00e4c7f994d89e42ae38e04b`; exact-head CI `41467045999` is in progress.
+- Worker audit-event attribution and retry metadata tests are included in the latest branch head; CI runs for those commits are also in progress. No production changes.
