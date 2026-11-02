@@ -156,3 +156,26 @@ New branch-only application changes:
 The latest route changes are on PR #192 branch. Exact-head CI for commit `304541ad58384c6fb9190ea044f71b4c14a8810c` is running; earlier commit `ffd9ae65cd046049c884e56d1b4121b097f18e09` has its own CI run in progress. Do not claim the new route code is accepted until latest exact-head CI succeeds.
 
 **Still not implemented:** durable worker loop and provider stage orchestration; revalidation call sites before every external stage and final provenance; atomic provenance/job finalization; runtime role and RLS policies; production migration. No production changes or provider writes have been made.
+
+
+### 15:35 UTC — authenticated enqueue/status route gates passed
+
+- Exact-head code commit `304541ad58384c6fb9190ea044f71b4c14a8810c`, workflow `41472574337`: **SUCCESS**.
+- Passed migration validation and disposable PostgreSQL execution, bootstrap privilege revocation, synthetic two-custodian bootstrap, typecheck, production build, browser smoke, full tests including disposable PostgreSQL acceptance, and production-container build.
+- The commit adds:
+  - `POST /api/v1/mrv/activities/:activityId/jobs`: authenticated enqueue, organization/geography derived from the activity row, `guardian:operate` permission, verified organization/activity/evidence/independent verification preconditions, short transaction and 202 queue response.
+  - `GET /api/v1/mrv/jobs/:jobId`: organization/geography/permission-scoped status and event history; payload snapshot and provider raw response are not returned.
+  - Both endpoints are disabled unless `RUPAYKG_MRV_DURABLE_JOBS_ENABLED=true`; leave disabled in production.
+- Current PR #192 head is documentation successor `8be1edd4c65e0c7300ef92a1d78c2bc0f9253171`; the last code commit is the exact tested commit above. The documentation successor does not alter runtime code.
+- The endpoints are not yet connected to a running worker. Production migration is not applied; production RLS/least-privilege roles remain absent. The feature flag must remain off.
+
+### Immediate next engineering slice
+
+Implement the worker runner with a stage-by-stage state machine:
+1. claim and lease in a short transaction;
+2. revalidate current job authorization before each external stage;
+3. persist Guardian idempotency key, call Guardian outside DB transaction, persist execution ID;
+4. generate Hedera transaction ID, persist under current lease, submit with that same ID, then reconcile through Mirror Node;
+5. revalidate authorization and current evidence/verification again;
+6. persist provenance and job completion atomically, with append-only event attribution;
+7. add crash/retry/fault-injection tests for every boundary.
