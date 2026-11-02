@@ -360,3 +360,45 @@ The credential issuance route does check completed activity, issuer ownership, V
 - All demo screenshots/exports must show whether data is synthetic, internal, externally acknowledged or independently verified.
 
 **Decision:** settlement and transfer flows remain non-production/engineering-only pending the above; do not claim two-party settlement or actual money movement. Production remains HOLD and certification OFF.
+
+
+## MRV source-evidence correction and provenance digest binding — 2026-11-02 16:18Z
+
+This section supersedes any earlier blanket statement in this checkpoint that the repository lacks lease-token-fenced job helper functions.
+
+### Corrected source inventory
+
+At PR #192 head `c48d3e274acadb22db9968f894278786c1a74d89`, `apps/src/mrv-submission-jobs.ts` already implements:
+- Atomic single-job claim using `FOR UPDATE SKIP LOCKED`, a random lease token and bounded 10–900 second lease.
+- Stage advance guarded by job id + exact lease token + unexpired lease; lease is cleared in the same update.
+- Persisted Guardian idempotency key and Hedera transaction ID under the same live lease fence.
+- Explicit lease release and renewal helpers.
+- Pre-provider reauthorization helper checking organization/identity status, active verified membership, role permission, activity/evidence/verification binding, independent verifier and geography helper.
+
+These are meaningful source-level controls. They do not establish that a production worker invokes them correctly, that database permissions prevent bypass, or that concurrency tests pass against a real disposable PostgreSQL instance. The earlier concern is therefore narrowed: the TypeScript lease helpers exist; the worker runtime, restricted DB execution boundary, schema-level fencing and real integration evidence remain to be proven.
+
+### New P0/P1 provenance integrity finding
+
+`apps/src/mrv-routes.ts` builds the Guardian request using the full ordered observation and evidence rows. However, the synchronous HCS anchor call currently constructs an `AnchorPayload` containing activity, verification, evidence IDs, Guardian policy/execution, methodology, the latest quantity/unit and a small Guardian status metadata object. It does not include the full observation snapshot, evidence content hashes/URIs, or the durable job's `payload_hash`.
+
+The durable enqueue path separately computes `payload_hash` over its canonical `payload_snapshot`, including observations and evidence, but the currently inspected synchronous HCS call does not pass that digest into the anchored payload. Thus the on-chain hash verifies the narrower AnchorPayload, not necessarily the complete MRV source snapshot that was sent to Guardian.
+
+**Required fix before calling the HCS anchor a complete MRV evidence anchor:**
+1. Define one versioned canonical MRV evidence manifest containing all accepted measurement/observation values, units, methods, instrument identities/calibration references, uncertainty/quality metadata, evidence content hashes, capture times, verification identity/decision, methodology/version and organization/geography provenance.
+2. Canonicalize and hash this manifest once; persist the exact canonical bytes or immutable canonical representation and SHA-256 digest before external side effects.
+3. Send that exact manifest or digest + schema/version + immutable evidence references to Guardian; require the Guardian execution response to bind to the same digest (or persist a cryptographically verifiable request/response correlation).
+4. Anchor the same digest, schema version and exact Guardian execution ID to HCS. Do not recompute from a smaller, separately assembled object.
+5. On Mirror Node verification, compare the anchored digest to the persisted canonical manifest digest and re-hash the retrieved canonical bytes. Fail closed on missing, stale, substituted or malformed evidence.
+6. Add mutation tests: change one observed value, unit, instrument, uncertainty, evidence hash, timestamp, methodology version or verifier identity and prove the digest changes and prior provenance cannot be reused.
+7. Test duplicate request, Guardian timeout-after-success, HCS timeout-after-success, Mirror indexing delay and replay while preserving the exact original digest and provider idempotency identities.
+
+### Related synchronous MRV route concerns
+
+- The legacy `POST /api/v1/mrv/activities/:activityId/submit` path performs Guardian and HCS calls directly in the request path, independently of the durable queue feature flag. Keep it explicitly classified as a legacy synchronous path; do not infer that the queue flag disables all provider submissions.
+- In the inspected legacy path, the route checks approved verification and verified evidence but does not visibly require `verifier_identity_id <> activity.actor_identity_id` or recheck the verifier's active independent-review authority in the route's binding query. The durable job reauthorization helper does include the distinct-verifier check. Require parity tests and enforce independence in the legacy path before it can remain enabled.
+- The legacy route uses a session-level advisory lock and a checked-out client for several reads/provider writes but does not wrap the complete operation in an explicit transaction or signed tenant-context helper. A session lock is not tenant isolation. Route integration must be designed before enabling database RLS.
+- The EPR return list/create handlers currently perform authorization through a pool query and data access/mutation through pool calls outside a single explicit request transaction. The EPR submit/external-reference handlers do use a checked-out client and transaction for their main mutation. Under RLS, list/create need the same signed request transaction/client boundary; no permission check should escape to the pool.
+
+### Corrected MRV status statement
+
+Durable job claim/lease/idempotency helper functions exist in source. The migration remains draft/not deployed, and no accepted worker service/runtime or real disposable-PostgreSQL acceptance evidence has been established in this audit. Complete manifest digest binding, legacy-path independence, tenant-bound worker execution and full route integration remain release blockers.
