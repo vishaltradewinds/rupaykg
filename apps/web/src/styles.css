@@ -199,3 +199,31 @@ footer{border-color:var(--rk-border-soft);color:var(--rk-subtle)}
 .stakeholder-selection p:not(.eyebrow){max-width:650px;color:var(--rk-muted);font-size:13px;line-height:1.65}
 .stakeholder-selection button{flex:none;min-height:46px;padding:12px 18px;border:1px solid var(--rk-primary)!important;border-radius:12px!important;background:var(--rk-primary)!important;color:var(--rk-primary-contrast)!important;font-weight:750}
 @media(max-width:650px){.context-switch{margin:20px auto 14px;width:100%}.context-choice{flex:1;min-width:0}.stakeholder-selection{display:grid;padding:18px;gap:12px}.stakeholder-selection button{width:100%}}
+
+
+/* Extend the same visual language into authenticated workspaces without changing their workflows. */
+.authority-card,.workspace-panel,.workspace-panel-head,.workspace-row,.metric,.admin-management-panel,
+.admin-record-list>article,.review-list article,.provenance,.provenance-card,.evidence-vault-list>article,
+.cpcb-swm-result,.cpcb-swm-checklist article,.super-admin-console,.admin-capabilities article{
+  background:rgba(255,255,255,.025);border-color:var(--rk-border-soft);color:var(--rk-text)
+}
+.workspace-panel-head,.workspace-row{border-color:var(--rk-border-soft)}
+.workspace-panel-head span,.workspace-row small,.metric span,.metric small,.authority-card span,.authority-card small,
+.admin-record-list small,.admin-management-panel>small,.evidence-vault-list article small{color:var(--rk-muted)}
+.workspace-tabs .tab{background:rgba(255,255,255,.025);border-color:var(--rk-border-soft);color:var(--rk-muted)}
+.workspace-tabs .tab:hover{border-color:rgba(52,211,153,.35);color:var(--rk-text)}
+.workspace-tabs .tab.active{background:var(--rk-primary)!important;color:var(--rk-primary-contrast)!important}
+.lifecycle-stage{background:rgba(255,255,255,.025);border-color:var(--rk-border-soft)}
+.lifecycle-stage.done{background:rgba(16,185,129,.09);border-color:rgba(52,211,153,.32)}
+.lifecycle-stage.done>span{background:var(--rk-primary);color:var(--rk-primary-contrast)}
+.status-pill{background:rgba(255,255,255,.025)}
+.form-field>span,.onboarding-form label,.admin-management-panel label{color:var(--rk-muted)}
+input,select,textarea{accent-color:var(--rk-primary)}
+button:not(.secondary):not(.landing-tab):not(.context-choice):not(.stakeholder-card){
+  border-radius:10px
+}
+button.secondary,.secondary{border-color:var(--rk-border)!important;color:var(--rk-text)!important;background:rgba(255,255,255,.02)!important}
+button:disabled{opacity:.55;cursor:not-allowed}
+.notice{border-color:rgba(245,190,90,.28);background:rgba(245,190,90,.08);color:#f2d69a}
+.notice.error,.error{border-color:rgba(248,113,113,.35);background:rgba(127,29,29,.14);color:#fecaca}
+.notice.success{border-color:rgba(52,211,153,.32);background:rgba(16,185,129,.08);color:#a7f3d0}
