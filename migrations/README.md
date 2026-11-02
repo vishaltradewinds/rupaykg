@@ -135,3 +135,10 @@ This is a forward-only candidate migration on a review branch. It has not been a
 Migration `20261112_stakeholder_platform_authority_scope.sql` replaces the stakeholder-application approval trigger's global role-name lookup. An approval transition now requires the reviewer identity to be active and `VERIFIED`, the membership to be `VERIFIED`, the membership's organization to be `VERIFIED` and of type `PLATFORM_AUTHORITY`, and the role to be `platform_admin` or `super_admin` with an explicit `admin:users` permission. Self-approval and direct INSERT as `APPROVED` remain prohibited. The function is SECURITY INVOKER and pins `search_path`.
 
 The PostgreSQL integration test rejects approval by a verified ordinary-tenant verifier and accepts approval by the synthetic active platform authority. The shared onboarding fixture now discovers only a reviewer meeting the same platform-authority and explicit-permission predicate. This is a candidate migration only; disposable PostgreSQL acceptance and independent security review are required before any production change.
+
+
+## Application-owned routine search-path hardening (20261113)
+
+Migration `20261113_pin_application_function_search_paths.sql` pins every application-owned public function/procedure to `pg_catalog, public, pg_temp`, excluding extension-owned routines so extension lifecycle remains controlled by the extension. The current production catalog shows PUBLIC has USAGE but not CREATE on public; pg_temp is placed last to prevent temporary-object shadowing. The integration test checks every application-owned public routine has exactly the reviewed path and confirms PUBLIC has no CREATE privilege on public.
+
+This is a candidate migration. CI must apply the full chain and pass all existing trigger, function, route, PostgreSQL acceptance and production-container gates. It does not revoke PUBLIC EXECUTE: a separate signature/call-site/grant inventory is required first, especially because trigger functions and ordinary helper functions have different invocation semantics. No production routine has been altered by this candidate.
