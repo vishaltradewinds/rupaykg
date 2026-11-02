@@ -79,3 +79,26 @@ This role manifest does not authorize production changes. Outstanding requiremen
 - Keep production certification OFF until the complete release gate passes.
 
 No production role, grant, RLS policy, function, credential, or database object has been changed by this proposal.
+## Signed RLS request-context key and verifier owner
+
+The signed-context verifier is a separate security boundary from the `auth_private` lifecycle owner:
+
+| Role / object | Required boundary |
+|---|---|
+| `rupaykg_security_definer` | NOLOGIN, NOSUPERUSER, NOBYPASSRLS, NOCREATEDB, NOCREATEROLE, NOINHERIT, NREPLICATION; owns only `app_security`, `app_security.request_context_keys` and `app_security.current_request_context_claims()`; no membership in another role |
+| `app_security.request_context_keys` | Signing key material stored only under the security-definer owner; no app/auth runtime SELECT/INSERT/UPDATE/DELETE |
+| `app_security.current_request_context_claims()` | SECURITY DEFINER, fixed `search_path=pg_catalog,app_security`, schema-qualified references, returns only validated actor/organization claims; never returns key material |
+| `rupaykg_app_runtime` | When RLS policies are introduced, receive only `USAGE` on `app_security` and `EXECUTE` on the verifier function as required by policy evaluation; no access to the key table or owner role |
+| Render server environment | `RUPAYKG_REQUEST_CONTEXT_SECRET` (at least 32 bytes) and `RUPAYKG_REQUEST_CONTEXT_KEY_ID`; server-side only, never `VITE_*` or client bundle |
+
+The same key ID and secret must be provisioned in two places through an approved secure ceremony: Render's server-side secret store and `app_security.request_context_keys`. The application config now validates both values and rejects client-prefixed versions. No real secret has been generated, copied, or provisioned.
+
+The transaction helper `withRlsRequestTransaction` signs a short-lived context (maximum 120 seconds) from a validated `AuthContext` and sets `app.request_context` transaction-locally. It is not yet integrated across tenant-data routes. Do not enable RLS or grant runtime verifier execution until the route/worker coverage and exact role grants are tested together.
+
+### Key lifecycle / rotation gate
+1. DBA and two custodians approve key ID and custody plan.
+2. Generate a cryptographically random secret of at least 32 bytes outside source control and CI logs.
+3. Insert the key under the restricted security-definer owner; set the same key ID/secret in the Render secret store.
+4. Run exact-role sign/verify acceptance with positive, expired, malformed, wrong-key and revoked-key cases.
+5. Rotate by adding a new key ID, switching the application secret/key ID, validating, then deactivating the old key only after all active instances have rotated.
+6. Never expose key material in logs, health responses, API responses, frontend variables, build artifacts or repository files.
