@@ -5,11 +5,14 @@
   "type": "module",
   "scripts": {
     "dev": "tsx src/server.ts",
-    "start": "node dist/src/acceptance-seed.js && node dist/src/production-server.js",
+    "start": "node dist/src/production-server.js",
+    "migrate:production": "node dist/src/migrate.js",
+    "seed:acceptance": "node dist/src/acceptance-seed.js",
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "migrate": "tsx src/migrate.ts",
-    "test": "npm run build && node --test \"dist/**/*.test.js\""
+    "test": "npm run build && node --test \"dist/**/*.test.js\"",
+    "capture:production-baseline": "tsx src/production-shaped-baseline.ts"
   },
   "dependencies": {
     "@fastify/cors": "^11.0.0",

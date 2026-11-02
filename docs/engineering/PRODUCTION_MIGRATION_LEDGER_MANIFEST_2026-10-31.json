@@ -1,0 +1,475 @@
+{
+  "snapshot": "2026-10-31",
+  "source": {
+    "provider": "Neon",
+    "project_id": "steep-mud-79906940",
+    "branch_id": "br-restless-base-b44cip2h",
+    "database": "rupaykg",
+    "query": "SELECT version, filename, applied_at FROM schema_migrations ORDER BY applied_at, version"
+  },
+  "count": 92,
+  "production_migration_order": [
+    {
+      "version": "001",
+      "filename": "001_core.sql",
+      "applied_at": "2026-10-17T10:47:58.762686+00:00"
+    },
+    {
+      "version": "002",
+      "filename": "002_regulatory.sql",
+      "applied_at": "2026-10-17T10:47:59.908135+00:00"
+    },
+    {
+      "version": "003",
+      "filename": "003_identity_geography_operations.sql",
+      "applied_at": "2026-10-17T10:48:00.96462+00:00"
+    },
+    {
+      "version": "004",
+      "filename": "004_security_auth.sql",
+      "applied_at": "2026-10-17T10:48:02.041886+00:00"
+    },
+    {
+      "version": "005",
+      "filename": "005_carbon_epr_esg.sql",
+      "applied_at": "2026-10-17T10:48:03.100554+00:00"
+    },
+    {
+      "version": "006",
+      "filename": "006_registry_settlement_guardrails.sql",
+      "applied_at": "2026-10-17T10:48:04.185129+00:00"
+    },
+    {
+      "version": "007",
+      "filename": "007_resource_flow_mrv.sql",
+      "applied_at": "2026-10-17T10:48:05.239943+00:00"
+    },
+    {
+      "version": "008",
+      "filename": "008_verification_integrity.sql",
+      "applied_at": "2026-10-17T10:48:06.310656+00:00"
+    },
+    {
+      "version": "009",
+      "filename": "009_field_sync.sql",
+      "applied_at": "2026-10-17T10:48:07.372399+00:00"
+    },
+    {
+      "version": "010",
+      "filename": "010_integrity_controls.sql",
+      "applied_at": "2026-10-17T10:48:08.433103+00:00"
+    },
+    {
+      "version": "011",
+      "filename": "011_field_sync_application.sql",
+      "applied_at": "2026-10-17T10:48:09.477321+00:00"
+    },
+    {
+      "version": "012",
+      "filename": "012_geography_authorization.sql",
+      "applied_at": "2026-10-17T10:48:10.521161+00:00"
+    },
+    {
+      "version": "013",
+      "filename": "013_settlement_external_confirmation.sql",
+      "applied_at": "2026-10-17T10:48:11.574591+00:00"
+    },
+    {
+      "version": "014",
+      "filename": "014_registry_settlement_idempotency.sql",
+      "applied_at": "2026-10-17T10:48:12.625965+00:00"
+    },
+    {
+      "version": "015",
+      "filename": "015_guardian_hedera_mrv.sql",
+      "applied_at": "2026-10-17T10:48:13.680441+00:00"
+    },
+    {
+      "version": "016",
+      "filename": "016_field_device_enrollment.sql",
+      "applied_at": "2026-10-17T10:48:14.747482+00:00"
+    },
+    {
+      "version": "017",
+      "filename": "017_field_device_provenance.sql",
+      "applied_at": "2026-10-17T10:48:15.792992+00:00"
+    },
+    {
+      "version": "018",
+      "filename": "018_value_mutation_permissions.sql",
+      "applied_at": "2026-10-17T10:48:16.837815+00:00"
+    },
+    {
+      "version": "019",
+      "filename": "019_settlement_reconciliation_immutability.sql",
+      "applied_at": "2026-10-17T10:48:17.889091+00:00"
+    },
+    {
+      "version": "020",
+      "filename": "020_carbon_calculation_provenance.sql",
+      "applied_at": "2026-10-17T10:48:18.931659+00:00"
+    },
+    {
+      "version": "021",
+      "filename": "021_methodology_governance.sql",
+      "applied_at": "2026-10-17T10:48:19.977737+00:00"
+    },
+    {
+      "version": "022",
+      "filename": "022_carbon_provenance_integrity.sql",
+      "applied_at": "2026-10-17T10:48:21.031855+00:00"
+    },
+    {
+      "version": "023",
+      "filename": "023_lifecycle_state_guards.sql",
+      "applied_at": "2026-10-17T10:48:22.078447+00:00"
+    },
+    {
+      "version": "024",
+      "filename": "024_methodology_governance_immutability.sql",
+      "applied_at": "2026-10-17T10:48:23.120907+00:00"
+    },
+    {
+      "version": "025",
+      "filename": "025_methodology_reconciliation_evidence.sql",
+      "applied_at": "2026-10-17T10:48:24.163459+00:00"
+    },
+    {
+      "version": "026",
+      "filename": "026_regulatory_source_provenance.sql",
+      "applied_at": "2026-10-17T10:48:25.224262+00:00"
+    },
+    {
+      "version": "027",
+      "filename": "027_verification_permission_hardening.sql",
+      "applied_at": "2026-10-17T10:48:26.266343+00:00"
+    },
+    {
+      "version": "028",
+      "filename": "028_settlement_retired_credential_guard.sql",
+      "applied_at": "2026-10-17T10:48:27.30859+00:00"
+    },
+    {
+      "version": "029",
+      "filename": "029_stakeholder_onboarding.sql",
+      "applied_at": "2026-10-17T10:48:28.355606+00:00"
+    },
+    {
+      "version": "030",
+      "filename": "030_authorization_role_defaults.sql",
+      "applied_at": "2026-10-17T10:48:29.411397+00:00"
+    },
+    {
+      "version": "031",
+      "filename": "031_settlement_credential_owner_authorization.sql",
+      "applied_at": "2026-10-17T10:48:30.455306+00:00"
+    },
+    {
+      "version": "032",
+      "filename": "032_authorization_lifecycle_hardening.sql",
+      "applied_at": "2026-10-17T10:48:31.497003+00:00"
+    },
+    {
+      "version": "033",
+      "filename": "033_field_sync_tenant_integrity.sql",
+      "applied_at": "2026-10-17T10:48:32.546797+00:00"
+    },
+    {
+      "version": "034",
+      "filename": "034_operation_sync_device_binding.sql",
+      "applied_at": "2026-10-17T10:48:33.589679+00:00"
+    },
+    {
+      "version": "035",
+      "filename": "035_cpcb_epr_portal_baseline.sql",
+      "applied_at": "2026-10-17T10:48:34.631969+00:00"
+    },
+    {
+      "version": "036",
+      "filename": "036_bwg_epr_esg_reporting.sql",
+      "applied_at": "2026-10-17T10:48:35.688122+00:00"
+    },
+    {
+      "version": "037",
+      "filename": "037_bwg_regulatory_registration_state.sql",
+      "applied_at": "2026-10-17T10:48:36.763772+00:00"
+    },
+    {
+      "version": "038",
+      "filename": "038_bwg_registration_unknown_default.sql",
+      "applied_at": "2026-10-17T10:48:37.808607+00:00"
+    },
+    {
+      "version": "039",
+      "filename": "039_india_regulatory_requirements.sql",
+      "applied_at": "2026-10-17T10:48:38.864259+00:00"
+    },
+    {
+      "version": "040",
+      "filename": "040_india_regulatory_extensions.sql",
+      "applied_at": "2026-10-17T10:48:39.916109+00:00"
+    },
+    {
+      "version": "041",
+      "filename": "041_high_risk_action_permissions.sql",
+      "applied_at": "2026-10-17T10:48:40.964799+00:00"
+    },
+    {
+      "version": "042",
+      "filename": "042_india_regulatory_requirement_catalog.sql",
+      "applied_at": "2026-10-17T10:48:42.009472+00:00"
+    },
+    {
+      "version": "043",
+      "filename": "043_bwg_epr_invariants.sql",
+      "applied_at": "2026-10-17T10:48:43.052829+00:00"
+    },
+    {
+      "version": "044",
+      "filename": "044_bwg_reporting_requires_applicability.sql",
+      "applied_at": "2026-10-17T10:48:44.139992+00:00"
+    },
+    {
+      "version": "045",
+      "filename": "045_guardian_mrv_registry_provenance_integrity.sql",
+      "applied_at": "2026-10-17T10:48:45.186331+00:00"
+    },
+    {
+      "version": "046",
+      "filename": "046_epr_credit_allocation_integrity.sql",
+      "applied_at": "2026-10-17T10:48:46.240043+00:00"
+    },
+    {
+      "version": "047",
+      "filename": "047_settlement_party_integrity.sql",
+      "applied_at": "2026-10-17T10:48:47.291921+00:00"
+    },
+    {
+      "version": "048",
+      "filename": "048_settlement_party_integrity_compatibility.sql",
+      "applied_at": "2026-10-17T10:48:48.33791+00:00"
+    },
+    {
+      "version": "049",
+      "filename": "049_credential_geography_integrity.sql",
+      "applied_at": "2026-10-17T10:48:49.379912+00:00"
+    },
+    {
+      "version": "050",
+      "filename": "050_field_sync_conflict_audit.sql",
+      "applied_at": "2026-10-17T10:48:50.423623+00:00"
+    },
+    {
+      "version": "051",
+      "filename": "051_registry_transfer_recipient_integrity.sql",
+      "applied_at": "2026-10-17T10:48:51.466467+00:00"
+    },
+    {
+      "version": "052",
+      "filename": "052_stakeholder_approval_guard.sql",
+      "applied_at": "2026-10-17T10:48:52.508298+00:00"
+    },
+    {
+      "version": "053",
+      "filename": "053_authoritative_regulatory_baseline.sql",
+      "applied_at": "2026-10-17T10:48:53.550589+00:00"
+    },
+    {
+      "version": "054",
+      "filename": "054_circular_economy_carbon_regulatory_baseline.sql",
+      "applied_at": "2026-10-17T10:48:54.660141+00:00"
+    },
+    {
+      "version": "055",
+      "filename": "055_carbon_market_mechanisms.sql",
+      "applied_at": "2026-10-17T10:48:55.708288+00:00"
+    },
+    {
+      "version": "056",
+      "filename": "056_environmental_attribute_claim_controls.sql",
+      "applied_at": "2026-10-17T10:48:56.766169+00:00"
+    },
+    {
+      "version": "057",
+      "filename": "057_environmental_attribute_allocation_api.sql",
+      "applied_at": "2026-10-17T10:48:57.820569+00:00"
+    },
+    {
+      "version": "058",
+      "filename": "058_environmental_attribute_reporting_references.sql",
+      "applied_at": "2026-10-17T10:48:58.869079+00:00"
+    },
+    {
+      "version": "059",
+      "filename": "059_epr_credit_environmental_claims.sql",
+      "applied_at": "2026-10-17T10:48:59.911198+00:00"
+    },
+    {
+      "version": "060",
+      "filename": "060_brsr_structured_reporting.sql",
+      "applied_at": "2026-10-17T10:49:00.953398+00:00"
+    },
+    {
+      "version": "061",
+      "filename": "061_brsr_metadata_projection.sql",
+      "applied_at": "2026-10-17T10:49:02.002898+00:00"
+    },
+    {
+      "version": "062",
+      "filename": "062_stakeholder_onboarding_governance.sql",
+      "applied_at": "2026-10-17T10:49:03.047127+00:00"
+    },
+    {
+      "version": "063",
+      "filename": "063_organization_legal_verification.sql",
+      "applied_at": "2026-10-17T10:49:04.093019+00:00"
+    },
+    {
+      "version": "064",
+      "filename": "064_statutory_applicability_controls.sql",
+      "applied_at": "2026-10-17T10:49:05.145976+00:00"
+    },
+    {
+      "version": "065",
+      "filename": "065_governance_integrity_and_profile_seeding.sql",
+      "applied_at": "2026-10-17T10:49:06.209506+00:00"
+    },
+    {
+      "version": "066",
+      "filename": "066_organization_governance_cleanup.sql",
+      "applied_at": "2026-10-17T10:49:07.253954+00:00"
+    },
+    {
+      "version": "067",
+      "filename": "067_epr_scheme_catalog.sql",
+      "applied_at": "2026-10-17T10:49:08.30079+00:00"
+    },
+    {
+      "version": "068",
+      "filename": "068_epr_lifecycle_controls.sql",
+      "applied_at": "2026-10-17T10:49:09.347297+00:00"
+    },
+    {
+      "version": "069",
+      "filename": "069_epr_evidence_guards.sql",
+      "applied_at": "2026-10-17T10:49:10.407742+00:00"
+    },
+    {
+      "version": "070",
+      "filename": "070_epr_obligations_returns.sql",
+      "applied_at": "2026-10-17T10:49:11.450871+00:00"
+    },
+    {
+      "version": "071",
+      "filename": "071_epr_return_obligation_binding.sql",
+      "applied_at": "2026-10-17T10:49:12.528155+00:00"
+    },
+    {
+      "version": "072",
+      "filename": "072_epr_external_reference_uniqueness.sql",
+      "applied_at": "2026-10-17T10:49:13.580775+00:00"
+    },
+    {
+      "version": "073",
+      "filename": "073_settlement_integrity.sql",
+      "applied_at": "2026-10-17T10:49:14.623989+00:00"
+    },
+    {
+      "version": "074",
+      "filename": "074_settlement_party_integrity.sql",
+      "applied_at": "2026-10-17T10:49:15.670146+00:00"
+    },
+    {
+      "version": "075",
+      "filename": "075_settlement_registry_owner_integrity.sql",
+      "applied_at": "2026-10-17T10:49:16.714465+00:00"
+    },
+    {
+      "version": "076",
+      "filename": "076_settlement_reconciliation_reference_uniqueness.sql",
+      "applied_at": "2026-10-17T10:49:17.765753+00:00"
+    },
+    {
+      "version": "077",
+      "filename": "077_hierarchical_stakeholder_onboarding.sql",
+      "applied_at": "2026-10-17T10:49:18.813861+00:00"
+    },
+    {
+      "version": "078",
+      "filename": "078_stakeholder_approval_separation.sql",
+      "applied_at": "2026-10-17T10:49:19.867208+00:00"
+    },
+    {
+      "version": "079",
+      "filename": "079_native_password_auth.sql",
+      "applied_at": "2026-10-17T10:49:20.909164+00:00"
+    },
+    {
+      "version": "080",
+      "filename": "080_geography_created_at.sql",
+      "applied_at": "2026-10-17T10:49:21.959276+00:00"
+    },
+    {
+      "version": "081",
+      "filename": "081_acceptance_fixture_geography.sql",
+      "applied_at": "2026-10-17T10:49:23.001948+00:00"
+    },
+    {
+      "version": "082",
+      "filename": "082_super_admin_identity_governance.sql",
+      "applied_at": "2026-10-17T10:52:01.121978+00:00"
+    },
+    {
+      "version": "083",
+      "filename": "083_mrv_mirror_node_registry_gate.sql",
+      "applied_at": "2026-10-17T10:52:02.123821+00:00"
+    },
+    {
+      "version": "084",
+      "filename": "084_platform_audit_chain_head.sql",
+      "applied_at": "2026-10-17T10:52:03.121629+00:00"
+    },
+    {
+      "version": "085",
+      "filename": "085_platform_access_dual_control.sql",
+      "applied_at": "2026-10-17T10:52:04.12417+00:00"
+    },
+    {
+      "version": "086",
+      "filename": "086_reserved_role_restoration_db_guard.sql",
+      "applied_at": "2026-10-17T10:52:05.131641+00:00"
+    },
+    {
+      "version": "087",
+      "filename": "087_acceptance_fixture_registry_exclusion.sql",
+      "applied_at": "2026-10-17T10:52:06.134511+00:00"
+    },
+    {
+      "version": "20261018",
+      "filename": "20261018_cpcb_swm_stakeholder_workspaces.sql",
+      "applied_at": "2026-10-18T17:04:02.062124+00:00"
+    },
+    {
+      "version": "20261019",
+      "filename": "20261019_cpcb_bwg_workflow_tracking.sql",
+      "applied_at": "2026-10-18T17:15:45.236554+00:00"
+    },
+    {
+      "version": "20261020",
+      "filename": "20261020_ccts_methodology_registry.sql",
+      "applied_at": "2026-10-18T17:40:01.548793+00:00"
+    },
+    {
+      "version": "20261021",
+      "filename": "20261021_evidence_artifact_vault.sql",
+      "applied_at": "2026-10-18T18:04:20.633684+00:00"
+    },
+    {
+      "version": "096",
+      "filename": "096_verification_authorization_provenance.sql",
+      "applied_at": "2026-10-27T13:46:14.262221+00:00"
+    }
+  ],
+  "recovered_production_migration_096_blob_sha": "258b1f4534efbf915688f78aa84d4ec24a47cbc0",
+  "note": "Read-only evidence snapshot. No production data copied. Applied timestamps define chronology. Migration 023 is present."
+}

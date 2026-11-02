@@ -147,6 +147,59 @@ async function transaction<T>(pool: Pool, work: (client: PoolClient) => Promise<
 }
 
 export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Pool | null): Promise<void> {
+  app.get("/api/v1/admin/database-runtime-identity", async (request, reply) => {
+    const context = await authorize(request, reply, pool, "admin:security");
+    if (!context || !pool) return;
+    try {
+      // Return identity and narrowly scoped privilege booleans only. Never return
+      // connection details, passwords, role membership names, or raw grants.
+      const result = await pool.query<{
+        loginRole: string;
+        effectiveRole: string;
+        loginIsSuperuser: boolean;
+        loginBypassesRls: boolean;
+        loginCanCreateRole: boolean;
+        loginCanCreateDatabase: boolean;
+        effectiveRoleIsSuperuser: boolean;
+        effectiveRoleBypassesRls: boolean;
+        effectiveRoleCanCreateRole: boolean;
+        effectiveRoleCanCreateDatabase: boolean;
+        canCreateInPublicSchema: boolean;
+        canTruncateVerifications: boolean;
+        canTriggerVerifications: boolean;
+      }>(
+        `select
+          session_user::text as "loginRole",
+          current_user::text as "effectiveRole",
+          coalesce(login_role.rolsuper,false) as "loginIsSuperuser",
+          coalesce(login_role.rolbypassrls,false) as "loginBypassesRls",
+          coalesce(login_role.rolcreaterole,false) as "loginCanCreateRole",
+          coalesce(login_role.rolcreatedb,false) as "loginCanCreateDatabase",
+          coalesce(effective_role.rolsuper,false) as "effectiveRoleIsSuperuser",
+          coalesce(effective_role.rolbypassrls,false) as "effectiveRoleBypassesRls",
+          coalesce(effective_role.rolcreaterole,false) as "effectiveRoleCanCreateRole",
+          coalesce(effective_role.rolcreatedb,false) as "effectiveRoleCanCreateDatabase",
+          has_schema_privilege(current_user,'public','CREATE') as "canCreateInPublicSchema",
+          has_table_privilege(current_user,'public.verifications','TRUNCATE') as "canTruncateVerifications",
+          has_table_privilege(current_user,'public.verifications','TRIGGER') as "canTriggerVerifications"
+         from (select 1) seed
+         left join pg_roles login_role on login_role.rolname = session_user
+         left join pg_roles effective_role on effective_role.rolname = current_user`,
+      );
+      const row = result.rows[0];
+      if (!row) throw new Error("Database runtime identity query returned no row");
+      return {
+        source: "postgresql",
+        syntheticData: false,
+        observedAt: new Date().toISOString(),
+        identity: row,
+      };
+    } catch (error) {
+      request.log.error(error);
+      return routeError(reply, 503, "Database runtime identity unavailable", "DATABASE_RUNTIME_IDENTITY_UNAVAILABLE");
+    }
+  });
+
   app.get("/api/v1/admin/overview", async (request, reply) => {
     const context = await authorize(request, reply, pool, null);
     if (!context || !pool) return;

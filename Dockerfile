@@ -19,7 +19,8 @@ COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/apps ./apps
 COPY --from=build /app/packages ./packages
 COPY --from=build /app/migrations ./migrations
+COPY docs/engineering/PRODUCTION_MIGRATION_LEDGER_MANIFEST_2026-10-31.json ./docs/engineering/PRODUCTION_MIGRATION_LEDGER_MANIFEST_2026-10-31.json
 
 USER node
 EXPOSE 8080
-CMD ["sh", "-c", "node apps/dist/src/migrate.js && node apps/dist/src/acceptance-seed.js && node apps/dist/src/production-server.js"]
+CMD ["node", "apps/dist/src/production-server.js"]
