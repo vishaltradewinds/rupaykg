@@ -278,8 +278,8 @@ DECLARE
   identity_b uuid;
   custodian_a text;
   custodian_b text;
-  organization_id uuid;
-  role_id uuid;
+  v_organization_id uuid;
+  v_role_id uuid;
   permissions jsonb;
   previous_hash text;
   event_hash text;
@@ -372,28 +372,28 @@ BEGIN
      (SELECT identity_id FROM bootstrap_private.bootstrap_claims
        WHERE ceremony_id = p_ceremony_id ORDER BY identity_id LIMIT 1),
      'Initial two-custodian platform authority bootstrap ceremony ' || p_ceremony_id::text)
-  RETURNING id INTO organization_id;
+  RETURNING id INTO v_organization_id;
 
-  INSERT INTO public.roles (organization_id, name, description, permissions)
-  VALUES (organization_id, 'super_admin', 'Initial platform authority administrators', permissions)
-  RETURNING id INTO role_id;
+  INSERT INTO public.roles (organization_id, name, permissions)
+  VALUES (v_organization_id, 'super_admin', permissions)
+  RETURNING id INTO v_role_id;
 
   UPDATE bootstrap_private.bootstrap_state
-     SET active_organization_id = organization_id,
-         active_role_id = role_id,
+     SET active_organization_id = v_organization_id,
+         active_role_id = v_role_id,
          updated_at = now()
    WHERE singleton = true;
 
   UPDATE bootstrap_private.bootstrap_ceremonies
      SET status = 'CONSUMING',
-         organization_id = organization_id,
-         role_id = role_id
+         organization_id = v_organization_id,
+         role_id = v_role_id
    WHERE id = p_ceremony_id;
 
   PERFORM set_config('app.platform_authority_bootstrap_ceremony', p_ceremony_id::text, true);
 
   INSERT INTO public.organization_memberships (organization_id, identity_id, role_id, status)
-  SELECT organization_id, identity_id, role_id, 'VERIFIED'::public.record_status
+  SELECT v_organization_id, identity_id, v_role_id, 'VERIFIED'::public.record_status
     FROM bootstrap_private.bootstrap_claims
    WHERE ceremony_id = p_ceremony_id
    ORDER BY identity_id;
@@ -412,8 +412,8 @@ BEGIN
          active_organization_id = NULL,
          active_role_id = NULL,
          consumed_ceremony_id = p_ceremony_id,
-         consumed_organization_id = organization_id,
-         consumed_role_id = role_id,
+         consumed_organization_id = v_organization_id,
+         consumed_role_id = v_role_id,
          consumed_at = now(),
          updated_at = now()
    WHERE singleton = true;
@@ -456,8 +456,8 @@ BEGIN
 
   RETURN jsonb_build_object(
     'status', 'BOOTSTRAPPED',
-    'organizationId', organization_id,
-    'roleId', role_id,
+    'organizationId', v_organization_id,
+    'roleId', v_role_id,
     'identityIds', jsonb_build_array(identity_a, identity_b),
     'auditEventHash', event_hash
   );
