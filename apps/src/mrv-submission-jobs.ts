@@ -161,6 +161,32 @@ export async function advanceMrvSubmissionJob(
 }
 
 /**
+ * Persist Guardian's deterministic idempotency key before the provider call.
+ * A retry must reuse the exact key; the active lease remains fenced while the
+ * external request runs after the short database transaction commits.
+ */
+export async function persistMrvGuardianIdempotencyKey(
+  client: PoolClient,
+  jobId: string,
+  leaseToken: string,
+  idempotencyKey: string,
+): Promise<MrvSubmissionJob | null> {
+  const key = idempotencyKey.trim();
+  if (key.length < 32 || key.length > 128) throw new TypeError("Guardian idempotency key must be 32-128 characters");
+  const result = await client.query<MrvSubmissionJob>(
+    `update mrv_submission_jobs
+        set status = 'GUARDIAN_SUBMITTED',
+            guardian_idempotency_key = coalesce(guardian_idempotency_key, $3)
+      where id = $1 and lease_token = $2::uuid and lease_expires_at > now()
+        and status in ('CLAIMED','GUARDIAN_SUBMITTED')
+        and (guardian_idempotency_key is null or guardian_idempotency_key = $3)
+      returning *`,
+    [jobId, leaseToken, key],
+  );
+  return result.rows[0] ?? null;
+}
+
+/**
  * Persist the Hedera transaction ID before the network side effect. The same
  * transaction ID is immutable once assigned; retries must reuse it. This
  * keeps the lease live while the provider call runs outside a DB transaction.
