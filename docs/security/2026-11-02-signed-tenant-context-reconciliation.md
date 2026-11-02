@@ -273,3 +273,47 @@ Read the full route-to-data authorization draft on the current PR #192 code head
 ### Current decision
 
 No RLS migration is ready for production. Do not enable RLS with generic policies, do not grant the existing broad `rupaykg` owner to runtime, and do not assume a signed transaction-local context alone provides data isolation. Production remains HOLD; TRL 3 system-level; certification OFF.
+
+
+## Follow-on MRV job-ledger security review — 2026-11-02 16:16Z
+
+Reviewed the full draft `migrations/20261109_durable_mrv_submission_jobs.sql`, the signed-context verifier migration, the geography helper migration, the explicit RLS transaction helper and the sync/registry route source. Static source review only; no migration was executed.
+
+### Positive controls already present in the draft
+
+- Composite foreign keys bind activity, organization and geography; evidence to activity; verification to evidence and activity.
+- Enqueue trigger requires completed activity, VERIFIED evidence, APPROVED independent verifier distinct from activity actor, and geography helper acceptance.
+- Immutable request tuple, constrained state machine, lease-required transitions, append-only event mutation guard and provider HCS transaction uniqueness are present.
+- The signed-context verifier rejects malformed, expired, overlong and invalid HMAC context and returns no claims on exceptions.
+- The request transaction helper binds signed context with transaction-local `set_config(..., true)` and commits/rolls back before returning the pooled connection.
+
+### MRV migration blockers before a worker can be implemented or enabled
+
+1. **Lease fencing is incomplete at the schema contract level.** The update trigger requires an unexpired old lease for most state changes and a fresh lease when claiming, but it does not itself prove that the caller presents the same lease token currently stored on the row. A worker repository/claim function must atomically compare job id + lease token + lease owner + expiry on every heartbeat and transition; stale workers must be unable to overwrite a newer claimant. Test lease expiry/reclaim races with two concurrent workers.
+2. **No restricted worker execution contract is included.** The draft defines tables and trigger functions but does not create a least-privilege worker role, claim/heartbeat/transition functions, table grants or RLS policies. Do not give a worker broad UPDATE access to job/provider columns or SELECT access to every tenant's evidence. Prefer narrowly scoped functions that atomically claim eligible work and enforce lease-token equality.
+3. **Trigger function execution context needs hardening.** The job validation/update/event trigger functions use default invoker execution and mostly unqualified object references/default search_path. Before granting worker access, set a safe fixed search_path (`pg_catalog, pg_temp`), schema-qualify all application relations and explicitly test function ownership/grants. Do not turn these into SECURITY DEFINER functions without a dedicated NOLOGIN NOBYPASSRLS owner and independent review.
+4. **Geography validation inherits an unsafe compatibility default.** The enqueue guard calls `organization_has_geography_scope`; the current helper returns true if the organization has no VERIFIED geography roots. This means the job migration's geography check does not establish a verified geography scope for such an organization. Change the approved policy semantics before deployment: no verified scope must fail regulated MRV enqueue, except an explicitly authorized national authority path.
+5. **Enqueue caller authorization is not proven by this trigger.** The trigger checks activity/evidence/verification bindings but does not prove the submitting identity is an active verified member with permission to request MRV submission for that organization. The API boundary and/or narrowly scoped DB function must derive actor from authenticated context and re-check membership, permission, geography and revocation atomically at enqueue and before every external provider side effect.
+6. **Provider state and evidence freshness require reconciliation rules.** Guardian result, Hedera transaction, consensus timestamp and Mirror digest fields need strict validation against provider responses and the immutable payload hash. A status field or caller-supplied JSON must never be sufficient proof. Define canonical serialization, hash/signature validation, network/topic allowlists, callback authentication, duplicate/out-of-order response handling and reconciliation for provider timeout after remote success.
+7. **Event history is not yet a complete audit contract.** Current event trigger records status/selected provider changes and classifies worker activity based on lease presence. Define event coverage for claim, heartbeat, lease expiry/reclaim, cancellation, retry scheduling, provider request/response, reconciliation and operator override; actor identity must be authenticated, not inferred solely from a non-null lease field.
+8. **Operational worker runtime is absent.** There is no accepted dedicated worker/cron runtime, deployment, health/readiness, concurrency cap, dead-letter operator workflow, alerting, key rotation or disaster-recovery runbook. A SQL job ledger alone is not an operational queue.
+9. **Migration dependency and replay test remain open.** Rehearse this migration only after its exact prerequisite migrations and schema objects are verified on a disposable PostgreSQL database. Test clean install, repeated application/idempotency, rollback, pre-existing index collisions, trigger replacement, concurrent enqueue, duplicate provider response and restore.
+
+### Explicit worker acceptance gate
+
+Before any real pilot job can be enqueued:
+- Dedicated API and worker roles are separate, both NOBYPASSRLS and neither owns tables or inherits the verifier function-owner role.
+- Two-tenant + disjoint-geography RLS integration tests pass for enqueue, list, claim, provider update, event read and retry/reconciliation.
+- Claim and transition are atomic, lease-token fenced and concurrency-tested with two workers; expired/stale worker writes fail.
+- Provider adapters use idempotency keys and reconcile remote-success/local-timeout without duplicate submissions.
+- Only verified evidence and an independent APPROVED verifier are accepted; revocation and evidence state changes are rechecked before each external side effect.
+- Guardian VERIFIED, Hedera consensus and Mirror Node proof are persisted from authoritative provider evidence and tied to exact payload/evidence digest.
+- Retry, permanent failure, dead-letter, manual reconciliation and operator override all produce immutable attributable events.
+- Worker deployment, secrets, key rotation, observability, alerts, backup/restore and incident runbook are reviewed.
+- Disposable PostgreSQL and provider sandbox evidence passes; independent security/DBA review signs off.
+
+### Related route integration caution
+
+The explicit `withRlsRequestTransaction` helper is a safe narrow foundation, but the current sync and registry modules still use direct pool reads and their own transaction wrappers. A future route migration must ensure authentication, permission lookup, membership, geography and all protected reads/writes occur on the same checked-out transaction client. Do not wrap an existing `BEGIN/COMMIT` handler around a second transaction helper or leave permission checks on the pool. Bilateral registry transfers and settlements need their own multi-party policy rather than a single-org token.
+
+**Decision:** MRV job migration remains draft/not deployed; worker activation and live pilot enqueue are prohibited. Production remains HOLD, certification OFF, and TRL 3 system-level.
