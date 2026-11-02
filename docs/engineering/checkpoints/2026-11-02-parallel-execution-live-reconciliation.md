@@ -428,3 +428,9 @@ HCS transaction-ID helper coverage added: `apps/src/hedera-anchor.test.ts` now v
 - Added `persistMrvGuardianIdempotencyKey` in `apps/src/mrv-submission-jobs.ts` (`7656471dbab80cc778060b0ebac0019ca088790c`). It requires the current unexpired lease, persists the deterministic key before the provider side effect, advances to `GUARDIAN_SUBMITTED`, retains the fence during the external call, and rejects attempts to replace a previously persisted key.
 - Extended the PostgreSQL integration path to verify Guardian key persistence and conflicting-key rejection, then Guardian verification, HCS transaction persistence and HCS consensus stage. Test commit `9094a4222148bb20690f1f7e8ea7d43b51268e0c`; CI pending.
 - This completes two provider-side pre-submit persistence primitives, not the worker. No live provider calls or production execution have been enabled.
+
+
+### Exact-head result — 2026-11-02 14:26 UTC
+
+- Run `41461603873` completed SUCCESS for code commit `30f6eabb99f3fd0ac29bc1c2f1bffdaf95ef3de2`: migrations, typecheck, build, browser smoke, disposable PostgreSQL acceptance (including HCS transaction-ID persistence path), and production container build all passed.
+- This validates the HCS persistence helper and preceding lease renewal/worker primitives at CI level. It does not validate the later Guardian idempotency helper/test commits; those are queued/running separately.
