@@ -72,7 +72,7 @@ before(async () => {
   verifierId = verifier;
   const role = (await pool.query<{ id: string }>(
     "insert into roles(organization_id,name,permissions) values($1,'verifier',$2::jsonb) returning id",
-    [owner, JSON.stringify(["verification:approve", "credential:issue"])],
+    [owner, JSON.stringify(["VERIFY_EVIDENCE", "verification:approve", "credential:issue"])],
   )).rows[0]!.id;
   await approveFixtureMembership(verifier, owner, role, geography);
 
