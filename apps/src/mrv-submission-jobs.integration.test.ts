@@ -83,6 +83,7 @@ test("durable MRV job ledger enforces immutable request, legal transitions and a
     };
     await expectSqlFailure("immutable_request", "update mrv_submission_jobs set payload_hash=$2 where id=$1", [jobId,"c".repeat(64)], /MRV_JOB_REQUEST_IMMUTABLE/);
     await expectSqlFailure("invalid_transition", "update mrv_submission_jobs set status='COMPLETED' where id=$1", [jobId], /MRV_JOB_INVALID_STATE_TRANSITION/);
+    await expectSqlFailure("missing_worker_lease", "update mrv_submission_jobs set status='CLAIMED' where id=$1", [jobId], /MRV_JOB_LEASE_REQUIRED/);
     await expectSqlFailure("append_only_event", "update mrv_submission_job_events set event_code='tampered' where job_id=$1", [jobId], /MRV_JOB_EVENT_APPEND_ONLY/);
 
     const lease = await claimNextMrvSubmissionJob(client, "worker-" + suffix, 60);
