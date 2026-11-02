@@ -67,9 +67,12 @@ A connection attempt explicitly pinned to the app/auth runtime role could not be
 7. Use restricted runtime credentials to test valid, missing, malformed, forged, expired, revoked, wrong-key and rotated contexts; two-tenant and two-geography isolation; transaction rollback; and pooled-connection reuse.
 8. Only after independent DBA/security approval, extend the explicit `withRlsRequestTransaction` pattern to one low-risk route. No blanket RLS activation.
 
-## Relationship to PR #208
+## Related implementation pull requests — status at 2026-11-02
 
-PR #208 wires validated request-context environment values into the server process. It does not provision the database key, create roles/grants/policies, deploy the verifier, or migrate routes. Its exact-head CI is still pending because the current workflow only triggers pull requests targeting `main`, whereas PR #208 currently targets the open authentication/bootstrap foundation branch.
+- PR #208 (runtime environment helper) was closed unmerged as a duplicate/superseded change. The signed request-context production wiring is carried in PR #205; neither PR is merged or deployed.
+- PR #210 proposes CI trigger coverage for pull requests targeting `shakti/**` branches and creates the restricted app runtime role in the disposable CI database. It must be reviewed and integrated into the Shakti foundation branch before stacked PRs receive the intended CI run.
+- PR #211 proposes the isolated read-only EPR returns endpoint and one-table tenant RLS migration, stacked on PR #205. It remains draft; no migration or route activation has occurred.
+- These pull requests are engineering proposals, not evidence of production acceptance. Exact-head CI, real restricted-credential tests, DBA key provisioning, and independent review remain mandatory.
 
 ## Disposition
 
