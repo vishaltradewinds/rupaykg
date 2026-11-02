@@ -36,7 +36,7 @@ const lifecycle=[["GENERATION","Physical activity captured"],["AGGREGATION","Col
 type CpcbReportedStatus="NOT_REPORTED"|"DRAFT"|"UNDER_REVIEW"|"CORRECTION_REQUESTED"|"APPROVED"|"REJECTED";
 type SwmLocalStage="LOCAL_PREPARATION"|"ELIGIBILITY_REVIEW"|"DOCUMENTS_PENDING"|"READY_FOR_USER_SUBMISSION"|"SUBMISSION_REPORTED"|"UNDER_REVIEW_FOLLOW_UP"|"CORRECTION_PREPARATION"|"AMENDMENT_PREPARATION"|"LEVEL_1_APPEAL_PREPARATION"|"GRIEVANCE_PREPARATION"|"EVENT_INTIMATION_PREPARATION"|"CLOSED_LOCAL"|"UNRESOLVED";
 type CpcbSwmWorkspaceRecord = {
- id:string; stakeholder_type:SwmStakeholderType; title:string; geography_id?:string|null;
+ id:string; stakeholder_type:SwmStakeholderType; facility_type?:string|null; title:string; geography_id?:string|null;
  eligibility_observations:Record<string,{value:number|null;unit:string;sourceReference?:string|null;periodStart?:string|null;periodEnd?:string|null}>;
  checklist:Array<{key:string;label:string;status:string;officialRequirement:string}>;
  cpcb_application_reference?:string|null;cpcb_status_source_reference?:string|null;cpcb_status_note?:string|null;cpcb_reported_status?:CpcbReportedStatus;local_workflow_stage?:SwmLocalStage;
@@ -45,6 +45,7 @@ type CpcbSwmWorkspaceRecord = {
 };
 function CpcbSwmReadiness({token,organizationId}:{token:string;organizationId:string}){
  const [stakeholder,setStakeholder]=useState<SwmStakeholderType>("BWG");
+ const [facilityType,setFacilityType]=useState("");
  const [area,setArea]=useState("");
  const [water,setWater]=useState("");
  const [waste,setWaste]=useState("");
@@ -87,7 +88,7 @@ function CpcbSwmReadiness({token,organizationId}:{token:string;organizationId:st
  }
  useEffect(()=>{void load();},[token,organizationId]);
  function openRecord(record:CpcbSwmWorkspaceRecord){
-  setSavedId(record.id);setStakeholder(record.stakeholder_type);setTitle(record.title);setGeographyId(record.geography_id??"");
+  setSavedId(record.id);setStakeholder(record.stakeholder_type);setFacilityType(record.facility_type??"");setTitle(record.title);setGeographyId(record.geography_id??"");
   setApplicationReference(record.cpcb_application_reference??"");setStatusSourceReference(record.cpcb_status_source_reference??"");setReportedStatus(record.cpcb_reported_status??"NOT_REPORTED");setLocalStage(record.local_workflow_stage??"LOCAL_PREPARATION");setStatusNote(record.cpcb_status_note??"");
   setDueDate(record.due_date?String(record.due_date).slice(0,10):"");setNotes(record.notes??"");
   const obs=record.eligibility_observations??{};
@@ -103,13 +104,14 @@ function CpcbSwmReadiness({token,organizationId}:{token:string;organizationId:st
  }
  async function save(){
   if(!title.trim()){setError("Enter a title for this preparation record.");return;}
+   if(stakeholder==="WASTE_FACILITY"&&!facilityType){setError("Select the Waste Facility subtype shown by the CPCB portal.");return;}
   setBusy(true);setError("");setMessage("");
   const eligibilityObservations={
    floorAreaM2:{value:num(area),unit:"m2",sourceReference:areaSource,periodStart:areaPeriodStart,periodEnd:areaPeriodEnd},
    waterConsumptionLitresPerDay:{value:num(water),unit:"L/day",sourceReference:waterSource,periodStart:waterPeriodStart,periodEnd:waterPeriodEnd},
    wasteGenerationKgPerDay:{value:num(waste),unit:"kg/day",sourceReference:wasteSource,periodStart:wastePeriodStart,periodEnd:wastePeriodEnd},
   };
-  const body={stakeholderType:stakeholder,title:title.trim(),geographyId:geographyId.trim()||null,eligibilityObservations,checklist,cpcbApplicationReference:applicationReference.trim()||null,cpcbStatusSourceReference:statusSourceReference.trim()||null,cpcbReportedStatus:reportedStatus,localWorkflowStage:localStage,statusNote:statusNote.trim()||null,dueDate:dueDate||null,notes:notes.trim()||null};
+  const body={stakeholderType:stakeholder,facilityType:stakeholder==="WASTE_FACILITY"?facilityType:null,title:title.trim(),geographyId:geographyId.trim()||null,eligibilityObservations,checklist,cpcbApplicationReference:applicationReference.trim()||null,cpcbStatusSourceReference:statusSourceReference.trim()||null,cpcbReportedStatus:reportedStatus,localWorkflowStage:localStage,statusNote:statusNote.trim()||null,dueDate:dueDate||null,notes:notes.trim()||null};
   try{
    const result=await api<{workspace:CpcbSwmWorkspaceRecord}>(savedId?"/api/v1/cpcb-swm/workspaces/"+savedId:"/api/v1/cpcb-swm/workspaces",token,{method:savedId?"PATCH":"POST",headers:{"Content-Type":"application/json","x-rupaykg-organization-id":organizationId},body:JSON.stringify(body)});
    setSavedId(result.workspace.id);setMessage("Preparation record saved in RupayKg. Any CPCB application/status reference remains USER_REPORTED_UNVERIFIED.");await load();
@@ -122,7 +124,9 @@ function CpcbSwmReadiness({token,organizationId}:{token:string;organizationId:st
   {error&&<p className="error" role="alert">{error}</p>}{message&&<p className="notice" role="status">{message}</p>}
   <div className="cpcb-swm-saved"><label>Open a saved preparation record<select value={savedId} onChange={e=>{const record=records.find(r=>r.id===e.target.value);if(record)openRecord(record);else setSavedId("");}}><option value="">New preparation record</option>{records.map(record=><option key={record.id} value={record.id}>{record.title} · {record.stakeholder_type}</option>)}</select></label><button className="secondary" disabled={busy} onClick={()=>void load()}>{busy?"Working…":"Refresh records"}</button></div>
   <label>Record title<input value={title} onChange={e=>setTitle(e.target.value)} placeholder="e.g. BWG annual compliance preparation — site name"/></label>
-  <label>Stakeholder type<select value={stakeholder} onChange={e=>{setStakeholder(e.target.value as SwmStakeholderType);setChecklistState({});}}><option value="BWG">Bulk Waste Generator (BWG)</option><option value="WASTE_FACILITY">Waste facility</option><option value="PROCESSOR">Processor</option><option value="ULB">Urban Local Body (ULB)</option><option value="DISTRICT_PANCHAYAT">District Panchayat</option><option value="GRAM_PANCHAYAT">Gram Panchayat</option><option value="COLLECTOR_TRANSPORTER">Collector / transporter</option></select></label>
+  <label>Stakeholder type<select value={stakeholder} onChange={e=>{setStakeholder(e.target.value as SwmStakeholderType);setChecklistState({});}}><option value="BWG">Bulk Waste Generator (BWG)</option><option value="WASTE_FACILITY">Waste facility</option><option value="PROCESSOR">Processor</option><option value="ULB">Urban Local Body (ULB)</option><option value="DISTRICT_PANCHAYAT">District Panchayat</option><option value="GRAM_PANCHAYAT">Gram Panchayat</option><option value="COLLECTOR_TRANSPORTER">Collector / transporter (RupayKg operational participant)</option><option value="SPCB_PCC">SPCB / PCC nodal authority (official onboarding)</option><option value="DISTRICT_MAGISTRATE">District Magistrate (official onboarding)</option><option value="REGIONAL_OFFICER">Regional Officer (provisioned by SPCB / PCC)</option><option value="CPCB_CENTRAL">CPCB central authority (official provisioning only)</option></select></label>
+   {stakeholder==="WASTE_FACILITY"&&<label>Waste Facility subtype<select value={facilityType} onChange={e=>setFacilityType(e.target.value)} required><option value="">Select the CPCB facility type</option><option value="RDF">Refuse-Derived Fuel (RDF)</option><option value="MRF">Material Recovery Facility (MRF)</option><option value="MRF_CUM_RDF">MRF-cum-RDF</option><option value="CBG_BIOGAS">Compressed Biogas / Biogas Plant</option><option value="COMPOST">Compost Facility</option><option value="WASTE_TO_ENERGY">Waste-to-Energy</option><option value="INTEGRATED_SWM">Integrated SWM Facility</option><option value="CO_PROCESSING">Co-processing Facility</option><option value="COMMON_BIOMEDICAL_WASTE">Common biomedical waste processing facility</option><option value="SANITARY_LANDFILL">Sanitary Landfill</option><option value="WASTE_COLLECTION_AGENCY">Waste Collection Agency</option><option value="INCINERATOR">Incinerator Facility</option></select><small>Choose the current official portal label. Confirm the live dropdown during authorized walkthrough.</small></label>}
+   {(stakeholder==="SPCB_PCC"||stakeholder==="DISTRICT_MAGISTRATE"||stakeholder==="REGIONAL_OFFICER"||stakeholder==="CPCB_CENTRAL")&&<p className="admin-boundary">Authority workspace only. This does not create a CPCB account or grant statutory powers. SPCB/PCC and DM accounts follow official onboarding; Regional Officers are provisioned by an authorized SPCB/PCC user; CPCB central access requires official provisioning and scope approval.</p>}
   <label>Authorized geography ID (optional)<input value={geographyId} onChange={e=>setGeographyId(e.target.value)} placeholder="Use a geography ID assigned to your verified organization"/></label>
   {stakeholder==="BWG"&&<><h3>BWG threshold pre-check</h3><p>Any one threshold qualifies for this pre-check: 20,000 m² floor area, 40,000 litres/day water consumption, or 100 kg/day waste generation. Provide a source reference and measurement period; missing or unsourced values remain unresolved.</p>
    <div className="cpcb-swm-input-grid"><label>Floor area (m²)<input inputMode="decimal" type="number" min="0" value={area} onChange={e=>setArea(e.target.value)} placeholder="e.g. 20000"/></label><label>Water consumption (litres/day)<input inputMode="decimal" type="number" min="0" value={water} onChange={e=>setWater(e.target.value)} placeholder="e.g. 40000"/></label><label>Waste generation (kg/day)<input inputMode="decimal" type="number" min="0" value={waste} onChange={e=>setWaste(e.target.value)} placeholder="e.g. 100"/></label></div>
@@ -145,7 +149,7 @@ function CpcbSwmReadiness({token,organizationId}:{token:string;organizationId:st
 
   <div className="cpcb-swm-input-grid"><label>CPCB application reference (optional)<input value={applicationReference} onChange={e=>setApplicationReference(e.target.value)} placeholder="User-entered reference only"/></label><label>Follow-up due date (optional)<input type="date" value={dueDate} onChange={e=>setDueDate(e.target.value)}/></label></div>
   <label>Working notes<textarea value={notes} onChange={e=>setNotes(e.target.value)} maxLength={4000} placeholder="Open questions, gaps, responsible person, next step"/></label>
-  <div className="cpcb-swm-actions"><button disabled={busy} onClick={()=>void save()}>{busy?"Saving…":savedId?"Update saved preparation":"Save preparation record"}</button><button className="secondary" disabled={busy} onClick={()=>{setSavedId("");setTitle("");setGeographyId("");setArea("");setWater("");setWaste("");setAreaSource("");setWaterSource("");setWasteSource("");setAreaPeriodStart("");setAreaPeriodEnd("");setWaterPeriodStart("");setWaterPeriodEnd("");setWastePeriodStart("");setWastePeriodEnd("");setApplicationReference("");setStatusSourceReference("");setReportedStatus("NOT_REPORTED");setLocalStage("LOCAL_PREPARATION");setStatusNote("");setDueDate("");setNotes("");setChecklistState({});setMessage("");setError("");}}>New record</button></div>
+  <div className="cpcb-swm-actions"><button disabled={busy} onClick={()=>void save()}>{busy?"Saving…":savedId?"Update saved preparation":"Save preparation record"}</button><button className="secondary" disabled={busy} onClick={()=>{setSavedId("");setTitle("");setGeographyId("");setFacilityType("");setArea("");setWater("");setWaste("");setAreaSource("");setWaterSource("");setWasteSource("");setAreaPeriodStart("");setAreaPeriodEnd("");setWaterPeriodStart("");setWaterPeriodEnd("");setWastePeriodStart("");setWastePeriodEnd("");setApplicationReference("");setStatusSourceReference("");setReportedStatus("NOT_REPORTED");setLocalStage("LOCAL_PREPARATION");setStatusNote("");setDueDate("");setNotes("");setChecklistState({});setMessage("");setError("");}}>New record</button></div>
   <p><a href="https://swmp.cpcb.gov.in/en/user-guide" target="_blank" rel="noreferrer">Open the official CPCB SWM user guide</a> · <a href="https://swm.cpcb.gov.in/" target="_blank" rel="noreferrer">Open the official CPCB SWM portal</a></p>
  </section>;
 }
