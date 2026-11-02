@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { integrityHash, verifyHcsMessage, type AnchorPayload } from "./hedera-anchor.js";
+import { createHcsTransactionId, integrityHash, verifyHcsMessage, type AnchorPayload } from "./hedera-anchor.js";
 
 const timestamp = "1791620000.123456789";
 const topicId = "0.0.12345";
@@ -73,4 +73,19 @@ test("MRV integrity hash survives JSON serialization when optional fields are un
   const withUndefined = { ...payload, methodologyCode: undefined, quantity: undefined, unit: undefined, metadata: undefined };
   const serialized = JSON.parse(JSON.stringify(withUndefined)) as AnchorPayload;
   assert.equal(integrityHash(withUndefined), integrityHash(serialized));
+});
+
+test("HCS transaction ID can be generated before submission for durable persistence", () => {
+  const previous = { account: process.env.HEDERA_OPERATOR_ID, key: process.env.HEDERA_OPERATOR_KEY, topic: process.env.HEDERA_TOPIC_ID };
+  process.env.HEDERA_OPERATOR_ID = "0.0.1234";
+  process.env.HEDERA_OPERATOR_KEY = "a".repeat(64);
+  process.env.HEDERA_TOPIC_ID = topicId;
+  try {
+    const transactionId = createHcsTransactionId();
+    assert.match(transactionId, /^0\\.0\\.1234@\\d+\\.\\d+$/);
+  } finally {
+    if (previous.account === undefined) delete process.env.HEDERA_OPERATOR_ID; else process.env.HEDERA_OPERATOR_ID = previous.account;
+    if (previous.key === undefined) delete process.env.HEDERA_OPERATOR_KEY; else process.env.HEDERA_OPERATOR_KEY = previous.key;
+    if (previous.topic === undefined) delete process.env.HEDERA_TOPIC_ID; else process.env.HEDERA_TOPIC_ID = previous.topic;
+  }
 });
