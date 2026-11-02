@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createHcsTransactionId, integrityHash, verifyHcsMessage, type AnchorPayload } from "./hedera-anchor.js";
+import { createHcsTransactionId, integrityHash, reconcileHcsTransaction, verifyHcsMessage, type AnchorPayload } from "./hedera-anchor.js";
 
 const timestamp = "1791620000.123456789";
 const topicId = "0.0.12345";
@@ -90,4 +90,31 @@ test("HCS transaction ID can be generated before submission for durable persiste
     if (previous.key === undefined) delete process.env.HEDERA_OPERATOR_KEY; else process.env.HEDERA_OPERATOR_KEY = previous.key;
     if (previous.topic === undefined) delete process.env.HEDERA_TOPIC_ID; else process.env.HEDERA_TOPIC_ID = previous.topic;
   }
+});
+
+test("Mirror Node reconciles a persisted HCS transaction ID and verifies the exact topic payload", async () => {
+  await withEnvironment(async () => {
+    const hash = integrityHash(payload);
+    const anchored = { ...payload, integrityHash: hash, anchoredAt: "2026-10-10T00:00:00.000Z" };
+    const mirrorId = "0.0.1234-1791620000-123456789";
+    globalThis.fetch = async (input) => {
+      const url = String(input);
+      if (url.includes("/api/v1/transactions/")) {
+        assert.ok(url.endsWith(encodeURIComponent(mirrorId)));
+        return new Response(JSON.stringify({ transactions: [{ transaction_id: mirrorId, name: "CONSENSUS_SUBMIT_MESSAGE", entity_id: topicId, result: "SUCCESS", consensus_timestamp: timestamp }] }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ messages: [{ consensus_timestamp: timestamp, sequence_number: 11, topic_id: topicId, message: Buffer.from(JSON.stringify(anchored), "utf8").toString("base64") }] }), { status: 200 });
+    };
+    const result = await reconcileHcsTransaction("0.0.1234@1791620000.123456789", topicId, hash, payload.activityId, payload.verificationId, payload.evidenceId, payload.guardianExecutionId);
+    assert.equal(result.status, "CONFIRMED");
+    if (result.status === "CONFIRMED") assert.equal(result.consensusTimestamp, timestamp);
+  });
+});
+
+test("Mirror Node 404 is pending and never treated as proof of non-submission", async () => {
+  await withEnvironment(async () => {
+    globalThis.fetch = async () => new Response(JSON.stringify({}), { status: 404 });
+    const result = await reconcileHcsTransaction("0.0.1234@1791620000.123456789", topicId);
+    assert.equal(result.status, "PENDING");
+  });
 });
