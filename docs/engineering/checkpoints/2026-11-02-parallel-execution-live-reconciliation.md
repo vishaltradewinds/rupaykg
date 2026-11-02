@@ -368,3 +368,15 @@ This validates the initial ledger schema and invariant tests only. It does not e
 ## Final workflow result
 
 Workflow `41459617407` for exact code commit `77c8f8be5365ca541dd57b60ed0a05d765499151` completed with conclusion **SUCCESS**. This includes the durable MRV ledger PostgreSQL integration test and production-container build. The documentation checkpoint update is in commit `4b55a04ec3fc6a9c6fff240db806cdd275967cd8`; its own workflow is separate and must be tracked independently. PR #192 remains draft/unmerged. Production is unchanged. TRL 9 and production readiness are not established by this CI pass.
+
+
+## Atomic worker lease primitives added
+
+On the PR #192 code branch, added `apps/src/mrv-submission-jobs.ts` with:
+- Atomic one-job claim using `FOR UPDATE SKIP LOCKED`, due-time filtering and bounded 10–900 second leases.
+- Unique per-claim UUID fencing token, worker identity and attempt counter.
+- Reclaim of expired leases across resumable non-terminal provider stages without erasing the persisted stage.
+- Compare-and-set stage advancement requiring the current, unexpired lease token; stage advancement clears the lease atomically.
+- Explicit retry release with bounded error metadata and caller-supplied retry time.
+
+Extended `apps/src/mrv-submission-jobs.integration.test.ts` to verify single-worker exclusivity, attempt increment, stale-token rejection and atomic lease release. Commit `cdd4968df2721adf593759d28a3122678b19e3ea` is under exact-head CI run `41460158865`; acceptance is pending. These are database orchestration primitives, not yet a running worker process or provider integration. External calls must remain outside DB transactions. Stable Hedera transaction ID persistence/reuse and Mirror Node reconciliation are still open, and the synchronous legacy MRV route remains in place. No production database or service was changed.
