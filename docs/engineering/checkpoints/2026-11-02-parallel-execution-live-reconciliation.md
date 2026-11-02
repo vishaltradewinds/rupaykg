@@ -363,3 +363,8 @@ Run `41459321801` confirmed the verifier fixture passed the independent-identity
 The corrected MRV verifier fixture commit `77c8f8be5365ca541dd57b60ed0a05d765499151` has passed the disposable PostgreSQL integration test suite, including `durable MRV job ledger enforces immutable request, legal transitions and append-only events`. The same run passed migration validation/execution, bootstrap privilege revocation, TypeScript type-check, production build, two-custodian bootstrap acceptance and browser smoke. Workflow run `41459617407` is still completing the production-container build; do not call the overall workflow fully successful until its final conclusion is SUCCESS.
 
 This validates the initial ledger schema and invariant tests only. It does not establish a functioning outbox/worker: the existing MRV submit route still performs external Guardian/Hedera calls under a session advisory lock and persists provider results afterwards. Worker claim/lease, short-transaction stage orchestration, durable Hedera transaction ID/reconciliation and tenant/RLS integration remain release blockers. No production change was made.
+
+
+## Final workflow result
+
+Workflow `41459617407` for exact code commit `77c8f8be5365ca541dd57b60ed0a05d765499151` completed with conclusion **SUCCESS**. This includes the durable MRV ledger PostgreSQL integration test and production-container build. The documentation checkpoint update is in commit `4b55a04ec3fc6a9c6fff240db806cdd275967cd8`; its own workflow is separate and must be tracked independently. PR #192 remains draft/unmerged. Production is unchanged. TRL 9 and production readiness are not established by this CI pass.
