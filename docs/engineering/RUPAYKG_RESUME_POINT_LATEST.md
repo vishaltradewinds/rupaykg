@@ -1,6 +1,6 @@
 # RupayKg — latest engineering resume point
 
-Updated: 2026-11-02 18:01 UTC
+Updated: 2026-11-02 18:02 UTC
 Canonical repository: vishaltradewinds/rupaykg
 Reference UI repository: vishaltradewinds/rupaykg-aistudio
 Governing standard: Shakti Standards
@@ -29,7 +29,7 @@ Governing standard: Shakti Standards
 - GitHub main: a3fecc0abd2c46549a201058d3963afc0e3a73c9.
 - PR #192 branch: shakti/auth-bootstrap-application-integration-2026-11-01.
 - Latest PR #192 head: 4781bfe03ac68bf61031b9c2e8924dcd498d259e; OPEN / DRAFT / UNMERGED.
-- Exact-head CI 41496454924 is in progress; at 18:01 UTC it was at TypeScript typecheck. This head includes the complete source-snapshot fixture and deterministic ordering repair. Do not claim a pass until CI completes.
+- Exact-head CI 41496454924 for head 4781bfe03ac68bf61031b9c2e8924dcd498d259e has passed migration validation, restricted verifier provisioning, disposable migrations, bootstrap privilege teardown, typecheck/build, synthetic two-custodian bootstrap, browser smoke and the full disposable PostgreSQL test suite including snapshot mutation assertions. Production-container build is still running; do not claim the full workflow green until it completes.
 - Earlier exact-head CI 41495348937 passed heartbeat/direct-submit code; 41495848722 passed direct-submit gate tests; 41495699292 passed NEEDS_RECONCILIATION claim exclusion; 41495765539 passed worker contract docs.
 - Runs 41496015060, 41496118629 and 41496146332 failed at the incomplete source-snapshot fixture assertion; the fixture was corrected in commits 6edc4d and 4781b.
 - PR #192 base/merge-base b5e91241d84a6712ff544d3deec1805702f45efd is two commits behind main. Main commit 14b735 added AUTH_DATABASE_URL; a3fecc0 reverted it. PR #192 requires a separate auth runtime pool. Reconcile before merge.
