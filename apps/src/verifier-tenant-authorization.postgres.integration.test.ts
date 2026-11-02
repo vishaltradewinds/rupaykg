@@ -41,6 +41,10 @@ test("verifier authorization is active-identity and subject-tenant scoped for ev
 
   try {
     await client.query("BEGIN");
+    const triggerBinding = await client.query<{ function_name: string }>(
+      "select p.proname as function_name from pg_trigger t join pg_proc p on p.oid=t.tgfoid where t.tgrelid='public.verifications'::regclass and t.tgname='verifications_integrity_guard' and not t.tgisinternal",
+    );
+    assert.equal(triggerBinding.rows[0]?.function_name, "prevent_invalid_verification", "tenant authorization must be enforced by the function actually bound to verifications_integrity_guard");
     const suffix = randomUUID();
     const orgA = (await client.query<{ id: string }>(
       "insert into public.organizations(name,organization_type,status) values($1,'COLLECTOR','VERIFIED') returning id",
