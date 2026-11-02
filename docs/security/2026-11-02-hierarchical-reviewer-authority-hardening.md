@@ -47,3 +47,7 @@ The synthetic fixture does not provision production authorities or grant product
 - Production Neon remains 67 public tables, 0 RLS, 0 FORCE RLS, broad owner `rupaykg` with BYPASSRLS; dedicated least-privilege production roles and auth schemas are absent.
 - Render auto-deploys `main`; PR #192 must not be merged before production role/auth pool/secret/migration/rollback gates are independently completed.
 - No production DDL/DML, migrations, grants, role changes, deployment, worker activation or certification.
+## Exact-head CI completion — 2026-11-02
+- Exact-head run `41432595295` for code head `6362242235ed7c1841d260f8d8f9321730fd79fd` completed **SUCCESS**.
+- The disposable PostgreSQL acceptance, all tests, browser smoke, migration validation, typecheck, build and production container build all passed.
+- This is engineering CI evidence only. It does not authorize production migration, role provisioning, RLS enablement, merge or deployment.
