@@ -107,10 +107,11 @@ test("verifier authorization is active-identity and subject-tenant scoped for ev
     await expectRejected("suspended_identity", () => insertVerification(activityA, evidenceA, suspendedVerifier), /verifier must be active|verification requires verified authority/i);
 
     const pendingVerifier = (await client.query<{ id: string }>(
-      "insert into public.identities(external_subject,display_name,status) values($1,'Unverified Verifier','PENDING') returning id",
+      "insert into public.identities(external_subject,display_name,status) values($1,'Unverified Verifier','VERIFIED') returning id",
       [`verifier-pending-${suffix}`],
     )).rows[0]!.id;
     await approveTestMembership(client, pendingVerifier, orgA, roleA, geoA, "verifier", "collector");
+    await client.query("update public.identities set status='PENDING' where id=$1", [pendingVerifier]);
     await expectRejected("unverified_identity", () => insertVerification(activityA, evidenceA, pendingVerifier), /verifier must be active|verification requires verified authority/i);
 
     const pendingMembershipVerifier = (await client.query<{ id: string }>(
@@ -133,6 +134,8 @@ test("verifier authorization is active-identity and subject-tenant scoped for ev
       [orgA, geoA],
     );
     await expectRejected("pending_geography_scope", () => insertVerification(activityA, evidenceA, verifierA), /verifier must be active|verification requires verified authority/i);
+
+    await client.query("update public.organization_geography_scopes set status='VERIFIED' where organization_id=$1 and geography_id=$2", [orgA, geoA]);
 
     const selfActivity = (await client.query<{ id: string }>(
       "insert into public.activities(organization_id,actor_identity_id,geography_id,activity_type,status,completed_at) values($1,$2,$3,'COLLECTION','COMPLETED',now()) returning id",
