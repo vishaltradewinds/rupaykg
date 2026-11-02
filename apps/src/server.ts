@@ -19,6 +19,7 @@ import { registerEvidenceVaultRoutes } from "./evidence-vault-routes.js";
 import { registerPlatformAdminRoutes } from "./platform-admin-routes.js";
 import { createContextAwarePool, registerRequestTenantContext } from "./tenant-db-context.js";
 import { createSignedRequestContextToken } from "./signed-request-context-token.js";
+import { registerEprReturnReadRoute } from "./epr-return-read-route.js";
 
 const app = Fastify({ logger: true });
 const allowedOrigins = process.env.RUPAYKG_ALLOWED_ORIGINS?.split(",").map(origin => origin.trim()).filter(Boolean) ?? [];
@@ -320,6 +321,10 @@ await registerIntelligenceRoutes(app, pool);
 await registerMrvRoutes(app, pool);
 await registerEvidenceVaultRoutes(app, pool);
 await registerPlatformAdminRoutes(app, pool);
+
+// The isolated EPR list is exposed only when signed tenant context is enforced.
+// The legacy EPR write module remains intentionally unregistered.
+if (requestContextMode === "enforced") await registerEprReturnReadRoute(app, pool);
 
 if (existsSync(webRoot)) app.get("/*", async (_request, reply) => reply.type("text/html; charset=utf-8").send(readFileSync(resolve(webRoot, "index.html"), "utf8")));
 if (process.env.NODE_ENV === "production") {
