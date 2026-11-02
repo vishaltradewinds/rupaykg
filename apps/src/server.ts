@@ -19,6 +19,7 @@ import { registerEvidenceVaultRoutes } from "./evidence-vault-routes.js";
 import { registerPlatformAdminRoutes } from "./platform-admin-routes.js";
 import { registerEprReturnReadRoute } from "./epr-return-read-route.js";
 import { assertEprReturnReadDatabaseContract } from "./epr-return-read-contract.js";
+import { withRlsRequestTransaction, type RlsRequestContextConfig } from "./rls-request-transaction.js";
 
 const app = Fastify({ logger: true });
 const allowedOrigins = process.env.RUPAYKG_ALLOWED_ORIGINS?.split(",").map(origin => origin.trim()).filter(Boolean) ?? [];
@@ -151,6 +152,7 @@ function requiredString(body: Record<string, unknown>, key: string): string | nu
 function requiredPositiveNumber(body: Record<string, unknown>, key: string): number | null { const value = Number(body[key]); return Number.isFinite(value) && value > 0 ? value : null; }
 async function withClient<T>(fn: (client: PoolClient) => Promise<T>): Promise<T> { if (!pool) throw new Error("DATABASE_URL is not configured"); const client = await pool.connect(); try { return await fn(client); } finally { client.release(); } }
 async function requireAuth(request: Parameters<typeof authenticate>[0], reply: { code: (status: number) => { send: (body: unknown) => unknown } }): Promise<AuthContext | null> { try { const auth = await authenticate(request, pool); if (!auth) { reply.code(401).send(bearerChallenge()); return null; } return auth; } catch (error) { request.log.error(error); reply.code(503).send({ error: "Authentication service unavailable", code: "AUTH_UNAVAILABLE" }); return null; } }
+function requestContextConfig(): RlsRequestContextConfig | null { const hmacSecret = process.env.RUPAYKG_REQUEST_CONTEXT_SECRET; const keyId = process.env.RUPAYKG_REQUEST_CONTEXT_KEY_ID; if (!hmacSecret || Buffer.byteLength(hmacSecret, "utf8") < 32 || !keyId || !/^[a-z0-9_-]{1,32}$/.test(keyId)) return null; return { hmacSecret, keyId }; }
 function requireOrganization(auth: AuthContext, organizationId: string, reply: { code: (status: number) => { send: (body: unknown) => unknown } }): boolean { if (!canActForOrganization(auth, organizationId)) { reply.code(403).send({ error: "No verified membership for organization", code: "ORG_FORBIDDEN" }); return false; } return true; }
 async function canReadGeography(client: PoolClient, auth: AuthContext, geographyId: string): Promise<boolean> { if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(geographyId)) return false; const result = getAuthResolverMode() === "security_definer" ? await client.query<{ ok: boolean }>(`select auth_private.can_read_geography($1,$2) as ok`, [auth.identityId, geographyId]) : await client.query<{ ok: boolean }>(`select exists(select 1 from organization_memberships om where om.identity_id=$1 and om.status='VERIFIED' and organization_has_geography_scope(om.organization_id,$2)) as ok`, [auth.identityId, geographyId]); return result.rows[0]?.ok === true; }
 async function canWriteActivity(client: Pool | PoolClient, auth: AuthContext, activityId: string): Promise<boolean> { if (getAuthResolverMode() === "security_definer") { const result = await client.query<{ ok: boolean }>(`select auth_private.can_write_activity($1,$2) as ok`, [auth.identityId, activityId]); return result.rows[0]?.ok === true; } const result = await client.query<{ organization_id: string }>(`select a.organization_id from activities a join organization_memberships om on om.organization_id=a.organization_id and om.identity_id=$2 and om.status='VERIFIED' where a.id=$1 and a.geography_id is not null and organization_has_geography_scope(om.organization_id,a.geography_id)`, [activityId, auth.identityId]); const organizationId = result.rows[0]?.organization_id; return !!organizationId && await hasOrganizationPermission(client, auth, organizationId, ['waste:record']); }
@@ -194,8 +196,45 @@ app.get("/api/v1/overview", async (request, reply) => {
 });
 app.get("/api/v1/regulatory/sources", async (_request, reply) => { try { return { source: "postgresql", syntheticData: false, sources: await query("select id, authority, title, instrument, reference, published_on, effective_from, jurisdiction, source_url, verified_on, status, affected_module, notes from regulatory_sources order by effective_from desc nulls last, published_on desc") }; } catch (error) { return reply.code(503).send({ error: "Regulatory source catalog unavailable", syntheticData: false }); } });
 
-app.get("/api/v1/geography/roots", async (request, reply) => { const auth = await requireAuth(request, reply); if (!auth || !pool) return; try { const rows = await pool.query(`with recursive scoped as (select g.id,g.parent_id,g.kind,g.code,g.external_code,g.name,g.source,g.source_version,g.valid_from,g.valid_to,g.metadata from geography g join organization_geography_scopes s on s.geography_id=g.id and s.status='VERIFIED' join organization_memberships om on om.organization_id=s.organization_id and om.identity_id=$1 and om.status='VERIFIED' union select g.id,g.parent_id,g.kind,g.code,g.external_code,g.name,g.source,g.source_version,g.valid_from,g.valid_to,g.metadata from geography g join scoped p on g.parent_id=p.id) select distinct id,parent_id,kind,code,external_code,name,source,source_version,valid_from,valid_to,metadata from scoped order by name`, [auth.identityId]); if (rows.rows.length) return { source: "postgresql", syntheticData: false, data: { geography: rows.rows } }; const fallback = await pool.query(`select id,parent_id,kind,code,external_code,name,source,source_version,valid_from,valid_to,metadata from geography where parent_id is null order by name`); const visible: unknown[] = []; for (const row of fallback.rows) if (await withClient(client => canReadGeography(client, auth, row.id))) visible.push(row); return { source: "postgresql", syntheticData: false, data: { geography: visible } }; } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Authoritative geography unavailable", syntheticData: false }); } });
-app.get("/api/v1/geography/children/:parentId", async (request, reply) => { const auth = await requireAuth(request, reply); if (!auth || !pool) return; try { const { parentId } = request.params as { parentId: string }; if (!await withClient(client => canReadGeography(client, auth, parentId))) return reply.code(403).send({ error: "Geography outside organization authorization scope", code: "GEOGRAPHY_FORBIDDEN" }); const rows = await pool.query("select id,parent_id,kind,code,external_code,name,source,source_version,valid_from,valid_to,metadata from geography where parent_id=$1 order by name", [parentId]); return { source: "postgresql", syntheticData: false, data: { geography: rows.rows } }; } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Authoritative geography unavailable", syntheticData: false }); } });
+app.get("/api/v1/geography/roots", async (request, reply) => {
+  const auth = await requireAuth(request, reply); if (!auth || !pool) return;
+  const config = requestContextConfig();
+  if (!config) return reply.code(503).send({ error: "Signed tenant context is not configured", code: "TENANT_CONTEXT_UNAVAILABLE", syntheticData: false });
+  try {
+    const rows = await withRlsRequestTransaction(pool, auth, config, async (client) => client.query(
+      `with recursive scoped as (
+         select g.id,g.parent_id,g.kind,g.code,g.external_code,g.name,g.source,g.source_version,g.valid_from,g.valid_to,g.metadata
+           from geography g
+           join organization_geography_scopes s on s.geography_id=g.id and s.status='VERIFIED'
+          where s.organization_id=$1
+         union
+         select g.id,g.parent_id,g.kind,g.code,g.external_code,g.name,g.source,g.source_version,g.valid_from,g.valid_to,g.metadata
+           from geography g join scoped p on g.parent_id=p.id
+       )
+       select distinct id,parent_id,kind,code,external_code,name,source,source_version,valid_from,valid_to,metadata
+         from scoped order by name`,
+      [auth.activeOrganizationId],
+    ));
+    return { source: "postgresql", syntheticData: false, data: { geography: rows.rows } };
+  } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Authoritative geography unavailable", syntheticData: false }); }
+});
+app.get("/api/v1/geography/children/:parentId", async (request, reply) => {
+  const auth = await requireAuth(request, reply); if (!auth || !pool) return;
+  const config = requestContextConfig();
+  if (!config) return reply.code(503).send({ error: "Signed tenant context is not configured", code: "TENANT_CONTEXT_UNAVAILABLE", syntheticData: false });
+  try {
+    const { parentId } = request.params as { parentId: string };
+    const rows = await withRlsRequestTransaction(pool, auth, config, async (client) => {
+      if (!await canReadGeography(client, auth, parentId)) return null;
+      return client.query(
+        "select id,parent_id,kind,code,external_code,name,source,source_version,valid_from,valid_to,metadata from geography where parent_id=$1 order by name",
+        [parentId],
+      );
+    });
+    if (!rows) return reply.code(403).send({ error: "Geography outside organization authorization scope", code: "GEOGRAPHY_FORBIDDEN" });
+    return { source: "postgresql", syntheticData: false, data: { geography: rows.rows } };
+  } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Authoritative geography unavailable", syntheticData: false }); }
+});
 
 app.post("/api/v1/operations/sync", async (request, reply) => {
   const body = bodyOf(request); const idempotencyKey = requiredString(body, "idempotencyKey"); const deviceId = requiredString(body, "deviceId"); const capturedAt = requiredString(body, "capturedAt"); const payload = body.payload;
