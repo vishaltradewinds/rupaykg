@@ -1,4 +1,5 @@
 import { readProductionConfig } from "./production-config.js";
+import { applyProductionRequestContextEnvironment } from "./production-runtime-env.js";
 
 const config = readProductionConfig();
 
@@ -13,5 +14,6 @@ process.env.DATABASE_CA_CERT = config.databaseCaCert;
 process.env.RUPAYKG_ALLOWED_ORIGINS = config.allowedOrigins.join(",");
 process.env.RUPAYKG_AUTH_MODE = config.authMode;
 process.env.RUPAYKG_SYNTHETIC_DATA = String(config.syntheticData);
+applyProductionRequestContextEnvironment(config);
 
 await import("./server.js");
