@@ -557,18 +557,18 @@ async function run(): Promise<void> {
       [regulatorOrganizationId, geographyRoot],
     );
 
-    const geographyApplicantIdentity = (await pool.query<{ id: string }>(
-      "insert into public.identities(external_subject,display_name,email,status) values($1,$2,$3,'VERIFIED') returning id",
-      [`ci-geography-applicant:${suffix}`, "CI Geography Applicant", `ci-geography-applicant-${suffix}@example.invalid`],
-    )).rows[0]?.id;
-    assert.ok(geographyApplicantIdentity);
-    const geographyApplicantToken = randomBytes(32).toString("base64url");
-    const geographyApplicantTokenHash = sha256(geographyApplicantToken);
-    await pool.query(
-      "insert into public.identity_sessions(identity_id,token_hash,expires_at,request_context) values($1,$2,now()+interval '8 hours',$3::jsonb)",
-      [geographyApplicantIdentity, geographyApplicantTokenHash, JSON.stringify({ provider: "ci-geography-review" })],
-    );
     const createGeographyApplication = async (name: string, code: string, geographyId: string) => {
+      const geographyApplicantIdentity = (await pool.query<{ id: string }>(
+        "insert into public.identities(external_subject,display_name,email,status) values($1,$2,$3,'VERIFIED') returning id",
+        [`ci-geography-applicant:${suffix}:${code}`, "CI Geography Applicant", `ci-geography-applicant-${suffix}-${code}@example.invalid`],
+      )).rows[0]?.id;
+      assert.ok(geographyApplicantIdentity);
+      const geographyApplicantToken = randomBytes(32).toString("base64url");
+      const geographyApplicantTokenHash = sha256(geographyApplicantToken);
+      await pool.query(
+        "insert into public.identity_sessions(identity_id,token_hash,expires_at,request_context) values($1,$2,now()+interval '8 hours',$3::jsonb)",
+        [geographyApplicantIdentity, geographyApplicantTokenHash, JSON.stringify({ provider: "ci-geography-review" })],
+      );
       const created = await pool.query<{ application_result: { application: { id: string } } }>(
         `select auth_private.create_stakeholder_application(
           $1,$2,$3,$4,$5,$6,$7,$8::uuid,$9,$10,$11,$12,$13,$14::timestamptz,$15::timestamptz
