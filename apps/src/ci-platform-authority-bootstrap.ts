@@ -246,14 +246,17 @@ async function run(): Promise<void> {
       [identityC, unauthorizedTokenHash, JSON.stringify({ provider: "ci-onboarding-review" })],
     );
 
-    const onboardingOwnerPrivileges = await pool.query<{ statutory_profile_insert: boolean; approval_update: boolean; evidence_update: boolean }>(
+    const onboardingOwnerPrivileges = await pool.query<{ statutory_profile_insert: boolean; statutory_profile_conflict_select: boolean; approval_update: boolean; evidence_update: boolean }>(
       `select
          has_table_privilege('rupaykg_auth_owner','public.organization_statutory_profiles','INSERT') as statutory_profile_insert,
+         has_column_privilege('rupaykg_auth_owner','public.organization_statutory_profiles','organization_id','SELECT') as statutory_profile_conflict_select,
          has_table_privilege('rupaykg_auth_owner','public.stakeholder_application_approvals','UPDATE') as approval_update,
          has_table_privilege('rupaykg_auth_owner','public.organization_verification_evidence','UPDATE') as evidence_update`,
     );
     assert.equal(onboardingOwnerPrivileges.rows[0]?.statutory_profile_insert, true,
       "auth function owner must be able to seed the organization governance profile trigger");
+    assert.equal(onboardingOwnerPrivileges.rows[0]?.statutory_profile_conflict_select, true,
+      "auth function owner must be able to resolve the governance-profile conflict key");
     assert.equal(onboardingOwnerPrivileges.rows[0]?.approval_update, true);
     assert.equal(onboardingOwnerPrivileges.rows[0]?.evidence_update, true);
 
