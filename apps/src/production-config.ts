@@ -7,6 +7,7 @@ export type ProductionConfig = {
   authResolverMode: "security_definer";
   requestContextSecret: string;
   requestContextKeyId: string;
+  eprReturnReadEnabled: boolean;
   databaseSsl: "require" | "false";
   databaseCaCert: string;
   allowedOrigins: string[];
@@ -60,6 +61,13 @@ function requestContextSecret(value: string): string {
   return value;
 }
 
+function parseEprReturnReadEnabled(value: string | undefined): boolean {
+  const normalized = value?.trim().toLowerCase() || "false";
+  if (normalized === "true") return true;
+  if (normalized === "false") return false;
+  throw new Error("PRODUCTION_CONFIG_INVALID: RUPAYKG_EPR_RETURN_READ_ENABLED must be true or false");
+}
+
 function requestContextKeyId(value: string): string {
   if (!/^[a-z0-9_-]{1,32}$/.test(value)) {
     throw new Error("PRODUCTION_CONFIG_INVALID: RUPAYKG_REQUEST_CONTEXT_KEY_ID is invalid");
@@ -103,6 +111,7 @@ export function readProductionConfig(env: NodeJS.ProcessEnv = process.env): Prod
     authResolverMode: "security_definer",
     requestContextSecret: requestContextSecretValue,
     requestContextKeyId: requestContextKeyIdValue,
+    eprReturnReadEnabled: parseEprReturnReadEnabled(env.RUPAYKG_EPR_RETURN_READ_ENABLED),
     databaseSsl: renderInternalDatabase ? "false" : "require",
     databaseCaCert: renderInternalDatabase ? "" : productionCaCert(env.DATABASE_CA_CERT?.trim() ?? "", databaseUrl),
     allowedOrigins: origins(required(env, "RUPAYKG_ALLOWED_ORIGINS")),
