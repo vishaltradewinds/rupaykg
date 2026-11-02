@@ -171,7 +171,22 @@ test("durable MRV job ledger enforces immutable request, legal transitions and a
     const conflictingTransaction = await persistMrvHcsTransactionId(client, jobId, hcsLease.leaseToken, "testnet", "0.0.12345", "0.0.1234@1791620001.123456789");
     assert.equal(conflictingTransaction, null, "a retry must not replace the previously persisted HCS transaction ID");
 
-    const hcsConfirmed = await advanceMrvSubmissionJob(client, jobId, hcsLease.leaseToken, "HCS_CONSENSUS_CONFIRMED", {
+    assert.equal(
+      await releaseMrvSubmissionJobLease(client, jobId, hcsLease.leaseToken, new Date(Date.now() - 1000), "HCS_AMBIGUOUS_TEST", "simulate an ambiguous provider response after transaction ID persistence"),
+      true,
+      "an ambiguous HCS response must release the lease without rewriting the provider stage",
+    );
+    const hcsRetryLease = await claimNextMrvSubmissionJob(client, "hedera-recovery-worker-" + suffix, 60);
+    assert.ok(hcsRetryLease, "an ambiguous HCS submission must be reclaimable for reconciliation");
+    assert.equal(hcsRetryLease.job.status, "HCS_SUBMITTED", "retry must resume at HCS reconciliation, not restart Guardian");
+    assert.equal(hcsRetryLease.job.hedera_transaction_id, transactionId, "retry must retain the exact pre-persisted HCS transaction ID");
+    assert.equal(
+      await advanceMrvSubmissionJob(client, jobId, hcsLease.leaseToken, "HCS_CONSENSUS_CONFIRMED"),
+      null,
+      "the pre-release worker token must be fenced after retry claim",
+    );
+
+    const hcsConfirmed = await advanceMrvSubmissionJob(client, jobId, hcsRetryLease.leaseToken, "HCS_CONSENSUS_CONFIRMED", {
       hedera_consensus_timestamp: "1791620000.123456789",
       hedera_status: "CONSENSUS_CONFIRMED",
     });
