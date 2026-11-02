@@ -329,7 +329,7 @@ BEGIN
          count(DISTINCT identity_id),
          count(DISTINCT custodian_role_name),
          count(DISTINCT submitted_by),
-         count(*) FILTER (WHERE submitted_at IS NOT NULL AND consumed_at IS NULL),
+         count(*) FILTER (WHERE submitted_at IS NOT NULL AND consumed_at IS NULL AND expires_at > now()),
          coalesce(bool_and(submitted_by = custodian_role_name), false)
     INTO claim_count, identity_count, custodian_count, submitter_count, submitted_count, bindings_valid
     FROM bootstrap_private.bootstrap_claims
