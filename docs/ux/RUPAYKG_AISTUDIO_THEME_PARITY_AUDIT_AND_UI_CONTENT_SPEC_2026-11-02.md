@@ -273,3 +273,12 @@ Each authorised participant sees the information needed for their part of the ch
 - The database/service health indicator is now shown only inside an authenticated workspace, not on the public landing page.
 - Added static checks for the header mount, responsive selector rules and authenticated-only health indicator; added a browser DOM assertion against the public health warning.
 - CI runs #4558–#4561 had passed typecheck, build, UX validation, browser smoke, full tests and container-build initiation; run #4562 covers the final public DOM warning assertion. Final success is pending.
+
+
+### Mobile verification and final small polish
+
+- Inspected the 390×844 screenshot artifact from CI #4562. The language selector no longer overlaps the RupayKg brand; the public header is compact and the health warning is absent. The black/emerald landing hierarchy and primary actions remain readable.
+- The screenshot also exposed an empty fixed-position offline status button at the bottom edge. It was created visible before any offline/online message was set.
+- Updated `apps/web/index.html` to hide that status control initially and restyle it in the canonical theme; it becomes visible only when a meaningful offline/online status message is set.
+- Added a static validator assertion for the initial hidden state. CI #4564 covers this final adjustment.
+- Screenshot review is a visual smoke check at desktop and 390px width, not a full device matrix or formal accessibility certification.
