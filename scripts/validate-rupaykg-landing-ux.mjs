@@ -46,5 +46,6 @@ assert.match(styles, /button:focus-visible/, "visible keyboard focus rule missin
 assert.doesNotMatch(stakeholderCss, /display:\s*none\s*!important/, "stakeholder stylesheet must not hide landing navigation or panels");
 assert.match(html, /theme-color" content="#050505"/, "browser theme colour must match reference");
 assert.match(html, /Traceable Material Flows/, "browser title must describe the platform");
+assert.match(html, /status\.hidden=true/, "offline indicator must not render as an empty floating control");
 
 console.log("RupayKg landing UX parity checks passed.");
