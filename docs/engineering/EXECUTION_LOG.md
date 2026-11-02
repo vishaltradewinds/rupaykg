@@ -94,3 +94,14 @@ Append-only record. Do not rewrite earlier entries.
 - Only `rupaykg` app-named role was observed; it is LOGIN/BYPASSRLS/CREATEDB/CREATEROLE/INHERIT/REPLICATION. No dedicated `rupaykg_app_runtime` role observed. Neon project settings still show public connections unblocked, empty IP allowlist and unprotected primary branch. Existing lab/rehearsal branches preserved.
 - Added immutable checkpoint `docs/engineering/checkpoints/2026-11-02-parallel-execution-live-assurance-refresh.md`; refreshed this resume pointer. No production DDL/DML, migrations, role/grant/RLS changes, secret writes, branch operations, deployments, provider writes, worker/scheduler activation or certification.
 - Next parallel batch: classify 78 app-owned functions; map 70 triggers; finish 67-table and endpoint-to-data authorization matrices; implement worker system-actor/RLS acceptance on disposable PostgreSQL; reconcile PR #192 auth-pool/main ancestry and PR #213 target-base metadata; continue BWG and UI accessibility gates. Production HOLD; worker OFF; certification OFF; TRL 9 NOT ESTABLISHED.
+
+
+## 2026-11-02 18:36 UTC — production function exposure first-pass audit
+
+- Read-only production catalog/source review separated 78 `rupaykg`-owned public functions from 37 `cloud_admin` extension functions. All 78 app-owned functions have PUBLIC EXECUTE; none is SECURITY DEFINER; no function-level pinned search_path was observed.
+- Of the 78 application functions, 67 distinct functions are referenced by the 70 public non-internal triggers; 11 are non-trigger functions.
+- Reviewed all 11 non-trigger function bodies. Flagged three mutating routines (`allocate_environmental_attribute_claim`, `allocate_epr_credit`, `release_epr_credit_allocation`) with no explicit actor/organization/signed-tenant authorization in their bodies; PUBLIC EXECUTE is present, though SECURITY INVOKER still requires underlying table privileges. Do not blanket-revoke or grant before call-site/dependency analysis.
+- Flagged `identity_has_permission` and `has_verification_permission` as global-across-membership helpers without an organization argument; call sites must not use them as tenant-scoped proof.
+- Flagged `organization_has_geography_scope` returning TRUE when no VERIFIED scope exists; this is fail-open for unconfigured geography and requires a founder/authority-approved default plus tests before any change.
+- All 67 distinct trigger functions are SECURITY INVOKER with no pinned function search_path. Trigger-to-table/event/function/owner/role mapping remains a required next batch.
+- Added immutable checkpoint `docs/engineering/checkpoints/2026-11-02-production-function-exposure-review.md`. No production privilege, role, grant, schema, data, migration, deployment, worker, external registry or certification state changed.
