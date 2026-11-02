@@ -21,6 +21,8 @@ const validRow = {
   can_update_schemes: false,
   can_delete_schemes: false,
   can_read_signing_keys: false,
+  can_create_public: false,
+  can_create_database: false,
   verifier_schema_usage: true,
   verifier_execute: true,
   verifier_valid: true,
@@ -46,6 +48,17 @@ test("fails closed when the verifier owner or pinned search_path is invalid", as
 test("fails closed when RLS is not forced", async () => {
   await assert.rejects(
     assertEprReturnReadDatabaseContract(fakePool({ ...validRow, returns_force_rls: false })),
+    /EPR_RETURN_READ_DATABASE_CONTRACT_INVALID/,
+  );
+});
+
+test("fails closed when the runtime can create public objects or databases", async () => {
+  await assert.rejects(
+    assertEprReturnReadDatabaseContract(fakePool({ ...validRow, can_create_public: true })),
+    /EPR_RETURN_READ_DATABASE_CONTRACT_INVALID/,
+  );
+  await assert.rejects(
+    assertEprReturnReadDatabaseContract(fakePool({ ...validRow, can_create_database: true })),
     /EPR_RETURN_READ_DATABASE_CONTRACT_INVALID/,
   );
 });
