@@ -52,6 +52,8 @@ jobs:
             NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS NOREPLICATION;
           GRANT CREATE ON DATABASE rupaykg TO rupaykg_bootstrap_owner;
           GRANT rupaykg_bootstrap_owner TO postgres WITH ADMIN OPTION;
+          CREATE ROLE rupaykg_app_runtime LOGIN
+            NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS NOREPLICATION;
           SQL
       - run: npm run migrate -w @rupaykg/api
       - name: Verify bootstrap owner temporary privileges are revoked

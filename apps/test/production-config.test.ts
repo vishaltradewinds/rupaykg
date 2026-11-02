@@ -12,6 +12,7 @@ const baseEnv = {
   RUPAYKG_AUTH_RESOLVER_MODE: "security_definer",
   RUPAYKG_REQUEST_CONTEXT_SECRET: "production-test-request-context-secret-material",
   RUPAYKG_REQUEST_CONTEXT_KEY_ID: "v1",
+  RUPAYKG_EPR_RETURN_READ_ENABLED: "false",
   RUPAYKG_ALLOWED_ORIGINS: "https://app.rupaykg.example,https://admin.rupaykg.example",
   RUPAYKG_SYNTHETIC_DATA: "false",
 };
@@ -24,6 +25,7 @@ test("production config accepts the fail-closed production contract", () => {
     authResolverMode: "security_definer",
     requestContextSecret: baseEnv.RUPAYKG_REQUEST_CONTEXT_SECRET,
     requestContextKeyId: baseEnv.RUPAYKG_REQUEST_CONTEXT_KEY_ID,
+    eprReturnReadEnabled: false,
     databaseSsl: "require",
     databaseCaCert: baseEnv.DATABASE_CA_CERT,
     allowedOrigins: ["https://app.rupaykg.example", "https://admin.rupaykg.example"],
@@ -47,6 +49,7 @@ test("production config rejects missing or unsafe production requirements", () =
     [{ ...baseEnv, RUPAYKG_ALLOWED_ORIGINS: "http://app.rupaykg.example" }, /origin must use HTTPS/],
     [{ ...baseEnv, RUPAYKG_ALLOWED_ORIGINS: "https://app.rupaykg.example/path" }, /must not contain path/],
     [{ ...baseEnv, RUPAYKG_SYNTHETIC_DATA: "true" }, /synthetic data is forbidden/],
+    [{ ...baseEnv, RUPAYKG_EPR_RETURN_READ_ENABLED: "enabled" }, /RUPAYKG_EPR_RETURN_READ_ENABLED must be true or false/],
     [{ ...baseEnv, VITE_RUPAYKG_SESSION_TOKEN: "not-allowed" }, /VITE_RUPAYKG_SESSION_TOKEN must not be provided/],
   ] as const;
 

@@ -17,6 +17,8 @@ import { registerIntelligenceRoutes } from "./intelligence-routes.js";
 import { registerMrvRoutes } from "./mrv-routes.js";
 import { registerEvidenceVaultRoutes } from "./evidence-vault-routes.js";
 import { registerPlatformAdminRoutes } from "./platform-admin-routes.js";
+import { registerEprReturnReadRoute } from "./epr-return-read-route.js";
+import { assertEprReturnReadDatabaseContract } from "./epr-return-read-contract.js";
 
 const app = Fastify({ logger: true });
 const allowedOrigins = process.env.RUPAYKG_ALLOWED_ORIGINS?.split(",").map(origin => origin.trim()).filter(Boolean) ?? [];
@@ -31,6 +33,11 @@ const pool = databaseUrl ? new Pool(poolConfig) : null;
 const authDatabaseUrl = process.env.AUTH_DATABASE_URL;
 const authPoolConfig: PoolConfig = { ...poolConfig, connectionString: authDatabaseUrl, max: 3 };
 const authPool = authDatabaseUrl ? new Pool(authPoolConfig) : null;
+const eprReturnReadEnabledValue = process.env.RUPAYKG_EPR_RETURN_READ_ENABLED?.trim() || "false";
+if (eprReturnReadEnabledValue !== "true" && eprReturnReadEnabledValue !== "false") {
+  throw new Error("RUPAYKG_EPR_RETURN_READ_ENABLED must be true or false");
+}
+const eprReturnReadEnabled = eprReturnReadEnabledValue === "true";
 if (process.env.NODE_ENV === "production" && !authPool) throw new Error("AUTH_DATABASE_URL is required for the dedicated authentication runtime");
 async function assertProductionDatabaseRuntimeContracts(): Promise<void> {
   if (!pool || !authPool) throw new Error("PRODUCTION_DATABASE_RUNTIME_UNAVAILABLE");
@@ -215,6 +222,14 @@ await registerPlatformAdminRoutes(app, pool);
 
 if (existsSync(webRoot)) app.get("/*", async (_request, reply) => reply.type("text/html; charset=utf-8").send(readFileSync(resolve(webRoot, "index.html"), "utf8")));
 if (process.env.NODE_ENV === "production") await assertProductionDatabaseRuntimeContracts();
+if (eprReturnReadEnabled) {
+  if (!pool) throw new Error("EPR_RETURN_READ_DATABASE_REQUIRED");
+  const hmacSecret = process.env.RUPAYKG_REQUEST_CONTEXT_SECRET;
+  const keyId = process.env.RUPAYKG_REQUEST_CONTEXT_KEY_ID;
+  if (!hmacSecret || !keyId) throw new Error("EPR_RETURN_READ_SIGNING_CONFIG_REQUIRED");
+  await assertEprReturnReadDatabaseContract(pool);
+  await registerEprReturnReadRoute(app, pool, { hmacSecret, keyId });
+}
 await registerAuthRoutes(app, pool, authPool);
 app.addHook("onClose", async () => { await Promise.all([pool?.end(), authPool?.end()]); });
 const port = Number(process.env.PORT ?? 3000); const host = process.env.HOST ?? "0.0.0.0"; await app.listen({ port, host });
