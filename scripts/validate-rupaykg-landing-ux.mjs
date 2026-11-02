@@ -25,6 +25,9 @@ for (const phrase of [
 }
 assert.match(styles, /--rk-bg:\s*#050505/, "near-black reference canvas token missing");
 assert.match(styles, /--rk-primary:\s*#10b981/, "emerald primary token missing");
+assert.match(styles, /--rk-surface:\s*#151619/, "reference card surface token missing");
+assert.match(styles, /--rk-border:\s*rgba\\(255,255,255,\\.08\\)/, "reference border token missing");
+assert.match(styles, /--rk-surface-soft:\s*rgba\\(255,255,255,\\.05\\)/, "reference glass token missing");
 assert.match(styles, /\.landing-nav\s*\{[^}]*display:flex!important/s, "landing navigation must remain visible");
 assert.match(styles, /\.landing-panel\s*\{[^}]*display:block!important/s, "landing content panels must remain visible");
 assert.match(styles, /prefers-reduced-motion/, "reduced-motion support missing");
