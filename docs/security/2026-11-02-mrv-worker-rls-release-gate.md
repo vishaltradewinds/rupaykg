@@ -28,7 +28,7 @@ The worker needs a narrow, auditable system-actor execution contract. Preferred 
 
 ## Additional implementation defects to resolve before enabling
 
-- Worker lease renewal currently uses a bounded fixed 120-second extension but does not run a heartbeat during provider calls. Provider timeouts must be shorter than the lease or a heartbeat/lease-loss cancellation strategy must be implemented.
+- Fixed 120-second renewal before provider calls was insufficient for slow providers. Follow-up commit `248e9979fbd0eb62b2338f05bec928e9228dc61b` adds a 30-second lease heartbeat around Guardian, Hedera submission and Mirror Node reconciliation. If renewal fails, the provider result is not persisted under the lost lease; stable provider bindings allow the next owner to reconcile. This does not cancel an already-running external call, so bounded provider timeouts and adapter-level cancellation remain required.
 - Guardian retries must reuse the persisted Guardian idempotency key. Hedera retries must reuse the persisted transaction ID; the worker must reconcile ambiguous submissions before any re-submit.
 - Job claim status and retry transitions must match the database transition trigger. A code path that attempts a transition not allowed by the SQL state machine must fail closed and be tested.
 - The API route's session advisory lock and the durable worker's lease/idempotency model are separate execution paths. Only one path should be authoritative after the worker is approved; avoid parallel direct-provider and durable-queue submissions.
