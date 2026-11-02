@@ -75,6 +75,29 @@ The founder-supplied checkpoint commit `1f15ff2c00257a8f85351a887bedc79d401b045a
 - Settlement bilateral consent/authority and registry event ordering/ownership semantics remain policy and regression gaps.
 - No production migration, production bootstrap ceremony, production database mutation, or live external registry proof is established by that checkpoint.
 
+## Route-to-data authorization audit — additional findings
+
+The PR #192 branch contains `docs/security/2026-11-02-route-to-data-tenant-authorization-audit-draft.md`, a static inventory of 90 HTTP route declarations across 15 route-bearing modules. It is an audit draft, not a complete authorization proof. It explicitly requires reconciliation against helpers, dynamic SQL, functions, triggers and workers.
+
+Key findings from that inventory:
+- `withRlsRequestTransaction` binds a signed short-lived identity and one verified active-organization claim to a transaction-local setting, but it is not yet the universal data-access path.
+- Route modules still contain direct pool queries and route-local transactions. A blind outer transaction wrapper is unsafe; each route must use one checked-out client for context, authorization and protected SQL, with nested transaction behavior deliberately refactored.
+- The single-organization helper rejects bilateral context. Settlement and inter-organization transfers need a dedicated bilateral authorization contract binding both parties and current credential ownership; do not force them into a single-org policy.
+- The signed request-context migration does not itself enable RLS or create policies. The production schema remains unprotected by RLS.
+- The geography helper currently allows organizations with no verified geography roots through a compatibility behavior. National production policy must explicitly decide whether such organizations are onboarding-only, default-scoped or blocked from regulated writes.
+- JSON/polymorphic ownership, evidence/blob storage, derived carbon/ESG records, async workers/webhooks and append-only histories need explicit ownership and execution-path treatment.
+
+P0/P1 release blockers recorded by the route audit:
+1. No production tenant RLS on 67/67 public tables.
+2. Privileged production owner/runtime role with BYPASSRLS and elevated role privileges.
+3. Signed transaction-context helper not integrated across all route data access.
+4. Bilateral settlement authority model unresolved.
+5. Route-local transaction/pool usage can separate context from protected statements.
+6. Geography compatibility default needs explicit national policy.
+7. JSON/polymorphic ownership and async/background paths remain incompletely reconciled.
+
+Required next artifacts are a machine-readable endpoint → SQL/table → client/transaction → owner/geography/bilateral scope matrix; a live-schema-verified 67-table classification; a function/trigger/owner/search_path/EXECUTE-grant inventory; disposable two-tenant negative tests using exact proposed runtime roles; and independent DBA/security review with restore/rollback rehearsal.
+
 ## Immediate critical path
 
 1. Freeze production as read-only / HOLD.
