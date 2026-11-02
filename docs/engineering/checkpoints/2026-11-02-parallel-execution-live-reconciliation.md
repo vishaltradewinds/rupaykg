@@ -410,3 +410,9 @@ HCS transaction-ID helper coverage added: `apps/src/hedera-anchor.test.ts` now v
 
 - CI run `41460930848` failed only the newly added transaction-ID regex assertion: SDK output was a valid `0.0.1234@seconds.nanos` string, while the test regex was over-escaped. No production code failure was reported by that test run; the run is still a failed overall gate.
 - Corrected the assertion in commit `dc4d0f4db809ba13eb090bf6ea9369d077ed122e`. Exact-head CI pending. Do not count the helper test as passed until that new run completes.
+
+
+### Transaction ID assertion follow-up — 2026-11-02 14:24 UTC
+
+- First regex correction remained over-escaped in the emitted test; exact CI on `dc4d0f4db809ba13eb090bf6ea9369d077ed122e` reproduced the same assertion failure. Replaced regex matching of the full identifier with explicit account-ID equality plus timestamp-component validation using `[.]` in commit `30f6eabb99f3fd0ac29bc1c2f1bffdaf95ef3de2`.
+- Exact-head CI run `41461603873` is currently running; do not treat this test as green until it completes. The broader build for docs checkpoint commit `daf4090ad091aaaaac837d0a674ca324c0874400` passed (`41461340133`).
