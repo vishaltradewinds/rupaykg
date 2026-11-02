@@ -91,6 +91,24 @@ test("evidence vault enforces tenant scope, versioned storage, integrity and ind
     assert.deepEqual(download.rawPayload, bytes);
     assert.equal(download.headers["x-evidence-sha256"], uploaded.sha256);
 
+    // Exercise the HTTP path with non-text instrument bytes.
+    const rawFrame = Buffer.from([0x00, 0xff, 0x01, 0x7f, 0xc3, 0x28, 0x80]);
+    const rawFrameUpload = await app.inject({
+      method: "POST", url: "/api/v1/evidence-vault/upload", headers: headers(uploaderToken),
+      payload: { activityId: activity.rows[0]!.id, evidenceType: "RAW_INSTRUMENT_FRAME", fileName: "instrument-frame.bin", mediaType: "application/octet-stream", contentBase64: rawFrame.toString("base64") },
+    });
+    assert.equal(rawFrameUpload.statusCode, 201, rawFrameUpload.body);
+    const rawFrameArtifact = rawFrameUpload.json().data as { evidenceId: string; sha256: string; mediaType: string; sizeBytes: number };
+    assert.equal(rawFrameArtifact.mediaType, "application/octet-stream");
+    assert.equal(rawFrameArtifact.sizeBytes, rawFrame.length);
+    assert.equal(rawFrameArtifact.sha256, createHash("sha256").update(rawFrame).digest("hex"));
+    const rawFrameDownload = await app.inject({
+      method: "GET", url: "/api/v1/evidence-vault/" + rawFrameArtifact.evidenceId, headers: headers(uploaderToken),
+    });
+    assert.equal(rawFrameDownload.statusCode, 200, rawFrameDownload.body);
+    assert.deepEqual(rawFrameDownload.rawPayload, rawFrame);
+    assert.equal(rawFrameDownload.headers["x-evidence-sha256"], rawFrameArtifact.sha256);
+
     const selfReview = await app.inject({ method: "POST", url: "/api/v1/evidence-vault/"+uploaded.evidenceId+"/review", headers: headers(uploaderToken), payload: { decision: "APPROVED", rationale: "Self review must be blocked" } });
     assert.equal(selfReview.statusCode, 403, selfReview.body);
 
@@ -101,8 +119,12 @@ test("evidence vault enforces tenant scope, versioned storage, integrity and ind
     assert.equal(reviewerDecision.statusCode, 200, reviewerDecision.body);
     assert.equal(reviewerDecision.json().data.status, "VERIFIED");
 
-    const secondReview = await app.inject({ method: "POST", url: "/api/v1/evidence-vault/"+uploaded.evidenceId+"/review", headers: headers(reviewerToken), payload: { decision: "REJECTED", rationale: "Attempt a second decision" } });
-    assert.equal(secondReview.statusCode, 409, secondReview.body);
+    const revocationReview = await app.inject({ method: "POST", url: "/api/v1/evidence-vault/"+uploaded.evidenceId+"/review", headers: headers(reviewerToken), payload: { decision: "REJECTED", rationale: "New information invalidated this evidence" } });
+    assert.equal(revocationReview.statusCode, 200, revocationReview.body);
+    assert.equal(revocationReview.json().data.status, "REJECTED");
+
+    const repeatReview = await app.inject({ method: "POST", url: "/api/v1/evidence-vault/"+uploaded.evidenceId+"/review", headers: headers(reviewerToken), payload: { decision: "REJECTED", rationale: "Rejected artifact must remain terminal" } });
+    assert.equal(repeatReview.statusCode, 409, repeatReview.body);
 
     const spoofedPdf = await app.inject({ method: "POST", url: "/api/v1/evidence-vault/upload", headers: headers(uploaderToken), payload: { activityId: activity.rows[0]!.id, evidenceType: "MALICIOUS", fileName: "not-a-pdf.pdf", mediaType: "application/pdf", contentBase64: Buffer.from("MZ executable bytes").toString("base64") } });
     assert.equal(spoofedPdf.statusCode, 415, spoofedPdf.body);

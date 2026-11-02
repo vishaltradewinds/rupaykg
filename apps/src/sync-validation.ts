@@ -10,6 +10,35 @@ function isUuid(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
+/**
+ * Field observations must carry an unambiguous RFC3339-style timestamp.
+ * Date.parse alone accepts date-only and timezone-naive strings and can
+ * normalize impossible calendar dates, so validate the structure and calendar
+ * fields before parsing.
+ */
+function isExplicitTimestamp(value: string): boolean {
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(Z|([+-])(\d{2}):(\d{2}))$/.exec(value);
+  if (!match) return false;
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const hour = Number(match[4]);
+  const minute = Number(match[5]);
+  const second = Number(match[6]);
+  const offsetHour = match[8] ? Number(match[9]) : 0;
+  const offsetMinute = match[8] ? Number(match[10]) : 0;
+  const leapYear = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const daysInMonth = [31, leapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+
+  return year >= 1
+    && month >= 1 && month <= 12
+    && day >= 1 && day <= (daysInMonth[month - 1] ?? 0)
+    && hour <= 23 && minute <= 59 && second <= 59
+    && offsetHour <= 23 && offsetMinute <= 59
+    && Number.isFinite(Date.parse(value));
+}
+
 export function validateSyncEnvelope(body: Record<string, unknown>): SyncEnvelopeValidation {
   const idempotencyKey = requiredString(body.idempotencyKey);
   const deviceId = requiredString(body.deviceId);
@@ -20,7 +49,7 @@ export function validateSyncEnvelope(body: Record<string, unknown>): SyncEnvelop
     return { ok: false, code: "INVALID_ENVELOPE", error: "idempotencyKey, deviceId, positive integer clientSequence, capturedAt and payload are required" };
   }
   if (!isUuid(deviceId)) return { ok: false, code: "INVALID_DEVICE", error: "deviceId must be a field device UUID" };
-  if (Number.isNaN(Date.parse(capturedAt))) return { ok: false, code: "INVALID_CAPTURE_TIME", error: "capturedAt must be an ISO date" };
+  if (!isExplicitTimestamp(capturedAt)) return { ok: false, code: "INVALID_CAPTURE_TIME", error: "capturedAt must be a full timestamp with an explicit timezone and valid calendar/clock fields" };
   if (body.payload === null || typeof body.payload !== "object") return { ok: false, code: "INVALID_PAYLOAD", error: "payload must be a JSON object or array" };
 
   return { ok: true, idempotencyKey, deviceId, clientSequence, capturedAt, payload: body.payload as Record<string, unknown> | unknown[] };

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { integrityHash, verifyHcsMessage, type AnchorPayload } from "./hedera-anchor.js";
+import { explicitAnchorQuantity, integrityHash, verifyHcsMessage, type AnchorPayload } from "./hedera-anchor.js";
 
 const timestamp = "1791620000.123456789";
 const topicId = "0.0.12345";
@@ -73,4 +73,27 @@ test("MRV integrity hash survives JSON serialization when optional fields are un
   const withUndefined = { ...payload, methodologyCode: undefined, quantity: undefined, unit: undefined, metadata: undefined };
   const serialized = JSON.parse(JSON.stringify(withUndefined)) as AnchorPayload;
   assert.equal(integrityHash(withUndefined), integrityHash(serialized));
+});
+
+test("activity anchor quantity is omitted unless an explicit parameter mapping is supplied", () => {
+  const observations = [
+    { parameter_code: "mass_kg", observed_value: "120.5", unit: "kg" },
+    { parameter_code: "electricity_kwh", observed_value: "44", unit: "kWh" },
+  ];
+  assert.deepEqual(explicitAnchorQuantity(observations), {});
+  assert.deepEqual(explicitAnchorQuantity(observations, "mass_kg"), { quantity: 120.5, unit: "kg" });
+  assert.deepEqual(explicitAnchorQuantity(observations, "missing_parameter"), {});
+});
+
+test("activity anchor quantity is omitted when an explicit parameter is ambiguous or malformed", () => {
+  assert.deepEqual(explicitAnchorQuantity([
+    { parameter_code: "mass_kg", observed_value: 10, unit: "kg" },
+    { parameter_code: "mass_kg", observed_value: 12, unit: "kg" },
+  ], "mass_kg"), {});
+  assert.deepEqual(explicitAnchorQuantity([
+    { parameter_code: "mass_kg", observed_value: "not-a-number", unit: "kg" },
+  ], "mass_kg"), {});
+  assert.deepEqual(explicitAnchorQuantity([
+    { parameter_code: "mass_kg", observed_value: 10, unit: "" },
+  ], "mass_kg"), {});
 });

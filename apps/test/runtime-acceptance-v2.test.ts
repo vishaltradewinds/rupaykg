@@ -48,14 +48,14 @@ async function request(path: string, init: RequestInit = {}, bearer?: string): P
   return fetch(`${baseUrl}${path}`, { ...init, headers });
 }
 async function body(response: Response): Promise<Record<string, any>> { return (await response.json()) as Record<string, any>; }
-async function submitAndApply(payload: Record<string, unknown>, identityToken: string, clientSequence: number, idempotencyKey: string): Promise<Record<string, any>> {
+async function submitAndApply(payload: Record<string, unknown>, identityToken: string, clientSequence: number, idempotencyKey: string, expectedApplyStatus = 200): Promise<Record<string, any>> {
   const capturedAt = new Date().toISOString();
   const accepted = await request("/api/v1/field-sync/envelopes", { method: "POST", body: JSON.stringify({ idempotencyKey, deviceId: verifiedDeviceId, clientSequence, capturedAt, payload }) }, identityToken);
   assert.equal(accepted.status, 202);
   const acceptedBody = await body(accepted);
   const id = acceptedBody.envelope.id as string;
   const applied = await request(`/api/v1/field-sync/envelopes/${id}/apply`, { method: "POST", body: "{}" }, identityToken);
-  assert.equal(applied.status, 200);
+  assert.equal(applied.status, expectedApplyStatus);
   return body(applied);
 }
 
@@ -139,17 +139,64 @@ describe("runtime acceptance", () => {
     const pending = await make(pendingId, actorToken); assert.equal(pending.status, 403); assert.equal((await body(pending)).code, "DEVICE_FORBIDDEN");
     const accepted = await make(verifiedDeviceId, actorToken); assert.equal(accepted.status, 202); envelopeId = (await body(accepted)).envelope.id;
     const replay = await make(verifiedDeviceId, actorToken); assert.equal(replay.status, 200); assert.equal((await body(replay)).replay, true);
+
+    // A retry may be idempotent only when the logical payload is unchanged.
+    const changedPayload = await request("/api/v1/field-sync/envelopes", { method: "POST", body: JSON.stringify({ idempotencyKey: `runtime-${suffix}`, deviceId: verifiedDeviceId, clientSequence: 1, capturedAt, payload: { ...payload, activityType: "TRANSPORT" } }) }, actorToken);
+    assert.equal(changedPayload.status, 409);
+    assert.equal((await body(changedPayload)).code, "IDEMPOTENCY_CONFLICT");
+
+    // Reusing a device sequence with a different idempotency key must create a conflict,
+    // not a second authoritative envelope or a silent overwrite.
+    const sequenceCollision = await request("/api/v1/field-sync/envelopes", { method: "POST", body: JSON.stringify({ idempotencyKey: `runtime-sequence-conflict-${suffix}`, deviceId: verifiedDeviceId, clientSequence: 1, capturedAt, payload: { ...payload, activityType: "TRANSPORT" } }) }, actorToken);
+    assert.equal(sequenceCollision.status, 409);
+    const sequenceCollisionBody = await body(sequenceCollision);
+    assert.equal(sequenceCollisionBody.code, "CLIENT_SEQUENCE_CONFLICT");
+    assert.ok(typeof sequenceCollisionBody.conflictId === "string");
+    const persisted = await pool.query<{ envelopes: string; conflicts: string }>(
+      `select (select count(*)::text from field_sync_envelopes where device_id=$1 and client_sequence=1) as envelopes,
+              (select count(*)::text from field_sync_conflicts where envelope_id=$2 and conflict_type='CLIENT_SEQUENCE_COLLISION' and resolution_status='OPEN') as conflicts`,
+      [verifiedDeviceId, envelopeId],
+    );
+    assert.equal(persisted.rows[0]?.envelopes, "1");
+    assert.equal(Number(persisted.rows[0]?.conflicts), 1);
+
     const cross = await make(verifiedDeviceId, verifierToken); assert.equal(cross.status, 403);
   });
 
-  it("executes activity, measurement, evidence and independent verification through the authoritative API", async () => {
+  it("fails closed for unapproved measurement ingestion and still verifies evidence independently", async () => {
     if (!pool) return;
     const apply = await request(`/api/v1/field-sync/envelopes/${envelopeId}/apply`, { method: "POST", body: "{}" }, actorToken);
     assert.equal(apply.status, 200); activityId = (await body(apply)).entityId;
+
+    // Reapplying an already applied envelope must return the same authoritative entity,
+    // without creating a duplicate activity or changing its identity.
+    const beforeReplayCount = (await pool.query<{ count: string }>(
+      "select count(*)::text as count from activities where actor_identity_id=$1", [actorId],
+    )).rows[0]?.count;
+    const applyReplay = await request(`/api/v1/field-sync/envelopes/${envelopeId}/apply`, { method: "POST", body: "{}" }, actorToken);
+    assert.equal(applyReplay.status, 200);
+    const replayResult = await body(applyReplay);
+    assert.equal(replayResult.replay, true);
+    assert.equal(replayResult.entityId, activityId);
+    const appliedState = await pool.query<{ status: string; count: string }>(
+      `select e.status, (select count(*)::text from activities where actor_identity_id=$2) as count from field_sync_envelopes e where e.id=$1`,
+      [envelopeId, actorId],
+    );
+    assert.equal(appliedState.rows[0]?.status, "APPLIED");
+    assert.equal(appliedState.rows[0]?.count, beforeReplayCount);
+
     const measuredAt = new Date().toISOString();
-    const measurementApplied = await submitAndApply({ operationType: "MEASUREMENT_CREATE", activityId, value: 10, unit: "kg", method: "WEIGHBRIDGE", source: "FIELD", measuredAt }, actorToken, 2, `measurement-${suffix}`);
-    const measurementId = measurementApplied.entityId as string;
-    const evidenceApplied = await submitAndApply({ operationType: "EVIDENCE_CREATE", activityId, evidenceType: "WEIGHBRIDGE_RECORD", capturedAt: measuredAt, contentHash: `sha256:${suffix}`, measurementId }, actorToken, 3, `evidence-${suffix}`);
+    const missingInstrument = await submitAndApply({ operationType: "MEASUREMENT_CREATE", activityId, value: 10, unit: "kg", method: "WEIGHBRIDGE", source: "FIELD", measuredAt }, actorToken, 2, `measurement-missing-${suffix}`, 400);
+    assert.equal(missingInstrument.code, "INVALID_OPERATION");
+    const unregisteredInstrument = await submitAndApply({ operationType: "MEASUREMENT_CREATE", activityId, value: 10, unit: "kg", method: "WEIGHBRIDGE", source: "FIELD", measuredAt, instrumentCode: `UNREGISTERED-${suffix}`, parameterCode: "mass" }, actorToken, 3, `measurement-unregistered-${suffix}`, 409);
+    assert.equal(unregisteredInstrument.code, "INSTRUMENT_NOT_APPROVED");
+    assert.equal(unregisteredInstrument.eligibleForMrv, false);
+    const directMissingInstrument = await request(`/api/v1/activities/${activityId}/measurements`, { method: "POST", body: JSON.stringify({ value: 10, unit: "kg", method: "WEIGHBRIDGE", source: "FIELD", measuredAt }) }, actorToken);
+    assert.equal(directMissingInstrument.status, 400);
+    const directUnregisteredInstrument = await request(`/api/v1/activities/${activityId}/measurements`, { method: "POST", body: JSON.stringify({ value: 11, unit: "kg", method: "WEIGHBRIDGE", source: "FIELD", measuredAt, instrumentCode: `UNREGISTERED-${suffix}`, parameterCode: "mass" }) }, actorToken);
+    assert.equal(directUnregisteredInstrument.status, 409);
+    assert.equal((await body(directUnregisteredInstrument)).eligibleForMrv, false);
+    const evidenceApplied = await submitAndApply({ operationType: "EVIDENCE_CREATE", activityId, evidenceType: "WEIGHBRIDGE_RECORD", capturedAt: measuredAt, contentHash: `sha256:${suffix}` }, actorToken, 4, `evidence-${suffix}`);
     evidenceId = evidenceApplied.entityId as string;
     const self = await request(`/api/v1/evidence/${evidenceId}/verification`, { method: "POST", body: JSON.stringify({ decision: "APPROVED", scope: "runtime" }) }, actorToken);
     assert.equal(self.status, 403);
