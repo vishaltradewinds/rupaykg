@@ -283,3 +283,14 @@ Remaining source-level critical review:
 - Registry settlement routes now require bilateral party permissions, but full end-to-end two-party actor-context tests and independent review are still required.
 
 Do not merge or deploy on the basis of a queued CI run. Keep production HOLD; certification OFF; TRL 9 not established.
+
+## Geography fixture regression resolved in CI
+
+CI run `41457369818` for code commit `0c5107585d744b2e8377b9e594fe26b1594593af` completed **SUCCESS**. This exact run includes the reordered evidence-vault integration fixture and passed the complete workflow, including the full test suite and production container build. This validates the fail-closed geography migration plus fixture correction at that commit; it does not include later evidence-upload transaction and bilateral settlement permission changes.
+
+Subsequent exact-head runs for later code changes are still running:
+- `41457553245` — code commit `ce51503601555b38cf4b66d6c615cc07422b4e8f`
+- `41457603965` — docs/branch follow-up commit `6659af4414ef1b93d876692b8bf1fde4e2e8c140`
+- `41457631324` — latest PR #192 head `7945acec86d78c7720d3873d07238687007c7d35`
+
+Do not extrapolate the earlier success to later commits. Exact latest-head CI acceptance remains pending.
