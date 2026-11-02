@@ -610,3 +610,10 @@ The first regression-test CI run (`41464821546`) failed as expected against the 
 - CI for migration commit `1a8981bb5f3a7b3fdd7d1fed413fbc6b54b82fa5` failed in the integration test because the test attempted REQUESTED → COMPLETED while expecting a lease error. After validation was correctly reordered, the database returned the more specific `MRV_JOB_INVALID_STATE_TRANSITION` (as it should).
 - Corrected the missing-lease test to exercise the legal REQUESTED → CLAIMED edge without supplying a lease, which must return `MRV_JOB_LEASE_REQUIRED`. The separate illegal-edge test is retained. Correction commit `2edd251ef404d88b00e4c7f994d89e42ae38e04b`; exact-head CI `41467045999` is in progress.
 - Worker audit-event attribution and retry metadata tests are included in the latest branch head; CI runs for those commits are also in progress. No production changes.
+
+
+### 15:00 UTC — latest MRV lease guard CI stages passed
+
+- Exact-head run `41467045999` for commit `2edd251ef404d88b00e4c7f994d89e42ae38e04b` has passed migration validation, disposable PostgreSQL migration, typecheck, app build, two-custodian bootstrap exercise, browser smoke, and full test suite including the MRV job ledger, active-lease transition enforcement, expired lease recovery, stale-token fencing, and audit-event assertions.
+- Production-container build is still in progress; overall workflow is not yet SUCCESS. Await final job conclusion.
+- The event attribution / retry metadata refinements in commits after `2edd251` are not included in this run and require their own exact-head CI (`392abdbc...` currently in progress). No production rollout.
