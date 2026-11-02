@@ -234,3 +234,11 @@ No production DDL/DML, migration, role/grant/RLS changes, deployments, worker/sc
 - Exact-head CI #4518 / run `41405997954` is IN PROGRESS. Migration validation, disposable PostgreSQL and full acceptance have not yet been confirmed on this head. Previous exact-head CI #4516 passed all gates on `2a88c7c2`.
 - Follow-on: add negative acceptance for a forged super_admin role in a non-platform organization and explicit geography-scope denial; verify review-queue visibility, not just mutation rejection. Then audit function grants, RLS/tenant coverage and direct table access. Do not close the issue or mark production-ready.
 - Production Neon and Render remain unchanged; PR #192 remains draft/open; no production bootstrap/deploy/worker activation/certification. Provisional TRL 3; TRL 9 not established.
+
+
+## 2026-11-02 — CI #4518 exact engineering-head result
+- Exact code commit `434ec340357053df275a59bc8602a34a155f2138` completed GitHub Actions CI run `41405997954` with overall conclusion **SUCCESS**. The workflow job is completed successfully; this validates the code head, including the queue authorization-parity migration and PostgreSQL negative permission test.
+- Verified acceptance: the synthetic platform authority loses queue visibility and legal-verification capability when `admin:users` is removed; the test restores the original permission JSON before continuing.
+- PR #192 remains OPEN/DRAFT. The later resume-pointer documentation commit `bad25a40bddeb1268e659586b66fe326ec7e14ec` is docs-only; code validation above applies to `434ec340`.
+- Next engineering gate: add disposable-PostgreSQL negative tests proving a role named `super_admin` in a non-`PLATFORM_AUTHORITY` organization cannot gain platform review queue visibility, legal verification or PLATFORM approval. Then test geographic-scope denial and revocation/concurrency boundaries. Do not bypass production triggers or weaken guards to make fixtures pass.
+- Production Neon and live Render remain unchanged. No production DDL/DML, migration, role/grant/RLS change, bootstrap, secret provisioning, deployment, worker activation or certification. PR #192 remains draft; release HOLD; provisional TRL 3; TRL 9 not established.
