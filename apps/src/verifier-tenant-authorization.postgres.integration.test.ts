@@ -182,8 +182,8 @@ test("verifier authorization is active-identity and subject-tenant scoped for ev
       /active verified PLATFORM_AUTHORITY member with admin:users permission/i,
     );
 
-    const platformReviewer = await client.query<{ id: string }>(
-      "select i.id from public.identities i join public.organization_memberships om on om.identity_id=i.id and om.status='VERIFIED' join public.roles r on r.id=om.role_id and r.organization_id=om.organization_id join public.organizations o on o.id=om.organization_id and o.status='VERIFIED' and o.organization_type='PLATFORM_AUTHORITY' where i.status='VERIFIED' and i.suspended_at is null and r.name in ('platform_admin','super_admin') and jsonb_typeof(r.permissions)='array' and r.permissions @> $1::jsonb order by i.created_at limit 1",
+    const platformReviewer = await client.query<{ id: string; role_id: string; permissions: unknown }>(
+      "select i.id, r.id as role_id, r.permissions from public.identities i join public.organization_memberships om on om.identity_id=i.id and om.status='VERIFIED' join public.roles r on r.id=om.role_id and r.organization_id=om.organization_id join public.organizations o on o.id=om.organization_id and o.status='VERIFIED' and o.organization_type='PLATFORM_AUTHORITY' where i.status='VERIFIED' and i.suspended_at is null and r.name in ('platform_admin','super_admin') and jsonb_typeof(r.permissions)='array' and r.permissions @> $1::jsonb order by i.created_at limit 1",
       [JSON.stringify(["admin:users"])],
     );
     assert.ok(platformReviewer.rows[0]?.id, "CI must provision a verified, active platform authority with admin:users");
@@ -197,6 +197,23 @@ test("verifier authorization is active-identity and subject-tenant scoped for ev
       /active verified PLATFORM_AUTHORITY member with admin:users permission/i,
     );
     await client.query("update public.identities set suspended_at=null where id=$1", [platformReviewer.rows[0]!.id]);
+    const originalPlatformPermissions = JSON.stringify(platformReviewer.rows[0]!.permissions);
+    await client.query(
+      "update public.roles set permissions=$2::jsonb where id=$1",
+      [platformReviewer.rows[0]!.role_id, JSON.stringify(["records:read"])],
+    );
+    await expectRejected(
+      "platform_role_without_admin_users",
+      () => client.query(
+        "update public.stakeholder_applications set status='APPROVED',reviewed_by_identity_id=$2,reviewed_at=clock_timestamp() where id=$1",
+        [stakeholderApplication, platformReviewer.rows[0]!.id],
+      ),
+      /active verified PLATFORM_AUTHORITY member with admin:users permission/i,
+    );
+    await client.query(
+      "update public.roles set permissions=$2::jsonb where id=$1",
+      [platformReviewer.rows[0]!.role_id, originalPlatformPermissions],
+    );
     await client.query(
       "update public.stakeholder_application_approvals set status='APPROVED',approved_by_identity_id=$2,reviewed_at=clock_timestamp(),review_note='Synthetic platform-authority approval test' where application_id=$1",
       [stakeholderApplication, platformReviewer.rows[0]!.id],
