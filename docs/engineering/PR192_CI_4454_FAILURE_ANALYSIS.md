@@ -32,3 +32,19 @@ PR #192 remains draft. Production remains HOLD. No production database was touch
 2. Commit: `388673cbc28640fe36d4916373449991e4922851`.
 3. Exact-head CI run #4457: https://github.com/vishaltradewinds/rupaykg/actions/runs/41397360029 — in progress at the time of this checkpoint. Typecheck, migration validation, disposable migration and synthetic bootstrap provisioning had passed; full test suite had not yet completed.
 4. After CI, inspect any remaining cancelled tests, then re-run the production container build and security review. Keep the PR draft until independent review and founder/DBA approvals are complete.
+
+## Follow-up repairs and exact-head verification — 2026-11-02
+
+The subsequent CI runs exposed additional legacy test fixtures and one genuine onboarding-model defect. These were repaired without weakening database authorization:
+
+- Added shared test helper `apps/src/test-support/approved-membership.ts`. It locates the synthetic CI super-admin, creates a PENDING application, approves every generated hierarchical approval step using that distinct authority, and leaves membership insertion to the fixture.
+- Migrated the lifecycle, registry/settlement runtime, general runtime acceptance, settlement reconciliation, and settlement credential guard fixtures to the governed application lifecycle.
+- Added an explicit verifier-permission assertion in the lifecycle test and inserted both actor/verifier memberships only after their approvals.
+- Fixed multi-organization onboarding: approved applications are durable approval evidence and must not block a verified identity from joining another organization. Updated the unmerged auth onboarding migration to reject only an existing PENDING application, and added `migrations/20261103_stakeholder_multi_org_approved_memberships.sql` to keep the one-pending-application-per-identity unique index while allowing multiple APPROVED applications. This is necessary for the product's multi-organization access and bilateral settlement model.
+- Removed cleanup attempts that tried to delete append-only registry events. Their linked test ledger graph is retained only in disposable CI PostgreSQL, which is destroyed at workflow end.
+- Corrected destination-owner fixture permissions to include the explicit retirement permission.
+
+Latest exact-head CI #4475: https://github.com/vishaltradewinds/rupaykg/actions/runs/41399039366
+Head: `fc02d4982dc659e6bd8a69cfe4f5eaf906752331`
+
+Passed: dependency audit, migration validation, restricted verifier-owner provisioning, disposable PostgreSQL migrations, synthetic two-custodian bootstrap acceptance, typecheck, build, browser smoke, and full API/disposable PostgreSQL acceptance. The production container build is still running at the time of this update. Do not call the PR fully green until that final step completes.
