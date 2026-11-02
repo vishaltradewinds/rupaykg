@@ -242,3 +242,12 @@ No production DDL/DML, migration, role/grant/RLS changes, deployments, worker/sc
 - PR #192 remains OPEN/DRAFT. The later resume-pointer documentation commit `bad25a40bddeb1268e659586b66fe326ec7e14ec` is docs-only; code validation above applies to `434ec340`.
 - Next engineering gate: add disposable-PostgreSQL negative tests proving a role named `super_admin` in a non-`PLATFORM_AUTHORITY` organization cannot gain platform review queue visibility, legal verification or PLATFORM approval. Then test geographic-scope denial and revocation/concurrency boundaries. Do not bypass production triggers or weaken guards to make fixtures pass.
 - Production Neon and live Render remain unchanged. No production DDL/DML, migration, role/grant/RLS change, bootstrap, secret provisioning, deployment, worker activation or certification. PR #192 remains draft; release HOLD; provisional TRL 3; TRL 9 not established.
+
+
+## 2026-11-02 — forged platform-role negative test added
+- Added disposable PostgreSQL acceptance in `apps/src/ci-platform-authority-bootstrap.ts` for a forged `super_admin` role name with `admin:users` permission inside an ordinary operator organization.
+- The test asserts direct VERIFIED membership activation is rejected by the existing `RESERVED_ROLE_REQUIRES_DUAL_CONTROL` database guard; the ordinary-organization identity receives no platform review/legal-verification capability; and legal verification is rejected with `ONBOARDING_AUTHORITY_FORBIDDEN`.
+- Test commit: `ec5273142094f6abbf7b17179ff579cf4e13f75e`.
+- Exact commit CI #4521 / run `41407079696` is IN PROGRESS. Do not report the test as passed until PostgreSQL acceptance and the complete workflow conclude successfully.
+- Next: add a geography-scope negative test using a valid, approved reviewer membership and a deliberately disjoint verified geography root; assert both queue visibility and decision mutation are denied. Then add concurrency/revocation tests and continue all-table RLS/runtime-access inventory.
+- PR #192 remains draft/open. Production Neon and Render remain unchanged; no production database operations, bootstrap, secret provisioning, deployment, worker activation or certification. Production HOLD; provisional TRL 3; TRL 9 not established.
