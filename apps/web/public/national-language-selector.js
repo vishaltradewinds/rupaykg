@@ -71,8 +71,18 @@
       if (code && select.value !== code) select.value = code;
     });
     host.append(label, select);
-    const topbar = document.querySelector(".topbar");
-    (topbar || document.body).appendChild(host);
+    const attachToHeader = () => {
+      const topbar = document.querySelector(".topbar");
+      if (!topbar) return false;
+      topbar.appendChild(host);
+      return true;
+    };
+    if (!attachToHeader()) {
+      const observer = new MutationObserver(() => {
+        if (attachToHeader()) observer.disconnect();
+      });
+      observer.observe(document.documentElement, { childList: true, subtree: true });
+    }
     apply(select.value);
   }
 
