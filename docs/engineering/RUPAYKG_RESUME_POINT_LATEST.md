@@ -468,3 +468,11 @@ Target verified: Neon project `rupaykg-production-fresh` (`steep-mud-79906940`),
 - Next action: locate the actual source paths for both fixtures; reuse the canonical approved onboarding/geography setup helper or add explicit verified organization + geography root/scope + independent verifier membership. Ensure verifier is not activity actor. Add a focused positive test for a valid in-scope verifier and negative tests for unverified org, unverified/missing geography root, cross-org membership, out-of-scope geography and self-verification. Then rerun complete CI and inspect exact-head result.
 - Container build was skipped because the test step failed. No full CI pass.
 - No production DB/schema/role/grant/secret changes. PR #192 remains draft; release HOLD; TRL 9 not established.
+
+
+## 2026-11-02 settlement verifier fixture repair
+- Repaired `apps/test/settlement-credential-guard.test.ts` and `apps/test/settlement-reconciliation.test.ts` after CI run `41439829393` showed their setup hooks were blocked by the new subject-org/geography verifier guard.
+- Both fixtures now create the subject processor organization as VERIFIED, use the exact accepted verifier role name `verifier` and JSON permission `verification:approve`, and rely on the approved-membership lifecycle helper rather than inserting a duplicate VERIFIED membership directly.
+- Commits: credential guard fixture `e9500daa61800f6f14c04ab4995f7d9d948438ae`; reconciliation fixture `be3ce292b10e94a5c645cae980d0310496a427c4`.
+- These are fixture-only changes; verifier production guard remains strict. They have not yet been validated by a new complete CI run. Add dedicated positive/negative verifier-scope regression cases (unverified org, cross-org verifier, unverified geography root/scope, out-of-scope geography, self-verification) before treating the verifier migration as fully assured.
+- No production DB/schema/role/grant/secret changes. PR #192 remains draft; release HOLD; TRL 9 not established.
