@@ -119,3 +119,33 @@ Migration `20261110_epr_return_read_tenant_rls.sql` is a candidate, not a produc
 The API route is disabled by default through `RUPAYKG_EPR_RETURN_READ_ENABLED=false`. When explicitly enabled, startup checks the actual connection identity, RLS/FORCE RLS, exact policy, table ownership, read-only privileges and verifier ownership/grants before registering only `GET /api/v1/epr/returns`. The route uses the existing explicit `withRlsRequestTransaction` client boundary; authentication occurs first, then permission lookup and EPR row reads use the same signed tenant client. No EPR write route is registered.
 
 This migration must be rehearsed on disposable PostgreSQL with the exact restricted runtime role and two-tenant negative tests. Production migration, role/secret provisioning and feature activation remain blocked pending independent DBA/security approval and explicit founder authorization.
+
+
+## Verifier active-identity and tenant trigger guard (20261111)
+
+Migration `20261111_verifier_active_identity_and_trigger_tenant_guard.sql` closes verifier authorization gaps across **both** active BEFORE INSERT/UPDATE trigger entry points on `public.verifications`: `verifications_integrity_guard` → `prevent_invalid_verification()` and `verification_independence_guard` → `enforce_verification_independence()`. Both functions now delegate to the same fail-closed activity authorization predicate. The predicate requires an active `VERIFIED` identity, a `VERIFIED` membership in the subject activity's organization, a `VERIFIED` subject organization, an explicit verification permission (`verification:approve`, `verification.approve`, or the legacy `VERIFY_EVIDENCE` alias), and a matching `VERIFIED` geography scope. Role labels alone do not grant verification authority.
+
+Both trigger functions resolve the subject activity from the verification row or its evidence, reject mismatched activity/evidence pairs, check self-verification first, and apply the same tenant-bound predicate to every decision. The integration test asserts the actual trigger-to-function bindings and exercises same-tenant success, foreign-tenant denial for APPROVED and REJECTED, role-label-only denial, suspended/unverified identity, pending membership, unverified organization, pending geography scope, and self-verification.
+
+This is a forward-only candidate migration on a review branch. It has not been applied to production. CI must apply the full migration chain to disposable PostgreSQL and pass the behavioral trigger matrix. The migration's SQL definition alone is not certification evidence.
+
+
+## Stakeholder platform-authority approval guard (20261112)
+
+Migration `20261112_stakeholder_platform_authority_scope.sql` replaces the stakeholder-application approval trigger's global role-name lookup. An approval transition now requires the reviewer identity to be active and `VERIFIED`, the membership to be `VERIFIED`, the membership's organization to be `VERIFIED` and of type `PLATFORM_AUTHORITY`, and the role to be `platform_admin` or `super_admin` with an explicit `admin:users` permission. Self-approval and direct INSERT as `APPROVED` remain prohibited. The function is SECURITY INVOKER and pins `search_path`.
+
+The PostgreSQL integration test rejects approval by a verified ordinary-tenant verifier and accepts approval by the synthetic active platform authority. The shared onboarding fixture now discovers only a reviewer meeting the same platform-authority and explicit-permission predicate. This is a candidate migration only; disposable PostgreSQL acceptance and independent security review are required before any production change.
+
+
+## Application-owned routine search-path hardening (20261113)
+
+Migration `20261113_pin_application_function_search_paths.sql` pins every application-owned public function/procedure to `pg_catalog, public, pg_temp`, excluding extension-owned routines so extension lifecycle remains controlled by the extension. The current production catalog shows PUBLIC has USAGE but not CREATE on public; pg_temp is placed last to prevent temporary-object shadowing. The integration test checks every application-owned public routine has exactly the reviewed path and confirms PUBLIC has no CREATE privilege on public.
+
+This is a candidate migration. CI must apply the full chain and pass all existing trigger, function, route, PostgreSQL acceptance and production-container gates. It does not revoke PUBLIC EXECUTE: a separate signature/call-site/grant inventory is required first, especially because trigger functions and ordinary helper functions have different invocation semantics. No production routine has been altered by this candidate.
+
+
+## Application trigger-function EXECUTE privileges (20261114)
+
+Migration `20261114_revoke_public_trigger_function_execute.sql` revokes direct `PUBLIC EXECUTE` only from application-owned public functions that (a) return PostgreSQL's trigger pseudotype and (b) are attached to at least one non-internal trigger. It excludes extension-owned functions. PostgreSQL invokes a trigger function through its trigger binding; application roles do not need direct EXECUTE on that trigger function to cause the trigger to run through an authorized table DML statement.
+
+This is deliberately not a blanket function revoke. Ordinary callable functions remain unchanged until their application SQL call sites, nested database-function dependencies and exact runtime-role grants are mapped by signature. The integration test asserts all application trigger functions remain attached to a trigger and none retain PUBLIC EXECUTE. CI must apply the complete migration chain and execute the test before this candidate can be considered validated. No production ACL was changed.

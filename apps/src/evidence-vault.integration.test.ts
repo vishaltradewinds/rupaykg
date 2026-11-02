@@ -9,6 +9,10 @@ const enabled = process.env.RUPAYKG_RUN_DB_INTEGRATION_TESTS === "1" && Boolean(
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
 
 test("evidence vault enforces tenant scope, versioned storage, integrity and independent review", { skip: !enabled }, async (t) => {
+  const previousSecret = process.env.RUPAYKG_REQUEST_CONTEXT_SECRET;
+  const previousKeyId = process.env.RUPAYKG_REQUEST_CONTEXT_KEY_ID;
+  process.env.RUPAYKG_REQUEST_CONTEXT_SECRET = randomBytes(32).toString("hex");
+  process.env.RUPAYKG_REQUEST_CONTEXT_KEY_ID = "ci-evidence";
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
   const app = Fastify({ logger: false });
   await registerEvidenceVaultRoutes(app, pool);
@@ -113,5 +117,7 @@ test("evidence vault enforces tenant scope, versioned storage, integrity and ind
   } finally {
     await app.close();
     await pool.end();
+    if (previousSecret === undefined) delete process.env.RUPAYKG_REQUEST_CONTEXT_SECRET; else process.env.RUPAYKG_REQUEST_CONTEXT_SECRET = previousSecret;
+    if (previousKeyId === undefined) delete process.env.RUPAYKG_REQUEST_CONTEXT_KEY_ID; else process.env.RUPAYKG_REQUEST_CONTEXT_KEY_ID = previousKeyId;
   }
 });

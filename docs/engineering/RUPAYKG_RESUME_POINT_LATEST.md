@@ -476,3 +476,103 @@ Target verified: Neon project `rupaykg-production-fresh` (`steep-mud-79906940`),
 - Commits: credential guard fixture `e9500daa61800f6f14c04ab4995f7d9d948438ae`; reconciliation fixture `be3ce292b10e94a5c645cae980d0310496a427c4`.
 - These are fixture-only changes; verifier production guard remains strict. They have not yet been validated by a new complete CI run. Add dedicated positive/negative verifier-scope regression cases (unverified org, cross-org verifier, unverified geography root/scope, out-of-scope geography, self-verification) before treating the verifier migration as fully assured.
 - No production DB/schema/role/grant/secret changes. PR #192 remains draft; release HOLD; TRL 9 not established.
+
+
+## 2026-11-03 CTO execution checkpoint — verifier, stakeholder authority and function hardening
+
+### Current candidate branch / PR
+- Repo: `vishaltradewinds/rupaykg`
+- PR #216: `shakti/verifier-identity-tenant-hardening-2026-11-02` → `shakti/epr-security-base-2026-11-02`
+- Current PR head: `57c2ba8ab4c526b4df79f767d0ca6515e367cd21`
+- Latest code-tested commit: `d7bb9c6c3e97bcae87f973429e249a7299b1bf1a`
+- Documentation-only successor after tested code: README update; no code changed.
+- PR #216 remains DRAFT/UNMERGED. PR #213 remains DRAFT/UNMERGED.
+
+### Candidate migrations and tests
+- `20261111_verifier_active_identity_and_trigger_tenant_guard.sql`: hardens both active BEFORE INSERT/UPDATE verification triggers: `verification_independence_guard` → `enforce_verification_independence()`, and `verifications_integrity_guard` → `prevent_invalid_verification()`. Both use the same activity-bound tenant/identity/geography authorization predicate.
+- `20261112_stakeholder_platform_authority_scope.sql`: stakeholder approval requires active VERIFIED reviewer, VERIFIED membership, VERIFIED organization type PLATFORM_AUTHORITY, reserved platform role and explicit `admin:users`; direct APPROVED insert and self-approval remain blocked.
+- `20261113_pin_application_function_search_paths.sql`: pins every application-owned public function/procedure to `pg_catalog, public, pg_temp`, excluding extension-owned routines. Does not revoke PUBLIC EXECUTE.
+- Integration tests assert both verification trigger bindings, same-/cross-tenant decisions, role-label-only denial, suspended/unverified verifier, geography/membership denial, self-verification, stakeholder reviewer denial for ordinary tenant, suspended platform reviewer, platform role without `admin:users`, valid platform reviewer after hierarchy completion, and search_path coverage across all application-owned public routines.
+- Shared onboarding test helper now only selects a reviewer with verified active PLATFORM_AUTHORITY membership and explicit `admin:users`.
+
+### Exact-head CI
+- Run #4949: prior verifier-only code head passed full CI.
+- Run #4954: stakeholder approval guard and base integration test passed full CI.
+- Run #4957: suspended platform authority negative test passed full CI.
+- Run #4959: latest code-tested head `d7bb9c6` passed full CI, including dependency audit, migration validation/application, restricted owner/bootstrap privilege checks, typecheck, build, two-custodian bootstrap, browser smoke/evidence, full disposable PostgreSQL acceptance and production-container build.
+- Latest docs-only head is `57c2ba8`; no code changes after the green #4959 code head.
+
+### Production read-only audit — do not confuse with CI
+- 67 public application tables; 0 RLS enabled; 0 FORCE RLS; no public table policies.
+- All 67 public tables owned by login `rupaykg`.
+- `rupaykg` has LOGIN, BYPASSRLS, CREATEDB, CREATEROLE, REPLICATION and INHERIT.
+- 115 public functions/procedures: 37 extension-owned, 78 application-owned.
+- All 78 application-owned functions have PUBLIC EXECUTE in catalog ACL and lack pinned search_path.
+- 67 distinct application trigger functions have no pinned search_path.
+- PUBLIC has USAGE but no CREATE on public schema.
+- November candidate migrations are not applied in production.
+- 67-table structural tenant policy design inventory: `docs/engineering/checkpoints/2026-11-03-production-tenant-isolation-policy-design-inventory.md`.
+
+### Remaining blockers / next tasks
+1. Independent security and DBA review of PR #213/#216; no review approval recorded yet.
+2. Complete 67-table tenant policies, exact per-table grants and two-tenant acceptance on a production-shaped disposable clone.
+3. Replace the current elevated production owner/runtime posture with dedicated app/auth/worker/migration NOLOGIN/LOGIN and NOBYPASSRLS separation, with secret provisioning and owner membership checks.
+4. Complete per-signature PUBLIC EXECUTE call-site/grant inventory before revoking broad execute grants; do not blanket revoke trigger functions.
+5. Reconcile all EPR/MRV/statutory/evidence-vault HTTP routes and background/device/worker paths to the same tenant transaction/client boundary.
+6. MRV worker remains an execution primitive only: server registers routes but does not invoke `runMrvSubmissionWorkerOnce`; worker and durable queue flags remain OFF pending a separately deployed least-privilege worker.
+7. Bilateral settlement/registry/chain-of-custody policies require bespoke two-party contracts and acceptance tests.
+8. Production migration/deployment, role/grant/RLS activation, feature flags and certification remain HOLD/OFF. TRL 9 is NOT established.
+
+No production write, DDL, grant, role, secret, feature flag, worker activation or deployment was performed in this checkpoint.
+
+
+## 2026-11-03 CTO continuation — function ACL, RLS map, route boundary and MRV worker contract
+
+This section supersedes earlier current-head and CI statements above.
+
+### Current branch and CI
+- PR #216: https://github.com/vishaltradewinds/rupaykg/pull/216
+- Branch: shakti/verifier-identity-tenant-hardening-2026-11-02
+- PR remains OPEN, DRAFT, UNMERGED.
+- CI #4964 passed on exact code head 5aa54132926404d4ff2f2bf545fd13a2a80d6269.
+- CI #4965 passed on docs successor 9575e3498c920e1ca30ebfd02e1e9138d10fb6d2.
+- CI #4968 passed on docs successor d33d016d73aa7c215bc20b2bd81e0723a1780fed.
+- Latest head at this checkpoint: 05f3fde31f30de9ec5d83c27d8ad6e888d6cc0b2; CI #4972 run 41512294931 is in progress. Do not claim latest head CI success until polled.
+
+### Function privilege review
+- Added docs/security/2026-11-03-callable-function-authorization-review.md.
+- Production catalog read-only inspection of 11 ordinary application-owned functions: all SECURITY INVOKER, owner rupaykg, NULL proconfig (unpinned search_path at audit time), PUBLIC EXECUTE true.
+- Nested dependencies recorded: record_epr_credit_value_claim → allocate_environmental_attribute_claim → assert_environmental_attribute_available; registry/settlement event triggers → identity_has_permission; three geography triggers → organization_has_geography_scope; role-default trigger → rupaykg_default_role_permissions.
+- allocate_epr_credit and release_epr_credit_allocation mutate EPR allocation state without explicit actor/tenant authorization in their function bodies; no TypeScript call was found in reviewed source, but SQL scripts, jobs and external clients remain to be checked.
+- No callable function PUBLIC EXECUTE was revoked. Exact-signature grants/revokes remain gated on caller inventory, role rehearsal and positive/negative tests.
+
+### Production 67-table RLS classification
+- Added docs/security/2026-11-03-production-67-table-rls-classification.md.
+- First-pass classification includes direct organization tables, parent-derived/indirect tenant tables, identity/auth, global governance/reference and platform-internal data.
+- Multi-party EPR/registry/settlement/chain-of-custody rows need bilateral visibility policies; no simple organization equality is safe.
+- RLS remains 0/67 and FORCE RLS 0/67. All 67 public tables remain owned by elevated rupaykg. This is a design inventory, not an executable policy migration.
+
+### Runtime role rehearsal
+- Added docs/security/2026-11-03-restricted-role-provisioning-rehearsal.md.
+- Actual app runtime names are rupaykg_app_runtime and rupaykg_auth_runtime.
+- Actual MRV worker role name is rupaykg_mrv_worker_runtime (corrected from generic worker_runtime based on apps/src/mrv-worker-server.ts).
+- Do not invent an MRV worker owner role; current worker code does not define/assert one.
+- Production still lacks the intended app/auth/MRV runtime roles; only elevated rupaykg role was observed.
+
+### Route boundary coverage and MRV worker blocker
+- Added docs/security/2026-11-03-tenant-route-boundary-coverage-audit.md.
+- Static scan of 16 modules found explicit withRlsRequestTransaction import/use in only mrv-routes.ts and epr-return-read-route.ts; MRV route module still contains direct query lines. The other 14 scanned modules do not use the wrapper. server.ts also contains direct pool queries/root route writes.
+- Production catalog confirms mrv_submission_jobs and mrv_submission_job_events are absent; mrv_provenance_events exists.
+- Production schema_migrations has no applied MRV submission/worker/queue migration filename.
+- apps/src/mrv-worker-server.ts requires both missing queue tables, exact mrv worker runtime role, scoped grants and FORCE RLS across 11 required tables. MRV worker activation remains OFF until schema/migration and job lifecycle acceptance are complete.
+
+### Release posture and next sequence
+1. Poll CI #4972 on exact latest head.
+2. Reconcile every tenant endpoint in server.ts and route modules to signed transaction boundary; keep auth and platform authority as separate constrained contracts; design explicit bilateral context for multi-party operations.
+3. Add reviewed candidate MRV submission queue schema and full lifecycle tests in disposable PostgreSQL; do not activate worker.
+4. Provision exact app/auth/MRV runtime role graph in production-shaped disposable PostgreSQL; test actual startup contracts and least privilege.
+5. Implement/test table-by-table policies and two-tenant route acceptance across all 67 tables.
+6. Perform independent DBA/security review.
+7. Keep production migration/deployment, role/grant/ACL/RLS activation, worker/queue and certification HOLD/OFF until all gates pass.
+
+No production DDL, role, grant, ACL, secret, RLS, worker, flag or deployment changes occurred. Production HOLD. TRL 9 NOT established.
