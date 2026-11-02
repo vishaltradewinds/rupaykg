@@ -28,8 +28,7 @@ AS $function$
      WHERE a.id = p_activity_id
        AND a.geography_id IS NOT NULL
        AND (
-         lower(r.name) IN ('verifier', 'auditor', 'validator', 'verification_officer')
-         OR r.permissions @> '["verification:approve"]'::jsonb
+         r.permissions @> '["verification:approve"]'::jsonb
          OR r.permissions @> '["verification.approve"]'::jsonb
          OR r.permissions @> '["VERIFY_EVIDENCE"]'::jsonb
        )
