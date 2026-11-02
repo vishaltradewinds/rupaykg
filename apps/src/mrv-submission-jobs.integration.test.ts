@@ -189,9 +189,28 @@ test("durable MRV job ledger enforces immutable request, legal transitions and a
     assert.equal(releaseEvent.rows[0]!.actor_kind, "WORKER", "worker-originated changes must be attributed to the worker");
     assert.equal(releaseEvent.rows[0]!.actor_reference, "recovery-worker-" + suffix, "worker audit events must identify the lease owner");
 
+    const enqueueObservations = await client.query(
+      "select id, parameter_code, observed_value, unit, method, instrument_id, observed_at, uncertainty, quality_status, metadata from mrv_observations where activity_id=$1 order by observed_at",
+      [activityId],
+    );
+    const enqueueEvidence = await client.query(
+      "select id, evidence_type, content_uri, content_hash, captured_at, status, metadata from evidence where activity_id=$1 order by captured_at",
+      [activityId],
+    );
+    const enqueueQuantity = await client.query<{ value: string | null; unit: string | null }>(
+      "select value::text value, unit from measurements where activity_id=$1 order by measured_at desc limit 1",
+      [activityId],
+    );
     const enqueueInput = {
       activityId, verificationId, evidenceId, organizationId, geographyId, requestedByIdentityId: verifierIdentityId,
-      guardianPolicyId: "enqueue-test-policy", methodologyCode: "BM WA03.001", payloadSnapshot: { schema: "rupaykg:mrv:v1", observations: [], evidence: [] },
+      guardianPolicyId: "enqueue-test-policy", methodologyCode: "BM WA03.001",
+      payloadSnapshot: {
+        schema: "rupaykg:mrv:v1",
+        observations: enqueueObservations.rows,
+        evidence: enqueueEvidence.rows,
+        ...(enqueueQuantity.rows[0]?.value ? { quantity: Number(enqueueQuantity.rows[0].value) } : {}),
+        ...(enqueueQuantity.rows[0]?.unit ? { unit: enqueueQuantity.rows[0].unit } : {}),
+      },
     };
     const queued = await enqueueMrvSubmissionJob(client, enqueueInput);
     const replayedQueue = await enqueueMrvSubmissionJob(client, enqueueInput);
