@@ -263,3 +263,13 @@ Each authorised participant sees the information needed for their part of the ch
 - Added validator assertions for opt-in account drawer behavior and a browser DOM smoke assertion that the initial landing does not render the account-access dialog.
 - Run #4552 (source change with opt-in drawer) completed SUCCESS. Runs #4553–#4555 cover the shared styling, validator and final CI workflow evidence changes; wait for final conclusions before declaring the latest head fully green.
 - Browser screenshot evidence is retained as a short-lived CI artifact for review. The inspected pre-fix screenshot is not the accepted final UI; inspect the latest artifact after #4555 completes.
+
+
+### Mobile header screenshot finding and fix
+
+- The 390×844 Chrome screenshot from run #4557 exposed the fixed-position national-language selector overlapping the brand, and an unavailable-service status message was shown to unauthenticated visitors.
+- Updated `apps/web/public/national-language-selector.js` to mount the language selector inside the shared application header with the same dark/emerald treatment.
+- Added responsive header sizing and compact language-select rules for 390px and narrower viewports.
+- The database/service health indicator is now shown only inside an authenticated workspace, not on the public landing page.
+- Added static checks for the header mount, responsive selector rules and authenticated-only health indicator; added a browser DOM assertion against the public health warning.
+- CI runs #4558–#4561 had passed typecheck, build, UX validation, browser smoke, full tests and container-build initiation; run #4562 covers the final public DOM warning assertion. Final success is pending.
