@@ -115,8 +115,22 @@ jobs:
           set -e
           test -s /tmp/rupaykg-web-dom.html
           grep -q 'RupayKG' /tmp/rupaykg-web-dom.html
+          grep -q 'Make every waste and resource movement traceable.' /tmp/rupaykg-web-dom.html
+          grep -q 'Stakeholders' /tmp/rupaykg-web-dom.html
+          grep -q 'How it works' /tmp/rupaykg-web-dom.html
+          grep -q 'Compliance' /tmp/rupaykg-web-dom.html
           test -s /tmp/rupaykg-web-smoke.png
           echo "Chrome DOM exit: $dom_status; screenshot exit: $shot_status"
+      - name: Upload landing UX browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rupaykg-landing-ux-\${{ github.run_number }}
+          path: |
+            /tmp/rupaykg-web-smoke.png
+            /tmp/rupaykg-web-dom.html
+          if-no-files-found: warn
+          retention-days: 7
       - name: Run tests including disposable PostgreSQL acceptance
         env:
           RUPAYKG_RUN_DB_INTEGRATION_TESTS: "1"
