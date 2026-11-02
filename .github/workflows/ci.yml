@@ -49,7 +49,7 @@ jobs:
           CREATE ROLE rupaykg_bootstrap_owner
             NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS NOREPLICATION;
           GRANT CREATE ON DATABASE rupaykg TO rupaykg_bootstrap_owner;
-          GRANT rupaykg_bootstrap_owner TO postgres;
+          GRANT rupaykg_bootstrap_owner TO postgres WITH ADMIN OPTION;
           SQL
       - run: npm run migrate -w @rupaykg/api
       - name: Provision synthetic bootstrap custodians in disposable CI PostgreSQL
