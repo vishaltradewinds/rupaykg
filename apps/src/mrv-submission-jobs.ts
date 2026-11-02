@@ -154,7 +154,19 @@ export async function isMrvSubmissionJobStillAuthorized(client: PoolClient, jobI
     observations: snapshot.observations ?? [], evidence: snapshot.evidence ?? [],
     quantity: snapshot.quantity, unit: snapshot.unit,
   }));
-  return stableJson(normalizedLive) === stableJson(normalizedSnapshot);
+  const sourceMatches = stableJson(normalizedLive) === stableJson(normalizedSnapshot);
+  if (!sourceMatches) {
+    console.error("MRV_WORKER_SOURCE_SNAPSHOT_DIAGNOSTIC", {
+      liveHash: createHash("sha256").update(stableJson(normalizedLive)).digest("hex"),
+      snapshotHash: createHash("sha256").update(stableJson(normalizedSnapshot)).digest("hex"),
+      liveObservationCount: observations.rows.length,
+      snapshotObservationCount: snapshot.observations?.length ?? 0,
+      liveEvidenceCount: evidence.rows.length,
+      snapshotEvidenceCount: snapshot.evidence?.length ?? 0,
+      liveQuantity, snapshotQuantity: snapshot.quantity, liveUnit, snapshotUnit: snapshot.unit,
+    });
+  }
+  return sourceMatches;
 }
 
 /** Enqueue an immutable MRV request; repeated identical requests return the same row. */
