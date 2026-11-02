@@ -81,6 +81,33 @@ test("durable MRV job ledger enforces immutable request, legal transitions and a
         await client.query(`release savepoint ${name}`);
       }
     };
+    const unverifiedEvidenceId = (await client.query<{id:string}>(
+      "insert into evidence(activity_id,measurement_id,evidence_type,status,captured_at,content_hash) values($1,$2,'TEST_RECORD','CAPTURED',now(),$3) returning id",
+      [activityId, measurementId, `unverified-${suffix}`],
+    )).rows[0]!.id;
+    const unverifiedEvidenceVerificationId = (await client.query<{id:string}>(
+      "insert into verifications(evidence_id,activity_id,verifier_identity_id,decision,scope,rationale) values($1,$2,$3,'APPROVED','test','Independent review of captured evidence') returning id",
+      [unverifiedEvidenceId, activityId, verifierIdentityId],
+    )).rows[0]!.id;
+    const rejectedVerificationId = (await client.query<{id:string}>(
+      "insert into verifications(evidence_id,activity_id,verifier_identity_id,decision,scope,rationale) values($1,$2,$3,'REJECTED','test','Evidence rejected for MRV') returning id",
+      [evidenceId, activityId, verifierIdentityId],
+    )).rows[0]!.id;
+    const attemptInvalidJob = async (name: string, organization: string, geography: string, evidence: string, verification: string, pattern: RegExp) => {
+      await expectSqlFailure(name,
+        `insert into mrv_submission_jobs(
+           idempotency_key,payload_hash,activity_id,verification_id,evidence_id,organization_id,
+           geography_id,requested_by_identity_id,guardian_policy_id,payload_snapshot
+         ) values($1,$2,$3,$4,$5,$6,$7,$8,'test-policy','{"schema":"rupaykg:mrv:v1"}'::jsonb)`,
+        [randomUUID().replaceAll("-", "") + "0000000000000000", "d".repeat(64), activityId, verification, evidence, organization, geography, identityId],
+        pattern,
+      );
+    };
+    await attemptInvalidJob("job_wrong_organization", randomUUID(), geographyId, evidenceId, verificationId, /MRV_JOB_ACTIVITY_SCOPE_INVALID/);
+    await attemptInvalidJob("job_wrong_geography", organizationId, randomUUID(), evidenceId, verificationId, /MRV_JOB_ACTIVITY_SCOPE_INVALID/);
+    await attemptInvalidJob("job_unverified_evidence", organizationId, geographyId, unverifiedEvidenceId, unverifiedEvidenceVerificationId, /MRV_JOB_EVIDENCE_NOT_VERIFIED/);
+    await attemptInvalidJob("job_rejected_verification", organizationId, geographyId, evidenceId, rejectedVerificationId, /MRV_JOB_VERIFICATION_INVALID/);
+
     await expectSqlFailure("immutable_request", "update mrv_submission_jobs set payload_hash=$2 where id=$1", [jobId,"c".repeat(64)], /MRV_JOB_REQUEST_IMMUTABLE/);
     await expectSqlFailure("missing_worker_lease", "update mrv_submission_jobs set status='CLAIMED' where id=$1", [jobId], /MRV_JOB_LEASE_REQUIRED/);
     await expectSqlFailure("append_only_event", "update mrv_submission_job_events set event_code='tampered' where job_id=$1", [jobId], /MRV_JOB_EVENT_APPEND_ONLY/);
