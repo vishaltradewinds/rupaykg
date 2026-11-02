@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
 import test from "node:test";
 import Fastify from "fastify";
 import type { Pool } from "pg";
@@ -21,8 +20,10 @@ const config: RlsRequestContextConfig = {
 class EprClient {
   calls: Call[] = [];
   released = false;
-  permission = true;
+  permission: boolean;
   rows: Array<Record<string, unknown>> = [{ id: "return-a", organization_id: organizationId }];
+
+  constructor(permission = true) { this.permission = permission; }
 
   async query(sql: string, values?: unknown[]) {
     this.calls.push({ sql, ...(values === undefined ? {} : { values }) });
@@ -39,6 +40,7 @@ class EprClient {
 class EprPool {
   rawCalls: Call[] = [];
   clients: EprClient[] = [];
+  permission = true;
   resolverRows: Array<Record<string, unknown>> = [{
     identity_id: identityId,
     organization_id: organizationId,
@@ -56,7 +58,7 @@ class EprPool {
   }
 
   async connect() {
-    const client = new EprClient();
+    const client = new EprClient(this.permission);
     this.clients.push(client);
     return client;
   }
@@ -66,9 +68,6 @@ function asPool(pool: EprPool): Pool {
   return pool as unknown as Pool;
 }
 
-function bearerHash(token: string): string {
-  return createHash("sha256").update(token).digest("hex");
-}
 
 async function makeApp(raw: EprPool) {
   const pool = createContextAwarePool(asPool(raw));
@@ -173,8 +172,7 @@ test("EPR list permission denial prevents protected record reads and rolls back"
   const raw = new EprPool();
   const app = await makeApp(raw);
   try {
-    // The fake client defaults to permission=false for this case.
-    raw.clients[0]!.permission = false;
+    raw.permission = false;
     const response = await app.inject({
       method: "GET",
       url: "/api/v1/epr/returns",
