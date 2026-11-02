@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
-import type { Pool } from "pg";
+import type { Pool, PoolClient } from "pg";
+import { withRlsRequestTransaction, type RlsRequestContextConfig } from "./rls-request-transaction.js";
 import { authenticate, bearerChallenge, canVerifyEvidence, hasOrganizationPermission, type AuthContext } from "./auth.js";
 
 async function requireAuth(app: FastifyInstance, pool: Pool | null, request: Parameters<typeof authenticate>[0], reply: { code: (status: number) => { send: (body: unknown) => unknown } }): Promise<AuthContext | null> {
@@ -26,7 +27,7 @@ function requestedOperatingContext(request: { query: unknown }): { context?: Ope
   if (raw === "urban" || raw === "rural") return { context: raw, invalid: false };
   return { invalid: true };
 }
-async function authorizeGeography(pool: Pool, auth: AuthContext, geographyId: string): Promise<boolean> {
+async function authorizeGeography(pool: Pool | PoolClient, auth: AuthContext, geographyId: string): Promise<boolean> {
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(geographyId)) return false;
   const check = await pool.query<{ ok: boolean }>(`select exists (select 1 from organization_memberships om where om.identity_id=$1 and om.status='VERIFIED' and ($3::uuid is null or om.organization_id=$3::uuid) and organization_has_geography_scope(om.organization_id,$2)) as ok`, [auth.identityId, geographyId, auth.activeOrganizationId ?? null]);
   return check.rows[0]?.ok === true;
@@ -44,11 +45,11 @@ async function authorizeWorkspaceRead(pool: Pool, auth: AuthContext, workspace: 
   return true;
 }
 
-export async function registerWorkspaceRoutes(app: FastifyInstance, pool: Pool | null): Promise<void> {
+export async function registerWorkspaceRoutes(app: FastifyInstance, pool: Pool | null, requestContext: RlsRequestContextConfig | null = null): Promise<void> {
   app.addHook("preHandler", async (request, reply) => {
     const route = request.routeOptions.url ?? ""; if (!route.startsWith("/api/v1/workspaces/")) return;
     const routeWorkspace = route.split("/").pop() ?? ""; const workspace = routeWorkspace === "resource-flows" ? "resourceFlows" : routeWorkspace as WorkspaceName;
-    if (!(workspace in WORKSPACE_READ_PERMISSIONS)) return; const auth = await requireAuth(app, pool, request, reply); if (!auth || !pool) return;
+    if (!(workspace in WORKSPACE_READ_PERMISSIONS) || workspace === "mrv") return; const auth = await requireAuth(app, pool, request, reply); if (!auth || !pool) return;
     if (!await authorizeWorkspaceRead(pool, auth, workspace)) return reply.code(403).send({ error: "Workspace read permission required", code: "WORKSPACE_READ_FORBIDDEN", workspace });
   });
 
@@ -59,27 +60,38 @@ export async function registerWorkspaceRoutes(app: FastifyInstance, pool: Pool |
   });
 
   app.get("/api/v1/workspaces/mrv", async (request, reply) => {
-    const auth = await requireAuth(app, pool, request, reply); if (!auth || !pool) return;
-    const ids = orgIds(auth); if (!ids.length) return result({ activities: [], measurements: [], evidence: [], verifications: [] });
+    const auth = await requireAuth(app, pool, request, reply);
+    if (!auth || !pool) return;
+    if (!requestContext) return reply.code(503).send({ error: "Signed tenant context is not configured", code: "TENANT_CONTEXT_UNAVAILABLE", syntheticData: false });
+    const organizationId = auth.activeOrganizationId;
+    if (!organizationId) return reply.code(403).send({ error: "A verified active organization is required for MRV workspace access", code: "RLS_ORGANIZATION_CONTEXT_REQUIRED", syntheticData: false });
     const geographyId = requestedGeography(request);
-    if (geographyId && !await authorizeGeography(pool, auth, geographyId)) return reply.code(403).send({ error: "Geography outside organization authorization scope", code: "GEOGRAPHY_FORBIDDEN" });
     const contextRequest = requestedOperatingContext(request);
     if (contextRequest.invalid) return reply.code(400).send({ error: "Context must be urban or rural", code: "INVALID_OPERATING_CONTEXT", syntheticData: false });
     try {
-      const params: unknown[] = [ids];
-      if (geographyId) params.push(geographyId);
-      if (contextRequest.context) params.push(operatingContextGeographyKinds(contextRequest.context));
-      const geographyClause = geoClause(geographyId, "a.geography_id");
-      const contextClause = operatingContextSqlClause(contextRequest.context, params.length);
-      const scopeClause = " and organization_has_geography_scope(a.organization_id,a.geography_id)";
-      const [activities, measurements, evidence, verifications] = await Promise.all([
-        pool.query(`select a.id,a.activity_type,a.status,a.occurred_at,a.created_at,a.geography_id,g.name as geography_name,g.kind::text as geography_kind from activities a left join geography g on g.id=a.geography_id where a.organization_id=any($1::uuid[])${scopeClause}${geographyClause}${contextClause} order by a.created_at desc limit 100`, params),
-        pool.query(`select m.id,m.activity_id,m.value,m.unit,m.method,m.source,m.measured_at,m.quality_status from measurements m join activities a on a.id=m.activity_id where a.organization_id=any($1::uuid[])${scopeClause}${geographyClause}${contextClause} order by m.measured_at desc limit 100`, params),
-        pool.query(`select e.id,e.activity_id,e.measurement_id,e.evidence_type,e.status,e.captured_at,e.content_uri,e.content_hash from evidence e join activities a on a.id=e.activity_id where a.organization_id=any($1::uuid[])${scopeClause}${geographyClause}${contextClause} order by e.captured_at desc limit 100`, params),
-        pool.query(`select v.id,v.evidence_id,v.activity_id,v.verifier_identity_id,v.decision,v.scope,v.rationale,v.decided_at from verifications v join evidence e on e.id=v.evidence_id join activities a on a.id=e.activity_id where a.organization_id=any($1::uuid[])${scopeClause}${geographyClause}${contextClause} order by v.decided_at desc limit 100`, params),
-      ]);
-      return result({ activities: activities.rows, measurements: measurements.rows, evidence: evidence.rows, verifications: verifications.rows, ...(contextRequest.context ? { operatingContext: contextRequest.context, geographyKinds: operatingContextGeographyKinds(contextRequest.context) } : {}) });
-    } catch (error) { request.log.error(error); return reply.code(503).send({ error: "MRV workspace unavailable", syntheticData: false }); }
+      const scoped = await withRlsRequestTransaction(pool, auth, requestContext, async (client) => {
+        if (!await hasOrganizationPermission(client, auth, organizationId, WORKSPACE_READ_PERMISSIONS.mrv)) return { forbidden: "WORKSPACE_READ_FORBIDDEN" as const };
+        if (geographyId && !await authorizeGeography(client, auth, geographyId)) return { forbidden: "GEOGRAPHY_FORBIDDEN" as const };
+        const params: unknown[] = [organizationId];
+        if (geographyId) params.push(geographyId);
+        if (contextRequest.context) params.push(operatingContextGeographyKinds(contextRequest.context));
+        const geographyClause = geoClause(geographyId, "a.geography_id");
+        const contextClause = operatingContextSqlClause(contextRequest.context, params.length);
+        const scopeClause = " and organization_has_geography_scope(a.organization_id,a.geography_id)";
+        const [activities, measurements, evidence, verifications] = await Promise.all([
+          client.query(`select a.id,a.activity_type,a.status,a.occurred_at,a.created_at,a.geography_id,g.name as geography_name,g.kind::text as geography_kind from activities a left join geography g on g.id=a.geography_id where a.organization_id=$1${scopeClause}${geographyClause}${contextClause} order by a.created_at desc limit 100`, params),
+          client.query(`select m.id,m.activity_id,m.value,m.unit,m.method,m.source,m.measured_at,m.quality_status from measurements m join activities a on a.id=m.activity_id where a.organization_id=$1${scopeClause}${geographyClause}${contextClause} order by m.measured_at desc limit 100`, params),
+          client.query(`select e.id,e.activity_id,e.measurement_id,e.evidence_type,e.status,e.captured_at,e.content_uri,e.content_hash from evidence e join activities a on a.id=e.activity_id where a.organization_id=$1${scopeClause}${geographyClause}${contextClause} order by e.captured_at desc limit 100`, params),
+          client.query(`select v.id,v.evidence_id,v.activity_id,v.verifier_identity_id,v.decision,v.scope,v.rationale,v.decided_at from verifications v join evidence e on e.id=v.evidence_id join activities a on a.id=e.activity_id where a.organization_id=$1${scopeClause}${geographyClause}${contextClause} order by v.decided_at desc limit 100`, params),
+        ]);
+        return { data: { activities: activities.rows, measurements: measurements.rows, evidence: evidence.rows, verifications: verifications.rows, ...(contextRequest.context ? { operatingContext: contextRequest.context, geographyKinds: operatingContextGeographyKinds(contextRequest.context) } : {}) } };
+      });
+      if ("forbidden" in scoped) return reply.code(403).send({ error: scoped.forbidden === "GEOGRAPHY_FORBIDDEN" ? "Geography outside organization authorization scope" : "Workspace read permission required", code: scoped.forbidden, syntheticData: false });
+      return result(scoped.data);
+    } catch (error) {
+      request.log.error(error);
+      return reply.code(503).send({ error: "MRV workspace unavailable", code: "MRV_WORKSPACE_UNAVAILABLE", syntheticData: false });
+    }
   });
 
   app.post("/api/v1/evidence/:evidenceId/verification", async (request, reply) => {
