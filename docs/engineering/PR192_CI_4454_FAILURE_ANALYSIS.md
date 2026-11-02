@@ -48,3 +48,11 @@ Latest exact-head CI #4475: https://github.com/vishaltradewinds/rupaykg/actions/
 Head: `fc02d4982dc659e6bd8a69cfe4f5eaf906752331`
 
 Passed: dependency audit, migration validation, restricted verifier-owner provisioning, disposable PostgreSQL migrations, synthetic two-custodian bootstrap acceptance, typecheck, build, browser smoke, and full API/disposable PostgreSQL acceptance. The production container build is still running at the time of this update. Do not call the PR fully green until that final step completes.
+
+## Bootstrap owner privilege teardown — 2026-11-02
+
+Security review identified that the migration principal's temporary membership in `rupaykg_bootstrap_owner` must not persist after setup. The migration now requires a direct temporary membership with ADMIN OPTION, requires that no other principal is a member of the owner role, and revokes the migration principal's membership immediately after the SECURITY DEFINER objects are created. The owner role's temporary database CREATE privilege is also revoked.
+
+CI #4479 passed all gates, including 138/138 API tests, two-custodian bootstrap acceptance, browser smoke and production container build, on code head `3302c0ebc68cc7558d264e466423c11dd75f17fa`.
+
+A further CI assertion was added in `.github/workflows/ci.yml` to verify that neither the migration principal's owner-role membership nor the owner's database CREATE privilege remains after migration. Exact-head CI #4480 is running; do not call that additional assertion verified until it passes.
