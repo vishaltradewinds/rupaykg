@@ -48,7 +48,7 @@ BEGIN
   END IF;
   IF NOT verifier.prosecdef
      OR verifier.owner_name <> 'rupaykg_security_definer'
-     OR NOT (verifier.proconfig @> ARRAY['search_path=pg_catalog, app_security']) THEN
+     OR NOT coalesce(verifier.proconfig @> ARRAY['search_path=pg_catalog, app_security'], false) THEN
     RAISE EXCEPTION 'EPR_RLS_SIGNED_CONTEXT_VERIFIER_INVALID: dedicated SECURITY DEFINER verifier is required';
   END IF;
 
