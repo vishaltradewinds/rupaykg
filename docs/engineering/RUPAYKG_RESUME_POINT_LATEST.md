@@ -380,3 +380,27 @@ No production DDL/DML, migration, role/grant/RLS changes, deployments, worker/sc
 - Confirmed later migrations add important business-integrity controls: registry recipient verification; stakeholder approval authority and self-approval prevention; carbon methodology mechanism and environmental-attribute double-claim controls; organization legal/statutory verification; EPR transfer/return evidence and quantity guards; settlement registry-owner and bilateral party integrity; hierarchical onboarding and approval separation; platform audit-chain head and dual-control access requests; signed request-context verifier; identity-bound onboarding and geography search-path hardening.
 - The migration scan is not a live catalog audit. Some functions are replaced across later migrations, and production may contain schema drift or non-migration objects. The authoritative next step remains read-only extraction of pg_class/pg_namespace, pg_policy, pg_proc, pg_trigger, pg_constraint, pg_roles, table ACLs, function ACLs, and ownership from production.
 - No production DDL/DML or role/grant/secret changes. RLS remains unimplemented and certification remains OFF/HOLD.
+
+
+## 2026-11-02: live Neon production catalog audit (read-only)
+Target verified: Neon project `rupaykg-production-fresh` (`steep-mud-79906940`), default/primary branch `main` (`br-restless-base-b44cip2h`), database `rupaykg`, owner `rupaykg`. All queries were SELECT/catalog reads; no production mutation.
+
+### Live catalog facts
+- `public` contains 67 base tables; all 67 relations are owned by `rupaykg`.
+- `pg_class`: 0/67 tables with RLS enabled; 0/67 FORCE RLS; zero policies.
+- `pg_proc`: 115 public functions; 0 SECURITY DEFINER.
+- `pg_trigger`: 70 non-internal triggers; the trigger inventory includes governance, geography, registry, settlement, MRV, EPR, carbon, evidence-vault and field-sync integrity controls.
+- `pg_constraint`: 873 constraints.
+- `schema_migrations`: 92 rows; latest version 20261021 / `20261021_evidence_artifact_vault.sql`.
+- All 67 tables grant the owner role SELECT/INSERT/UPDATE/DELETE/TRUNCATE/TRIGGER/REFERENCES. No separate application runtime role appeared in the role listing.
+- Role `rupaykg`: LOGIN, BYPASSRLS, CREATEROLE, CREATEDB and REPLICATION; membership in `neon_superuser` is present. `neon_service` also has broad elevated flags. Treat effective inherited privileges as a critical DBA review item; do not assume `rolsuper=false` means least privilege.
+- `public` schema owner is `pg_database_owner`.
+
+### Important reconciliation
+- The branch contains 97 migration source files, but production records 92 applied migration rows and latest applied migration 20261021. Therefore migrations dated 20261026 and 20261101–20261105 on the working branch are not yet recorded as applied in production. Do not assume production has the auth/bootstrap/geography hardening code represented by those newer branch files.
+- The earlier remembered 67 tables / 0 RLS / owner BYPASSRLS finding is independently reconfirmed by live catalog reads.
+
+### Scope and limitations
+- `information_schema` and `pg_catalog` catalog reads are authoritative for visible production objects under this Neon connection. The role result includes Neon-managed roles; DBA must validate effective role membership and platform-managed privilege semantics before proposing revocation.
+- Complete trigger list and table constraints were queried; function count/security-definer count and relation-owner/RLS aggregates recorded. A full per-function definition/ACL and per-object ACL export, sequence/view/materialized-view inventory, and worker/external callback inventory remain follow-up items.
+- No RLS policies, grants, roles, secrets, data or schema were changed. Keep production HOLD.
