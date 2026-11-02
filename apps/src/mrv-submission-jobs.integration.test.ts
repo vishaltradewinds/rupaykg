@@ -126,6 +126,21 @@ test("durable MRV job ledger enforces immutable request, legal transitions and a
     });
     assert.equal(hcsConfirmed?.status, "HCS_CONSENSUS_CONFIRMED");
     assert.equal(hcsConfirmed?.hedera_transaction_id, transactionId, "the persisted HCS transaction ID must survive stage completion");
+
+    const interruptedLease = await claimNextMrvSubmissionJob(client, "interrupted-worker-" + suffix, 60);
+    assert.ok(interruptedLease, "a confirmed HCS stage must be reclaimable for Mirror Node reconciliation");
+    await client.query("update mrv_submission_jobs set lease_expires_at=now()-interval '1 second' where id=$1", [jobId]);
+    const recoveredLease = await claimNextMrvSubmissionJob(client, "recovery-worker-" + suffix, 60);
+    assert.ok(recoveredLease, "an expired lease must be recoverable");
+    assert.notEqual(recoveredLease.leaseToken, interruptedLease.leaseToken, "recovery must fence the previous worker with a fresh token");
+    assert.equal(recoveredLease.job.status, "HCS_CONSENSUS_CONFIRMED", "recovery must preserve the last confirmed provider stage");
+    assert.equal(recoveredLease.job.hedera_transaction_id, transactionId, "recovery must preserve the exact persisted HCS transaction ID");
+    const staleWorkerAdvance = await advanceMrvSubmissionJob(client, jobId, interruptedLease.leaseToken, "MIRROR_VERIFIED");
+    assert.equal(staleWorkerAdvance, null, "the expired worker must not advance after another worker reclaims the lease");
+    const staleWorkerHcsReplacement = await persistMrvHcsTransactionId(client, jobId, interruptedLease.leaseToken, "testnet", "0.0.12345", "0.0.1234@1791620002.123456789");
+    assert.equal(staleWorkerHcsReplacement, null, "the expired worker must not replace the persisted HCS transaction ID");
+    assert.equal(await releaseMrvSubmissionJobLease(client, jobId, recoveredLease.leaseToken, new Date(Date.now() + 1000), "TEST_RELEASE", "release recovery lease for subsequent fixture checks"), true);
+
     const enqueueInput = {
       activityId, verificationId, evidenceId, organizationId, geographyId, requestedByIdentityId: identityId,
       guardianPolicyId: "enqueue-test-policy", methodologyCode: "BM WA03.001", payloadSnapshot: { schema: "rupaykg:mrv:v1", observations: [], evidence: [] },
