@@ -35,7 +35,7 @@ BEGIN
     RAISE EXCEPTION 'EPR_RLS_APP_ROLE_MUST_NOT_READ_SIGNING_KEYS';
   END IF;
 
-  SELECT p.prosecdef, r.rolname AS owner_name
+  SELECT p.prosecdef, p.proconfig, r.rolname AS owner_name
     INTO verifier
     FROM pg_catalog.pg_proc p
     JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace
@@ -46,7 +46,9 @@ BEGIN
   IF NOT FOUND THEN
     RAISE EXCEPTION 'EPR_RLS_SIGNED_CONTEXT_VERIFIER_MISSING';
   END IF;
-  IF NOT verifier.prosecdef OR verifier.owner_name <> 'rupaykg_security_definer' THEN
+  IF NOT verifier.prosecdef
+     OR verifier.owner_name <> 'rupaykg_security_definer'
+     OR NOT (verifier.proconfig @> ARRAY['search_path=pg_catalog, app_security']) THEN
     RAISE EXCEPTION 'EPR_RLS_SIGNED_CONTEXT_VERIFIER_INVALID: dedicated SECURITY DEFINER verifier is required';
   END IF;
 
