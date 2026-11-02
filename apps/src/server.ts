@@ -146,6 +146,62 @@ async function assertProductionDatabaseRuntimeContracts(): Promise<void> {
   }
 }
 
+async function assertEprReturnReadDatabaseContract(): Promise<void> {
+  if (!rawPool) throw new Error("EPR_RETURN_READ_DATABASE_UNAVAILABLE");
+  const result = await rawPool.query<{
+    rls_enabled: boolean;
+    rls_forced: boolean;
+    policy_count: number;
+    expected_policy_count: number;
+    runtime_login: boolean;
+    runtime_bypass_rls: boolean;
+    runtime_inherit: boolean;
+    runtime_role_memberships: number;
+    runtime_select_returns: boolean;
+    runtime_select_schemes: boolean;
+    runtime_write_returns: boolean;
+    verifier_execute: boolean;
+    verifier_schema_usage: boolean;
+  }>(
+    `select
+       c.relrowsecurity as rls_enabled,
+       c.relforcerowsecurity as rls_forced,
+       (select count(*)::int from pg_catalog.pg_policies p
+         where p.schemaname='public' and p.tablename='epr_returns') as policy_count,
+       (select count(*)::int from pg_catalog.pg_policies p
+         where p.schemaname='public' and p.tablename='epr_returns'
+           and p.policyname='epr_returns_select_tenant' and p.cmd='SELECT'
+           and p.roles @> ARRAY['rupaykg_app_runtime']::name[]
+           and p.qual ilike '%current_request_context_claims%'
+           and p.qual ilike '%organization_id%') as expected_policy_count,
+       r.rolcanlogin as runtime_login,
+       r.rolbypassrls as runtime_bypass_rls,
+       r.rolinherit as runtime_inherit,
+       (select count(*)::int from pg_catalog.pg_auth_members m where m.member=r.oid) as runtime_role_memberships,
+       has_table_privilege(r.rolname,'public.epr_returns','SELECT') as runtime_select_returns,
+       has_table_privilege(r.rolname,'public.epr_schemes','SELECT') as runtime_select_schemes,
+       (has_table_privilege(r.rolname,'public.epr_returns','INSERT')
+         or has_table_privilege(r.rolname,'public.epr_returns','UPDATE')
+         or has_table_privilege(r.rolname,'public.epr_returns','DELETE')) as runtime_write_returns,
+       has_schema_privilege(r.rolname,'app_security','USAGE') as verifier_schema_usage,
+       has_function_privilege(r.rolname,'app_security.current_request_context_claims()','EXECUTE') as verifier_execute
+      from pg_catalog.pg_class c
+      join pg_catalog.pg_namespace n on n.oid=c.relnamespace
+      cross join pg_catalog.pg_roles r
+     where n.nspname='public' and c.relname='epr_returns'
+       and r.rolname='rupaykg_app_runtime' and c.relkind='r'`,
+  );
+  const contract = result.rows[0];
+  if (!contract || !contract.rls_enabled || !contract.rls_forced ||
+      contract.policy_count !== 1 || contract.expected_policy_count !== 1 ||
+      !contract.runtime_login || contract.runtime_bypass_rls || contract.runtime_inherit ||
+      contract.runtime_role_memberships !== 0 || !contract.runtime_select_returns ||
+      !contract.runtime_select_schemes || contract.runtime_write_returns ||
+      !contract.verifier_schema_usage || !contract.verifier_execute) {
+    throw new Error("EPR_RETURN_READ_TENANT_RLS_CONTRACT_INVALID");
+  }
+}
+
 async function assertRequestContextDatabaseContract(): Promise<void> {
   if (!rawPool) throw new Error("REQUEST_CONTEXT_DATABASE_UNAVAILABLE");
   const rls = await rawPool.query<{ rls_enabled: number }>(
@@ -256,6 +312,7 @@ async function canWriteGeography(client: Pool | PoolClient, auth: AuthContext, o
 if (requestContextMode === "enforced") {
   if (!rawPool || !requestContextSecret || !requestContextKeyId) throw new Error("REQUEST_CONTEXT_ENFORCEMENT_REQUIRES_DATABASE_AND_SIGNING_MATERIAL");
   registerRequestTenantContext(app, rawPool, { hmacSecret: requestContextSecret, keyId: requestContextKeyId, ttlSeconds: 120 });
+  await assertEprReturnReadDatabaseContract();
 }
 
 app.get("/health", async (_request, reply) => { let database: "AVAILABLE" | "UNAVAILABLE" = "UNAVAILABLE"; let authenticationDatabase: "AVAILABLE" | "UNAVAILABLE" = "UNAVAILABLE"; if (pool) { try { await pool.query("select 1"); database = "AVAILABLE"; } catch {} } if (authPool) { try { await authPool.query("select 1"); authenticationDatabase = "AVAILABLE"; } catch {} } const healthy = database === "AVAILABLE" && authenticationDatabase === "AVAILABLE"; return reply.code(healthy ? 200 : 503).send({ status: healthy ? "READY" : "DEGRADED", database, authenticationDatabase, syntheticData: false }); });
