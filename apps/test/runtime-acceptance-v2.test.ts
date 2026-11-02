@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { spawn, type ChildProcess } from "node:child_process";
 import { Pool } from "pg";
+import { approveTestMembership } from "../src/test-support/approved-membership.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 const port = Number(process.env.RUNTIME_ACCEPTANCE_PORT ?? 43127);
@@ -72,6 +73,8 @@ before(async () => {
     verifierId = (await c.query<{ id: string }>("insert into identities(external_subject,display_name) values($1,$2) returning id", [`runtime-verifier-${suffix}`, "Runtime Verifier"])).rows[0]!.id;
     const actorRole = (await c.query<{ id: string }>("insert into roles(organization_id,name,permissions) values($1,$2,'[\"FIELD_SYNC\",\"waste:record\",\"evidence:upload\",\"projects:manage\"]') returning id", [orgId, `ACTOR-${suffix}`])).rows[0]!.id;
     const verifierRole = (await c.query<{ id: string }>("insert into roles(organization_id,name,permissions) values($1,$2,'[\"VERIFY_EVIDENCE\"]') returning id", [orgId, `VERIFIER-${suffix}`])).rows[0]!.id;
+    await approveTestMembership(c, actorId, orgId, actorRole, geographyId, "operator", "collector");
+    await approveTestMembership(c, verifierId, orgId, verifierRole, geographyId, "verifier", "collector");
     await c.query("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED'),($4,$2,$5,'VERIFIED')", [actorId, orgId, actorRole, verifierId, verifierRole]);
     actorToken = token(); verifierToken = token();
     await c.query("insert into identity_sessions(identity_id,expires_at,token_hash) values($1,now()+interval '1 hour',$2),($3,now()+interval '1 hour',$4)", [actorId, hash(actorToken), verifierId, hash(verifierToken)]);
