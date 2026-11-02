@@ -211,3 +211,6 @@ CI history: the first worker commit had an exact-optional-property TypeScript er
 - The worker handles SIGTERM/SIGINT, uses a small pool, processes one durable stage per loop and backs off when idle or on failure.
 
 This creates an executable process boundary, not production deployability. The worker database role and policies do not yet exist in production; no role, grant, policy, migration, service or compute was created. Do not set the worker flags or configure the URL until the independent RLS/least-privilege migration and tests are approved.
+
+
+The standalone worker startup contract was tightened further: in addition to RLS/FORCE-RLS and role flags, it checks absence of PUBLIC-schema CREATE, verifies SELECT on each of its eleven required tables, UPDATE on the job ledger, INSERT on the append-only event ledger and provenance table, and EXECUTE on the geography-scope function. This is a startup assertion only; it does not create grants or policies. Latest privilege-check SQL is under exact-head CI validation.
