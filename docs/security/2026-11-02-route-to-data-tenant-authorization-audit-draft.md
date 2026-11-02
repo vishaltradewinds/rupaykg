@@ -218,3 +218,33 @@ Source-reviewed the exact branch migrations below. This is migration-source evid
 - Source-verified migration-level semantics: settlements (party columns/current-owner integrity trigger), resource_flows (single organization + two geography endpoints), field_sync_envelopes (device identity binding), memberships/sessions (identity/org/role and revocation fields).
 - Still provisional: chain_of_custody_links, credentials, registry_events and environmental_attribute_claims ownership/policy semantics; all 67 production table FK paths; production parity for migrations newer than 20261021.
 - No RLS policies generated; no production roles/grants/migrations or data changed. PR #192 remains draft and release remains HOLD.
+
+
+## 2026-11-02 registry/settlement source audit — second bounded batch
+
+Reviewed exact branch source files: `migrations/006_registry_settlement_guardrails.sql`, `008_verification_integrity.sql`, `014_registry_settlement_idempotency.sql`, `047_settlement_party_integrity.sql`, and `20261020_ccts_methodology_registry.sql`. These are source-level findings only; they do not establish production parity for migrations newer than the production ledger cutoff (20261021).
+
+### Verified source semantics
+
+- `credentials`: migration 006 adds `verification_id`, `methodology_version_id`, positive `quantity` and `unit`; issuance/value-bearing states (ISSUED, ACTIVE, TRANSFERRED, RETIRED) require a linked APPROVED verification. A partial unique index on (activity_id, verification_id) prevents duplicate credential issuance for the same pair.
+- `registry_events`: migration 006 adds `verification_id` and `recorded_by_identity_id`; migration 008 makes registry events append-only for UPDATE/DELETE and computes an event hash on INSERT from id, credential, event type, from/to owner, external reference, verification, recorder and created_at. This protects event mutation but does not by itself prove event sequence validity or current-owner correctness.
+- `settlement_events`: migration 006 creates the child table with FK to settlements and optional actor identity; migration 008 makes events append-only and hashes settlement id, event type, actor, external reference and timestamp. Append-only hash anchoring is not a substitute for tenant row visibility or cryptographic external anchoring.
+- `settlements`: migration 006 requires verification + authorization reference before EXECUTING/RECONCILING/SETTLED. Migration 014 makes non-empty external_reference unique and prevents changing an assigned reference or confirmed timestamp. Migration 047 adds party/credential integrity and current-owner checks. These are mutation-integrity controls, not bilateral SELECT/UPDATE authorization.
+- Verification approval: migration 008 requires the verifier identity to have a VERIFIED membership and a verifier/auditor/validator role or verification permission; it prevents an activity actor from approving their own activity/evidence. The function's permission query is global across memberships and is not, by itself, organization/geography scoped.
+- `ccts_methodology_registry`: migration 20261020 creates a global reference catalogue keyed by code, with item kind, sector, source status, implementation status, official version, source URL and source snapshot/check dates. Registry presence explicitly does not mean the methodology/tool is implemented, validated or applicable. This is shared reference data, not tenant-owned data.
+
+### Authorization contract decisions required before policies
+
+1. Credentials should be protected by a verified activity/project organization ownership chain plus approved verification and methodology reference. Do not infer tenant ownership from the credential's current registry owner alone.
+2. Registry event visibility needs a policy decision for issuer, current owner, prior owner, recipient and regulator/auditor. Append-only triggers alone do not prevent unauthorized SELECT or INSERT.
+3. Settlement and settlement-event access must be party-scoped (payer, payee, credential owner) with operation-specific state transitions. A generic single-organization RLS predicate is incorrect for bilateral settlement.
+4. Verification approval must require the verifier's verified authority in the same organization/geographic scope as the subject activity/evidence, not merely any verified verifier membership. Add cross-organization and cross-geography negative tests.
+5. Hash values are currently generated using SHA-256 over concatenated fields, but source reviewed here does not establish a previous-hash chain or external anchoring for these event tables. Do not describe this as immutable cryptographic proof or tamper-evident external consensus.
+6. The methodology catalogue must be read-only to ordinary tenant roles; edits require controlled platform/regulatory source governance with provenance. Its `implementation_status` and `source_status` must remain distinct.
+
+### Remaining gaps
+
+- Exact full CREATE TABLE/FK definitions and all later replacements for `credentials`, `registry_events`, `environmental_attribute_claims`, `chain_of_custody_links`, and settlement parent tables still need full migration-chain reconciliation.
+- Need tests for credential transfer ownership sequence, issuer/recipient visibility, verifier cross-tenant denial, settlement payer/payee isolation, duplicate external reference, state-transition matrix, and concurrent transfer/settlement.
+- Need full per-function EXECUTE ACL and trigger/function owner inventory; migration source scan cannot prove live production ACLs.
+- No RLS policies generated, no production schema/role/grant/data changed. Keep PR #192 draft and release HOLD.
