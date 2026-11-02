@@ -479,3 +479,10 @@ The branch now contains an immutable/idempotent enqueue helper, atomic lease cla
 5. Keep the production worker OFF and all production schema/role changes gated pending the 67-table tenant policy and least-privilege runtime-role review.
 
 **No production database or service was changed. Production HOLD; certification OFF; platform-wide TRL 9 NOT ESTABLISHED.**
+
+
+### Durable enqueue and Mirror Node CI progress — 2026-11-02 14:34 UTC
+
+- Checkpoint/documentation exact-head workflow `41462800628` completed SUCCESS.
+- Reconciliation helper's corrected strict-null code commit `ef3ee145447bbfa0536a39c5ba92c0fd9e45b4fe` had a typecheck failure before the correction; the new exact-head workflow `41462918208` for the subsequent source commit is now through typecheck/build and disposable PostgreSQL acceptance, with production-container build in progress. Do not call the full workflow green until it completes.
+- Idempotent enqueue implementation/test source commits `c7e0e254b83ac03b30770b49f29f1175eaa13943` and `745e279128a8f0e722e3ee7e0e4389c41759b7de` were covered by CI runs that initially failed due to the same Mirror Node strict-null issue. The corrected branch rerun includes these changes.
