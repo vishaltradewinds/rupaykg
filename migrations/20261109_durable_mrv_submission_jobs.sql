@@ -101,20 +101,6 @@ begin
   end if;
 
   if new.status is distinct from old.status then
-    -- Status transitions are lease-fenced at the database boundary as well as
-    -- in the worker repository. Claiming REQUESTED/retryable work must install
-    -- a fresh live lease; advancing an already claimed stage must present an
-    -- existing live lease (the repository clears it after the transition).
-    if not (old.status = 'REQUESTED' and new.status = 'CANCELLED') then
-      if new.status = 'CLAIMED' then
-        if new.lease_token is null or new.lease_expires_at is null or new.lease_expires_at <= now() then
-          raise exception 'MRV_JOB_LEASE_REQUIRED';
-        end if;
-      elsif old.lease_token is null or old.lease_expires_at is null or old.lease_expires_at <= now() then
-        raise exception 'MRV_JOB_LEASE_REQUIRED';
-      end if;
-    end if;
-
     allowed := case old.status
       when 'REQUESTED' then new.status in ('CLAIMED','CANCELLED')
       when 'CLAIMED' then new.status in ('CLAIMED','GUARDIAN_SUBMITTED','RETRYABLE_FAILURE','PERMANENT_FAILURE','NEEDS_RECONCILIATION','CANCELLED')
@@ -131,6 +117,21 @@ begin
     if not allowed then
       raise exception 'MRV_JOB_INVALID_STATE_TRANSITION: % -> %', old.status, new.status;
     end if;
+
+    -- Status transitions are lease-fenced at the database boundary as well as
+    -- in the worker repository. Claiming REQUESTED/retryable work must install
+    -- a fresh live lease; advancing an already claimed stage must present an
+    -- existing live lease (the repository clears it after the transition).
+    if not (old.status = 'REQUESTED' and new.status = 'CANCELLED') then
+      if new.status = 'CLAIMED' then
+        if new.lease_token is null or new.lease_expires_at is null or new.lease_expires_at <= now() then
+          raise exception 'MRV_JOB_LEASE_REQUIRED';
+        end if;
+      elsif old.lease_token is null or old.lease_expires_at is null or old.lease_expires_at <= now() then
+        raise exception 'MRV_JOB_LEASE_REQUIRED';
+      end if;
+    end if;
+
   end if;
 
   new.updated_at := now();
