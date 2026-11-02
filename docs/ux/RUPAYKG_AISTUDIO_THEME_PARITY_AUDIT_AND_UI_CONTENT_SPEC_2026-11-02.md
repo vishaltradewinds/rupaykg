@@ -219,3 +219,22 @@ Each authorised participant sees the information needed for their part of the ch
 - The reference's public landing component is the design authority for the public entry experience; the rest of the reference application should be sampled further before claiming whole-application visual parity.
 - This document does not change production, database schema, access policy, or deployment state.
 - PR #192 remains draft and must not be merged as a side effect of UI work.
+
+
+## Implementation progress — 2026-11-02
+
+### Gate 1 source changes committed to the PR #192 engineering branch
+
+- `apps/web/src/styles.css`: canonical black / emerald / muted-white tokens and reference-aligned styling for the public landing, shared header, forms, cards and workspace surfaces; responsive rules, visible focus and reduced-motion handling.
+- `apps/web/public/minimal-stakeholder.css`: removed the blanket `display:none!important` rules that hid `.landing-nav` and `.landing-panel`; retained only responsive landing refinements.
+- `apps/web/src/main.tsx`: updated the hero and overview content to plain-language material traceability; changed the public process to Record → Move → Verify → Realize; changed the trust tab label to Compliance; added `aria-pressed` state to the tab controls.
+- `apps/web/index.html`: near-black browser theme colour, revised page title and description.
+- `scripts/validate-rupaykg-landing-ux.mjs`: static acceptance checks for required copy, visible navigation/panels, theme tokens, focus and reduced-motion rules.
+- `.github/workflows/ci.yml`: runs the UX parity validator during CI after the production web build.
+
+### Validation status
+
+- Changes are on the existing draft PR #192 engineering branch so the established CI suite covers them.
+- CI run #4542 (run ID `41417677832`) was queued when this checkpoint was written; do not report it as passed until GitHub reports a successful conclusion.
+- No production deployment or database change was performed.
+- Visual parity is not yet certified: inspect the CI browser screenshot and perform viewport/browser checks after the run. This batch is Gate 1 source implementation, not the complete authenticated-shell and workflow redesign.
