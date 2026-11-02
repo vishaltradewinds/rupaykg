@@ -15,6 +15,21 @@ BEGIN
   IF NOT pg_catalog.pg_has_role(current_user, owner_role.oid, 'MEMBER') THEN
     RAISE EXCEPTION 'BOOTSTRAP_OWNER_MEMBERSHIP_MISSING: migration principal must be able to SET ROLE rupaykg_bootstrap_owner';
   END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_catalog.pg_auth_members m
+     WHERE m.roleid = owner_role.oid
+       AND m.member = (SELECT oid FROM pg_catalog.pg_roles WHERE rolname = current_user)
+       AND m.admin_option
+  ) THEN
+    RAISE EXCEPTION 'BOOTSTRAP_OWNER_TEMPORARY_ADMIN_MEMBERSHIP_REQUIRED: migration principal needs ADMIN OPTION to revoke its temporary membership after setup';
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM pg_catalog.pg_auth_members m
+     WHERE m.roleid = owner_role.oid
+       AND m.member <> (SELECT oid FROM pg_catalog.pg_roles WHERE rolname = current_user)
+  ) THEN
+    RAISE EXCEPTION 'BOOTSTRAP_OWNER_ROLE_HAS_UNEXPECTED_MEMBERS: only the migration principal may temporarily assume the bootstrap owner';
+  END IF;
   IF NOT pg_catalog.has_database_privilege(owner_role.oid, current_database(), 'CREATE') THEN
     RAISE EXCEPTION 'BOOTSTRAP_OWNER_DATABASE_CREATE_MISSING: DBA must grant CREATE temporarily for schema creation';
   END IF;
@@ -477,6 +492,16 @@ ALTER DEFAULT PRIVILEGES FOR ROLE rupaykg_bootstrap_owner IN SCHEMA bootstrap_pr
   REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC;
 
 RESET ROLE;
+
+-- The migration principal's owner-role membership is temporary. Remove it
+-- immediately after all SECURITY DEFINER objects have been created so neither
+-- application nor ordinary migration sessions can later SET ROLE to the owner.
+DO $revoke_temporary_owner_membership$
+DECLARE migration_principal name := current_user;
+BEGIN
+  EXECUTE format('REVOKE rupaykg_bootstrap_owner FROM %I', migration_principal);
+END
+$revoke_temporary_owner_membership$;
 
 -- The owner needs CREATE only for schema creation; it retains ownership of its private schema.
 DO $revoke_database_create$
