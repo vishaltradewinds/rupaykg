@@ -16,7 +16,8 @@ export async function approveTestMembership(
   requestedOrganizationType: string,
 ): Promise<void> {
   const authority = await client.query<{ id: string }>(
-    "select i.id from public.identities i join public.organization_memberships om on om.identity_id=i.id and om.status='VERIFIED' join public.roles r on r.id=om.role_id and r.organization_id=om.organization_id join public.organizations o on o.id=om.organization_id and o.status='VERIFIED' and o.organization_type='PLATFORM_AUTHORITY' where i.status='VERIFIED' and i.suspended_at is null and r.name in ('platform_admin','super_admin') and jsonb_typeof(r.permissions)='array' and r.permissions @> '[\"admin:users\"]'::jsonb order by i.created_at limit 1",
+    "select i.id from public.identities i join public.organization_memberships om on om.identity_id=i.id and om.status='VERIFIED' join public.roles r on r.id=om.role_id and r.organization_id=om.organization_id join public.organizations o on o.id=om.organization_id and o.status='VERIFIED' and o.organization_type='PLATFORM_AUTHORITY' where i.status='VERIFIED' and i.suspended_at is null and r.name in ('platform_admin','super_admin') and jsonb_typeof(r.permissions)='array' and r.permissions @> $1::jsonb order by i.created_at limit 1",
+    [JSON.stringify(["admin:users"])],
   );
   const reviewerId = authority.rows[0]?.id;
   if (!reviewerId) throw new Error("TEST_PLATFORM_AUTHORITY_NOT_BOOTSTRAPPED");
