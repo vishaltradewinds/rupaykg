@@ -270,3 +270,13 @@ No production DDL/DML, migration, role/grant/RLS changes, deployments, worker/sc
 - This closes a concrete negative-test gap for the existing `organization_has_geography_scope` and activity trigger. It does not yet test route-level queue scope decisions, resource-flow source/destination guards, or prove the scope model for all approval levels.
 - CI status for this exact commit has not yet been returned by the commit workflow/status endpoints; do not treat this change as validated until PR workflow jobs complete.
 - No production database change. PR #192 remains draft. Next: run/poll exact-head CI, then test geography-scoped review queue/decision and resource-flow source/destination denial.
+
+
+## 2026-11-02 — API SQL / tenant-context source inventory
+- Added `docs/security/RUPAYKG_API_ROUTE_SQL_TENANT_CONTEXT_INVENTORY_2026-11-02.md` (commit `cbb93ddbcd4bd2e6ae137a543c07351b8a5055b7`).
+- Static scan across 14 API/auth/route modules found 218 source lines with direct query/connect call patterns; request-context helper itself has 5 internal query/connect call lines but is not invoked by any of the 14 route/server/auth modules in this scan.
+- Highest remediation concentration: platform-admin 49 call lines, value routes 36, evidence vault 27, sync 21, CPCB/SWM 19, MRV 15. Counts are triage indicators, not SQL statement counts or vulnerability counts.
+- 0/14 scanned API route/server/auth modules use the signed RLS request helper. This substantiates the P0 route integration gap; no RLS enablement or runtime cutover until the complete route/worker contract is implemented and tested.
+- Added prioritized remediation order and exact-role acceptance criteria to the inventory.
+- CI #4526 run id `41408414934` was observed in progress on the resume checkpoint head; check latest PR head and exact-head run before claiming the geography acceptance test passed.
+- No production change. PR #192 remains open/draft. Next: poll exact-head CI; then continue auth/geography negative tests and begin platform-admin route migration only after reviewing its full handler/function contract.
