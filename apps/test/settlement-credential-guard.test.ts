@@ -2,6 +2,7 @@ import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { Pool } from "pg";
 import { randomUUID } from "node:crypto";
+import { approveTestMembership } from "../src/test-support/approved-membership.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 const pool = databaseUrl ? new Pool({ connectionString: databaseUrl, max: 2 }) : null;
@@ -30,6 +31,7 @@ before(async () => {
     const verifier = (await c.query<{ id: string }>("insert into identities(external_subject,display_name) values($1,$2) returning id", [`settlement-guard-verifier-${suffix}`, "Settlement Guard Independent Verifier"])).rows[0]!.id;
     verifierId = verifier;
     const verifierRole = (await c.query<{ id: string }>("insert into roles(organization_id,name,permissions) values($1,$2,$3::jsonb) returning id", [owner, `settlement-guard-verifier-role-${suffix}`, JSON.stringify(["VERIFY_EVIDENCE", "ISSUE_CREDENTIAL"])] )).rows[0]!.id;
+    await approveTestMembership(c, verifier, owner, verifierRole, geography, "verifier", "processor");
     await c.query("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED')", [verifier, owner, verifierRole]);
 
     const retiredActivity = (await c.query<{ id: string }>("insert into activities(organization_id,actor_identity_id,geography_id,activity_type,status,completed_at) values($1,$2,$3,'COLLECTION','COMPLETED',now()) returning id", [owner, actor, geography])).rows[0]!.id;
@@ -56,33 +58,9 @@ before(async () => {
 });
 
 after(async () => {
-  if (!pool) return;
-  if (ownerId) {
-    const c = await pool.connect();
-    const organizationIds = [ownerId, counterpartyId].filter(Boolean);
-    const identityIds = [actorId, verifierId].filter(Boolean);
-    try {
-      await c.query("begin");
-      await c.query("delete from settlements where credential_id in (select id from credentials where issuer_organization_id=$1)", [ownerId]);
-      await c.query("delete from registry_events where credential_id in (select id from credentials where issuer_organization_id=$1)", [ownerId]);
-      await c.query("delete from mrv_provenance_events where activity_id in (select id from activities where organization_id=$1)", [ownerId]);
-      await c.query("delete from credentials where issuer_organization_id=$1", [ownerId]);
-      await c.query("delete from verifications where activity_id in (select id from activities where organization_id=$1)", [ownerId]);
-      await c.query("delete from evidence where activity_id in (select id from activities where organization_id=$1)", [ownerId]);
-      await c.query("delete from activities where organization_id=$1", [ownerId]);
-      await c.query("delete from stakeholder_application_approvals where application_id in (select id from stakeholder_applications where organization_id=$1)", [ownerId]);
-      await c.query("delete from stakeholder_applications where organization_id=$1", [ownerId]);
-      await c.query("delete from organization_memberships where organization_id=$1", [ownerId]);
-      await c.query("delete from roles where organization_id=$1", [ownerId]);
-      await c.query("delete from organization_geography_scopes where organization_id=$1", [ownerId]);
-      await c.query("delete from organization_statutory_profiles where organization_id=any($1::uuid[])", [organizationIds]);
-      if (identityIds.length) await c.query("delete from identities where id=any($1::uuid[])", [identityIds]);
-      if (geographyId) await c.query("delete from geography where id=$1", [geographyId]);
-      await c.query("delete from organizations where id=any($1::uuid[])", [organizationIds]);
-      await c.query("commit");
-    } catch (error) { await c.query("rollback"); throw error; } finally { c.release(); }
-  }
-  await pool.end();
+  // Registry events are append-only. Keep this fixture's linked credential and
+  // evidence graph intact; CI destroys the disposable PostgreSQL service.
+  await pool?.end();
 });
 
 describe("settlement credential lifecycle database guards", () => {
