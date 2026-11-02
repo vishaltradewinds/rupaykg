@@ -264,3 +264,27 @@ Added `migrations/20261106_verifier_same_org_geography_scope.sql` on the PR #192
 Required test matrix remains: same-org/in-scope success; unrelated-org denial; out-of-scope geography denial; NULL geography denial; no verified geography root denial; evidence-only activity resolution; activity/evidence mismatch denial; self-verification denial; non-APPROVED workflow compatibility; restricted search-path/runtime-role bypass denial.
 
 No production migration was applied. PR #192 remains draft and production release remains HOLD. TRL 9 is not established.
+
+
+## 2026-11-02 schema compatibility review of verifier migration
+
+Compared the new migration against the available source definitions:
+
+- `migrations/004_security_auth.sql`: `organization_memberships.status` is `record_status`; it has `identity_id`, `organization_id`, `role_id` and VERIFIED membership semantics.
+- `migrations/012_geography_authorization.sql`: `organization_geography_scopes` has `organization_id`, `geography_id`, `status record_status`; `organization_has_geography_scope(uuid,uuid)` returns true when there are no VERIFIED roots. The new helper explicitly checks for a VERIFIED root first, so that compatibility branch cannot grant verifier approval when no root exists.
+- `migrations/008_verification_integrity.sql`: existing trigger confirms `verifications.decision`, `verifier_identity_id`, `activity_id`, `evidence_id`, and the `activities.actor_identity_id` reference are already used by the existing trigger. This supports replacing that trigger function without changing its trigger name.
+- `apps/src/mrv-routes.ts`: activity geography is explicitly read from `activities.geography_id`, with organization binding and non-null checks.
+- `migrations/20261026_auth_scoped_onboarding_mutations.sql`: role permissions are JSONB arrays and verified memberships use `record_status`; onboarding initially creates membership and geography scope as PENDING, consistent with the proposed fail-closed requirement.
+
+### Remaining schema uncertainty and hardening
+
+The migration has not yet been applied to a disposable database, so PostgreSQL compilation remains unproven. The subject organization itself should also be required to have `organizations.status='VERIFIED'` before approval; the committed migration currently requires verified membership and verified geography root but does not yet explicitly require verified organization status. Treat this as a required correction before merge. Check whether `verifications.activity_id` and `evidence.activity_id` are nullable and whether all rows can be resolved as expected. Confirm all role aliases and permissions from the authoritative role catalogue.
+
+### Validation execution status
+
+- Static source compatibility review: completed for the five files above.
+- Migration validator: not executed in a checked-out runtime.
+- PostgreSQL migration apply/rollback: not executed.
+- Regression tests: not implemented or executed.
+- CI: no workflow run was returned for migration commit `c15726971ffb57b96c25573bd5f0f6107b6011ad`; no green status is claimed for the new migration.
+- Production: unchanged; no DDL, grants, role or data changes.
