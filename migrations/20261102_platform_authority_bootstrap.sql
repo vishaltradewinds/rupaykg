@@ -485,6 +485,30 @@ BEGIN
 END
 $revoke_database_create$;
 
+-- Keep the membership guard's search_path restricted while schema-qualifying its table lookup.
+-- The bootstrap SECURITY DEFINER function uses pg_catalog,pg_temp; this trigger must not
+-- depend on caller search_path or resolve an attacker-controlled relation.
+CREATE OR REPLACE FUNCTION public.enforce_verified_membership_role_permissions()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = pg_catalog, pg_temp
+AS $
+BEGIN
+  IF NEW.status = 'VERIFIED' THEN
+    IF NOT EXISTS (
+      SELECT 1
+        FROM public.roles r
+       WHERE r.id = NEW.role_id
+         AND jsonb_typeof(r.permissions) = 'array'
+         AND jsonb_array_length(r.permissions) > 0
+    ) THEN
+      RAISE EXCEPTION 'verified membership requires an explicit role permission set';
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$;
+
 create or replace function public.ensure_organization_governance_profile()
 returns trigger
 language plpgsql
