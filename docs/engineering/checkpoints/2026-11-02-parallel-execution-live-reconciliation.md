@@ -383,3 +383,14 @@ Extended `apps/src/mrv-submission-jobs.integration.test.ts` to verify single-wor
 
 
 Lease renewal follow-up: `apps/src/mrv-submission-jobs.ts` now also exposes `renewMrvSubmissionJobLease`, a compare-and-set extension that only the current unexpired lease token can perform. Commit `e34536c0fec929b02640cf1cfb79a3a28d47d4f3`. This is still a library primitive; worker heartbeat policy and integration tests remain to be added before any long-running provider processing is enabled.
+
+
+## Subsequent worker and Hedera safety work — 2026-11-02 14:17 UTC
+
+- Exact-head workflow for worker claim/advance and stale-token integration tests: `41460225243` completed SUCCESS on `cdd4968df2721adf593759d28a3122678b19e3ea`.
+- Exact-head workflow for worker lease module and initial integration tests: `41460158865` completed SUCCESS on `961b6303d0a62eb9e73a3c065c06e409c79b48b1`.
+- Added `createHcsTransactionId()` and optional persisted transaction-ID submission support in `apps/src/hedera-anchor.ts` (`eb1ba4b0af10a70190d060c6a28df4299540e4cb`). This allows a caller to generate and persist an SDK transaction ID before HCS submission, then reuse the same ID on retry. It is not yet wired into the job worker or legacy submit route.
+- Added explicit lease-renewal integration coverage in commit `d65d311d09e7d8be7b617ea2c1b1507ae837bdbb`; CI pending.
+- Checkpoint branch updated through the lease-renewal note in its own documentation commits; latest docs CI and code CI remain independently tracked.
+
+**Safety boundary:** no autonomous production worker is started. The production DB audit still found no RLS enabled on the public base tables and no dedicated least-privilege worker runtime role/policy. The job migration deliberately has no grants/RLS policy yet. A runnable worker must fail closed until a separate worker credential, forced RLS, job-table policies, actor/organization/geography binding, tenant-negative tests and DBA-reviewed migration are available. Guardian idempotency is deterministic but still depends on the Guardian endpoint honoring the key. HCS transaction-ID persistence is only a helper until wired into the job state machine. Mirror Node reconciliation and provenance finalization remain open. Do not claim end-to-end durable orchestration or TRL 9.
