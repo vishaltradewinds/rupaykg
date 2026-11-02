@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { approveTestMembership } from "./test-support/approved-membership.js";
-import { advanceMrvSubmissionJob, claimNextMrvSubmissionJob, enqueueMrvSubmissionJob, persistMrvGuardianIdempotencyKey, persistMrvHcsTransactionId, releaseMrvSubmissionJobLease, renewMrvSubmissionJobLease } from "./mrv-submission-jobs.js";
+import { advanceMrvSubmissionJob, claimNextMrvSubmissionJob, enqueueMrvSubmissionJob, isMrvSubmissionJobStillAuthorized, persistMrvGuardianIdempotencyKey, persistMrvHcsTransactionId, releaseMrvSubmissionJobLease, renewMrvSubmissionJobLease } from "./mrv-submission-jobs.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 const ssl = process.env.DATABASE_SSL === "false" ? undefined : { rejectUnauthorized: false };
@@ -180,12 +180,16 @@ test("durable MRV job ledger enforces immutable request, legal transitions and a
     assert.equal(releaseEvent.rows[0]!.actor_reference, "recovery-worker-" + suffix, "worker audit events must identify the lease owner");
 
     const enqueueInput = {
-      activityId, verificationId, evidenceId, organizationId, geographyId, requestedByIdentityId: identityId,
+      activityId, verificationId, evidenceId, organizationId, geographyId, requestedByIdentityId: verifierIdentityId,
       guardianPolicyId: "enqueue-test-policy", methodologyCode: "BM WA03.001", payloadSnapshot: { schema: "rupaykg:mrv:v1", observations: [], evidence: [] },
     };
     const queued = await enqueueMrvSubmissionJob(client, enqueueInput);
     const replayedQueue = await enqueueMrvSubmissionJob(client, enqueueInput);
     assert.equal(replayedQueue.id, queued.id, "identical submissions must return the same durable job");
+    assert.equal(await isMrvSubmissionJobStillAuthorized(client, queued.id), true, "valid requester membership and current MRV bindings authorize provider work");
+    await client.query("update organization_memberships set status='PENDING' where identity_id=$1 and organization_id=$2", [verifierIdentityId, organizationId]);
+    assert.equal(await isMrvSubmissionJobStillAuthorized(client, queued.id), false, "revoked or pending requester membership must block provider work");
+    await client.query("update organization_memberships set status='VERIFIED' where identity_id=$1 and organization_id=$2", [verifierIdentityId, organizationId]);
     await assert.rejects(
       enqueueMrvSubmissionJob(client, { ...enqueueInput, payloadSnapshot: { schema: "rupaykg:mrv:v1", observations: [{ value: 2 }], evidence: [] } }),
       /MRV_IDEMPOTENCY_PAYLOAD_CONFLICT/,
