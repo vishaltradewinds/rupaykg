@@ -486,47 +486,95 @@ async function run(): Promise<void> {
     assert.equal(activated.rows[0]?.membership_status, "VERIFIED");
     assert.equal(activated.rows[0]?.organization_status, "VERIFIED");
 
-    // Exercise the hierarchy's geography predicate at both the review-queue
-    // and mutation boundaries. The synthetic reviewer has a valid STATE role
-    // in a verified organization whose verified geography root excludes a
-    // sibling state. This is a disposable-PostgreSQL fixture, not production
-    // membership provisioning.
-    const scopedReviewerRole = await pool.query<{ id: string }>(
+    // Exercise reviewer organization type and geography at both the
+    // review-queue and mutation boundaries. A role label in an ordinary
+    // processor organization must not create regulator authority.
+    const processorMembership = await pool.query<{ id: string; role_id: string }>(
+      `select id,role_id from public.organization_memberships
+        where identity_id=$1 and organization_id=$2 and status='VERIFIED'`,
+      [applicantIdentity, applicantOrganizationId],
+    );
+    assert.equal(processorMembership.rows.length, 1);
+    const originalProcessorRoleId = processorMembership.rows[0]?.role_id;
+    assert.ok(originalProcessorRoleId);
+    const forgedRegulatorRole = await pool.query<{ id: string }>(
       `insert into public.roles(organization_id,name,permissions)
        values($1,'regulator','[]'::jsonb) returning id`,
       [applicantOrganizationId],
     );
-    const scopedReviewerRoleId = scopedReviewerRole.rows[0]?.id;
-    assert.ok(scopedReviewerRoleId);
-    const reviewerMembershipApplication = await pool.query<{ id: string }>(
-      `insert into public.stakeholder_applications(
-         identity_id,organization_id,role_id,requested_role_key,requested_organization_type,
-         geography_id,status,applicant_note
-       ) values($1,$2,$3,'regulator','processing_facility',null,'PENDING','CI reviewer membership lifecycle fixture')
-       returning id`,
-      [identityC, applicantOrganizationId, scopedReviewerRoleId],
-    );
-    const reviewerMembershipApplicationId = reviewerMembershipApplication.rows[0]?.id;
-    assert.ok(reviewerMembershipApplicationId);
+    const forgedRegulatorRoleId = forgedRegulatorRole.rows[0]?.id;
+    assert.ok(forgedRegulatorRoleId);
     await pool.query(
-      `insert into public.organization_memberships(identity_id,organization_id,role_id,status)
-       values($1,$2,$3,'PENDING')`,
-      [identityC, applicantOrganizationId, scopedReviewerRoleId],
+      "update public.organization_memberships set role_id=$2 where id=$1",
+      [processorMembership.rows[0]?.id, forgedRegulatorRoleId],
     );
-    const reviewerMembershipDecision = await pool.query<{ decision_result: { status: string; approvalLevel: string } }>(
-      "select auth_private.review_stakeholder_application($1,$2,$3,$4) as decision_result",
-      [authorityTokenHash, reviewerMembershipApplicationId, "approve", "CI reviewer role approved through platform lifecycle"],
-    );
-    assert.equal(reviewerMembershipDecision.rows[0]?.decision_result.status, "APPROVED");
-    assert.equal(reviewerMembershipDecision.rows[0]?.decision_result.approvalLevel, "PLATFORM");
 
+    // Create a real synthetic regulator organization and membership through
+    // the approved onboarding lifecycle. Only its geography scope is seeded
+    // directly as a controlled CI fixture.
+    const regulatorApplication = await pool.query<{
+      application_result: { application: { id: string }; organization_id: string }
+    }>(
+      `select auth_private.create_stakeholder_application(
+        $1,$2,$3,$4,$5,$6,$7,$8::uuid,$9,$10,$11,$12,$13,$14::timestamptz,$15::timestamptz
+      ) as application_result`,
+      [
+        unauthorizedTokenHash, "CI Synthetic Regulator", "regulator",
+        "CI Synthetic Regulator Authority", "Public Authority",
+        `REG-CI-${suffix}`, "State Government", null, "Synthetic regulator reviewer fixture",
+        "AUTHORITY_NOTIFICATION", `evidence://ci/regulator/${suffix}`, "e".repeat(64),
+        "CI Test Issuer", null, null,
+      ],
+    );
+    const regulatorApplicationId = regulatorApplication.rows[0]?.application_result.application.id;
+    const regulatorOrganizationId = regulatorApplication.rows[0]?.application_result.organization_id;
+    assert.ok(regulatorApplicationId && regulatorOrganizationId);
+    const regulatorLegalVerification = await pool.query<{ verification_result: { status: string } }>(
+      "select auth_private.verify_stakeholder_legal($1,$2,$3,$4) as verification_result",
+      [authorityTokenHash, regulatorApplicationId, "VERIFIED", "CI synthetic regulator evidence verified"],
+    );
+    assert.equal(regulatorLegalVerification.rows[0]?.verification_result.status, "VERIFIED");
+    const regulatorApproval = await pool.query<{ decision_result: { status: string; approvalLevel: string } }>(
+      "select auth_private.review_stakeholder_application($1,$2,$3,$4) as decision_result",
+      [authorityTokenHash, regulatorApplicationId, "approve", "CI regulator membership approved"],
+    );
+    assert.equal(regulatorApproval.rows[0]?.decision_result.status, "APPROVED");
+    assert.equal(regulatorApproval.rows[0]?.decision_result.approvalLevel, "PLATFORM");
+    const regulatorMembership = await pool.query<{ role_name: string; membership_status: string; organization_type: string }>(
+      `select r.name as role_name,om.status as membership_status,o.organization_type
+         from public.organization_memberships om
+         join public.roles r on r.id=om.role_id
+         join public.organizations o on o.id=om.organization_id
+        where om.identity_id=$1 and om.organization_id=$2`,
+      [identityC, regulatorOrganizationId],
+    );
+    assert.equal(regulatorMembership.rows[0]?.role_name, "regulator");
+    assert.equal(regulatorMembership.rows[0]?.membership_status, "VERIFIED");
+    assert.equal(regulatorMembership.rows[0]?.organization_type, "regulator");
+    await pool.query(
+      `insert into public.organization_geography_scopes(organization_id,geography_id,status)
+       values($1,$2,'VERIFIED')`,
+      [regulatorOrganizationId, geographyRoot],
+    );
+
+    const geographyApplicantIdentity = (await pool.query<{ id: string }>(
+      "insert into public.identities(external_subject,display_name,email,status) values($1,$2,$3,'VERIFIED') returning id",
+      [`ci-geography-applicant:${suffix}`, "CI Geography Applicant", `ci-geography-applicant-${suffix}@example.invalid`],
+    )).rows[0]?.id;
+    assert.ok(geographyApplicantIdentity);
+    const geographyApplicantToken = randomBytes(32).toString("base64url");
+    const geographyApplicantTokenHash = sha256(geographyApplicantToken);
+    await pool.query(
+      "insert into public.identity_sessions(identity_id,token_hash,expires_at,request_context) values($1,$2,now()+interval '8 hours',$3::jsonb)",
+      [geographyApplicantIdentity, geographyApplicantTokenHash, JSON.stringify({ provider: "ci-geography-review" })],
+    );
     const createGeographyApplication = async (name: string, code: string, geographyId: string) => {
       const created = await pool.query<{ application_result: { application: { id: string } } }>(
         `select auth_private.create_stakeholder_application(
           $1,$2,$3,$4,$5,$6,$7,$8::uuid,$9,$10,$11,$12,$13,$14::timestamptz,$15::timestamptz
         ) as application_result`,
         [
-          authorityTokenHash, name, "processor", name, "Private Limited",
+          geographyApplicantTokenHash, name, "processor", name, "Private Limited",
           code, "MCA", geographyId, "CI geography-scoped reviewer fixture",
           "INCORPORATION_CERTIFICATE", `evidence://ci/geography/${suffix}/${code}`,
           "d".repeat(64), "CI Test Issuer", null, null,
@@ -542,32 +590,19 @@ async function run(): Promise<void> {
     const outOfScopeApplicationId = await createGeographyApplication(
       "CI Out-of-Scope Geography Application", `CIN-OUT-${suffix}`, geographyOutside,
     );
-    const reviewerOrganizationType = await pool.query<{ organization_type: string }>(
-      "select organization_type from public.organizations where id=$1",
-      [applicantOrganizationId],
-    );
-    assert.equal(reviewerOrganizationType.rows[0]?.organization_type, "processing_facility");
     const processorRoleQueue = await pool.query<{ queue_result: { applications: Array<{ id: string }> } }>(
       "select auth_private.get_onboarding_review_queue($1) as queue_result",
-      [unauthorizedTokenHash],
+      [applicantTokenHash],
     );
     assert.equal(
       processorRoleQueue.rows[0]?.queue_result.applications.some(
         row => row.id === inScopeApplicationId || row.id === outOfScopeApplicationId,
       ),
       false,
-      "a verified processing facility must not gain state-review authority from a regulator role label",
-    );
-
-    // The fixture then represents a verified regulator organization with the
-    // same reviewer role and geography root to prove that legitimate authority
-    // is scoped to descendants, not merely blocked wholesale.
-    await pool.query(
-      "update public.organizations set organization_type='regulator' where id=$1",
-      [applicantOrganizationId],
+      "a processing facility must not gain state-review authority from a regulator role label",
     );
     const scopedReviewerQueue = await pool.query<{
-      queue_result: { applications: Array<{ id: string; canReview: boolean; nextApproval?: { approval_level?: string } }> }
+      queue_result: { applications: Array<{ id: string; canReview: boolean }> }
     }>(
       "select auth_private.get_onboarding_review_queue($1) as queue_result",
       [unauthorizedTokenHash],
@@ -606,8 +641,8 @@ async function run(): Promise<void> {
       "state reviewer must lose queue visibility after its step advances to PLATFORM",
     );
     await pool.query(
-      "update public.organizations set organization_type='processing_facility' where id=$1",
-      [applicantOrganizationId],
+      "update public.organization_memberships set role_id=$2 where id=$1",
+      [processorMembership.rows[0]?.id, originalProcessorRoleId],
     );
 
     const selfApplication = await pool.query<{ application_result: { application: { id: string } } }>(
