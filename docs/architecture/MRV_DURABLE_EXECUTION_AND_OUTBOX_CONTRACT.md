@@ -199,3 +199,15 @@ The runner requires `RUPAYKG_MRV_WORKER_ENABLED=true` and is not registered as a
 CI history: the first worker commit had an exact-optional-property TypeScript error; it was corrected by omitting absent optional properties rather than passing `undefined`. Subsequent branch workflows are running. Do not mark worker implementation accepted until the latest exact-head workflow is green and integration tests exercise all stages, lease expiry, retries, provider ambiguity, authorization revocation and finalization on disposable PostgreSQL.
 
 **Not yet proven / not production-ready:** no separately deployed worker process or supervised scheduler; no worker DB role or forced RLS; no live provider test; no real pilot job; no independent review of provenance upsert semantics; no production migration or rollout. Production flags must remain unset. No production database or provider writes have occurred.
+
+
+### Separate worker process and startup guard
+
+- Added `apps/src/mrv-worker-server.ts` and package command `npm run start:worker:mrv -w @rupaykg/api`.
+- The worker is a separate process; it is not imported by the HTTP API server and cannot start as a side effect of serving user traffic.
+- Requires both `RUPAYKG_MRV_WORKER_ENABLED=true` and a dedicated `MRV_WORKER_DATABASE_URL`.
+- Startup rejects any database identity other than `rupaykg_mrv_worker_runtime`, and rejects login roles with inheritance, superuser, BYPASSRLS, CREATEDB, CREATEROLE or replication privileges, or membership in app/auth owner roles.
+- Startup also requires RLS **and FORCE RLS** on all eleven data tables the worker touches, plus the geography-scope authorization function. With the current production schema (0/67 RLS enabled), this worker must fail closed and cannot start.
+- The worker handles SIGTERM/SIGINT, uses a small pool, processes one durable stage per loop and backs off when idle or on failure.
+
+This creates an executable process boundary, not production deployability. The worker database role and policies do not yet exist in production; no role, grant, policy, migration, service or compute was created. Do not set the worker flags or configure the URL until the independent RLS/least-privilege migration and tests are approved.
