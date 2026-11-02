@@ -59,6 +59,8 @@ A read-only production catalog check confirmed:
 - mrv_submission_jobs does NOT exist.
 - mrv_submission_job_events does NOT exist.
 
+A read-only inspection of the production schema_migrations ledger found no applied migration filename matching MRV submission, worker, or queue; only earlier MRV/Guardian registry and provenance migrations were present. The missing queue tables are therefore not merely hidden from the public-table inventory: no corresponding applied submission/worker/queue migration is recorded in the inspected ledger.
+
 Therefore the current MRV worker startup contract cannot be satisfied by the inspected production schema as it stands. Worker enablement remains OFF. Before any worker activation, reconcile migrations/schema history and add the missing durable job tables in a reviewed candidate migration, then test queue claims, retries, idempotency, lease expiry, dead-letter behavior, tenant isolation, event append-only semantics and worker role grants in disposable PostgreSQL.
 
 The worker startup also requires FORCE RLS on all 11 listed tables and EXECUTE on public.organization_has_geography_scope(uuid,uuid). These requirements must be included in the exact worker role rehearsal; do not infer that app runtime grants are sufficient.
