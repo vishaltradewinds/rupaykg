@@ -351,3 +351,8 @@ The exact-head CI for `07cf795...` is pending. Do not claim the durable ledger m
 ## MRV job-ledger integration test regression found and corrected
 
 After the delimiter fix, the migration advanced through disposable PostgreSQL and the suite reached the new integration test. The fixture was rejected by the existing independent-verification invariant because it reused the activity actor as verifier. Corrected the test to create a distinct verifier identity; commit `ebb112300a5aa14c36f77b09a398eea8e15eaeb9`. This is a fixture correction, not a weakening of the anti-self-approval rule. Exact-head CI is pending.
+
+
+## 14:12 UTC CI correction
+
+Run `41459321801` confirmed the verifier fixture passed the independent-identity check but failed the next database authorization guard: the verifier also needs `VERIFY_EVIDENCE`. Added this explicit permission alongside `verification:approve` in commit `77c8f8be5365ca541dd57b60ed0a05d765499151`. Exact-head CI run `41459617407` is progressing through build; acceptance remains pending. Inspection also reconfirmed that the existing `/api/v1/mrv/activities/:activityId/submit` route still performs Guardian and Hedera calls synchronously while holding a session advisory lock. The durable ledger is not yet wired into that route; this remains a major reliability gap and must be replaced by short-transaction enqueue/claim/provider/finalize stages before claiming durable orchestration.
