@@ -39,6 +39,12 @@ before(async () => {
     destinationOrgId = (await c.query<{ id: string }>("insert into organizations(name,organization_type,status) values($1,'PROCESSOR','VERIFIED') returning id", [`runtime-registry-destination-${suffix}`])).rows[0]!.id;
     geographyId = (await c.query<{ id: string }>("insert into geography(kind,code,name) values('STATE_UT',$1,$2) returning id", [`REGISTRY-${suffix}`, `Registry Runtime ${suffix}`])).rows[0]!.id;
     await c.query("insert into organization_geography_scopes(organization_id,geography_id,status) values($1,$2,'VERIFIED')", [ownerOrgId, geographyId]);
+    const geographyChecks = await c.query<{ owner_scope: boolean; unscoped_scope: boolean }>(
+      "select public.organization_has_geography_scope($1,$3) as owner_scope, public.organization_has_geography_scope($2,$3) as unscoped_scope",
+      [ownerOrgId, destinationOrgId, geographyId],
+    );
+    assert.equal(geographyChecks.rows[0]?.owner_scope, true, "verified organization geography scope must be accepted");
+    assert.equal(geographyChecks.rows[0]?.unscoped_scope, false, "organization without a verified geography root must fail closed");
     actorId = (await c.query<{ id: string }>("insert into identities(external_subject,display_name) values($1,$2) returning id", [`runtime-registry-actor-${suffix}`, "Registry Runtime Actor"])).rows[0]!.id;
     verifierId = (await c.query<{ id: string }>("insert into identities(external_subject,display_name) values($1,$2) returning id", [`runtime-registry-verifier-${suffix}`, "Registry Runtime Verifier"])).rows[0]!.id;
     const actorRole = (await c.query<{ id: string }>("insert into roles(organization_id,name,permissions) values($1,$2,$3::jsonb) returning id", [ownerOrgId, `REGISTRY-OPERATOR-${suffix}`, JSON.stringify(["ISSUE_CREDENTIAL","TRANSFER_CREDENTIAL","RETIRE_CREDENTIAL","AUTHORIZE_SETTLEMENT","SETTLE_FUNDS","settlement:authorize","settlement:settle","guardian:read"])] )).rows[0]!.id;
