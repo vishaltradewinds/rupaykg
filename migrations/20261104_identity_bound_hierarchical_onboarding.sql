@@ -125,7 +125,7 @@ BEGIN
   IF p_token_hash IS NULL OR length(p_token_hash)<>64 THEN
     RAISE EXCEPTION 'AUTH_REQUIRED' USING ERRCODE='28000';
   END IF;
-  IF p_application_id IS NULL OR p_verification_status NOT IN ('VERIFIED','REJECTED')
+  IF p_application_id IS NULL OR p_verification_status IS NULL OR p_verification_status NOT IN ('VERIFIED','REJECTED')
      OR p_verification_note IS NULL OR length(btrim(p_verification_note))=0 THEN
     RAISE EXCEPTION 'LEGAL_REVIEW_INVALID' USING ERRCODE='22023';
   END IF;
@@ -202,7 +202,7 @@ BEGIN
   IF p_token_hash IS NULL OR length(p_token_hash)<>64 THEN
     RAISE EXCEPTION 'AUTH_REQUIRED' USING ERRCODE='28000';
   END IF;
-  IF p_application_id IS NULL OR p_action NOT IN ('approve','reject') THEN
+  IF p_application_id IS NULL OR p_action IS NULL OR p_action NOT IN ('approve','reject') THEN
     RAISE EXCEPTION 'INVALID_DECISION' USING ERRCODE='22023';
   END IF;
   IF p_action='reject' AND (p_review_note IS NULL OR length(btrim(p_review_note))=0) THEN
