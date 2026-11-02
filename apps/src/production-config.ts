@@ -7,6 +7,7 @@ export type ProductionConfig = {
   authResolverMode: "security_definer";
   requestContextSecret: string;
   requestContextKeyId: string;
+  requestContextMode: "disabled" | "enforced";
   databaseSsl: "require" | "false";
   databaseCaCert: string;
   allowedOrigins: string[];
@@ -67,6 +68,14 @@ function requestContextKeyId(value: string): string {
   return value;
 }
 
+function parseRequestContextMode(value: string | undefined): "disabled" | "enforced" {
+  const mode = value?.trim() || "disabled";
+  if (mode !== "disabled" && mode !== "enforced") {
+    throw new Error("PRODUCTION_CONFIG_INVALID: RUPAYKG_REQUEST_CONTEXT_MODE must be disabled or enforced");
+  }
+  return mode;
+}
+
 function origins(value: string): string[] {
   const result = value.split(",").map((item) => item.trim()).filter(Boolean);
   if (!result.length) throw new Error("PRODUCTION_CONFIG_INVALID: RUPAYKG_ALLOWED_ORIGINS must contain at least one origin");
@@ -91,6 +100,7 @@ export function readProductionConfig(env: NodeJS.ProcessEnv = process.env): Prod
   const authDatabaseUrl = productionAuthDatabaseUrl(required(env, "AUTH_DATABASE_URL"), databaseUrl);
   const requestContextSecretValue = requestContextSecret(required(env, "RUPAYKG_REQUEST_CONTEXT_SECRET"));
   const requestContextKeyIdValue = requestContextKeyId(required(env, "RUPAYKG_REQUEST_CONTEXT_KEY_ID"));
+  const requestContextModeValue = parseRequestContextMode(env.RUPAYKG_REQUEST_CONTEXT_MODE);
   const parsedDatabaseUrl = new URL(databaseUrl);
   const renderInternalDatabase =
     /^dpg-[a-z0-9-]+$/i.test(parsedDatabaseUrl.hostname) &&
@@ -103,6 +113,7 @@ export function readProductionConfig(env: NodeJS.ProcessEnv = process.env): Prod
     authResolverMode: "security_definer",
     requestContextSecret: requestContextSecretValue,
     requestContextKeyId: requestContextKeyIdValue,
+    requestContextMode: requestContextModeValue,
     databaseSsl: renderInternalDatabase ? "false" : "require",
     databaseCaCert: renderInternalDatabase ? "" : productionCaCert(env.DATABASE_CA_CERT?.trim() ?? "", databaseUrl),
     allowedOrigins: origins(required(env, "RUPAYKG_ALLOWED_ORIGINS")),

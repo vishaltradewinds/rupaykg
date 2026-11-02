@@ -17,6 +17,8 @@ import { registerIntelligenceRoutes } from "./intelligence-routes.js";
 import { registerMrvRoutes } from "./mrv-routes.js";
 import { registerEvidenceVaultRoutes } from "./evidence-vault-routes.js";
 import { registerPlatformAdminRoutes } from "./platform-admin-routes.js";
+import { createContextAwarePool, registerRequestTenantContext } from "./tenant-db-context.js";
+import { createSignedRequestContextToken } from "./signed-request-context-token.js";
 
 const app = Fastify({ logger: true });
 const allowedOrigins = process.env.RUPAYKG_ALLOWED_ORIGINS?.split(",").map(origin => origin.trim()).filter(Boolean) ?? [];
@@ -27,7 +29,14 @@ const databaseUrl = process.env.DATABASE_URL;
 const poolConfig: PoolConfig = { connectionString: databaseUrl, max: 10 };
 if (process.env.DATABASE_SSL === "require") poolConfig.ssl = { rejectUnauthorized: true, ca: process.env.DATABASE_CA_CERT };
 else if (process.env.DATABASE_SSL !== "false") poolConfig.ssl = { rejectUnauthorized: false };
-const pool = databaseUrl ? new Pool(poolConfig) : null;
+const requestContextMode = process.env.RUPAYKG_REQUEST_CONTEXT_MODE ?? "disabled";
+if (requestContextMode !== "disabled" && requestContextMode !== "enforced") throw new Error("REQUEST_CONTEXT_MODE_INVALID");
+const requestContextSecret = process.env.RUPAYKG_REQUEST_CONTEXT_SECRET;
+const requestContextKeyId = process.env.RUPAYKG_REQUEST_CONTEXT_KEY_ID;
+const rawPool = databaseUrl ? new Pool(poolConfig) : null;
+const pool = rawPool ? createContextAwarePool(rawPool) : null;
+if (requestContextMode === "enforced" && (!rawPool || !requestContextSecret || !requestContextKeyId)) throw new Error("REQUEST_CONTEXT_ENFORCEMENT_REQUIRES_DATABASE_AND_SIGNING_MATERIAL");
+if (requestContextMode === "enforced" && getAuthResolverMode() !== "security_definer") throw new Error("REQUEST_CONTEXT_ENFORCEMENT_REQUIRES_SECURITY_DEFINER_AUTH");
 const authDatabaseUrl = process.env.AUTH_DATABASE_URL;
 const authPoolConfig: PoolConfig = { ...poolConfig, connectionString: authDatabaseUrl, max: 3 };
 const authPool = authDatabaseUrl ? new Pool(authPoolConfig) : null;
@@ -136,6 +145,102 @@ async function assertProductionDatabaseRuntimeContracts(): Promise<void> {
   }
 }
 
+async function assertRequestContextDatabaseContract(): Promise<void> {
+  if (!rawPool) throw new Error("REQUEST_CONTEXT_DATABASE_UNAVAILABLE");
+  const rls = await rawPool.query<{ rls_enabled: number }>(
+    `select count(*)::int as rls_enabled
+       from pg_class c join pg_namespace n on n.oid=c.relnamespace
+      where n.nspname='public' and c.relkind='r' and c.relrowsecurity`,
+  );
+  const rlsEnabled = rls.rows[0]?.rls_enabled ?? 0;
+  if (rlsEnabled > 0 && requestContextMode !== "enforced") {
+    throw new Error("PRODUCTION_RLS_REQUIRES_SIGNED_REQUEST_CONTEXT_MODE_ENFORCED");
+  }
+  if (requestContextMode !== "enforced") return;
+  if (!requestContextSecret || !requestContextKeyId) throw new Error("REQUEST_CONTEXT_SIGNING_MATERIAL_UNAVAILABLE");
+
+  const contract = await rawPool.query<{
+    schema_exists: boolean;
+    schema_usage: boolean;
+    verifier_exists: boolean;
+    verifier_execute: boolean;
+    key_table_exists: boolean;
+    key_table_read: boolean;
+  }>(
+    `select
+       (to_regnamespace('app_security') is not null) as schema_exists,
+       case when to_regnamespace('app_security') is not null then has_schema_privilege(current_user,'app_security','USAGE') else false end as schema_usage,
+       (to_regprocedure('app_security.current_request_context_claims()') is not null) as verifier_exists,
+       case when to_regprocedure('app_security.current_request_context_claims()') is not null then has_function_privilege(current_user,to_regprocedure('app_security.current_request_context_claims()'),'EXECUTE') else false end as verifier_execute,
+       (to_regclass('app_security.request_context_keys') is not null) as key_table_exists,
+       case when to_regclass('app_security.request_context_keys') is not null then has_table_privilege(current_user,'app_security.request_context_keys','SELECT') else true end as key_table_read`,
+  );
+  const verified = contract.rows[0];
+  if (!verified || !verified.schema_exists || !verified.schema_usage || !verified.verifier_exists || !verified.verifier_execute || !verified.key_table_exists || verified.key_table_read) {
+    throw new Error("PRODUCTION_REQUEST_CONTEXT_VERIFIER_PRIVILEGES_INVALID");
+  }
+  const owner = await rawPool.query<{
+    security_definer: boolean;
+    owner_name: string;
+    owner_can_login: boolean;
+    owner_super: boolean;
+    owner_bypass_rls: boolean;
+    owner_create_role: boolean;
+    owner_create_db: boolean;
+    owner_inherit: boolean;
+    owner_replication: boolean;
+  }>(
+    `select p.prosecdef as security_definer, pg_get_userbyid(p.proowner) as owner_name,
+            r.rolcanlogin as owner_can_login, r.rolsuper as owner_super,
+            r.rolbypassrls as owner_bypass_rls, r.rolcreaterole as owner_create_role,
+            r.rolcreatedb as owner_create_db, r.rolinherit as owner_inherit,
+            r.rolreplication as owner_replication
+       from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+       join pg_roles r on r.oid=p.proowner
+      where n.nspname='app_security' and p.proname='current_request_context_claims' and p.pronargs=0`,
+  );
+  const verifierOwner = owner.rows[0];
+  if (owner.rows.length !== 1 || !verifierOwner?.security_definer || verifierOwner.owner_name !== "rupaykg_security_definer" ||
+      verifierOwner.owner_can_login || verifierOwner.owner_super || verifierOwner.owner_bypass_rls || verifierOwner.owner_create_role ||
+      verifierOwner.owner_create_db || verifierOwner.owner_inherit || verifierOwner.owner_replication) {
+    throw new Error("PRODUCTION_REQUEST_CONTEXT_VERIFIER_OWNER_INVALID");
+  }
+
+  // This is a read-only startup probe: the GUC is transaction-local and the
+  // transaction is always rolled back. It proves the server secret/key ID match
+  // an active database verifier key without exposing either value to logs.
+  const actorId = "00000000-0000-4000-8000-000000000001";
+  const organizationId = "00000000-0000-4000-8000-000000000002";
+  const token = createSignedRequestContextToken(
+    { actorIdentityId: actorId, organizationId },
+    { secret: requestContextSecret, keyId: requestContextKeyId, ttlSeconds: 60 },
+  );
+  const client = await rawPool.connect();
+  let transactionStarted = false;
+  let releaseError: Error | undefined;
+  try {
+    await client.query("BEGIN");
+    transactionStarted = true;
+    await client.query("select set_config('app.request_context', $1, true)", [token]);
+    const result = await client.query<{ claims: string[] | null }>("select app_security.current_request_context_claims() as claims");
+    const claims = result.rows[0]?.claims;
+    if (!Array.isArray(claims) || claims[0] !== actorId || claims[1] !== organizationId) {
+      throw new Error("PRODUCTION_REQUEST_CONTEXT_VERIFIER_KEY_MISMATCH");
+    }
+    await client.query("ROLLBACK");
+    transactionStarted = false;
+  } catch (error) {
+    releaseError = error instanceof Error ? error : new Error("Production request-context verification failed");
+    if (transactionStarted) {
+      try { await client.query("ROLLBACK"); }
+      catch (rollbackError) { releaseError = rollbackError instanceof Error ? rollbackError : releaseError; }
+    }
+    throw error;
+  } finally {
+    client.release(releaseError);
+  }
+}
+
 async function query<T extends Record<string, unknown>>(text: string, values: unknown[] = []): Promise<T[]> { if (!pool) throw new Error("DATABASE_URL is not configured"); return (await pool.query<T>(text, values)).rows; }
 function bodyOf(request: { body: unknown }): Record<string, unknown> { return (request.body && typeof request.body === "object" ? request.body : {}) as Record<string, unknown>; }
 function requiredString(body: Record<string, unknown>, key: string): string | null { return typeof body[key] === "string" && body[key].trim() ? body[key].trim() : null; }
@@ -146,6 +251,11 @@ function requireOrganization(auth: AuthContext, organizationId: string, reply: {
 async function canReadGeography(client: PoolClient, auth: AuthContext, geographyId: string): Promise<boolean> { if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(geographyId)) return false; const result = getAuthResolverMode() === "security_definer" ? await client.query<{ ok: boolean }>(`select auth_private.can_read_geography($1,$2) as ok`, [auth.identityId, geographyId]) : await client.query<{ ok: boolean }>(`select exists(select 1 from organization_memberships om where om.identity_id=$1 and om.status='VERIFIED' and organization_has_geography_scope(om.organization_id,$2)) as ok`, [auth.identityId, geographyId]); return result.rows[0]?.ok === true; }
 async function canWriteActivity(client: Pool | PoolClient, auth: AuthContext, activityId: string): Promise<boolean> { if (getAuthResolverMode() === "security_definer") { const result = await client.query<{ ok: boolean }>(`select auth_private.can_write_activity($1,$2) as ok`, [auth.identityId, activityId]); return result.rows[0]?.ok === true; } const result = await client.query<{ organization_id: string }>(`select a.organization_id from activities a join organization_memberships om on om.organization_id=a.organization_id and om.identity_id=$2 and om.status='VERIFIED' where a.id=$1 and a.geography_id is not null and organization_has_geography_scope(om.organization_id,a.geography_id)`, [activityId, auth.identityId]); const organizationId = result.rows[0]?.organization_id; return !!organizationId && await hasOrganizationPermission(client, auth, organizationId, ['waste:record']); }
 async function canWriteGeography(client: Pool | PoolClient, auth: AuthContext, organizationId: string, geographyId: string): Promise<boolean> { if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(geographyId)) return false; const result = getAuthResolverMode() === "security_definer" ? await client.query<{ ok: boolean }>(`select auth_private.can_write_geography($1,$2,$3) as ok`, [auth.identityId, organizationId, geographyId]) : await client.query<{ ok: boolean }>(`select exists(select 1 from organization_memberships om where om.identity_id=$1 and om.organization_id=$2 and om.status='VERIFIED' and organization_has_geography_scope(om.organization_id,$3)) as ok`, [auth.identityId, organizationId, geographyId]); return result.rows[0]?.ok === true; }
+
+if (requestContextMode === "enforced") {
+  if (!rawPool || !requestContextSecret || !requestContextKeyId) throw new Error("REQUEST_CONTEXT_ENFORCEMENT_REQUIRES_DATABASE_AND_SIGNING_MATERIAL");
+  registerRequestTenantContext(app, rawPool, { hmacSecret: requestContextSecret, keyId: requestContextKeyId, ttlSeconds: 120 });
+}
 
 app.get("/health", async (_request, reply) => { let database: "AVAILABLE" | "UNAVAILABLE" = "UNAVAILABLE"; let authenticationDatabase: "AVAILABLE" | "UNAVAILABLE" = "UNAVAILABLE"; if (pool) { try { await pool.query("select 1"); database = "AVAILABLE"; } catch {} } if (authPool) { try { await authPool.query("select 1"); authenticationDatabase = "AVAILABLE"; } catch {} } const healthy = database === "AVAILABLE" && authenticationDatabase === "AVAILABLE"; return reply.code(healthy ? 200 : 503).send({ status: healthy ? "READY" : "DEGRADED", database, authenticationDatabase, syntheticData: false }); });
 app.get("/api/v1/status", async () => ({ service: "rupaykg-api", version: "0.1.0", sourceOfTruth: "postgresql", syntheticData: false }));
@@ -212,7 +322,10 @@ await registerEvidenceVaultRoutes(app, pool);
 await registerPlatformAdminRoutes(app, pool);
 
 if (existsSync(webRoot)) app.get("/*", async (_request, reply) => reply.type("text/html; charset=utf-8").send(readFileSync(resolve(webRoot, "index.html"), "utf8")));
-if (process.env.NODE_ENV === "production") await assertProductionDatabaseRuntimeContracts();
+if (process.env.NODE_ENV === "production") {
+  await assertProductionDatabaseRuntimeContracts();
+  await assertRequestContextDatabaseContract();
+}
 await registerAuthRoutes(app, pool, authPool);
-app.addHook("onClose", async () => { await Promise.all([pool?.end(), authPool?.end()]); });
+app.addHook("onClose", async () => { await Promise.all([rawPool?.end(), authPool?.end()]); });
 const port = Number(process.env.PORT ?? 3000); const host = process.env.HOST ?? "0.0.0.0"; await app.listen({ port, host });

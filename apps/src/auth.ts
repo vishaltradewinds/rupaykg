@@ -9,6 +9,12 @@ export type AuthContext = {
   bilateralOrganizationScope?: boolean;
 };
 
+const requestAuthContextCache = new WeakMap<FastifyRequest, AuthContext | null>();
+
+export function cacheRequestAuthContext(request: FastifyRequest, auth: AuthContext | null): void {
+  requestAuthContextCache.set(request, auth);
+}
+
 function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
@@ -92,6 +98,7 @@ export async function authenticate(
   pool: Pool | null,
   mode: AuthResolverMode = getAuthResolverMode(),
 ): Promise<AuthContext | null> {
+  if (requestAuthContextCache.has(request)) return requestAuthContextCache.get(request) ?? null;
   if (!pool) return null;
   const header = request.headers.authorization;
   if (!header?.startsWith("Bearer ")) return null;

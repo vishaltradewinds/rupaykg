@@ -13,6 +13,7 @@ const valid = {
   RUPAYKG_AUTH_RESOLVER_MODE: "security_definer",
   RUPAYKG_REQUEST_CONTEXT_SECRET: "production-test-request-context-secret-material",
   RUPAYKG_REQUEST_CONTEXT_KEY_ID: "v1",
+  RUPAYKG_REQUEST_CONTEXT_MODE: "disabled",
 } as const;
 
 describe("production configuration", () => {
@@ -25,12 +26,23 @@ describe("production configuration", () => {
       authResolverMode: "security_definer",
       requestContextSecret: valid.RUPAYKG_REQUEST_CONTEXT_SECRET,
       requestContextKeyId: valid.RUPAYKG_REQUEST_CONTEXT_KEY_ID,
+      requestContextMode: "disabled",
       databaseSsl: "require",
       databaseCaCert: valid.DATABASE_CA_CERT,
       allowedOrigins: ["https://app.rupaykg.example"],
       authMode: "real",
       syntheticData: false,
     });
+  });
+
+  it("defaults request-scoped tenant context to disabled until an explicit rollout gate", () => {
+    const { RUPAYKG_REQUEST_CONTEXT_MODE: _mode, ...withoutMode } = valid;
+    assert.equal(readProductionConfig(withoutMode).requestContextMode, "disabled");
+    assert.equal(readProductionConfig({ ...valid, RUPAYKG_REQUEST_CONTEXT_MODE: "enforced" }).requestContextMode, "enforced");
+  });
+
+  it("rejects an unknown request-context mode", () => {
+    assert.throws(() => readProductionConfig({ ...valid, RUPAYKG_REQUEST_CONTEXT_MODE: "permissive" }), /RUPAYKG_REQUEST_CONTEXT_MODE must be disabled or enforced/);
   });
 
   it("requires a sufficiently strong signed request-context secret", () => {
