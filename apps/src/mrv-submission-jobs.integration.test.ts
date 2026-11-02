@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { approveTestMembership } from "./test-support/approved-membership.js";
-import { advanceMrvSubmissionJob, claimNextMrvSubmissionJob, enqueueMrvSubmissionJob, persistMrvGuardianIdempotencyKey, persistMrvHcsTransactionId, renewMrvSubmissionJobLease } from "./mrv-submission-jobs.js";
+import { advanceMrvSubmissionJob, claimNextMrvSubmissionJob, enqueueMrvSubmissionJob, persistMrvGuardianIdempotencyKey, persistMrvHcsTransactionId, releaseMrvSubmissionJobLease, renewMrvSubmissionJobLease } from "./mrv-submission-jobs.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 const ssl = process.env.DATABASE_SSL === "false" ? undefined : { rejectUnauthorized: false };
