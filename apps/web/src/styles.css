@@ -238,3 +238,25 @@ button:disabled{opacity:.55;cursor:not-allowed}
 .auth-drawer .auth-close{width:38px;min-height:38px;padding:0;border:1px solid var(--rk-border)!important;border-radius:50%;background:rgba(255,255,255,.04)!important;color:var(--rk-text)!important;font-size:20px;line-height:1}
 .auth-drawer input{background:#050705;border-color:var(--rk-border);color:var(--rk-text)}
 .auth-drawer>button:not(.auth-close){min-height:44px;background:var(--rk-primary)!important;border:1px solid var(--rk-primary)!important;color:var(--rk-primary-contrast)!important;font-weight:750}
+
+
+/* Keep the national-language selector in the shared header, not as a fixed overlay. */
+.topbar #rupaykg-national-language-selector{position:static!important;top:auto!important;right:auto!important;z-index:6!important;margin-left:auto;max-width:min(100%,250px);flex:0 1 auto}
+.topbar #rupaykg-national-language-selector label{color:var(--rk-muted);font-size:10px;white-space:nowrap}
+.topbar #rupaykg-national-language-selector select{max-width:160px!important;min-width:0;padding:5px 6px!important;border-color:var(--rk-border)!important;background:#080b09!important;color:var(--rk-text)!important;font-size:10px}
+@media(max-width:650px){
+  .topbar{min-height:64px;height:auto;flex-wrap:nowrap;gap:8px;padding:9px 12px}
+  .topbar .brand{flex:1 1 auto;min-width:0;gap:8px}
+  .topbar .brand strong{font-size:14px}
+  .topbar .brand span{font-size:8px;letter-spacing:.05em}
+  .topbar .brand-mark{width:32px;height:32px;flex:none}
+  .topbar #rupaykg-national-language-selector{max-width:164px;gap:4px;padding:3px 5px;flex:0 1 164px}
+  .topbar #rupaykg-national-language-selector label{font-size:9px}
+  .topbar #rupaykg-national-language-selector select{max-width:112px!important;font-size:9px}
+  .topbar .health{display:none}
+}
+@media(max-width:360px){
+  .topbar #rupaykg-national-language-selector label{display:none}
+  .topbar #rupaykg-national-language-selector{max-width:126px;flex-basis:126px}
+  .topbar #rupaykg-national-language-selector select{max-width:116px!important}
+}
