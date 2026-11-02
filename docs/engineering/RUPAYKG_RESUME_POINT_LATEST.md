@@ -372,3 +372,11 @@ No production DDL/DML, migration, role/grant/RLS changes, deployments, worker/sc
 - Reviewed integrity routines include field-sync tenant binding, operation/device binding, registry and settlement high-risk permission guards, EPR credit allocation capacity, settlement party integrity, credential geography guards, and field-sync conflict audit.
 - These are integrity and mutation controls, not a complete tenant row-visibility boundary.
 - Remaining review: migrations 051–087 and 20261018–20261105, followed by full catalog inventory and exact per-table owner mapping. Production unchanged; draft PR and HOLD remain.
+
+
+## 2026-11-02: complete migration source scan
+- Completed source-text review of all 97 SQL migration files present in the branch (001–087 and 10 dated migrations).
+- Across all 97 files, found no `ENABLE ROW LEVEL SECURITY`, `FORCE ROW LEVEL SECURITY`, or `CREATE POLICY` statements.
+- Confirmed later migrations add important business-integrity controls: registry recipient verification; stakeholder approval authority and self-approval prevention; carbon methodology mechanism and environmental-attribute double-claim controls; organization legal/statutory verification; EPR transfer/return evidence and quantity guards; settlement registry-owner and bilateral party integrity; hierarchical onboarding and approval separation; platform audit-chain head and dual-control access requests; signed request-context verifier; identity-bound onboarding and geography search-path hardening.
+- The migration scan is not a live catalog audit. Some functions are replaced across later migrations, and production may contain schema drift or non-migration objects. The authoritative next step remains read-only extraction of pg_class/pg_namespace, pg_policy, pg_proc, pg_trigger, pg_constraint, pg_roles, table ACLs, function ACLs, and ownership from production.
+- No production DDL/DML or role/grant/secret changes. RLS remains unimplemented and certification remains OFF/HOLD.
