@@ -96,7 +96,7 @@ test("missing or revoked session fails closed before the auth runtime is called"
     const response=await app.inject({method:"GET",url:"/api/v1/onboarding/review-queue",headers:{authorization:"Bearer revoked-or-unknown-token"}});
     assert.equal(response.statusCode,401);assert.equal(response.json().code,"AUTH_REQUIRED");
     assert.equal(authPool.calls.length,0);
-    assert.equal(appPool.calls.length,1);assert.match(appPool.calls[0]!.sql,/auth_private\\.resolve_session/);
+    assert.equal(appPool.calls.length,1);assert.ok(appPool.calls[0]!.sql.includes("auth_private.resolve_session"));
   }finally{await app.close();if(previous===undefined)delete process.env.RUPAYKG_AUTH_RESOLVER_MODE;else process.env.RUPAYKG_AUTH_RESOLVER_MODE=previous;}
 });
 
@@ -133,6 +133,6 @@ test("auth runtime database failure returns 503 and never falls back to applicat
     const response=await app.inject({method:"GET",url:"/api/v1/onboarding/review-queue",headers:{authorization:"Bearer valid-session-token"}});
     assert.equal(response.statusCode,503);assert.equal(response.json().code,"ONBOARDING_QUEUE_UNAVAILABLE");
     assert.equal(authPool.calls.length,1);assert.equal(appPool.calls.length,1);
-    assert.ok([...appPool.calls,...authPool.calls].every(c=>!/\\b(insert|update|delete)\\b/i.test(c.sql)));
+    assert.ok([...appPool.calls,...authPool.calls].every(c=>!/(insert|update|delete)/i.test(c.sql)));
   }finally{await app.close();if(previous===undefined)delete process.env.RUPAYKG_AUTH_RESOLVER_MODE;else process.env.RUPAYKG_AUTH_RESOLVER_MODE=previous;}
 });
