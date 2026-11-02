@@ -32,9 +32,9 @@ const EPR_RETURN_READ_CONTRACT_SQL = `select
     select 1 from pg_catalog.pg_auth_members m
      where m.member = r.oid
   ) as no_role_memberships,
-  returns.relrowsecurity as returns_rls_enabled,
-  returns.relforcerowsecurity as returns_force_rls,
-  pg_catalog.pg_get_userbyid(returns.relowner) as returns_owner,
+  epr_table.relrowsecurity as returns_rls_enabled,
+  epr_table.relforcerowsecurity as returns_force_rls,
+  pg_catalog.pg_get_userbyid(epr_table.relowner) as returns_owner,
   (select count(*) from pg_catalog.pg_policies
     where schemaname='public' and tablename='epr_returns') as policy_count,
   (select count(*) from pg_catalog.pg_policies
@@ -65,8 +65,8 @@ const EPR_RETURN_READ_CONTRACT_SQL = `select
        and owner_role.rolname='rupaykg_security_definer'
   ) as verifier_valid
 from pg_catalog.pg_roles r
-join pg_catalog.pg_class returns
-  on returns.oid = 'public.epr_returns'::regclass
+join pg_catalog.pg_class epr_table
+  on epr_table.oid = 'public.epr_returns'::regclass
 where r.rolname=current_user`;
 
 export async function assertEprReturnReadDatabaseContract(pool: Pick<Pool, "query">): Promise<void> {
