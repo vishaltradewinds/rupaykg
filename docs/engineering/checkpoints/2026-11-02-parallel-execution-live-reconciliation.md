@@ -544,3 +544,13 @@ A further source review found a fail-closed gap in `reconcileHcsTransaction`: af
 ### 14:47 UTC — regression test caught missing fail-closed status; corrected
 
 The first regression-test CI run (`41464821546`) failed as expected against the intermediate code: exact-ID lookup had been changed to remove fallback, but the no-match branch still returned `PENDING`. The test correctly required `MISMATCH` for a successful Mirror Node response containing only unrelated transaction IDs. Corrected the no-match branch in `apps/src/hedera-anchor.ts` to return `MISMATCH` and not continue to message verification. Fix commit: `2e793ddc2761b10839c6efe797aff1d4d13a5459`. Exact-head CI run `41465105410` is in progress; no passing claim until it completes. This is an intentional test-driven fail-closed correction, not a production incident; no production write or deployment occurred.
+
+
+### 14:49 UTC — HCS exact-match correction verified
+
+- Exact code head `2e793ddc2761b10839c6efe797aff1d4d13a5459` on PR #192 passed CI run `41465105410` (**SUCCESS**). This run includes migration validation, restricted verifier-owner lifecycle, disposable PostgreSQL migrations/acceptance, typecheck, application build, bootstrap/browser smoke, full tests and production container build.
+- The regression test first failed on the intermediate code because an unrelated successful Mirror Node record still produced `PENDING`; the fix now returns `MISMATCH` for a successful response without the exact persisted transaction ID. Test asserts no HCS topic-message lookup follows the mismatch.
+- PR #204 checkpoint head `9bcc5dfe935a1c1ab451c298e825ae603f1b9da0` passed CI run `41465180890` (**SUCCESS**). Both PR #192 and PR #204 remain open/draft/unmerged.
+- Scope of evidence: CI proves the code and regression test in disposable CI; it does not establish Mirror Node production service behavior, real Hedera transaction execution, worker deployment, tenant RLS, or TRL 9.
+
+**Next safe work:** finish a complete stage-by-stage worker execution contract and negative tests, but do not wire or activate a worker until the 67-table tenant RLS policies, exact least-privilege worker role, actor-bound enqueue/finalize transaction context, and two-tenant authorization tests are independently reviewed. The current legacy MRV endpoint still executes provider calls inline under a session advisory lock; durable worker primitives are not a live worker.
