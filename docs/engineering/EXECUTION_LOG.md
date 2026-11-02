@@ -105,3 +105,8 @@ Append-only record. Do not rewrite earlier entries.
 - Flagged `organization_has_geography_scope` returning TRUE when no VERIFIED scope exists; this is fail-open for unconfigured geography and requires a founder/authority-approved default plus tests before any change.
 - All 67 distinct trigger functions are SECURITY INVOKER with no pinned function search_path. Trigger-to-table/event/function/owner/role mapping remains a required next batch.
 - Added immutable checkpoint `docs/engineering/checkpoints/2026-11-02-production-function-exposure-review.md`. No production privilege, role, grant, schema, data, migration, deployment, worker, external registry or certification state changed.
+
+
+## CI freshness correction — 2026-11-02 18:38 UTC
+
+A subsequent PR-head refresh found PR #193 and #194 each advanced after their earlier successful exact-head runs. Their current heads are #193 `29e1c29254ff81db341bc55da5f2031e68928846` and #194 `5008a04038f2002a48949044c7389acc9eabe66f`; new exact-head CI runs [41500716186](https://github.com/vishaltradewinds/rupaykg/actions/runs/41500716186) and [41500726098](https://github.com/vishaltradewinds/rupaykg/actions/runs/41500726098) are IN PROGRESS. Earlier CI successes apply only to prior heads and do not certify these current heads. Documentation PR #204 current head `69696922911d84f65119e3e440f01ddb3cc010c6` also has exact-head CI [41500770887](https://github.com/vishaltradewinds/rupaykg/actions/runs/41500770887) IN PROGRESS. PR #213 exact-head CI 41499847180 and PR #192 exact-head CI 41498504841 remain SUCCESS. Keep all PRs unmerged pending current exact-head CI and required independent review.
