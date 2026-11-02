@@ -223,7 +223,7 @@ BEGIN
     JOIN public.organizations o ON o.id=sa.organization_id
    WHERE sa.id=p_application_id AND sa.status='PENDING'
    FOR UPDATE OF sa,o;
-  IF v_app.id IS NULL THEN
+  IF NOT FOUND THEN
     RAISE EXCEPTION 'APPLICATION_NOT_FOUND' USING ERRCODE='P0002';
   END IF;
   IF v_actor=v_app.identity_id THEN
@@ -237,7 +237,7 @@ BEGIN
     FROM public.stakeholder_application_approvals ap
    WHERE ap.application_id=p_application_id AND ap.status='PENDING'
    ORDER BY ap.step_order LIMIT 1 FOR UPDATE;
-  IF v_next.id IS NULL THEN
+  IF NOT FOUND THEN
     RAISE EXCEPTION 'APPROVAL_CHAIN_COMPLETE' USING ERRCODE='23514';
   END IF;
 
