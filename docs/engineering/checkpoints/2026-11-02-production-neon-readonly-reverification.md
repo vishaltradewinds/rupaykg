@@ -60,3 +60,8 @@ This checkpoint records catalog metadata and read-only SQL results observed on 2
 - Render service `rupaykg` (`srv-daki4d7qj5pc73b8qksg`) is configured for auto-deploy on commits to `main`.
 - Latest Render deployment `dep-dbjo4dqvcj2c73f7bt00` is LIVE on the same `a3fecc0` revert commit. The preceding auth-pool deployment for `14b7356` failed and was superseded by the successful revert deployment.
 - Operational consequence: merging PR #192 to `main` would initiate the Render deployment path. Do not merge until the separate auth pool, least-privilege production roles, grants, secrets, database functions/migrations, rollback and release checks are provisioned and validated. PR #192 remains draft.
+## Branch activity / cleanup classification (read-only)
+- `main` is the only primary/default branch and the only authoritative production branch.
+- `rupaykg-rls-assurance-lab-20261101`, `rupaykg-onboarding-auth-functions-lab-2026-11-01`, `rupaykg-tenant-isolation-lab-20261101`, `rupaykg-gov-inbox-staging-20261020`, `shakti-unresolved-migration-rehearsal-20261028` and `shakti-prod-main-worker-migration-rehearsal-20261031` each have a compute endpoint with recent activity; keep as non-production evidence/rehearsal until their findings are reconciled and retained.
+- `shakti-prod-main-rehearsal-20261031` (`br-spring-lab-b4hqez2o`) has no compute endpoint and zero recorded compute/active/data-transfer activity. It is the only obvious cleanup candidate from this inventory.
+- No branch was deleted. Neon explicitly requires user confirmation before branch deletion. Confirm separately if this zero-activity rehearsal branch should be removed; do not delete active labs or staging branches as part of this task.
