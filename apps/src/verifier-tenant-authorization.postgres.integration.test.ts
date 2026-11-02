@@ -188,6 +188,10 @@ test("verifier authorization is active-identity and subject-tenant scoped for ev
     );
     assert.ok(platformReviewer.rows[0]?.id, "CI must provision a verified, active platform authority with admin:users");
     await client.query(
+      "update public.stakeholder_application_approvals set status='APPROVED',approved_by_identity_id=$2,reviewed_at=clock_timestamp(),review_note='Synthetic platform-authority approval test' where application_id=$1",
+      [stakeholderApplication, platformReviewer.rows[0]!.id],
+    );
+    await client.query(
       "update public.stakeholder_applications set status='APPROVED',reviewed_by_identity_id=$2,reviewed_at=clock_timestamp() where id=$1",
       [stakeholderApplication, platformReviewer.rows[0]!.id],
     );
