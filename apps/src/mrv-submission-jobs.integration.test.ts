@@ -36,6 +36,32 @@ test("durable MRV job ledger enforces immutable request, legal transitions and a
       "select id from roles where upper(name)='VERIFIER' limit 1",
     )).rows[0]?.id;
     assert.ok(verifierRoleId, "VERIFIER role fixture must exist");
+    const platformReviewerId = (await client.query<{id:string}>(
+      `select om.identity_id as id
+         from organization_memberships om
+         join roles r on r.id=om.role_id
+        where om.status='VERIFIED' and r.name in ('platform_admin','super_admin')
+        limit 1`,
+    )).rows[0]?.id;
+    assert.ok(platformReviewerId, "CI bootstrap must provision a verified platform reviewer");
+    const applicationId = (await client.query<{id:string}>(
+      `insert into stakeholder_applications(
+         identity_id,organization_id,role_id,requested_role_key,requested_organization_type,geography_id,status
+       ) values($1,$2,$3,'VERIFIER','COLLECTOR',$4,'PENDING') returning id`,
+      [verifierIdentityId, organizationId, verifierRoleId, geographyId],
+    )).rows[0]!.id;
+    await client.query(
+      `update stakeholder_application_approvals
+          set status='APPROVED',approved_by_identity_id=$2,reviewed_at=now()
+        where application_id=$1`,
+      [applicationId, platformReviewerId],
+    );
+    await client.query(
+      `update stakeholder_applications
+          set status='APPROVED',reviewed_by_identity_id=$2,reviewed_at=now()
+        where id=$1`,
+      [applicationId, platformReviewerId],
+    );
     await client.query(
       "insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED')",
       [verifierIdentityId, organizationId, verifierRoleId],
