@@ -642,3 +642,12 @@ The first regression-test CI run (`41464821546`) failed as expected against the 
 - The automated repository write safety gate blocked the subsequent attempt to repair that migration file. Do not treat the cross-record binding migration as valid or tested. Stop further writes to this migration until the SQL is safely repaired through an approved editing path and validated by migration CI.
 - The earlier MRV lease/state-machine code head `2edd251ef404d88b00e4c7f994d89e42ae38e04b` remains the last fully green exact-head baseline (CI `41467045999` SUCCESS). New commits after that head are not validated by that success.
 - The DDL reconciliation document is useful as source analysis, but its statement that new job-binding tests were added is not evidence of passing behavior. The binding changes remain unaccepted and production must not consume this migration.
+
+
+### 15:13 UTC — safe Git tree repair and fresh exact-head CI
+
+- Repaired the migration through Git blob/tree/commit operations after the contents-file update path repeatedly corrupted SQL dollar delimiters. The first tree operation omitted the base tree; this was immediately detected by recursively inspecting the commit tree (only 2 entries), and the branch was repaired using the full parent tree `30ea68582d5807470d60800afb5cd1b41bf40685` as the base.
+- Corrected commit `3da1cc2234995ae598a655f4308b46afe76b017b` now has a verified recursive tree of 413 entries, including README and all repository files. The migration binding trigger is represented as `LANGUAGE plpgsql AS $$ ... $$;` with one function definition (duplicate malformed blocks removed).
+- PR #192 exact-head workflow `41469378224` is queued/running; at 15:13 UTC it was in progress at dependency installation, so no migration or test pass is claimed.
+- The earlier fully green baseline remains `2edd251ef404d88b00e4c7f994d89e42ae38e04b` / CI `41467045999`. All later MRV binding work is provisional until `41469378224` completes successfully.
+- No production DB, roles, grants, migrations, deployment, or external provider writes were performed. PRs remain draft/unmerged.
