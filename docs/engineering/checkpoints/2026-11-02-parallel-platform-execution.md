@@ -1,0 +1,71 @@
+# RupayKg parallel platform execution checkpoint — 2026-11-02
+
+## Founder direction
+Proceed with all material platform workstreams in parallel, not only the stakeholder demonstration. Preserve one authoritative production Neon database. Keep production changes behind independent review and explicit approval.
+
+## Completed in this execution batch
+1. `docs/pilot/PILOT_DEMONSTRATION_READINESS_PLAN.md` — stakeholder demonstration objective, stakeholder-by-stakeholder dashboard capabilities, end-to-end synthetic scenario, demo isolation and release gates. Commit `783c00b863192a7b818aba07cfacec2e53a9ebb8`.
+2. `docs/pilot/STAKEHOLDER_DASHBOARD_ROUTE_MATRIX.md` — source-level map of existing dashboard modules to APIs and known evidence gaps. Commit `e54a95ff4d3fee570a7086288b7af755e1aa05dd`.
+3. `docs/engineering/checkpoints/2026-11-02-stakeholder-pilot-demo-checkpoint.md` — saved demo objective, current blockers and execution sequence. Commit `fce685470ccb719306b621cf444803b244890cd9`.
+4. PR #192 fixture changes:
+   - Added explicit `ISSUE_CREDENTIAL` to the settlement credential guard verifier fixture, commit `273013a2bdc061c034c81d05586355674bc8f298`.
+   - Replaced settlement reconciliation's local application helper with the shared approved-membership helper, commit `86fa0694ee955cff26f731827af2903b36f586e7`.
+   - Exact-head CI run `41451938072` failed PostgreSQL acceptance. Summary: 148 passed, 5 cancelled, 0 assertion failures; the settlement credential guard and reconciliation setup hooks still report `registry event requires explicit permission: ISSUE_CREDENTIAL`. No green CI claim.
+
+## Important security correction
+The shared helper `apps/src/test-support/approved-membership.ts` currently inserts PENDING membership/scope rows and directly changes application approval, organization status, membership and scope to VERIFIED. That bypasses the actual `auth_private.review_stakeholder_application` authority-bound dual-control workflow. This is NOT acceptable evidence of the production onboarding path. Do not reuse this helper as production-path proof and do not expand it to bypass further guards. Replace it with a test fixture that bootstraps the first platform authority through the actual two-custodian bootstrap function and runs subsequent stakeholder approval through the actual governed review function with signed identity/organization context. If that cannot be established safely in CI, keep those tests blocked and document the gap rather than weakening authorization.
+- Root P0 issue: #195, `P0: define a one-time bootstrap for the first platform authority`.
+- Issue evidence: production inventory had 0 organizations, 0 identities, 0 roles, 0 memberships, 0 platform access requests and 0 verified platform authorities. This is a bootstrap/release blocker, not evidence of an active tenant-data exposure.
+- The actual review function requires identity-bound authority; logs showed `ONBOARDING_AUTHORITY_FORBIDDEN` and `AUTH_REQUIRED` when the synthetic review setup lacked valid request context.
+- Test fixture must preserve two distinct custodians, one-time atomic consumption, no application runtime execution rights, and negative tests for reuse/concurrency/self-approval/unauthorized reserved-role grants.
+
+## Parallel workstreams — current evidence and next gates
+
+### A. Stakeholder demo / UX
+- Existing source has substantial role/workspace panels, not just a landing page:
+  - `apps/web/src/main.tsx` central workbench, permissions-filtered workspace navigation, onboarding, admin and evidence flows.
+  - `ulb-command-center.tsx`, resource flow, field device/capture, evidence vault, MRV verification, EPR, CPCB-SWM, statutory applicability, carbon/value, registry, settlement/reconciliation, ESG and multilingual modules.
+- The route matrix maps those components to APIs and marks what is only source-level.
+- Next: execute a role-by-role browser walkthrough against isolated demo data, verify every mutation and exception, accessibility/mobile, and create a repeatable reset/seed. No synthetic data in production.
+
+### B. Authentication, onboarding and governance
+- PR #192 remains draft. CI run `41451938072` failed; do not weaken database guards.
+- Issue #195 is the P0 bootstrap path. Need a two-custodian, out-of-band, single-use bootstrap that is used by both disposable CI and the separately approved production ceremony.
+- Complete identity-bound onboarding create/withdraw/review functions and convert route writes to them; test actual signed request context and exact runtime roles.
+
+### C. Tenant isolation / database security
+- Production Neon baseline previously read-only audited: 67 public tables, 0 RLS enabled, 0 FORCE RLS, zero policies; production role `rupaykg` is BYPASSRLS and elevated.
+- Continue complete 67-table ownership/FK/JSON/polymorphic mapping; route-to-SQL/function/trigger/worker matrix; exact runtime roles and grants; bilateral settlement policies; disposable two-tenant negative matrix; backup/restore and rollback.
+- Never enable RLS indiscriminately or use the elevated production owner as application runtime. No production DDL, DML, role/grant, secret or migration action in this batch.
+
+### D. MRV, Guardian, Hedera and methodology
+- Guardian policy bundle exists at `guardian-policies/WA03.001/policy.json`, but its README explicitly says it is an unpublished implementation build artifact and has no real Guardian IDs, Hedera message IDs, signatures or publication evidence.
+- `apps/src/guardian-mrv.ts` returns NOT_CONFIGURED unless `GUARDIAN_MRV_SUBMIT_URL` exists; a VERIFIED response must include an execution ID.
+- `apps/src/hedera-anchor.ts` uses testnet by default unless configured; HCS success requires transaction ID and consensus timestamp, and Mirror Node verification is a separate read.
+- Next: validate/import the policy in a real Guardian environment; capture policy/execution IDs and execution receipt; verify HCS transaction and Mirror Node proof; bind all to the exact activity/evidence/verification and methodology version. Keep these states distinct and fail closed.
+- Carbon methodology production eligibility remains gated by locked authoritative source, applicability, parameters/equations, independent numerical reconciliation and independent regression evidence.
+
+### E. EPR / statutory compliance
+- Frontend EPR panel supports draft creation, evidence-backed internal submission and external portal reference recording. It explicitly distinguishes internal workflow from actual CPCB submission.
+- Backend EPR submit/external-reference authorization was corrected to use the same transaction client as the mutation in earlier commit `0b06f342290d3b8fa9444db5038b4d90854c4899`.
+- Next: exact-head CI, statutory source version/effective-date review, and only claim external portal submission when a genuine portal receipt exists.
+
+### F. Resource operations / IoT / field sync
+- Resource-flow and measurement APIs, field-device panel and capture experience exist.
+- Next: test device enrollment and identity binding, signed capture, idempotency/replay protection, conflict resolution, scale/weighbridge provenance, custody transitions, mass-balance and offline synchronization under the exact worker/service identity. Device data is untrusted until verified.
+
+### G. Registry / market / settlement
+- Registry and settlement panels and API lifecycle routes exist.
+- Credential issuance DB guard requires actual independent verification, Guardian VERIFIED, HCS consensus and persisted Mirror Node verification. Do not create issued credentials from demo fixtures or synthetic acceptance activities.
+- Settlement requires payer/payee authority, current credential ownership, external authority confirmation and immutable reconciliation evidence. Use sandbox-only demonstration; no fake payment.
+
+### H. Assurance / TRL / operations
+- Maintain a claim-to-evidence ledger for every TRL assertion, with requirement, test, artifact, environment, exact commit, independent reviewer and unresolved limitations.
+- Run vulnerability/dependency audits, observability/error-path checks, backup/restore, disaster recovery, performance, accessibility, operational runbook, support/incident process and release rollback.
+- TRL 9 requires proven operational deployment and sustained use in the intended environment; a passing unit suite or UI demonstration is not sufficient.
+
+## Execution order
+Parallelize independent source-level audits, UX mapping, methodology evidence reconciliation, Guardian/Hedera integration verification and EPR/statutory review. Serialize schema/migration changes, bootstrap changes and security-sensitive release steps behind exact-head CI, independent review and founder approval. Use small reversible commits and update this checkpoint on each meaningful batch.
+
+## Release posture
+PR #192 and #203 remain draft. Production Neon remains unchanged. Production certification OFF/HOLD. TRL 9 NOT established. No external pilot site has been represented as live by this checkpoint.
