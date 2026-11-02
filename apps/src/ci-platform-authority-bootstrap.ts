@@ -522,7 +522,7 @@ async function run(): Promise<void> {
         unauthorizedTokenHash, "CI Synthetic Regulator", "regulator",
         "CI Synthetic Regulator Authority", "Public Authority",
         `REG-CI-${suffix}`, "State Government", null, "Synthetic regulator reviewer fixture",
-        "AUTHORITY_NOTIFICATION", `evidence://ci/regulator/${suffix}`, "e".repeat(64),
+        "INCORPORATION_CERTIFICATE", `evidence://ci/regulator/${suffix}`, "e".repeat(64),
         "CI Test Issuer", null, null,
       ],
     );
