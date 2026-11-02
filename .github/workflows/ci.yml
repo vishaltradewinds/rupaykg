@@ -125,7 +125,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: rupaykg-landing-ux-\${{ github.run_number }}
+          name: rupaykg-landing-ux
           path: |
             /tmp/rupaykg-web-smoke.png
             /tmp/rupaykg-web-dom.html
