@@ -90,6 +90,38 @@ export function createMrvSubmissionIdempotencyKey(input: Pick<EnqueueMrvSubmissi
   return createHash("sha256").update([input.activityId, input.verificationId, input.evidenceId, input.guardianPolicyId, input.methodologyCode ?? ""].join("|")).digest("hex");
 }
 
+/**
+ * Re-check all mutable authorization and MRV bindings immediately before an
+ * irreversible provider stage. Enqueue-time validation alone is insufficient:
+ * membership, organization, evidence or verification may have changed.
+ */
+export async function isMrvSubmissionJobStillAuthorized(client: PoolClient, jobId: string): Promise<boolean> {
+  const result = await client.query<{ authorized: boolean }>(
+    `select exists (
+       select 1
+         from mrv_submission_jobs j
+         join activities a on a.id=j.activity_id
+                           and a.organization_id=j.organization_id
+                           and a.geography_id=j.geography_id
+         join organizations o on o.id=j.organization_id and o.status='VERIFIED'
+         join evidence e on e.id=j.evidence_id and e.activity_id=a.id and e.status='VERIFIED'
+         join verifications v on v.id=j.verification_id
+                              and v.evidence_id=e.id and v.activity_id=a.id
+                              and v.decision='APPROVED'
+         join organization_memberships om on om.identity_id=j.requested_by_identity_id
+                                          and om.organization_id=j.organization_id
+                                          and om.status='VERIFIED'
+        where j.id=$1
+          and a.status='COMPLETED'
+          and v.verifier_identity_id <> a.actor_identity_id
+          and a.geography_id is not null
+          and organization_has_geography_scope(j.organization_id,a.geography_id)
+     ) as authorized`,
+    [jobId],
+  );
+  return result.rows[0]?.authorized === true;
+}
+
 /** Enqueue an immutable MRV request; repeated identical requests return the same row. */
 export async function enqueueMrvSubmissionJob(client: PoolClient, input: EnqueueMrvSubmissionJobInput): Promise<MrvSubmissionJob> {
   if (!input.guardianPolicyId.trim() || !Object.keys(input.payloadSnapshot).length) throw new TypeError("MRV policy and payload snapshot are required");
