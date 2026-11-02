@@ -170,7 +170,6 @@ describe("registry and settlement runtime acceptance", () => {
   it("runs settlement through authorization, execution, external confirmation and reconciliation", async () => {
     if (!pool) return;
     const destinationRole = (await pool.query<{ id: string }>("select id from roles where organization_id=$1 and name=$2", [destinationOrgId, `SETTLEMENT-PARTY-${suffix}`])).rows[0]!.id;
-    await pool.query("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED')", [actorId, destinationOrgId, destinationRole]);
     const created = await request("/api/v1/settlements", { method: "POST", body: JSON.stringify({ credentialId, payerId: ownerOrgId, payeeId: destinationOrgId, amount: 1250, currency: "INR", externalReference: `payment-${suffix}` }) }, actorToken, ownerOrgId);
     assert.equal(created.status, 201); settlementId = (await body(created)).settlement.id;
     const authorized = await request(`/api/v1/settlements/${settlementId}/authorize`, { method: "POST", body: JSON.stringify({ authorizationReference: `auth-${suffix}` }) }, actorToken, ownerOrgId);
@@ -198,8 +197,6 @@ describe("registry and settlement runtime acceptance", () => {
     const denied = await request(`/api/v1/credentials/${credentialId}/transfer`, { method: "POST", body: JSON.stringify({ toOwnerId: destinationOrgId }) }, verifierToken, ownerOrgId); assert.equal(denied.status, 403); assert.equal((await body(denied)).code, "HIGH_RISK_PERMISSION_REQUIRED");
     const transferred = await request(`/api/v1/credentials/${credentialId}/transfer`, { method: "POST", body: JSON.stringify({ toOwnerId: destinationOrgId }) }, actorToken, ownerOrgId); assert.equal(transferred.status, 200); assert.equal((await body(transferred)).registryEvent.event_type, "TRANSFERRED");
     const staleOwnerTransfer = await request(`/api/v1/credentials/${credentialId}/transfer`, { method: "POST", body: JSON.stringify({ toOwnerId: ownerOrgId }) }, actorToken, ownerOrgId); assert.equal(staleOwnerTransfer.status, 403); assert.equal((await body(staleOwnerTransfer)).code, "ORG_FORBIDDEN");
-    const destinationRole = (await c.query<{ id: string }>("insert into roles(organization_id,name,permissions) values($1,$2,$3::jsonb) returning id", [destinationOrgId, `SETTLEMENT-PARTY-${suffix}`, JSON.stringify(["settlement:authorize","settlement:settle"])] )).rows[0]!.id;
-    await pool.query("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED')", [actorId, destinationOrgId, destinationRole]);
     const retired = await request(`/api/v1/credentials/${credentialId}/retire`, { method: "POST", body: "{}" }, actorToken, destinationOrgId); assert.equal(retired.status, 200); assert.equal((await body(retired)).registryEvent.event_type, "RETIRED");
     const retiredSettlement = await request("/api/v1/settlements", { method: "POST", body: JSON.stringify({ credentialId, payerId: destinationOrgId, payeeId: ownerOrgId, amount: 1, currency: "INR" }) }, actorToken, destinationOrgId); assert.equal(retiredSettlement.status, 409); assert.equal((await body(retiredSettlement)).code, "CREDENTIAL_RETIRED");
     const state = await pool.query<{ status: string }>("select status from credentials where id=$1", [credentialId]); assert.equal(state.rows[0]?.status, "RETIRED");
