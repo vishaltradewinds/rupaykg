@@ -304,3 +304,14 @@ No production DDL/DML, migration, role/grant/RLS changes, deployments, worker/sc
 - Exact-head CI run #4529 (`41408626206`) for geography fixture commit `fe698f9` completed SUCCESS.
 - Exact-head CI run #4530 (`41408644879`) for resume checkpoint commit `b46088d` completed SUCCESS.
 - Later documentation-only UI/UX audit and resume pointer commits have no workflow run returned; no application code was changed in those commits.
+
+
+## 2026-11-02 — AI Studio theme comparative audit and adoption specification
+- Compared current `rupaykg` UI against `rupaykg-aistudio` main (reference commit `c2380d6e0a8628588959cac43ff7a519acc0c07a`). Target inspected on canonical PR #192 branch before this docs update (head `080fad902456c0498b7c60cec743e72662ee2957`).
+- Published `docs/ux/RUPAYKG_AISTUDIO_THEME_COMPARATIVE_AUDIT_AND_ADOPTION_SPEC_2026-11-02.md` in commit `8d2006be956d926021f802f0161adc85c1c40973`.
+- Canonical visual target: reference exact tokens `#050505` page, `#151619` cards, `rgba(255,255,255,0.08)` borders, white primary text, 60% white muted text, 5% white glass, emerald `#10b981`; Inter body, Space Grotesk headings, JetBrains Mono metadata.
+- Content target: public landing with Platform / Stakeholders / How it works / Compliance / Impact; Urban/Rural context selector; stakeholder journeys for Government, Waste & Recycling, Businesses/BWGs, Farmers/FPOs, Carbon/ESG and Regulators; four-step Record → Track → Verify → Report story; compliance boundary and evidence-first language. Full approved copy deck and authenticated navigation map are in the report.
+- Preserve current target capabilities and security: Operations, MRV & Evidence, Compliance & EPR, Carbon & Value, Registry, Settlement, ESG/BRSR, Intelligence and governed Administration. Do not port the reference repo's older backend, DB/auth model, demo metrics or unverified credit claims.
+- P0 UI defect reconfirmed: `apps/web/public/minimal-stakeholder.css` hides `.landing-nav` and `.landing-panel`; this prevents users reaching important public explanatory content. Repair with keyboard-accessible navigation/sections.
+- This was a static comparative audit and specification only. No UI source, production DB, API, deployment or authorization behavior changed in this batch. PR #192 remains draft; production remains HOLD; TRL 9 not established.
+- Next execution: fix landing navigation visibility and browser tests; establish canonical theme token stylesheet and apply to public/authenticated shell; then incrementally restyle shared components and workflows without changing API contracts or permission gates. Validate exact-head CI and browser/mobile behavior before any release.
