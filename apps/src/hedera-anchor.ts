@@ -174,7 +174,7 @@ export async function reconcileHcsTransaction(
 export async function verifyHcsMessage(consensusTimestamp: string, topicId = process.env.HEDERA_TOPIC_ID || "", expectedIntegrityHash?: string, expectedActivityId?: string, expectedVerificationId?: string, expectedEvidenceId?: string, expectedGuardianExecutionId?: string) {
   const network = networkName();
   if (!topicId) return { verified: false, network, error: "HEDERA_TOPIC_ID is not configured" };
-  const response = await fetch(`${mirrorEndpoint(network)}/api/v1/topics/${encodeURIComponent(topicId)}/messages?timestamp=${encodeURIComponent(`eq:${consensusTimestamp}`)}&limit=1&order=desc`);
+  const response = await fetch(`${mirrorEndpoint(network)}/api/v1/topics/${encodeURIComponent(topicId)}/messages?timestamp=${encodeURIComponent(`eq:${consensusTimestamp}`)}&limit=1&order=desc`, { signal: AbortSignal.timeout(10_000) });
   if (!response.ok) return { verified: false, network, error: `Mirror node HTTP ${response.status}` };
   const data = await response.json() as { messages?: Array<{ consensus_timestamp?: string; sequence_number?: number; message?: string; topic_id?: string }> };
   const found = data.messages?.find(message => message.consensus_timestamp === consensusTimestamp && (!message.topic_id || message.topic_id === topicId));
