@@ -118,3 +118,42 @@ test("Mirror Node 404 is pending and never treated as proof of non-submission", 
     assert.equal(result.status, "PENDING");
   });
 });
+
+
+test("HCS ambiguous outcome polls the same persisted transaction ID until Mirror Node confirms it", async () => {
+  await withEnvironment(async () => {
+    const hash = integrityHash(payload);
+    const anchored = { ...payload, integrityHash: hash, anchoredAt: "2026-10-10T00:00:00.000Z" };
+    const transactionId = "0.0.1234@1791620000.123456789";
+    const mirrorId = "0.0.1234-1791620000-123456789";
+    const transactionLookups: string[] = [];
+    let lookupCount = 0;
+    globalThis.fetch = async (input) => {
+      const url = String(input);
+      if (url.includes("/api/v1/transactions/")) {
+        transactionLookups.push(url);
+        lookupCount += 1;
+        if (lookupCount === 1) return new Response(JSON.stringify({}), { status: 404 });
+        return new Response(JSON.stringify({ transactions: [{
+          transaction_id: mirrorId,
+          name: "CONSENSUS_SUBMIT_MESSAGE",
+          entity_id: topicId,
+          result: "SUCCESS",
+          consensus_timestamp: timestamp,
+        }] }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ messages: [{
+        consensus_timestamp: timestamp,
+        sequence_number: 12,
+        topic_id: topicId,
+        message: Buffer.from(JSON.stringify(anchored), "utf8").toString("base64"),
+      }] }), { status: 200 });
+    };
+    const pending = await reconcileHcsTransaction(transactionId, topicId, hash, payload.activityId, payload.verificationId, payload.evidenceId, payload.guardianExecutionId);
+    assert.equal(pending.status, "PENDING");
+    const confirmed = await reconcileHcsTransaction(transactionId, topicId, hash, payload.activityId, payload.verificationId, payload.evidenceId, payload.guardianExecutionId);
+    assert.equal(confirmed.status, "CONFIRMED");
+    assert.equal(transactionLookups.length, 2);
+    assert.equal(transactionLookups[0], transactionLookups[1], "reconciliation must query the exact same persisted HCS transaction ID");
+  });
+});
