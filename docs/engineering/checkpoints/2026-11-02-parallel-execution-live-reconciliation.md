@@ -356,3 +356,10 @@ After the delimiter fix, the migration advanced through disposable PostgreSQL an
 ## 14:12 UTC CI correction
 
 Run `41459321801` confirmed the verifier fixture passed the independent-identity check but failed the next database authorization guard: the verifier also needs `VERIFY_EVIDENCE`. Added this explicit permission alongside `verification:approve` in commit `77c8f8be5365ca541dd57b60ed0a05d765499151`. Exact-head CI run `41459617407` is progressing through build; acceptance remains pending. Inspection also reconfirmed that the existing `/api/v1/mrv/activities/:activityId/submit` route still performs Guardian and Hedera calls synchronously while holding a session advisory lock. The durable ledger is not yet wired into that route; this remains a major reliability gap and must be replaced by short-transaction enqueue/claim/provider/finalize stages before claiming durable orchestration.
+
+
+## Exact-head CI acceptance update — 2026-11-02
+
+The corrected MRV verifier fixture commit `77c8f8be5365ca541dd57b60ed0a05d765499151` has passed the disposable PostgreSQL integration test suite, including `durable MRV job ledger enforces immutable request, legal transitions and append-only events`. The same run passed migration validation/execution, bootstrap privilege revocation, TypeScript type-check, production build, two-custodian bootstrap acceptance and browser smoke. Workflow run `41459617407` is still completing the production-container build; do not call the overall workflow fully successful until its final conclusion is SUCCESS.
+
+This validates the initial ledger schema and invariant tests only. It does not establish a functioning outbox/worker: the existing MRV submit route still performs external Guardian/Hedera calls under a session advisory lock and persists provider results afterwards. Worker claim/lease, short-transaction stage orchestration, durable Hedera transaction ID/reconciliation and tenant/RLS integration remain release blockers. No production change was made.
