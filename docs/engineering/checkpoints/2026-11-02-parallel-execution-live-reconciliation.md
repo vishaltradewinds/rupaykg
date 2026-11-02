@@ -569,3 +569,12 @@ The first regression-test CI run (`41464821546`) failed as expected against the 
 - Added the missing named import in commit `24b0545ede4a118436aa3d609825cac81c1de1ea`. No test assertions or production code were weakened/changed.
 - Exact-head CI for corrected commit has not yet appeared in workflow results. Checkpoint update itself is being recorded separately; no success claimed.
 - Next review: once CI starts, confirm the new expired-lease recovery path actually executes in disposable PostgreSQL, including stale-token rejection and preserved HCS ID. Also inspect migration audit findings independently; npm audit --omit=dev --audit-level=high reported moderate fast-uri advisories in the run log, not a high-severity failure.
+
+
+### 14:54 UTC — database-level lease fence added to MRV state machine
+
+- Code review identified a defence-in-depth gap: the repository functions fenced worker transitions by lease token, but the database state-transition trigger itself only enforced legal status edges. A direct SQL update could therefore attempt a legal edge without an active worker lease if the caller had table UPDATE.
+- Migration `20261109_durable_mrv_submission_jobs.sql` now requires a live lease when entering `CLAIMED` and an existing unexpired lease for subsequent worker stage transitions; the explicit initial REQUESTED → CANCELLED path remains exempt.
+- Disposable PostgreSQL integration test now asserts an unleased state change fails with `MRV_JOB_LEASE_REQUIRED`, and an illegal state edge remains rejected even while a valid lease exists. The expired-lease reclaim/fencing test remains included.
+- Commits: migration guard `d5425df4c7b4e67af7f011836115c998de727717`; test coverage and import corrections `24b0545ede4a118436aa3d609825cac81c1de1ea`, `28f9d3b2b5c0005b7940a8db0120b21146ace` (note: authoritative latest test commit will be confirmed from GitHub head below).
+- CI runs for earlier test and migration commits are in progress; no result is claimed for the combined final head yet. Production remains untouched. This is defence-in-depth only; table grants/RLS are still required to prevent untrusted callers from changing lease columns themselves.
