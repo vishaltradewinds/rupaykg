@@ -476,3 +476,51 @@ Target verified: Neon project `rupaykg-production-fresh` (`steep-mud-79906940`),
 - Commits: credential guard fixture `e9500daa61800f6f14c04ab4995f7d9d948438ae`; reconciliation fixture `be3ce292b10e94a5c645cae980d0310496a427c4`.
 - These are fixture-only changes; verifier production guard remains strict. They have not yet been validated by a new complete CI run. Add dedicated positive/negative verifier-scope regression cases (unverified org, cross-org verifier, unverified geography root/scope, out-of-scope geography, self-verification) before treating the verifier migration as fully assured.
 - No production DB/schema/role/grant/secret changes. PR #192 remains draft; release HOLD; TRL 9 not established.
+
+
+## 2026-11-03 CTO execution checkpoint — verifier, stakeholder authority and function hardening
+
+### Current candidate branch / PR
+- Repo: `vishaltradewinds/rupaykg`
+- PR #216: `shakti/verifier-identity-tenant-hardening-2026-11-02` → `shakti/epr-security-base-2026-11-02`
+- Current PR head: `57c2ba8ab4c526b4df79f767d0ca6515e367cd21`
+- Latest code-tested commit: `d7bb9c6c3e97bcae87f973429e249a7299b1bf1a`
+- Documentation-only successor after tested code: README update; no code changed.
+- PR #216 remains DRAFT/UNMERGED. PR #213 remains DRAFT/UNMERGED.
+
+### Candidate migrations and tests
+- `20261111_verifier_active_identity_and_trigger_tenant_guard.sql`: hardens both active BEFORE INSERT/UPDATE verification triggers: `verification_independence_guard` → `enforce_verification_independence()`, and `verifications_integrity_guard` → `prevent_invalid_verification()`. Both use the same activity-bound tenant/identity/geography authorization predicate.
+- `20261112_stakeholder_platform_authority_scope.sql`: stakeholder approval requires active VERIFIED reviewer, VERIFIED membership, VERIFIED organization type PLATFORM_AUTHORITY, reserved platform role and explicit `admin:users`; direct APPROVED insert and self-approval remain blocked.
+- `20261113_pin_application_function_search_paths.sql`: pins every application-owned public function/procedure to `pg_catalog, public, pg_temp`, excluding extension-owned routines. Does not revoke PUBLIC EXECUTE.
+- Integration tests assert both verification trigger bindings, same-/cross-tenant decisions, role-label-only denial, suspended/unverified verifier, geography/membership denial, self-verification, stakeholder reviewer denial for ordinary tenant, suspended platform reviewer, platform role without `admin:users`, valid platform reviewer after hierarchy completion, and search_path coverage across all application-owned public routines.
+- Shared onboarding test helper now only selects a reviewer with verified active PLATFORM_AUTHORITY membership and explicit `admin:users`.
+
+### Exact-head CI
+- Run #4949: prior verifier-only code head passed full CI.
+- Run #4954: stakeholder approval guard and base integration test passed full CI.
+- Run #4957: suspended platform authority negative test passed full CI.
+- Run #4959: latest code-tested head `d7bb9c6` passed full CI, including dependency audit, migration validation/application, restricted owner/bootstrap privilege checks, typecheck, build, two-custodian bootstrap, browser smoke/evidence, full disposable PostgreSQL acceptance and production-container build.
+- Latest docs-only head is `57c2ba8`; no code changes after the green #4959 code head.
+
+### Production read-only audit — do not confuse with CI
+- 67 public application tables; 0 RLS enabled; 0 FORCE RLS; no public table policies.
+- All 67 public tables owned by login `rupaykg`.
+- `rupaykg` has LOGIN, BYPASSRLS, CREATEDB, CREATEROLE, REPLICATION and INHERIT.
+- 115 public functions/procedures: 37 extension-owned, 78 application-owned.
+- All 78 application-owned functions have PUBLIC EXECUTE in catalog ACL and lack pinned search_path.
+- 67 distinct application trigger functions have no pinned search_path.
+- PUBLIC has USAGE but no CREATE on public schema.
+- November candidate migrations are not applied in production.
+- 67-table structural tenant policy design inventory: `docs/engineering/checkpoints/2026-11-03-production-tenant-isolation-policy-design-inventory.md`.
+
+### Remaining blockers / next tasks
+1. Independent security and DBA review of PR #213/#216; no review approval recorded yet.
+2. Complete 67-table tenant policies, exact per-table grants and two-tenant acceptance on a production-shaped disposable clone.
+3. Replace the current elevated production owner/runtime posture with dedicated app/auth/worker/migration NOLOGIN/LOGIN and NOBYPASSRLS separation, with secret provisioning and owner membership checks.
+4. Complete per-signature PUBLIC EXECUTE call-site/grant inventory before revoking broad execute grants; do not blanket revoke trigger functions.
+5. Reconcile all EPR/MRV/statutory/evidence-vault HTTP routes and background/device/worker paths to the same tenant transaction/client boundary.
+6. MRV worker remains an execution primitive only: server registers routes but does not invoke `runMrvSubmissionWorkerOnce`; worker and durable queue flags remain OFF pending a separately deployed least-privilege worker.
+7. Bilateral settlement/registry/chain-of-custody policies require bespoke two-party contracts and acceptance tests.
+8. Production migration/deployment, role/grant/RLS activation, feature flags and certification remain HOLD/OFF. TRL 9 is NOT established.
+
+No production write, DDL, grant, role, secret, feature flag, worker activation or deployment was performed in this checkpoint.
