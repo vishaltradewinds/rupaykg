@@ -185,7 +185,7 @@ export async function claimNextMrvSubmissionJob(
      )
      update mrv_submission_jobs job
         set status = case
-              when job.status in ('REQUESTED','RETRYABLE_FAILURE','NEEDS_RECONCILIATION') then 'CLAIMED'
+              when job.status in ('REQUESTED','RETRYABLE_FAILURE') then 'CLAIMED'
               else job.status
             end,
             lease_owner = $2,
