@@ -10,6 +10,8 @@ const baseEnv = {
   DATABASE_CA_CERT: "-----BEGIN CERTIFICATE-----\nproduction-test-ca\n-----END CERTIFICATE-----",
   RUPAYKG_AUTH_MODE: "real",
   RUPAYKG_AUTH_RESOLVER_MODE: "security_definer",
+  RUPAYKG_REQUEST_CONTEXT_SECRET: "production-test-request-context-secret-material",
+  RUPAYKG_REQUEST_CONTEXT_KEY_ID: "v1",
   RUPAYKG_ALLOWED_ORIGINS: "https://app.rupaykg.example,https://admin.rupaykg.example",
   RUPAYKG_SYNTHETIC_DATA: "false",
 };
@@ -20,6 +22,8 @@ test("production config accepts the fail-closed production contract", () => {
     databaseUrl: baseEnv.DATABASE_URL,
     authDatabaseUrl: baseEnv.AUTH_DATABASE_URL,
     authResolverMode: "security_definer",
+    requestContextSecret: baseEnv.RUPAYKG_REQUEST_CONTEXT_SECRET,
+    requestContextKeyId: baseEnv.RUPAYKG_REQUEST_CONTEXT_KEY_ID,
     databaseSsl: "require",
     databaseCaCert: baseEnv.DATABASE_CA_CERT,
     allowedOrigins: ["https://app.rupaykg.example", "https://admin.rupaykg.example"],
