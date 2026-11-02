@@ -539,3 +539,8 @@ A further source review found a fail-closed gap in `reconcileHcsTransaction`: af
 - Regression test on PR #192: commit `19e09f5eaaaa5cef82c0d6e9f33c677becc11043`, `apps/src/hedera-anchor.test.ts`. Supplies an unrelated successful transaction and asserts reconciliation returns MISMATCH without attempting topic-message verification.
 - Code CI run `41464771299` (fix commit) is in progress; run `41464821546` (test commit) is queued. No passing result is claimed yet.
 - Checkpoint source review and security posture remain: no durable worker process, no production DB changes, no deployment, no external writes. Keep PRs draft/unmerged and release HOLD until exact-head CI and independent tenant-security gates pass.
+
+
+### 14:47 UTC — regression test caught missing fail-closed status; corrected
+
+The first regression-test CI run (`41464821546`) failed as expected against the intermediate code: exact-ID lookup had been changed to remove fallback, but the no-match branch still returned `PENDING`. The test correctly required `MISMATCH` for a successful Mirror Node response containing only unrelated transaction IDs. Corrected the no-match branch in `apps/src/hedera-anchor.ts` to return `MISMATCH` and not continue to message verification. Fix commit: `2e793ddc2761b10839c6efe797aff1d4d13a5459`. Exact-head CI run `41465105410` is in progress; no passing claim until it completes. This is an intentional test-driven fail-closed correction, not a production incident; no production write or deployment occurred.
