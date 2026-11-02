@@ -119,8 +119,16 @@ BEGIN
     SELECT EXISTS(
       SELECT 1 FROM public.organization_memberships om
       JOIN public.roles r ON r.id=om.role_id
+      JOIN public.organizations authority_org ON authority_org.id=om.organization_id
       WHERE om.identity_id=v_actor AND om.status='VERIFIED'
+        AND authority_org.status='VERIFIED'
+        AND authority_org.organization_type='PLATFORM_AUTHORITY'
         AND r.name IN ('platform_admin','super_admin')
+        AND jsonb_typeof(r.permissions)='array'
+        AND EXISTS (
+          SELECT 1 FROM jsonb_array_elements_text(r.permissions) permission(value)
+          WHERE permission.value='admin:users'
+        )
     ) AND v_row.requested_organization_type<>'individual'
       AND v_row.verification_status IS DISTINCT FROM 'VERIFIED'
       INTO v_can_verify;
@@ -170,8 +178,16 @@ BEGIN
   IF NOT EXISTS(
     SELECT 1 FROM public.organization_memberships om
     JOIN public.roles r ON r.id=om.role_id
+    JOIN public.organizations authority_org ON authority_org.id=om.organization_id
     WHERE om.identity_id=v_actor AND om.status='VERIFIED'
+      AND authority_org.status='VERIFIED'
+      AND authority_org.organization_type='PLATFORM_AUTHORITY'
       AND r.name IN ('platform_admin','super_admin')
+      AND jsonb_typeof(r.permissions)='array'
+      AND EXISTS (
+        SELECT 1 FROM jsonb_array_elements_text(r.permissions) permission(value)
+        WHERE permission.value='admin:users'
+      )
   ) THEN
     RAISE EXCEPTION 'ONBOARDING_AUTHORITY_FORBIDDEN' USING ERRCODE='42501';
   END IF;
@@ -283,8 +299,18 @@ BEGIN
   IF NOT EXISTS(
     SELECT 1 FROM public.organization_memberships om
     JOIN public.roles r ON r.id=om.role_id
+    JOIN public.organizations reviewer_org ON reviewer_org.id=om.organization_id
     WHERE om.identity_id=v_actor AND om.status='VERIFIED'
+      AND reviewer_org.status='VERIFIED'
       AND r.name=ANY(v_roles)
+      AND (v_next.approval_level<>'PLATFORM' OR (
+        reviewer_org.organization_type='PLATFORM_AUTHORITY'
+        AND jsonb_typeof(r.permissions)='array'
+        AND EXISTS (
+          SELECT 1 FROM jsonb_array_elements_text(r.permissions) permission(value)
+          WHERE permission.value='admin:users'
+        )
+      ))
       AND (v_next.approval_level='PLATFORM' OR v_app.geography_id IS NULL
            OR public.organization_has_geography_scope(om.organization_id,v_app.geography_id))
   ) THEN
