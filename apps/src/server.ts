@@ -149,6 +149,8 @@ async function assertProductionDatabaseRuntimeContracts(): Promise<void> {
 async function assertEprReturnReadDatabaseContract(): Promise<void> {
   if (!rawPool) throw new Error("EPR_RETURN_READ_DATABASE_UNAVAILABLE");
   const result = await rawPool.query<{
+    connection_role: string;
+    connection_bypass_rls: boolean;
     rls_enabled: boolean;
     rls_forced: boolean;
     policy_count: number;
@@ -170,6 +172,9 @@ async function assertEprReturnReadDatabaseContract(): Promise<void> {
     verifier_schema_usage: boolean;
   }>(
     `select
+       current_user as connection_role,
+       current_setting('role', true) is not distinct from 'rupaykg_app_runtime' as explicit_role_switch,
+       r.rolbypassrls as connection_bypass_rls,
        c.relrowsecurity as rls_enabled,
        c.relforcerowsecurity as rls_forced,
        (select count(*)::int from pg_catalog.pg_policies p
@@ -206,7 +211,7 @@ async function assertEprReturnReadDatabaseContract(): Promise<void> {
        and r.rolname='rupaykg_app_runtime' and c.relkind='r'`,
   );
   const contract = result.rows[0];
-  if (!contract || !contract.rls_enabled || !contract.rls_forced ||
+  if (!contract || contract.connection_role !== "rupaykg_app_runtime" || contract.connection_bypass_rls || !contract.rls_enabled || !contract.rls_forced ||
       contract.policy_count !== 1 || contract.expected_policy_count !== 1 ||
       !contract.runtime_login || contract.runtime_super || contract.runtime_bypass_rls ||
       contract.runtime_createdb || contract.runtime_createrole || contract.runtime_inherit ||
