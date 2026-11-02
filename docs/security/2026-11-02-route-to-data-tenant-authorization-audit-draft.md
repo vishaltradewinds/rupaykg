@@ -304,3 +304,24 @@ Targeted fix committed on this PR branch:
 Exact code branch head at time of note: `9d6664ba06f8264655606eaa8853062e518fadd1`. Exact-head CI run `41456990898` is QUEUED. No production migration or database change was made. This remediation remains unaccepted until exact-head CI passes and independent review confirms the national onboarding path provisions verified geography roots before geography-bound operations.
 
 **Operational consequence:** existing organizations without verified geography roots will be blocked from geography-bound actions after this migration is deployed. A controlled backfill/onboarding process is required; do not apply this migration to production until all legitimate organizations are classified and a rollback/restore plan is approved.
+
+
+## Additional transaction-boundary reconciliation — 2 November follow-up
+
+### Evidence vault upload
+The upload route previously resolved activity organization/geography and checked `evidence:upload` through the pool before acquiring its write client. A membership/role change between preflight and mutation could make the authorization decision stale. The route now repeats activity context and permission checks through the same checked-out client after BEGIN and before creating the evidence series, evidence row and artifact version. Read/list/download paths still require separate query-level review; they are not certified as RLS-context-bound.
+
+### Registry issuance and bilateral settlement
+- Credential issuance now evaluates `ISSUE_CREDENTIAL` on the same transaction client that locks the verification/evidence/activity and inserts the credential.
+- Settlement creation evaluates `settlement:authorize` for both payer and payee on the write transaction client.
+- Settlement authorization, execution and confirmation require the corresponding high-risk permission for both payer and payee on the transaction client.
+- Missing bilateral creation authority now returns 403.
+- These changes do not by themselves implement the signed bilateral RLS context. The single-organization RLS helper explicitly rejects bilateral contexts, so production RLS design must include a separately validated two-party transaction contract, not bypass that rejection.
+
+### MRV submit — unresolved critical boundary
+The submit route holds a session advisory lock using a checked-out client but issues most activity/evidence/measurement/provenance queries through the pool. This splits the lock, authorization reads and final provenance write across database connections. It is not yet a single tenant-context transaction. Do not simply wrap Guardian/Hedera network calls in a long-running DB transaction. Implement a durable idempotent claim/outbox → external execution → authenticated finalize flow, with actor/org/geography binding on both claim and finalize and uniqueness/replay protection.
+
+### CI regression caused by stricter geography invariant
+Exact-head CI run `41457065615` passed 155/156 tests. The only failure was the evidence-vault integration fixture inserting a geography-bound activity before seeding its VERIFIED organization geography scope. The fail-closed trigger correctly rejected it. Fixture ordering was corrected in `apps/src/evidence-vault.integration.test.ts` to create the verified scope first. Exact-head CI run `41457553245` was queued after subsequent code fixes; acceptance is pending.
+
+Production remains unchanged. This audit is a source-level draft, not an independent security certification.
