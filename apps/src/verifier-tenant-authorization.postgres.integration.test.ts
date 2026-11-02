@@ -102,7 +102,7 @@ test("verifier authorization is active-identity and subject-tenant scoped for ev
       "insert into public.identities(external_subject,display_name,status) values($1,'Role Label Only Verifier','VERIFIED') returning id",
       [`verifier-label-only-${suffix}`],
     )).rows[0]!.id;
-    await approveTestMembership(client, labelOnlyVerifier, orgA, labelOnlyRole, geoA, "auditor", "collector");
+    await approveTestMembership(client, labelOnlyVerifier, orgA, labelOnlyRole, geoA, "auditor", "collector", false);
     await expectRejected("role_label_without_permission", () => insertVerification(activityA, evidenceA, labelOnlyVerifier), /verifier must be active|verification requires verified authority/i);
 
     // Positive: a verified, active verifier in the subject tenant and geography.
