@@ -524,3 +524,10 @@ The branch now contains an immutable/idempotent enqueue helper, atomic lease cla
 - PR #204 checkpoint commit `7d2bd99930c0cbf477ce9bfadc096f6639e0ae21` records the HCS CI evidence and remains documentation-only.
 
 **Next engineering gate:** introduce a separate, default-disabled durable enqueue API contract while preserving the legacy synchronous endpoint for compatibility. Do not enable it until route authorization, transaction-local signed actor context, job-table RLS, least-privilege worker role, and two-tenant negative tests are independently verified. No worker runtime activation, production DB changes, deployments, or external writes.
+
+
+### 14:43 UTC — additional HCS reconciliation review finding
+
+A further source review found a fail-closed gap in `reconcileHcsTransaction`: after querying the Mirror Node endpoint for the persisted transaction ID, the code currently selects the exact matching record **or falls back to the first returned transaction**. The fallback is not acceptable evidence that the persisted HCS transaction was indexed. Correct behavior is to require an exact `transaction_id` match to the normalized persisted ID; if the response contains only unrelated records, return a non-confirming mismatch/reconciliation state and do not advance provenance. A focused regression test must cover unrelated transaction IDs in an otherwise successful response. This is a newly identified source-level defect; no patch or passing test is claimed yet.
+
+**Worker implementation gate remains unchanged:** the legacy synchronous submit endpoint still invokes Guardian and HCS directly; the new durable job primitives are not wired to a running worker. Next safe sequence is actor-bound enqueue/finalize contracts, exact worker authorization and RLS policies, then provider orchestration with short DB transactions around claim/persist/finalize and external calls only between commits. Keep the durable enqueue/worker path disabled until independent security review and two-tenant negative tests pass.
