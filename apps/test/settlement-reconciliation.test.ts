@@ -42,7 +42,7 @@ async function approveFixtureMembership(identityId: string, organizationId: stri
 before(async () => {
   if (!pool) return;
   const owner = (await pool.query<{ id: string }>(
-    "insert into organizations(name,organization_type) values($1,'PROCESSOR') returning id",
+    "insert into organizations(name,organization_type,status) values($1,'PROCESSOR','VERIFIED') returning id",
     [`settlement-reconciliation-owner-${suffix}`],
   )).rows[0]!.id;
   ownerId = owner;
@@ -71,14 +71,10 @@ before(async () => {
   )).rows[0]!.id;
   verifierId = verifier;
   const role = (await pool.query<{ id: string }>(
-    "insert into roles(organization_id,name,permissions) values($1,$2,$3::jsonb) returning id",
-    [owner, `settlement-reconciliation-role-${suffix}`, JSON.stringify(["VERIFY_EVIDENCE", "ISSUE_CREDENTIAL"])],
+    "insert into roles(organization_id,name,permissions) values($1,'verifier',$2::jsonb) returning id",
+    [owner, JSON.stringify(["verification:approve", "credential:issue"])],
   )).rows[0]!.id;
   await approveFixtureMembership(verifier, owner, role, geography);
-  await pool.query(
-    "insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED')",
-    [verifier, owner, role],
-  );
 
   const activity = (await pool.query<{ id: string }>(
     "insert into activities(organization_id,actor_identity_id,geography_id,activity_type,status,completed_at) values($1,$2,$3,'COLLECTION','COMPLETED',now()) returning id",
