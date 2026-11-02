@@ -152,3 +152,13 @@ No production DDL/DML, migration, role/grant/RLS changes, deployments, worker/sc
 - Detailed analysis: `docs/engineering/PR192_CI_4454_FAILURE_ANALYSIS.md`.
 - Next: add shared test fixture helper that uses pending application → all hierarchical approval steps → approved application via the synthetic CI super-admin → verified membership. Migrate every integration fixture, do not weaken production guards.
 - PR #192 remains draft; production remains HOLD; no production DB operation occurred. Container build skipped because tests failed.
+
+## 2026-11-02 — governed integration fixtures and multi-organization onboarding
+
+- CI #4454 root cause was a legacy settlement verifier fixture directly inserting a VERIFIED membership. Subsequent TAP evidence identified the same unsafe pattern in lifecycle, registry/settlement runtime, general runtime acceptance, and settlement credential guard fixtures.
+- Shared helper: `apps/src/test-support/approved-membership.ts`. It performs PENDING application → hierarchical approvals by synthetic CI super-admin → APPROVED application. Fixtures insert membership only after the helper succeeds.
+- Multi-org model defect fixed: approved applications were incorrectly included in the one-active-application-per-identity constraint and auth onboarding function's APPLICATION_EXISTS check. Approved applications are durable evidence, not pending requests. Updated unmerged `20261026_auth_scoped_onboarding_mutations.sql` to block only PENDING duplicates and added `migrations/20261103_stakeholder_multi_org_approved_memberships.sql` to enforce one pending request while permitting multiple approved org memberships.
+- Append-only registry ledger cleanup corrected: immutable registry events and their linked test graph remain in disposable CI PostgreSQL; no test cleanup deletes or rewrites them.
+- Latest code head at CI #4475: `fc02d4982dc659e6bd8a69cfe4f5eaf906752331`; run https://github.com/vishaltradewinds/rupaykg/actions/runs/41399039366.
+- Passed migration validation, disposable PostgreSQL migration, restricted verifier owner provisioning, synthetic two-custodian bootstrap, typecheck, build, browser smoke, and full API/disposable PostgreSQL test suite. Production container build remains in progress; poll #4475 before claiming full CI green.
+- PR #192 remains draft. Production remains HOLD. No production database migration, DDL/DML, grants, bootstrap, secrets, or deployment performed. Founder identity/trust model, independent security review, and DBA authorization remain release blockers.
