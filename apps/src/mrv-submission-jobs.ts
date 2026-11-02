@@ -104,6 +104,7 @@ export async function isMrvSubmissionJobStillAuthorized(client: PoolClient, jobI
                            and a.organization_id=j.organization_id
                            and a.geography_id=j.geography_id
          join organizations o on o.id=j.organization_id and o.status='VERIFIED'
+         join identities i on i.id=j.requested_by_identity_id and i.status='VERIFIED' and i.suspended_at is null
          join evidence e on e.id=j.evidence_id and e.activity_id=a.id and e.status='VERIFIED'
          join verifications v on v.id=j.verification_id
                               and v.evidence_id=e.id and v.activity_id=a.id
@@ -111,11 +112,13 @@ export async function isMrvSubmissionJobStillAuthorized(client: PoolClient, jobI
          join organization_memberships om on om.identity_id=j.requested_by_identity_id
                                           and om.organization_id=j.organization_id
                                           and om.status='VERIFIED'
+         join roles r on r.id=om.role_id and r.organization_id=j.organization_id
         where j.id=$1
           and a.status='COMPLETED'
           and v.verifier_identity_id <> a.actor_identity_id
           and a.geography_id is not null
           and organization_has_geography_scope(j.organization_id,a.geography_id)
+          and exists (select 1 from jsonb_array_elements_text(r.permissions) p where p = 'guardian:operate')
      ) as authorized`,
     [jobId],
   );
