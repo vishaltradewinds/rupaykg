@@ -142,3 +142,10 @@ The PostgreSQL integration test rejects approval by a verified ordinary-tenant v
 Migration `20261113_pin_application_function_search_paths.sql` pins every application-owned public function/procedure to `pg_catalog, public, pg_temp`, excluding extension-owned routines so extension lifecycle remains controlled by the extension. The current production catalog shows PUBLIC has USAGE but not CREATE on public; pg_temp is placed last to prevent temporary-object shadowing. The integration test checks every application-owned public routine has exactly the reviewed path and confirms PUBLIC has no CREATE privilege on public.
 
 This is a candidate migration. CI must apply the full chain and pass all existing trigger, function, route, PostgreSQL acceptance and production-container gates. It does not revoke PUBLIC EXECUTE: a separate signature/call-site/grant inventory is required first, especially because trigger functions and ordinary helper functions have different invocation semantics. No production routine has been altered by this candidate.
+
+
+## Application trigger-function EXECUTE privileges (20261114)
+
+Migration `20261114_revoke_public_trigger_function_execute.sql` revokes direct `PUBLIC EXECUTE` only from application-owned public functions that (a) return PostgreSQL's trigger pseudotype and (b) are attached to at least one non-internal trigger. It excludes extension-owned functions. PostgreSQL invokes a trigger function through its trigger binding; application roles do not need direct EXECUTE on that trigger function to cause the trigger to run through an authorized table DML statement.
+
+This is deliberately not a blanket function revoke. Ordinary callable functions remain unchanged until their application SQL call sites, nested database-function dependencies and exact runtime-role grants are mapped by signature. The integration test asserts all application trigger functions remain attached to a trigger and none retain PUBLIC EXECUTE. CI must apply the complete migration chain and execute the test before this candidate can be considered validated. No production ACL was changed.
