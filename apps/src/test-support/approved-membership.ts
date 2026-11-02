@@ -3,7 +3,7 @@ import type { Pool, PoolClient } from "pg";
 type SqlExecutor = Pool | PoolClient;
 
 /**
- * Create a test membership through the same governed onboarding lifecycle as production.
+ * Approve the governed application required before a test membership is inserted.
  * The disposable CI database must already contain its synthetic platform authority.
  */
 export async function approveTestMembership(
