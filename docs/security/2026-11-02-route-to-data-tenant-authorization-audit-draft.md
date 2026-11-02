@@ -74,3 +74,8 @@ The inventory found 90 registered HTTP route declarations across these modules:
 ## Release boundary
 
 No production database DDL/DML, grants, role changes, secrets, RLS enablement, migration, branch deletion, merge or deployment was performed by this audit. Keep PR #192 and PR #203 draft. Production remains HOLD, certification OFF and TRL 9 not established.
+## Follow-up code change — EPR mutation authorization transaction binding
+
+During this audit, both `POST /api/v1/epr/returns/:returnId/submit` and `POST /api/v1/epr/returns/:returnId/external-reference` were found to lock and mutate the return on a checked-out client while evaluating `epr:manage` through the pool (a separate connection). The permission read could therefore run outside the row-locking transaction and observe a different snapshot.
+
+Commit `0b06f342290d3b8fa9444db5038b4d90854c4899` changes both checks to use the same `PoolClient` as the mutation. This is a targeted transaction-consistency correction, not full tenant RLS integration. Exact-head CI run `41436296516` is in progress; keep the finding open until CI and independent review pass.
