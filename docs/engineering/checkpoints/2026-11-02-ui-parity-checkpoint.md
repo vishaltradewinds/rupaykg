@@ -54,3 +54,15 @@ Continue from PR #203 and this checkpoint. Do not re-run initial repository disc
 - First CI failure was a journey-copy mismatch; corrected the copy. Second failure was over-escaped regular expressions in the exact-token validator; corrected the regex. Both root causes are now covered by the passing exact-head CI.
 - Static parity assertions: 25/25 pass. No API, database, migration, auth, tenant policy, role, production configuration or deployment changes were introduced in PR #203.
 - Remaining UX gates: inspect actual desktop/mobile screenshots; test tab interaction with a real user/browser session; keyboard-only and screen-reader review; contrast/zoom and 320px viewport validation; role label and registration handoff review; field usability and localization review. Do not merge or deploy until these are completed and independently reviewed.
+## Rendered screenshot review and responsive corrections — 2026-11-02
+- Retrieved and visually inspected the desktop, 390×844 and 320×844 Chrome screenshots from CI artifact `rupaykg-landing-ux` (run `41432785214`).
+- First screenshot review identified four concrete defects: the account-access panel was always open and covered the landing; unauthenticated visitors saw internal `DATA SOURCE UNAVAILABLE` diagnostics; the language selector was fixed over the brand on mobile; and an empty offline-status button rendered as a floating dot.
+- Corrected all four:
+  - Account drawer is closed by default; hero CTAs open it; Escape and a close control dismiss it; email/password fields are required.
+  - Health diagnostics render only for authenticated members.
+  - National language selector waits for React header mount and docks inside the responsive topbar.
+  - Offline status control is hidden until a real online/offline event provides a message.
+- Added Chrome DOM assertions for closed drawer, hidden diagnostics, language selector inside header and hidden offline control. Added desktop, 390px and 320px screenshot capture and artifact retention.
+- Final screenshot inspection: desktop and 390px layouts are clean; 320px layout has no visible overlap or horizontal clipping in the captured viewport. Language dropdown's selected label is naturally truncated within its constrained width but remains operable.
+- Exact-head CI run `41432785214` for workflow head `8468c1afac6468ade38a509433ee00eab6dfb353`: **SUCCESS** — dependency audit, migrations, UX assertions, typecheck, build, desktop/390/320 browser smoke, full tests including disposable PostgreSQL acceptance and production container build.
+- Still not completed: real click-through authentication/registration test, keyboard-only/focus-return test, screen-reader test, contrast/zoom audit, 320px scroll-width programmatic assertion, localization review and field usability validation. Keep PR draft.
