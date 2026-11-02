@@ -659,3 +659,11 @@ The first regression-test CI run (`41464821546`) failed as expected against the 
 - Rebuilt `20261109_durable_mrv_submission_jobs.sql` from the clean, last-green `2edd251ef404d88b00e4c7f994d89e42ae38e04b` migration, then reapplied only the composite unique indexes, composite foreign keys and one correctly dollar-quoted binding trigger. Static assertions: exactly one binding trigger function, six balanced `$$` delimiter tokens in the migration, zero doubled single quotes.
 - New commit `d575f60463493f1d0d336d836fa0b485c4341175`; branch recursive tree again verified at 413 entries with README present. Exact-head CI `41469758436` queued at 15:15 UTC. No success claimed until migration and all tests finish.
 - This replaces the broken migration content on the PR branch; prior failing CI runs remain in history as diagnostics. Production remains unchanged.
+
+
+### 15:17 UTC — second migration run pinpointed missing second dollar sign; corrected
+
+- Exact-head CI `41469758436` validated 101 migrations / 80 schema objects, then disposable PostgreSQL failed on `20261109_durable_mrv_submission_jobs.sql` at character 4347: the binding trigger opener was `AS $` and closer `$;`, not a paired delimiter. This is now precisely identified; the previous static check had incorrectly counted unrelated delimiters elsewhere in the migration.
+- Corrected both sides to `AS $$ ... $$;` in commit `5a60b7fdfbc8fc75de3e8257a76e364d7353489c`. Verified the binding trigger occurs once and the repository tree remains 413 entries with README.
+- This commit is now PR #192 head. A new exact-head workflow has not yet appeared in the Actions listing at the time of this checkpoint; prior failure `41469758436` remains the last result. Do not claim the repaired migration passed until a new run executes disposable PostgreSQL migration + integration tests.
+- No production database, grants, roles, migrations or deployments changed.
