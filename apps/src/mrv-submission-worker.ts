@@ -21,7 +21,7 @@ import {
 } from "./mrv-submission-jobs.js";
 
 export interface MrvWorkerResult {
-  outcome: "IDLE" | "STAGE_ADVANCED" | "RETRY_SCHEDULED" | "REJECTED" | "NEEDS_RECONCILIATION" | "STALE_LEASE";
+  outcome: "IDLE" | "STAGE_ADVANCED" | "RETRY_SCHEDULED" | "REJECTED" | "PERMANENT_FAILURE" | "NEEDS_RECONCILIATION" | "STALE_LEASE";
   jobId?: string;
   stage?: string;
 }
@@ -170,7 +170,7 @@ export async function runMrvSubmissionWorkerOnce(pool: Pool, workerId: string): 
   if (["CLAIMED", "GUARDIAN_SUBMITTED"].includes(job.status)) {
     if (!await authorize(pool, lease)) {
       const ok = await advance(pool, lease, "PERMANENT_FAILURE", { last_error_code: "MRV_AUTHORIZATION_REVOKED", last_error_detail: "Current identity, membership, role permission, evidence, verification or geography check failed before Guardian submission." });
-      return { outcome: ok ? "REJECTED" : "STALE_LEASE", jobId: job.id, stage: "GUARDIAN_AUTHORIZATION" };
+      return { outcome: ok ? "PERMANENT_FAILURE" : "STALE_LEASE", jobId: job.id, stage: "GUARDIAN_AUTHORIZATION" };
     }
     const snapshot = snapshotOf(job);
     const key = job.guardian_idempotency_key ?? job.idempotency_key;
@@ -203,7 +203,7 @@ export async function runMrvSubmissionWorkerOnce(pool: Pool, workerId: string): 
   if (job.status === "GUARDIAN_VERIFIED") {
     if (!await authorize(pool, lease)) {
       const ok = await advance(pool, lease, "PERMANENT_FAILURE", { last_error_code: "MRV_AUTHORIZATION_REVOKED", last_error_detail: "Authorization failed before Hedera submission." });
-      return { outcome: ok ? "REJECTED" : "STALE_LEASE", jobId: job.id, stage: "HCS_AUTHORIZATION" };
+      return { outcome: ok ? "PERMANENT_FAILURE" : "STALE_LEASE", jobId: job.id, stage: "HCS_AUTHORIZATION" };
     }
     const status = hederaStatus();
     if (!status.configured || status.topicId === "NOT_CONFIGURED") {
