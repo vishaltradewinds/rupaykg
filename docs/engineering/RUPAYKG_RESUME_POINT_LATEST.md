@@ -423,3 +423,12 @@ Target verified: Neon project `rupaykg-production-fresh` (`steep-mud-79906940`),
 - chain_of_custody_links, credentials, registry_events and environmental_attribute_claims remain provisional; exact FK/column/policy paths are not proven by this batch. No policies authored.
 - Detailed source evidence and remaining gaps appended to `docs/security/2026-11-02-route-to-data-tenant-authorization-audit-draft.md`.
 - No production DB changes. PR #192 remains draft; production HOLD; TRL 9 not established.
+
+
+## 2026-11-02 registry/settlement source audit — second bounded batch
+- Reviewed exact branch migrations 006_registry_settlement_guardrails, 008_verification_integrity, 014_registry_settlement_idempotency, 047_settlement_party_integrity and 20261020_ccts_methodology_registry.
+- Verified credentials require APPROVED verification for value-bearing states and have activity+verification idempotency; registry_events and settlement_events are append-only for UPDATE/DELETE and receive SHA-256 event hashes; settlement state changes require verification + authorization reference; non-empty external settlement references are unique and immutable after assignment; CCTS methodology catalogue is global reference data with registry status distinct from implementation/validation status.
+- Found verification approval helper checks any verified verifier-capable membership globally; it does not prove same-org or same-geography authority. This must be corrected/tested before relying on it for tenant authorization.
+- Hashing is per-event field digest; source reviewed does not establish a previous-hash chain or external anchoring. Do not claim independent tamper-proof proof.
+- Added detailed operation-specific authorization contract and required negative/concurrency tests to `docs/security/2026-11-02-route-to-data-tenant-authorization-audit-draft.md`.
+- No RLS policies or production changes. PR #192 remains draft; release HOLD; TRL 9 not established.
