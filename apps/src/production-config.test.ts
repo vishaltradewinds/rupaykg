@@ -36,7 +36,7 @@ describe("production configuration", () => {
   });
 
   it("keeps the EPR read route disabled by default", () => {
-    const { RUPAYKG_EPR_RETURN_READ_ENABLED: _flag, ...withoutFlag } = valid;
+    const withoutFlag = Object.fromEntries(Object.entries(valid).filter(([key]) => key !== "RUPAYKG_EPR_RETURN_READ_ENABLED"));
     assert.equal(readProductionConfig(withoutFlag).eprReturnReadEnabled, false);
   });
 
