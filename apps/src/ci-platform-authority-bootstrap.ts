@@ -246,6 +246,17 @@ async function run(): Promise<void> {
       [identityC, unauthorizedTokenHash, JSON.stringify({ provider: "ci-onboarding-review" })],
     );
 
+    const onboardingOwnerPrivileges = await pool.query<{ statutory_profile_insert: boolean; approval_update: boolean; evidence_update: boolean }>(
+      `select
+         has_table_privilege('rupaykg_auth_owner','public.organization_statutory_profiles','INSERT') as statutory_profile_insert,
+         has_table_privilege('rupaykg_auth_owner','public.stakeholder_application_approvals','UPDATE') as approval_update,
+         has_table_privilege('rupaykg_auth_owner','public.organization_verification_evidence','UPDATE') as evidence_update`,
+    );
+    assert.equal(onboardingOwnerPrivileges.rows[0]?.statutory_profile_insert, true,
+      "auth function owner must be able to seed the organization governance profile trigger");
+    assert.equal(onboardingOwnerPrivileges.rows[0]?.approval_update, true);
+    assert.equal(onboardingOwnerPrivileges.rows[0]?.evidence_update, true);
+
     const applicantIdentity = (await pool.query<{ id: string }>(
       "insert into identities(external_subject,display_name,email,status) values($1,$2,$3,'VERIFIED') returning id",
       [`ci-onboarding-applicant:${suffix}`, "CI Onboarding Applicant", `ci-onboarding-applicant-${suffix}@example.invalid`],
