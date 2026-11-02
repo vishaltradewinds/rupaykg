@@ -62,6 +62,7 @@ const EPR_RETURN_READ_CONTRACT_SQL = `select
        and p.proname='current_request_context_claims'
        and p.pronargs=0
        and p.prosecdef
+       and p.proconfig @> ARRAY['search_path=pg_catalog, app_security']
        and owner_role.rolname='rupaykg_security_definer'
   ) as verifier_valid
 from pg_catalog.pg_roles r
