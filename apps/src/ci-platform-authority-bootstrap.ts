@@ -236,13 +236,13 @@ async function run(): Promise<void> {
     const authorityToken = randomBytes(32).toString("base64url");
     const authorityTokenHash = sha256(authorityToken);
     await pool.query(
-      "select auth_private.issue_session($1,$2,$3::jsonb)",
+      "insert into public.identity_sessions(identity_id,token_hash,expires_at,request_context) values($1,$2,now()+interval '8 hours',$3::jsonb)",
       [identityA, authorityTokenHash, JSON.stringify({ provider: "ci-onboarding-review" })],
     );
     const unauthorizedToken = randomBytes(32).toString("base64url");
     const unauthorizedTokenHash = sha256(unauthorizedToken);
     await pool.query(
-      "select auth_private.issue_session($1,$2,$3::jsonb)",
+      "insert into public.identity_sessions(identity_id,token_hash,expires_at,request_context) values($1,$2,now()+interval '8 hours',$3::jsonb)",
       [identityC, unauthorizedTokenHash, JSON.stringify({ provider: "ci-onboarding-review" })],
     );
 
@@ -254,7 +254,7 @@ async function run(): Promise<void> {
     const applicantToken = randomBytes(32).toString("base64url");
     const applicantTokenHash = sha256(applicantToken);
     await pool.query(
-      "select auth_private.issue_session($1,$2,$3::jsonb)",
+      "insert into public.identity_sessions(identity_id,token_hash,expires_at,request_context) values($1,$2,now()+interval '8 hours',$3::jsonb)",
       [applicantIdentity, applicantTokenHash, JSON.stringify({ provider: "ci-onboarding-review" })],
     );
     const createdApplication = await pool.query<{ application_result: { application: { id: string }; organization_id: string } }>(
@@ -365,9 +365,10 @@ async function run(): Promise<void> {
 
     const revokedToken = randomBytes(32).toString("base64url");
     const revokedHash = sha256(revokedToken);
-    await pool.query("select auth_private.issue_session($1,$2,$3::jsonb)", [
-      identityC, revokedHash, JSON.stringify({ provider: "ci-onboarding-review" }),
-    ]);
+    await pool.query(
+      "insert into public.identity_sessions(identity_id,token_hash,expires_at,request_context) values($1,$2,now()+interval '8 hours',$3::jsonb)",
+      [identityC, revokedHash, JSON.stringify({ provider: "ci-onboarding-review" })],
+    );
     await pool.query("select auth_private.revoke_session($1)", [revokedHash]);
     await assert.rejects(
       pool.query("select auth_private.get_onboarding_review_queue($1)", [revokedHash]),
