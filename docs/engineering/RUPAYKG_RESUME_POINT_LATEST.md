@@ -432,3 +432,11 @@ Target verified: Neon project `rupaykg-production-fresh` (`steep-mud-79906940`),
 - Hashing is per-event field digest; source reviewed does not establish a previous-hash chain or external anchoring. Do not claim independent tamper-proof proof.
 - Added detailed operation-specific authorization contract and required negative/concurrency tests to `docs/security/2026-11-02-route-to-data-tenant-authorization-audit-draft.md`.
 - No RLS policies or production changes. PR #192 remains draft; release HOLD; TRL 9 not established.
+
+
+## 2026-11-02 verifier-scope migration checkpoint
+- Added forward-only migration `migrations/20261106_verifier_same_org_geography_scope.sql` on PR #192 branch; commit `c15726971ffb57b96c25573bd5f0f6107b6011ad`.
+- New helper scopes verifier approval to the exact subject activity organization and geography, requires a VERIFIED membership and verified geography root, and fails closed for missing geography/root. Replaced approval trigger to resolve evidence-only activity, reject mismatched activity/evidence, and retain self-verification guard.
+- Security audit records exact behavior and caveats. Documentation commit: `12ea8f3fc1ef588ff5b8524b004c296a0fda64f9`.
+- NOT VALIDATED: migration has not run in disposable PostgreSQL; no regression suite has been executed; complete schema/enum/role permission assumptions and compatibility must be confirmed. Migration validation + full CI pending.
+- No production schema, roles, grants, or data changed. PR #192 stays draft; production HOLD; TRL 9 not established.
