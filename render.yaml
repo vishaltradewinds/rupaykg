@@ -21,6 +21,8 @@ services:
         value: real
       - key: RUPAYKG_AUTH_RESOLVER_MODE
         value: security_definer
+      - key: RUPAYKG_EPR_RETURN_READ_ENABLED
+        value: "false"
       - key: RUPAYKG_SYNTHETIC_DATA
         value: "false"
       - key: DATABASE_URL
