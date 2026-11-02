@@ -141,3 +141,18 @@ This design does not authorize production changes. Do not merge/deploy the migra
 An initial schema slice is now present in `migrations/20261109_durable_mrv_submission_jobs.sql`: immutable request/payload binding, organization/geography/source references, explicit stage state, lease metadata, provider identifiers, state-transition guard, and append-only event ledger. A disposable-PostgreSQL integration test was added at `apps/src/mrv-submission-jobs.integration.test.ts`.
 
 The first CI attempts caught a malformed dollar-quoted PL/pgSQL delimiter in the append-only trigger function. The migration source was corrected and re-fetched to verify the exact `$$` delimiters in commit `07cf79538700a6fccb233a9d96800090064aeb1d`. Exact-head migration and integration CI remains pending. This is not yet a working outbox: worker claim/lease logic, actor-context enforcement, provider-stage transitions, durable Hedera transaction-ID retry, Mirror Node reconciliation and RLS/grants still need implementation and tests.
+
+
+### Current implementation checkpoint — 2026-11-02 15:31 UTC
+
+The earlier implementation-progress paragraph above is historical; migration quoting has since been repaired and exact-head CI `41470418440` passed all migration, disposable PostgreSQL, browser, test and container gates. Exact-head worker authorization integration tests also passed in `41471858495` (commit `b690a5ec19ccc6b38c8d8a2ffc77f142b17af8bf`).
+
+New branch-only application changes:
+- `isMrvSubmissionJobStillAuthorized(client, jobId)` rechecks activity completion, verified organization and identity, non-suspended requester, current verified membership, `guardian:operate` role permission, verified evidence, approved same-activity verification, independent verifier, and organization geography scope. Positive and membership-revocation negative integration assertions passed in `41471858495`.
+- `POST /api/v1/mrv/activities/:activityId/jobs` adds authenticated, permission-checked durable enqueue. Organization and geography are read from the activity row, not request JSON. It uses a single checked-out client and short transaction; provider calls are not performed in the route.
+- `GET /api/v1/mrv/jobs/:jobId` returns permission-scoped status and append-only stage events without returning the payload snapshot or provider raw response.
+- Both routes fail closed unless `RUPAYKG_MRV_DURABLE_JOBS_ENABLED=true`. The flag must remain unset until the migration, least-privilege role, RLS policies, worker and production release gates are approved.
+
+The latest route changes are on PR #192 branch. Exact-head CI for commit `304541ad58384c6fb9190ea044f71b4c14a8810c` is running; earlier commit `ffd9ae65cd046049c884e56d1b4121b097f18e09` has its own CI run in progress. Do not claim the new route code is accepted until latest exact-head CI succeeds.
+
+**Still not implemented:** durable worker loop and provider stage orchestration; revalidation call sites before every external stage and final provenance; atomic provenance/job finalization; runtime role and RLS policies; production migration. No production changes or provider writes have been made.
