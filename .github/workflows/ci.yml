@@ -55,7 +55,7 @@ jobs:
       - name: Verify bootstrap owner temporary privileges are revoked
         run: |
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
-          DO $
+          DO $assert_bootstrap_owner$
           BEGIN
             IF pg_catalog.pg_has_role('postgres', 'rupaykg_bootstrap_owner', 'MEMBER') THEN
               RAISE EXCEPTION 'bootstrap owner membership must be revoked after migration';
@@ -64,7 +64,7 @@ jobs:
               RAISE EXCEPTION 'bootstrap owner database CREATE must be revoked after migration';
             END IF;
           END
-          $;
+          $assert_bootstrap_owner$;
           SQL
       - name: Provision synthetic bootstrap custodians in disposable CI PostgreSQL
         run: |
