@@ -44,8 +44,8 @@ AS $function$
 $function$;
 
 -- This trigger historically guarded every verification decision, not only APPROVED.
--- Preserve that behavior while replacing its global membership lookup with the same
--- activity-bound authorization predicate used by prevent_invalid_verification().
+-- Preserve the established self-verification error contract by checking subject
+-- identity first, then apply the activity-bound tenant/identity/geography predicate.
 CREATE OR REPLACE FUNCTION public.enforce_verification_independence()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -77,12 +77,6 @@ BEGIN
     RAISE EXCEPTION 'verification requires a resolvable subject activity';
   END IF;
 
-  IF NOT public.has_verification_permission_for_activity(
-    NEW.verifier_identity_id, v_activity_id
-  ) THEN
-    RAISE EXCEPTION 'verifier must be active, verified and authorized in the subject organization and geography';
-  END IF;
-
   SELECT a.actor_identity_id
     INTO v_activity_actor
     FROM public.activities a
@@ -93,6 +87,12 @@ BEGIN
     RAISE EXCEPTION 'verifier cannot self-approve activity evidence';
   END IF;
 
+  IF NOT public.has_verification_permission_for_activity(
+    NEW.verifier_identity_id, v_activity_id
+  ) THEN
+    RAISE EXCEPTION 'verifier must be active, verified and authorized in the subject organization and geography';
+  END IF;
+
   RETURN NEW;
 END;
 $function$;
@@ -101,4 +101,4 @@ COMMENT ON FUNCTION public.has_verification_permission_for_activity(uuid, uuid) 
   'Fail-closed verifier authorization: active VERIFIED identity, VERIFIED membership and organization, explicit verifier permission, and VERIFIED geography scope for the subject activity tenant.';
 
 COMMENT ON FUNCTION public.enforce_verification_independence() IS
-  'Applies the shared activity-tenant verifier authorization predicate to every verification decision and prohibits self-verification.';
+  'Checks self-verification first, then applies the shared activity-tenant verifier authorization predicate to every verification decision.';
