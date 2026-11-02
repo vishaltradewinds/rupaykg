@@ -45,3 +45,12 @@
 
 ## Resume instruction
 Continue from PR #203 and this checkpoint. Do not re-run initial repository discovery. Preserve the production HOLD and the canonical Neon production branch as read-only until separately approved security and release gates pass.
+## Implementation and CI follow-up — 2026-11-02 10:36Z
+- PR #203 current head: `5a594bf1e5ffa49a23a4527423b6076d8d1ab0db`; open/draft; mergeable at last check.
+- Exact-head CI run `41429980540`: **SUCCESS**. Passed production dependency audit, migration validator, all 25 landing parity assertions, disposable PostgreSQL migrations, typecheck, full build, Chrome browser smoke, full tests including disposable PostgreSQL acceptance, and production container build.
+- Browser smoke now asserts rendered brand, navigation labels and hero copy in Chrome DOM, captures desktop screenshot and 390×844 mobile screenshot. Screenshot capture is automated; it has not yet been independently visually reviewed from the artifact.
+- Theme tokens now match the reference values: page `#050505`, card `#151619`, border `rgba(255,255,255,.08)`, glass `rgba(255,255,255,.05)`, emerald `#10b981`, white primary text and muted white secondary text.
+- Extended reference styling across public landing and authenticated workbench surfaces, forms, metrics, tabs, panels, lifecycle cards, admin/evidence surfaces, review panels, notices and responsive layouts. Brand casing standardized to `RupayKg`.
+- First CI failure was a journey-copy mismatch; corrected the copy. Second failure was over-escaped regular expressions in the exact-token validator; corrected the regex. Both root causes are now covered by the passing exact-head CI.
+- Static parity assertions: 25/25 pass. No API, database, migration, auth, tenant policy, role, production configuration or deployment changes were introduced in PR #203.
+- Remaining UX gates: inspect actual desktop/mobile screenshots; test tab interaction with a real user/browser session; keyboard-only and screen-reader review; contrast/zoom and 320px viewport validation; role label and registration handoff review; field usability and localization review. Do not merge or deploy until these are completed and independently reviewed.
