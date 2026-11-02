@@ -262,3 +262,11 @@ No production DDL/DML, migration, role/grant/RLS changes, deployments, worker/sc
 - PR #192 remains OPEN/DRAFT; Render auto-deploy path tracks main. No production DDL/DML, grants, RLS, secrets, bootstrap or deployment performed.
 - Execution order: complete route/worker inventory; finish auth/bootstrap negative tests; convert platform-admin and remaining direct authorization paths; integrate request transaction boundary; complete 67-table policy/FK matrix; exact-role disposable Neon; reconcile migration drift; external MRV/regulatory acceptance; calibrated field pilot; independent TRL assurance.
 - Provisional system TRL remains 3. Indicative overall TRL 9 planning range 12–24+ months, contingent on pilot site, calibrated hardware, authorized integrations, sustained operations and independent evaluation. Not a commitment or certification.
+
+
+## 2026-11-02 — Database-enforced geography scope acceptance test
+- Added to `apps/src/ci-platform-authority-bootstrap.ts` in commit `3e4d5bb6dc7a307ebf0f12643e4f8ae16045098e`.
+- Disposable PostgreSQL fixture creates a synthetic state root, descendant district and out-of-scope state; asserts verified root authorizes descendant but not outside geography; inserts an in-scope activity and asserts the database trigger rejects out-of-scope activity.
+- This closes a concrete negative-test gap for the existing `organization_has_geography_scope` and activity trigger. It does not yet test route-level queue scope decisions, resource-flow source/destination guards, or prove the scope model for all approval levels.
+- CI status for this exact commit has not yet been returned by the commit workflow/status endpoints; do not treat this change as validated until PR workflow jobs complete.
+- No production database change. PR #192 remains draft. Next: run/poll exact-head CI, then test geography-scoped review queue/decision and resource-flow source/destination denial.
