@@ -192,3 +192,29 @@ table_name,provisional_class,proposed_scope_path,open_review
 - `BILATERAL_*`, `REGISTRY_MULTI_PARTY*`, `IDENTITY_*`, `PLATFORM_*`, `SHARED_*` and `DERIVED_*` classes require bespoke access semantics; do not collapse them into `organization_id = active_org`.
 - Before generating any policy, add verified columns, parent-FK path, insert/check semantics, update/delete semantics, actor/role restrictions, geography rule, background-service principal and negative test IDs.
 - A table may require separate SELECT/INSERT/UPDATE/DELETE policies rather than one symmetric predicate. Reference catalogues should be read-only for tenant roles; secrets and auth material should be function-only or auth-runtime-only.
+
+
+## 2026-11-02 bounded migration-DDL reconciliation — bilateral and device cohorts
+
+Source-reviewed the exact branch migrations below. This is migration-source evidence, not proof of production schema parity: production's applied ledger ends at 20261021, while these branch migrations are later/older source files. No production catalog or data was changed.
+
+| Table | Verified source facts | Authorization implication | Remaining uncertainty |
+|---|---|---|---|
+| `settlements` | `047_settlement_party_integrity.sql` trigger reads `NEW.credential_id`, `NEW.payer_id`, `NEW.payee_id`; rejects missing current registry owner, requires one settlement party to be current credential owner, rejects payer=payee. | Bilateral payer/payee scope is mandatory; additionally bind the current credential owner and authorized actor. | Full column/FK/unique/check constraints, SELECT visibility, settlement state transitions, party consent/approval, and current-owner derivation correctness remain unverified. Trigger is an integrity check, not row isolation. |
+| `resource_flows` | `012_geography_authorization.sql` trigger uses `NEW.organization_id`, `NEW.source_geography_id`, `NEW.destination_geography_id`; both geography endpoints are checked against the same organization scope. | Existing source models a single organization owner for the flow, with both endpoints geographically constrained. Do not silently reinterpret this as two-party transfer ownership. | Actual FK/columns and route semantics need confirmation; no recipient organization field is evidenced by this migration. No-root organizations pass the geography helper by compatibility design. |
+| `chain_of_custody_links` | No direct table DDL or trigger definition was established in the bounded source set reviewed in this pass. | Keep bilateral/inter-org classification provisional; no policy predicate may be authored. | Locate authoritative CREATE TABLE/FK/trigger source and reconcile activity, flow, source/destination actor and organization ownership. |
+| `field_sync_envelopes` | `033_field_sync_tenant_integrity.sql` trigger binds `NEW.identity_id` to enrolled `field_devices.identity_id`, requires device status VERIFIED, and prevents processed envelope provenance fields being changed after terminal status. | Device identity is a separate principal dimension; tenant scope must be derived from verified device enrollment, not caller-supplied organization data. | Device organization FK, envelope parent FK, cursor/conflict ownership and worker execution context remain to be mapped. |
+| `organization_memberships`, `identity_sessions` | `004_security_auth.sql` defines membership identity_id + organization_id + role_id and uniqueness across that triple; sessions bind identity_id and include expiry, revocation and unique token_hash. | Membership visibility must distinguish identity-self from org-admin; session/token material is identity/auth-only and must not be tenant-readable. | Later migration replacements, all column constraints, exact function grants and session lifecycle callsites remain to be reconciled. |
+
+### New high-priority design observations
+
+1. The resource-flow geography trigger validates both endpoints against one `organization_id`. That is a geographic constraint, not a bilateral authorization model. The business rule must explicitly decide whether a flow is tenant-owned by an operator, jointly owned, or has source and destination parties; RLS must follow that decision.
+2. The settlement integrity trigger's `coalesce(re.to_owner_id, re.from_owner_id)` chooses the latest qualifying registry event's recipient when non-null, otherwise its sender. This is only sound if the event ordering and event-type semantics guarantee that the latest ISSUED/TRANSFERRED event is the authoritative current-owner event. Require a deterministic registry-current-owner invariant and tests for issuance, successive transfers, malformed/duplicate events and concurrent settlement/transfer before relying on it for authorization.
+3. `organization_has_geography_scope` returns true when no VERIFIED geography roots exist. Until onboarding guarantees a verified root, regulated write operations should be denied or limited to an explicit onboarding-only path; this compatibility default must not be treated as national authorization.
+4. The field-sync trigger protects identity/device binding and terminal provenance, but does not prove a background worker exists or that its database principal is tenant-restricted.
+
+### Evidence status
+
+- Source-verified migration-level semantics: settlements (party columns/current-owner integrity trigger), resource_flows (single organization + two geography endpoints), field_sync_envelopes (device identity binding), memberships/sessions (identity/org/role and revocation fields).
+- Still provisional: chain_of_custody_links, credentials, registry_events and environmental_attribute_claims ownership/policy semantics; all 67 production table FK paths; production parity for migrations newer than 20261021.
+- No RLS policies generated; no production roles/grants/migrations or data changed. PR #192 remains draft and release remains HOLD.
