@@ -70,3 +70,10 @@ Continue from PR #203 and this checkpoint. Do not re-run initial repository disc
 - Added `scripts/validate-rupaykg-landing-interactions.mjs`, using Chrome DevTools Protocol with no new npm dependency.
 - It verifies the initial anonymous state, language-selector header docking, hidden offline control, no health diagnostics, 320px document scroll width, Sign in CTA opens the panel, Escape closes it, Create account opens the registration name field, and the close control dismisses it.
 - The exact-head workflow run `41433279946` passed the browser smoke step including these real click/keyboard interactions and the full disposable PostgreSQL test suite. Production container build was still running at the time of this note.
+## Final exact-head CI completion — 2026-11-02
+- Exact workflow head `b04c5d0153342f7f5784866a87dc00818e77a9e5`, run `41433279946`: **SUCCESS**.
+- The run includes the real Chrome DevTools interaction acceptance: initial anonymous state, language selector docking, offline status hidden, 320px no-horizontal-overflow assertion, Sign in open, Escape close, Create account name field, and close control.
+- The same run passed dependency audit, migration validation, UX static assertions, disposable PostgreSQL migrations, typecheck, build, desktop/390/320 browser smoke, full test suite and production container build.
+- PR #203 current head includes documentation-only checkpoint commits after the verified workflow head; application code and CI workflow tested in `b04c5d0` are unchanged.
+- Current PR comparison: 31 commits ahead of `main`, 0 behind, 11 changed files, mergeable; diff is limited to UI/UX, CI validation, scripts and documentation. No API or database files are changed.
+- PR #203 remains draft because independent code review, screen-reader/keyboard/focus-return, contrast/zoom and field usability validation remain outstanding.
