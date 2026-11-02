@@ -157,3 +157,29 @@ test("HCS ambiguous outcome polls the same persisted transaction ID until Mirror
     assert.equal(transactionLookups[0], transactionLookups[1], "reconciliation must query the exact same persisted HCS transaction ID");
   });
 });
+
+
+test("Mirror Node reconciliation rejects unrelated transaction IDs instead of falling back to the first record", async () => {
+  await withEnvironment(async () => {
+    const transactionId = "0.0.1234@1791620000.123456789";
+    const unrelatedMirrorId = "0.0.1234-1791620001-987654321";
+    let messageLookupAttempted = false;
+    globalThis.fetch = async (input) => {
+      const url = String(input);
+      if (url.includes("/api/v1/transactions/")) {
+        return new Response(JSON.stringify({ transactions: [{
+          transaction_id: unrelatedMirrorId,
+          name: "CONSENSUS_SUBMIT_MESSAGE",
+          entity_id: topicId,
+          result: "SUCCESS",
+          consensus_timestamp: timestamp,
+        }] }), { status: 200 });
+      }
+      messageLookupAttempted = true;
+      return new Response(JSON.stringify({ messages: [] }), { status: 200 });
+    };
+    const result = await reconcileHcsTransaction(transactionId, topicId);
+    assert.equal(result.status, "MISMATCH");
+    assert.equal(messageLookupAttempted, false, "unrelated transaction must not reach message verification");
+  });
+});
