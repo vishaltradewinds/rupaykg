@@ -1,6 +1,6 @@
 {
-  "createDate": "2026-09-24T09:14:36.139Z",
-  "updateDate": "2026-09-24T09:14:36.139Z",
+  "createDate": "2026-10-19T14:31:37.327Z",
+  "updateDate": "2026-10-19T14:31:37.327Z",
   "uuid": "8b2d9c31-5c1b-4a7f-9b5a-000000000002",
   "hash": "",
   "name": "WA03.001 Baseline Determination",
@@ -68,9 +68,27 @@
         "readOnly": false,
         "type": "string"
       },
+      "baselineRecordId": {
+        "title": "RupayKg Baseline Record ID (reference only)",
+        "description": "Must identify the baseline record in RupayKg; this field alone does not prove independent approval",
+        "readOnly": false,
+        "type": "string"
+      },
+      "baselineRecordSha256": {
+        "title": "Baseline Record SHA-256 (reference only)",
+        "description": "Canonical hash to be checked against the immutable RupayKg record; form equality is not proof of approval",
+        "readOnly": false,
+        "type": "string"
+      },
       "baselineMethod": {
         "title": "Baseline Method",
         "description": "BEE BM-T-011 method/version used",
+        "readOnly": false,
+        "type": "string"
+      },
+      "baselinePeriod": {
+        "title": "Baseline Period",
+        "description": "Baseline period covered by the BM-T-011 record",
         "readOnly": false,
         "type": "string"
       },
@@ -103,7 +121,10 @@
       "@context",
       "type",
       "activityId",
+      "baselineRecordId",
+      "baselineRecordSha256",
       "baselineMethod",
+      "baselinePeriod",
       "fch4BL",
       "bmT011Inputs",
       "bmT011Evidence"
@@ -115,7 +136,16 @@
       "activityId": {
         "@type": "https://www.schema.org/text"
       },
+      "baselineRecordId": {
+        "@type": "https://www.schema.org/text"
+      },
+      "baselineRecordSha256": {
+        "@type": "https://www.schema.org/text"
+      },
       "baselineMethod": {
+        "@type": "https://www.schema.org/text"
+      },
+      "baselinePeriod": {
         "@type": "https://www.schema.org/text"
       },
       "fch4BL": {

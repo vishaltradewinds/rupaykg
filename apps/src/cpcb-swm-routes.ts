@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+
 import type { FastifyInstance } from "fastify";
 import type { Pool, PoolClient } from "pg";
 import { authenticate, bearerChallenge, canActForOrganization, hasOrganizationPermission, type AuthContext } from "./auth.js";
@@ -80,12 +80,13 @@ export function safeObservations(value: unknown): boolean {
   }
   return true;
 }
-function hashEvent(value: unknown): string { return createHash("sha256").update(JSON.stringify(value)).digest("hex"); }
 async function writeAudit(client: PoolClient, identityId: string, organizationId: string, action: string, targetId: string, payload: unknown, requestId: string) {
-  const prior = await client.query<{ event_hash: string }>("select event_hash from audit_events where organization_id=$1 order by created_at desc, id desc limit 1 for update", [organizationId]);
-  const previousHash = prior.rows[0]?.event_hash ?? null;
-  const event = { identityId, organizationId, action, targetId, payload, requestId, previousHash, at: new Date().toISOString() };
-  await client.query("insert into audit_events(actor_identity_id,organization_id,action,target_type,target_id,request_id,previous_hash,event_hash,payload) values($1,$2,$3,'cpcb_swm_stakeholder_workspace',$4,$5,$6,$7,$8::jsonb)", [identityId, organizationId, action, targetId, requestId, previousHash, hashEvent(event), JSON.stringify(payload)]);
+  // PostgreSQL migration 088 owns predecessor selection and canonical hashing for every writer.
+  // Do not construct a per-organization chain here; it can race and fork the global chain.
+  await client.query(
+    "insert into audit_events(actor_identity_id,organization_id,action,target_type,target_id,request_id,payload) values($1,$2,$3,'cpcb_swm_stakeholder_workspace',$4,$5,$6::jsonb)",
+    [identityId, organizationId, action, targetId, requestId, JSON.stringify(payload)],
+  );
 }
 
 export async function registerCpcbSwmRoutes(app: FastifyInstance, pool: Pool | null): Promise<void> {
@@ -102,6 +103,8 @@ export async function registerCpcbSwmRoutes(app: FastifyInstance, pool: Pool | n
 
   app.post("/api/v1/cpcb-swm/workspaces", async (request, reply) => {
     const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
+    const requestId = (request as never as Request).id;
+    if (typeof requestId !== "string" || !requestId.trim()) return reply.code(503).send({ error: "Request correlation ID unavailable; refusing unaudited workspace creation", code: "AUDIT_REQUEST_ID_REQUIRED", syntheticData: false });
     const body = bodyOf(request as never), organizationId = auth.activeOrganizationId;
     if (!organizationId || !canActForOrganization(auth, organizationId)) return reply.code(403).send({ error: "Select a verified organization", code: "ORG_FORBIDDEN" });
     if (!await hasOrganizationPermission(pool, auth, organizationId, ["waste:record"])) return reply.code(403).send({ error: "Waste-recording permission required to save stakeholder preparation", code: "SWM_WRITE_FORBIDDEN" });
@@ -132,7 +135,7 @@ export async function registerCpcbSwmRoutes(app: FastifyInstance, pool: Pool | n
         if (reportedStatus !== "NOT_REPORTED") {
           await client.query("insert into cpcb_swm_status_history(workspace_id,organization_id,previous_reported_status,reported_status,source_reference,status_note,actor_identity_id) values($1,$2,'NOT_REPORTED',$3,$4,$5,$6)", [workspace.id, organizationId, reportedStatus, effectiveSourceReference, statusNote, auth.identityId]);
         }
-        await writeAudit(client, auth.identityId, organizationId, "CPCB_SWM_WORKSPACE_CREATED", workspace.id, { stakeholderType, title, checklistItems: checklist.length, cpcbReportedStatus: reportedStatus, localWorkflowStage: localStage, cpcbStatusClaim: "USER_REPORTED_UNVERIFIED" }, (request as never as Request).id ?? "request-id-unavailable");
+        await writeAudit(client, auth.identityId, organizationId, "CPCB_SWM_WORKSPACE_CREATED", workspace.id, { stakeholderType, title, checklistItems: checklist.length, cpcbReportedStatus: reportedStatus, localWorkflowStage: localStage, cpcbStatusClaim: "USER_REPORTED_UNVERIFIED" }, requestId);
         await client.query("commit");
         return reply.code(201).send({ source: "postgresql", syntheticData: false, workspace: rows.rows[0] });
       } catch (error) { await client.query("rollback"); throw error; } finally { client.release(); }
@@ -141,6 +144,8 @@ export async function registerCpcbSwmRoutes(app: FastifyInstance, pool: Pool | n
 
   app.patch("/api/v1/cpcb-swm/workspaces/:workspaceId", async (request, reply) => {
     const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
+    const requestId = (request as never as Request).id;
+    if (typeof requestId !== "string" || !requestId.trim()) return reply.code(503).send({ error: "Request correlation ID unavailable; refusing unaudited workspace update", code: "AUDIT_REQUEST_ID_REQUIRED", syntheticData: false });
     const body = bodyOf(request as never), organizationId = auth.activeOrganizationId, id = (request as never as Request).params.workspaceId ?? "";
     if (!organizationId || !canActForOrganization(auth, organizationId)) return reply.code(403).send({ error: "Select a verified organization", code: "ORG_FORBIDDEN" });
     if (!UUID.test(id)) return reply.code(400).send({ error: "Invalid workspace ID", code: "SWM_WORKSPACE_ID_INVALID" });
@@ -169,10 +174,53 @@ export async function registerCpcbSwmRoutes(app: FastifyInstance, pool: Pool | n
         if (prior.rows[0].cpcb_reported_status !== reportedStatus || prior.rows[0].cpcb_status_source_reference !== effectiveSourceReference || prior.rows[0].cpcb_status_note !== statusNote) {
           await client.query("insert into cpcb_swm_status_history(workspace_id,organization_id,previous_reported_status,reported_status,source_reference,status_note,actor_identity_id) values($1,$2,$3,$4,$5,$6,$7)", [id, organizationId, prior.rows[0].cpcb_reported_status, reportedStatus, effectiveSourceReference, statusNote, auth.identityId]);
         }
-        await writeAudit(client, auth.identityId, organizationId, "CPCB_SWM_WORKSPACE_UPDATED", id, { stakeholderType, title, checklistItems: checklist.length, cpcbReportedStatus: reportedStatus, localWorkflowStage: localStage, cpcbStatusClaim: "USER_REPORTED_UNVERIFIED" }, (request as never as Request).id ?? "request-id-unavailable");
+        await writeAudit(client, auth.identityId, organizationId, "CPCB_SWM_WORKSPACE_UPDATED", id, { stakeholderType, title, checklistItems: checklist.length, cpcbReportedStatus: reportedStatus, localWorkflowStage: localStage, cpcbStatusClaim: "USER_REPORTED_UNVERIFIED" }, requestId);
         await client.query("commit");
         return { source: "postgresql", syntheticData: false, workspace: rows.rows[0] };
       } catch (error) { await client.query("rollback"); throw error; } finally { client.release(); }
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "CPCB SWM workspace update failed", code: "SWM_WORKSPACE_UPDATE_FAILED", syntheticData: false }); }
   });
+  app.get("/api/v1/cpcb-swm/workspaces/:workspaceId/evidence", async (request, reply) => {
+    const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
+    const org = auth.activeOrganizationId, id = (request as never as Request).params.workspaceId ?? "";
+    if (!org || !canActForOrganization(auth, org)) return reply.code(403).send({error:"Organization forbidden",code:"ORG_FORBIDDEN"});
+    if (!UUID.test(id)) return reply.code(400).send({error:"Invalid workspace ID",code:"SWM_WORKSPACE_ID_INVALID"});
+    if (!await hasOrganizationPermission(pool,auth,org,["waste:record"]) || !await hasOrganizationPermission(pool,auth,org,["evidence:read","evidence:upload","evidence:review"])) return reply.code(403).send({error:"Evidence read permission required",code:"SWM_EVIDENCE_READ_FORBIDDEN"});
+    const w=await pool.query("select id from cpcb_swm_stakeholder_workspaces where id=$1 and organization_id=$2",[id,org]);
+    if(!w.rows[0]) return reply.code(404).send({error:"Workspace not found",code:"SWM_WORKSPACE_NOT_FOUND"});
+    const rows=await pool.query("select l.id,l.evidence_id,l.artifact_version_id,l.checklist_key,l.created_at,e.status::text evidence_status,v.version_number,v.file_name,v.media_type,v.size_bytes,v.sha256,v.source_reference from cpcb_swm_workspace_evidence l join evidence e on e.id=l.evidence_id join evidence_artifact_versions v on v.id=l.artifact_version_id where l.workspace_id=$1 and l.organization_id=$2 order by l.created_at desc",[id,org]);
+    return {source:"postgresql",syntheticData:false,evidenceLinks:rows.rows};
+  });
+
+  app.post("/api/v1/cpcb-swm/workspaces/:workspaceId/evidence", async (request, reply) => {
+    const auth=await authFor(request as never,reply,pool); if(!auth||!pool)return;
+    const requestId=(request as never as Request).id;
+    if(typeof requestId!=="string"||!requestId.trim())return reply.code(503).send({error:"Request correlation ID unavailable; refusing unaudited evidence link",code:"AUDIT_REQUEST_ID_REQUIRED",syntheticData:false});
+    const org=auth.activeOrganizationId,id=(request as never as Request).params.workspaceId??"",body=bodyOf(request as never),evidenceId=text(body,"evidenceId",64),checklistKey=text(body,"checklistKey",80);
+    if(!org||!canActForOrganization(auth,org))return reply.code(403).send({error:"Organization forbidden",code:"ORG_FORBIDDEN"});
+    if(!UUID.test(id))return reply.code(400).send({error:"Invalid workspace ID",code:"SWM_WORKSPACE_ID_INVALID"});
+    if(!evidenceId||!UUID.test(evidenceId)||!checklistKey||!/^[a-z0-9_]{2,80}$/.test(checklistKey))return reply.code(400).send({error:"Valid evidenceId and checklistKey required",code:"SWM_EVIDENCE_FIELDS_INVALID"});
+    if(!await hasOrganizationPermission(pool,auth,org,["waste:record"])||!await hasOrganizationPermission(pool,auth,org,["evidence:read","evidence:upload","evidence:review"]))return reply.code(403).send({error:"Evidence linking permission required",code:"SWM_EVIDENCE_LINK_FORBIDDEN"});
+    const client=await pool.connect();
+    try{
+      await client.query("begin");
+      const wr=await client.query("select id,geography_id,stakeholder_type from cpcb_swm_stakeholder_workspaces where id=$1 and organization_id=$2 for update",[id,org]);
+      const w=wr.rows[0] as {id:string;geography_id:string|null;stakeholder_type:Stakeholder}|undefined;
+      if(!w){await client.query("rollback");return reply.code(404).send({error:"Workspace not found",code:"SWM_WORKSPACE_NOT_FOUND"});}
+      if(!initialSwmChecklist(w.stakeholder_type).some(x=>x.key===checklistKey)){await client.query("rollback");return reply.code(400).send({error:"Checklist key is not canonical for stakeholder",code:"SWM_EVIDENCE_CHECKLIST_KEY_INVALID"});}
+      const er=await client.query("select e.id evidence_id,v.id version_id,a.geography_id,e.status::text status,e.content_hash,v.sha256 from evidence e join activities a on a.id=e.activity_id join evidence_artifact_versions v on v.evidence_id=e.id join evidence_artifact_series s on s.id=v.series_id where e.id=$1 and s.organization_id=$2 and a.organization_id=$2 and s.activity_id=a.id",[evidenceId,org]);
+      const e=er.rows[0] as {evidence_id:string;version_id:string;geography_id:string|null;status:string;content_hash:string;sha256:string}|undefined;
+      if(!e||e.content_hash!==e.sha256){await client.query("rollback");return reply.code(404).send({error:"Evidence not found in organization or hash mismatch",code:"SWM_EVIDENCE_NOT_FOUND"});}
+      if(!e.geography_id||(w.geography_id&&w.geography_id!==e.geography_id)){await client.query("rollback");return reply.code(403).send({error:"Evidence geography must match workspace and be present",code:"SWM_EVIDENCE_GEOGRAPHY_MISMATCH"});}
+      const scope=await client.query("select organization_has_geography_scope($1::uuid,$2::uuid) ok",[org,e.geography_id]);
+      if(!(scope.rows[0] as {ok:boolean}|undefined)?.ok){await client.query("rollback");return reply.code(403).send({error:"Evidence geography outside organization scope",code:"SWM_EVIDENCE_SCOPE_FORBIDDEN"});}
+      const lr=await client.query("insert into cpcb_swm_workspace_evidence(workspace_id,organization_id,evidence_id,artifact_version_id,checklist_key,linked_by_identity_id) values($1,$2,$3,$4,$5,$6) on conflict(workspace_id,evidence_id,checklist_key) do nothing returning id",[id,org,evidenceId,e.version_id,checklistKey,auth.identityId]);
+      const link=lr.rows[0] as {id:string}|undefined;
+      if(!link){await client.query("rollback");return reply.code(409).send({error:"Evidence already linked to checklist item",code:"SWM_EVIDENCE_ALREADY_LINKED"});}
+      await writeAudit(client,auth.identityId,org,"CPCB_SWM_EVIDENCE_LINKED",link.id,{workspaceId:id,evidenceId,artifactVersionId:e.version_id,checklistKey,evidenceStatus:e.status,officialCpcbStatusChanged:false},requestId);
+      await client.query("commit");
+      return reply.code(201).send({source:"postgresql",syntheticData:false,evidenceLink:{id:link.id,workspaceId:id,evidenceId,artifactVersionId:e.version_id,checklistKey,evidenceStatus:e.status,verificationStatus:e.status==="VERIFIED"?"INDEPENDENTLY_REVIEWED":e.status==="REJECTED"?"REJECTED":"PENDING_REVIEW",officialCpcbStatus:"UNCHANGED"}});
+    }catch(error){await client.query("rollback").catch(()=>undefined);request.log.error(error);return reply.code(503).send({error:"Evidence link unavailable",code:"SWM_EVIDENCE_LINK_UNAVAILABLE",syntheticData:false});}finally{client.release();}
+  });
+
 }

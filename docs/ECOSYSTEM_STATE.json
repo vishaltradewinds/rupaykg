@@ -1,34 +1,153 @@
-﻿{
-  "schemaVersion": 1,
-  "system": "RupayKg Ecosystem Continuity & Reconciliation",
-  "rule": "RECONCILE -> IDENTIFY NEXT UNFINISHED ITEM -> EXECUTE ONLY THAT ITEM -> VERIFY -> UPDATE CHECKPOINT",
-  "sourceOfTruth": "vishaltradewinds/rupaykg",
-  "referenceOnly": ["vishaltradewinds/rupaykg-aistudio"],
-  "states": ["VERIFIED_DONE", "IN_PROGRESS", "BLOCKED", "UNVERIFIED", "NEXT", "NOT_STARTED"],
-  "items": [
-    {"id":"repo-source-of-truth","area":"Repository","state":"VERIFIED_DONE","evidence":"Production repository is vishaltradewinds/rupaykg"},
-    {"id":"pc-clone","area":"Local workspace","state":"VERIFIED_DONE","evidence":"C:\\Users\\Vishal\\Documents\\GitHub\\rupaykg"},
-    {"id":"docker","area":"Infrastructure","state":"VERIFIED_DONE","evidence":"Docker Engine verified on connected PC"},
-    {"id":"rupaykg-production","area":"Production","state":"VERIFIED_DONE","evidence":"Render service rupaykg is live"},
-    {"id":"github-ci","area":"CI","state":"VERIFIED_DONE","evidence":"Latest verified CI run 35514484727 succeeded"},
-    {"id":"guardian-stack","area":"Guardian","state":"VERIFIED_DONE","evidence":"Local Guardian quickstart services running"},
-    {"id":"guardian-auth","area":"Guardian","state":"VERIFIED_DONE","evidence":"User confirmed Guardian authentication/setup already completed"},
-    {"id":"guardian-mrv-sender","area":"Guardian MRV","state":"VERIFIED_DONE","evidence":"guardian-mrv-sender-test is running"},
-    {"id":"rupaykg-guardian-adapter","area":"MRV","state":"VERIFIED_DONE","evidence":"apps/src/guardian-mrv.ts implements rupaykg:guardian-mrv:v1 contract"},
-    {"id":"live-acceptance-workflow","area":"Acceptance","state":"VERIFIED_DONE","evidence":".github/workflows/guardian-live-acceptance.yml exists and enforces non-synthetic Guardian/Hedera/Mirror Node proof"},
-    {"id":"guardian-policy-id","area":"Guardian","state":"NEXT","evidence":"Real published policy/workflow identifier still needs to be resolved from authenticated Guardian"},
-    {"id":"guardian-verified","area":"Acceptance","state":"NOT_STARTED","evidence":"Requires real live submission"},
-    {"id":"hedera-consensus","area":"Acceptance","state":"NOT_STARTED","evidence":"Requires real HCS confirmation"},
-    {"id":"persisted-provenance","area":"Acceptance","state":"NOT_STARTED","evidence":"Requires successful live acceptance"},
-    {"id":"mirror-node-verification","area":"Acceptance","state":"NOT_STARTED","evidence":"Requires real consensus timestamp and Mirror Node verification"},
-    {"id":"issue-11","area":"Governance","state":"BLOCKED","evidence":"Keep open until all real acceptance evidence exists"}
-  ],
-  "operatingRules": [
-    "Never redo VERIFIED_DONE work unless new evidence contradicts it.",
-    "Never convert historical evidence into current verification.",
-    "Never invent credentials, IDs, timestamps, signatures, policy IDs, execution IDs or acceptance results.",
-    "Every new work session starts by reading this manifest and reconciling only changed or stale items.",
-    "When an item is completed, update its state and evidence in the same coherent change.",
-    "When blocked, record the exact blocker and continue with independent work instead of repeating completed setup."
-  ]
+{
+    "schemaVersion":  1,
+    "system":  "RupayKg Ecosystem Continuity \u0026 Reconciliation",
+    "rule":  "RECONCILE -\u003e IDENTIFY NEXT UNFINISHED ITEM -\u003e EXECUTE ONLY THAT ITEM -\u003e VERIFY -\u003e UPDATE CHECKPOINT",
+    "sourceOfTruth":  "vishaltradewinds/rupaykg",
+    "referenceOnly":  [
+                          "vishaltradewinds/rupaykg-aistudio"
+                      ],
+    "states":  [
+                   "VERIFIED_DONE",
+                   "IN_PROGRESS",
+                   "BLOCKED",
+                   "UNVERIFIED",
+                   "NEXT",
+                   "NOT_STARTED"
+               ],
+    "items":  [
+                  {
+                      "id":  "repo-source-of-truth",
+                      "area":  "Repository",
+                      "state":  "VERIFIED_DONE",
+                      "evidence":  "Production repository is vishaltradewinds/rupaykg"
+                  },
+                  {
+                      "id":  "pc-clone",
+                      "area":  "Local workspace",
+                      "state":  "VERIFIED_DONE",
+                      "evidence":  "C:\\Users\\Vishal\\Documents\\GitHub\\rupaykg"
+                  },
+                  {
+                      "id":  "docker",
+                      "area":  "Infrastructure",
+                      "state":  "VERIFIED_DONE",
+                      "evidence":  "2026-10-19 live check: Docker Engine 29.8.0 responds; WSL2 docker-desktop is Running; all 15 existing Guardian Quickstart containers are Up. No container/data reset was performed during this recovery."
+                  },
+                  {
+                      "id":  "rupaykg-production",
+                      "area":  "Production",
+                      "state":  "VERIFIED_DONE",
+                      "evidence":  "Render service rupaykg is live"
+                  },
+                  {
+                      "id":  "github-ci",
+                      "area":  "CI",
+                      "state":  "VERIFIED_DONE",
+                      "evidence":  "Latest verified CI run 35514484727 succeeded"
+                  },
+                  {
+                      "id":  "guardian-stack",
+                      "area":  "Guardian",
+                      "state":  "VERIFIED_DONE",
+                      "evidence":  "2026-10-19 live check: Guardian Quickstart project reports 15 running containers and http://127.0.0.1:3000 returns HTTP 200. This proves service reachability only, not a validated WA03.001 workflow or live Hedera acceptance."
+                  },
+                  {
+                      "id":  "guardian-auth",
+                      "area":  "Guardian",
+                      "state":  "VERIFIED_DONE",
+                      "evidence":  "User confirmed Guardian authentication/setup already completed"
+                  },
+                  {
+                      "id":  "guardian-mrv-sender",
+                      "area":  "Guardian MRV",
+                      "state":  "VERIFIED_DONE",
+                      "evidence":  "2026-10-19 live check: guardian-quickstart-mrv-sender-1 is Up and http://127.0.0.1:3005 returns HTTP 200. The root is a browser UI; no evidence that it implements the RupayKG rupaykg:guardian-mrv:v1 adapter contract."
+                  },
+                  {
+                      "id":  "rupaykg-guardian-adapter",
+                      "area":  "MRV",
+                      "state":  "BLOCKED",
+                      "evidence":  "Local Guardian mrv-sender 3.7.1-rc exposes POST /mrv-generate, accepts a browser-supplied config containing issuer DID/DID document/key and creates a Guardian-native VC before POSTing to its configured external-ingest URL. It does not verify RupayKg vc+jwt as a trusted credential and is not the rupaykg:guardian-mrv:v1 API adapter. No authorized issuer DID/key or bridge environment configuration is present. Do not use demo/generated credentials as production trust."
+                  },
+                  {
+                      "id":  "live-acceptance-workflow",
+                      "area":  "Acceptance",
+                      "state":  "VERIFIED_DONE",
+                      "evidence":  ".github/workflows/guardian-live-acceptance.yml exists and enforces non-synthetic Guardian/Hedera/Mirror Node proof"
+                  },
+                  {
+                      "id":  "guardian-policy-id",
+                      "area":  "Guardian",
+                      "state":  "VERIFIED_DONE",
+                      "evidence":  "Fresh read-only local Guardian Mongo query resolved a PUBLISH record: 6aba3a07e76c0b08fdd9d8d2, version 1.0.0, topic 0.0.10757557. Critical qualification: this record has 0 policyNavigation entries, 0 schemaTemplates and 0 tools; it is not proven usable for WA03.001. policy_test and dry_run collections both have 0 records. Identifier lookup is done; usable policy validation is not."
+                  },
+                  {
+                      "id":  "guardian-verified",
+                      "area":  "Acceptance",
+                      "state":  "NOT_STARTED",
+                      "evidence":  "Requires real live submission"
+                  },
+                  {
+                      "id":  "hedera-consensus",
+                      "area":  "Acceptance",
+                      "state":  "NOT_STARTED",
+                      "evidence":  "Requires real HCS confirmation"
+                  },
+                  {
+                      "id":  "persisted-provenance",
+                      "area":  "Acceptance",
+                      "state":  "NOT_STARTED",
+                      "evidence":  "Requires successful live acceptance"
+                  },
+                  {
+                      "id":  "mirror-node-verification",
+                      "area":  "Acceptance",
+                      "state":  "NOT_STARTED",
+                      "evidence":  "Requires real consensus timestamp and Mirror Node verification"
+                  },
+                  {
+                      "id":  "issue-11",
+                      "area":  "Governance",
+                      "state":  "BLOCKED",
+                      "evidence":  "Keep open until all real acceptance evidence exists"
+                  },
+                  {
+                      "id":  "guardian-policy-validation",
+                      "area":  "Guardian policy assurance",
+                      "state":  "VERIFIED_DONE",
+                      "evidence":  "Structural validator npm run validate:guardian-policy passed for the five-schema candidate bundle, baseline cross-form consistency gate, fail-closed source, monitoring -\u003e validator -\u003e Equation 4, navigation and official equation. This proves repository structure only; it does not prove live Guardian import, policy validation, dry-run, publish or execution."
+                  },
+                  {
+                      "id":  "production-identity-and-activity",
+                      "area":  "Production acceptance data",
+                      "state":  "BLOCKED",
+                      "evidence":  "Read-only queries of both available Neon RupayKg project candidates found 0 rows in organizations, identities, memberships, activities, verifications, evidence, measurements, credentials and MRV provenance. Render-managed rupaykg-db is suspended by billing. Production database mapping and a real authorized non-synthetic acceptance activity remain unverified."
+                  },
+                  {
+                      "id":  "cpcb-evidence-linking",
+                      "area":  "CPCB SWM stakeholder evidence workflow",
+                      "state":  "IN_PROGRESS",
+                      "evidence":  "Local API/UI and migration implemented. Applied all 96 migrations in three isolated disposable PostgreSQL databases. Full workspace tests passed: API 110/110, carbon 30/30, compliance 2/2, domain 29/29, ESG 1/1, intelligence 2/2; zero failures or skips. CPCB API integration verified same-tenant POST/GET, duplicate and invalid checklist handling, cross-organization workspace/evidence isolation, and official CPCB status unchanged. Production dependency audit: zero vulnerabilities. Browser smoke: HTTP 200; Chrome DOM and screenshot produced. No production migration/deployment or official CPCB submission/status synchronization performed."
+                  },
+                  {
+                      "state":  "VERIFIED_DONE",
+                      "evidence":  "Implemented BM-T-011 v1.0 annual Application A FOD calculation and scoped persisted assessment/review API. Carbon suite passed 30/30. Full API suite passed 110/110 against isolated disposable PostgreSQL databases with zero skips/failures. Result is methane emissions potential in tCO2e and explicitly is not FCH4,BL, methodology eligibility, BEE/ACVA approval or CCC issuance.",
+                      "id":  "bm-t011-annual-assessment-engineering",
+                      "area":  "Methodology engineering"
+                  },
+                  {
+                      "state":  "NEXT",
+                      "evidence":  "Next: establish a trusted RupayKg JWT -\u003e Guardian-native VC bridge only with authorized issuer DID/key and Guardian sender configuration. Current local process environment has none of the required RUPAYKG_BASELINE_SIGNING_ISSUER_DID, RUPAYKG_BASELINE_SIGNING_KEY_ID, RUPAYKG_BASELINE_SIGNING_PRIVATE_KEY_PEM, GUARDIAN_MRV_SUBMIT_URL, GUARDIAN_API_TOKEN or GUARDIAN_MRV_POLICY_ID. Do not invent credentials or reuse unrelated Hedera keys. Then validate/import the candidate policy, run negative tests, and obtain real Guardian VERIFIED execution, Hedera consensus and Mirror Node proof. No production deployment/migration/HCS write.",
+                      "id":  "guardian-credential-bridge",
+                      "area":  "Guardian integration"
+                  }
+              ],
+    "operatingRules":  [
+                           "Never redo VERIFIED_DONE work unless new evidence contradicts it.",
+                           "Never convert historical evidence into current verification.",
+                           "Never invent credentials, IDs, timestamps, signatures, policy IDs, execution IDs or acceptance results.",
+                           "Every new work session starts by reading this manifest and reconciling only changed or stale items.",
+                           "When an item is completed, update its state and evidence in the same coherent change.",
+                           "When blocked, record the exact blocker and continue with independent work instead of repeating completed setup."
+                       ]
 }

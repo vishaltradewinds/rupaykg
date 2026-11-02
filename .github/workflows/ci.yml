@@ -35,11 +35,13 @@ jobs:
         with:
           node-version: '22.x'
           package-manager-cache: false
-      - run: npm install --no-audit --no-fund
+      - run: npm ci --no-audit --no-fund
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=high
       - run: npm run validate:migrations
       - run: npm run migrate -w @rupaykg/api
+      - name: Verify applied migrations against repository inventory
+        run: npm run verify:migration-state -w @rupaykg/api
       - run: npm run typecheck
       - run: npm run build
       - name: Browser smoke test production web build
@@ -71,9 +73,40 @@ jobs:
           grep -q 'RupayKG' /tmp/rupaykg-web-dom.html
           test -s /tmp/rupaykg-web-smoke.png
           echo "Chrome DOM exit: $dom_status; screenshot exit: $shot_status"
+      - name: Prepare isolated PostgreSQL acceptance databases
+        env:
+          CI_ADMIN_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+        run: |
+          node scripts/create-ci-test-databases.mjs
+          DATABASE_URL=postgresql://postgres:postgres@localhost:5432/rupaykg_baseline_test npm run migrate -w @rupaykg/api
+          DATABASE_URL=postgresql://postgres:postgres@localhost:5432/rupaykg_cpcb_test npm run migrate -w @rupaykg/api
       - name: Run tests including disposable PostgreSQL acceptance
         env:
           RUPAYKG_RUN_DB_INTEGRATION_TESTS: "1"
+          RUPAYKG_TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/rupaykg_baseline_test
+          RUPAYKG_CPCB_TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/rupaykg_cpcb_test
+          RUPAYKG_MIGRATION_RACE_TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/rupaykg_migration_race_test
         run: npm test
+      - name: Verify audit chain using read-only PostgreSQL session
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/rupaykg_baseline_test
+          DATABASE_SSL: "false"
+        run: npm run verify:audit-chain -w @rupaykg/api
+      - name: Backup disposable audit-chain database
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/rupaykg_baseline_test
+        shell: bash
+        run: pg_dump --format=custom --no-owner --no-acl --file=/tmp/rupaykg-audit-chain.dump "$DATABASE_URL"
+      - name: Restore backup to a fresh disposable database and verify chain
+        env:
+          PGPASSWORD: postgres
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/rupaykg_audit_restore_test
+          DATABASE_SSL: "false"
+        shell: bash
+        run: |
+          set -euo pipefail
+          createdb --host=localhost --username=postgres rupaykg_audit_restore_test
+          pg_restore --exit-on-error --no-owner --no-acl --dbname="$DATABASE_URL" /tmp/rupaykg-audit-chain.dump
+          npm run verify:audit-chain -w @rupaykg/api
       - name: Build production container
         run: docker build --pull --tag rupaykg:ci .
