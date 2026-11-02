@@ -280,3 +280,9 @@ No production DDL/DML, migration, role/grant/RLS changes, deployments, worker/sc
 - Added prioritized remediation order and exact-role acceptance criteria to the inventory.
 - CI #4526 run id `41408414934` was observed in progress on the resume checkpoint head; check latest PR head and exact-head run before claiming the geography acceptance test passed.
 - No production change. PR #192 remains open/draft. Next: poll exact-head CI; then continue auth/geography negative tests and begin platform-admin route migration only after reviewing its full handler/function contract.
+
+
+## 2026-11-02 — Geography fixture enum correction
+- Reviewed the core geography enum against the new test fixture and caught that the schema uses `STATE_UT`, not `STATE`.
+- Corrected both synthetic root/out-of-scope fixtures to canonical `STATE_UT` in commit `fe698f9821138f43f013c1b0631916058e574bb2` before treating the acceptance test as valid.
+- The previous CI #4528 was running against the earlier fixture; it is not the final code state. Require a new exact-head run for `fe698f9` and poll through completion.
