@@ -617,3 +617,11 @@ The first regression-test CI run (`41464821546`) failed as expected against the 
 - Exact-head run `41467045999` for commit `2edd251ef404d88b00e4c7f994d89e42ae38e04b` has passed migration validation, disposable PostgreSQL migration, typecheck, app build, two-custodian bootstrap exercise, browser smoke, and full test suite including the MRV job ledger, active-lease transition enforcement, expired lease recovery, stale-token fencing, and audit-event assertions.
 - Production-container build is still in progress; overall workflow is not yet SUCCESS. Await final job conclusion.
 - The event attribution / retry metadata refinements in commits after `2edd251` are not included in this run and require their own exact-head CI (`392abdbc...` currently in progress). No production rollout.
+
+
+### 15:01 UTC — exact-head MRV lease guard and audit-event CI SUCCESS
+
+- Exact-head CI `41467045999` for PR #192 head `2edd251ef404d88b00e4c7f994d89e42ae38e04b` completed **SUCCESS**, including production-container build. Verified job result: `completed / success`, no failed steps.
+- This exact head includes: database-level lease requirement for legal worker transitions; legal-transition validation before lease errors; expired lease reclaim with fresh token; stale worker rejection; immutable Guardian/HCS idempotency identifiers; retry-release audit event; worker actor attribution; and the regression test that checks audit metadata.
+- PR #192 remains open and draft. PR #204 remains open and draft. No merge, deploy, production DB change, role/grant change, or provider write was performed.
+- Scope limit remains: CI uses disposable PostgreSQL and synthetic provider/test data. It does not prove a deployed worker, production Hedera/Guardian operation, tenant RLS coverage, production authorization, Jabalpur pilot acceptance, or TRL 9.
