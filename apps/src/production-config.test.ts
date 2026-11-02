@@ -81,6 +81,14 @@ describe("production configuration", () => {
     assert.throws(() => readProductionConfig({ ...valid, VITE_RUPAYKG_SESSION_TOKEN: "secret" }), /VITE_RUPAYKG_SESSION_TOKEN must not be provided/);
   });
 
+  it("never permits the request-context signing secret in a Vite client variable", () => {
+    assert.throws(() => readProductionConfig({ ...valid, VITE_RUPAYKG_REQUEST_CONTEXT_SECRET: "must-not-be-client-bundled" }), /must never be client-bundled/);
+  });
+
+  it("never permits the request-context key identifier in a Vite client variable", () => {
+    assert.throws(() => readProductionConfig({ ...valid, VITE_RUPAYKG_REQUEST_CONTEXT_KEY_ID: "v1" }), /must not be provided to the browser/);
+  });
+
   it("requires HTTPS origins without paths", () => {
     assert.throws(() => readProductionConfig({ ...valid, RUPAYKG_ALLOWED_ORIGINS: "http://app.rupaykg.example" }), /origin must use HTTPS/);
     assert.throws(() => readProductionConfig({ ...valid, RUPAYKG_ALLOWED_ORIGINS: "https://app.rupaykg.example/path" }), /must not contain path/);
