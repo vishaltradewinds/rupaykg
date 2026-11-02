@@ -35,20 +35,18 @@ before(async () => {
   const c = await pool.connect();
   try {
     await c.query("begin");
-    ownerOrgId = (await c.query<{ id: string }>("insert into organizations(name,organization_type) values($1,'COLLECTOR') returning id", [`runtime-registry-owner-${suffix}`])).rows[0]!.id;
-    destinationOrgId = (await c.query<{ id: string }>("insert into organizations(name,organization_type) values($1,'PROCESSOR') returning id", [`runtime-registry-destination-${suffix}`])).rows[0]!.id;
+    ownerOrgId = (await c.query<{ id: string }>("insert into organizations(name,organization_type,status) values($1,'COLLECTOR','VERIFIED') returning id", [`runtime-registry-owner-${suffix}`])).rows[0]!.id;
+    destinationOrgId = (await c.query<{ id: string }>("insert into organizations(name,organization_type,status) values($1,'PROCESSOR','VERIFIED') returning id", [`runtime-registry-destination-${suffix}`])).rows[0]!.id;
     geographyId = (await c.query<{ id: string }>("insert into geography(kind,code,name) values('STATE_UT',$1,$2) returning id", [`REGISTRY-${suffix}`, `Registry Runtime ${suffix}`])).rows[0]!.id;
-    await c.query("insert into organization_geography_scopes(organization_id,geography_id) values($1,$2)", [ownerOrgId, geographyId]);
+    await c.query("insert into organization_geography_scopes(organization_id,geography_id,status) values($1,$2,'VERIFIED')", [ownerOrgId, geographyId]);
     actorId = (await c.query<{ id: string }>("insert into identities(external_subject,display_name) values($1,$2) returning id", [`runtime-registry-actor-${suffix}`, "Registry Runtime Actor"])).rows[0]!.id;
     verifierId = (await c.query<{ id: string }>("insert into identities(external_subject,display_name) values($1,$2) returning id", [`runtime-registry-verifier-${suffix}`, "Registry Runtime Verifier"])).rows[0]!.id;
     const actorRole = (await c.query<{ id: string }>("insert into roles(organization_id,name,permissions) values($1,$2,$3::jsonb) returning id", [ownerOrgId, `REGISTRY-OPERATOR-${suffix}`, JSON.stringify(["ISSUE_CREDENTIAL","TRANSFER_CREDENTIAL","RETIRE_CREDENTIAL","AUTHORIZE_SETTLEMENT","SETTLE_FUNDS","settlement:authorize","settlement:settle","guardian:read"])] )).rows[0]!.id;
-    const verifierRole = (await c.query<{ id: string }>("insert into roles(organization_id,name,permissions) values($1,$2,'[\"VERIFY_EVIDENCE\"]') returning id", [ownerOrgId, `REGISTRY-VERIFIER-${suffix}`])).rows[0]!.id;
+    const verifierRole = (await c.query<{ id: string }>("insert into roles(organization_id,name,permissions) values($1,'verifier',$2::jsonb) returning id", [ownerOrgId, JSON.stringify([\"VERIFY_EVIDENCE\",\"verification:approve\"]))).rows[0]!.id;
     const destinationRole = (await c.query<{ id: string }>("insert into roles(organization_id,name,permissions) values($1,$2,$3::jsonb) returning id", [destinationOrgId, `SETTLEMENT-PARTY-${suffix}`, JSON.stringify(["settlement:authorize","settlement:settle","RETIRE_CREDENTIAL"])] )).rows[0]!.id;
     await approveTestMembership(c, actorId, ownerOrgId, actorRole, geographyId, "operator", "collector");
     await approveTestMembership(c, verifierId, ownerOrgId, verifierRole, geographyId, "verifier", "collector");
     await approveTestMembership(c, actorId, destinationOrgId, destinationRole, geographyId, "settlement_party", "processor");
-    await c.query("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED'),($4,$2,$5,'VERIFIED')", [actorId, ownerOrgId, actorRole, verifierId, verifierRole]);
-    await c.query("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED')", [actorId, destinationOrgId, destinationRole]);
     actorToken = token(); verifierToken = token();
     await c.query("insert into identity_sessions(identity_id,expires_at,token_hash) values($1,now()+interval '1 hour',$2),($3,now()+interval '1 hour',$4)", [actorId, hash(actorToken), verifierId, hash(verifierToken)]);
     activityId = (await c.query<{ id: string }>("insert into activities(organization_id,actor_identity_id,geography_id,activity_type,status,completed_at) values($1,$2,$3,'COLLECTION','COMPLETED',now()) returning id", [ownerOrgId, actorId, geographyId])).rows[0]!.id;
@@ -71,7 +69,6 @@ describe("registry and settlement runtime acceptance", () => {
     const deniedIdentity = (await pool.query<{ id: string }>("insert into identities(external_subject,display_name) values($1,$2) returning id", [`runtime-registry-denied-${suffix}`, "Denied Registry Actor"])).rows[0]!.id;
     const deniedToken = token();
     await approveTestMembership(pool, deniedIdentity, ownerOrgId, deniedRole, geographyId, "reader", "collector");
-    await pool.query("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED')", [deniedIdentity, ownerOrgId, deniedRole]);
     await pool.query("insert into identity_sessions(identity_id,expires_at,token_hash) values($1,now()+interval '1 hour',$2)", [deniedIdentity, hash(deniedToken)]);
     const response = await request("/api/v1/credentials", { method: "POST", body: JSON.stringify({ activityId, trustRootId: `runtime-root-${suffix}`, verificationId, issuerOrganizationId: ownerOrgId, quantity: 100, unit: "kg" }) }, deniedToken, ownerOrgId);
     assert.equal(response.status, 403); assert.equal((await body(response)).code, "HIGH_RISK_PERMISSION_REQUIRED");
