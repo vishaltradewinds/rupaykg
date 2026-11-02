@@ -464,3 +464,22 @@ A registration audit of the PR #192 server composition changes the implementatio
 4. Test on disposable PostgreSQL with the actual restricted app role, signed key table, RLS policies and two organizations. Until that evidence exists, keep the helper unused by production routes and keep production HOLD.
 
 **Correction:** The prior matrix accurately records source behavior of the EPR return module but overstates its operational status if read as a live API inventory. Its registration was not found in the inspected server composition. No production route exposure is asserted.
+
+
+## Route registration correction — 2026-11-02 16:21Z
+
+A registration audit of the PR #192 server composition changes the implementation order:
+
+- `apps/src/epr-return-routes.ts` contains EPR return list/create/submit/external-reference handlers, but `apps/src/server.ts` does not import or call `registerEprReturnRoutes`. The module is not part of the inspected production server route registration path. Therefore the earlier endpoint matrix is a source-module review, **not proof that these endpoints are live or demo-accessible**. Do not treat EPR return routes as currently exposed until route registration and end-to-end tests are added.
+- `apps/src/mrv-routes.ts` calls `registerStatutoryRoutes`, so the live statutory EPR/applicability routes are registered through the MRV route module. The inspected statutory handlers still use pool-level permission checks and direct pool reads/writes; they need separate route-by-route tenant-bound integration.
+- `withRlsRequestTransaction` exists and uses a transaction-local signed context. Production config validates the required signing settings, but `production-server.ts` currently propagates database/auth settings without explicitly copying the request-context signing settings into the runtime environment. Verify and correct this wiring before any route calls the helper.
+- The database's protected context-key row and matching key identifier/key material must be provisioned through a reviewed DBA procedure before any request context can verify. Application environment values alone are insufficient.
+
+### Revised first-slice gate
+
+1. Do not claim EPR return API availability or implement route registration as a cosmetic fix. First decide whether EPR return workflows are in pilot scope and verify schema, route tests and UI consumers.
+2. Prefer an already-registered read-only statutory route only after verifying data classification and whether national reference data should be readable by any authenticated organization. Tenant RLS alone may not be the right policy for national reference data; use an explicit catalog policy.
+3. Before route integration, propagate validated production signing settings into the server process, confirm the DBA-provisioned key row, and add a fail-closed startup contract. Never log or expose signing material.
+4. Test on disposable PostgreSQL with the actual restricted app role, signed key table, RLS policies and two organizations. Until that evidence exists, keep the helper unused by production routes and keep production HOLD.
+
+**Correction:** The prior matrix accurately records source behavior of the EPR return module but overstates its operational status if read as a live API inventory. Its registration was not found in the inspected server composition. No production route exposure is asserted.
