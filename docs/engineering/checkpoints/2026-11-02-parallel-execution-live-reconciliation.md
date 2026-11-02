@@ -6,7 +6,7 @@ Reference UI repository: `vishaltradewinds/rupaykg-aistudio`
 
 ## Purpose and evidence boundary
 
-This checkpoint reconciles the founder-provided ten-workstream register against live GitHub and Neon read-only evidence. It is a documentation checkpoint only. It does not authorize production mutation, merge, deployment, worker activation, external registry submission, field operation, or certification.
+This checkpoint reconciles the founder-provided ten-workstream register against live GitHub and Neon read-only evidence and the canonical 2 November engineering checkpoint. It is a documentation checkpoint only. It does not authorize production mutation, merge, deployment, worker activation, external registry submission, field operation, or certification.
 
 ## Canonical source and deployment boundary
 
@@ -23,6 +23,7 @@ This checkpoint reconciles the founder-provided ten-workstream register against 
 - Current PR head: `8c2b45656a0db3b53b28e846a75f23813d47026a`.
 - Exact-head CI run: `41454624258`, completed SUCCESS.
 - The branch contains identity/session lifecycle, separate auth runtime pool, signed request context and transaction wrapper foundation, two-custodian synthetic bootstrap tests, and hierarchical/geography-scoped reviewer authorization.
+- The current PR head is two documentation commits ahead of code/test commit `bde761f9a5b3640081ed9383a5b4b5a48feeb211`; comparison shows no code-file changes in those two commits. Thus the expiry-fix code at that base is included in the current tested tree.
 - CI success is engineering evidence only. The production auth pool, least-privilege database roles, route/worker authorization reconciliation, independent review, founder-authorized two-custodian ceremony, and release approval remain open.
 
 ### PR #203 — UI/UX reference parity
@@ -64,6 +65,16 @@ The Neon project inventory also returned non-primary branches for staging, migra
 9. Registry/settlement: bilateral counterparty authority, ownership/event ordering, replay/idempotency and external settlement proof remain open.
 10. Evidence/assurance/TRL: preserve requirement-to-test-to-operation lineage, recovery evidence and independent assessment; platform-wide TRL 9 is NOT ESTABLISHED.
 
+## Canonical 2 November checkpoint findings retained
+
+The founder-supplied checkpoint commit `1f15ff2c00257a8f85351a887bedc79d401b045a` and file `docs/engineering/checkpoints/2026-11-02-parallel-platform-execution.md` are valid in the canonical repository. The checkpoint records, among other items:
+- Stakeholder pilot demonstration readiness plan and stakeholder dashboard route matrix are documentation/source maps, not real-site acceptance.
+- The shared test helper that directly updates membership/approval state is not proof of the governed onboarding path; the dedicated synthetic PostgreSQL bootstrap integration test does exercise the actual two-custodian and review functions.
+- Bootstrap claim-expiry hardening commits: migration `d1516653229bb043a29762e882ff54a4adfadac6` and regression test `bde761f9a5b3640081ed9383a5b4b5a48feeb211`. The checkpoint itself recorded exact-head CI as pending at that point. The current PR #192 head is two documentation commits ahead of the test commit, with no code changes in those two commits, and its exact-head CI run `41454624258` is SUCCESS.
+- Guardian policy remains unpublished and lacks real Guardian IDs, signatures and execution evidence; Hedera HCS transaction/consensus and Mirror Node read-back are separate proof requirements.
+- Settlement bilateral consent/authority and registry event ordering/ownership semantics remain policy and regression gaps.
+- No production migration, production bootstrap ceremony, production database mutation, or live external registry proof is established by that checkpoint.
+
 ## Immediate critical path
 
 1. Freeze production as read-only / HOLD.
@@ -75,9 +86,9 @@ The Neon project inventory also returned non-primary branches for staging, migra
 7. Continue PR #203 review independently; do not let UI completion substitute for security or operational readiness.
 8. Complete integrated stakeholder workflows, real instrument qualification, Guardian/Hedera proof, site operation and independent assurance.
 
-## Checkpoint provenance discrepancy
+## Checkpoint provenance
 
-The founder-provided reference commit `1f15ff2c00257a8f85351a887bedc79d401b045a` could not be resolved in the canonical repository during this inspection, and the named checkpoint file was not retrievable at that ref. This document records the verified live state without asserting that the supplied commit is valid or replacing historical records.
+The canonical 2 November checkpoint is verified at commit `1f15ff2c00257a8f85351a887bedc79d401b045a`. This live reconciliation document supplements it with independently queried Neon and current PR-head evidence; it does not replace the original checkpoint.
 
 ## Release posture
 
