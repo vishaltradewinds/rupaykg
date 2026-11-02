@@ -286,3 +286,15 @@ No production DDL/DML, migration, role/grant/RLS changes, deployments, worker/sc
 - Reviewed the core geography enum against the new test fixture and caught that the schema uses `STATE_UT`, not `STATE`.
 - Corrected both synthetic root/out-of-scope fixtures to canonical `STATE_UT` in commit `fe698f9821138f43f013c1b0631916058e574bb2` before treating the acceptance test as valid.
 - The previous CI #4528 was running against the earlier fixture; it is not the final code state. Require a new exact-head run for `fe698f9` and poll through completion.
+
+
+## 2026-11-02 — UI/UX audit checkpoint
+- Preserved previous API SQL / tenant-context inventory and geography fixture correction in prior checkpoint entries.
+- Added `docs/ux/RUPAYKG_UI_UX_DESIGN_AUDIT_AND_EXECUTION_PLAN_2026-11-02.md` in commit `448c999cf0dcea227014e0ee23c34ac92491d5b5`.
+- Static UI audit reviewed `apps/web/index.html`, React `main.tsx`, primary/mobile CSS, role dashboard, stakeholder journey, citizen/farmer guided panel, field capture, offline operation queue, operating-context scripts and representative domain panels.
+- P0 findings: landing navigation and its tab-controlled explanatory panels are both hidden by `minimal-stakeholder.css`; UI is split between React and independently mounted scripts with competing visual/context/navigation systems.
+- P1 findings: uneven localization despite 23 language choices; partial/unverified accessibility; mobile floating-control overlap risk; offline queue lacks a demonstrated complete user recovery surface; context/organization orientation and dense technical forms need improvement.
+- Report includes a national role-first UX architecture, batch execution plan, acceptance evidence and field validation requirements.
+- Scope caveat: static source audit only; no live browser/device usability, WCAG certification, Lighthouse/axe, screen-reader or translation review. No UI code changed in this batch.
+- Immediate next change: repair landing navigation/content visibility and add browser tests, then consolidate shell/context/navigation. Keep backend authorization and statutory authority boundaries unchanged.
+- PR #192 remains open/draft; production database and deployment remain untouched.
