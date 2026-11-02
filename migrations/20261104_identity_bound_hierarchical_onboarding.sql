@@ -108,9 +108,19 @@ BEGIN
       SELECT EXISTS(
         SELECT 1 FROM public.organization_memberships om
         JOIN public.roles r ON r.id=om.role_id
+        JOIN public.organizations reviewer_org ON reviewer_org.id=om.organization_id
         WHERE om.identity_id=v_actor AND om.status='VERIFIED'
+          AND reviewer_org.status='VERIFIED'
           AND r.name=ANY(v_roles)
-          AND ((v_next->>'approval_level')='PLATFORM'
+          AND ((v_next->>'approval_level')<>'PLATFORM' OR (
+            reviewer_org.organization_type='PLATFORM_AUTHORITY'
+            AND jsonb_typeof(r.permissions)='array'
+            AND EXISTS (
+              SELECT 1 FROM jsonb_array_elements_text(r.permissions) permission(value)
+              WHERE permission.value='admin:users'
+            )
+          ))
+          AND (v_next->>'approval_level'='PLATFORM'
                OR v_row.geography_id IS NULL
                OR public.organization_has_geography_scope(om.organization_id,v_row.geography_id))
       ) INTO v_can_review;
