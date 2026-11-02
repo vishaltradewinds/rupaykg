@@ -625,3 +625,12 @@ The first regression-test CI run (`41464821546`) failed as expected against the 
 - This exact head includes: database-level lease requirement for legal worker transitions; legal-transition validation before lease errors; expired lease reclaim with fresh token; stale worker rejection; immutable Guardian/HCS idempotency identifiers; retry-release audit event; worker actor attribution; and the regression test that checks audit metadata.
 - PR #192 remains open and draft. PR #204 remains open and draft. No merge, deploy, production DB change, role/grant change, or provider write was performed.
 - Scope limit remains: CI uses disposable PostgreSQL and synthetic provider/test data. It does not prove a deployed worker, production Hedera/Guardian operation, tenant RLS coverage, production authorization, Jabalpur pilot acceptance, or TRL 9.
+
+
+### 15:06 UTC — MRV enqueue binding integrity expanded; first migration CI caught delimiter typo
+
+- Source-DDL review of migrations `001_core.sql`, `007_resource_flow_mrv.sql`, `008_verification_integrity.sql`, `015_guardian_hedera_mrv.sql`, `025_methodology_reconciliation_evidence.sql`, and `20261021_evidence_artifact_vault.sql` identified that independent UUID foreign keys do not prove activity/evidence/verification ownership relationships.
+- Added composite unique indexes and composite foreign keys to the branch-only MRV job migration so the job's activity+organization+geography, evidence+activity, and verification+evidence+activity bindings remain consistent. Added a BEFORE INSERT guard requiring COMPLETED activity, VERIFIED evidence, APPROVED independent verification, and verified organization geography scope. This is a source-branch change only.
+- Added negative PostgreSQL integration cases for mismatched organization, mismatched geography, unverified evidence and rejected verification.
+- First migration CI `41468069376` and subsequent test-head run `41468147382` exposed a malformed dollar-quote delimiter (`as $` instead of a paired delimiter) in the new trigger. Corrected to named delimiter `$mrv_job_binding$` in commit `f1f42f216c7e55dbc080c4d4c282dc5d10716e9c`.
+- Exact-head CI `41468346945` is queued. No pass claimed; do not treat these new constraints as validated until this run completes. Audit draft updated with source-backed ownership implications. Production remains untouched.
