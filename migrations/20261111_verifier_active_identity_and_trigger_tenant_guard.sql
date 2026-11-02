@@ -45,7 +45,7 @@ $function$;
 -- This trigger historically guarded every verification decision, not only APPROVED.
 -- Preserve the established self-verification error contract by checking subject
 -- identity first, then apply the activity-bound tenant/identity/geography predicate.
-CREATE OR REPLACE FUNCTION public.enforce_verification_independence()
+CREATE OR REPLACE FUNCTION public.prevent_invalid_verification()
 RETURNS trigger
 LANGUAGE plpgsql
 SET search_path = pg_catalog, pg_temp
@@ -99,5 +99,5 @@ $function$;
 COMMENT ON FUNCTION public.has_verification_permission_for_activity(uuid, uuid) IS
   'Fail-closed verifier authorization: active VERIFIED identity, VERIFIED membership and organization, explicit verifier permission, and VERIFIED geography scope for the subject activity tenant.';
 
-COMMENT ON FUNCTION public.enforce_verification_independence() IS
-  'Checks self-verification first, then applies the shared activity-tenant verifier authorization predicate to every verification decision.';
+COMMENT ON FUNCTION public.prevent_invalid_verification() IS
+  'The verifications_integrity_guard trigger entry point: checks self-verification first, then applies the shared activity-tenant verifier authorization predicate to every verification decision.';
