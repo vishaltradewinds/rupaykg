@@ -148,3 +148,19 @@ These are initial classifications from live column and foreign-key metadata, not
 - Independent DBA/security review and production-shaped two-tenant acceptance remain outstanding.
 
 No production migration, grant, role change, policy activation, deployment or certification is authorized by this design inventory.
+
+## 7. Additional live function and ownership ACL findings
+
+A second read-only production catalog query, on the same Neon production branch, observed:
+
+- 115 public-schema functions/procedures total; 37 extension-owned and 78 application-owned.
+- All 78 application-owned functions have PUBLIC EXECUTE in the catalog ACL.
+- All 78 application-owned functions lack a pinned search_path.
+- None of the inspected public functions are SECURITY DEFINER.
+- All 67 public application tables are owned by the same login role rupaykg.
+
+These counts are catalog facts, not proof that every trigger function is directly callable; trigger invocation has separate PostgreSQL semantics. They do establish a mandatory per-signature review. Do not blanket REVOKE PUBLIC EXECUTE until SQL call sites, trigger dependencies, views and function-to-function calls are mapped. The remediation artifact must record function signature, owner, extension/application ownership, SECURITY DEFINER flag, search_path, ACL, trigger bindings, call sites, required runtime roles and proposed grants.
+
+The target design is not “grant all application functions to the runtime.” Use explicit per-signature EXECUTE grants only where an application route or approved database routine calls the function. Trigger functions should be protected by ownership and table DML privileges; do not treat trigger-function EXECUTE ACLs as a replacement for trigger-table authorization. Pin search_path on every application-owned function using a reviewed migration and rehearse effects on extension-owned functions separately.
+
+This section does not authorize production ACL changes.
