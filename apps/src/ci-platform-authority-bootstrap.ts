@@ -498,11 +498,27 @@ async function run(): Promise<void> {
     );
     const scopedReviewerRoleId = scopedReviewerRole.rows[0]?.id;
     assert.ok(scopedReviewerRoleId);
-    await pool.query(
-      `insert into public.organization_memberships(identity_id,organization_id,role_id,status)
-       values($1,$2,$3,'VERIFIED')`,
+    const reviewerMembershipApplication = await pool.query<{ id: string }>(
+      `insert into public.stakeholder_applications(
+         identity_id,organization_id,role_id,requested_role_key,requested_organization_type,
+         geography_id,status,applicant_note
+       ) values($1,$2,$3,'state_admin','processing_facility',null,'PENDING','CI reviewer membership lifecycle fixture')
+       returning id`,
       [identityC, applicantOrganizationId, scopedReviewerRoleId],
     );
+    const reviewerMembershipApplicationId = reviewerMembershipApplication.rows[0]?.id;
+    assert.ok(reviewerMembershipApplicationId);
+    await pool.query(
+      `insert into public.organization_memberships(identity_id,organization_id,role_id,status)
+       values($1,$2,$3,'PENDING')`,
+      [identityC, applicantOrganizationId, scopedReviewerRoleId],
+    );
+    const reviewerMembershipDecision = await pool.query<{ decision_result: { status: string; approvalLevel: string } }>(
+      "select auth_private.review_stakeholder_application($1,$2,$3,$4) as decision_result",
+      [authorityTokenHash, reviewerMembershipApplicationId, "approve", "CI reviewer role approved through platform lifecycle"],
+    );
+    assert.equal(reviewerMembershipDecision.rows[0]?.decision_result.status, "APPROVED");
+    assert.equal(reviewerMembershipDecision.rows[0]?.decision_result.approvalLevel, "PLATFORM");
 
     const createGeographyApplication = async (name: string, code: string, geographyId: string) => {
       const created = await pool.query<{ application_result: { application: { id: string } } }>(
