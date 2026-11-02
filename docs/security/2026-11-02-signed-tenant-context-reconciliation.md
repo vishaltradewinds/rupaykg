@@ -187,3 +187,58 @@ The repository contains draft migration `migrations/20261109_durable_mrv_submiss
 7. Keep PR #205 and request-context mode disabled until a single transaction architecture is selected and full route/worker semantics are tested.
 
 **Current boundary:** mobile source/documentation audit advanced; no application code was changed in this batch. Production remains HOLD, worker activation OFF, certification OFF, and TRL 9 is not established.
+
+
+## TRL and pilot-demonstration evidence reconciliation — 2026-11-02 16:05Z
+
+### Evidence delta since the 2026-11-01 provisional TRL assessment
+
+The earlier TRL note references an incomplete/failed PR #192 run at code head `003f4e29...`. The current PR #192 head is `c48d3e274acadb22db9968f894278786c1a74d89`, and its exact-head CI run `41475438403` completed SUCCESS. This is a genuine positive engineering-evidence update. It does not invalidate the earlier recorded failure at its historical head; it supersedes it for current-head CI status.
+
+The current PR #192 branch description reports its latest integrated test evidence as including disposable migrations, typecheck, build, two-custodian bootstrap, reviewer/geography PostgreSQL acceptance, browser smoke, full test suite and production container build. Treat those as CI-reported test stages for the branch's exact-head successful run; retain the run as the authoritative execution record.
+
+### TRL decision — no score increase
+
+Keep the previous conservative system-level assessment at **TRL 3** pending real operational demonstration. The new CI result strengthens laboratory validation only. It does not prove:
+- A live production tenant with a least-privilege runtime identity and enforced table RLS.
+- Real Jabalpur facility onboarding, measured material flow and calibrated weighbridge/sensor evidence.
+- Real field-device enrollment, secure sync and offline conflict resolution.
+- Live authorized Guardian submission, Hedera HCS consensus and Mirror Node verification.
+- CPCB/EPR/CCTS portal acceptance or legally valid external acknowledgements.
+- Bilateral settlement authorization and actual payment/financial reconciliation.
+- Sustained operations, incident response, backup restoration and independent field evaluation.
+
+### Pilot demonstration acceptance ledger
+
+| Demonstration claim | Required evidence before presenting as achieved | Current classification |
+|---|---|---|
+| National/platform overview | Persisted data, platform authority permission, audit trail and freshness metadata | UI/source surface exists; end-to-end acceptance pending |
+| Stakeholder onboarding | Two-custodian initial authority ceremony; identity proof; approved application; geography-bound reviewer chain | CI synthetic acceptance exists; production ceremony not performed |
+| ULB/local command centre | Verified ULB identity, ward/geography scope, persisted resource flows and negative cross-geography test | UI/source surface exists; real ULB pilot not accepted |
+| Waste handover / mass balance | Calibrated instrument record, source/destination custody signatures, timestamps, unit normalization and discrepancy workflow | API/UI source exists; real measured chain not evidenced |
+| Evidence vault | Original bytes/hash, uploader and reviewer identities, version lineage, access-denial tests and retention evidence | Source/UI exists; full security/operational acceptance pending |
+| MRV | Approved methodology version, activity/evidence lineage, uncertainty and independent verification | Partial software/lab evidence; no real independent MRV acceptance |
+| Guardian/Hedera | Actual Guardian workflow response, HCS transaction ID/consensus timestamp and Mirror Node proof linked to exact evidence tuple | Not verified; never show a synthetic/placeholder status as live |
+| CPCB/SWM | Authoritative submission receipt, portal reference and accepted/rejected response from authorized channel | Internal preparation only; no portal acceptance evidence |
+| EPR | Actual authorized portal submission and acknowledgement, separately reconciled to internal return | Internal return/external-reference recording only |
+| Registry issuance | All methodology, evidence, independent verification, Guardian, HCS and Mirror gates, with issuer authority | Blocked until all gates pass |
+| Bilateral settlement | Two party-specific authorizations, credential ownership proof, immutable reconciliation and external payment evidence if claiming payment | UI/source exists; bilateral RLS and real payment not verified |
+| Field sync | Enrolled device certificate/key, signed envelope, replay protection, tenant binding and offline conflict acceptance | Source/UI exists; physical-device acceptance pending |
+| ESG/BRSR | Traceable source evidence, approved calculation basis, reviewer and assurance state | Reporting surface exists; audited disclosure not established |
+
+### Demo truthfulness controls
+
+For the pilot presentation:
+- Use separate demo tenant/database; do not seed synthetic rows in production.
+- Put a persistent `DEMO / SYNTHETIC DATA` label on every screen, export and screenshot containing fixtures.
+- Distinguish `prepared`, `submitted internally`, `externally acknowledged`, `independently verified` and `issued/settled` as different states.
+- Display evidence timestamps, source, responsible organization, verification authority and freshness.
+- Show unavailable external integrations as `NOT CONNECTED` or `NOT VERIFIED`; never use green success badges for simulated responses.
+- Include a live negative-path demonstration: user from tenant B cannot read tenant A evidence; reviewer outside assigned geography cannot approve; unverified evidence cannot advance to registry issuance.
+- Use only real authorized pilot data after consent, lawful basis, security controls and site acceptance have been documented.
+
+### Immediate mobile-safe follow-up
+
+Before any further UI feature work, complete a source-level action matrix for the demo-critical slice (onboarding → ULB → resource flow → evidence → MRV → CPCB/EPR → registry gates). For every action record actor, permission, organization/geography scope, API route, SQL objects, transaction boundary, audit event, external dependency, positive test and negative test. The existing 90-route inventory is a baseline, not a completed matrix.
+
+**Decision:** keep TRL 3 system-level, production HOLD, certification OFF and pilot status PRE-VALIDATION until the evidence above is independently demonstrated.
