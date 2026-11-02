@@ -455,3 +455,27 @@ HCS transaction-ID helper coverage added: `apps/src/hedera-anchor.test.ts` now v
 
 - First reconciliation-helper CI failed TypeScript strict-null checks because the transaction list could be empty despite the fallback expression. Added an explicit no-match `PENDING` guard in commit `ef3ee145447bbfa0536a39c5ba92c0fd9e45b4fe`. No tests were weakened. Exact-head CI pending.
 - Guardian pre-submit idempotency helper and integration test passed exact-head CI (`41462022847` SUCCESS); Guardian and HCS provider key persistence is now CI-backed.
+
+
+## 14:33 UTC — CI reconciliation and MRV durable-execution boundary
+
+Exact workflow outcomes rechecked against GitHub Actions job records:
+- Run `41462022847`, code commit `9094a4222148bb20690f1f7e8ea7d43b51268e0c`: **SUCCESS**. Includes the Guardian persisted-idempotency-key integration path and the full CI validate job (migration validation/execution, typecheck, build, synthetic two-custodian bootstrap, browser smoke, disposable PostgreSQL tests, production container build).
+- Run `41461976164`, code commit `7656471dbab80cc778060b0ebac0019ca088790c`: **SUCCESS**. Includes the Guardian pre-submit idempotency persistence helper.
+- Run `41461930332`, docs commit `8a87dd42e007c0ade73cf469324e37ff160478e6`: **SUCCESS**. Documentation checkpoint CI only.
+- Current PR #192 head at reconciliation: `ef3ee145447bbfa0536a39c5ba92c0fd9e45b4fe`; exact-head workflow `41462890956` is **IN_PROGRESS**. This head includes subsequent Mirror Node reconciliation and durable enqueue work; the earlier Guardian success must not be attributed to this newer head.
+- Current PR #204 head at reconciliation: `06d02107ba9417fb1cdf31d6e49cc985f593b0b7`; exact-head workflow `41462800628` is **IN_PROGRESS**.
+
+### Durable MRV status — precise scope
+
+The branch now contains an immutable/idempotent enqueue helper, atomic lease claim/renew/release/advance primitives, Guardian pre-submit key persistence, HCS transaction-ID pre-submit persistence, and Mirror Node transaction/message reconciliation helpers. Their presence is not equivalent to an operational worker. The synchronous legacy `/api/v1/mrv/activities/:activityId/submit` route still calls external Guardian/Hedera services directly and has not yet been replaced by enqueue → worker → finalize orchestration. No first-class worker process, queue consumer, scheduler or Render background service has been verified. Do not activate one before the signed actor-context contract, exact least-privilege worker principal, forced RLS/job-table policies, tenant-negative tests, and independent DBA/security acceptance.
+
+### Next engineering gate
+
+1. Wait for and inspect exact-head CI `41462890956`; fix any failing test without weakening invariants.
+2. Add controlled fault-injection tests for Guardian accepted/response-lost and HCS accepted/response-lost, proving same persisted provider keys/transaction ID are reused and Mirror Node 404 remains pending.
+3. Implement the worker orchestration as an injectable, testable process only after route/tenant authorization design is complete; all DB stages must use short transactions and external provider calls must occur outside them.
+4. Build actor-bound finalize transaction with exact source/organization/geography revalidation and immutable provenance persistence.
+5. Keep the production worker OFF and all production schema/role changes gated pending the 67-table tenant policy and least-privilege runtime-role review.
+
+**No production database or service was changed. Production HOLD; certification OFF; platform-wide TRL 9 NOT ESTABLISHED.**
