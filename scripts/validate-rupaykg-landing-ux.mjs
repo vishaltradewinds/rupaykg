@@ -21,7 +21,7 @@ for (const label of ["Overview", "Stakeholders", "How it works", "Compliance"]) 
 for (const phrase of [
   "Make every waste and resource movement traceable.",
   "A shared digital infrastructure",
-  "Record what happened, where and when.",
+  "Capture what happened, where and when.",
   "Track material across responsible organisations and locations.",
   "Review measurements and supporting evidence.",
   "Report verified outcomes and eligible next steps.",
