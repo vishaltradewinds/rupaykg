@@ -55,3 +55,8 @@ This checkpoint records catalog metadata and read-only SQL results observed on 2
 - `rupaykg`: NOSUPERUSER but CREATEROLE, CREATEDB, LOGIN, BYPASSRLS.
 - No separate least-privilege application, authentication, migrator or restricted function-owner roles are currently visible in the production catalog.
 - This confirms the production role boundary is not ready for RLS. Do not enable RLS until the production role architecture, ownership, grants and controlled provisioning are independently reviewed and rehearsed.
+## GitHub main and Render release-path re-verification
+- GitHub `main` head: `a3fecc0abd2c46549a201058d3963afc0e3a73c9`.
+- Render service `rupaykg` (`srv-daki4d7qj5pc73b8qksg`) is configured for auto-deploy on commits to `main`.
+- Latest Render deployment `dep-dbjo4dqvcj2c73f7bt00` is LIVE on the same `a3fecc0` revert commit. The preceding auth-pool deployment for `14b7356` failed and was superseded by the successful revert deployment.
+- Operational consequence: merging PR #192 to `main` would initiate the Render deployment path. Do not merge until the separate auth pool, least-privilege production roles, grants, secrets, database functions/migrations, rollback and release checks are provisioned and validated. PR #192 remains draft.
