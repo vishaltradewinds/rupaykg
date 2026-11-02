@@ -93,3 +93,6 @@ The integration assertion was expanded in `3d4879fbaa02c66dcf02f446f39e8900f3c90
 
 ### Integration fixture correction — 2026-11-02
 The first source-parity CI run correctly rejected the existing ledger integration fixture because it manually inserted a minimal `{"schema":"rupaykg:mrv:v1"}` snapshot rather than the complete observations/evidence/quantity payload produced by the real enqueue route. The fixture now seeds the same source fields from its disposable PostgreSQL rows (`59c5dc1d0976dbd7b92e2d9194c3d3f07f40e431`). This preserves strict source parity; it does not relax authorization. Exact-head CI is queued as run `41496873635`.
+
+### Provider request bounds
+Guardian submission already uses an AbortController with a validated configurable timeout. Mirror Node transaction lookup also has a 10-second abort bound; its second-stage topic-message verification fetch now has an explicit 10-second `AbortSignal.timeout` (`4bfc85b`), with a regression assertion (`3c0cd88`). Hedera SDK submission remains a separate timeout-review item; do not infer SDK cancellation solely from the worker lease heartbeat.
