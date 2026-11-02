@@ -651,3 +651,11 @@ The first regression-test CI run (`41464821546`) failed as expected against the 
 - PR #192 exact-head workflow `41469378224` is queued/running; at 15:13 UTC it was in progress at dependency installation, so no migration or test pass is claimed.
 - The earlier fully green baseline remains `2edd251ef404d88b00e4c7f994d89e42ae38e04b` / CI `41467045999`. All later MRV binding work is provisional until `41469378224` completes successfully.
 - No production DB, roles, grants, migrations, deployment, or external provider writes were performed. PRs remain draft/unmerged.
+
+
+### 15:15 UTC — root cause isolated; migration rebuilt from last green baseline
+
+- The 15:13 exact-head CI `41469378224` failed migration with syntax error near `REQUESTED`. Log inspection showed doubled SQL quotes (`''REQUESTED''`, etc.) outside PL/pgSQL function bodies. These were introduced by the earlier malformed quoting/slicing repair, not by the last green baseline.
+- Rebuilt `20261109_durable_mrv_submission_jobs.sql` from the clean, last-green `2edd251ef404d88b00e4c7f994d89e42ae38e04b` migration, then reapplied only the composite unique indexes, composite foreign keys and one correctly dollar-quoted binding trigger. Static assertions: exactly one binding trigger function, six balanced `$$` delimiter tokens in the migration, zero doubled single quotes.
+- New commit `d575f60463493f1d0d336d836fa0b485c4341175`; branch recursive tree again verified at 413 entries with README present. Exact-head CI `41469758436` queued at 15:15 UTC. No success claimed until migration and all tests finish.
+- This replaces the broken migration content on the PR branch; prior failing CI runs remain in history as diagnostics. Production remains unchanged.
