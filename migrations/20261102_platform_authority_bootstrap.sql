@@ -440,7 +440,7 @@ BEGIN
   payload := jsonb_build_object(
     'event', 'PLATFORM_AUTHORITY_BOOTSTRAP_COMPLETED',
     'ceremonyId', p_ceremony_id,
-    'organizationId', organization_id,
+    'organizationId', v_organization_id,
     'identityIds', jsonb_build_array(identity_a, identity_b),
     'custodianRoles', jsonb_build_array(custodian_a, custodian_b),
     'createdAt', now()
@@ -451,7 +451,7 @@ BEGIN
     (ceremony_id, organization_id, identity_a, identity_b, custodian_a, custodian_b,
      previous_hash, event_hash, payload)
   VALUES
-    (p_ceremony_id, organization_id, identity_a, identity_b, custodian_a, custodian_b,
+    (p_ceremony_id, v_organization_id, identity_a, identity_b, custodian_a, custodian_b,
      previous_hash, event_hash, payload);
 
   RETURN jsonb_build_object(
