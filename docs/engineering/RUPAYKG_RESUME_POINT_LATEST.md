@@ -179,3 +179,11 @@ No production DDL/DML, migration, role/grant/RLS changes, deployments, worker/sc
 - Migration teardown remains: revoke migration principal's temporary owner membership and revoke owner's temporary database CREATE privilege.
 - Commit: `3dd4b378ba3a43bacd37ef968d4e5d31bd078008`; CI #4485: https://github.com/vishaltradewinds/rupaykg/actions/runs/41400170361.
 - Exact-head CI is validating. Do not promote or merge PR #192 until the assertion and all other gates pass. Production remains HOLD.
+
+
+## 2026-11-02 — CI #4485 completed
+- CI run #4485 / `41400170361` completed with overall conclusion **SUCCESS** on bootstrap privilege teardown fix commit `3dd4b378ba3a43bacd37ef968d4e5d31bd078008`.
+- Passed dependency audit, migration validation, restricted verifier-owner provisioning, full disposable PostgreSQL migrations, bootstrap-owner temporary membership and database-CREATE privilege teardown assertions, synthetic two-custodian bootstrap acceptance, TypeScript typecheck, production build, browser smoke, full API/disposable PostgreSQL tests, and production-container build.
+- The run validates its triggering code commit. Current PR head at checkpoint review is `90bdfa2e06b0539765bab5995c83caf6a3f9d223` (resume/checkpoint documentation update); verify a current-head workflow run before treating the latest documentation commit as fully CI-covered.
+- PR #192 remains OPEN and DRAFT. Do not merge or deploy: broad API runtime compatibility, onboarding create/withdraw and hierarchical approval conversion, tenant/RLS coverage, independent security review, founder-approved initial authority identities/trust ceremony, and DBA authorization remain outstanding.
+- Production Neon and live Render remain unchanged. No production DDL/DML, migration, role/grant/RLS change, bootstrap ceremony, secret provisioning, deployment, worker activation, or certification occurred. Production HOLD; TRL 9 not established.
