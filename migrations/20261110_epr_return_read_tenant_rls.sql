@@ -39,7 +39,10 @@ BEGIN
    WHERE n.nspname = 'app_security'
      AND p.proname = 'current_request_context_claims'
      AND p.pronargs = 0;
-  IF NOT FOUND OR NOT verifier.prosecdef OR verifier.owner_name <> 'rupaykg_security_definer' THEN
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'EPR_RLS_SIGNED_CONTEXT_VERIFIER_MISSING';
+  END IF;
+  IF NOT verifier.prosecdef OR verifier.owner_name <> 'rupaykg_security_definer' THEN
     RAISE EXCEPTION 'EPR_RLS_SIGNED_CONTEXT_VERIFIER_INVALID: dedicated SECURITY DEFINER verifier is required';
   END IF;
 
