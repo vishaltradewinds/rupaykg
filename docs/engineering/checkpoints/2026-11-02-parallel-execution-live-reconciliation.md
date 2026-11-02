@@ -397,3 +397,10 @@ Lease renewal follow-up: `apps/src/mrv-submission-jobs.ts` now also exposes `ren
 
 
 HCS transaction-ID helper coverage added: `apps/src/hedera-anchor.test.ts` now verifies an SDK transaction ID can be generated before submission with the configured operator account, suitable for persisting before the provider side effect. Commit `18a4fffde580a9bb9c1e054ddc125b1d2e42224e`; exact-head CI pending. This test does not submit a live transaction or prove retry behavior against Hedera; those require controlled testnet acceptance with a persisted ID and Mirror Node confirmation.
+
+
+## Pre-submit HCS transaction persistence primitive — 2026-11-02 14:21 UTC
+
+- Added `persistMrvHcsTransactionId` to `apps/src/mrv-submission-jobs.ts` (commits `878975b2299d6d30e12bafbca2077db93bfc23ef`, parameter correction `4a71fd41e126c2f4f65ce396102e635a0f00c990`). It compare-and-sets against the live lease token, moves `GUARDIAN_VERIFIED` to `HCS_SUBMITTED`, persists network/topic/transaction ID before the network call, and refuses to replace an already persisted ID or change its network/topic. The lease remains active while the provider call executes outside the DB transaction.
+- Extended PostgreSQL integration test to walk REQUESTED → CLAIMED → GUARDIAN_SUBMITTED → GUARDIAN_VERIFIED → HCS_SUBMITTED → HCS_CONSENSUS_CONFIRMED, assert transaction ID survives, and reject a conflicting retry ID. Test commit `70755746f29e9dd3886972b655ce27be052332d3`; exact-head CI pending.
+- This remains a tested orchestration primitive, not a live worker. Worker role/RLS policy, API enqueue path, actual Guardian/HCS calls, Mirror Node polling, and final provenance transaction still need wiring and test coverage.
