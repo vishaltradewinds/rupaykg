@@ -155,7 +155,7 @@ export async function runMrvSubmissionWorkerOnce(pool: Pool, workerId: string): 
   if (["CLAIMED", "GUARDIAN_SUBMITTED"].includes(job.status)) {
     if (!await authorize(pool, lease)) {
       const ok = await advance(pool, lease, "PERMANENT_FAILURE", { last_error_code: "MRV_AUTHORIZATION_REVOKED", last_error_detail: "Current identity, membership, role permission, evidence, verification or geography check failed before Guardian submission." });
-      return { outcome: ok ? "NEEDS_RECONCILIATION" : "STALE_LEASE", jobId: job.id, stage: "GUARDIAN_AUTHORIZATION" };
+      return { outcome: ok ? "REJECTED" : "STALE_LEASE", jobId: job.id, stage: "GUARDIAN_AUTHORIZATION" };
     }
     const snapshot = snapshotOf(job);
     const key = job.guardian_idempotency_key ?? job.idempotency_key;
@@ -185,7 +185,7 @@ export async function runMrvSubmissionWorkerOnce(pool: Pool, workerId: string): 
   if (job.status === "GUARDIAN_VERIFIED") {
     if (!await authorize(pool, lease)) {
       const ok = await advance(pool, lease, "PERMANENT_FAILURE", { last_error_code: "MRV_AUTHORIZATION_REVOKED", last_error_detail: "Authorization failed before Hedera submission." });
-      return { outcome: ok ? "NEEDS_RECONCILIATION" : "STALE_LEASE", jobId: job.id, stage: "HCS_AUTHORIZATION" };
+      return { outcome: ok ? "REJECTED" : "STALE_LEASE", jobId: job.id, stage: "HCS_AUTHORIZATION" };
     }
     const status = hederaStatus();
     if (!status.configured || status.topicId === "NOT_CONFIGURED") {
@@ -235,6 +235,71 @@ export async function runMrvSubmissionWorkerOnce(pool: Pool, workerId: string): 
     }
     const ok = await release(pool, lease, "HCS_MIRROR_PENDING", mirror.message);
     return { outcome: ok ? "RETRY_SCHEDULED" : "STALE_LEASE", jobId: job.id, stage: "MIRROR_RECONCILIATION" };
+  }
+
+  if (job.status === "MIRROR_VERIFIED") {
+    if (!await authorize(pool, lease)) {
+      const ok = await advance(pool, lease, "NEEDS_RECONCILIATION", { last_error_code: "MRV_AUTHORIZATION_REVOKED", last_error_detail: "Authorization failed before final provenance persistence." });
+      return { outcome: ok ? "NEEDS_RECONCILIATION" : "STALE_LEASE", jobId: job.id, stage: "PROVENANCE_AUTHORIZATION" };
+    }
+    if (!job.guardian_execution_id || !job.hedera_topic_id || !job.hedera_transaction_id || !job.hedera_consensus_timestamp || !job.mirror_verification_digest || !job.mirror_verified_at) {
+      const ok = await advance(pool, lease, "NEEDS_RECONCILIATION", { last_error_code: "MRV_FINALIZATION_BINDING_MISSING", last_error_detail: "Guardian, HCS and Mirror verification bindings must all be persisted before provenance finalization." });
+      return { outcome: ok ? "NEEDS_RECONCILIATION" : "STALE_LEASE", jobId: job.id, stage: "PROVENANCE_BINDING" };
+    }
+    const payload = anchorPayload(job);
+    const digest = integrityHash(payload);
+    if (digest !== job.mirror_verification_digest) {
+      const ok = await advance(pool, lease, "NEEDS_RECONCILIATION", { last_error_code: "MRV_FINALIZATION_DIGEST_MISMATCH", last_error_detail: "Persisted Mirror verification digest no longer matches the immutable job payload." });
+      return { outcome: ok ? "NEEDS_RECONCILIATION" : "STALE_LEASE", jobId: job.id, stage: "PROVENANCE_DIGEST" };
+    }
+    const finalized = await withClient(pool, async client => {
+      await client.query("begin");
+      try {
+        const current = await client.query<{ id: string }>(
+          "select id from mrv_submission_jobs where id=$1 and lease_token=$2::uuid and lease_expires_at>now() and status='MIRROR_VERIFIED' for update",
+          [job.id, lease.leaseToken],
+        );
+        if (!current.rows[0] || !await isMrvSubmissionJobStillAuthorized(client, job.id)) {
+          await client.query("rollback");
+          return false;
+        }
+        const inserted = await client.query<{ id: string }>(
+          "insert into mrv_provenance_events(activity_id,verification_id,evidence_id,guardian_policy_id,guardian_execution_id,guardian_status,hcs_status,hcs_topic_id,hcs_transaction_id,hcs_consensus_timestamp,integrity_hash,methodology_code,metadata,mirror_node_verified_at) " +
+          "values($1,$2,$3,$4,$5,'VERIFIED','CONSENSUS_CONFIRMED',$6,$7,$8,$9,$10,$11::jsonb,$12) " +
+          "on conflict(activity_id,verification_id,integrity_hash) do nothing returning id",
+          [job.activity_id,job.verification_id,job.evidence_id,job.guardian_policy_id,job.guardian_execution_id,
+           job.hedera_topic_id,job.hedera_transaction_id,job.hedera_consensus_timestamp,digest,
+           job.methodology_code,JSON.stringify({ durableJobId: job.id, mirrorVerifiedAt: job.mirror_verified_at, mirrorVerificationDigest: digest, guardian: job.guardian_result }),job.mirror_verified_at],
+        );
+        if (!inserted.rows[0]) {
+          const existing = await client.query<{ id: string; evidence_id: string; guardian_execution_id: string | null; hcs_transaction_id: string | null; mirror_node_verified_at: Date | null }>(
+            "select id,evidence_id,guardian_execution_id,hcs_transaction_id,mirror_node_verified_at from mrv_provenance_events where activity_id=$1 and verification_id=$2 and integrity_hash=$3 for update",
+            [job.activity_id,job.verification_id,digest],
+          );
+          const row = existing.rows[0];
+          if (!row || row.evidence_id !== job.evidence_id || row.guardian_execution_id !== job.guardian_execution_id
+              || row.hcs_transaction_id !== job.hedera_transaction_id || !row.mirror_node_verified_at) {
+            throw new Error("MRV_PROVENANCE_IDEMPOTENCY_CONFLICT");
+          }
+        }
+        const persisted = await client.query(
+          "update mrv_submission_jobs set status='PROVENANCE_PERSISTED' where id=$1 and lease_token=$2::uuid and lease_expires_at>now() and status='MIRROR_VERIFIED'",
+          [job.id,lease.leaseToken],
+        );
+        if (persisted.rowCount !== 1) throw new Error("MRV_JOB_LEASE_LOST_DURING_FINALIZATION");
+        const completed = await client.query(
+          "update mrv_submission_jobs set status='COMPLETED',completed_at=now(),lease_owner=null,lease_token=null,lease_expires_at=null,last_error_code=null,last_error_detail=null where id=$1 and lease_token=$2::uuid and lease_expires_at>now() and status='PROVENANCE_PERSISTED'",
+          [job.id,lease.leaseToken],
+        );
+        if (completed.rowCount !== 1) throw new Error("MRV_JOB_COMPLETION_FENCE_FAILED");
+        await client.query("commit");
+        return true;
+      } catch (error) {
+        await client.query("rollback").catch(() => undefined);
+        throw error;
+      }
+    });
+    return { outcome: finalized ? "STAGE_ADVANCED" : "STALE_LEASE", jobId: job.id, stage: finalized ? "COMPLETED" : "PROVENANCE_FINALIZATION" };
   }
 
   return { outcome: "IDLE", jobId: job.id, stage: job.status };
