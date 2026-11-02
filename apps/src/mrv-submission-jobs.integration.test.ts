@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
+import { approveTestMembership } from "./test-support/approved-membership.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 const ssl = process.env.DATABASE_SSL === "false" ? undefined : { rejectUnauthorized: false };
@@ -32,6 +33,11 @@ test("durable MRV job ledger enforces immutable request, legal transitions and a
       "insert into identities(external_subject,display_name) values($1,'MRV Job Independent Verifier') returning id",
       [`mrv-job-verifier-${suffix}`],
     )).rows[0]!.id;
+    const verifierRoleId = (await client.query<{id:string}>(
+      "insert into roles(organization_id,name,permissions) values($1,'verifier',$2::jsonb) returning id",
+      [organizationId, JSON.stringify(["verification:approve"])],
+    )).rows[0]!.id;
+    await approveTestMembership(client, verifierIdentityId, organizationId, verifierRoleId, geographyId, "verifier", "collector");
     const activityId = (await client.query<{id:string}>(
       "insert into activities(organization_id,actor_identity_id,geography_id,activity_type,status,completed_at) values($1,$2,$3,'COLLECTION','COMPLETED',now()) returning id",
       [organizationId, identityId, geographyId],
