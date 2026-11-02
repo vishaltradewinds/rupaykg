@@ -41,10 +41,17 @@ test("verifier authorization is active-identity and subject-tenant scoped for ev
 
   try {
     await client.query("BEGIN");
-    const triggerBinding = await client.query<{ function_name: string }>(
-      "select p.proname as function_name from pg_trigger t join pg_proc p on p.oid=t.tgfoid where t.tgrelid='public.verifications'::regclass and t.tgname='verifications_integrity_guard' and not t.tgisinternal",
+    const triggerBindings = await client.query<{ trigger_name: string; function_name: string }>(
+      "select t.tgname as trigger_name, p.proname as function_name from pg_trigger t join pg_proc p on p.oid=t.tgfoid where t.tgrelid='public.verifications'::regclass and not t.tgisinternal order by t.tgname",
     );
-    assert.equal(triggerBinding.rows[0]?.function_name, "prevent_invalid_verification", "tenant authorization must be enforced by the function actually bound to verifications_integrity_guard");
+    assert.deepEqual(
+      triggerBindings.rows,
+      [
+        { trigger_name: "verification_independence_guard", function_name: "enforce_verification_independence" },
+        { trigger_name: "verifications_integrity_guard", function_name: "prevent_invalid_verification" },
+      ],
+      "every active verification trigger must bind to a hardened tenant-scoped entry point",
+    );
     const suffix = randomUUID();
     const orgA = (await client.query<{ id: string }>(
       "insert into public.organizations(name,organization_type,status) values($1,'COLLECTOR','VERIFIED') returning id",
