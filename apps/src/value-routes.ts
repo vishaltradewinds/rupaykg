@@ -99,6 +99,8 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
       const inserted = await pool.query("insert into esg_metrics (reporting_period_id, metric_code, scope, value, unit, evidence_id, verification_id, status, metadata) values ($1,$2,$3,$4,$5,$6,$7,$8,$9) returning *", [periodId, metricCode, scope, value, unit, evidenceId, verificationId, state, body.metadata ?? {}]);
       return reply.code(201).send({ source: "postgresql", syntheticData: false, metric: inserted.rows[0], state });
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "ESG metric recording unavailable", syntheticData: false }); }
+  });
+
   app.get("/api/v1/workspaces/bwg", async (request, reply) => {
     const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
     const organizationId = auth.activeOrganizationId;
