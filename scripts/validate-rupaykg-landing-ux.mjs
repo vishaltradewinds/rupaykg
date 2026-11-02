@@ -13,6 +13,9 @@ assert.match(app, /Choose your operating context/, "urban/rural context selector
 assert.match(app, /aria-pressed=\{operatingContext==="urban"\}/, "urban context must expose selected state");
 assert.match(app, /aria-pressed=\{operatingContext==="rural"\}/, "rural context must expose selected state");
 assert.match(app, /selectedStakeholderCard/, "selected stakeholder outcome panel must exist");
+assert.match(app, /authOpen&&<section className="auth-drawer"/, "account drawer must be opt-in, not visible on first load");
+assert.match(app, /setAuthOpen\(true\)/, "landing account actions must open the account drawer");
+assert.match(app, /aria-label="Close account access"/, "account drawer must provide an accessible close action");
 assert.match(styles, /\.context-switch/, "urban/rural selector styling missing");
 assert.match(styles, /\.stakeholder-selection/, "selected stakeholder outcome styling missing");
 for (const label of ["Overview", "Stakeholders", "How it works", "Compliance"]) {
