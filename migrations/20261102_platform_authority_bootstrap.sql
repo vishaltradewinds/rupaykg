@@ -282,7 +282,7 @@ DECLARE
   v_role_id uuid;
   permissions jsonb;
   previous_hash text;
-  event_hash text;
+  v_event_hash text;
   payload jsonb;
 BEGIN
   PERFORM bootstrap_private.assert_custodian_session();
@@ -432,8 +432,8 @@ BEGIN
    ORDER BY identity_id
    LIMIT 1 OFFSET 1;
 
-  SELECT event_hash INTO previous_hash
-    FROM bootstrap_private.bootstrap_audit_events
+  SELECT bae.event_hash INTO previous_hash
+    FROM bootstrap_private.bootstrap_audit_events bae
    ORDER BY created_at DESC, id DESC
    LIMIT 1;
 
@@ -445,21 +445,21 @@ BEGIN
     'custodianRoles', jsonb_build_array(custodian_a, custodian_b),
     'createdAt', now()
   );
-  event_hash := encode(public.digest(coalesce(previous_hash, '') || '|' || payload::text, 'sha256'), 'hex');
+  v_event_hash := encode(public.digest(coalesce(previous_hash, '') || '|' || payload::text, 'sha256'), 'hex');
 
   INSERT INTO bootstrap_private.bootstrap_audit_events
     (ceremony_id, organization_id, identity_a, identity_b, custodian_a, custodian_b,
      previous_hash, event_hash, payload)
   VALUES
     (p_ceremony_id, v_organization_id, identity_a, identity_b, custodian_a, custodian_b,
-     previous_hash, event_hash, payload);
+     previous_hash, v_event_hash, payload);
 
   RETURN jsonb_build_object(
     'status', 'BOOTSTRAPPED',
     'organizationId', v_organization_id,
     'roleId', v_role_id,
     'identityIds', jsonb_build_array(identity_a, identity_b),
-    'auditEventHash', event_hash
+    'auditEventHash', v_event_hash
   );
 END;
 $$;
