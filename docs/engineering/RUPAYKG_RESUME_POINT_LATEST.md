@@ -118,3 +118,11 @@ No production DDL/DML, migration, role/grant/RLS changes, deployments, worker/sc
 - Corrected the validator in commit 384d84dce411e8491fde7da9ecaa42a2afbf4ac6 to parse optional schema-qualified names and compare canonical schema.object identities (defaulting unqualified objects to public).
 - Current PR #192 head is 384d84dce411e8491fde7da9ecaa42a2afbf4ac6. Exact-head CI has not yet been observed; do not claim the fix passes until the new run completes.
 - The two-custodian bootstrap SQL and synthetic CI exercise are draft-only. Founder selection of two distinct initial authority identities, independent custodian/secret custody approval, independent security review and DBA approval remain required for any production ceremony. No production changes or deployment.
+
+
+## 2026-11-02 PostgreSQL bootstrap migration syntax repair
+- Canonical PR #192 CI run #4445 / 41395807273 passed dependency audit and the corrected schema-qualified migration validator, then failed during disposable PostgreSQL migration execution at `20261102_platform_authority_bootstrap.sql` with PostgreSQL 42601 syntax error near `THEN` (character 23252). All later CI stages were skipped.
+- Inspection found `public.prevent_direct_membership_activation()` had been corrupted by a partial/duplicated merge: the UUID-regex `IF` statement was cut off, and the remainder of the bootstrap exception block was appended after the function terminator, producing `$$; then`.
+- Replaced the entire trigger function with a complete, structurally valid PL/pgSQL implementation: strict UUID-format check, bootstrap-owner identity check, locked CONSUMING singleton/ceremony binding, two distinct unconsumed custodian claims, and unchanged ordinary application + reserved-role dual-control guards.
+- Fix committed to canonical PR #192 branch as `b1dc9d103e56351d499b1b6a4b7f1181ff80a4b4`. Exact-head CI has not yet been observed; do not claim migration or bootstrap acceptance until it completes.
+- No production DDL/DML, role/grant/RLS changes, branch operations, deployment or bootstrap ceremony. Production remains HOLD; founder and DBA approval gates unchanged.
