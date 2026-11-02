@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { Pool, type PoolClient } from "pg";
+import { approveTestMembership } from "./test-support/approved-membership.js";
 
 const url = process.env.DATABASE_URL;
 
@@ -17,7 +18,7 @@ test("production lifecycle integration gate", { skip: !url }, async () => {
     const actor = (await c.query("insert into identities(external_subject,display_name) values('integration-actor','actor') returning id")).rows[0].id;
     const verifier = (await c.query("insert into identities(external_subject,display_name) values('integration-verifier','verifier') returning id")).rows[0].id;
     const role = (await c.query("insert into roles(organization_id,name,permissions) values($1,'VERIFIER','[\"VERIFY_EVIDENCE\",\"ISSUE_CREDENTIAL\"]') returning id", [org])).rows[0].id;
-    await c.query("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED')", [verifier, org, role]);
+    await approveTestMembership(c, verifier, org, role, geography, "verifier", "collector");
 
     const activity = (await c.query("insert into activities(organization_id,actor_identity_id,geography_id,activity_type,status) values($1,$2,$3,'COLLECTION','SUBMITTED') returning id", [org, actor, geography])).rows[0].id;
     const evidence = (await c.query("insert into evidence(activity_id,evidence_type,status,captured_at,content_hash) values($1,'FIELD','UNDER_REVIEW',now(),'integration') returning id", [activity])).rows[0].id;
@@ -35,7 +36,7 @@ test("production lifecycle integration gate", { skip: !url }, async () => {
 
     const unauthorizedRole = (await c.query("insert into roles(organization_id,name,permissions) values($1,'READER','[\"dashboard:read\"]') returning id", [org])).rows[0].id;
     const unauthorized = (await c.query("insert into identities(external_subject,display_name) values('integration-unauthorized','unauthorized') returning id")).rows[0].id;
-    await c.query("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED')", [unauthorized, org, unauthorizedRole]);
+    await approveTestMembership(c, unauthorized, org, unauthorizedRole, geography, "reader", "collector");
     const credential = (await c.query("insert into credentials(activity_id,issuer_organization_id,trust_root_id,status,verification_id,quantity,unit) values($1,$2,'integration-root','ISSUED',$3,100,'kg') returning id", [activity, org, verification])).rows[0].id;
     await reject(c, () => c.query("insert into registry_events(credential_id,event_type,to_owner_id,verification_id,recorded_by_identity_id,event_hash) values($1,'ISSUED',$2,$3,$4,'integration')", [credential, org, verification, unauthorized]), /explicit permission: ISSUE_CREDENTIAL/);
     await c.query("insert into registry_events(credential_id,event_type,to_owner_id,verification_id,recorded_by_identity_id,event_hash) values($1,'ISSUED',$2,$3,$4,'integration')", [credential, org, verification, verifier]);
