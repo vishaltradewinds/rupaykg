@@ -70,9 +70,17 @@ jobs:
           cat /tmp/rupaykg-chrome-shot.out
           set -e
           test -s /tmp/rupaykg-web-dom.html
-          grep -q 'RupayKG' /tmp/rupaykg-web-dom.html
+          grep -q 'RupayKg' /tmp/rupaykg-web-dom.html
+          grep -q 'Overview' /tmp/rupaykg-web-dom.html
+          grep -q 'Stakeholders' /tmp/rupaykg-web-dom.html
+          grep -q 'How it works' /tmp/rupaykg-web-dom.html
+          grep -q 'Compliance' /tmp/rupaykg-web-dom.html
+          grep -q 'Make every waste and resource movement traceable.' /tmp/rupaykg-web-dom.html
           test -s /tmp/rupaykg-web-smoke.png
-          echo "Chrome DOM exit: $dom_status; screenshot exit: $shot_status"
+          google-chrome --headless=new --no-sandbox --disable-gpu --disable-dev-shm-usage --disable-extensions --no-first-run --user-data-dir=/tmp/rupaykg-chrome-mobile --hide-scrollbars --window-size=390,844 --screenshot=/tmp/rupaykg-web-mobile-smoke.png --virtual-time-budget=2000 http://127.0.0.1:4173/ >/tmp/rupaykg-chrome-mobile.out 2>&1
+          cat /tmp/rupaykg-chrome-mobile.out
+          test -s /tmp/rupaykg-web-mobile-smoke.png
+          echo "Chrome DOM exit: $dom_status; desktop screenshot exit: $shot_status; mobile screenshot captured"
       - name: Run tests including disposable PostgreSQL acceptance
         env:
           RUPAYKG_RUN_DB_INTEGRATION_TESTS: "1"
