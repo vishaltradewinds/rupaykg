@@ -182,7 +182,7 @@ test("onboarding creation delegates all writes to the identity-bound auth databa
     assert.equal(response.statusCode, 201);
     assert.equal(response.json().application.id, application.id);
     assert.equal(appPool.calls.length, 1);
-    assert.match(appPool.calls[0]!.sql, /auth_private\.resolve_session/);
+    assert.ok(appPool.calls[0]!.sql.includes("auth_private.resolve_session"));
     assert.equal(authPool.calls.length, 1);
     assert.match(authPool.calls[0]!.sql, /auth_private\.create_stakeholder_application/);
     assert.equal(authPool.calls[0]!.values?.[0], createHash("sha256").update(token).digest("hex"));
@@ -218,7 +218,7 @@ test("onboarding withdrawal delegates to the identity-bound auth database functi
     assert.equal(response.json().status, "WITHDRAWN");
     assert.equal(response.json().organizationId, organizationId);
     assert.equal(appPool.calls.length, 1);
-    assert.match(appPool.calls[0]!.sql, /auth_private\.resolve_session/);
+    assert.ok(appPool.calls[0]!.sql.includes("auth_private.resolve_session"));
     assert.equal(authPool.calls.length, 1);
     assert.match(authPool.calls[0]!.sql, /auth_private\.withdraw_stakeholder_application/);
     assert.deepEqual(authPool.calls[0]!.values, [createHash("sha256").update(token).digest("hex"), "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"]);
