@@ -51,7 +51,7 @@ before(async () => {
     destinationActorId = (await c.query<{ id: string }>("insert into identities(external_subject,display_name) values($1,$2) returning id", [`runtime-registry-destination-actor-${suffix}`, "Registry Destination Actor"])).rows[0]!.id;
     await approveTestMembership(c, destinationActorId, destinationOrgId, destinationRole, geographyId, "settlement_party", "processor");
     await c.query("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED'),($4,$2,$5,'VERIFIED')", [actorId, ownerOrgId, actorRole, verifierId, verifierRole]);
-    await c.query("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED')", [actorId, destinationOrgId, destinationRole]);
+    await c.query("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED')", [destinationActorId, destinationOrgId, destinationRole]);
     actorToken = token(); verifierToken = token(); destinationActorToken = token();
     await c.query("insert into identity_sessions(identity_id,expires_at,token_hash) values($1,now()+interval '1 hour',$2),($3,now()+interval '1 hour',$4),($5,now()+interval '1 hour',$6)", [actorId, hash(actorToken), verifierId, hash(verifierToken), destinationActorId, hash(destinationActorToken)]);
     activityId = (await c.query<{ id: string }>("insert into activities(organization_id,actor_identity_id,geography_id,activity_type,status,completed_at) values($1,$2,$3,'COLLECTION','COMPLETED',now()) returning id", [ownerOrgId, actorId, geographyId])).rows[0]!.id;
@@ -172,7 +172,6 @@ describe("registry and settlement runtime acceptance", () => {
 
   it("runs settlement through authorization, execution, external confirmation and reconciliation", async () => {
     if (!pool) return;
-    const destinationRole = (await pool.query<{ id: string }>("select id from roles where organization_id=$1 and name=$2", [destinationOrgId, `SETTLEMENT-PARTY-${suffix}`])).rows[0]!.id;
     const created = await request("/api/v1/settlements", { method: "POST", body: JSON.stringify({ credentialId, payerId: ownerOrgId, payeeId: destinationOrgId, amount: 1250, currency: "INR", externalReference: `payment-${suffix}` }) }, actorToken, ownerOrgId);
     assert.equal(created.status, 201); settlementId = (await body(created)).settlement.id;
     const authorized = await request(`/api/v1/settlements/${settlementId}/authorize`, { method: "POST", body: JSON.stringify({ authorizationReference: `auth-${suffix}` }) }, actorToken, ownerOrgId);
