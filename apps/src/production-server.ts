@@ -10,6 +10,7 @@ process.env.DATABASE_URL = config.databaseUrl;
 process.env.AUTH_DATABASE_URL = config.authDatabaseUrl;
 process.env.RUPAYKG_AUTH_RESOLVER_MODE = config.authResolverMode;
 applyRequestContextRuntimeEnvironment(config);
+process.env.RUPAYKG_EPR_RETURN_READ_ENABLED = String(config.eprReturnReadEnabled);
 process.env.DATABASE_SSL = config.databaseSsl;
 process.env.DATABASE_CA_CERT = config.databaseCaCert;
 process.env.RUPAYKG_ALLOWED_ORIGINS = config.allowedOrigins.join(",");
