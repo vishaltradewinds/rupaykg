@@ -51,7 +51,6 @@ class EprPool {
   async query(sql: string, values?: unknown[]) {
     this.rawCalls.push({ sql, ...(values === undefined ? {} : { values }) });
     if (sql.includes("auth_private.resolve_session")) {
-      const requestedOrganizationId = String(values?.[0] ?? "");
       return { rows: this.resolverRows, rowCount: this.resolverRows.length };
     }
     return { rows: [], rowCount: 0 };
