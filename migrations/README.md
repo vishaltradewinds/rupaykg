@@ -128,3 +128,10 @@ Migration `20261111_verifier_active_identity_and_trigger_tenant_guard.sql` close
 Both trigger functions resolve the subject activity from the verification row or its evidence, reject mismatched activity/evidence pairs, check self-verification first, and apply the same tenant-bound predicate to every decision. The integration test asserts the actual trigger-to-function bindings and exercises same-tenant success, foreign-tenant denial for APPROVED and REJECTED, role-label-only denial, suspended/unverified identity, pending membership, unverified organization, pending geography scope, and self-verification.
 
 This is a forward-only candidate migration on a review branch. It has not been applied to production. CI must apply the full migration chain to disposable PostgreSQL and pass the behavioral trigger matrix. The migration's SQL definition alone is not certification evidence.
+
+
+## Stakeholder platform-authority approval guard (20261112)
+
+Migration `20261112_stakeholder_platform_authority_scope.sql` replaces the stakeholder-application approval trigger's global role-name lookup. An approval transition now requires the reviewer identity to be active and `VERIFIED`, the membership to be `VERIFIED`, the membership's organization to be `VERIFIED` and of type `PLATFORM_AUTHORITY`, and the role to be `platform_admin` or `super_admin` with an explicit `admin:users` permission. Self-approval and direct INSERT as `APPROVED` remain prohibited. The function is SECURITY INVOKER and pins `search_path`.
+
+The PostgreSQL integration test rejects approval by a verified ordinary-tenant verifier and accepts approval by the synthetic active platform authority. The shared onboarding fixture now discovers only a reviewer meeting the same platform-authority and explicit-permission predicate. This is a candidate migration only; disposable PostgreSQL acceptance and independent security review are required before any production change.
