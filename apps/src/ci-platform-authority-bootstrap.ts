@@ -526,6 +526,30 @@ async function run(): Promise<void> {
     const outOfScopeApplicationId = await createGeographyApplication(
       "CI Out-of-Scope Geography Application", `CIN-OUT-${suffix}`, geographyOutside,
     );
+    const reviewerOrganizationType = await pool.query<{ organization_type: string }>(
+      "select organization_type from public.organizations where id=$1",
+      [applicantOrganizationId],
+    );
+    assert.equal(reviewerOrganizationType.rows[0]?.organization_type, "processing_facility");
+    const processorRoleQueue = await pool.query<{ queue_result: { applications: Array<{ id: string }> } }>(
+      "select auth_private.get_onboarding_review_queue($1) as queue_result",
+      [unauthorizedTokenHash],
+    );
+    assert.equal(
+      processorRoleQueue.rows[0]?.queue_result.applications.some(
+        row => row.id === inScopeApplicationId || row.id === outOfScopeApplicationId,
+      ),
+      false,
+      "a verified processing facility must not gain state-review authority from a state_admin role label",
+    );
+
+    // The fixture then represents a verified regulator organization with the
+    // same reviewer role and geography root to prove that legitimate authority
+    // is scoped to descendants, not merely blocked wholesale.
+    await pool.query(
+      "update public.organizations set organization_type='regulator' where id=$1",
+      [applicantOrganizationId],
+    );
     const scopedReviewerQueue = await pool.query<{
       queue_result: { applications: Array<{ id: string; canReview: boolean; nextApproval?: { approval_level?: string } }> }
     }>(
@@ -535,7 +559,7 @@ async function run(): Promise<void> {
     const inScopeQueued = scopedReviewerQueue.rows[0]?.queue_result.applications.find(
       row => row.id === inScopeApplicationId,
     );
-    assert.ok(inScopeQueued, "a state reviewer must see an application within its verified geography scope");
+    assert.ok(inScopeQueued, "a verified regulator must see an application within its verified geography scope");
     assert.equal(inScopeQueued.canReview, true);
     assert.equal(
       scopedReviewerQueue.rows[0]?.queue_result.applications.some(row => row.id === outOfScopeApplicationId),
@@ -564,6 +588,10 @@ async function run(): Promise<void> {
       afterStateApproval.rows[0]?.queue_result.applications.some(row => row.id === inScopeApplicationId),
       false,
       "state reviewer must lose queue visibility after its step advances to PLATFORM",
+    );
+    await pool.query(
+      "update public.organizations set organization_type='processing_facility' where id=$1",
+      [applicantOrganizationId],
     );
 
     const selfApplication = await pool.query<{ application_result: { application: { id: string } } }>(
