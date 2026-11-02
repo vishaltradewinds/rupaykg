@@ -586,3 +586,11 @@ The first regression-test CI run (`41464821546`) failed as expected against the 
 - The separate lease-trigger change exposed a test-ordering issue: invalid state transitions were being rejected by the lease guard before the transition graph check. CI `41466136572` failed exactly there; the test did not indicate a broken worker lease claim.
 - Reordered the trigger to check legal transition graph first, then lease requirements. Latest migration commit is `1a8981bb5f3a7b3fdd7d1fed413fbc6b54b82fa5`; exact-head CI `41466508579` is in progress. Do not treat earlier SUCCESS as validation of this latest migration change.
 - Earlier corrected test-only commit `24b0545ede4a118436aa3d609825cac81c1de1ea` also passed CI `41465927624`, but it predates the database-level lease guard.
+
+
+### 14:57 UTC — worker retry audit-event coverage expanded
+
+- Further review found lease release writes `next_attempt_at` and bounded error metadata without necessarily changing job status. The existing append-only event trigger did not include those columns, so a retry release could update the current row without an associated event.
+- Expanded the event trigger to capture changes to `next_attempt_at`, `last_error_code`, and `last_error_detail` in addition to stage/provider updates (migration commit `cfd497bfb47866fc2a86fe4612628cc460b75d8c`). Lease renewals remain excluded to avoid noisy heartbeat events.
+- Added integration assertions that a retry lease release appends exactly one audit event and records the expected error code (test commit `a6f34467d9e5062fd2027e99eeb2e04716d49ec1`).
+- Exact-head CI `41466741462` is queued. Migration-only CI `41466699396` and lease-guard CI `41466508579` remain in progress; no pass claimed for these later changes.
