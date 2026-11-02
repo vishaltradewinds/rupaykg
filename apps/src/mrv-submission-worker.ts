@@ -162,8 +162,10 @@ export async function runMrvSubmissionWorkerOnce(pool: Pool, workerId: string): 
     if (!job.guardian_idempotency_key && !await persistGuardianKey(pool, lease, key)) return { outcome: "STALE_LEASE", jobId: job.id, stage: "GUARDIAN_KEY_PERSIST" };
     const guardian = await executeGuardianMrv({
       activityId: job.activity_id, verificationId: job.verification_id, evidenceId: job.evidence_id,
-      policyId: job.guardian_policy_id, methodologyCode: job.methodology_code ?? undefined,
-      observations: snapshot.observations ?? [], evidence: snapshot.evidence ?? [], metadata: snapshot.metadata,
+      policyId: job.guardian_policy_id,
+      ...(job.methodology_code ? { methodologyCode: job.methodology_code } : {}),
+      observations: snapshot.observations ?? [], evidence: snapshot.evidence ?? [],
+      ...(snapshot.metadata ? { metadata: snapshot.metadata } : {}),
       idempotencyKey: key,
     });
     if (guardian.status === "UNAVAILABLE" || guardian.status === "NOT_CONFIGURED") {
