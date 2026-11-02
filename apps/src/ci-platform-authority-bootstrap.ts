@@ -125,6 +125,46 @@ async function run(): Promise<void> {
       "custodian A must not be able to submit custodian B's claim",
     );
 
+    const expiredCeremonyId = randomUUID();
+    const expiredSecret = randomBytes(32).toString("base64url");
+    await pool.query(
+      "insert into bootstrap_private.bootstrap_ceremonies(id,expires_at) values($1,now()-interval '1 minute')",
+      [expiredCeremonyId],
+    );
+    await pool.query(
+      "insert into bootstrap_private.bootstrap_claims(ceremony_id,identity_id,custodian_role_name,secret_hash,expires_at) values($1,$2,$3,$4,now()+interval '30 minutes')",
+      [expiredCeremonyId, identityA, custodianA, sha256(expiredSecret)],
+    );
+    await assert.rejects(
+      withCustodian(pool, custodianA, client => client.query(
+        "select bootstrap_private.submit_initial_platform_authority_claim($1,$2)",
+        [expiredCeremonyId, expiredSecret],
+      )),
+      /BOOTSTRAP_CLAIM_INVALID/,
+      "an expired ceremony must not accept a valid secret",
+    );
+
+    const suspendedCeremonyId = randomUUID();
+    const suspendedSecret = randomBytes(32).toString("base64url");
+    await pool.query("update public.identities set suspended_at=now() where id=$1", [identityC]);
+    await pool.query(
+      "insert into bootstrap_private.bootstrap_ceremonies(id,expires_at) values($1,now()+interval '30 minutes')",
+      [suspendedCeremonyId],
+    );
+    await pool.query(
+      "insert into bootstrap_private.bootstrap_claims(ceremony_id,identity_id,custodian_role_name,secret_hash,expires_at) values($1,$2,$3,$4,now()+interval '30 minutes')",
+      [suspendedCeremonyId, identityC, custodianA, sha256(suspendedSecret)],
+    );
+    await assert.rejects(
+      withCustodian(pool, custodianA, client => client.query(
+        "select bootstrap_private.submit_initial_platform_authority_claim($1,$2)",
+        [suspendedCeremonyId, suspendedSecret],
+      )),
+      /BOOTSTRAP_IDENTITY_NOT_VERIFIED/,
+      "a suspended identity must not submit a bootstrap claim",
+    );
+    await pool.query("update public.identities set suspended_at=null where id=$1", [identityC]);
+
     const acceptedA = await withCustodian(pool, custodianA, client => client.query<{ submit_initial_platform_authority_claim: { status: string } }>(
       "select bootstrap_private.submit_initial_platform_authority_claim($1,$2)",
       [ceremonyId, secretA],
@@ -137,6 +177,14 @@ async function run(): Promise<void> {
       )),
       /BOOTSTRAP_CLAIM_INVALID/,
       "a submitted one-time claim must not be reusable",
+    );
+    await assert.rejects(
+      withCustodian(pool, custodianA, client => client.query(
+        "select bootstrap_private.finalize_initial_platform_authority_bootstrap($1)",
+        [ceremonyId],
+      )),
+      /BOOTSTRAP_REQUIRES_TWO_DISTINCT_CUSTODIANS/,
+      "finalization must fail until both distinct custodian claims are submitted",
     );
     const acceptedB = await withCustodian(pool, custodianB, client => client.query<{ submit_initial_platform_authority_claim: { status: string } }>(
       "select bootstrap_private.submit_initial_platform_authority_claim($1,$2)",
