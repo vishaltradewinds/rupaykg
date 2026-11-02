@@ -7,6 +7,31 @@ GRANT UPDATE ON public.organization_verification_evidence,
 GRANT INSERT ON public.organization_statutory_profiles TO rupaykg_auth_owner;
 GRANT SELECT (organization_id,framework,rule_reference,effective_from)
   ON public.organization_statutory_profiles TO rupaykg_auth_owner;
+CREATE OR REPLACE FUNCTION public.ensure_organization_governance_profile()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, pg_temp
+AS $governance_profile$
+BEGIN
+  -- Platform authority is an internal governance principal, not a regulated
+  -- operating organization; do not seed an operator statutory profile for it.
+  IF NEW.organization_type = 'PLATFORM_AUTHORITY' THEN
+    RETURN NEW;
+  END IF;
+
+  INSERT INTO public.organization_statutory_profiles
+    (organization_id, framework, rule_reference, effective_from, applicability_status, basis)
+  VALUES
+    (NEW.id, 'SWM_BWG', 'SWM_RULES_2026_S_O_388_E', date '2026-04-01', 'UNKNOWN',
+     jsonb_build_object('source', 'RupayKG governance catalogue', 'externalAcceptance', false,
+       'thresholds', jsonb_build_object('floorAreaSqM', 20000,
+         'waterConsumptionLpd', 40000, 'solidWasteKgpd', 100)))
+  ON CONFLICT DO NOTHING;
+  RETURN NEW;
+END;
+$governance_profile$;
+
 ALTER FUNCTION public.ensure_organization_governance_profile() OWNER TO rupaykg_auth_owner;
 ALTER FUNCTION public.ensure_organization_governance_profile() SECURITY DEFINER;
 ALTER FUNCTION public.ensure_organization_governance_profile() SET search_path = pg_catalog, pg_temp;
