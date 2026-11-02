@@ -15,7 +15,7 @@ The live production database currently exposes only the elevated rupaykg login a
 | rupaykg_auth_owner | no | no | no | Own auth schema objects; no application login. |
 | rupaykg_app_runtime | yes | no | no | Request-serving application; tenant-scoped transactions only. |
 | rupaykg_auth_runtime | yes | no | no | Authentication/session operations only; no business-table broad access. |
-| rupaykg_worker_runtime | yes | no | no | Dedicated worker/queue execution; job-scoped capabilities. |
+| rupaykg_mrv_worker_runtime | yes | no | no | Dedicated MRV worker/queue execution; job-scoped capabilities. This exact name is required by apps/src/mrv-worker-server.ts. |
 | rupaykg_security_definer | no | no | no | Optional narrowly scoped NOLOGIN owner for reviewed SECURITY DEFINER functions only; omit unless a concrete function requires it. |
 | rupaykg_migrator | yes, controlled | no | no | Short-lived controlled schema migration identity; not used by app, auth or worker. |
 | rupaykg_bootstrap | yes, temporary | no | no | Two-custodian bootstrap only; temporary elevated attributes must be removed and verified before application startup. |
