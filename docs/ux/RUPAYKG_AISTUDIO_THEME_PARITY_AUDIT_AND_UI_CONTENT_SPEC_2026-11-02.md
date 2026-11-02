@@ -282,3 +282,20 @@ Each authorised participant sees the information needed for their part of the ch
 - Updated `apps/web/index.html` to hide that status control initially and restyle it in the canonical theme; it becomes visible only when a meaningful offline/online status message is set.
 - Added a static validator assertion for the initial hidden state. CI #4564 covers this final adjustment.
 - Screenshot review is a visual smoke check at desktop and 390px width, not a full device matrix or formal accessibility certification.
+
+
+### Follow-up implementation and CI evidence — 2026-11-02
+
+- Added Urban / Rural operating-context switcher to the public stakeholder journey.
+- Stakeholder cards change with the selected context:
+  - Urban: households and bulk generators; Safai Mitras, collectors and transporters; ULBs and wards; processors, recyclers and verifiers.
+  - Rural: farmers, FPOs and village producers; collectors, aggregators and processors; Gram Panchayats and rural bodies; biomass processors, project owners and assurance.
+- Selecting a stakeholder reveals a short description and a registration CTA. This is a journey aid only; actual account access remains governed by existing verified onboarding, role and geography controls.
+- Added responsive selected-card and context-switch styling.
+- CI run #4566, run ID `41420805357`, on the latest branch head completed SUCCESS:
+  - production web build: success;
+  - reference-aligned landing UX validator: success;
+  - browser smoke test of production web build: success;
+  - landing UX browser evidence uploaded as artifact `rupaykg-landing-ux` (artifact ID `13129088263`).
+- The branch remains attached to draft PR #192; no merge or production deployment occurred.
+- Remaining validation: inspect the browser evidence at desktop/mobile breakpoints and perform a real stakeholder usability/accessibility review. Passing smoke tests is not equivalent to WCAG 2.2 AA certification or field validation.
