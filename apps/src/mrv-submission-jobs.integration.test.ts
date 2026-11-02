@@ -113,8 +113,17 @@ test("durable MRV job ledger enforces immutable request, legal transitions and a
     await expectSqlFailure("missing_worker_lease", "update mrv_submission_jobs set status='CLAIMED' where id=$1", [jobId], /MRV_JOB_LEASE_REQUIRED/);
     await expectSqlFailure("append_only_event", "update mrv_submission_job_events set event_code='tampered' where job_id=$1", [jobId], /MRV_JOB_EVENT_APPEND_ONLY/);
 
+    const reconciliationJobId = (await client.query<{id:string}>(
+      `insert into mrv_submission_jobs(
+         idempotency_key,payload_hash,activity_id,verification_id,evidence_id,organization_id,
+         geography_id,requested_by_identity_id,guardian_policy_id,payload_snapshot,status
+       ) values($1,$2,$3,$4,$5,$6,$7,$8,'test-policy','{"schema":"rupaykg:mrv:v1"}'::jsonb,'NEEDS_RECONCILIATION')
+       returning id`,
+      ["f".repeat(64), "e".repeat(64), activityId, verificationId, evidenceId, organizationId, geographyId, identityId],
+    )).rows[0]!.id;
     const lease = await claimNextMrvSubmissionJob(client, "worker-" + suffix, 60);
     assert.ok(lease, "a due REQUESTED job must be claimable");
+    assert.notEqual(lease.job.id, reconciliationJobId, "NEEDS_RECONCILIATION must remain held for explicit operator review");
     assert.equal(lease.job.id, jobId);
     assert.equal(lease.job.status, "CLAIMED");
     assert.equal(lease.job.attempt_count, 1);
