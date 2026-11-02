@@ -49,3 +49,9 @@ Do not:
 
 ## Evidence integrity
 This checkpoint records catalog metadata and read-only SQL results observed on 2026-11-02. It is not a security certification, migration approval or production readiness sign-off.
+## Additional role-catalog check (read-only)
+- Non-system PostgreSQL roles visible: `cloud_admin` and `rupaykg`.
+- `cloud_admin`: SUPERUSER, CREATEROLE, CREATEDB, LOGIN, BYPASSRLS.
+- `rupaykg`: NOSUPERUSER but CREATEROLE, CREATEDB, LOGIN, BYPASSRLS.
+- No separate least-privilege application, authentication, migrator or restricted function-owner roles are currently visible in the production catalog.
+- This confirms the production role boundary is not ready for RLS. Do not enable RLS until the production role architecture, ownership, grants and controlled provisioning are independently reviewed and rehearsed.
