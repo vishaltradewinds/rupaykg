@@ -294,3 +294,9 @@ Subsequent exact-head runs for later code changes are still running:
 - `41457631324` — latest PR #192 head `7945acec86d78c7720d3873d07238687007c7d35`
 
 Do not extrapolate the earlier success to later commits. Exact latest-head CI acceptance remains pending.
+
+## Exact CI acceptance for evidence and bilateral settlement code
+
+CI run `41457510422` for code commit `aae20cdedff4832ae95b0ba49ef0ef83576aeb61` completed **SUCCESS**. It includes the fail-closed geography migration, fixture-order correction, evidence-upload authorization on the write client, credential issuance authorization on the write client and bilateral settlement permission checks. This is an exact-head successful verification for that code commit, not for later commits.
+
+The latest MRV connection-consistency code is commit `bb878aa90c3b348e8ccb85933372d59080522fb4`. It moves MRV submit-path authorization, source reads, replay lookup and provenance persistence to the same checked-out client that holds the idempotency advisory lock. Exact-head CI run `41457821676` was QUEUED at last check. The code still does not establish a transaction-local signed RLS context; durable claim/outbox and actor-bound finalize remain open.
