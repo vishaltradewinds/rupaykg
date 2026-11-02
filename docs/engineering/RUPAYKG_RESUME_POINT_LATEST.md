@@ -16,7 +16,8 @@ Governing standard: Shakti Standards
 
 ## Read first
 
-1. Immutable checkpoint: checkpoints/2026-11-02-mrv-source-snapshot-revalidation.md
+1. Immutable checkpoint: checkpoints/2026-11-02-mrv-snapshot-ci-green.md
+2. Previous checkpoint: checkpoints/2026-11-02-mrv-source-snapshot-revalidation.md
 2. Session log: session-logs/2026-11-02-cto-mrv-snapshot-revalidation.md
 3. Previous checkpoint: checkpoints/2026-11-02-mrv-single-path-and-worker-contract.md
 4. Previous checkpoint: checkpoints/2026-11-02-auth-mrv-convergence-and-release-gates.md
@@ -28,8 +29,8 @@ Governing standard: Shakti Standards
 
 - GitHub main: a3fecc0abd2c46549a201058d3963afc0e3a73c9.
 - PR #192 branch: shakti/auth-bootstrap-application-integration-2026-11-01.
-- Latest PR #192 head: 4781bfe03ac68bf61031b9c2e8924dcd498d259e; OPEN / DRAFT / UNMERGED.
-- Exact-head CI 41496454924 for head 4781bfe03ac68bf61031b9c2e8924dcd498d259e has passed migration validation, restricted verifier provisioning, disposable migrations, bootstrap privilege teardown, typecheck/build, synthetic two-custodian bootstrap, browser smoke and the full disposable PostgreSQL test suite including snapshot mutation assertions. Production-container build is still running; do not claim the full workflow green until it completes.
+- Latest PR #192 head: 59c5dc1d0976dbd7b92e2d9194c3d3f07f40e431; OPEN / DRAFT / UNMERGED.
+- Exact-head CI 41496454924 for head 4781bfe03ac68bf61031b9c2e8924dcd498d259e completed SUCCESS, including migration validation, restricted verifier provisioning, disposable migrations, bootstrap privilege teardown, typecheck/build, synthetic two-custodian bootstrap, browser smoke, full disposable PostgreSQL tests with source-snapshot mutation assertions, production-container build and cleanup. A test-only follow-up commit 59c5dc1d0976dbd7b92e2d9194c3d3f07f40e431 aligns the initial worker-ledger fixture with the same complete source snapshot; exact-head CI 41496873635 is running and must complete before accepting the latest head.
 - Earlier exact-head CI 41495348937 passed heartbeat/direct-submit code; 41495848722 passed direct-submit gate tests; 41495699292 passed NEEDS_RECONCILIATION claim exclusion; 41495765539 passed worker contract docs.
 - Runs 41496015060, 41496118629 and 41496146332 failed at the incomplete source-snapshot fixture assertion; the fixture was corrected in commits 6edc4d and 4781b.
 - PR #192 base/merge-base b5e91241d84a6712ff544d3deec1805702f45efd is two commits behind main. Main commit 14b735 added AUTH_DATABASE_URL; a3fecc0 reverted it. PR #192 requires a separate auth runtime pool. Reconcile before merge.
