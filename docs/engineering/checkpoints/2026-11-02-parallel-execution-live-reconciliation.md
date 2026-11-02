@@ -594,3 +594,12 @@ The first regression-test CI run (`41464821546`) failed as expected against the 
 - Expanded the event trigger to capture changes to `next_attempt_at`, `last_error_code`, and `last_error_detail` in addition to stage/provider updates (migration commit `cfd497bfb47866fc2a86fe4612628cc460b75d8c`). Lease renewals remain excluded to avoid noisy heartbeat events.
 - Added integration assertions that a retry lease release appends exactly one audit event and records the expected error code (test commit `a6f34467d9e5062fd2027e99eeb2e04716d49ec1`).
 - Exact-head CI `41466741462` is queued. Migration-only CI `41466699396` and lease-guard CI `41466508579` remain in progress; no pass claimed for these later changes.
+
+
+### 14:58 UTC — append-only worker event attribution
+
+- Extended the durable MRV job event writer so lease-owned changes are recorded as `actor_kind=WORKER` with the owning worker ID and the active/stale lease token; initial job creation remains `SYSTEM`. The event trigger also captures retry schedule/error metadata while excluding lease heartbeat renewals.
+- Hardened INSERT handling to avoid referencing the unassigned OLD record in trigger execution.
+- Integration test now verifies lease release appends one event with `TEST_RELEASE`, `WORKER`, and the exact recovery worker identity.
+- Commits: event columns `cfd497bfb47866fc2a86fe4612628cc460b75d8c`; worker attribution `de0f8044406fdb7e3c2ebae12f44558ba7ad184c`; INSERT safety `52d25cf0bca67537bd14a76723d3ebbce141dc6f`; assertions `392abdbc56c1cd116bee7d0454e0b04d47760a96`.
+- These changes are on PR #192 and await exact-head CI. They remain migration/test work only; no background worker is deployed.
