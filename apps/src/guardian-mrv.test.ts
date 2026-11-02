@@ -70,3 +70,34 @@ test("Guardian MRV accepts VERIFIED only with an authoritative execution id", as
     else process.env.GUARDIAN_MRV_SUBMIT_URL = previousUrl;
   }
 });
+
+test("Guardian retries reuse the persisted idempotency key after an ambiguous response loss", async () => {
+  const previousUrl = process.env.GUARDIAN_MRV_SUBMIT_URL;
+  const previousFetch = globalThis.fetch;
+  process.env.GUARDIAN_MRV_SUBMIT_URL = "https://guardian.test/mrv";
+  const persistedKey = "f".repeat(64);
+  const sentKeys: string[] = [];
+  let attempts = 0;
+  globalThis.fetch = async (_input, init) => {
+    const headers = new Headers(init?.headers);
+    sentKeys.push(headers.get("idempotency-key") || "");
+    attempts += 1;
+    if (attempts === 1) throw new Error("connection reset after provider accepted request");
+    return new Response(JSON.stringify({ status: "VERIFIED", executionId: "guardian-execution-replayed" }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  };
+  try {
+    const first = await executeGuardianMrv({ ...request, idempotencyKey: persistedKey });
+    const retry = await executeGuardianMrv({ ...request, idempotencyKey: persistedKey });
+    assert.equal(first.status, "UNAVAILABLE");
+    assert.equal(retry.status, "VERIFIED");
+    assert.equal(retry.executionId, "guardian-execution-replayed");
+    assert.deepEqual(sentKeys, [persistedKey, persistedKey], "retry must send the exact persisted key, never derive a replacement");
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousUrl === undefined) delete process.env.GUARDIAN_MRV_SUBMIT_URL;
+    else process.env.GUARDIAN_MRV_SUBMIT_URL = previousUrl;
+  }
+});
