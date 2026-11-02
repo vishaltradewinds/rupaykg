@@ -96,7 +96,7 @@ export function createMrvSubmissionIdempotencyKey(input: Pick<EnqueueMrvSubmissi
  * membership, organization, evidence or verification may have changed.
  */
 export async function isMrvSubmissionJobStillAuthorized(client: PoolClient, jobId: string): Promise<boolean> {
-  const result = await client.query<{ authorized: boolean }>(
+  const result = await client.query<{ authorized: boolean; payload_snapshot: Record<string, unknown> }>(
     `select exists (
        select 1
          from mrv_submission_jobs j
@@ -119,10 +119,42 @@ export async function isMrvSubmissionJobStillAuthorized(client: PoolClient, jobI
           and a.geography_id is not null
           and organization_has_geography_scope(j.organization_id,a.geography_id)
           and exists (select 1 from jsonb_array_elements_text(r.permissions) p where p = 'guardian:operate')
-     ) as authorized`,
+     ) as authorized,
+     (select payload_snapshot from mrv_submission_jobs where id=$1) as payload_snapshot`,
     [jobId],
   );
-  return result.rows[0]?.authorized === true;
+  const row = result.rows[0];
+  if (!row?.authorized || !row.payload_snapshot) return false;
+
+  // Re-read the live MRV source rows before every irreversible provider stage.
+  // JSON round-tripping normalizes pg Date objects to the ISO strings stored in
+  // the immutable JSONB enqueue snapshot; numeric measurement values are
+  // deliberately converted to Number on both sides.
+  const observations = await client.query(
+    "select id, parameter_code, observed_value, unit, method, instrument_id, observed_at, uncertainty, quality_status, metadata from mrv_observations where activity_id=(select activity_id from mrv_submission_jobs where id=$1) order by observed_at",
+    [jobId],
+  );
+  const evidence = await client.query(
+    "select id, evidence_type, content_uri, content_hash, captured_at, status, metadata from evidence where activity_id=(select activity_id from mrv_submission_jobs where id=$1) order by captured_at",
+    [jobId],
+  );
+  const quantityResult = await client.query<{ value: string | null; unit: string | null }>(
+    "select value::text value, unit from measurements where activity_id=(select activity_id from mrv_submission_jobs where id=$1) order by measured_at desc limit 1",
+    [jobId],
+  );
+  const liveQuantity = quantityResult.rows[0]?.value ? Number(quantityResult.rows[0].value) : undefined;
+  const liveUnit = quantityResult.rows[0]?.unit || undefined;
+  const snapshot = row.payload_snapshot as {
+    observations?: unknown[]; evidence?: unknown[]; quantity?: number; unit?: string;
+  };
+  const normalizedLive = JSON.parse(JSON.stringify({
+    observations: observations.rows, evidence: evidence.rows, quantity: liveQuantity, unit: liveUnit,
+  }));
+  const normalizedSnapshot = JSON.parse(JSON.stringify({
+    observations: snapshot.observations ?? [], evidence: snapshot.evidence ?? [],
+    quantity: snapshot.quantity, unit: snapshot.unit,
+  }));
+  return stableJson(normalizedLive) === stableJson(normalizedSnapshot);
 }
 
 /** Enqueue an immutable MRV request; repeated identical requests return the same row. */
