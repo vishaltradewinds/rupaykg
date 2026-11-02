@@ -137,8 +137,8 @@ export async function reconcileHcsTransaction(
   const id = transactionId.trim();
   const topic = topicId.trim();
   if (!id || !topic) return { status: "MISMATCH", transactionId: id, message: "Persisted HCS transaction ID and topic are required" };
-  const mirrorId = id.includes("@") ? id.replace(/^([0-9]+\\.[0-9]+\\.[0-9]+)@([0-9]+)\\.([0-9]+)$/, "$1-$2-$3") : id;
-  if (mirrorId === id && !/^[0-9]+\\.[0-9]+\\.[0-9]+-[0-9]+-[0-9]+$/.test(mirrorId)) {
+  const mirrorId = id.includes("@") ? id.replace(/^([0-9]+\.[0-9]+\.[0-9]+)@([0-9]+)\.([0-9]+)$/, "$1-$2-$3") : id;
+  if (mirrorId === id && !/^[0-9]+\.[0-9]+\.[0-9]+-[0-9]+-[0-9]+$/.test(mirrorId)) {
     return { status: "MISMATCH", transactionId: id, message: "Persisted HCS transaction ID has an unsupported format" };
   }
   const controller = new AbortController();
