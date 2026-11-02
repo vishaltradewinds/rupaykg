@@ -71,6 +71,16 @@ try {
     return response.result?.value;
   };
   const waitForRender = "await new Promise(resolve => setTimeout(resolve, 60));";
+  const pageReady = await evaluate(`(async()=> {
+    for (let attempt = 0; attempt < 60; attempt += 1) {
+      const header = document.querySelector('.topbar');
+      const language = document.querySelector('#rupaykg-national-language-selector');
+      if (header && language?.parentElement === header) return true;
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+    return false;
+  })()`);
+  assert.equal(pageReady, true, "React header and language selector must mount before interaction tests");
 
   const initial = await evaluate(`({
     drawer: !!document.querySelector('[aria-label="Account access"]'),
