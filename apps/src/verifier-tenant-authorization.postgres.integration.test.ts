@@ -95,8 +95,8 @@ test("verifier authorization is active-identity and subject-tenant scoped for ev
 
     // Negative: a verifier-like role label without an explicit permission is not authority.
     const labelOnlyRole = (await client.query<{ id: string }>(
-      "insert into public.roles(organization_id,name,permissions) values($1,\'auditor\',\'[\\"records:read\\"]\'::jsonb) returning id",
-      [orgA],
+      `insert into public.roles(organization_id,name,permissions) values($1,\'auditor\',$2::jsonb) returning id`,
+      [orgA, JSON.stringify(["records:read"])],
     )).rows[0]!.id;
     const labelOnlyVerifier = (await client.query<{ id: string }>(
       "insert into public.identities(external_subject,display_name,status) values($1,'Role Label Only Verifier','VERIFIED') returning id",
