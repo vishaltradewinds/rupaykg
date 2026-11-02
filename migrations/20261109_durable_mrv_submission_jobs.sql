@@ -74,7 +74,7 @@ create table if not exists mrv_submission_jobs (
 -- independent verification. Composite FKs below keep the cross-record bindings
 -- intact after enqueue; provider workers must still re-check revocation/status.
 create or replace function validate_mrv_submission_job_bindings()
-returns trigger language plpgsql as $
+returns trigger language plpgsql as '
 declare
   activity_actor uuid;
   evidence_is_verified boolean;
@@ -85,31 +85,31 @@ begin
    where a.id = new.activity_id
      and a.organization_id = new.organization_id
      and a.geography_id = new.geography_id
-     and a.status = 'COMPLETED';
+     and a.status = ''COMPLETED'';
   if not found then
-    raise exception 'MRV_JOB_ACTIVITY_SCOPE_INVALID';
+    raise exception ''MRV_JOB_ACTIVITY_SCOPE_INVALID'';
   end if;
 
-  select (e.status = 'VERIFIED') into evidence_is_verified
+  select (e.status = ''VERIFIED'') into evidence_is_verified
     from evidence e
    where e.id = new.evidence_id
      and e.activity_id = new.activity_id;
   if coalesce(evidence_is_verified, false) is not true then
-    raise exception 'MRV_JOB_EVIDENCE_NOT_VERIFIED';
+    raise exception ''MRV_JOB_EVIDENCE_NOT_VERIFIED'';
   end if;
 
-  select (v.decision = 'APPROVED' and v.verifier_identity_id is distinct from activity_actor)
+  select (v.decision = ''APPROVED'' and v.verifier_identity_id is distinct from activity_actor)
     into verification_is_approved
     from verifications v
    where v.id = new.verification_id
      and v.evidence_id = new.evidence_id
      and v.activity_id = new.activity_id;
   if coalesce(verification_is_approved, false) is not true then
-    raise exception 'MRV_JOB_VERIFICATION_INVALID';
+    raise exception ''MRV_JOB_VERIFICATION_INVALID'';
   end if;
 
   if not public.organization_has_geography_scope(new.organization_id, new.geography_id) then
-    raise exception 'MRV_JOB_GEOGRAPHY_SCOPE_INVALID';
+    raise exception ''MRV_JOB_GEOGRAPHY_SCOPE_INVALID'';
   end if;
   return new;
 end;
@@ -127,31 +127,31 @@ begin
    where a.id = new.activity_id
      and a.organization_id = new.organization_id
      and a.geography_id = new.geography_id
-     and a.status = 'COMPLETED';
+     and a.status = ''COMPLETED'';
   if not found then
-    raise exception 'MRV_JOB_ACTIVITY_SCOPE_INVALID';
+    raise exception ''MRV_JOB_ACTIVITY_SCOPE_INVALID'';
   end if;
 
-  select (e.status = 'VERIFIED') into evidence_is_verified
+  select (e.status = ''VERIFIED'') into evidence_is_verified
     from evidence e
    where e.id = new.evidence_id
      and e.activity_id = new.activity_id;
   if coalesce(evidence_is_verified, false) is not true then
-    raise exception 'MRV_JOB_EVIDENCE_NOT_VERIFIED';
+    raise exception ''MRV_JOB_EVIDENCE_NOT_VERIFIED'';
   end if;
 
-  select (v.decision = 'APPROVED' and v.verifier_identity_id is distinct from activity_actor)
+  select (v.decision = ''APPROVED'' and v.verifier_identity_id is distinct from activity_actor)
     into verification_is_approved
     from verifications v
    where v.id = new.verification_id
      and v.evidence_id = new.evidence_id
      and v.activity_id = new.activity_id;
   if coalesce(verification_is_approved, false) is not true then
-    raise exception 'MRV_JOB_VERIFICATION_INVALID';
+    raise exception ''MRV_JOB_VERIFICATION_INVALID'';
   end if;
 
   if not public.organization_has_geography_scope(new.organization_id, new.geography_id) then
-    raise exception 'MRV_JOB_GEOGRAPHY_SCOPE_INVALID';
+    raise exception ''MRV_JOB_GEOGRAPHY_SCOPE_INVALID'';
   end if;
   return new;
 end;
@@ -164,7 +164,7 @@ for each row execute function validate_mrv_submission_job_bindings();
 
 create index if not exists mrv_submission_jobs_claim_idx
   on mrv_submission_jobs(next_attempt_at, created_at)
-  where status in ('REQUESTED','RETRYABLE_FAILURE','CLAIMED');
+  where status in (''REQUESTED'',''RETRYABLE_FAILURE'',''CLAIMED'');
 
 create index if not exists mrv_submission_jobs_activity_idx
   on mrv_submission_jobs(activity_id, created_at desc);
@@ -181,11 +181,11 @@ create table if not exists mrv_submission_job_events (
   job_id uuid not null references mrv_submission_jobs(id),
   from_status text,
   to_status text not null,
-  actor_kind text not null check (actor_kind in ('API','WORKER','SYSTEM')),
+  actor_kind text not null check (actor_kind in (''API'',''WORKER'',''SYSTEM'')),
   actor_reference text,
   lease_token uuid,
   event_code text not null,
-  event_detail jsonb not null default '{}'::jsonb,
+  event_detail jsonb not null default ''{}''::jsonb,
   created_at timestamptz not null default now()
 );
 
@@ -206,38 +206,38 @@ begin
     old.organization_id,old.geography_id,old.requested_by_identity_id,old.guardian_policy_id,
     old.methodology_code,old.payload_snapshot,old.created_at
   ) then
-    raise exception 'MRV_JOB_REQUEST_IMMUTABLE';
+    raise exception ''MRV_JOB_REQUEST_IMMUTABLE'';
   end if;
 
   if new.status is distinct from old.status then
     allowed := case old.status
-      when 'REQUESTED' then new.status in ('CLAIMED','CANCELLED')
-      when 'CLAIMED' then new.status in ('CLAIMED','GUARDIAN_SUBMITTED','RETRYABLE_FAILURE','PERMANENT_FAILURE','NEEDS_RECONCILIATION','CANCELLED')
-      when 'GUARDIAN_SUBMITTED' then new.status in ('GUARDIAN_VERIFIED','REJECTED','RETRYABLE_FAILURE','PERMANENT_FAILURE','NEEDS_RECONCILIATION')
-      when 'GUARDIAN_VERIFIED' then new.status in ('HCS_SUBMITTED','RETRYABLE_FAILURE','PERMANENT_FAILURE','NEEDS_RECONCILIATION')
-      when 'HCS_SUBMITTED' then new.status in ('HCS_CONSENSUS_CONFIRMED','RETRYABLE_FAILURE','PERMANENT_FAILURE','NEEDS_RECONCILIATION')
-      when 'HCS_CONSENSUS_CONFIRMED' then new.status in ('MIRROR_VERIFIED','RETRYABLE_FAILURE','NEEDS_RECONCILIATION')
-      when 'MIRROR_VERIFIED' then new.status in ('PROVENANCE_PERSISTED','NEEDS_RECONCILIATION')
-      when 'PROVENANCE_PERSISTED' then new.status = 'COMPLETED'
-      when 'RETRYABLE_FAILURE' then new.status in ('CLAIMED','NEEDS_RECONCILIATION','CANCELLED')
-      when 'NEEDS_RECONCILIATION' then new.status in ('CLAIMED','PERMANENT_FAILURE','CANCELLED')
+      when ''REQUESTED'' then new.status in (''CLAIMED'',''CANCELLED'')
+      when ''CLAIMED'' then new.status in (''CLAIMED'',''GUARDIAN_SUBMITTED'',''RETRYABLE_FAILURE'',''PERMANENT_FAILURE'',''NEEDS_RECONCILIATION'',''CANCELLED'')
+      when ''GUARDIAN_SUBMITTED'' then new.status in (''GUARDIAN_VERIFIED'',''REJECTED'',''RETRYABLE_FAILURE'',''PERMANENT_FAILURE'',''NEEDS_RECONCILIATION'')
+      when ''GUARDIAN_VERIFIED'' then new.status in (''HCS_SUBMITTED'',''RETRYABLE_FAILURE'',''PERMANENT_FAILURE'',''NEEDS_RECONCILIATION'')
+      when ''HCS_SUBMITTED'' then new.status in (''HCS_CONSENSUS_CONFIRMED'',''RETRYABLE_FAILURE'',''PERMANENT_FAILURE'',''NEEDS_RECONCILIATION'')
+      when ''HCS_CONSENSUS_CONFIRMED'' then new.status in (''MIRROR_VERIFIED'',''RETRYABLE_FAILURE'',''NEEDS_RECONCILIATION'')
+      when ''MIRROR_VERIFIED'' then new.status in (''PROVENANCE_PERSISTED'',''NEEDS_RECONCILIATION'')
+      when ''PROVENANCE_PERSISTED'' then new.status = ''COMPLETED''
+      when ''RETRYABLE_FAILURE'' then new.status in (''CLAIMED'',''NEEDS_RECONCILIATION'',''CANCELLED'')
+      when ''NEEDS_RECONCILIATION'' then new.status in (''CLAIMED'',''PERMANENT_FAILURE'',''CANCELLED'')
       else false
     end;
     if not allowed then
-      raise exception 'MRV_JOB_INVALID_STATE_TRANSITION: % -> %', old.status, new.status;
+      raise exception ''MRV_JOB_INVALID_STATE_TRANSITION: % -> %'', old.status, new.status;
     end if;
 
     -- Status transitions are lease-fenced at the database boundary as well as
     -- in the worker repository. Claiming REQUESTED/retryable work must install
     -- a fresh live lease; advancing an already claimed stage must present an
     -- existing live lease (the repository clears it after the transition).
-    if not (old.status = 'REQUESTED' and new.status = 'CANCELLED') then
-      if new.status = 'CLAIMED' then
+    if not (old.status = ''REQUESTED'' and new.status = ''CANCELLED'') then
+      if new.status = ''CLAIMED'' then
         if new.lease_token is null or new.lease_expires_at is null or new.lease_expires_at <= now() then
-          raise exception 'MRV_JOB_LEASE_REQUIRED';
+          raise exception ''MRV_JOB_LEASE_REQUIRED'';
         end if;
       elsif old.lease_token is null or old.lease_expires_at is null or old.lease_expires_at <= now() then
-        raise exception 'MRV_JOB_LEASE_REQUIRED';
+        raise exception ''MRV_JOB_LEASE_REQUIRED'';
       end if;
     end if;
 
@@ -245,8 +245,7 @@ begin
 
   new.updated_at := now();
   return new;
-end;
-$$;
+end;';
 
 drop trigger if exists mrv_submission_job_update_guard on mrv_submission_jobs;
 create trigger mrv_submission_job_update_guard
