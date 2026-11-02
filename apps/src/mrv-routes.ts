@@ -228,6 +228,17 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
   });
 
   app.post("/api/v1/mrv/activities/:activityId/submit", async (request, reply) => {
+    // The durable queue is the canonical provider execution path. Keep the
+    // legacy synchronous provider path disabled unless explicitly selected
+    // for a controlled non-worker environment; never run both paths together.
+    if (process.env.RUPAYKG_MRV_DIRECT_SUBMIT_ENABLED !== "true"
+        || process.env.RUPAYKG_MRV_WORKER_ENABLED === "true") {
+      return reply.code(503).send({
+        error: "Synchronous MRV submission is disabled; use the gated durable queue path.",
+        code: "MRV_DIRECT_SUBMIT_DISABLED",
+        syntheticData: false,
+      });
+    }
     const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
     const activityId = (request.params as { activityId: string }).activityId;
     const body = bodyOf(request as never);
