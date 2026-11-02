@@ -254,3 +254,12 @@ Each authorised participant sees the information needed for their part of the ch
 - CI run #4548 (run ID `41418306339`) includes the final shared-workspace surface CSS change; typecheck, production build, UX parity validator and synthetic bootstrap had passed, while browser smoke / remaining tests were still running.
 - The first four failed runs were caused by a test assertion expecting the phrase `Record what happened` while the implemented card copy correctly says `Capture what happened`; the validator was corrected to match the rendered content. The corrected validator passed in #4547 and #4548.
 - Do not treat a run as fully green until its final workflow conclusion is SUCCESS.
+
+
+### Browser screenshot review and correction
+
+- Inspected the CI-rendered desktop screenshot artifact from run #4551. It confirmed the reference theme, visible landing navigation and four-step process, but exposed an always-visible fixed account drawer overlapping the lower-right landing content.
+- Corrected the UX: account access now opens only after the user selects Sign in / Create account / Continue from a stakeholder card; it has an explicit accessible close control. Initial landing render no longer mounts the drawer.
+- Added validator assertions for opt-in account drawer behavior and a browser DOM smoke assertion that the initial landing does not render the account-access dialog.
+- Run #4552 (source change with opt-in drawer) completed SUCCESS. Runs #4553–#4555 cover the shared styling, validator and final CI workflow evidence changes; wait for final conclusions before declaring the latest head fully green.
+- Browser screenshot evidence is retained as a short-lived CI artifact for review. The inspected pre-fix screenshot is not the accepted final UI; inspect the latest artifact after #4555 completes.
