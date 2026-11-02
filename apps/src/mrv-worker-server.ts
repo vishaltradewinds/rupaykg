@@ -28,19 +28,19 @@ async function main(): Promise<void> {
     const identity = await pool.query<{
       current_user: string; rolcanlogin: boolean; rolinherit: boolean; rolsuper: boolean;
       rolbypassrls: boolean; rolcreatedb: boolean; rolcreaterole: boolean; rolreplication: boolean;
-      owner_membership: boolean; geography_scope_execute: boolean;
+      owner_membership: boolean; geography_scope_execute: boolean; public_create: boolean; required_table_reads: boolean; job_update: boolean; event_insert: boolean; provenance_insert: boolean;
     }>(
       `select current_user,
               r.rolcanlogin,r.rolinherit,r.rolsuper,r.rolbypassrls,r.rolcreatedb,r.rolcreaterole,r.rolreplication,
               pg_has_role(current_user,'rupaykg_app_owner','MEMBER')
                 or pg_has_role(current_user,'rupaykg_auth_owner','MEMBER') as owner_membership,
-              has_function_privilege(current_user,'public.organization_has_geography_scope(uuid,uuid)','EXECUTE') as geography_scope_execute
+              has_function_privilege(current_user,'public.organization_has_geography_scope(uuid,uuid)','EXECUTE') as geography_scope_execute,\n              has_schema_privilege(current_user,'public','CREATE') as public_create,\n              (select bool_and(has_table_privilege(current_user,'public.'||name,'SELECT')) from unnest($organizations,identities,organization_memberships,roles,activities,evidence,verifications,geography,mrv_submission_jobs,mrv_submission_job_events,mrv_provenance_events$::text[]) name) as required_table_reads,\n              has_table_privilege(current_user,'public.mrv_submission_jobs','UPDATE') as job_update,\n              has_table_privilege(current_user,'public.mrv_submission_job_events','INSERT') as event_insert,\n              has_table_privilege(current_user,'public.mrv_provenance_events','INSERT') as provenance_insert
          from pg_roles r where r.rolname=current_user`,
     );
     const role = identity.rows[0];
     if (!role || role.current_user !== expectedRole || !role.rolcanlogin || role.rolinherit
         || role.rolsuper || role.rolbypassrls || role.rolcreatedb || role.rolcreaterole
-        || role.rolreplication || role.owner_membership || !role.geography_scope_execute) {
+        || role.rolreplication || role.owner_membership || !role.geography_scope_execute || role.public_create\n        || !role.required_table_reads || !role.job_update || !role.event_insert || !role.provenance_insert) {
       throw new Error("MRV_WORKER_DATABASE_ROLE_CONTRACT_FAILED");
     }
 
