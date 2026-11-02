@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { AccountId, Client, PrivateKey, TopicId, TopicMessageSubmitTransaction } from "@hiero-ledger/sdk";
+import { AccountId, Client, PrivateKey, TopicId, TopicMessageSubmitTransaction, TransactionId } from "@hiero-ledger/sdk";
 
 export type HederaAnchorState = "NOT_CONFIGURED" | "CONSENSUS_CONFIRMED" | "RETRYABLE_FAILURE" | "FAILED";
 
@@ -72,7 +72,17 @@ export function hederaStatus() {
   };
 }
 
-export async function submitHcsAnchor(payload: AnchorPayload): Promise<AnchorResult> {
+/**
+ * Generate before the HCS side effect and persist on the durable job row.
+ * Retries must reuse this exact transaction ID after ambiguous outcomes.
+ */
+export function createHcsTransactionId(): string {
+  const operatorId = process.env.HEDERA_OPERATOR_ID?.trim();
+  if (!operatorId || !configured()) throw new Error("HEDERA_OPERATOR_NOT_CONFIGURED");
+  return TransactionId.generate(AccountId.fromString(operatorId)).toString();
+}
+
+export async function submitHcsAnchor(payload: AnchorPayload, persistedTransactionId?: string): Promise<AnchorResult> {
   const network = networkName();
   const topicId = process.env.HEDERA_TOPIC_ID?.trim() || "";
   const hash = integrityHash(payload);
@@ -87,7 +97,11 @@ export async function submitHcsAnchor(payload: AnchorPayload): Promise<AnchorRes
     else client = Client.forTestnet();
     client.setOperator(AccountId.fromString(process.env.HEDERA_OPERATOR_ID!), PrivateKey.fromString(process.env.HEDERA_OPERATOR_KEY!));
     const message = JSON.stringify({ ...payload, integrityHash: hash, anchoredAt: new Date().toISOString() });
-    const response = await new TopicMessageSubmitTransaction().setTopicId(TopicId.fromString(topicId)).setMessage(message).execute(client);
+    const transaction = new TopicMessageSubmitTransaction()
+      .setTopicId(TopicId.fromString(topicId))
+      .setMessage(message);
+    if (persistedTransactionId) transaction.setTransactionId(TransactionId.fromString(persistedTransactionId));
+    const response = await transaction.execute(client);
     const record = await response.getRecord(client);
     const consensusTimestamp = record.consensusTimestamp?.toString() ?? null;
     if (!consensusTimestamp) throw new Error("Hedera did not return a consensus timestamp");
