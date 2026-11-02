@@ -42,3 +42,14 @@ Append-only record. Do not rewrite earlier entries.
 - Production Neon remains 0/67 RLS and the elevated rupaykg login is unchanged. Main is two commits ahead of PR #192's merge base; AUTH_DATABASE_URL/auth-pool contract must be reconciled before merge.
 - Added immutable checkpoint docs/engineering/checkpoints/2026-11-02-mrv-single-path-and-worker-contract.md and session log docs/engineering/session-logs/2026-11-02-cto-mrv-single-path.md; refreshed the resume pointer.
 - No production DDL/DML, migrations, roles/grants/RLS changes, branch operations, secrets, deployments, provider writes, worker/scheduler activation or certification. Production HOLD; worker OFF; certification OFF; TRL 9 NOT ESTABLISHED.
+
+
+## 2026-11-02 18:01 UTC — MRV source snapshot revalidation and CI fixture repair
+
+- Worker authorization now re-reads observations, evidence and latest measurement quantity/unit before provider stages. The immutable enqueue snapshot comparison rejects changed source data.
+- Disposable tests cover measurement quantity and evidence content-hash mutation and exact restoration. Deterministic timestamp + row-ID ordering was aligned across worker revalidation, API enqueue, direct preflight/re-read and the test fixture.
+- Exact CI 41496015060 failed because the synthetic fixture omitted live evidence and quantity/unit while the database contained them. The fail-closed comparison was correct; the fixture was repaired to query the same source rows as the API. Runs 41496118629 and 41496146332 also failed at this same fixture assertion.
+- Exact CI 41495848722 passed the direct-submit default-off/mutual-exclusion tests; 41495699292 passed NEEDS_RECONCILIATION claim exclusion; 41495765539 passed the worker contract docs. Current exact-head CI 41496454924 for 4781bfe was at TypeScript typecheck at 18:01 UTC; no source-snapshot pass is claimed until it completes.
+- Added immutable checkpoint docs/engineering/checkpoints/2026-11-02-mrv-source-snapshot-revalidation.md and session log docs/engineering/session-logs/2026-11-02-cto-mrv-snapshot-revalidation.md; refreshed the latest resume pointer.
+- Production Neon remains 0/67 RLS with the elevated rupaykg login. PR #192 remains draft/unmerged and two commits behind main; PR #213 needs rebase/fresh CI. PRs #205/#211/#212 remain closed unmerged as superseded.
+- No production DDL/DML, migration, role/grant/RLS change, branch operation, secret, deployment, provider write, worker/scheduler activation or certification. Production HOLD; worker OFF; certification OFF; TRL 9 NOT ESTABLISHED.
