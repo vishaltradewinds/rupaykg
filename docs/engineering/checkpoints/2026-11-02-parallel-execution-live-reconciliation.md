@@ -220,3 +220,22 @@ The production catalog exposes 11 application-owned non-trigger functions: 3 boo
 The 37 C-language functions are extension members of pgcrypto 1.4 in public; preserve extension-managed ownership and versioning. Do not apply application-function ACL scripts to these extension objects.
 
 Validation provenance: production-only catalog reads on authoritative Neon main. No data, DDL, grants, role membership, schema ACL, trigger, function or migration was changed. No disposable compute was started.
+
+
+## Priority function-body review — read-only production definitions
+
+A bounded pg_get_functiondef review was completed for the 9 highest-priority application-owned callable functions. No function source was modified.
+
+Findings:
+
+1. allocate_epr_credit and release_epr_credit_allocation perform multi-table writes and row locks, but accept only record IDs/quantity and do not accept an authenticated actor or organization scope. Their bodies validate status, scheme, quantity and capacity, but do not themselves prove caller authorization or tenant ownership. Treat PUBLIC EXECUTE as a critical access-control risk if these functions are reachable from an untrusted database/API caller. Verify all call sites and runtime connectivity before determining exploitability.
+2. allocate_environmental_attribute_claim accepts organization/activity/evidence/verification IDs and validates claim type, positive quantity and unit, then inserts an active value claim. The inspected body does not itself bind the supplied organization to a verified caller identity. Caller authorization and FK/trigger constraints must be proven end-to-end; this function is not safe to expose as a general RPC under the current privilege model.
+3. has_verification_permission(identity_id) and identity_has_permission(actor_id, permission_code, role_names) test verified membership across organizations without taking a subject organization/activity parameter. They are global capability predicates and must not be used alone for organization/geography-scoped decisions.
+4. organization_has_geography_scope returns true when the organization has no VERIFIED geography roots. This is a confirmed compatibility fail-open. The verifier migration under PR #192 introduces an explicit verified-root check in its newer branch helper, but that branch change is not production deployed. Regulated writes should remain blocked until onboarding ensures a verified root or a specific onboarding-only exception is enforced.
+5. can_assess_epr, can_manage_field_device and can_write_esg do bind identity to organization and require VERIFIED membership, but do not include geography in their own predicates. Callers must add the relevant resource geography and operation-specific checks.
+
+Risk interpretation: PUBLIC EXECUTE is confirmed for these functions, and their bodies reveal authorization assumptions that are not uniformly enforced internally. This is a high-priority security finding, not proof that an unauthenticated internet user can call the functions: actual exposure depends on database credential custody, API/RPC exposure, route callsites and database role. Do not expose them through PostgREST/RPC or grant broader application connectivity until an actor-bound contract and exact ACL are tested.
+
+Required next steps: map all route and worker callsites; introduce actor-bound, organization/geography/bilateral-scoped database APIs where needed; classify trigger-only functions separately; restrict function EXECUTE to the minimum runtime roles in a disposable rehearsal; add negative tests for cross-tenant IDs, wrong actor, unverified membership, missing geography root, stale credential owner and concurrent EPR allocation/release.
+
+No production data, DDL, function definition, ACL, role, schema or trigger was changed. This body review is read-only evidence from the authoritative production branch.
