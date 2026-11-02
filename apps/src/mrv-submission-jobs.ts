@@ -148,7 +148,7 @@ export async function enqueueMrvSubmissionJob(client: PoolClient, input: Enqueue
 const claimableStatuses: MrvJobStatus[] = [
   "REQUESTED", "CLAIMED", "GUARDIAN_SUBMITTED", "GUARDIAN_VERIFIED",
   "HCS_SUBMITTED", "HCS_CONSENSUS_CONFIRMED", "MIRROR_VERIFIED",
-  "PROVENANCE_PERSISTED", "RETRYABLE_FAILURE", "NEEDS_RECONCILIATION",
+  "PROVENANCE_PERSISTED", "RETRYABLE_FAILURE",
 ];
 
 function boundedLeaseSeconds(seconds: number): number {
