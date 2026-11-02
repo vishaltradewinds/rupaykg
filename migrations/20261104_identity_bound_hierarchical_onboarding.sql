@@ -112,6 +112,17 @@ BEGIN
         WHERE om.identity_id=v_actor AND om.status='VERIFIED'
           AND reviewer_org.status='VERIFIED'
           AND r.name=ANY(v_roles)
+          AND CASE v_next->>'approval_level'
+            WHEN 'PLATFORM' THEN reviewer_org.organization_type='PLATFORM_AUTHORITY'
+            WHEN 'STATE' THEN reviewer_org.organization_type='regulator'
+            WHEN 'DISTRICT' THEN reviewer_org.organization_type='regulator'
+            WHEN 'LOCAL' THEN CASE
+              WHEN v_row.geography_kind IN ('ULB','WARD','LOCALITY') THEN reviewer_org.organization_type='ulb'
+              WHEN v_row.geography_kind IN ('GRAM_PANCHAYAT','VILLAGE','CLUSTER') THEN reviewer_org.organization_type='regulator'
+              ELSE false
+            END
+            ELSE false
+          END
           AND ((v_next->>'approval_level')<>'PLATFORM' OR (
             reviewer_org.organization_type='PLATFORM_AUTHORITY'
             AND jsonb_typeof(r.permissions)='array'
@@ -313,6 +324,17 @@ BEGIN
     WHERE om.identity_id=v_actor AND om.status='VERIFIED'
       AND reviewer_org.status='VERIFIED'
       AND r.name=ANY(v_roles)
+      AND CASE v_next.approval_level
+        WHEN 'PLATFORM' THEN reviewer_org.organization_type='PLATFORM_AUTHORITY'
+        WHEN 'STATE' THEN reviewer_org.organization_type='regulator'
+        WHEN 'DISTRICT' THEN reviewer_org.organization_type='regulator'
+        WHEN 'LOCAL' THEN CASE
+          WHEN v_app.geography_kind IN ('ULB','WARD','LOCALITY') THEN reviewer_org.organization_type='ulb'
+          WHEN v_app.geography_kind IN ('GRAM_PANCHAYAT','VILLAGE','CLUSTER') THEN reviewer_org.organization_type='regulator'
+          ELSE false
+        END
+        ELSE false
+      END
       AND (v_next.approval_level<>'PLATFORM' OR (
         reviewer_org.organization_type='PLATFORM_AUTHORITY'
         AND jsonb_typeof(r.permissions)='array'
