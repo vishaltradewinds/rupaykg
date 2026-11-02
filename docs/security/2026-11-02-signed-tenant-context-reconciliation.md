@@ -126,3 +126,64 @@ Do not combine them or enable both by default. The safer initial integration pat
 6. Revisit PR #205's proxy only if a measured migration plan proves the explicit-client refactor is impractical; if chosen, it must replace—not duplicate—the first-generation transaction abstraction and must pass the full route/worker matrix.
 
 No route has been modified in this checkpoint. This is an architecture finding and sequencing decision, not a code-completion claim.
+
+
+## Mobile-executable parallel audit batch — 2026-11-02 16:04Z
+
+This batch used GitHub repository/API access only. The authorized Desktop Commander device was checked and remained OFFLINE (last seen 72 hours ago). No local shell, browser, build, PostgreSQL integration, Neon write, Render mutation or deployment was attempted.
+
+### 1. Canonical integration branch CI recheck
+
+- PR #192 head: `c48d3e274acadb22db9968f894278786c1a74d89`.
+- Exact-head GitHub Actions run: `41475438403` / run #4840 — **SUCCESS**.
+- This is a verified CI result for the current PR #192 head, not production acceptance and not proof that the separate optional local PostgreSQL test ran against the authoritative production database.
+- PR #192 remains draft and open. No merge or deployment is authorized by this result.
+
+### 2. Stakeholder dashboard / pilot demonstration source audit
+
+The existing `docs/pilot/STAKEHOLDER_DASHBOARD_ROUTE_MATRIX.md` maps the current frontend/backend surfaces for platform administration, onboarding, ULB, waste/resource operations, evidence, MRV, CPCB/SWM, EPR, statutory applicability, carbon/methodology, registry, settlement, ESG/BRSR, intelligence, field devices and multilingual UX.
+
+Important demo boundaries retained:
+- CPCB/SWM preparation records are not proof of CPCB portal submission or acceptance.
+- EPR internal submission/external reference is not proof of an external portal receipt.
+- Local evidence review is not Guardian/Hedera verification.
+- Registry issuance is blocked absent real independent verification, Guardian VERIFIED, HCS consensus and Mirror Node verification.
+- Internal settlement state is not proof that money moved or that both counterparties authorized it.
+- Carbon calculations/eligibility are not production credit issuance.
+- Synthetic fixtures must be visibly labelled and isolated from production.
+
+The matrix is source-level mapping, not end-to-end role acceptance. The next evidence unit is a role-specific walkthrough backed by persisted server state and cross-tenant/cross-geography negative tests, not another dashboard panel.
+
+### 3. MRV asynchronous execution readiness
+
+The repository contains draft migration `migrations/20261109_durable_mrv_submission_jobs.sql` with an idempotent job ledger, activity/evidence/verification composite bindings, lease fields, provider state, retry states and event history. However:
+- The migration itself states it is not deployed.
+- It deliberately contains no grants, RLS, worker SECURITY DEFINER functions or production role changes.
+- The worker runtime inventory found no dedicated worker/queue-consumer/cron entrypoint or Render worker service.
+- Therefore a durable MRV queue/worker is not yet an operational capability. Do not enqueue real pilot work or claim automated Guardian→Hedera→Mirror processing.
+- Before implementation, reconcile the migration's dependency on the signed geography helper, add exact least-privilege worker role and claim/lease functions, tenant RLS, idempotent provider submission/reconciliation, dead-letter and recovery tests, and a separate worker deployment/runbook. Run it only against disposable PostgreSQL until independently reviewed.
+
+### 4. Parallel work register — mobile-safe vs. machine-dependent
+
+| Workstream | Mobile-safe work completed/available | Machine-dependent gate |
+|---|---|---|
+| Tenant isolation | Compared existing explicit transaction helper with PR #205 proxy model; documented staged decision | Rebase/refactor, route integration, concurrency and PostgreSQL tests |
+| Auth/bootstrap | Reviewed PR #192 source and latest exact-head CI | Production role provisioning, founder-approved two-custodian ceremony, independent review |
+| Stakeholder UI/pilot | Audited existing role/surface map and external-truth labels | Browser role walkthroughs, responsive/accessibility testing, persisted API acceptance |
+| MRV/Guardian/Hedera | Inspected draft durable-job schema and missing worker runtime | Implement worker, provider adapters, real testnet proof, retry/recovery and Mirror verification |
+| Database/RLS | Read-only production baseline and table policy draft already documented | Complete route/table/function matrix; disposable two-tenant policies and migration rehearsal |
+| Field sync/IoT | Source inventory and security requirements documented | Hardware connectivity, device signatures, RS232/weighbridge tests, offline replay under real conditions |
+| Regulatory/EPR | Source-level feature surfaces and evidence boundaries documented | Effective-date/source verification and actual external portal/API receipts |
+| Release/TRL | CI result and current HOLD boundary recorded | Backup/restore, rollback, production SLO/monitoring, pilot acceptance and independent TRL evidence |
+
+### 5. Resume trigger when Desktop Commander returns online
+
+1. Re-check device status and repository branch/head before touching files.
+2. Confirm PR #192 head still matches the recorded SHA; fetch latest before any rebase.
+3. Create an isolated working branch from the current PR #192 head.
+4. Implement one representative, low-risk, single-tenant route using the explicit `withRlsRequestTransaction` callback and one checked-out client for every protected query.
+5. Add route-level positive/negative tests; run typecheck/build and the real disposable-PostgreSQL integration suite.
+6. Only after that evidence passes, expand to the next route cohort. Keep bilateral settlement, platform administration, authentication lifecycle, sync/device and public catalog outside the first slice.
+7. Keep PR #205 and request-context mode disabled until a single transaction architecture is selected and full route/worker semantics are tested.
+
+**Current boundary:** mobile source/documentation audit advanced; no application code was changed in this batch. Production remains HOLD, worker activation OFF, certification OFF, and TRL 9 is not established.
