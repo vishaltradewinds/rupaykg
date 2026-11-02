@@ -87,3 +87,5 @@ The worker currently uses direct SQL in `apps/src/mrv-submission-jobs.ts` and fi
 
 ### Immutable source snapshot revalidation
 A second static audit found that the durable worker rechecked membership, permission, geography and record status but did not compare live observations/evidence/quantity with the immutable enqueue snapshot. Commit `30661ab6dc350f19dcbd44d4034486a428c151fc` now re-reads the source rows and rejects provider-stage authorization when the current source differs from the stored snapshot. The disposable integration test (`f0ffd8523f69602752d5a5e74d818bdd12d939e5`) changes the measurement after enqueue and asserts that authorization fails until the original value is restored. This remains direct SQL today and must move behind the restricted worker function API before release.
+
+The integration assertion was expanded in `3d4879fbaa02c66dcf02f446f39e8900f3c902bf` to mutate and restore an evidence content hash as well as a measurement quantity. Both changes must invalidate worker authorization until the exact enqueue-time source state is restored.
