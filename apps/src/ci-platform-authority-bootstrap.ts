@@ -310,7 +310,7 @@ async function run(): Promise<void> {
     // sibling/out-of-scope geography for the same organization.
     const geographyRoot = (await pool.query<{ id: string }>(
       `insert into public.geography(kind,name,code,source,source_version)
-       values('STATE','CI Authorized State',concat('CI-STATE-',left($1,8)),'CI synthetic fixture','1')
+       values('STATE_UT','CI Authorized State',concat('CI-STATE-',left($1,8)),'CI synthetic fixture','1')
        returning id`,
       [suffix],
     )).rows[0]?.id;
@@ -324,7 +324,7 @@ async function run(): Promise<void> {
     assert.ok(geographyChild);
     const geographyOutside = (await pool.query<{ id: string }>(
       `insert into public.geography(kind,name,code,source,source_version)
-       values('STATE','CI Out-of-Scope State',concat('CI-OUT-',left($1,8)),'CI synthetic fixture','1')
+       values('STATE_UT','CI Out-of-Scope State',concat('CI-OUT-',left($1,8)),'CI synthetic fixture','1')
        returning id`,
       [suffix],
     )).rows[0]?.id;
