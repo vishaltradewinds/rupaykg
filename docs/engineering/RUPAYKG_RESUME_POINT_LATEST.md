@@ -141,3 +141,14 @@ No production DDL/DML, migration, role/grant/RLS changes, deployments, worker/sc
 - Root cause traced to `migrations/030_authorization_role_defaults.sql`. Added a replacement definition to `migrations/20261102_platform_authority_bootstrap.sql` that retains locked `search_path = pg_catalog, pg_temp` and explicitly reads `public.roles`; it preserves the original verified-membership rule requiring a nonempty JSON-array permission set. This fixes resolution without adding `public` to a SECURITY DEFINER search path.
 - Repair commit: `bfae544fa5afa3472bb1c07c4d8a95678d3a0aea`. Exact-head CI was not yet visible at checkpoint update time; verify before treating repair as validated.
 - Production remains HOLD; no production mutation or secret/role provisioning performed.
+
+
+## 2026-11-02 — CI #4454 follow-up
+
+- Latest auth bootstrap head at CI start: `456d3c07454890ffbda135de45b5a2c553102746`.
+- CI run #4454: https://github.com/vishaltradewinds/rupaykg/actions/runs/41396879799
+- Passed migration validation, disposable PostgreSQL migration, restricted verifier-owner provisioning, synthetic two-custodian bootstrap acceptance, typecheck, build, and browser smoke.
+- Full API test suite failed because legacy integration fixtures directly insert ordinary `VERIFIED` memberships without a completed stakeholder application. Root error: `STAKEHOLDER_MEMBERSHIP_REQUIRES_APPROVED_APPLICATION`. 117 passed, 1 failed, 20 cancelled in the API workspace; inspect cancellations after fixture setup is repaired.
+- Detailed analysis: `docs/engineering/PR192_CI_4454_FAILURE_ANALYSIS.md`.
+- Next: add shared test fixture helper that uses pending application → all hierarchical approval steps → approved application via the synthetic CI super-admin → verified membership. Migrate every integration fixture, do not weaken production guards.
+- PR #192 remains draft; production remains HOLD; no production DB operation occurred. Container build skipped because tests failed.
