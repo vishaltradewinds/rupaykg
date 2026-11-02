@@ -238,3 +238,19 @@ Each authorised participant sees the information needed for their part of the ch
 - CI run #4542 (run ID `41417677832`) was queued when this checkpoint was written; do not report it as passed until GitHub reports a successful conclusion.
 - No production deployment or database change was performed.
 - Visual parity is not yet certified: inspect the CI browser screenshot and perform viewport/browser checks after the run. This batch is Gate 1 source implementation, not the complete authenticated-shell and workflow redesign.
+
+
+### Additional Gate 1 work
+
+- Added an actual **Urban / Rural** context selector to the Stakeholders tab.
+- Stakeholder cards now change by operating context and are selectable, with a selected-role explanation panel and account-creation handoff.
+- Added `aria-pressed` state to both context choices and stakeholder cards.
+- Extended black / emerald / muted-white surface styling into authenticated workspace cards, navigation tabs, forms, governance panels, evidence and compliance surfaces.
+- Expanded the static UX validator to check the context selector, selected stakeholder panel and their styling.
+
+### CI evidence update
+
+- CI run #4547 (run ID `41418192634`): typecheck, production build, UX parity validator, synthetic two-custodian bootstrap, browser smoke and full test suite all reported success; production container build was still running at the time of this update.
+- CI run #4548 (run ID `41418306339`) includes the final shared-workspace surface CSS change; typecheck, production build, UX parity validator and synthetic bootstrap had passed, while browser smoke / remaining tests were still running.
+- The first four failed runs were caused by a test assertion expecting the phrase `Record what happened` while the implemented card copy correctly says `Capture what happened`; the validator was corrected to match the rendered content. The corrected validator passed in #4547 and #4548.
+- Do not treat a run as fully green until its final workflow conclusion is SUCCESS.
