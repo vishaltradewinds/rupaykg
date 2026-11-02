@@ -71,9 +71,14 @@ jobs:
           grep -q 'RupayKG' /tmp/rupaykg-web-dom.html
           test -s /tmp/rupaykg-web-smoke.png
           echo "Chrome DOM exit: $dom_status; screenshot exit: $shot_status"
+      - name: Prepare isolated migration concurrency database
+        env:
+          CI_ADMIN_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+        run: node scripts/create-ci-migration-race-database.mjs
       - name: Run tests including disposable PostgreSQL acceptance
         env:
           RUPAYKG_RUN_DB_INTEGRATION_TESTS: "1"
+          RUPAYKG_MIGRATION_RACE_TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/rupaykg_migration_race_test
         run: npm test
       - name: Build production container
         run: docker build --pull --tag rupaykg:ci .
