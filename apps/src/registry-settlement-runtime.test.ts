@@ -10,6 +10,8 @@ const port = Number(process.env.RUNTIME_REGISTRY_PORT ?? 43129);
 const baseUrl = `http://127.0.0.1:${port}`;
 const pool = databaseUrl ? new Pool({ connectionString: databaseUrl, max: 4 }) : null;
 const suffix = randomUUID();
+const requestContextSecret = randomBytes(32).toString("hex");
+const requestContextKeyId = `registry_${randomBytes(6).toString("hex")}`;
 let server: ChildProcess | null = null;
 let ownerOrgId = "";
 let destinationOrgId = "";
@@ -60,13 +62,14 @@ before(async () => {
     evidenceId = (await c.query<{ id: string }>("insert into evidence(activity_id,measurement_id,evidence_type,status,captured_at,content_hash) values($1,$2,'WEIGHBRIDGE_RECORD','VERIFIED',now(),$3) returning id", [activityId, measurementId, `runtime-${suffix}`])).rows[0]!.id;
     verificationId = (await c.query<{ id: string }>("insert into verifications(evidence_id,activity_id,verifier_identity_id,decision,scope,rationale) values($1,$2,$3,'APPROVED','runtime','independent runtime acceptance') returning id", [evidenceId, activityId, verifierId])).rows[0]!.id;
     await c.query("insert into mrv_provenance_events(activity_id,verification_id,evidence_id,guardian_policy_id,guardian_execution_id,guardian_status,hcs_status,hcs_topic_id,hcs_transaction_id,hcs_consensus_timestamp,integrity_hash,metadata,mirror_node_verified_at) values($1,$2,$3,'runtime-policy','runtime-guardian','VERIFIED','CONSENSUS_CONFIRMED','0.0.123',$4,$5,$6,'{\"testFixture\":true}',clock_timestamp())", [activityId, verificationId, evidenceId, `runtime-tx-${suffix}`, `runtime-consensus-${suffix}`, `runtime-hash-${suffix}`]);
+    await c.query("insert into app_security.request_context_keys(key_id,secret,active) values($1,$2,true)", [requestContextKeyId, requestContextSecret]);
     await c.query("commit");
   } catch (error) { await c.query("rollback"); throw error; } finally { c.release(); }
-  server = spawn(process.execPath, ["dist/src/server.js"], { cwd: process.cwd(), env: { ...process.env, PORT: String(port), HOST: "127.0.0.1", DATABASE_URL: databaseUrl, AUTH_DATABASE_URL: databaseUrl, DATABASE_SSL: "false" }, stdio: ["ignore", "ignore", "pipe"] });
+  server = spawn(process.execPath, ["dist/src/server.js"], { cwd: process.cwd(), env: { ...process.env, PORT: String(port), HOST: "127.0.0.1", DATABASE_URL: databaseUrl, AUTH_DATABASE_URL: databaseUrl, DATABASE_SSL: "false", RUPAYKG_REQUEST_CONTEXT_SECRET: requestContextSecret, RUPAYKG_REQUEST_CONTEXT_KEY_ID: requestContextKeyId }, stdio: ["ignore", "ignore", "pipe"] });
   await waitFor(`${baseUrl}/health`, 200);
 });
 
-after(async () => { server?.kill("SIGTERM"); if (pool) await pool.end(); });
+after(async () => { server?.kill("SIGTERM"); if (pool) { await pool.query("delete from app_security.request_context_keys where key_id=$1", [requestContextKeyId]); await pool.end(); } });
 
 describe("registry and settlement runtime acceptance", () => {
   it("requires explicit registry permission before issuance", async () => {
