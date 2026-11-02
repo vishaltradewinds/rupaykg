@@ -449,3 +449,9 @@ HCS transaction-ID helper coverage added: `apps/src/hedera-anchor.test.ts` now v
 - Added `createMrvSubmissionIdempotencyKey` and `enqueueMrvSubmissionJob` to `apps/src/mrv-submission-jobs.ts` (`c7e0e254b83ac03b30770b49f29f1175eaa13943`). The helper derives a deterministic key from activity/verification/evidence/policy/methodology, canonicalizes the payload snapshot before hashing, inserts the immutable request, returns the same job for an identical replay, and fails closed if the same key is reused with a changed payload.
 - Added PostgreSQL integration coverage for same-request replay and changed-payload rejection (`745e279128a8f0e722e3ee7e0e4389c41759b7de`). Exact-head CI pending.
 - This is the enqueue primitive only. The authenticated HTTP enqueue endpoint remains disabled/not wired, and no worker process is enabled. Both require the tenant-bound runtime context, dedicated non-BYPASSRLS worker identity, forced RLS policies for the jobs/events tables, and the independent security gates.
+
+
+### Mirror Node typecheck correction — 2026-11-02 14:32 UTC
+
+- First reconciliation-helper CI failed TypeScript strict-null checks because the transaction list could be empty despite the fallback expression. Added an explicit no-match `PENDING` guard in commit `ef3ee145447bbfa0536a39c5ba92c0fd9e45b4fe`. No tests were weakened. Exact-head CI pending.
+- Guardian pre-submit idempotency helper and integration test passed exact-head CI (`41462022847` SUCCESS); Guardian and HCS provider key persistence is now CI-backed.
