@@ -178,3 +178,21 @@ export async function releaseMrvSubmissionJobLease(
   );
   return result.rowCount === 1;
 }
+
+/** Extend a live lease while a bounded provider operation is still running. */
+export async function renewMrvSubmissionJobLease(
+  client: PoolClient,
+  jobId: string,
+  leaseToken: string,
+  leaseSeconds = 60,
+): Promise<Date | null> {
+  const duration = boundedLeaseSeconds(leaseSeconds);
+  const result = await client.query<{ lease_expires_at: Date }>(
+    `update mrv_submission_jobs
+        set lease_expires_at = now() + make_interval(secs => $3)
+      where id = $1 and lease_token = $2::uuid and lease_expires_at > now()
+      returning lease_expires_at`,
+    [jobId, leaseToken, duration],
+  );
+  return result.rows[0]?.lease_expires_at ?? null;
+}
