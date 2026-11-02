@@ -144,11 +144,13 @@ test("durable MRV job ledger enforces immutable request, legal transitions and a
       "select count(*)::text count from mrv_submission_job_events where job_id=$1", [jobId],
     )).rows[0]!.count);
     assert.equal(await releaseMrvSubmissionJobLease(client, jobId, recoveredLease.leaseToken, new Date(Date.now() + 1000), "TEST_RELEASE", "release recovery lease for subsequent fixture checks"), true);
-    const releaseEvent = await client.query<{count:string; event_detail: {lastErrorCode?:string}}>(
-      "select count(*)::text count, (select event_detail from mrv_submission_job_events where job_id=$1 order by id desc limit 1) event_detail from mrv_submission_job_events where job_id=$1", [jobId],
+    const releaseEvent = await client.query<{count:string; event_detail: {lastErrorCode?:string}; actor_kind:string; actor_reference:string}>(
+      "select count(*)::text count, (select event_detail from mrv_submission_job_events where job_id=$1 order by id desc limit 1) event_detail, (select actor_kind from mrv_submission_job_events where job_id=$1 order by id desc limit 1) actor_kind, (select actor_reference from mrv_submission_job_events where job_id=$1 order by id desc limit 1) actor_reference from mrv_submission_job_events where job_id=$1", [jobId],
     );
     assert.equal(Number(releaseEvent.rows[0]!.count), eventsBeforeRelease + 1, "lease release retry metadata must append an audit event");
     assert.equal(releaseEvent.rows[0]!.event_detail.lastErrorCode, "TEST_RELEASE");
+    assert.equal(releaseEvent.rows[0]!.actor_kind, "WORKER", "worker-originated changes must be attributed to the worker");
+    assert.equal(releaseEvent.rows[0]!.actor_reference, "recovery-worker-" + suffix, "worker audit events must identify the lease owner");
 
     const enqueueInput = {
       activityId, verificationId, evidenceId, organizationId, geographyId, requestedByIdentityId: identityId,
