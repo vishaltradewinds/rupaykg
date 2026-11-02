@@ -71,3 +71,30 @@ The policy matrix is still a draft. The application runtime role, table owner, m
 - Complete route/worker-to-table/function coverage matrix.
 - Two-tenant negative test results.
 - Independent DBA/security approval and rollback rehearsal.
+
+
+## Source-level integration review — follow-on
+
+The PR #205 patch was inspected against the current PR #192 snapshots. The following are verified patch-level deltas and review requirements:
+
+- `apps/src/auth.ts`: PR #205 adds a request-keyed `WeakMap`, an exported cache setter, and a cache read at the start of `authenticate`. The current PR #192 implementation has no such cache. Preserve PR #192's current authentication resolver and membership logic; port only the cache behavior after proving the Fastify request lifecycle cannot retain stale auth across reuse (Fastify request objects are per request) and that null results are intentionally cached.
+- `apps/src/production-config.ts`: PR #205 adds a strict `disabled | enforced` parser with default `disabled`. This is a small additive delta, but the returned type and tests must be updated together.
+- `apps/src/production-config.test.ts`: PR #205 adds default-disabled, explicit-enforced and invalid-mode tests. Preserve the current PR #192 production contract assertions.
+- `apps/src/production-server.ts`: PR #205 forwards the mode, secret and key ID to the server process. Preserve the existing validated TLS/auth configuration and ensure no secret is logged or exposed to the browser.
+- `.env.example`: PR #205 adds a documented `RUPAYKG_REQUEST_CONTEXT_MODE=disabled` default. Keep this disabled until all security gates pass.
+- `apps/src/server.ts`: This is the highest-risk overlap. PR #205 wraps the domain pool, introduces a raw pool, conditionally registers Fastify hooks, adds production database-verifier/role probes, and changes pool shutdown to close the raw pool. These hunks must be reconciled against the latest PR #192 pool/auth startup and production assertions; do not copy the old whole file.
+- PR #205-only files `tenant-db-context.ts` and `tenant-db-context.test.ts` are additive candidates, but they are not production assurance by themselves.
+
+### Newly identified behavior requiring explicit negative tests
+
+1. `registerRequestTenantContext` skips non-`/api/v1/` paths, `/api/v1/operations/sync`, and requests without a bearer header. Inventory these bypasses and prove each is either intentionally public/authenticated elsewhere or covered by a dedicated worker/device principal.
+2. Bilateral settlement paths are explicitly rejected with `RLS_BILATERAL_CONTEXT_UNSUPPORTED`. This is fail-closed and should remain so until the two-party policy is independently approved.
+3. Authentication is resolved before the request transaction is opened. Verify that this is safe with the separate auth runtime role and that the context-aware pool does not accidentally scope the auth resolver query.
+4. The context-aware pool redirects `pool.query` and `pool.connect` only while AsyncLocalStorage has a request context. Prove propagation from the Fastify callback-style `preHandler` completion into every asynchronous route handler and downstream callback.
+5. Route-local `BEGIN/COMMIT/ROLLBACK` are translated into savepoints. Add tests for nested failure recovery, unsupported transaction commands, open savepoints at response time, release-with-error, and connection loss.
+6. `onSend` commits for status codes below 400 and rolls back for 400+. Test response serialization failure, streaming/aborted responses, thrown errors and hooks ordering; never allow a response to claim success if transaction finalization fails.
+7. The startup verifier check inspects RLS presence and SECURITY DEFINER ownership/grants. It must be validated against actual disposable Neon runtime roles and schema, not merely mocked catalog rows.
+
+### Integration decision
+
+The patch is not ready to be transplanted as a mechanical six-file overlay. Proceed only with a conflict-aware merge/rebase in a normal Git environment, then run the exact-head CI and disposable-PostgreSQL test suite. No production setting change is authorized by this review.
