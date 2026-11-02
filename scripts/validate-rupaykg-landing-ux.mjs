@@ -9,6 +9,12 @@ const html = read("../apps/web/index.html");
 
 assert.match(app, /className="landing-nav"/, "public landing navigation must exist");
 assert.match(app, /aria-pressed=\{landingTab===key\}/, "landing navigation must expose selected state");
+assert.match(app, /Choose your operating context/, "urban/rural context selector must exist");
+assert.match(app, /aria-pressed=\{operatingContext==="urban"\}/, "urban context must expose selected state");
+assert.match(app, /aria-pressed=\{operatingContext==="rural"\}/, "rural context must expose selected state");
+assert.match(app, /selectedStakeholderCard/, "selected stakeholder outcome panel must exist");
+assert.match(styles, /\.context-switch/, "urban/rural selector styling missing");
+assert.match(styles, /\.stakeholder-selection/, "selected stakeholder outcome styling missing");
 for (const label of ["Overview", "Stakeholders", "How it works", "Compliance"]) {
   assert.ok(app.includes(label), `missing landing navigation label: ${label}`);
 }
