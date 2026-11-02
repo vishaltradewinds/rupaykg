@@ -19,7 +19,7 @@ test("application-owned public routines have a pinned safe search_path", { skip:
            where p.proconfig is not null
              and not ('search_path=pg_catalog, public, pg_temp'=any(p.proconfig))
          )::text as wrong_path,
-         has_schema_privilege('public','public','CREATE') as public_create
+         (SELECT EXISTS (SELECT 1 FROM pg_catalog.aclexplode(coalesce(ns.nspacl,pg_catalog.acldefault('n',ns.nspowner))) a WHERE a.grantee=0 AND a.privilege_type='CREATE') FROM pg_catalog.pg_namespace ns WHERE ns.nspname='public') as public_create
        from pg_catalog.pg_proc p
        join pg_catalog.pg_namespace n on n.oid=p.pronamespace
        where n.nspname='public'
