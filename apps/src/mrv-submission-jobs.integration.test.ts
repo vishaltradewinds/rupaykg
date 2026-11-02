@@ -73,8 +73,8 @@ test("durable MRV job ledger enforces immutable request, legal transitions and a
              select id,evidence_type,content_uri,content_hash,captured_at,status,metadata
                from evidence where activity_id=$3
            ) e),'[]'::jsonb),
-           'quantity',(select value from measurements where activity_id=$3 order by measured_at desc limit 1),
-           'unit',(select unit from measurements where activity_id=$3 order by measured_at desc limit 1)
+           'quantity',(select value from measurements where activity_id=$3 order by measured_at desc, id desc limit 1),
+           'unit',(select unit from measurements where activity_id=$3 order by measured_at desc, id desc limit 1)
          ))
        returning id`,
       [idempotencyKey,payloadHash,activityId,verificationId,evidenceId,organizationId,geographyId,identityId],
@@ -211,7 +211,7 @@ test("durable MRV job ledger enforces immutable request, legal transitions and a
       [activityId],
     );
     const enqueueQuantity = await client.query<{ value: string | null; unit: string | null }>(
-      "select value::text value, unit from measurements where activity_id=$1 order by measured_at desc limit 1",
+      "select value::text value, unit from measurements where activity_id=$1 order by measured_at desc, id desc limit 1",
       [activityId],
     );
     const enqueueInput = {
