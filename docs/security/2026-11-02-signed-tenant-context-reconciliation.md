@@ -317,3 +317,46 @@ Before any real pilot job can be enqueued:
 The explicit `withRlsRequestTransaction` helper is a safe narrow foundation, but the current sync and registry modules still use direct pool reads and their own transaction wrappers. A future route migration must ensure authentication, permission lookup, membership, geography and all protected reads/writes occur on the same checked-out transaction client. Do not wrap an existing `BEGIN/COMMIT` handler around a second transaction helper or leave permission checks on the pool. Bilateral registry transfers and settlements need their own multi-party policy rather than a single-org token.
 
 **Decision:** MRV job migration remains draft/not deployed; worker activation and live pilot enqueue are prohibited. Production remains HOLD, certification OFF, and TRL 3 system-level.
+
+
+## Follow-on registry, settlement and field-sync source audit — 2026-11-02 16:16Z
+
+Static review of `apps/src/registry-routes.ts` and `apps/src/sync-routes.ts` at PR #192 code head `c48d3e274acadb22db9968f894278786c1a74d89`. Findings below are review blockers to validate with targeted tests and schema constraints; they are not proof of an exploit in a live production system.
+
+### P0 — settlement confirmation can overstate external financial truth
+
+The settlement `/settle` handler checks state and permissions, writes `EXECUTING`, appends an event, then immediately writes `RECONCILING`. No payment rail/provider call or authoritative transaction status is visible in this route. The `/confirm` handler accepts caller-supplied `confirmationReference` and `reconciliationReference`, checks uniqueness and state, then writes `SETTLED` and `external_confirmed_at=now()`. It does not itself validate those references with a bank/payment provider or authoritative reconciliation source.
+
+**Required disposition:** keep this workflow labelled internal `RECONCILIATION_PENDING` (or equivalent) until a verified external settlement adapter proves funds movement. A user-supplied reference is evidence metadata, not proof. Only a provider-authenticated, idempotent callback/reconciliation record with amount, currency, payer, payee, credential, timestamp and immutable provider transaction identity may authorize the financial `SETTLED` state. Add forged-reference, duplicate-callback, callback-signature, wrong-amount, wrong-party, timeout-after-success and replay tests. Until then, stakeholder demos must explicitly state that no money movement is performed or verified by this route.
+
+### P0 — current bilateral authorization is not independent two-party consent
+
+Settlement creation requires the same authenticated `AuthContext` to act for both payer and payee and requires that same context to have `settlement:authorize` for both parties. Later authorization and settlement operations likewise check both parties using the same caller. This is not a two-custodian/two-counterparty approval protocol: it can reject legitimate separate counterparties and does not prove that payer and payee independently approved the same immutable terms.
+
+**Required disposition:** define separate payer-side and payee-side authorization records bound to a canonical settlement terms hash (credential, payer, payee, amount, currency, fees, expiry and external reference). Require distinct verified actors with current party-specific permissions; prevent one identity from satisfying both sides unless a separately approved legal/business rule explicitly permits it. Any change to terms invalidates both approvals. Add cross-party impersonation, one-party-only, same-actor, revoked-membership and concurrent-modification tests.
+
+### P1 — credential transfer recipient acceptance and registry owner derivation
+
+The transfer route checks source/current owner authority and confirms the destination organization has some VERIFIED membership, then changes credential status and appends a transfer event. The route does not show destination-party consent or a verified receiving actor accepting the exact transfer. Current-owner derivation is based on the latest ISSUED/TRANSFERRED event, so the DB constraints and ordering semantics must guarantee deterministic ownership under concurrent transfers and legacy rows.
+
+**Required disposition:** require a destination acceptance record by a distinct authorized recipient, bind both parties to the transfer terms hash, enforce one current owner at the database boundary, use deterministic event sequence/locking, and reject stale or concurrent transfers. Verify no organization can infer ownership from a caller-provided UUID.
+
+### P1 — field-device authorization must be transaction-bound and tenant-bound
+
+The sync module has a helper `requireFieldDevice(pool, auth, deviceId)` that performs a direct pool query, while other sync operations use checked-out clients and local transaction wrappers. This query must not be left outside the same transaction/tenant context as device ownership, cursor, envelope and operation writes once RLS is enabled. Device lookup must bind both verified device identity and owning organization, and every envelope must be checked against the device's current organization, current identity, key/certificate status, replay cursor and revocation state at apply time.
+
+The activity/resource-flow sync code also checks geography through `organization_has_geography_scope`; the current no-verified-roots=true compatibility behavior means these route checks do not by themselves establish a verified national/ward authorization scope. Treat missing geography as denied for regulated writes until a separately approved national authority capability is verified.
+
+### Registry issuance gate — preserve the strong fail-closed controls
+
+The credential issuance route does check completed activity, issuer ownership, VERIFIED evidence, APPROVED verification distinct from activity actor, and persisted Guardian VERIFIED + Hedera consensus + Mirror Node proof before issuing. This is a valuable fail-closed control. It must remain bound to the exact evidence/payload/provenance digest and be covered by cross-tenant, revoked-membership, stale-owner and concurrent-issuance tests after RLS integration. The route-level control does not replace database-enforced isolation.
+
+### Stakeholder demonstration truth labels
+
+- `CREATED`, `AUTHORIZED`, `EXECUTING`, `RECONCILING` are internal workflow states, not proof of funds transfer.
+- Do not display `SETTLED` as a real financial outcome until the authoritative provider reconciliation gate is implemented and verified.
+- Credential `TRANSFERRED` must not imply recipient acceptance until the recipient authorization record exists.
+- Registry issuance may only be described as real when its Guardian/Hedera/Mirror evidence is genuine, traceable and independently reviewable.
+- All demo screenshots/exports must show whether data is synthetic, internal, externally acknowledged or independently verified.
+
+**Decision:** settlement and transfer flows remain non-production/engineering-only pending the above; do not claim two-party settlement or actual money movement. Production remains HOLD and certification OFF.
