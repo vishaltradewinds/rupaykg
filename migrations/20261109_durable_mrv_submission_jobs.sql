@@ -179,7 +179,8 @@ for each row execute function record_mrv_submission_job_event();
 drop trigger if exists mrv_submission_job_event_update on mrv_submission_jobs;
 create trigger mrv_submission_job_event_update
 after update of status, attempt_count, guardian_status, guardian_execution_id,
-  hedera_status, hedera_transaction_id, hedera_consensus_timestamp, mirror_verified_at
+  hedera_status, hedera_transaction_id, hedera_consensus_timestamp, mirror_verified_at,
+  next_attempt_at, last_error_code, last_error_detail
 on mrv_submission_jobs
 for each row execute function record_mrv_submission_job_event();
 
