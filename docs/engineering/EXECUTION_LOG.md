@@ -121,3 +121,8 @@ A subsequent PR-head refresh found PR #193 and #194 each advanced after their ea
 - Reaffirmed PR #198 as controlling 67-table RLS design. Trigger audit adds concrete database-side paths, while all 67 table route/worker/trigger call graphs remain not fully closed. No source code change made to production trigger functions.
 - Created immutable report `docs/engineering/checkpoints/2026-11-02-production-trigger-tenant-boundary-audit.md`.
 - Fresh exact-head CI: PR #193 run 41500716186 SUCCESS; PR #194 run 41500726098 SUCCESS; PR #204 run 41500882768 IN PROGRESS. PR #213 remains draft; exact-head CI passed earlier. No merge or production changes.
+
+
+## PR #213 remediation coverage — 2026-11-02
+
+Follow-up review of candidate exact head `cd96ec5...` found migrations `20261105` (search_path hardening), `20261106`/ `20261107` (same-organization and VERIFIED subject organization for approved verification), and `20261108` (geography fail-closed). These are candidate-only, not production. Remaining review: `enforce_verification_independence()` remains a separate global-membership trigger; determine whether pending decisions may use cross-org verifier, and align if not. New scoped helper does not itself check identity VERIFIED/suspended status; confirm another guard guarantees it. Fail-closed geography requires governed explicit verified scope onboarding, including explicit national scope; no blanket backfill. PR #213 is DRAFT against integration branch `shakti/auth-bootstrap-application-integration-2026-11-01`, not main; do not retarget/merge automatically. Candidate branch contains migration identifiers 20261103–20261110; confirm sequence/release gating. Exact-head CI 41499847180 SUCCESS; no production changes.
