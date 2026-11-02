@@ -325,3 +325,9 @@ The submit route holds a session advisory lock using a checked-out client but is
 Exact-head CI run `41457065615` passed 155/156 tests. The only failure was the evidence-vault integration fixture inserting a geography-bound activity before seeding its VERIFIED organization geography scope. The fail-closed trigger correctly rejected it. Fixture ordering was corrected in `apps/src/evidence-vault.integration.test.ts` to create the verified scope first. Exact-head CI run `41457553245` was queued after subsequent code fixes; acceptance is pending.
 
 Production remains unchanged. This audit is a source-level draft, not an independent security certification.
+
+
+### MRV submit connection consistency correction — follow-up
+The MRV submit route previously acquired a session advisory lock on a checked-out `PoolClient` but performed the authorization reads, payload reads, replay lookup and final provenance write through `pool.query` on potentially different connections. It now keeps the lock and all those submit-path database operations on the same checked-out client. The authorization and geography helper functions accept that client as well. This removes the lock/query connection split and keeps the serialized submit path on one DB session.
+
+**Important limitation:** this is not yet a transaction-local signed RLS context. Queries remain autocommit while the session advisory lock is held, including across Guardian/Hedera network calls. A durable claim/outbox → provider execution → actor-bound finalize design remains the preferred next architecture to avoid long-running transactions while maintaining crash recovery, lease expiry, idempotency and authorization revalidation. Do not claim tenant RLS coverage from this change.
