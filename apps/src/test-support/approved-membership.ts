@@ -27,6 +27,17 @@ export async function approveTestMembership(
   );
   const applicationId = application.rows[0]!.id;
 
+  // Seed the same pending records that production onboarding activates.
+  // The fixture then applies the terminal state transitions performed by
+  // auth_private.review_stakeholder_application after its approval chain ends.
+  await client.query(
+    "insert into public.organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'PENDING')",
+    [identityId, organizationId, roleId],
+  );
+  await client.query(
+    "insert into public.organization_geography_scopes(organization_id,geography_id,status) values($1,$2,'PENDING') on conflict do nothing",
+    [organizationId, geographyId],
+  );
   await client.query(
     "update public.stakeholder_application_approvals set status='APPROVED',approved_by_identity_id=$2,reviewed_at=clock_timestamp(),review_note='Synthetic CI integration fixture' where application_id=$1",
     [applicationId, reviewerId],
@@ -34,5 +45,17 @@ export async function approveTestMembership(
   await client.query(
     "update public.stakeholder_applications set status='APPROVED',reviewed_by_identity_id=$2,reviewed_at=clock_timestamp() where id=$1",
     [applicationId, reviewerId],
+  );
+  await client.query(
+    "update public.organizations set status='VERIFIED' where id=$1",
+    [organizationId],
+  );
+  await client.query(
+    "update public.organization_memberships set status='VERIFIED' where identity_id=$1 and organization_id=$2 and role_id=$3 and status='PENDING'",
+    [identityId, organizationId, roleId],
+  );
+  await client.query(
+    "update public.organization_geography_scopes set status='VERIFIED' where organization_id=$1 and geography_id=$2 and status='PENDING'",
+    [organizationId, geographyId],
   );
 }
