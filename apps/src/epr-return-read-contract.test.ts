@@ -36,6 +36,13 @@ test("accepts only the dedicated read-only EPR runtime contract", async () => {
   await assert.doesNotReject(assertEprReturnReadDatabaseContract(fakePool(validRow)));
 });
 
+test("fails closed when the verifier owner or pinned search_path is invalid", async () => {
+  await assert.rejects(
+    assertEprReturnReadDatabaseContract(fakePool({ ...validRow, verifier_valid: false })),
+    /EPR_RETURN_READ_DATABASE_CONTRACT_INVALID/,
+  );
+});
+
 test("fails closed when RLS is not forced", async () => {
   await assert.rejects(
     assertEprReturnReadDatabaseContract(fakePool({ ...validRow, returns_force_rls: false })),
