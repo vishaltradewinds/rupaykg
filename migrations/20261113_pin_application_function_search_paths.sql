@@ -43,6 +43,3 @@ BEGIN
   END LOOP;
 END;
 $migration$;
-
-COMMENT ON SCHEMA public IS
-  'Application objects live here. PUBLIC has USAGE but no CREATE; runtime roles must not receive CREATE.';
