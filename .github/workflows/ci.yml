@@ -52,6 +52,20 @@ jobs:
           GRANT rupaykg_bootstrap_owner TO postgres WITH ADMIN OPTION;
           SQL
       - run: npm run migrate -w @rupaykg/api
+      - name: Verify bootstrap owner temporary privileges are revoked
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          DO $
+          BEGIN
+            IF pg_catalog.pg_has_role('postgres', 'rupaykg_bootstrap_owner', 'MEMBER') THEN
+              RAISE EXCEPTION 'bootstrap owner membership must be revoked after migration';
+            END IF;
+            IF pg_catalog.has_database_privilege('rupaykg_bootstrap_owner', current_database(), 'CREATE') THEN
+              RAISE EXCEPTION 'bootstrap owner database CREATE must be revoked after migration';
+            END IF;
+          END
+          $;
+          SQL
       - name: Provision synthetic bootstrap custodians in disposable CI PostgreSQL
         run: |
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
