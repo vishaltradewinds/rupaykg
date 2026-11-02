@@ -38,8 +38,9 @@ test("Mirror Node verification confirms exact provenance after JSON omits undefi
     const wirePayload: AnchorPayload = { ...payload, methodologyCode: undefined, quantity: undefined, unit: undefined, metadata: undefined };
     const hash = integrityHash(wirePayload);
     const anchored = JSON.parse(JSON.stringify({ ...wirePayload, integrityHash: hash, anchoredAt: "2026-10-10T00:00:00.000Z" })) as Record<string, unknown>;
-    globalThis.fetch = async (input) => {
+    globalThis.fetch = async (input, init) => {
       assert.match(String(input), /testnet\.mirrornode\.hedera\.com/);
+      assert.ok(init?.signal, "Mirror Node message verification must use a bounded request signal");
       return new Response(JSON.stringify({ messages: [{
         consensus_timestamp: timestamp,
         sequence_number: 7,
