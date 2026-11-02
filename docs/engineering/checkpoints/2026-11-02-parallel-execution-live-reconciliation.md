@@ -404,3 +404,9 @@ HCS transaction-ID helper coverage added: `apps/src/hedera-anchor.test.ts` now v
 - Added `persistMrvHcsTransactionId` to `apps/src/mrv-submission-jobs.ts` (commits `878975b2299d6d30e12bafbca2077db93bfc23ef`, parameter correction `4a71fd41e126c2f4f65ce396102e635a0f00c990`). It compare-and-sets against the live lease token, moves `GUARDIAN_VERIFIED` to `HCS_SUBMITTED`, persists network/topic/transaction ID before the network call, and refuses to replace an already persisted ID or change its network/topic. The lease remains active while the provider call executes outside the DB transaction.
 - Extended PostgreSQL integration test to walk REQUESTED → CLAIMED → GUARDIAN_SUBMITTED → GUARDIAN_VERIFIED → HCS_SUBMITTED → HCS_CONSENSUS_CONFIRMED, assert transaction ID survives, and reject a conflicting retry ID. Test commit `70755746f29e9dd3886972b655ce27be052332d3`; exact-head CI pending.
 - This remains a tested orchestration primitive, not a live worker. Worker role/RLS policy, API enqueue path, actual Guardian/HCS calls, Mirror Node polling, and final provenance transaction still need wiring and test coverage.
+
+
+### CI correction record — HCS ID helper test
+
+- CI run `41460930848` failed only the newly added transaction-ID regex assertion: SDK output was a valid `0.0.1234@seconds.nanos` string, while the test regex was over-escaped. No production code failure was reported by that test run; the run is still a failed overall gate.
+- Corrected the assertion in commit `dc4d0f4db809ba13eb090bf6ea9369d077ed122e`. Exact-head CI pending. Do not count the helper test as passed until that new run completes.
