@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { approveTestMembership } from "./test-support/approved-membership.js";
-import { advanceMrvSubmissionJob, claimNextMrvSubmissionJob, persistMrvHcsTransactionId, renewMrvSubmissionJobLease } from "./mrv-submission-jobs.js";
+import { advanceMrvSubmissionJob, claimNextMrvSubmissionJob, persistMrvGuardianIdempotencyKey, persistMrvHcsTransactionId, renewMrvSubmissionJobLease } from "./mrv-submission-jobs.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 const ssl = process.env.DATABASE_SSL === "false" ? undefined : { rejectUnauthorized: false };
@@ -96,17 +96,19 @@ test("durable MRV job ledger enforces immutable request, legal transitions and a
     assert.ok(renewedUntil instanceof Date, "the active owner must be able to renew its lease");
     const staleAdvance = await advanceMrvSubmissionJob(client, jobId, randomUUID(), "GUARDIAN_SUBMITTED");
     assert.equal(staleAdvance, null, "a non-owner lease token must not advance a job");
-    const advanced = await advanceMrvSubmissionJob(client, jobId, lease.leaseToken, "GUARDIAN_SUBMITTED", { guardian_idempotency_key: "d".repeat(64) });
-    assert.equal(advanced?.status, "GUARDIAN_SUBMITTED");
-    assert.equal(advanced?.lease_token, null, "stage advancement must release the lease atomically");
-
-    const guardianLease = await claimNextMrvSubmissionJob(client, "guardian-worker-" + suffix, 60);
-    assert.ok(guardianLease, "the persisted Guardian stage must be resumable");
-    const guardianVerified = await advanceMrvSubmissionJob(client, jobId, guardianLease.leaseToken, "GUARDIAN_VERIFIED", {
+    const guardianKey = "d".repeat(64);
+    const persistedGuardian = await persistMrvGuardianIdempotencyKey(client, jobId, lease.leaseToken, guardianKey);
+    assert.equal(persistedGuardian?.status, "GUARDIAN_SUBMITTED");
+    assert.equal(persistedGuardian?.guardian_idempotency_key, guardianKey);
+    assert.equal(persistedGuardian?.lease_token, lease.leaseToken, "persisting Guardian idempotency must retain the active fence");
+    const conflictingGuardianKey = await persistMrvGuardianIdempotencyKey(client, jobId, lease.leaseToken, "e".repeat(64));
+    assert.equal(conflictingGuardianKey, null, "a retry must not replace the persisted Guardian idempotency key");
+    const guardianVerified = await advanceMrvSubmissionJob(client, jobId, lease.leaseToken, "GUARDIAN_VERIFIED", {
       guardian_execution_id: "guardian-exec-" + suffix,
       guardian_status: "VERIFIED",
     });
     assert.equal(guardianVerified?.status, "GUARDIAN_VERIFIED");
+    assert.equal(guardianVerified?.lease_token, null, "stage advancement must release the lease atomically");
 
     const hcsLease = await claimNextMrvSubmissionJob(client, "hedera-worker-" + suffix, 60);
     assert.ok(hcsLease, "the verified Guardian stage must be resumable");
