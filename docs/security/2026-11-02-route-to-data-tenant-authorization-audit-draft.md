@@ -248,3 +248,19 @@ Reviewed exact branch source files: `migrations/006_registry_settlement_guardrai
 - Need tests for credential transfer ownership sequence, issuer/recipient visibility, verifier cross-tenant denial, settlement payer/payee isolation, duplicate external reference, state-transition matrix, and concurrent transfer/settlement.
 - Need full per-function EXECUTE ACL and trigger/function owner inventory; migration source scan cannot prove live production ACLs.
 - No RLS policies generated, no production schema/role/grant/data changed. Keep PR #192 draft and release HOLD.
+
+
+## 2026-11-02 forward-only verifier-scope migration added — validation pending
+
+Added `migrations/20261106_verifier_same_org_geography_scope.sql` on the PR #192 branch (commit `c15726971ffb57b96c25573bd5f0f6107b6011ad`). The migration:
+
+- Adds `public.has_verification_permission_for_activity(identity_id, activity_id)` with restricted `search_path = pg_catalog, pg_temp` and schema-qualified relations.
+- Requires a VERIFIED membership in the exact activity organization, a verifier-capable role/permission, a non-null activity geography, at least one VERIFIED organization geography root, and activity geography inside the verified scope.
+- Replaces the approval trigger to resolve the activity from `NEW.activity_id` or `NEW.evidence_id`, reject mismatched activity/evidence pairs, require the scoped helper, and retain the self-verification prohibition.
+- Leaves the older global helper in place for compatibility; the approval trigger no longer calls it.
+
+**Important validation status:** this migration has been committed but has NOT yet been run against a disposable PostgreSQL instance, and no regression suite has been added or run. Column/table assumptions (including `activities.actor_identity_id`, `activities.geography_id`, `evidence.activity_id`, `organization_memberships.status`, and `roles.permissions` JSONB) must be confirmed against the complete migration chain and a disposable schema before merge. In particular, confirm whether `verifications.decision` is the exact approval state value and whether all verifier roles/permissions are represented by the predicates above. Migration validator and full CI are still required.
+
+Required test matrix remains: same-org/in-scope success; unrelated-org denial; out-of-scope geography denial; NULL geography denial; no verified geography root denial; evidence-only activity resolution; activity/evidence mismatch denial; self-verification denial; non-APPROVED workflow compatibility; restricted search-path/runtime-role bypass denial.
+
+No production migration was applied. PR #192 remains draft and production release remains HOLD. TRL 9 is not established.
