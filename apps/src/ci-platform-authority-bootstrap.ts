@@ -493,7 +493,7 @@ async function run(): Promise<void> {
     // membership provisioning.
     const scopedReviewerRole = await pool.query<{ id: string }>(
       `insert into public.roles(organization_id,name,permissions)
-       values($1,'state_admin','[]'::jsonb) returning id`,
+       values($1,'regulator','[]'::jsonb) returning id`,
       [applicantOrganizationId],
     );
     const scopedReviewerRoleId = scopedReviewerRole.rows[0]?.id;
@@ -502,7 +502,7 @@ async function run(): Promise<void> {
       `insert into public.stakeholder_applications(
          identity_id,organization_id,role_id,requested_role_key,requested_organization_type,
          geography_id,status,applicant_note
-       ) values($1,$2,$3,'state_admin','processing_facility',null,'PENDING','CI reviewer membership lifecycle fixture')
+       ) values($1,$2,$3,'regulator','processing_facility',null,'PENDING','CI reviewer membership lifecycle fixture')
        returning id`,
       [identityC, applicantOrganizationId, scopedReviewerRoleId],
     );
@@ -556,7 +556,7 @@ async function run(): Promise<void> {
         row => row.id === inScopeApplicationId || row.id === outOfScopeApplicationId,
       ),
       false,
-      "a verified processing facility must not gain state-review authority from a state_admin role label",
+      "a verified processing facility must not gain state-review authority from a regulator role label",
     );
 
     // The fixture then represents a verified regulator organization with the
