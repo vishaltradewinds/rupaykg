@@ -166,6 +166,30 @@ test("verifier authorization is active-identity and subject-tenant scoped for ev
     )).rows[0]!.id;
     const selfEvidence = await insertEvidence(selfActivity, `self-${suffix}`);
     await expectRejected("self_verification", () => insertVerification(selfActivity, selfEvidence, verifierA), /self-approve|cannot verify its own/i);
+
+    // Stakeholder approval is a separate reserved-authority boundary.
+    // An ordinary verified tenant member cannot approve another organization's intake.
+    const stakeholderApplication = (await client.query<{ id: string }>(
+      "insert into public.stakeholder_applications(identity_id,organization_id,role_id,requested_role_key,requested_organization_type,geography_id,status) values($1,$2,$3,'verifier','COLLECTOR',$4,'PENDING') returning id",
+      [actorId, orgA, roleA, geoA],
+    )).rows[0]!.id;
+    await expectRejected(
+      "non_platform_authority_stakeholder_approval",
+      () => client.query(
+        "update public.stakeholder_applications set status='APPROVED',reviewed_by_identity_id=$2,reviewed_at=clock_timestamp() where id=$1",
+        [stakeholderApplication, verifierA],
+      ),
+      /active verified PLATFORM_AUTHORITY member with admin:users permission/i,
+    );
+
+    const platformReviewer = await client.query<{ id: string }>(
+      "select i.id from public.identities i join public.organization_memberships om on om.identity_id=i.id and om.status='VERIFIED' join public.roles r on r.id=om.role_id and r.organization_id=om.organization_id join public.organizations o on o.id=om.organization_id and o.status='VERIFIED' and o.organization_type='PLATFORM_AUTHORITY' where i.status='VERIFIED' and i.suspended_at is null and r.name in ('platform_admin','super_admin') and jsonb_typeof(r.permissions)='array' and r.permissions @> '[\\"admin:users\\"]'::jsonb order by i.created_at limit 1",
+    );
+    assert.ok(platformReviewer.rows[0]?.id, "CI must provision a verified, active platform authority with admin:users");
+    await client.query(
+      "update public.stakeholder_applications set status='APPROVED',reviewed_by_identity_id=$2,reviewed_at=clock_timestamp() where id=$1",
+      [stakeholderApplication, platformReviewer.rows[0]!.id],
+    );
   } finally {
     await client.query("ROLLBACK").catch(() => undefined);
     client.release();
