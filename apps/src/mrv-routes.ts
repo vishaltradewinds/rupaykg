@@ -72,8 +72,11 @@ async function isAcceptanceFixture(pool: Pool | PoolClient, activityId: string):
 export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null): Promise<void> {
   app.get("/api/v1/mrv/status", async (request, reply) => {
     const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
-    const organizationId = auth.activeOrganizationId || auth.memberships[0]?.organization_id;
-    if (!organizationId || !await requirePermission(pool, auth, organizationId, ["guardian:read"])) return reply.code(403).send({ error: "Guardian read permission required", code: "MRV_PERMISSION_REQUIRED" });
+    const organizationId = auth.activeOrganizationId;
+    const config = requestContextConfig();
+    if (!organizationId || !config) return reply.code(503).send({ error: "Signed tenant context is not configured", code: "TENANT_CONTEXT_UNAVAILABLE", syntheticData: false });
+    const authorized = await withRlsRequestTransaction(pool, auth, config, async (client) => requirePermission(client, auth, organizationId, ["guardian:read"]));
+    if (!authorized) return reply.code(403).send({ error: "Guardian read permission required", code: "MRV_PERMISSION_REQUIRED" });
     const guardian = guardianStatus();
     const hedera = hederaStatus();
     return {
