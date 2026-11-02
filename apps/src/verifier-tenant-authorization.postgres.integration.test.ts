@@ -89,6 +89,18 @@ test("verifier authorization is active-identity and subject-tenant scoped for ev
     )).rows[0]!.id;
     const evidenceA = await insertEvidence(activityA, suffix);
 
+    // Negative: a verifier-like role label without an explicit permission is not authority.
+    const labelOnlyRole = (await client.query<{ id: string }>(
+      "insert into public.roles(organization_id,name,permissions) values($1,'auditor','[]'::jsonb) returning id",
+      [orgA],
+    )).rows[0]!.id;
+    const labelOnlyVerifier = (await client.query<{ id: string }>(
+      "insert into public.identities(external_subject,display_name,status) values($1,'Role Label Only Verifier','VERIFIED') returning id",
+      [`verifier-label-only-${suffix}`],
+    )).rows[0]!.id;
+    await approveTestMembership(client, labelOnlyVerifier, orgA, labelOnlyRole, geoA, "auditor", "collector");
+    await expectRejected("role_label_without_permission", () => insertVerification(activityA, evidenceA, labelOnlyVerifier), /verifier must be active|verification requires verified authority/i);
+
     // Positive: a verified, active verifier in the subject tenant and geography.
     await insertVerification(activityA, evidenceA, verifierA);
 
