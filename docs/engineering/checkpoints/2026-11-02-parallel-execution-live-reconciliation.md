@@ -634,3 +634,11 @@ The first regression-test CI run (`41464821546`) failed as expected against the 
 - Added negative PostgreSQL integration cases for mismatched organization, mismatched geography, unverified evidence and rejected verification.
 - First migration CI `41468069376` and subsequent test-head run `41468147382` exposed a malformed dollar-quote delimiter (`as $` instead of a paired delimiter) in the new trigger. Corrected to named delimiter `$mrv_job_binding$` in commit `f1f42f216c7e55dbc080c4d4c282dc5d10716e9c`.
 - Exact-head CI `41468346945` is queued. No pass claimed; do not treat these new constraints as validated until this run completes. Audit draft updated with source-backed ownership implications. Production remains untouched.
+
+
+### 15:08 UTC — MRV cross-record binding migration blocked by SQL body quoting
+
+- Exact-head migration CI `41468346945` failed in the migration step. The first attempt used an incomplete dollar delimiter; the next used a named delimiter that the repository migration runner did not parse as expected. A further correction to a single-quoted PL/pgSQL body was committed as `41b531d438b28e1d49a07c09a1c13e6c7e7e7e9a`, but inspection shows the closing quote was not correctly emitted (`end;` is followed by a stray `$;`).
+- The automated repository write safety gate blocked the subsequent attempt to repair that migration file. Do not treat the cross-record binding migration as valid or tested. Stop further writes to this migration until the SQL is safely repaired through an approved editing path and validated by migration CI.
+- The earlier MRV lease/state-machine code head `2edd251ef404d88b00e4c7f994d89e42ae38e04b` remains the last fully green exact-head baseline (CI `41467045999` SUCCESS). New commits after that head are not validated by that success.
+- The DDL reconciliation document is useful as source analysis, but its statement that new job-binding tests were added is not evidence of passing behavior. The binding changes remain unaccepted and production must not consume this migration.
