@@ -85,6 +85,8 @@ export function readProductionConfig(env: NodeJS.ProcessEnv = process.env): Prod
   if (env.RUPAYKG_AUTH_MODE !== "real") throw new Error("PRODUCTION_CONFIG_INVALID: RUPAYKG_AUTH_MODE must be real");
   if (env.RUPAYKG_AUTH_RESOLVER_MODE !== "security_definer") throw new Error("PRODUCTION_CONFIG_INVALID: RUPAYKG_AUTH_RESOLVER_MODE must be security_definer");
   if (env.VITE_RUPAYKG_SESSION_TOKEN?.trim()) throw new Error("PRODUCTION_CONFIG_INVALID: VITE_RUPAYKG_SESSION_TOKEN must not be provided in production");
+  if (env.VITE_RUPAYKG_REQUEST_CONTEXT_SECRET?.trim()) throw new Error("PRODUCTION_CONFIG_INVALID: VITE_RUPAYKG_REQUEST_CONTEXT_SECRET must never be client-bundled");
+  if (env.VITE_RUPAYKG_REQUEST_CONTEXT_KEY_ID?.trim()) throw new Error("PRODUCTION_CONFIG_INVALID: VITE_RUPAYKG_REQUEST_CONTEXT_KEY_ID must not be provided to the browser");
   const databaseUrl = productionDatabaseUrl(required(env, "DATABASE_URL"));
   const authDatabaseUrl = productionAuthDatabaseUrl(required(env, "AUTH_DATABASE_URL"), databaseUrl);
   const requestContextSecretValue = requestContextSecret(required(env, "RUPAYKG_REQUEST_CONTEXT_SECRET"));
