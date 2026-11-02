@@ -227,3 +227,14 @@ button:disabled{opacity:.55;cursor:not-allowed}
 .notice{border-color:rgba(245,190,90,.28);background:rgba(245,190,90,.08);color:#f2d69a}
 .notice.error,.error{border-color:rgba(248,113,113,.35);background:rgba(127,29,29,.14);color:#fecaca}
 .notice.success{border-color:rgba(52,211,153,.32);background:rgba(16,185,129,.08);color:#a7f3d0}
+
+
+/* Account access is opt-in; never obscure the public landing page on initial load. */
+.auth-drawer{z-index:12;border-color:rgba(52,211,153,.28);background:rgba(8,11,9,.98);box-shadow:0 24px 80px rgba(0,0,0,.55)}
+.auth-drawer-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.auth-drawer-head>div{display:flex;gap:7px}
+.auth-drawer-head>div button{min-height:38px;padding:8px 12px;border:1px solid var(--rk-border)!important;border-radius:9px;background:transparent;color:var(--rk-muted)}
+.auth-drawer-head>div button.active{border-color:rgba(52,211,153,.4)!important;background:rgba(16,185,129,.12);color:var(--rk-primary-strong)}
+.auth-drawer .auth-close{width:38px;min-height:38px;padding:0;border:1px solid var(--rk-border)!important;border-radius:50%;background:rgba(255,255,255,.04)!important;color:var(--rk-text)!important;font-size:20px;line-height:1}
+.auth-drawer input{background:#050705;border-color:var(--rk-border);color:var(--rk-text)}
+.auth-drawer>button:not(.auth-close){min-height:44px;background:var(--rk-primary)!important;border:1px solid var(--rk-primary)!important;color:var(--rk-primary-contrast)!important;font-weight:750}
