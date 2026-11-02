@@ -187,3 +187,14 @@ No production DDL/DML, migration, role/grant/RLS changes, deployments, worker/sc
 - The run validates its triggering code commit. Current PR head at checkpoint review is `90bdfa2e06b0539765bab5995c83caf6a3f9d223` (resume/checkpoint documentation update); verify a current-head workflow run before treating the latest documentation commit as fully CI-covered.
 - PR #192 remains OPEN and DRAFT. Do not merge or deploy: broad API runtime compatibility, onboarding create/withdraw and hierarchical approval conversion, tenant/RLS coverage, independent security review, founder-approved initial authority identities/trust ceremony, and DBA authorization remain outstanding.
 - Production Neon and live Render remain unchanged. No production DDL/DML, migration, role/grant/RLS change, bootstrap ceremony, secret provisioning, deployment, worker activation, or certification occurred. Production HOLD; TRL 9 not established.
+
+
+## 2026-11-02 — Onboarding create/withdraw route isolation
+- Replaced direct application-server INSERT/UPDATE transactions in `apps/src/auth-routes.ts` with calls to the existing `auth_private.create_stakeholder_application` and `auth_private.withdraw_stakeholder_application` SECURITY DEFINER functions through the dedicated auth runtime pool.
+- Both mutation functions receive only the SHA-256 hash of the bearer token; database functions independently resolve the live, unrevoked, unexpired session and derive the identity. Caller-supplied identity IDs are not accepted.
+- Removed the application-side role-permission construction and direct table writes. Geography validation, pending-duplicate protection, atomic creation, evidence persistence, and identity-scoped withdrawal now execute inside the database function transaction.
+- Added Fastify route tests asserting hashed-token forwarding, expected database-function invocation, response behavior, and absence of direct DML in route queries.
+- Commits: route change `2f52b09924bd64f539acdace2f4ae98c1d7ee774`; route tests `d0b605dce2eb49a11d1b6256d9dce5e0330e24d7`; regex assertion correction `66647ddb484e229d6b6735ac803ec1c4c995950a`.
+- CI #4487 and #4488 passed all gates including container build. CI #4489 (route code commit) and #4490 (route test commit) were still running at checkpoint write; do not infer a pass until final workflow conclusions are confirmed.
+- Remaining onboarding security scope: `apps/src/onboarding-hierarchy-routes.ts` still performs review-queue reads, legal verification writes, hierarchical approval/rejection writes, and authority checks through application-issued SQL. These need identity-bound database functions with least-privilege grants, explicit transaction/concurrency controls, and negative authorization tests. This work is NOT complete.
+- PR #192 remains OPEN/DRAFT. No merge, production migration, role/grant/RLS change, live database mutation, deployment, or certification. Production HOLD; TRL 9 not established.
