@@ -524,89 +524,12 @@ begin
     return new;
   end if;
 
-  -- The only exception is the atomic, two-custodian initial authority ceremony.
-  -- GUC alone is not trusted: invoker must be the NOLOGIN bootstrap function owner
-  -- and the locked singleton state/claim rows must prove both independent claims.
+  -- Initial platform authority is the only exception to ordinary application
+  -- approval. A caller-controlled GUC is insufficient: the effective function
+  -- owner, locked singleton state and two independent custodian claims must agree.
   if TG_OP = 'INSERT' and current_user = 'rupaykg_bootstrap_owner' then
     bootstrap_ceremony_text := current_setting('app.platform_authority_bootstrap_ceremony', true);
-    if bootstrap_ceremony_text ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}
-  if TG_OP = 'UPDATE' then
-    if old.status = 'VERIFIED' then
-      return new;
-    end if;
-    target_membership_id := old.id;
-    previous_revoked_at := old.last_revoked_at;
-  end if;
-
-  select r.name into role_name
-    from public.roles r
-   where r.id = new.role_id and r.organization_id = new.organization_id;
-
-  -- Reserved platform roles retain the original two-person database guard.
-  if role_name in ('super_admin','platform_admin') then
-    access_request_type := case when TG_OP = 'INSERT' then 'GRANT_RESERVED_ROLE' else 'RESTORE_RESERVED_ROLE' end;
-
-    select exists (
-      select 1
-        from public.platform_access_change_requests q
-        join public.identities requester on requester.id=q.requester_identity_id
-        join public.identities approver on approver.id=q.approver_identity_id
-       where q.request_type=access_request_type
-         and q.target_identity_id=new.identity_id
-         and q.organization_id=new.organization_id
-         and q.role_id=new.role_id
-         and (
-           (TG_OP = 'INSERT' and q.membership_id is null)
-           or
-           (TG_OP = 'UPDATE' and q.membership_id=target_membership_id
-             and previous_revoked_at is not null
-             and q.created_at > previous_revoked_at)
-         )
-         and q.status='APPROVED'
-         and q.applied_at is not null
-         and q.requester_identity_id <> q.approver_identity_id
-         and q.requester_identity_id <> q.target_identity_id
-         and q.approver_identity_id <> q.target_identity_id
-         and requester.status='VERIFIED' and requester.suspended_at is null
-         and approver.status='VERIFIED' and approver.suspended_at is null
-         and exists (
-           select 1 from public.organization_memberships om
-           join public.roles r on r.id=om.role_id
-           join public.organizations o on o.id=om.organization_id and o.status='VERIFIED'
-           where om.identity_id=q.requester_identity_id and om.organization_id=q.organization_id and om.status='VERIFIED'
-             and r.name='super_admin'
-             and exists (select 1 from jsonb_array_elements_text(r.permissions) as permission(value) where permission.value='admin:users')
-         )
-         and exists (
-           select 1 from public.organization_memberships om
-           join public.roles r on r.id=om.role_id
-           join public.organizations o on o.id=om.organization_id and o.status='VERIFIED'
-           where om.identity_id=q.approver_identity_id and om.organization_id=q.organization_id and om.status='VERIFIED'
-             and r.name='super_admin'
-             and exists (select 1 from jsonb_array_elements_text(r.permissions) as permission(value) where permission.value='admin:users')
-         )
-    ) into dual_control_approved;
-
-    if not dual_control_approved then
-      raise exception 'RESERVED_ROLE_REQUIRES_DUAL_CONTROL';
-    end if;
-    return new;
-  end if;
-
-  -- Ordinary memberships require a completed stakeholder application on both
-  -- INSERT and status promotion. Test fixtures must use the governed lifecycle.
-  if not exists (
-    select 1 from public.stakeholder_applications sa
-     where sa.identity_id=new.identity_id
-       and sa.organization_id=new.organization_id
-       and sa.role_id=new.role_id
-       and sa.status='APPROVED'
-  ) then
-    raise exception 'STAKEHOLDER_MEMBERSHIP_REQUIRES_APPROVED_APPLICATION';
-  end if;
-  return new;
-end;
-$$; then
+    if bootstrap_ceremony_text ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then
       bootstrap_ceremony_id := bootstrap_ceremony_text::uuid;
       if exists (
         select 1
@@ -713,8 +636,7 @@ $$; then
     return new;
   end if;
 
-  -- Ordinary memberships require a completed stakeholder application on both
-  -- INSERT and status promotion. Test fixtures must use the governed lifecycle.
+  -- Ordinary memberships require a completed stakeholder application.
   if not exists (
     select 1 from public.stakeholder_applications sa
      where sa.identity_id=new.identity_id
