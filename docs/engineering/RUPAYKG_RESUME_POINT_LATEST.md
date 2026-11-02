@@ -84,3 +84,12 @@ Governing standard: Shakti Standards
 10. Keep production Neon read-only, deployment HOLD, worker OFF and certification OFF.
 
 Render inspection remains blocked pending explicit workspace confirmation. Do not select a workspace autonomously.
+
+
+## Latest live assurance refresh — 2026-11-02 18:30 UTC
+
+The immutable current checkpoint is `checkpoints/2026-11-02-parallel-execution-live-assurance-refresh.md`. It supersedes the older PR/CI snapshots below where they conflict. Current exact-head evidence: PR #192 CI 41498504841 SUCCESS on `51b673d`; PR #213 CI 41499847180 SUCCESS on `cd96ec5`; PR #203 CI 41454665904 SUCCESS on `18b551c`; BWG PR #193 CI 41332732530 SUCCESS and PR #194 CI 41332741365 SUCCESS. PR #213 remains draft and requires target-base metadata reconciliation plus independent security/DBA review.
+
+Fresh read-only production Neon snapshot: 67 public base tables, 0 RLS, 0 FORCE RLS, 70 public non-internal triggers, 92 migration rows/latest `20261021_evidence_artifact_vault.sql`; only app-named `rupaykg` role observed (LOGIN, BYPASSRLS, CREATEDB, CREATEROLE, INHERIT, REPLICATION); no dedicated `rupaykg_app_runtime`. There are 78 `rupaykg`-owned public functions, all PUBLIC EXECUTE, none SECURITY DEFINER; 37 additional PUBLIC-EXECUTE public functions are owned by `cloud_admin` and must be classified separately. Neon public connections remain unblocked, IP allowlist empty, primary branch unprotected. Keep production READ-ONLY/HOLD, worker OFF, certification OFF, TRL 9 NOT ESTABLISHED.
+
+Next: classify 78 app-owned functions; map 70 triggers; complete 67-table and endpoint-to-data tenant matrix; implement worker system-actor RLS contract on disposable PostgreSQL; reconcile PR #192 auth-pool/main ancestry and PR #213 target-base metadata; finish BWG independent review and UI accessibility/localization/field validation.
