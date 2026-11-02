@@ -242,3 +242,34 @@ For the pilot presentation:
 Before any further UI feature work, complete a source-level action matrix for the demo-critical slice (onboarding → ULB → resource flow → evidence → MRV → CPCB/EPR → registry gates). For every action record actor, permission, organization/geography scope, API route, SQL objects, transaction boundary, audit event, external dependency, positive test and negative test. The existing 90-route inventory is a baseline, not a completed matrix.
 
 **Decision:** keep TRL 3 system-level, production HOLD, certification OFF and pilot status PRE-VALIDATION until the evidence above is independently demonstrated.
+
+
+## Follow-on mobile audit — authorization inventory and policy design blockers (2026-11-02 16:16Z)
+
+### Source evidence reviewed
+
+Read the full route-to-data authorization draft on the current PR #192 code head, the hierarchical reviewer authority hardening record, the TRL assessment and the stakeholder dashboard route matrix. This is source/document review only; no database was queried or changed in this batch.
+
+### Additional findings that must govern RLS design
+
+1. **67-table ownership register is provisional, not policy-ready.** The existing route audit enumerates all 67 live production base-table names and proposed ownership classes, but many rows explicitly remain pending FK/column verification. Do not translate the CSV directly into RLS policies. First extract exact live columns, FK graph, unique constraints, triggers, views, functions, JSON ownership references and all query call sites for each table.
+2. **At least four data families require multi-party or non-tenant scope models:** `chain_of_custody_links`, `epr_credit_transfers`, `credentials/registry_events`, and `resource_flows`; settlements are also bilateral. A generic single `organization_id` policy will either leak records or block legitimate counterparties. Model party membership and permitted action per lifecycle state, with database-enforced source/destination ownership and immutable transfer events.
+3. **Unverified geography default is a policy blocker.** The existing geography helper returns true when an organization has no verified geography roots. For a regulated national platform, this compatibility behavior must not be interpreted as unrestricted national authority. Proposed safe default: onboarding/read-only access until a verified and approved geography scope exists; allow only explicitly enumerated national/platform authorities through separate capability grants. This is a design recommendation, not an implemented production rule.
+4. **Identity and platform governance are not ordinary tenant tables.** Identity sessions/password material, platform audit chain heads, access-change requests, schema migrations and reserved roles require narrow auth/governance/migration paths. Tenant runtime should have no direct read/write privileges to secret identity material, migration metadata or platform-only audit chain state.
+5. **The route audit confirms transaction consistency risk can exist even before RLS.** EPR return submit and external-reference handlers were previously found to check `epr:manage` via the pool while mutating through a checked-out client. A targeted PR code fix binds both checks to the same PoolClient. This fix is not a substitute for tenant context/RLS and its exact historical CI run must not be misrepresented as current-head verification.
+6. **Hierarchical reviewer hardening is a separate positive laboratory control.** Organization type is now bound to authority tier; a verified ordinary processor cannot gain regulator access by spoofing a role label. Restricted search_path geography helper references were schema-qualified. The exact historical code head's CI passed, but production still has no RLS and no live authorities.
+
+### Required policy design deliverables before any RLS migration
+
+- A canonical schema manifest generated from the authoritative production schema (tables, columns, PKs, FKs, indexes, constraints, triggers, views, routines, owners and grants), reviewed against the latest migration head.
+- A per-table access matrix with principal class, read/create/update/delete, ownership path, geography rule, append-only rule, cross-party exception, service-worker access and explicit deny cases.
+- A per-routine manifest for every SECURITY DEFINER function: owner, fixed search_path, schema qualification, EXECUTE grants, caller/actor derivation, dynamic SQL review, and transaction assumptions.
+- A cross-table integrity suite proving child rows cannot reference another tenant's parent even when the caller knows a valid foreign UUID.
+- A dedicated multi-party policy design for transfers, resource flows, credentials, registry events and settlements; do not weaken single-tenant rules to make these work.
+- A documented no-verified-geography state and explicit onboarding-only behavior.
+- A disposable PostgreSQL acceptance matrix using exact restricted runtime roles (NOBYPASSRLS, not owner, no inherited function-owner privileges), at least two tenants and disjoint geographies, plus worker/device and bilateral counterparties.
+- A separate backup/restore and rollback rehearsal, independent DBA/security review, and signed release approval before production migration.
+
+### Current decision
+
+No RLS migration is ready for production. Do not enable RLS with generic policies, do not grant the existing broad `rupaykg` owner to runtime, and do not assume a signed transaction-local context alone provides data isolation. Production remains HOLD; TRL 3 system-level; certification OFF.
