@@ -11,6 +11,8 @@ const valid = {
   RUPAYKG_ALLOWED_ORIGINS: "https://app.rupaykg.example",
   RUPAYKG_AUTH_MODE: "real",
   RUPAYKG_AUTH_RESOLVER_MODE: "security_definer",
+  RUPAYKG_REQUEST_CONTEXT_SECRET: "production-test-request-context-secret-material",
+  RUPAYKG_REQUEST_CONTEXT_KEY_ID: "v1",
 } as const;
 
 describe("production configuration", () => {
@@ -21,12 +23,26 @@ describe("production configuration", () => {
       databaseUrl: valid.DATABASE_URL,
       authDatabaseUrl: valid.AUTH_DATABASE_URL,
       authResolverMode: "security_definer",
+      requestContextSecret: valid.RUPAYKG_REQUEST_CONTEXT_SECRET,
+      requestContextKeyId: valid.RUPAYKG_REQUEST_CONTEXT_KEY_ID,
       databaseSsl: "require",
       databaseCaCert: valid.DATABASE_CA_CERT,
       allowedOrigins: ["https://app.rupaykg.example"],
       authMode: "real",
       syntheticData: false,
     });
+  });
+
+  it("requires a sufficiently strong signed request-context secret", () => {
+    assert.throws(() => readProductionConfig({ ...valid, RUPAYKG_REQUEST_CONTEXT_SECRET: "short" }), /RUPAYKG_REQUEST_CONTEXT_SECRET must be at least 32 bytes/);
+  });
+
+  it("requires a valid request-context key identifier", () => {
+    assert.throws(() => readProductionConfig({ ...valid, RUPAYKG_REQUEST_CONTEXT_KEY_ID: "INVALID KEY ID" }), /RUPAYKG_REQUEST_CONTEXT_KEY_ID is invalid/);
+  });
+
+  it("fails closed when request-context signing material is absent", () => {
+    assert.throws(() => readProductionConfig({ ...valid, RUPAYKG_REQUEST_CONTEXT_SECRET: "" }), /RUPAYKG_REQUEST_CONTEXT_SECRET is required/);
   });
 
   it("fails closed without real authentication", () => {
