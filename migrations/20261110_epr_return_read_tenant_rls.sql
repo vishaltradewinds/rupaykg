@@ -79,8 +79,16 @@ $preflight$;
 
 REVOKE ALL ON TABLE public.epr_returns FROM PUBLIC, rupaykg_app_runtime;
 REVOKE ALL ON TABLE public.epr_schemes FROM PUBLIC, rupaykg_app_runtime;
-GRANT USAGE ON SCHEMA public, app_security TO rupaykg_app_runtime;
+GRANT USAGE ON SCHEMA public TO rupaykg_app_runtime;
+
+-- The signed verifier schema/function are owned by the dedicated NOLOGIN role.
+-- The migration principal must have the temporary DBA-approved membership
+-- established for migration 20261101; the application role never receives it.
+SET LOCAL ROLE rupaykg_security_definer;
+GRANT USAGE ON SCHEMA app_security TO rupaykg_app_runtime;
 GRANT EXECUTE ON FUNCTION app_security.current_request_context_claims() TO rupaykg_app_runtime;
+RESET ROLE;
+
 GRANT SELECT ON TABLE public.epr_returns, public.epr_schemes TO rupaykg_app_runtime;
 
 ALTER TABLE public.epr_returns ENABLE ROW LEVEL SECURITY;
