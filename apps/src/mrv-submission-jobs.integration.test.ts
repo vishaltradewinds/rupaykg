@@ -62,7 +62,20 @@ test("durable MRV job ledger enforces immutable request, legal transitions and a
       `insert into mrv_submission_jobs(
          idempotency_key,payload_hash,activity_id,verification_id,evidence_id,organization_id,
          geography_id,requested_by_identity_id,guardian_policy_id,payload_snapshot
-       ) values($1,$2,$3,$4,$5,$6,$7,$8,'test-policy','{"schema":"rupaykg:mrv:v1"}'::jsonb)
+       ) values($1,$2,$3,$4,$5,$6,$7,$8,'test-policy',
+         jsonb_build_object(
+           'schema','rupaykg:mrv:v1',
+           'observations',coalesce((select jsonb_agg(to_jsonb(o) order by o.observed_at,o.id) from (
+             select id,parameter_code,observed_value,unit,method,instrument_id,observed_at,uncertainty,quality_status,metadata
+               from mrv_observations where activity_id=$3
+           ) o),'[]'::jsonb),
+           'evidence',coalesce((select jsonb_agg(to_jsonb(e) order by e.captured_at,e.id) from (
+             select id,evidence_type,content_uri,content_hash,captured_at,status,metadata
+               from evidence where activity_id=$3
+           ) e),'[]'::jsonb),
+           'quantity',(select value from measurements where activity_id=$3 order by measured_at desc limit 1),
+           'unit',(select unit from measurements where activity_id=$3 order by measured_at desc limit 1)
+         ))
        returning id`,
       [idempotencyKey,payloadHash,activityId,verificationId,evidenceId,organizationId,geographyId,identityId],
     )).rows[0]!.id;
