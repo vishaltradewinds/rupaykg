@@ -115,3 +115,27 @@ PR #192 and #203 remain draft. Production Neon remains unchanged. Production cer
 - Commits: migration fix `d1516653229bb043a29762e882ff54a4adfadac6`; regression test `bde761f9a5b3640081ed9383a5b4b5a48feeb211`.
 - CI for exact test commit `bde761f9a5b3640081ed9383a5b4b5a48feeb211` was not yet returned at checkpoint time. Do not treat this fix as validated until that exact head's PostgreSQL acceptance workflow passes.
 - No production migration was applied, no real bootstrap ceremony was run, and no production credentials or roles were provisioned.
+
+
+## Synchronous parallel execution update — 2026-11-02 13:34Z
+
+### Revalidated exact-head CI and PR state
+- PR #192 remains OPEN / DRAFT / unmerged. Current head: `1f15ff2c00257a8f85351a887bedc79d401b045a`. Exact-head workflow run `41453676559`, job `validate`: SUCCESS.
+- Bootstrap expiry regression test commit `bde761f9a5b3640081ed9383a5b4b5a48feeb211`: workflow run `41453639132`, job `validate`: SUCCESS. The test specifically prevents expired submitted custodian claims from satisfying finalization.
+- PR #203 remains OPEN / DRAFT / unmerged. Current head: `3287ea78ccf833947b4c4f5992bc404393344d98`. Exact-head workflow run `41433672603`, job `validate`: SUCCESS. This is the last verified head; do not infer newer UI work or accessibility acceptance from it.
+- Both PRs remain separate: authentication/database controls are not mixed into the UI-only branch.
+
+### Parallel gates still open (not production acceptance)
+1. **Identity / bootstrap:** disposable CI passed; still require complete independent migration/role/grant/search_path review, negative edge-case matrix, DBA review and founder-approved production ceremony. No production bootstrap or migration executed.
+2. **Tenant isolation / RLS:** production catalog baseline remains 0/67 tables with RLS enabled and no FORCE RLS. Continue table ownership/data-scope classification and route/helper/worker-to-SQL reconciliation before designing per-table policies. Do not blanket-enable RLS.
+3. **Verifier geography:** migration logic is a candidate only. Complete disposable PostgreSQL positive/negative matrix (same-org, unrelated org, out-of-scope, NULL geography, missing verified scope, evidence-only resolution, mismatch, self-verification, restricted search_path and runtime bypass) before acceptance.
+4. **Database provenance / migrations:** reconcile production's applied migration history with repository and rehearsal branches using read-only evidence; no branch deletion/reset or production schema mutation.
+5. **Worker / API reliability:** inventory direct pool/query paths, queues, retries, idempotency and background identities; verify tenant context is propagated and cannot be forged or lost across async boundaries.
+6. **MRV / Guardian / Hedera:** policy remains an unpublished build artifact; require real controlled-environment import/execution receipt, HCS transaction/consensus and Mirror Node confirmation tied to activity/evidence/methodology. Synthetic fixtures are not proof.
+7. **Registry / settlement:** define deterministic event ordering, retired terminal state, recipient consent and bilateral payee authorization; add replay/concurrency/negative tests before any live settlement.
+8. **Pilot:** continue isolated synthetic stakeholder walkthrough and API mutation checks. Jabalpur SITE-JBP-01 remains pre-validation; no real pilot acceptance or statutory approval claimed.
+9. **UI / UX:** PR #203 CI is green at its recorded head, but runtime screenshot parity, keyboard/focus, screen-reader, WCAG 2.2 AA, translation completeness, 200% zoom, low-end Android and field usability remain open.
+10. **TRL / assurance:** maintain evidence ledger by requirement and independently verifiable artifact. TRL 9, production certification and national readiness remain NOT ESTABLISHED.
+
+### Synchronization rule
+Workstreams may progress independently only where their dependencies permit. Shared interfaces, database contracts, identity/scope assumptions, evidence IDs and release gates must be reconciled before integration. Any new code head invalidates prior exact-head CI evidence until CI reruns. Keep PRs draft and production read-only until all relevant gates pass and explicit release approval is obtained.
