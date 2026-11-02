@@ -264,3 +264,22 @@ The prior PR #204 documentation validation run `41456297642` completed SUCCESS a
 - Exact code-commit CI run `41456990898` is IN_PROGRESS. At last job inspection: dependency audit, migration validation, restricted owner provisioning, disposable migration application, bootstrap owner teardown and synthetic custodian provisioning passed; typecheck was running; build/bootstrap/browser/PostgreSQL tests/container build were pending.
 - A later documentation-only commit updates the route audit; current PR #192 head is `09d4cd335b4726241cc155884f51ebcc3b3767d7`. CI run `41457065615` was also IN_PROGRESS at last inspection.
 - PR #192 remains draft, open and unmerged. Do not treat queued/in-progress CI as acceptance. Production remains unchanged and the fail-closed migration is not approved for production until the organization geography backfill and rollback gates are satisfied.
+
+## Follow-on CI failure diagnosis and write-boundary hardening
+
+Exact-head CI run `41457065615` completed with 155/156 tests passing. The sole failing test was `evidence vault enforces tenant scope, versioned storage, integrity and independent review` in `apps/src/evidence-vault.integration.test.ts`. PostgreSQL raised `activity geography is outside organization authorization scope` when the fixture inserted the activity before inserting its VERIFIED organization geography scope. This is a test-fixture ordering defect exposed by the new fail-closed trigger/migration, not a reason to weaken the guard.
+
+Correction committed on PR #192:
+- `apps/src/evidence-vault.integration.test.ts` now creates the VERIFIED organization geography scope before inserting the geography-bound activity, matching the real onboarding invariant.
+- Evidence upload now resolves activity ownership/geography and checks `evidence:upload` using the same checked-out transaction client that creates the evidence series, evidence row and artifact version. This closes the preflight-pool-check to write-transaction gap for uploads.
+- Credential issuance now checks `ISSUE_CREDENTIAL` using the same transaction client that locks and creates the credential.
+- Bilateral settlement creation now checks `settlement:authorize` for both payer and payee on the write transaction client. Authorization, execution and confirmation now require the relevant high-risk permission for both parties on that transaction client. Missing bilateral create permission is mapped to HTTP 403 rather than generic 503.
+
+Latest PR #192 code head: `ce51503601555b38cf4b66d6c615cc07422b4e8f`. Exact-head CI run `41457553245` was QUEUED at checkpoint time. The preceding run `41457065615` is FAILED solely on the geography fixture ordering test described above; migration validation, typecheck, build, bootstrap and browser smoke all passed. No production changes.
+
+Remaining source-level critical review:
+- MRV submit retains a session advisory lock on one checked-out client but performs most reads and provenance writes through `pool.query` on other connections. It is not yet a single tenant-context transaction; external Guardian/Hedera calls need a deliberate idempotent outbox/claim/finalize design rather than holding a database transaction across network calls.
+- Registry, evidence and MRV route adoption of signed RLS transaction context remains incomplete. The production database still has 0/67 tables with RLS enabled and the live role is privileged.
+- Registry settlement routes now require bilateral party permissions, but full end-to-end two-party actor-context tests and independent review are still required.
+
+Do not merge or deploy on the basis of a queued CI run. Keep production HOLD; certification OFF; TRL 9 not established.
