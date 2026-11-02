@@ -376,3 +376,32 @@ The insert guard also requires a COMPLETED activity, VERIFIED evidence, APPROVED
 5. Do not deploy this branch migration or create production policies until the complete live-schema reconciliation, role/grant inventory, two-tenant tests, backup/restore and rollback rehearsal are independently reviewed.
 
 No production database, role, grant, migration, data, deployment or external provider was changed in this pass.
+
+
+## 15:24 UTC update — live schema recheck and MRV worker authorization fence
+
+The prior paragraph above is a historical checkpoint and has been superseded where it says the migration is unaccepted because of SQL quoting. Exact-head PR #192 commit `6c13b492016cb7820d2df32243a6790586b75165` completed CI `41470418440` successfully, including migration validation, disposable PostgreSQL execution, binding negative tests, typecheck, build, browser smoke, full test suite and production-container build. This is branch CI only; no production rollout.
+
+A fresh read-only query against the authoritative Neon production branch reconfirmed 67 public base tables, 0 RLS-enabled, 0 FORCE-RLS-enabled, and all 67 owned by login `rupaykg`. The 67-table policy matrix remains a first-pass structural map, not an approved predicate set. The route/data audit must remain open until all route, function, trigger, background worker, device and bilateral call paths are reconciled.
+
+### New fail-closed worker gate added on PR #192
+
+- Added `isMrvSubmissionJobStillAuthorized(client, jobId)` in `apps/src/mrv-submission-jobs.ts`.
+- It re-reads the immutable job binding and requires: activity COMPLETED; organization VERIFIED; requester identity VERIFIED and not suspended; requester membership still VERIFIED in that exact organization; requester role still has `guardian:operate`; evidence still VERIFIED; verification still APPROVED and bound to that same evidence/activity; verifier distinct from activity actor; and organization geography scope still valid.
+- Integration coverage now asserts the check passes for a valid synthetic requester, then fails closed when that requester's membership is moved to PENDING. The fixture explicitly grants `guardian:operate`.
+- This is a reusable pre-provider-stage authorization predicate, not yet wired into a live worker loop. A production worker must call it before Guardian submission, before HCS submission/reconciliation, and before final provenance persistence, using the same non-owner worker connection and current lease.
+- Current exact-head tests are running for commits `76ba515e5afd4312631bb661ef8e6b3ce1aef9cc` and `b690a5ec19ccc6b38c8d8a2ffc77f142b17af8bf`; do not claim these new authorization tests passed until the latest run completes.
+
+### Sequencing constraint confirmed for Hedera
+
+`createHcsTransactionId()` already generates a transaction ID before the provider side effect, and `submitHcsAnchor(payload, persistedTransactionId)` can submit using that exact ID. The worker sequence must therefore be: generate ID → persist ID under current lease → commit → submit with the persisted ID → reconcile that same ID through Mirror Node. Never call Hedera before durable ID persistence.
+
+### Remaining hard gates
+
+1. Wire the authorization predicate into a real durable worker orchestration and test lease expiry between every provider boundary.
+2. Revalidate again before final provenance insert; persist the provenance and job state atomically.
+3. Build authenticated enqueue that derives requester/org from verified request context and requires `guardian:operate`; caller-supplied identity/org IDs must not grant authority.
+4. Finish exact per-table RLS predicates, app/auth/worker/migrator separation and two-tenant tests on disposable PostgreSQL.
+5. Independent security/DBA review, restore/rollback rehearsal and explicit production release approval.
+
+Production remains unchanged: no RLS, grants, roles, migrations, provider writes or deployment were applied.
