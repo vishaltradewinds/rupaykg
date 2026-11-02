@@ -458,3 +458,13 @@ Target verified: Neon project `rupaykg-production-fresh` (`steep-mud-79906940`),
 - No production database changes. The CI workflow uses a disposable PostgreSQL 16 service, runs the migration validator, applies migrations through the normal migration runner, and then runs tests/acceptance; it does not connect to production Neon.
 - CI run `41439829393` was observed in progress; initial job state showed PostgreSQL service initialization in progress and no test steps completed yet. Recheck before claiming any result.
 - PR #192 remains draft. No merge/deploy authorization inferred. Release HOLD; TRL 9 not established.
+
+
+## 2026-11-02 verifier-scope CI failure — fixture reconciliation required
+- Exact migration commit `41b7fd214c82f5f2b1e3e3c7353fd010071ab36f`; CI run `41439829393` completed **FAILURE**.
+- Passed: dependency audit, migration validation, restricted verifier-owner provisioning, full migration apply on disposable PostgreSQL 16, bootstrap privilege teardown, synthetic bootstrap ceremony, typecheck, build and browser smoke.
+- Failed: API PostgreSQL acceptance suite. Summary: 153 tests, 136 passed, 3 failed, 14 cancelled. The two failing suites are `settlement-credential-guard.test.ts` and `settlement-reconciliation.test.ts`; both setup hooks failed while creating APPROVED verification rows with `verification requires verified authority in the subject organization and geography`. The downstream 14 cancellations are consequences of those setup failures, not independent test findings.
+- Root cause is fixture incompatibility with the newly strengthened verifier rule: settlement test fixtures do not establish all required verified authority facts for the subject activity (verified subject organization, same-org VERIFIED verifier membership with accepted verifier capability, and verified geography root/scope). Do NOT weaken the production guard to make tests pass.
+- Next action: locate the actual source paths for both fixtures; reuse the canonical approved onboarding/geography setup helper or add explicit verified organization + geography root/scope + independent verifier membership. Ensure verifier is not activity actor. Add a focused positive test for a valid in-scope verifier and negative tests for unverified org, unverified/missing geography root, cross-org membership, out-of-scope geography and self-verification. Then rerun complete CI and inspect exact-head result.
+- Container build was skipped because the test step failed. No full CI pass.
+- No production DB/schema/role/grant/secret changes. PR #192 remains draft; release HOLD; TRL 9 not established.
