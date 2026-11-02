@@ -4,6 +4,7 @@
 
 GRANT UPDATE ON public.organization_verification_evidence,
   public.stakeholder_application_approvals TO rupaykg_auth_owner;
+GRANT INSERT ON public.organization_statutory_profiles TO rupaykg_auth_owner;
 
 SET ROLE rupaykg_auth_owner;
 
