@@ -486,3 +486,11 @@ The branch now contains an immutable/idempotent enqueue helper, atomic lease cla
 - Checkpoint/documentation exact-head workflow `41462800628` completed SUCCESS.
 - Reconciliation helper's corrected strict-null code commit `ef3ee145447bbfa0536a39c5ba92c0fd9e45b4fe` had a typecheck failure before the correction; the new exact-head workflow `41462918208` for the subsequent source commit is now through typecheck/build and disposable PostgreSQL acceptance, with production-container build in progress. Do not call the full workflow green until it completes.
 - Idempotent enqueue implementation/test source commits `c7e0e254b83ac03b30770b49f29f1175eaa13943` and `745e279128a8f0e722e3ee7e0e4389c41759b7de` were covered by CI runs that initially failed due to the same Mirror Node strict-null issue. The corrected branch rerun includes these changes.
+
+
+### 14:34 UTC — latest-head typecheck failure recorded and repaired
+
+- Exact-head workflow `41462890956` for PR #192 head `ef3ee145447bbfa0536a39c5ba92c0fd9e45b4fe` failed at TypeScript typecheck. The error was isolated to the new enqueue idempotency integration-test block being placed in a `catch` scope, where its fixture variables were not in scope (`TS18004/TS2304`). Migration validation and disposable PostgreSQL migration execution had already passed; downstream build/test steps were skipped.
+- Repaired the test in commit `3f771a63d4027629da350a79725193858e1a323d`: enqueue same-payload replay and changed-payload rejection assertions now execute inside the fixture's `try` scope; the `catch` only rolls back and rethrows. No assertion or production security check was weakened.
+- PR #192 head is now `3f771a63d4027629da350a79725193858e1a323d`. Exact-head CI has not yet appeared in the commit workflow-run listing at the time of this checkpoint; do not claim this repair passed until its workflow concludes SUCCESS.
+- PR #192 remains draft/open. PR #204 remains documentation-only/draft. Production HOLD; no production changes; TRL 9 NOT ESTABLISHED.
