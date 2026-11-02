@@ -191,15 +191,15 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
         }
 
         const observations = await client.query(
-          "select id, parameter_code, observed_value, unit, method, instrument_id, observed_at, uncertainty, quality_status, metadata from mrv_observations where activity_id=$1 order by observed_at, id, id",
+          "select id, parameter_code, observed_value, unit, method, instrument_id, observed_at, uncertainty, quality_status, metadata from mrv_observations where activity_id=$1 order by observed_at, id",
           [activityId],
         );
         const evidence = await client.query(
-          "select id, evidence_type, content_uri, content_hash, captured_at, status, metadata from evidence where activity_id=$1 order by captured_at, id, id",
+          "select id, evidence_type, content_uri, content_hash, captured_at, status, metadata from evidence where activity_id=$1 order by captured_at, id",
           [activityId],
         );
         const quantityRow = await client.query<{ value: string | null; unit: string | null }>(
-          "select value::text value, unit from measurements where activity_id=$1 order by measured_at desc limit 1",
+          "select value::text value, unit from measurements where activity_id=$1 order by measured_at desc, id desc limit 1",
           [activityId],
         );
         const quantity = quantityRow.rows[0]?.value ? Number(quantityRow.rows[0].value) : undefined;
@@ -274,9 +274,9 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
         if (!await requirePermission(client, auth, row.organization_id, ["guardian:operate"])) return { response: reply.code(403).send({ error: "Guardian MRV operation permission required", code: "MRV_PERMISSION_REQUIRED" }) };
         if (!await activityInAuthorizedGeography(client, auth, activityId, row.organization_id)) return { response: reply.code(403).send({ error: "Activity geography is outside organization authorization scope", code: "GEOGRAPHY_FORBIDDEN" }) };
         if (row.activity_status !== "COMPLETED" || row.decision !== "APPROVED" || row.evidence_status !== "VERIFIED" || row.evidence_activity_id !== activityId || row.verifier_identity_id === row.actor_identity_id) return { response: reply.code(409).send({ error: "Completed activity, verified evidence and independent approved verification are required before Guardian MRV", code: "MRV_PRECONDITION_FAILED" }) };
-        const observations = await client.query("select id, parameter_code, observed_value, unit, method, instrument_id, observed_at, uncertainty, quality_status, metadata from mrv_observations where activity_id=$1 order by observed_at, id, id", [activityId]);
-        const evidence = await client.query("select id, evidence_type, content_uri, content_hash, captured_at, status, metadata from evidence where activity_id=$1 order by captured_at, id, id", [activityId]);
-        const quantityRow = await client.query<{ value: string | null; unit: string | null }>("select value::text value, unit from measurements where activity_id=$1 order by measured_at desc limit 1", [activityId]);
+        const observations = await client.query("select id, parameter_code, observed_value, unit, method, instrument_id, observed_at, uncertainty, quality_status, metadata from mrv_observations where activity_id=$1 order by observed_at, id", [activityId]);
+        const evidence = await client.query("select id, evidence_type, content_uri, content_hash, captured_at, status, metadata from evidence where activity_id=$1 order by captured_at, id", [activityId]);
+        const quantityRow = await client.query<{ value: string | null; unit: string | null }>("select value::text value, unit from measurements where activity_id=$1 order by measured_at desc, id desc limit 1", [activityId]);
         const quantity = quantityRow.rows[0]?.value ? Number(quantityRow.rows[0].value) : undefined;
         const unit = quantityRow.rows[0]?.unit || undefined;
         const sourceSnapshotHash = crypto.createHash("sha256").update(JSON.stringify({ activityId, verificationId, evidenceId, observations: observations.rows, evidence: evidence.rows, quantity, unit })).digest("hex");
@@ -313,9 +313,9 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
         const row = binding.rows[0];
         if (!row || row.organization_id !== auth.activeOrganizationId || row.activity_status !== "COMPLETED" || row.decision !== "APPROVED" || row.evidence_status !== "VERIFIED" || row.evidence_activity_id !== activityId || row.verifier_identity_id === row.actor_identity_id) throw new Error("MRV_SOURCE_BINDING_CHANGED_DURING_PROVIDER_EXECUTION");
         if (!await requirePermission(client, auth, row.organization_id, ["guardian:operate"]) || !await activityInAuthorizedGeography(client, auth, activityId, row.organization_id)) throw new Error("MRV_AUTHORIZATION_CHANGED_DURING_PROVIDER_EXECUTION");
-        const observationsNow = await client.query("select id, parameter_code, observed_value, unit, method, instrument_id, observed_at, uncertainty, quality_status, metadata from mrv_observations where activity_id=$1 order by observed_at, id, id", [activityId]);
-        const evidenceNow = await client.query("select id, evidence_type, content_uri, content_hash, captured_at, status, metadata from evidence where activity_id=$1 order by captured_at, id, id", [activityId]);
-        const quantityNow = await client.query<{ value: string | null; unit: string | null }>("select value::text value, unit from measurements where activity_id=$1 order by measured_at desc limit 1", [activityId]);
+        const observationsNow = await client.query("select id, parameter_code, observed_value, unit, method, instrument_id, observed_at, uncertainty, quality_status, metadata from mrv_observations where activity_id=$1 order by observed_at, id", [activityId]);
+        const evidenceNow = await client.query("select id, evidence_type, content_uri, content_hash, captured_at, status, metadata from evidence where activity_id=$1 order by captured_at, id", [activityId]);
+        const quantityNow = await client.query<{ value: string | null; unit: string | null }>("select value::text value, unit from measurements where activity_id=$1 order by measured_at desc, id desc limit 1", [activityId]);
         const currentSnapshotHash = crypto.createHash("sha256").update(JSON.stringify({ activityId, verificationId, evidenceId, observations: observationsNow.rows, evidence: evidenceNow.rows, quantity: quantityNow.rows[0]?.value ? Number(quantityNow.rows[0].value) : undefined, unit: quantityNow.rows[0]?.unit || undefined })).digest("hex");
         if (currentSnapshotHash !== prepared.sourceSnapshotHash) throw new Error("MRV_SOURCE_EVIDENCE_CHANGED_DURING_PROVIDER_EXECUTION");
         return client.query(
