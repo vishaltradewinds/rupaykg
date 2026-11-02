@@ -116,6 +116,60 @@ export async function submitHcsAnchor(payload: AnchorPayload, persistedTransacti
   }
 }
 
+export type HcsReconciliationResult =
+  | { status: "CONFIRMED"; transactionId: string; consensusTimestamp: string; verification: Record<string, unknown> }
+  | { status: "PENDING" | "UNAVAILABLE" | "MISMATCH" | "FAILED"; transactionId: string; message: string };
+
+/**
+ * Reconcile an already-persisted HCS transaction ID after an ambiguous submit.
+ * A 404 or empty result is PENDING (Mirror Node indexing lag), never proof that
+ * the transaction was not accepted and never permission to create a new ID.
+ */
+export async function reconcileHcsTransaction(
+  transactionId: string,
+  topicId: string,
+  expectedIntegrityHash?: string,
+  expectedActivityId?: string,
+  expectedVerificationId?: string,
+  expectedEvidenceId?: string,
+  expectedGuardianExecutionId?: string,
+): Promise<HcsReconciliationResult> {
+  const id = transactionId.trim();
+  const topic = topicId.trim();
+  if (!id || !topic) return { status: "MISMATCH", transactionId: id, message: "Persisted HCS transaction ID and topic are required" };
+  const mirrorId = id.includes("@") ? id.replace(/^([0-9]+\\.[0-9]+\\.[0-9]+)@([0-9]+)\\.([0-9]+)$/, "$1-$2-$3") : id;
+  if (mirrorId === id && !/^[0-9]+\\.[0-9]+\\.[0-9]+-[0-9]+-[0-9]+$/.test(mirrorId)) {
+    return { status: "MISMATCH", transactionId: id, message: "Persisted HCS transaction ID has an unsupported format" };
+  }
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 10000);
+  try {
+    const response = await fetch(`${mirrorEndpoint(networkName())}/api/v1/transactions/${encodeURIComponent(mirrorId)}`, { signal: controller.signal });
+    if (response.status === 404) return { status: "PENDING", transactionId: id, message: "Mirror Node has not indexed the persisted transaction yet" };
+    if (!response.ok) return { status: "UNAVAILABLE", transactionId: id, message: `Mirror Node transaction lookup returned HTTP ${response.status}` };
+    const body = await response.json() as { transactions?: Array<{ transaction_id?: string; result?: string; name?: string; entity_id?: string | null; consensus_timestamp?: string | null }> };
+    const transactions = body.transactions ?? [];
+    if (!transactions.length) return { status: "PENDING", transactionId: id, message: "Mirror Node returned no transaction record yet" };
+    const matching = transactions.find((item) => item.transaction_id === mirrorId || item.transaction_id === id) ?? transactions[0];
+    if (matching.name !== "CONSENSUS_SUBMIT_MESSAGE" || matching.entity_id !== topic) {
+      return { status: "MISMATCH", transactionId: id, message: "Mirror Node transaction type or topic does not match the persisted HCS submission" };
+    }
+    if (matching.result !== "SUCCESS") {
+      if (matching.result === "DUPLICATE_TRANSACTION") return { status: "PENDING", transactionId: id, message: "Mirror Node reports a duplicate node submission; waiting for the successful transaction record" };
+      return { status: "FAILED", transactionId: id, message: `HCS transaction was not successful: ${matching.result ?? "UNKNOWN"}` };
+    }
+    if (!matching.consensus_timestamp) return { status: "PENDING", transactionId: id, message: "Successful transaction is indexed but consensus timestamp is not available yet" };
+    const verification = await verifyHcsMessage(matching.consensus_timestamp, topic, expectedIntegrityHash, expectedActivityId, expectedVerificationId, expectedEvidenceId, expectedGuardianExecutionId);
+    if (!verification.verified) return { status: "MISMATCH", transactionId: id, message: `Mirror Node found the transaction but HCS message verification failed: ${"error" in verification ? verification.error : "payload mismatch"}` };
+    return { status: "CONFIRMED", transactionId: id, consensusTimestamp: matching.consensus_timestamp, verification: verification as unknown as Record<string, unknown> };
+  } catch (error) {
+    const message = error instanceof Error && error.name === "AbortError" ? "Mirror Node transaction lookup timed out" : error instanceof Error ? error.message : String(error);
+    return { status: "UNAVAILABLE", transactionId: id, message };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function verifyHcsMessage(consensusTimestamp: string, topicId = process.env.HEDERA_TOPIC_ID || "", expectedIntegrityHash?: string, expectedActivityId?: string, expectedVerificationId?: string, expectedEvidenceId?: string, expectedGuardianExecutionId?: string) {
   const network = networkName();
   if (!topicId) return { verified: false, network, error: "HEDERA_TOPIC_ID is not configured" };
