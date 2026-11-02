@@ -62,3 +62,11 @@ Append-only record. Do not rewrite earlier entries.
 - The direct-submit gate tests passed in CI 41495848722; the NEEDS_RECONCILIATION claim-exclusion test passed in 41495699292; worker contract docs passed in 41495765539.
 - PR #192 remains draft/unmerged and two commits behind main. PR #213 remains the only EPR read-only candidate pending rebase and fresh CI. PRs #205/#211/#212 remain closed unmerged as superseded.
 - Production Neon remains 0/67 RLS and the elevated rupaykg login is unchanged. No production mutation, secret, deployment, worker activation or certification occurred.
+
+
+## 2026-11-02 18:03 UTC — MRV snapshot exact-head CI PASS
+
+- Exact-head CI 41496454924 completed SUCCESS on PR #192 head 4781bfe03ac68bf61031b9c2e8924dcd498d259e, including migration validation, restricted verifier provisioning, disposable migrations, bootstrap privilege teardown, typecheck/build, synthetic two-custodian bootstrap, browser smoke, full PostgreSQL tests with source-snapshot mutation/restoration and production-container build/cleanup.
+- Follow-up test-only commit 59c5dc1 aligns the initial worker-ledger fixture with the same complete source snapshot. Exact-head CI 41496873635 is running; latest head remains pending.
+- Added immutable checkpoint docs/engineering/checkpoints/2026-11-02-mrv-snapshot-ci-green.md and session log docs/engineering/session-logs/2026-11-02-cto-mrv-snapshot-ci.md; refreshed resume pointer.
+- Production Neon remains 0/67 RLS and elevated rupaykg login unchanged. PR #192 remains draft/unmerged and two commits behind main; PR #213 requires rebase/fresh CI. No production mutation, deployment, worker activation or certification.
