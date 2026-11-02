@@ -13,6 +13,7 @@ const valid = {
   RUPAYKG_AUTH_RESOLVER_MODE: "security_definer",
   RUPAYKG_REQUEST_CONTEXT_SECRET: "production-test-request-context-secret-material",
   RUPAYKG_REQUEST_CONTEXT_KEY_ID: "v1",
+  RUPAYKG_EPR_RETURN_READ_ENABLED: "false",
 } as const;
 
 describe("production configuration", () => {
@@ -25,12 +26,26 @@ describe("production configuration", () => {
       authResolverMode: "security_definer",
       requestContextSecret: valid.RUPAYKG_REQUEST_CONTEXT_SECRET,
       requestContextKeyId: valid.RUPAYKG_REQUEST_CONTEXT_KEY_ID,
+      eprReturnReadEnabled: false,
       databaseSsl: "require",
       databaseCaCert: valid.DATABASE_CA_CERT,
       allowedOrigins: ["https://app.rupaykg.example"],
       authMode: "real",
       syntheticData: false,
     });
+  });
+
+  it("keeps the EPR read route disabled by default", () => {
+    const { RUPAYKG_EPR_RETURN_READ_ENABLED: _flag, ...withoutFlag } = valid;
+    assert.equal(readProductionConfig(withoutFlag).eprReturnReadEnabled, false);
+  });
+
+  it("accepts explicit EPR read enablement only as a strict boolean", () => {
+    assert.equal(readProductionConfig({ ...valid, RUPAYKG_EPR_RETURN_READ_ENABLED: "true" }).eprReturnReadEnabled, true);
+    assert.throws(
+      () => readProductionConfig({ ...valid, RUPAYKG_EPR_RETURN_READ_ENABLED: "yes" }),
+      /RUPAYKG_EPR_RETURN_READ_ENABLED must be true or false/,
+    );
   });
 
   it("requires a sufficiently strong signed request-context secret", () => {
