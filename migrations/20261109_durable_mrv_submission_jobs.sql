@@ -163,7 +163,14 @@ begin
     job_id, from_status, to_status, actor_kind, actor_reference, lease_token, event_code, event_detail
   ) values (
     new.id, case when tg_op = 'INSERT' then null else old.status end,
-    new.status, 'SYSTEM', null, new.lease_token,
+    new.status,
+    case when tg_op = 'INSERT' then 'SYSTEM'
+         when old.lease_token is not null or new.lease_token is not null then 'WORKER'
+         else 'SYSTEM' end,
+    case when tg_op = 'INSERT' then null
+         when old.lease_token is not null then old.lease_owner
+         else new.lease_owner end,
+    coalesce(new.lease_token, old.lease_token),
     case when tg_op = 'INSERT' then 'JOB_CREATED' else 'JOB_UPDATED' end,
     jsonb_build_object('attemptCount', new.attempt_count, 'lastErrorCode', new.last_error_code)
   );
