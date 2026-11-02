@@ -108,8 +108,8 @@
 
 /* RupayKg reference parity: rupaykg-aistudio black / emerald design system. */
 :root{
-  --rk-bg:#050505;--rk-surface:#0b0f0d;--rk-surface-soft:rgba(255,255,255,.035);
-  --rk-border:rgba(255,255,255,.10);--rk-border-soft:rgba(255,255,255,.07);
+  --rk-bg:#050505;--rk-surface:#151619;--rk-surface-soft:rgba(255,255,255,.05);
+  --rk-border:rgba(255,255,255,.08);--rk-border-soft:rgba(255,255,255,.06);
   --rk-text:#f5f7f5;--rk-muted:rgba(255,255,255,.58);--rk-subtle:rgba(255,255,255,.38);
   --rk-primary:#10b981;--rk-primary-strong:#34d399;--rk-primary-contrast:#04110b;
   color:var(--rk-text);background:var(--rk-bg)
@@ -150,8 +150,8 @@ body:before{background:radial-gradient(circle at 12% 0%,rgba(16,185,129,.075),tr
 .journey-grid article{padding:22px}
 .journey-grid h3{color:var(--rk-text)}
 .trust-list span{color:var(--rk-muted)}
-.auth-form,.onboarding-form,.authority-card,.workspace-panel,.metric,.admin-management-panel,.evidence-vault-panel,.cpcb-swm-readiness{
-  background:var(--rk-surface-soft);border-color:var(--rk-border);border-radius:16px
+.auth-form,.onboarding-form,.authority-card,.workspace-panel,.metric,.admin-management-panel,.evidence-vault-panel,.cpcb-swm-readiness,.super-admin-console,.mrv-trust-panel,.review-list>article,.provenance-card{
+  background:var(--rk-surface);border-color:var(--rk-border);border-radius:16px
 }
 .auth-form input,.onboarding-form input,.onboarding-form select,.form-field input,.form-field select,
 .admin-management-panel input:not([type=checkbox]),.admin-management-panel select{
@@ -187,3 +187,54 @@ footer{border-color:var(--rk-border-soft);color:var(--rk-subtle)}
   .journey-grid,.trust-list{grid-template-columns:1fr}
 }
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*::before,*::after{transition-duration:.01ms!important;animation-duration:.01ms!important;animation-iteration-count:1!important}}
+
+
+/* Unified workbench surfaces — visual-only; authorization and data scope remain server-enforced. */
+h1,h2,h3,.brand strong{font-family:"Space Grotesk",Inter,ui-sans-serif,system-ui,sans-serif}
+code,pre,.status-pill,.eyebrow{font-variant-numeric:tabular-nums}
+.workspace-head,.section-heading{color:var(--rk-text)}
+.workspace-head>div>p:not(.eyebrow),.section-heading>span{color:var(--rk-muted)}
+.workspace-panel{overflow:hidden;box-shadow:0 18px 60px rgba(0,0,0,.22)}
+.workspace-panel-head,.workspace-row,.workspace-panel .panel-head{border-color:var(--rk-border-soft)}
+.workspace-panel-head strong,.workspace-title strong,.workspace-panel .panel-head h2{color:var(--rk-text)}
+.workspace-panel-head span,.workspace-title span,.workspace-fields b,.workspace-row small{color:var(--rk-muted)}
+.workspace-fields span{color:rgba(255,255,255,.78)}
+.metrics{gap:12px}
+.metric{box-shadow:0 12px 36px rgba(0,0,0,.16)}
+.metric span,.metric small{color:var(--rk-muted)}
+.metric strong{color:var(--rk-primary-strong)}
+.workspace-tabs .tab{border-color:var(--rk-border);color:var(--rk-muted)}
+.workspace-tabs .tab:hover{border-color:rgba(16,185,129,.45);color:var(--rk-text)}
+.command-card,.lifecycle-stage,.provenance-list span,.admin-status-grid article,.admin-capabilities article{
+  background:var(--rk-surface);border:1px solid var(--rk-border);border-radius:14px;color:var(--rk-text)
+}
+.command-card h3,.lifecycle-stage strong,.admin-capabilities strong{color:var(--rk-text)}
+.command-card p,.lifecycle-stage small,.admin-capabilities small,.admin-status-grid small{color:var(--rk-muted)}
+.lifecycle-stage.done{border-color:rgba(16,185,129,.42);background:rgba(16,185,129,.08)}
+.lifecycle-stage.done>span{background:var(--rk-primary);color:var(--rk-primary-contrast)}
+.provenance-card p,.provenance-card span,.provenance-card textarea{color:var(--rk-muted)}
+.provenance-list span{border-color:var(--rk-border)}
+.review-list>article{border:1px solid var(--rk-border);padding:18px}
+.review-list small,.empty,.empty-state>p:not(.eyebrow){color:var(--rk-muted)}
+.notice{border-color:rgba(16,185,129,.35);background:rgba(16,185,129,.08);color:#a7f3d0}
+.notice.error,.error{border-color:rgba(248,113,113,.35);background:rgba(248,113,113,.08);color:#fca5a5}
+input,select,textarea{accent-color:var(--rk-primary)}
+input:not([type=checkbox]),select,textarea{background:#080a09;color:var(--rk-text);border-color:var(--rk-border)}
+button{border-radius:10px}
+button:disabled{opacity:.5;cursor:not-allowed}
+.secondary{border-color:var(--rk-border)!important;color:var(--rk-muted)!important}
+.auth-drawer{background:rgba(21,22,25,.96);border:1px solid var(--rk-border);border-radius:16px;box-shadow:0 24px 80px rgba(0,0,0,.45)}
+.auth-drawer input{background:#080a09;color:var(--rk-text);border:1px solid var(--rk-border);border-radius:9px}
+.auth-drawer button.active{background:rgba(16,185,129,.14);color:var(--rk-primary-strong)}
+a{color:var(--rk-primary-strong)}
+@media(max-width:800px){
+  .workspace-head{align-items:flex-start;gap:14px;flex-wrap:wrap}
+  .metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .command-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .provenance-card{grid-template-columns:1fr;gap:16px}
+}
+@media(max-width:480px){
+  .metrics,.command-grid,.workspace-fields{grid-template-columns:1fr}
+  .workspace-panel-head,.workspace-title{align-items:flex-start;flex-direction:column}
+  .auth-drawer{width:calc(100% - 24px);margin:12px auto}
+}
