@@ -402,3 +402,46 @@ The durable enqueue path separately computes `payload_hash` over its canonical `
 ### Corrected MRV status statement
 
 Durable job claim/lease/idempotency helper functions exist in source. The migration remains draft/not deployed, and no accepted worker service/runtime or real disposable-PostgreSQL acceptance evidence has been established in this audit. Complete manifest digest binding, legacy-path independence, tenant-bound worker execution and full route integration remain release blockers.
+
+
+## Demo-critical endpoint-to-data acceptance matrix — 2026-11-02 16:20Z
+
+Source baseline: PR #192 head `c48d3e274acadb22db9968f894278786c1a74d89`. This matrix distinguishes the existing route behavior from the required tenant-RLS acceptance contract.
+
+| Endpoint / operation | Existing source behavior | RLS/authorization acceptance requirement | Priority |
+|---|---|---|---|
+| `GET /api/v1/epr/returns` | Auth + membership + permission checks via pool; list query via pool | Resolve one active org; open signed tenant transaction; recheck membership/permission on same client; list scoped by org; tenant B cannot enumerate tenant A | P0 |
+| `POST /api/v1/epr/returns` | Permission via pool; insert/select eligibility via pool | Signed tenant transaction; same-client permission and verified scheme/obligation ownership; DB FK/composite constraints bind scheme + obligation + organization | P0 |
+| `POST /api/v1/epr/returns/:id/submit` | Checked-out client + BEGIN; rechecks membership/permission; validates evidence and geography; updates return + obligation | Install signed context before protected SQL; ensure no pool query escapes; add concurrent double-submit/balance race and cross-tenant evidence tests | P0 |
+| `POST /api/v1/epr/returns/:id/external-reference` | Checked-out client + BEGIN; records caller-supplied external reference; no external portal submission | Signed context; keep label as reference-recorded only; require separately authenticated portal receipt before external-acknowledged/accepted state | P1 |
+| `GET /api/v1/mrv/status` | Auth + permission + provider configuration status via pool | Signed context and scoped permission; distinguish provider configured from successful end-to-end test/verified external state | P1 |
+| `GET /api/v1/mrv/jobs/:id` | Explicit client transaction; checks org, permission and geography; reads job + events | Install signed context; RLS for both job and event tables; ensure no cross-tenant event leakage; reject unverified geography | P0 |
+| `POST /api/v1/mrv/activities/:id/jobs` | Explicit client transaction; validates activity/evidence/verification, independent verifier, org and geography; enqueues immutable snapshot | Install signed context; verify enqueue trigger/RLS; recheck actor membership/revocation at commit; canonical payload digest must be anchored end-to-end; queue feature remains disabled | P0 |
+| `POST /api/v1/mrv/activities/:id/submit` | Legacy synchronous provider path; session advisory lock; no full transaction or signed context; route precondition does not visibly enforce distinct verifier identity | Disable or migrate to durable path after parity tests; enforce independent verifier; same signed client for every query; bind full canonical manifest digest to Guardian/HCS/Mirror | P0 |
+| `GET /api/v1/mrv/provenance/:activityId` | Multiple direct pool queries for owner, permission, geography and provenance | One signed tenant transaction; scope provenance by authorized org/geography; two-tenant read-denial tests | P0 |
+| `GET /api/v1/mrv/hedera/verify/:timestamp` | Direct pool lookup by consensus timestamp before tenant ownership/permission checks; later update also via pool | Avoid global timestamp lookup as an information oracle; resolve authorized activity scope first in one signed transaction; provider fetch outside transaction only with immutable snapshot, then revalidate before persisting verification | P0 |
+| `POST /api/v1/mrv/activities/:id/jobs` worker-side provider stages | TypeScript helper layer contains claim/lease/idempotency and reauthorization primitives; no accepted production worker runtime evidenced | Worker role and runtime separate from API; NOBYPASSRLS; every stage revalidates authorization and lease; database grants/policies prevent bypass; no real queue enablement until proven | P0 |
+
+### Required implementation sequence (smallest safe cohort)
+
+1. **EPR list route first only if test fixture and schema prove a single-tenant low-risk read.** Resolve the requested organization exclusively from authenticated active context (or a validated explicit org switch); reject ambiguous/multi-org requests. Use `withRlsRequestTransaction` and route every query—including permission lookup—through the callback's checked-out client.
+2. Add unit tests for missing active organization, unverified membership, missing permission, header/body org spoofing, malformed/expired signed context, rollback and no pool fallback.
+3. Add real disposable PostgreSQL tests with two organizations, two users and disjoint geographies. Prove tenant A can list only A; tenant B cannot read A even with a known UUID; same pooled connection reused by B has no residual A context.
+4. Only after that read-only cohort passes, migrate EPR create with same-client scheme/obligation ownership constraints and race tests.
+5. Migrate submit/external-reference separately; do not treat them as simple reads. Retain explicit transaction semantics and ensure helper does not create nested BEGIN/COMMIT.
+6. Migrate MRV read/status/provenance endpoints only after EPR cohort acceptance; keep legacy synchronous MRV submit disabled or behind an explicit non-production flag until independence and digest-parity fixes are proven.
+7. Do not include registry transfers, settlements, platform administration, auth/bootstrap, device sync or worker claims in this first slice. They need separate multi-party, governance or device-principal context models.
+
+### EPR submission consistency tests
+
+The submit handler locks the EPR return and obligation, computes remaining balance, then increments fulfilled quantity and updates the return in one transaction. Retain that atomic design and add:
+- Two concurrent submissions against the same remaining balance: exactly one may consume the last available quantity.
+- Same return submitted twice: no double-counting of obligation fulfilled quantity.
+- Evidence belonging to another organization or activity: denied even when evidence UUID is known.
+- Verification by the activity actor: denied; verifier must be distinct and independently authorized.
+- Evidence geography outside verified org scope or org with no verified roots: denied.
+- Client transaction failure after return update but before obligation update: both changes roll back.
+- Revoked membership/permission between initial authentication and transaction: same-transaction recheck denies.
+- External reference alone never changes external submission state to accepted/completed.
+
+**Implementation boundary:** no route code has been changed in this mobile batch. This matrix is a reviewed work contract for the desktop integration batch; it is not a claim that RLS is deployed or route acceptance tests have passed.
