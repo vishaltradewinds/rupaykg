@@ -82,7 +82,9 @@ test("HCS transaction ID can be generated before submission for durable persiste
   process.env.HEDERA_TOPIC_ID = topicId;
   try {
     const transactionId = createHcsTransactionId();
-    assert.match(transactionId, /^0\.0\.1234@\d+\.\d+$/);
+    const [accountId, timestamp] = transactionId.split("@");
+    assert.equal(accountId, "0.0.1234");
+    assert.match(timestamp ?? "", /^[0-9]+[.][0-9]+$/);
   } finally {
     if (previous.account === undefined) delete process.env.HEDERA_OPERATOR_ID; else process.env.HEDERA_OPERATOR_ID = previous.account;
     if (previous.key === undefined) delete process.env.HEDERA_OPERATOR_KEY; else process.env.HEDERA_OPERATOR_KEY = previous.key;
