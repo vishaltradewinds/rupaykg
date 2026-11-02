@@ -630,7 +630,20 @@ async function run(): Promise<void> {
       [unauthorizedTokenHash, inScopeApplicationId, "approve", "In-scope geography review accepted"],
     );
     assert.equal(inScopeDecision.rows[0]?.decision_result.status, "PENDING");
-    assert.equal(inScopeDecision.rows[0]?.decision_result.approvalLevel, "STATE");
+    assert.equal(inScopeDecision.rows[0]?.decision_result.approvalLevel, "DISTRICT");
+    const stateStepQueue = await pool.query<{ queue_result: { applications: Array<{ id: string; canReview: boolean }> } }>(
+      "select auth_private.get_onboarding_review_queue($1) as queue_result",
+      [unauthorizedTokenHash],
+    );
+    const stateQueued = stateStepQueue.rows[0]?.queue_result.applications.find(row => row.id === inScopeApplicationId);
+    assert.ok(stateQueued, "a regulator must retain scope-limited access to the next STATE approval step");
+    assert.equal(stateQueued.canReview, true);
+    const stateDecision = await pool.query<{ decision_result: { status: string; approvalLevel: string } }>(
+      "select auth_private.review_stakeholder_application($1,$2,$3,$4) as decision_result",
+      [unauthorizedTokenHash, inScopeApplicationId, "approve", "In-scope state approval accepted"],
+    );
+    assert.equal(stateDecision.rows[0]?.decision_result.status, "PENDING");
+    assert.equal(stateDecision.rows[0]?.decision_result.approvalLevel, "STATE");
     const afterStateApproval = await pool.query<{ queue_result: { applications: Array<{ id: string }> } }>(
       "select auth_private.get_onboarding_review_queue($1) as queue_result",
       [unauthorizedTokenHash],
