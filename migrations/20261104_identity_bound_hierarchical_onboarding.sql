@@ -5,6 +5,9 @@
 GRANT UPDATE ON public.organization_verification_evidence,
   public.stakeholder_application_approvals TO rupaykg_auth_owner;
 GRANT INSERT ON public.organization_statutory_profiles TO rupaykg_auth_owner;
+ALTER FUNCTION public.ensure_organization_governance_profile() OWNER TO rupaykg_auth_owner;
+ALTER FUNCTION public.ensure_organization_governance_profile() SECURITY DEFINER;
+ALTER FUNCTION public.ensure_organization_governance_profile() SET search_path = pg_catalog, pg_temp;
 
 SET ROLE rupaykg_auth_owner;
 
