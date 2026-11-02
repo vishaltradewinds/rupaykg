@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import type { Pool } from "pg";
 import { authenticate, bearerChallenge, hasOrganizationPermission, type AuthContext } from "./auth.js";
+import { withRlsRequestTransaction } from "./rls-request-transaction.js";
 
 function bodyOf(request: { body: unknown }): Record<string, unknown> {
   return request.body && typeof request.body === "object" ? request.body as Record<string, unknown> : {};
@@ -31,13 +32,34 @@ function canAct(auth: AuthContext, organizationId: string): boolean {
 export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool | null): Promise<void> {
   app.get("/api/v1/epr/returns", async (request, reply) => {
     const auth = await authFor(request, reply, pool); if (!auth || !pool) return;
-    const organizationId = typeof request.headers["x-rupaykg-organization-id"] === "string" ? request.headers["x-rupaykg-organization-id"] : auth.activeOrganizationId;
-    if (!organizationId || !canAct(auth, organizationId)) return reply.code(403).send({ error: "Verified organization membership required", code: "ORG_FORBIDDEN" });
-    if (!await hasOrganizationPermission(pool, auth, organizationId, ["epr:read", "epr:manage", "reports:read"])) return reply.code(403).send({ error: "EPR return read permission required", code: "EPR_RETURN_READ_FORBIDDEN" });
+    const requestedOrganizationId = typeof request.headers["x-rupaykg-organization-id"] === "string" ? request.headers["x-rupaykg-organization-id"] : undefined;
+    const organizationId = auth.activeOrganizationId;
+    // A caller may not select a different organization inside this route. The
+    // authentication resolver has already validated any organization header.
+    if (!organizationId || (requestedOrganizationId && requestedOrganizationId !== organizationId) || !canAct(auth, organizationId)) {
+      return reply.code(403).send({ error: "A verified active organization is required", code: "ORG_FORBIDDEN" });
+    }
+    const hmacSecret = process.env.RUPAYKG_REQUEST_CONTEXT_SECRET;
+    const keyId = process.env.RUPAYKG_REQUEST_CONTEXT_KEY_ID;
+    if (!hmacSecret || !keyId) {
+      return reply.code(503).send({ error: "Tenant request context is not configured; protected EPR reads are fail-closed", code: "RLS_CONTEXT_UNAVAILABLE", syntheticData: false });
+    }
     try {
-      const rows = await pool.query(`select r.id,r.scheme_id,s.code as scheme_code,s.name as scheme_name,r.organization_id,r.obligation_id,r.period_start,r.period_end,r.return_type,r.reported_quantity,r.obligation_quantity,r.fulfilled_quantity,r.status,r.external_reference,r.evidence_id,r.verification_id,r.submitted_at,r.created_at from epr_returns r join epr_schemes s on s.id=r.scheme_id where r.organization_id=$1 order by r.period_end desc,r.created_at desc limit 100`, [organizationId]);
-      return { source: "postgresql", syntheticData: false, returns: rows.rows };
-    } catch (error) { request.log.error(error); return reply.code(503).send({ error: "EPR return workspace unavailable", syntheticData: false }); }
+      const returns = await withRlsRequestTransaction(pool, auth, { hmacSecret, keyId }, async (client) => {
+        // Permission lookup and protected data read deliberately share the
+        // same signed, transaction-local tenant context and checked-out client.
+        if (!await hasOrganizationPermission(client, auth, organizationId, ["epr:read", "epr:manage", "reports:read"])) {
+          return null;
+        }
+        const rows = await client.query(`select r.id,r.scheme_id,s.code as scheme_code,s.name as scheme_name,r.organization_id,r.obligation_id,r.period_start,r.period_end,r.return_type,r.reported_quantity,r.obligation_quantity,r.fulfilled_quantity,r.status,r.external_reference,r.evidence_id,r.verification_id,r.submitted_at,r.created_at from epr_returns r join epr_schemes s on s.id=r.scheme_id where r.organization_id=$1 order by r.period_end desc,r.created_at desc limit 100`, [organizationId]);
+        return rows.rows;
+      });
+      if (returns === null) return reply.code(403).send({ error: "EPR return read permission required", code: "EPR_RETURN_READ_FORBIDDEN" });
+      return { source: "postgresql", syntheticData: false, returns };
+    } catch (error) {
+      request.log.error(error);
+      return reply.code(503).send({ error: "EPR return workspace unavailable", syntheticData: false, code: "EPR_RETURN_READ_UNAVAILABLE" });
+    }
   });
 
   app.post("/api/v1/epr/returns", async (request, reply) => {
