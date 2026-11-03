@@ -132,8 +132,8 @@ test("Fastify EPR read route authorizes through the exact restricted runtime and
       await admin.query("delete from app_security.request_context_keys where key_id=$1", [keyId]);
       await admin.query("delete from public.organization_memberships where identity_id=any($1::uuid[])", [[identityId, deniedIdentityId]]);
       await admin.query("delete from public.roles where organization_id=$1 and name=any($2::text[])", [organizationA, ["epr_route_reader_" + suffix, "epr_route_denied_" + suffix]]);
-      await admin.query("delete from public.identities where id=any($1::uuid[])", [[identityId, deniedIdentityId]]);
       await admin.query("delete from public.organizations where id=any($1::uuid[])", [[organizationA, organizationB]]);
+      await admin.query("delete from public.identities where id=any($1::uuid[])", [[identityId, deniedIdentityId]]);
     }
     await admin.end();
   }
