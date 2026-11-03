@@ -224,4 +224,4 @@ jobs:
 
       - name: Acceptance result
         run: |
-          echo "LIVE ACCEPTANCE PASSED: RupayKG -> Guardian VERIFIED -> Hedera HCS CONSENSUS_CONFIRMED -> persisted provenance -> Mirror Node verified."
+          echo "LIVE ACCEPTANCE PASSED: Guardian VERIFIED -> HCS consensus -> immutable source snapshot -> persisted provenance -> Mirror Node verified; acceptance fixture remains explicitly registry-ineligible."
