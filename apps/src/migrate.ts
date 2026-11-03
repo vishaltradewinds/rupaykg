@@ -22,6 +22,32 @@ async function assertCriticalPostconditions(client: SqlExecutor, filename: strin
     for (const key of ["jobs", "events", "binding_function", "update_guard_function", "event_guard_function", "event_writer_function"]) {
       if (row?.[key] !== true) throw new Error(`MIGRATION_POSTCONDITION_FAILED: ${filename} missing ${key}`);
     }
+    const constraints = await client.query(`
+      select count(*)::integer as total
+        from pg_constraint
+       where conrelid in ('public.mrv_submission_jobs'::regclass, 'public.mrv_submission_job_events'::regclass)
+    `);
+    if (Number(constraints.rows[0]?.total ?? 0) < 12) {
+      throw new Error(`MIGRATION_POSTCONDITION_FAILED: ${filename} expected at least 12 queue/event constraints`);
+    }
+    const requiredIndexes = await client.query(`
+      select indexname from pg_indexes
+       where schemaname = 'public'
+         and indexname = any(array[
+           'activities_id_org_geo_uq', 'evidence_id_activity_uq',
+           'verifications_id_evidence_activity_uq', 'mrv_submission_jobs_activity_idx',
+           'mrv_submission_jobs_org_status_idx', 'mrv_submission_jobs_provider_hcs_tx_idx',
+           'mrv_submission_job_events_job_idx'
+         ])
+    `);
+    const indexNames = new Set(requiredIndexes.rows.map((row) => row.indexname));
+    for (const name of [
+      "activities_id_org_geo_uq", "evidence_id_activity_uq", "verifications_id_evidence_activity_uq",
+      "mrv_submission_jobs_activity_idx", "mrv_submission_jobs_org_status_idx",
+      "mrv_submission_jobs_provider_hcs_tx_idx", "mrv_submission_job_events_job_idx",
+    ]) {
+      if (!indexNames.has(name)) throw new Error(`MIGRATION_POSTCONDITION_FAILED: ${filename} missing index ${name}`);
+    }
     const triggers = await client.query(`
       select tgname from pg_trigger
        where not tgisinternal
