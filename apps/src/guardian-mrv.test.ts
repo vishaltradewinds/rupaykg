@@ -110,9 +110,11 @@ test("Guardian receives the complete measurements and immutable snapshot digest"
     await executeGuardianMrv({
       ...request,
       measurements: [{ id: "measurement-1", value: "12.5", unit: "kg" }],
+      artifactSeries: [{ id: "series-1", evidenceType: "WEIGHBRIDGE_TICKET" }],
       metadata: { sourceSnapshotId: "snapshot-1", sourceSnapshotVersion: 1, sourceSnapshotDigest: "c".repeat(64) },
     });
     assert.deepEqual(sent[0]?.measurements, [{ id: "measurement-1", value: "12.5", unit: "kg" }]);
+    assert.deepEqual(sent[0]?.artifactSeries, [{ id: "series-1", evidenceType: "WEIGHBRIDGE_TICKET" }]);
     assert.equal((sent[0]?.metadata as Record<string, unknown>).sourceSnapshotDigest, "c".repeat(64));
   } finally {
     globalThis.fetch = previousFetch;
