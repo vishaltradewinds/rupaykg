@@ -140,9 +140,9 @@ export const HIGH_RISK_PERMISSIONS = {
 
 export type HighRiskAction = keyof typeof HIGH_RISK_PERMISSIONS;
 
-export async function hasOrganizationPermission(client: Pool | PoolClient, auth: AuthContext, organizationId: string, permissions: readonly string[]): Promise<boolean> {
+export async function hasOrganizationPermission(client: Pool | PoolClient, auth: AuthContext, organizationId: string, permissions: readonly string[], resolverMode: AuthResolverMode = getAuthResolverMode()): Promise<boolean> {
   if (auth.memberships.length > 0 && !canActForOrganization(auth, organizationId)) return false;
-  if (getAuthResolverMode() === "security_definer") {
+  if (resolverMode === "security_definer") {
     const result = await client.query<{ ok: boolean }>(
       `select auth_private.has_organization_permission($1,$2,$3::text[]) as ok`,
       [auth.identityId, organizationId, permissions],
