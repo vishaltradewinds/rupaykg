@@ -1,9 +1,9 @@
-import { createHash } from "node:crypto";
 import { readdir, readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
+import { assertNoOrphanedMigrations, sha256Hex } from "./migration-integrity.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) throw new Error("DATABASE_URL is required");
@@ -14,8 +14,6 @@ const pool = new Pool({
   ssl: process.env.DATABASE_SSL === "false" ? undefined : { rejectUnauthorized: false },
 });
 
-const checksum = (bytes: Buffer): string => createHash("sha256").update(bytes).digest("hex");
-const validChecksum = (value: unknown): value is string => typeof value === "string" && /^[a-f0-9]{64}$/.test(value);
 
 try {
   await pool.query(`
@@ -43,7 +41,7 @@ try {
     const version = filename.split("_", 1)[0];
     if (manifest.has(version)) throw new Error(`Duplicate migration version in repository: ${version}`);
     const bytes = await readFile(path.join(migrationDir, filename));
-    manifest.set(version, { filename, bytes, checksum: checksum(bytes) });
+    manifest.set(version, { filename, bytes, checksum: sha256Hex(bytes) });
   }
 
   const lock = await pool.connect();
@@ -54,50 +52,13 @@ try {
     );
     const recorded = new Map(ledger.rows.map((row) => [row.version, row]));
 
-    // Detect rows whose source file disappeared or was renamed.
-    for (const row of ledger.rows) {
-      const source = manifest.get(row.version);
-      if (!source) {
-        throw new Error(`MIGRATION_LEDGER_ORPHAN: version ${row.version} (${row.filename}) has no matching repository migration`);
-      }
-      if (source.filename !== row.filename) {
-        throw new Error(`MIGRATION_FILENAME_DRIFT: version ${row.version} is recorded as ${row.filename}, repository has ${source.filename}`);
-      }
-      if (row.checksum_sha256 === null) {
-        throw new Error(`LEGACY_UNVERIFIED: version ${row.version} (${row.filename}) has no historical SHA-256. Stop for reviewed reconciliation; do not backfill from current files.`);
-      }
-      if (!validChecksum(row.checksum_sha256)) {
-        throw new Error(`MIGRATION_CHECKSUM_INVALID: version ${row.version} has malformed checksum metadata`);
-      }
-      if (row.checksum_sha256 !== source.checksum) {
-        throw new Error(`MIGRATION_CHECKSUM_DRIFT: version ${row.version} (${row.filename}) differs from the applied SHA-256`);
-      }
-    }
-
-    for (const [version, migration] of manifest) {
-      if (recorded.has(version)) continue;
-      const client = await pool.connect();
-      try {
-        await client.query("begin");
-        await client.query(migration.bytes.toString("utf8"));
-        await client.query(
-          "insert into schema_migrations(version, filename, checksum_sha256) values ($1, $2, $3)",
-          [version, migration.filename, migration.checksum],
-        );
-        await client.query("commit");
-        console.log(`Applied ${migration.filename} sha256=${migration.checksum}`);
-      } catch (error) {
-        await client.query("rollback");
-        throw new Error(`Migration ${migration.filename} failed; ledger row was not committed`, { cause: error });
-      } finally {
-        client.release();
-      }
-    }
-    console.log(`Database migrations are current (${files.length} files; SHA-256 verified).`);
-  } finally {
-    try { await lock.query("select pg_advisory_unlock(hashtext('rupaykg:migration-runner:v2'))"); }
-    finally { lock.release(); }
-  }
-} finally {
-  await pool.end();
-}
+    // Validate every historical row before applying anything new. Legacy NULL
+    // hashes are explicit LEGACY_UNVERIFIED states and require reviewed recovery.
+    assertNoOrphanedMigrations(
+      ledger.rows,
+      new Map([...manifest].map(([version, item]) => [version, {
+        version,
+        filename: item.filename,
+        checksum: item.checksum,
+      }])),
+    );
