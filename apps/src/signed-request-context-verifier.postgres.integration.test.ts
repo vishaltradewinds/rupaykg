@@ -237,6 +237,14 @@ test("PostgreSQL verifier trigger enforces tenant authority, independence, geogr
     assert.equal(rejectedSnapshot.rows[0]?.authorization_snapshot.subject_organization_id, orgA);
     assert.equal(rejectedSnapshot.rows[0]?.authorization_snapshot.verifier_identity_id, validVerifier);
     assert.match(rejectedSnapshot.rows[0]?.authorization_snapshot_hash ?? "", /^[a-f0-9]{64}$/);
+    const rejectedId = await client.query<{ id: string }>(
+      "select id from public.verifications where evidence_id=$1 and verifier_identity_id=$2 and decision='REJECTED' order by decided_at desc limit 1",
+      [evidenceId, validVerifier],
+    );
+    await expectRejected(
+      "update public.verifications set authorization_snapshot='{}'::jsonb where id=$1",
+      [rejectedId.rows[0]!.id],
+    );
     await expectRejected(
       "insert into public.verifications(evidence_id,activity_id,verifier_identity_id,decision,scope,authorization_snapshot) values($1,$2,$3,'REJECTED','TEST','{}'::jsonb)",
       [evidenceId, activityId, validVerifier],
