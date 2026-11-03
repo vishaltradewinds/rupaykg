@@ -41,7 +41,7 @@ async function assertCriticalPostconditions(client: SqlExecutor, filename: strin
     const result = await client.query(`
       select indexdef, indisvalid
         from pg_indexes i
-        join pg_class c on c.relname = i.indexname
+        join pg_class c on c.relname = i.indexname and c.relnamespace = 'public'::regnamespace
         join pg_index x on x.indexrelid = c.oid
        where i.schemaname = 'public'
          and i.tablename = 'mrv_submission_jobs'
@@ -116,3 +116,9 @@ try {
         checksum: item.checksum,
       }])),
     );
+
+    // A previously recorded migration is not accepted on ledger evidence alone.
+    // Re-check critical catalog postconditions on every run, including rehearsals.
+    for (const [version, migration] of manifest) {
+      if (recorded.has(version)) await assertCriticalPostconditions(lock, migration.filename);
+    }
