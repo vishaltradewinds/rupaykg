@@ -147,7 +147,7 @@ export async function captureMrvSourceSnapshot(input: {
          from evidence e
          left join evidence_artifact_versions v on v.evidence_id=e.id
          left join evidence_artifact_series s on s.id=v.series_id
-        where e.activity_id=$1 order by e.captured_at,e.id`,
+        where e.activity_id=$1 order by e.captured_at,e.id,v.version_number,v.id`,
       [input.activityId],
     );
 
