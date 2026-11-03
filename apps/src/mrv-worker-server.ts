@@ -42,13 +42,13 @@ async function main(): Promise<void> {
                  from unnest($1::text[]) as required(name)) as required_table_reads,
               has_table_privilege(current_user,'public.mrv_submission_jobs','UPDATE') as job_update,
               has_table_privilege(current_user,'public.mrv_submission_jobs','INSERT') as job_insert,
-              has_table_privilege(current_user,'public.mrv_submission_jobs','DELETE') as job_delete,
+              has_table_privilege(current_user,'public.mrv_submission_jobs','DELETE') as job_delete,\n              has_table_privilege(current_user,'public.mrv_submission_jobs','TRUNCATE') as job_truncate,
               has_table_privilege(current_user,'public.mrv_submission_job_events','INSERT') as event_insert,
               has_table_privilege(current_user,'public.mrv_submission_job_events','UPDATE') as event_update,
-              has_table_privilege(current_user,'public.mrv_submission_job_events','DELETE') as event_delete,
+              has_table_privilege(current_user,'public.mrv_submission_job_events','DELETE') as event_delete,\n              has_table_privilege(current_user,'public.mrv_submission_job_events','TRUNCATE') as event_truncate,
               has_table_privilege(current_user,'public.mrv_provenance_events','INSERT') as provenance_insert,
               has_table_privilege(current_user,'public.mrv_provenance_events','UPDATE') as provenance_update,
-              has_table_privilege(current_user,'public.mrv_provenance_events','DELETE') as provenance_delete,
+              has_table_privilege(current_user,'public.mrv_provenance_events','DELETE') as provenance_delete,\n              has_table_privilege(current_user,'public.mrv_provenance_events','TRUNCATE') as provenance_truncate,
               (select bool_or(has_table_privilege(current_user,'public.'||name,privilege))
                  from unnest(ARRAY['organizations','identities','organization_memberships','roles','activities','evidence','verifications','geography']) as source(name)
                  cross join unnest(ARRAY['INSERT','UPDATE','DELETE','TRUNCATE']) as privileges(privilege)) as source_table_write
