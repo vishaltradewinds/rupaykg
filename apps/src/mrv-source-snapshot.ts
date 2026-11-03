@@ -32,6 +32,7 @@ export class MrvSnapshotError extends Error {
 }
 
 function canonical(value: unknown): string {
+  if (value instanceof Date) return JSON.stringify(value.toISOString());
   if (value === undefined) return "null";
   if (value === null || typeof value !== "object") return JSON.stringify(value) ?? "null";
   if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
