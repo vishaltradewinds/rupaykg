@@ -149,6 +149,7 @@ for (const failure of ["LEGACY_UNVERIFIED", "MIGRATION_CHECKSUM_DRIFT", "MIGRATI
   if (!migrationIntegrityTests.includes(failure)) throw new Error(`migration integrity tests must cover ${failure}`);
 }
 if (!/assertCriticalPostconditions\(client, migration\.filename\)/.test(migrationRunner) ||
+    !/assertCriticalPostconditions\\(lock, migration\\.filename\\)/.test(migrationRunner) ||
     !/mrv_submission_job_events/.test(migrationRunner) ||
     !/mrv_submission_jobs_claim_idx/.test(migrationRunner)) {
   throw new Error("critical MRV migrations must assert actual PostgreSQL catalog postconditions before ledger commit");
