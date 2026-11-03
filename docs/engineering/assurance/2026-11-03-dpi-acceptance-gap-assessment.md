@@ -185,3 +185,28 @@ Before integrating any stacked branch, verify its current base/head, exact-head 
 - Recovered historical migration 096 provenance: PR #221, `docs/evidence/RECOVERED_096_VERIFICATION_AUTHORIZATION_PROVENANCE.md`.
 
 **Authority boundary:** this is an internal engineering assessment. CDPI is a contextual architecture reference, not a regulator or certification authority. This assessment does not designate RupayKg as DPI, establish legal compliance, grant official API access, certify carbon outcomes, authorise production database changes, or approve a live release.
+
+
+## 9. Additional 2026-11-03 security evidence — assessment refinement
+
+A subsequent read-only audit package on the stacked verifier-hardening branch `shakti/verifier-identity-tenant-hardening-2026-11-02` provides more granular evidence. These findings are not merged into mainline and are recorded as audit inputs, not as completed controls:
+
+1. **RLS remains 0/67:** the 2026-11-03 production policy-design inventory again reports 67 public application tables, zero RLS and zero FORCE RLS. The application login `rupaykg` retains BYPASSRLS, CREATEDB, CREATEROLE, REPLICATION and INHERIT. It also reports 67 public trigger functions without pinned `search_path`. Do not apply candidate role/function migrations to production before role, caller, trigger and rollback rehearsals.
+2. **Request transaction adoption remains incomplete:** a static scan of 16 route/auth modules found `withRlsRequestTransaction` in only `mrv-routes.ts` and `epr-return-read-route.ts`; server root routes and the other modules remain outside the wrapper or only partially adopted. This is a source scan, not runtime proof, but it is sufficient to block RLS enablement.
+3. **MRV worker is a distinct trust boundary:** its runtime design claims a non-bypass role and RLS/FORCE RLS checks, but the recorded production catalog lacks `mrv_submission_jobs` and `mrv_submission_job_events`. The worker's broad cross-tenant queue discovery cannot safely inherit a normal single-tenant request policy. It needs narrowly scoped queue-claim, live-lease job authorization, state-transition and provenance-finalization capabilities; do not grant broad tenant-table SELECT to make it work.
+4. **Callable database functions need explicit review:** the production audit reports 11 ordinary application-owned public functions as SECURITY INVOKER, without pinned `search_path`, and with PUBLIC EXECUTE at audit time. Some are nested in triggers; others contain legacy role-name fallbacks or mutate EPR allocations without explicit actor authorization. Do not blanket-revoke EXECUTE or blanket-pin/apply function changes without mapping direct and nested callers, exact signatures, trigger execution semantics and per-role grants.
+5. **Migration 096 remains a historical exception:** recovered SQL is preserved in evidence-only form and is not an executable migration. Production ledger records it applied. Keep the source under `docs/evidence/`; never replay or rewrite production history.
+6. **Stacked PR ancestry must be preserved:** PR #213 is based on an earlier auth-bootstrap branch head, #216 is based on an EPR security base, #218 is based on #216, and #219 is based on #218. PR #192's current head is not automatically the tested base of every dependent PR. Reconcile exact base/head SHAs and exact-head CI before integration; a clean mergeability flag is not proof of correct dependency ancestry.
+
+### Revised gate disposition
+
+- R-DPI-03 remains **FAIL / P0**; the route-wrapper coverage and database role evidence make the gap more specific.
+- R-DPI-05 remains **PARTIAL / HOLD**; the MRV worker needs a separate least-privilege job capability model and production schema parity.
+- R-DPI-08 remains **PARTIAL**; database function and trigger hardening, recovery and operational evidence remain open.
+- R-DPI-09 remains **FAIL / P1**; the cited audits are engineering reviews, not independent assurance.
+- R-DPI-10 remains **HOLD**.
+
+### Immediate implementation sequencing correction
+
+The next engineering batch must not begin by writing or enabling broad RLS policies. First complete a single integrated route-to-database access inventory across every API route, worker, trigger, function, scheduler and external callback. Then converge authentication and signed context, role separation, callable-function privileges, and worker capabilities in disposable PostgreSQL. Only after this combined contract passes adversarial integration tests should table policies be finalized and rehearsed. Production remains unchanged.
+
