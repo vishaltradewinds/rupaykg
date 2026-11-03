@@ -15,10 +15,6 @@ if (process.env.NODE_ENV === "production") {
   throw new Error("PRODUCTION_CONFIG_INVALID: acceptance fixture seeding is forbidden in production");
 }
 
-if (process.env.NODE_ENV === "production") {
-  throw new Error("PRODUCTION_CONFIG_INVALID: acceptance fixture seeding is forbidden in production");
-}
-
 if (process.env.RUPAYKG_ACCEPTANCE_SEED_ON_START !== "true") {
   process.exit(0);
 }
