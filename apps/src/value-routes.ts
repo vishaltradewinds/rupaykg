@@ -33,8 +33,9 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
         const access = accessResult.rows[0] ?? null;
         if (!access || access.organization_id !== auth.activeOrganizationId) throw Object.assign(new Error("Activity is not in the active organization"), { code: "ACTIVITY_FORBIDDEN" });
         if (!await hasOrganizationPermission(client, auth, auth.activeOrganizationId!, ["projects:manage"], "security_definer")) throw Object.assign(new Error("Explicit projects:manage permission is required"), { code: "CARBON_CALCULATION_FORBIDDEN" });
-        const geography = await assertActivityGeographyScope(client, access.organization_id, access.geography_id, auth.identityId);
-        if (!geography.ok) throw Object.assign(new Error(geography.code ?? "Activity geography is not authorized"), { code: geography.code ?? "GEOGRAPHY_FORBIDDEN" });
+        if (!access.geography_id) throw Object.assign(new Error("Activity geography is required"), { code: "ACTIVITY_GEOGRAPHY_REQUIRED" });
+        const geography = await client.query<{ ok: boolean }>("select organization_has_geography_scope($1,$2) as ok", [auth.activeOrganizationId, access.geography_id]);
+        if (geography.rows[0]?.ok !== true) throw Object.assign(new Error("Activity geography is outside organization authorization scope"), { code: "GEOGRAPHY_FORBIDDEN" });
         const evidence = await client.query<{ id: string; activity_id: string | null; content_hash: string | null; content_uri: string | null; status: string }>("select id,activity_id,content_hash,content_uri,status from evidence where id=$1", [evidenceId]);
         const evidenceRow = evidence.rows[0];
         if (!evidenceRow || evidenceRow.activity_id !== activityId) throw Object.assign(new Error("Evidence must exist and belong to the activity"), { code: "EVIDENCE_ACTIVITY_MISMATCH" });
