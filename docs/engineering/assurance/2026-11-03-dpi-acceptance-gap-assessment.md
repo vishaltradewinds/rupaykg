@@ -210,3 +210,18 @@ A subsequent read-only audit package on the stacked verifier-hardening branch `s
 
 The next engineering batch must not begin by writing or enabling broad RLS policies. First complete a single integrated route-to-database access inventory across every API route, worker, trigger, function, scheduler and external callback. Then converge authentication and signed context, role separation, callable-function privileges, and worker capabilities in disposable PostgreSQL. Only after this combined contract passes adversarial integration tests should table policies be finalized and rehearsed. Production remains unchanged.
 
+
+
+## 10. Source-level recheck of signed transaction adoption
+
+A direct re-fetch of `apps/src/value-routes.ts` at the current PR #216 head (`8693239b28587fb61e0f61c2f2d021b97f073fba`) found:
+- imports `withRlsRequestTransaction`;
+- contains ten references to the wrapper;
+- registers nine carbon/EPR/ESG/BWG workspace handlers;
+- its helper functions accept a `Pool | PoolClient` and are called with the checked-out `client` from the wrapped handler paths.
+
+This is inconsistent with the PR #216 branch's earlier static route-coverage document, which listed `value-routes.ts` among modules without wrapper adoption. The current source inspection supersedes that specific module-level statement; the audit document must be refreshed rather than repeating a stale count.
+
+This does **not** establish that the entire application is covered. `workspace-routes.ts` and `bwg-routes.ts` still show direct pool-based authorization/data queries in the inspected branch; other modules in the route inventory remain to be rechecked individually. The wrapper also intentionally rejects bilateral operations and requires one active verified organization, so registry transfers, settlements, regulator authority and cross-tenant workers need distinct contexts rather than forced reuse.
+
+**Revised interpretation:** transaction-boundary adoption is progressing in selected modules, but is not application-wide. Keep R-DPI-03 FAIL until every tenant-data path and worker/trigger/function path has a tested context/policy contract and the production role/RLS prerequisites are satisfied.
