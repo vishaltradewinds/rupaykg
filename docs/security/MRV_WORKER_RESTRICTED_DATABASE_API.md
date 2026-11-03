@@ -43,3 +43,40 @@ The worker's current direct SQL design must be replaced by a typed API client. I
 ## Release gate
 
 No runtime role provisioning, grants, production migration, worker enablement or TRL certification until the function API, TypeScript refactor, disposable PostgreSQL acceptance tests and independent DBA/security review are complete.
+
+## Concrete function contract (implementation target; not installed)
+
+The TypeScript worker call sites map to exactly these eight PostgreSQL entry points. Signatures below are the contract to implement and test, not a claim that these functions exist:
+
+| Operation | Required signature | Atomic responsibility |
+|---|---|---|
+| Claim | `mrv_worker_api.claim_next_job(text, integer) returns jsonb` | Select one due row with `FOR UPDATE SKIP LOCKED`, install a fresh UUID lease, increment attempt count, and return the complete immutable job snapshot plus lease token. |
+| Live authorization | `mrv_worker_api.authorize_job(uuid) returns boolean` | In one statement/snapshot, re-check the verified organization, unsuspended requester, active same-org verified membership, role permission, completed activity, verified evidence, independent approved verification, geography scope, and exact observations/evidence/latest-measurement snapshot equality. |
+| Guardian binding | `mrv_worker_api.persist_guardian_binding(uuid, uuid, text) returns boolean` | Lease-fenced, immutable idempotency binding; allow only CLAIMED/GUARDIAN_SUBMITTED and reject conflicting retries. |
+| Hedera binding | `mrv_worker_api.persist_hedera_binding(uuid, uuid, text, text, text) returns boolean` | Lease-fenced, immutable network/topic/transaction tuple; allow only GUARDIAN_VERIFIED/HCS_SUBMITTED and reject conflicting retries. |
+| Renew | `mrv_worker_api.renew_lease(uuid, uuid, integer) returns timestamptz` | Extend only a currently live matching lease; bound duration to 10–900 seconds. |
+| Advance | `mrv_worker_api.advance_job(uuid, uuid, text, jsonb) returns jsonb` | Validate state transition and an explicit patch-key/type allow-list; fence by live token; clear lease; let the existing trigger append the event in the same transaction. |
+| Release | `mrv_worker_api.release_job(uuid, uuid, timestamptz, text, text) returns boolean` | Clear only the matching live lease and store bounded retry/error metadata. |
+| Finalize | `mrv_worker_api.finalize_provenance(uuid, uuid, text) returns boolean` | Re-check authorization and the persisted Mirror digest; insert-or-verify the exact provenance tuple; transition through PROVENANCE_PERSISTED to COMPLETED and append events atomically. |
+
+The API must return no source-row data from authorization failures. It must not accept caller-supplied organization, geography, requester, activity, evidence or verification scope: those are derived from the locked job row and checked against live source rows. The worker may pass only the job ID and lease token for authorization.
+
+### Trusted function-owner boundary under FORCE RLS
+
+The runtime login remains function-only: no direct table grants, no role memberships, no schema CREATE, no BYPASSRLS. The eight functions require a dedicated NOLOGIN, NOINHERIT, NOSUPERUSER, NOBYPASSRLS owner with no memberships. That owner receives only the table privileges needed by the functions and explicit RLS policies scoped to that owner on the exact source, job, event and provenance tables. Do not solve this by granting BYPASSRLS, making the runtime login a table owner, or adding a broad policy for PUBLIC/application roles. Function bodies must enforce the full job-derived tenant/geography binding before any cross-tenant queue operation or mutation. The owner/policy/grant design must be tested with FORCE ROW LEVEL SECURITY enabled and hostile caller-controlled schemas.
+
+The runtime preflight's catalog checks must separately verify: (1) exact worker login attributes and no memberships; (2) zero direct table privileges; (3) EXECUTE on all eight exact signatures; (4) no PUBLIC EXECUTE on any signature; (5) expected SECURITY DEFINER owner and pinned search_path for each function; and (6) RLS plus FORCE RLS on every source/ledger/sink table. Checking only `claim_next_job` is insufficient once the full API exists.
+
+### Source-to-API refactor rule
+
+After all eight functions and their disposable PostgreSQL tests exist, replace `PoolClient`/SQL helpers in `mrv-submission-worker.ts` with a typed `MrvWorkerDatabase` adapter that calls only `select * from mrv_worker_api.<function>(...)`. Remove `mrv-submission-jobs.ts` direct-table helpers from the worker path. Keep Guardian, Hedera and Mirror Node network calls outside database transactions. Keep the same persisted provider idempotency and lease-token fencing semantics. The API adapter must validate returned JSON shape before provider calls.
+
+### Schema facts verified from the current migration source
+
+- `mrv_submission_jobs` and its immutable request payload/lease/state columns are created by `20261109_durable_mrv_submission_jobs.sql`.
+- Append-only `mrv_submission_job_events` and its transition event trigger are created in that same migration; status changes already emit events transactionally.
+- `mrv_provenance_events` is created in `015_guardian_hedera_mrv.sql`; Mirror Node timestamp is added in `083_mrv_mirror_node_registry_gate.sql`.
+- Live authorization currently reads `organizations.status`, `identities.status/suspended_at`, `organization_memberships.status/role_id`, `roles.permissions`, `activities`, `evidence`, `verifications`, `organization_has_geography_scope`, `mrv_observations`, and `measurements`.
+- The provenance uniqueness key is `(activity_id, verification_id, integrity_hash)`; the finalize function must verify an existing row's evidence, Guardian execution, HCS transaction and Mirror timestamp before treating a conflict as idempotent.
+
+No API migration or owner role is included in this design update. These contracts must be implemented against the full migration chain and verified on disposable PostgreSQL before the runtime role is provisioned.
