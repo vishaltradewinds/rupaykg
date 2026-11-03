@@ -100,6 +100,7 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
       const observations = captured.observations;
       const measurements = captured.measurements;
       const evidence = captured.evidence;
+      const artifactSeries = captured.artifactSeries;
       const quantity = captured.latestQuantity;
       const unit = captured.latestUnit;
 
@@ -140,7 +141,7 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
         });
       }
 
-      const guardian = await executeGuardianMrv({ activityId, verificationId, evidenceId, policyId, methodologyCode, observations, measurements, evidence, metadata: { evidenceCount: evidence.length, observationCount: observations.length, sourceSnapshotId: snapshot.id, sourceSnapshotVersion: snapshot.snapshot_version, sourceSnapshotDigest: snapshot.source_digest } });
+      const guardian = await executeGuardianMrv({ activityId, verificationId, evidenceId, policyId, methodologyCode, observations, measurements, evidence, artifactSeries, metadata: { evidenceCount: evidence.length, observationCount: observations.length, sourceSnapshotId: snapshot.id, sourceSnapshotVersion: snapshot.snapshot_version, sourceSnapshotDigest: snapshot.source_digest } });
       if (guardian.status !== "VERIFIED" || !guardian.executionId) return reply.code(503).send({ source: "guardian", syntheticData: false, guardian, eligibleForRegistry: false });
 
       const anchor = await submitHcsAnchor({ schema: "rupaykg:mrv:v2", activityId, verificationId, evidenceId, guardianPolicyId: policyId, guardianExecutionId: guardian.executionId, mrvStatus: "VERIFIED", methodologyCode, quantity, unit, sourceSnapshotId: snapshot.id, sourceSnapshotDigest: snapshot.source_digest, sourceSnapshotVersion: snapshot.snapshot_version, metadata: { guardianStatus: guardian.status } });
