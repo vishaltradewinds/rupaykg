@@ -766,6 +766,64 @@ async function run(): Promise<void> {
     assert.equal(privileges.rows[0]?.custodian_table_select, false);
     assert.equal(privileges.rows[0]?.public_execute, false);
 
+    // Verify every bootstrap SECURITY DEFINER function is owned by the
+    // dedicated NOLOGIN owner, pins search_path, and exposes only the two
+    // intended entry points to the custodian capability (never to runtime/PUBLIC).
+    const bootstrapFunctionContracts = await pool.query<{
+      function_name: string;
+      owner_name: string;
+      security_definer: boolean;
+      function_config: string[] | null;
+      runtime_execute: boolean;
+      custodian_execute: boolean;
+      public_execute: boolean;
+    }>(
+      `select p.proname as function_name,
+              pg_get_userbyid(p.proowner) as owner_name,
+              p.prosecdef as security_definer,
+              p.proconfig as function_config,
+              has_function_privilege('rupaykg_auth_runtime',p.oid,'EXECUTE') as runtime_execute,
+              has_function_privilege('rupaykg_bootstrap_custodian',p.oid,'EXECUTE') as custodian_execute,
+              exists(
+                select 1 from lateral aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) acl
+                 where acl.grantee=0 and acl.privilege_type='EXECUTE'
+              ) as public_execute
+         from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+        where n.nspname='bootstrap_private'
+          and p.proname=any($1::text[])
+        order by p.proname`,
+      [[
+        "assert_custodian_session",
+        "submit_initial_platform_authority_claim",
+        "finalize_initial_platform_authority_bootstrap",
+      ]],
+    );
+    assert.equal(bootstrapFunctionContracts.rows.length, 3,
+      "all three bootstrap functions must exist in the private schema");
+    for (const contract of bootstrapFunctionContracts.rows) {
+      assert.equal(contract.owner_name, "rupaykg_bootstrap_owner",
+        `${contract.function_name} must be owned by the dedicated NOLOGIN bootstrap owner`);
+      assert.equal(contract.security_definer, true,
+        `${contract.function_name} must be SECURITY DEFINER`);
+      assert.ok(contract.function_config?.some(value => value.replace(/\\s+/g, "") === "search_path=pg_catalog,pg_temp"),
+        `${contract.function_name} must pin search_path to pg_catalog,pg_temp`);
+      assert.equal(contract.runtime_execute, false,
+        `${contract.function_name} must not be executable by auth runtime`);
+      assert.equal(contract.public_execute, false,
+        `${contract.function_name} must not be executable by PUBLIC`);
+      assert.equal(contract.custodian_execute,
+        contract.function_name !== "assert_custodian_session",
+        `${contract.function_name} must expose only intended custodian entry points`);
+    }
+    const bootstrapRuntimeSchema = await pool.query<{ schema_usage: boolean; claim_select: boolean; ceremony_update: boolean }>(
+      `select has_schema_privilege('rupaykg_auth_runtime','bootstrap_private','USAGE') as schema_usage,
+              has_table_privilege('rupaykg_auth_runtime','bootstrap_private.bootstrap_claims','SELECT') as claim_select,
+              has_table_privilege('rupaykg_auth_runtime','bootstrap_private.bootstrap_ceremonies','UPDATE') as ceremony_update`,
+    );
+    assert.equal(bootstrapRuntimeSchema.rows[0]?.schema_usage, false);
+    assert.equal(bootstrapRuntimeSchema.rows[0]?.claim_select, false);
+    assert.equal(bootstrapRuntimeSchema.rows[0]?.ceremony_update, false);
+
     const roleId = (await pool.query<{ id: string }>(
       "select r.id from roles r where r.organization_id=$1 and r.name='super_admin'",
       [result.organizationId],
