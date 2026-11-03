@@ -1,6 +1,10 @@
 -- Identity-bound hierarchical onboarding review and legal verification.
 -- Every operation derives the actor from a live session token hash inside PostgreSQL.
 -- SECURITY DEFINER routines are owned by the dedicated NOLOGIN auth owner.
+-- Ensure the identity suspension kill switch exists before these functions run.
+ALTER TABLE public.identities
+  ADD COLUMN IF NOT EXISTS suspended_at timestamptz;
+
 
 GRANT UPDATE ON public.organization_verification_evidence,
   public.stakeholder_application_approvals TO rupaykg_auth_owner;
