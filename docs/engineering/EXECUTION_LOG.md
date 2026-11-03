@@ -24,3 +24,11 @@
 - PR #244 earlier head passed all CI steps in run #5232. Latest PR #244 head has CI #5239 in progress.
 - Updated PR #244 description to identify the latest checkpoint set and distinguish earlier CI from current-head CI.
 - Production unchanged; release remains HOLD.
+
+## 2026-11-03 — CTO Run 09 (17:54–17:55 UTC)
+- PR #243 exact-head CI #5241 failed while applying migration 088 to disposable PostgreSQL: syntax error near the following CREATE FUNCTION because the credential-guard body ended with `$$` without a statement semicolon.
+- Corrected the function statement terminator to `$$;` in commit `e083577bcb853af1f2d44f3a536fd3d4f89cbf34`; verified all four PL/pgSQL functions close correctly.
+- Fresh exact-head CI #5244 (`41688858075`) is in progress on the corrected head.
+- PR #244 latest head CI #5239 (`41688568104`) completed SUCCESS across all configured stages, including production-container build.
+- PR #243 remains draft/unmerged due current CI and outstanding MRV snapshot integrity findings.
+- Production unchanged; no merge, deployment, migration or role/RLS change.
