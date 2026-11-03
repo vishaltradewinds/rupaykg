@@ -25,8 +25,8 @@ test("MRV source snapshots are immutable, idempotent and require explicit correc
       [organizationId, geography.rows[0]!.id],
     );
     const identity = await pool.query<{ id: string }>(
-      "insert into identities(external_subject,display_name,email,status) values($1,$2,$3,'VERIFIED') returning id",
-      ["test-mrv-snapshot:"+suffix,"MRV Snapshot Actor","mrv-snapshot-"+suffix+"@example.invalid"],
+      "insert into identities(external_subject,display_name,status) values($1,$2,'VERIFIED') returning id",
+      ["test-mrv-snapshot:"+suffix,"MRV Snapshot Actor"],
     );
     const identityId = identity.rows[0]!.id;
     const role = await pool.query<{ id: string }>(
