@@ -197,9 +197,9 @@ export async function captureMrvSourceSnapshot(input: {
     const latestMeasurement = measurementsResult.rows.at(-1);
     return {
       snapshot,
-      observations: observationsResult.rows.map(({ snapshot_record: _snapshotRecord, ...row }) => row),
-      measurements: measurementsResult.rows.map(({ snapshot_record: _snapshotRecord, ...row }) => row),
-      evidence: evidenceResult.rows.map(({ evidence_snapshot_record: _evidenceSnapshotRecord, artifact_version_snapshot_record: _artifactVersionSnapshotRecord, artifact_series_snapshot_record: _artifactSeriesSnapshotRecord, ...row }) => row),
+      observations: observationsResult.rows.map(row => row.snapshot_record),
+      measurements: measurementsResult.rows.map(row => row.snapshot_record),
+      evidence: evidenceResult.rows.map(row => ({ ...row.evidence_snapshot_record, artifactVersion: row.artifact_version_snapshot_record, artifactSeries: row.artifact_series_snapshot_record, reviews: row.reviews })),
       latestQuantity: latestMeasurement ? Number(latestMeasurement.value) : undefined,
       latestUnit: latestMeasurement?.unit,
       organizationId: activity.organization_id,
