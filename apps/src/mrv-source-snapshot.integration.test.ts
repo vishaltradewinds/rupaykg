@@ -19,6 +19,7 @@ test("MRV source snapshots are immutable, idempotent and require explicit correc
     const geography = await pool.query<{ id: string }>(
       "insert into geography(kind,name,source,source_version) values('STATE_UT',$1,'integration-test','fixture-v1') returning id",
       ["TEST-MRV-GEO-" + suffix],
+    await pool.query("insert into organization_geography_scopes(organization_id,geography_id) values($1,$2)", [organizationId, geography.rows[0]!.id]);
     );
     const activity = await pool.query<{ id: string }>(
       "insert into activities(organization_id,geography_id,activity_type,status,occurred_at,completed_at) values($1,$2,'WASTE_WEIGHT_MEASUREMENT','COMPLETED',now()-interval '1 day',now()) returning id",
