@@ -7,13 +7,10 @@ const checksum = sha256Hex(bytes);
 const source = { version: "001", filename: "001_core.sql", checksum };
 const row = { version: "001", filename: "001_core.sql", checksum_sha256: checksum };
 
-test("SHA-256 is deterministic over exact bytes", () => {
-  assert.equal(sha256Hex(bytes), "e6b1f8b9c6a2c3b12e6e84c1e8e9f1a0c0f7a4e7d7e8d3d7e3f3e0f2e8c7b0e8");
-  assert.equal(sha256Hex(Buffer.from("select 1;", "utf8")), notEqualNewlineChecksum());
+test("SHA-256 is deterministic over exact bytes, including line endings", () => {
+  assert.equal(checksum, "4a45092ccf992ea92250053a80b931b787924ba61648f420555511b84f10ab6c");
+  assert.notEqual(checksum, sha256Hex(Buffer.from("select 1;", "utf8")));
 });
-function notEqualNewlineChecksum() {
-  return sha256Hex(Buffer.from("select 1;", "utf8"));
-}
 
 test("accepts an exact filename and checksum match", () => {
   assert.equal(classifyRecordedMigration(row, source), "VERIFIED");
