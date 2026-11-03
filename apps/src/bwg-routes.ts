@@ -4,6 +4,13 @@ import { authenticate, bearerChallenge, hasOrganizationPermission, type AuthCont
 import { registerEprReturnRoutes } from "./epr-return-routes.js";
 import { withRlsRequestTransaction, type RlsRequestContextConfig } from "./rls-request-transaction.js";
 
+class EprObligationPermissionDenied extends Error {
+  constructor() {
+    super("EPR obligation read permission required");
+    this.name = "EprObligationPermissionDenied";
+  }
+}
+
 async function authFor(request: Parameters<typeof authenticate>[0], reply: { code: (status: number) => { send: (body: unknown) => unknown } }, pool: Pool | null): Promise<AuthContext | null> {
   if (!pool) { reply.code(503).send({ error: "Authoritative API unavailable", code: "DATABASE_UNAVAILABLE", syntheticData: false }); return null; }
   try { const auth = await authenticate(request, pool); if (!auth) { reply.code(401).send(bearerChallenge()); return null; } return auth; }
@@ -34,7 +41,7 @@ export async function registerBwgRoutes(app: FastifyInstance, pool: Pool | null)
     try {
       const rows = await withRlsRequestTransaction(pool, auth, context, async (client) => {
         const permitted = await hasOrganizationPermission(client, auth, organizationId, ["epr:read", "epr:manage", "reports:read"]);
-        if (!permitted) return null;
+        if (!permitted) throw new EprObligationPermissionDenied();
         return client.query(
           `select eo.id as epr_obligation_id,eo.obligation_id,eo.scheme_id,s.code as scheme_code,s.name as scheme_name,eo.category_code,eo.target_quantity,eo.fulfilled_quantity,eo.status,o.period_start,o.period_end,o.jurisdiction_id,g.name as jurisdiction_name
              from epr_obligations eo
@@ -47,9 +54,11 @@ export async function registerBwgRoutes(app: FastifyInstance, pool: Pool | null)
           [organizationId],
         );
       });
-      if (!rows) return reply.code(403).send({ error: "EPR obligation read permission required", code: "EPR_OBLIGATION_READ_FORBIDDEN", syntheticData: false });
       return { source: "postgresql", syntheticData: false, obligations: rows.rows };
     } catch (error) {
+      if (error instanceof EprObligationPermissionDenied) {
+        return reply.code(403).send({ error: error.message, code: "EPR_OBLIGATION_READ_FORBIDDEN", syntheticData: false });
+      }
       request.log.error(error);
       return reply.code(503).send({ error: "EPR obligation workspace unavailable", code: "EPR_OBLIGATION_READ_UNAVAILABLE", syntheticData: false });
     }
