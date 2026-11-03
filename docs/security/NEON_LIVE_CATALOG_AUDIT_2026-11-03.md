@@ -55,7 +55,7 @@ The current database owner/runtime role's `BYPASSRLS` and elevated attributes me
 
 ## Migration ledger observation
 
-The latest rows in `public.schema_migrations` were headed by version `096` (applied 2026-10-27) and `20261021` (applied 2026-10-18). The visible recent ledger does not include the current repository's November 2026 worker, verifier authorization snapshot or claim-index migrations. The direct catalog checks independently confirm that the durable worker queue/API objects are absent.
+The live `public.schema_migrations` table contains **92 rows**. Its latest applied timestamp is `2026-10-27T13:46:14.262Z`, headed by version `096`; the next visible version is `20261021`. A direct predicate check found **no** versions matching the current repository's November 2026 worker/verifier migration set (`20261106`, `20261108`, `20261109`, `20261112`, `20261113`). The direct catalog checks independently confirm that the durable worker queue/API objects are absent.
 
 The repository migration chain and live database have therefore diverged. Do not infer that GitHub migration files are deployed merely because they exist in the branch.
 
