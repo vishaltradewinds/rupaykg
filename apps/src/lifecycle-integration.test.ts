@@ -10,7 +10,7 @@ test("production lifecycle integration gate", { skip: !url }, async () => {
   const c = await pool.connect();
   try {
     await c.query("begin");
-    const org = (await c.query("insert into organizations(name,organization_type) values('integration','COLLECTOR') returning id")).rows[0].id;
+    const org = (await c.query("insert into organizations(name,organization_type) values('integration','COLLECTOR') returning id")).rows[0]!.id;
     const buyer = (await c.query("insert into organizations(name,organization_type) values('integration-buyer','INDUSTRY_GENERATOR') returning id")).rows[0].id;
     const geography = (await c.query("insert into geography(kind,code,name,source) values('DISTRICT','INTEGRATION','Integration District','test') returning id")).rows[0].id;
     await c.query("insert into organization_geography_scopes(organization_id,geography_id,status) values($1,$2,'VERIFIED')", [org, geography]);
