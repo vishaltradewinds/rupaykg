@@ -187,8 +187,9 @@ export async function captureMrvSourceSnapshot(input: {
         [input.activityId,input.verificationId,input.evidenceId,input.guardianPolicyId,input.methodologyCode ?? null,
          version,digest,JSON.stringify(payload),latest?.id ?? null,latest ? correctionReason : null,input.auth.identityId],
       );
-      snapshot = inserted.rows[0];
-      if (!snapshot) throw new Error("MRV source snapshot insert returned no row");
+      const insertedSnapshot = inserted.rows[0];
+      if (!insertedSnapshot) throw new Error("MRV source snapshot insert returned no row");
+      snapshot = insertedSnapshot;
     }
     await client.query("commit");
     transactionOpen = false;
