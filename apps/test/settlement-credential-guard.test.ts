@@ -26,8 +26,22 @@ before(async () => {
     const retiredActivity = (await c.query<{ id: string }>("insert into activities(organization_id,actor_identity_id,geography_id,activity_type,status,completed_at) values($1,$2,$3,'COLLECTION','COMPLETED',now()) returning id", [owner, actor, geography])).rows[0]!.id;
     const retiredEvidence = (await c.query<{ id: string }>("insert into evidence(activity_id,evidence_type,status,captured_at,content_hash) values($1,'SETTLEMENT_GUARD','VERIFIED',now(),$2) returning id", [retiredActivity, `settlement-guard-retired-${suffix}`])).rows[0]!.id;
     const retiredVerification = (await c.query<{ id: string }>("insert into verifications(evidence_id,activity_id,verifier_identity_id,decision,scope,rationale) values($1,$2,$3,'APPROVED','settlement-guard','independent database guard test') returning id", [retiredEvidence, retiredActivity, verifier])).rows[0]!.id;
-    await c.query("insert into mrv_provenance_events(activity_id,verification_id,evidence_id,guardian_policy_id,guardian_execution_id,guardian_status,hcs_status,hcs_topic_id,hcs_transaction_id,hcs_consensus_timestamp,integrity_hash,metadata,mirror_node_verified_at) values($1,$2,$3,'settlement-guard-policy','settlement-guard-guardian','VERIFIED','CONSENSUS_CONFIRMED','0.0.123',$4,$5,$6,'{\"testFixture\":true}',clock_timestamp())", [retiredActivity, retiredVerification, retiredEvidence, `retired-tx-${suffix}`, `retired-consensus-${suffix}`, `retired-hash-${suffix}`]);
-    retiredCredentialId = (await c.query<{ id: string }>("insert into credentials(activity_id,issuer_organization_id,trust_root_id,status,verification_id,quantity,unit,issued_at) values($1,$2,$3,'ELIGIBLE',$4,1,'kg',now()) returning id", [retiredActivity, owner, `settlement-guard-retired-root-${suffix}`, retiredVerification])).rows[0]!.id;
+    const retiredMethodologyCode = `TEST-METHODOLOGY-RETIRED-${suffix}`;
+    const retiredMethodologyId = (await c.query(
+      "insert into methodology_versions(methodology_code,version,rules,source_reference,source_hash,applicability_rules,parameter_dictionary,equation_mapping,reconciliation_evidence,reconciliation_reference,reconciled_at,regression_verified_at) values($1,'test-1','{}'::jsonb,'test-fixture://methodology',repeat('a',64),'{\"fixture\":true}'::jsonb,'{\"fixture\":true}'::jsonb,'{\"fixture\":true}'::jsonb,'[{\"fixture\":true}]'::jsonb,$2,now(),now()) returning id",
+      [retiredMethodologyCode, `retired-reconciliation-${suffix}`],
+    )).rows[0]!.id;
+    await c.query(
+      "insert into methodology_governance_evidence(methodology_version_id,evidence_kind,reference,evidence_hash,independent_party,evidence) values($1,'NUMERICAL_RECONCILIATION',$2,repeat('b',64),'TEST_FIXTURE_ONLY','{\"fixture\":true}'::jsonb),($1,'REGRESSION_TEST',$3,repeat('c',64),'TEST_FIXTURE_ONLY','{\"fixture\":true}'::jsonb)",
+      [retiredMethodologyId, `retired-reconciliation-${suffix}`, `retired-regression-${suffix}`],
+    );
+    await c.query("update methodology_versions set governance_status='PRODUCTION_ELIGIBLE' where id=$1", [retiredMethodologyId]);
+    await c.query("insert into mrv_provenance_events(activity_id,verification_id,evidence_id,methodology_code,guardian_policy_id,guardian_execution_id,guardian_status,hcs_status,hcs_topic_id,hcs_transaction_id,hcs_consensus_timestamp,integrity_hash,metadata,mirror_node_verified_at) values($1,$2,$3,$4,'settlement-guard-policy','settlement-guard-guardian','VERIFIED','CONSENSUS_CONFIRMED','0.0.123',$5,$6,$7,'{\"testFixture\":true}',clock_timestamp())", [retiredActivity, retiredVerification, retiredEvidence, retiredMethodologyCode, `retired-tx-${suffix}`, `retired-consensus-${suffix}`, `retired-hash-${suffix}`]);
+    await c.query(
+      "insert into activity_registry_eligibility_decisions(activity_id,verification_id,evidence_id,methodology_version_id,geography_id,decision,statutory_basis,permit_and_authority_evidence,applicability_rationale,independent_review_reference,reviewer_identity_id,effective_from) values($1,$2,$3,$4,$5,'APPROVED','{\"testFixture\":true}'::jsonb,'[{\"testFixture\":true}]'::jsonb,'TEST FIXTURE ONLY - NOT A REGULATORY APPROVAL',$6,$7,current_date)",
+      [retiredActivity, retiredVerification, retiredEvidence, retiredMethodologyId, geography, `retired-review-${suffix}`, verifier],
+    );
+    retiredCredentialId = (await c.query<{ id: string }>("insert into credentials(activity_id,issuer_organization_id,trust_root_id,status,verification_id,methodology_version_id,quantity,unit,issued_at) values($1,$2,$3,'ELIGIBLE',$4,$5,1,'kg',now()) returning id", [retiredActivity, owner, `settlement-guard-retired-root-${suffix}`, retiredVerification, retiredMethodologyId])).rows[0]!.id;
     await c.query("update credentials set status='ISSUED' where id=$1", [retiredCredentialId]);
     await c.query("insert into registry_events(credential_id,event_type,to_owner_id,verification_id,recorded_by_identity_id,event_hash) values($1,'ISSUED',$2,$3,$4,$5)", [retiredCredentialId, owner, retiredVerification, verifier, `settlement-guard-retired-registry-${suffix}`]);
     await c.query("update credentials set status='ACTIVE' where id=$1", [retiredCredentialId]);
@@ -36,8 +50,22 @@ before(async () => {
     const openActivity = (await c.query<{ id: string }>("insert into activities(organization_id,actor_identity_id,geography_id,activity_type,status,completed_at) values($1,$2,$3,'COLLECTION','COMPLETED',now()) returning id", [owner, actor, geography])).rows[0]!.id;
     const openEvidence = (await c.query<{ id: string }>("insert into evidence(activity_id,evidence_type,status,captured_at,content_hash) values($1,'SETTLEMENT_GUARD','VERIFIED',now(),$2) returning id", [openActivity, `settlement-guard-open-${suffix}`])).rows[0]!.id;
     const openVerification = (await c.query<{ id: string }>("insert into verifications(evidence_id,activity_id,verifier_identity_id,decision,scope,rationale) values($1,$2,$3,'APPROVED','settlement-guard','independent database guard test') returning id", [openEvidence, openActivity, verifier])).rows[0]!.id;
-    await c.query("insert into mrv_provenance_events(activity_id,verification_id,evidence_id,guardian_policy_id,guardian_execution_id,guardian_status,hcs_status,hcs_topic_id,hcs_transaction_id,hcs_consensus_timestamp,integrity_hash,metadata,mirror_node_verified_at) values($1,$2,$3,'settlement-guard-policy','settlement-guard-guardian','VERIFIED','CONSENSUS_CONFIRMED','0.0.123',$4,$5,$6,'{\"testFixture\":true}',clock_timestamp())", [openActivity, openVerification, openEvidence, `open-tx-${suffix}`, `open-consensus-${suffix}`, `open-hash-${suffix}`]);
-    openSettlementCredentialId = (await c.query<{ id: string }>("insert into credentials(activity_id,issuer_organization_id,trust_root_id,status,verification_id,quantity,unit,issued_at) values($1,$2,$3,'ELIGIBLE',$4,2,'kg',now()) returning id", [openActivity, owner, `settlement-guard-open-root-${suffix}`, openVerification])).rows[0]!.id;
+    const openMethodologyCode = `TEST-METHODOLOGY-OPEN-${suffix}`;
+    const openMethodologyId = (await c.query(
+      "insert into methodology_versions(methodology_code,version,rules,source_reference,source_hash,applicability_rules,parameter_dictionary,equation_mapping,reconciliation_evidence,reconciliation_reference,reconciled_at,regression_verified_at) values($1,'test-1','{}'::jsonb,'test-fixture://methodology',repeat('a',64),'{\"fixture\":true}'::jsonb,'{\"fixture\":true}'::jsonb,'{\"fixture\":true}'::jsonb,'[{\"fixture\":true}]'::jsonb,$2,now(),now()) returning id",
+      [openMethodologyCode, `open-reconciliation-${suffix}`],
+    )).rows[0]!.id;
+    await c.query(
+      "insert into methodology_governance_evidence(methodology_version_id,evidence_kind,reference,evidence_hash,independent_party,evidence) values($1,'NUMERICAL_RECONCILIATION',$2,repeat('b',64),'TEST_FIXTURE_ONLY','{\"fixture\":true}'::jsonb),($1,'REGRESSION_TEST',$3,repeat('c',64),'TEST_FIXTURE_ONLY','{\"fixture\":true}'::jsonb)",
+      [openMethodologyId, `open-reconciliation-${suffix}`, `open-regression-${suffix}`],
+    );
+    await c.query("update methodology_versions set governance_status='PRODUCTION_ELIGIBLE' where id=$1", [openMethodologyId]);
+    await c.query("insert into mrv_provenance_events(activity_id,verification_id,evidence_id,methodology_code,guardian_policy_id,guardian_execution_id,guardian_status,hcs_status,hcs_topic_id,hcs_transaction_id,hcs_consensus_timestamp,integrity_hash,metadata,mirror_node_verified_at) values($1,$2,$3,$4,'settlement-guard-policy','settlement-guard-guardian','VERIFIED','CONSENSUS_CONFIRMED','0.0.123',$5,$6,$7,'{\"testFixture\":true}',clock_timestamp())", [openActivity, openVerification, openEvidence, openMethodologyCode, `open-tx-${suffix}`, `open-consensus-${suffix}`, `open-hash-${suffix}`]);
+    await c.query(
+      "insert into activity_registry_eligibility_decisions(activity_id,verification_id,evidence_id,methodology_version_id,geography_id,decision,statutory_basis,permit_and_authority_evidence,applicability_rationale,independent_review_reference,reviewer_identity_id,effective_from) values($1,$2,$3,$4,$5,'APPROVED','{\"testFixture\":true}'::jsonb,'[{\"testFixture\":true}]'::jsonb,'TEST FIXTURE ONLY - NOT A REGULATORY APPROVAL',$6,$7,current_date)",
+      [openActivity, openVerification, openEvidence, openMethodologyId, geography, `open-review-${suffix}`, verifier],
+    );
+    openSettlementCredentialId = (await c.query<{ id: string }>("insert into credentials(activity_id,issuer_organization_id,trust_root_id,status,verification_id,methodology_version_id,quantity,unit,issued_at) values($1,$2,$3,'ELIGIBLE',$4,$5,2,'kg',now()) returning id", [openActivity, owner, `settlement-guard-open-root-${suffix}`, openVerification, openMethodologyId])).rows[0]!.id;
     await c.query("update credentials set status='ISSUED' where id=$1", [openSettlementCredentialId]);
     await c.query("insert into registry_events(credential_id,event_type,to_owner_id,verification_id,recorded_by_identity_id,event_hash) values($1,'ISSUED',$2,$3,$4,$5)", [openSettlementCredentialId, owner, openVerification, verifier, `settlement-guard-open-registry-${suffix}`]);
     await c.query("update credentials set status='ACTIVE' where id=$1", [openSettlementCredentialId]);
@@ -66,3 +94,65 @@ describe("settlement credential lifecycle database guards", () => {
     assert.match(error.message, /Credential cannot be retired while a settlement is open/i);
   });
 });
+
+
+  it("fails closed when a newer eligibility review rejects an earlier approval", async () => {
+    if (!pool) return;
+    const source = (await pool.query<{
+      activity_id: string; issuer_organization_id: string; trust_root_id: string;
+      verification_id: string; evidence_id: string; methodology_version_id: string;
+      geography_id: string; reviewer_identity_id: string; methodology_code: string;
+    }>(
+      `select c.activity_id,c.issuer_organization_id,c.trust_root_id,c.verification_id,
+              v.evidence_id,c.methodology_version_id,d.geography_id,d.reviewer_identity_id,mv.methodology_code
+         from credentials c
+         join verifications v on v.id=c.verification_id
+         join activity_registry_eligibility_decisions d on d.activity_id=c.activity_id and d.verification_id=c.verification_id
+         join methodology_versions mv on mv.id=c.methodology_version_id
+        where c.id=$1
+        order by d.decision_sequence desc limit 1`,
+      [openSettlementCredentialId],
+    )).rows[0]!;
+    const verificationId = (await pool.query<{id:string}>(
+      `insert into verifications(evidence_id,activity_id,verifier_identity_id,decision,scope,rationale)
+       values($1,$2,$3,'APPROVED','eligibility-supersession-test','TEST FIXTURE ONLY - supersession regression') returning id`,
+      [source.evidence_id,source.activity_id,source.reviewer_identity_id],
+    )).rows[0]!.id;
+    await pool.query(
+      `insert into mrv_provenance_events
+       (activity_id,verification_id,evidence_id,methodology_code,guardian_policy_id,guardian_execution_id,
+        guardian_status,hcs_status,hcs_topic_id,hcs_transaction_id,hcs_consensus_timestamp,integrity_hash,metadata,mirror_node_verified_at)
+       values($1,$2,$3,$4,'supersession-test-policy',$5,'VERIFIED','CONSENSUS_CONFIRMED','0.0.123',$6,$7,$8,'{"testFixture":true}'::jsonb,clock_timestamp())`,
+      [source.activity_id,verificationId,source.evidence_id,source.methodology_code,
+       `supersession-guardian-${suffix}`,`supersession-tx-${suffix}`,`1700000000.${suffix.slice(0,9)}`,`supersession-hash-${suffix}`],
+    );
+    await pool.query(
+      `insert into activity_registry_eligibility_decisions
+       (activity_id,verification_id,evidence_id,methodology_version_id,geography_id,decision,
+        statutory_basis,permit_and_authority_evidence,applicability_rationale,
+        independent_review_reference,reviewer_identity_id,effective_from)
+       values($1,$2,$3,$4,$5,'APPROVED',$6::jsonb,$7::jsonb,$8,$9,$10,current_date)`,
+      [source.activity_id,verificationId,source.evidence_id,source.methodology_version_id,source.geography_id,
+       JSON.stringify({testFixture:true}),JSON.stringify([{testFixture:true}]),
+       "TEST FIXTURE ONLY - initial approval for supersession test",`initial-review-${suffix}`,source.reviewer_identity_id],
+    );
+    const candidateId = (await pool.query<{id:string}>(
+      `insert into credentials(activity_id,issuer_organization_id,trust_root_id,status,verification_id,methodology_version_id,quantity,unit,issued_at)
+       values($1,$2,$3,'ELIGIBLE',$4,$5,1,'kg',now()) returning id`,
+      [source.activity_id,source.issuer_organization_id,source.trust_root_id,verificationId,source.methodology_version_id],
+    )).rows[0]!.id;
+    await pool.query(
+      `insert into activity_registry_eligibility_decisions
+       (activity_id,verification_id,evidence_id,methodology_version_id,geography_id,decision,
+        statutory_basis,permit_and_authority_evidence,applicability_rationale,
+        independent_review_reference,reviewer_identity_id,effective_from)
+       values($1,$2,$3,$4,$5,'REQUIRES_REVIEW',$6::jsonb,$7::jsonb,$8,$9,$10,current_date)`,
+      [source.activity_id,verificationId,source.evidence_id,source.methodology_version_id,source.geography_id,
+       JSON.stringify({testFixture:true}),JSON.stringify([{testFixture:true}]),
+       "TEST FIXTURE ONLY - later review requires reassessment",`later-review-${suffix}`,source.reviewer_identity_id],
+    );
+    const error = await pool.query("update credentials set status='ISSUED' where id=$1", [candidateId])
+      .then(() => null).catch((value: unknown) => value);
+    assert.ok(error instanceof Error, "newer REQUIRES_REVIEW decision must supersede an older APPROVED decision");
+    assert.match(error.message, /REGULATORY_ELIGIBILITY_REQUIRED/i);
+  });

@@ -104,3 +104,22 @@
 .evidence-vault-actions{display:grid;gap:.5rem;align-content:start;min-width:0}
 .evidence-vault-actions textarea{min-height:4rem;padding:.6rem;border:1px solid var(--border,#d5dbe4);border-radius:.5rem;background:var(--input,transparent);color:inherit}
 @media(max-width:640px){.evidence-vault-panel{padding:.85rem}.evidence-vault-list>article{grid-template-columns:1fr}.evidence-vault-actions{grid-template-columns:1fr}}
+
+.agentic-panel{display:grid;gap:1rem;margin-top:1.25rem;padding:1rem;border:1px solid var(--border,#d5dbe4);border-radius:1rem;min-width:0}
+.agentic-panel>p{max-width:75ch;line-height:1.55;opacity:.9}
+.agentic-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.8rem;align-items:end}
+.agentic-form label{display:grid;gap:.4rem;min-width:0;font-size:.9rem}
+.agentic-form input:not([type=checkbox]),.agentic-form select{box-sizing:border-box;width:100%;min-width:0;padding:.7rem;border:1px solid var(--border,#d5dbe4);border-radius:.55rem;background:var(--input,transparent);color:inherit}
+.agentic-form .agentic-check{display:flex;align-items:center;gap:.5rem;grid-column:1/-1}
+.agentic-form button{justify-self:start}
+.agentic-result{display:grid;gap:.8rem;min-width:0}
+.agentic-summary,.agentic-step>div{display:flex;align-items:center;justify-content:space-between;gap:.75rem;flex-wrap:wrap}
+.agentic-summary span,.agentic-step small{font-size:.78rem;opacity:.78;overflow-wrap:anywhere}
+.agentic-steps{display:grid;gap:.65rem}
+.agentic-step{display:grid;gap:.45rem;padding:.8rem;border:1px solid var(--border,#d5dbe4);border-radius:.7rem;min-width:0}
+.agentic-step p{margin:0;line-height:1.45;overflow-wrap:anywhere}
+.agentic-step small{line-height:1.4}
+.agentic-explanation{padding:.8rem;border-left:3px solid var(--accent,#6688ee);background:var(--surface,transparent);border-radius:.35rem}
+.agentic-explanation p{margin:.4rem 0 0;line-height:1.5;overflow-wrap:anywhere}
+.agentic-boundary{font-size:.8rem;font-weight:600}
+@media(max-width:640px){.agentic-panel{padding:.8rem}.agentic-form{grid-template-columns:1fr}.agentic-form .agentic-check{grid-column:auto}}
