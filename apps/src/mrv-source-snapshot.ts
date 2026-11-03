@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
 import { canActForOrganization, hasOrganizationPermission, type AuthContext } from "./auth.js";
 
@@ -33,19 +32,6 @@ export class MrvSnapshotError extends Error {
   }
 }
 
-function canonical(value: unknown): string {
-  if (value instanceof Date) return JSON.stringify(value.toISOString());
-  if (value === undefined) return "null";
-  if (value === null || typeof value !== "object") return JSON.stringify(value) ?? "null";
-  if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
-  const object = value as Record<string, unknown>;
-  const keys = Object.keys(object).filter(key => object[key] !== undefined).sort();
-  return `{${keys.map(key => `${JSON.stringify(key)}:${canonical(object[key])}`).join(",")}}`;
-}
-
-export function mrvSourceDigest(payload: unknown): string {
-  return createHash("sha256").update(canonical(payload)).digest("hex");
-}
 
 type ActivityRow = {
   id: string; organization_id: string; actor_identity_id: string | null; geography_id: string | null; activity_type: string;
@@ -162,7 +148,12 @@ export async function captureMrvSourceSnapshot(input: {
       measurements: measurementsResult.rows.map(row => ({ recordJson: row.snapshot_record_json, value: row.value, unit: row.unit })),
       evidence: evidenceResult.rows.map(row => ({ evidenceRecordJson: row.evidence_snapshot_record_json, artifactVersionRecordJson: row.artifact_version_snapshot_record_json, artifactSeriesRecordJson: row.artifact_series_snapshot_record_json, reviewRecordsJson: row.reviews_snapshot_records_json })),
     };
-    const digest = mrvSourceDigest(payload);
+    const digestResult = await client.query<{ digest: string }>(
+      "select mrv_source_snapshot_digest($1::jsonb) as digest",
+      [JSON.stringify(payload)],
+    );
+    const digest = digestResult.rows[0]?.digest;
+    if (!digest) throw new Error("PostgreSQL did not return the canonical MRV source digest");
     const latestResult = await client.query<MrvSourceSnapshot>(
       "select * from mrv_source_snapshots where activity_id=$1 order by snapshot_version desc limit 1 for update",
       [input.activityId],
