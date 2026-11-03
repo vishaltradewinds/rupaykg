@@ -85,6 +85,10 @@ function completeJob(value: unknown, leaseToken: string): MrvSubmissionJob {
   if (!leaseOwner || !rowLeaseToken || !UUID.test(rowLeaseToken) || !leaseExpiresAt || rowLeaseToken !== leaseToken) throw new Error("MRV_WORKER_API_INVALID_JOB_LEASE");
   const idempotencyKey = requiredString(row, "idempotency_key");
   if (idempotencyKey.length < 32 || idempotencyKey.length > 128) throw new Error("MRV_WORKER_API_INVALID_JOB_FIELD:idempotency_key");
+  const guardianIdempotencyKey = nullableString(row, "guardian_idempotency_key");
+  if (guardianIdempotencyKey !== null && (guardianIdempotencyKey.length < 32 || guardianIdempotencyKey.length > 128)) {
+    throw new Error("MRV_WORKER_API_INVALID_JOB_FIELD:guardian_idempotency_key");
+  }
   const payloadHash = requiredString(row, "payload_hash");
   if (!/^[a-f0-9]{64}$/.test(payloadHash)) throw new Error("MRV_WORKER_API_INVALID_JOB_FIELD:payload_hash");
   const foreignIds = ["activity_id", "verification_id", "evidence_id", "organization_id", "geography_id", "requested_by_identity_id"] as const;
@@ -112,7 +116,7 @@ function completeJob(value: unknown, leaseToken: string): MrvSubmissionJob {
     lease_token: rowLeaseToken,
     lease_expires_at: leaseExpiresAt,
     next_attempt_at: dateValue(row, "next_attempt_at")!,
-    guardian_idempotency_key: nullableString(row, "guardian_idempotency_key"),
+    guardian_idempotency_key: guardianIdempotencyKey,
     guardian_execution_id: nullableString(row, "guardian_execution_id"),
     guardian_status: guardianStatus,
     guardian_result: guardianResult,
