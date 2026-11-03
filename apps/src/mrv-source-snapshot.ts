@@ -54,8 +54,8 @@ type ActivityRow = {
 type VerificationRow = {
   id: string; evidence_id: string; verifier_identity_id: string; decision: string; scope: string; rationale: string | null; decided_at: Date | string; snapshot_record: Record<string, unknown>;
 };
-type EvidenceRow = Record<string, unknown> & { id: string; status: string; evidence_snapshot_record: Record<string, unknown>; artifact_version_snapshot_record: Record<string, unknown> | null; artifact_series_snapshot_record: Record<string, unknown> | null };
-type MeasurementRow = Record<string, unknown> & { value: string | number; unit: string; snapshot_record: Record<string, unknown> };
+type EvidenceRow = Record<string, unknown> & { id: string; status: string; evidence_snapshot_record_json: string; artifact_version_snapshot_record_json: string | null; artifact_series_snapshot_record_json: string | null; reviews_snapshot_records_json: string };
+type MeasurementRow = Record<string, unknown> & { value: string | number; unit: string; snapshot_record_json: string };
 
 export async function captureMrvSourceSnapshot(input: {
   pool: Pool;
@@ -121,12 +121,12 @@ export async function captureMrvSourceSnapshot(input: {
       throw new MrvSnapshotError("MRV_PRECONDITION_FAILED", "Activity must be COMPLETED before Guardian MRV");
     }
 
-    const observationsResult = await client.query<Record<string, unknown>>(
-      "select mo.id,mo.parameter_code,mo.observed_value::text observed_value,mo.unit,mo.method,mo.instrument_id,mo.observed_at,mo.uncertainty::text uncertainty,mo.quality_status::text quality_status,mo.metadata,to_jsonb(mo) snapshot_record from mrv_observations mo where mo.activity_id=$1 order by mo.observed_at,mo.id",
+    const observationsResult = await client.query<Record<string, unknown> & { snapshot_record_json: string }>(
+      "select mo.id,mo.parameter_code,mo.observed_value::text observed_value,mo.unit,mo.method,mo.instrument_id,mo.observed_at,mo.uncertainty::text uncertainty,mo.quality_status::text quality_status,mo.metadata,to_jsonb(mo)::text snapshot_record_json from mrv_observations mo where mo.activity_id=$1 order by mo.observed_at,mo.id",
       [input.activityId],
     );
     const measurementsResult = await client.query<MeasurementRow>(
-      "select m.id,m.value::text value,m.unit,m.method,m.source,m.measured_at,m.quality_status::text quality_status,m.metadata,to_jsonb(m) snapshot_record from measurements m where m.activity_id=$1 order by m.measured_at,m.id",
+      "select m.id,m.value::text value,m.unit,m.method,m.source,m.measured_at,m.quality_status::text quality_status,m.metadata,to_jsonb(m)::text snapshot_record_json from measurements m where m.activity_id=$1 order by m.measured_at,m.id",
       [input.activityId],
     );
     const evidenceResult = await client.query<EvidenceRow>(
@@ -137,13 +137,13 @@ export async function captureMrvSourceSnapshot(input: {
               v.uploaded_by_identity_id artifact_uploaded_by_identity_id,v.source_reference artifact_source_reference,
               v.measurement_period_start artifact_measurement_period_start,v.measurement_period_end artifact_measurement_period_end,
               v.created_at artifact_version_created_at,
-              to_jsonb(e) evidence_snapshot_record,
-              case when v.id is null then null else to_jsonb(v) - 'content' end artifact_version_snapshot_record,
-              case when s.id is null then null else to_jsonb(s) end artifact_series_snapshot_record,
+              to_jsonb(e)::text evidence_snapshot_record_json,
+              case when v.id is null then null else (to_jsonb(v) - 'content')::text end artifact_version_snapshot_record_json,
+              case when s.id is null then null else to_jsonb(s)::text end artifact_series_snapshot_record_json,
               s.organization_id artifact_series_organization_id,s.activity_id artifact_series_activity_id,
               s.evidence_type artifact_series_evidence_type,s.created_by_identity_id artifact_series_created_by_identity_id,
               s.created_at artifact_series_created_at,
-              coalesce((select jsonb_agg(to_jsonb(r) order by r.created_at,r.id) from evidence_artifact_reviews r where r.evidence_id=e.id),'[]'::jsonb) reviews
+              coalesce((select jsonb_agg(to_jsonb(r) order by r.created_at,r.id) from evidence_artifact_reviews r where r.evidence_id=e.id),'[]'::jsonb)::text reviews_snapshot_records_json
          from evidence e
          left join evidence_artifact_versions v on v.evidence_id=e.id
          left join evidence_artifact_series s on s.id=v.series_id
@@ -158,9 +158,9 @@ export async function captureMrvSourceSnapshot(input: {
       selectedEvidenceId: input.evidenceId,
       guardianPolicyId: input.guardianPolicyId,
       methodologyCode: input.methodologyCode ?? null,
-      observations: observationsResult.rows.map(row => row.snapshot_record),
-      measurements: measurementsResult.rows.map(row => row.snapshot_record),
-      evidence: evidenceResult.rows.map(row => ({ evidence: row.evidence_snapshot_record, artifactVersion: row.artifact_version_snapshot_record, artifactSeries: row.artifact_series_snapshot_record, reviews: row.reviews })),
+      observations: observationsResult.rows.map(row => ({ recordJson: row.snapshot_record_json, observedValue: row.observed_value, uncertainty: row.uncertainty })),
+      measurements: measurementsResult.rows.map(row => ({ recordJson: row.snapshot_record_json, value: row.value, unit: row.unit })),
+      evidence: evidenceResult.rows.map(row => ({ evidenceRecordJson: row.evidence_snapshot_record_json, artifactVersionRecordJson: row.artifact_version_snapshot_record_json, artifactSeriesRecordJson: row.artifact_series_snapshot_record_json, reviewRecordsJson: row.reviews_snapshot_records_json })),
     };
     const digest = mrvSourceDigest(payload);
     const latestResult = await client.query<MrvSourceSnapshot>(
@@ -197,9 +197,9 @@ export async function captureMrvSourceSnapshot(input: {
     const latestMeasurement = measurementsResult.rows.at(-1);
     return {
       snapshot,
-      observations: observationsResult.rows.map(row => row.snapshot_record),
-      measurements: measurementsResult.rows.map(row => row.snapshot_record),
-      evidence: evidenceResult.rows.map(row => ({ ...row.evidence_snapshot_record, artifactVersion: row.artifact_version_snapshot_record, artifactSeries: row.artifact_series_snapshot_record, reviews: row.reviews })),
+      observations: observationsResult.rows.map(({ snapshot_record_json, ...row }) => ({ ...row, sourceRecordJson: snapshot_record_json })),
+      measurements: measurementsResult.rows.map(({ snapshot_record_json, ...row }) => ({ ...row, sourceRecordJson: snapshot_record_json })),
+      evidence: evidenceResult.rows.map(({ evidence_snapshot_record_json, artifact_version_snapshot_record_json, artifact_series_snapshot_record_json, reviews_snapshot_records_json, ...row }) => ({ ...row, sourceRecordJson: evidence_snapshot_record_json, artifactVersionRecordJson: artifact_version_snapshot_record_json, artifactSeriesRecordJson: artifact_series_snapshot_record_json, reviewRecordsJson: reviews_snapshot_records_json })),
       latestQuantity: latestMeasurement ? Number(latestMeasurement.value) : undefined,
       latestUnit: latestMeasurement?.unit,
       organizationId: activity.organization_id,
