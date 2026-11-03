@@ -46,6 +46,57 @@ export async function runMigrations(pool: PoolType, migrationDir: string): Promi
     const ledger = await client.query<{ ledger_exists: string | null }>(
       "select to_regclass('schema_migrations')::text as ledger_exists",
     );
+    if (!ledger.rows[0]?.ledger_exists) {
+      // A missing ledger is only a fresh database when the target schema has
+      // no pre-existing application relations, custom types or functions.
+      // Never bootstrap a new ledger over an unknown/partially migrated schema.
+      const existingObjects = await client.query<{ has_application_objects: boolean }>(`
+        select exists (
+          select 1 from (
+            select 1
+              from pg_class c
+              join pg_namespace n on n.oid = c.relnamespace
+             where n.nspname = current_schema()
+               and c.relkind in ('r','p','v','m','S','f')
+               and c.relname <> 'schema_migrations'
+               and not exists (
+                 select 1 from pg_depend d
+                  where d.classid = 'pg_class'::regclass
+                    and d.objid = c.oid
+                    and d.deptype = 'e'
+               )
+            union all
+            select 1
+              from pg_type t
+              join pg_namespace n on n.oid = t.typnamespace
+             where n.nspname = current_schema()
+               and t.typtype in ('e','d')
+               and not exists (
+                 select 1 from pg_depend d
+                  where d.classid = 'pg_type'::regclass
+                    and d.objid = t.oid
+                    and d.deptype = 'e'
+               )
+            union all
+            select 1
+              from pg_proc p
+              join pg_namespace n on n.oid = p.pronamespace
+             where n.nspname = current_schema()
+               and not exists (
+                 select 1 from pg_depend d
+                  where d.classid = 'pg_proc'::regclass
+                    and d.objid = p.oid
+                    and d.deptype = 'e'
+               )
+          ) existing
+        ) as has_application_objects
+      `);
+      if (existingObjects.rows[0]?.has_application_objects) {
+        throw new Error(
+          "MIGRATION_HISTORY_UNRESOLVED: schema_migrations ledger is absent but the target schema contains existing application objects; reconcile the schema before migration",
+        );
+      }
+    }
     const applied = ledger.rows[0]?.ledger_exists
       ? await client.query<{ version: string; filename: string }>(
           "select version, filename from schema_migrations order by version",
