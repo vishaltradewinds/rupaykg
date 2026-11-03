@@ -89,7 +89,7 @@ test("MRV source snapshots are immutable, idempotent and require explicit correc
     assert.equal(corrected.snapshot.snapshot_version, 2);
     assert.equal(corrected.snapshot.supersedes_snapshot_id, first.snapshot.id);
     assert.notEqual(corrected.snapshot.source_digest, first.snapshot.source_digest);
-    assert.ok(corrected.snapshot.source_revision > first.snapshot.source_revision);
+    assert.ok(Number(corrected.snapshot.source_revision) > Number(first.snapshot.source_revision));
 
     const staleSnapshotDigest = first.snapshot.source_digest;
     await pool.query(
