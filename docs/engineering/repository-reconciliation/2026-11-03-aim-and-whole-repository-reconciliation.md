@@ -230,6 +230,7 @@ No step is skipped because a later screen or integration appears ready. Independ
 
 ## 11. Evidence limits and audit discipline
 
+- **Audit depth:** this pass inventories the entire mainline tree and deeply reconciles the release-critical product, database, migration, authorization, deployment and active-PR surfaces. It is not a line-by-line independent code review of all 319 files; domain-specific route and stakeholder acceptance must continue through the mapped work packages.
 - GitHub main tree, PR metadata, CI run #41615632245, Render service/deployment metadata and Neon read-only metadata/SQL were inspected on 2026-11-03.
 - GitHub branch-protection API inspection was not available to the connected integration; do not infer protection settings from that failed read.
 - Render service environment values were not read; the Render-to-Neon `DATABASE_URL` binding is unverified.
