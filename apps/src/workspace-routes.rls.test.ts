@@ -111,7 +111,7 @@ test("MRV workspace binds permission and all four protected reads to one signed 
     const pool = new TenantPool();
     const app = await makeApp(pool);
     try {
-      const response = await app.inject({ method: "GET", url: "/api/v1/workspaces/mrv", headers: requestHeaders() });
+      const response = await app.inject({ method: "GET", url: "/api/v1/workspaces/mrv?geographyId=" + geographyA, headers: requestHeaders() });
       assert.equal(response.statusCode, 200);
       assert.equal(response.json().source, "postgresql");
       assert.equal(response.json().syntheticData, false);
@@ -126,9 +126,12 @@ test("MRV workspace binds permission and all four protected reads to one signed 
       assert.match(signedClaims[4] ?? "", /^mrv_workspace_test\\.[a-f0-9]{64}$/);
       const permission = calls.find((call) => call.sql.includes("auth_private.has_organization_permission"));
       assert.deepEqual(permission?.values, [identityId, organizationA, ["evidence:upload", "evidence:review", "guardian:read"]]);
+      const geographyCheck = calls.find((call) => call.sql.includes("organization_has_geography_scope"));
+      assert.deepEqual(geographyCheck?.values, [organizationA, geographyA]);
+      assert.equal(calls.some((call) => call.sql.includes("organization_memberships")), false);
       const protectedReads = calls.filter((call) => /select .* from (activities a|measurements m|evidence e|verifications v)/is.test(call.sql));
       assert.equal(protectedReads.length, 4);
-      for (const call of protectedReads) assert.deepEqual(call.values, [organizationA]);
+      for (const call of protectedReads) assert.deepEqual(call.values, [organizationA, geographyA]);
       assert.equal(calls.at(-1)?.sql, "COMMIT");
       assert.equal(pool.clients[0]!.released, true);
       assert.equal(pool.rawCalls.filter((call) => /from (activities|measurements|evidence|verifications)/i.test(call.sql)).length, 0);
