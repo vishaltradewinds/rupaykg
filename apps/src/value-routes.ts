@@ -31,7 +31,7 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
       const calculation = await withRlsRequestTransaction(pool, auth, requestContext, async (client) => {
         const access = await activityAccess(client, activityId, auth.identityId);
         if (!access || access.organization_id !== auth.activeOrganizationId) throw Object.assign(new Error("Activity is not in the active organization"), { code: "ACTIVITY_FORBIDDEN" });
-        if (!await hasOrganizationPermission(client, auth, auth.activeOrganizationId!, ["projects:manage"])) throw Object.assign(new Error("Explicit projects:manage permission is required"), { code: "CARBON_CALCULATION_FORBIDDEN" });
+        if (!await hasOrganizationPermission(client, auth, auth.activeOrganizationId!, ["projects:manage"], "security_definer")) throw Object.assign(new Error("Explicit projects:manage permission is required"), { code: "CARBON_CALCULATION_FORBIDDEN" });
         const geography = await assertActivityGeographyScope(client, access.organization_id, access.geography_id, auth.identityId);
         if (!geography.ok) throw Object.assign(new Error(geography.code ?? "Activity geography is not authorized"), { code: geography.code ?? "GEOGRAPHY_FORBIDDEN" });
         const evidence = await client.query<{ id: string; activity_id: string | null; content_hash: string | null; content_uri: string | null; status: string }>("select id,activity_id,content_hash,content_uri,status from evidence where id=$1", [evidenceId]);
