@@ -35,7 +35,7 @@ function job(status: MrvSubmissionJob["status"], overrides: Partial<MrvSubmissio
     status, attempt_count: 1, lease_owner: "worker-a", lease_token: TOKEN,
     lease_expires_at: new Date("2026-11-03T16:00:00.000Z"),
     next_attempt_at: new Date("2026-11-03T15:00:00.000Z"),
-    guardian_idempotency_key: "stable-guardian-key", guardian_execution_id: "guardian-exec-1",
+    guardian_idempotency_key: "g".repeat(64), guardian_execution_id: "guardian-exec-1",
     guardian_status: "VERIFIED", guardian_result: null,
     hedera_network: "testnet", hedera_topic_id: "0.0.1234", hedera_transaction_id: "0.0.1234@1730646000.000000001",
     hedera_consensus_timestamp: null, hedera_status: null, mirror_verified_at: null,
@@ -58,7 +58,7 @@ function harness(current: MrvSubmissionJob, overrides: Record<string, unknown> =
     finalize: async (...args: unknown[]) => { calls.push({ name: "finalize", args }); return true; },
   };
   const deps: MrvRestrictedWorkerDependencies = {
-    executeGuardianMrv: async () => ({ status: "VERIFIED", executionId: "guardian-exec-2", policyId: "policy-v1", correlationId: "corr-1", idempotencyKey: "stable-guardian-key", message: "verified" }),
+    executeGuardianMrv: async () => ({ status: "VERIFIED", executionId: "guardian-exec-2", policyId: "policy-v1", correlationId: "corr-1", idempotencyKey: "g".repeat(64), message: "verified" }),
     createHcsTransactionId: () => "0.0.1234@1730646000.000000002",
     hederaStatus: () => ({ readStatus: "AVAILABLE", writeStatus: "AVAILABLE", consensusStatus: "CONFIGURED", network: "testnet", mirrorNodeEndpoint: "https://mirror.invalid", topicId: "0.0.1234", configured: true, syntheticData: false }),
     integrityHash: () => "c".repeat(64),
@@ -92,7 +92,7 @@ test("restricted worker executes Guardian only from GUARDIAN_SUBMITTED and persi
     const h = harness(job("GUARDIAN_SUBMITTED"), {
       executeGuardianMrv: async () => {
         guardianCalls += 1;
-        return { status: "VERIFIED", executionId: "guardian-exec-2", policyId: "policy-v1", correlationId: "corr-1", idempotencyKey: "stable-guardian-key", message: "verified" };
+        return { status: "VERIFIED", executionId: "guardian-exec-2", policyId: "policy-v1", correlationId: "corr-1", idempotencyKey: "g".repeat(64), message: "verified" };
       },
     });
     const result = await runMrvSubmissionWorkerOnce(h.database, "worker-a", h.deps);
