@@ -30,11 +30,11 @@ declare
   prior_snapshot mrv_source_snapshots%rowtype;
   activity_ok boolean;
 begin
-  if new.source_payload->>'schema' <> 'rupaykg:mrv-source-snapshot:v1'
-     or new.source_payload->'activity'->>'id' <> new.activity_id::text
-     or new.source_payload->'verification'->>'id' <> new.verification_id::text
-     or new.source_payload->>'selectedEvidenceId' <> new.evidence_id::text
-     or new.source_payload->>'guardianPolicyId' <> new.guardian_policy_id then
+  if new.source_payload->>'schema' is distinct from 'rupaykg:mrv-source-snapshot:v1'
+     or new.source_payload->'activity'->>'id' is distinct from new.activity_id::text
+     or new.source_payload->'verification'->>'id' is distinct from new.verification_id::text
+     or new.source_payload->>'selectedEvidenceId' is distinct from new.evidence_id::text
+     or new.source_payload->>'guardianPolicyId' is distinct from new.guardian_policy_id then
     raise exception 'MRV_SOURCE_SNAPSHOT_PAYLOAD_BINDING_INVALID';
   end if;
 
