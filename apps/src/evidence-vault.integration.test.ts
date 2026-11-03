@@ -11,7 +11,7 @@ const hash = (value: string) => createHash("sha256").update(value).digest("hex")
 test("evidence vault enforces tenant scope, versioned storage, integrity and independent review", { skip: !enabled }, async (t) => {
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
   const app = Fastify({ logger: false });
-  await registerEvidenceVaultRoutes(app, pool);
+  await registerEvidenceVaultRoutes(app, pool, { hmacSecret: "evidence-vault-integration-hmac-secret-material-at-least-32-bytes", keyId: "evidence_vault_integration", ttlSeconds: 120 });
   const suffix = randomBytes(8).toString("hex");
   const uploaderToken = randomBytes(32).toString("base64url");
   const reviewerToken = randomBytes(32).toString("base64url");
