@@ -130,7 +130,7 @@ const EPR_RETURN_READ_CONTRACT_SQL = `select
        and owner_role.rolname='rupaykg_auth_owner'
        and p.prosrc ilike '%current_request_context_claims%'
        and p.prosrc ilike '%organization_memberships%'
-       and p.prosrc ilike '%role.organization_id%'
+       and p.prosrc ilike '%role_row.organization_id%'
        and p.prosrc ilike '%permissions%'
   ) as permission_helper_valid,
   exists (
