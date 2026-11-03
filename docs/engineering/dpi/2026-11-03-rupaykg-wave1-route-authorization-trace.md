@@ -141,3 +141,56 @@ Every route contract must declare:
 - Static signals do not prove authentication, authorisation, RLS, transaction isolation or audit completeness.
 - No route is declared production-safe by this inventory.
 - This does not authorise global RLS enablement, production migration, external partner access, payment integration, VC issuance, or DPI qualification.
+
+
+## 8. Existing mainline test coverage discovered
+
+Static test-file inventory (test titles and file presence only; this audit did not execute tests):
+
+| Test file | Existing coverage indicated by test names | Gap against Wave 1 |
+|---|---|---|
+| apps/test/auth-permissions.test.ts | Canonical high-risk permissions, authoritative PostgreSQL role query, active organisation match, fail-closed role query, explicit evidence permission | Does not prove all 56 routes use the same signed tenant context and same-client transaction |
+| apps/src/evidence-vault-routes.test.ts | Filename/path traversal, malformed/empty/oversized base64, media signature validation | Unit validation only; no route-level two-tenant proof |
+| apps/src/evidence-vault.integration.test.ts | Tenant scope, versioned storage, integrity, independent review (environment-gated) | Must confirm test actually runs in CI against disposable PostgreSQL; add list/download/review cross-tenant negative cases |
+| apps/src/guardian-mrv.test.ts | Provider disabled state and authoritative execution ID requirements | Does not prove cross-tenant MRV submission/read isolation |
+| apps/src/mrv-integration.test.ts | Fail-closed provider config and deterministic integrity hash | No full tenant-context acceptance |
+| apps/src/operation-sync-security.test.ts | Device cannot be unverified or another identity's device | Add organisation transfer/revocation, cross-tenant replay and payload parent-child substitution |
+| apps/src/registry-routes.test.ts | Governed credential and settlement state transitions | State-machine unit coverage is not authorisation or persistence isolation |
+| apps/src/registry-settlement-runtime.test.ts | Permission before issuance, persisted Mirror Node proof, evidence/verification gate, settlement lifecycle, transfer/retirement permission | Add bilateral cross-tenant visibility, same-client atomicity and replay tests |
+| apps/src/sync-validation.test.ts | Envelope validation, device ID and conflict-resolution field validation | Add full route integration with two organisations and device ownership changes |
+| apps/src/workspace-context.test.ts | Urban/rural geography rails and SQL parameter placement | Does not prove all workspace route permissions and row-level scope |
+| apps/src/epr-registration-input.test.ts | Avoids asserting externally registered CPCB status without proof | Does not prove EPR route tenant scope, source authority or assessment transaction |
+
+### 8.1 Coverage disposition
+
+- **Existing useful tests:** auth permission policy, evidence validation, evidence integration, MRV fail-closed behaviour, operation-sync device identity, credential/settlement lifecycle, geography context and EPR registration truthfulness.
+- **Not evidenced by the inspected test titles:** exhaustive route auth matrix, cross-tenant read/write denial for every route, route-level same-client transaction proof, tenant A/B aggregate isolation, organisation switch/revocation races, cross-tenant parent-child ID substitution, all-route error envelope conformance, and external partner contract conformance.
+- **CI caution:** a test file existing in mainline does not prove it runs in the required CI job, is not skipped, uses disposable PostgreSQL, or covers the exact PR head. Inspect workflow commands and test skip conditions before marking a gate passed.
+
+### 8.2 Required two-tenant acceptance suite
+
+Use disposable PostgreSQL with two tenants (A and B), distinct identities and at least one delegated user. Seed same-shaped activity, evidence, obligation, credential, reporting-period, device, geography and workspace records in each tenant. For every route family, run:
+
+1. tenant A identity reads A record: allowed only with correct permission;
+2. tenant A identity reads B record by direct UUID: generic not-found/forbidden without data leakage;
+3. tenant A identity lists/aggregates while B has records: no B counts or rows;
+4. tenant A identity mutates B record by UUID: denied and no database side effect;
+5. tenant A identity supplies B parent ID with A child payload: denied;
+6. revoked membership or changed active organisation during request: mutation denied;
+7. same idempotency key/same payload: deterministic replay;
+8. same idempotency key/different payload: conflict with no second mutation;
+9. device enrolled to A replays or submits to B: denied;
+10. bilateral credential/settlement operation: only explicitly authorised party views each state;
+11. evidence reviewer cannot approve own submission where separation is required;
+12. audit row is committed atomically with the protected mutation and records the effective actor, tenant and target.
+
+The suite must assert persisted row counts and audit records after each denial; an HTTP status alone is insufficient.
+
+## 9. Review sequencing
+
+1. Close P0 handler tracing (ESG, evidence, EPR/BWG, onboarding, sync apply and overview).
+2. Add missing route-level auth/tenant assertions and two-tenant database acceptance.
+3. Establish one signed tenant-context transaction API and migrate route families in dependency order.
+4. Only after route code is stable, publish OpenAPI and JSON Schemas from real validators/serializers.
+5. Run independent partner-client conformance tests and security review.
+6. Keep global RLS disabled until the production owner/role/BYPASSRLS posture and every tenant table policy have been remediated and accepted in a separate controlled change.
