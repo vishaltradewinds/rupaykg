@@ -61,7 +61,7 @@ test("EPR obligations reads use the signed active-tenant transaction, not caller
       const response = await app.inject({
         method: "GET",
         url: "/api/v1/epr/obligations",
-        headers: { authorization: "Bearer valid-bwg-session", "x-rupaykg-organization-id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" },
+        headers: { authorization: "Bearer valid-bwg-session" },
       });
       assert.equal(response.statusCode, 200);
       assert.equal(response.json().obligations[0].epr_obligation_id, "obligation-a");
@@ -75,6 +75,23 @@ test("EPR obligations reads use the signed active-tenant transaction, not caller
       const listing = calls.find(call => call.sql.includes("from epr_obligations"));
       assert.deepEqual(listing?.values, [organizationId]);
       assert.equal(raw.clients[0]!.released, true);
+      assert.equal(raw.rawCalls.some(call => call.sql.includes("from epr_obligations")), false);
+    } finally { await app.close(); }
+  });
+});
+
+test("EPR obligations reject a caller-selected organization outside the authenticated membership", async () => {
+  await withSecurityDefiner(async () => {
+    const raw = new RawPool();
+    const app = await makeApp(raw);
+    try {
+      const response = await app.inject({
+        method: "GET",
+        url: "/api/v1/epr/obligations",
+        headers: { authorization: "Bearer valid-bwg-session", "x-rupaykg-organization-id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" },
+      });
+      assert.equal(response.statusCode, 401);
+      assert.equal(raw.clients.length, 0);
       assert.equal(raw.rawCalls.some(call => call.sql.includes("from epr_obligations")), false);
     } finally { await app.close(); }
   });
