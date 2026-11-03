@@ -260,7 +260,12 @@ try {
     connectionString: process.env.DATABASE_URL,
     ssl: process.env.DATABASE_SSL === "false" ? undefined : { rejectUnauthorized: false },
   });
+  const observerClient = new Client({
+    connectionString: process.env.DATABASE_URL,
+    ssl: process.env.DATABASE_SSL === "false" ? undefined : { rejectUnauthorized: false },
+  });
   await concurrentClient.connect();
+  await observerClient.connect();
   await concurrentClient.query("set search_path to " + q(schema) + ", public");
   const mainBackendPid = (await client.query("select pg_backend_pid()")).rows[0].pg_backend_pid;
   try {
@@ -271,7 +276,7 @@ try {
       "insert into verifications(id,activity_id,evidence_id,verifier_identity_id,decision) values ($1,$2,$3,$4,'APPROVED')",
       ["10000000-0000-4000-8000-000000000031", ids.activity, ids.evidence, ids.verifier],
     ).then(() => { approvalSettled = true; return null; }, (error) => { approvalSettled = true; return error; });
-    assert.equal(await waitForLockWait(concurrentClient, mainBackendPid), true, "approval must be blocked on the membership row lock");
+    assert.equal(await waitForLockWait(observerClient, mainBackendPid), true, "approval must be blocked on the membership row lock");
     await concurrentClient.query("COMMIT");
     const revokedApprovalError = await blockedApproval;
     assert.match(revokedApprovalError?.message ?? "", /requires active verifier permission/);
@@ -287,7 +292,7 @@ try {
       "update organization_memberships set status='REVOKED' where id=$1",
       [ids.membership],
     ).then((result) => { revocationSettled = true; return result; });
-    assert.equal(await waitForLockWait(concurrentClient, mainBackendPid), true, "membership revocation must wait for the approval transaction");
+    assert.equal(await waitForLockWait(observerClient, mainBackendPid), true, "membership revocation must wait for the approval transaction");
     await client.query("COMMIT");
     await blockedRevocation;
     await client.query("update organization_memberships set status='VERIFIED' where id=$1", [ids.membership]);
@@ -299,7 +304,7 @@ try {
       "insert into verifications(id,activity_id,evidence_id,verifier_identity_id,decision) values ($1,$2,$3,$4,'APPROVED')",
       ["10000000-0000-4000-8000-000000000033", ids.activity, ids.evidence, ids.verifier],
     ).then(() => { roleApprovalSettled = true; return null; }, (error) => { roleApprovalSettled = true; return error; });
-    assert.equal(await waitForLockWait(concurrentClient, mainBackendPid), true, "approval must be blocked on the role permission row lock");
+    assert.equal(await waitForLockWait(observerClient, mainBackendPid), true, "approval must be blocked on the role permission row lock");
     await concurrentClient.query("COMMIT");
     const roleApprovalError = await blockedByRoleRevocation;
     assert.match(roleApprovalError?.message ?? "", /requires active verifier permission/);
@@ -312,7 +317,7 @@ try {
       "insert into verifications(id,activity_id,evidence_id,verifier_identity_id,decision) values ($1,$2,$3,$4,'APPROVED')",
       ["10000000-0000-4000-8000-000000000034", ids.activity, ids.evidence, ids.verifier],
     ).then(() => { identityApprovalSettled = true; return null; }, (error) => { identityApprovalSettled = true; return error; });
-    assert.equal(await waitForLockWait(concurrentClient, mainBackendPid), true, "approval must be blocked on the identity row lock");
+    assert.equal(await waitForLockWait(observerClient, mainBackendPid), true, "approval must be blocked on the identity row lock");
     await concurrentClient.query("COMMIT");
     const identityApprovalError = await blockedBySuspension;
     assert.match(identityApprovalError?.message ?? "", /requires active verifier permission/);
@@ -320,6 +325,7 @@ try {
     console.log("PASS: two-session PostgreSQL tests serialize approval against membership revocation, role permission changes, and identity suspension.");
   } finally {
     await concurrentClient.end();
+    await observerClient.end();
   }
 
     console.log("PASS: proposed forward-only semantics preserve snapshots, reject linkage swaps, clear forged pending snapshots, and re-check authorization on approval transition.");
