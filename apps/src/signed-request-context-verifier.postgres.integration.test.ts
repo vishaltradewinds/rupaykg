@@ -246,6 +246,31 @@ test("PostgreSQL verifier trigger enforces tenant authority, independence, geogr
       [approved.rows[0]!.id],
     );
 
+    // A verified geography assignment is insufficient when the subject
+    // organization itself has not passed legal/organizational verification.
+    const pendingOrg = (await client.query<{ id: string }>(
+      "insert into public.organizations(name,organization_type,status) values('Verifier test pending organization','TEST','PENDING') returning id",
+    )).rows[0]!.id;
+    const pendingVerifier = await makeIdentity("Verifier test pending-organization verifier");
+    const pendingRole = await makeRole(pendingOrg, "VERIFIER", ["VERIFY_EVIDENCE"]);
+    await membership(pendingVerifier, pendingOrg, pendingRole);
+    const pendingActivity = (await client.query<{ id: string }>(
+      "insert into public.activities(organization_id,actor_identity_id,geography_id,activity_type) values($1,$2,$3,'VERIFIER_TEST') returning id",
+      [pendingOrg, actor, geographyId],
+    )).rows[0]!.id;
+    const pendingEvidence = (await client.query<{ id: string }>(
+      "insert into public.evidence(activity_id,evidence_type,captured_at) values($1,'VERIFIER_TEST',now()) returning id",
+      [pendingActivity],
+    )).rows[0]!.id;
+    await client.query(
+      "insert into public.organization_geography_scopes(organization_id,geography_id,status) values($1,$2,'VERIFIED')",
+      [pendingOrg, geographyId],
+    );
+    await expectRejected(
+      "insert into public.verifications(evidence_id,activity_id,verifier_identity_id,decision,scope) values($1,$2,$3,'APPROVED','TEST')",
+      [pendingEvidence, pendingActivity, pendingVerifier],
+    );
+
     // Cyclic hierarchy data must terminate and fail closed when no assigned root
     // covers the requested geography.
     const cycleA = (await client.query<{ id: string }>(
@@ -256,6 +281,12 @@ test("PostgreSQL verifier trigger enforces tenant authority, independence, geogr
     )).rows[0]!.id;
     await client.query("update public.geography set parent_id=$2 where id=$1", [cycleA, cycleB]);
     await client.query("update public.geography set parent_id=$2 where id=$1", [cycleB, cycleA]);
+    // Give the organization a different verified root so the cycle is actually
+    // traversed rather than short-circuited by the no-roots fail-closed case.
+    await client.query(
+      "insert into public.organization_geography_scopes(organization_id,geography_id,status) values($1,$2,'VERIFIED')",
+      [orgB, geographyId],
+    );
     const cycleResult = await client.query<{ allowed: boolean }>(
       "select public.organization_has_geography_scope($1,$2) as allowed",
       [orgB, cycleA],
