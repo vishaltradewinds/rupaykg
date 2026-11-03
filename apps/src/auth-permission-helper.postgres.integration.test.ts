@@ -83,10 +83,14 @@ test("restricted app runtime can use only signed-context-bound boolean permissio
 
     await client.query("ALTER TABLE public.organization_memberships DISABLE TRIGGER stakeholder_membership_application_guard");
     await client.query(
-      "insert into public.organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED'),($4,$5,$6,'VERIFIED'),($7,$8,$9,'PENDING'),($10,$11,$12,'VERIFIED'),($13,$14,$15,'REVOKED'),($1,$16,$17,'VERIFIED')",
+      "insert into public.organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED'),($4,$5,$6,'VERIFIED'),($7,$8,$9,'PENDING'),($10,$11,$12,'VERIFIED'),($13,$14,$15,'REJECTED'),($1,$16,$17,'VERIFIED')",
       [identityA, orgA, roleA, identityB, orgB, roleB, identityPending, orgA, rolePending, identityNameOnly, orgA, roleNameOnly, identityRevoked, orgA, roleRevoked, orgPendingVerification, rolePendingVerification],
     );
     await client.query("ALTER TABLE public.organization_memberships ENABLE TRIGGER stakeholder_membership_application_guard");
+    await client.query(
+      "update public.organization_memberships set last_revoked_at=clock_timestamp(),last_revoked_by_identity_id=$2,last_revocation_reason='Synthetic CI revoked membership' where identity_id=$1 and organization_id=$3",
+      [identityRevoked, identityB, orgA],
+    );
 
     await client.query(
       "insert into app_security.request_context_keys(key_id,secret,active) values($1,$2,true)",
