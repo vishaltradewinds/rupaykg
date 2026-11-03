@@ -75,3 +75,24 @@ TRL 9 remains NOT ESTABLISHED until real field deployment, real stakeholder part
 - This document is a control-plane reconciliation record only. It does not change application code, database state, RLS, production configuration or certification status.
 - GitHub comment creation was blocked by the connector safety layer; Desktop Commander was offline. No PR comment, code fix, PostgreSQL run, merge or deployment is claimed.
 - Next required action: bring the authorized development workstation online, reconcile current Git refs and perform the P0 code/test batch on the authoritative branch; do not infer that work has run in the background.
+
+
+## Follow-up source audit — durable MRV worker boundary
+
+Inspected the actual candidate source on `security/epr-explicit-client-read-2026-11-02`:
+
+- `apps/src/mrv-submission-worker.ts` exports `runMrvSubmissionWorkerOnce(pool: Pool, workerId: string)`. The same general `Pool` is used for queue claim, live authorization, lease renewal/release, state transitions and final provenance persistence. Its `withClient(pool, ...)` helper calls `pool.connect()` directly. The feature flag is a deployment guard, not a database privilege boundary.
+- `apps/src/mrv-submission-jobs.ts` accepts `PoolClient` for the SQL helpers and re-checks organization, identity suspension, verified evidence, approved independent verification, membership, permission and geography before provider stages. These are useful application checks but do not constrain what the worker database principal can query or mutate.
+- `migrations/20261109_durable_mrv_submission_jobs.sql` explicitly installs no grants, RLS policies, SECURITY DEFINER worker functions or role changes. Therefore it does not yet establish a least-privilege worker execution path.
+- The worker has useful lease-token fencing, provider idempotency persistence, Guardian/Hedera stage separation, Mirror Node reconciliation and a final provenance transaction. Those controls do not remove the general-pool privilege gap.
+
+### Required remediation before worker activation
+
+1. Define a dedicated worker database principal with NOLOGIN/NOBYPASSRLS/NOINHERIT ownership posture as appropriate, no privileged role memberships, and no direct table DML privileges.
+2. Move queue claim, authorization recheck, lease mutation, stage transition and final provenance into a small reviewed set of database functions with explicit arguments and fixed search_path. Prefer SECURITY INVOKER where feasible; if SECURITY DEFINER is necessary, use a non-login non-bypass owner, schema-qualified objects, pinned search_path, strict EXECUTE grants and adversarial privilege tests.
+3. Change the TypeScript worker API to accept only a narrow typed worker repository/client interface, not a general application Pool. Keep external Guardian/Hedera/Mirror calls outside database transactions.
+4. Prove direct SELECT/INSERT/UPDATE/DELETE denial and permitted-function-only execution using disposable PostgreSQL tests under the actual worker role.
+5. Execute the full concurrency, stale-token, lease-theft, expiry/reclaim, authorization-revocation, provider-timeout/idempotency, Mirror reconciliation and finalization-after-lease-loss matrix.
+6. Only after those tests and independent DBA/security review may the worker be enabled in a non-production rehearsal. No production role grants, migration, worker activation or RLS change is authorized by this review.
+
+This is a source-level finding, not a claim that PostgreSQL acceptance has passed. The workstation remains unavailable for local execution; exact-head CI and disposable DB evidence must be recorded separately.
