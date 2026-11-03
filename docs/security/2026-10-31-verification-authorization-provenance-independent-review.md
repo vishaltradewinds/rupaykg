@@ -150,3 +150,40 @@ The two-session regression now polls pg_stat_activity for the main connection's 
 Read-only production catalog inspection confirms `public.verifications` is owned by `rupaykg`. That role has BYPASSRLS, CREATEROLE, CREATEDB, membership in `neon_superuser`, and SELECT/INSERT/UPDATE/DELETE/TRUNCATE/TRIGGER plus public-schema CREATE privileges. `neon_service` also has BYPASSRLS, CREATEROLE, CREATEDB, membership in `neon_superuser`, and SELECT/INSERT/UPDATE/DELETE on verifications. `cloud_admin` is superuser. No active app connection was present in pg_stat_activity, so the Render service role remains unidentified.
 
 This is a separate P1 release blocker: neither likely app role is least privilege, and `rupaykg` can delete/truncate verification records or alter trigger definitions. The current function's SECURITY INVOKER status and row-level checks cannot compensate for a runtime identity that can bypass RLS or disable/drop triggers. Do not alter live credentials/grants/ownership without a separately rehearsed migration and rollback plan. This finding is now recorded in the verification history design document and the production tenant-isolation design remains HOLD.
+
+
+## Production corroboration refresh — 2026-11-03 (read-only)
+
+Target: Neon project `steep-mud-79906940`, main branch `br-restless-base-b44cip2h`, database `rupaykg`. All database operations in this refresh were SELECT-only.
+
+### Migration 096 source and deployed effect
+
+- Live ledger row: `096 | 096_verification_authorization_provenance.sql | 2026-10-27T13:46:14.262Z`.
+- Original source retrieved from commit `ca8f4100782e13f8d72106187fafc8e1e446214f`; Git blob SHA `258b1f4534efbf915688f78aa84d4ec24a47cbc0`.
+- Production contains the four expected authorization columns and the `verifications_integrity_guard` BEFORE INSERT OR UPDATE trigger calling `public.prevent_invalid_verification()`.
+- The live function body confirms that every UPDATE leaving `new.decision='APPROVED'` true reselects current membership/role permissions and overwrites the four authorization snapshot fields. This is the precise historical-snapshot rewrite behavior that the disposable regression must reproduce and the proposed forward-only fixture must prevent.
+
+### Runtime-role privilege blocker reconfirmed
+
+Read-only `pg_roles`, `pg_auth_members`, and table-privilege inspection returned:
+
+| Role | BYPASSRLS | CREATEROLE | CREATEDB | REPLICATION | Membership | verifications owner | DELETE | TRUNCATE | TRIGGER |
+|---|---:|---:|---:|---:|---|---|---:|---:|---:|
+| `rupaykg` | true | true | true | true | `neon_superuser` | `rupaykg` | yes | yes | yes |
+| `neon_service` | true | true | true | true | `neon_superuser` | `rupaykg` | yes | no | no |
+
+Neither role is an acceptable least-privilege application runtime identity. The actual Render connection role remains unidentified; do not assume it is either role. Do not change live credentials, grants, role memberships, table ownership, or triggers as part of this PR.
+
+### Exact-head CI gap and workflow wiring
+
+PR #140 head at the start of this refresh was `9b0f493de4b02f63080fa77752f93eb0decbd419`; GitHub reported zero workflow runs for that exact SHA. The PR branch's own `.github/workflows/ci.yml` contains an explicit step:
+
+`RUPAYKG_RUN_AUTHORIZATION_PROVENANCE_TESTS=1 node scripts/test-authorization-provenance-forward-fix.mjs`
+
+The test script checks that exact opt-in variable, so the branch workflow wiring is correct. An exact-head run is still required; older CI runs do not validate the current fixture/test contents. This evidence update is committed on the PR branch to request a fresh PR synchronization/validation cycle.
+
+### Classification and release gate
+
+Migration 096 is corroborated by a matching live ledger row, immutable source blob, and expected production catalog/function effect. The earlier migration-history investigation also records a Render deploy/log sequence for the source commit, but this refresh did not independently query Render because no Render workspace has been selected for this session. Review/approval authorization remains unresolved.
+
+The proposed SQL remains an unnumbered disposable fixture. No production or staging DDL/DML, migration replay, role/grant change, deployment, merge, worker activation, or certification occurred. SEC-01 through SEC-05 and all outstanding independent-review gates remain open until exact-head CI and reviewer sign-off.
