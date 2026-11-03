@@ -233,3 +233,18 @@ The table classes above are hypotheses to validate against complete DDL, constra
 The next technical artefact must be a route-by-route matrix with one row per endpoint and these columns: method/path, auth required, actor class, permission, active-organisation rule, geography rule, input fields, response fields, tables read, tables written, transaction/client, external dependencies, idempotency/replay, audit event, data classification, and known test coverage.
 
 Do not mark an endpoint contract-ready until its route-specific input/output schema and its authorization/data-access path have both been traced. Prioritise common auth/context, organisation/geography, resource flows/measurements, evidence, and MRV; defer settlement and external credential exchange until their separate assurance reviews.
+
+
+## 10.1 Field-data contract and provenance blockers
+
+The mainline API surface has a stronger offline field-sync envelope than its direct operational endpoints, but the two paths are not yet semantically equivalent:
+
+- Direct resource-flow and measurement routes are inline in server.ts and perform permission/geography checks via pool calls before a separate pool insert. They lack a single transaction and idempotency key.
+- The measurements table already has captured_by_identity_id, device_id, latitude, longitude and location_accuracy_m, but the direct measurement route does not populate these fields.
+- resource_flows currently has no idempotency key or actor/device provenance columns.
+- Offline envelopes persist actor, device, capture time, client sequence, idempotency key, payload hash and applied entity link. However device authorization is checked before the intake transaction; organization binding is not checked against active organization; apply does not revalidate the device or pass device context to applyOperation.
+- Offline MEASUREMENT_CREATE does not populate measurement captured_by_identity_id/device_id or create the corresponding mrv_observations instrument/uncertainty/evidence lineage. EVIDENCE_CREATE captures identity but omits device_id; ACTIVITY_CREATE captures actor but omits device_id.
+
+**Contract rule:** use one canonical field-operation schema across online and offline paths. It must identify actor, verified organization, assigned device, capture and observation timestamps, idempotency, geography, instrument/sensor identity, method/version, unit, uncertainty/quality, and evidence references. The server derives actor and organization authority from authenticated membership and the enrolled device; clients cannot self-assert these as authoritative claims. Domain records must retain a stable envelope/source link. Do not label a raw measurement as an MRV observation or verified evidence.
+
+Runtime validation is currently manual in the inline routes; introduce versioned JSON Schema and attach it to Fastify routes before generating the OpenAPI 3.x partner contract. Keep draft/internal until same-client authorization, device-org binding, two-tenant/two-device negative tests and provenance linkage pass.
