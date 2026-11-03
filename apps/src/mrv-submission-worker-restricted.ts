@@ -197,12 +197,17 @@ export async function runMrvSubmissionWorkerOnce(database: MrvWorkerDatabaseApi,
     if (!mirrorRun.leaseValid) return { outcome: "STALE_LEASE", jobId: job.id, stage: "MIRROR_LEASE_HEARTBEAT" };
     const mirror = mirrorRun.value;
     if (mirror.status === "CONFIRMED") {
-      const ok = await advance(database, lease, "MIRROR_VERIFIED", {
+      // The durable state machine requires HCS_SUBMITTED -> HCS_CONSENSUS_CONFIRMED
+      // before a later lease may advance to MIRROR_VERIFIED.
+      const nextStatus = job.status === "HCS_SUBMITTED" ? "HCS_CONSENSUS_CONFIRMED" : "MIRROR_VERIFIED";
+      const ok = await advance(database, lease, nextStatus, {
         hedera_consensus_timestamp: mirror.consensusTimestamp,
-        mirror_verified_at: new Date(), mirror_verification_digest: integrityHash(payload),
+        ...(nextStatus === "MIRROR_VERIFIED" ? {
+          mirror_verified_at: new Date(), mirror_verification_digest: integrityHash(payload),
+        } : {}),
         hedera_status: "CONSENSUS_CONFIRMED", last_error_code: null, last_error_detail: null,
       });
-      return { outcome: ok ? "STAGE_ADVANCED" : "STALE_LEASE", jobId: job.id, stage: "MIRROR_VERIFIED" };
+      return { outcome: ok ? "STAGE_ADVANCED" : "STALE_LEASE", jobId: job.id, stage: nextStatus };
     }
     if (mirror.status === "MISMATCH" || mirror.status === "FAILED") {
       const ok = await advance(database, lease, "NEEDS_RECONCILIATION", { last_error_code: "HCS_MIRROR_MISMATCH", last_error_detail: mirror.message });
