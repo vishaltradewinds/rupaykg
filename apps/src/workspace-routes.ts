@@ -27,7 +27,7 @@ function requestedOperatingContext(request: { query: unknown }): { context?: Ope
   if (raw === "urban" || raw === "rural") return { context: raw, invalid: false };
   return { invalid: true };
 }
-async function authorizeGeography(pool: Pick<Pool | PoolClient, "query">, auth: AuthContext, geographyId: string): Promise<boolean> {
+async function authorizeGeography(pool: Pick<Pool, "query">, auth: AuthContext, geographyId: string): Promise<boolean> {
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(geographyId)) return false;
   const check = await pool.query<{ ok: boolean }>(`select exists (select 1 from organization_memberships om where om.identity_id=$1 and om.status='VERIFIED' and ($3::uuid is null or om.organization_id=$3::uuid) and organization_has_geography_scope(om.organization_id,$2)) as ok`, [auth.identityId, geographyId, auth.activeOrganizationId ?? null]);
   return check.rows[0]?.ok === true;
