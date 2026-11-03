@@ -126,7 +126,7 @@ test("MRV workspace binds permission and all four protected reads to one signed 
       assert.match(signedClaims[4] ?? "", /^mrv_workspace_test\\.[a-f0-9]{64}$/);
       const permission = calls.find((call) => call.sql.includes("auth_private.has_organization_permission"));
       assert.deepEqual(permission?.values, [identityId, organizationA, ["evidence:upload", "evidence:review", "guardian:read"]]);
-      const geographyCheck = calls.find((call) => call.sql.includes("organization_has_geography_scope"));
+      const geographyCheck = calls.find((call) => call.sql.includes("select organization_has_geography_scope"));
       assert.deepEqual(geographyCheck?.values, [organizationA, geographyA]);
       assert.equal(calls.some((call) => call.sql.includes("organization_memberships")), false);
       const protectedReads = calls.filter((call) => /select .* from (activities a|measurements m|evidence e|verifications v)/is.test(call.sql));
