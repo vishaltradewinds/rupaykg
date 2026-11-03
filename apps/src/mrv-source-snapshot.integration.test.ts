@@ -164,7 +164,7 @@ test("MRV source snapshots are immutable, idempotent and require explicit correc
       /MRV_SOURCE_SNAPSHOT_DIGEST_MISMATCH/,
     );
     await assert.rejects(
-      () => pool.query("truncate mrv_source_snapshots"),
+      () => pool.query("truncate mrv_source_snapshots cascade"),
       /MRV source snapshots cannot be truncated/,
     );
 
