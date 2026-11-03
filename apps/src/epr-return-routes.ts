@@ -53,7 +53,7 @@ export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool |
   app.post("/api/v1/epr/returns", async (request, reply) => {
     const auth = await authFor(request, reply, pool); if (!auth || !pool) return;
     const body = bodyOf(request);
-    const organizationId = requiredString(body, "organizationId") ?? auth.activeOrganizationId;
+    const organizationId = auth.activeOrganizationId;
     const schemeId = requiredString(body, "schemeId");
     const obligationId = requiredString(body, "obligationId");
     const periodStart = requiredString(body, "periodStart");
@@ -61,14 +61,21 @@ export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool |
     const returnType = requiredString(body, "returnType");
     const reportedQuantity = positiveNumber(body, "reportedQuantity");
     if (!organizationId || !schemeId || !obligationId || !periodStart || !periodEnd || !returnType || reportedQuantity === null) return reply.code(400).send({ error: "organizationId, schemeId, obligationId, periodStart, periodEnd, returnType and positive reportedQuantity are required", code: "INVALID_EPR_RETURN" });
-    if (!canAct(auth, organizationId)) return reply.code(403).send({ error: "Verified organization membership required", code: "ORG_FORBIDDEN" });
-    if (!await hasOrganizationPermission(pool, auth, organizationId, ["epr:manage"])) return reply.code(403).send({ error: "EPR management permission required", code: "EPR_RETURN_WRITE_FORBIDDEN" });
+    if (!organizationId || !canAct(auth, organizationId)) return reply.code(403).send({ error: "One active verified organization is required", code: "ORG_FORBIDDEN" });
+    if (!requestContext) return reply.code(503).send({ error: "Signed tenant request context is not configured", code: "RLS_CONTEXT_CONFIG_REQUIRED", syntheticData: false });
     if (Number.isNaN(Date.parse(periodStart)) || Number.isNaN(Date.parse(periodEnd)) || periodStart > periodEnd) return reply.code(400).send({ error: "Valid periodStart and periodEnd are required", code: "INVALID_PERIOD" });
     try {
-      const rows = await pool.query(`insert into epr_returns(scheme_id,organization_id,obligation_id,period_start,period_end,return_type,reported_quantity,status) select $1,$2,$3,$4::date,$5::date,$6,$7,'DRAFT' where exists(select 1 from epr_schemes where id=$1 and status='VERIFIED') and exists(select 1 from epr_obligations eo join obligations o on o.id=eo.obligation_id where eo.id=$3 and eo.scheme_id=$1 and eo.obligated_organization_id=$2 and eo.status in ('OPEN','ELIGIBLE') and o.period_start <= $5::date and o.period_end >= $4::date) returning *`, [schemeId, organizationId, obligationId, periodStart, periodEnd, returnType, reportedQuantity]);
-      if (!rows.rows[0]) return reply.code(409).send({ error: "Verified EPR scheme and matching open/eligible obligation are required", code: "EPR_RETURN_NOT_ELIGIBLE" });
-      return reply.code(201).send({ source: "postgresql", syntheticData: false, authoritativeMutation: true, eprReturn: rows.rows[0] });
+      const created = await withRlsRequestTransaction(pool, auth, requestContext, async (client) => {
+        const permitted = await hasOrganizationPermission(client, auth, organizationId, ["epr:manage"], "security_definer");
+        if (!permitted) throw Object.assign(new Error("EPR management permission required"), { code: "EPR_RETURN_WRITE_FORBIDDEN" });
+        const rows = await client.query(`insert into epr_returns(scheme_id,organization_id,obligation_id,period_start,period_end,return_type,reported_quantity,status) select $1,$2,$3,$4::date,$5::date,$6,$7,'DRAFT' where exists(select 1 from epr_schemes where id=$1 and status='VERIFIED') and exists(select 1 from epr_obligations eo join obligations o on o.id=eo.obligation_id where eo.id=$3 and eo.scheme_id=$1 and eo.obligated_organization_id=$2 and eo.status in ('OPEN','ELIGIBLE') and o.period_start <= $5::date and o.period_end >= $4::date) returning *`, [schemeId, organizationId, obligationId, periodStart, periodEnd, returnType, reportedQuantity]);
+        return rows.rows[0] ?? null;
+      });
+      if (!created) return reply.code(409).send({ error: "Verified EPR scheme and matching open/eligible obligation are required", code: "EPR_RETURN_NOT_ELIGIBLE" });
+      return reply.code(201).send({ source: "postgresql", syntheticData: false, authoritativeMutation: true, eprReturn: created });
     } catch (error: unknown) {
+      const code = error && typeof error === "object" && "code" in error ? String((error as {code:unknown}).code) : "";
+      if (code === "EPR_RETURN_WRITE_FORBIDDEN") return reply.code(403).send({ error: "EPR management permission required", code });
       request.log.error(error);
       const message = error instanceof Error ? error.message : "";
       if (message.toLowerCase().includes("duplicate key")) return reply.code(409).send({ error: "An EPR return already exists for this scheme, organization, period and return type", code: "EPR_RETURN_EXISTS" });
