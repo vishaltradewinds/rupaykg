@@ -83,6 +83,7 @@ export async function registerEprReturnReadRoute(
           auth,
           organizationId,
           EPR_READ_PERMISSIONS,
+          "security_definer",
         );
         if (!permitted) throw new EprReadPermissionDenied();
         return client.query(EPR_RETURN_LIST_SQL, [organizationId]);
