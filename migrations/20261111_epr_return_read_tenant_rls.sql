@@ -91,12 +91,46 @@ BEGIN
   ) THEN
     RAISE EXCEPTION 'EPR_RLS_EXISTING_POLICY_REQUIRES_MANUAL_RECONCILIATION';
   END IF;
+
+  -- This EPR migration depends on the shared auth foundation being installed first.
+  -- Never grant direct membership/role table reads to the application runtime.
+  IF NOT EXISTS (
+    SELECT 1
+      FROM pg_catalog.pg_proc p
+      JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace
+      JOIN pg_catalog.pg_roles owner_role ON owner_role.oid=p.proowner
+     WHERE n.nspname='auth_private'
+       AND p.proname='has_organization_permission'
+       AND p.pronargs=3
+       AND p.prosecdef
+       AND p.proconfig @> ARRAY['search_path=pg_catalog, pg_temp']
+       AND owner_role.rolname='rupaykg_auth_owner'
+  ) THEN
+    RAISE EXCEPTION 'EPR_RLS_PERMISSION_HELPER_MISSING_OR_INVALID: apply the shared auth permission-helper migration first';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_catalog.pg_roles
+     WHERE rolname='rupaykg_auth_owner'
+       AND NOT rolcanlogin AND NOT rolsuper AND NOT rolbypassrls
+       AND NOT rolcreatedb AND NOT rolcreaterole AND NOT rolinherit
+       AND NOT rolreplication
+  ) THEN
+    RAISE EXCEPTION 'EPR_RLS_PERMISSION_OWNER_INVALID';
+  END IF;
 END
 $preflight$;
 
 REVOKE ALL ON TABLE public.epr_returns FROM PUBLIC, rupaykg_app_runtime;
 REVOKE ALL ON TABLE public.epr_schemes FROM PUBLIC, rupaykg_app_runtime;
 GRANT USAGE ON SCHEMA public TO rupaykg_app_runtime;
+
+-- Grant only the boolean permission API to the EPR application runtime.
+-- The helper internally validates the signed actor/organization claims.
+SET LOCAL ROLE rupaykg_auth_owner;
+GRANT USAGE ON SCHEMA auth_private TO rupaykg_app_runtime;
+GRANT EXECUTE ON FUNCTION auth_private.has_organization_permission(uuid,uuid,text[])
+  TO rupaykg_app_runtime;
+RESET ROLE;
 
 -- The signed verifier schema/function are owned by the dedicated NOLOGIN role.
 -- The migration principal must have the temporary DBA-approved membership
