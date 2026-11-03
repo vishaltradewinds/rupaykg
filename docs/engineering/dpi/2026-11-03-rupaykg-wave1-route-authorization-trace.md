@@ -51,10 +51,10 @@ A missing signal means the simple static scan did not find the pattern; it is a 
 | POST /api/v1/settlements/:settlementId/authorize | registry-routes.ts | MEM, PERM, WRITE | Separation of duties, payer/payee rights, amount/currency and idempotency |
 | POST /api/v1/settlements/:settlementId/settle | registry-routes.ts | MEM, PERM, WRITE | External payment proof/reconciliation; no false settled state |
 | POST /api/v1/settlements/:settlementId/confirm | registry-routes.ts | MEM, PERM, WRITE | Confirm only against authoritative settlement evidence |
-| POST /api/v1/evidence-vault/upload | evidence-vault-routes.ts | PERM, TX, WRITE | Trace AUTH wrapper, activity tenant binding, size/content/hash and same-client transaction |
-| GET /api/v1/evidence-vault | evidence-vault-routes.ts | PERM | Trace actor and activity scope; ensure listing cannot enumerate another tenant |
-| GET /api/v1/evidence-vault/:evidenceId | evidence-vault-routes.ts | MEM, PERM, GEO | Same-client ownership check and artifact retrieval; no cross-tenant existence leak |
-| POST /api/v1/evidence-vault/:evidenceId/review | evidence-vault-routes.ts | MEM, PERM, GEO, TX, WRITE | Reviewer separation, same-client lock/write and immutable decision audit |
+| POST /api/v1/evidence-vault/upload | evidence-vault-routes.ts | AUTH (authFor), MEM snapshot, PERM, GEO, TX, WRITE | Auth and permission checks exist, but activityContext and permission are evaluated via pool before the write transaction; revalidate activity owner/geography/permission on the same transaction client before insert |
+| GET /api/v1/evidence-vault | evidence-vault-routes.ts | AUTH (authFor), MEM snapshot, PERM, GEO | Actor and activity scope are checked, but checks and list query use separate pool operations; bind all checks and listing to one tenant-scoped client/transaction |
+| GET /api/v1/evidence-vault/:evidenceId | evidence-vault-routes.ts | AUTH (authFor), MEM snapshot, PERM, GEO | Existence query precedes tenant and geography checks on separate pool queries; consolidate lookup and authorisation to avoid timing/existence leaks and TOCTOU |
+| POST /api/v1/evidence-vault/:evidenceId/review | evidence-vault-routes.ts | AUTH (authFor), MEM snapshot, PERM, GEO, TX, WRITE | Stronger path: locks evidence and performs permission/geography/self-review checks and writes on one transaction client; membership snapshot still originates before transaction and needs signed tenant-context binding |
 | GET /api/v1/mrv/status | mrv-routes.ts | PERM, ACTIVE, EXT | Restrict provider diagnostics; ensure active org and permission semantics |
 | POST /api/v1/mrv/activities/:activityId/submit | mrv-routes.ts | MEM, PERM, WRITE, EXT, IDEMP | Same-client source/evidence snapshot, external submission and persisted outcome |
 | GET /api/v1/mrv/provenance/:activityId | mrv-routes.ts | MEM, PERM, EXT | Prove activity visibility and external provenance separation |
@@ -74,7 +74,7 @@ A missing signal means the simple static scan did not find the pattern; it is a 
 | POST /api/v1/carbon/calculations | value-routes.ts | PERM, GEO, WRITE | Trace AUTH, tenant ownership, deterministic methodology and numeric precision |
 | POST /api/v1/epr/obligations/:obligationId/assess | value-routes.ts | MEM, PERM, GEO, WRITE | Verify source obligation, jurisdiction, actor and assessment transaction |
 | POST /api/v1/esg/reporting-periods/:periodId/metrics | value-routes.ts | MEM, PERM, GEO, WRITE | Verify period ownership, metric schema/unit and duplicate semantics |
-| GET /api/v1/workspaces/bwg | value-routes.ts | PERM, ACTIVE, GEO | Verify actor authentication and complete BWG scope |
+| GET /api/v1/workspaces/bwg | value-routes.ts | AUTH (authFor), ACTIVE, verified membership-derived orgIds, PERM metadata | Data queries execute for authenticated organisation members before permission booleans are returned; enforce a read permission before returning profiles/reports, then test tenant isolation |
 | POST /api/v1/bwg/profile | value-routes.ts | MEM, PERM, GEO, WRITE | Verify organisation profile owner and unique identity constraints |
 | POST /api/v1/bwg/reporting-periods | value-routes.ts | MEM, PERM, WRITE | Verify profile/organisation linkage and period uniqueness |
 | POST /api/v1/bwg/reporting-periods/:periodId/waste | value-routes.ts | MEM, PERM, WRITE | Verify reporting period owner and source evidence |
@@ -194,3 +194,14 @@ The suite must assert persisted row counts and audit records after each denial; 
 4. Only after route code is stable, publish OpenAPI and JSON Schemas from real validators/serializers.
 5. Run independent partner-client conformance tests and security review.
 6. Keep global RLS disabled until the production owner/role/BYPASSRLS posture and every tenant table policy have been remediated and accepted in a separate controlled change.
+
+
+## 10. Precision correction after manual handler review
+
+The first-pass signal table used a deliberately simple text-pattern scan. Manual inspection of the P0 handlers corrected several false negatives:
+- The ESG workspace does call the module-level requireAuth wrapper and derives its organisation list from verified memberships/active organisation. The confirmed gap is the absence of a dedicated read-permission gate before returning ESG reporting periods and metrics, not missing authentication.
+- The BWG workspace also authenticates and uses the active verified organisation, but appears to return reporting data before the permission booleans are calculated for the UI. Permission metadata is not a substitute for denying unauthorised reads.
+- Evidence Vault handlers all call authFor. Upload/list/download do perform activity, geography and permission checks, but those checks are split across pool queries and the protected read/write. Upload's database transaction does not revalidate activity ownership/geography/permission on the same client before writing. Review is stronger: it locks the evidence row and performs geography, permission, independent-review and state checks plus writes inside one transaction client, while the authenticated membership snapshot is still established earlier.
+- EPR obligations does authenticate, verify organisation membership and check EPR read permission. Remaining review is statutory jurisdiction/source correctness and same-client tenant-context binding.
+
+This correction supersedes the earlier simplistic wording in Sections 3 and 4. It illustrates why static pattern matching is only triage; manual control-flow review is required before security conclusions.
