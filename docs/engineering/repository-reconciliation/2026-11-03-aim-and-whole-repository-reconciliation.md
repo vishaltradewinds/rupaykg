@@ -553,3 +553,57 @@ Current migrations README and migration 012 explicitly allow organizations with 
 Recommended Shakti rule for a pan-India system: no implicit unlimited geography. Local organizations must have verified district/block/ULB/facility roots; national authorities must receive an explicit verified India-level root. The Jabalpur pilot must have a verified Jabalpur root and source-versioned administrative crosswalk. Missing/ambiguous/expired/cyclic mapping is UNRESOLVED or denied, not a nationwide grant. Read-only national aggregate access is a distinct permission/scope and must not become a write-scope bypass.
 
 Before adopting fail-closed enforcement, inventory unscoped organizations, classify national vs local authority, provision/verify roots, and test unscoped denial, explicit national-root allowance, local-root boundaries, and missing/ambiguous/cyclic crosswalk denial. Do not silently deploy 20261108 until this scope backfill and pilot evidence are accepted.
+
+## 13. Master execution plan — user-approved 2026-11-03
+
+This is the controlling user-approved execution baseline. Objective: deliver RupayKg as a pan-India Circular Economy Operating System for trusted environmental resource flows, connecting authorized stakeholders and geography to real activity, measurement, evidence, regulatory applicability, methodology, independent verification, MRV/provenance, eligibility, registry, settlement and reporting. Keep captured, authoritative, measured, evidenced, verified, Guardian-verified, HCS-consensus-confirmed, value-eligible, officially issued and settled as distinct states. Jabalpur SITE-JBP-01 / Kathonda is the pilot inside the national architecture, never its boundary.
+
+### Verified engineering foundations (not TRL 9 completion)
+- Core monorepo, API, web application, domain packages and PostgreSQL migration foundation exist.
+- Initial methodology/regulatory baseline includes BM-T-011 and BM WA03.001 / WA03.002; statutory applicability and acceptance remain to be validated.
+- Jabalpur SITE-JBP-01 / Kathonda is designated for pilot validation.
+- Prior Phase 2, 2.5, 3 and 5 work is recorded in checkpoints; each completion must be tied to current evidence.
+- Evidence Vault list/download hardening has recorded exact-head CI evidence; write paths and independent review remain separate gates.
+- PR #235 implements candidate startup/migration-runner hardening: no automatic production migration or fixture seeding, shared PostgreSQL TLS policy, catalogue/history preflight, one-client advisory lock, transactional migration/ledger writes and orphan-schema rejection. Reported exact-head CI #5182 passed; PR remains draft/unmerged. Full PostgreSQL TLS protocol and live Render/Neon binding remain unverified.
+- PR #233 holds reconciliation documentation; PR #230 starts CDPI Wave 1; PR #219 starts pilot demo UI. These are draft proposals, not production functionality.
+- Historical migration fixtures are recovered for review only; they are not permission to replay or activate them.
+
+### Remaining execution register
+| ID | Workstream | State | Required exit evidence |
+|---|---|---|---|
+| P0-01 | Production/staging migration source-ledger reconciliation (#214) | BLOCKED | Exact source provenance/checksum and semantic reconciliation for production 096 and staging-only 20261022–25; no replay; reviewed forward-only correction; disposable PostgreSQL proof |
+| P0-02 | Verifier authorization and decision integrity (#215) | BLOCKED | Exact subject-organization authorization; verified/non-suspended identity and membership; explicit permissions; snapshots for APPROVED and REJECTED; UPDATE/DELETE immutability; superseding correction; adversarial geography-cycle tests |
+| P0-03 | Geography authority and scope backfill | BLOCKED | Inventory unscoped/national/local organizations; verified India-level/local roots; Jabalpur root and versioned crosswalk; missing/ambiguous/expired/cyclic mapping denied or UNRESOLVED |
+| P0-04 | Tenant-safe route integration | IN_PROGRESS | One canonical EPR/BWG/MRV/Evidence Vault implementation; same-tenant transaction binding; two-tenant PostgreSQL tests for reads, writes, exports, uploads, downloads, jobs and callbacks |
+| P0-05 | Least-privilege DB and worker identities | BLOCKED | NOLOGIN owner separated from runtime; runtime/worker roles without BYPASSRLS, ownership, DDL, TEMP or unnecessary TRUNCATE/DELETE; pinned SECURITY DEFINER search_path and explicit grants |
+| P0-06 | Production connection/migration-runner assurance | IN_PROGRESS | Independent review of #235; PostgreSQL TLS protocol acceptance; verified Render-to-Neon target without exposing secrets; backup/restore and rollback rehearsal |
+| P1-01 | Field-to-MRV operational chain | PARTIAL FOUNDATIONS | Real stakeholder/site onboarding; source/material flow; calibrated measurement; chain-of-custody evidence; methodology calculation; reconciled MRV; independent verification |
+| P1-02 | Offline and device provenance | BLOCKED | Device bound to organization; lock/revalidate at intake/apply; immutable envelope/idempotency; actor/device/envelope persisted to domain records; two-tenant/two-device tests |
+| P1-03 | Hardware and field validation | NOT STARTED | Validated weighbridge RS232, sensors, calibration, device identity, offline sync and evidence; compliance checks for actual selected devices |
+| P1-04 | Guardian, Hedera and VC | EXTERNAL ACCEPTANCE UNVERIFIED | Real Guardian policy execution; HCS write and consensus tuple; independent Mirror Node confirmation; persisted provenance; W3C VC asymmetric signing and key custody/rotation |
+| P1-05 | EPR, registry and commercial operations | INCOMPLETE | Scheme-specific obligations/reporting; verified eligibility; registry issuance boundaries; transfer/retirement; buyer/seller settlement and auditable reconciliation |
+| P1-06 | Stakeholder dashboard and pilot demonstration | IN_PROGRESS | Stakeholder journeys backed by authorized APIs; synthetic data conspicuously isolated/labeled |
+| P1-07 | CDPI Wave 1 | IN_PROGRESS | Resource inventory, licence/governance/security review, attribution, selected integrations, versioned contracts and conformance tests; no unearned DPG qualification |
+| FINAL-01 | Production and TRL assurance | BLOCKED | Independent security/DBA review, statutory/partner acceptance, field operational evidence, reliability/backup/restore/incident controls, complete end-to-end live pilot and documented TRL 9 assurance |
+
+### Parallel execution and dependency rules
+Run independent streams in parallel: migration lineage; verifier/geography; tenant route integration; CDPI/licensing; Jabalpur field workflow and hardware design; Guardian/Hedera/VC; stakeholder demo. Integrate only when parent/base branch is canonical and exact-head CI plus independent review is recorded. Do not duplicate EPR/BWG routes or blindly merge/rebase divergent stacks.
+
+Dependency order: data/migration truth and identity → geography and tenant authorization → evidence/field measurement → MRV and independent verification → external provenance → eligibility/registry → settlement/reporting → production assurance. UI and CDPI work can proceed in parallel but cannot bypass authorization or evidence-state controls.
+
+### Non-negotiable controls
+- No production/staging DDL/DML, migration, role/grant change, RLS activation, worker activation, external transaction, deployment or certification without explicit authorization and independent release gates.
+- No task is complete from a PR title, route/screen existence, successful build, synthetic demo or CI alone.
+- Every completion requires exact commit, test/acceptance evidence, reviewer and environment scope. Record BLOCKED/UNVERIFIED when proof is absent.
+- Do not claim TRL 9 until real operational deployment and end-to-end field acceptance evidence exist.
+- Shakti Standards governs the lifecycle: one Shakti Standard, many project-specific operating systems.
+
+### Immediate next sequence
+1. Reconcile latest PR/branch heads and migration history; preserve exact historical provenance.
+2. Close verifier snapshots, approved DELETE protection, cycle fail-closed tests and organization/geography policy.
+3. Reconcile duplicate/stacked EPR, BWG, MRV and Evidence Vault implementations; execute tenant A/B PostgreSQL tests.
+4. Independently review #235 and validate live connection/TLS only through approved non-mutating checks.
+5. Advance Jabalpur field-to-MRV workflow and stakeholder demo with synthetic data clearly labeled until real evidence is accepted.
+6. Continue CDPI Wave 1 and Guardian/Hedera/VC in parallel with their evidence gates.
+
+**Disposition:** engineering foundation in progress; migration integrity and tenant/verifier security remain blockers; production certification HOLD/OFF; TRL 9 NOT ESTABLISHED.
