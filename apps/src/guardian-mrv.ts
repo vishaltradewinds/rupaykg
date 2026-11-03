@@ -35,7 +35,7 @@ function timeoutMs(): number {
 
 function deterministicIdempotencyKey(input: GuardianMrvRequest): string {
   return createHash("sha256")
-    .update([input.activityId, input.verificationId, input.evidenceId, input.policyId, input.methodologyCode || ""].join("|"))
+    .update([input.activityId, input.verificationId, input.evidenceId, input.policyId, input.methodologyCode || "", String(input.metadata?.sourceSnapshotDigest || "")].join("|"))
     .digest("hex");
 }
 
