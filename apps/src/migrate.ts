@@ -104,9 +104,18 @@ try {
       checksum_sha256 text
     )
   `);
-  // Existing installations receive a nullable column. NULL is deliberately
-  // preserved as LEGACY_UNVERIFIED; never invent historical byte provenance.
-  await pool.query("alter table schema_migrations add column if not exists checksum_sha256 text");
+  // Do not mutate an existing historical ledger merely to discover it is legacy.
+  // An old non-empty ledger without checksum metadata is blocked before ALTER.
+  const checksumColumn = await pool.query(
+    "select exists(select 1 from information_schema.columns where table_schema = current_schema() and table_name = 'schema_migrations' and column_name = 'checksum_sha256') as present",
+  );
+  if (checksumColumn.rows[0]?.present !== true) {
+    const count = await pool.query<{ total: number }>("select count(*)::integer as total from schema_migrations");
+    if (Number(count.rows[0]?.total ?? 0) > 0) {
+      throw new Error("LEGACY_UNVERIFIED: non-empty migration ledger has no checksum_sha256 column; no ledger schema change was made");
+    }
+    await pool.query("alter table schema_migrations add column if not exists checksum_sha256 text");
+  }
 
   const here = path.dirname(fileURLToPath(import.meta.url));
   const candidates = [path.resolve(here, "../../migrations"), path.resolve(here, "../../../migrations")];
@@ -165,7 +174,7 @@ try {
           [version, migration.filename, migration.checksum],
         );
         await client.query("commit");
-        migrationReport.applied.push(migration.filename);
+        migrationReport.applied.push(migration.filename);\n        migrationReport.pending = migrationReport.pending.filter((filename) => filename !== migration.filename);
       } catch (error) {
         await client.query("rollback");
         throw new Error("Migration " + migration.filename + " failed; ledger row was not committed", { cause: error });
