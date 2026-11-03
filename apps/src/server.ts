@@ -215,7 +215,7 @@ await registerRegistryRoutes(app, pool);
 await registerSyncRoutes(app, pool, process.env.RUPAYKG_REQUEST_CONTEXT_SECRET && process.env.RUPAYKG_REQUEST_CONTEXT_KEY_ID ? { hmacSecret: process.env.RUPAYKG_REQUEST_CONTEXT_SECRET, keyId: process.env.RUPAYKG_REQUEST_CONTEXT_KEY_ID } : undefined);
 await registerWorkspaceRoutes(app, pool, process.env.RUPAYKG_REQUEST_CONTEXT_SECRET && process.env.RUPAYKG_REQUEST_CONTEXT_KEY_ID ? { hmacSecret: process.env.RUPAYKG_REQUEST_CONTEXT_SECRET, keyId: process.env.RUPAYKG_REQUEST_CONTEXT_KEY_ID } : undefined);
 await registerBwgRoutes(app, pool, process.env.RUPAYKG_REQUEST_CONTEXT_SECRET && process.env.RUPAYKG_REQUEST_CONTEXT_KEY_ID ? { hmacSecret: process.env.RUPAYKG_REQUEST_CONTEXT_SECRET, keyId: process.env.RUPAYKG_REQUEST_CONTEXT_KEY_ID } : undefined);
-await registerCpcbSwmRoutes(app, pool);
+await registerCpcbSwmRoutes(app, pool, process.env.RUPAYKG_REQUEST_CONTEXT_SECRET && process.env.RUPAYKG_REQUEST_CONTEXT_KEY_ID ? { hmacSecret: process.env.RUPAYKG_REQUEST_CONTEXT_SECRET, keyId: process.env.RUPAYKG_REQUEST_CONTEXT_KEY_ID } : undefined);
 await registerIntelligenceRoutes(app, pool);
 await registerMrvRoutes(app, pool);
 await registerEvidenceVaultRoutes(app, pool);
