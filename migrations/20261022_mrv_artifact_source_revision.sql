@@ -2,7 +2,7 @@
 -- Keep activity source revision current when new vault versions/reviews are recorded.
 
 create or replace function bump_mrv_source_revision_from_evidence_artifact()
-returns trigger language plpgsql as $$
+returns trigger language plpgsql security definer set search_path = pg_catalog, public as $
 declare
   old_evidence_id uuid;
   new_evidence_id uuid;
@@ -14,15 +14,15 @@ begin
   if tg_op <> 'DELETE' then new_evidence_id := new.evidence_id; end if;
 
   if old_evidence_id is not null then
-    select activity_id into old_activity_id from evidence where id=old_evidence_id;
+    select activity_id into old_activity_id from public.evidence where id=old_evidence_id;
   end if;
   if new_evidence_id is not null then
-    select activity_id into new_activity_id from evidence where id=new_evidence_id;
+    select activity_id into new_activity_id from public.evidence where id=new_evidence_id;
   end if;
 
   if old_activity_id is not null
      and (new_activity_id is null or old_activity_id is distinct from new_activity_id) then
-    update activities set mrv_source_revision=mrv_source_revision+1 where id=old_activity_id;
+    update public.activities set mrv_source_revision=mrv_source_revision+1 where id=old_activity_id;
   end if;
   if new_activity_id is not null then
     update activities set mrv_source_revision=mrv_source_revision+1 where id=new_activity_id;
