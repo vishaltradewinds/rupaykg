@@ -472,3 +472,12 @@ Further read-only review of staging branch br-spring-hill-b4544vz5 found:
 - The four staging tables remain RLS/FORCE RLS disabled with no policies. The elevated owner has BYPASSRLS, DDL and replication capabilities. A dedicated NOLOGIN schema owner and least-privilege runtime/worker principal without ownership, BYPASSRLS, DDL or TRUNCATE are mandatory before activation.
 
 This is staging-only. No DDL/DML, role/grant change, payload read or worker activation occurred. Do not add these staging-only objects to production as part of the hardening exercise. Any future implementation must be a reviewed forward migration and disposable PostgreSQL acceptance package, not an edit/replay of historical fixtures.
+
+
+### 12.16 Consolidated current-main production-safety and migration-runner candidate — PR #235
+
+Opened draft [PR #235](https://github.com/vishaltradewinds/rupaykg/pull/235), head aa2b89f9785e547ed81f28d6e286f7bd997525af, base main at a3fecc0abd2c46549a201058d3963afc0e3a73c9. It consolidates PR #234's current-main startup/TLS hardening with migration-history preflight, session advisory-lock serialization, single-client migration execution, rollback/unlock connection disposal, public search_path pinning, and orphan-schema refusal when the ledger is absent. PR #234 remains an open draft component/reference PR and must not be merged separately if #235 is accepted.
+
+Exact-head CI run #41628809379 (run 5168) on aa2b89f9785e547ed81f28d6e286f7bd997525af: dependency audit, migration catalogue validation, migration CLI against disposable CI PostgreSQL, TypeScript typecheck, production build, browser smoke and disposable PostgreSQL acceptance (including the new orphan-schema case) all passed. The production-container build was still running at the time of this addendum; no final workflow success is claimed yet.
+
+The runner preflight verifies migration catalogue uniqueness, applied filename presence and numeric-prefix consistency, and refuses an unledgered schema containing non-extension relations/custom enum or domain types/functions. It does not verify historical SQL bytes against cryptographic checksums. Exact 096 source reconciliation and staging-only 20261022–25 provenance remain separate blocking gates. No production or staging migration was executed.
