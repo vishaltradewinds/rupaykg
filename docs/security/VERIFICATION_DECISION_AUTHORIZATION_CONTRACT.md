@@ -44,11 +44,27 @@ Both trigger functions are owned by `rupaykg`, are not SECURITY DEFINER, have no
 - Does not require the subject organization itself to be VERIFIED.
 - Does not enforce decision/snapshot immutability on UPDATE or DELETE.
 
-### 2.4 Geography helper is currently fail-open
+### 2.4 Applied migration 096 source recovered; important limitations
+
+The exact source blob for `migrations/096_verification_authorization_provenance.sql` was recovered from PR #173 at blob SHA `258b1f4534efbf915688f78aa84d4ec24a47cbc0`. It matches the previously recovered source provenance, but PR #192's changed-file inventory still omits this applied production migration.
+
+The recovered migration:
+- Adds the four authorization snapshot columns.
+- Replaces `prevent_invalid_verification()` but enforces authority only when `decision = 'APPROVED'`.
+- Accepts canonical `VERIFY_EVIDENCE` and two legacy aliases.
+- Selects one membership by `created_at DESC LIMIT 1`, without a unique deterministic tie-breaker or explicit ambiguity denial.
+- Does not require `roles.organization_id` to equal the activity organization.
+- Does not verify organization `verification_status`, geography scope or self-review for REJECTED.
+- Populates the four snapshot fields only for APPROVED.
+- Recreates the integrity trigger for INSERT OR UPDATE but does not make decisions/snapshots immutable and does not install a DELETE guard.
+
+This source recovery is provenance, not proof of exact production deployment bytes. The production ledger confirms migration 096 was applied; a release must still reconcile exact deployed source/hash and the full migration chronology. Do not replay migration 096.
+
+### 2.5 Geography helper is currently fail-open
 
 The current `public.organization_has_geography_scope(organization_id, geography_id)` returns TRUE when the organization has **no VERIFIED geography-scope rows**. This is fail-open behavior. A later candidate migration may replace this helper, but the production-derived baseline still has this behavior. A new verifier function must not rely on the helper unless its exact deployed definition is changed and independently tested to fail closed.
 
-### 2.5 Relevant schema
+### 2.6 Relevant schema
 
 - `verifications`: `id`, nullable `evidence_id`, nullable `activity_id`, non-null `verifier_identity_id`, enum `decision` (`APPROVED`, `REJECTED`), non-null `scope`, optional rationale, `decided_at`, plus four nullable authorization snapshot fields.
 - `evidence`: `id`, nullable `activity_id`, evidence status, capture metadata and identity.
@@ -68,7 +84,7 @@ The inspected child has zero rows in `verifications`; no data backfill was indic
 
 A decision must have a resolvable subject activity and organization.
 
-1. Require either a valid `evidence_id` or an `activity_id` according to the product contract; do not silently accept a decision with neither.
+1. Require either a valid `evidence_id` or an `activity_id` according to the product contract; do not silently accept a decision with neither. The recovered applied migration permits activity-only decisions, so changing this to evidence-required needs a separately approved product/legal decision and caller audit.
 2. If `evidence_id` is supplied, the evidence row must exist and have a non-null `activity_id`.
 3. If both `evidence_id` and `activity_id` are supplied, they must resolve to the same activity.
 4. Resolve the activity row. It must exist and have a non-null `organization_id`.
