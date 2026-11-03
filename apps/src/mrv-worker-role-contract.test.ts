@@ -19,6 +19,8 @@ const safeRole: MrvWorkerRoleContract = {
   direct_table_privileges: false,
   worker_api_execute: true,
   public_worker_api_execute: false,
+  worker_api_complete: true,
+  worker_api_secure: true,
 };
 
 test("accepts only the dedicated function-only worker database role", () => {
@@ -46,6 +48,8 @@ test("rejects direct table privileges, public schema creation, or missing API ex
     { public_create: true },
     { direct_table_privileges: true },
     { worker_api_execute: false },
+    { worker_api_complete: false },
+    { worker_api_secure: false },
   ]) {
     assert.throws(() => assertMrvWorkerRoleContract({ ...safeRole, ...patch }));
   }
