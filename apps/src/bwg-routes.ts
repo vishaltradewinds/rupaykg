@@ -12,7 +12,7 @@ async function authFor(request: Parameters<typeof authenticate>[0], reply: { cod
 
 /** Compatibility registration point retained for the server's existing BWG registration order. */
 export async function registerBwgRoutes(app: FastifyInstance, pool: Pool | null, requestContext?: RlsRequestContextConfig): Promise<void> {
-  await registerEprReturnRoutes(app, pool);
+  await registerEprReturnRoutes(app, pool, requestContext);
   app.get("/api/v1/epr/obligations", async (request, reply) => {
     const auth = await authFor(request, reply, pool); if (!auth || !pool) return;
     const organizationId = auth.activeOrganizationId;
