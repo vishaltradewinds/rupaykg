@@ -481,3 +481,10 @@ Opened draft [PR #235](https://github.com/vishaltradewinds/rupaykg/pull/235), he
 Exact-head CI run #41628809379 (run 5168) on aa2b89f9785e547ed81f28d6e286f7bd997525af: dependency audit, migration catalogue validation, migration CLI against disposable CI PostgreSQL, TypeScript typecheck, production build, browser smoke and disposable PostgreSQL acceptance (including the new orphan-schema case) all passed. The production-container build was still running at the time of this addendum; no final workflow success is claimed yet.
 
 The runner preflight verifies migration catalogue uniqueness, applied filename presence and numeric-prefix consistency, and refuses an unledgered schema containing non-extension relations/custom enum or domain types/functions. It does not verify historical SQL bytes against cryptographic checksums. Exact 096 source reconciliation and staging-only 20261022–25 provenance remain separate blocking gates. No production or staging migration was executed.
+
+
+### 12.17 Migration 027 filename/source reconciliation correction
+
+A direct SELECT of production and staging migration ledgers confirms both record version 027 as filename 027_verification_permission_hardening.sql, applied_at 2026-10-17T10:48:26.266Z. The exact file exists on current main and historical commit ca8f4100782e13f8d72106187fafc8e1e446214f with Git blob c626a7aad10a31a620b5d814af1330f00c54def4. It is not a missing source file. The current migrations README incorrectly names it 027_verification_permission_guard.sql; correct the README reference.
+
+The 027 SQL removes role-name fallback and checks explicit permission keys, but only verifies a membership status and permission. It does not bind the membership to the activity organization, verify identity state/suspension, enforce geography scope, or persist immutable decision-time authorization snapshots. Treat 027 as a partial historical hardening step, not the complete verifier authorization contract. Do not replay it; replace/extend only through a reviewed forward migration after the #213 snapshot, DELETE and geography gaps are closed.
