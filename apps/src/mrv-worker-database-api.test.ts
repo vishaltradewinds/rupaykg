@@ -45,3 +45,16 @@ test("worker adapter rejects malformed boolean responses", async () => {
   const { pool } = poolReturning("true");
   await assert.rejects(() => new MrvWorkerDatabaseApi(pool).authorize("job"), /INVALID_BOOLEAN/);
 });
+
+test("advance adapter accepts only the documented JSONB envelope", async () => {
+  const id = "00000000-0000-4000-8000-000000000001";
+  const token = "00000000-0000-4000-8000-000000000002";
+  const accepted = new MrvWorkerDatabaseApi(poolReturning({ advanced: true }).pool);
+  assert.equal(await accepted.advance(id, token, "GUARDIAN_VERIFIED"), true);
+  const rejected = new MrvWorkerDatabaseApi(poolReturning({ advanced: "true" }).pool);
+  await assert.rejects(() => rejected.advance(id, token, "GUARDIAN_VERIFIED"), /INVALID_ADVANCE_RESULT/);
+  const extra = new MrvWorkerDatabaseApi(poolReturning({ advanced: true, ignored: true }).pool);
+  await assert.rejects(() => extra.advance(id, token, "GUARDIAN_VERIFIED"), /INVALID_ADVANCE_RESULT/);
+  const legacy = new MrvWorkerDatabaseApi(poolReturning(true).pool);
+  await assert.rejects(() => legacy.advance(id, token, "GUARDIAN_VERIFIED"), /INVALID_ADVANCE_RESULT/);
+});
