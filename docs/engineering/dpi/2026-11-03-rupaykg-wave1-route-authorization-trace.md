@@ -205,3 +205,33 @@ The first-pass signal table used a deliberately simple text-pattern scan. Manual
 - EPR obligations does authenticate, verify organisation membership and check EPR read permission. Remaining review is statutory jurisdiction/source correctness and same-client tenant-context binding.
 
 This correction supersedes the earlier simplistic wording in Sections 3 and 4. It illustrates why static pattern matching is only triage; manual control-flow review is required before security conclusions.
+
+
+## 10.1 Manual field-data/device trace after the first-pass inventory
+
+Pinned mainline sources manually rechecked on 2026-11-03:
+- apps/src/server.ts blob ecdd9c49b27f1aef02c07e3f7a79f872d07a7f06
+- apps/src/sync-routes.ts blob 457e8a53a3efa0b6e045a0b4e737212a36b0b63f
+- migrations/003_identity_geography_operations.sql blob (see repository source)
+- migrations/007_resource_flow_mrv.sql blob 70091a21f87b6cf0924f95eb02a814febb3e5e40
+
+**P0 — direct operational writes are not atomic with their authorization checks:**
+- POST /api/v1/resource-flows checks active organization, waste:record permission and source/destination geography through separate pool operations, then inserts with a separate pool query. No single transaction client spans authorization and mutation. It has no request idempotency key and resource_flows has no actor/device provenance columns.
+- POST /api/v1/activities/{activityId}/measurements calls canWriteActivity through the pool, then inserts through the pool separately. It has no request idempotency key and omits existing measurement provenance fields captured_by_identity_id, device_id, latitude, longitude and location_accuracy_m.
+- These direct endpoints remain in the PR #216 security-base branch unchanged. The presence of withRlsRequestTransaction elsewhere does not certify these routes.
+
+**P0 — field-device organization binding is incomplete:**
+- requireFieldDevice() is called before the envelope transaction and checks only field_devices.id, identity_id and VERIFIED status; it does not require the device's organization_id to equal the authenticated active organization and does not lock the device row in the intake transaction.
+- The envelope intake has useful idempotency semantics (device+idempotency key, payload conflict, per-device client sequence and server cursor) and stores identity/device/capture/hash provenance. This is a stronger capture path than the direct endpoints.
+- The apply route locks the envelope but does not join/lock/revalidate its field_devices row. It selects no device_id from the envelope and applyOperation receives no device context. Device revocation or organization binding is therefore not revalidated at apply time.
+- The device check must be repeated inside the same transaction as envelope insert/apply, requiring device identity = authenticated identity, device organization = active verified organization and status VERIFIED. Test org A device attempting org B activity/resource flow and device revocation between intake and apply.
+
+**P1 — offline operation provenance is not fully copied to domain rows:**
+- MEASUREMENT_CREATE has envelope idempotency, but inserts only activity/value/unit/method/source/measured_at/metadata. It does not set captured_by_identity_id or device_id even though measurements has those columns.
+- EVIDENCE_CREATE writes captured_by_identity_id but omits device_id; ACTIVITY_CREATE writes actor_identity_id but omits device_id.
+- RESOURCE_FLOW_CREATE has no direct actor/device/idempotency fields; its trace depends on the envelope applied_entity reference. The direct resource-flow endpoint bypasses that envelope.
+- MEASUREMENT_CREATE does not create an mrv_observations row or bind instrument_id, calibration, uncertainty, source method version or evidence reference. A generic measurement is not automatically an authoritative MRV observation.
+
+**CDPI/OpenAPI consequence:** current inline Fastify handlers use manual requiredString/requiredPositiveNumber checks rather than route-attached JSON Schema validators. Do not generate/publish partner OpenAPI by copying UI fields or inferring from TypeScript casts. First introduce shared versioned JSON Schemas and Fastify runtime validation; then make authorization, idempotency, actor/device provenance and response serializers match the contract. Keep the contract internal/draft until two-tenant and two-device PostgreSQL acceptance passes.
+
+**Acceptance package:** two organizations, two identities, one device per organization, multiple geography roots; cross-org device attempts; revocation between intake/apply; same idempotency replay; different payload conflict; client-sequence collision; direct route parity; no writes on denial; measurement/evidence/activity/resource-flow linkage to actor, device, envelope and source evidence. Assert persisted rows and audit records, not only HTTP status.
