@@ -178,3 +178,8 @@ No local TypeScript/Node test execution was available in this environment, and G
 The runner now checks whether the checksum column exists before attempting any compatibility ALTER. If an existing non-empty ledger lacks that column, it stops with `LEGACY_UNVERIFIED` **without changing the ledger schema**. Only a fresh ledger or an empty legacy ledger can receive the new column automatically. It also validates previously recorded critical MRV migrations on every run, rather than checking postconditions only when applying a new file. Newly applied migrations are committed only after their catalog postconditions pass; the JSON report removes each successfully applied file from the pending list.
 
 The implementation and static validator were corrected after source inspection to ensure these fail-closed paths are present. This remains unexecuted locally and has no exact-head CI evidence.
+
+
+### Pull request integration boundary
+
+The current PR #213 head is `eb75edca50850a807bf5ba7042749d6567746626`. GitHub reports the branch as **252 commits ahead and 36 commits behind** its configured base, with comparison status `diverged`; the PR remains draft, unmerged and non-mergeable. No workflow run or commit status was returned for this exact head. This makes the branch unsuitable for merge or release even if the new focused checksum unit tests later pass. Before acceptance, the work must be reconciled onto the current intended base with a reviewable diff, then receive exact-head CI and independent DBA/security review.
