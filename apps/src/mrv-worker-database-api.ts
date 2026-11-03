@@ -14,6 +14,17 @@ function booleanResult(value: unknown, operation: string): boolean {
   throw new Error(`MRV_WORKER_API_INVALID_BOOLEAN:${operation}`);
 }
 
+function advanceResult(value: unknown): boolean {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("MRV_WORKER_API_INVALID_ADVANCE_RESULT");
+  }
+  const result = value as Record<string, unknown>;
+  if (Object.keys(result).length !== 1 || typeof result.advanced !== "boolean") {
+    throw new Error("MRV_WORKER_API_INVALID_ADVANCE_RESULT");
+  }
+  return result.advanced;
+}
+
 function claimResult(value: unknown): MrvJobLease | null {
   if (value === null) return null;
   if (!value || typeof value !== "object") throw new Error("MRV_WORKER_API_INVALID_CLAIM");
@@ -60,7 +71,7 @@ export class MrvWorkerDatabaseApi {
 
   async advance(jobId: string, token: string, status: MrvJobStatus, patch: MrvJobStagePatch = {}): Promise<boolean> {
     const q = await this.pool.query<ApiResult<unknown>>("select mrv_worker_api.advance_job($1::uuid,$2::uuid,$3,$4::jsonb) as result", [jobId, token, status, JSON.stringify(patch)]);
-    return booleanResult(one(q.rows, "advance_job"), "advance_job");
+    return advanceResult(one(q.rows, "advance_job"));
   }
 
   async release(jobId: string, token: string, nextAttemptAt: Date, code: string, detail: string): Promise<boolean> {
