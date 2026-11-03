@@ -8,6 +8,8 @@ import type { RlsRequestContextConfig } from "./rls-request-transaction.js";
 const identityId = "11111111-1111-4111-8111-111111111111";
 const organizationA = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const geographyA = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa01";
+const activityA = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa02";
+const evidenceA = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa03";
 const config: RlsRequestContextConfig = {
   hmacSecret: "mrv-workspace-test-secret-material-at-least-32-bytes",
   keyId: "mrv_workspace_test",
@@ -23,12 +25,22 @@ class TenantClient {
   geographyAllowed = true;
   failProtectedRead = false;
   protectedReadFailureTriggered = false;
+  verificationAllowed = true;
+  evidenceVisible = true;
+  failVerificationRead = false;
 
   async query(sql: string, values?: unknown[]) {
     this.calls.push({ sql, ...(values === undefined ? {} : { values }) });
     if (sql === "BEGIN" || sql === "COMMIT" || sql === "ROLLBACK") return { rows: [], rowCount: 0 };
     if (sql.includes("set_config('app.request_context'")) return { rows: [{ set_config: "signed" }], rowCount: 1 };
     if (sql.includes("auth_private.has_organization_permission")) return { rows: [{ ok: this.permission }], rowCount: 1 };
+    if (sql.includes("select e.activity_id, a.geography_id")) {
+      if (this.failVerificationRead) throw new Error("synthetic evidence lookup failure");
+      return { rows: this.evidenceVisible ? [{ activity_id: activityA, geography_id: geographyA }] : [], rowCount: this.evidenceVisible ? 1 : 0 };
+    }
+    if (sql.includes("auth_private.can_verify_evidence")) return { rows: [{ ok: this.verificationAllowed }], rowCount: 1 };
+    if (sql.includes("insert into verifications")) return { rows: [{ id: "verification-a", evidence_id: evidenceA, activity_id: activityA, verifier_identity_id: identityId, decision: "APPROVED", scope: "MRV", decided_at: new Date("2026-11-03T00:00:00Z") }], rowCount: 1 };
+    if (sql.startsWith("update evidence set status='VERIFIED'")) return { rows: [], rowCount: 1 };
     if (sql.includes("select m.id")) {
       if (this.failProtectedRead) { this.protectedReadFailureTriggered = true; throw new Error("synthetic protected read failure"); }
       return { rows: [{ id: "measurement-a", organization_id: organizationA }], rowCount: 1 };
@@ -55,6 +67,9 @@ class TenantPool {
   permission = true;
   geographyAllowed = true;
   failProtectedRead = false;
+  verificationAllowed = true;
+  evidenceVisible = true;
+  failVerificationRead = false;
 
   async query(sql: string, values?: unknown[]) {
     this.rawCalls.push({ sql, ...(values === undefined ? {} : { values }) });
@@ -67,6 +82,9 @@ class TenantPool {
     client.permission = this.permission;
     client.geographyAllowed = this.geographyAllowed;
     client.failProtectedRead = this.failProtectedRead;
+    client.verificationAllowed = this.verificationAllowed;
+    client.evidenceVisible = this.evidenceVisible;
+    client.failVerificationRead = this.failVerificationRead;
     this.clients.push(client);
     return client;
   }
@@ -210,6 +228,96 @@ test("MRV workspace rolls back on protected-read failure and never returns parti
       const calls = pool.clients[0]!.calls;
       assert.equal(calls.at(-1)?.sql, "ROLLBACK");
       assert.equal(calls.some((call) => call.sql === "COMMIT"), false);
+    } finally { await app.close(); }
+  });
+});
+
+
+test("evidence verification writes only inside the active signed tenant transaction", async () => {
+  await withEnvironment(async () => {
+    const pool = new TenantPool();
+    const app = await makeApp(pool);
+    try {
+      const response = await app.inject({
+        method: "POST",
+        url: "/api/v1/evidence/" + evidenceA + "/verification",
+        headers: requestHeaders(),
+        payload: { decision: "APPROVED", scope: "MRV" },
+      });
+      assert.equal(response.statusCode, 201);
+      assert.equal(response.json().authoritativeMutation, true);
+      const calls = pool.clients[0]!.calls;
+      assert.equal(calls[0]?.sql, "BEGIN");
+      assert.ok(calls[1]?.sql.includes("set_config('app.request_context', $1, true)"));
+      const evidenceLookup = calls.find((call) => call.sql.includes("select e.activity_id, a.geography_id"));
+      assert.deepEqual(evidenceLookup?.values, [evidenceA, organizationA]);
+      const geography = calls.find((call) => call.sql.includes("select organization_has_geography_scope"));
+      assert.deepEqual(geography?.values, [organizationA, geographyA]);
+      const verifier = calls.find((call) => call.sql.includes("auth_private.can_verify_evidence"));
+      assert.deepEqual(verifier?.values, [identityId, evidenceA]);
+      const insert = calls.find((call) => call.sql.includes("insert into verifications"));
+      assert.deepEqual(insert?.values, [evidenceA, activityA, identityId, "APPROVED", "MRV"]);
+      const update = calls.find((call) => call.sql.startsWith("update evidence set status='VERIFIED'"));
+      assert.deepEqual(update?.values, [evidenceA, activityA]);
+      assert.equal(calls.at(-1)?.sql, "COMMIT");
+      assert.equal(pool.rawCalls.filter((call) => /from (evidence|activities|verifications)/i.test(call.sql)).length, 0);
+    } finally { await app.close(); }
+  });
+});
+
+test("evidence verification rejects foreign or missing evidence within the active tenant and rolls back", async () => {
+  await withEnvironment(async () => {
+    const pool = new TenantPool(); pool.evidenceVisible = false;
+    const app = await makeApp(pool);
+    try {
+      const response = await app.inject({
+        method: "POST",
+        url: "/api/v1/evidence/" + evidenceA + "/verification",
+        headers: requestHeaders(),
+        payload: { decision: "APPROVED", scope: "MRV" },
+      });
+      assert.equal(response.statusCode, 404);
+      assert.equal(response.json().code, "EVIDENCE_NOT_FOUND");
+      assert.equal(pool.clients[0]!.calls.at(-1)?.sql, "ROLLBACK");
+      assert.equal(pool.clients[0]!.calls.some((call) => call.sql.includes("insert into verifications")), false);
+    } finally { await app.close(); }
+  });
+});
+
+test("evidence verification permission denial rolls back and performs no mutation", async () => {
+  await withEnvironment(async () => {
+    const pool = new TenantPool(); pool.verificationAllowed = false;
+    const app = await makeApp(pool);
+    try {
+      const response = await app.inject({
+        method: "POST",
+        url: "/api/v1/evidence/" + evidenceA + "/verification",
+        headers: requestHeaders(),
+        payload: { decision: "APPROVED", scope: "MRV" },
+      });
+      assert.equal(response.statusCode, 403);
+      assert.equal(response.json().code, "VERIFY_EVIDENCE_FORBIDDEN");
+      const calls = pool.clients[0]!.calls;
+      assert.equal(calls.at(-1)?.sql, "ROLLBACK");
+      assert.equal(calls.some((call) => call.sql.includes("insert into verifications")), false);
+    } finally { await app.close(); }
+  });
+});
+
+test("evidence verification rolls back on evidence lookup failure", async () => {
+  await withEnvironment(async () => {
+    const pool = new TenantPool(); pool.failVerificationRead = true;
+    const app = await makeApp(pool);
+    try {
+      const response = await app.inject({
+        method: "POST",
+        url: "/api/v1/evidence/" + evidenceA + "/verification",
+        headers: requestHeaders(),
+        payload: { decision: "APPROVED", scope: "MRV" },
+      });
+      assert.equal(response.statusCode, 503);
+      assert.equal(response.json().code, "VERIFICATION_UNAVAILABLE");
+      assert.equal(pool.clients[0]!.calls.at(-1)?.sql, "ROLLBACK");
     } finally { await app.close(); }
   });
 });
