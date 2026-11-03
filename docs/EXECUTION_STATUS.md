@@ -20,3 +20,11 @@ Main remains the authoritative source of truth. Current AIM and whole-repository
 4. Complete tenant A/B PostgreSQL acceptance and independent DBA/security review before any RLS or production-release decision.
 
 See `docs/ECOSYSTEM_STATE.json` for the machine-validated single NEXT item. Do not infer production readiness from CI, a live service, demo data or a successful build.
+
+## User-approved master TRL 9 execution baseline — 2026-11-03
+
+The controlling completed-vs-remaining register, dependencies, parallel workstreams and release gates are recorded in [section 13 of the repository reconciliation](engineering/repository-reconciliation/2026-11-03-aim-and-whole-repository-reconciliation.md#13-master-execution-plan--user-approved-2026-11-03).
+
+Immediate sequence: (1) migration source/ledger integrity (#214), (2) verifier authorization and decision integrity (#215), (3) geography and tenant isolation, (4) canonical EPR/BWG/MRV/Evidence Vault integration, (5) Jabalpur field-to-MRV workflow, (6) Guardian/Hedera/VC and registry/settlement, (7) stakeholder demonstration and CDPI Wave 1, (8) independent production and TRL 9 assurance.
+
+Parallel work is allowed only where dependencies and branch ancestry permit. No production/staging writes, migrations, RLS activation, worker activation, deployment or certification without explicit authorization and independent gates. Production remains HOLD/OFF; TRL 9 is NOT ESTABLISHED.
