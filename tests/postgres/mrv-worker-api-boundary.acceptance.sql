@@ -21,6 +21,7 @@ declare
     'mrv_submission_jobs','mrv_submission_job_events','mrv_provenance_events'
   ];
   table_name text;
+  claim_index_definition text;
 begin
   select oid into runtime_oid from pg_roles where rolname='rupaykg_mrv_worker_runtime';
   select oid into owner_oid from pg_roles where rolname='rupaykg_mrv_worker_api_owner';
@@ -127,6 +128,26 @@ begin
       raise exception 'MRV API acceptance: RLS and FORCE RLS required on public.%', table_name;
     end if;
   end loop;
+
+  select pg_get_indexdef(to_regclass('public.mrv_submission_jobs_claim_idx'))
+    into claim_index_definition;
+  if claim_index_definition is null then
+    raise exception 'MRV API acceptance: missing reconciled MRV claim index';
+  end if;
+  if position('next_attempt_at, created_at, id' in lower(claim_index_definition)) = 0 then
+    raise exception 'MRV API acceptance: MRV claim index key order is not deterministic';
+  end if;
+  foreach required_signature in array array[
+    'REQUESTED','CLAIMED','GUARDIAN_SUBMITTED','GUARDIAN_VERIFIED',
+    'HCS_SUBMITTED','HCS_CONSENSUS_CONFIRMED','MIRROR_VERIFIED','RETRYABLE_FAILURE'
+  ] loop
+    if position(quote_literal(required_signature) in claim_index_definition) = 0 then
+      raise exception 'MRV API acceptance: claim index omits worker-claimable status %', required_signature;
+    end if;
+  end loop;
+  if position(quote_literal('NEEDS_RECONCILIATION') in claim_index_definition) > 0 then
+    raise exception 'MRV API acceptance: quarantine status must not be automatically claimable';
+  end if;
 end
 $accept$;
 
