@@ -50,7 +50,7 @@ before(async () => {
     actorId = (await c.query<{ id: string }>("insert into identities(external_subject,display_name) values($1,$2) returning id", [`runtime-registry-actor-${suffix}`, "Registry Runtime Actor"])).rows[0]!.id;
     verifierId = (await c.query<{ id: string }>("insert into identities(external_subject,display_name) values($1,$2) returning id", [`runtime-registry-verifier-${suffix}`, "Registry Runtime Verifier"])).rows[0]!.id;
     const actorRole = (await c.query<{ id: string }>("insert into roles(organization_id,name,permissions) values($1,$2,$3::jsonb) returning id", [ownerOrgId, `REGISTRY-OPERATOR-${suffix}`, JSON.stringify(["ISSUE_CREDENTIAL","TRANSFER_CREDENTIAL","RETIRE_CREDENTIAL","AUTHORIZE_SETTLEMENT","SETTLE_FUNDS","settlement:authorize","settlement:settle","guardian:read","evidence:upload"])] )).rows[0]!.id;
-    const verifierRole = (await c.query<{ id: string }>("insert into roles(organization_id,name,permissions) values($1,'verifier',$2::jsonb) returning id", [ownerOrgId, JSON.stringify(["VERIFY_EVIDENCE", "verification:approve"])] )).rows[0]!.id;
+    const verifierRole = (await c.query<{ id: string }>("insert into roles(organization_id,name,permissions) values($1,'verifier',$2::jsonb) returning id", [ownerOrgId, JSON.stringify(["VERIFY_EVIDENCE", "verification:approve", "evidence:review"])] )).rows[0]!.id;
     const destinationRole = (await c.query<{ id: string }>("insert into roles(organization_id,name,permissions) values($1,$2,$3::jsonb) returning id", [destinationOrgId, `SETTLEMENT-PARTY-${suffix}`, JSON.stringify(["settlement:authorize","settlement:settle","RETIRE_CREDENTIAL"])] )).rows[0]!.id;
     await approveTestMembership(c, actorId, ownerOrgId, actorRole, geographyId, "operator", "collector");
     await approveTestMembership(c, verifierId, ownerOrgId, verifierRole, geographyId, "verifier", "collector");
@@ -223,6 +223,23 @@ describe("registry and settlement runtime acceptance", () => {
     const uploaded = await body(upload);
     const uploadedEvidenceId = uploaded.data.evidenceId as string;
     assert.ok(uploadedEvidenceId);
+
+    const ownerList = await request(`/api/v1/evidence-vault?activityId=${activityId}`, {}, actorToken, ownerOrgId);
+    assert.equal(ownerList.status, 200);
+    const ownerListBody = await body(ownerList);
+    assert.ok(ownerListBody.data.artifacts.some((artifact: { evidence_id: string }) => artifact.evidence_id === uploadedEvidenceId));
+
+    const ownerDownload = await request(`/api/v1/evidence-vault/${uploadedEvidenceId}`, {}, actorToken, ownerOrgId);
+    assert.equal(ownerDownload.status, 200);
+    assert.equal(ownerDownload.headers.get("X-Evidence-SHA256"), uploaded.data.sha256);
+    assert.deepEqual(Buffer.from(await ownerDownload.arrayBuffer()), content);
+
+    const ownerReview = await request(`/api/v1/evidence-vault/${uploadedEvidenceId}/review`, {
+      method: "POST",
+      body: JSON.stringify({ decision: "APPROVED", rationale: "Independent reviewer accepted the artifact" }),
+    }, verifierToken, ownerOrgId);
+    assert.equal(ownerReview.status, 200);
+    assert.equal((await body(ownerReview)).data.status, "VERIFIED");
 
     const foreignList = await request(`/api/v1/evidence-vault?activityId=${activityId}`, {}, actorToken, destinationOrgId);
     assert.equal(foreignList.status, 403);
