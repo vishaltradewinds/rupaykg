@@ -44,6 +44,9 @@ type EprReturnReadContractRow = {
   permission_helper_valid: boolean;
   permission_owner_valid: boolean;
   permission_owner_no_memberships: boolean;
+  session_resolver_execute: boolean;
+  session_resolver_public_execute: boolean;
+  session_resolver_valid: boolean;
 };
 
 const EPR_RETURN_READ_CONTRACT_SQL = `select
@@ -145,7 +148,34 @@ const EPR_RETURN_READ_CONTRACT_SQL = `select
     select 1 from pg_catalog.pg_auth_members membership
     join pg_catalog.pg_roles owner_role on owner_role.oid=membership.member
      where owner_role.rolname='rupaykg_auth_owner'
-  ) as permission_owner_no_memberships
+  ) as permission_owner_no_memberships,
+  has_function_privilege(current_user,'auth_private.resolve_session(text)','EXECUTE') as session_resolver_execute,
+  exists (
+    select 1 from pg_catalog.pg_proc p
+      join pg_catalog.pg_namespace n on n.oid=p.pronamespace
+     where n.nspname='auth_private'
+       and p.proname='resolve_session'
+       and p.pronargs=1
+       and exists (
+         select 1 from pg_catalog.aclexplode(coalesce(p.proacl,pg_catalog.acldefault('f',p.proowner))) acl
+          where acl.grantee=0 and acl.privilege_type='EXECUTE'
+       )
+  ) as session_resolver_public_execute,
+  exists (
+    select 1 from pg_catalog.pg_proc p
+      join pg_catalog.pg_namespace n on n.oid=p.pronamespace
+      join pg_catalog.pg_roles owner_role on owner_role.oid=p.proowner
+     where n.nspname='auth_private'
+       and p.proname='resolve_session'
+       and p.pronargs=1
+       and p.prosecdef
+       and p.proconfig @> ARRAY['search_path=pg_catalog, pg_temp']
+       and owner_role.rolname='rupaykg_auth_owner'
+       and p.prosrc ilike '%identity_sessions%'
+       and p.prosrc ilike '%revoked_at%'
+       and p.prosrc ilike '%expires_at%'
+       and p.prosrc ilike '%suspended_at%'
+  ) as session_resolver_valid
 from pg_catalog.pg_roles r
 join pg_catalog.pg_class epr_table
   on epr_table.oid = 'public.epr_returns'::regclass
@@ -198,7 +228,10 @@ export async function assertEprReturnReadDatabaseContract(pool: Pick<Pool, "quer
     row.permission_helper_public_execute ||
     !row.permission_helper_valid ||
     !row.permission_owner_valid ||
-    !row.permission_owner_no_memberships
+    !row.permission_owner_no_memberships ||
+    !row.session_resolver_execute ||
+    row.session_resolver_public_execute ||
+    !row.session_resolver_valid
   ) {
     throw new Error("EPR_RETURN_READ_DATABASE_CONTRACT_INVALID");
   }
