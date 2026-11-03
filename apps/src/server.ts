@@ -16,6 +16,8 @@ import { registerIntelligenceRoutes } from "./intelligence-routes.js";
 import { registerMrvRoutes } from "./mrv-routes.js";
 import { registerEvidenceVaultRoutes } from "./evidence-vault-routes.js";
 import { registerPlatformAdminRoutes } from "./platform-admin-routes.js";
+import { registerFacilityRoutes } from "./facility-routes.js";
+import { registerFacilityActivityLinkRoutes } from "./facility-activity-link-routes.js";
 
 const app = Fastify({ logger: true });
 const allowedOrigins = process.env.RUPAYKG_ALLOWED_ORIGINS?.split(",").map(origin => origin.trim()).filter(Boolean) ?? [];
@@ -91,6 +93,8 @@ app.post("/api/v1/resource-flows", async (request, reply) => { const auth = awai
 app.post("/api/v1/activities/:activityId/measurements", async (request, reply) => { const auth=await requireAuth(request,reply);if(!auth)return;const {activityId}=request.params as {activityId:string};const body=bodyOf(request);const value=requiredPositiveNumber(body,"value"),unit=requiredString(body,"unit"),method=requiredString(body,"method"),source=requiredString(body,"source"),measuredAt=requiredString(body,"measuredAt");if(value===null||!unit||!method||!source||!measuredAt||Number.isNaN(Date.parse(measuredAt)))return reply.code(400).send({error:"positive value, unit, method, source and valid measuredAt are required"});try{if(!await canWriteActivity(pool!,auth,activityId))return reply.code(403).send({error:"Activity is outside organization authorization scope or lacks waste recording permission",code:"ACTIVITY_FORBIDDEN"});const rows=await query("insert into measurements(activity_id,value,unit,method,source,measured_at) values($1,$2,$3,$4,$5,$6) returning *",[activityId,value,unit,method,source,measuredAt]);return reply.code(201).send({source:"postgresql",syntheticData:false,measurement:rows[0]});}catch(error){request.log.error(error);return reply.code(503).send({error:"Measurement recording unavailable",syntheticData:false});}});
 
 await registerOnboardingHierarchyRoutes(app, pool);
+await registerFacilityRoutes(app, pool);
+await registerFacilityActivityLinkRoutes(app, pool);
 await registerValueRoutes(app, pool);
 await registerRegistryRoutes(app, pool);
 await registerSyncRoutes(app, pool);
