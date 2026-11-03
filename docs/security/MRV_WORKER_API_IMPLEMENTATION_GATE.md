@@ -54,3 +54,11 @@ Status: BLOCKED — TypeScript contract/state-transition corrections committed; 
 ## Current decision
 
 No production migration, RLS activation, role grant, worker enablement, merge or TRL claim is authorized by this engineering checkpoint.
+
+## 2026-11-03 restricted-worker testability and stage coverage batch
+
+- Commit `f2581e91723a63b39cb245b0822e4e0e4cd02350` adds explicit provider dependency injection to the restricted worker. Production defaults remain the existing Guardian/Hedera/Mirror implementations; the seam permits deterministic tests without live provider calls.
+- Commit `1fb8303df481a844b37b8c485cfbc91b6788fac8` adds `mrv-submission-worker-restricted.test.ts` coverage for CLAIMED advancement, Guardian execution and verified-result persistence, HCS transaction binding before HCS_SUBMITTED, submission using the persisted transaction ID, and Mirror reconciliation only after HCS consensus confirmation.
+- The adapter complete-job validator and regression tests were committed earlier in this batch. The validator checks required row fields, status, JSON object snapshots, dates, lease owner/token and exact lease-token equality. UUID and immutable hash constraints still require alignment with actual database row/API contract before finalizing the SQL function return shape.
+- No exact-head CI/check run is visible for the current head `1fb8303df481a844b37b8c485cfbc91b6788fac8`; the commit's check-runs endpoint currently reports zero checks. No test/build pass is claimed.
+- No live database, provider or production operation was executed. PR #213 remains draft, unmerged and non-mergeable. Worker enablement, production migration, role grants, RLS activation and certification remain blocked.
