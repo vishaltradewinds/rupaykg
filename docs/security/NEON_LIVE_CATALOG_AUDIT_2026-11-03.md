@@ -171,3 +171,10 @@ A controlled recovery must first establish migration provenance from the exact d
 ### Verification boundary
 
 No local TypeScript/Node test execution was available in this environment, and GitHub Actions has not returned a run for the latest PR head. The implementation is committed but **not yet CI-validated**. No Neon branch was modified.
+
+
+### Final runner hardening correction
+
+The runner now checks whether the checksum column exists before attempting any compatibility ALTER. If an existing non-empty ledger lacks that column, it stops with `LEGACY_UNVERIFIED` **without changing the ledger schema**. Only a fresh ledger or an empty legacy ledger can receive the new column automatically. It also validates previously recorded critical MRV migrations on every run, rather than checking postconditions only when applying a new file. Newly applied migrations are committed only after their catalog postconditions pass; the JSON report removes each successfully applied file from the pending list.
+
+The implementation and static validator were corrected after source inspection to ensure these fail-closed paths are present. This remains unexecuted locally and has no exact-head CI evidence.
