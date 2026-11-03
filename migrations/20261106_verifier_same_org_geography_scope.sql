@@ -180,7 +180,7 @@ BEGIN
   END IF;
 
   IF v_activity_actor IS NOT NULL AND v_activity_actor = NEW.verifier_identity_id THEN
-    RAISE EXCEPTION 'activity actor cannot verify its own evidence';
+    RAISE EXCEPTION 'self-approve is prohibited: activity actor cannot verify its own evidence';
   END IF;
 
   IF NOT public.organization_has_geography_scope_at(
