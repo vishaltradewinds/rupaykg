@@ -12,7 +12,7 @@ test("MRV source snapshots are immutable, idempotent and require explicit correc
   const suffix = randomBytes(8).toString("hex");
   try {
     const organization = await pool.query<{ id: string }>(
-      "insert into organizations(name,organization_type,status) values($1,'test_fixture','VERIFIED') returning id",
+      "insert into organizations(name,organization_type,status) values($1,'COLLECTOR','VERIFIED') returning id",
       ["TEST-MRV-SNAPSHOT-" + suffix],
     );
     const organizationId = organization.rows[0]!.id;
