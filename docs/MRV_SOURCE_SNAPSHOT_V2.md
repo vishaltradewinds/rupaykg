@@ -23,7 +23,8 @@ The snapshot JSON uses schema \`rupaykg:mrv-source-snapshot:v1\`; its canonical,
 - Repeated submission with the same digest reuses the same snapshot.
 - If source data differs from the latest snapshot, submission fails closed unless the caller supplies \`correctionReason\` (10–2000 characters).
 - A correction creates a new version linked through \`supersedes_snapshot_id\`; prior snapshots cannot be updated or deleted.
-- PostgreSQL validates activity/verification/evidence binding and sequential supersession.
+- PostgreSQL validates activity/verification/evidence binding, sequential supersession and source revision equality.
+- Database triggers increment the activity source revision when activity context, verification, observations, measurements, evidence, artifact versions or independent reviews change. Credential issuance fails closed if the snapshot revision no longer matches the live activity revision.
 - Reverting to an earlier data state still creates a new version linked to the immediately preceding snapshot.
 
 A correction reason explains why the new snapshot supersedes the old one; it does not itself validate the corrected source. Evidence review and methodology controls remain separate requirements.
@@ -45,7 +46,7 @@ Credential issuance requires Guardian VERIFIED, HCS consensus confirmation, pers
 
 - This migration and code change do not prove that migration 088 has been applied to the authoritative Neon database.
 - Existing v1 provenance remains historical and is not retroactively upgraded or represented as snapshot-bound.
-- Source observation and measurement tables are not globally made append-only by this change. Instead, each MRV execution preserves a complete immutable source snapshot. Source-record correction controls and independent evidence review remain necessary.
+- Source observation and measurement tables are not globally made append-only by this change. Instead, source mutations advance a database revision, making prior snapshots ineligible for new credential issuance until a new correction snapshot and provider anchor are completed. Each MRV execution preserves a complete immutable source snapshot. Independent evidence review remains necessary.
 - A source correction after an external Guardian/HCS operation creates a new snapshot and requires a new provider execution and anchor. Existing anchors remain historical evidence for the earlier snapshot.
 - No production deployment, live DB migration, RLS activation, external provider configuration or TRL 9 certification is authorized by this implementation.
 
