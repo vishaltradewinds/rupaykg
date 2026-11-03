@@ -46,6 +46,10 @@ test("evidence vault enforces tenant scope, versioned storage, integrity and ind
     const uploaderId = identities[0].rows[0]!.id;
     const reviewerId = identities[1].rows[0]!.id;
     const outsiderId = identities[2].rows[0]!.id;
+    await pool.query(
+      "update organizations set verification_status='VERIFIED',verified_by_identity_id=$2,verified_at=clock_timestamp() where id=$1",
+      [organizationId, reviewerId],
+    );
     const roles = await Promise.all([
       pool.query<{ id: string }>("insert into roles(organization_id,name,permissions,geography_scope) values($1,'evidence_uploader_test',$2::jsonb,'[]') returning id",[organizationId,JSON.stringify(["evidence:upload","evidence:read"])]),
       pool.query<{ id: string }>("insert into roles(organization_id,name,permissions,geography_scope) values($1,'verifier',$2::jsonb,'[]') returning id",[organizationId,JSON.stringify(["evidence:read","evidence:review","VERIFY_EVIDENCE","verification:approve"])]),
