@@ -187,3 +187,49 @@ Existing docs/MRV_EVIDENCE_VAULT.md documents a bounded PostgreSQL bytea store (
 7. Exact-head CI and disposable PostgreSQL two-tenant acceptance for any code changes.
 
 **Disposition:** Inventory complete for inspected mainline route declarations; request/response schema completeness and tenant safety remain unproven. This document is not an API release contract.
+
+
+## 8. First-pass route-module to table-family mapping
+
+This is a source-level discovery map, not the final route-by-route authorisation matrix. It lists concrete table references found in SQL statements in each pinned module. The final matrix must resolve each endpoint to exact operations, row ownership, policy class, actor permissions and same-client transaction behaviour. Dynamic SQL, CTE aliases and helper calls require manual review.
+
+| Module | Observed domain tables (deduplicated) | Initial access class |
+|---|---|---|
+| server.ts | activities, credentials, evidence, geography, measurements, obligations, organization_geography_scopes, organization_memberships, regulatory_sources, resource_flows, settlements, verifications | Mixed: global regulatory/geography reference plus organisation-owned operational records |
+| auth.ts | activities, evidence, identities, identity_sessions, organization_memberships, roles | Identity/authentication control plane plus organisation membership |
+| registry-routes.ts | activities, credentials, evidence, mrv_provenance_events, organization_memberships, organizations, registry_events, settlement_events, settlements, verifications | Organisation-owned credential/settlement lifecycle with cross-party transfer semantics |
+| evidence-vault-routes.ts | activities, evidence, evidence_artifact_reviews, evidence_artifact_series, evidence_artifact_versions, verifications | Organisation-owned evidence and append-only review/audit history |
+| mrv-routes.ts | activities, evidence, measurements, mrv_observations, mrv_provenance_events, organization_memberships, verifications | Organisation-owned MRV records plus external-provider provenance |
+| workspace-routes.ts | activities, carbon_calculations, credentials, esg_metrics, esg_reporting_periods, evidence, geography, measurements, methodology_versions, obligations, organization_memberships, organizations, registry_events, resource_flows, settlements, verifications | Read projections across multiple domain-owned resources; requires per-source permission and tenant scoping |
+| bwg-routes.ts | epr_obligations, epr_schemes, geography, obligations | Statutory/reference scheme plus organisation/jurisdiction-scoped obligations |
+| cpcb-swm-routes.ts | audit_events, cpcb_swm_stakeholder_workspaces, cpcb_swm_status_history, organization_memberships | Organisation-scoped workspace plus append-only audit/status history |
+| value-routes.ts | activities, bwg_epr_reports, bwg_esg_reports, bwg_profiles, bwg_reporting_periods, bwg_waste_reports, carbon_calculations, epr_credits, epr_obligations, epr_schemes, esg_metrics, esg_reporting_periods, evidence, geography, methodology_versions, obligations, organization_geography_scopes, organization_memberships, verifications | Mixed statutory references and organisation-owned reporting/value records |
+| sync-routes.ts | activities, audit_events, evidence, field_devices, field_sync_conflicts, field_sync_cursors, field_sync_envelopes, measurements, organization_memberships, resource_flows | Device principal, organisation-owned operational records and append-only sync/audit events |
+| onboarding-hierarchy-routes.ts | geography, identities, organization_geography_scopes, organization_memberships, organization_verification_evidence, organizations, roles, stakeholder_application_approvals, stakeholder_applications | Identity/authority control plane, organisation onboarding and geography references |
+
+### 8.1 Table policy classes to confirm against the full schema
+
+- **Identity/auth control plane:** identities, identity_sessions, roles, organization_memberships. Access must not be inferred from ordinary tenant row ownership; session revocation and membership state must remain authoritative.
+- **Organisation-owned operational:** activities, resource_flows, measurements, evidence, obligations, reporting periods, profiles and workspace rows. Each requires explicit owner/tenant policy and parent-child consistency.
+- **Evidence and audit append-only:** evidence_artifact_versions, evidence_artifact_reviews, verifications, registry_events, settlement_events, audit_events, field_sync_envelopes and field_sync_conflicts. Define append/read rules, correction semantics and retention separately.
+- **External/source registries and reference:** geography, regulatory_sources, epr_schemes, methodology_versions. Establish authority, update provenance, freshness and permitted projections; do not apply generic tenant-owned policy.
+- **Cross-organisation/bilateral:** credentials, registry ownership/transfer history, settlements and EPR credits. Define both parties' visibility and allowed state transitions explicitly; a single organization_id policy is insufficient.
+- **External trust/provenance:** mrv_provenance_events. Separate local activity ownership from external Guardian/HCS/Mirror Node claims and preserve provider references/read-back evidence.
+
+The table classes above are hypotheses to validate against complete DDL, constraints, triggers, views, functions, worker principals and actual data. They are not approved RLS policies.
+
+## 9. Specific source-backed contract cautions
+
+1. The mainline server.ts uses a shared Pool and generic pool-backed query helper. Auth is invoked with that Pool. Multiple mainline route modules still issue independent pool queries for permission and protected data access. Route-level signed-context PRs are separate, unmerged branch work.
+2. Geography has both source-owned reference semantics and organisation_geography_scopes. The public/partner schema must not imply that the platform is the authoritative creator of every geography identifier.
+3. Evidence Vault stores bounded files in PostgreSQL bytea with a documented 5 MiB limit. Contract size limits and content-type validation must match actual implementation and must not claim malware scanning or legal admissibility.
+4. Credentials are currently an internal RupayKg registry record/lifecycle. Do not describe them as W3C VCs until issuer, holder, verifier, format, signature, status and trust-registry interoperability are actually implemented and tested.
+5. MRV provenance has distinct Guardian, Hedera consensus and Mirror Node verification states. Do not collapse these into a single VERIFIED flag.
+6. Settlement routes are high-impact and require a separate financial authority, regulated partner and reconciliation review before any external API contract or payment integration.
+7. Regulatory sources, EPR schemes, methodologies and statutory applicability need source/version/effective-date provenance. A platform calculation or assessment must not be represented as an official statutory determination.
+
+## 10. Next route-matrix work
+
+The next technical artefact must be a route-by-route matrix with one row per endpoint and these columns: method/path, auth required, actor class, permission, active-organisation rule, geography rule, input fields, response fields, tables read, tables written, transaction/client, external dependencies, idempotency/replay, audit event, data classification, and known test coverage.
+
+Do not mark an endpoint contract-ready until its route-specific input/output schema and its authorization/data-access path have both been traced. Prioritise common auth/context, organisation/geography, resource flows/measurements, evidence, and MRV; defer settlement and external credential exchange until their separate assurance reviews.
