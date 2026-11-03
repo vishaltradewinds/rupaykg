@@ -248,3 +248,32 @@ Interpretation:
 - No role provisioning, migration, RLS activation, worker activation, or production deployment is authorised by this read-only audit.
 
 This live check supersedes any stale statement that the role/table baseline has not been refreshed since 2026-11-01. It does not resolve the production release hold.
+
+
+## 12. Parallel branch and exact-head CI reconciliation — 2026-11-03 09:03 UTC
+
+The live PR graph and exact-head Actions runs were rechecked after the production audit. All statuses below refer to the recorded commit SHA, not to a broad branch label:
+
+| PR | Exact head | CI evidence | Disposition |
+|---|---|---|---|
+| #192 auth/bootstrap | `070c2f9982406b91c8fe7b6354044c1def1467ae` | Run #5046 succeeded | Foundation candidate; draft/unmerged |
+| #213 EPR explicit-client route | `41db6489aa2cf92fc0dec6e452e097e264ff76fb` | Run #5110 succeeded | Candidate canonical EPR stack; overlaps #228; draft/unmerged |
+| #216 verifier identity | `8693239b28587fb61e0f61c2f2d021b97f073fba` | Prior evidence only; refresh exact head before integration | Base for #218 and #228; draft/unmerged |
+| #218 MRV workspace signed tenant read | `31eba17c130481b7447851035e4dcd01d2cb115c` | Run #4990 succeeded | Source change passes CI, but adversarial matrix is a test contract only; no executable endpoint tests were added in this PR; draft/unmerged |
+| #219 pilot UI integration | `c3ba46485bb2c2352ed3fc93097d470ca92d430f` | Run #4989 succeeded | Recorded base SHA `337bc5cc6abbf09acdc786c7c37ab7b4d1a57eb6` differs from current #218 head; rebase/reconcile ancestry and rerun exact-head tests; draft/unmerged |
+| #227 DPI assessment | `8c33c1bc524505ada75cbf02920ca0c852966eaa` | Run #5103 succeeded | Documentation-only evidence; draft/unmerged |
+| #228 EPR obligations read | `550ea742fc663e6f0684a46427dfc314b1bf002c` | Run #5104 failed 1 of 191 API integration tests | Six EPR route tests passed; Evidence Vault version-list test failed (expected 2 artifacts, received 1); draft/unmerged |
+
+### EPR route overlap — integration decision
+
+PR #213 and PR #228 both modify `apps/src/bwg-routes.ts` and implement `GET /api/v1/epr/obligations` using the signed explicit-client transaction boundary. They must not be merged independently. PR #213 additionally carries the read-only EPR returns route, startup contract, and candidate read-only EPR RLS migration. PR #228 adds valuable explicit bilateral-scope rejection, multi-organization ambiguity tests, missing-context tests, and rollback assertions. Reconcile those improvements into one canonical branch after verifying the exact auth foundation; retain only one route registration and one source of truth.
+
+The #228 failure is in the existing Evidence Vault integration assertion at `apps/dist/src/evidence-vault.integration.test.js:69`: expected artifact list length 2, actual 1 after a second upload reported version number 2. This is not an EPR test failure. Root cause remains unresolved; do not weaken the assertion or claim a green full suite. Compare the second upload's returned evidence ID/series ID, persisted artifact rows, and the listing query under the same disposable PostgreSQL fixture to identify whether the defect is persistence, trigger/policy visibility, or query behavior.
+
+### MRV acceptance evidence boundary
+
+PR #218 adds `docs/security/2026-11-03-mrv-workspace-adversarial-acceptance-matrix.md`, whose status is explicitly REQUIRED / NOT YET EXECUTED. The PR changes the MRV route but adds no executable route test file. Its successful CI is not evidence of two-tenant route isolation. Add executable Fastify tests and disposable PostgreSQL acceptance for same-client authorization/reads, A/B tenant separation, foreign-geography denial, missing context/active organization/permission, and rollback on query/context failure. The current denial branches return ordinary callback values, which commit the transaction; if rollback is the intended contract, use a typed thrown denial and catch it after the wrapper rolls back. Explicitly decide and test bilateral-organization behavior.
+
+### Integration rule
+
+Do not merge overlapping PRs or repair ancestry by blind retargeting. Preserve the reviewed dependency order, reconcile overlapping files, rerun exact-head CI on the final combined commits, and keep all production database/role/secret/deployment state unchanged until disposable integration and independent assurance pass.
