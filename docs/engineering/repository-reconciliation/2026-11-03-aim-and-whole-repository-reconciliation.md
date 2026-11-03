@@ -495,3 +495,19 @@ The 027 SQL removes role-name fallback and checks explicit permission keys, but 
 The full CI run #41628809379 (run 5168) on commit aa2b89f9785e547ed81f28d6e286f7bd997525af completed SUCCESS, including the production-container build. This exact head passed all configured validation, browser, disposable PostgreSQL and container stages.
 
 After that success, the migration README's incorrect version-027 filename was corrected in PR #235 to 027_verification_permission_hardening.sql, matching both inspected environment ledgers and the exact source blob c626a7aad10a31a620b5d814af1330f00c54def4. New head e7e34aca8097281a315a2348a96a264cb9531c65 is documentation-only relative to the CI-green head; a fresh exact-head CI run is still required before the PR can be called green. PR #235 remains draft and unmerged.
+
+
+### 12.19 Field-data write-path and device-binding audit (mainline vs security stack)
+
+Manual review of current main and PR #216 security-base source confirms the direct operational routes remain unchanged:
+- POST /api/v1/resource-flows checks permission and geography using separate pool operations and inserts via a separate pool query; it lacks a single transaction, idempotency key and direct actor/device provenance.
+- POST /api/v1/activities/:activityId/measurements checks activity authorization/geography via pool then inserts via pool; it lacks idempotency and omits measurements.captured_by_identity_id, device_id, latitude, longitude and location_accuracy_m columns already present in the schema.
+- The same route code is present in PR #216's security-base branch; adding signed request-context helpers elsewhere does not certify these direct write routes.
+
+The offline field-sync path has useful per-device idempotency, payload-hash conflict detection, client-sequence collision detection, server cursors and transactional envelope application. However, requireFieldDevice() is called before the intake transaction, checks only device ID/identity/VERIFIED status, and does not bind device.organization_id to auth.activeOrganizationId or lock/revalidate the device in the transaction. Apply locks the envelope but does not join/revalidate field_devices or pass device context into applyOperation. A device bound to org A must not be used to create org B records simply because its identity also belongs to org B.
+
+Offline domain mapping is also incomplete: MEASUREMENT_CREATE does not populate measurement actor/device provenance or create an instrument/uncertainty/evidence-linked mrv_observations row; EVIDENCE_CREATE writes captured_by_identity_id but omits device_id; ACTIVITY_CREATE writes actor_identity_id but omits device_id; RESOURCE_FLOW_CREATE relies on envelope linkage and the direct route bypasses it. Resource flows have no direct idempotency or actor/device fields.
+
+**Disposition:** this is a P0/P1 field-data integrity and tenant-authorization gap. Require same-client authorization+write transactions, device identity+organization binding and lock/revalidation at both intake and apply, idempotent online/offline parity, and explicit provenance mapping to every domain record. Two-tenant/two-device PostgreSQL acceptance must prove cross-org device denial, revocation-between-intake/apply denial, replay/conflict semantics and zero writes on denial. Do not treat a captured numeric measurement as an MRV observation or verified evidence.
+
+**CDPI Wave 1 update:** PR #230's route trace and API/domain inventory were extended with these manual findings. The current inline Fastify routes use manual validation, not attached JSON Schema. Machine-readable OpenAPI should be generated only after versioned JSON Schema is attached to runtime validation and the authorization/device/provenance semantics match the contract. No public partner contract is approved yet.
