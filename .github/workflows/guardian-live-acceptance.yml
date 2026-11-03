@@ -175,17 +175,18 @@ jobs:
           TOKEN: ${{ secrets.RUPAYKG_SESSION_TOKEN }}
         run: |
           set -euo pipefail
+          source /tmp/acceptance.env
           curl --fail-with-body --silent --show-error \
             --header "Authorization: Bearer $TOKEN" \
             --header "X-RupayKG-Organization-Id: $ORGANIZATION_ID" \
             "$BASE_URL/api/v1/mrv/provenance/$ACTIVITY_ID" > /tmp/provenance.json
           python - <<'PY'
-          import json
+          import json, os
           data = json.load(open('/tmp/provenance.json'))
           if data.get('syntheticData') is not False:
               raise SystemExit('Persisted provenance is not explicitly non-synthetic.')
           rows = data.get('provenance') or []
-          confirmed = [r for r in rows if r.get('guardian_status') == 'VERIFIED' and r.get('hcs_status') == 'CONSENSUS_CONFIRMED' and r.get('source_snapshot_id') and r.get('source_snapshot_digest') and r.get('source_snapshot_version')]
+          confirmed = [r for r in rows if r.get('guardian_status') == 'VERIFIED' and r.get('hcs_status') == 'CONSENSUS_CONFIRMED' and r.get('source_snapshot_id') == os.environ['SOURCE_SNAPSHOT_ID'] and r.get('source_snapshot_digest') == os.environ['SOURCE_SNAPSHOT_DIGEST'] and str(r.get('source_snapshot_version')) == os.environ['SOURCE_SNAPSHOT_VERSION']]
           if not confirmed:
               raise SystemExit('No persisted Guardian VERIFIED + HCS CONSENSUS_CONFIRMED provenance row found.')
           print('Persisted authoritative provenance confirmed.')
