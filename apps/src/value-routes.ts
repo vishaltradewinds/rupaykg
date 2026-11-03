@@ -267,7 +267,7 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
       if(["ORG_FORBIDDEN","BWG_EPR_FORBIDDEN"].includes(code))return reply.code(403).send({error:error instanceof Error?error.message:"BWG EPR report forbidden",code});
       if(["EVIDENCE_NOT_VERIFIED","VERIFICATION_INVALID"].includes(code))return reply.code(409).send({error:error instanceof Error?error.message:"Evidence precondition failed",code});
       if(["RLS_ORGANIZATION_CONTEXT_REQUIRED","RLS_VERIFIED_MEMBERSHIP_REQUIRED","RLS_BILATERAL_CONTEXT_UNSUPPORTED"].includes(code))return reply.code(403).send({error:error instanceof Error?error.message:"Verified organization context required",code});
-      request.log.error(error);return reply.code(503).send({error:"BWG EPR report unavailable",code:"BWG_EPR_UNAVAILABLE",syntheticData:false);}
+      request.log.error(error);return reply.code(503).send({error:"BWG EPR report unavailable",code:"BWG_EPR_UNAVAILABLE",syntheticData:false});}
   });
 
   app.post("/api/v1/bwg/reporting-periods/:periodId/esg",async(request,reply)=>{
