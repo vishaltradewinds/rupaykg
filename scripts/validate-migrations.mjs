@@ -46,10 +46,10 @@ for (const [name, sql] of [["20261106", verificationGuard], ["20261107", verific
     throw new Error(`${name} must reject unverified or suspended identities`);
   }
 }
-if (!/create trigger verifications_integrity_guard\\s+before insert or update on verifications\\s+for each row execute function prevent_invalid_verification\\(\\)/i.test(verificationTriggerMigration)) {
+if (!/create trigger verifications_integrity_guard\s+before insert or update on verifications\s+for each row execute function prevent_invalid_verification\(\)/i.test(verificationTriggerMigration)) {
   throw new Error("subject-bound verification guard must remain attached to INSERT and UPDATE after function replacement");
 }
-if (!/create or replace function public\\.prevent_invalid_verification\\s*\\(/i.test(verificationGuard)) {
+if (!/create or replace function public\.prevent_invalid_verification\s*\(/i.test(verificationGuard)) {
   throw new Error("20261106 must replace the exact trigger function installed by the base verification migration");
 }
 if (!/drop trigger if exists verification_independence_guard on public\.verifications/i.test(verificationGuard)) {
