@@ -287,12 +287,12 @@ try {
       "insert into verifications(id,activity_id,evidence_id,verifier_identity_id,decision) values ($1,$2,$3,$4,'APPROVED')",
       ["10000000-0000-4000-8000-000000000032", ids.activity, ids.evidence, ids.verifier],
     );
+    const concurrentBackendPid = (await concurrentClient.query("select pg_backend_pid()")).rows[0].pg_backend_pid;
     let revocationSettled = false;
     const blockedRevocation = concurrentClient.query(
       "update organization_memberships set status='REVOKED' where id=$1",
       [ids.membership],
     ).then((result) => { revocationSettled = true; return result; });
-    const concurrentBackendPid = (await concurrentClient.query("select pg_backend_pid()")).rows[0].pg_backend_pid;
     assert.equal(await waitForLockWait(observerClient, concurrentBackendPid), true, "membership revocation must wait for the approval transaction");
     await client.query("COMMIT");
     await blockedRevocation;
