@@ -9,6 +9,7 @@ declare
   old_activity_id uuid;
   new_activity_id uuid;
 begin
+  if tg_op = 'UPDATE' and to_jsonb(new) is not distinct from to_jsonb(old) then return null; end if;
   if tg_op <> 'INSERT' then old_evidence_id := old.evidence_id; end if;
   if tg_op <> 'DELETE' then new_evidence_id := new.evidence_id; end if;
 
