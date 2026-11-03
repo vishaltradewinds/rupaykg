@@ -94,7 +94,7 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
       lockAcquired = true;
       const captured = await captureMrvSourceSnapshot({
         pool, auth, activityId, verificationId, evidenceId, guardianPolicyId: policyId,
-        methodologyCode, correctionReason: str(body, "correctionReason"),
+        ...(methodologyCode !== undefined ? { methodologyCode } : {}), correctionReason: str(body, "correctionReason"),
       });
       const { snapshot } = captured;
       const observations = captured.observations;
