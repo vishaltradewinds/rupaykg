@@ -32,7 +32,7 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
         const accessResult = await client.query<{ organization_id: string; geography_id: string | null }>("select organization_id, geography_id from activities where id = $1 and organization_id = $2", [activityId, auth.activeOrganizationId]);
         const access = accessResult.rows[0] ?? null;
         if (!access || access.organization_id !== auth.activeOrganizationId) throw Object.assign(new Error("Activity is not in the active organization"), { code: "ACTIVITY_FORBIDDEN" });
-        if (!await hasOrganizationPermission(client, auth, auth.activeOrganizationId!, ["projects:manage"], "security_definer")) throw Object.assign(new Error("Explicit projects:manage permission is required"), { code: "CARBON_CALCULATION_FORBIDDEN" });
+        if (!await hasOrganizationPermission(client, auth, auth.activeOrganizationId!, ["projects:manage"])) throw Object.assign(new Error("Explicit projects:manage permission is required"), { code: "CARBON_CALCULATION_FORBIDDEN" });
         if (!access.geography_id) throw Object.assign(new Error("Activity geography is required"), { code: "ACTIVITY_GEOGRAPHY_REQUIRED" });
         const geography = await client.query<{ ok: boolean }>("select organization_has_geography_scope($1,$2) as ok", [auth.activeOrganizationId, access.geography_id]);
         if (geography.rows[0]?.ok !== true) throw Object.assign(new Error("Activity geography is outside organization authorization scope"), { code: "GEOGRAPHY_FORBIDDEN" });
