@@ -309,3 +309,20 @@ Exact-head CI run #41609506785 completed **SUCCESS** on this commit, including m
 ### Release decision
 
 No merge, production migration, role/secret provisioning, RLS activation, worker activation, feature activation, or deployment is authorised by this work. The current code changes improve route-level controls but do not change the production tenant-isolation finding: R-DPI-03 remains FAIL / P0, independent assurance remains open, and release readiness remains HOLD. The remaining direct-query routes, including the MRV verification mutation, must be covered by the full route-to-data inventory and exact-role two-tenant acceptance before any TRL 9 or production claim.
+
+
+## 14. Stacked MRV evidence-verification mutation workstream — 2026-11-03 09:20 UTC
+
+PR #229 (`security(mrv): bind evidence verification writes to signed tenant context`) was opened as a stacked draft on PR #218's exact head `feeac1de3325a831012e1dc4967dfe95f9914e6d`. Its branch is `shakti/mrv-verification-signed-tenant-mutation-2026-11-03`.
+
+The adjacent `POST /api/v1/evidence/:evidenceId/verification` route previously used a raw PoolClient transaction without signed tenant context. PR #229 changes it to:
+- require a signed single-tenant context and resolver-verified active organization;
+- reject unsupported bilateral context;
+- lock/read evidence only through an activity row belonging to the active organization;
+- check geography scope and verifier permission on the same transaction client;
+- insert the verification and update evidence status inside `withRlsRequestTransaction`;
+- throw typed 403/404 denials so the wrapper rolls back before returning the response.
+
+Four additional Fastify tests cover successful same-client mutation, active-tenant not-found behavior, verifier denial rollback, and lookup-failure rollback. Exact-head CI run #41610069413 has passed migration validation, typecheck, build, browser smoke and tests; production-container build was still running at this checkpoint. PR #229 remains draft/unmerged pending final CI completion, disposable PostgreSQL two-tenant acceptance under the exact NOBYPASSRLS runtime role, and independent review.
+
+This is a route-boundary improvement, not proof of database-enforced RLS. The evidence-verification path and MRV workspace read still need the same actual-role two-tenant acceptance; production RLS activation and TRL 9 remain blocked.
