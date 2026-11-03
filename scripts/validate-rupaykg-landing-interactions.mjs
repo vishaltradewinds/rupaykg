@@ -83,7 +83,7 @@ try {
   assert.equal(pageReady, true, "React header and language selector must mount before interaction tests");
 
   const initial = await evaluate(`({
-    drawer: !!document.querySelector('[role="dialog"][aria-label="Account access"]'),
+    drawer: !!document.querySelector('[role="dialog"]'),
     health: !!document.querySelector('.health'),
     languageInHeader: document.querySelector('#rupaykg-national-language-selector')?.parentElement?.classList.contains('topbar') === true,
     offlineHidden: document.querySelector('#rupaykg-offline-status')?.hidden === true
@@ -105,8 +105,10 @@ try {
     document.querySelector('.landing-actions button')?.click();
     ${waitForRender}
     return {
-      drawer: !!document.querySelector('[aria-label="Account access"]'),
-      email: !!document.querySelector('[aria-label="Account access"] input[type="email"]')
+      drawer: !!document.querySelector('[role="dialog"][aria-modal="true"]'),
+      modal: document.querySelector('[role="dialog"]')?.getAttribute("aria-modal") === "true",
+      focusInside: document.querySelector('[role="dialog"]')?.contains(document.activeElement) === true,
+      email: !!document.querySelector('[role="dialog"] input[aria-label="Email"]')
     };
   })()`);
   assert.equal(signIn.drawer, true, "Sign in CTA must open an accessible dialog");
