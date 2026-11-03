@@ -49,3 +49,12 @@
 - PR #244 CI #5246 passed all configured stages including production-container build on head 32028c4. Current docs-only head 7260020 has no separate workflow run visible.
 - Updated PR #244 description and refreshed the resume point.
 - Production remains unchanged and READ-ONLY / HOLD.
+
+## 2026-11-03 — CTO Run 12 (17:59–18:00 UTC)
+- PR #243 advanced to head `88b4b8f2db042c277b8de8b47077b1ab8722625f`.
+- New migrations 089 and 20261022 add database-maintained activity source revisions and bump them for activity, verification, evidence, observation, measurement, artifact-version and artifact-review changes; snapshot capture binds the revision and credential issuance checks it remains current.
+- Exact-head CI #5255 passed migration validation, disposable PostgreSQL migration, typecheck, build and browser smoke; automated tests are in progress.
+- Created/updated issue #245 with the source-revision implementation as partial progress; digest-to-payload verification and TRUNCATE/privilege boundaries remain open.
+- Read-only Neon query confirms pgcrypto 1.4 is already installed in production; no extension or schema changes made.
+- PR #244 current head CI #5256 is in progress; dependency/migration/typecheck/build stages passed and browser smoke is running.
+- Production remains READ-ONLY / HOLD.
