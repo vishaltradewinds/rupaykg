@@ -39,6 +39,17 @@ const validRow = {
   verifier_schema_usage: true,
   verifier_execute: true,
   verifier_valid: true,
+  can_read_memberships: false,
+  can_read_roles: false,
+  permission_schema_usage: true,
+  permission_helper_execute: true,
+  permission_helper_public_execute: false,
+  permission_helper_valid: true,
+  permission_owner_valid: true,
+  permission_owner_no_memberships: true,
+  session_resolver_execute: true,
+  session_resolver_public_execute: false,
+  session_resolver_valid: true,
 };
 
 function fakePool(row: Record<string, unknown>): Pool {
