@@ -428,3 +428,17 @@ A read-only Neon catalog comparison was performed against staging branch br-spri
 - PR #234 commit 5e98e4f2731d9e1e8898fc6c45402088fc3b2384 passed CI run #41626454283, including typecheck, build, browser smoke, disposable PostgreSQL acceptance and production-container build. This pass applies to that exact commit only.
 - Further TLS hardening followed on the same PR: preserve native connection-string TLS parameters in non-production when DATABASE_SSL is not explicitly set; apply an explicit environment policy only when provided; reject unsupported DATABASE_SSL values. New head is 59490c40a8e597fd17679f19d74fc7d704f13f86 and exact-head CI run #41627023797 was still in progress at the time of this update.
 - PR #219 pilot demo was hardened in commit c488c5e6a1624c142f81941ba0edceb7f98ea7c3: synthetic panel requires explicit ?demo=1, “Verified” was removed from the title, and CSV delimiters corrected. PR remains draft; its base branch is diverged 9 commits ahead/9 behind from the current pilot head comparison. Preserve parent relationship and await exact-head CI and base reconciliation.
+
+
+### 12.12 Exact-head CI closure and pilot UI status correction
+
+The follow-up CI checks have now completed:
+
+- PR #234 head 59490c40a8e597fd17679f19d74fc7d704f13f86 — workflow run #41627023797 / run number 5157 — conclusion SUCCESS. Every configured stage passed: dependency audit, migration validation, migration CLI against disposable CI PostgreSQL, TypeScript typecheck, production build, browser smoke, disposable PostgreSQL acceptance and production-container build. This includes the new tests preserving non-production URL TLS configuration when DATABASE_SSL is not explicitly set, while explicit env policy remains authoritative.
+- PR #219 head c488c5e6a1624c142f81941ba0edceb7f98ea7c3 — workflow run #41626898059 / run number 5155 — conclusion SUCCESS. The pilot UI branch passed typecheck, build, browser smoke, disposable PostgreSQL acceptance and production-container build.
+
+PR #234 remains draft: its CI suite does not exercise a real PostgreSQL TLS handshake with an untrusted CA and hostname mismatch, and the actual Render DATABASE_URL hostname/binding remains unverified. Independent security review is still required.
+
+PR #219 remains draft and stacked on the MRV workspace security branch. Its head-to-base comparison remains 9 commits ahead and 9 behind from merge base 337bc5cc6abbf09acdc786c7c37ab7b4d1a57eb6. Do not rebase or merge until the MRV parent head is reconciled. The UI's reference-parity token layer uses near-black #050505, charcoal #151619 and emerald #10b981; the pilot fixture is opt-in (?demo=1), synthetic-only and browser-local.
+
+These exact-head CI successes validate only the branches and workflow stages described above. They do not certify production tenant isolation, historical migration parity, real Guardian/HCS/Mirror Node operation, regulatory approval, live pilot readiness or TRL 9.
