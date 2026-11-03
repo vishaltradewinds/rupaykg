@@ -1,0 +1,164 @@
+
+-- Shared identity-to-geography gate for all operational APIs. Ambiguous verified
+-- roles within an organization fail closed instead of selecting the broadest role.
+create or replace function identity_has_geography_scope(
+  p_identity_id uuid,
+  p_organization_id uuid,
+  p_geography_id uuid
+) returns boolean
+language sql stable as $identity_scope$
+  select case
+    when p_identity_id is null or p_organization_id is null or p_geography_id is null then false
+    when (
+      select count(*)
+      from organization_memberships om
+      where om.identity_id = p_identity_id
+        and om.organization_id = p_organization_id
+        and om.status = 'VERIFIED'
+    ) <> 1 then false
+    else exists (
+      select 1
+      from organization_memberships om
+      where om.identity_id = p_identity_id
+        and om.organization_id = p_organization_id
+        and om.status = 'VERIFIED'
+        and organization_has_geography_scope(p_organization_id, p_geography_id)
+        and role_has_geography_scope(om.role_id, p_geography_id)
+    )
+  end;
+$identity_scope$;
+
+-- Organization-wide records have no single geography. Restrict them to one
+-- unambiguous verified role with no role-specific geography restriction.
+create or replace function identity_has_organization_scope(
+  p_identity_id uuid,
+  p_organization_id uuid
+) returns boolean
+language sql stable as $identity_org_scope$
+  select case
+    when p_identity_id is null or p_organization_id is null then false
+    when (
+      select count(*)
+      from organization_memberships om
+      where om.identity_id = p_identity_id
+        and om.organization_id = p_organization_id
+        and om.status = 'VERIFIED'
+    ) <> 1 then false
+    else exists (
+      select 1
+      from organization_memberships om
+      join roles r on r.id = om.role_id
+      where om.identity_id = p_identity_id
+        and om.organization_id = p_organization_id
+        and om.status = 'VERIFIED'
+        and jsonb_typeof(r.geography_scope) = 'array'
+        and jsonb_array_length(r.geography_scope) = 0
+    )
+  end;
+$identity_org_scope$;
+
+-- Verification authorization hardening.
+-- The legacy 010 trigger allowed role names (VERIFIER/AUDITOR) to bypass the
+-- explicit permission model introduced in 027. Keep database enforcement aligned
+-- with has_verification_permission(), which requires a verified membership and
+-- an explicit verification permission. The database remains authoritative.
+
+create or replace function enforce_verification_independence()
+returns trigger language plpgsql as $$
+declare
+  activity_actor uuid;
+  evidence_activity_id uuid;
+begin
+  if new.evidence_id is not null then
+    select e.activity_id, a.actor_identity_id
+      into evidence_activity_id, activity_actor
+      from evidence e
+      join activities a on a.id = e.activity_id
+     where e.id = new.evidence_id;
+
+    if evidence_activity_id is null then
+      raise exception 'verification evidence does not exist';
+    end if;
+
+    if new.activity_id is not null and new.activity_id <> evidence_activity_id then
+      raise exception 'verification activity does not match evidence activity';
+    end if;
+  elsif new.activity_id is not null then
+    select a.actor_identity_id
+      into activity_actor
+      from activities a
+     where a.id = new.activity_id;
+  end if;
+
+  if activity_actor is not null and activity_actor = new.verifier_identity_id then
+    raise exception 'verifier cannot self-approve activity evidence';
+  end if;
+
+  if not has_verification_permission(new.verifier_identity_id) then
+    raise exception 'verifier lacks explicit verification permission';
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists verification_independence_guard on verifications;
+create trigger verification_independence_guard
+before insert on verifications
+for each row execute function enforce_verification_independence();
+
+-- Verify the stored artifact digest at the database boundary as well as in the
+-- API. This prevents direct SQL writers from pairing arbitrary bytes with a
+-- plausible-looking SHA-256 string.
+create or replace function enforce_evidence_artifact_digest()
+returns trigger language plpgsql as $$
+declare
+  actual_hash text;
+  series_org uuid;
+  series_activity uuid;
+  series_type_value text;
+  evidence_activity uuid;
+  evidence_org_id uuid;
+  evidence_type_value text;
+  evidence_hash text;
+begin
+  actual_hash := encode(digest(new.content, 'sha256'), 'hex');
+  if actual_hash <> new.sha256 then
+    raise exception 'evidence artifact SHA-256 does not match stored bytes';
+  end if;
+
+  select s.organization_id, s.activity_id, s.evidence_type
+    into series_org, series_activity, series_type_value
+    from evidence_artifact_series s
+   where s.id = new.series_id;
+
+  select e.activity_id, e.content_hash, e.evidence_type, a.organization_id
+    into evidence_activity, evidence_hash, evidence_type_value, evidence_org_id
+    from evidence e
+    join activities a on a.id = e.activity_id
+   where e.id = new.evidence_id;
+
+  if series_org is null or series_activity is null or evidence_activity is null then
+    raise exception 'evidence artifact series or evidence does not exist';
+  end if;
+  if series_activity <> evidence_activity then
+    raise exception 'evidence artifact activity does not match its series';
+  end if;
+  if series_org <> evidence_org_id then
+    raise exception 'evidence artifact organization does not match its activity';
+  end if;
+  if series_type_value <> evidence_type_value then
+    raise exception 'evidence artifact type does not match its series';
+  end if;
+  if evidence_hash is distinct from actual_hash then
+    raise exception 'evidence artifact digest does not match canonical evidence hash';
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists evidence_artifact_digest_guard on evidence_artifact_versions;
+create trigger evidence_artifact_digest_guard
+before insert on evidence_artifact_versions
+for each row execute function enforce_evidence_artifact_digest();

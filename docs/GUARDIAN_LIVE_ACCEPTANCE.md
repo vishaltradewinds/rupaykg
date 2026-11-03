@@ -68,13 +68,20 @@ The live gate is not passed unless all of these remain fail-closed:
 - Guardian HTTP failure.
 - Guardian returns `VERIFIED` without an authoritative execution ID.
 - Guardian returns malformed JSON.
+- Guardian response explicitly names a different policy ID than the requested policy.
+- Guardian execution identifier is blank or whitespace-only.
 - Hedera credentials missing.
 - Hedera transaction failure.
+- Hedera response without a transaction identifier or with a blank/whitespace-only transaction identifier.
 - Hedera response without consensus timestamp.
 - Mirror Node cannot locate the consensus message.
 - Activity/evidence/verification identifiers do not match the anchored payload.
 - Integrity hash mismatch.
 - Duplicate submission with the same deterministic idempotency key.
+- Same idempotency key reused with changed observations, evidence or metadata.
+- Eligibility decision is absent, expired, geographically mismatched, bound to another verification/evidence item, or references a different methodology version.
+- Methodology governance status is not production-eligible or the verification is not approved.
+- Any acceptance/test-fixture activity or evidence attempts a value-bearing credential transition.
 
 None of these conditions may manufacture a transaction ID, consensus timestamp, Guardian execution ID, VC signature, statutory certificate, or registry eligibility.
 
@@ -118,3 +125,19 @@ Acceptance still requires authenticated browser testing with two separate author
 Cloud Run deployment remains the final step. The production deployment gate is:
 
 `CI green -> runtime/container green -> UI/backend contract green -> statutory/governance checks green -> live Guardian acceptance -> live Hedera consensus verification -> final production smoke test -> Cloud Run deployment`
+
+
+## Sanitized evidence packet checklist
+
+For each authorized non-production acceptance attempt, preserve an immutable, access-controlled packet outside source control containing:
+- exact RupayKG commit SHA, deployment/environment identifier, test operator and independent witness;
+- UTC start/end timestamps and correlation ID;
+- approved Guardian release, policy ID/version, execution ID and sanitized authoritative response;
+- requested idempotency key plus canonical input digest (never private evidence contents unless approved for that packet);
+- Hedera network, topic ID, transaction ID, consensus timestamp and authoritative response;
+- Mirror Node request reference and sanitized returned payload, including the exact digest comparison result;
+- database row identifiers and before/after state for the matching provenance record and eligibility decision;
+- outcomes for each negative/retry/duplicate/mismatch test, including expected versus observed result;
+- redaction record, reviewer decision, unresolved deviations and sign-off timestamp.
+
+Do not place private keys, bearer tokens, personal data, raw sensitive evidence, or production secrets in Git, CI logs, pull-request comments, or this packet's broadly accessible copy. A screenshot, mocked response, local fixture, or CI success alone is not external acceptance evidence. Failed attempts must be retained as failures rather than rewritten as passes.

@@ -64,7 +64,6 @@ create trigger evidence_artifact_reviews_append_only
 before update or delete on evidence_artifact_reviews
 for each row execute function prevent_evidence_artifact_review_mutation();
 
--- Keep the canonical evidence pointer/hash bound to the immutable stored version.
 create or replace function prevent_evidence_vault_pointer_mutation()
 returns trigger language plpgsql as $$
 begin
