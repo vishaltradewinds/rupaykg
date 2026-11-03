@@ -50,6 +50,153 @@ GRANT SELECT ON public.evidence, public.activities TO rupaykg_auth_owner;
 
 SET LOCAL ROLE rupaykg_auth_owner;
 
+CREATE OR REPLACE FUNCTION auth_private.resolve_session(
+  p_token_hash text
+) RETURNS TABLE(
+  identity_id uuid,
+  organization_id uuid,
+  role_id uuid,
+  membership_status text
+)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = pg_catalog, pg_temp
+AS $function$
+  SELECT identity.id,
+         membership.organization_id,
+         membership.role_id,
+         membership.status::text
+    FROM public.identity_sessions session
+    JOIN public.identities identity ON identity.id=session.identity_id
+    JOIN public.organization_memberships membership
+      ON membership.identity_id=identity.id
+     AND membership.status='VERIFIED'
+    JOIN public.roles role
+      ON role.id=membership.role_id
+     AND role.organization_id=membership.organization_id
+   WHERE p_token_hash IS NOT NULL
+     AND p_token_hash ~ '^[0-9a-f]{64}
+  p_identity_id uuid,
+  p_organization_id uuid,
+  p_permissions text[]
+) RETURNS boolean
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = pg_catalog, pg_temp
+AS $function$
+DECLARE
+  signed_claims text[];
+BEGIN
+  IF p_identity_id IS NULL OR p_organization_id IS NULL
+     OR coalesce(cardinality(p_permissions),0)=0 THEN
+    RETURN false;
+  END IF;
+
+  signed_claims := app_security.current_request_context_claims();
+  IF signed_claims IS NULL OR cardinality(signed_claims) <> 2
+     OR signed_claims[1] IS DISTINCT FROM p_identity_id::text
+     OR signed_claims[2] IS DISTINCT FROM p_organization_id::text THEN
+    RETURN false;
+  END IF;
+
+  RETURN EXISTS (
+    SELECT 1
+      FROM public.identities identity
+      JOIN public.organization_memberships membership
+        ON membership.identity_id=identity.id
+       AND membership.organization_id=p_organization_id
+       AND membership.status='VERIFIED'
+      JOIN public.roles role
+        ON role.id=membership.role_id
+       AND role.organization_id=membership.organization_id
+     WHERE identity.id=p_identity_id
+       AND identity.status='VERIFIED'
+       AND identity.suspended_at IS NULL
+       AND EXISTS (
+         SELECT 1
+           FROM pg_catalog.jsonb_array_elements_text(role.permissions) permission(value)
+          WHERE permission.value = ANY(p_permissions)
+       )
+  );
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION auth_private.can_verify_evidence(
+  p_identity_id uuid,
+  p_evidence_id uuid
+) RETURNS boolean
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = pg_catalog, pg_temp
+AS $function$
+DECLARE
+  signed_claims text[];
+  subject_activity_id uuid;
+  subject_organization_id uuid;
+BEGIN
+  IF p_identity_id IS NULL OR p_evidence_id IS NULL THEN
+    RETURN false;
+  END IF;
+
+  signed_claims := app_security.current_request_context_claims();
+  IF signed_claims IS NULL OR cardinality(signed_claims) <> 2
+     OR signed_claims[1] IS DISTINCT FROM p_identity_id::text THEN
+    RETURN false;
+  END IF;
+
+  SELECT activity.id, activity.organization_id
+    INTO subject_activity_id, subject_organization_id
+    FROM public.evidence evidence
+    JOIN public.activities activity ON activity.id=evidence.activity_id
+   WHERE evidence.id=p_evidence_id;
+
+  IF subject_activity_id IS NULL
+     OR signed_claims[2] IS DISTINCT FROM subject_organization_id::text THEN
+    RETURN false;
+  END IF;
+
+  RETURN public.has_verification_permission_for_activity(
+    p_identity_id, subject_activity_id
+  );
+END;
+$function$;
+
+ALTER FUNCTION auth_private.resolve_session(text) OWNER TO rupaykg_auth_owner;
+ALTER FUNCTION auth_private.has_organization_permission(uuid,uuid,text[]) OWNER TO rupaykg_auth_owner;
+ALTER FUNCTION auth_private.can_verify_evidence(uuid,uuid) OWNER TO rupaykg_auth_owner;
+ALTER FUNCTION auth_private.resolve_session(text) SET search_path = pg_catalog, pg_temp;
+ALTER FUNCTION auth_private.has_organization_permission(uuid,uuid,text[]) SET search_path = pg_catalog, pg_temp;
+ALTER FUNCTION auth_private.can_verify_evidence(uuid,uuid) SET search_path = pg_catalog, pg_temp;
+
+REVOKE ALL ON FUNCTION auth_private.resolve_session(text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION auth_private.has_organization_permission(uuid,uuid,text[]) FROM PUBLIC;
+REVOKE ALL ON FUNCTION auth_private.can_verify_evidence(uuid,uuid) FROM PUBLIC;
+GRANT USAGE ON SCHEMA auth_private TO rupaykg_app_runtime;
+GRANT USAGE ON SCHEMA auth_private TO rupaykg_auth_runtime;
+GRANT EXECUTE ON FUNCTION auth_private.resolve_session(text) TO rupaykg_app_runtime, rupaykg_auth_runtime;
+GRANT EXECUTE ON FUNCTION auth_private.has_organization_permission(uuid,uuid,text[]) TO rupaykg_app_runtime, rupaykg_auth_runtime;
+GRANT EXECUTE ON FUNCTION auth_private.can_verify_evidence(uuid,uuid) TO rupaykg_app_runtime, rupaykg_auth_runtime;
+
+COMMENT ON FUNCTION auth_private.resolve_session(text) IS
+  'Resolves only active verified identity memberships for a valid bearer-session hash; exposes no session or identity secrets.';
+COMMENT ON FUNCTION auth_private.has_organization_permission(uuid,uuid,text[]) IS
+  'Returns only a boolean; requires a valid signed request context whose actor and organization exactly match the arguments. Exposes no membership or role rows to the app runtime.';
+COMMENT ON FUNCTION auth_private.can_verify_evidence(uuid,uuid) IS
+  'Evidence verifier authorization bound to the signed request actor and the evidence activity organization.';
+
+RESET ROLE;
+
+     AND session.token_hash=p_token_hash
+     AND session.revoked_at IS NULL
+     AND session.expires_at>statement_timestamp()
+     AND identity.status='VERIFIED'
+     AND identity.suspended_at IS NULL
+   ORDER BY membership.organization_id, membership.role_id;
+$function$;
+
 CREATE OR REPLACE FUNCTION auth_private.has_organization_permission(
   p_identity_id uuid,
   p_organization_id uuid,
