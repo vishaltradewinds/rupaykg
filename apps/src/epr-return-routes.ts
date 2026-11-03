@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type { Pool } from "pg";
+import { withRlsRequestTransaction, type RlsRequestContextConfig } from "./rls-request-transaction.js";
 import { authenticate, bearerChallenge, hasOrganizationPermission, type AuthContext } from "./auth.js";
 
 function bodyOf(request: { body: unknown }): Record<string, unknown> {
@@ -28,22 +29,31 @@ function canAct(auth: AuthContext, organizationId: string): boolean {
   return auth.memberships.some((membership) => membership.organization_id === organizationId && membership.status === "VERIFIED");
 }
 
-export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool | null): Promise<void> {
+export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool | null, requestContext?: RlsRequestContextConfig): Promise<void> {
   app.get("/api/v1/epr/returns", async (request, reply) => {
     const auth = await authFor(request, reply, pool); if (!auth || !pool) return;
-    const organizationId = typeof request.headers["x-rupaykg-organization-id"] === "string" ? request.headers["x-rupaykg-organization-id"] : auth.activeOrganizationId;
-    if (!organizationId || !canAct(auth, organizationId)) return reply.code(403).send({ error: "Verified organization membership required", code: "ORG_FORBIDDEN" });
-    if (!await hasOrganizationPermission(pool, auth, organizationId, ["epr:read", "epr:manage", "reports:read"])) return reply.code(403).send({ error: "EPR return read permission required", code: "EPR_RETURN_READ_FORBIDDEN" });
+    const organizationId = auth.activeOrganizationId;
+    if (!organizationId || !canAct(auth, organizationId)) return reply.code(403).send({ error: "One explicitly active verified organization is required", code: "RLS_ORGANIZATION_CONTEXT_REQUIRED" });
+    if (!requestContext) return reply.code(503).send({ error: "Signed tenant request context is not configured", code: "RLS_CONTEXT_CONFIG_REQUIRED", syntheticData: false });
     try {
-      const rows = await pool.query(`select r.id,r.scheme_id,s.code as scheme_code,s.name as scheme_name,r.organization_id,r.obligation_id,r.period_start,r.period_end,r.return_type,r.reported_quantity,r.obligation_quantity,r.fulfilled_quantity,r.status,r.external_reference,r.evidence_id,r.verification_id,r.submitted_at,r.created_at from epr_returns r join epr_schemes s on s.id=r.scheme_id where r.organization_id=$1 order by r.period_end desc,r.created_at desc limit 100`, [organizationId]);
-      return { source: "postgresql", syntheticData: false, returns: rows.rows };
-    } catch (error) { request.log.error(error); return reply.code(503).send({ error: "EPR return workspace unavailable", syntheticData: false }); }
+      const returns = await withRlsRequestTransaction(pool, auth, requestContext, async (client) => {
+        const permitted = await hasOrganizationPermission(client, auth, organizationId, ["epr:read", "epr:manage", "reports:read"], "security_definer");
+        if (!permitted) throw Object.assign(new Error("EPR return read permission required"), { code: "EPR_RETURN_READ_FORBIDDEN" });
+        const rows = await client.query(`select r.id,r.scheme_id,s.code as scheme_code,s.name as scheme_name,r.organization_id,r.obligation_id,r.period_start,r.period_end,r.return_type,r.reported_quantity,r.obligation_quantity,r.fulfilled_quantity,r.status,r.external_reference,r.evidence_id,r.verification_id,r.submitted_at,r.created_at from epr_returns r join epr_schemes s on s.id=r.scheme_id where r.organization_id=$1 order by r.period_end desc,r.created_at desc limit 100`, [organizationId]);
+        return rows.rows;
+      });
+      return { source: "postgresql", syntheticData: false, returns };
+    } catch (error) {
+      const code = error && typeof error === "object" && "code" in error ? String((error as {code:unknown}).code) : "";
+      if (code === "EPR_RETURN_READ_FORBIDDEN") return reply.code(403).send({ error: "EPR return read permission required", code });
+      request.log.error(error); return reply.code(503).send({ error: "EPR return workspace unavailable", syntheticData: false });
+    }
   });
 
   app.post("/api/v1/epr/returns", async (request, reply) => {
     const auth = await authFor(request, reply, pool); if (!auth || !pool) return;
     const body = bodyOf(request);
-    const organizationId = requiredString(body, "organizationId") ?? auth.activeOrganizationId;
+    const organizationId = auth.activeOrganizationId;
     const schemeId = requiredString(body, "schemeId");
     const obligationId = requiredString(body, "obligationId");
     const periodStart = requiredString(body, "periodStart");
@@ -51,14 +61,21 @@ export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool |
     const returnType = requiredString(body, "returnType");
     const reportedQuantity = positiveNumber(body, "reportedQuantity");
     if (!organizationId || !schemeId || !obligationId || !periodStart || !periodEnd || !returnType || reportedQuantity === null) return reply.code(400).send({ error: "organizationId, schemeId, obligationId, periodStart, periodEnd, returnType and positive reportedQuantity are required", code: "INVALID_EPR_RETURN" });
-    if (!canAct(auth, organizationId)) return reply.code(403).send({ error: "Verified organization membership required", code: "ORG_FORBIDDEN" });
-    if (!await hasOrganizationPermission(pool, auth, organizationId, ["epr:manage"])) return reply.code(403).send({ error: "EPR management permission required", code: "EPR_RETURN_WRITE_FORBIDDEN" });
+    if (!organizationId || !canAct(auth, organizationId)) return reply.code(403).send({ error: "One active verified organization is required", code: "ORG_FORBIDDEN" });
+    if (!requestContext) return reply.code(503).send({ error: "Signed tenant request context is not configured", code: "RLS_CONTEXT_CONFIG_REQUIRED", syntheticData: false });
     if (Number.isNaN(Date.parse(periodStart)) || Number.isNaN(Date.parse(periodEnd)) || periodStart > periodEnd) return reply.code(400).send({ error: "Valid periodStart and periodEnd are required", code: "INVALID_PERIOD" });
     try {
-      const rows = await pool.query(`insert into epr_returns(scheme_id,organization_id,obligation_id,period_start,period_end,return_type,reported_quantity,status) select $1,$2,$3,$4::date,$5::date,$6,$7,'DRAFT' where exists(select 1 from epr_schemes where id=$1 and status='VERIFIED') and exists(select 1 from epr_obligations eo join obligations o on o.id=eo.obligation_id where eo.id=$3 and eo.scheme_id=$1 and eo.obligated_organization_id=$2 and eo.status in ('OPEN','ELIGIBLE') and o.period_start <= $5::date and o.period_end >= $4::date) returning *`, [schemeId, organizationId, obligationId, periodStart, periodEnd, returnType, reportedQuantity]);
-      if (!rows.rows[0]) return reply.code(409).send({ error: "Verified EPR scheme and matching open/eligible obligation are required", code: "EPR_RETURN_NOT_ELIGIBLE" });
-      return reply.code(201).send({ source: "postgresql", syntheticData: false, authoritativeMutation: true, eprReturn: rows.rows[0] });
+      const created = await withRlsRequestTransaction(pool, auth, requestContext, async (client) => {
+        const permitted = await hasOrganizationPermission(client, auth, organizationId, ["epr:manage"], "security_definer");
+        if (!permitted) throw Object.assign(new Error("EPR management permission required"), { code: "EPR_RETURN_WRITE_FORBIDDEN" });
+        const rows = await client.query(`insert into epr_returns(scheme_id,organization_id,obligation_id,period_start,period_end,return_type,reported_quantity,status) select $1,$2,$3,$4::date,$5::date,$6,$7,'DRAFT' where exists(select 1 from epr_schemes where id=$1 and status='VERIFIED') and exists(select 1 from epr_obligations eo join obligations o on o.id=eo.obligation_id where eo.id=$3 and eo.scheme_id=$1 and eo.obligated_organization_id=$2 and eo.status in ('OPEN','ELIGIBLE') and o.period_start <= $5::date and o.period_end >= $4::date) returning *`, [schemeId, organizationId, obligationId, periodStart, periodEnd, returnType, reportedQuantity]);
+        return rows.rows[0] ?? null;
+      });
+      if (!created) return reply.code(409).send({ error: "Verified EPR scheme and matching open/eligible obligation are required", code: "EPR_RETURN_NOT_ELIGIBLE" });
+      return reply.code(201).send({ source: "postgresql", syntheticData: false, authoritativeMutation: true, eprReturn: created });
     } catch (error: unknown) {
+      const code = error && typeof error === "object" && "code" in error ? String((error as {code:unknown}).code) : "";
+      if (code === "EPR_RETURN_WRITE_FORBIDDEN") return reply.code(403).send({ error: "EPR management permission required", code });
       request.log.error(error);
       const message = error instanceof Error ? error.message : "";
       if (message.toLowerCase().includes("duplicate key")) return reply.code(409).send({ error: "An EPR return already exists for this scheme, organization, period and return type", code: "EPR_RETURN_EXISTS" });
@@ -73,57 +90,73 @@ export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool |
     const evidenceId = requiredString(body, "evidenceId");
     const verificationId = requiredString(body, "verificationId");
     if (!evidenceId || !verificationId) return reply.code(400).send({ error: "Verified evidence and approved verification are required to submit a statutory EPR return", code: "EVIDENCE_REQUIRED" });
-    const client = await pool.connect();
+    const organizationId = auth.activeOrganizationId;
+    if (!organizationId || !canAct(auth, organizationId)) return reply.code(403).send({ error: "One explicitly active verified organization is required", code: "ORG_FORBIDDEN" });
+    if (!requestContext) return reply.code(503).send({ error: "Signed tenant request context is not configured", code: "RLS_CONTEXT_CONFIG_REQUIRED", syntheticData: false });
     try {
-      await client.query("BEGIN");
-      const current = await client.query(`select r.*,eo.target_quantity,eo.fulfilled_quantity as obligation_fulfilled,eo.status as obligation_status,s.code as scheme_code from epr_returns r join epr_obligations eo on eo.id=r.obligation_id join epr_schemes s on s.id=r.scheme_id where r.id=$1 for update`, [returnId]);
-      const row = current.rows[0];
-      if (!row) { await client.query("ROLLBACK"); return reply.code(404).send({ error: "EPR return not found", code: "EPR_RETURN_NOT_FOUND" }); }
-      if (!canAct(auth, row.organization_id) || !await hasOrganizationPermission(client, auth, row.organization_id, ["epr:manage"])) { await client.query("ROLLBACK"); return reply.code(403).send({ error: "EPR management permission required", code: "EPR_RETURN_WRITE_FORBIDDEN" }); }
-      if (row.status !== "DRAFT" && row.status !== "REJECTED") { await client.query("ROLLBACK"); return reply.code(409).send({ error: `Return cannot be submitted from ${row.status}`, code: "INVALID_EPR_RETURN_STATE" }); }
-      const obligation = await client.query(`select id,target_quantity,fulfilled_quantity,status from epr_obligations where id=$1 for update`, [row.obligation_id]);
-      const obligationRow = obligation.rows[0];
-      if (!obligationRow) { await client.query("ROLLBACK"); return reply.code(409).send({ error: "Bound EPR obligation not found", code: "OBLIGATION_NOT_FOUND" }); }
-      if (!["OPEN", "ELIGIBLE"].includes(obligationRow.status)) { await client.query("ROLLBACK"); return reply.code(409).send({ error: `EPR obligation cannot be fulfilled from ${obligationRow.status}`, code: "OBLIGATION_NOT_ELIGIBLE" }); }
-      const evidence = await client.query(`select e.id,e.status,e.content_hash,e.content_uri,a.organization_id,a.geography_id from evidence e join activities a on a.id=e.activity_id join verifications v on v.id=$2 and v.evidence_id=e.id and v.decision='APPROVED' where e.id=$1`, [evidenceId, verificationId]);
-      const evidenceRow = evidence.rows[0];
-      if (!evidenceRow || evidenceRow.status !== "VERIFIED" || (!evidenceRow.content_hash && !evidenceRow.content_uri) || evidenceRow.organization_id !== row.organization_id || !evidenceRow.geography_id) { await client.query("ROLLBACK"); return reply.code(409).send({ error: "Submission evidence must be verified, provenance-backed, approved and organization-scoped", code: "EVIDENCE_NOT_ELIGIBLE" }); }
-      const geo = await client.query(`select organization_has_geography_scope($1,$2) as ok`, [row.organization_id, evidenceRow.geography_id]);
-      if (!geo.rows[0]?.ok) { await client.query("ROLLBACK"); return reply.code(403).send({ error: "Evidence geography is outside organization authorization scope", code: "GEOGRAPHY_FORBIDDEN" }); }
-      const fulfilled = Number(row.reported_quantity);
-      const balance = Number(obligationRow.target_quantity) - Number(obligationRow.fulfilled_quantity);
-      if (!Number.isFinite(fulfilled) || fulfilled <= 0) { await client.query("ROLLBACK"); return reply.code(400).send({ error: "Reported quantity must be positive", code: "INVALID_QUANTITY" }); }
-      if (fulfilled > balance + 1e-9) { await client.query("ROLLBACK"); return reply.code(409).send({ error: "Reported quantity exceeds remaining EPR obligation balance", code: "OBLIGATION_BALANCE_EXCEEDED", remainingQuantity: Math.max(balance, 0) }); }
-      const updated = await client.query(`update epr_returns set fulfilled_quantity=$2,obligation_quantity=$3,evidence_id=$4,verification_id=$5,status='SUBMITTED',submitted_at=now() where id=$1 returning *`, [returnId, fulfilled, obligationRow.target_quantity, evidenceId, verificationId]);
-      await client.query(`update epr_obligations set fulfilled_quantity=fulfilled_quantity+$2,status=case when fulfilled_quantity+$2 >= target_quantity then 'COMPLIANT' else 'OPEN' end where id=$1`, [row.obligation_id, fulfilled]);
-      await client.query("COMMIT");
-      return { source: "postgresql", syntheticData: false, authoritativeMutation: true, eprReturn: updated.rows[0], externalSubmission: "NOT_SUBMITTED" };
-    } catch (error) { await client.query("ROLLBACK"); request.log.error(error); return reply.code(503).send({ error: "EPR return submission unavailable", syntheticData: false }); }
-    finally { client.release(); }
+      const result = await withRlsRequestTransaction(pool, auth, requestContext, async (client) => {
+        const permitted = await hasOrganizationPermission(client, auth, organizationId, ["epr:manage"], "security_definer");
+        if (!permitted) throw Object.assign(new Error("EPR management permission required"), { code: "EPR_RETURN_WRITE_FORBIDDEN" });
+        const current = await client.query(`select r.*,eo.target_quantity,eo.fulfilled_quantity as obligation_fulfilled,eo.status as obligation_status,s.code as scheme_code from epr_returns r join epr_obligations eo on eo.id=r.obligation_id join epr_schemes s on s.id=r.scheme_id where r.id=$1 and r.organization_id=$2 for update`, [returnId, organizationId]);
+        const row = current.rows[0];
+        if (!row) throw Object.assign(new Error("EPR return not found"), { code: "EPR_RETURN_NOT_FOUND" });
+        if (row.status !== "DRAFT" && row.status !== "REJECTED") throw Object.assign(new Error("Return cannot be submitted from current state"), { code: "INVALID_EPR_RETURN_STATE" });
+        const obligation = await client.query(`select id,target_quantity,fulfilled_quantity,status from epr_obligations where id=$1 and obligated_organization_id=$2 for update`, [row.obligation_id, organizationId]);
+        const obligationRow = obligation.rows[0];
+        if (!obligationRow) throw Object.assign(new Error("Bound EPR obligation not found"), { code: "OBLIGATION_NOT_FOUND" });
+        if (!["OPEN", "ELIGIBLE"].includes(obligationRow.status)) throw Object.assign(new Error("EPR obligation is not eligible"), { code: "OBLIGATION_NOT_ELIGIBLE" });
+        const evidence = await client.query(`select e.id,e.status,e.content_hash,e.content_uri,a.organization_id,a.geography_id from evidence e join activities a on a.id=e.activity_id join verifications v on v.id=$2 and v.evidence_id=e.id and v.decision='APPROVED' where e.id=$1`, [evidenceId, verificationId]);
+        const evidenceRow = evidence.rows[0];
+        if (!evidenceRow || evidenceRow.status !== "VERIFIED" || (!evidenceRow.content_hash && !evidenceRow.content_uri) || evidenceRow.organization_id !== organizationId || !evidenceRow.geography_id) throw Object.assign(new Error("Submission evidence must be verified, provenance-backed, approved and organization-scoped"), { code: "EVIDENCE_NOT_ELIGIBLE" });
+        const geo = await client.query(`select organization_has_geography_scope($1,$2) as ok`, [organizationId, evidenceRow.geography_id]);
+        if (!geo.rows[0]?.ok) throw Object.assign(new Error("Evidence geography is outside organization authorization scope"), { code: "GEOGRAPHY_FORBIDDEN" });
+        const fulfilled = Number(row.reported_quantity);
+        const balance = Number(obligationRow.target_quantity) - Number(obligationRow.fulfilled_quantity);
+        if (!Number.isFinite(fulfilled) || fulfilled <= 0) throw Object.assign(new Error("Reported quantity must be positive"), { code: "INVALID_QUANTITY" });
+        if (fulfilled > balance + 1e-9) throw Object.assign(new Error("Reported quantity exceeds remaining EPR obligation balance"), { code: "OBLIGATION_BALANCE_EXCEEDED", remainingQuantity: Math.max(balance, 0) });
+        const updated = await client.query(`update epr_returns set fulfilled_quantity=$2,obligation_quantity=$3,evidence_id=$4,verification_id=$5,status='SUBMITTED',submitted_at=now() where id=$1 and organization_id=$6 returning *`, [returnId, fulfilled, obligationRow.target_quantity, evidenceId, verificationId, organizationId]);
+        if (!updated.rows[0]) throw Object.assign(new Error("EPR return not found"), { code: "EPR_RETURN_NOT_FOUND" });
+        await client.query(`update epr_obligations set fulfilled_quantity=fulfilled_quantity+$2,status=case when fulfilled_quantity+$2 >= target_quantity then 'COMPLIANT' else 'OPEN' end where id=$1 and obligated_organization_id=$3`, [row.obligation_id, fulfilled, organizationId]);
+        return updated.rows[0];
+      });
+      return { source: "postgresql", syntheticData: false, authoritativeMutation: true, eprReturn: result, externalSubmission: "NOT_SUBMITTED" };
+    } catch (error) {
+      const code = error && typeof error === "object" && "code" in error ? String((error as {code:unknown}).code) : "";
+      const status: Record<string, number> = { EPR_RETURN_WRITE_FORBIDDEN: 403, EPR_RETURN_NOT_FOUND: 404, INVALID_EPR_RETURN_STATE: 409, OBLIGATION_NOT_FOUND: 409, OBLIGATION_NOT_ELIGIBLE: 409, EVIDENCE_NOT_ELIGIBLE: 409, GEOGRAPHY_FORBIDDEN: 403, INVALID_QUANTITY: 400, OBLIGATION_BALANCE_EXCEEDED: 409 };
+      if (status[code]) return reply.code(status[code]!).send({ error: error instanceof Error ? error.message : "EPR return submission rejected", code, ...(code === "OBLIGATION_BALANCE_EXCEEDED" && error && typeof error === "object" && "remainingQuantity" in error ? { remainingQuantity: (error as {remainingQuantity: number}).remainingQuantity } : {}) });
+      request.log.error(error); return reply.code(503).send({ error: "EPR return submission unavailable", syntheticData: false });
+    }
   });
 
   app.post("/api/v1/epr/returns/:returnId/external-reference", async (request, reply) => {
     const auth = await authFor(request, reply, pool); if (!auth || !pool) return;
     const body = bodyOf(request); const externalReference = requiredString(body, "externalReference");
+    const { returnId } = request.params as { returnId: string };
     if (!externalReference) return reply.code(400).send({ error: "externalReference is required", code: "EXTERNAL_REFERENCE_REQUIRED" });
-    const client = await pool.connect();
+    const organizationId = auth.activeOrganizationId;
+    if (!organizationId || !canAct(auth, organizationId)) return reply.code(403).send({ error: "One explicitly active verified organization is required", code: "ORG_FORBIDDEN" });
+    if (!requestContext) return reply.code(503).send({ error: "Signed tenant request context is not configured", code: "RLS_CONTEXT_CONFIG_REQUIRED", syntheticData: false });
     try {
-      await client.query("BEGIN");
-      const returnId = (request.params as { returnId: string }).returnId;
-      const row = await client.query<{ organization_id: string; status: string; external_reference: string | null }>("select organization_id,status,external_reference from epr_returns where id=$1 for update", [returnId]);
-      if (!row.rows[0]) { await client.query("ROLLBACK"); return reply.code(404).send({ error: "EPR return not found", code: "EPR_RETURN_NOT_FOUND" }); }
-      if (!canAct(auth, row.rows[0].organization_id) || !await hasOrganizationPermission(client, auth, row.rows[0].organization_id, ["epr:manage"])) { await client.query("ROLLBACK"); return reply.code(403).send({ error: "EPR management permission required", code: "EPR_RETURN_WRITE_FORBIDDEN" }); }
-      if (!["SUBMITTED","ACCEPTED","COMPLETED"].includes(row.rows[0].status)) { await client.query("ROLLBACK"); return reply.code(409).send({ error: "External reference can only be recorded after submission", code: "INVALID_EPR_RETURN_STATE" }); }
-      if (row.rows[0].external_reference && row.rows[0].external_reference !== externalReference) { await client.query("ROLLBACK"); return reply.code(409).send({ error: "A different external reference is already recorded for this EPR return", code: "EXTERNAL_REFERENCE_IMMUTABLE" }); }
-      const updated = await client.query("update epr_returns set external_reference=$2 where id=$1 returning *", [returnId, externalReference]);
-      await client.query("COMMIT");
-      return { source: "postgresql", syntheticData: false, authoritativeMutation: true, eprReturn: updated.rows[0], externalSubmission: "EXTERNAL_REFERENCE_RECORDED_NOT_ISSUED_BY_RUPAYKG" };
+      const result = await withRlsRequestTransaction(pool, auth, requestContext, async (client) => {
+        const permitted = await hasOrganizationPermission(client, auth, organizationId, ["epr:manage"], "security_definer");
+        if (!permitted) throw Object.assign(new Error("EPR management permission required"), { code: "EPR_RETURN_WRITE_FORBIDDEN" });
+        const row = await client.query<{ organization_id: string; status: string; external_reference: string | null }>("select organization_id,status,external_reference from epr_returns where id=$1 and organization_id=$2 for update", [returnId, organizationId]);
+        if (!row.rows[0]) throw Object.assign(new Error("EPR return not found"), { code: "EPR_RETURN_NOT_FOUND" });
+        if (!["SUBMITTED","ACCEPTED","COMPLETED"].includes(row.rows[0].status)) throw Object.assign(new Error("External reference can only be recorded after submission"), { code: "INVALID_EPR_RETURN_STATE" });
+        if (row.rows[0].external_reference && row.rows[0].external_reference !== externalReference) throw Object.assign(new Error("A different external reference is already recorded for this EPR return"), { code: "EXTERNAL_REFERENCE_IMMUTABLE" });
+        const updated = await client.query("update epr_returns set external_reference=$2 where id=$1 and organization_id=$3 returning *", [returnId, externalReference, organizationId]);
+        if (!updated.rows[0]) throw Object.assign(new Error("EPR return not found"), { code: "EPR_RETURN_NOT_FOUND" });
+        return updated.rows[0];
+      });
+      return { source: "postgresql", syntheticData: false, authoritativeMutation: true, eprReturn: result, externalSubmission: "EXTERNAL_REFERENCE_RECORDED_NOT_ISSUED_BY_RUPAYKG" };
     } catch (error: unknown) {
-      await client.query("ROLLBACK").catch(() => undefined);
+      const code = error && typeof error === "object" && "code" in error ? String((error as {code:unknown}).code) : "";
+      const status: Record<string, number> = { EPR_RETURN_WRITE_FORBIDDEN: 403, EPR_RETURN_NOT_FOUND: 404, INVALID_EPR_RETURN_STATE: 409, EXTERNAL_REFERENCE_IMMUTABLE: 409 };
+      if (status[code]) return reply.code(status[code]!).send({ error: error instanceof Error ? error.message : "EPR external reference rejected", code });
       request.log.error(error);
       const message = error instanceof Error ? error.message : "";
       if (message.toLowerCase().includes("duplicate key")) return reply.code(409).send({ error: "That external EPR reference is already recorded on another return", code: "EXTERNAL_REFERENCE_EXISTS" });
       return reply.code(503).send({ error: "External EPR reference recording unavailable", syntheticData: false });
-    } finally { client.release(); }
+    }
   });
 }

@@ -110,3 +110,12 @@ This migration installs a **draft-only, one-time two-custodian bootstrap path**.
 - The bootstrap state is globally one-time. Reused, expired, cross-custodian, missing or malformed secrets fail closed.
 - CI uses synthetic identities and synthetic custodian login roles only. No production identities, secrets, claims or logins are created by this migration.
 - Production execution remains blocked until the founder approves the two initial identities and the out-of-band two-custodian secret-custody ceremony, and independent security review passes.
+
+
+## Read-only EPR returns tenant RLS (20261110)
+
+Migration `20261110_epr_return_read_tenant_rls.sql` is a candidate, not a production deployment. It requires a separately provisioned `rupaykg_app_runtime` LOGIN role with NOBYPASSRLS, NOINHERIT, no elevated attributes and no role memberships. The migration grants that role SELECT only on `public.epr_returns` and the global `public.epr_schemes` catalogue, gives it verifier schema/function use but no signing-key table read, and enables/forces a single organization-claim SELECT policy on `public.epr_returns`.
+
+The API route is disabled by default through `RUPAYKG_EPR_RETURN_READ_ENABLED=false`. When explicitly enabled, startup checks the actual connection identity, RLS/FORCE RLS, exact policy, table ownership, read-only privileges and verifier ownership/grants before registering only `GET /api/v1/epr/returns`. The route uses the existing explicit `withRlsRequestTransaction` client boundary; authentication occurs first, then permission lookup and EPR row reads use the same signed tenant client. No EPR write route is registered.
+
+This migration must be rehearsed on disposable PostgreSQL with the exact restricted runtime role and two-tenant negative tests. Production migration, role/secret provisioning and feature activation remain blocked pending independent DBA/security approval and explicit founder authorization.

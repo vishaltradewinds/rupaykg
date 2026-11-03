@@ -17,6 +17,8 @@ import { registerIntelligenceRoutes } from "./intelligence-routes.js";
 import { registerMrvRoutes } from "./mrv-routes.js";
 import { registerEvidenceVaultRoutes } from "./evidence-vault-routes.js";
 import { registerPlatformAdminRoutes } from "./platform-admin-routes.js";
+import { registerEprReturnReadRoute } from "./epr-return-read-route.js";
+import { assertEprReturnReadDatabaseContract } from "./epr-return-read-contract.js";
 
 const app = Fastify({ logger: true });
 const allowedOrigins = process.env.RUPAYKG_ALLOWED_ORIGINS?.split(",").map(origin => origin.trim()).filter(Boolean) ?? [];
@@ -31,8 +33,14 @@ const pool = databaseUrl ? new Pool(poolConfig) : null;
 const authDatabaseUrl = process.env.AUTH_DATABASE_URL;
 const authPoolConfig: PoolConfig = { ...poolConfig, connectionString: authDatabaseUrl, max: 3 };
 const authPool = authDatabaseUrl ? new Pool(authPoolConfig) : null;
+const eprReturnReadEnabledValue = process.env.RUPAYKG_EPR_RETURN_READ_ENABLED?.trim() || "false";
+if (eprReturnReadEnabledValue !== "true" && eprReturnReadEnabledValue !== "false") {
+  throw new Error("RUPAYKG_EPR_RETURN_READ_ENABLED must be true or false");
+}
+const eprReturnReadEnabled = eprReturnReadEnabledValue === "true";
 if (process.env.NODE_ENV === "production" && !authPool) throw new Error("AUTH_DATABASE_URL is required for the dedicated authentication runtime");
 async function assertProductionDatabaseRuntimeContracts(): Promise<void> {
+  if (getAuthResolverMode() !== "security_definer") throw new Error("PRODUCTION_AUTH_RESOLVER_MODE_INVALID");
   if (!pool || !authPool) throw new Error("PRODUCTION_DATABASE_RUNTIME_UNAVAILABLE");
   const [appIdentity, authIdentity] = await Promise.all([
     pool.query<{ current_user: string; current_database: string; rolcanlogin: boolean; rolinherit: boolean; rolsuper: boolean; rolbypassrls: boolean; rolcreatedb: boolean; rolcreaterole: boolean; rolreplication: boolean }>(
@@ -202,19 +210,27 @@ app.post("/api/v1/resource-flows", async (request, reply) => { const auth = awai
 app.post("/api/v1/activities/:activityId/measurements", async (request, reply) => { const auth=await requireAuth(request,reply);if(!auth)return;const {activityId}=request.params as {activityId:string};const body=bodyOf(request);const value=requiredPositiveNumber(body,"value"),unit=requiredString(body,"unit"),method=requiredString(body,"method"),source=requiredString(body,"source"),measuredAt=requiredString(body,"measuredAt");if(value===null||!unit||!method||!source||!measuredAt||Number.isNaN(Date.parse(measuredAt)))return reply.code(400).send({error:"positive value, unit, method, source and valid measuredAt are required"});try{if(!await canWriteActivity(pool!,auth,activityId))return reply.code(403).send({error:"Activity is outside organization authorization scope or lacks waste recording permission",code:"ACTIVITY_FORBIDDEN"});const rows=await query("insert into measurements(activity_id,value,unit,method,source,measured_at) values($1,$2,$3,$4,$5,$6) returning *",[activityId,value,unit,method,source,measuredAt]);return reply.code(201).send({source:"postgresql",syntheticData:false,measurement:rows[0]});}catch(error){request.log.error(error);return reply.code(503).send({error:"Measurement recording unavailable",syntheticData:false});}});
 
 await registerOnboardingHierarchyRoutes(app, pool, authPool);
-await registerValueRoutes(app, pool);
+await registerValueRoutes(app, pool, process.env.RUPAYKG_REQUEST_CONTEXT_SECRET && process.env.RUPAYKG_REQUEST_CONTEXT_KEY_ID ? { hmacSecret: process.env.RUPAYKG_REQUEST_CONTEXT_SECRET, keyId: process.env.RUPAYKG_REQUEST_CONTEXT_KEY_ID } : undefined);
 await registerRegistryRoutes(app, pool);
-await registerSyncRoutes(app, pool);
-await registerWorkspaceRoutes(app, pool);
-await registerBwgRoutes(app, pool);
-await registerCpcbSwmRoutes(app, pool);
+await registerSyncRoutes(app, pool, process.env.RUPAYKG_REQUEST_CONTEXT_SECRET && process.env.RUPAYKG_REQUEST_CONTEXT_KEY_ID ? { hmacSecret: process.env.RUPAYKG_REQUEST_CONTEXT_SECRET, keyId: process.env.RUPAYKG_REQUEST_CONTEXT_KEY_ID } : undefined);
+await registerWorkspaceRoutes(app, pool, process.env.RUPAYKG_REQUEST_CONTEXT_SECRET && process.env.RUPAYKG_REQUEST_CONTEXT_KEY_ID ? { hmacSecret: process.env.RUPAYKG_REQUEST_CONTEXT_SECRET, keyId: process.env.RUPAYKG_REQUEST_CONTEXT_KEY_ID } : undefined);
+await registerBwgRoutes(app, pool, process.env.RUPAYKG_REQUEST_CONTEXT_SECRET && process.env.RUPAYKG_REQUEST_CONTEXT_KEY_ID ? { hmacSecret: process.env.RUPAYKG_REQUEST_CONTEXT_SECRET, keyId: process.env.RUPAYKG_REQUEST_CONTEXT_KEY_ID } : undefined);
+await registerCpcbSwmRoutes(app, pool, process.env.RUPAYKG_REQUEST_CONTEXT_SECRET && process.env.RUPAYKG_REQUEST_CONTEXT_KEY_ID ? { hmacSecret: process.env.RUPAYKG_REQUEST_CONTEXT_SECRET, keyId: process.env.RUPAYKG_REQUEST_CONTEXT_KEY_ID } : undefined);
 await registerIntelligenceRoutes(app, pool);
 await registerMrvRoutes(app, pool);
-await registerEvidenceVaultRoutes(app, pool);
+await registerEvidenceVaultRoutes(app, pool, process.env.RUPAYKG_REQUEST_CONTEXT_SECRET && process.env.RUPAYKG_REQUEST_CONTEXT_KEY_ID ? { hmacSecret: process.env.RUPAYKG_REQUEST_CONTEXT_SECRET, keyId: process.env.RUPAYKG_REQUEST_CONTEXT_KEY_ID } : undefined);
 await registerPlatformAdminRoutes(app, pool);
 
 if (existsSync(webRoot)) app.get("/*", async (_request, reply) => reply.type("text/html; charset=utf-8").send(readFileSync(resolve(webRoot, "index.html"), "utf8")));
 if (process.env.NODE_ENV === "production") await assertProductionDatabaseRuntimeContracts();
+if (eprReturnReadEnabled) {
+  if (!pool) throw new Error("EPR_RETURN_READ_DATABASE_REQUIRED");
+  const hmacSecret = process.env.RUPAYKG_REQUEST_CONTEXT_SECRET;
+  const keyId = process.env.RUPAYKG_REQUEST_CONTEXT_KEY_ID;
+  if (!hmacSecret || !keyId) throw new Error("EPR_RETURN_READ_SIGNING_CONFIG_REQUIRED");
+  await assertEprReturnReadDatabaseContract(pool);
+  await registerEprReturnReadRoute(app, pool, { hmacSecret, keyId });
+}
 await registerAuthRoutes(app, pool, authPool);
 app.addHook("onClose", async () => { await Promise.all([pool?.end(), authPool?.end()]); });
 const port = Number(process.env.PORT ?? 3000); const host = process.env.HOST ?? "0.0.0.0"; await app.listen({ port, host });

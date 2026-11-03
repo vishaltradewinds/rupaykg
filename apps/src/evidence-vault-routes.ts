@@ -2,6 +2,8 @@ import { createHash } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import type { Pool, PoolClient } from "pg";
 import { authenticate, bearerChallenge, canActForOrganization, canVerifyEvidence, hasOrganizationPermission, type AuthContext } from "./auth.js";
+import { withRlsRequestTransaction, type RlsRequestContextConfig } from "./rls-request-transaction.js";
+import { createSignedRequestContextForAuth } from "./signed-request-context-token.js";
 
 const MAX_BYTES = 5 * 1024 * 1024;
 const MEDIA = new Set(["application/pdf", "image/jpeg", "image/png", "text/csv", "text/plain", "application/json"]);
@@ -50,7 +52,7 @@ async function activityContext(pool:Pool|PoolClient,auth:AuthContext,id:string):
  const scope=await pool.query<{ok:boolean}>("select organization_has_geography_scope($1::uuid,$2::uuid) ok",[a.organization_id,a.geography_id]);
  return scope.rows[0]?.ok?{organization_id:a.organization_id,geography_id:a.geography_id}:null;
 }
-export async function registerEvidenceVaultRoutes(app:FastifyInstance,pool:Pool|null):Promise<void>{
+export async function registerEvidenceVaultRoutes(app:FastifyInstance,pool:Pool|null,requestContext?:RlsRequestContextConfig):Promise<void>{
  app.post("/api/v1/evidence-vault/upload",{bodyLimit:7*1024*1024},async(request,reply)=>{
   const auth=await authFor(request as never,reply,pool);if(!auth||!pool)return;
   const b=bodyOf(request as never),activityId=str(b,"activityId"),evidenceType=str(b,"evidenceType"),fileNameRaw=str(b,"fileName"),mediaType=str(b,"mediaType")?.toLowerCase(),encoded=str(b,"contentBase64"),seriesId=str(b,"seriesId"),sourceReference=str(b,"sourceReference"),periodStart=str(b,"measurementPeriodStart"),periodEnd=str(b,"measurementPeriodEnd");
@@ -65,8 +67,12 @@ export async function registerEvidenceVaultRoutes(app:FastifyInstance,pool:Pool|
   const sha=createHash("sha256").update(bytes).digest("hex"),client=await pool.connect();
   try{
    await client.query("begin");
+   if(!requestContext){await client.query("rollback");return reply.code(503).send({error:"Signed tenant request context is not configured",code:"RLS_CONTEXT_CONFIG_REQUIRED"});}
+   if(!auth.activeOrganizationId){await client.query("rollback");return reply.code(403).send({error:"Select one verified organization",code:"RLS_ORGANIZATION_CONTEXT_REQUIRED"});}
+   const token=createSignedRequestContextForAuth(auth,{secret:requestContext.hmacSecret,keyId:requestContext.keyId,...(requestContext.ttlSeconds===undefined?{}:{ttlSeconds:requestContext.ttlSeconds})});
+   await client.query("select set_config('app.request_context',$1,true)",[token]);
    const ctx=await activityContext(client,auth,activityId);
-   if(!ctx){await client.query("rollback");return reply.code(403).send({error:"Activity outside active organization/geography scope",code:"EVIDENCE_SCOPE_FORBIDDEN"});}
+   if(!ctx||ctx.organization_id!==auth.activeOrganizationId){await client.query("rollback");return reply.code(403).send({error:"Activity outside active organization/geography scope",code:"EVIDENCE_SCOPE_FORBIDDEN"});}
    if(!await hasOrganizationPermission(client,auth,ctx.organization_id,["evidence:upload"])){await client.query("rollback");return reply.code(403).send({error:"Evidence upload permission required",code:"EVIDENCE_UPLOAD_FORBIDDEN"});}
    let series:{id:string;evidence_type:string}|undefined;
    if(seriesId){
@@ -88,28 +94,49 @@ export async function registerEvidenceVaultRoutes(app:FastifyInstance,pool:Pool|
   const auth=await authFor(request as never,reply,pool);if(!auth||!pool)return;
   const query=(request as unknown as {query?:Record<string,unknown>}).query??{},activityId=typeof query.activityId==="string"?query.activityId:"";
   if(!activityId||!UUID.test(activityId))return reply.code(400).send({error:"Valid activityId is required",code:"EVIDENCE_ACTIVITY_REQUIRED"});
-  const ctx=await activityContext(pool,auth,activityId);if(!ctx)return reply.code(403).send({error:"Activity outside active organization/geography scope",code:"EVIDENCE_SCOPE_FORBIDDEN"});
-  if(!await hasOrganizationPermission(pool,auth,ctx.organization_id,["evidence:read","evidence:upload","evidence:review"]))return reply.code(403).send({error:"Evidence read permission required",code:"EVIDENCE_READ_FORBIDDEN"});
-  const rows=await pool.query<{evidence_id:string;series_id:string;artifact_version_id:string;version_number:number;file_name:string;media_type:string;size_bytes:number;sha256:string;status:string;evidence_type:string;source_reference:string|null;measurement_period_start:string|null;measurement_period_end:string|null;uploaded_by_identity_id:string;created_at:Date}>(
-   "select e.id evidence_id,v.series_id,v.id artifact_version_id,v.version_number,v.file_name,v.media_type,v.size_bytes,v.sha256,e.status::text status,e.evidence_type,v.source_reference,v.measurement_period_start::text,v.measurement_period_end::text,v.uploaded_by_identity_id,v.created_at from evidence e join activities a on a.id=e.activity_id join evidence_artifact_versions v on v.evidence_id=e.id where a.id=$1 and a.organization_id=$2 order by v.created_at desc limit 200",
-   [activityId,ctx.organization_id]);
-  return {source:"postgresql",syntheticData:false,data:{artifacts:rows.rows}};
+  if(!requestContext)return reply.code(503).send({error:"Signed tenant request context is not configured",code:"RLS_CONTEXT_CONFIG_REQUIRED"});
+  if(!auth.activeOrganizationId)return reply.code(403).send({error:"Select one verified organization",code:"RLS_ORGANIZATION_CONTEXT_REQUIRED"});
+  try{
+   const artifacts=await withRlsRequestTransaction(pool,auth,requestContext,async(client)=>{
+    const ctx=await activityContext(client,auth,activityId);
+    if(!ctx||ctx.organization_id!==auth.activeOrganizationId)throw Object.assign(new Error("Activity outside active organization/geography scope"),{code:"EVIDENCE_SCOPE_FORBIDDEN"});
+    if(!await hasOrganizationPermission(client,auth,ctx.organization_id,["evidence:read","evidence:upload","evidence:review"]))throw Object.assign(new Error("Evidence read permission required"),{code:"EVIDENCE_READ_FORBIDDEN"});
+    const rows=await client.query<{evidence_id:string;series_id:string;artifact_version_id:string;version_number:number;file_name:string;media_type:string;size_bytes:number;sha256:string;status:string;evidence_type:string;source_reference:string|null;measurement_period_start:string|null;measurement_period_end:string|null;uploaded_by_identity_id:string;created_at:Date}>(
+     "select e.id evidence_id,v.series_id,v.id artifact_version_id,v.version_number,v.file_name,v.media_type,v.size_bytes,v.sha256,e.status::text status,e.evidence_type,v.source_reference,v.measurement_period_start::text,v.measurement_period_end::text,v.uploaded_by_identity_id,v.created_at from evidence e join activities a on a.id=e.activity_id join evidence_artifact_versions v on v.evidence_id=e.id where a.id=$1 and a.organization_id=$2 order by v.created_at desc limit 200",
+     [activityId,ctx.organization_id]);
+    return rows.rows;
+   });
+   return {source:"postgresql",syntheticData:false,data:{artifacts}};
+  }catch(error){const code=error&&typeof error==="object"&&"code"in error?String((error as {code:unknown}).code):"";if(code==="EVIDENCE_SCOPE_FORBIDDEN"||code==="EVIDENCE_READ_FORBIDDEN")return reply.code(403).send({error:error instanceof Error?error.message:"Evidence access denied",code});if(code.startsWith("RLS_"))return reply.code(403).send({error:error instanceof Error?error.message:"Verified organization context required",code});request.log.error(error);return reply.code(503).send({error:"Evidence vault unavailable",code:"EVIDENCE_VAULT_UNAVAILABLE"});}
  });
  app.get("/api/v1/evidence-vault/:evidenceId",async(request,reply)=>{
   const auth=await authFor(request as never,reply,pool);if(!auth||!pool)return;const id=(request.params as {evidenceId:string}).evidenceId;if(!UUID.test(id))return reply.code(400).send({error:"Invalid evidenceId",code:"EVIDENCE_ID_INVALID"});
-  const q=await pool.query<{organization_id:string;geography_id:string|null;artifact_id:string;version_number:number;file_name:string;media_type:string;size_bytes:number;sha256:string;content:Buffer;status:string;source_reference:string|null;measurement_period_start:string|null;measurement_period_end:string|null}>("select a.organization_id,a.geography_id,v.id artifact_id,v.version_number,v.file_name,v.media_type,v.size_bytes,v.sha256,v.content,e.status::text status,v.source_reference,v.measurement_period_start::text,v.measurement_period_end::text from evidence e join activities a on a.id=e.activity_id join evidence_artifact_versions v on v.evidence_id=e.id where e.id=$1",[id]);
-  const row=q.rows[0];if(!row||!row.geography_id||!canActForOrganization(auth,row.organization_id))return reply.code(404).send({error:"Evidence not found",code:"EVIDENCE_NOT_FOUND"});
-  const g=await pool.query<{ok:boolean}>("select organization_has_geography_scope($1::uuid,$2::uuid) ok",[row.organization_id,row.geography_id]);
-  if(!g.rows[0]?.ok||!await hasOrganizationPermission(pool,auth,row.organization_id,["evidence:read","evidence:upload","evidence:review"]))return reply.code(403).send({error:"Evidence read permission required",code:"EVIDENCE_READ_FORBIDDEN"});
-  if(row.content.length!==row.size_bytes||createHash("sha256").update(row.content).digest("hex")!==row.sha256)return reply.code(503).send({error:"Stored evidence integrity check failed",code:"EVIDENCE_INTEGRITY_FAILED"});
-  reply.header("Content-Disposition",'attachment; filename="'+row.file_name.replace(/["\\\r\n]/g,"_")+'"');reply.header("X-Content-Type-Options","nosniff");reply.header("X-Evidence-SHA256",row.sha256);reply.header("X-Evidence-Version",String(row.version_number));return reply.type(row.media_type).send(row.content);
+  if(!requestContext)return reply.code(503).send({error:"Signed tenant request context is not configured",code:"RLS_CONTEXT_CONFIG_REQUIRED"});
+  if(!auth.activeOrganizationId)return reply.code(403).send({error:"Select one verified organization",code:"RLS_ORGANIZATION_CONTEXT_REQUIRED"});
+  try{
+   const row=await withRlsRequestTransaction(pool,auth,requestContext,async(client)=>{
+    const q=await client.query<{organization_id:string;geography_id:string|null;artifact_id:string;version_number:number;file_name:string;media_type:string;size_bytes:number;sha256:string;content:Buffer;status:string;source_reference:string|null;measurement_period_start:string|null;measurement_period_end:string|null}>("select a.organization_id,a.geography_id,v.id artifact_id,v.version_number,v.file_name,v.media_type,v.size_bytes,v.sha256,v.content,e.status::text status,v.source_reference,v.measurement_period_start::text,v.measurement_period_end::text from evidence e join activities a on a.id=e.activity_id join evidence_artifact_versions v on v.evidence_id=e.id where e.id=$1 and a.organization_id=$2",[id,auth.activeOrganizationId]);
+    const found=q.rows[0];if(!found||!found.geography_id)return null;
+    const g=await client.query<{ok:boolean}>("select organization_has_geography_scope($1::uuid,$2::uuid) ok",[found.organization_id,found.geography_id]);
+    if(!g.rows[0]?.ok||!await hasOrganizationPermission(client,auth,found.organization_id,["evidence:read","evidence:upload","evidence:review"]))throw Object.assign(new Error("Evidence read permission required"),{code:"EVIDENCE_READ_FORBIDDEN"});
+    return found;
+   });
+   if(!row)return reply.code(404).send({error:"Evidence not found",code:"EVIDENCE_NOT_FOUND"});
+   if(row.content.length!==row.size_bytes||createHash("sha256").update(row.content).digest("hex")!==row.sha256)return reply.code(503).send({error:"Stored evidence integrity check failed",code:"EVIDENCE_INTEGRITY_FAILED"});
+   reply.header("Content-Disposition",'attachment; filename="'+row.file_name.replace(/["\\\r\n]/g,"_")+'"');reply.header("X-Content-Type-Options","nosniff");reply.header("X-Evidence-SHA256",row.sha256);reply.header("X-Evidence-Version",String(row.version_number));return reply.type(row.media_type).send(row.content);
+  }catch(error){const code=error&&typeof error==="object"&&"code"in error?String((error as {code:unknown}).code):"";if(code==="EVIDENCE_READ_FORBIDDEN")return reply.code(403).send({error:"Evidence read permission required",code});if(code.startsWith("RLS_"))return reply.code(403).send({error:error instanceof Error?error.message:"Verified organization context required",code});request.log.error(error);return reply.code(503).send({error:"Evidence vault unavailable",code:"EVIDENCE_VAULT_UNAVAILABLE"});}
  });
  app.post("/api/v1/evidence-vault/:evidenceId/review",async(request,reply)=>{
-  const auth=await authFor(request as never,reply,pool);if(!auth||!pool)return;const id=(request.params as {evidenceId:string}).evidenceId,b=bodyOf(request as never),decision=str(b,"decision"),rationale=str(b,"rationale");
+  const auth=await authFor(request as never,reply,pool);if(!auth||!pool)return;
+  const id=(request.params as {evidenceId:string}).evidenceId,b=bodyOf(request as never),decision=str(b,"decision"),rationale=str(b,"rationale");
   if(!UUID.test(id))return reply.code(400).send({error:"Invalid evidenceId",code:"EVIDENCE_ID_INVALID"});
   if((decision!=="APPROVED"&&decision!=="REJECTED")||!rationale||rationale.length<5||rationale.length>2000)return reply.code(400).send({error:"Decision and 5–2000 character rationale required",code:"EVIDENCE_REVIEW_FIELDS_INVALID"});
-  const client=await pool.connect();try{await client.query("begin");
-   const q=await client.query<{organization_id:string;activity_id:string;geography_id:string|null;status:string;artifact_id:string;uploaded_by_identity_id:string}>("select a.organization_id,a.id activity_id,a.geography_id,e.status::text status,v.id artifact_id,v.uploaded_by_identity_id from evidence e join activities a on a.id=e.activity_id join evidence_artifact_versions v on v.evidence_id=e.id where e.id=$1 for update of e",[id]),row=q.rows[0];
+  if(!requestContext)return reply.code(503).send({error:"Signed tenant request context is not configured",code:"RLS_CONTEXT_CONFIG_REQUIRED"});
+   if(!auth.activeOrganizationId)return reply.code(403).send({error:"Select one verified organization",code:"RLS_ORGANIZATION_CONTEXT_REQUIRED"});
+   const client=await pool.connect();try{await client.query("begin");
+    const reviewToken=createSignedRequestContextForAuth(auth,{secret:requestContext.hmacSecret,keyId:requestContext.keyId,...(requestContext.ttlSeconds===undefined?{}:{ttlSeconds:requestContext.ttlSeconds})});
+    await client.query("select set_config('app.request_context',$1,true)",[reviewToken]);
+   const q=await client.query<{organization_id:string;activity_id:string;geography_id:string|null;status:string;artifact_id:string;uploaded_by_identity_id:string}>("select a.organization_id,a.id activity_id,a.geography_id,e.status::text status,v.id artifact_id,v.uploaded_by_identity_id from evidence e join activities a on a.id=e.activity_id join evidence_artifact_versions v on v.evidence_id=e.id where e.id=$1 and a.organization_id=$2 for update of e",[id,auth.activeOrganizationId]),row=q.rows[0];
    if(!row||!row.geography_id||!canActForOrganization(auth,row.organization_id)){await client.query("rollback");return reply.code(404).send({error:"Evidence not found",code:"EVIDENCE_NOT_FOUND"});}
    const g=await client.query<{ok:boolean}>("select organization_has_geography_scope($1::uuid,$2::uuid) ok",[row.organization_id,row.geography_id]);
    if(!g.rows[0]?.ok||!await hasOrganizationPermission(client,auth,row.organization_id,["evidence:review"])||!await canVerifyEvidence(client,auth.identityId,id)){await client.query("rollback");return reply.code(403).send({error:"Evidence review permission and geography scope required",code:"EVIDENCE_REVIEW_FORBIDDEN"});}
