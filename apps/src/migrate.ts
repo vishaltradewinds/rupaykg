@@ -88,13 +88,14 @@ try {
   if (!migrationDir) throw new Error(`Migration directory not found. Checked: ${candidates.join(", ")}`);
 
   const files = (await readdir(migrationDir))
-    .filter((name) => /^\\d+_.+\\.sql$/.test(name))
+    .filter((name) => /^\d+_.+\.sql$/.test(name))
     .sort();
   const manifest = new Map<string, { filename: string; bytes: Buffer; checksum: string }>();
   for (const filename of files) {
     const version = filename.split("_", 1)[0];
     if (manifest.has(version)) throw new Error(`Duplicate migration version in repository: ${version}`);
     const bytes = await readFile(path.join(migrationDir, filename));
+    new TextDecoder("utf-8", { fatal: true }).decode(bytes);
     manifest.set(version, { filename, bytes, checksum: sha256Hex(bytes) });
   }
 
@@ -117,8 +118,52 @@ try {
       }])),
     );
 
-    migrationReport.verified.push(...ledger.rows.map((row) => row.version));\n    migrationReport.pending.push(...[...manifest].filter(([version]) => !recorded.has(version)).map(([, migration]) => migration.filename));\n\n    // A previously recorded migration is not accepted on ledger evidence alone.
+    migrationReport.verified.push(...ledger.rows.map((row) => row.version));
+    migrationReport.pending.push(...[...manifest].filter(([version]) => !recorded.has(version)).map(([, migration]) => migration.filename));
+
+    // A previously recorded migration is not accepted on ledger evidence alone.
     // Re-check critical catalog postconditions on every run, including rehearsals.
     for (const [version, migration] of manifest) {
       if (recorded.has(version)) await assertCriticalPostconditions(lock, migration.filename);
     }
+
+    for (const [version, migration] of manifest) {
+      if (recorded.has(version)) continue;
+      const client = await pool.connect();
+      try {
+        await client.query("begin");
+        await client.query(migration.bytes.toString("utf8"));
+        await assertCriticalPostconditions(client, migration.filename);
+        await client.query(
+          "insert into schema_migrations(version, filename, checksum_sha256) values ($1, $2, $3)",
+          [version, migration.filename, migration.checksum],
+        );
+        await client.query("commit");
+        migrationReport.applied.push(migration.filename);
+      } catch (error) {
+        await client.query("rollback");
+        throw new Error("Migration " + migration.filename + " failed; ledger row was not committed", { cause: error });
+      } finally {
+        client.release();
+      }
+    }
+
+    migrationReport.status = "CURRENT";
+    console.log(JSON.stringify(migrationReport, null, 2));
+  } finally {
+    try {
+      await lock.query("select pg_advisory_unlock(hashtext('rupaykg:migration-runner:v2'))");
+    } finally {
+      lock.release();
+    }
+  }
+} catch (error) {
+  migrationReport.status = "BLOCKED";
+  console.error(JSON.stringify({
+    ...migrationReport,
+    error: error instanceof Error ? error.message : String(error),
+  }, null, 2));
+  throw error;
+} finally {
+  await pool.end();
+}
