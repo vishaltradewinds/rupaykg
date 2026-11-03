@@ -4,7 +4,7 @@ import { execFileSync } from "node:child_process";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import tls from "node:tls";
+import * as tls from "node:tls";
 import type { AddressInfo } from "node:net";
 import { createDatabasePoolConfig } from "./database-pool-config.js";
 
@@ -12,7 +12,7 @@ describe("production PostgreSQL TLS policy handshake", () => {
   let directory: string;
   let certificate: string;
   let privateKey: string;
-  let server: tls.Server;
+  let server: tls.Server | undefined;
   let port: number;
 
   before(async () => {
@@ -38,7 +38,7 @@ describe("production PostgreSQL TLS policy handshake", () => {
   });
 
   after(async () => {
-    await new Promise<void>((resolve) => server.close(() => resolve()));
+    if (server) await new Promise<void>((resolve) => server?.close(() => resolve()));
     await rm(directory, { recursive: true, force: true });
   });
 
@@ -64,9 +64,10 @@ describe("production PostgreSQL TLS policy handshake", () => {
       DATABASE_SSL: "require",
       DATABASE_CA_CERT: certificate,
     });
-    assert.equal(typeof config.ssl, "object");
-    assert.equal(config.ssl.rejectUnauthorized, true);
-    await connectWithPolicy(config.ssl as tls.ConnectionOptions, "localhost");
+    const policy = config.ssl;
+    assert.ok(policy && typeof policy === "object");
+    assert.equal(policy.rejectUnauthorized, true);
+    await connectWithPolicy(policy, "localhost");
   });
 
   it("rejects a self-signed certificate when its CA is not trusted", async () => {
@@ -75,9 +76,10 @@ describe("production PostgreSQL TLS policy handshake", () => {
       DATABASE_URL: "postgresql://db.example.invalid:5432/rupaykg",
       DATABASE_SSL: "require",
     });
-    assert.equal(typeof config.ssl, "object");
+    const policy = config.ssl;
+    assert.ok(policy && typeof policy === "object");
     await assert.rejects(
-      connectWithPolicy(config.ssl as tls.ConnectionOptions, "localhost"),
+      connectWithPolicy(policy, "localhost"),
       /self-signed certificate|unable to verify/i,
     );
   });
@@ -89,9 +91,10 @@ describe("production PostgreSQL TLS policy handshake", () => {
       DATABASE_SSL: "require",
       DATABASE_CA_CERT: certificate,
     });
-    assert.equal(typeof config.ssl, "object");
+    const policy = config.ssl;
+    assert.ok(policy && typeof policy === "object");
     await assert.rejects(
-      connectWithPolicy(config.ssl as tls.ConnectionOptions, "wronghost.example.invalid"),
+      connectWithPolicy(policy, "wronghost.example.invalid"),
       /hostname|subject alternative name|altname/i,
     );
   });
