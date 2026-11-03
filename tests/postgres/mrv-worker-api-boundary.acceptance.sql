@@ -16,7 +16,8 @@ declare
   bad text[] := array[]::text[];
   required_tables text[] := array[
     'organizations','identities','organization_memberships','roles','activities',
-    'evidence','verifications','geography','mrv_observations','measurements',
+    'evidence','verifications','geography','organization_geography_scopes',
+    'mrv_observations','measurements',
     'mrv_submission_jobs','mrv_submission_job_events','mrv_provenance_events'
   ];
   table_name text;
