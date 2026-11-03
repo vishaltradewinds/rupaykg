@@ -1,57 +1,41 @@
 # RupayKg Build State
 
-**Date:** 2026-09-02
+**Current checkpoint:** 2026-10-30  
+**Canonical status:** [Current Source of Truth](CURRENT_SOURCE_OF_TRUTH.md)
 
-## Source of truth
+## Current release posture
 
-`vishaltradewinds/rupaykg` is the production source of truth. The legacy `rupaykg-aistudio` repository is reference-only and must not be modified for this rebuild.
+**Production HOLD · scheduler OFF · certification HOLD/OFF.**
 
-## Product direction
+The canonical application repository is `vishaltradewinds/rupaykg`; the legacy `rupaykg-aistudio` repository is reference-only and is not the Render production source. Render service `rupaykg` deploys this repository's `main` branch. Do not confuse a live service or healthy endpoint with complete release acceptance.
 
-RupayKg is India's Circular Economy Operating System for urban and rural resource flows, combining resource/waste operations, digital MRV, carbon accounting, EPR compliance, ESG reporting, registry and governed settlement.
+## Product and lifecycle
+
+RupayKg is a pan-India circular-economy operating platform for resource/waste operations, digital MRV, carbon accounting, EPR compliance, ESG reporting, environmental attributes, registry and governed settlement.
 
 Authoritative lifecycle:
 
 `Generate → Aggregate → Measure → Transport → Process → Evidence → Verify → Calculate Value → Certify/Issue → Registry → Transfer/Retire → Settle → Report`
 
-The backend is authoritative. The platform must never present unverified activity, measurement, compliance, credential, registry transition, payment or settlement as completed.
+Backend and database state are authoritative. The platform must never present unverified activity, measurement, compliance, credential, registry transition, payment or settlement as completed.
 
-## Implemented foundation
+## Engineering evidence and limits
 
-- Monorepo with web, API and domain-oriented packages.
-- PostgreSQL migrations 001–008 covering core, regulatory, identity/geography/operations, security/auth, carbon/EPR/ESG, registry/settlement guardrails, resource-flow/MRV, and verification integrity.
-- Migration validation script and CI workflow.
-- Domain state machines and regulatory applicability rules.
-- Carbon, compliance, ESG and AI-advisory packages with tests.
-- Authenticated API patterns with database-backed sessions.
-- Resource-flow, measurement, evidence and verification APIs.
-- Carbon calculation, EPR assessment and ESG metric APIs.
-- Governed credential registry and settlement workflow APIs.
-- Database-level anti-self-verification, verifier authorization, append-only registry/settlement events and event hashes.
-- Shared frontend API client and live operational refresh.
-- Responsive institutional UI foundation and Stitch-compatible `DESIGN.md`.
+The repository includes a monorepo, web/API/domain packages, PostgreSQL migration runner and validation, CI, regulatory applicability, lifecycle state machines, resource-flow/MRV, evidence and verification APIs, carbon/EPR/ESG workflows, registry/settlement controls, and frontend workspaces. The precise readiness of each component must be determined from current code, tests and independent runtime evidence—not this summary alone.
 
-## Current known next work
+### Critical unresolved gate: migration provenance
 
-1. Replace placeholder registry/settlement tests with meaningful API/domain guardrail tests.
-2. Add field/offline sync persistence with idempotency, server acknowledgements, conflict records and authoritative-state protection.
-3. Add field/offline sync API endpoints and conflict resolution workflow.
-4. Add mobile/field queue UI states: pending, syncing, accepted, conflict, rejected, retry and last sync.
-5. Add real workspace data endpoints and wire all frontend workspaces to authoritative data.
-6. Add explicit route-level verifier permission checks in addition to database triggers.
-7. Add registry/settlement idempotency and external-authority confirmation boundaries.
-8. Run and verify CI after each coherent batch; never claim green without an actual successful run.
+Neon main recorded migration `096_verification_authorization_provenance.sql` at `2026-10-27T13:46:14.262221Z`, and the expected authorization snapshot schema/function state was observed there. The current repository `main` does not contain that migration. Render logs reported it applied about one second later. Render's exact Neon target, immutable deployed image digest, exact SQL SHA-256 and execution/approval provenance remain unproven. Staging and rehearsal have separate history discrepancies.
 
-## Design workflow
+No migration replay, rollback, ledger edit, production database write, merge or deployment is authorized by this checkpoint. See [Current Source of Truth](CURRENT_SOURCE_OF_TRUTH.md) and [Issue #145](https://github.com/vishaltradewinds/rupaykg/issues/145).
 
-Google Stitch is the UI/UX exploration and prototyping layer. `DESIGN.md` is the reusable design-system contract. Production React code remains authoritative for application behavior. Stitch supports importing/exporting `DESIGN.md` and working with existing code/design files, so the project should keep the design contract versioned with the repository.
+## Operational truthfulness rules
 
-## Truthfulness rules
-
-- AI findings are advisory and must not directly mutate authoritative state.
-- Evidence precedes value claims.
-- Verification is distinct from evidence capture.
+- AI findings are advisory; AI must not directly mutate authoritative state.
+- Evidence precedes value claims; verification is distinct from evidence capture.
 - Credentials require approved verification.
 - Settlement completion requires external/authoritative confirmation and reconciliation.
-- Use `verified`, `pending`, `rejected`, `unavailable`, `demo`, and `simulated` states explicitly.
-- Prefer `tamper-evident, cryptographically anchored audit trails` unless true immutability is actually established.
+- Use explicit `verified`, `pending`, `rejected`, `unavailable`, `demo`, and `simulated` states.
+- Prefer “tamper-evident, cryptographically anchored audit trail” unless true immutability is established.
+- Never claim CI green without a successful run on the exact candidate commit.
+- Preserve historical artifacts for auditability; label them historical instead of treating them as current truth.

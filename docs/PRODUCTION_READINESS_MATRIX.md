@@ -1,3 +1,7 @@
+> **CURRENT OVERRIDE — 2026-10-30:** This matrix contains an older evidence snapshot and its historical GREEN statuses are not a current release authorization. The current gate is **Production HOLD · scheduler OFF · certification HOLD/OFF** because migration provenance and external acceptance remain unresolved. Use [Current Source of Truth](CURRENT_SOURCE_OF_TRUTH.md) for the dated evidence and open blockers. Re-validate every row against the exact candidate commit before relying on a status.
+
+---
+
 # RupayKG Production Readiness Matrix
 
 This matrix converts the useful readiness discipline from the former AI Studio repository into the current canonical architecture.
