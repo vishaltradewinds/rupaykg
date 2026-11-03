@@ -225,3 +225,26 @@ This is inconsistent with the PR #216 branch's earlier static route-coverage doc
 This does **not** establish that the entire application is covered. `workspace-routes.ts` and `bwg-routes.ts` still show direct pool-based authorization/data queries in the inspected branch; other modules in the route inventory remain to be rechecked individually. The wrapper also intentionally rejects bilateral operations and requires one active verified organization, so registry transfers, settlements, regulator authority and cross-tenant workers need distinct contexts rather than forced reuse.
 
 **Revised interpretation:** transaction-boundary adoption is progressing in selected modules, but is not application-wide. Keep R-DPI-03 FAIL until every tenant-data path and worker/trigger/function path has a tested context/policy contract and the production role/RLS prerequisites are satisfied.
+
+
+## 11. Direct production Neon re-verification — 2026-11-03
+
+A fresh read-only SQL inspection was executed against the previously identified authoritative Neon target: project `steep-mud-79906940`, production primary branch `br-restless-base-b44cip2h`, database `rupaykg`. The query used catalog metadata and aggregate counts only; no DDL, DML, role change, secret read, or deployment was performed.
+
+Observed results:
+- `current_database()` = `rupaykg`; `current_user` = `rupaykg`.
+- 67 public ordinary tables; 0 RLS enabled; 0 FORCE RLS.
+- All inspected public tables are owned by `rupaykg`.
+- Runtime login `rupaykg`: LOGIN=true, BYPASSRLS=true, CREATEDB=true, CREATEROLE=true, REPLICATION=true, INHERIT=true, SUPERUSER=false.
+- 115 public-schema functions; 78 owned by `rupaykg`; 115 SECURITY INVOKER; 115 without a pinned `search_path`; 115 expose PUBLIC EXECUTE under the inspected ACL/default-privilege calculation; 67 are trigger functions.
+- `mrv_submission_jobs` and `mrv_submission_job_events` do not exist in this production database.
+- `schema_migrations`: 92 rows; maximum recorded version `20261021`.
+
+Interpretation:
+- R-DPI-03 is confirmed **FAIL / P0** by fresh live catalog evidence, not merely a prior report.
+- Function/trigger exposure requires a per-function and per-trigger caller/privilege/search-path inventory. Do not blanket-revoke PUBLIC EXECUTE or apply broad function changes; some functions are trigger dependencies.
+- The production MRV worker's required queue tables are absent, so worker activation or deployment against this schema must remain blocked until an approved, separately rehearsed migration/data contract exists.
+- The exact production runtime is still using the elevated `rupaykg` login in this inspected Neon connection. The Render service's live connection identity must be correlated to this database evidence before any role cutover; do not assume a replacement runtime is active.
+- No role provisioning, migration, RLS activation, worker activation, or production deployment is authorised by this read-only audit.
+
+This live check supersedes any stale statement that the role/table baseline has not been refreshed since 2026-11-01. It does not resolve the production release hold.
