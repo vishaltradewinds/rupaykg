@@ -1,4 +1,9 @@
 -- Subject-bound verifier authorization. A role label is never an authority grant.
+-- Ensure clean installs and partially upgraded databases have the suspension
+-- kill switch before verifier functions reference it.
+ALTER TABLE public.identities
+  ADD COLUMN IF NOT EXISTS suspended_at timestamptz;
+
 CREATE OR REPLACE FUNCTION public.has_verification_permission_for_activity(
   p_identity_id uuid,
   p_activity_id uuid
