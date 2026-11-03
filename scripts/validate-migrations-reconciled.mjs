@@ -104,7 +104,7 @@ const protectedWorkerTables = [
   "mrv_observations", "measurements", "mrv_submission_jobs",
   "mrv_submission_job_events", "mrv_provenance_events",
 ];
-const requiredTableList = restrictedWorkerServer.match(/const requiredTables = \\[([\s\S]*?)\];/);
+const requiredTableList = restrictedWorkerServer.match(/const requiredTables = \[([\s\S]*?)\];/);
 if (!requiredTableList) throw new Error("restricted MRV worker must declare its complete RLS preflight table list");
 for (const table of protectedWorkerTables) {
   if (!new RegExp(`["']${table}["']`).test(requiredTableList[1])) {
