@@ -47,11 +47,11 @@ export function mrvSourceDigest(payload: unknown): string {
 }
 
 type ActivityRow = {
-  id: string; organization_id: string; geography_id: string | null; activity_type: string;
-  status: string; occurred_at: Date | string | null; completed_at: Date | string | null; metadata: Record<string, unknown>;
+  id: string; organization_id: string; actor_identity_id: string | null; geography_id: string | null; activity_type: string;
+  status: string; occurred_at: Date | string | null; completed_at: Date | string | null; created_at: Date | string; metadata: Record<string, unknown>;
 };
 type VerificationRow = {
-  id: string; evidence_id: string; decision: string; scope: string; rationale: string | null; decided_at: Date | string;
+  id: string; evidence_id: string; verifier_identity_id: string; decision: string; scope: string; rationale: string | null; decided_at: Date | string;
 };
 type EvidenceRow = Record<string, unknown> & { id: string; status: string };
 type MeasurementRow = Record<string, unknown> & { value: string | number; unit: string };
@@ -79,7 +79,7 @@ export async function captureMrvSourceSnapshot(input: {
     transactionOpen = true;
 
     const activityResult = await client.query<ActivityRow>(
-      "select id,organization_id,geography_id,activity_type,status::text,occurred_at,completed_at,metadata from activities where id=$1 for share",
+      "select id,organization_id,actor_identity_id,geography_id,activity_type,status::text,occurred_at,completed_at,created_at,metadata from activities where id=$1 for share",
       [input.activityId],
     );
     const activity = activityResult.rows[0];
@@ -102,7 +102,7 @@ export async function captureMrvSourceSnapshot(input: {
     if (geography.rows[0]?.ok !== true) throw new MrvSnapshotError("GEOGRAPHY_FORBIDDEN", "Activity geography is outside organization authorization scope", 403);
 
     const verificationResult = await client.query<VerificationRow>(
-      "select id,evidence_id,decision::text,scope,rationale,decided_at from verifications where id=$1 and activity_id=$2 for share",
+      "select id,evidence_id,verifier_identity_id,decision::text,scope,rationale,decided_at from verifications where id=$1 and activity_id=$2 for share",
       [input.verificationId, input.activityId],
     );
     const verification = verificationResult.rows[0];
@@ -146,12 +146,12 @@ export async function captureMrvSourceSnapshot(input: {
     const payload = {
       schema: "rupaykg:mrv-source-snapshot:v1",
       activity: {
-        id: activity.id, organizationId: activity.organization_id, geographyId: activity.geography_id,
+        id: activity.id, organizationId: activity.organization_id, actorIdentityId: activity.actor_identity_id, geographyId: activity.geography_id,
         activityType: activity.activity_type, status: activity.status, occurredAt: activity.occurred_at,
-        completedAt: activity.completed_at, metadata: activity.metadata,
+        completedAt: activity.completed_at, createdAt: activity.created_at, metadata: activity.metadata,
       },
       verification: {
-        id: verification.id, evidenceId: verification.evidence_id, decision: verification.decision,
+        id: verification.id, evidenceId: verification.evidence_id, verifierIdentityId: verification.verifier_identity_id, decision: verification.decision,
         scope: verification.scope, rationale: verification.rationale, decidedAt: verification.decided_at,
       },
       selectedEvidenceId: input.evidenceId,
