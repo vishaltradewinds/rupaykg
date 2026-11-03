@@ -81,7 +81,7 @@ before(async () => {
     await c.query("COMMIT");
   } catch (error) { await c.query("ROLLBACK"); throw error; } finally { c.release(); }
 
-  server = spawn(process.execPath, ["dist/src/server.js"], { cwd: process.cwd(), env: { ...process.env, PORT: String(port), HOST: "127.0.0.1", DATABASE_URL: databaseUrl, AUTH_DATABASE_URL: databaseUrl, DATABASE_SSL: "false" }, stdio: ["ignore", "ignore", "pipe"] });
+  server = spawn(process.execPath, ["dist/src/server.js"], { cwd: process.cwd(), env: { ...process.env, PORT: String(port), HOST: "127.0.0.1", DATABASE_URL: databaseUrl, AUTH_DATABASE_URL: databaseUrl, DATABASE_SSL: "false", RUPAYKG_REQUEST_CONTEXT_SECRET: "runtime-acceptance-request-context-secret-32-bytes-minimum", RUPAYKG_REQUEST_CONTEXT_KEY_ID: "runtime-acceptance-v1" }, stdio: ["ignore", "ignore", "pipe"] });
   capture(server, "server");
   await waitFor(`${baseUrl}/health`, 200, server);
 
