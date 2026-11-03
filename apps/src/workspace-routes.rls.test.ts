@@ -22,6 +22,7 @@ class TenantClient {
   permission = true;
   geographyAllowed = true;
   failProtectedRead = false;
+  protectedReadFailureTriggered = false;
 
   async query(sql: string, values?: unknown[]) {
     this.calls.push({ sql, ...(values === undefined ? {} : { values }) });
@@ -29,8 +30,8 @@ class TenantClient {
     if (sql.includes("set_config('app.request_context'")) return { rows: [{ set_config: "signed" }], rowCount: 1 };
     if (sql.includes("auth_private.has_organization_permission")) return { rows: [{ ok: this.permission }], rowCount: 1 };
     if (sql.includes("organization_has_geography_scope")) return { rows: [{ ok: this.geographyAllowed }], rowCount: 1 };
-    if (sql.includes("from measurements m")) {
-      if (this.failProtectedRead) throw new Error("synthetic protected read failure");
+    if (sql.includes("select m.id")) {
+      if (this.failProtectedRead) { this.protectedReadFailureTriggered = true; throw new Error("synthetic protected read failure"); }
       return { rows: [{ id: "measurement-a", organization_id: organizationA }], rowCount: 1 };
     }
     if (sql.includes("from activities a") || sql.includes("from evidence e") || sql.includes("from verifications v")) {
@@ -118,7 +119,11 @@ test("MRV workspace binds permission and all four protected reads to one signed 
       const calls = pool.clients[0]!.calls;
       assert.equal(calls[0]?.sql, "BEGIN");
       assert.ok(calls[1]?.sql.includes("set_config('app.request_context', $1, true)"));
-      assert.match(String(calls[1]?.values?.[0]), /^11111111-1111-4111-8111-111111111111\\|aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa\\|[0-9]+\\|[0-9]+\\|mrv_workspace_test\\.[a-f0-9]{64}$/);
+      const signedClaims = String(calls[1]?.values?.[0]).split("|");
+      assert.deepEqual(signedClaims.slice(0, 2), [identityId, organizationA]);
+      assert.match(signedClaims[2] ?? "", /^\\d+$/);
+      assert.match(signedClaims[3] ?? "", /^\\d+$/);
+      assert.match(signedClaims[4] ?? "", /^mrv_workspace_test\\.[a-f0-9]{64}$/);
       const permission = calls.find((call) => call.sql.includes("auth_private.has_organization_permission"));
       assert.deepEqual(permission?.values, [identityId, organizationA, ["evidence:upload", "evidence:review", "guardian:read"]]);
       const protectedReads = calls.filter((call) => /select .* from (activities a|measurements m|evidence e|verifications v)/is.test(call.sql));
@@ -194,6 +199,8 @@ test("MRV workspace rolls back on protected-read failure and never returns parti
     const app = await makeApp(pool);
     try {
       const response = await app.inject({ method: "GET", url: "/api/v1/workspaces/mrv", headers: requestHeaders() });
+      assert.equal(pool.clients[0]!.failProtectedRead, true);
+      assert.equal(pool.clients[0]!.protectedReadFailureTriggered, true);
       assert.equal(response.statusCode, 503);
       assert.equal(response.json().code, "MRV_WORKSPACE_UNAVAILABLE");
       const calls = pool.clients[0]!.calls;
