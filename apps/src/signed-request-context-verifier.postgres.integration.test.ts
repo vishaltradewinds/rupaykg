@@ -229,25 +229,29 @@ test("PostgreSQL verifier trigger enforces tenant authority, independence, geogr
     // A valid verifier may reject, but cannot approve until the subject organization
     // has a verified geography scope covering the activity.
     await insertVerification(validVerifier, "REJECTED");
-    const rejectedSnapshot = await client.query<{ authorization_snapshot: Record<string, unknown>; authorization_snapshot_hash: string }>(
-      "select authorization_snapshot, authorization_snapshot_hash from public.verifications where evidence_id=$1 and verifier_identity_id=$2 and decision='REJECTED' order by decided_at desc limit 1",
+    const rejectedSnapshot = await client.query<{
+      id: string; authorization_membership_id: string; authorization_role_id: string;
+      authorization_permissions_snapshot: string[]; authorization_checked_at: Date;
+    }>(
+      "select id, authorization_membership_id, authorization_role_id, authorization_permissions_snapshot, authorization_checked_at from public.verifications where evidence_id=$1 and verifier_identity_id=$2 and decision='REJECTED' order by decided_at desc limit 1",
       [evidenceId, validVerifier],
     );
     assert.equal(rejectedSnapshot.rowCount, 1);
-    assert.equal(rejectedSnapshot.rows[0]?.authorization_snapshot.subject_organization_id, orgA);
-    assert.equal(rejectedSnapshot.rows[0]?.authorization_snapshot.verifier_identity_id, validVerifier);
-    assert.match(rejectedSnapshot.rows[0]?.authorization_snapshot_hash ?? "", /^[a-f0-9]{64}$/);
-    const rejectedId = await client.query<{ id: string }>(
-      "select id from public.verifications where evidence_id=$1 and verifier_identity_id=$2 and decision='REJECTED' order by decided_at desc limit 1",
-      [evidenceId, validVerifier],
+    assert.ok(rejectedSnapshot.rows[0]?.authorization_membership_id);
+    assert.equal(rejectedSnapshot.rows[0]?.authorization_role_id, roleA);
+    assert.ok(rejectedSnapshot.rows[0]?.authorization_permissions_snapshot.includes("VERIFY_EVIDENCE"));
+    assert.ok(rejectedSnapshot.rows[0]?.authorization_checked_at instanceof Date);
+    await expectRejected(
+      "update public.verifications set authorization_permissions_snapshot='[]'::jsonb where id=$1",
+      [rejectedSnapshot.rows[0]!.id],
     );
     await expectRejected(
-      "update public.verifications set authorization_snapshot='{}'::jsonb where id=$1",
-      [rejectedId.rows[0]!.id],
+      "delete from public.verifications where id=$1",
+      [rejectedSnapshot.rows[0]!.id],
     );
     await expectRejected(
-      "insert into public.verifications(evidence_id,activity_id,verifier_identity_id,decision,scope,authorization_snapshot) values($1,$2,$3,'REJECTED','TEST','{}'::jsonb)",
-      [evidenceId, activityId, validVerifier],
+      "insert into public.verifications(evidence_id,activity_id,verifier_identity_id,decision,scope,authorization_membership_id) values($1,$2,$3,'REJECTED','TEST',$4)",
+      [evidenceId, activityId, validVerifier, rejectedSnapshot.rows[0]!.authorization_membership_id],
     );
     await expectRejected(
       "insert into public.verifications(evidence_id,activity_id,verifier_identity_id,decision,scope) values($1,$2,$3,'APPROVED','TEST')",
@@ -257,14 +261,17 @@ test("PostgreSQL verifier trigger enforces tenant authority, independence, geogr
       "insert into public.organization_geography_scopes(organization_id,geography_id,status) values($1,$2,'VERIFIED')",
       [orgA, geographyId],
     );
-    const approved = await client.query<{ id: string; authorization_snapshot: Record<string, unknown>; authorization_snapshot_hash: string }>(
-      "insert into public.verifications(evidence_id,activity_id,verifier_identity_id,decision,scope) values($1,$2,$3,'APPROVED','TEST') returning id, authorization_snapshot, authorization_snapshot_hash",
+    const approved = await client.query<{
+      id: string; authorization_membership_id: string; authorization_role_id: string;
+      authorization_permissions_snapshot: string[]; authorization_checked_at: Date;
+    }>(
+      "insert into public.verifications(evidence_id,activity_id,verifier_identity_id,decision,scope) values($1,$2,$3,'APPROVED','TEST') returning id, authorization_membership_id, authorization_role_id, authorization_permissions_snapshot, authorization_checked_at",
       [evidenceId, activityId, validVerifier],
     );
-    assert.equal(approved.rows[0]?.authorization_snapshot.subject_organization_id, orgA);
-    assert.equal(approved.rows[0]?.authorization_snapshot.verifier_identity_id, validVerifier);
-    assert.equal(approved.rows[0]?.authorization_snapshot.decision, "APPROVED");
-    assert.match(approved.rows[0]?.authorization_snapshot_hash ?? "", /^[a-f0-9]{64}$/);
+    assert.ok(approved.rows[0]?.authorization_membership_id);
+    assert.equal(approved.rows[0]?.authorization_role_id, roleA);
+    assert.ok(approved.rows[0]?.authorization_permissions_snapshot.includes("VERIFY_EVIDENCE"));
+    assert.ok(approved.rows[0]?.authorization_checked_at instanceof Date);
     await expectRejected(
       "update public.verifications set rationale='attempted rewrite' where id=$1",
       [approved.rows[0]!.id],
