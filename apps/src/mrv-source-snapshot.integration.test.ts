@@ -31,7 +31,7 @@ test("MRV source snapshots are immutable, idempotent and require explicit correc
     const identityId = identity.rows[0]!.id;
     const role = await pool.query<{ id: string }>(
       "insert into roles(organization_id,name,permissions,geography_scope) values($1,$2,$3::jsonb,'[]') returning id",
-      [organizationId,"mrv_snapshot_test_"+suffix,JSON.stringify(["guardian:operate"])],
+      [organizationId,"mrv_snapshot_test_"+suffix,JSON.stringify(["guardian:operate","VERIFY_EVIDENCE"])],
     );
     await pool.query("alter table organization_memberships disable trigger stakeholder_membership_application_guard");
     try {
