@@ -45,6 +45,13 @@ async function authorizeWorkspaceRead(pool: Pool, auth: AuthContext, workspace: 
   return true;
 }
 
+class WorkspaceReadDenied extends Error {
+  constructor(readonly code: "WORKSPACE_READ_FORBIDDEN" | "GEOGRAPHY_FORBIDDEN") {
+    super(code);
+    this.name = "WorkspaceReadDenied";
+  }
+}
+
 export async function registerWorkspaceRoutes(app: FastifyInstance, pool: Pool | null, requestContext: RlsRequestContextConfig | null = null): Promise<void> {
   app.addHook("preHandler", async (request, reply) => {
     const route = request.routeOptions.url ?? ""; if (!route.startsWith("/api/v1/workspaces/")) return;
@@ -64,14 +71,15 @@ export async function registerWorkspaceRoutes(app: FastifyInstance, pool: Pool |
     if (!auth || !pool) return;
     if (!requestContext) return reply.code(503).send({ error: "Signed tenant context is not configured", code: "TENANT_CONTEXT_UNAVAILABLE", syntheticData: false });
     const organizationId = auth.activeOrganizationId;
+    if (auth.bilateralOrganizationScope) return reply.code(403).send({ error: "Bilateral scope is not supported by the single-tenant MRV workspace", code: "RLS_BILATERAL_CONTEXT_UNSUPPORTED", syntheticData: false });
     if (!organizationId) return reply.code(403).send({ error: "A verified active organization is required for MRV workspace access", code: "RLS_ORGANIZATION_CONTEXT_REQUIRED", syntheticData: false });
     const geographyId = requestedGeography(request);
     const contextRequest = requestedOperatingContext(request);
     if (contextRequest.invalid) return reply.code(400).send({ error: "Context must be urban or rural", code: "INVALID_OPERATING_CONTEXT", syntheticData: false });
     try {
       const scoped = await withRlsRequestTransaction(pool, auth, requestContext, async (client) => {
-        if (!await hasOrganizationPermission(client, auth, organizationId, WORKSPACE_READ_PERMISSIONS.mrv)) return { forbidden: "WORKSPACE_READ_FORBIDDEN" as const };
-        if (geographyId && !await authorizeGeography(client, auth, geographyId)) return { forbidden: "GEOGRAPHY_FORBIDDEN" as const };
+        if (!await hasOrganizationPermission(client, auth, organizationId, WORKSPACE_READ_PERMISSIONS.mrv)) throw new WorkspaceReadDenied("WORKSPACE_READ_FORBIDDEN");
+        if (geographyId && !await authorizeGeography(client, auth, geographyId)) throw new WorkspaceReadDenied("GEOGRAPHY_FORBIDDEN");
         const params: unknown[] = [organizationId];
         if (geographyId) params.push(geographyId);
         if (contextRequest.context) params.push(operatingContextGeographyKinds(contextRequest.context));
@@ -86,9 +94,9 @@ export async function registerWorkspaceRoutes(app: FastifyInstance, pool: Pool |
         ]);
         return { data: { activities: activities.rows, measurements: measurements.rows, evidence: evidence.rows, verifications: verifications.rows, ...(contextRequest.context ? { operatingContext: contextRequest.context, geographyKinds: operatingContextGeographyKinds(contextRequest.context) } : {}) } };
       });
-      if ("forbidden" in scoped) return reply.code(403).send({ error: scoped.forbidden === "GEOGRAPHY_FORBIDDEN" ? "Geography outside organization authorization scope" : "Workspace read permission required", code: scoped.forbidden, syntheticData: false });
       return result(scoped.data);
     } catch (error) {
+      if (error instanceof WorkspaceReadDenied) return reply.code(403).send({ error: error.code === "GEOGRAPHY_FORBIDDEN" ? "Geography outside organization authorization scope" : "Workspace read permission required", code: error.code, syntheticData: false });
       request.log.error(error);
       return reply.code(503).send({ error: "MRV workspace unavailable", code: "MRV_WORKSPACE_UNAVAILABLE", syntheticData: false });
     }
