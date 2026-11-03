@@ -55,13 +55,14 @@ The current `public.organization_has_geography_scope(organization_id, geography_
 - `activities`: `id`, non-null `organization_id`, optional `actor_identity_id`, nullable `geography_id`.
 - `identities`: `id`, `status`, `suspended_at`.
 - `organization_memberships`: `id`, `identity_id`, `organization_id`, `role_id`, `status`, revocation metadata.
-- `roles`: `id`, `permissions` JSONB, `name`.
-- `organizations`: `status` enum and `verification_status` text.
+- `roles`: `id`, `organization_id`, `permissions` JSONB, `name`.
+- `organizations`: `status` enum and `verification_status` text; the latter is constrained to `PENDING`, `UNDER_REVIEW`, `VERIFIED`, or `REJECTED`.
 - `organization_geography_scopes`: `organization_id`, `geography_id`, `status`.
+- `geography`: `id`, `parent_id`, `kind`, `valid_from`, `valid_to`; the inspected table has **no status column**.
 
 Enum values observed: `record_status = VERIFIED | PENDING | REJECTED | UNAVAILABLE | DEMO | SIMULATED`; `verification_decision = APPROVED | REJECTED`.
 
-The inspected child has zero rows in `verifications`; no data backfill was indicated by this check.
+The inspected child has zero rows in `verifications`; no data backfill was indicated by this check. The inspected schema confirms `geography` has no status field, `roles` are organization-owned, and memberships can have multiple roles per identity/organization.
 
 ## 3. Canonical subject-resolution contract
 
@@ -72,7 +73,7 @@ A decision must have a resolvable subject activity and organization.
 3. If both `evidence_id` and `activity_id` are supplied, they must resolve to the same activity.
 4. Resolve the activity row. It must exist and have a non-null `organization_id`.
 5. Resolve the activity actor and geography from the activity row, not client-supplied fields.
-6. The subject organization must exist. For APPROVED, require `organizations.status = 'VERIFIED'` and `organizations.verification_status = 'VERIFIED'` if that is the canonical organization verification contract; confirm the intended field semantics before coding. Do not accept DEMO/SIMULATED/PENDING as a real verified subject.
+6. The subject organization must exist. For APPROVED, require both `organizations.status = 'VERIFIED'` and `organizations.verification_status = 'VERIFIED'`; the inspected schema has both fields and `verification_status` is constrained. Do not accept DEMO/SIMULATED/PENDING as a real verified subject.
 7. If product semantics require evidence for every verification, make `evidence_id` NOT NULL in a separately reviewed schema change after auditing existing callers. Until then, enforce the agreed decision contract consistently for both decisions.
 
 No decision may be persisted when subject resolution is incomplete or contradictory.
@@ -84,15 +85,15 @@ For `APPROVED` and `REJECTED`, require all of the following at decision insert t
 1. `verifier_identity_id` resolves to exactly one identity.
 2. Identity `status = 'VERIFIED'` and `suspended_at IS NULL`.
 3. A membership exists for that identity in the exact organization resolved from the subject activity.
-4. Membership `status = 'VERIFIED'` and revocation metadata does not indicate revocation.
-5. The membership's role exists and its JSON permissions contain the canonical explicit permission key `VERIFY_EVIDENCE`.
+4. Membership `status = 'VERIFIED'`, `last_revoked_at IS NULL`, and revocation metadata does not indicate revocation.
+5. The membership's role exists, `roles.organization_id` equals the subject activity organization, and its JSON permissions contain the canonical explicit permission key `VERIFY_EVIDENCE`.
 6. Do not authorize based on role name (including `VERIFIER`, `AUDITOR`, `VALIDATOR`, or `VERIFICATION_OFFICER`).
 7. Do not authorize based on legacy aliases `verification:approve` or `verification.approve` as independent grants. If compatibility is required, normalize legacy role permission data through a separately reviewed migration and record that normalization. The canonical database authority is one exact permission key.
 8. The activity actor must not equal `verifier_identity_id`.
 9. The membership and role snapshot selected must be deterministic. If multiple valid memberships are possible, reject ambiguity or define a stable, approved selection rule; do not rely on an unordered LIMIT.
 10. Capture the exact membership id, role id, full permission JSON snapshot and authorization timestamp for every decision, including REJECTED.
 
-The authorization function must lock or otherwise serialize the relevant identity/membership rows sufficiently to make revocation concurrency semantics explicit. Define whether the decision is authorized at transaction snapshot time or must serialize against concurrent membership revocation; add a deterministic concurrent test. A stale application AuthContext must never be the source of database authority.
+The authorization function must lock or otherwise serialize the relevant identity/membership rows sufficiently to make revocation concurrency semantics explicit. The inspected membership uniqueness constraint is `(identity_id, organization_id, role_id)`, so one identity may have multiple role memberships in the same organization; the function must reject ambiguous authority or define a deterministic rule, and each selected role must belong to that same organization. Define whether the decision is authorized at transaction snapshot time or must serialize against concurrent membership revocation; add a deterministic concurrent test. A stale application AuthContext must never be the source of database authority.
 
 ## 5. Additional APPROVED-only conditions
 
@@ -100,10 +101,10 @@ For `APPROVED`, additionally require:
 
 1. Subject organization is VERIFIED under the approved canonical organization verification fields.
 2. Activity has a non-null geography id.
-3. The geography row exists and is itself in the expected verified/usable state (confirm the geography schema and status contract before implementation).
-4. At least one matching verified organization geography scope exists that contains the activity geography under the approved ancestor/descendant semantics.
-5. No verified geography scope, missing geography, unknown geography, unverified scope or non-containing scope means DENY. **Never treat absence of a scope as global permission.**
-6. Scope containment must be implemented and tested with parent/child, exact match, sibling and unrelated geography fixtures. Confirm whether a scope on an ancestor grants descendant coverage; do not assume the direction.
+3. The geography row must exist. The inspected `geography` table has no status column; do not invent or query one. If validity windows are relevant, explicitly define whether `valid_from` / `valid_to` are enforced at decision time.
+4. At least one matching VERIFIED organization geography scope must contain the activity geography under the approved ancestor/descendant semantics. The role's `organization_id` must also equal the subject activity organization.
+5. No VERIFIED scope, missing geography, unknown geography or non-containing scope means DENY. **Never treat absence of a scope as global permission.**
+6. Scope containment must be implemented and tested with parent/child, exact match, sibling and unrelated geography fixtures. The current helper walks from the activity geography up its parent chain, so a scope on an ancestor grants descendant coverage; verify this explicitly in the replacement tests.
 
 For `REJECTED`, organization/geography validation may differ if product/legal policy explicitly says so, but verifier identity, exact subject-organization membership, canonical permission, no self-review, subject binding and immutable authorization snapshot remain mandatory. If the business decision is that rejection requires the same geographic authority as approval, make that requirement explicit and test it; do not accidentally inherit approval-only code paths.
 
