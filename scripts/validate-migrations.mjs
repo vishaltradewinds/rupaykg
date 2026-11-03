@@ -85,4 +85,13 @@ if (!/verification_authorization_snapshot_guard/i.test(authorizationSnapshotMigr
   throw new Error("verifier authorization snapshots must be database-generated and immutable");
 }
 
+const workerRoleContract = await readFile(path.resolve("apps/src/mrv-worker-role-contract.ts"), "utf8");
+const workerServer = await readFile(path.resolve("apps/src/mrv-worker-server.ts"), "utf8");
+if (!/any_role_membership/i.test(workerRoleContract) || !/source_table_write/i.test(workerRoleContract) || !/job_insert/i.test(workerRoleContract) || !/provenance_delete/i.test(workerRoleContract)) {
+  throw new Error("MRV worker role contract must reject inherited roles and writes outside the narrow worker sinks");
+}
+if (!/assertMrvWorkerRoleContract\(identity\.rows\[0\]\)/i.test(workerServer) || !/rejectUnauthorized:\s*true/i.test(workerServer) || !/MRV_WORKER_TLS_REQUIRED_IN_PRODUCTION/i.test(workerServer)) {
+  throw new Error("MRV worker must enforce its dedicated role contract and verified TLS");
+}
+
 console.log(`Validated ${files.length} migrations, ${objects.size} schema objects and verification/geography guardrails.`);
