@@ -13,7 +13,7 @@ test("geography authorization rejects cycles, excessive depth, missing scopes an
     await client.query("BEGIN");
 
     const orgA = (await client.query<{ id: string }>(
-      "insert into public.organizations(name,organization_type,status,verification_status) values($1,'test_fixture','VERIFIED','VERIFIED') returning id",
+      "insert into public.organizations(name,organization_type,status) values($1,'test_fixture','VERIFIED') returning id",
       ["Verifier Geography A " + suffix],
     )).rows[0]!.id;
     const orgB = (await client.query<{ id: string }>(
@@ -25,6 +25,10 @@ test("geography authorization rejects cycles, excessive depth, missing scopes an
       "insert into public.identities(external_subject,display_name,status) values($1,$2,'VERIFIED') returning id",
       ["verifier-actor:" + suffix, "Verifier Test Actor"],
     )).rows[0]!.id;
+    await client.query(
+      "update public.organizations set verification_status='VERIFIED',verified_by_identity_id=$2,verified_at=clock_timestamp() where id=any($1::uuid[])",
+      [[orgA, orgB], actorId],
+    );
     const verifierId = (await client.query<{ id: string }>(
       "insert into public.identities(external_subject,display_name,status) values($1,$2,'VERIFIED') returning id",
       ["verifier-valid:" + suffix, "Verifier Test Valid"],
