@@ -74,11 +74,23 @@ test("worker adapter uses the exact authorization and persistence functions", as
   const id = "00000000-0000-4000-8000-000000000001";
   const token = "00000000-0000-4000-8000-000000000002";
   assert.equal(await api.authorize(id), true);
-  assert.equal(await api.persistGuardian(id, token, "stable-key"), true);
+  assert.equal(await api.persistGuardian(id, token, "g".repeat(64)), true);
   assert.equal(await api.persistHedera(id, token, "testnet", "0.0.1", "tx"), true);
   assert.match(calls[0], /mrv_worker_api\.authorize_job/);
   assert.match(calls[1], /mrv_worker_api\.persist_guardian_binding/);
   assert.match(calls[2], /mrv_worker_api\.persist_hedera_binding/);
+});
+
+test("worker adapter rejects malformed identifiers and stage patches before database calls", async () => {
+  const { pool, calls } = poolReturning(true);
+  const api = new MrvWorkerDatabaseApi(pool);
+  await assert.rejects(() => api.authorize("not-a-uuid"), /INVALID_UUID:jobId/);
+  await assert.rejects(() => api.persistGuardian(JOB_ID, "not-a-uuid", "g".repeat(64)), /INVALID_UUID:leaseToken/);
+  await assert.rejects(() => api.persistGuardian(JOB_ID, LEASE_TOKEN, "short"), /INVALID_GUARDIAN_IDEMPOTENCY_KEY/);
+  await assert.rejects(() => api.advance(JOB_ID, LEASE_TOKEN, "NOT_A_STATUS" as never), /INVALID_NEXT_STATUS/);
+  await assert.rejects(() => api.advance(JOB_ID, LEASE_TOKEN, "GUARDIAN_VERIFIED", { unexpected: true } as never), /INVALID_STAGE_PATCH/);
+  await assert.rejects(() => api.finalize(JOB_ID, "bad-token", "c".repeat(64)), /INVALID_UUID:leaseToken/);
+  assert.equal(calls.length, 0);
 });
 
 test("worker adapter accepts parseable lease timestamps and rejects malformed values", async () => {
