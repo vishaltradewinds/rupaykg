@@ -10,7 +10,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "migrate": "tsx src/migrate.ts",
     "test": "npm run build && node --test \"dist/**/*.test.js\"",
-    "start:worker:mrv": "node dist/src/mrv-worker-server.js"
+    "start:worker:mrv": "node dist/src/mrv-worker-server-restricted.js"
   },
   "dependencies": {
     "@fastify/cors": "^11.0.0",
