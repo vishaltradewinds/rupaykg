@@ -38,7 +38,7 @@ The existing worker authorization reads organizations, identities, organization_
 
 ## Existing implementation gaps
 
-The worker's current direct SQL design must be replaced by a typed API client. Its preflight list must include mrv_observations and measurements while direct reads remain in place. Once the function-only API exists, remove the direct-read preflight rather than granting broad reads. The current privilege query also contains literal escaped newline sequences that require correction and exact-head CI validation.
+The worker's current direct SQL design must be replaced by a typed API client. Its preflight list must include mrv_observations and measurements while direct reads remain in place. Once the function-only API exists, remove the direct-read preflight rather than granting broad reads. The worker privilege query's escaped newline defect has been corrected in source; exact-head CI validation remains outstanding.
 
 ## Release gate
 
