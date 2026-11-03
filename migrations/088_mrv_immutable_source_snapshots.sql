@@ -222,7 +222,7 @@ begin
   end if;
   return new;
 end;
-$$
+$$;
 
 -- Any change to the anchor tuple, including its source snapshot binding, invalidates Mirror Node proof.
 create or replace function clear_mrv_mirror_verification_on_anchor_change()
