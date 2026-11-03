@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'shakti/**']
   pull_request:
-    branches: [main]
+    branches: [main, shakti/current-main-startup-tls-hardening-2026-11-03]
 
 permissions:
   contents: read
