@@ -52,6 +52,34 @@ describe("database pool TLS policy", () => {
     assert.deepEqual(config.ssl, { rejectUnauthorized: true });
   });
 
+  it("preserves native non-production connection-string TLS settings when no explicit policy is set", () => {
+    const config = createDatabasePoolConfig({
+      NODE_ENV: "development",
+      DATABASE_URL: "postgresql://db.example.invalid:5432/rupaykg?sslmode=require&sslrootcert=%2Ftmp%2Fdev-ca.pem",
+    });
+    assert.equal(config.ssl, undefined);
+    assert.equal(new URL(config.connectionString!).searchParams.get("sslmode"), "require");
+    assert.equal(new URL(config.connectionString!).searchParams.get("sslrootcert"), "/tmp/dev-ca.pem");
+  });
+
+  it("uses an explicit non-production DATABASE_SSL policy over URL parameters", () => {
+    const config = createDatabasePoolConfig({
+      NODE_ENV: "development",
+      DATABASE_URL: "postgresql://db.example.invalid:5432/rupaykg?sslmode=require",
+      DATABASE_SSL: "false",
+    });
+    assert.equal(config.ssl, false);
+    assert.equal(new URL(config.connectionString!).searchParams.has("sslmode"), false);
+  });
+
+  it("rejects unsupported explicit DATABASE_SSL values", () => {
+    assert.throws(() => createDatabasePoolConfig({
+      NODE_ENV: "development",
+      DATABASE_URL: "postgresql://db.example.invalid:5432/rupaykg",
+      DATABASE_SSL: "prefer",
+    }), /DATABASE_SSL must be either require or false/);
+  });
+
   it("rejects non-PostgreSQL connection URLs", () => {
     assert.throws(() => createDatabasePoolConfig({
       DATABASE_URL: "https://db.example.invalid",
