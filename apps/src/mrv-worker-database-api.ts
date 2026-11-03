@@ -175,7 +175,7 @@ export class MrvWorkerDatabaseApi {
     if (value === null) return false;
     if (typeof value !== "string" && !(value instanceof Date)) throw new Error("MRV_WORKER_API_INVALID_RENEWAL");
     const renewedUntil = value instanceof Date ? new Date(value.getTime()) : new Date(value);
-    if (!Number.isFinite(renewedUntil.getTime()) || renewedUntil.getTime() <= Date.now()) {
+    if (!Number.isFinite(renewedUntil.getTime())) {
       throw new Error("MRV_WORKER_API_INVALID_RENEWAL");
     }
     return true;
