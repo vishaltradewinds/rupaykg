@@ -15,7 +15,7 @@ async function authFor(request: Request, reply: Reply, pool: Pool | null): Promi
 async function activityAccess(client: Pool | PoolClient, activityId: string, identityId: string): Promise<{ organization_id: string; geography_id: string | null } | null> { const result = await client.query<{ organization_id: string; geography_id: string | null }>(`select a.organization_id, a.geography_id from activities a join organization_memberships om on om.organization_id = a.organization_id where a.id = $1 and om.identity_id = $2 and om.status = 'VERIFIED'`, [activityId, identityId]); return result.rows[0] ?? null; }
 export async function assertActivityGeographyScope(client: Pool | PoolClient, organizationId: string, geographyId: string | null, identityId: string): Promise<{ ok: boolean; code?: string }> { if (!geographyId) return { ok: false, code: "ACTIVITY_GEOGRAPHY_REQUIRED" }; const result = await client.query<{ ok: boolean }>(`select exists(select 1 from organization_memberships om where om.identity_id = $1 and om.organization_id = $2 and om.status = 'VERIFIED' and organization_has_geography_scope(om.organization_id, $3)) as ok`, [identityId, organizationId, geographyId]); return result.rows[0]?.ok === true ? { ok: true } : { ok: false, code: "GEOGRAPHY_FORBIDDEN" }; }
 async function hasValuePermission(pool: Pool | PoolClient, functionName: "can_assess_epr" | "can_write_esg", identityId: string, organizationId: string): Promise<boolean> { const result = await pool.query<{ ok: boolean }>(`select ${functionName}($1,$2) as ok`, [identityId, organizationId]); return result.rows[0]?.ok === true; }
-async function evidenceIsVerified(pool: Pool, evidenceId: string, organizationId: string): Promise<boolean> { const result = await pool.query<{ ok: boolean }>(`select exists(select 1 from evidence e join activities a on a.id=e.activity_id where e.id=$1 and a.organization_id=$2 and e.status='VERIFIED' and (e.content_hash is not null or e.content_uri is not null) and a.geography_id is not null and organization_has_geography_scope($2,a.geography_id)) as ok`, [evidenceId, organizationId]); return result.rows[0]?.ok === true; }
+async function evidenceIsVerified(pool: Pool | PoolClient, evidenceId: string, organizationId: string): Promise<boolean> { const result = await pool.query<{ ok: boolean }>(`select exists(select 1 from evidence e join activities a on a.id=e.activity_id where e.id=$1 and a.organization_id=$2 and e.status='VERIFIED' and (e.content_hash is not null or e.content_uri is not null) and a.geography_id is not null and organization_has_geography_scope($2,a.geography_id)) as ok`, [evidenceId, organizationId]); return result.rows[0]?.ok === true; }
 
 export async function registerValueRoutes(app: FastifyInstance, pool: Pool | null, requestContext?: RlsRequestContextConfig): Promise<void> {
   app.post("/api/v1/carbon/calculations", async (request, reply) => {
@@ -244,35 +244,56 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
   });
 
   app.post("/api/v1/bwg/reporting-periods/:periodId/epr", async (request, reply) => {
-    const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
-    const periodId = (request.params as { periodId: string }).periodId; const body = bodyOf(request as never); const schemeId = str(body, "schemeId"); const categoryCode = str(body, "categoryCode"); const obligated = nonNegative(body, "obligatedQuantity"); const fulfilled = nonNegative(body, "fulfilledQuantity");
-    if (!schemeId || !categoryCode || obligated === null || fulfilled === null) return reply.code(400).send({ error: "schemeId, categoryCode and non-negative obligated/fulfilled quantities are required", code: "BWG_EPR_REQUIRED" });
-    try {
-      const period = await pool.query<{ organization_id: string }>("select organization_id from bwg_reporting_periods where id=$1", [periodId]); if (!period.rows[0]) return reply.code(404).send({ error: "BWG reporting period not found" });
-      const organizationId = period.rows[0].organization_id; if (!canActForOrganization(auth, organizationId)) return reply.code(403).send({ error: "Organization access denied", code: "ORG_FORBIDDEN" });
-      if (!await hasOrganizationPermission(pool, auth, organizationId, ["epr:manage"])) return reply.code(403).send({ error: "EPR management permission required", code: "BWG_EPR_FORBIDDEN" });
-      const scheme = await pool.query("select id from epr_schemes where id=$1 and status='VERIFIED'", [schemeId]); if (!scheme.rows[0]) return reply.code(404).send({ error: "Authoritative EPR scheme not found" });
-      const evidenceId = str(body, "evidenceId"); const verificationId = str(body, "verificationId"); if (verificationId && !evidenceId) return reply.code(400).send({ error: "verificationId requires evidenceId" });
-      if (evidenceId && !await evidenceIsVerified(pool, evidenceId, organizationId)) return reply.code(409).send({ error: "Verified, provenance-backed evidence is required", code: "EVIDENCE_NOT_VERIFIED" });
-      if (verificationId) { const v = await pool.query("select 1 from verifications where id=$1 and evidence_id=$2 and decision='APPROVED'", [verificationId,evidenceId]); if (!v.rows[0]) return reply.code(409).send({ error: "Approved verification is required", code: "VERIFICATION_INVALID" }); }
-      const row = await pool.query("insert into bwg_epr_reports (reporting_period_id,scheme_id,category_code,obligated_quantity,fulfilled_quantity,evidence_id,verification_id,status,metadata) values ($1,$2,$3,$4,$5,$6,$7,$8,$9) returning *", [periodId,schemeId,categoryCode,obligated,fulfilled,evidenceId,verificationId,evidenceId && verificationId ? 'VERIFIED' : 'PENDING',body.metadata ?? {}]);
-      return reply.code(201).send({ source: "postgresql", syntheticData: false, authoritativeMutation: true, externalSubmission: "NOT_SUBMITTED", eprReport: row.rows[0] });
-    } catch (error) { request.log.error(error); return reply.code(503).send({ error: "BWG EPR report unavailable", code: "BWG_EPR_UNAVAILABLE", syntheticData: false }); }
+    const auth=await authFor(request as never,reply,pool);if(!auth||!pool)return;
+    const periodId=(request.params as {periodId:string}).periodId;const body=bodyOf(request as never);const schemeId=str(body,"schemeId");const categoryCode=str(body,"categoryCode");const obligated=nonNegative(body,"obligatedQuantity");const fulfilled=nonNegative(body,"fulfilledQuantity");
+    if(!schemeId||!categoryCode||obligated===null||fulfilled===null||fulfilled>obligated)return reply.code(400).send({error:"schemeId, categoryCode and valid obligated/fulfilled quantities are required",code:"BWG_EPR_REQUIRED"});
+    if(!auth.activeOrganizationId)return reply.code(403).send({error:"One explicitly active verified organization is required",code:"RLS_ORGANIZATION_CONTEXT_REQUIRED"});
+    if(!requestContext)return reply.code(503).send({error:"Signed tenant request context is not configured",code:"RLS_CONTEXT_CONFIG_REQUIRED",syntheticData:false});
+    const evidenceId=str(body,"evidenceId");const verificationId=str(body,"verificationId");if(verificationId&&!evidenceId)return reply.code(400).send({error:"verificationId requires evidenceId",code:"VERIFICATION_EVIDENCE_REQUIRED"});
+    try{
+      const eprReport=await withRlsRequestTransaction(pool,auth,requestContext,async(client)=>{
+        const period=await client.query<{organization_id:string}>("select organization_id from bwg_reporting_periods where id=$1 for update",[periodId]);
+        if(!period.rows[0])throw Object.assign(new Error("BWG reporting period not found"),{code:"BWG_PERIOD_NOT_FOUND"});
+        const organizationId=period.rows[0].organization_id;if(organizationId!==auth.activeOrganizationId)throw Object.assign(new Error("Reporting period is not in the active organization"),{code:"ORG_FORBIDDEN"});
+        if(!await hasOrganizationPermission(client,auth,organizationId,["epr:manage"]))throw Object.assign(new Error("EPR management permission required"),{code:"BWG_EPR_FORBIDDEN"});
+        const scheme=await client.query("select id from epr_schemes where id=$1 and status='VERIFIED'",[schemeId]);if(!scheme.rows[0])throw Object.assign(new Error("Authoritative EPR scheme not found"),{code:"EPR_SCHEME_NOT_FOUND"});
+        if(evidenceId&&!await evidenceIsVerified(client,evidenceId,organizationId))throw Object.assign(new Error("Verified, provenance-backed evidence is required"),{code:"EVIDENCE_NOT_VERIFIED"});
+        if(verificationId){const v=await client.query("select 1 from verifications where id=$1 and evidence_id=$2 and decision='APPROVED'",[verificationId,evidenceId]);if(!v.rows[0])throw Object.assign(new Error("Approved verification is required"),{code:"VERIFICATION_INVALID"});}
+        const row=await client.query("insert into bwg_epr_reports (reporting_period_id,scheme_id,category_code,obligated_quantity,fulfilled_quantity,evidence_id,verification_id,status,metadata) values ($1,$2,$3,$4,$5,$6,$7,$8,$9) returning *",[periodId,schemeId,categoryCode,obligated,fulfilled,evidenceId,verificationId,evidenceId&&verificationId?"VERIFIED":"PENDING",body.metadata??{}]);return row.rows[0];
+      });
+      return reply.code(201).send({source:"postgresql",syntheticData:false,authoritativeMutation:true,externalSubmission:"NOT_SUBMITTED",eprReport});
+    }catch(error){const code=error&&typeof error==="object"&&"code"in error?String((error as {code:unknown}).code):"";
+      if(["BWG_PERIOD_NOT_FOUND","EPR_SCHEME_NOT_FOUND"].includes(code))return reply.code(404).send({error:error instanceof Error?error.message:"BWG reference not found",code});
+      if(["ORG_FORBIDDEN","BWG_EPR_FORBIDDEN"].includes(code))return reply.code(403).send({error:error instanceof Error?error.message:"BWG EPR report forbidden",code});
+      if(["EVIDENCE_NOT_VERIFIED","VERIFICATION_INVALID"].includes(code))return reply.code(409).send({error:error instanceof Error?error.message:"Evidence precondition failed",code});
+      if(["RLS_ORGANIZATION_CONTEXT_REQUIRED","RLS_VERIFIED_MEMBERSHIP_REQUIRED","RLS_BILATERAL_CONTEXT_UNSUPPORTED"].includes(code))return reply.code(403).send({error:error instanceof Error?error.message:"Verified organization context required",code});
+      request.log.error(error);return reply.code(503).send({error:"BWG EPR report unavailable",code:"BWG_EPR_UNAVAILABLE",syntheticData:false);}
   });
 
-  app.post("/api/v1/bwg/reporting-periods/:periodId/esg", async (request, reply) => {
-    const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
-    const periodId = (request.params as { periodId: string }).periodId; const body = bodyOf(request as never); const metricCode = str(body, "metricCode"); const scope = str(body, "scope"); const unit = str(body, "unit"); const value = nonNegative(body, "value");
-    if (!metricCode || !scope || !unit || value === null) return reply.code(400).send({ error: "metricCode, scope, unit and non-negative value are required", code: "BWG_ESG_REQUIRED" });
-    try {
-      const period = await pool.query<{ organization_id: string }>("select organization_id from bwg_reporting_periods where id=$1", [periodId]); if (!period.rows[0]) return reply.code(404).send({ error: "BWG reporting period not found" });
-      const organizationId = period.rows[0].organization_id; if (!canActForOrganization(auth, organizationId)) return reply.code(403).send({ error: "Organization access denied", code: "ORG_FORBIDDEN" });
-      if (!await hasValuePermission(pool, "can_write_esg", auth.identityId, organizationId)) return reply.code(403).send({ error: "ESG metric write permission required", code: "BWG_ESG_FORBIDDEN" });
-      const evidenceId = str(body, "evidenceId"); const verificationId = str(body, "verificationId"); if (verificationId && !evidenceId) return reply.code(400).send({ error: "verificationId requires evidenceId" });
-      if (evidenceId && !await evidenceIsVerified(pool, evidenceId, organizationId)) return reply.code(409).send({ error: "Verified, provenance-backed evidence is required", code: "EVIDENCE_NOT_VERIFIED" });
-      if (verificationId) { const v = await pool.query("select 1 from verifications where id=$1 and evidence_id=$2 and decision='APPROVED'", [verificationId,evidenceId]); if (!v.rows[0]) return reply.code(409).send({ error: "Approved verification is required", code: "VERIFICATION_INVALID" }); }
-      const row = await pool.query("insert into bwg_esg_reports (reporting_period_id,metric_code,scope,value,unit,evidence_id,verification_id,status,metadata) values ($1,$2,$3,$4,$5,$6,$7,$8,$9) returning *", [periodId,metricCode,scope,value,unit,evidenceId,verificationId,evidenceId && verificationId ? 'VERIFIED' : 'PENDING',body.metadata ?? {}]);
-      return reply.code(201).send({ source: "postgresql", syntheticData: false, authoritativeMutation: true, esgReport: row.rows[0] });
-    } catch (error) { request.log.error(error); return reply.code(503).send({ error: "BWG ESG report unavailable", code: "BWG_ESG_UNAVAILABLE", syntheticData: false }); }
+  app.post("/api/v1/bwg/reporting-periods/:periodId/esg",async(request,reply)=>{
+    const auth=await authFor(request as never,reply,pool);if(!auth||!pool)return;
+    const periodId=(request.params as {periodId:string}).periodId;const body=bodyOf(request as never);const metricCode=str(body,"metricCode");const scope=str(body,"scope");const unit=str(body,"unit");const value=nonNegative(body,"value");
+    if(!metricCode||!scope||!unit||value===null)return reply.code(400).send({error:"metricCode, scope, unit and non-negative value are required",code:"BWG_ESG_REQUIRED"});
+    if(!auth.activeOrganizationId)return reply.code(403).send({error:"One explicitly active verified organization is required",code:"RLS_ORGANIZATION_CONTEXT_REQUIRED"});
+    if(!requestContext)return reply.code(503).send({error:"Signed tenant request context is not configured",code:"RLS_CONTEXT_CONFIG_REQUIRED",syntheticData:false});
+    const evidenceId=str(body,"evidenceId");const verificationId=str(body,"verificationId");if(verificationId&&!evidenceId)return reply.code(400).send({error:"verificationId requires evidenceId",code:"VERIFICATION_EVIDENCE_REQUIRED"});
+    try{
+      const esgReport=await withRlsRequestTransaction(pool,auth,requestContext,async(client)=>{
+        const period=await client.query<{organization_id:string}>("select organization_id from bwg_reporting_periods where id=$1 for update",[periodId]);
+        if(!period.rows[0])throw Object.assign(new Error("BWG reporting period not found"),{code:"BWG_PERIOD_NOT_FOUND"});
+        const organizationId=period.rows[0].organization_id;if(organizationId!==auth.activeOrganizationId)throw Object.assign(new Error("Reporting period is not in the active organization"),{code:"ORG_FORBIDDEN"});
+        if(!await hasValuePermission(client,"can_write_esg",auth.identityId,organizationId))throw Object.assign(new Error("ESG metric write permission required"),{code:"BWG_ESG_FORBIDDEN"});
+        if(evidenceId&&!await evidenceIsVerified(client,evidenceId,organizationId))throw Object.assign(new Error("Verified, provenance-backed evidence is required"),{code:"EVIDENCE_NOT_VERIFIED"});
+        if(verificationId){const v=await client.query("select 1 from verifications where id=$1 and evidence_id=$2 and decision='APPROVED'",[verificationId,evidenceId]);if(!v.rows[0])throw Object.assign(new Error("Approved verification is required"),{code:"VERIFICATION_INVALID"});}
+        const row=await client.query("insert into bwg_esg_reports (reporting_period_id,metric_code,scope,value,unit,evidence_id,verification_id,status,metadata) values ($1,$2,$3,$4,$5,$6,$7,$8,$9) returning *",[periodId,metricCode,scope,value,unit,evidenceId,verificationId,evidenceId&&verificationId?"VERIFIED":"PENDING",body.metadata??{}]);return row.rows[0];
+      });
+      return reply.code(201).send({source:"postgresql",syntheticData:false,authoritativeMutation:true,esgReport});
+    }catch(error){const code=error&&typeof error==="object"&&"code"in error?String((error as {code:unknown}).code):"";
+      if(code==="BWG_PERIOD_NOT_FOUND")return reply.code(404).send({error:"BWG reporting period not found",code});
+      if(["ORG_FORBIDDEN","BWG_ESG_FORBIDDEN"].includes(code))return reply.code(403).send({error:error instanceof Error?error.message:"BWG ESG report forbidden",code});
+      if(["EVIDENCE_NOT_VERIFIED","VERIFICATION_INVALID"].includes(code))return reply.code(409).send({error:error instanceof Error?error.message:"Evidence precondition failed",code});
+      if(["RLS_ORGANIZATION_CONTEXT_REQUIRED","RLS_VERIFIED_MEMBERSHIP_REQUIRED","RLS_BILATERAL_CONTEXT_UNSUPPORTED"].includes(code))return reply.code(403).send({error:error instanceof Error?error.message:"Verified organization context required",code});
+      request.log.error(error);return reply.code(503).send({error:"BWG ESG report unavailable",code:"BWG_ESG_UNAVAILABLE",syntheticData:false});
+    }
   });
 }
