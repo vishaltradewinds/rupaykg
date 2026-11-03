@@ -97,6 +97,45 @@ test("MRV source snapshots are immutable, idempotent and require explicit correc
     assert.notEqual(corrected.snapshot.source_digest, first.snapshot.source_digest);
     assert.ok(Number(corrected.snapshot.source_revision) > Number(first.snapshot.source_revision));
 
+    const assertMutationInvalidatesSnapshot = async (sql: string, params: unknown[]) => {
+      const before = await pool.query<{ revision: string }>(
+        "select mrv_source_revision::text revision from activities where id=$1",
+        [activity.rows[0]!.id],
+      );
+      await pool.query(sql, params);
+      const after = await pool.query<{ revision: string }>(
+        "select mrv_source_revision::text revision from activities where id=$1",
+        [activity.rows[0]!.id],
+      );
+      assert.ok(Number(after.rows[0]!.revision) > Number(before.rows[0]!.revision));
+      await assert.rejects(
+        () => captureMrvSourceSnapshot(input),
+        (error: unknown) => error instanceof MrvSnapshotError && error.code === "MRV_CORRECTION_REASON_REQUIRED",
+      );
+      const refreshed = await captureMrvSourceSnapshot({
+        ...input,
+        correctionReason: "Re-captured after a verified source mutation regression test",
+      });
+      assert.equal(String(refreshed.snapshot.source_revision), after.rows[0]!.revision);
+    };
+
+    await assertMutationInvalidatesSnapshot(
+      "update activities set metadata=metadata || '{\"sourceRevisionRegression\":true}'::jsonb where id=$1",
+      [activity.rows[0]!.id],
+    );
+    await assertMutationInvalidatesSnapshot(
+      "update verifications set rationale=coalesce(rationale,'') || ' revised' where id=$1",
+      [verification.rows[0]!.id],
+    );
+    await assertMutationInvalidatesSnapshot(
+      "update evidence set content_hash=$2 where id=$1",
+      [evidence.rows[0]!.id, "b".repeat(64)],
+    );
+    await assertMutationInvalidatesSnapshot(
+      "update mrv_observations set observed_value=observed_value+1 where activity_id=$1",
+      [activity.rows[0]!.id],
+    );
+
     const staleSnapshotDigest = first.snapshot.source_digest;
     await pool.query(
       "insert into mrv_provenance_events(activity_id,verification_id,evidence_id,guardian_policy_id,guardian_execution_id,guardian_status,hcs_status,hcs_topic_id,hcs_transaction_id,hcs_consensus_timestamp,integrity_hash,metadata,mirror_node_verified_at,source_snapshot_id,source_snapshot_digest,source_snapshot_version) values($1,$2,$3,'test-policy','test-guardian','VERIFIED','CONSENSUS_CONFIRMED','0.0.123','test-tx','test-consensus',$4,'{}'::jsonb,clock_timestamp(),$5,$6,1)",
