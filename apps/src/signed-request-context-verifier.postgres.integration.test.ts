@@ -245,6 +245,10 @@ test("PostgreSQL verifier trigger enforces tenant authority, independence, geogr
       "update public.verifications set rationale='attempted rewrite' where id=$1",
       [approved.rows[0]!.id],
     );
+    await expectRejected(
+      "delete from public.verifications where id=$1",
+      [approved.rows[0]!.id],
+    );
 
     // A verified geography assignment is insufficient when the subject
     // organization itself has not passed legal/organizational verification.
