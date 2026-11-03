@@ -8,6 +8,7 @@ export type MrvSourceSnapshot = {
   verification_id: string;
   evidence_id: string;
   snapshot_version: number;
+  source_revision: number;
   source_digest: string;
   source_payload: Record<string, unknown>;
   supersedes_snapshot_id: string | null;
@@ -48,7 +49,7 @@ export function mrvSourceDigest(payload: unknown): string {
 
 type ActivityRow = {
   id: string; organization_id: string; actor_identity_id: string | null; geography_id: string | null; activity_type: string;
-  status: string; occurred_at: Date | string | null; completed_at: Date | string | null; created_at: Date | string; metadata: Record<string, unknown>;
+  status: string; occurred_at: Date | string | null; completed_at: Date | string | null; created_at: Date | string; mrv_source_revision: number; metadata: Record<string, unknown>;
 };
 type VerificationRow = {
   id: string; evidence_id: string; verifier_identity_id: string; decision: string; scope: string; rationale: string | null; decided_at: Date | string;
@@ -79,7 +80,7 @@ export async function captureMrvSourceSnapshot(input: {
     transactionOpen = true;
 
     const activityResult = await client.query<ActivityRow>(
-      "select id,organization_id,actor_identity_id,geography_id,activity_type,status::text,occurred_at,completed_at,created_at,metadata from activities where id=$1 for share",
+      "select id,organization_id,actor_identity_id,geography_id,activity_type,status::text,occurred_at,completed_at,created_at,mrv_source_revision,metadata from activities where id=$1 for share",
       [input.activityId],
     );
     const activity = activityResult.rows[0];
@@ -148,7 +149,7 @@ export async function captureMrvSourceSnapshot(input: {
       activity: {
         id: activity.id, organizationId: activity.organization_id, actorIdentityId: activity.actor_identity_id, geographyId: activity.geography_id,
         activityType: activity.activity_type, status: activity.status, occurredAt: activity.occurred_at,
-        completedAt: activity.completed_at, createdAt: activity.created_at, metadata: activity.metadata,
+        completedAt: activity.completed_at, createdAt: activity.created_at, sourceRevision: activity.mrv_source_revision, metadata: activity.metadata,
       },
       verification: {
         id: verification.id, evidenceId: verification.evidence_id, verifierIdentityId: verification.verifier_identity_id, decision: verification.decision,
@@ -182,10 +183,10 @@ export async function captureMrvSourceSnapshot(input: {
       const inserted = await client.query<MrvSourceSnapshot>(
         `insert into mrv_source_snapshots(
            activity_id,verification_id,evidence_id,guardian_policy_id,methodology_code,
-           snapshot_version,source_digest,source_payload,supersedes_snapshot_id,correction_reason,created_by_identity_id
-         ) values($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10,$11) returning *`,
+           snapshot_version,source_revision,source_digest,source_payload,supersedes_snapshot_id,correction_reason,created_by_identity_id
+         ) values($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,$11,$12) returning *`,
         [input.activityId,input.verificationId,input.evidenceId,input.guardianPolicyId,input.methodologyCode ?? null,
-         version,digest,JSON.stringify(payload),latest?.id ?? null,latest ? correctionReason : null,input.auth.identityId],
+         version,activity.mrv_source_revision,digest,JSON.stringify(payload),latest?.id ?? null,latest ? correctionReason : null,input.auth.identityId],
       );
       const insertedSnapshot = inserted.rows[0];
       if (!insertedSnapshot) throw new Error("MRV source snapshot insert returned no row");
