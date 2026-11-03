@@ -4,6 +4,7 @@ export type StakeholderPermission =
   | "profile:update"
   | "waste:read"
   | "waste:record"
+  | "facility:manage"
   | "evidence:upload"
   | "evidence:review"
   | "reports:read"
@@ -71,11 +72,12 @@ export const ROLE_PERMISSIONS: Record<string, readonly StakeholderPermission[]> 
   citizen: [...OPERATIONAL],
   farmer: [...OPERATIONAL],
   safai_mitra: [...OPERATIONAL],
-  fpo: [...OPERATIONAL, "swm:read", "reports:export"],
+  fpo: [...OPERATIONAL, "facility:manage", "swm:read", "reports:export"],
   municipal_admin: [
     ...ALL_READ,
     "profile:update",
     "waste:read",
+    "facility:manage",
     "evidence:upload",
     "evidence:review",
     "reports:export",
@@ -87,12 +89,12 @@ export const ROLE_PERMISSIONS: Record<string, readonly StakeholderPermission[]> 
     "epr:read",
     "audit:read",
   ],
-  municipal_generator: [...OPERATIONAL, "swm:read", "reports:export"],
-  aggregator: [...OPERATIONAL, "reports:export"],
-  processor: [...OPERATIONAL, "reports:export"],
-  industry_generator: [...OPERATIONAL, "reports:export", "epr:read"],
-  commercial_generator: [...OPERATIONAL, "reports:export", "epr:read"],
-  institution_generator: [...OPERATIONAL, "reports:export", "epr:read"],
+  municipal_generator: [...OPERATIONAL, "facility:manage", "swm:read", "reports:export"],
+  aggregator: [...OPERATIONAL, "facility:manage", "reports:export"],
+  processor: [...OPERATIONAL, "facility:manage", "reports:export"],
+  industry_generator: [...OPERATIONAL, "facility:manage", "reports:export", "epr:read"],
+  commercial_generator: [...OPERATIONAL, "facility:manage", "reports:export", "epr:read"],
+  institution_generator: [...OPERATIONAL, "facility:manage", "reports:export", "epr:read"],
   PROJECT_OWNER: [
     ...ALL_READ,
     "profile:update",
@@ -182,6 +184,7 @@ export const ROLE_PERMISSIONS: Record<string, readonly StakeholderPermission[]> 
     "profile:update",
     "waste:read",
     "waste:record",
+    "facility:manage",
     "evidence:upload",
     "evidence:review",
     "reports:export",
@@ -212,6 +215,7 @@ export const ROLE_PERMISSIONS: Record<string, readonly StakeholderPermission[]> 
     "profile:update",
     "waste:read",
     "waste:record",
+    "facility:manage",
     "evidence:upload",
     "evidence:review",
     "reports:export",
