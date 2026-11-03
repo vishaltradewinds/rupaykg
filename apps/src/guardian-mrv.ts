@@ -84,6 +84,7 @@ export async function executeGuardianMrv(input: GuardianMrvRequest): Promise<Gua
         observations: input.observations,
         measurements: input.measurements ?? [],
         evidence: input.evidence,
+        artifactSeries: input.artifactSeries ?? [],
         metadata: input.metadata,
       }),
     });
