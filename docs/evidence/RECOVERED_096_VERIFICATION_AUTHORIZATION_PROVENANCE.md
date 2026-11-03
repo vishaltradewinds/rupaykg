@@ -153,3 +153,18 @@ The matching ledger row, source Git object, expected columns, trigger, and funct
 - Independently review the legacy `verification_independence_guard` behavior and whether authorization snapshot columns are protected from later mutation.
 - Do not replay migration 096, restore it to the executable migration directory, alter the ledger, or synthesize a checksum.
 - No production state was changed during this corroboration.
+
+
+## Full live-ledger versus executable-migration inventory
+
+A second read-only comparison was performed against the same Neon main branch and the migration directory at this evidence branch head:
+
+- Neon `schema_migrations` rows: **92**.
+- Executable `migrations/*.sql` files in the inspected repository branch: **91**.
+- Ledger filenames with no matching executable migration file: **1** — `096_verification_authorization_provenance.sql`.
+- Executable migration files absent from the live ledger: **0**.
+- The sole unmatched ledger row is version `096`, applied at `2026-10-27T13:46:14.262Z`, and its original source object is preserved in this document's historical evidence record, not in the executable migration directory.
+
+This explains why the source file must be preserved outside the runner directory: blindly restoring it as executable would risk replay, while leaving the legacy ledger unresolved blocks the checksum-aware runner. The correct path is a reviewed history/provenance reconciliation, not replay or ledger rewriting.
+
+This comparison establishes filename inventory parity for the 91 currently present executable migrations and identifies one historical source recovery. It does not establish exact executed bytes for those 91 migrations, nor does it prove that their current file contents equal what was applied. Their historical classifications remain `UNRESOLVED` until release/deployment evidence is gathered.
