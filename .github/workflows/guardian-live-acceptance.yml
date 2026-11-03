@@ -206,16 +206,20 @@ jobs:
             --header "X-RupayKG-Organization-Id: $ORGANIZATION_ID" \
             "$BASE_URL/api/v1/mrv/hedera/verify/$(python -c 'import os,urllib.parse; print(urllib.parse.quote(os.environ["CONSENSUS_TIMESTAMP"], safe=""))')" > /tmp/hedera-verify.json
           python - <<'PY'
-          import json
+          import json, os
           data = json.load(open('/tmp/hedera-verify.json'))
           if data.get('verified') is not True:
               raise SystemExit('Mirror Node did not verify the persisted Hedera provenance record.')
-          if data.get('eligibleForRegistry') is not True:
-              raise SystemExit('Mirror Node proof succeeded but the current snapshot is not registry-eligible.')
+          payload = data.get('payload') or {}
+          if payload.get('sourceSnapshotId') != os.environ['SOURCE_SNAPSHOT_ID'] or payload.get('sourceSnapshotDigest') != os.environ['SOURCE_SNAPSHOT_DIGEST'] or str(payload.get('sourceSnapshotVersion')) != os.environ['SOURCE_SNAPSHOT_VERSION']:
+              raise SystemExit('Mirror Node verified a different source snapshot than the one submitted.')
+          if data.get('eligibleForRegistry') is not False or data.get('registryEligibilityReason') != 'ACCEPTANCE_FIXTURE_NOT_REGISTRY_ELIGIBLE':
+              raise SystemExit('Acceptance fixture must remain explicitly excluded from registry eligibility.')
           print('Mirror Node verification: true')
           print('Network:', data.get('network'))
           print('Consensus timestamp:', data.get('consensusTimestamp'))
           print('Sequence number:', data.get('sequenceNumber'))
+          print('Registry exclusion:', data.get('registryEligibilityReason'))
           PY
 
       - name: Acceptance result
