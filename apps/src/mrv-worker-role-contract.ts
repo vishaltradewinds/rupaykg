@@ -17,12 +17,15 @@ export interface MrvWorkerRoleContract {
   job_update: boolean;
   job_insert: boolean;
   job_delete: boolean;
+  job_truncate: boolean;
   event_insert: boolean;
   event_update: boolean;
   event_delete: boolean;
+  event_truncate: boolean;
   provenance_insert: boolean;
   provenance_update: boolean;
   provenance_delete: boolean;
+  provenance_truncate: boolean;
   source_table_write: boolean;
 }
 
@@ -37,9 +40,9 @@ export function assertMrvWorkerRoleContract(role: MrvWorkerRoleContract | undefi
       || role.rolsuper || role.rolbypassrls || role.rolcreatedb || role.rolcreaterole
       || role.rolreplication || role.owner_membership || role.elevated_membership
       || role.any_role_membership || !role.geography_scope_execute || role.public_create
-      || !role.required_table_reads || !role.job_update || role.job_insert || role.job_delete
-      || !role.event_insert || role.event_update || role.event_delete
-      || !role.provenance_insert || role.provenance_update || role.provenance_delete
+      || !role.required_table_reads || !role.job_update || role.job_insert || role.job_delete || role.job_truncate
+      || !role.event_insert || role.event_update || role.event_delete || role.event_truncate
+      || !role.provenance_insert || role.provenance_update || role.provenance_delete || role.provenance_truncate
       || role.source_table_write) {
     throw new Error("MRV_WORKER_DATABASE_ROLE_CONTRACT_FAILED");
   }
