@@ -348,3 +348,25 @@ The candidate patches were inspected directly on 2026-11-03. This section distin
 **Exact-head validation update:** the documentation-only PR #233 commit `9793d96eb7cfd1003ef0ac64f1fc7a746f083c1b` now has GitHub Actions CI run #41620872867 completed with conclusion `success`. This validates the documentation branch's configured CI only; it does not validate application code or authorize a merge.
 
 **Next implementation batch:** (1) create one current-main startup/preflight candidate with no automatic production migrations or fixture seeding; (2) port the verified TLS policy into API, migration and seed clients; (3) reconcile the #148 runner with canonical migration history on a fresh branch; (4) recover exact historical source manifests; (5) inspect the full #216 base commit graph before touching the stacked tenant-security PRs. Production remains read-only and HOLD.
+
+
+### 12.8 Current-main startup/TLS remediation candidate — PR #234
+
+A focused current-main-based draft PR was opened: [#234 — isolate production startup and verify PostgreSQL TLS](https://github.com/vishaltradewinds/rupaykg/pull/234), branch `shakti/current-main-startup-tls-hardening-2026-11-03`, base SHA `a3fecc0abd2c46549a201058d3963afc0e3a73c9`, head SHA `c7d4b5431dd3aa8dd110a42cb295f9f420725419`.
+
+Observed candidate changes:
+- Docker production command and API package start script now invoke only `production-server.js`; normal startup no longer invokes the migration runner or acceptance fixture seeder.
+- Production configuration rejects `RUPAYKG_ACCEPTANCE_SEED_ON_START=true`; the fixture seeder independently refuses to run under `NODE_ENV=production`.
+- API, migration and acceptance-seed PostgreSQL pools now share `createDatabasePoolConfig`.
+- The helper strips connection-string TLS query parameters before constructing the pool, requires verified TLS for external production PostgreSQL connections, and allows plaintext only for the Render private-host form when production configuration explicitly normalizes `DATABASE_SSL=false`.
+- Added unit tests for URL-level TLS downgrade attempts, CA/system trust, private Render host handling, invalid connection schemes and the production seed prohibition.
+
+**Review limitations / release gates:**
+- PR #234 is draft. At the first exact-head check, no PR workflow run or combined status had yet been returned for head `c7d4b543...`; do not claim tests or CI passed.
+- The Render private-host pattern must be confirmed against the actual deployed `DATABASE_URL` hostname before relying on the plaintext exception. Render environment values were not read; no live connection was attempted.
+- Review Node-postgres URL parsing and TLS behavior against the pinned dependency version in CI; test real certificate/hostname rejection against a disposable PostgreSQL TLS endpoint, not production.
+- Confirm every database client in all worker/background entrypoints uses the shared helper; this candidate covers the main API pool, migration CLI and acceptance fixture seeder only.
+- Production migration history remains unresolved; separating migration execution from startup does not authorize running the CLI.
+- No production deployment, database change, seed, migration or external transaction was performed.
+
+**Disposition:** retain #234 as the current startup/TLS remediation candidate. Do not merge, deploy or remove draft status until exact-head CI, disposable PostgreSQL TLS acceptance, current Render private-host validation and independent security review are recorded.
