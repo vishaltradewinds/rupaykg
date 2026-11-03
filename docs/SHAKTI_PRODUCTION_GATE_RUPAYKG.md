@@ -1,12 +1,15 @@
 # RupayKg — SHAKTI Production Gate
 
+> **Superseding status notice — 2026-11-03:** The baseline below is historical. Render metadata now identifies live deployment `dep-dbjo4dqvcj2c73f7bt00` at main commit `a3fecc0abd2c46549a201058d3963afc0e3a73c9`. The authoritative Neon candidate audited is project `steep-mud-79906940`, branch `br-restless-base-b44cip2h`, database `rupaykg`; its 67 public tables have 0 RLS / 0 FORCE RLS, and the `rupaykg` owner has BYPASSRLS. The Render-to-Neon connection binding is unverified. Production certification remains HOLD/OFF. See [the dated AIM and whole-repository reconciliation](engineering/repository-reconciliation/2026-11-03-aim-and-whole-repository-reconciliation.md).
+
+
 ## Purpose
 
 This document is the production-control record for RupayKg under SHAKTI — Standard Operating Systems.
 
 **Rule:** RupayKg must satisfy all applicable SHAKTI gates before it can be treated as SHAKTI-certified for live production. SHAKTI certification does not replace independent statutory, regulatory, contractual, infrastructure-provider, or third-party approvals.
 
-## Current verified baseline
+## Historical baseline (superseded 2026-11-03)
 
 - Repository: `vishaltradewinds/rupaykg`
 - Default branch: `main`
