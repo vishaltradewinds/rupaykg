@@ -8,7 +8,7 @@ export type MrvSourceSnapshot = {
   verification_id: string;
   evidence_id: string;
   snapshot_version: number;
-  source_revision: number;
+  source_revision: number | string;
   source_digest: string;
   source_payload: Record<string, unknown>;
   supersedes_snapshot_id: string | null;
@@ -49,7 +49,7 @@ export function mrvSourceDigest(payload: unknown): string {
 
 type ActivityRow = {
   id: string; organization_id: string; actor_identity_id: string | null; geography_id: string | null; activity_type: string;
-  status: string; occurred_at: Date | string | null; completed_at: Date | string | null; created_at: Date | string; mrv_source_revision: number; metadata: Record<string, unknown>;
+  status: string; occurred_at: Date | string | null; completed_at: Date | string | null; created_at: Date | string; mrv_source_revision: number | string; metadata: Record<string, unknown>;
 };
 type VerificationRow = {
   id: string; evidence_id: string; verifier_identity_id: string; decision: string; scope: string; rationale: string | null; decided_at: Date | string;
