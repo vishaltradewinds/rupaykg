@@ -129,7 +129,7 @@ try {
     .sort();
   const manifest = new Map<string, { filename: string; bytes: Buffer; checksum: string }>();
   for (const filename of files) {
-    const version = filename.split("_", 1)[0];
+    const version = filename.slice(0, filename.indexOf("_"));
     if (manifest.has(version)) throw new Error(`Duplicate migration version in repository: ${version}`);
     const bytes = await readFile(path.join(migrationDir, filename));
     new TextDecoder("utf-8", { fatal: true }).decode(bytes);
