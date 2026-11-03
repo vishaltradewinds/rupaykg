@@ -169,44 +169,78 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
     const body = bodyOf(request as never); const organizationId = str(body, "organizationId"); const jurisdictionId = str(body, "jurisdictionId");
     const floorArea = nonNegative(body, "floorAreaSqm"); const water = nonNegative(body, "waterConsumptionLpd"); const waste = nonNegative(body, "wasteGenerationKgDay"); const establishmentType = str(body, "establishmentType");
     if (!organizationId || !jurisdictionId || floorArea === null || water === null || waste === null || !establishmentType) return reply.code(400).send({ error: "organizationId, jurisdictionId, floorAreaSqm, waterConsumptionLpd, wasteGenerationKgDay and establishmentType are required", code: "BWG_PROFILE_REQUIRED" });
-    if (!canActForOrganization(auth, organizationId)) return reply.code(403).send({ error: "Organization access denied", code: "ORG_FORBIDDEN" });
-    if (!await hasOrganizationPermission(pool, auth, organizationId, ["profile:update", "waste:record"])) return reply.code(403).send({ error: "Profile update and waste recording permissions are required", code: "BWG_PROFILE_FORBIDDEN" });
-    const geography = await pool.query<{ ok: boolean }>("select exists(select 1 from organization_memberships om where om.identity_id=$1 and om.organization_id=$2 and om.status='VERIFIED' and organization_has_geography_scope(om.organization_id,$3)) as ok", [auth.identityId, organizationId, jurisdictionId]);
-    if (geography.rows[0]?.ok !== true) return reply.code(403).send({ error: "Jurisdiction is outside organization authorization scope", code: "GEOGRAPHY_FORBIDDEN" });
+    if (organizationId !== auth.activeOrganizationId) return reply.code(403).send({ error: "Only the explicitly active verified organization may be changed", code: "RLS_ORGANIZATION_CONTEXT_REQUIRED" });
+    if (!requestContext) return reply.code(503).send({ error: "Signed tenant request context is not configured", code: "RLS_CONTEXT_CONFIG_REQUIRED", syntheticData: false });
     const criteria = { floorAreaSqm: floorArea >= 20000, waterConsumptionLpd: water >= 40000, wasteGenerationKgDay: waste >= 100 };
-    const applicable = Object.values(criteria).some(Boolean);
-    const applicabilityStatus = applicable ? "APPLICABLE" : "NOT_APPLICABLE";
+    const applicabilityStatus = Object.values(criteria).some(Boolean) ? "APPLICABLE" : "NOT_APPLICABLE";
     try {
-      const row = await pool.query("insert into bwg_profiles (organization_id,jurisdiction_id,floor_area_sqm,water_consumption_lpd,waste_generation_kg_day,establishment_type,applicability_status,applicability_basis,status,updated_at) values ($1,$2,$3,$4,$5,$6,$7,$8,'VERIFIED',now()) on conflict (organization_id) do update set jurisdiction_id=excluded.jurisdiction_id,floor_area_sqm=excluded.floor_area_sqm,water_consumption_lpd=excluded.water_consumption_lpd,waste_generation_kg_day=excluded.waste_generation_kg_day,establishment_type=excluded.establishment_type,applicability_status=excluded.applicability_status,applicability_basis=excluded.applicability_basis,status='VERIFIED',updated_at=now() returning *", [organizationId, jurisdictionId, floorArea, water, waste, establishmentType, applicabilityStatus, JSON.stringify(criteria)]);
-      return reply.code(201).send({ source: "postgresql", syntheticData: false, authoritativeMutation: true, profile: row.rows[0] });
-    } catch (error) { request.log.error(error); return reply.code(503).send({ error: "BWG profile unavailable", code: "BWG_PROFILE_UNAVAILABLE", syntheticData: false }); }
+      const profile = await withRlsRequestTransaction(pool, auth, requestContext, async (client) => {
+        if (!await hasOrganizationPermission(client, auth, organizationId, ["profile:update", "waste:record"])) throw Object.assign(new Error("Profile update and waste recording permissions are required"), { code: "BWG_PROFILE_FORBIDDEN" });
+        const geography = await client.query<{ok:boolean}>("select organization_has_geography_scope($1,$2) as ok", [organizationId,jurisdictionId]);
+        if (geography.rows[0]?.ok !== true) throw Object.assign(new Error("Jurisdiction is outside organization authorization scope"), { code: "GEOGRAPHY_FORBIDDEN" });
+        const row = await client.query("insert into bwg_profiles (organization_id,jurisdiction_id,floor_area_sqm,water_consumption_lpd,waste_generation_kg_day,establishment_type,applicability_status,applicability_basis,status,updated_at) values ($1,$2,$3,$4,$5,$6,$7,$8,'VERIFIED',now()) on conflict (organization_id) do update set jurisdiction_id=excluded.jurisdiction_id,floor_area_sqm=excluded.floor_area_sqm,water_consumption_lpd=excluded.water_consumption_lpd,waste_generation_kg_day=excluded.waste_generation_kg_day,establishment_type=excluded.establishment_type,applicability_status=excluded.applicability_status,applicability_basis=excluded.applicability_basis,status='VERIFIED',updated_at=now() returning *", [organizationId,jurisdictionId,floorArea,water,waste,establishmentType,applicabilityStatus,JSON.stringify(criteria)]);
+        return row.rows[0];
+      });
+      return reply.code(201).send({ source: "postgresql", syntheticData: false, authoritativeMutation: true, profile });
+    } catch (error) {
+      const code = error && typeof error === "object" && "code" in error ? String((error as {code:unknown}).code) : "";
+      if (["BWG_PROFILE_FORBIDDEN","GEOGRAPHY_FORBIDDEN"].includes(code)) return reply.code(403).send({ error: error instanceof Error ? error.message : "BWG profile forbidden", code });
+      if (["RLS_ORGANIZATION_CONTEXT_REQUIRED","RLS_VERIFIED_MEMBERSHIP_REQUIRED","RLS_BILATERAL_CONTEXT_UNSUPPORTED"].includes(code)) return reply.code(403).send({ error: error instanceof Error ? error.message : "Verified organization context required", code });
+      request.log.error(error); return reply.code(503).send({ error: "BWG profile unavailable", code: "BWG_PROFILE_UNAVAILABLE", syntheticData: false });
+    }
   });
 
   app.post("/api/v1/bwg/reporting-periods", async (request, reply) => {
     const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
     const body = bodyOf(request as never); const organizationId = str(body, "organizationId"); const start = str(body, "periodStart"); const end = str(body, "periodEnd"); const basis = str(body, "reportingBasis");
     if (!organizationId || !start || !end || !basis || Number.isNaN(Date.parse(start)) || Number.isNaN(Date.parse(end)) || start > end) return reply.code(400).send({ error: "organizationId, valid periodStart, periodEnd and reportingBasis are required", code: "BWG_PERIOD_REQUIRED" });
-    if (!canActForOrganization(auth, organizationId)) return reply.code(403).send({ error: "Organization access denied", code: "ORG_FORBIDDEN" });
-    if (!await hasOrganizationPermission(pool, auth, organizationId, ["reports:read", "waste:record"])) return reply.code(403).send({ error: "Reporting and waste recording permissions are required", code: "BWG_PERIOD_FORBIDDEN" });
-    try { const row = await pool.query("insert into bwg_reporting_periods (organization_id,period_start,period_end,reporting_basis) values ($1,$2,$3,$4) on conflict (organization_id,period_start,period_end,reporting_basis) do update set reporting_basis=excluded.reporting_basis returning *", [organizationId,start,end,basis]); return reply.code(201).send({ source: "postgresql", syntheticData: false, authoritativeMutation: true, period: row.rows[0] }); }
-    catch (error) { request.log.error(error); return reply.code(503).send({ error: "BWG reporting period unavailable", code: "BWG_PERIOD_UNAVAILABLE", syntheticData: false }); }
+    if (organizationId !== auth.activeOrganizationId) return reply.code(403).send({ error: "Only the explicitly active verified organization may be changed", code: "RLS_ORGANIZATION_CONTEXT_REQUIRED" });
+    if (!requestContext) return reply.code(503).send({ error: "Signed tenant request context is not configured", code: "RLS_CONTEXT_CONFIG_REQUIRED", syntheticData: false });
+    try {
+      const period = await withRlsRequestTransaction(pool, auth, requestContext, async (client) => {
+        if (!await hasOrganizationPermission(client, auth, organizationId, ["reports:read", "waste:record"])) throw Object.assign(new Error("Reporting and waste recording permissions are required"), { code: "BWG_PERIOD_FORBIDDEN" });
+        const row = await client.query("insert into bwg_reporting_periods (organization_id,period_start,period_end,reporting_basis) values ($1,$2,$3,$4) on conflict (organization_id,period_start,period_end,reporting_basis) do update set reporting_basis=excluded.reporting_basis returning *", [organizationId,start,end,basis]);
+        return row.rows[0];
+      });
+      return reply.code(201).send({ source: "postgresql", syntheticData: false, authoritativeMutation: true, period });
+    } catch (error) {
+      const code = error && typeof error === "object" && "code" in error ? String((error as {code:unknown}).code) : "";
+      if (code === "BWG_PERIOD_FORBIDDEN") return reply.code(403).send({ error: error instanceof Error ? error.message : "BWG reporting permission required", code });
+      if (["RLS_ORGANIZATION_CONTEXT_REQUIRED","RLS_VERIFIED_MEMBERSHIP_REQUIRED","RLS_BILATERAL_CONTEXT_UNSUPPORTED"].includes(code)) return reply.code(403).send({ error: error instanceof Error ? error.message : "Verified organization context required", code });
+      request.log.error(error); return reply.code(503).send({ error: "BWG reporting period unavailable", code: "BWG_PERIOD_UNAVAILABLE", syntheticData: false });
+    }
   });
 
   app.post("/api/v1/bwg/reporting-periods/:periodId/waste", async (request, reply) => {
     const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
-    const periodId = (request.params as { periodId: string }).periodId; const body = bodyOf(request as never); const wasteStream = str(body, "wasteStream"); const unit = str(body, "unit");
-    const generated = nonNegative(body, "generatedQuantity"); const segregated = nonNegative(body, "segregatedQuantity") ?? 0; const channelized = nonNegative(body, "channelizedQuantity") ?? 0; const processed = nonNegative(body, "processedQuantity") ?? 0;
+    const periodId = (request.params as {periodId:string}).periodId; const body = bodyOf(request as never); const wasteStream = str(body,"wasteStream"); const unit = str(body,"unit");
+    const generated = nonNegative(body,"generatedQuantity"); const segregated = nonNegative(body,"segregatedQuantity") ?? 0; const channelized = nonNegative(body,"channelizedQuantity") ?? 0; const processed = nonNegative(body,"processedQuantity") ?? 0;
     if (!wasteStream || !unit || generated === null || segregated > generated || channelized > generated || processed > channelized) return reply.code(400).send({ error: "wasteStream, unit, generatedQuantity and valid segregated/channelized/processed quantities are required", code: "BWG_WASTE_REQUIRED" });
+    if (!auth.activeOrganizationId) return reply.code(403).send({ error: "One explicitly active verified organization is required", code: "RLS_ORGANIZATION_CONTEXT_REQUIRED" });
+    if (!requestContext) return reply.code(503).send({ error: "Signed tenant request context is not configured", code: "RLS_CONTEXT_CONFIG_REQUIRED", syntheticData: false });
+    const evidenceId = str(body,"evidenceId"); const verificationId = str(body,"verificationId");
+    if (verificationId && !evidenceId) return reply.code(400).send({ error: "verificationId requires evidenceId", code: "VERIFICATION_EVIDENCE_REQUIRED" });
     try {
-      const period = await pool.query<{ organization_id: string }>("select organization_id from bwg_reporting_periods where id=$1", [periodId]); if (!period.rows[0]) return reply.code(404).send({ error: "BWG reporting period not found" });
-      const organizationId = period.rows[0].organization_id; if (!canActForOrganization(auth, organizationId)) return reply.code(403).send({ error: "Organization access denied", code: "ORG_FORBIDDEN" });
-      if (!await hasOrganizationPermission(pool, auth, organizationId, ["waste:record"])) return reply.code(403).send({ error: "Waste recording permission required", code: "BWG_WASTE_FORBIDDEN" });
-      const evidenceId = str(body, "evidenceId"); const verificationId = str(body, "verificationId"); if (verificationId && !evidenceId) return reply.code(400).send({ error: "verificationId requires evidenceId" });
-      if (evidenceId && !await evidenceIsVerified(pool, evidenceId, organizationId)) return reply.code(409).send({ error: "Verified, provenance-backed evidence is required", code: "EVIDENCE_NOT_VERIFIED" });
-      if (verificationId) { const v = await pool.query("select 1 from verifications where id=$1 and evidence_id=$2 and decision='APPROVED'", [verificationId,evidenceId]); if (!v.rows[0]) return reply.code(409).send({ error: "Approved verification is required", code: "VERIFICATION_INVALID" }); }
-      const row = await pool.query("insert into bwg_waste_reports (reporting_period_id,waste_stream,generated_quantity,segregated_quantity,channelized_quantity,processed_quantity,unit,evidence_id,verification_id,status,metadata) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) returning *", [periodId,wasteStream,generated,segregated,channelized,processed,unit,evidenceId,verificationId,evidenceId && verificationId ? 'VERIFIED' : 'PENDING',body.metadata ?? {}]);
-      return reply.code(201).send({ source: "postgresql", syntheticData: false, authoritativeMutation: true, wasteReport: row.rows[0] });
-    } catch (error) { request.log.error(error); return reply.code(503).send({ error: "BWG waste report unavailable", code: "BWG_WASTE_UNAVAILABLE", syntheticData: false }); }
+      const wasteReport = await withRlsRequestTransaction(pool, auth, requestContext, async (client) => {
+        const period = await client.query<{organization_id:string}>("select organization_id from bwg_reporting_periods where id=$1 for update", [periodId]);
+        if (!period.rows[0]) throw Object.assign(new Error("BWG reporting period not found"), { code: "BWG_PERIOD_NOT_FOUND" });
+        const organizationId = period.rows[0].organization_id;
+        if (organizationId !== auth.activeOrganizationId) throw Object.assign(new Error("Reporting period is not in the active organization"), { code: "ORG_FORBIDDEN" });
+        if (!await hasOrganizationPermission(client, auth, organizationId, ["waste:record"])) throw Object.assign(new Error("Waste recording permission required"), { code: "BWG_WASTE_FORBIDDEN" });
+        if (evidenceId && !await evidenceIsVerified(client, evidenceId, organizationId)) throw Object.assign(new Error("Verified, provenance-backed evidence is required"), { code: "EVIDENCE_NOT_VERIFIED" });
+        if (verificationId) { const v = await client.query("select 1 from verifications where id=$1 and evidence_id=$2 and decision='APPROVED'", [verificationId,evidenceId]); if (!v.rows[0]) throw Object.assign(new Error("Approved verification is required"), { code: "VERIFICATION_INVALID" }); }
+        const row = await client.query("insert into bwg_waste_reports (reporting_period_id,waste_stream,generated_quantity,segregated_quantity,channelized_quantity,processed_quantity,unit,evidence_id,verification_id,status,metadata) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) returning *", [periodId,wasteStream,generated,segregated,channelized,processed,unit,evidenceId,verificationId,evidenceId && verificationId ? "VERIFIED" : "PENDING",body.metadata ?? {}]);
+        return row.rows[0];
+      });
+      return reply.code(201).send({ source: "postgresql", syntheticData: false, authoritativeMutation: true, wasteReport });
+    } catch (error) {
+      const code = error && typeof error === "object" && "code" in error ? String((error as {code:unknown}).code) : "";
+      if (code === "BWG_PERIOD_NOT_FOUND") return reply.code(404).send({ error: "BWG reporting period not found", code });
+      if (["ORG_FORBIDDEN","BWG_WASTE_FORBIDDEN"].includes(code)) return reply.code(403).send({ error: error instanceof Error ? error.message : "BWG waste report forbidden", code });
+      if (["EVIDENCE_NOT_VERIFIED","VERIFICATION_INVALID"].includes(code)) return reply.code(409).send({ error: error instanceof Error ? error.message : "Evidence precondition failed", code });
+      if (["RLS_ORGANIZATION_CONTEXT_REQUIRED","RLS_VERIFIED_MEMBERSHIP_REQUIRED","RLS_BILATERAL_CONTEXT_UNSUPPORTED"].includes(code)) return reply.code(403).send({ error: error instanceof Error ? error.message : "Verified organization context required", code });
+      request.log.error(error); return reply.code(503).send({ error: "BWG waste report unavailable", code: "BWG_WASTE_UNAVAILABLE", syntheticData: false });
+    }
   });
 
   app.post("/api/v1/bwg/reporting-periods/:periodId/epr", async (request, reply) => {
