@@ -138,30 +138,40 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
   });
 
   app.get("/api/v1/workspaces/bwg", async (request, reply) => {
-    const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
-    const activeOrganizationId = auth.activeOrganizationId ?? auth.memberships[0]?.organization_id;
-    const ids = activeOrganizationId ? [activeOrganizationId] : [];
-    if (!ids.length) return { source: "postgresql", syntheticData: false, data: { profiles: [], periods: [], wasteReports: [], eprReports: [], esgReports: [], jurisdictions: [], schemes: [] } };
-    try {
-      const [profiles, periods, wasteReports, eprReports, esgReports, jurisdictions, schemes] = await Promise.all([
-        pool.query("select p.*, g.name as jurisdiction_name from bwg_profiles p left join geography g on g.id=p.jurisdiction_id where p.organization_id=any($1::uuid[]) order by p.updated_at desc", [ids]),
-        pool.query("select * from bwg_reporting_periods where organization_id=any($1::uuid[]) order by period_end desc", [ids]),
-        pool.query("select w.*, r.organization_id from bwg_waste_reports w join bwg_reporting_periods r on r.id=w.reporting_period_id where r.organization_id=any($1::uuid[]) order by w.created_at desc", [ids]),
-        pool.query("select e.*, r.organization_id, s.name as scheme_name from bwg_epr_reports e join bwg_reporting_periods r on r.id=e.reporting_period_id join epr_schemes s on s.id=e.scheme_id where r.organization_id=any($1::uuid[]) order by e.created_at desc", [ids]),
-        pool.query("select e.*, r.organization_id from bwg_esg_reports e join bwg_reporting_periods r on r.id=e.reporting_period_id where r.organization_id=any($1::uuid[]) order by e.created_at desc", [ids]),
-        pool.query("select distinct g.id, g.name from geography g join organization_geography_scopes ogs on ogs.geography_id=g.id where ogs.organization_id=any($1::uuid[]) and ogs.status='VERIFIED' order by g.name", [ids]),
-        pool.query("select id, code, name, authority, jurisdiction_id from epr_schemes where status='VERIFIED' order by name"),
-      ]);
-      const organizations = await Promise.all(ids.map(async (organizationId) => ({
-        organizationId,
-        profileUpdate: await hasOrganizationPermission(pool, auth, organizationId, ["profile:update", "waste:record"]),
-        periodCreate: await hasOrganizationPermission(pool, auth, organizationId, ["reports:read", "waste:record"]),
-        wasteRecord: await hasOrganizationPermission(pool, auth, organizationId, ["waste:record"]),
-        eprManage: await hasOrganizationPermission(pool, auth, organizationId, ["epr:manage"]),
-        esgWrite: await hasValuePermission(pool, "can_write_esg", auth.identityId, organizationId),
-      })));
-      return { source: "postgresql", syntheticData: false, data: { profiles: profiles.rows, periods: periods.rows, wasteReports: wasteReports.rows, eprReports: eprReports.rows, esgReports: esgReports.rows, jurisdictions: jurisdictions.rows, schemes: schemes.rows, organizations } };
-    } catch (error) { request.log.error(error); return reply.code(503).send({ error: "BWG reporting workspace unavailable", code: "BWG_WORKSPACE_UNAVAILABLE", syntheticData: false }); }
+    const auth=await authFor(request as never,reply,pool);if(!auth||!pool)return;
+    const organizationId=auth.activeOrganizationId;
+    if(!organizationId)return reply.code(403).send({error:"One explicitly active verified organization is required",code:"RLS_ORGANIZATION_CONTEXT_REQUIRED"});
+    if(!requestContext)return reply.code(503).send({error:"Signed tenant request context is not configured",code:"RLS_CONTEXT_CONFIG_REQUIRED",syntheticData:false});
+    try{
+      const data=await withRlsRequestTransaction(pool,auth,requestContext,async(client)=>{
+        const permitted=await hasOrganizationPermission(client,auth,organizationId,["reports:read","waste:record","epr:read","epr:manage"]);
+        if(!permitted)throw Object.assign(new Error("BWG workspace read permission required"),{code:"BWG_WORKSPACE_FORBIDDEN"});
+        const [profiles,periods,wasteReports,eprReports,esgReports,jurisdictions,schemes]=await Promise.all([
+          client.query("select p.*,g.name as jurisdiction_name from bwg_profiles p left join geography g on g.id=p.jurisdiction_id where p.organization_id=$1 order by p.updated_at desc",[organizationId]),
+          client.query("select * from bwg_reporting_periods where organization_id=$1 order by period_end desc",[organizationId]),
+          client.query("select w.*,r.organization_id from bwg_waste_reports w join bwg_reporting_periods r on r.id=w.reporting_period_id where r.organization_id=$1 order by w.created_at desc",[organizationId]),
+          client.query("select e.*,r.organization_id,s.name as scheme_name from bwg_epr_reports e join bwg_reporting_periods r on r.id=e.reporting_period_id join epr_schemes s on s.id=e.scheme_id where r.organization_id=$1 order by e.created_at desc",[organizationId]),
+          client.query("select e.*,r.organization_id from bwg_esg_reports e join bwg_reporting_periods r on r.id=e.reporting_period_id where r.organization_id=$1 order by e.created_at desc",[organizationId]),
+          client.query("select distinct g.id,g.name from geography g join organization_geography_scopes ogs on ogs.geography_id=g.id where ogs.organization_id=$1 and ogs.status='VERIFIED' order by g.name",[organizationId]),
+          client.query("select id,code,name,authority,jurisdiction_id from epr_schemes where status='VERIFIED' order by name")
+        ]);
+        const organizations=[{
+          organizationId,
+          profileUpdate:await hasOrganizationPermission(client,auth,organizationId,["profile:update","waste:record"]),
+          periodCreate:await hasOrganizationPermission(client,auth,organizationId,["reports:read","waste:record"]),
+          wasteRecord:await hasOrganizationPermission(client,auth,organizationId,["waste:record"]),
+          eprManage:await hasOrganizationPermission(client,auth,organizationId,["epr:manage"]),
+          esgWrite:await hasValuePermission(client,"can_write_esg",auth.identityId,organizationId)
+        }];
+        return {profiles:profiles.rows,periods:periods.rows,wasteReports:wasteReports.rows,eprReports:eprReports.rows,esgReports:esgReports.rows,jurisdictions:jurisdictions.rows,schemes:schemes.rows,organizations};
+      });
+      return {source:"postgresql",syntheticData:false,data};
+    }catch(error){
+      const code=error&&typeof error==="object"&&"code"in error?String((error as {code:unknown}).code):"";
+      if(code==="BWG_WORKSPACE_FORBIDDEN")return reply.code(403).send({error:"BWG workspace read permission required",code});
+      if(["RLS_ORGANIZATION_CONTEXT_REQUIRED","RLS_VERIFIED_MEMBERSHIP_REQUIRED","RLS_BILATERAL_CONTEXT_UNSUPPORTED"].includes(code))return reply.code(403).send({error:error instanceof Error?error.message:"Verified organization context required",code});
+      request.log.error(error);return reply.code(503).send({error:"BWG reporting workspace unavailable",code:"BWG_WORKSPACE_UNAVAILABLE",syntheticData:false});
+    }
   });
 
   app.post("/api/v1/bwg/profile", async (request, reply) => {
