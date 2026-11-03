@@ -167,3 +167,39 @@ test("restricted worker reconciles Mirror Node only after HCS consensus confirma
     else process.env.RUPAYKG_MRV_WORKER_ENABLED = previous;
   }
 });
+
+
+test("restricted worker leaves NEEDS_RECONCILIATION quarantined without provider calls or automatic retry", async () => {
+  const previous = process.env.RUPAYKG_MRV_WORKER_ENABLED;
+  process.env.RUPAYKG_MRV_WORKER_ENABLED = "true";
+  try {
+    const h = harness(job("NEEDS_RECONCILIATION"));
+    let guardianCalls = 0;
+    let hcsCalls = 0;
+    let mirrorCalls = 0;
+    const deps: MrvRestrictedWorkerDependencies = {
+      ...h.deps,
+      executeGuardianMrv: async () => {
+        guardianCalls += 1;
+        throw new Error("quarantined job must not call Guardian");
+      },
+      submitHcsAnchor: async () => {
+        hcsCalls += 1;
+        throw new Error("quarantined job must not submit HCS");
+      },
+      reconcileHcsTransaction: async () => {
+        mirrorCalls += 1;
+        throw new Error("quarantined job must not reconcile Mirror Node");
+      },
+    };
+    const result = await runMrvSubmissionWorkerOnce(h.database, "worker-a", deps);
+    assert.deepEqual(result, { outcome: "IDLE", jobId: JOB_ID, stage: "NEEDS_RECONCILIATION" });
+    assert.deepEqual(h.calls.map(call => call.name), ["claim"]);
+    assert.equal(guardianCalls, 0);
+    assert.equal(hcsCalls, 0);
+    assert.equal(mirrorCalls, 0);
+  } finally {
+    if (previous === undefined) delete process.env.RUPAYKG_MRV_WORKER_ENABLED;
+    else process.env.RUPAYKG_MRV_WORKER_ENABLED = previous;
+  }
+});
