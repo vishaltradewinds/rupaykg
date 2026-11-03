@@ -116,75 +116,113 @@ create index mrv_provenance_source_snapshot_idx
 create or replace function require_guardian_hcs_mrv_for_credential()
 returns trigger language plpgsql as $$
 begin
-  -- Preserve already-issued legacy credentials and their forward lifecycle.
-  -- Snapshot currency is a requirement for NEW issuance, not a retroactive revocation.
-  if tg_op = 'UPDATE' and old.status in ('ISSUED','ACTIVE','TRANSFERRED','RETIRED') then
-    if not exists (
-      select 1
-        from mrv_provenance_events m
-        join verifications v on v.id = new.verification_id
-       where m.activity_id = new.activity_id
-         and m.verification_id = new.verification_id
-         and m.evidence_id = v.evidence_id
-         and m.guardian_status = 'VERIFIED'
-         and m.hcs_status = 'CONSENSUS_CONFIRMED'
-         and m.guardian_execution_id is not null
-         and btrim(m.guardian_execution_id) <> ''
-         and m.hcs_topic_id is not null
-         and btrim(m.hcs_topic_id) <> ''
-         and m.hcs_transaction_id is not null
-         and btrim(m.hcs_transaction_id) <> ''
-         and m.hcs_consensus_timestamp is not null
-         and btrim(m.hcs_consensus_timestamp) <> ''
-         and m.integrity_hash is not null
-         and btrim(m.integrity_hash) <> ''
-         and m.mirror_node_verified_at is not null
-    ) then
-      raise exception 'CREDENTIAL_MRV_REQUIRED: existing credential lifecycle requires its original verified Guardian, HCS and Mirror Node provenance';
-    end if;
-    return new;
-  end if;
-
   if new.status in ('ISSUED','ACTIVE','TRANSFERRED','RETIRED') then
-    if not exists (
-      select 1
-        from mrv_provenance_events m
-        join verifications v on v.id = new.verification_id
-        join mrv_source_snapshots s
-          on s.id = m.source_snapshot_id
-         and s.activity_id = m.activity_id
-         and s.verification_id = m.verification_id
-         and s.evidence_id = m.evidence_id
-         and s.source_digest = m.source_snapshot_digest
-         and s.snapshot_version = m.source_snapshot_version
-         and not exists (
-           select 1 from mrv_source_snapshots newer
-            where newer.activity_id=s.activity_id and newer.snapshot_version>s.snapshot_version
-         )
-       where m.activity_id = new.activity_id
-         and m.verification_id = new.verification_id
-         and m.evidence_id = v.evidence_id
-         and v.evidence_id = m.evidence_id
-         and m.guardian_status = 'VERIFIED'
-         and m.hcs_status = 'CONSENSUS_CONFIRMED'
-         and m.guardian_execution_id is not null
-         and btrim(m.guardian_execution_id) <> ''
-         and m.hcs_topic_id is not null
-         and btrim(m.hcs_topic_id) <> ''
-         and m.hcs_transaction_id is not null
-         and btrim(m.hcs_transaction_id) <> ''
-         and m.hcs_consensus_timestamp is not null
-         and btrim(m.hcs_consensus_timestamp) <> ''
-         and m.integrity_hash is not null
-         and btrim(m.integrity_hash) <> ''
-         and m.mirror_node_verified_at is not null
-    ) then
-      raise exception 'CREDENTIAL_MRV_REQUIRED: new credential issuance requires Guardian, HCS consensus, Mirror Node proof and the current immutable source snapshot';
+    if tg_op = 'UPDATE' then
+      if old.status in ('ISSUED','ACTIVE','TRANSFERRED','RETIRED') then
+        -- Existing credentials keep their forward lifecycle against their original anchor.
+        if not exists (
+          select 1
+            from mrv_provenance_events m
+            join verifications v on v.id = new.verification_id
+           where m.activity_id = new.activity_id
+             and m.verification_id = new.verification_id
+             and m.evidence_id = v.evidence_id
+             and m.guardian_status = 'VERIFIED'
+             and m.hcs_status = 'CONSENSUS_CONFIRMED'
+             and m.guardian_execution_id is not null
+             and btrim(m.guardian_execution_id) <> ''
+             and m.hcs_topic_id is not null
+             and btrim(m.hcs_topic_id) <> ''
+             and m.hcs_transaction_id is not null
+             and btrim(m.hcs_transaction_id) <> ''
+             and m.hcs_consensus_timestamp is not null
+             and btrim(m.hcs_consensus_timestamp) <> ''
+             and m.integrity_hash is not null
+             and btrim(m.integrity_hash) <> ''
+             and m.mirror_node_verified_at is not null
+        ) then
+          raise exception 'CREDENTIAL_MRV_REQUIRED: existing credential lifecycle requires its original verified Guardian, HCS and Mirror Node provenance';
+        end if;
+      else
+        -- A transition into issuance must bind the current immutable source snapshot.
+        if not exists (
+          select 1
+            from mrv_provenance_events m
+            join verifications v on v.id = new.verification_id
+            join mrv_source_snapshots s
+              on s.id = m.source_snapshot_id
+             and s.activity_id = m.activity_id
+             and s.verification_id = m.verification_id
+             and s.evidence_id = m.evidence_id
+             and s.source_digest = m.source_snapshot_digest
+             and s.snapshot_version = m.source_snapshot_version
+             and not exists (
+               select 1 from mrv_source_snapshots newer
+                where newer.activity_id=s.activity_id and newer.snapshot_version>s.snapshot_version
+             )
+           where m.activity_id = new.activity_id
+             and m.verification_id = new.verification_id
+             and m.evidence_id = v.evidence_id
+             and v.evidence_id = m.evidence_id
+             and m.guardian_status = 'VERIFIED'
+             and m.hcs_status = 'CONSENSUS_CONFIRMED'
+             and m.guardian_execution_id is not null
+             and btrim(m.guardian_execution_id) <> ''
+             and m.hcs_topic_id is not null
+             and btrim(m.hcs_topic_id) <> ''
+             and m.hcs_transaction_id is not null
+             and btrim(m.hcs_transaction_id) <> ''
+             and m.hcs_consensus_timestamp is not null
+             and btrim(m.hcs_consensus_timestamp) <> ''
+             and m.integrity_hash is not null
+             and btrim(m.integrity_hash) <> ''
+             and m.mirror_node_verified_at is not null
+        ) then
+          raise exception 'CREDENTIAL_MRV_REQUIRED: new credential issuance requires Guardian, HCS consensus, Mirror Node proof and the current immutable source snapshot';
+        end if;
+      end if;
+    else
+      -- Direct INSERT of an already-issued credential must also satisfy the current snapshot gate.
+      if not exists (
+        select 1
+          from mrv_provenance_events m
+          join verifications v on v.id = new.verification_id
+          join mrv_source_snapshots s
+            on s.id = m.source_snapshot_id
+           and s.activity_id = m.activity_id
+           and s.verification_id = m.verification_id
+           and s.evidence_id = m.evidence_id
+           and s.source_digest = m.source_snapshot_digest
+           and s.snapshot_version = m.source_snapshot_version
+           and not exists (
+             select 1 from mrv_source_snapshots newer
+              where newer.activity_id=s.activity_id and newer.snapshot_version>s.snapshot_version
+           )
+         where m.activity_id = new.activity_id
+           and m.verification_id = new.verification_id
+           and m.evidence_id = v.evidence_id
+           and v.evidence_id = m.evidence_id
+           and m.guardian_status = 'VERIFIED'
+           and m.hcs_status = 'CONSENSUS_CONFIRMED'
+           and m.guardian_execution_id is not null
+           and btrim(m.guardian_execution_id) <> ''
+           and m.hcs_topic_id is not null
+           and btrim(m.hcs_topic_id) <> ''
+           and m.hcs_transaction_id is not null
+           and btrim(m.hcs_transaction_id) <> ''
+           and m.hcs_consensus_timestamp is not null
+           and btrim(m.hcs_consensus_timestamp) <> ''
+           and m.integrity_hash is not null
+           and btrim(m.integrity_hash) <> ''
+           and m.mirror_node_verified_at is not null
+      ) then
+        raise exception 'CREDENTIAL_MRV_REQUIRED: new credential issuance requires Guardian, HCS consensus, Mirror Node proof and the current immutable source snapshot';
+      end if;
     end if;
   end if;
   return new;
 end;
-$$;
+$$
 
 -- Any change to the anchor tuple, including its source snapshot binding, invalidates Mirror Node proof.
 create or replace function clear_mrv_mirror_verification_on_anchor_change()
