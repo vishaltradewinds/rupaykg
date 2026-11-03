@@ -91,3 +91,11 @@ No production migration, RLS activation, role grant, worker enablement, merge or
 - Commit `fbd843797703d776cd9a31b92df9dba9a769322d` adds regression tests asserting malformed identifiers, idempotency keys, statuses and patch keys are rejected without issuing a database query. The adapter test fixture now uses a 64-character Guardian key.
 - Commit `2808ade43849dd2cfb7d2c297183d66bed4a0cb0` corrects lease timestamp tests: the adapter accepts any parseable PostgreSQL timestamp and rejects malformed/wrong-type values; expiry remains a database-side decision, avoiding client/database clock-skew assumptions.
 - These are source and test changes only. They have not been executed locally or by exact-head CI. PostgreSQL must independently enforce all input, state-transition, lease and tenant invariants; TypeScript validation is defense in depth, not a replacement for SQL authorization.
+
+
+## 2026-11-03 migration-source reconciliation
+
+- The durable queue migration's initial partial index omitted five in-flight statuses from the worker's actual eight-status claim allow-list. Added `migrations/20261113_mrv_worker_claim_index_reconcile.sql` to rebuild the index for all eight statuses in the same order used by the claim query. This is an unapplied migration; no live DB was changed.
+- The restricted SQL `claim_next_job` must use the exact allow-list and deterministic order `next_attempt_at, created_at, id`; it must exclude NEEDS_RECONCILIATION even though the generic update trigger permits an operator-controlled transition from that state to CLAIMED.
+- The legacy HCS helper changes status to HCS_SUBMITTED during binding persistence. The restricted API must not reproduce that behavior: persist the immutable tuple only under a live lease in GUARDIAN_VERIFIED, then let `advance_job` alone perform GUARDIAN_VERIFIED -> HCS_SUBMITTED and clear the lease.
+- The old direct-SQL helpers remain prohibited from the restricted worker path. No PostgreSQL functions, roles, grants or RLS policies were provisioned in this batch.
