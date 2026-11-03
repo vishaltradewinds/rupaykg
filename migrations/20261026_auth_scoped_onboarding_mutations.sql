@@ -1,6 +1,11 @@
 -- Auth-scoped stakeholder onboarding mutations.
 -- Functions accept only a token hash; the authenticated identity is derived inside PostgreSQL.
 -- No RLS is enabled here. Full tenant-policy rollout remains a separate release gate.
+-- Identity suspension is an authorization kill switch. Add it before any function
+-- in this migration reads it; nullable NULL means not currently suspended.
+ALTER TABLE public.identities
+  ADD COLUMN IF NOT EXISTS suspended_at timestamptz;
+
 
 do $$
 begin
