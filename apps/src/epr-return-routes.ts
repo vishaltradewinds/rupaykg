@@ -131,6 +131,7 @@ export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool |
   app.post("/api/v1/epr/returns/:returnId/external-reference", async (request, reply) => {
     const auth = await authFor(request, reply, pool); if (!auth || !pool) return;
     const body = bodyOf(request); const externalReference = requiredString(body, "externalReference");
+    const { returnId } = request.params as { returnId: string };
     if (!externalReference) return reply.code(400).send({ error: "externalReference is required", code: "EXTERNAL_REFERENCE_REQUIRED" });
     const organizationId = auth.activeOrganizationId;
     if (!organizationId || !canAct(auth, organizationId)) return reply.code(403).send({ error: "One explicitly active verified organization is required", code: "ORG_FORBIDDEN" });
