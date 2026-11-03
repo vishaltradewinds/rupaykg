@@ -24,13 +24,14 @@ Apply migrations in filename order against a fresh PostgreSQL database:
 20. `020_carbon_calculation_provenance.sql` — evidence-bound carbon calculation provenance.
 21. `021_methodology_governance.sql` — methodology source lock, applicability/parameter/equation mapping and production-eligibility governance.
 22. `022_carbon_provenance_integrity.sql` — database integrity controls for carbon provenance.
+23. `023_lifecycle_state_guards.sql` — database-enforced lifecycle transition guards.
 23. `024_methodology_governance_immutability.sql` — forward-only methodology governance and immutable mapped/reconciled state.
 24. `025_methodology_reconciliation_evidence.sql` — independent numerical reconciliation and regression-verification evidence required for production eligibility.
 25. `026_regulatory_source_provenance.sql` — exact verified official-source corrections and verification dates for regulatory records; does not rewrite the historical seed migration.
 26. `027_verification_permission_guard.sql` — database verification authorization guard requiring explicit `VERIFY_EVIDENCE` permission rather than legacy role-name elevation.
 27. `028_settlement_retired_credential_guard.sql` — prevents settlement creation for retired credentials and prevents retirement while an attached settlement remains open.
 
-Migration `023` is intentionally absent from the current repository history; do not renumber later migrations to fill the gap. Migration numbering is identity, not a requirement for contiguous integers.
+Migration `023_lifecycle_state_guards.sql` is present in the current repository and is recorded in the production ledger. Migration numbering is identity; never renumber, rewrite or reuse an applied migration.
 
 Migration files are intentionally ordered and each numbered migration must have one authoritative owner. Do not reintroduce duplicate numbered migrations containing the same tables or enums.
 
