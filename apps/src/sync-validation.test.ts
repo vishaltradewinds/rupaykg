@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { validateConflictResolution, validateSyncEnvelope } from "./sync-validation.js";
+import { validateConflictResolution, validateResourceFlowGeography, validateSyncEnvelope } from "./sync-validation.js";
 
 test("accepts a valid field-sync envelope", () => {
   const result = validateSyncEnvelope({
@@ -33,4 +33,14 @@ test("requires the authoritative conflict-resolution field name", () => {
   const legacy = validateConflictResolution({ resolutionStatus: "RESOLVED", reason: "Reviewed by operations" });
   assert.equal(legacy.ok, false);
   if (!legacy.ok) assert.equal(legacy.code, "INVALID_RESOLUTION");
+});
+
+test("offline resource-flow creation requires at least one geography like the direct API", () => {
+  assert.deepEqual(validateResourceFlowGeography(null, null), {
+    ok: false,
+    code: "GEOGRAPHY_REQUIRED",
+    error: "At least one authorized source or destination geography is required",
+  });
+  assert.deepEqual(validateResourceFlowGeography("550e8400-e29b-41d4-a716-446655440000", null), { ok: true });
+  assert.deepEqual(validateResourceFlowGeography(null, "550e8400-e29b-41d4-a716-446655440001"), { ok: true });
 });
