@@ -33,6 +33,17 @@ const JOB_STATUSES = new Set<MrvJobStatus>([
 ]);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+function assertUuid(value: string, field: string): void {
+  if (typeof value !== "string" || !UUID.test(value)) throw new TypeError(`MRV_WORKER_INVALID_UUID:${field}`);
+}
+
+const PATCH_KEYS = new Set<keyof MrvJobStagePatch>([
+  "guardian_idempotency_key", "guardian_execution_id", "guardian_status", "guardian_result",
+  "hedera_network", "hedera_topic_id", "hedera_transaction_id", "hedera_consensus_timestamp",
+  "hedera_status", "mirror_verified_at", "mirror_verification_digest", "last_error_code",
+  "last_error_detail", "completed_at", "next_attempt_at",
+]);
+
 function requiredString(row: Record<string, unknown>, key: string): string {
   const value = row[key];
   if (typeof value !== "string" || !value.trim()) throw new Error(`MRV_WORKER_API_INVALID_JOB_FIELD:${key}`);
@@ -148,27 +159,37 @@ export class MrvWorkerDatabaseApi {
   constructor(private readonly pool: Pool) {}
 
   async claim(workerId: string, leaseSeconds: number): Promise<MrvJobLease | null> {
-    if (!workerId.trim() || workerId.length > 128 || !Number.isInteger(leaseSeconds) || leaseSeconds < 10 || leaseSeconds > 900) throw new TypeError("MRV_WORKER_INVALID_CLAIM_ARGUMENT");
-    const q = await this.pool.query<ApiResult<unknown>>("select mrv_worker_api.claim_next_job($1,$2) as result", [workerId, leaseSeconds]);
+    const normalizedWorkerId = typeof workerId === "string" ? workerId.trim() : "";
+    if (!normalizedWorkerId || normalizedWorkerId.length > 128 || !Number.isInteger(leaseSeconds) || leaseSeconds < 10 || leaseSeconds > 900) throw new TypeError("MRV_WORKER_INVALID_CLAIM_ARGUMENT");
+    const q = await this.pool.query<ApiResult<unknown>>("select mrv_worker_api.claim_next_job($1,$2) as result", [normalizedWorkerId, leaseSeconds]);
     return claimResult(one(q.rows, "claim_next_job"));
   }
 
   async authorize(jobId: string): Promise<boolean> {
+    assertUuid(jobId, "jobId");
     const q = await this.pool.query<ApiResult<unknown>>("select mrv_worker_api.authorize_job($1::uuid) as result", [jobId]);
     return booleanResult(one(q.rows, "authorize_job"), "authorize_job");
   }
 
   async persistGuardian(jobId: string, token: string, key: string): Promise<boolean> {
+    assertUuid(jobId, "jobId");
+    assertUuid(token, "leaseToken");
+    if (typeof key !== "string" || key.length < 32 || key.length > 128) throw new TypeError("MRV_WORKER_INVALID_GUARDIAN_IDEMPOTENCY_KEY");
     const q = await this.pool.query<ApiResult<unknown>>("select mrv_worker_api.persist_guardian_binding($1::uuid,$2::uuid,$3) as result", [jobId, token, key]);
     return booleanResult(one(q.rows, "persist_guardian_binding"), "persist_guardian_binding");
   }
 
   async persistHedera(jobId: string, token: string, network: "testnet" | "previewnet" | "mainnet", topicId: string, txId: string): Promise<boolean> {
+    assertUuid(jobId, "jobId");
+    assertUuid(token, "leaseToken");
+    if (!["testnet", "previewnet", "mainnet"].includes(network) || !topicId.trim() || !txId.trim()) throw new TypeError("MRV_WORKER_INVALID_HEDERA_BINDING");
     const q = await this.pool.query<ApiResult<unknown>>("select mrv_worker_api.persist_hedera_binding($1::uuid,$2::uuid,$3,$4,$5) as result", [jobId, token, network, topicId, txId]);
     return booleanResult(one(q.rows, "persist_hedera_binding"), "persist_hedera_binding");
   }
 
   async renew(jobId: string, token: string, seconds: number): Promise<boolean> {
+    assertUuid(jobId, "jobId");
+    assertUuid(token, "leaseToken");
     if (!Number.isInteger(seconds) || seconds < 10 || seconds > 900) throw new TypeError("MRV_WORKER_INVALID_LEASE_DURATION");
     const q = await this.pool.query<ApiResult<unknown>>("select mrv_worker_api.renew_lease($1::uuid,$2::uuid,$3) as result", [jobId, token, seconds]);
     const value = one(q.rows, "renew_lease");
@@ -182,17 +203,27 @@ export class MrvWorkerDatabaseApi {
   }
 
   async advance(jobId: string, token: string, status: MrvJobStatus, patch: MrvJobStagePatch = {}): Promise<boolean> {
+    assertUuid(jobId, "jobId");
+    assertUuid(token, "leaseToken");
+    if (!JOB_STATUSES.has(status)) throw new TypeError("MRV_WORKER_INVALID_NEXT_STATUS");
+    if (!patch || typeof patch !== "object" || Array.isArray(patch) || Object.keys(patch).some(key => !PATCH_KEYS.has(key as keyof MrvJobStagePatch))) {
+      throw new TypeError("MRV_WORKER_INVALID_STAGE_PATCH");
+    }
     const q = await this.pool.query<ApiResult<unknown>>("select mrv_worker_api.advance_job($1::uuid,$2::uuid,$3,$4::jsonb) as result", [jobId, token, status, JSON.stringify(patch)]);
     return advanceResult(one(q.rows, "advance_job"));
   }
 
   async release(jobId: string, token: string, nextAttemptAt: Date, code: string, detail: string): Promise<boolean> {
+    assertUuid(jobId, "jobId");
+    assertUuid(token, "leaseToken");
     if (!Number.isFinite(nextAttemptAt.getTime()) || !code.trim() || code.length > 128 || detail.length > 2000) throw new TypeError("MRV_WORKER_INVALID_RELEASE_ARGUMENT");
     const q = await this.pool.query<ApiResult<unknown>>("select mrv_worker_api.release_job($1::uuid,$2::uuid,$3::timestamptz,$4,$5) as result", [jobId, token, nextAttemptAt, code, detail]);
     return booleanResult(one(q.rows, "release_job"), "release_job");
   }
 
   async finalize(jobId: string, token: string, digest: string): Promise<boolean> {
+    assertUuid(jobId, "jobId");
+    assertUuid(token, "leaseToken");
     if (!/^[a-f0-9]{64}$/i.test(digest)) throw new TypeError("MRV_WORKER_INVALID_PROVENANCE_DIGEST");
     const q = await this.pool.query<ApiResult<unknown>>("select mrv_worker_api.finalize_provenance($1::uuid,$2::uuid,$3) as result", [jobId, token, digest]);
     return booleanResult(one(q.rows, "finalize_provenance"), "finalize_provenance");
