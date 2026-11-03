@@ -1,9 +1,28 @@
--- Preserve the authorization facts used at the exact time each verifier decision is recorded.
--- Historical rows remain NULL: this migration does not fabricate past authorization evidence.
+-- Forward-only compatibility for the production verification authorization contract.
+-- Existing production columns are retained; clean installs receive the same fields.
 ALTER TABLE public.verifications
-  ADD COLUMN IF NOT EXISTS authorization_snapshot jsonb,
-  ADD COLUMN IF NOT EXISTS authorization_snapshot_hash text;
+  ADD COLUMN IF NOT EXISTS authorization_membership_id uuid,
+  ADD COLUMN IF NOT EXISTS authorization_role_id uuid,
+  ADD COLUMN IF NOT EXISTS authorization_permissions_snapshot jsonb,
+  ADD COLUMN IF NOT EXISTS authorization_checked_at timestamptz;
 
+DO $constraints$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'verifications_authorization_membership_fk') THEN
+    ALTER TABLE public.verifications
+      ADD CONSTRAINT verifications_authorization_membership_fk
+      FOREIGN KEY (authorization_membership_id) REFERENCES public.organization_memberships(id);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'verifications_authorization_role_fk') THEN
+    ALTER TABLE public.verifications
+      ADD CONSTRAINT verifications_authorization_role_fk
+      FOREIGN KEY (authorization_role_id) REFERENCES public.roles(id);
+  END IF;
+END;
+$constraints$;
+
+-- Capture the exact same-tenant permission-bearing membership and role used
+-- for BOTH APPROVED and REJECTED decisions. Caller-supplied snapshots are denied.
 CREATE OR REPLACE FUNCTION public.capture_verification_authorization_snapshot()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -11,17 +30,18 @@ SET search_path = pg_catalog, pg_temp
 AS $function$
 DECLARE
   v_activity_id uuid;
-  v_snapshot jsonb;
+  v_membership_id uuid;
+  v_role_id uuid;
+  v_permissions jsonb;
 BEGIN
   IF TG_OP = 'UPDATE' THEN
-    IF NEW.authorization_snapshot IS DISTINCT FROM OLD.authorization_snapshot
-       OR NEW.authorization_snapshot_hash IS DISTINCT FROM OLD.authorization_snapshot_hash THEN
-      RAISE EXCEPTION 'verification authorization snapshot is immutable';
-    END IF;
-    RETURN NEW;
+    RAISE EXCEPTION 'verification decisions and authorization snapshots are immutable; create a superseding record';
   END IF;
 
-  IF NEW.authorization_snapshot IS NOT NULL OR NEW.authorization_snapshot_hash IS NOT NULL THEN
+  IF NEW.authorization_membership_id IS NOT NULL
+     OR NEW.authorization_role_id IS NOT NULL
+     OR NEW.authorization_permissions_snapshot IS NOT NULL
+     OR NEW.authorization_checked_at IS NOT NULL THEN
     RAISE EXCEPTION 'verification authorization snapshot is database-generated';
   END IF;
 
@@ -34,47 +54,33 @@ BEGIN
     RAISE EXCEPTION 'cannot snapshot verifier authorization without a subject activity';
   END IF;
 
-  SELECT jsonb_build_object(
-    'schema_version', 1,
-    'captured_at', clock_timestamp(),
-    'decision', NEW.decision,
-    'verifier_identity_id', NEW.verifier_identity_id,
-    'identity', (SELECT jsonb_build_object(
-      'id', i.id, 'status', i.status, 'suspended_at', i.suspended_at
-    ) FROM public.identities i WHERE i.id = NEW.verifier_identity_id),
-    'subject_activity_id', a.id,
-    'subject_organization_id', a.organization_id,
-    'subject_organization_status', o.status,
-    'subject_geography_id', a.geography_id,
-    'verified_memberships', COALESCE((
-      SELECT jsonb_agg(jsonb_build_object(
-        'membership_id', m.id, 'status', m.status, 'role_id', r.id,
-        'role_permissions', r.permissions
-      ) ORDER BY m.id)
-      FROM public.organization_memberships m
-      JOIN public.roles r ON r.id = m.role_id
-      WHERE m.identity_id = NEW.verifier_identity_id
-        AND m.organization_id = a.organization_id
-        AND m.status = 'VERIFIED'
-        AND r.organization_id = a.organization_id
-    ), '[]'::jsonb),
-    'verified_geography_scopes', COALESCE((
-      SELECT jsonb_agg(jsonb_build_object(
-        'scope_id', s.id, 'geography_id', s.geography_id, 'status', s.status
-      ) ORDER BY s.id)
-      FROM public.organization_geography_scopes s
-      WHERE s.organization_id = a.organization_id AND s.status = 'VERIFIED'
-    ), '[]'::jsonb)
-  ) INTO v_snapshot
-  FROM public.activities a
-  JOIN public.organizations o ON o.id = a.organization_id
-  WHERE a.id = v_activity_id;
+  SELECT m.id, r.id, r.permissions
+    INTO v_membership_id, v_role_id, v_permissions
+    FROM public.activities a
+    JOIN public.organization_memberships m
+      ON m.organization_id = a.organization_id
+     AND m.identity_id = NEW.verifier_identity_id
+     AND m.status = 'VERIFIED'
+    JOIN public.roles r
+      ON r.id = m.role_id
+     AND r.organization_id = a.organization_id
+   WHERE a.id = v_activity_id
+     AND (
+       r.permissions @> '["VERIFY_EVIDENCE"]'::jsonb
+       OR r.permissions @> '["verification:approve"]'::jsonb
+       OR r.permissions @> '["verification.approve"]'::jsonb
+     )
+   ORDER BY m.id
+   LIMIT 1;
 
-  IF v_snapshot IS NULL THEN
-    RAISE EXCEPTION 'cannot capture authorization snapshot for missing subject activity';
+  IF v_membership_id IS NULL THEN
+    RAISE EXCEPTION 'cannot snapshot verifier authorization without an explicit subject-organization permission';
   END IF;
-  NEW.authorization_snapshot := v_snapshot;
-  NEW.authorization_snapshot_hash := encode(digest(v_snapshot::text, 'sha256'), 'hex');
+
+  NEW.authorization_membership_id := v_membership_id;
+  NEW.authorization_role_id := v_role_id;
+  NEW.authorization_permissions_snapshot := v_permissions;
+  NEW.authorization_checked_at := clock_timestamp();
   RETURN NEW;
 END;
 $function$;
@@ -83,3 +89,21 @@ DROP TRIGGER IF EXISTS verification_authorization_snapshot_guard ON public.verif
 CREATE TRIGGER verification_authorization_snapshot_guard
   BEFORE INSERT OR UPDATE ON public.verifications
   FOR EACH ROW EXECUTE FUNCTION public.capture_verification_authorization_snapshot();
+
+-- Decisions are append-only, including REJECTED outcomes. Corrections require
+-- a separately linked superseding decision; history is never rewritten/deleted.
+CREATE OR REPLACE FUNCTION public.prevent_approved_verification_delete()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = pg_catalog, pg_temp
+AS $function$
+BEGIN
+  RAISE EXCEPTION 'verification decisions are immutable; create a superseding record';
+END;
+$function$;
+
+DROP TRIGGER IF EXISTS approved_verification_delete_guard ON public.verifications;
+DROP TRIGGER IF EXISTS verification_delete_guard ON public.verifications;
+CREATE TRIGGER verification_delete_guard
+  BEFORE DELETE ON public.verifications
+  FOR EACH ROW EXECUTE FUNCTION public.prevent_approved_verification_delete();
