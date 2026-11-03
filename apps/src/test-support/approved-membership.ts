@@ -47,8 +47,8 @@ export async function approveTestMembership(
     [applicationId, reviewerId],
   );
   await client.query(
-    "update public.organizations set status='VERIFIED' where id=$1",
-    [organizationId],
+    "update public.organizations set status='VERIFIED',verification_status='VERIFIED',verified_by_identity_id=$2,verified_at=clock_timestamp() where id=$1",
+    [organizationId, reviewerId],
   );
   await client.query(
     "update public.organization_memberships set status='VERIFIED' where identity_id=$1 and organization_id=$2 and role_id=$3 and status='PENDING'",
