@@ -49,7 +49,6 @@ test("PostgreSQL Super Admin suspension revokes sessions and blocks subsequent a
   let organizationId = "";
   let roleId = "";
   let membershipId = "";
-  let auditId = "";
   try {
     const org = await pool.query<{ id: string }>(
       "insert into organizations(name,organization_type,status) values($1,'test_fixture','VERIFIED') returning id",
@@ -107,7 +106,6 @@ test("PostgreSQL Super Admin suspension revokes sessions and blocks subsequent a
       "select id,event_hash,previous_hash from audit_events where actor_identity_id=$1 and target_id=$2 and action='IDENTITY_SUSPENDED' order by id desc limit 1",
       [actorId, targetId],
     );
-    auditId = audit.rows[0]?.id ?? "";
     assert.ok(audit.rows[0]?.event_hash, "suspension should have an audit event");
 
     const reactivated = await app.inject({
