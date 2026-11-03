@@ -13,6 +13,24 @@ function signedToken(secret: string, keyId: string, issuedAt: number, expiresAt:
   return payload + "." + signature;
 }
 
+test("identity suspension kill-switch column is present in the migrated PostgreSQL schema", { skip: !enabled }, async () => {
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
+  try {
+    const result = await pool.query<{ data_type: string; is_nullable: string }>(`
+      select data_type, is_nullable
+        from information_schema.columns
+       where table_schema = 'public'
+         and table_name = 'identities'
+         and column_name = 'suspended_at'
+    `);
+    assert.equal(result.rowCount, 1, "migrations must create identities.suspended_at");
+    assert.equal(result.rows[0]?.data_type, "timestamp with time zone");
+    assert.equal(result.rows[0]?.is_nullable, "YES", "existing identities remain unsuspended by default");
+  } finally {
+    await pool.end();
+  }
+});
+
 test("database signed-context verifier authenticates claims and fails closed", { skip: !enabled }, async () => {
   const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
   const suffix = randomBytes(6).toString("hex");
