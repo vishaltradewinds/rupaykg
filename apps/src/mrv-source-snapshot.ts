@@ -49,13 +49,13 @@ export function mrvSourceDigest(payload: unknown): string {
 
 type ActivityRow = {
   id: string; organization_id: string; actor_identity_id: string | null; geography_id: string | null; activity_type: string;
-  status: string; occurred_at: Date | string | null; completed_at: Date | string | null; created_at: Date | string; mrv_source_revision: number | string; metadata: Record<string, unknown>;
+  status: string; occurred_at: Date | string | null; completed_at: Date | string | null; created_at: Date | string; mrv_source_revision: number | string; metadata: Record<string, unknown>; snapshot_record: Record<string, unknown>;
 };
 type VerificationRow = {
-  id: string; evidence_id: string; verifier_identity_id: string; decision: string; scope: string; rationale: string | null; decided_at: Date | string;
+  id: string; evidence_id: string; verifier_identity_id: string; decision: string; scope: string; rationale: string | null; decided_at: Date | string; snapshot_record: Record<string, unknown>;
 };
-type EvidenceRow = Record<string, unknown> & { id: string; status: string };
-type MeasurementRow = Record<string, unknown> & { value: string | number; unit: string };
+type EvidenceRow = Record<string, unknown> & { id: string; status: string; evidence_snapshot_record: Record<string, unknown>; artifact_version_snapshot_record: Record<string, unknown> | null; artifact_series_snapshot_record: Record<string, unknown> | null };
+type MeasurementRow = Record<string, unknown> & { value: string | number; unit: string; snapshot_record: Record<string, unknown> };
 
 export async function captureMrvSourceSnapshot(input: {
   pool: Pool;
@@ -80,7 +80,7 @@ export async function captureMrvSourceSnapshot(input: {
     transactionOpen = true;
 
     const activityResult = await client.query<ActivityRow>(
-      "select id,organization_id,actor_identity_id,geography_id,activity_type,status::text,occurred_at,completed_at,created_at,mrv_source_revision,metadata from activities where id=$1 for share",
+      "select a.id,a.organization_id,a.actor_identity_id,a.geography_id,a.activity_type,a.status::text,a.occurred_at,a.completed_at,a.created_at,a.mrv_source_revision,a.metadata,to_jsonb(a) snapshot_record from activities a where a.id=$1 for share",
       [input.activityId],
     );
     const activity = activityResult.rows[0];
@@ -103,7 +103,7 @@ export async function captureMrvSourceSnapshot(input: {
     if (geography.rows[0]?.ok !== true) throw new MrvSnapshotError("GEOGRAPHY_FORBIDDEN", "Activity geography is outside organization authorization scope", 403);
 
     const verificationResult = await client.query<VerificationRow>(
-      "select id,evidence_id,verifier_identity_id,decision::text,scope,rationale,decided_at from verifications where id=$1 and activity_id=$2 for share",
+      "select v.id,v.evidence_id,v.verifier_identity_id,v.decision::text,v.scope,v.rationale,v.decided_at,to_jsonb(v) snapshot_record from verifications v where v.id=$1 and v.activity_id=$2 for share",
       [input.verificationId, input.activityId],
     );
     const verification = verificationResult.rows[0];
@@ -122,11 +122,11 @@ export async function captureMrvSourceSnapshot(input: {
     }
 
     const observationsResult = await client.query<Record<string, unknown>>(
-      "select id,parameter_code,observed_value::text observed_value,unit,method,instrument_id,observed_at,uncertainty::text uncertainty,quality_status::text quality_status,metadata from mrv_observations where activity_id=$1 order by observed_at,id",
+      "select mo.id,mo.parameter_code,mo.observed_value::text observed_value,mo.unit,mo.method,mo.instrument_id,mo.observed_at,mo.uncertainty::text uncertainty,mo.quality_status::text quality_status,mo.metadata,to_jsonb(mo) snapshot_record from mrv_observations mo where mo.activity_id=$1 order by mo.observed_at,mo.id",
       [input.activityId],
     );
     const measurementsResult = await client.query<MeasurementRow>(
-      "select id,value::text value,unit,method,source,measured_at,quality_status::text quality_status,metadata from measurements where activity_id=$1 order by measured_at,id",
+      "select m.id,m.value::text value,m.unit,m.method,m.source,m.measured_at,m.quality_status::text quality_status,m.metadata,to_jsonb(m) snapshot_record from measurements m where m.activity_id=$1 order by m.measured_at,m.id",
       [input.activityId],
     );
     const evidenceResult = await client.query<EvidenceRow>(
@@ -137,13 +137,13 @@ export async function captureMrvSourceSnapshot(input: {
               v.uploaded_by_identity_id artifact_uploaded_by_identity_id,v.source_reference artifact_source_reference,
               v.measurement_period_start artifact_measurement_period_start,v.measurement_period_end artifact_measurement_period_end,
               v.created_at artifact_version_created_at,
+              to_jsonb(e) evidence_snapshot_record,
+              case when v.id is null then null else to_jsonb(v) - 'content' end artifact_version_snapshot_record,
+              case when s.id is null then null else to_jsonb(s) end artifact_series_snapshot_record,
               s.organization_id artifact_series_organization_id,s.activity_id artifact_series_activity_id,
               s.evidence_type artifact_series_evidence_type,s.created_by_identity_id artifact_series_created_by_identity_id,
               s.created_at artifact_series_created_at,
-              coalesce((select jsonb_agg(jsonb_build_object(
-                'id',r.id,'artifactVersionId',r.artifact_version_id,'reviewerIdentityId',r.reviewer_identity_id,
-                'decision',r.decision,'rationale',r.rationale,'createdAt',r.created_at
-              ) order by r.created_at,r.id) from evidence_artifact_reviews r where r.evidence_id=e.id),'[]'::jsonb) reviews
+              coalesce((select jsonb_agg(to_jsonb(r) order by r.created_at,r.id) from evidence_artifact_reviews r where r.evidence_id=e.id),'[]'::jsonb) reviews
          from evidence e
          left join evidence_artifact_versions v on v.evidence_id=e.id
          left join evidence_artifact_series s on s.id=v.series_id
@@ -153,21 +153,14 @@ export async function captureMrvSourceSnapshot(input: {
 
     const payload = {
       schema: "rupaykg:mrv-source-snapshot:v1",
-      activity: {
-        id: activity.id, organizationId: activity.organization_id, actorIdentityId: activity.actor_identity_id, geographyId: activity.geography_id,
-        activityType: activity.activity_type, status: activity.status, occurredAt: activity.occurred_at,
-        completedAt: activity.completed_at, createdAt: activity.created_at, sourceRevision: activity.mrv_source_revision, metadata: activity.metadata,
-      },
-      verification: {
-        id: verification.id, evidenceId: verification.evidence_id, verifierIdentityId: verification.verifier_identity_id, decision: verification.decision,
-        scope: verification.scope, rationale: verification.rationale, decidedAt: verification.decided_at,
-      },
+      activity: { ...activity.snapshot_record, sourceRevision: activity.mrv_source_revision },
+      verification: verification.snapshot_record,
       selectedEvidenceId: input.evidenceId,
       guardianPolicyId: input.guardianPolicyId,
       methodologyCode: input.methodologyCode ?? null,
-      observations: observationsResult.rows,
-      measurements: measurementsResult.rows,
-      evidence: evidenceResult.rows,
+      observations: observationsResult.rows.map(row => row.snapshot_record),
+      measurements: measurementsResult.rows.map(row => row.snapshot_record),
+      evidence: evidenceResult.rows.map(row => ({ evidence: row.evidence_snapshot_record, artifactVersion: row.artifact_version_snapshot_record, artifactSeries: row.artifact_series_snapshot_record, reviews: row.reviews })),
     };
     const digest = mrvSourceDigest(payload);
     const latestResult = await client.query<MrvSourceSnapshot>(
@@ -204,9 +197,9 @@ export async function captureMrvSourceSnapshot(input: {
     const latestMeasurement = measurementsResult.rows.at(-1);
     return {
       snapshot,
-      observations: observationsResult.rows,
-      measurements: measurementsResult.rows,
-      evidence: evidenceResult.rows,
+      observations: observationsResult.rows.map(({ snapshot_record: _snapshotRecord, ...row }) => row),
+      measurements: measurementsResult.rows.map(({ snapshot_record: _snapshotRecord, ...row }) => row),
+      evidence: evidenceResult.rows.map(({ evidence_snapshot_record: _evidenceSnapshotRecord, artifact_version_snapshot_record: _artifactVersionSnapshotRecord, artifact_series_snapshot_record: _artifactSeriesSnapshotRecord, ...row }) => row),
       latestQuantity: latestMeasurement ? Number(latestMeasurement.value) : undefined,
       latestUnit: latestMeasurement?.unit,
       organizationId: activity.organization_id,
