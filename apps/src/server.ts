@@ -218,7 +218,7 @@ await registerBwgRoutes(app, pool, process.env.RUPAYKG_REQUEST_CONTEXT_SECRET &&
 await registerCpcbSwmRoutes(app, pool, process.env.RUPAYKG_REQUEST_CONTEXT_SECRET && process.env.RUPAYKG_REQUEST_CONTEXT_KEY_ID ? { hmacSecret: process.env.RUPAYKG_REQUEST_CONTEXT_SECRET, keyId: process.env.RUPAYKG_REQUEST_CONTEXT_KEY_ID } : undefined);
 await registerIntelligenceRoutes(app, pool);
 await registerMrvRoutes(app, pool);
-await registerEvidenceVaultRoutes(app, pool);
+await registerEvidenceVaultRoutes(app, pool, process.env.RUPAYKG_REQUEST_CONTEXT_SECRET && process.env.RUPAYKG_REQUEST_CONTEXT_KEY_ID ? { hmacSecret: process.env.RUPAYKG_REQUEST_CONTEXT_SECRET, keyId: process.env.RUPAYKG_REQUEST_CONTEXT_KEY_ID } : undefined);
 await registerPlatformAdminRoutes(app, pool);
 
 if (existsSync(webRoot)) app.get("/*", async (_request, reply) => reply.type("text/html; charset=utf-8").send(readFileSync(resolve(webRoot, "index.html"), "utf8")));
