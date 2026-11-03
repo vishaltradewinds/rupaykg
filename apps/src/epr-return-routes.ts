@@ -1,7 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type { Pool } from "pg";
 import { authenticate, bearerChallenge, hasOrganizationPermission, type AuthContext } from "./auth.js";
-import { withRlsRequestTransaction, type RlsRequestContextConfig } from "./rls-request-transaction.js";
 
 function bodyOf(request: { body: unknown }): Record<string, unknown> {
   return request.body && typeof request.body === "object" ? request.body as Record<string, unknown> : {};
@@ -29,33 +28,16 @@ function canAct(auth: AuthContext, organizationId: string): boolean {
   return auth.memberships.some((membership) => membership.organization_id === organizationId && membership.status === "VERIFIED");
 }
 
-function requestContextConfig(): RlsRequestContextConfig | null {
-  const hmacSecret = process.env.RUPAYKG_REQUEST_CONTEXT_SECRET;
-  const keyId = process.env.RUPAYKG_REQUEST_CONTEXT_KEY_ID;
-  if (!hmacSecret || Buffer.byteLength(hmacSecret, "utf8") < 32 || !keyId || !/^[a-z0-9_-]{1,32}$/.test(keyId)) return null;
-  return { hmacSecret, keyId };
-}
-
 export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool | null): Promise<void> {
   app.get("/api/v1/epr/returns", async (request, reply) => {
     const auth = await authFor(request, reply, pool); if (!auth || !pool) return;
-    const organizationId = auth.activeOrganizationId;
-    const config = requestContextConfig();
+    const organizationId = typeof request.headers["x-rupaykg-organization-id"] === "string" ? request.headers["x-rupaykg-organization-id"] : auth.activeOrganizationId;
     if (!organizationId || !canAct(auth, organizationId)) return reply.code(403).send({ error: "Verified organization membership required", code: "ORG_FORBIDDEN" });
-    if (!config) return reply.code(503).send({ error: "Signed tenant context is not configured", code: "TENANT_CONTEXT_UNAVAILABLE", syntheticData: false });
+    if (!await hasOrganizationPermission(pool, auth, organizationId, ["epr:read", "epr:manage", "reports:read"])) return reply.code(403).send({ error: "EPR return read permission required", code: "EPR_RETURN_READ_FORBIDDEN" });
     try {
-      const result = await withRlsRequestTransaction(pool, auth, config, async (client) => {
-        const allowed = await hasOrganizationPermission(client, auth, organizationId, ["epr:read", "epr:manage", "reports:read"]);
-        if (!allowed) return { forbidden: true as const, returns: [] as unknown[] };
-        const rows = await client.query(`select r.id,r.scheme_id,s.code as scheme_code,s.name as scheme_name,r.organization_id,r.obligation_id,r.period_start,r.period_end,r.return_type,r.reported_quantity,r.obligation_quantity,r.fulfilled_quantity,r.status,r.external_reference,r.evidence_id,r.verification_id,r.submitted_at,r.created_at from public.epr_returns r join public.epr_schemes s on s.id=r.scheme_id where r.organization_id=$1 order by r.period_end desc,r.created_at desc limit 100`, [organizationId]);
-        return { forbidden: false as const, returns: rows.rows };
-      });
-      if (result.forbidden) return reply.code(403).send({ error: "EPR return read permission required", code: "EPR_RETURN_READ_FORBIDDEN" });
-      return { source: "postgresql", syntheticData: false, returns: result.returns };
-    } catch (error) {
-      request.log.error(error);
-      return reply.code(503).send({ error: "EPR return workspace unavailable", syntheticData: false });
-    }
+      const rows = await pool.query(`select r.id,r.scheme_id,s.code as scheme_code,s.name as scheme_name,r.organization_id,r.obligation_id,r.period_start,r.period_end,r.return_type,r.reported_quantity,r.obligation_quantity,r.fulfilled_quantity,r.status,r.external_reference,r.evidence_id,r.verification_id,r.submitted_at,r.created_at from epr_returns r join epr_schemes s on s.id=r.scheme_id where r.organization_id=$1 order by r.period_end desc,r.created_at desc limit 100`, [organizationId]);
+      return { source: "postgresql", syntheticData: false, returns: rows.rows };
+    } catch (error) { request.log.error(error); return reply.code(503).send({ error: "EPR return workspace unavailable", syntheticData: false }); }
   });
 
   app.post("/api/v1/epr/returns", async (request, reply) => {
