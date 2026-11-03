@@ -23,7 +23,7 @@ test("rejects owner/elevated role memberships and inherited privileges", () => {
     { owner_membership: true }, { elevated_membership: true },
     { any_role_membership: true }, { rolinherit: true },
     { rolbypassrls: true }, { rolsuper: true },
-  ]) assert.throws(() => assertMrvWorkerRoleContract({ ...safeRole, ...patch }));
+  ]) assert.throws(() => assertMrvWorkerRoleContract({ ...safeRole, ...patch } as MrvWorkerRoleContract));
 });
 
 test("rejects broad writes outside the MRV job ledger and append-only sinks", () => {
@@ -31,7 +31,7 @@ test("rejects broad writes outside the MRV job ledger and append-only sinks", ()
     { source_table_write: true }, { job_insert: true }, { job_delete: true }, { job_truncate: true },
     { event_update: true }, { event_delete: true }, { event_truncate: true },
     { provenance_update: true }, { provenance_delete: true }, { provenance_truncate: true },
-  ]) assert.throws(() => assertMrvWorkerRoleContract({ ...safeRole, ...patch }));
+  ]) assert.throws(() => assertMrvWorkerRoleContract({ ...safeRole, ...patch } as MrvWorkerRoleContract));
 });
 
 test("rejects a session role that differs from the authenticated worker role", () => {
