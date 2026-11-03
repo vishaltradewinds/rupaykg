@@ -72,16 +72,16 @@ if (!/drop trigger if exists verification_independence_guard on public\.verifica
 if (!/old\.decision\s*=\s*'APPROVED'/i.test(verificationGuard) || !/new\s+is distinct from old/i.test(verificationGuard)) {
   throw new Error("approved verification rows must be immutable");
 }
-if (!/create trigger verification_delete_guard\\s+before delete on public\\.verifications\\s+for each row execute function public\\.prevent_verification_delete\\(\\)/i.test(authorizationSnapshotMigration)) {
+if (!/create trigger verification_delete_guard\s+before delete on public\.verifications\s+for each row execute function public\.prevent_verification_delete\(\)/i.test(authorizationSnapshotMigration)) {
   throw new Error("all verification decisions must be protected against DELETE");
 }
-if (/then\\s+true\\s+else\\s+exists/i.test(geographyGuard) || !/a.depth\\s*<\\s*63/i.test(geographyGuard) || !/any\\s*\\(\\s*a.path\\s*\\)/i.test(geographyGuard) || !/is_cycle/i.test(geographyGuard)) {
+if (/then\s+true\s+else\s+exists/i.test(geographyGuard) || !/a.depth\s*<\s*63/i.test(geographyGuard) || !/any\s*\(\s*a.path\s*\)/i.test(geographyGuard) || !/is_cycle/i.test(geographyGuard)) {
   throw new Error("geography authorization must fail closed and detect cyclic hierarchy traversal");
 }
 if (!/add column if not exists authorization_membership_id uuid/i.test(authorizationSnapshotMigration) || !/add column if not exists authorization_role_id uuid/i.test(authorizationSnapshotMigration) || !/add column if not exists authorization_permissions_snapshot jsonb/i.test(authorizationSnapshotMigration) || !/add column if not exists authorization_checked_at timestamptz/i.test(authorizationSnapshotMigration)) {
   throw new Error("verifier decisions must preserve the four production authorization snapshot fields");
 }
-if (!/verification_authorization_snapshot_guard/i.test(authorizationSnapshotMigration) || !/new\\.authorization_membership_id is not null/i.test(authorizationSnapshotMigration) || !/verification decisions and authorization snapshots are immutable/i.test(authorizationSnapshotMigration)) {
+if (!/verification_authorization_snapshot_guard/i.test(authorizationSnapshotMigration) || !/new\.authorization_membership_id is not null/i.test(authorizationSnapshotMigration) || !/verification decisions and authorization snapshots are immutable/i.test(authorizationSnapshotMigration)) {
   throw new Error("verifier authorization snapshots must be database-generated and immutable");
 }
 
