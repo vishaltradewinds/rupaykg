@@ -59,6 +59,12 @@ test("worker adapter rejects malformed claim results and unsafe lease durations"
   await assert.rejects(() => invalidForeignId.claim("worker-a", 120), /INVALID_JOB_FIELD:activity_id/);
   const invalidHash = new MrvWorkerDatabaseApi(poolReturning({ job: completeJob({ payload_hash: "not-a-sha256" }), leaseToken: LEASE_TOKEN }).pool);
   await assert.rejects(() => invalidHash.claim("worker-a", 120), /INVALID_JOB_FIELD:payload_hash/);
+  const shortGuardianKey = new MrvWorkerDatabaseApi(poolReturning({ job: completeJob({ guardian_idempotency_key: "short-key" }), leaseToken: LEASE_TOKEN }).pool);
+  await assert.rejects(() => shortGuardianKey.claim("worker-a", 120), /INVALID_JOB_FIELD:guardian_idempotency_key/);
+  const longGuardianKey = new MrvWorkerDatabaseApi(poolReturning({ job: completeJob({ guardian_idempotency_key: "g".repeat(129) }), leaseToken: LEASE_TOKEN }).pool);
+  await assert.rejects(() => longGuardianKey.claim("worker-a", 120), /INVALID_JOB_FIELD:guardian_idempotency_key/);
+  const validGuardianKey = new MrvWorkerDatabaseApi(poolReturning({ job: completeJob({ guardian_idempotency_key: "g".repeat(64) }), leaseToken: LEASE_TOKEN }).pool);
+  assert.equal((await validGuardianKey.claim("worker-a", 120))?.job.guardian_idempotency_key, "g".repeat(64));
   await assert.rejects(() => new MrvWorkerDatabaseApi(poolReturning(null).pool).claim("worker-a", 1), /INVALID_CLAIM_ARGUMENT/);
 });
 
