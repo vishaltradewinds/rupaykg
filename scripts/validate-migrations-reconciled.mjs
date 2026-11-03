@@ -138,7 +138,10 @@ const migrationIntegrityTests = await readFile(path.resolve("apps/src/migration-
 if (!/add column if not exists checksum_sha256 text/i.test(migrationRunner) ||
     !/sha256Hex\(bytes\)/.test(migrationRunner) ||
     !/assertNoOrphanedMigrations\(/.test(migrationRunner) ||
-    !/checksum_sha256\) values/i.test(migrationRunner)) {
+    !/checksum_sha256\) values/i.test(migrationRunner) ||
+    !/LEGACY_UNVERIFIED: non-empty migration ledger/.test(migrationRunner) ||
+    !/TextDecoder\("utf-8", \{ fatal: true \}\)/.test(migrationRunner) ||
+    !/JSON\.stringify\(migrationReport/.test(migrationRunner)) {
   throw new Error("migration runner must atomically record exact-byte SHA-256 and reconcile all existing ledger rows before applying new migrations");
 }
 for (const failure of ["LEGACY_UNVERIFIED", "MIGRATION_CHECKSUM_DRIFT", "MIGRATION_FILENAME_DRIFT", "MIGRATION_LEDGER_ORPHAN", "MIGRATION_CHECKSUM_INVALID"]) {
