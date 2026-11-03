@@ -125,7 +125,7 @@ export async function verifyHcsMessage(consensusTimestamp: string, topicId = pro
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) return { verified: false, network, consensusTimestamp: found.consensus_timestamp, sequenceNumber: found.sequence_number, payload, error: "HCS message payload is not a structured RupayKG provenance record" };
   const record = payload as Record<string, unknown>;
   const requiredMatches = [
-    ["schema", "rupaykg:mrv:v1"],
+    ["schema", expectedSourceSnapshotId ? "rupaykg:mrv:v2" : "rupaykg:mrv:v1"],
     ["mrvStatus", "VERIFIED"],
     ...(expectedSourceSnapshotId ? [["sourceSnapshotId", expectedSourceSnapshotId]] as const : []),
     ...(expectedSourceSnapshotDigest ? [["sourceSnapshotDigest", expectedSourceSnapshotDigest]] as const : []),
