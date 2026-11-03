@@ -121,6 +121,10 @@ export async function runMrvSubmissionWorkerOnce(database: MrvWorkerDatabaseApi,
       const ok = await advance(database, lease, "PERMANENT_FAILURE", { last_error_code: "MRV_AUTHORIZATION_REVOKED", last_error_detail: "Current identity, membership, role permission, evidence, verification or geography check failed before Guardian submission." });
       return { outcome: ok ? "PERMANENT_FAILURE" : "STALE_LEASE", jobId: job.id, stage: "GUARDIAN_AUTHORIZATION" };
     }
+    if (job.status === "CLAIMED") {
+      const submitted = await advance(database, lease, "GUARDIAN_SUBMITTED");
+      return { outcome: submitted ? "STAGE_ADVANCED" : "STALE_LEASE", jobId: job.id, stage: "GUARDIAN_SUBMITTED" };
+    }
     const snapshot = snapshotOf(job);
     const key = job.guardian_idempotency_key ?? job.idempotency_key;
     if (!job.guardian_idempotency_key && !await persistGuardianKey(database, lease, key)) return { outcome: "STALE_LEASE", jobId: job.id, stage: "GUARDIAN_KEY_PERSIST" };
@@ -163,11 +167,35 @@ export async function runMrvSubmissionWorkerOnce(database: MrvWorkerDatabaseApi,
     }
     const txId = createHcsTransactionId();
     if (!await persistHcsId(database, lease, status.network, status.topicId, txId)) return { outcome: "STALE_LEASE", jobId: job.id, stage: "HCS_TRANSACTION_ID_PERSIST" };
+    const submitted = await advance(database, lease, "HCS_SUBMITTED", {
+      hedera_network: status.network,
+      hedera_topic_id: status.topicId,
+      hedera_transaction_id: txId,
+      last_error_code: null,
+      last_error_detail: null,
+    });
+    return { outcome: submitted ? "STAGE_ADVANCED" : "STALE_LEASE", jobId: job.id, stage: "HCS_SUBMITTED" };
+  }
+
+  if (job.status === "HCS_SUBMITTED") {
+    if (!await authorize(database, lease)) {
+      const ok = await advance(database, lease, "NEEDS_RECONCILIATION", { last_error_code: "MRV_AUTHORIZATION_REVOKED", last_error_detail: "Authorization failed before Hedera submission." });
+      return { outcome: ok ? "NEEDS_RECONCILIATION" : "STALE_LEASE", jobId: job.id, stage: "HCS_AUTHORIZATION" };
+    }
+    if (!job.hedera_transaction_id || !job.hedera_topic_id || !job.guardian_execution_id) {
+      const ok = await advance(database, lease, "NEEDS_RECONCILIATION", { last_error_code: "HCS_BINDING_MISSING", last_error_detail: "Persisted transaction, topic or Guardian execution binding is missing." });
+      return { outcome: ok ? "NEEDS_RECONCILIATION" : "STALE_LEASE", jobId: job.id, stage: "HCS_BINDING" };
+    }
+    const status = hederaStatus();
+    if (!status.configured || status.topicId !== job.hedera_topic_id || status.network !== job.hedera_network) {
+      const ok = await release(database, lease, "HEDERA_CONFIGURATION_MISMATCH", "Current Hedera configuration does not match the persisted transaction network and topic.");
+      return { outcome: ok ? "RETRY_SCHEDULED" : "STALE_LEASE", jobId: job.id, stage: "HCS_CONFIGURATION" };
+    }
     if (!await renewLease(database, lease)) return { outcome: "STALE_LEASE", jobId: job.id, stage: "HCS_LEASE_RENEWAL" };
-    const anchorRun = await withLeaseHeartbeat(database, lease, () => submitHcsAnchor(anchorPayload(job), txId));
+    const anchorRun = await withLeaseHeartbeat(database, lease, () => submitHcsAnchor(anchorPayload(job), job.hedera_transaction_id!));
     if (!anchorRun.leaseValid) return { outcome: "STALE_LEASE", jobId: job.id, stage: "HCS_LEASE_HEARTBEAT" };
     const anchor = anchorRun.value;
-    if (anchor.status === "CONSENSUS_CONFIRMED" && anchor.transactionId === txId && anchor.consensusTimestamp) {
+    if (anchor.status === "CONSENSUS_CONFIRMED" && anchor.transactionId === job.hedera_transaction_id && anchor.consensusTimestamp) {
       const ok = await advance(database, lease, "HCS_CONSENSUS_CONFIRMED", {
         hedera_status: "CONSENSUS_CONFIRMED", hedera_consensus_timestamp: anchor.consensusTimestamp,
         last_error_code: null, last_error_detail: null,
@@ -182,7 +210,7 @@ export async function runMrvSubmissionWorkerOnce(database: MrvWorkerDatabaseApi,
     return { outcome: ok ? "RETRY_SCHEDULED" : "STALE_LEASE", jobId: job.id, stage: "HCS_SUBMISSION" };
   }
 
-  if (job.status === "HCS_SUBMITTED" || job.status === "HCS_CONSENSUS_CONFIRMED") {
+  if (job.status === "HCS_CONSENSUS_CONFIRMED") {
     if (!await authorize(database, lease)) {
       const ok = await advance(database, lease, "NEEDS_RECONCILIATION", { last_error_code: "MRV_AUTHORIZATION_REVOKED", last_error_detail: "Authorization failed before Mirror Node reconciliation." });
       return { outcome: ok ? "NEEDS_RECONCILIATION" : "STALE_LEASE", jobId: job.id, stage: "MIRROR_AUTHORIZATION" };
