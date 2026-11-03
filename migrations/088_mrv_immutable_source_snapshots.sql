@@ -115,8 +115,33 @@ create index mrv_provenance_source_snapshot_idx
 -- Credential issuance now requires provenance bound to the latest immutable source snapshot.
 create or replace function require_guardian_hcs_mrv_for_credential()
 returns trigger language plpgsql as $$
+declare
+  new_issuance boolean := true;
 begin
+  if tg_op = 'UPDATE' then
+    new_issuance := old.status not in ('ISSUED','ACTIVE','TRANSFERRED','RETIRED');
+  end if;
+
   if new.status in ('ISSUED','ACTIVE','TRANSFERRED','RETIRED') then
+    if new_issuance and (
+      exists (
+        select 1 from activities a
+         where a.id = new.activity_id
+           and a.metadata->>'acceptanceFixture' = 'true'
+      )
+      or exists (
+        select 1
+          from evidence e
+          join verifications v on v.evidence_id=e.id
+         where e.activity_id=new.activity_id
+           and v.activity_id=new.activity_id
+           and v.id=new.verification_id
+           and e.metadata->>'acceptanceFixture'='true'
+      )
+    ) then
+      raise exception 'ACCEPTANCE_FIXTURE_NOT_REGISTRY_ELIGIBLE: acceptance fixture activity/evidence cannot back an issued registry credential';
+    end if;
+
     if tg_op = 'UPDATE' then
       if old.status in ('ISSUED','ACTIVE','TRANSFERRED','RETIRED') then
         -- Existing credentials keep their forward lifecycle against their original anchor.
