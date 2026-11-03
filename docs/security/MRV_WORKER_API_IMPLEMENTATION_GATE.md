@@ -73,3 +73,13 @@ No production migration, RLS activation, role grant, worker enablement, merge or
 - Commit `5bae6d69d9da973ae89d9b13eeb257b78e431943` adds a restricted-worker disabled-gate test that asserts no queue claim is attempted while the feature flag is absent.
 - Latest source now contains deterministic tests for stage ordering and the disabled gate. No test, typecheck, build or PostgreSQL acceptance result is claimed: the latest commit has zero exact-head GitHub check runs.
 - PR #213 remains draft, unmerged and non-mergeable. The API migration, owner role, narrowly scoped RLS policies and eight functions do not yet exist. No production migration, grant, RLS activation, worker enablement, deployment or certification has occurred.
+
+
+## 2026-11-03 claim/recovery contract reconciliation
+
+- The existing `claimableStatuses` allow-list is exactly REQUESTED, CLAIMED, GUARDIAN_SUBMITTED, GUARDIAN_VERIFIED, HCS_SUBMITTED, HCS_CONSENSUS_CONFIRMED, MIRROR_VERIFIED and RETRYABLE_FAILURE. The restricted SQL claim function must preserve this list; it must not claim NEEDS_RECONCILIATION or terminal states.
+- Only REQUESTED and RETRYABLE_FAILURE are normalized to CLAIMED. Expired in-flight jobs retain their exact stage and receive a new lease, so the restricted worker resumes from persisted Guardian/HCS/Mirror bindings rather than starting over.
+- NEEDS_RECONCILIATION has no automated worker handler and remains an operator-controlled quarantine state until a separate audited reconciliation workflow exists. Do not make it claimable.
+- Provider binding functions are persistence-only: Guardian binding is permitted only in GUARDIAN_SUBMITTED; Hedera binding is permitted in GUARDIAN_VERIFIED and may idempotently confirm the exact same tuple in HCS_SUBMITTED. advance_job alone owns state transitions and event-trigger execution.
+- The worker test fixture now uses a contract-valid 64-character Guardian idempotency key.
+- Lease renewal response validation parses the returned timestamp but deliberately does not compare it with the application host clock; only PostgreSQL can authoritatively determine whether a lease is live. This avoids false rejection under host/database clock skew.
