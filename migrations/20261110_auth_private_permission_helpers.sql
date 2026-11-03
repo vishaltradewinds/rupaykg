@@ -46,6 +46,8 @@ GRANT USAGE ON SCHEMA app_security TO rupaykg_auth_owner;
 GRANT EXECUTE ON FUNCTION app_security.current_request_context_claims() TO rupaykg_auth_owner;
 RESET ROLE;
 
+GRANT SELECT ON public.evidence, public.activities TO rupaykg_auth_owner;
+
 SET LOCAL ROLE rupaykg_auth_owner;
 
 CREATE OR REPLACE FUNCTION auth_private.has_organization_permission(
@@ -148,9 +150,9 @@ GRANT USAGE ON SCHEMA auth_private TO rupaykg_auth_runtime;
 GRANT EXECUTE ON FUNCTION auth_private.has_organization_permission(uuid,uuid,text[]) TO rupaykg_app_runtime, rupaykg_auth_runtime;
 GRANT EXECUTE ON FUNCTION auth_private.can_verify_evidence(uuid,uuid) TO rupaykg_app_runtime, rupaykg_auth_runtime;
 
-RESET ROLE;
-
 COMMENT ON FUNCTION auth_private.has_organization_permission(uuid,uuid,text[]) IS
   'Returns only a boolean; requires a valid signed request context whose actor and organization exactly match the arguments. Exposes no membership or role rows to the app runtime.';
 COMMENT ON FUNCTION auth_private.can_verify_evidence(uuid,uuid) IS
   'Evidence verifier authorization bound to the signed request actor and the evidence activity organization.';
+
+RESET ROLE;
