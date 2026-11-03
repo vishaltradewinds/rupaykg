@@ -51,7 +51,6 @@ async function assertCriticalPostconditions(client: SqlExecutor, filename: strin
     const definition = typeof row?.indexdef === "string" ? row.indexdef : "";
     if (!row || row.indisvalid !== true ||
         !/\(next_attempt_at, created_at, id\)/i.test(definition) ||
-        !/NEEDS_RECONCILIATION/i.test("NEEDS_RECONCILIATION") ||
         /'NEEDS_RECONCILIATION'/i.test(definition) ||
         !/'GUARDIAN_SUBMITTED'/i.test(definition) ||
         !/'HCS_CONSENSUS_CONFIRMED'/i.test(definition)) {
