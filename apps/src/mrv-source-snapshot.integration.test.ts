@@ -31,7 +31,7 @@ test("MRV source snapshots are immutable, idempotent and require explicit correc
     const identityId = identity.rows[0]!.id;
     const role = await pool.query<{ id: string }>(
       "insert into roles(organization_id,name,permissions,geography_scope) values($1,$2,$3::jsonb,'[]') returning id",
-      [organizationId,"mrv_snapshot_test_"+suffix,JSON.stringify(["guardian:operate","VERIFY_EVIDENCE"])],
+      [organizationId,"mrv_snapshot_test_"+suffix,JSON.stringify(["guardian:operate","VERIFY_EVIDENCE","ISSUE_CREDENTIAL"])],
     );
     await pool.query("alter table organization_memberships disable trigger stakeholder_membership_application_guard");
     try {
@@ -89,6 +89,21 @@ test("MRV source snapshots are immutable, idempotent and require explicit correc
     assert.equal(corrected.snapshot.snapshot_version, 2);
     assert.equal(corrected.snapshot.supersedes_snapshot_id, first.snapshot.id);
     assert.notEqual(corrected.snapshot.source_digest, first.snapshot.source_digest);
+    assert.ok(corrected.snapshot.source_revision > first.snapshot.source_revision);
+
+    const staleSnapshotDigest = first.snapshot.source_digest;
+    await pool.query(
+      "insert into mrv_provenance_events(activity_id,verification_id,evidence_id,guardian_policy_id,guardian_execution_id,guardian_status,hcs_status,hcs_topic_id,hcs_transaction_id,hcs_consensus_timestamp,integrity_hash,metadata,mirror_node_verified_at,source_snapshot_id,source_snapshot_digest,source_snapshot_version) values($1,$2,$3,'test-policy','test-guardian','VERIFIED','CONSENSUS_CONFIRMED','0.0.123','test-tx','test-consensus',$4,'{}'::jsonb,clock_timestamp(),$5,$6,1)",
+      [activity.rows[0]!.id, verification.rows[0]!.id, evidence.rows[0]!.id, "e".repeat(64), first.snapshot.id, staleSnapshotDigest],
+    );
+    const staleCredential = await pool.query<{ id: string }>(
+      "insert into credentials(activity_id,issuer_organization_id,trust_root_id,status,verification_id,quantity,unit) values($1,$2,'mrv-snapshot-test-root','ELIGIBLE',$3,10,'kg') returning id",
+      [activity.rows[0]!.id, organizationId, verification.rows[0]!.id],
+    );
+    await assert.rejects(
+      () => pool.query("update credentials set status='ISSUED' where id=$1", [staleCredential.rows[0]!.id]),
+      /CREDENTIAL_MRV_REQUIRED/,
+    );
 
     await assert.rejects(
       () => pool.query("update mrv_source_snapshots set correction_reason=correction_reason where id=$1", [first.snapshot.id]),
