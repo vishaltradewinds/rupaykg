@@ -319,3 +319,32 @@ The correct integration sequence is to select one canonical migration-history va
 7. **P1 — external trust integration:** current Render blueprint points to Hedera testnet; mainnet/real Guardian evidence remains unproven.
 
 **Audit status after this addendum:** repository inventory and selected critical-path source review are complete to this checkpoint; route-by-route and all-file independent review remains in progress. Production remains HOLD, certification OFF, worker activation OFF. No production database, deployment, branch protection, role/grant, migration, external transaction or credential was changed.
+
+
+### 12.7 Candidate remediation review — PR #120 and PR #148
+
+The candidate patches were inspected directly on 2026-11-03. This section distinguishes useful isolated changes from merge readiness.
+
+**PR #120 — startup/safety candidate (branch `cto/batch1-production-safety`, base `main`):**
+- Adds `apps/src/startup-preflight.ts`, which calls `readProductionConfig()`, and places it before migration and seed in the Docker command. It also adds a production-config rejection for `RUPAYKG_ACCEPTANCE_SEED_ON_START=true` and a defensive production guard inside `acceptance-seed.ts`.
+- This is a meaningful correction to the Docker startup validation order. It is not the final release design: the Docker command still runs migrations automatically at every container start, followed by the optional seed script. The existing `apps/package.json` start script still invokes the acceptance seeder before `production-server.js`; this path must receive the same preflight/seed prohibition or be removed from production use.
+- The candidate's `migrate.ts` still configures PostgreSQL TLS with `rejectUnauthorized: false`. It must not be adopted as the final migration runner.
+- PR #120's CI patch adds migration-history acceptance, but the branch's migration implementation predates the stronger same-session advisory-lock and preflight-before-ledger-DDL behavior in PR #148.
+- **Decision:** port the production seed prohibition and validated preflight concept to the canonical current-main startup design, but do not merge PR #120 wholesale or treat its Docker change as authorization for automatic production migrations.
+
+**PR #148 — migration runner candidate (branch `fix/migration-ledger-preflight-order-2026-10-30`, based on `shakti/canonical-migration-history-verified`):**
+- The inspected runner validates the migration catalogue, acquires a session-level advisory lock, checks whether the ledger exists, reconciles all applied rows before ledger DDL, and uses the same checked-out client for preflight and migration execution.
+- It includes fail-closed connection disposal for lock acquisition/release uncertainty and rollback failure, plus unit tests and disposable-PostgreSQL concurrency/failure tests.
+- These are the strongest reviewed runner mechanics among the inspected candidates. However, PR #148 is stacked on an older migration-history branch; its parent lineage, exact current-main replay, current CI and independent review remain unverified. Its PostgreSQL integration tests also need the shared verified TLS helper before use against any non-local database.
+- The runner must be paired with exact source recovery for production 096 and staging 20261022–20261025. A better preflight cannot make missing historical source safe or resolve database/environment identity.
+- **Decision:** retain PR #148 as the preferred migration-runner implementation reference. Replay/reconcile its isolated changes onto a current-main-based candidate only after validating PR #134/#132 ancestry, and run the exact-head disposable PostgreSQL suite. Do not merge the stacked branch as-is.
+
+**Branch topology — PR #216 security chain:**
+- PR #216 head is `8693239b28587fb61e0f61c2f2d021b97f073fba`; its declared base is `shakti/epr-security-base-2026-11-02` at `cd96ec579e2eda726b3fbe9e2d261f5b2ce9d832`.
+- PR #218 is stacked on #216; #219 is stacked on #218; #229 is also stacked on #218; #232 is stacked on #229. These relationships are explicit in the PR metadata and must be preserved.
+- A branch comparison against the current `main` reported a diverged history for the named EPR security base (567 commits ahead / 2 behind in the connector's comparison response). This unusually large ancestry delta requires commit-graph and merge-base inspection before any rebase, cherry-pick or merge. It is not evidence that 567 new feature commits should be integrated.
+- **Decision:** freeze the stack's current heads as evidence; do not rewrite or merge the chain until the base lineage and per-PR exact-head CI are reconciled. Keep the pilot UI #219 downstream of the security read path; do not detach it and bypass authorization.
+
+**Exact-head validation update:** the documentation-only PR #233 commit `9793d96eb7cfd1003ef0ac64f1fc7a746f083c1b` now has GitHub Actions CI run #41620872867 completed with conclusion `success`. This validates the documentation branch's configured CI only; it does not validate application code or authorize a merge.
+
+**Next implementation batch:** (1) create one current-main startup/preflight candidate with no automatic production migrations or fixture seeding; (2) port the verified TLS policy into API, migration and seed clients; (3) reconcile the #148 runner with canonical migration history on a fresh branch; (4) recover exact historical source manifests; (5) inspect the full #216 base commit graph before touching the stacked tenant-security PRs. Production remains read-only and HOLD.
