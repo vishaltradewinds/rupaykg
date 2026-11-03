@@ -15,6 +15,8 @@ export interface MrvWorkerRoleContract {
   direct_table_privileges: boolean;
   worker_api_execute: boolean;
   public_worker_api_execute: boolean;
+  worker_api_complete: boolean;
+  worker_api_secure: boolean;
 }
 
 /**
@@ -28,7 +30,8 @@ export function assertMrvWorkerRoleContract(role: MrvWorkerRoleContract | undefi
       || role.rolsuper || role.rolbypassrls || role.rolcreatedb || role.rolcreaterole
       || role.rolreplication || role.owner_membership || role.elevated_membership
       || role.any_role_membership || role.public_create || role.direct_table_privileges
-      || !role.worker_api_execute || role.public_worker_api_execute) {
+      || !role.worker_api_execute || role.public_worker_api_execute
+      || !role.worker_api_complete || !role.worker_api_secure) {
     throw new Error("MRV_WORKER_DATABASE_ROLE_CONTRACT_FAILED");
   }
 }
