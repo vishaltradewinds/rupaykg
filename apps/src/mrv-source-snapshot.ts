@@ -18,6 +18,7 @@ export type MrvSourceSnapshot = {
 export type MrvSnapshotCapture = {
   snapshot: MrvSourceSnapshot;
   observations: Record<string, unknown>[];
+  measurements: Record<string, unknown>[];
   evidence: Record<string, unknown>[];
   latestQuantity: number | undefined;
   latestUnit: string | undefined;
@@ -195,6 +196,7 @@ export async function captureMrvSourceSnapshot(input: {
     return {
       snapshot,
       observations: observationsResult.rows,
+      measurements: measurementsResult.rows,
       evidence: evidenceResult.rows,
       latestQuantity: latestMeasurement ? Number(latestMeasurement.value) : undefined,
       latestUnit: latestMeasurement?.unit,
