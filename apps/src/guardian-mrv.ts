@@ -9,6 +9,7 @@ export interface GuardianMrvRequest {
   observations: unknown[];
   measurements?: unknown[];
   evidence: unknown[];
+  artifactSeries?: unknown[];
   metadata?: Record<string, unknown>;
   correlationId?: string | undefined;
   idempotencyKey?: string | undefined;
