@@ -213,9 +213,8 @@ export async function registerWorkspaceRoutes(app: FastifyInstance, pool: Pool |
     } catch (error) { return workspaceFailure(reply, error, "Registry", request); }
   });
 
-  app.get("/api/v1/workspaces/settlement", async (request, reply) => {
-    const auth=await requireAuth(app,pool,request,reply);if(!auth||!pool)return;const ids=orgIds(auth);if(!ids.length)return result({settlements:[]});const geographyId=requestedGeography(request);if(geographyId&&!await authorizeGeography(pool,auth,geographyId))return reply.code(403).send({error:"Geography outside organization authorization scope",code:"GEOGRAPHY_FORBIDDEN"});
-    try{const params:unknown[]=[ids];if(geographyId)params.push(geographyId);const rows=await pool.query(`select s.id,s.obligation_id,s.credential_id,s.payer_id,p.name as payer_name,s.payee_id,py.name as payee_name,s.amount,s.currency,s.status,s.external_reference,s.created_at,s.settled_at from settlements s left join organizations p on p.id=s.payer_id left join organizations py on py.id=s.payee_id left join credentials c on c.id=s.credential_id left join activities a on a.id=c.activity_id where (s.payer_id=any($1::uuid[]) or s.payee_id=any($1::uuid[])) and organization_has_geography_scope(a.organization_id,a.geography_id)${geoClause(geographyId,"a.geography_id")} order by s.created_at desc limit 100`,params);return result({settlements:rows.rows});}catch(error){request.log.error(error);return reply.code(503).send({error:"Settlement workspace unavailable",syntheticData:false});}
+  app.get("/api/v1/workspaces/settlement", async (_request, reply) => {
+    return reply.code(503).send({ error: "Settlement workspace requires a separately approved multi-party authorization boundary", code: "SETTLEMENT_MULTI_PARTY_CONTEXT_REQUIRED", syntheticData: false });
   });
 
   app.get("/api/v1/workspaces/esg", async (request, reply) => {
