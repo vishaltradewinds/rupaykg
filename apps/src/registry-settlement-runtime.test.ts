@@ -208,8 +208,8 @@ describe("registry and settlement runtime acceptance", () => {
   it("allows BWG workspace data only after reports:read is granted", async () => {
     if (!pool) return;
     const roleId = (await pool.query<{ id: string }>(
-      "insert into roles(organization_id,name,permissions) values($1,$2,'[\\"reports:read\\"]'::jsonb) returning id",
-      [ownerOrgId, `BWG-READER-${suffix}`],
+      "insert into roles(organization_id,name,permissions) values($1,$2,$3::jsonb) returning id",
+      [ownerOrgId, `BWG-READER-${suffix}`, JSON.stringify(["reports:read"])],
     )).rows[0]!.id;
     const identityId = (await pool.query<{ id: string }>(
       "insert into identities(external_subject,display_name) values($1,$2) returning id",
