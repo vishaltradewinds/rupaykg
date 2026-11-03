@@ -49,7 +49,7 @@ before(async () => {
     assert.equal(geographyChecks.rows[0]?.unscoped_scope, false, "organization without a verified geography root must fail closed");
     actorId = (await c.query<{ id: string }>("insert into identities(external_subject,display_name) values($1,$2) returning id", [`runtime-registry-actor-${suffix}`, "Registry Runtime Actor"])).rows[0]!.id;
     verifierId = (await c.query<{ id: string }>("insert into identities(external_subject,display_name) values($1,$2) returning id", [`runtime-registry-verifier-${suffix}`, "Registry Runtime Verifier"])).rows[0]!.id;
-    const actorRole = (await c.query<{ id: string }>("insert into roles(organization_id,name,permissions) values($1,$2,$3::jsonb) returning id", [ownerOrgId, `REGISTRY-OPERATOR-${suffix}`, JSON.stringify(["ISSUE_CREDENTIAL","TRANSFER_CREDENTIAL","RETIRE_CREDENTIAL","AUTHORIZE_SETTLEMENT","SETTLE_FUNDS","settlement:authorize","settlement:settle","guardian:read"])] )).rows[0]!.id;
+    const actorRole = (await c.query<{ id: string }>("insert into roles(organization_id,name,permissions) values($1,$2,$3::jsonb) returning id", [ownerOrgId, `REGISTRY-OPERATOR-${suffix}`, JSON.stringify(["ISSUE_CREDENTIAL","TRANSFER_CREDENTIAL","RETIRE_CREDENTIAL","AUTHORIZE_SETTLEMENT","SETTLE_FUNDS","settlement:authorize","settlement:settle","guardian:read","evidence:upload"])] )).rows[0]!.id;
     const verifierRole = (await c.query<{ id: string }>("insert into roles(organization_id,name,permissions) values($1,'verifier',$2::jsonb) returning id", [ownerOrgId, JSON.stringify(["VERIFY_EVIDENCE", "verification:approve"])] )).rows[0]!.id;
     const destinationRole = (await c.query<{ id: string }>("insert into roles(organization_id,name,permissions) values($1,$2,$3::jsonb) returning id", [destinationOrgId, `SETTLEMENT-PARTY-${suffix}`, JSON.stringify(["settlement:authorize","settlement:settle","RETIRE_CREDENTIAL"])] )).rows[0]!.id;
     await approveTestMembership(c, actorId, ownerOrgId, actorRole, geographyId, "operator", "collector");
@@ -206,4 +206,57 @@ describe("registry and settlement runtime acceptance", () => {
     const retiredSettlement = await request("/api/v1/settlements", { method: "POST", body: JSON.stringify({ credentialId, payerId: destinationOrgId, payeeId: ownerOrgId, amount: 1, currency: "INR" }) }, actorToken, destinationOrgId); assert.equal(retiredSettlement.status, 409); assert.equal((await body(retiredSettlement)).code, "CREDENTIAL_RETIRED");
     const state = await pool.query<{ status: string }>("select status from credentials where id=$1", [credentialId]); assert.equal(state.rows[0]?.status, "RETIRED");
   });
+  it("binds Evidence Vault upload, list, download and review to the selected active organization", async () => {
+    if (!pool) return;
+    const content = Buffer.from("%PDF-1.7\\nactive organization boundary acceptance");
+    const upload = await request("/api/v1/evidence-vault/upload", {
+      method: "POST",
+      body: JSON.stringify({
+        activityId,
+        evidenceType: "ACTIVE_ORGANIZATION_BOUNDARY",
+        fileName: "active-organization-boundary.pdf",
+        mediaType: "application/pdf",
+        contentBase64: content.toString("base64"),
+      }),
+    }, actorToken, ownerOrgId);
+    assert.equal(upload.status, 201, "the verified active organization may upload evidence");
+    const uploaded = await body(upload);
+    const uploadedEvidenceId = uploaded.data.evidenceId as string;
+    assert.ok(uploadedEvidenceId);
+
+    const foreignList = await request(`/api/v1/evidence-vault?activityId=${activityId}`, {}, actorToken, destinationOrgId);
+    assert.equal(foreignList.status, 403);
+    assert.equal((await body(foreignList)).code, "EVIDENCE_SCOPE_FORBIDDEN");
+
+    const foreignDownload = await request(`/api/v1/evidence-vault/${uploadedEvidenceId}`, {}, actorToken, destinationOrgId);
+    assert.equal(foreignDownload.status, 404);
+    assert.equal((await body(foreignDownload)).code, "EVIDENCE_NOT_FOUND");
+
+    const foreignReview = await request(`/api/v1/evidence-vault/${uploadedEvidenceId}/review`, {
+      method: "POST",
+      body: JSON.stringify({ decision: "APPROVED", rationale: "Cross-organization review must be hidden" }),
+    }, actorToken, destinationOrgId);
+    assert.equal(foreignReview.status, 404);
+    assert.equal((await body(foreignReview)).code, "EVIDENCE_NOT_FOUND");
+
+    const foreignUpload = await request("/api/v1/evidence-vault/upload", {
+      method: "POST",
+      body: JSON.stringify({
+        activityId,
+        evidenceType: "ACTIVE_ORGANIZATION_BOUNDARY",
+        fileName: "must-not-upload.pdf",
+        mediaType: "application/pdf",
+        contentBase64: content.toString("base64"),
+      }),
+    }, actorToken, destinationOrgId);
+    assert.equal(foreignUpload.status, 403);
+    assert.equal((await body(foreignUpload)).code, "EVIDENCE_SCOPE_FORBIDDEN");
+
+    const persisted = await pool.query<{ count: string }>(
+      "select count(*)::text as count from evidence where activity_id=$1 and metadata->>'fileName' in ('active-organization-boundary.pdf','must-not-upload.pdf')",
+      [activityId],
+    );
+    assert.equal(Number(persisted.rows[0]?.count ?? 0), 1, "cross-organization upload must create no evidence rows");
+  });
+
 });
