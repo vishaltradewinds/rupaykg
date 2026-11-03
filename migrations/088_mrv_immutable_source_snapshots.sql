@@ -27,12 +27,12 @@ create table mrv_source_snapshots (
 -- The application asks PostgreSQL for this digest; the INSERT trigger independently
 -- recomputes it so a forged caller-supplied digest cannot be persisted.
 create or replace function mrv_source_snapshot_digest(payload jsonb)
-returns text language sql immutable strict parallel safe as $
+returns text language sql immutable strict parallel safe as $$
   select encode(digest(convert_to(payload::text, 'UTF8'), 'sha256'), 'hex');
-$;
+$$;
 
 create or replace function validate_mrv_source_snapshot_digest()
-returns trigger language plpgsql as $
+returns trigger language plpgsql as $$
 begin
   if new.source_digest is distinct from mrv_source_snapshot_digest(new.source_payload) then
     raise exception 'MRV_SOURCE_SNAPSHOT_DIGEST_MISMATCH';
@@ -42,7 +42,7 @@ begin
   end if;
   return new;
 end;
-$;
+$$;
 
 create trigger mrv_source_snapshots_validate_digest
 before insert on mrv_source_snapshots
@@ -50,11 +50,11 @@ for each row execute function validate_mrv_source_snapshot_digest();
 
 -- A row-level UPDATE/DELETE trigger does not intercept TRUNCATE.
 create or replace function prevent_mrv_source_snapshot_truncate()
-returns trigger language plpgsql as $
+returns trigger language plpgsql as $$
 begin
   raise exception 'MRV source snapshots cannot be truncated';
 end;
-$;
+$$;
 
 create trigger mrv_source_snapshots_no_truncate
 before truncate on mrv_source_snapshots
