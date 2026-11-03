@@ -292,7 +292,8 @@ try {
       "update organization_memberships set status='REVOKED' where id=$1",
       [ids.membership],
     ).then((result) => { revocationSettled = true; return result; });
-    assert.equal(await waitForLockWait(observerClient, mainBackendPid), true, "membership revocation must wait for the approval transaction");
+    const concurrentBackendPid = (await concurrentClient.query("select pg_backend_pid()")).rows[0].pg_backend_pid;
+    assert.equal(await waitForLockWait(observerClient, concurrentBackendPid), true, "membership revocation must wait for the approval transaction");
     await client.query("COMMIT");
     await blockedRevocation;
     await client.query("update organization_memberships set status='VERIFIED' where id=$1", [ids.membership]);
