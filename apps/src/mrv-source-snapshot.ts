@@ -20,6 +20,7 @@ export type MrvSnapshotCapture = {
   observations: Record<string, unknown>[];
   measurements: Record<string, unknown>[];
   evidence: Record<string, unknown>[];
+  artifactSeries: Record<string, unknown>[];
   latestQuantity: number | undefined;
   latestUnit: string | undefined;
   organizationId: string;
@@ -137,6 +138,11 @@ export async function captureMrvSourceSnapshot(input: {
       [input.activityId],
     );
 
+    const artifactSeriesResult = await client.query<{ record_json: string }>(
+      "select to_jsonb(s)::text record_json from evidence_artifact_series s where s.activity_id=$1 order by s.created_at,s.id",
+      [input.activityId],
+    );
+
     const payload = {
       schema: "rupaykg:mrv-source-snapshot:v1",
       activity: { id: activity.id, sourceRevision: activity.mrv_source_revision, recordJson: activity.snapshot_record_json },
@@ -147,6 +153,7 @@ export async function captureMrvSourceSnapshot(input: {
       observations: observationsResult.rows.map(row => ({ recordJson: row.snapshot_record_json, observedValue: row.observed_value, uncertainty: row.uncertainty })),
       measurements: measurementsResult.rows.map(row => ({ recordJson: row.snapshot_record_json, value: row.value, unit: row.unit })),
       evidence: evidenceResult.rows.map(row => ({ evidenceRecordJson: row.evidence_snapshot_record_json, artifactVersionRecordJson: row.artifact_version_snapshot_record_json, artifactSeriesRecordJson: row.artifact_series_snapshot_record_json, reviewRecordsJson: row.reviews_snapshot_records_json })),
+      artifactSeries: artifactSeriesResult.rows.map(row => row.record_json),
     };
     const digestResult = await client.query<{ digest: string }>(
       "select mrv_source_snapshot_digest($1::jsonb) as digest",
@@ -191,6 +198,7 @@ export async function captureMrvSourceSnapshot(input: {
       observations: observationsResult.rows.map(({ snapshot_record_json, ...row }) => ({ ...row, sourceRecordJson: snapshot_record_json })),
       measurements: measurementsResult.rows.map(({ snapshot_record_json, ...row }) => ({ ...row, sourceRecordJson: snapshot_record_json })),
       evidence: evidenceResult.rows.map(({ evidence_snapshot_record_json, artifact_version_snapshot_record_json, artifact_series_snapshot_record_json, reviews_snapshot_records_json, ...row }) => ({ ...row, sourceRecordJson: evidence_snapshot_record_json, artifactVersionRecordJson: artifact_version_snapshot_record_json, artifactSeriesRecordJson: artifact_series_snapshot_record_json, reviewRecordsJson: reviews_snapshot_records_json })),
+      artifactSeries: artifactSeriesResult.rows.map(row => ({ sourceRecordJson: row.record_json })),
       latestQuantity: latestMeasurement ? Number(latestMeasurement.value) : undefined,
       latestUnit: latestMeasurement?.unit,
       organizationId: activity.organization_id,
