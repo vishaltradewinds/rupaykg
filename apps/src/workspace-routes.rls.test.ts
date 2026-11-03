@@ -7,7 +7,6 @@ import type { RlsRequestContextConfig } from "./rls-request-transaction.js";
 
 const identityId = "11111111-1111-4111-8111-111111111111";
 const organizationA = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
-const organizationB = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 const geographyA = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa01";
 const config: RlsRequestContextConfig = {
   hmacSecret: "mrv-workspace-test-secret-material-at-least-32-bytes",
