@@ -222,11 +222,38 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
       if (!await activityInAuthorizedGeography(pool, auth, row.activity_id, owner.rows[0].organization_id)) return reply.code(403).send({ error: "Activity geography is outside organization authorization scope", code: "GEOGRAPHY_FORBIDDEN" });
       const verification = await verifyHcsMessage(timestamp, row.hcs_topic_id, row.integrity_hash, row.activity_id, row.verification_id, row.evidence_id, row.guardian_execution_id, row.source_snapshot_id ?? undefined, row.source_snapshot_digest ?? undefined, row.source_snapshot_version ?? undefined);
       if (!verification.verified) return { source: "hedera-mirror-node", syntheticData: false, ...verification, eligibleForRegistry: false };
-      const persisted = await pool.query<{ mirror_node_verified_at: Date }>(
-        "update mrv_provenance_events set mirror_node_verified_at=clock_timestamp() where id=$1 and hcs_consensus_timestamp=$2 and hcs_topic_id=$3 and integrity_hash=$4 and guardian_execution_id=$5 and guardian_status='VERIFIED' and hcs_status='CONSENSUS_CONFIRMED' returning mirror_node_verified_at",
-        [row.id, timestamp, row.hcs_topic_id, row.integrity_hash, row.guardian_execution_id],
-      );
-      if (!persisted.rows[0]?.mirror_node_verified_at) return { source: "hedera-mirror-node", syntheticData: false, verified: false, eligibleForRegistry: false, error: "MRV provenance changed during Mirror Node verification; retry against the current record" };
+      const verifyClient = await pool.connect();
+      let persistedAt: Date | null = null;
+      try {
+        await verifyClient.query("begin");
+        if (!canActForOrganization(auth, owner.rows[0].organization_id)
+            || !await hasOrganizationPermission(verifyClient, auth, owner.rows[0].organization_id, ["guardian:read"])) {
+          await verifyClient.query("rollback");
+          return reply.code(403).send({ error: "Authorization changed during Mirror Node verification", code: "MRV_AUTHORIZATION_CHANGED", syntheticData: false });
+        }
+        const scope = await verifyClient.query<{ ok: boolean }>(
+          `select exists(select 1 from organization_memberships om join activities a on a.organization_id=om.organization_id
+            where om.identity_id=$1 and om.organization_id=$2 and om.status='VERIFIED' and a.id=$3
+              and a.geography_id is not null and organization_has_geography_scope(om.organization_id,a.geography_id)) ok`,
+          [auth.identityId, owner.rows[0].organization_id, row.activity_id],
+        );
+        if (scope.rows[0]?.ok !== true) {
+          await verifyClient.query("rollback");
+          return reply.code(403).send({ error: "Activity geography authorization changed during Mirror Node verification", code: "GEOGRAPHY_FORBIDDEN", syntheticData: false });
+        }
+        const persisted = await verifyClient.query<{ mirror_node_verified_at: Date }>(
+          "update mrv_provenance_events set mirror_node_verified_at=clock_timestamp() where id=$1 and hcs_consensus_timestamp=$2 and hcs_topic_id=$3 and integrity_hash=$4 and guardian_execution_id=$5 and source_snapshot_id is not distinct from $6 and source_snapshot_digest is not distinct from $7 and source_snapshot_version is not distinct from $8 and guardian_status='VERIFIED' and hcs_status='CONSENSUS_CONFIRMED' returning mirror_node_verified_at",
+          [row.id, timestamp, row.hcs_topic_id, row.integrity_hash, row.guardian_execution_id, row.source_snapshot_id, row.source_snapshot_digest, row.source_snapshot_version],
+        );
+        persistedAt = persisted.rows[0]?.mirror_node_verified_at ?? null;
+        await verifyClient.query("commit");
+      } catch (error) {
+        await verifyClient.query("rollback").catch(() => undefined);
+        throw error;
+      } finally {
+        verifyClient.release();
+      }
+      if (!persistedAt) return { source: "hedera-mirror-node", syntheticData: false, verified: false, eligibleForRegistry: false, error: "MRV provenance or source snapshot binding changed during Mirror Node verification; retry against the current record" };
       const acceptanceFixture = await isAcceptanceFixture(pool, row.activity_id);
       const currentSnapshot = row.source_snapshot_id && row.source_snapshot_version !== null
         ? await pool.query<{ current: boolean }>("select not exists(select 1 from mrv_source_snapshots newer where newer.activity_id=$1 and newer.snapshot_version>$2) current", [row.activity_id, row.source_snapshot_version])
@@ -238,7 +265,7 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
         ...verification,
         eligibleForRegistry: !acceptanceFixture && sourceSnapshotCurrent,
         ...(acceptanceFixture ? { registryEligibilityReason: "ACCEPTANCE_FIXTURE_NOT_REGISTRY_ELIGIBLE" } : !sourceSnapshotCurrent ? { registryEligibilityReason: "SOURCE_SNAPSHOT_SUPERSEDED_OR_LEGACY" } : {}),
-        persistedVerificationAt: persisted.rows[0].mirror_node_verified_at,
+        persistedVerificationAt: persistedAt,
       };
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Hedera mirror-node verification unavailable", code: "HCS_VERIFY_UNAVAILABLE", syntheticData: false }); }
   });
