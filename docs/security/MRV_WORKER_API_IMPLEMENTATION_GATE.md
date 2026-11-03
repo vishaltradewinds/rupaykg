@@ -62,3 +62,14 @@ No production migration, RLS activation, role grant, worker enablement, merge or
 - The adapter complete-job validator and regression tests now also enforce the durable migration's actual constraints: UUID primary/foreign identifiers, 32–128 character idempotency key, lowercase 64-character SHA-256 payload hash, status enum, object snapshots, dates and exact live lease-token equality (commits `39310e175330fff3494ae8ed61fb04a7491b815e` and `1a81146ae5f8b69d62b95520cc03187705569b1e`). The database API must return the canonical `mrv_submission_jobs` row shape; this still requires PostgreSQL contract validation.
 - No exact-head CI/check run is visible for the current head `1fb8303df481a844b37b8c485cfbc91b6788fac8`; the commit's check-runs endpoint currently reports zero checks. No test/build pass is claimed.
 - No live database, provider or production operation was executed. PR #213 remains draft, unmerged and non-mergeable. Worker enablement, production migration, role grants, RLS activation and certification remain blocked.
+
+
+## 2026-11-03 worker entrypoint and strict-input correction
+
+- Commit `39310e175330fff3494ae8ed61fb04a7491b815e` enforces the durable queue's UUID foreign-key, idempotency-key length and SHA-256 payload-hash constraints at the TypeScript API boundary.
+- Commit `1a81146ae5f8b69d62b95520cc03187705569b1e` adds malformed UUID/hash regression cases.
+- Commit `8eacf3ffa5e0f274f1ec68812c1ae8a7410d43b9` changes the package worker start script to the restricted function-only server. The legacy direct-SQL worker/server remain in source but are not the package entrypoint and must not be deployed.
+- Commit `4e24041194e0d627453ff5c32819d95a2eb5c5f1` documents this deployment boundary.
+- Commit `5bae6d69d9da973ae89d9b13eeb257b78e431943` adds a restricted-worker disabled-gate test that asserts no queue claim is attempted while the feature flag is absent.
+- Latest source now contains deterministic tests for stage ordering and the disabled gate. No test, typecheck, build or PostgreSQL acceptance result is claimed: the latest commit has zero exact-head GitHub check runs.
+- PR #213 remains draft, unmerged and non-mergeable. The API migration, owner role, narrowly scoped RLS policies and eight functions do not yet exist. No production migration, grant, RLS activation, worker enablement, deployment or certification has occurred.
