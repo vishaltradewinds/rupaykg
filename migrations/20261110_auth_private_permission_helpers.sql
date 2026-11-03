@@ -46,7 +46,9 @@ GRANT USAGE ON SCHEMA app_security TO rupaykg_auth_owner;
 GRANT EXECUTE ON FUNCTION app_security.current_request_context_claims() TO rupaykg_auth_owner;
 RESET ROLE;
 
-GRANT SELECT ON public.evidence, public.activities TO rupaykg_auth_owner;
+GRANT SELECT (id, activity_id) ON public.evidence TO rupaykg_auth_owner;
+GRANT SELECT (id, organization_id, geography_id, actor_identity_id, occurred_at, created_at)
+  ON public.activities TO rupaykg_auth_owner;
 
 SET LOCAL ROLE rupaykg_auth_owner;
 
