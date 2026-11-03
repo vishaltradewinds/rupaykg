@@ -3,37 +3,71 @@ import test from "node:test";
 import { assertMrvWorkerRoleContract, type MrvWorkerRoleContract } from "./mrv-worker-role-contract.js";
 
 const safeRole: MrvWorkerRoleContract = {
-  current_user: "rupaykg_mrv_worker_runtime", session_user: "rupaykg_mrv_worker_runtime",
-  rolcanlogin: true, rolinherit: false, rolsuper: false, rolbypassrls: false,
-  rolcreatedb: false, rolcreaterole: false, rolreplication: false,
-  owner_membership: false, elevated_membership: false, any_role_membership: false,
-  geography_scope_execute: true, public_create: false, required_table_reads: true,
-  job_update: true, job_insert: false, job_delete: false, job_truncate: false,
-  event_insert: true, event_update: false, event_delete: false, event_truncate: false,
-  provenance_insert: true, provenance_update: false, provenance_delete: false, provenance_truncate: false,
-  source_table_write: false,
+  current_user: "rupaykg_mrv_worker_runtime",
+  session_user: "rupaykg_mrv_worker_runtime",
+  rolcanlogin: true,
+  rolinherit: false,
+  rolsuper: false,
+  rolbypassrls: false,
+  rolcreatedb: false,
+  rolcreaterole: false,
+  rolreplication: false,
+  owner_membership: false,
+  elevated_membership: false,
+  any_role_membership: false,
+  public_create: false,
+  direct_table_privileges: false,
+  worker_api_execute: true,
+  public_worker_api_execute: false,
 };
 
-test("accepts only the dedicated non-inheriting worker database role", () => {
+test("accepts only the dedicated function-only worker database role", () => {
   assert.doesNotThrow(() => assertMrvWorkerRoleContract(safeRole));
 });
 
-test("rejects owner/elevated role memberships and inherited privileges", () => {
+test("rejects privileged role flags and memberships", () => {
   for (const patch of [
-    { owner_membership: true }, { elevated_membership: true },
-    { any_role_membership: true }, { rolinherit: true },
-    { rolbypassrls: true }, { rolsuper: true },
-  ]) assert.throws(() => assertMrvWorkerRoleContract({ ...safeRole, ...patch } as MrvWorkerRoleContract));
+    { owner_membership: true },
+    { elevated_membership: true },
+    { any_role_membership: true },
+    { rolinherit: true },
+    { rolsuper: true },
+    { rolbypassrls: true },
+    { rolcreatedb: true },
+    { rolcreaterole: true },
+    { rolreplication: true },
+  ]) {
+    assert.throws(() => assertMrvWorkerRoleContract({ ...safeRole, ...patch }));
+  }
 });
 
-test("rejects broad writes outside the MRV job ledger and append-only sinks", () => {
+test("rejects direct table privileges, public schema creation, or missing API execution", () => {
   for (const patch of [
-    { source_table_write: true }, { job_insert: true }, { job_delete: true }, { job_truncate: true },
-    { event_update: true }, { event_delete: true }, { event_truncate: true },
-    { provenance_update: true }, { provenance_delete: true }, { provenance_truncate: true },
-  ]) assert.throws(() => assertMrvWorkerRoleContract({ ...safeRole, ...patch } as MrvWorkerRoleContract));
+    { public_create: true },
+    { direct_table_privileges: true },
+    { worker_api_execute: false },
+  ]) {
+    assert.throws(() => assertMrvWorkerRoleContract({ ...safeRole, ...patch }));
+  }
+});
+
+test("rejects PUBLIC execution on the worker API", () => {
+  assert.throws(() => assertMrvWorkerRoleContract({
+    ...safeRole,
+    public_worker_api_execute: true,
+  }));
 });
 
 test("rejects a session role that differs from the authenticated worker role", () => {
-  assert.throws(() => assertMrvWorkerRoleContract({ ...safeRole, session_user: "postgres" }));
+  assert.throws(() => assertMrvWorkerRoleContract({
+    ...safeRole,
+    session_user: "postgres",
+  }));
+});
+
+test("rejects any identity other than the dedicated runtime role", () => {
+  assert.throws(() => assertMrvWorkerRoleContract({
+    ...safeRole,
+    current_user: "rupaykg_app_runtime",
+  }));
 });
