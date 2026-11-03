@@ -49,6 +49,10 @@ test("EPR returns RLS isolates two organizations and fails closed without a vali
        on conflict(id) do nothing`,
       [actorId, 'epr-rls-actor'],
     );
+    await client.query(
+      "update public.organizations set verification_status='VERIFIED',verified_by_identity_id=$2,verified_at=clock_timestamp() where id=any($1::uuid[]) and verification_status is distinct from 'VERIFIED'",
+      [[organizationA, organizationB], actorId],
+    );
     const permissionRole = await client.query<{ id: string }>(
       `insert into public.roles(organization_id,name,permissions,geography_scope)
        values($1,'epr_reader','["epr:read"]'::jsonb,'[]'::jsonb) returning id`,
