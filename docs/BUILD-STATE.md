@@ -1,5 +1,8 @@
 # RupayKg Build State
 
+> **Historical snapshot warning — 2026-11-03:** This document is dated 2026-09-02 and its implementation inventory/next-work list is historical. The current product AIM, repository/database facts and release blockers are recorded in [the 2026-11-03 repository reconciliation](engineering/repository-reconciliation/2026-11-03-aim-and-whole-repository-reconciliation.md). Do not use this snapshot as current production-readiness evidence.
+
+
 **Date:** 2026-09-02
 
 ## Source of truth
