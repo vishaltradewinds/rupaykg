@@ -1,7 +1,6 @@
 -- Fail closed when an organization has no verified geography assignment.
--- The previous compatibility behavior treated missing scope roots as unrestricted.
--- Existing organizations must receive an explicitly verified geography assignment
--- through the governed onboarding process before geography-bound writes are enabled.
+-- Bound hierarchy traversal and stop on repeated nodes to prevent malformed
+-- cyclic reference data from causing unbounded recursion.
 CREATE OR REPLACE FUNCTION public.organization_has_geography_scope(
   p_organization_id uuid,
   p_geography_id uuid
@@ -10,15 +9,17 @@ LANGUAGE sql
 STABLE
 SET search_path = pg_catalog, pg_temp
 AS $function$
-  WITH RECURSIVE ancestors(id) AS (
-    SELECT g.id
+  WITH RECURSIVE ancestors(id, path, depth) AS (
+    SELECT g.id, ARRAY[g.id]::uuid[], 0
       FROM public.geography g
      WHERE g.id = p_geography_id
     UNION ALL
-    SELECT g.parent_id
+    SELECT g.parent_id, a.path || g.parent_id, a.depth + 1
       FROM public.geography g
       JOIN ancestors a ON a.id = g.id
      WHERE g.parent_id IS NOT NULL
+       AND a.depth < 63
+       AND NOT (g.parent_id = ANY(a.path))
   )
   SELECT EXISTS (
     SELECT 1
