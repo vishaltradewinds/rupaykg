@@ -83,7 +83,7 @@ try {
   assert.equal(pageReady, true, "React header and language selector must mount before interaction tests");
 
   const initial = await evaluate(`({
-    drawer: !!document.querySelector('[aria-label="Account access"]'),
+    drawer: !!document.querySelector('[role="dialog"][aria-label="Account access"]'),
     health: !!document.querySelector('.health'),
     languageInHeader: document.querySelector('#rupaykg-national-language-selector')?.parentElement?.classList.contains('topbar') === true,
     offlineHidden: document.querySelector('#rupaykg-offline-status')?.hidden === true
@@ -109,32 +109,44 @@ try {
       email: !!document.querySelector('[aria-label="Account access"] input[type="email"]')
     };
   })()`);
-  assert.equal(signIn.drawer, true, "Sign in CTA must open account access");
-  assert.equal(signIn.email, true, "Sign in panel must expose an email field");
+  assert.equal(signIn.drawer, true, "Sign in CTA must open an accessible dialog");
+  assert.equal(signIn.modal, true, "Account access must be announced as modal");
+  assert.equal(signIn.focusInside, true, "Opening account access must move focus into the dialog");
+  assert.equal(signIn.email, true, "Sign in panel must expose a programmatically labelled email field");
+  const trapped = await evaluate(`(async()=> {
+    const panel = document.querySelector('[role="dialog"]');
+    const items = [...panel.querySelectorAll('button:not([disabled]),input:not([disabled])')];
+    items[items.length - 1].focus();
+    panel.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }));
+    return panel.contains(document.activeElement) && document.activeElement === items[0];
+  })()`);
+  assert.equal(trapped, true, "Tab from the last control must wrap to the first dialog control");
 
   const escaped = await evaluate(`(async()=> {
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     ${waitForRender}
-    return !document.querySelector('[aria-label="Account access"]');
+    return !document.querySelector('[role="dialog"]') && document.activeElement === document.querySelectorAll(".landing-actions button")[0];
   })()`);
   assert.equal(escaped, true, "Escape must close account access");
 
   const register = await evaluate(`(async()=> {
     document.querySelectorAll('.landing-actions button')[1]?.click();
     ${waitForRender}
-    const panel = document.querySelector('[aria-label="Account access"]');
+    const panel = document.querySelector('[role="dialog"][aria-modal="true"]');
     return {
       drawer: !!panel,
-      name: !!panel?.querySelector('input[placeholder="Name"]')
+      name: !!panel?.querySelector('input[aria-label="Name"]'),
+      focusInside: panel?.contains(document.activeElement) === true
     };
   })()`);
   assert.equal(register.drawer, true, "Create account CTA must open account access");
-  assert.equal(register.name, true, "Create account panel must expose the name field");
+  assert.equal(register.name, true, "Create account panel must expose the labelled name field");
+  assert.equal(register.focusInside, true, "Registration dialog must receive focus on open");
 
   const closed = await evaluate(`(async()=> {
     document.querySelector('[aria-label="Close account access"]')?.click();
     ${waitForRender}
-    return !document.querySelector('[aria-label="Account access"]');
+    return !document.querySelector('[role="dialog"]') && document.activeElement === document.querySelectorAll(".landing-actions button")[1];
   })()`);
   assert.equal(closed, true, "Close control must dismiss account access");
 
