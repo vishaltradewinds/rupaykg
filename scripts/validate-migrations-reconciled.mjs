@@ -132,8 +132,6 @@ if (!/organization_geography_scopes/.test(workerBoundaryAcceptance)) {
   throw new Error("MRV PostgreSQL acceptance must enforce RLS on organization_geography_scopes");
 }
 
-console.log(`Validated ${files.length} migrations, ${objects.size} schema objects and verification/geography guardrails.`);
-
 const migrationRunner = await readFile(path.resolve("apps/src/migrate.ts"), "utf8");
 const migrationIntegrity = await readFile(path.resolve("apps/src/migration-integrity.ts"), "utf8");
 const migrationIntegrityTests = await readFile(path.resolve("apps/src/migration-integrity.test.ts"), "utf8");
@@ -152,3 +150,5 @@ if (!/assertCriticalPostconditions\(client, migration\.filename\)/.test(migratio
     !/mrv_submission_jobs_claim_idx/.test(migrationRunner)) {
   throw new Error("critical MRV migrations must assert actual PostgreSQL catalog postconditions before ledger commit");
 }
+
+console.log(`Validated ${files.length} migrations, ${objects.size} schema objects, checksum integrity and critical MRV catalog gates.`);
