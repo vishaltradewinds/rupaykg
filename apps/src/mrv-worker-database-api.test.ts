@@ -75,6 +75,19 @@ test("worker adapter uses the exact authorization and persistence functions", as
   assert.match(calls[2], /mrv_worker_api\.persist_hedera_binding/);
 });
 
+test("worker adapter rejects invalid and expired lease renewal timestamps", async () => {
+  const id = "00000000-0000-4000-8000-000000000001";
+  const token = "00000000-0000-4000-8000-000000000002";
+  const valid = new MrvWorkerDatabaseApi(poolReturning("2099-01-01T00:00:00.000Z").pool);
+  assert.equal(await valid.renew(id, token, 120), true);
+  const malformed = new MrvWorkerDatabaseApi(poolReturning("not-a-timestamp").pool);
+  await assert.rejects(() => malformed.renew(id, token, 120), /INVALID_RENEWAL/);
+  const expired = new MrvWorkerDatabaseApi(poolReturning("2000-01-01T00:00:00.000Z").pool);
+  await assert.rejects(() => expired.renew(id, token, 120), /INVALID_RENEWAL/);
+  const wrongType = new MrvWorkerDatabaseApi(poolReturning(123).pool);
+  await assert.rejects(() => wrongType.renew(id, token, 120), /INVALID_RENEWAL/);
+});
+
 test("worker adapter rejects malformed boolean responses", async () => {
   const { pool } = poolReturning("true");
   await assert.rejects(() => new MrvWorkerDatabaseApi(pool).authorize("job"), /INVALID_BOOLEAN/);
