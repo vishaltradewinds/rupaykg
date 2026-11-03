@@ -68,21 +68,32 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
   app.post("/api/v1/epr/obligations/:obligationId/assess", async (request, reply) => {
     const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
     const obligationId = (request.params as { obligationId: string }).obligationId;
+    if (!auth.activeOrganizationId) return reply.code(403).send({ error: "Select one verified organization", code: "RLS_ORGANIZATION_CONTEXT_REQUIRED" });
+    if (!requestContext) return reply.code(503).send({ error: "Signed tenant request context is not configured", code: "RLS_CONTEXT_CONFIG_REQUIRED", syntheticData: false });
     try {
-      const obligation = await pool.query<{ id: string; organization_id: string; jurisdiction_id: string | null; required_quantity: string }>("select id, organization_id, jurisdiction_id, required_quantity from obligations where id = $1", [obligationId]);
-      if (!obligation.rows[0]) return reply.code(404).send({ error: "Obligation not found" });
-      const organizationId = obligation.rows[0].organization_id;
-      if (!canActForOrganization(auth, organizationId)) return reply.code(403).send({ error: "Organization access denied", code: "ORG_FORBIDDEN" });
-      if (!await hasValuePermission(pool, "can_assess_epr", auth.identityId, organizationId)) return reply.code(403).send({ error: "EPR assessment permission required", code: "EPR_ASSESS_FORBIDDEN" });
-      const jurisdictionId = obligation.rows[0].jurisdiction_id;
-      if (!jurisdictionId) return reply.code(409).send({ error: "EPR obligation must have an authorized jurisdiction before assessment", code: "OBLIGATION_JURISDICTION_REQUIRED" });
-      const jurisdiction = await pool.query<{ ok: boolean }>("select exists(select 1 from organization_memberships om where om.identity_id=$1 and om.organization_id=$2 and om.status='VERIFIED' and organization_has_geography_scope(om.organization_id,$3)) as ok", [auth.identityId, organizationId, jurisdictionId]);
-      if (jurisdiction.rows[0]?.ok !== true) return reply.code(403).send({ error: "Obligation jurisdiction is outside organization authorization scope", code: "GEOGRAPHY_FORBIDDEN" });
-      const evidence = await pool.query<{ evidence_id: string; verification_id: string; quantity: string }>(`select c.evidence_id, c.verification_id, c.quantity::text from epr_credits c join epr_obligations eo on eo.scheme_id = c.scheme_id and eo.obligated_organization_id = $1 join evidence e on e.id = c.evidence_id join verifications v on v.id = c.verification_id join activities a on a.id = e.activity_id where eo.obligation_id = $2 and c.status in ('ELIGIBLE','ISSUED','ACTIVE') and e.status = 'VERIFIED' and (e.content_hash is not null or e.content_uri is not null) and v.decision = 'APPROVED' and a.geography_id is not null and organization_has_geography_scope($1,a.geography_id) and (c.issuer_organization_id = $1 or c.recycler_organization_id = $1)`, [organizationId, obligationId]);
-      const assessment = assessEprObligation(Number(obligation.rows[0].required_quantity ?? 0), evidence.rows.map(row => ({ evidenceId: row.evidence_id, verificationId: row.verification_id, approved: true, quantity: Number(row.quantity) })));
-      await pool.query("update obligations set status = $2, required_quantity = $3 where id = $1", [obligationId, assessment.status, assessment.requiredQuantity]);
+      const assessment = await withRlsRequestTransaction(pool, auth, requestContext, async (client) => {
+        const obligation = await client.query<{organization_id:string;jurisdiction_id:string|null;required_quantity:string}>("select organization_id,jurisdiction_id,required_quantity from obligations where id=$1 for update", [obligationId]);
+        const row = obligation.rows[0];
+        if (!row) throw Object.assign(new Error("Obligation not found"), { code: "OBLIGATION_NOT_FOUND" });
+        if (row.organization_id !== auth.activeOrganizationId || !canActForOrganization(auth, row.organization_id)) throw Object.assign(new Error("Obligation is not in the active organization"), { code: "ORG_FORBIDDEN" });
+        if (!await hasValuePermission(client, "can_assess_epr", auth.identityId, row.organization_id)) throw Object.assign(new Error("EPR assessment permission required"), { code: "EPR_ASSESS_FORBIDDEN" });
+        if (!row.jurisdiction_id) throw Object.assign(new Error("Obligation jurisdiction required"), { code: "OBLIGATION_JURISDICTION_REQUIRED" });
+        const scope = await client.query<{ok:boolean}>("select organization_has_geography_scope($1,$2) as ok", [row.organization_id,row.jurisdiction_id]);
+        if (scope.rows[0]?.ok !== true) throw Object.assign(new Error("Obligation jurisdiction is outside organization scope"), { code: "GEOGRAPHY_FORBIDDEN" });
+        const credits = await client.query<{evidence_id:string;verification_id:string;quantity:string}>(`select c.evidence_id,c.verification_id,c.quantity::text from epr_credits c join epr_obligations eo on eo.scheme_id=c.scheme_id and eo.obligated_organization_id=$1 join evidence e on e.id=c.evidence_id join verifications v on v.id=c.verification_id join activities a on a.id=e.activity_id where eo.obligation_id=$2 and c.status in ('ELIGIBLE','ISSUED','ACTIVE') and e.status='VERIFIED' and (e.content_hash is not null or e.content_uri is not null) and v.decision='APPROVED' and a.geography_id is not null and organization_has_geography_scope($1,a.geography_id) and (c.issuer_organization_id=$1 or c.recycler_organization_id=$1)`, [row.organization_id,obligationId]);
+        const result = assessEprObligation(Number(row.required_quantity ?? 0), credits.rows.map(x => ({evidenceId:x.evidence_id,verificationId:x.verification_id,approved:true,quantity:Number(x.quantity)})));
+        await client.query("update obligations set status=$2,required_quantity=$3 where id=$1", [obligationId,result.status,result.requiredQuantity]);
+        return result;
+      });
       return { source: "postgresql", syntheticData: false, assessment };
-    } catch (error) { request.log.error(error); return reply.code(503).send({ error: "EPR assessment unavailable", syntheticData: false }); }
+    } catch (error) {
+      const code = error && typeof error === "object" && "code" in error ? String((error as {code:unknown}).code) : "";
+      if (code === "OBLIGATION_NOT_FOUND") return reply.code(404).send({ error: "Obligation not found", code });
+      if (["ORG_FORBIDDEN","EPR_ASSESS_FORBIDDEN","GEOGRAPHY_FORBIDDEN"].includes(code)) return reply.code(403).send({ error: error instanceof Error ? error.message : "EPR assessment forbidden", code });
+      if (code === "OBLIGATION_JURISDICTION_REQUIRED") return reply.code(409).send({ error: error instanceof Error ? error.message : "Obligation jurisdiction required", code });
+      if (["RLS_ORGANIZATION_CONTEXT_REQUIRED","RLS_VERIFIED_MEMBERSHIP_REQUIRED","RLS_BILATERAL_CONTEXT_UNSUPPORTED"].includes(code)) return reply.code(403).send({ error: error instanceof Error ? error.message : "Verified organization context required", code });
+      request.log.error(error); return reply.code(503).send({ error: "EPR assessment unavailable", syntheticData: false });
+    }
   });
 
   app.post("/api/v1/esg/reporting-periods/:periodId/metrics", async (request, reply) => {
