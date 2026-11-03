@@ -27,7 +27,7 @@ test("production lifecycle integration gate", { skip: !url }, async () => {
     await c.query("update activities set status='COMPLETED' where id=$1", [activity]);
 
     // CI uses a deterministic fixture anchor, but the credential gate still requires a source snapshot.
-    const sourceRevision = (await c.query<{ mrv_source_revision: number }>("select mrv_source_revision from activities where id=$1", [activity])).rows[0]!.mrv_source_revision;
+    const sourceRevision = (await c.query<{ mrv_source_revision: string | number }>("select mrv_source_revision from activities where id=$1", [activity])).rows[0]!.mrv_source_revision;
     const snapshotPayload = { schema: "rupaykg:mrv-source-snapshot:v1", activity: { id: activity, sourceRevision }, verification: { id: verification }, selectedEvidenceId: evidence, guardianPolicyId: "integration-policy" };
     const snapshot = (await c.query<{ id: string }>(
       "insert into mrv_source_snapshots(activity_id,verification_id,evidence_id,guardian_policy_id,snapshot_version,source_revision,source_digest,source_payload,created_by_identity_id) values($1,$2,$3,$4,1,$5,$6,$7::jsonb,$8) returning id",
