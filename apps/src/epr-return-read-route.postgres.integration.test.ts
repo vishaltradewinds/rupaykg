@@ -43,12 +43,41 @@ test("EPR returns RLS isolates two organizations and fails closed without a vali
       [returnA, returnB, scheme.rows[0]!.id, organizationA, organizationB],
     );
 
+    await client.query(
+      `insert into public.identities(id,external_subject,display_name,status)
+       values($1,$2,'EPR RLS CI Actor','VERIFIED')
+       on conflict(id) do nothing`,
+      [actorId, `epr-rls-actor:${suffix}`],
+    );
+    const permissionRole = await client.query<{ id: string }>(
+      `insert into public.roles(organization_id,name,permissions,geography_scope)
+       values($1,'epr_reader','["epr:read"]'::jsonb,'[]'::jsonb) returning id`,
+      [organizationA],
+    );
+    await client.query("ALTER TABLE public.organization_memberships DISABLE TRIGGER stakeholder_membership_application_guard");
+    await client.query(
+      `insert into public.organization_memberships(identity_id,organization_id,role_id,status)
+       values($1,$2,$3,'VERIFIED')`,
+      [actorId, organizationA, permissionRole.rows[0]!.id],
+    );
+    await client.query("ALTER TABLE public.organization_memberships ENABLE TRIGGER stakeholder_membership_application_guard");
+
     await client.query("SET LOCAL ROLE rupaykg_app_runtime");
     const tokenA = createSignedRequestContextToken(
       { actorIdentityId: actorId, organizationId: organizationA },
       { secret, keyId, ttlSeconds: 60 },
     );
     await client.query("select set_config('app.request_context',$1,true)", [tokenA]);
+    const allowedPermission = await client.query<{ allowed: boolean }>(
+      "select auth_private.has_organization_permission($1,$2,$3::text[]) as allowed",
+      [actorId, organizationA, ["epr:read"]],
+    );
+    assert.equal(allowedPermission.rows[0]?.allowed, true, "exact app runtime must execute the signed same-tenant permission helper");
+    const mismatchedOrganization = await client.query<{ allowed: boolean }>(
+      "select auth_private.has_organization_permission($1,$2,$3::text[]) as allowed",
+      [actorId, organizationB, ["epr:read"]],
+    );
+    assert.equal(mismatchedOrganization.rows[0]?.allowed, false, "the helper must reject an organization argument different from the signed claim");
     const visibleA = await client.query<{ id: string; organization_id: string }>(
       "select id,organization_id from public.epr_returns where id = any($1::uuid[]) order by id",
       [[returnA, returnB]],
@@ -174,6 +203,8 @@ test("EPR returns RLS isolates two organizations and fails closed without a vali
       [returnA],
     );
     await expectPermissionDenied("select * from app_security.request_context_keys");
+    await expectPermissionDenied("select * from public.organization_memberships");
+    await expectPermissionDenied("select * from public.roles");
 
     await client.query("ROLLBACK");
   } catch (error) {
