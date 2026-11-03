@@ -5,7 +5,8 @@ const credentialTransitions: Record<string, string[]> = {
   ELIGIBLE: ["ISSUED"],
   ISSUED: ["ACTIVE"],
   ACTIVE: ["TRANSFERRED", "RETIRED"],
-  TRANSFERRED: ["RETIRED"],
+  // Transfer history can advance repeatedly while the aggregate status remains TRANSFERRED.
+  TRANSFERRED: ["TRANSFERRED", "RETIRED"],
   RETIRED: [],
 };
 
@@ -25,6 +26,7 @@ test("credential lifecycle only permits governed forward transitions", () => {
   assert.equal(canTransition(credentialTransitions, "ELIGIBLE", "ISSUED"), true);
   assert.equal(canTransition(credentialTransitions, "ISSUED", "ACTIVE"), true);
   assert.equal(canTransition(credentialTransitions, "ACTIVE", "TRANSFERRED"), true);
+  assert.equal(canTransition(credentialTransitions, "TRANSFERRED", "TRANSFERRED"), true);
   assert.equal(canTransition(credentialTransitions, "TRANSFERRED", "RETIRED"), true);
   assert.equal(canTransition(credentialTransitions, "RETIRED", "ACTIVE"), false);
   assert.equal(canTransition(credentialTransitions, "ISSUED", "RETIRED"), false);

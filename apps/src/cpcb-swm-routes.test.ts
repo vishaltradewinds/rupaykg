@@ -60,3 +60,18 @@ test("local workflow stages are separate from reported CPCB statuses", () => {
   assert.equal(isSwmLocalStage("APPROVED"), false);
   assert.equal(isSwmLocalStage("INTEGRATED_API_SYNCED"), false);
 });
+
+test("CPCB SWM observation payload rejects non-canonical measurement units", () => {
+  assert.equal(safeObservations({
+    ...baseObservations,
+    floorAreaM2: { ...baseObservations.floorAreaM2, unit: "sqft" },
+  }), false);
+  assert.equal(safeObservations({
+    ...baseObservations,
+    waterConsumptionLitresPerDay: { ...baseObservations.waterConsumptionLitresPerDay, unit: "litres/day" },
+  }), false);
+  assert.equal(safeObservations({
+    ...baseObservations,
+    wasteGenerationKgPerDay: { ...baseObservations.wasteGenerationKgPerDay, unit: "tonnes/day" },
+  }), false);
+});

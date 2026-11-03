@@ -34,6 +34,12 @@ Migration `023` is intentionally absent from the current repository history; do 
 
 Migration files are intentionally ordered and each numbered migration must have one authoritative owner. Do not reintroduce duplicate numbered migrations containing the same tables or enums.
 
+## Canonical audit append rule (migration 089)
+
+Migration `089_canonical_audit_append.sql` introduces `append_platform_audit_event`. The function takes a row lock on the singleton chain head, constructs a canonical JSONB event from persisted audit fields, hashes its UTF-8 JSONB representation with SHA-256, inserts the audit row, and advances the head in the caller's transaction. Platform-admin, CPCB/SWM, field-device enrollment/verification, and the field-sync conflict trigger use this shared append path after migration 089. The business mutation and audit append must remain in the same transaction.
+
+The migration deliberately does not rewrite old audit rows. The pre-cutover head is an anchor, not proof that every historical event was linked. Any new audit writer must use the shared function; direct inserts into `audit_events` break the post-cutover completeness guarantee. The disposable PostgreSQL integration test checks concurrent append serialization, stored-field hash consistency, chain reachability, and head consistency. Do not claim the whole historical audit table is a single complete tamper-evident chain until legacy rows and all writers are independently reconciled.
+
 ## Production rule
 
 A migration runner must stop on the first error. Never silently continue after a partial schema application. Run against a controlled migration ledger in deployment infrastructure before accepting application traffic.
@@ -75,3 +81,36 @@ Migration `086_reserved_role_restoration_db_guard.sql` protects status reactivat
 ## Acceptance fixture registry exclusion
 
 Migration `087_acceptance_fixture_registry_exclusion.sql` prevents activities or evidence explicitly marked with `metadata.acceptanceFixture=true` from backing credentials in value-bearing states. It also binds the database gate to the exact activity, verification, and evidence tuple. The MRV API reports acceptance fixtures as not registry eligible even after real Guardian/Hedera/Mirror Node verification. External anchoring proves message integrity and consensus; it does not validate the underlying activity as a real eligible carbon project.
+
+
+## Registry transfer recipient legal verification
+
+Migration `088_registry_transfer_legal_verification.sql` tightens the database-enforced transfer recipient boundary. The legacy `organizations.status` field defaults to `VERIFIED` for compatibility and is not sufficient evidence of legal verification. A recipient must have `verification_status='VERIFIED'`, verifier identity and timestamp, a verified organization membership, and at least one verified organization-verification evidence record with a reference or content hash. This is platform-governed legal-verification evidence; it does not by itself prove statutory registration or external authority approval.
+
+
+## Canonical audit append and immutability (migrations 089–090)
+
+Migration `001_core.sql` enables PostgreSQL `pgcrypto`, which supplies the `digest(..., 'sha256')` function used by the canonical audit append function in migration 089. Fresh-database migration validation and the disposable PostgreSQL CI migration pass verify this prerequisite in the test environment; production extension availability and migration state still require direct operational verification before rollout.
+
+Migration `090_audit_events_append_only.sql` installs database triggers that reject row-level UPDATE and DELETE and statement-level TRUNCATE against `audit_events`. Canonical appends remain INSERT operations through `append_platform_audit_event`. Integration coverage verifies rejected UPDATE/DELETE operations leave a test audit row intact and checks that both triggers are enabled. It does not attempt a table-wide TRUNCATE in the shared test database.
+
+These triggers are defense-in-depth for ordinary database access. They are not a defense against a sufficiently privileged database administrator deliberately disabling triggers or modifying storage outside the normal database interface. For stronger assurance, production must also restrict database roles, preserve independent backups, and periodically verify restored data and chain continuity.
+
+The audit-writer inventory is still an explicit release gate: any application route, scheduled job, migration trigger, or operational script that directly inserts into `audit_events` bypasses the canonical chain and must be migrated or documented as a deliberately separate event stream. Do not claim complete post-cutover chain coverage until that inventory and transaction-boundary review are finished.
+
+
+## Database privilege gate for canonical audit writes — OPEN
+
+Migration 090 protects audit rows from ordinary UPDATE, DELETE and TRUNCATE, but it does **not** prohibit direct INSERTs. Migration 089's function is a convention until the deployed database privilege model makes it the only permitted append path. The repository's production configuration currently supplies one `DATABASE_URL`; it does not establish separate, verified runtime and function-owner database roles or prove the effective grants on the deployed database.
+
+Do not claim this gap is closed by adding a caller-controlled custom PostgreSQL setting (a role that can set the setting can normally spoof it), by making the function `SECURITY DEFINER` without a distinct trusted owner, or by revoking a table privilege from the table-owning runtime role. Those patterns do not establish the required boundary.
+
+**Required acceptance criteria before closing this gate:**
+
+1. Provision and verify a non-login, least-privilege owner for the canonical append function, distinct from the application runtime role.
+2. Make the function a carefully reviewed `SECURITY DEFINER` entry point with a fixed safe `search_path`, schema-qualified object references, and execute permissions limited to the intended runtime role.
+3. Ensure the runtime role does not own `audit_events`, cannot insert directly, cannot alter/disable audit triggers, and cannot assume the function-owner role. Revoke broad/default grants as appropriate and verify effective privileges, including inherited roles.
+4. Add PostgreSQL integration tests using the **same privilege topology as production**: canonical function append succeeds; direct INSERT fails; ordinary runtime cannot disable triggers or truncate; business mutation plus append rolls back atomically; concurrency and hash continuity remain valid.
+5. Record the exact deployed role/grant evidence and verify it after migration. If the managed database provider cannot support the needed role separation, document an approved alternative boundary before release.
+
+Until these conditions are implemented and tested, direct INSERT bypass protection remains an OPEN release gate. Do not introduce guessed role names or a production migration that assumes elevated role-creation privileges. Production database access and grants were not available in this repository-only audit.

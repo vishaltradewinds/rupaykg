@@ -286,9 +286,7 @@ test("identity suspension revokes active sessions and records an audit event tra
         if (sql.includes("r.name in ('super_admin','platform_admin')")) return { rows: [{ ok: false }] };
         if (sql.includes("update identities set suspended_at=now()")) return { rows: [], rowCount: 1 };
         if (sql.includes("update identity_sessions set revoked_at=now()")) return { rows: [], rowCount: 2 };
-        if (sql.includes("select last_event_hash from platform_audit_chain_head")) return { rows: [{ last_event_hash: null }], rowCount: 1 };
-        if (sql.includes("insert into audit_events")) return { rows: [{ id: "623e4567-e89b-42d3-a456-426614174000" }], rowCount: 1 };
-        if (sql.includes("update platform_audit_chain_head")) return { rows: [], rowCount: 1 };
+        if (sql.includes("select append_platform_audit_event(")) return { rows: [{ append_platform_audit_event: "623e4567-e89b-42d3-a456-426614174000" }], rowCount: 1 };
         throw new Error(`Unexpected client SQL in identity-suspension test: ${sql}`);
       },
       release: () => undefined,
@@ -308,10 +306,8 @@ test("identity suspension revokes active sessions and records an audit event tra
   assert.equal(response.json().revokedSessions, 2);
   assert.ok(statements.some(sql => sql.includes("update identities set suspended_at=now()")));
   assert.ok(statements.some(sql => sql.includes("update identity_sessions set revoked_at=now()")));
-  assert.ok(statements.some(sql => sql.includes("insert into audit_events")));
-  assert.ok(statements.some(sql => sql.includes("select last_event_hash from platform_audit_chain_head where singleton=true for update")), "audit append must lock the authoritative chain head");
-  assert.ok(statements.some(sql => sql.includes("update platform_audit_chain_head set last_event_id=$1,last_event_hash=$2")), "audit append must atomically advance the chain head");
-  assert.ok(statements.some(sql => sql.includes("returning id")), "audit append must capture the inserted event ID");
+  assert.ok(statements.some(sql => sql.includes("select append_platform_audit_event(")), "audit append must use the canonical serialized PostgreSQL writer");
+  assert.ok(statements.some(sql => sql.includes("append_platform_audit_event(") && sql.includes("$7::jsonb")), "audit payload must be passed as structured JSON");
   assert.equal(statements.filter(sql => sql.trim().toLowerCase() === "commit").length, 1);
   await app.close();
 });

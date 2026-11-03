@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { Pool } from "pg";
+import { databaseSslConfig } from "./database-ssl.js";
 
 /**
  * Creates one deterministic, idempotent live-acceptance dataset.
@@ -22,7 +23,7 @@ if (!sessionToken) throw new Error("RUPAYKG_ACCEPTANCE_SESSION_TOKEN is required
 const pool = new Pool({
   connectionString: databaseUrl,
   max: 1,
-  ssl: process.env.DATABASE_SSL === "false" ? undefined : { rejectUnauthorized: false },
+  ssl: databaseSslConfig(),
 });
 
 const tokenHash = createHash("sha256").update(sessionToken).digest("hex");

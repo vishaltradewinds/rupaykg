@@ -16,20 +16,35 @@ function required(env: NodeJS.ProcessEnv, name: string): string {
   return value;
 }
 
-function productionDatabaseUrl(value: string): string {
+function productionDatabaseUrl(value: string): { url: string; renderInternalDatabase: boolean } {
   let parsed: URL;
   try { parsed = new URL(value); } catch { throw new Error("PRODUCTION_CONFIG_INVALID: DATABASE_URL must be a valid PostgreSQL URL"); }
   if (parsed.protocol !== "postgres:" && parsed.protocol !== "postgresql:") throw new Error("PRODUCTION_CONFIG_INVALID: DATABASE_URL must use postgres:// or postgresql://");
-  if (["localhost", "127.0.0.1", "::1"].includes(parsed.hostname.toLowerCase())) throw new Error("PRODUCTION_CONFIG_INVALID: production DATABASE_URL must not target localhost");
-  return value;
+  const hostname = parsed.hostname.toLowerCase();
+  // URL.hostname preserves brackets around IPv6 literals (for example "[::1]").
+  // Normalize that representation so IPv6 loopback cannot bypass the production
+  // database-target guard.
+  const normalizedHostname = hostname.startsWith("[") && hostname.endsWith("]") ? hostname.slice(1, -1) : hostname;
+  if (["localhost", "127.0.0.1", "::1"].includes(normalizedHostname)) throw new Error("PRODUCTION_CONFIG_INVALID: production DATABASE_URL must not target localhost");
+
+  // Classify the original URL before stripping SSL query parameters; otherwise
+  // removing sslmode would accidentally turn a TLS-required URL into the
+  // internal-connection path.
+  const renderInternalDatabase =
+    /^dpg-[a-z0-9-]+$/i.test(parsed.hostname) &&
+    !parsed.searchParams.get("sslmode");
+
+  // node-postgres connection-string SSL parameters can override the explicit
+  // Pool SSL object. Keep TLS policy in validated environment configuration only.
+  for (const key of ["sslmode", "sslrootcert", "sslcert", "sslkey", "sslpassword"]) {
+    parsed.searchParams.delete(key);
+  }
+  return { url: parsed.toString(), renderInternalDatabase };
 }
 
-function productionCaCert(value: string, databaseUrl: string): string {
+function productionCaCert(value: string): string {
   if (value.includes("BEGIN CERTIFICATE") && value.includes("END CERTIFICATE")) return value;
-  let parsed: URL;
-  try { parsed = new URL(databaseUrl); } catch { throw new Error("PRODUCTION_CONFIG_INVALID: DATABASE_URL must be a valid PostgreSQL URL"); }
-  if (parsed.searchParams.get("sslmode") === "require") return "";
-  throw new Error("PRODUCTION_CONFIG_INVALID: DATABASE_CA_CERT must contain a PEM certificate unless DATABASE_URL uses sslmode=require");
+  throw new Error("PRODUCTION_CONFIG_INVALID: DATABASE_CA_CERT must contain a PEM certificate for external PostgreSQL TLS");
 }
 
 function origins(value: string): string[] {
@@ -47,19 +62,16 @@ function origins(value: string): string[] {
 export function readProductionConfig(env: NodeJS.ProcessEnv = process.env): ProductionConfig {
   if (env.NODE_ENV !== PRODUCTION_ENV) throw new Error("PRODUCTION_CONFIG_NOT_ACTIVE: NODE_ENV must be production");
   if (env.RUPAYKG_SYNTHETIC_DATA?.toLowerCase() === "true") throw new Error("PRODUCTION_CONFIG_INVALID: synthetic data is forbidden in production");
+  if (env.RUPAYKG_ACCEPTANCE_SEED_ON_START?.toLowerCase() === "true") throw new Error("PRODUCTION_CONFIG_INVALID: acceptance seed is forbidden in production");
   if (env.RUPAYKG_AUTH_MODE !== "real") throw new Error("PRODUCTION_CONFIG_INVALID: RUPAYKG_AUTH_MODE must be real");
   if (env.VITE_RUPAYKG_SESSION_TOKEN?.trim()) throw new Error("PRODUCTION_CONFIG_INVALID: VITE_RUPAYKG_SESSION_TOKEN must not be provided in production");
-  const databaseUrl = productionDatabaseUrl(required(env, "DATABASE_URL"));
-  const parsedDatabaseUrl = new URL(databaseUrl);
-  const renderInternalDatabase =
-    /^dpg-[a-z0-9-]+$/i.test(parsedDatabaseUrl.hostname) &&
-    !parsedDatabaseUrl.searchParams.get("sslmode");
+  const { url: databaseUrl, renderInternalDatabase } = productionDatabaseUrl(required(env, "DATABASE_URL"));
   if (!renderInternalDatabase && env.DATABASE_SSL !== "require") throw new Error("PRODUCTION_CONFIG_INVALID: DATABASE_SSL must be require");
   return {
     environment: "production",
     databaseUrl,
     databaseSsl: renderInternalDatabase ? "false" : "require",
-    databaseCaCert: renderInternalDatabase ? "" : productionCaCert(env.DATABASE_CA_CERT?.trim() ?? "", databaseUrl),
+    databaseCaCert: renderInternalDatabase ? "" : productionCaCert(env.DATABASE_CA_CERT?.trim() ?? ""),
     allowedOrigins: origins(required(env, "RUPAYKG_ALLOWED_ORIGINS")),
     authMode: "real",
     syntheticData: false,

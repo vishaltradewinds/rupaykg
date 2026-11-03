@@ -100,34 +100,10 @@ async function audit(
   payload: Record<string, unknown>,
   organizationId: string | null = null,
 ): Promise<void> {
-  // Lock the authoritative chain-head row. Timestamps and random UUIDs do not define append order.
-  const prior = await client.query<{ last_event_hash: string | null }>(
-    "select last_event_hash from platform_audit_chain_head where singleton=true for update",
-  );
-  if (prior.rowCount !== 1) throw new Error("PLATFORM_AUDIT_CHAIN_HEAD_MISSING");
-  const previousHash = prior.rows[0]?.last_event_hash ?? null;
-  const event = {
-    actorIdentityId: actorId,
-    action,
-    targetType,
-    targetId,
-    organizationId,
-    requestId: request.id,
-    payload,
-    previousHash,
-  };
-  const eventHash = hash(JSON.stringify(event));
-  const inserted = await client.query<{ id: string }>(
-    `insert into audit_events(actor_identity_id,organization_id,action,target_type,target_id,request_id,previous_hash,event_hash,payload,created_at)
-     values($1,$2,$3,$4,$5,$6,$7,$8,$9,clock_timestamp())
-     returning id`,
-    [actorId, organizationId, action, targetType, targetId, request.id, previousHash, eventHash, JSON.stringify(payload)],
-  );
-  const eventId = inserted.rows[0]?.id;
-  if (!eventId) throw new Error("PLATFORM_AUDIT_EVENT_INSERT_FAILED");
+  // Canonical PostgreSQL function serializes all audit writers through one chain head.
   await client.query(
-    "update platform_audit_chain_head set last_event_id=$1,last_event_hash=$2,updated_at=clock_timestamp() where singleton=true",
-    [eventId, eventHash],
+    "select append_platform_audit_event($1,$2,$3,$4,$5,$6,$7::jsonb)",
+    [actorId, organizationId, action, targetType, targetId, request.id, JSON.stringify(payload)],
   );
 }
 

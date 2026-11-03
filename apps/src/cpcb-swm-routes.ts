@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import type { Pool, PoolClient } from "pg";
 import { authenticate, bearerChallenge, canActForOrganization, hasOrganizationPermission, type AuthContext } from "./auth.js";
@@ -61,14 +60,21 @@ export function isSwmLocalStage(value: unknown): value is typeof LOCAL_STAGES[nu
 export function safeObservations(value: unknown): boolean {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const record = value as Record<string, unknown>;
-  const keys = ["floorAreaM2", "waterConsumptionLitresPerDay", "wasteGenerationKgPerDay"];
+  const expectedUnits: Record<string, string> = {
+    floorAreaM2: "m2",
+    waterConsumptionLitresPerDay: "L/day",
+    wasteGenerationKgPerDay: "kg/day",
+  };
+  const keys = Object.keys(expectedUnits);
   if (Object.keys(record).some(key => !keys.includes(key))) return false;
   for (const key of keys) {
     const raw = record[key];
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) return false;
     const observation = raw as Record<string, unknown>;
     if (!(observation.value === null || (typeof observation.value === "number" && Number.isFinite(observation.value) && observation.value >= 0))) return false;
-    if (typeof observation.unit !== "string" || observation.unit.length > 32) return false;
+    // Units are part of the data contract; accepting arbitrary units can silently
+    // corrupt later aggregation or eligibility calculations.
+    if (typeof observation.unit !== "string" || observation.unit !== expectedUnits[key]) return false;
     for (const field of ["sourceReference", "periodStart", "periodEnd"]) {
       const fieldValue = observation[field];
       if (fieldValue !== undefined && fieldValue !== null && typeof fieldValue !== "string") return false;
@@ -80,12 +86,11 @@ export function safeObservations(value: unknown): boolean {
   }
   return true;
 }
-function hashEvent(value: unknown): string { return createHash("sha256").update(JSON.stringify(value)).digest("hex"); }
 async function writeAudit(client: PoolClient, identityId: string, organizationId: string, action: string, targetId: string, payload: unknown, requestId: string) {
-  const prior = await client.query<{ event_hash: string }>("select event_hash from audit_events where organization_id=$1 order by created_at desc, id desc limit 1 for update", [organizationId]);
-  const previousHash = prior.rows[0]?.event_hash ?? null;
-  const event = { identityId, organizationId, action, targetId, payload, requestId, previousHash, at: new Date().toISOString() };
-  await client.query("insert into audit_events(actor_identity_id,organization_id,action,target_type,target_id,request_id,previous_hash,event_hash,payload) values($1,$2,$3,'cpcb_swm_stakeholder_workspace',$4,$5,$6,$7,$8::jsonb)", [identityId, organizationId, action, targetId, requestId, previousHash, hashEvent(event), JSON.stringify(payload)]);
+  await client.query(
+    "select append_platform_audit_event($1,$2,$3,$4,$5,$6,$7::jsonb)",
+    [identityId, organizationId, action, "cpcb_swm_stakeholder_workspace", targetId, requestId, JSON.stringify(payload ?? {})],
+  );
 }
 
 export async function registerCpcbSwmRoutes(app: FastifyInstance, pool: Pool | null): Promise<void> {
