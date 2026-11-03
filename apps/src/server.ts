@@ -212,7 +212,7 @@ app.post("/api/v1/activities/:activityId/measurements", async (request, reply) =
 await registerOnboardingHierarchyRoutes(app, pool, authPool);
 await registerValueRoutes(app, pool);
 await registerRegistryRoutes(app, pool);
-await registerSyncRoutes(app, pool);
+await registerSyncRoutes(app, pool, process.env.RUPAYKG_REQUEST_CONTEXT_SECRET && process.env.RUPAYKG_REQUEST_CONTEXT_KEY_ID ? { hmacSecret: process.env.RUPAYKG_REQUEST_CONTEXT_SECRET, keyId: process.env.RUPAYKG_REQUEST_CONTEXT_KEY_ID } : undefined);
 await registerWorkspaceRoutes(app, pool, process.env.RUPAYKG_REQUEST_CONTEXT_SECRET && process.env.RUPAYKG_REQUEST_CONTEXT_KEY_ID ? { hmacSecret: process.env.RUPAYKG_REQUEST_CONTEXT_SECRET, keyId: process.env.RUPAYKG_REQUEST_CONTEXT_KEY_ID } : undefined);
 await registerBwgRoutes(app, pool, process.env.RUPAYKG_REQUEST_CONTEXT_SECRET && process.env.RUPAYKG_REQUEST_CONTEXT_KEY_ID ? { hmacSecret: process.env.RUPAYKG_REQUEST_CONTEXT_SECRET, keyId: process.env.RUPAYKG_REQUEST_CONTEXT_KEY_ID } : undefined);
 await registerCpcbSwmRoutes(app, pool);
