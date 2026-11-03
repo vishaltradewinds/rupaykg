@@ -98,30 +98,43 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
 
   app.post("/api/v1/esg/reporting-periods/:periodId/metrics", async (request, reply) => {
     const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
-    const periodId = (request.params as { periodId: string }).periodId; const body = bodyOf(request as never); const metricCode = str(body, "metricCode"); const scope = str(body, "scope") as "1" | "2" | "3" | "IMPACT" | null; const unit = str(body, "unit"); const value = nonNegative(body, "value");
-    if (!metricCode || !scope || !["1","2","3","IMPACT"].includes(scope) || !unit || value === null) return reply.code(400).send({ error: "metricCode, scope, unit and non-negative value are required" });
+    const periodId = (request.params as {periodId:string}).periodId; const body = bodyOf(request as never);
+    const metricCode = str(body,"metricCode"); const scope = str(body,"scope") as "1"|"2"|"3"|"IMPACT"|null; const unit = str(body,"unit"); const value = nonNegative(body,"value");
+    if (!metricCode || !scope || !["1","2","3","IMPACT"].includes(scope) || !unit || value === null) return reply.code(400).send({error:"metricCode, scope, unit and non-negative value are required",code:"ESG_METRIC_INPUTS_REQUIRED"});
+    if (!auth.activeOrganizationId) return reply.code(403).send({error:"Select one verified organization",code:"RLS_ORGANIZATION_CONTEXT_REQUIRED"});
+    if (!requestContext) return reply.code(503).send({error:"Signed tenant request context is not configured",code:"RLS_CONTEXT_CONFIG_REQUIRED",syntheticData:false});
+    const evidenceId = str(body,"evidenceId"); const verificationId = str(body,"verificationId");
+    if (verificationId && !evidenceId) return reply.code(400).send({error:"verificationId requires evidenceId",code:"VERIFICATION_EVIDENCE_REQUIRED"});
     try {
-      const period = await pool.query<{ organization_id: string }>("select organization_id from esg_reporting_periods where id = $1", [periodId]);
-      if (!period.rows[0]) return reply.code(404).send({ error: "Reporting period not found" });
-      const organizationId = period.rows[0].organization_id;
-      if (!canActForOrganization(auth, organizationId)) return reply.code(403).send({ error: "Organization access denied", code: "ORG_FORBIDDEN" });
-      if (!await hasValuePermission(pool, "can_write_esg", auth.identityId, organizationId)) return reply.code(403).send({ error: "ESG metric write permission required", code: "ESG_WRITE_FORBIDDEN" });
-      const evidenceId = str(body, "evidenceId"); const verificationId = str(body, "verificationId");
-      if (verificationId && !evidenceId) return reply.code(400).send({ error: "verificationId requires evidenceId" });
-      const metric = { code: metricCode, scope, value, unit, ...(evidenceId ? { evidenceId } : {}), ...(verificationId ? { verificationId } : {}) };
-      const state = classifyMetric(metric);
-      if (evidenceId) {
-        const evidence = await pool.query<{ activity_id: string | null; status: string }>(`select e.activity_id, e.status from evidence e left join activities a on a.id=e.activity_id where e.id=$1 and a.organization_id=$2 and a.geography_id is not null and organization_has_geography_scope($2,a.geography_id)`, [evidenceId, organizationId]);
-        if (!evidence.rows[0]) return reply.code(403).send({ error: "Evidence is outside organization authorization scope", code: "EVIDENCE_FORBIDDEN" });
-        if (evidence.rows[0].status !== "VERIFIED") return reply.code(409).send({ error: "Evidence must be verified before ESG metric recording", code: "EVIDENCE_NOT_VERIFIED" });
-      }
-      if (verificationId) {
-        const verified = await pool.query("select 1 from verifications where id = $1 and evidence_id = $2 and decision = 'APPROVED'", [verificationId, evidenceId]);
-        if (!verified.rows[0]) return reply.code(409).send({ error: "Verification is not an approved verification for the supplied evidence", code: "VERIFICATION_INVALID" });
-      }
-      const inserted = await pool.query("insert into esg_metrics (reporting_period_id, metric_code, scope, value, unit, evidence_id, verification_id, status, metadata) values ($1,$2,$3,$4,$5,$6,$7,$8,$9) returning *", [periodId, metricCode, scope, value, unit, evidenceId, verificationId, state, body.metadata ?? {}]);
-      return reply.code(201).send({ source: "postgresql", syntheticData: false, metric: inserted.rows[0], state });
-    } catch (error) { request.log.error(error); return reply.code(503).send({ error: "ESG metric recording unavailable", syntheticData: false }); }
+      const metricResult = await withRlsRequestTransaction(pool,auth,requestContext,async(client)=>{
+        const period = await client.query<{organization_id:string}>("select organization_id from esg_reporting_periods where id=$1 for update",[periodId]);
+        if (!period.rows[0]) throw Object.assign(new Error("Reporting period not found"),{code:"REPORTING_PERIOD_NOT_FOUND"});
+        const organizationId = period.rows[0].organization_id;
+        if (organizationId !== auth.activeOrganizationId || !canActForOrganization(auth,organizationId)) throw Object.assign(new Error("Reporting period is not in the active organization"),{code:"ORG_FORBIDDEN"});
+        if (!await hasValuePermission(client,"can_write_esg",auth.identityId,organizationId)) throw Object.assign(new Error("ESG metric write permission required"),{code:"ESG_WRITE_FORBIDDEN"});
+        const metric = {code:metricCode,scope,value,unit,...(evidenceId?{evidenceId}:{}),...(verificationId?{verificationId}:{})};
+        const state = classifyMetric(metric);
+        if (evidenceId) {
+          const evidence = await client.query<{activity_id:string|null;status:string}>("select e.activity_id,e.status from evidence e join activities a on a.id=e.activity_id where e.id=$1 and a.organization_id=$2 and a.geography_id is not null and organization_has_geography_scope($2,a.geography_id)",[evidenceId,organizationId]);
+          if (!evidence.rows[0]) throw Object.assign(new Error("Evidence is outside organization authorization scope"),{code:"EVIDENCE_FORBIDDEN"});
+          if (evidence.rows[0].status !== "VERIFIED") throw Object.assign(new Error("Evidence must be verified before ESG metric recording"),{code:"EVIDENCE_NOT_VERIFIED"});
+        }
+        if (verificationId) {
+          const verified = await client.query("select 1 from verifications where id=$1 and evidence_id=$2 and decision='APPROVED'",[verificationId,evidenceId]);
+          if (!verified.rows[0]) throw Object.assign(new Error("Verification is not approved for the supplied evidence"),{code:"VERIFICATION_INVALID"});
+        }
+        const inserted = await client.query("insert into esg_metrics (reporting_period_id,metric_code,scope,value,unit,evidence_id,verification_id,status,metadata) values ($1,$2,$3,$4,$5,$6,$7,$8,$9) returning *",[periodId,metricCode,scope,value,unit,evidenceId,verificationId,state,body.metadata??{}]);
+        return {metric:inserted.rows[0],state};
+      });
+      return reply.code(201).send({source:"postgresql",syntheticData:false,...metricResult});
+    } catch(error) {
+      const code = error && typeof error==="object" && "code" in error ? String((error as {code:unknown}).code) : "";
+      if(code==="REPORTING_PERIOD_NOT_FOUND") return reply.code(404).send({error:"Reporting period not found",code});
+      if(["ORG_FORBIDDEN","ESG_WRITE_FORBIDDEN","EVIDENCE_FORBIDDEN"].includes(code)) return reply.code(403).send({error:error instanceof Error?error.message:"ESG metric write forbidden",code});
+      if(["EVIDENCE_NOT_VERIFIED","VERIFICATION_INVALID"].includes(code)) return reply.code(409).send({error:error instanceof Error?error.message:"ESG evidence precondition failed",code});
+      if(["RLS_ORGANIZATION_CONTEXT_REQUIRED","RLS_VERIFIED_MEMBERSHIP_REQUIRED","RLS_BILATERAL_CONTEXT_UNSUPPORTED"].includes(code)) return reply.code(403).send({error:error instanceof Error?error.message:"Verified organization context required",code});
+      request.log.error(error); return reply.code(503).send({error:"ESG metric recording unavailable",syntheticData:false});
+    }
   });
 
   app.get("/api/v1/workspaces/bwg", async (request, reply) => {
