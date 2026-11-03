@@ -48,7 +48,7 @@ function requestContextConfig():RlsRequestContextConfig|null{const hmacSecret=pr
 async function activityContext(pool:Pool|PoolClient,auth:AuthContext,id:string):Promise<{organization_id:string;geography_id:string}|null>{
  if(!UUID.test(id))return null;
  const r=await pool.query<{organization_id:string;geography_id:string|null}>("select organization_id,geography_id from activities where id=$1",[id]);
- const a=r.rows[0];if(!a||!a.geography_id||!canActForOrganization(auth,a.organization_id))return null;
+ const a=r.rows[0];if(!a||a.organization_id!==auth.activeOrganizationId||!a.geography_id||!canActForOrganization(auth,a.organization_id))return null;
  const scope=await pool.query<{ok:boolean}>("select organization_has_geography_scope($1::uuid,$2::uuid) ok",[a.organization_id,a.geography_id]);
  return scope.rows[0]?.ok?{organization_id:a.organization_id,geography_id:a.geography_id}:null;
 }
@@ -112,7 +112,7 @@ export async function registerEvidenceVaultRoutes(app:FastifyInstance,pool:Pool|
    const config=requestContextConfig();if(!config)return reply.code(503).send({error:"Signed tenant context is not configured",code:"TENANT_CONTEXT_UNAVAILABLE"});
    try{
     const result=await withRlsRequestTransaction(pool,auth,config,async(client)=>{
-     const q=await client.query("select a.organization_id,a.geography_id,v.id artifact_id,v.version_number,v.file_name,v.media_type,v.size_bytes,v.sha256,v.content,e.status::text status,v.source_reference,v.measurement_period_start::text,v.measurement_period_end::text from evidence e join activities a on a.id=e.activity_id join evidence_artifact_versions v on v.evidence_id=e.id where e.id=$1",[id]);
+     const q=await client.query("select a.organization_id,a.geography_id,v.id artifact_id,v.version_number,v.file_name,v.media_type,v.size_bytes,v.sha256,v.content,e.status::text status,v.source_reference,v.measurement_period_start::text,v.measurement_period_end::text from evidence e join activities a on a.id=e.activity_id join evidence_artifact_versions v on v.evidence_id=e.id where e.id=$1 and a.organization_id=$2",[id,auth.activeOrganizationId]);
      const row=q.rows[0];if(!row||!row.geography_id||!canActForOrganization(auth,row.organization_id))return null;
      const g=await client.query("select organization_has_geography_scope($1::uuid,$2::uuid) ok",[row.organization_id,row.geography_id]);
      if(!g.rows[0]?.ok||!await hasOrganizationPermission(client,auth,row.organization_id,["evidence:read","evidence:upload","evidence:review"]))return false;
@@ -131,7 +131,7 @@ export async function registerEvidenceVaultRoutes(app:FastifyInstance,pool:Pool|
   if((decision!=="APPROVED"&&decision!=="REJECTED")||!rationale||rationale.length<5||rationale.length>2000)return reply.code(400).send({error:"Decision and 5–2000 character rationale required",code:"EVIDENCE_REVIEW_FIELDS_INVALID"});
   const config=requestContextConfig();if(!config)return reply.code(503).send({error:"Signed tenant context is not configured",code:"TENANT_CONTEXT_UNAVAILABLE"});
   try{return await withRlsRequestTransaction(pool,auth,config,async(client)=>{
-   const q=await client.query<{organization_id:string;activity_id:string;geography_id:string|null;status:string;artifact_id:string;uploaded_by_identity_id:string}>("select a.organization_id,a.id activity_id,a.geography_id,e.status::text status,v.id artifact_id,v.uploaded_by_identity_id from evidence e join activities a on a.id=e.activity_id join evidence_artifact_versions v on v.evidence_id=e.id where e.id=$1 for update of e",[id]),row=q.rows[0];
+   const q=await client.query<{organization_id:string;activity_id:string;geography_id:string|null;status:string;artifact_id:string;uploaded_by_identity_id:string}>("select a.organization_id,a.id activity_id,a.geography_id,e.status::text status,v.id artifact_id,v.uploaded_by_identity_id from evidence e join activities a on a.id=e.activity_id join evidence_artifact_versions v on v.evidence_id=e.id where e.id=$1 and a.organization_id=$2 for update of e",[id,auth.activeOrganizationId]),row=q.rows[0];
    if(!row||!row.geography_id||!canActForOrganization(auth,row.organization_id)){return reply.code(404).send({error:"Evidence not found",code:"EVIDENCE_NOT_FOUND"});}
    const g=await client.query<{ok:boolean}>("select organization_has_geography_scope($1::uuid,$2::uuid) ok",[row.organization_id,row.geography_id]);
    if(!g.rows[0]?.ok||!await hasOrganizationPermission(client,auth,row.organization_id,["evidence:review"])||!await canVerifyEvidence(client,auth.identityId,id)){return reply.code(403).send({error:"Evidence review permission and geography scope required",code:"EVIDENCE_REVIEW_FORBIDDEN"});}
