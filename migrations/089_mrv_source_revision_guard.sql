@@ -21,10 +21,10 @@ begin
 
   if row(
     new.organization_id,new.actor_identity_id,new.geography_id,new.activity_type,
-    new.status,new.occurred_at,new.completed_at,new.metadata
+    new.status,new.occurred_at,new.completed_at,new.created_at,new.metadata
   ) is distinct from row(
     old.organization_id,old.actor_identity_id,old.geography_id,old.activity_type,
-    old.status,old.occurred_at,old.completed_at,old.metadata
+    old.status,old.occurred_at,old.completed_at,old.created_at,old.metadata
   ) then
     new.mrv_source_revision := old.mrv_source_revision + 1;
   else
