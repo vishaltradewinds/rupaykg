@@ -326,3 +326,8 @@ The adjacent `POST /api/v1/evidence/:evidenceId/verification` route previously u
 Four additional Fastify tests cover successful same-client mutation, active-tenant not-found behavior, verifier denial rollback, and lookup-failure rollback. Exact-head CI run #41610069413 has passed migration validation, typecheck, build, browser smoke and tests; production-container build was still running at this checkpoint. PR #229 remains draft/unmerged pending final CI completion, disposable PostgreSQL two-tenant acceptance under the exact NOBYPASSRLS runtime role, and independent review.
 
 This is a route-boundary improvement, not proof of database-enforced RLS. The evidence-verification path and MRV workspace read still need the same actual-role two-tenant acceptance; production RLS activation and TRL 9 remain blocked.
+
+
+### PR #213 exact-head refresh — 2026-11-03
+
+The PR head advanced after the earlier successful run: current head is `a4db4c5c88ad401eef13b1660fc1d2d97734c974`. No PR-triggered workflow run was returned for this latest commit at the time of this update. The prior success (#41608135173) applies only to `fecef5f5aad41e13eadb29293cbbb413c882318e` and must not be carried forward to the new head. Exact-head CI refresh is required.
