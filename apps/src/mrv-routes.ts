@@ -72,7 +72,7 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
       syntheticData: false,
       guardian,
       hedera,
-      registryEligibility: "REQUIRES_GUARDIAN_VERIFIED_AND_HCS_CONSENSUS_CONFIRMED_PROVENANCE",
+      registryEligibility: "REQUIRES_GUARDIAN_VERIFIED_HCS_CONSENSUS_MIRROR_NODE_VERIFIED_AND_CURRENT_IMMUTABLE_SOURCE_SNAPSHOT",
     };
   });
 
@@ -183,13 +183,13 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
       if (!owner.rows[0] || !canActForOrganization(auth, owner.rows[0].organization_id)) return reply.code(403).send({ error: "Organization access denied", code: "ORG_FORBIDDEN" });
       if (!await requirePermission(pool, auth, owner.rows[0].organization_id, ["guardian:read"])) return reply.code(403).send({ error: "Guardian read permission required", code: "MRV_PERMISSION_REQUIRED" });
       if (!await activityInAuthorizedGeography(pool, auth, activityId, owner.rows[0].organization_id)) return reply.code(403).send({ error: "Activity geography is outside organization authorization scope", code: "GEOGRAPHY_FORBIDDEN" });
-      const rows = await pool.query("select * from mrv_provenance_events where activity_id=$1 order by created_at desc", [activityId]);
+      const rows = await pool.query("select m.*, (m.source_snapshot_id is not null and not exists(select 1 from mrv_source_snapshots newer where newer.activity_id=m.activity_id and newer.snapshot_version>m.source_snapshot_version)) as source_snapshot_current from mrv_provenance_events m where m.activity_id=$1 order by m.created_at desc", [activityId]);
       const acceptanceFixture = await isAcceptanceFixture(pool, activityId);
       return {
         source: "postgresql",
         syntheticData: false,
-        eligibleForRegistry: !acceptanceFixture && rows.rows.some(r => r.guardian_status === "VERIFIED" && r.hcs_status === "CONSENSUS_CONFIRMED" && r.mirror_node_verified_at != null),
-        ...(acceptanceFixture ? { registryEligibilityReason: "ACCEPTANCE_FIXTURE_NOT_REGISTRY_ELIGIBLE" } : {}),
+        eligibleForRegistry: !acceptanceFixture && rows.rows.some(r => r.guardian_status === "VERIFIED" && r.hcs_status === "CONSENSUS_CONFIRMED" && r.mirror_node_verified_at != null && r.source_snapshot_current === true),
+        ...(acceptanceFixture ? { registryEligibilityReason: "ACCEPTANCE_FIXTURE_NOT_REGISTRY_ELIGIBLE" } : rows.rows.some(r => r.mirror_node_verified_at != null && r.source_snapshot_current !== true) ? { registryEligibilityReason: "SOURCE_SNAPSHOT_SUPERSEDED_OR_LEGACY" } : {}),
         provenance: rows.rows,
       };
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "MRV provenance unavailable", syntheticData: false }); }
@@ -218,12 +218,16 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
       );
       if (!persisted.rows[0]?.mirror_node_verified_at) return { source: "hedera-mirror-node", syntheticData: false, verified: false, eligibleForRegistry: false, error: "MRV provenance changed during Mirror Node verification; retry against the current record" };
       const acceptanceFixture = await isAcceptanceFixture(pool, row.activity_id);
+      const currentSnapshot = row.source_snapshot_id && row.source_snapshot_version !== null
+        ? await pool.query<{ current: boolean }>("select not exists(select 1 from mrv_source_snapshots newer where newer.activity_id=$1 and newer.snapshot_version>$2) current", [row.activity_id, row.source_snapshot_version])
+        : { rows: [{ current: false }] };
+      const sourceSnapshotCurrent = currentSnapshot.rows[0]?.current === true;
       return {
         source: "hedera-mirror-node",
         syntheticData: false,
         ...verification,
-        eligibleForRegistry: !acceptanceFixture,
-        ...(acceptanceFixture ? { registryEligibilityReason: "ACCEPTANCE_FIXTURE_NOT_REGISTRY_ELIGIBLE" } : {}),
+        eligibleForRegistry: !acceptanceFixture && sourceSnapshotCurrent,
+        ...(acceptanceFixture ? { registryEligibilityReason: "ACCEPTANCE_FIXTURE_NOT_REGISTRY_ELIGIBLE" } : !sourceSnapshotCurrent ? { registryEligibilityReason: "SOURCE_SNAPSHOT_SUPERSEDED_OR_LEGACY" } : {}),
         persistedVerificationAt: persisted.rows[0].mirror_node_verified_at,
       };
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Hedera mirror-node verification unavailable", code: "HCS_VERIFY_UNAVAILABLE", syntheticData: false }); }
