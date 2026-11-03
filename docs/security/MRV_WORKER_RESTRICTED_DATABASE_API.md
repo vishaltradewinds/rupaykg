@@ -46,14 +46,22 @@ No runtime role provisioning, grants, production migration, worker enablement or
 
 ## Concrete function contract (implementation target; not installed)
 
-The TypeScript worker call sites map to exactly these eight PostgreSQL entry points. Signatures below are the contract to implement and test, not a claim that these functions exist:
+The TypeScript worker call sites map to exactly these eight PostgreSQL entry points. Signatures below are the contract to implement and test, not a claim that these functions exist.
+
+### Claim eligibility and recovery boundary
+
+The claim function must preserve the existing `claimableStatuses` allow-list exactly: `REQUESTED`, `CLAIMED`, `GUARDIAN_SUBMITTED`, `GUARDIAN_VERIFIED`, `HCS_SUBMITTED`, `HCS_CONSENSUS_CONFIRMED`, `MIRROR_VERIFIED`, and `RETRYABLE_FAILURE`. It must not claim `NEEDS_RECONCILIATION`, `PERMANENT_FAILURE`, `REJECTED`, `PROVENANCE_PERSISTED`, `COMPLETED`, or `CANCELLED`. Only `REQUESTED` and `RETRYABLE_FAILURE` become `CLAIMED`; expired in-flight stage statuses retain their exact stage and are reclaimed with a fresh lease. This matches the restricted worker's stage dispatch and prevents an ambiguous external operation from being replayed as a new operation.
+
+`NEEDS_RECONCILIATION` is an operator-controlled quarantine state, not an automatic retry state. It requires a separate audited reconciliation workflow that inspects persisted provider bindings and external Guardian/Hedera/Mirror evidence, records an explicit decision, and only then permits a controlled transition back to a supported processing stage. Do not include it in the worker claim query until that workflow is implemented and independently tested.
+
+Binding functions must not perform state transitions. `persist_guardian_binding` may bind only in `GUARDIAN_SUBMITTED`; `persist_hedera_binding` may bind in `GUARDIAN_VERIFIED` or idempotently verify the same tuple in `HCS_SUBMITTED`. The separate `advance_job` call owns all state transitions and event-trigger execution. This separation is required because the restricted worker persists a provider binding and then advances state in a distinct fenced operation; a binding function that also changes status would create a double-transition/lease-clearing race.
 
 | Operation | Required signature | Atomic responsibility |
 |---|---|---|
 | Claim | `mrv_worker_api.claim_next_job(text, integer) returns jsonb` | Select one due row with `FOR UPDATE SKIP LOCKED`, install a fresh UUID lease, increment attempt count, and return the complete immutable job snapshot plus lease token. |
 | Live authorization | `mrv_worker_api.authorize_job(uuid) returns boolean` | In one statement/snapshot, re-check the verified organization, unsuspended requester, active same-org verified membership, role permission, completed activity, verified evidence, independent approved verification, geography scope, and exact observations/evidence/latest-measurement snapshot equality. |
-| Guardian binding | `mrv_worker_api.persist_guardian_binding(uuid, uuid, text) returns boolean` | Lease-fenced, immutable idempotency binding; allow only CLAIMED/GUARDIAN_SUBMITTED and reject conflicting retries. |
-| Hedera binding | `mrv_worker_api.persist_hedera_binding(uuid, uuid, text, text, text) returns boolean` | Lease-fenced, immutable network/topic/transaction tuple; allow only GUARDIAN_VERIFIED/HCS_SUBMITTED and reject conflicting retries. |
+| Guardian binding | `mrv_worker_api.persist_guardian_binding(uuid, uuid, text) returns boolean` | Lease-fenced, immutable idempotency binding; allow only GUARDIAN_SUBMITTED and reject conflicting retries. |
+| Hedera binding | `mrv_worker_api.persist_hedera_binding(uuid, uuid, text, text, text) returns boolean` | Lease-fenced, immutable network/topic/transaction tuple; allow GUARDIAN_VERIFIED or idempotently verify the same tuple in HCS_SUBMITTED; reject conflicting retries. |
 | Renew | `mrv_worker_api.renew_lease(uuid, uuid, integer) returns timestamptz` | Extend only a currently live matching lease; bound duration to 10–900 seconds. |
 | Advance | `mrv_worker_api.advance_job(uuid, uuid, text, jsonb) returns jsonb` | Validate state transition and an explicit patch-key/type allow-list; fence by live token; clear lease; let the existing trigger append the event in the same transaction. |
 | Release | `mrv_worker_api.release_job(uuid, uuid, timestamptz, text, text) returns boolean` | Clear only the matching live lease and store bounded retry/error metadata. |
