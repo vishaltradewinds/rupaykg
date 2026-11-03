@@ -516,3 +516,10 @@ Offline domain mapping is also incomplete: MEASUREMENT_CREATE does not populate 
 ### 12.20 Staging search_path and append-only privilege confirmation
 
 A further read-only SELECT on staging confirmed current search_path = "$user", public; role rupaykg has database TEMP privilege; and rupaykg has both TRUNCATE and DELETE on public.async_mirror_inbox_events. Combined with the event-writing function's NULL proconfig (no pinned search_path), invoker-security mode and unqualified INSERT target, the temp-schema shadowing and event-history bypass risks are concrete. The function must pin a safe search_path and explicitly insert into public.async_mirror_inbox_events; add a statement-level TRUNCATE guard as defense in depth; and separate a NOLOGIN schema owner from a runtime principal without TEMP, TRUNCATE, DELETE, ownership, BYPASSRLS or DDL authority. No DDL/DML or payload reads were performed.
+
+
+### 12.21 Final exact-head CI and TLS handshake test for PR #235
+
+PR #235 head 45e757b5062c9e7d80bf62dc7ebc1c5ac4d9afa9 completed GitHub Actions run #41630197690 (run 5182) with conclusion SUCCESS. All configured stages passed: dependency audit, migration catalogue validation, migration CLI against disposable CI PostgreSQL, TypeScript typecheck, production build, browser smoke, disposable PostgreSQL acceptance and production-container build.
+
+Added an ephemeral local Node TLS handshake regression test using a generated self-signed certificate. It verifies trusted CA + matching hostname succeeds, untrusted/self-signed CA is rejected, and hostname mismatch is rejected using the exact TLS policy returned by createDatabasePoolConfig. This validates Node TLS policy, but not the full PostgreSQL SSLRequest/protocol handshake or the live Render/Neon connection. Those remain independent release gates. PR #235 remains draft and unmerged; PR #234 is closed as superseded. Production remains read-only/HOLD.
