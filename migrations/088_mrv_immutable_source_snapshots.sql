@@ -23,6 +23,60 @@ create table mrv_source_snapshots (
   )
 );
 
+
+create or replace function validate_mrv_source_snapshot_lineage()
+returns trigger language plpgsql as $
+declare
+  prior_snapshot mrv_source_snapshots%rowtype;
+  activity_ok boolean;
+begin
+  if new.source_payload->>'schema' <> 'rupaykg:mrv-source-snapshot:v1'
+     or new.source_payload->'activity'->>'id' <> new.activity_id::text
+     or new.source_payload->'verification'->>'id' <> new.verification_id::text
+     or new.source_payload->>'selectedEvidenceId' <> new.evidence_id::text
+     or new.source_payload->>'guardianPolicyId' <> new.guardian_policy_id then
+    raise exception 'MRV_SOURCE_SNAPSHOT_PAYLOAD_BINDING_INVALID';
+  end if;
+
+  select exists (
+    select 1
+      from activities a
+      join verifications v on v.id=new.verification_id and v.activity_id=a.id and v.decision='APPROVED'
+      join evidence e on e.id=new.evidence_id and e.activity_id=a.id and e.status='VERIFIED'
+     where a.id=new.activity_id and a.status='COMPLETED' and v.evidence_id=e.id
+  ) into activity_ok;
+  if not activity_ok then
+    raise exception 'MRV_SOURCE_SNAPSHOT_REQUIRES_COMPLETED_ACTIVITY_APPROVED_VERIFICATION_AND_VERIFIED_EVIDENCE';
+  end if;
+
+  select * into prior_snapshot
+    from mrv_source_snapshots
+   where activity_id=new.activity_id
+   order by snapshot_version desc
+   limit 1
+   for update;
+
+  if new.snapshot_version=1 then
+    if found or new.supersedes_snapshot_id is not null then
+      raise exception 'MRV_SOURCE_SNAPSHOT_INITIAL_VERSION_INVALID';
+    end if;
+  else
+    if not found
+       or prior_snapshot.id is distinct from new.supersedes_snapshot_id
+       or prior_snapshot.snapshot_version <> new.snapshot_version-1
+       or prior_snapshot.source_digest = new.source_digest then
+      raise exception 'MRV_SOURCE_SNAPSHOT_SUPERSESSION_LINEAGE_INVALID';
+    end if;
+  end if;
+  return new;
+end;
+$;
+
+drop trigger if exists mrv_source_snapshots_validate_lineage on mrv_source_snapshots;
+create trigger mrv_source_snapshots_validate_lineage
+before insert on mrv_source_snapshots
+for each row execute function validate_mrv_source_snapshot_lineage();
+
 create index mrv_source_snapshots_activity_version_idx
   on mrv_source_snapshots(activity_id, snapshot_version desc);
 create index mrv_source_snapshots_digest_idx
