@@ -8,9 +8,9 @@ const safeRole: MrvWorkerRoleContract = {
   rolcreatedb: false, rolcreaterole: false, rolreplication: false,
   owner_membership: false, elevated_membership: false, any_role_membership: false,
   geography_scope_execute: true, public_create: false, required_table_reads: true,
-  job_update: true, job_insert: false, job_delete: false,
-  event_insert: true, event_update: false, event_delete: false,
-  provenance_insert: true, provenance_update: false, provenance_delete: false,
+  job_update: true, job_insert: false, job_delete: false, job_truncate: false,
+  event_insert: true, event_update: false, event_delete: false, event_truncate: false,
+  provenance_insert: true, provenance_update: false, provenance_delete: false, provenance_truncate: false,
   source_table_write: false,
 };
 
@@ -28,9 +28,9 @@ test("rejects owner/elevated role memberships and inherited privileges", () => {
 
 test("rejects broad writes outside the MRV job ledger and append-only sinks", () => {
   for (const patch of [
-    { source_table_write: true }, { job_insert: true }, { job_delete: true },
-    { event_update: true }, { event_delete: true },
-    { provenance_update: true }, { provenance_delete: true },
+    { source_table_write: true }, { job_insert: true }, { job_delete: true }, { job_truncate: true },
+    { event_update: true }, { event_delete: true }, { event_truncate: true },
+    { provenance_update: true }, { provenance_delete: true }, { provenance_truncate: true },
   ]) assert.throws(() => assertMrvWorkerRoleContract({ ...safeRole, ...patch }));
 });
 
