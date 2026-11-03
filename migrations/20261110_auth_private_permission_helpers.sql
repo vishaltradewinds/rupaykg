@@ -63,18 +63,18 @@ STABLE
 SECURITY DEFINER
 SET search_path = pg_catalog, pg_temp
 AS $function$
-  SELECT identity.id,
-         membership.organization_id,
-         membership.role_id,
-         membership.status::text
-    FROM public.identity_sessions session
-    JOIN public.identities identity ON identity.id=session.identity_id
-    JOIN public.organization_memberships membership
-      ON membership.identity_id=identity.id
-     AND membership.status='VERIFIED'
-    JOIN public.roles role
-      ON role.id=membership.role_id
-     AND role.organization_id=membership.organization_id
+  SELECT identity_row.id,
+         membership_row.organization_id,
+         membership_row.role_id,
+         membership_row.status::text
+    FROM public.identity_sessions session_row
+    JOIN public.identities identity_row ON identity_row.id=session_row.identity_id
+    JOIN public.organization_memberships membership_row
+      ON membership_row.identity_id=identity_row.id
+     AND membership_row.status='VERIFIED'
+    JOIN public.roles role_row
+      ON role_row.id=membership_row.role_id
+     AND role_row.organization_id=membership_row.organization_id
    WHERE p_token_hash IS NOT NULL
      AND p_token_hash ~ '^[0-9a-f]{64}
   p_identity_id uuid,
@@ -103,20 +103,20 @@ BEGIN
 
   RETURN EXISTS (
     SELECT 1
-      FROM public.identities identity
-      JOIN public.organization_memberships membership
-        ON membership.identity_id=identity.id
-       AND membership.organization_id=p_organization_id
-       AND membership.status='VERIFIED'
-      JOIN public.roles role
-        ON role.id=membership.role_id
-       AND role.organization_id=membership.organization_id
-     WHERE identity.id=p_identity_id
-       AND identity.status='VERIFIED'
-       AND identity.suspended_at IS NULL
+      FROM public.identities identity_row
+      JOIN public.organization_memberships membership_row
+        ON membership_row.identity_id=identity_row.id
+       AND membership_row.organization_id=p_organization_id
+       AND membership_row.status='VERIFIED'
+      JOIN public.roles role_row
+        ON role_row.id=membership_row.role_id
+       AND role_row.organization_id=membership_row.organization_id
+     WHERE identity_row.id=p_identity_id
+       AND identity_row.status='VERIFIED'
+       AND identity_row.suspended_at IS NULL
        AND EXISTS (
          SELECT 1
-           FROM pg_catalog.jsonb_array_elements_text(role.permissions) permission(value)
+           FROM pg_catalog.jsonb_array_elements_text(role_row.permissions) permission(value)
           WHERE permission.value = ANY(p_permissions)
        )
   );
@@ -149,9 +149,9 @@ BEGIN
 
   SELECT activity.id, activity.organization_id
     INTO subject_activity_id, subject_organization_id
-    FROM public.evidence evidence
-    JOIN public.activities activity ON activity.id=evidence.activity_id
-   WHERE evidence.id=p_evidence_id;
+    FROM public.evidence evidence_row
+    JOIN public.activities activity_row ON activity_row.id=evidence_row.activity_id
+   WHERE evidence_row.id=p_evidence_id;
 
   IF subject_activity_id IS NULL
      OR signed_claims[2] IS DISTINCT FROM subject_organization_id::text THEN
@@ -189,12 +189,12 @@ COMMENT ON FUNCTION auth_private.can_verify_evidence(uuid,uuid) IS
 
 RESET ROLE;
 
-     AND session.token_hash=p_token_hash
-     AND session.revoked_at IS NULL
-     AND session.expires_at>statement_timestamp()
-     AND identity.status='VERIFIED'
-     AND identity.suspended_at IS NULL
-   ORDER BY membership.organization_id, membership.role_id;
+     AND session_row.token_hash=p_token_hash
+     AND session_row.revoked_at IS NULL
+     AND session_row.expires_at>statement_timestamp()
+     AND identity_row.status='VERIFIED'
+     AND identity_row.suspended_at IS NULL
+   ORDER BY membership_row.organization_id, membership_row.role_id;
 $function$;
 
 CREATE OR REPLACE FUNCTION auth_private.has_organization_permission(
@@ -224,20 +224,20 @@ BEGIN
 
   RETURN EXISTS (
     SELECT 1
-      FROM public.identities identity
-      JOIN public.organization_memberships membership
-        ON membership.identity_id=identity.id
-       AND membership.organization_id=p_organization_id
-       AND membership.status='VERIFIED'
-      JOIN public.roles role
-        ON role.id=membership.role_id
-       AND role.organization_id=membership.organization_id
-     WHERE identity.id=p_identity_id
-       AND identity.status='VERIFIED'
-       AND identity.suspended_at IS NULL
+      FROM public.identities identity_row
+      JOIN public.organization_memberships membership_row
+        ON membership_row.identity_id=identity_row.id
+       AND membership_row.organization_id=p_organization_id
+       AND membership_row.status='VERIFIED'
+      JOIN public.roles role_row
+        ON role_row.id=membership_row.role_id
+       AND role_row.organization_id=membership_row.organization_id
+     WHERE identity_row.id=p_identity_id
+       AND identity_row.status='VERIFIED'
+       AND identity_row.suspended_at IS NULL
        AND EXISTS (
          SELECT 1
-           FROM pg_catalog.jsonb_array_elements_text(role.permissions) permission(value)
+           FROM pg_catalog.jsonb_array_elements_text(role_row.permissions) permission(value)
           WHERE permission.value = ANY(p_permissions)
        )
   );
@@ -270,9 +270,9 @@ BEGIN
 
   SELECT activity.id, activity.organization_id
     INTO subject_activity_id, subject_organization_id
-    FROM public.evidence evidence
-    JOIN public.activities activity ON activity.id=evidence.activity_id
-   WHERE evidence.id=p_evidence_id;
+    FROM public.evidence evidence_row
+    JOIN public.activities activity_row ON activity_row.id=evidence_row.activity_id
+   WHERE evidence_row.id=p_evidence_id;
 
   IF subject_activity_id IS NULL
      OR signed_claims[2] IS DISTINCT FROM subject_organization_id::text THEN
