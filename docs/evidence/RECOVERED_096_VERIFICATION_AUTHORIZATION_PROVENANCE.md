@@ -110,3 +110,46 @@ comment on column verifications.authorization_permissions_snapshot is
 comment on column verifications.authorization_checked_at is
   'Database timestamp when verifier authorization was checked for an approved decision.';
 ```
+
+
+## Read-only production corroboration — 2026-11-03
+
+Target: Neon project `steep-mud-79906940`, branch `br-restless-base-b44cip2h`, database `rupaykg`. All database observations below were SELECT-only; no DDL, DML, role, grant, or deployment action was performed.
+
+### Historical source identity
+
+- Retrieved `migrations/096_verification_authorization_provenance.sql` directly from original commit `ca8f4100782e13f8d72106187fafc8e1e446214f`.
+- Git blob SHA returned by GitHub: `258b1f4534efbf915688f78aa84d4ec24a47cbc0`, matching the blob recorded above.
+- Original source path and SQL are preserved here as evidence only. Git's blob SHA is an immutable source-object identifier; it is not a SHA-256 execution checksum.
+
+### Production ledger observation
+
+Read-only query returned exactly one matching row:
+
+| version | filename | applied_at |
+|---|---|---|
+| `096` | `096_verification_authorization_provenance.sql` | `2026-10-27T13:46:14.262Z` |
+
+### Production catalog corroboration
+
+Read-only catalog inspection confirmed all four columns exist on `public.verifications`:
+
+- `authorization_membership_id uuid`
+- `authorization_role_id uuid`
+- `authorization_permissions_snapshot jsonb`
+- `authorization_checked_at timestamptz`
+
+It also confirmed trigger `verifications_integrity_guard` is a BEFORE INSERT OR UPDATE trigger on `public.verifications`, invoking `public.prevent_invalid_verification()`. The current database function body matches the material authorization logic preserved in this recovered source: activity/evidence binding, same-organization verified membership, active identity check, verifier permission check, and persisted authorization snapshot.
+
+### Classification and limits
+
+**Classification: `PROVEN_EXECUTION_CATALOG_ONLY` — not `PROVEN_EXACT_BYTES`.**
+
+The matching ledger row, source Git object, expected columns, trigger, and function body strongly corroborate that migration 096's intended effect is present in production. However, no contemporaneous deployment artifact/job log or database audit record was located in this read-only investigation that binds the exact Git blob to the execution event at the recorded timestamp. Therefore exact historical execution bytes are not proven and this row is NOT eligible for checksum backfill under the recovery protocol.
+
+### Remaining review items
+
+- Locate immutable deployment/job evidence for the exact source commit/blob and target Neon branch at the recorded application time.
+- Independently review the legacy `verification_independence_guard` behavior and whether authorization snapshot columns are protected from later mutation.
+- Do not replay migration 096, restore it to the executable migration directory, alter the ledger, or synthesize a checksum.
+- No production state was changed during this corroboration.
