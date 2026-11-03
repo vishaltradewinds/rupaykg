@@ -134,7 +134,7 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
           guardian: { status: "VERIFIED", executionId: existing.guardian_execution_id, policyId: existing.guardian_policy_id, message: "Reused persisted Guardian execution; no duplicate provider submission." },
           hedera: { status: "CONSENSUS_CONFIRMED", transactionId: existing.hcs_transaction_id, consensusTimestamp: existing.hcs_consensus_timestamp, topicId: existing.hcs_topic_id, network: hederaStatus().network, integrityHash: existing.integrity_hash, message: "Reused persisted HCS anchor; no duplicate consensus message submitted." },
           provenance: existing,
-          sourceSnapshot: { id: snapshot.id, version: snapshot.snapshot_version, digest: snapshot.source_digest, supersedesSnapshotId: snapshot.supersedes_snapshot_id },
+          sourceSnapshot: { id: snapshot.id, version: snapshot.snapshot_version, digest: snapshot.source_digest, supersedesSnapshotId: snapshot.supersedes_snapshot_id, sourceRevision: snapshot.source_revision },
           eligibleForRegistry: !acceptanceFixture && Boolean(existing.mirror_node_verified_at),
           ...(acceptanceFixture ? { registryEligibilityReason: "ACCEPTANCE_FIXTURE_NOT_REGISTRY_ELIGIBLE" } : {}),
         });
@@ -173,7 +173,7 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
       } finally {
         persistClient.release();
       }
-      return reply.code(anchor.status === "CONSENSUS_CONFIRMED" ? 201 : 503).send({ source: "postgresql+guardian+hedera", syntheticData: false, guardian, hedera: anchor, provenance: persistedRow, sourceSnapshot: { id: snapshot.id, version: snapshot.snapshot_version, digest: snapshot.source_digest, supersedesSnapshotId: snapshot.supersedes_snapshot_id }, eligibleForRegistry: false });
+      return reply.code(anchor.status === "CONSENSUS_CONFIRMED" ? 201 : 503).send({ source: "postgresql+guardian+hedera", syntheticData: false, guardian, hedera: anchor, provenance: persistedRow, sourceSnapshot: { id: snapshot.id, version: snapshot.snapshot_version, digest: snapshot.source_digest, supersedesSnapshotId: snapshot.supersedes_snapshot_id, sourceRevision: snapshot.source_revision }, eligibleForRegistry: false });
     } catch (error) {
       if (error instanceof MrvSnapshotError) return reply.code(error.httpStatus).send({ error: error.message, code: error.code, syntheticData: false });
       request.log.error(error); return reply.code(503).send({ error: "Authoritative MRV submission unavailable", code: "MRV_UNAVAILABLE", syntheticData: false });
