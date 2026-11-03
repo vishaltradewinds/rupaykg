@@ -94,4 +94,42 @@ if (!/assertMrvWorkerRoleContract\(identity\.rows\[0\]\)/i.test(workerServer) ||
   throw new Error("MRV worker must enforce its dedicated role contract and verified TLS");
 }
 
+const restrictedWorkerServer = await readFile(path.resolve("apps/src/mrv-worker-server-restricted.ts"), "utf8");
+const workerBoundaryAcceptance = await readFile(path.resolve("tests/postgres/mrv-worker-api-boundary.acceptance.sql"), "utf8");
+const workerJobs = await readFile(path.resolve("apps/src/mrv-submission-jobs.ts"), "utf8");
+const claimIndexMigration = await readFile(path.join(dir, "20261113_mrv_worker_claim_index_reconcile.sql"), "utf8");
+const protectedWorkerTables = [
+  "organizations", "identities", "organization_memberships", "roles", "activities",
+  "evidence", "verifications", "geography", "organization_geography_scopes",
+  "mrv_observations", "measurements", "mrv_submission_jobs",
+  "mrv_submission_job_events", "mrv_provenance_events",
+];
+const requiredTableList = restrictedWorkerServer.match(/const requiredTables = \\[([\\s\\S]*?)\\];/);
+if (!requiredTableList) throw new Error("restricted MRV worker must declare its complete RLS preflight table list");
+for (const table of protectedWorkerTables) {
+  if (!new RegExp(`["']${table}["']`).test(requiredTableList[1])) {
+    throw new Error(`restricted MRV worker RLS preflight omits public.${table}`);
+  }
+  if (!new RegExp(`["']${table}["']`).test(workerBoundaryAcceptance)) {
+    throw new Error(`MRV PostgreSQL acceptance gate omits public.${table}`);
+  }
+}
+const claimableBlock = workerJobs.match(/const claimableStatuses\\s*:\\s*MrvJobStatus\\[\\]\\s*=\\s*\\[([\\s\\S]*?)\\];/);
+const claimIndexBlock = claimIndexMigration.match(/where\\s+status\\s+in\\s*\\(([\\s\\S]*?)\\);/i);
+if (!claimableBlock || !claimIndexBlock) throw new Error("MRV worker claim allow-list and claim index must both be explicit");
+const workerStatuses = [...claimableBlock[1].matchAll(/"([A-Z_]+)"/g)].map((match) => match[1]).sort();
+const indexedStatuses = [...claimIndexBlock[1].matchAll(/'([A-Z_]+)'/g)].map((match) => match[1]).sort();
+if (JSON.stringify(workerStatuses) !== JSON.stringify(indexedStatuses)) {
+  throw new Error("MRV claim index predicate must exactly match worker claimableStatuses");
+}
+if (!/on\\s+mrv_submission_jobs\\s*\\(next_attempt_at,\\s*created_at,\\s*id\\)/i.test(claimIndexMigration)) {
+  throw new Error("MRV claim index must preserve deterministic next_attempt_at, created_at, id ordering");
+}
+if (indexedStatuses.includes("NEEDS_RECONCILIATION")) {
+  throw new Error("MRV quarantine status must not be automatically claimable");
+}
+if (!/organization_geography_scopes/.test(workerBoundaryAcceptance)) {
+  throw new Error("MRV PostgreSQL acceptance must enforce RLS on organization_geography_scopes");
+}
+
 console.log(`Validated ${files.length} migrations, ${objects.size} schema objects and verification/geography guardrails.`);
