@@ -28,7 +28,10 @@ export function createDatabasePoolConfig(
 
   const internalRenderHost = /^dpg-[a-z0-9-]+$/i.test(parsed.hostname);
   const production = env.NODE_ENV === "production";
-  const sslMode = env.DATABASE_SSL;
+  const sslMode = env.DATABASE_SSL?.trim() || undefined;
+  if (sslMode && sslMode !== "require" && sslMode !== "false") {
+    throw new Error("DATABASE_SSL must be either require or false");
+  }
 
   if (production && internalRenderHost && sslMode !== "false") {
     throw new Error("Production Render private database connections must be explicitly normalized to DATABASE_SSL=false");
@@ -40,16 +43,26 @@ export function createDatabasePoolConfig(
     throw new Error("Production external PostgreSQL connections require DATABASE_SSL=require");
   }
 
-  // node-postgres may let sslmode/sslrootcert URL parameters override the
-  // supplied TLS object. Remove all TLS URL parameters and apply one policy.
-  for (const key of ["sslmode", "sslrootcert", "sslcert", "sslkey", "sslpassword"]) {
-    parsed.searchParams.delete(key);
-  }
-
   const config: PoolConfig = {
     connectionString: parsed.toString(),
     max,
   };
+
+  // In non-production, preserve the driver's native URL TLS configuration
+  // unless an explicit DATABASE_SSL policy was supplied. Production always
+  // requires an explicit policy, so URL parameters cannot downgrade it.
+  if (!production && sslMode === undefined) {
+    config.connectionString = rawUrl;
+    return config;
+  }
+
+  // node-postgres URL TLS parameters can override an explicit ssl object.
+  // Strip them only after capturing the URL and only when our environment
+  // policy is authoritative.
+  for (const key of ["sslmode", "sslrootcert", "sslcert", "sslkey", "sslpassword"]) {
+    parsed.searchParams.delete(key);
+  }
+  config.connectionString = parsed.toString();
 
   if (production && internalRenderHost && sslMode === "false") {
     config.ssl = false;
