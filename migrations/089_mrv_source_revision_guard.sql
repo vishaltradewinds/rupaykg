@@ -9,6 +9,11 @@ alter table activities
 alter table mrv_source_snapshots
   add column source_revision bigint not null default 1 check (source_revision > 0);
 
+-- Snapshots created before source revisions existed cannot prove their live source state.
+update activities a
+   set mrv_source_revision = a.mrv_source_revision + 1
+ where exists (select 1 from mrv_source_snapshots s where s.activity_id=a.id);
+
 create or replace function guard_activity_mrv_source_revision()
 returns trigger language plpgsql as $$
 begin
