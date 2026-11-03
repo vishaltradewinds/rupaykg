@@ -407,3 +407,24 @@ Migration 096 remains historical evidence only. Its exact blob and limitations a
 3. Complete PR #213 verifier trigger review and execute opt-in PostgreSQL tests on a fresh disposable production-derived child only after independent review.
 4. Keep staging migrations out of the active release catalogue until lineage, data model, worker principal and RLS design are accepted.
 5. Keep production HOLD, no production DDL/DML, no global RLS, no worker activation, no issuance or settlement enablement.
+
+
+### 12.10 Direct staging-catalog comparison of recovered migration fixtures
+
+A read-only Neon catalog comparison was performed against staging branch br-spring-hill-b4544vz5 and production branch br-restless-base-b44cip2h, database rupaykg, on 2026-11-03. No row payloads were read and no database writes were performed.
+
+**Staging ledger:** all four 20261022–20261025 rows are present with applied_at 2026-10-20T10:48:38.647Z. The four corresponding tables exist. Catalog shape confirms the 20261023 inbox lease columns/status expansion, the append-only inbox-event table and triggers, plus the AI rate-limit and evidence-intake job tables with their unique/FK/check constraints and indexes. This supports schema-shape consistency with the recovered fixture sequence, but it is not cryptographic proof of the exact deployed SQL bytes.
+
+**Aggregate data profile (no payload contents queried):** async_mirror_inbox 12 rows; async_mirror_inbox_events 29 rows; ai_intake_rate_limits 0 rows; ai_evidence_intake_jobs 0 rows. The inbox table contains payload JSON, which remains untrusted source data and must not be equated with measurements or MRV evidence.
+
+**Staging security posture:** all four tables have RLS=false and FORCE RLS=false; no policies were found; owner is elevated role rupaykg. Catalog shows rupaykg has full owner table privileges including TRUNCATE and grantable privileges. The inspected role has BYPASSRLS, CREATEDB, CREATEROLE, INHERIT and REPLICATION, while rolsuper=false. No separate restricted worker principal was evidenced by this inspection. The event append-only trigger is not a substitute for RLS, restricted grants, or a hardened worker boundary.
+
+**Production comparison:** the authoritative production branch query returned zero of these four tables. Therefore these remain staging-only schema objects in the inspected snapshots; do not promote them into production or the active release catalogue.
+
+**Release decision:** staging-only inbox and AI-intake capabilities remain disabled/unsupported for production. Before any future activation require independent upstream blob verification, dedicated least-privilege worker principals, tenant-scoped data ownership, RLS/FORCE RLS and explicit policies, payload classification and retention, signed authority/source validation, idempotency/replay acceptance, and two-tenant PostgreSQL negative tests. No DDL/DML, payload reads, role/grant changes, migration, worker activation or deployment occurred.
+
+### 12.11 Latest PR #234 / pilot UI follow-up
+
+- PR #234 commit 5e98e4f2731d9e1e8898fc6c45402088fc3b2384 passed CI run #41626454283, including typecheck, build, browser smoke, disposable PostgreSQL acceptance and production-container build. This pass applies to that exact commit only.
+- Further TLS hardening followed on the same PR: preserve native connection-string TLS parameters in non-production when DATABASE_SSL is not explicitly set; apply an explicit environment policy only when provided; reject unsupported DATABASE_SSL values. New head is 59490c40a8e597fd17679f19d74fc7d704f13f86 and exact-head CI run #41627023797 was still in progress at the time of this update.
+- PR #219 pilot demo was hardened in commit c488c5e6a1624c142f81941ba0edceb7f98ea7c3: synthetic panel requires explicit ?demo=1, “Verified” was removed from the title, and CSV delimiters corrected. PR remains draft; its base branch is diverged 9 commits ahead/9 behind from the current pilot head comparison. Preserve parent relationship and await exact-head CI and base reconciliation.
