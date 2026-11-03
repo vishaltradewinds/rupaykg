@@ -87,8 +87,15 @@ test("worker adapter rejects malformed identifiers and stage patches before data
   await assert.rejects(() => api.authorize("not-a-uuid"), /INVALID_UUID:jobId/);
   await assert.rejects(() => api.persistGuardian(JOB_ID, "not-a-uuid", "g".repeat(64)), /INVALID_UUID:leaseToken/);
   await assert.rejects(() => api.persistGuardian(JOB_ID, LEASE_TOKEN, "short"), /INVALID_GUARDIAN_IDEMPOTENCY_KEY/);
+  await assert.rejects(() => api.persistHedera(JOB_ID, LEASE_TOKEN, "testnet", 7 as never, "tx"), /INVALID_HEDERA_BINDING/);
+  await assert.rejects(() => api.persistHedera(JOB_ID, LEASE_TOKEN, "testnet", "0.0.1", null as never), /INVALID_HEDERA_BINDING/);
+  await assert.rejects(() => api.persistHedera(JOB_ID, LEASE_TOKEN, "bad-network" as never, "0.0.1", "tx"), /INVALID_HEDERA_BINDING/);
   await assert.rejects(() => api.advance(JOB_ID, LEASE_TOKEN, "NOT_A_STATUS" as never), /INVALID_NEXT_STATUS/);
   await assert.rejects(() => api.advance(JOB_ID, LEASE_TOKEN, "GUARDIAN_VERIFIED", { unexpected: true } as never), /INVALID_STAGE_PATCH/);
+  await assert.rejects(() => api.advance(JOB_ID, LEASE_TOKEN, "GUARDIAN_VERIFIED", new Date() as never), /INVALID_STAGE_PATCH/);
+  await assert.rejects(() => api.release(JOB_ID, LEASE_TOKEN, new Date(), null as never, "detail"), /INVALID_RELEASE_ARGUMENT/);
+  await assert.rejects(() => api.release(JOB_ID, LEASE_TOKEN, new Date(), "CODE", 12 as never), /INVALID_RELEASE_ARGUMENT/);
+  await assert.rejects(() => api.release(JOB_ID, LEASE_TOKEN, "not-a-date" as never, "CODE", "detail"), /INVALID_RELEASE_ARGUMENT/);
   await assert.rejects(() => api.finalize(JOB_ID, "bad-token", "c".repeat(64)), /INVALID_UUID:leaseToken/);
   assert.equal(calls.length, 0);
 });
