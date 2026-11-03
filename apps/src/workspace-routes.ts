@@ -220,11 +220,15 @@ export async function registerWorkspaceRoutes(app: FastifyInstance, pool: Pool |
 
   app.get("/api/v1/workspaces/esg", async (request, reply) => {
     const auth = await requireAuth(app, pool, request, reply); if (!auth || !pool) return;
-    const ids = orgIds(auth); if (!ids.length) return result({ reportingPeriods: [], metrics: [] });
     try {
-      const periods = await pool.query(`select id,organization_id,period_start,period_end,framework,status,reporting_standard,applicability_status,value_chain_reporting,assurance_mode,external_submission_status,methodology_notes,reporting_boundary from esg_reporting_periods where organization_id=any($1::uuid[]) order by period_end desc,period_start desc limit 100`, [ids]);
-      const metrics = await pool.query(`select em.id,em.reporting_period_id,em.metric_code,em.scope,em.value,em.unit,em.source_activity_id,em.evidence_id,em.verification_id,em.status,em.metadata,em.disclosure_id,em.esg_attribute,em.value_chain_direction,em.methodology,em.assumptions,em.reporting_boundary,em.data_quality,em.assurance_status from esg_metrics em join esg_reporting_periods rp on rp.id=em.reporting_period_id where rp.organization_id=any($1::uuid[]) order by em.id desc limit 200`, [ids]);
-      return result({ reportingPeriods: periods.rows, metrics: metrics.rows });
-    } catch (error) { request.log.error(error); return reply.code(503).send({ error: "ESG workspace unavailable", syntheticData: false }); }
+      const data = await withWorkspaceRead(pool, auth, requestContext, "esg", async (client, organizationId) => {
+        const [periods, metrics] = await Promise.all([
+          client.query(`select id,organization_id,period_start,period_end,framework,status,reporting_standard,applicability_status,value_chain_reporting,assurance_mode,external_submission_status,methodology_notes,reporting_boundary from esg_reporting_periods where organization_id=any($1::uuid[]) order by period_end desc,period_start desc limit 100`, [[organizationId]]),
+          client.query(`select em.id,em.reporting_period_id,em.metric_code,em.scope,em.value,em.unit,em.source_activity_id,em.evidence_id,em.verification_id,em.status,em.metadata,em.disclosure_id,em.esg_attribute,em.value_chain_direction,em.methodology,em.assumptions,em.reporting_boundary,em.data_quality,em.assurance_status from esg_metrics em join esg_reporting_periods rp on rp.id=em.reporting_period_id where rp.organization_id=any($1::uuid[]) order by em.id desc limit 200`, [[organizationId]]),
+        ]);
+        return { reportingPeriods: periods.rows, metrics: metrics.rows };
+      });
+      return result(data);
+    } catch (error) { return workspaceFailure(reply, error, "ESG", request); }
   });
 }
