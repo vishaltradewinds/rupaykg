@@ -79,3 +79,37 @@ $function$;
 
 COMMENT ON FUNCTION public.organization_has_geography_scope_at(uuid, uuid, timestamptz) IS
   'Fail-closed ancestor scope check. Rejects missing scope, invalid effective-date nodes, cycles and chains exceeding 128 levels; valid_to is exclusive.';
+
+CREATE OR REPLACE FUNCTION public.enforce_activity_geography_scope()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = pg_catalog, pg_temp
+AS $function$
+BEGIN
+  IF NEW.geography_id IS NOT NULL
+     AND NOT public.organization_has_geography_scope(NEW.organization_id, NEW.geography_id) THEN
+    RAISE EXCEPTION 'activity geography is outside organization authorization scope';
+  END IF;
+  RETURN NEW;
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.enforce_resource_flow_geography_scope()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = pg_catalog, pg_temp
+AS $function$
+BEGIN
+  IF NEW.source_geography_id IS NOT NULL
+     AND NOT public.organization_has_geography_scope(NEW.organization_id, NEW.source_geography_id) THEN
+    RAISE EXCEPTION 'resource-flow source geography is outside organization authorization scope';
+  END IF;
+
+  IF NEW.destination_geography_id IS NOT NULL
+     AND NOT public.organization_has_geography_scope(NEW.organization_id, NEW.destination_geography_id) THEN
+    RAISE EXCEPTION 'resource-flow destination geography is outside organization authorization scope';
+  END IF;
+
+  RETURN NEW;
+END;
+$function$;
