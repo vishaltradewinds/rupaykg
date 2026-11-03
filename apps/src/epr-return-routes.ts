@@ -132,24 +132,30 @@ export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool |
     const auth = await authFor(request, reply, pool); if (!auth || !pool) return;
     const body = bodyOf(request); const externalReference = requiredString(body, "externalReference");
     if (!externalReference) return reply.code(400).send({ error: "externalReference is required", code: "EXTERNAL_REFERENCE_REQUIRED" });
-    const client = await pool.connect();
+    const organizationId = auth.activeOrganizationId;
+    if (!organizationId || !canAct(auth, organizationId)) return reply.code(403).send({ error: "One explicitly active verified organization is required", code: "ORG_FORBIDDEN" });
+    if (!requestContext) return reply.code(503).send({ error: "Signed tenant request context is not configured", code: "RLS_CONTEXT_CONFIG_REQUIRED", syntheticData: false });
     try {
-      await client.query("BEGIN");
-      const returnId = (request.params as { returnId: string }).returnId;
-      const row = await client.query<{ organization_id: string; status: string; external_reference: string | null }>("select organization_id,status,external_reference from epr_returns where id=$1 for update", [returnId]);
-      if (!row.rows[0]) { await client.query("ROLLBACK"); return reply.code(404).send({ error: "EPR return not found", code: "EPR_RETURN_NOT_FOUND" }); }
-      if (!canAct(auth, row.rows[0].organization_id) || !await hasOrganizationPermission(client, auth, row.rows[0].organization_id, ["epr:manage"])) { await client.query("ROLLBACK"); return reply.code(403).send({ error: "EPR management permission required", code: "EPR_RETURN_WRITE_FORBIDDEN" }); }
-      if (!["SUBMITTED","ACCEPTED","COMPLETED"].includes(row.rows[0].status)) { await client.query("ROLLBACK"); return reply.code(409).send({ error: "External reference can only be recorded after submission", code: "INVALID_EPR_RETURN_STATE" }); }
-      if (row.rows[0].external_reference && row.rows[0].external_reference !== externalReference) { await client.query("ROLLBACK"); return reply.code(409).send({ error: "A different external reference is already recorded for this EPR return", code: "EXTERNAL_REFERENCE_IMMUTABLE" }); }
-      const updated = await client.query("update epr_returns set external_reference=$2 where id=$1 returning *", [returnId, externalReference]);
-      await client.query("COMMIT");
-      return { source: "postgresql", syntheticData: false, authoritativeMutation: true, eprReturn: updated.rows[0], externalSubmission: "EXTERNAL_REFERENCE_RECORDED_NOT_ISSUED_BY_RUPAYKG" };
+      const result = await withRlsRequestTransaction(pool, auth, requestContext, async (client) => {
+        const permitted = await hasOrganizationPermission(client, auth, organizationId, ["epr:manage"], "security_definer");
+        if (!permitted) throw Object.assign(new Error("EPR management permission required"), { code: "EPR_RETURN_WRITE_FORBIDDEN" });
+        const row = await client.query<{ organization_id: string; status: string; external_reference: string | null }>("select organization_id,status,external_reference from epr_returns where id=$1 and organization_id=$2 for update", [returnId, organizationId]);
+        if (!row.rows[0]) throw Object.assign(new Error("EPR return not found"), { code: "EPR_RETURN_NOT_FOUND" });
+        if (!["SUBMITTED","ACCEPTED","COMPLETED"].includes(row.rows[0].status)) throw Object.assign(new Error("External reference can only be recorded after submission"), { code: "INVALID_EPR_RETURN_STATE" });
+        if (row.rows[0].external_reference && row.rows[0].external_reference !== externalReference) throw Object.assign(new Error("A different external reference is already recorded for this EPR return"), { code: "EXTERNAL_REFERENCE_IMMUTABLE" });
+        const updated = await client.query("update epr_returns set external_reference=$2 where id=$1 and organization_id=$3 returning *", [returnId, externalReference, organizationId]);
+        if (!updated.rows[0]) throw Object.assign(new Error("EPR return not found"), { code: "EPR_RETURN_NOT_FOUND" });
+        return updated.rows[0];
+      });
+      return { source: "postgresql", syntheticData: false, authoritativeMutation: true, eprReturn: result, externalSubmission: "EXTERNAL_REFERENCE_RECORDED_NOT_ISSUED_BY_RUPAYKG" };
     } catch (error: unknown) {
-      await client.query("ROLLBACK").catch(() => undefined);
+      const code = error && typeof error === "object" && "code" in error ? String((error as {code:unknown}).code) : "";
+      const status: Record<string, number> = { EPR_RETURN_WRITE_FORBIDDEN: 403, EPR_RETURN_NOT_FOUND: 404, INVALID_EPR_RETURN_STATE: 409, EXTERNAL_REFERENCE_IMMUTABLE: 409 };
+      if (status[code]) return reply.code(status[code]!).send({ error: error instanceof Error ? error.message : "EPR external reference rejected", code });
       request.log.error(error);
       const message = error instanceof Error ? error.message : "";
       if (message.toLowerCase().includes("duplicate key")) return reply.code(409).send({ error: "That external EPR reference is already recorded on another return", code: "EXTERNAL_REFERENCE_EXISTS" });
       return reply.code(503).send({ error: "External EPR reference recording unavailable", syntheticData: false });
-    } finally { client.release(); }
+    }
   });
 }
