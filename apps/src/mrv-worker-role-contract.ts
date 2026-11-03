@@ -11,39 +11,24 @@ export interface MrvWorkerRoleContract {
   owner_membership: boolean;
   elevated_membership: boolean;
   any_role_membership: boolean;
-  geography_scope_execute: boolean;
   public_create: boolean;
-  required_table_reads: boolean;
-  job_update: boolean;
-  job_insert: boolean;
-  job_delete: boolean;
-  job_truncate: boolean;
-  event_insert: boolean;
-  event_update: boolean;
-  event_delete: boolean;
-  event_truncate: boolean;
-  provenance_insert: boolean;
-  provenance_update: boolean;
-  provenance_delete: boolean;
-  provenance_truncate: boolean;
-  source_table_write: boolean;
+  direct_table_privileges: boolean;
+  worker_api_execute: boolean;
+  public_worker_api_execute: boolean;
 }
 
 /**
- * Fail closed unless the worker is a dedicated, non-inheriting, non-owner,
- * non-bypass login with only the currently required MRV data privileges.
- * This is a runtime privilege gate, not a substitute for SECURITY DEFINER APIs.
+ * The runtime identity is function-only. It must not read or mutate application
+ * tables directly; the SECURITY DEFINER API is the sole database boundary.
+ * This gate intentionally rejects the current direct-SQL worker implementation.
  */
 export function assertMrvWorkerRoleContract(role: MrvWorkerRoleContract | undefined): void {
   if (!role || role.current_user !== "rupaykg_mrv_worker_runtime"
       || role.session_user !== role.current_user || !role.rolcanlogin || role.rolinherit
       || role.rolsuper || role.rolbypassrls || role.rolcreatedb || role.rolcreaterole
       || role.rolreplication || role.owner_membership || role.elevated_membership
-      || role.any_role_membership || !role.geography_scope_execute || role.public_create
-      || !role.required_table_reads || !role.job_update || role.job_insert || role.job_delete || role.job_truncate
-      || !role.event_insert || role.event_update || role.event_delete || role.event_truncate
-      || !role.provenance_insert || role.provenance_update || role.provenance_delete || role.provenance_truncate
-      || role.source_table_write) {
+      || role.any_role_membership || role.public_create || role.direct_table_privileges
+      || !role.worker_api_execute || role.public_worker_api_execute) {
     throw new Error("MRV_WORKER_DATABASE_ROLE_CONTRACT_FAILED");
   }
 }
