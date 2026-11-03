@@ -29,7 +29,14 @@ function requestedOperatingContext(request: { query: unknown }): { context?: Ope
 }
 async function authorizeGeography(pool: Pool | PoolClient, auth: AuthContext, geographyId: string): Promise<boolean> {
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(geographyId)) return false;
-  const check = await pool.query<{ ok: boolean }>(`select exists (select 1 from organization_memberships om where om.identity_id=$1 and om.status='VERIFIED' and ($3::uuid is null or om.organization_id=$3::uuid) and organization_has_geography_scope(om.organization_id,$2)) as ok`, [auth.identityId, geographyId, auth.activeOrganizationId ?? null]);
+  const organizationId = auth.activeOrganizationId;
+  if (!organizationId || !auth.memberships.some((membership) => membership.organization_id === organizationId && membership.status === "VERIFIED")) return false;
+  // Membership is established by the auth resolver; do not read auth tables
+  // directly from the tenant application runtime for a geography check.
+  const check = await pool.query<{ ok: boolean }>(
+    "select organization_has_geography_scope($1::uuid,$2::uuid) as ok",
+    [organizationId, geographyId],
+  );
   return check.rows[0]?.ok === true;
 }
 function geoClause(geographyId: string | null, column: string): string { return geographyId ? ` and ${column} = $2` : ""; }
