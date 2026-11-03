@@ -65,9 +65,16 @@ export async function captureMrvSourceSnapshot(input: {
   correctionReason?: string | null;
 }): Promise<MrvSnapshotCapture> {
   const client: PoolClient = await input.pool.connect();
+  const snapshotLockKey = `mrv-source:${input.activityId}`;
+  let lockAcquired = false;
+  let transactionOpen = false;
   try {
+    // Acquire the session lock before BEGIN so a waiting REPEATABLE READ transaction
+    // does not retain a stale snapshot taken before the preceding writer committed.
+    await client.query("select pg_advisory_lock(hashtext($1))", [snapshotLockKey]);
+    lockAcquired = true;
     await client.query("begin isolation level repeatable read");
-    await client.query("select pg_advisory_xact_lock(hashtext($1))", [`mrv-source:${input.activityId}`]);
+    transactionOpen = true;
 
     const activityResult = await client.query<ActivityRow>(
       "select id,organization_id,geography_id,activity_type,status::text,occurred_at,completed_at,metadata from activities where id=$1 for share",
@@ -182,6 +189,7 @@ export async function captureMrvSourceSnapshot(input: {
       if (!snapshot) throw new Error("MRV source snapshot insert returned no row");
     }
     await client.query("commit");
+    transactionOpen = false;
     const latestMeasurement = measurementsResult.rows.at(-1);
     return {
       snapshot,
@@ -192,9 +200,10 @@ export async function captureMrvSourceSnapshot(input: {
       organizationId: activity.organization_id,
     };
   } catch (error) {
-    await client.query("rollback").catch(() => undefined);
+    if (transactionOpen) await client.query("rollback").catch(() => undefined);
     throw error;
   } finally {
+    if (lockAcquired) await client.query("select pg_advisory_unlock(hashtext($1))", [snapshotLockKey]).catch(() => undefined);
     client.release();
   }
 }
