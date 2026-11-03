@@ -204,7 +204,7 @@ export async function runMrvSubmissionWorkerOnce(database: MrvWorkerDatabaseApi,
       const ok = await advance(database, lease, "NEEDS_RECONCILIATION", { last_error_code: "HCS_BINDING_MISSING", last_error_detail: "Persisted transaction, topic or Guardian execution binding is missing." });
       return { outcome: ok ? "NEEDS_RECONCILIATION" : "STALE_LEASE", jobId: job.id, stage: "HCS_BINDING" };
     }
-    const status = hederaStatus();
+    const status = dependencies.hederaStatus();
     if (!status.configured || status.topicId !== job.hedera_topic_id || status.network !== job.hedera_network) {
       const ok = await release(database, lease, "HEDERA_CONFIGURATION_MISMATCH", "Current Hedera configuration does not match the persisted transaction network and topic.");
       return { outcome: ok ? "RETRY_SCHEDULED" : "STALE_LEASE", jobId: job.id, stage: "HCS_CONFIGURATION" };
