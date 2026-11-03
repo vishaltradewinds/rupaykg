@@ -7,6 +7,7 @@ export interface GuardianMrvRequest {
   policyId: string;
   methodologyCode?: string | undefined;
   observations: unknown[];
+  measurements?: unknown[];
   evidence: unknown[];
   metadata?: Record<string, unknown>;
   correlationId?: string | undefined;
@@ -81,6 +82,7 @@ export async function executeGuardianMrv(input: GuardianMrvRequest): Promise<Gua
         evidenceId: input.evidenceId,
         ...(input.methodologyCode !== undefined ? { methodologyCode: input.methodologyCode } : {}),
         observations: input.observations,
+        measurements: input.measurements ?? [],
         evidence: input.evidence,
         metadata: input.metadata,
       }),
