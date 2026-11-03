@@ -65,7 +65,7 @@ test("evidence verification fails closed when signed tenant context is not confi
 
 test("evidence verification requires an active verified organization before opening a transaction", async () => {
   await withSecurityDefiner(async () => {
-    const pool = new VerificationPool([]);
+    const pool = new VerificationPool([{ organization_id: null, role_id: null, membership_status: null }]);
     const app = Fastify();
     await registerWorkspaceRoutes(app, pool as unknown as Pool, { hmacSecret: "x".repeat(48), keyId: "test-key" });
     try {
