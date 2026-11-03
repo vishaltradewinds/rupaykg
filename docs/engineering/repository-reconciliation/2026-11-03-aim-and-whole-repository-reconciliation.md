@@ -488,3 +488,10 @@ The runner preflight verifies migration catalogue uniqueness, applied filename p
 A direct SELECT of production and staging migration ledgers confirms both record version 027 as filename 027_verification_permission_hardening.sql, applied_at 2026-10-17T10:48:26.266Z. The exact file exists on current main and historical commit ca8f4100782e13f8d72106187fafc8e1e446214f with Git blob c626a7aad10a31a620b5d814af1330f00c54def4. It is not a missing source file. The current migrations README incorrectly names it 027_verification_permission_guard.sql; correct the README reference.
 
 The 027 SQL removes role-name fallback and checks explicit permission keys, but only verifies a membership status and permission. It does not bind the membership to the activity organization, verify identity state/suspension, enforce geography scope, or persist immutable decision-time authorization snapshots. Treat 027 as a partial historical hardening step, not the complete verifier authorization contract. Do not replay it; replace/extend only through a reviewed forward migration after the #213 snapshot, DELETE and geography gaps are closed.
+
+
+### 12.18 PR #235 CI completion and migration README correction
+
+The full CI run #41628809379 (run 5168) on commit aa2b89f9785e547ed81f28d6e286f7bd997525af completed SUCCESS, including the production-container build. This exact head passed all configured validation, browser, disposable PostgreSQL and container stages.
+
+After that success, the migration README's incorrect version-027 filename was corrected in PR #235 to 027_verification_permission_hardening.sql, matching both inspected environment ledgers and the exact source blob c626a7aad10a31a620b5d814af1330f00c54def4. New head e7e34aca8097281a315a2348a96a264cb9531c65 is documentation-only relative to the CI-green head; a fresh exact-head CI run is still required before the PR can be called green. PR #235 remains draft and unmerged.
