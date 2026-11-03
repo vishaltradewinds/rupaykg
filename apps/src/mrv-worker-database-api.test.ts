@@ -55,6 +55,10 @@ test("worker adapter rejects malformed claim results and unsafe lease durations"
   await assert.rejects(() => wrongStatus.claim("worker-a", 120), /INVALID_JOB_FIELD:status/);
   const wrongLease = new MrvWorkerDatabaseApi(poolReturning({ job: completeJob({ lease_token: "00000000-0000-4000-8000-000000000099" }), leaseToken: LEASE_TOKEN }).pool);
   await assert.rejects(() => wrongLease.claim("worker-a", 120), /INVALID_JOB_LEASE/);
+  const invalidForeignId = new MrvWorkerDatabaseApi(poolReturning({ job: completeJob({ activity_id: "not-a-uuid" }), leaseToken: LEASE_TOKEN }).pool);
+  await assert.rejects(() => invalidForeignId.claim("worker-a", 120), /INVALID_JOB_FIELD:activity_id/);
+  const invalidHash = new MrvWorkerDatabaseApi(poolReturning({ job: completeJob({ payload_hash: "not-a-sha256" }), leaseToken: LEASE_TOKEN }).pool);
+  await assert.rejects(() => invalidHash.claim("worker-a", 120), /INVALID_JOB_FIELD:payload_hash/);
   await assert.rejects(() => new MrvWorkerDatabaseApi(poolReturning(null).pool).claim("worker-a", 1), /INVALID_CLAIM_ARGUMENT/);
 });
 
