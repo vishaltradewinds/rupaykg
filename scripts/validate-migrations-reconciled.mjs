@@ -133,3 +133,22 @@ if (!/organization_geography_scopes/.test(workerBoundaryAcceptance)) {
 }
 
 console.log(`Validated ${files.length} migrations, ${objects.size} schema objects and verification/geography guardrails.`);
+
+const migrationRunner = await readFile(path.resolve("apps/src/migrate.ts"), "utf8");
+const migrationIntegrity = await readFile(path.resolve("apps/src/migration-integrity.ts"), "utf8");
+const migrationIntegrityTests = await readFile(path.resolve("apps/src/migration-integrity.test.ts"), "utf8");
+if (!/add column if not exists checksum_sha256 text/i.test(migrationRunner) ||
+    !/sha256Hex\(bytes\)/.test(migrationRunner) ||
+    !/assertNoOrphanedMigrations\(/.test(migrationRunner) ||
+    !/checksum_sha256\) values/i.test(migrationRunner)) {
+  throw new Error("migration runner must atomically record exact-byte SHA-256 and reconcile all existing ledger rows before applying new migrations");
+}
+for (const failure of ["LEGACY_UNVERIFIED", "MIGRATION_CHECKSUM_DRIFT", "MIGRATION_FILENAME_DRIFT", "MIGRATION_LEDGER_ORPHAN", "MIGRATION_CHECKSUM_INVALID"]) {
+  if (!migrationIntegrity.includes(failure)) throw new Error(`migration integrity helper must fail closed for ${failure}`);
+  if (!migrationIntegrityTests.includes(failure)) throw new Error(`migration integrity tests must cover ${failure}`);
+}
+if (!/assertCriticalPostconditions\(client, migration\.filename\)/.test(migrationRunner) ||
+    !/mrv_submission_job_events/.test(migrationRunner) ||
+    !/mrv_submission_jobs_claim_idx/.test(migrationRunner)) {
+  throw new Error("critical MRV migrations must assert actual PostgreSQL catalog postconditions before ledger commit");
+}
