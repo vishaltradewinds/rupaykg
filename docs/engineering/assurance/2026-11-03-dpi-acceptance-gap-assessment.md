@@ -292,7 +292,7 @@ Changes now present on the branch:
 - Geography authorization no longer directly reads `organization_memberships`; it relies on the resolver-validated VERIFIED active membership and calls `organization_has_geography_scope(activeOrganizationId, geographyId)`.
 - Six executable Fastify route tests cover same-client transaction use, signed context, tenant-bound query parameters, permission/geography denial rollback, missing context, missing active organization, and protected-read failure.
 
-Exact-head CI run #41609506785 is still running at the production-container build stage. On this run, migration validation, restricted verifier-owner provisioning/rehearsal, typecheck, build, browser smoke, and the test suite have passed. The previous run #41609228776 exposed test-fixture defects (token regex escaping and mock query ordering); those were corrected without weakening the assertions.
+Exact-head CI run #41609506785 completed **SUCCESS** on this commit, including migration validation, restricted verifier-owner provisioning/rehearsal, typecheck, build, browser smoke, API tests, and production-container build. The previous run #41609228776 exposed test-fixture defects (token regex escaping and mock query ordering); those were corrected without weakening the assertions.
 
 **Evidence limitation:** the six route tests use a mocked Pool/PoolClient. They are not the required two-tenant disposable-PostgreSQL test under the exact NOBYPASSRLS runtime role, and do not establish database-enforced tenant isolation. The same module still contains `POST /api/v1/evidence/:evidenceId/verification` using a raw client transaction without signed tenant context. That adjacent MRV mutation route remains an explicit follow-up. PR #218 stays draft/unmerged.
 
@@ -301,7 +301,7 @@ Exact-head CI run #41609506785 is still running at the production-container buil
 | PR | Current exact head | Latest evidence | Disposition |
 |---|---|---|---|
 | #213 EPR explicit-client route | `fecef5f5aad41e13eadb29293cbbb413c882318e` | CI run #41608135173 succeeded | Candidate only; add explicit bilateral-scope 403 behavior and preserve #228 multi-org tests; draft/unmerged |
-| #218 MRV signed workspace read | `feeac1de3325a831012e1dc4967dfe95f9914e6d` | CI run #41609506785 in progress; test step passed | Draft/unmerged; PostgreSQL/RLS acceptance and adjacent mutation route remain open |
+| #218 MRV signed workspace read | `feeac1de3325a831012e1dc4967dfe95f9914e6d` | CI run #41609506785 succeeded | Draft/unmerged; PostgreSQL/RLS acceptance and adjacent mutation route remain open |
 | #219 pilot UI integration | `c3ba46485bb2c2352ed3fc93097d470ca92d430f` | Compared with current #218: diverged; #219 is 8 commits ahead and 9 commits behind; merge base `337bc5cc6abbf09acdc786c7c37ab7b4d1a57eb6` | Reconcile/rebase onto latest #218 only after its CI passes; do not blindly retarget; draft/unmerged |
 | #228 EPR obligations read | `550ea742fc663e6f0684a46427dfc314b1bf002c` | CI run #41606578847 failed in Evidence Vault integration: expected 2 artifacts, received 1 after upload #2 reported version 2 | Root cause unresolved; diagnostic request posted; do not weaken assertion; draft/unmerged |
 | #227 DPI assessment | documentation branch | Prior docs-only update | Draft/unmerged |
