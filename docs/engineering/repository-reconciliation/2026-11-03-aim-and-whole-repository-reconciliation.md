@@ -537,3 +537,10 @@ Read-only source review of migrations 003/009/011/016/017 and apps/src/sync-rout
 - Current-main canVerifyEvidence() joins any verified membership for the identity and geography without binding om.organization_id to activities.organization_id. The security-definer candidate path must be mandatory in production with no unsafe legacy fallback.
 
 **Disposition:** P0/P1 field-data and tenant-isolation work. Do not activate field-sync workers or global RLS until two-tenant/two-device, device revocation/reassignment, conflict isolation, idempotency replay, terminal-state immutability and domain provenance tests pass under a restricted runtime principal. No production/staging changes were made.
+
+
+### 12.23 CDPI Wave 1 field-operation JSON Schema draft
+
+PR #230 now includes contracts/schemas/field-sync-envelope.v1.schema.json (JSON Schema 2020-12), a target contract for ACTIVITY_CREATE, MEASUREMENT_CREATE, EVIDENCE_CREATE and RESOURCE_FLOW_CREATE. It defines idempotency, device ID, sequence, capture time, organization declaration, and target measurement provenance fields for instrument, calibration evidence, uncertainty, GPS accuracy, methodology version and evidence links.
+
+It is explicitly marked draft-target-not-runtime-enforced. Current sync-validation.ts and applyOperation still use manual validation, and not every target field is accepted or persisted. The schema must not be published as partner OpenAPI or represented as current runtime behavior. Next gates are shared Fastify runtime validation, operation-to-domain persistence mapping, device/org binding, immutable idempotency and two-tenant/two-device PostgreSQL acceptance.
