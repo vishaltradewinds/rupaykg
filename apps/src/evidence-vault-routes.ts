@@ -54,7 +54,6 @@ async function activityContext(pool:Pool|PoolClient,auth:AuthContext,id:string):
 export async function registerEvidenceVaultRoutes(app:FastifyInstance,pool:Pool|null,requestContext?:RlsRequestContextConfig):Promise<void>{
  app.post("/api/v1/evidence-vault/upload",{bodyLimit:7*1024*1024},async(request,reply)=>{
   const auth=await authFor(request as never,reply,pool);if(!auth||!pool)return;
-  return reply.code(503).send({error:"Evidence upload is temporarily disabled until its signed tenant transaction is enabled",code:"EVIDENCE_WRITE_SIGNED_TRANSACTION_PENDING",syntheticData:false});
   const b=bodyOf(request as never),activityId=str(b,"activityId"),evidenceType=str(b,"evidenceType"),fileNameRaw=str(b,"fileName"),mediaType=str(b,"mediaType")?.toLowerCase(),encoded=str(b,"contentBase64"),seriesId=str(b,"seriesId"),sourceReference=str(b,"sourceReference"),periodStart=str(b,"measurementPeriodStart"),periodEnd=str(b,"measurementPeriodEnd");
   if(!activityId||!evidenceType||evidenceType.length>100||!fileNameRaw||!mediaType||!encoded)return reply.code(400).send({error:"activityId, evidenceType, fileName, mediaType and contentBase64 are required",code:"EVIDENCE_FIELDS_REQUIRED"});
   const fileName=sanitizeEvidenceFileName(fileNameRaw),bytes=decodeEvidenceBase64(encoded);
@@ -124,7 +123,6 @@ export async function registerEvidenceVaultRoutes(app:FastifyInstance,pool:Pool|
  });
  app.post("/api/v1/evidence-vault/:evidenceId/review",async(request,reply)=>{
   const auth=await authFor(request as never,reply,pool);if(!auth||!pool)return;
-  return reply.code(503).send({error:"Evidence review is temporarily disabled until its signed tenant transaction is enabled",code:"EVIDENCE_WRITE_SIGNED_TRANSACTION_PENDING",syntheticData:false});
   const id=(request.params as {evidenceId:string}).evidenceId,b=bodyOf(request as never),decision=str(b,"decision"),rationale=str(b,"rationale");
   if(!UUID.test(id))return reply.code(400).send({error:"Invalid evidenceId",code:"EVIDENCE_ID_INVALID"});
   if((decision!=="APPROVED"&&decision!=="REJECTED")||!rationale||rationale.length<5||rationale.length>2000)return reply.code(400).send({error:"Decision and 5–2000 character rationale required",code:"EVIDENCE_REVIEW_FIELDS_INVALID"});
