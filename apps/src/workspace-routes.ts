@@ -45,7 +45,7 @@ async function authorizeWorkspaceRead(pool: Pool, auth: AuthContext, workspace: 
   return true;
 }
 
-export async function registerWorkspaceRoutes(app: FastifyInstance, pool: Pool | null, requestContext: RlsRequestContextConfig): Promise<void> {
+export async function registerWorkspaceRoutes(app: FastifyInstance, pool: Pool | null, requestContext?: RlsRequestContextConfig): Promise<void> {
   app.addHook("preHandler", async (request, reply) => {
     const route = request.routeOptions.url ?? ""; if (!route.startsWith("/api/v1/workspaces/")) return;
     const routeWorkspace = route.split("/").pop() ?? ""; const workspace = routeWorkspace === "resource-flows" ? "resourceFlows" : routeWorkspace as WorkspaceName;
@@ -66,6 +66,7 @@ export async function registerWorkspaceRoutes(app: FastifyInstance, pool: Pool |
     const geographyId = requestedGeography(request);
     const contextRequest = requestedOperatingContext(request);
     if (contextRequest.invalid) return reply.code(400).send({ error: "Context must be urban or rural", code: "INVALID_OPERATING_CONTEXT", syntheticData: false });
+    if (!requestContext) return reply.code(503).send({ error: "Signed tenant request context is not configured", code: "RLS_CONTEXT_CONFIG_REQUIRED", syntheticData: false });
     try {
       const data = await withRlsRequestTransaction(pool, auth, requestContext, async (client) => {
         const permitted = await hasOrganizationPermission(client, auth, auth.activeOrganizationId!, WORKSPACE_READ_PERMISSIONS.mrv, "security_definer");
