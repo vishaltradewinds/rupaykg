@@ -26,11 +26,15 @@ test("production lifecycle integration gate", { skip: !url }, async () => {
     await c.query("update evidence set status='VERIFIED' where id=$1", [evidence]);
     await c.query("update activities set status='COMPLETED' where id=$1", [activity]);
 
-    // CI cannot call live Guardian/Hedera credentials. This fixture represents the
-    // authoritative, already-confirmed provenance boundary enforced by production SQL.
+    // CI uses a deterministic fixture anchor, but the credential gate still requires a source snapshot.
+    const snapshotPayload = { schema: "rupaykg:mrv-source-snapshot:v1", activity: { id: activity }, verification: { id: verification }, selectedEvidenceId: evidence, guardianPolicyId: "integration-policy" };
+    const snapshot = (await c.query<{ id: string }>(
+      "insert into mrv_source_snapshots(activity_id,verification_id,evidence_id,guardian_policy_id,snapshot_version,source_digest,source_payload,created_by_identity_id) values($1,$2,$3,'integration-policy',1,$4,$5::jsonb,$6) returning id",
+      [activity, verification, evidence, "a".repeat(64), JSON.stringify(snapshotPayload), verifier],
+    )).rows[0].id;
     await c.query(
-      "insert into mrv_provenance_events(activity_id,verification_id,evidence_id,guardian_policy_id,guardian_execution_id,guardian_status,hcs_status,hcs_topic_id,hcs_transaction_id,hcs_consensus_timestamp,integrity_hash,metadata,mirror_node_verified_at) values($1,$2,$3,'integration-policy','integration-guardian','VERIFIED','CONSENSUS_CONFIRMED','0.0.123','integration-tx','integration-consensus','integration-hash','{\"testFixture\":true}',clock_timestamp())",
-      [activity, verification, evidence]
+      "insert into mrv_provenance_events(activity_id,verification_id,evidence_id,guardian_policy_id,guardian_execution_id,guardian_status,hcs_status,hcs_topic_id,hcs_transaction_id,hcs_consensus_timestamp,integrity_hash,metadata,mirror_node_verified_at,source_snapshot_id,source_snapshot_digest,source_snapshot_version) values($1,$2,$3,'integration-policy','integration-guardian','VERIFIED','CONSENSUS_CONFIRMED','0.0.123','integration-tx','integration-consensus','integration-hash',jsonb_build_object('testFixture',true),clock_timestamp(),$4,$5,1)",
+      [activity, verification, evidence, snapshot, "a".repeat(64)]
     );
 
     const unauthorizedRole = (await c.query("insert into roles(organization_id,name,permissions) values($1,'READER','[\"dashboard:read\"]') returning id", [org])).rows[0].id;
