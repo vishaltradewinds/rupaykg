@@ -49,6 +49,10 @@ describe("production configuration", () => {
     assert.throws(() => readProductionConfig({ ...valid, DATABASE_CA_CERT: "" }), /DATABASE_CA_CERT must contain a PEM certificate/);
   });
 
+  it("forbids acceptance fixture seeding in production", () => {
+    assert.throws(() => readProductionConfig({ ...valid, RUPAYKG_ACCEPTANCE_SEED_ON_START: "true" }), /acceptance seeding is forbidden/);
+  });
+
   it("requires real authentication", () => {
     assert.throws(() => readProductionConfig({ ...valid, RUPAYKG_AUTH_MODE: "demo" }), /RUPAYKG_AUTH_MODE must be real/);
   });
