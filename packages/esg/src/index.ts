@@ -24,7 +24,10 @@ export function classifyMetric(metric: EsgMetric): EsgMetricState {
   if (!metric.code.trim() || !metric.unit.trim() || !Number.isFinite(metric.value)) {
     throw new Error("metric code, unit and finite value are required");
   }
-  return metric.evidenceId && metric.verificationId ? "VERIFIED" : "PENDING";
+  // Evidence/verification references alone do not establish an independently
+  // assessed or assured ESG metric. Keep the generic metric state PENDING until
+  // a governed assessment/assurance decision model with actor and provenance exists.
+  return "PENDING";
 }
 
 export function validateEsgFramework(framework: string): EsgFramework {

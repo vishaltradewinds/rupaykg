@@ -1,7 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type { Pool, PoolClient } from "pg";
 import { calculateEmissionReduction, isGenericCalculationMethodAllowed, sha256Canonical } from "@rupaykg/carbon";
-import { assessEprObligation } from "@rupaykg/compliance";
 import { classifyMetric } from "@rupaykg/esg";
 import { authenticate, canActForOrganization, hasOrganizationPermission, type AuthContext } from "./auth.js";
 import { registerAuthRoutes } from "./auth-routes.js";
@@ -11,6 +10,18 @@ type Request = { body: unknown; params: Record<string, string>; log: { error: (e
 function bodyOf(request: Request): Record<string, unknown> { return request.body && typeof request.body === "object" ? request.body as Record<string, unknown> : {}; }
 function str(body: Record<string, unknown>, key: string): string | null { return typeof body[key] === "string" && body[key].trim() ? body[key].trim() : null; }
 function nonNegative(body: Record<string, unknown>, key: string): number | null { const n = Number(body[key]); return Number.isFinite(n) && n >= 0 ? n : null; }
+export function resolveEsgReportingBoundary(input: unknown): string | null {
+  return typeof input === "string" && input.trim() ? input.trim() : null;
+}
+export function normalizeEsgMetricMetadata(input: unknown): Record<string, unknown> {
+  const metadata = input && typeof input === "object" && !Array.isArray(input) ? { ...(input as Record<string, unknown>) } : {};
+  const declaredAssurance = typeof metadata.assuranceStatus === "string" ? metadata.assuranceStatus : typeof metadata.assurance_status === "string" ? metadata.assurance_status : undefined;
+  delete metadata.assuranceStatus;
+  delete metadata.assurance_status;
+  delete metadata.declaredAssuranceStatus;
+  delete metadata.declared_assurance_status;
+  return { ...metadata, assuranceStatus: "DECLARED_UNVERIFIED", ...(declaredAssurance ? { declaredAssuranceStatus: declaredAssurance } : {}) };
+}
 async function authFor(request: Request, reply: Reply, pool: Pool | null): Promise<AuthContext | null> { try { const auth = await authenticate(request as never, pool); if (!auth) { reply.code(401).send({ error: "Authenticated session required", code: "AUTH_REQUIRED" }); return null; } return auth; } catch (error) { request.log.error(error); reply.code(503).send({ error: "Authentication service unavailable", code: "AUTH_UNAVAILABLE" }); return null; } }
 async function activityAccess(client: Pool | PoolClient, activityId: string, identityId: string): Promise<{ organization_id: string; geography_id: string | null } | null> { const result = await client.query<{ organization_id: string; geography_id: string | null }>(`select a.organization_id, a.geography_id from activities a join organization_memberships om on om.organization_id = a.organization_id where a.id = $1 and om.identity_id = $2 and om.status = 'VERIFIED'`, [activityId, identityId]); return result.rows[0] ?? null; }
 async function assertActivityGeographyScope(client: Pool | PoolClient, geographyId: string | null, identityId: string): Promise<{ ok: boolean; code?: string }> { if (!geographyId) return { ok: false, code: "ACTIVITY_GEOGRAPHY_REQUIRED" }; const result = await client.query<{ ok: boolean }>(`select exists(select 1 from organization_memberships om where om.identity_id = $1 and om.status = 'VERIFIED' and organization_has_geography_scope(om.organization_id, $2)) as ok`, [identityId, geographyId]); return result.rows[0]?.ok === true ? { ok: true } : { ok: false, code: "GEOGRAPHY_FORBIDDEN" }; }
@@ -55,22 +66,15 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
 
   app.post("/api/v1/epr/obligations/:obligationId/assess", async (request, reply) => {
     const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
-    const obligationId = (request.params as { obligationId: string }).obligationId;
-    try {
-      const obligation = await pool.query<{ id: string; organization_id: string; jurisdiction_id: string | null; required_quantity: string }>("select id, organization_id, jurisdiction_id, required_quantity from obligations where id = $1", [obligationId]);
-      if (!obligation.rows[0]) return reply.code(404).send({ error: "Obligation not found" });
-      const organizationId = obligation.rows[0].organization_id;
-      if (!canActForOrganization(auth, organizationId)) return reply.code(403).send({ error: "Organization access denied", code: "ORG_FORBIDDEN" });
-      if (!await hasValuePermission(pool, "can_assess_epr", auth.identityId, organizationId)) return reply.code(403).send({ error: "EPR assessment permission required", code: "EPR_ASSESS_FORBIDDEN" });
-      const jurisdictionId = obligation.rows[0].jurisdiction_id;
-      if (!jurisdictionId) return reply.code(409).send({ error: "EPR obligation must have an authorized jurisdiction before assessment", code: "OBLIGATION_JURISDICTION_REQUIRED" });
-      const jurisdiction = await pool.query<{ ok: boolean }>("select exists(select 1 from organization_memberships om where om.identity_id=$1 and om.organization_id=$2 and om.status='VERIFIED' and organization_has_geography_scope(om.organization_id,$3)) as ok", [auth.identityId, organizationId, jurisdictionId]);
-      if (jurisdiction.rows[0]?.ok !== true) return reply.code(403).send({ error: "Obligation jurisdiction is outside organization authorization scope", code: "GEOGRAPHY_FORBIDDEN" });
-      const evidence = await pool.query<{ evidence_id: string; verification_id: string; quantity: string }>(`select c.evidence_id, c.verification_id, c.quantity::text from epr_credits c join epr_obligations eo on eo.scheme_id = c.scheme_id and eo.obligated_organization_id = $1 join evidence e on e.id = c.evidence_id join verifications v on v.id = c.verification_id join activities a on a.id = e.activity_id where eo.obligation_id = $2 and c.status in ('ELIGIBLE','ISSUED','ACTIVE') and e.status = 'VERIFIED' and (e.content_hash is not null or e.content_uri is not null) and v.decision = 'APPROVED' and a.geography_id is not null and organization_has_geography_scope($1,a.geography_id) and (c.issuer_organization_id = $1 or c.recycler_organization_id = $1)`, [organizationId, obligationId]);
-      const assessment = assessEprObligation(Number(obligation.rows[0].required_quantity ?? 0), evidence.rows.map(row => ({ evidenceId: row.evidence_id, verificationId: row.verification_id, approved: true, quantity: Number(row.quantity) })));
-      await pool.query("update obligations set status = $2, required_quantity = $3 where id = $1", [obligationId, assessment.status, assessment.requiredQuantity]);
-      return { source: "postgresql", syntheticData: false, assessment };
-    } catch (error) { request.log.error(error); return reply.code(503).send({ error: "EPR assessment unavailable", syntheticData: false }); }
+    // Fail closed: the legacy assessment path sums eligible credit quantities without
+    // reconciling authoritative epr_credit_allocations and may mutate the legacy
+    // obligations table. It must not present that result as statutory fulfillment.
+    return reply.code(409).send({
+      error: "Authoritative EPR assessment is unavailable until credit allocations, obligation fulfillment, source evidence and reporting-period/category bindings are reconciled",
+      code: "EPR_ASSESSMENT_RECONCILIATION_REQUIRED",
+      productionGate: "HOLD",
+      syntheticData: false
+    });
   });
 
   app.post("/api/v1/esg/reporting-periods/:periodId/metrics", async (request, reply) => {
@@ -78,11 +82,15 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
     const periodId = (request.params as { periodId: string }).periodId; const body = bodyOf(request as never); const metricCode = str(body, "metricCode"); const scope = str(body, "scope") as "1" | "2" | "3" | "IMPACT" | null; const unit = str(body, "unit"); const value = nonNegative(body, "value");
     if (!metricCode || !scope || !["1","2","3","IMPACT"].includes(scope) || !unit || value === null) return reply.code(400).send({ error: "metricCode, scope, unit and non-negative value are required" });
     try {
-      const period = await pool.query<{ organization_id: string }>("select organization_id from esg_reporting_periods where id = $1", [periodId]);
+      const period = await pool.query<{ organization_id: string; reporting_boundary: string | null }>("select organization_id, reporting_boundary from esg_reporting_periods where id = $1", [periodId]);
       if (!period.rows[0]) return reply.code(404).send({ error: "Reporting period not found" });
       const organizationId = period.rows[0].organization_id;
+      // Authorize before returning boundary-specific validation details to avoid
+      // leaking reporting-period configuration to an unrelated organization.
       if (!canActForOrganization(auth, organizationId)) return reply.code(403).send({ error: "Organization access denied", code: "ORG_FORBIDDEN" });
       if (!await hasValuePermission(pool, "can_write_esg", auth.identityId, organizationId)) return reply.code(403).send({ error: "ESG metric write permission required", code: "ESG_WRITE_FORBIDDEN" });
+      const reportingBoundary = resolveEsgReportingBoundary(period.rows[0].reporting_boundary);
+      if (!reportingBoundary) return reply.code(409).send({ error: "ESG reporting period requires an explicit reporting boundary before metrics can be recorded", code: "ESG_REPORTING_BOUNDARY_REQUIRED", productionGate: "HOLD" });
       const evidenceId = str(body, "evidenceId"); const verificationId = str(body, "verificationId");
       if (verificationId && !evidenceId) return reply.code(400).send({ error: "verificationId requires evidenceId" });
       const metric = { code: metricCode, scope, value, unit, ...(evidenceId ? { evidenceId } : {}), ...(verificationId ? { verificationId } : {}) };
@@ -96,8 +104,9 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
         const verified = await pool.query("select 1 from verifications where id = $1 and evidence_id = $2 and decision = 'APPROVED'", [verificationId, evidenceId]);
         if (!verified.rows[0]) return reply.code(409).send({ error: "Verification is not an approved verification for the supplied evidence", code: "VERIFICATION_INVALID" });
       }
-      const inserted = await pool.query("insert into esg_metrics (reporting_period_id, metric_code, scope, value, unit, evidence_id, verification_id, status, metadata) values ($1,$2,$3,$4,$5,$6,$7,$8,$9) returning *", [periodId, metricCode, scope, value, unit, evidenceId, verificationId, state, body.metadata ?? {}]);
-      return reply.code(201).send({ source: "postgresql", syntheticData: false, metric: inserted.rows[0], state });
+      const persistedMetadata = normalizeEsgMetricMetadata(body.metadata);
+      const inserted = await pool.query("insert into esg_metrics (reporting_period_id, metric_code, scope, value, unit, evidence_id, verification_id, status, metadata, reporting_boundary) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) returning *", [periodId, metricCode, scope, value, unit, evidenceId, verificationId, state, persistedMetadata, reportingBoundary]);
+      return reply.code(201).send({ source: "postgresql", syntheticData: false, metric: inserted.rows[0], state, reportingBoundary, reportingBoundarySource: "ESG_REPORTING_PERIOD" });
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "ESG metric recording unavailable", syntheticData: false }); }
   });
 
@@ -168,8 +177,8 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
       const evidenceId = str(body, "evidenceId"); const verificationId = str(body, "verificationId"); if (verificationId && !evidenceId) return reply.code(400).send({ error: "verificationId requires evidenceId" });
       if (evidenceId && !await evidenceIsVerified(pool, evidenceId, organizationId)) return reply.code(409).send({ error: "Verified, provenance-backed evidence is required", code: "EVIDENCE_NOT_VERIFIED" });
       if (verificationId) { const v = await pool.query("select 1 from verifications where id=$1 and evidence_id=$2 and decision='APPROVED'", [verificationId,evidenceId]); if (!v.rows[0]) return reply.code(409).send({ error: "Approved verification is required", code: "VERIFICATION_INVALID" }); }
-      const row = await pool.query("insert into bwg_waste_reports (reporting_period_id,waste_stream,generated_quantity,segregated_quantity,channelized_quantity,processed_quantity,unit,evidence_id,verification_id,status,metadata) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) returning *", [periodId,wasteStream,generated,segregated,channelized,processed,unit,evidenceId,verificationId,evidenceId && verificationId ? 'VERIFIED' : 'PENDING',body.metadata ?? {}]);
-      return reply.code(201).send({ source: "postgresql", syntheticData: false, authoritativeMutation: true, wasteReport: row.rows[0] });
+      const row = await pool.query("insert into bwg_waste_reports (reporting_period_id,waste_stream,generated_quantity,segregated_quantity,channelized_quantity,processed_quantity,unit,evidence_id,verification_id,status,metadata) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) returning *", [periodId,wasteStream,generated,segregated,channelized,processed,unit,evidenceId,verificationId,'PENDING',body.metadata ?? {}]);
+      return reply.code(201).send({ source: "postgresql", syntheticData: false, authoritativeMutation: true, reportAssessment: "DECLARED_UNASSESSED", quantityBasis: "USER_DECLARED_UNRECONCILED", complianceStatus: "NOT_ASSESSED", productionGate: "HOLD", wasteReport: row.rows[0] });
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "BWG waste report unavailable", code: "BWG_WASTE_UNAVAILABLE", syntheticData: false }); }
   });
 
@@ -185,8 +194,8 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
       const evidenceId = str(body, "evidenceId"); const verificationId = str(body, "verificationId"); if (verificationId && !evidenceId) return reply.code(400).send({ error: "verificationId requires evidenceId" });
       if (evidenceId && !await evidenceIsVerified(pool, evidenceId, organizationId)) return reply.code(409).send({ error: "Verified, provenance-backed evidence is required", code: "EVIDENCE_NOT_VERIFIED" });
       if (verificationId) { const v = await pool.query("select 1 from verifications where id=$1 and evidence_id=$2 and decision='APPROVED'", [verificationId,evidenceId]); if (!v.rows[0]) return reply.code(409).send({ error: "Approved verification is required", code: "VERIFICATION_INVALID" }); }
-      const row = await pool.query("insert into bwg_epr_reports (reporting_period_id,scheme_id,category_code,obligated_quantity,fulfilled_quantity,evidence_id,verification_id,status,metadata) values ($1,$2,$3,$4,$5,$6,$7,$8,$9) returning *", [periodId,schemeId,categoryCode,obligated,fulfilled,evidenceId,verificationId,evidenceId && verificationId ? 'VERIFIED' : 'PENDING',body.metadata ?? {}]);
-      return reply.code(201).send({ source: "postgresql", syntheticData: false, authoritativeMutation: true, externalSubmission: "NOT_SUBMITTED", eprReport: row.rows[0] });
+      const row = await pool.query("insert into bwg_epr_reports (reporting_period_id,scheme_id,category_code,obligated_quantity,fulfilled_quantity,evidence_id,verification_id,status,metadata) values ($1,$2,$3,$4,$5,$6,$7,$8,$9) returning *", [periodId,schemeId,categoryCode,obligated,fulfilled,evidenceId,verificationId,'PENDING',body.metadata ?? {}]);
+      return reply.code(201).send({ source: "postgresql", syntheticData: false, authoritativeMutation: true, reportAssessment: "DECLARED_UNASSESSED", quantityBasis: "USER_DECLARED_UNRECONCILED", complianceStatus: "NOT_ASSESSED", productionGate: "HOLD", externalSubmission: "NOT_SUBMITTED", eprReport: row.rows[0] });
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "BWG EPR report unavailable", code: "BWG_EPR_UNAVAILABLE", syntheticData: false }); }
   });
 
@@ -201,8 +210,8 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
       const evidenceId = str(body, "evidenceId"); const verificationId = str(body, "verificationId"); if (verificationId && !evidenceId) return reply.code(400).send({ error: "verificationId requires evidenceId" });
       if (evidenceId && !await evidenceIsVerified(pool, evidenceId, organizationId)) return reply.code(409).send({ error: "Verified, provenance-backed evidence is required", code: "EVIDENCE_NOT_VERIFIED" });
       if (verificationId) { const v = await pool.query("select 1 from verifications where id=$1 and evidence_id=$2 and decision='APPROVED'", [verificationId,evidenceId]); if (!v.rows[0]) return reply.code(409).send({ error: "Approved verification is required", code: "VERIFICATION_INVALID" }); }
-      const row = await pool.query("insert into bwg_esg_reports (reporting_period_id,metric_code,scope,value,unit,evidence_id,verification_id,status,metadata) values ($1,$2,$3,$4,$5,$6,$7,$8,$9) returning *", [periodId,metricCode,scope,value,unit,evidenceId,verificationId,evidenceId && verificationId ? 'VERIFIED' : 'PENDING',body.metadata ?? {}]);
-      return reply.code(201).send({ source: "postgresql", syntheticData: false, authoritativeMutation: true, esgReport: row.rows[0] });
+      const row = await pool.query("insert into bwg_esg_reports (reporting_period_id,metric_code,scope,value,unit,evidence_id,verification_id,status,metadata) values ($1,$2,$3,$4,$5,$6,$7,$8,$9) returning *", [periodId,metricCode,scope,value,unit,evidenceId,verificationId,'PENDING',body.metadata ?? {}]);
+      return reply.code(201).send({ source: "postgresql", syntheticData: false, authoritativeMutation: true, reportAssessment: "DECLARED_UNASSESSED", complianceStatus: "NOT_ASSESSED", productionGate: "HOLD", esgReport: row.rows[0] });
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "BWG ESG report unavailable", code: "BWG_ESG_UNAVAILABLE", syntheticData: false }); }
   });
 }
