@@ -136,8 +136,32 @@ export async function registerSyncRoutes(app: FastifyInstance, pool: Pool | null
   });
 
   app.post("/api/v1/field-sync/envelopes/:envelopeId/apply", async (request, reply) => {
-    if (!pool) return reply.code(503).send({ error: "Field sync unavailable", code: "DATABASE_UNAVAILABLE", syntheticData: false }); let auth: AuthContext; try { auth = await authenticate(request, pool); if (!auth) return reply.code(401).send(bearerChallenge()); } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Authentication service unavailable", code: "AUTH_UNAVAILABLE" }); } const { envelopeId } = request.params as { envelopeId: string }; if (!isUuid(envelopeId)) return reply.code(400).send({ error: "envelopeId must be a UUID", code: "INVALID_ENVELOPE" });
-    try { const client = await pool.connect(); try { await client.query("BEGIN"); const envelope = await client.query<{ id: string; identity_id: string; status: string; payload: OperationPayload; applied_entity_type: string | null; applied_entity_id: string | null }>(`select id, identity_id, status, payload, applied_entity_type, applied_entity_id from field_sync_envelopes where id = $1 for update`, [envelopeId]); const row = envelope.rows[0]; if (!row || row.identity_id !== auth.identityId) { await client.query("ROLLBACK"); return reply.code(404).send({ error: "Sync envelope not found for authenticated identity", code: "ENVELOPE_NOT_FOUND" }); } if (row.status === "APPLIED") { await client.query("COMMIT"); return reply.code(200).send({ source: "postgresql", syntheticData: false, replay: true, authoritativeMutation: true, entityType: row.applied_entity_type, entityId: row.applied_entity_id }); } if (row.status !== "RECEIVED") { await client.query("ROLLBACK"); return reply.code(409).send({ error: `Envelope cannot be applied from status ${row.status}`, code: "ENVELOPE_NOT_APPLICABLE" }); } const applied = await applyOperation(client, auth, row.payload); await client.query(`update field_sync_envelopes set status = 'APPLIED', applied_at = now(), applied_entity_type = $2, applied_entity_id = $3 where id = $1`, [envelopeId, applied.entityType, applied.entityId]); await client.query("COMMIT"); return reply.code(200).send({ source: "postgresql", syntheticData: false, replay: false, authoritativeMutation: true, envelopeId, entityType: applied.entityType, entityId: applied.entityId }); } catch (error) { await client.query("ROLLBACK"); const code = (error as { code?: string }).code; if (code === "INVALID_OPERATION" || code === "UNSUPPORTED_OPERATION") return reply.code(400).send({ error: (error as Error).message, code }); if (code === "OPERATION_FORBIDDEN") return reply.code(403).send({ error: (error as Error).message, code }); request.log.error(error); return reply.code(503).send({ error: "Authoritative operation application unavailable", syntheticData: false }); } finally { client.release(); } } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Field sync application unavailable", syntheticData: false }); }
+    if (!pool) return reply.code(503).send({ error: "Field sync unavailable", code: "DATABASE_UNAVAILABLE", syntheticData: false });
+    let auth: AuthContext; try { auth = await authenticate(request, pool); if (!auth) return reply.code(401).send(bearerChallenge()); } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Authentication service unavailable", code: "AUTH_UNAVAILABLE" }); }
+    const { envelopeId } = request.params as { envelopeId: string };
+    if (!isUuid(envelopeId)) return reply.code(400).send({ error: "envelopeId must be a UUID", code: "INVALID_ENVELOPE" });
+    if (!auth.activeOrganizationId) return reply.code(403).send({ error: "Select one verified organization to apply field-sync envelopes", code: "RLS_ORGANIZATION_CONTEXT_REQUIRED" });
+    if (!requestContext) return reply.code(503).send({ error: "Signed tenant request context is not configured", code: "RLS_CONTEXT_CONFIG_REQUIRED", syntheticData: false });
+    try {
+      const appliedResult = await withRlsRequestTransaction(pool, auth, requestContext, async (client) => {
+        const envelope = await client.query<{ id: string; identity_id: string; status: string; payload: OperationPayload; applied_entity_type: string | null; applied_entity_id: string | null }>(`select e.id,e.identity_id,e.status,e.payload,e.applied_entity_type,e.applied_entity_id from field_sync_envelopes e join field_devices fd on fd.id=e.device_id where e.id=$1 and fd.organization_id=$2 for update of e`, [envelopeId, auth.activeOrganizationId]);
+        const row = envelope.rows[0];
+        if (!row || row.identity_id !== auth.identityId) throw Object.assign(new Error("Sync envelope not found for authenticated identity and active organization"), { code: "ENVELOPE_NOT_FOUND" });
+        if (row.status === "APPLIED") return { replay: true, entityType: row.applied_entity_type, entityId: row.applied_entity_id };
+        if (row.status !== "RECEIVED") throw Object.assign(new Error(`Envelope cannot be applied from status ${row.status}`), { code: "ENVELOPE_NOT_APPLICABLE" });
+        const applied = await applyOperation(client, auth, row.payload);
+        await client.query(`update field_sync_envelopes set status = 'APPLIED', applied_at = now(), applied_entity_type = $2, applied_entity_id = $3 where id = $1`, [envelopeId, applied.entityType, applied.entityId]);
+        return { replay: false, entityType: applied.entityType, entityId: applied.entityId };
+      });
+      return reply.code(200).send({ source: "postgresql", syntheticData: false, replay: appliedResult.replay, authoritativeMutation: true, envelopeId, entityType: appliedResult.entityType, entityId: appliedResult.entityId });
+    } catch (error) {
+      const code = error && typeof error === "object" && "code" in error ? String((error as {code:unknown}).code) : "";
+      if (code === "ENVELOPE_NOT_FOUND") return reply.code(404).send({ error: "Sync envelope not found for authenticated identity and active organization", code });
+      if (code === "ENVELOPE_NOT_APPLICABLE") return reply.code(409).send({ error: error instanceof Error ? error.message : "Envelope cannot be applied", code });
+      if (code === "INVALID_OPERATION" || code === "UNSUPPORTED_OPERATION") return reply.code(400).send({ error: error instanceof Error ? error.message : "Invalid operation", code });
+      if (code === "OPERATION_FORBIDDEN") return reply.code(403).send({ error: error instanceof Error ? error.message : "Operation forbidden", code });
+      request.log.error(error); return reply.code(503).send({ error: "Field sync application unavailable", syntheticData: false });
+    }
   });
 
   app.get("/api/v1/field-sync/conflicts", async (request, reply) => {
