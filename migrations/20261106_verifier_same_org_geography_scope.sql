@@ -1,3 +1,48 @@
+-- Persist the authorization decision that was actually checked at insert time.
+-- Historical rows remain NULL/unattested; they are not retroactively certified.
+ALTER TABLE public.verifications
+  ADD COLUMN IF NOT EXISTS authorization_membership_id uuid,
+  ADD COLUMN IF NOT EXISTS authorization_role_id uuid,
+  ADD COLUMN IF NOT EXISTS authorization_permissions_snapshot jsonb,
+  ADD COLUMN IF NOT EXISTS authorization_checked_at timestamptz;
+
+DO $constraints$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_catalog.pg_constraint
+     WHERE conrelid='public.verifications'::regclass
+       AND conname='verifications_authorization_membership_fk'
+  ) THEN
+    ALTER TABLE public.verifications
+      ADD CONSTRAINT verifications_authorization_membership_fk
+      FOREIGN KEY (authorization_membership_id)
+      REFERENCES public.organization_memberships(id) ON DELETE RESTRICT;
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_catalog.pg_constraint
+     WHERE conrelid='public.verifications'::regclass
+       AND conname='verifications_authorization_role_fk'
+  ) THEN
+    ALTER TABLE public.verifications
+      ADD CONSTRAINT verifications_authorization_role_fk
+      FOREIGN KEY (authorization_role_id)
+      REFERENCES public.roles(id) ON DELETE RESTRICT;
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_catalog.pg_constraint
+     WHERE conrelid='public.verifications'::regclass
+       AND conname='verifications_authorization_permissions_array'
+  ) THEN
+    ALTER TABLE public.verifications
+      ADD CONSTRAINT verifications_authorization_permissions_array
+      CHECK (
+        authorization_permissions_snapshot IS NULL
+        OR jsonb_typeof(authorization_permissions_snapshot)='array'
+      );
+  END IF;
+END
+$constraints$;
+
 -- Unified, subject-bound verifier authorization for APPROVED and REJECTED decisions.
 -- Role names never confer authority. Exactly one verified permission-bearing membership
 -- in the subject organization is required and is snapshotted on the decision.
