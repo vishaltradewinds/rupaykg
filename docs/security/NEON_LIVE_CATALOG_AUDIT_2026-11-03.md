@@ -72,3 +72,30 @@ The repository migration chain and live database have therefore diverged. Do not
 ## Evidence boundary
 
 This report records the exact catalog facts returned by read-only Neon queries. It does not establish that all tables in the full 67-table application schema have been audited, nor does it establish application availability, tenant data correctness, regulatory acceptance, pilot operation or TRL 9.
+
+
+## Rehearsal branch reconciliation — 2026-11-03 follow-up
+
+Three existing non-primary branches were inspected read-only. Branch IDs and names were resolved from Neon before querying.
+
+| Branch | Branch ID | Migration ledger observation | Durable worker objects |
+|---|---|---|---|
+| `shakti-prod-main-worker-migration-rehearsal-20261031` | `br-young-mouse-b4jhqbci` | Contains versions through `20261113` | Jobs table absent; events table absent; `mrv_worker_api` schema absent; no matching MRV worker roles |
+| `verification-authz-rehearsal-2026-11-03` | `br-twilight-base-b4eec0j6` | Stops at `20261021` | Jobs table absent; events table absent; `mrv_worker_api` schema absent; no matching MRV worker roles |
+| `shakti-unresolved-migration-rehearsal-20261028` | `br-broad-glade-b46npw8o` | Stops at `20261025` | Jobs table absent; events table absent; `mrv_worker_api` schema absent; no matching MRV worker roles |
+
+### Critical interpretation
+
+The worker migration rehearsal branch's ledger contains `20261106` through `20261113`, including the durable worker migration version, while the expected queue tables and worker API schema are absent from the catalog. This is a **ledger-to-schema inconsistency**. It is not proof that the migration SQL executed successfully. The rehearsal must be treated as failed/unverified until the migration runner, SQL execution logs, branch lineage, schema diff and migration ledger write path are reconciled.
+
+The three branches have different parents/creation points and different ledger cutoffs. They are not interchangeable rehearsal environments. In particular, the verifier rehearsal is a fresh branch from live main and does not inherit the worker rehearsal's ledger entries. Do not merge their ledgers or treat one branch's successful migration marker as evidence for another branch's schema.
+
+### Required corrective actions before another rehearsal
+
+1. Identify the migration runner used to populate `schema_migrations` and verify whether it records a version before or after successful SQL execution/transaction commit.
+2. Inspect the actual SQL execution logs and migration transaction outcomes for `20261106`–`20261113` on the worker rehearsal branch.
+3. Compare the branch's catalog to the expected post-migration schema, including all indexes, constraints, triggers, functions, ownership and grants—not only the two queue tables.
+4. Do not manually delete or rewrite migration ledger rows. Preserve evidence and create a new clean disposable rehearsal branch from the authoritative main lineage after the migration-runner defect is understood.
+5. Make the migration acceptance gate assert both ledger state and catalog postconditions. A migration must fail acceptance if its expected objects, definitions, constraints, triggers or privileges are absent even when its version is recorded.
+
+No changes were made to any Neon branch during this follow-up.
