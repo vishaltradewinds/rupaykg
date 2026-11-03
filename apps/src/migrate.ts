@@ -64,7 +64,7 @@ if (!databaseUrl) throw new Error("DATABASE_URL is required");
 
 const pool = new Pool({
   connectionString: databaseUrl,
-  max: 1,
+  max: 2,
   ssl: process.env.DATABASE_SSL === "false" ? undefined : { rejectUnauthorized: false },
 });
 
