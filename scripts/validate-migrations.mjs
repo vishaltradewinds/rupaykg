@@ -74,7 +74,7 @@ if (!/old\.decision\s*=\s*'APPROVED'/i.test(verificationGuard) || !/new\s+is dis
 if (!/create trigger approved_verification_delete_guard\s+before delete on public\.verifications\s+for each row execute function public\.prevent_approved_verification_delete\(\)/i.test(verificationGuard)) {
   throw new Error("approved verification rows must be protected against DELETE");
 }
-if (/then\s+true\s+else\s+exists/i.test(geographyGuard) || !/a\.depth\s*<\s*63/i.test(geographyGuard) || !/any\s*\(\s*a\.path\s*\)/i.test(geographyGuard)) {
+if (/then\s+true\s+else\s+exists/i.test(geographyGuard) || !/a.depth\s*<\s*63/i.test(geographyGuard) || !/any\s*\(\s*a.path\s*\)/i.test(geographyGuard)) {
   throw new Error("geography authorization must fail closed and bound cyclic hierarchy traversal");
 }
 
