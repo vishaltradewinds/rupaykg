@@ -41,3 +41,11 @@
 - Fresh PR #243 exact-head CI #5247 is in progress; do not claim pass.
 - Rechecked Neon production read-only: `mrv_source_snapshots` absent, migration 088 not recorded, and one `rupaykg` login role is BYPASSRLS-capable. No production writes.
 - PR #244 current head CI #5246 is in progress; all stages through automated tests passed, production-container build is in progress.
+
+## 2026-11-03 — CTO Run 11 (17:57–17:59 UTC)
+- PR #243 CI #5247 passed dependency audit, migration validation, disposable PostgreSQL migration, typecheck, build, browser smoke and automated tests after acceptance-fixture exclusion was restored.
+- Production-container build remains in progress; no full CI pass claim.
+- Created P1 issue #245 and linked it from PR #243.
+- PR #244 CI #5246 passed all configured stages including production-container build on head 32028c4. Current docs-only head 7260020 has no separate workflow run visible.
+- Updated PR #244 description and refreshed the resume point.
+- Production remains unchanged and READ-ONLY / HOLD.
