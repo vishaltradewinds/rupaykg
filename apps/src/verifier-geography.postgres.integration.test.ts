@@ -17,7 +17,7 @@ test("geography authorization rejects cycles, excessive depth, missing scopes an
       ["Verifier Geography A " + suffix],
     )).rows[0]!.id;
     const orgB = (await client.query<{ id: string }>(
-      "insert into public.organizations(name,organization_type,status,verification_status) values($1,'test_fixture','VERIFIED','VERIFIED') returning id",
+      "insert into public.organizations(name,organization_type,status) values($1,'test_fixture','VERIFIED') returning id",
       ["Verifier Geography B " + suffix],
     )).rows[0]!.id;
 
