@@ -70,3 +70,27 @@ test("Guardian MRV accepts VERIFIED only with an authoritative execution id", as
     else process.env.GUARDIAN_MRV_SUBMIT_URL = previousUrl;
   }
 });
+
+test("Guardian idempotency key changes when the immutable source snapshot changes", async () => {
+  const previousUrl = process.env.GUARDIAN_MRV_SUBMIT_URL;
+  const previousFetch = globalThis.fetch;
+  const keys: string[] = [];
+  process.env.GUARDIAN_MRV_SUBMIT_URL = "https://guardian.test/mrv";
+  globalThis.fetch = async (_input, init) => {
+    keys.push(new Headers(init?.headers).get("idempotency-key") || "");
+    return new Response(JSON.stringify({ status: "VERIFIED", executionId: "guardian-execution-1" }), {
+      status: 200, headers: { "content-type": "application/json" },
+    });
+  };
+  try {
+    await executeGuardianMrv({ ...request, metadata: { sourceSnapshotDigest: "a".repeat(64) } });
+    await executeGuardianMrv({ ...request, metadata: { sourceSnapshotDigest: "b".repeat(64) } });
+    assert.match(keys[0] || "", /^[a-f0-9]{64}$/);
+    assert.match(keys[1] || "", /^[a-f0-9]{64}$/);
+    assert.notEqual(keys[0], keys[1]);
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousUrl === undefined) delete process.env.GUARDIAN_MRV_SUBMIT_URL;
+    else process.env.GUARDIAN_MRV_SUBMIT_URL = previousUrl;
+  }
+});
