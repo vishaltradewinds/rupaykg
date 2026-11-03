@@ -47,7 +47,7 @@ test("EPR returns RLS isolates two organizations and fails closed without a vali
       `insert into public.identities(id,external_subject,display_name,status)
        values($1,$2,'EPR RLS CI Actor','VERIFIED')
        on conflict(id) do nothing`,
-      [actorId, `epr-rls-actor:${suffix}`],
+      [actorId, 'epr-rls-actor'],
     );
     const permissionRole = await client.query<{ id: string }>(
       `insert into public.roles(organization_id,name,permissions,geography_scope)
