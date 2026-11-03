@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import pg from "pg";
 
-if (process.env.RUPAYKG_RUN_AUTHORIZATION_PROVENANCE_TESTS !== "1") {
+if (process.env.RUPAYKG_RUN_AUTHORIZATION_PROVENANCE_TESTS !== "1" && process.env.RUPAYKG_RUN_DB_INTEGRATION_TESTS !== "1") {
   console.log("Skipped authorization provenance regression (explicit disposable-DB gate not enabled).");
   process.exit(0);
 }
