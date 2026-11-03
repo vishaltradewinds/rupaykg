@@ -48,6 +48,8 @@ jobs:
             NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;
           GRANT CREATE ON DATABASE rupaykg TO rupaykg_security_definer;
           GRANT rupaykg_security_definer TO postgres;
+          CREATE ROLE rupaykg_app_runtime LOGIN
+            NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS NOREPLICATION;
           CREATE ROLE rupaykg_bootstrap_owner
             NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS NOREPLICATION;
           GRANT CREATE ON DATABASE rupaykg TO rupaykg_bootstrap_owner;
