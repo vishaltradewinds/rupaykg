@@ -70,7 +70,7 @@ test("MRV source snapshots are immutable, idempotent and require explicit correc
       evidenceId: evidence.rows[0]!.id, guardianPolicyId: "test-policy", methodologyCode: "BM WA03.001",
     };
     const golden = await pool.query<{ digest: string }>(
-      "select mrv_source_snapshot_digest('{\\"b\\":2,\\"a\\":1}'::jsonb) as digest",
+      "select mrv_source_snapshot_digest(${"b":2,"a":1}$::jsonb) as digest",
     );
     assert.equal(golden.rows[0]?.digest, "d8497d9d82770a70729261095aa98f7ef5154d7af499f8037b6ca250296785a6");
 
