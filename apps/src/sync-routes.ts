@@ -116,6 +116,27 @@ export async function registerSyncRoutes(app: FastifyInstance, pool: Pool | null
   });
 
   app.post("/api/v1/field-sync/conflicts/:conflictId/resolve", async (request, reply) => {
-    if (!pool) return reply.code(503).send({ error: "Field sync unavailable", code: "DATABASE_UNAVAILABLE", syntheticData: false }); let auth: AuthContext; try { auth = await authenticate(request, pool); if (!auth) return reply.code(401).send(bearerChallenge()); } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Authentication service unavailable", code: "AUTH_UNAVAILABLE" }); } const { conflictId } = request.params as { conflictId: string }; if (!isUuid(conflictId)) return reply.code(400).send({ error: "conflictId must be a UUID", code: "INVALID_CONFLICT" }); const validation = validateConflictResolution(bodyOf(request)); if (!validation.ok) return reply.code(400).send({ error: validation.error, code: validation.code }); try { const result = await pool.query(`update field_sync_conflicts c set resolution_status = $2, resolution_reason = $3, resolved_by_identity_id = $4, resolved_at = now() where c.id = $1 and c.resolution_status = 'OPEN' and exists (select 1 from field_sync_envelopes e where e.id = c.envelope_id and e.identity_id = $4) returning c.id, c.envelope_id, c.resolution_status, c.resolution_reason, c.resolved_by_identity_id, c.resolved_at`, [conflictId, validation.resolutionStatus, validation.resolutionReason, auth.identityId]); if (!result.rows[0]) return reply.code(404).send({ error: "Open conflict not found for authenticated identity", code: "CONFLICT_NOT_FOUND" }); return reply.code(200).send({ source: "postgresql", syntheticData: false, authoritativeMutation: false, conflict: result.rows[0] }); } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Conflict resolution unavailable", syntheticData: false }); }
+    if (!pool) return reply.code(503).send({ error: "Field sync unavailable", code: "DATABASE_UNAVAILABLE", syntheticData: false });
+    let auth: AuthContext; try { auth = await authenticate(request, pool); if (!auth) return reply.code(401).send(bearerChallenge()); } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Authentication service unavailable", code: "AUTH_UNAVAILABLE" }); }
+    const { conflictId } = request.params as { conflictId: string };
+    if (!isUuid(conflictId)) return reply.code(400).send({ error: "conflictId must be a UUID", code: "INVALID_CONFLICT" });
+    const validation = validateConflictResolution(bodyOf(request)); if (!validation.ok) return reply.code(400).send({ error: validation.error, code: validation.code });
+    if (!auth.activeOrganizationId) return reply.code(403).send({ error: "Select one verified organization to resolve field-sync conflicts", code: "RLS_ORGANIZATION_CONTEXT_REQUIRED" });
+    if (!requestContext) return reply.code(503).send({ error: "Signed tenant request context is not configured", code: "RLS_CONTEXT_CONFIG_REQUIRED", syntheticData: false });
+    try {
+      const conflict = await withRlsRequestTransaction(pool, auth, requestContext, async (client) => {
+        const permitted = await hasOrganizationPermission(client, auth, auth.activeOrganizationId!, ["reports:read"], "security_definer");
+        if (!permitted) throw Object.assign(new Error("Field-sync conflict resolution permission required"), { code: "FIELD_SYNC_WRITE_FORBIDDEN" });
+        const result = await client.query(`update field_sync_conflicts c set resolution_status = $2, resolution_reason = $3, resolved_by_identity_id = $4, resolved_at = now() where c.id = $1 and c.resolution_status = 'OPEN' and exists (select 1 from field_sync_envelopes e where e.id = c.envelope_id and e.identity_id = $4 and e.organization_id = $5) returning c.id, c.envelope_id, c.resolution_status, c.resolution_reason, c.resolved_by_identity_id, c.resolved_at`, [conflictId, validation.resolutionStatus, validation.resolutionReason, auth.identityId, auth.activeOrganizationId]);
+        if (!result.rows[0]) throw Object.assign(new Error("Open conflict not found for authenticated identity and active organization"), { code: "CONFLICT_NOT_FOUND" });
+        return result.rows[0];
+      });
+      return reply.code(200).send({ source: "postgresql", syntheticData: false, authoritativeMutation: false, conflict });
+    } catch (error) {
+      const code = error && typeof error === "object" && "code" in error ? String((error as {code:unknown}).code) : "";
+      if (code === "FIELD_SYNC_WRITE_FORBIDDEN") return reply.code(403).send({ error: "Field-sync conflict resolution permission required", code });
+      if (code === "CONFLICT_NOT_FOUND") return reply.code(404).send({ error: "Open conflict not found for authenticated identity and active organization", code });
+      request.log.error(error); return reply.code(503).send({ error: "Conflict resolution unavailable", syntheticData: false });
+    }
   });
 }
