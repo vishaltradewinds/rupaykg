@@ -87,7 +87,11 @@ SET search_path = pg_catalog, pg_temp
 AS $function$
 BEGIN
   IF NEW.geography_id IS NOT NULL
-     AND NOT public.organization_has_geography_scope(NEW.organization_id, NEW.geography_id) THEN
+     AND NOT public.organization_has_geography_scope_at(
+       NEW.organization_id,
+       NEW.geography_id,
+       coalesce(NEW.occurred_at, NEW.created_at, statement_timestamp())
+     ) THEN
     RAISE EXCEPTION 'activity geography is outside organization authorization scope';
   END IF;
   RETURN NEW;
