@@ -33,11 +33,11 @@ export function createDatabasePoolConfig(
   if (production && internalRenderHost && sslMode !== "false") {
     throw new Error("Production Render private database connections must be explicitly normalized to DATABASE_SSL=false");
   }
+  if (production && !internalRenderHost && sslMode === "false") {
+    throw new Error("Plaintext PostgreSQL is forbidden for external production database endpoints");
+  }
   if (production && !internalRenderHost && sslMode !== "require") {
     throw new Error("Production external PostgreSQL connections require DATABASE_SSL=require");
-  }
-  if (production && sslMode === "false" && !internalRenderHost) {
-    throw new Error("Plaintext PostgreSQL is forbidden for external production database endpoints");
   }
 
   // node-postgres may let sslmode/sslrootcert URL parameters override the
