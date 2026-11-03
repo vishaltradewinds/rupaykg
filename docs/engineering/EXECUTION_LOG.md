@@ -32,3 +32,12 @@
 - PR #244 latest head CI #5239 (`41688568104`) completed SUCCESS across all configured stages, including production-container build.
 - PR #243 remains draft/unmerged due current CI and outstanding MRV snapshot integrity findings.
 - Production unchanged; no merge, deployment, migration or role/RLS change.
+
+## 2026-11-03 — CTO Run 10 (17:55–17:57 UTC)
+- PR #243 exact-head CI #5244 passed migration validation, disposable PostgreSQL migration, typecheck, build and browser smoke, then failed automated tests: 107/108 passed.
+- Failing regression: `blocks acceptance fixture evidence from becoming a registry credential`. Root cause: migration 088 replaced the credential guard but omitted the acceptance-fixture exclusion from migration 087.
+- Restored acceptance-fixture exclusion for new issuance and transitions, preserving existing credential lifecycle, in commit `d00c530ab0091a803a765367b8a288f26510c58b`.
+- Created issue #245 for MRV digest/payload binding, source-mutation invalidation, TRUNCATE/runtime privilege boundary and deterministic capture ordering.
+- Fresh PR #243 exact-head CI #5247 is in progress; do not claim pass.
+- Rechecked Neon production read-only: `mrv_source_snapshots` absent, migration 088 not recorded, and one `rupaykg` login role is BYPASSRLS-capable. No production writes.
+- PR #244 current head CI #5246 is in progress; all stages through automated tests passed, production-container build is in progress.
