@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { Pool } from "pg";
+import { createDatabasePoolConfig } from "./database-pool-config.js";
 
 /**
  * Creates one deterministic, idempotent live-acceptance dataset.
@@ -10,6 +11,10 @@ import { Pool } from "pg";
  * migration 081; it never invents LGD/government geography data.
  */
 
+if (process.env.NODE_ENV === "production") {
+  throw new Error("PRODUCTION_CONFIG_INVALID: acceptance fixture seeding is forbidden in production");
+}
+
 if (process.env.RUPAYKG_ACCEPTANCE_SEED_ON_START !== "true") {
   process.exit(0);
 }
@@ -19,11 +24,7 @@ const sessionToken = process.env.RUPAYKG_ACCEPTANCE_SESSION_TOKEN;
 if (!databaseUrl) throw new Error("DATABASE_URL is required for acceptance seed");
 if (!sessionToken) throw new Error("RUPAYKG_ACCEPTANCE_SESSION_TOKEN is required for acceptance seed");
 
-const pool = new Pool({
-  connectionString: databaseUrl,
-  max: 1,
-  ssl: process.env.DATABASE_SSL === "false" ? undefined : { rejectUnauthorized: false },
-});
+const pool = new Pool(createDatabasePoolConfig(process.env, 1));
 
 const tokenHash = createHash("sha256").update(sessionToken).digest("hex");
 const evidenceHash = createHash("sha256")
