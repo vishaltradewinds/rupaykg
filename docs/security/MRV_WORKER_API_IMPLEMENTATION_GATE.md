@@ -1,6 +1,15 @@
 # MRV Worker API Implementation Gate
 
-Status: BLOCKED — contract hardening only; no database API migration or runtime provisioning.
+Status: BLOCKED — TypeScript contract/state-transition corrections committed; database API migration, runtime provisioning and execution validation remain outstanding.
+
+## 2026-11-03 implementation correction batch
+
+- Commit `e1940cf91f51ec8c3bfaf16ab13188e378596f11` changes the adapter to accept only the exact `{ advanced: boolean }` JSONB envelope for `advance_job`. Bare booleans, arrays, null, non-boolean values, missing keys and extra keys are rejected.
+- Commit `74ead03da6eaef21d4a55b3cc80b62ea614fe75a` adds adapter regression coverage for the documented envelope and rejects legacy boolean and malformed/ambiguous responses.
+- Commit `9ef8de4d4ac4f1151a9cdb1e5f081efdaab0d9d7` corrects restricted worker stage sequencing: `CLAIMED -> GUARDIAN_SUBMITTED -> GUARDIAN_VERIFIED`, then persists the HCS transaction binding and advances `GUARDIAN_VERIFIED -> HCS_SUBMITTED` before submitting the persisted transaction. HCS submission now occurs from `HCS_SUBMITTED`; Mirror Node reconciliation begins only from `HCS_CONSENSUS_CONFIRMED`.
+- The changes are source-level corrections only. Exact-head GitHub checks currently report zero check runs; no test, build, PostgreSQL acceptance or CI pass is claimed.
+- PR #213 remains draft/unmerged and mergeability is false. No migration, role grant, RLS activation, worker enablement, deployment or certification occurred.
+
 
 ## Confirmed implementation mismatch
 
@@ -33,7 +42,9 @@ Status: BLOCKED — contract hardening only; no database API migration or runtim
 
 ## Required next validation batch
 
-- Align adapter, SQL contract and tests on the JSONB advance envelope.
+- Complete-job shape validation is still incomplete; validate every required job field, UUID, status, snapshot and date before provider execution.
+- Execute adapter and worker tests, typecheck, build and full exact-head CI for commit `9ef8de4d4ac4f1151a9cdb1e5f081efdaab0d9d7`.
+- Align SQL implementation and acceptance tests on the JSONB advance envelope.
 - Add strict complete-job shape validation before any provider call.
 - Implement SQL only after validating every referenced column and policy against the full migration chain on a disposable PostgreSQL database.
 - Add hostile two-tenant tests for direct table denial, cross-tenant job IDs, revoked membership/permissions, stale leases, conflicting provider bindings, idempotent provenance and transactionally appended events.
