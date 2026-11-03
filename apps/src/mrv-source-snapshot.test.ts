@@ -17,3 +17,7 @@ test("MRV source digest changes when any observation or evidence version changes
 test("MRV source digest is a SHA-256 hex digest", () => {
   assert.match(mrvSourceDigest({ a: 1 }), /^[0-9a-f]{64}$/);
 });
+
+test("MRV source digest includes timestamp values", () => {
+  assert.notEqual(mrvSourceDigest({ observedAt: new Date("2026-11-03T10:00:00.000Z") }), mrvSourceDigest({ observedAt: new Date("2026-11-03T10:00:01.000Z") }));
+});
