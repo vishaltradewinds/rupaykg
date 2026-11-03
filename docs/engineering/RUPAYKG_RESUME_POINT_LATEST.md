@@ -1,37 +1,39 @@
-# RupayKg CTO Resume Point — 2026-11-03 17:49 UTC
+# RupayKg CTO Resume Point — 2026-11-03 17:53 UTC
 
 ## Authority and safety
 - Repository: `vishaltradewinds/rupaykg`, default branch `main`.
 - Authoritative live database: Neon project `steep-mud-79906940`, primary branch `br-restless-base-b44cip2h` (`main`), database `rupaykg`.
 - Production is READ-ONLY / HOLD. No production DDL/DML, migration, role/grant/RLS change, branch operation, deployment, worker activation, merge or certification is authorized by this checkpoint.
-- Render auto-deploys from GitHub main (existing release-governance evidence); do not merge to main without explicit release approval and controls.
-- Desktop Commander device `DESKTOP-AGPFFLB` was offline at 17:49 UTC. Local shell execution and local test reruns were therefore unavailable in this run.
+- Render auto-deploys from GitHub main; do not merge to main without explicit release approval and controls.
+- Desktop Commander device `DESKTOP-AGPFFLB` was offline at 17:49 UTC. Local shell execution and local test reruns were unavailable.
 
 ## Verified current repository state
-- Current main base observed through open PR base SHA: `a3fecc0abd2c46549a201058d3963afc0e3a73c9`.
-- The requested historical `docs/engineering/RUPAYKG_RESUME_POINT_LATEST.md` and `docs/engineering/EXECUTION_LOG.md` did not exist on current main (GitHub contents API returned 404). This PR restores a canonical handoff location; it is not evidence of earlier checkpoints being present.
+- Main base SHA: `a3fecc0abd2c46549a201058d3963afc0e3a73c9`.
+- The requested historical `docs/engineering/RUPAYKG_RESUME_POINT_LATEST.md` and `docs/engineering/EXECUTION_LOG.md` did not exist on main (GitHub contents API returned 404). PR #244 restores a canonical handoff location; it does not claim prior history existed.
 - `migrations/README.md` on main says migration 023 is intentionally absent. Do not repeat the prior claim that 023 was restored without checking actual directory contents and production ledger.
-- Main migration directory listing from GitHub shows numbered migrations 001–087 (023 absent) and dated migrations through `20261021_evidence_artifact_vault.sql`. Production ledger is not to be rewritten to match this list.
-- Current main README describes RupayKg as India's Circular Economy Operating System and identifies current validation work on statutory BWG nullability and onboarding governance fetch interception.
+- Main migration directory listing shows numbered migrations 001–087 (023 absent) and dated migrations through `20261021_evidence_artifact_vault.sql`. Production ledger must not be rewritten to match this list.
+- Main README describes RupayKg as India's Circular Economy Operating System and identifies current validation work on statutory BWG nullability and onboarding governance fetch interception.
 
 ## Authoritative Neon read-only evidence (2026-11-03)
 Read-only query against `br-restless-base-b44cip2h`:
-- database: `rupaykg`
-- current role: `rupaykg`
+- database: `rupaykg`; current role: `rupaykg`
 - public base tables: 67
 - RLS-enabled tables: 0
 - FORCE RLS tables: 0
 - migration ledger rows: 92
 - latest ledger version: `20261021`
+- Neon reports production main `protected=false`
 
-This confirms the production tenant-isolation release blocker. No write was performed. Neon branch listing also reports production main `protected=false`.
+This confirms the production tenant-isolation release blocker. No write was performed.
 
 ## Current high-priority PRs
-- PR #243 — MRV immutable source snapshots v2. Current head `313a6447c11eafd82840c77a14c55481fef2ea75`, draft, unmerged. Exact-head CI run #5227 (`41687754897`) failed typecheck at `apps/test/settlement-reconciliation.test.ts(59,3): TS1135 Argument expression expected`. Migration validation and disposable PostgreSQL migration execution passed; CI reports migration 088 applied in the disposable CI database; build, browser smoke, tests and production-container build were skipped. A technical review comment was added to PR #243 identifying missing database verification of source_digest, missing invalidation when source records change after snapshot, TRUNCATE/privileged-writer gaps in snapshot immutability, and nondeterministic artifact-version ordering. These require correction and regression tests before acceptance.
-- PR #238 — forward-only verification authorization provenance repair. Draft/unmerged. Its exact-head CI evidence reported passing disposable PostgreSQL regression, but independent review still must reconcile the legacy `verification_independence_guard` and unified same-organization/permission model.
-- PR #242 — EPR transaction-bound authorization hardening. Draft/unmerged; do not register its dormant legacy route alongside PR #213's signed-RLS GET route.
-- PR #237 — migration checksum integrity. Draft/unmerged; inspect latest head and exact CI before relying on it.
-- PR #240/#241 — strategic positioning and claim/evidence documentation; draft/unmerged.
+- **PR #243 — MRV immutable source snapshots v2.** Draft/unmerged. Current head `582fade6a8002599c41f2d2e52829994c9adea2b`. Exact-head CI run #5237 (`41688426903`) is IN PROGRESS. Previous head `313a644...` failed typecheck at `apps/test/settlement-reconciliation.test.ts(59,3)`; a subsequent branch update removed that malformed fragment. Further source inspection found the credential-guard PL/pgSQL function body closed with malformed `$;`; corrected to `$$;` in commit `582fade6...` and verified all four function bodies close with `$$;`. CI #5237 must prove migration 088 parses and full tests pass.
+- PR #243 technical review comments identify unresolved MRV integrity requirements: PostgreSQL does not recompute/verify `source_digest` against `source_payload`; source mutations do not invalidate current snapshot/provenance or force a new external trust-rail cycle; UPDATE/DELETE trigger does not cover TRUNCATE or privileged runtime writers; artifact-version join ordering lacks a deterministic version tie-breaker. These require design correction and disposable PostgreSQL regression tests before approval.
+- **PR #238** — forward-only verification authorization provenance repair. Draft/unmerged. Exact-head CI evidence reported passing disposable PostgreSQL regression, but independent review must reconcile the live legacy `verification_independence_guard` and unified same-organization/permission model.
+- **PR #242** — EPR transaction-bound authorization hardening. Draft/unmerged; do not register its dormant legacy route alongside PR #213's signed-RLS GET route.
+- **PR #237** — migration checksum integrity. Draft/unmerged; inspect latest head and exact CI before relying on it.
+- **PR #240/#241** — strategic positioning and claim/evidence documentation; draft/unmerged.
+- **PR #244** — this documentation-only handoff restoration. Draft/unmerged; CI run #5232 (`41688183202`) had passed dependency audit, migration validation, disposable PostgreSQL migration, typecheck, build, browser smoke and tests; production-container build was still running at last inspection. Do not claim full pass until final job conclusion is SUCCESS.
 
 ## P0/P1 issues
 - #215: verification authorization must be tenant-bound and fail closed. Require same-organization active verified membership and explicit permission for every decision; no role-name fallback; geography fails closed; immutable approval lineage; legacy trigger resolved only after replacement tests.
@@ -41,8 +43,8 @@ This confirms the production tenant-isolation release blocker. No write was perf
 - #112: whole-platform Shakti operational/compliance/security/TRL audit; continue source-backed stakeholder and statutory coverage.
 
 ## Next execution sequence
-1. Fix PR #243's exact-head TypeScript parser failure. Re-read current head and diff before changing anything; do not assume the reported line alone is the cause. Run exact-head CI and inspect the job logs. Ensure disposable PostgreSQL integration is actually executed, not skipped.
-2. Resolve MRV snapshot integrity before approval: database-verifiable digest/payload binding; bind methodology and security-relevant fields; ensure source changes invalidate prior eligibility or force superseding snapshot + new Guardian/HCS/Mirror Node proof; enforce TRUNCATE and writer privilege boundaries; deterministic evidence artifact version ordering.
+1. Inspect exact-head CI #5237 for PR #243; fix any migration/type/test failures on the feature branch only and rerun exact-head CI.
+2. Resolve MRV snapshot integrity: database-verifiable digest/payload binding; bind methodology and security-relevant fields; ensure source changes invalidate prior eligibility or force superseding snapshot + new Guardian/HCS/Mirror Node proof; enforce TRUNCATE and writer privilege boundaries; deterministic evidence artifact version ordering.
 3. Reconcile PR #243 migration 088 with current verification/tenant-isolation and credential issuance triggers; do not merge while P0 #215/#196 contracts conflict.
 4. Continue #238 unified verification authorization correction and include the live legacy trigger in disposable PostgreSQL tests.
 5. Reconcile migration sources against production and staging ledgers read-only; exact filename, checksum, object definitions and timestamp evidence.
@@ -56,4 +58,4 @@ This confirms the production tenant-isolation release blocker. No write was perf
 - SITE-JBP-01 Kathonda remains pre-validation until real field evidence is recorded.
 
 ## Evidence rule
-Each status claim must link to a commit, exact-head workflow, read-only database result, official source, or field artifact. CI success is engineering evidence only; it is not legal acceptance, production readiness, carbon-credit issuance or TRL 9.
+Every status claim must link to a commit, exact-head workflow, read-only database result, official source, or field artifact. CI success is engineering evidence only; it is not legal acceptance, production readiness, carbon-credit issuance or TRL 9.
