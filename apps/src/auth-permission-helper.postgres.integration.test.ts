@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { Pool } from "pg";
 import { createSignedRequestContextToken } from "./signed-request-context-token.js";
 
@@ -68,6 +68,12 @@ test("restricted app runtime can use only signed-context-bound boolean permissio
       "insert into app_security.request_context_keys(key_id,secret,active) values($1,$2,true)",
       [keyId, secret],
     );
+    const bearerToken = "ci-auth-session-" + suffix;
+    const tokenHash = createHash("sha256").update(bearerToken).digest("hex");
+    await client.query(
+      "insert into public.identity_sessions(identity_id,expires_at,token_hash) values($1,now()+interval '5 minutes',$2)",
+      [identityA, tokenHash],
+    );
 
     await client.query("SET LOCAL ROLE rupaykg_app_runtime");
     const privileges = await client.query<{
@@ -88,6 +94,22 @@ test("restricted app runtime can use only signed-context-bound boolean permissio
       can_execute_helper: true,
       can_use_schema: true,
     });
+
+    const resolvedSession = await client.query<{
+      identity_id: string;
+      organization_id: string;
+      role_id: string;
+      membership_status: string;
+    }>(
+      "select identity_id,organization_id,role_id,membership_status from auth_private.resolve_session($1)",
+      [tokenHash],
+    );
+    assert.deepEqual(resolvedSession.rows, [{
+      identity_id: identityA,
+      organization_id: orgA,
+      role_id: roleA,
+      membership_status: "VERIFIED",
+    }], "restricted runtime must resolve only the active identity's verified organization membership");
 
     const authorize = async (actorId: string, organizationId: string, token?: string) => {
       await client.query("select set_config('app.request_context',$1,true)", [token ?? ""]);
