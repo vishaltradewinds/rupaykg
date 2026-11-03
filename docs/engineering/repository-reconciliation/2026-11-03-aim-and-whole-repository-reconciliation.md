@@ -544,3 +544,12 @@ Read-only source review of migrations 003/009/011/016/017 and apps/src/sync-rout
 PR #230 now includes contracts/schemas/field-sync-envelope.v1.schema.json (JSON Schema 2020-12), a target contract for ACTIVITY_CREATE, MEASUREMENT_CREATE, EVIDENCE_CREATE and RESOURCE_FLOW_CREATE. It defines idempotency, device ID, sequence, capture time, organization declaration, and target measurement provenance fields for instrument, calibration evidence, uncertainty, GPS accuracy, methodology version and evidence links.
 
 It is explicitly marked draft-target-not-runtime-enforced. Current sync-validation.ts and applyOperation still use manual validation, and not every target field is accepted or persisted. The schema must not be published as partner OpenAPI or represented as current runtime behavior. Next gates are shared Fastify runtime validation, operation-to-domain persistence mapping, device/org binding, immutable idempotency and two-tenant/two-device PostgreSQL acceptance.
+
+
+### 12.24 Geography fallback vs fail-closed policy decision
+
+Current migrations README and migration 012 explicitly allow organizations with no configured geography roots to rely on membership authorization. PR #213's 20261108 candidate changes this to fail closed. This is a breaking policy decision, not a purely technical correction.
+
+Recommended Shakti rule for a pan-India system: no implicit unlimited geography. Local organizations must have verified district/block/ULB/facility roots; national authorities must receive an explicit verified India-level root. The Jabalpur pilot must have a verified Jabalpur root and source-versioned administrative crosswalk. Missing/ambiguous/expired/cyclic mapping is UNRESOLVED or denied, not a nationwide grant. Read-only national aggregate access is a distinct permission/scope and must not become a write-scope bypass.
+
+Before adopting fail-closed enforcement, inventory unscoped organizations, classify national vs local authority, provision/verify roots, and test unscoped denial, explicit national-root allowance, local-root boundaries, and missing/ambiguous/cyclic crosswalk denial. Do not silently deploy 20261108 until this scope backfill and pilot evidence are accepted.
