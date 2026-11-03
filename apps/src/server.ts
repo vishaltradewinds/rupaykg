@@ -40,6 +40,7 @@ if (eprReturnReadEnabledValue !== "true" && eprReturnReadEnabledValue !== "false
 const eprReturnReadEnabled = eprReturnReadEnabledValue === "true";
 if (process.env.NODE_ENV === "production" && !authPool) throw new Error("AUTH_DATABASE_URL is required for the dedicated authentication runtime");
 async function assertProductionDatabaseRuntimeContracts(): Promise<void> {
+  if (getAuthResolverMode() !== "security_definer") throw new Error("PRODUCTION_AUTH_RESOLVER_MODE_INVALID");
   if (!pool || !authPool) throw new Error("PRODUCTION_DATABASE_RUNTIME_UNAVAILABLE");
   const [appIdentity, authIdentity] = await Promise.all([
     pool.query<{ current_user: string; current_database: string; rolcanlogin: boolean; rolinherit: boolean; rolsuper: boolean; rolbypassrls: boolean; rolcreatedb: boolean; rolcreaterole: boolean; rolreplication: boolean }>(
