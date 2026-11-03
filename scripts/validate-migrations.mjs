@@ -48,6 +48,7 @@ const verificationTriggerMigration = await readFile(path.join(dir, "008_verifica
 const verificationGuard = await readFile(path.join(dir, "20261106_verifier_same_org_geography_scope.sql"), "utf8");
 const verificationPermission = await readFile(path.join(dir, "20261107_verifier_subject_org_verified.sql"), "utf8");
 const geographyGuard = await readFile(path.join(dir, "20261108_geography_scope_fail_closed.sql"), "utf8");
+const authorizationSnapshotMigration = await readFile(path.join(dir, "20261112_verification_authorization_snapshots.sql"), "utf8");
 for (const [name, sql] of [["20261106", verificationGuard], ["20261107", verificationPermission]]) {
   if (/lower\s*\(\s*r\.name\s*\)/i.test(sql) || /r\.name\s+in\s*\(/i.test(sql)) {
     throw new Error(`${name} must not grant verifier authority by role name`);
@@ -76,6 +77,13 @@ if (!/create trigger approved_verification_delete_guard\s+before delete on publi
 }
 if (/then\s+true\s+else\s+exists/i.test(geographyGuard) || !/a.depth\s*<\s*63/i.test(geographyGuard) || !/any\s*\(\s*a.path\s*\)/i.test(geographyGuard)) {
   throw new Error("geography authorization must fail closed and bound cyclic hierarchy traversal");
+}
+
+if (!/add column if not exists authorization_snapshot jsonb/i.test(authorizationSnapshotMigration) || !/add column if not exists authorization_snapshot_hash text/i.test(authorizationSnapshotMigration)) {
+  throw new Error("verifier decisions must persist authorization snapshots and hashes");
+}
+if (!/verification_authorization_snapshot_guard/i.test(authorizationSnapshotMigration) || !/new\.authorization_snapshot is not null/i.test(authorizationSnapshotMigration) || !/authorization snapshot is immutable/i.test(authorizationSnapshotMigration)) {
+  throw new Error("verifier authorization snapshots must be database-generated and immutable");
 }
 
 console.log(`Validated ${files.length} migrations, ${objects.size} schema objects and verification/geography guardrails.`);
