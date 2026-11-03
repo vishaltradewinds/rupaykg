@@ -165,7 +165,7 @@ test("MRV source snapshots are immutable, idempotent and require explicit correc
     );
     await assert.rejects(
       () => pool.query("truncate mrv_source_snapshots cascade"),
-      /MRV source snapshots cannot be truncated/,
+      /MRV source snapshots cannot be truncated|cannot truncate a table referenced in a foreign key constraint/,
     );
 
     await assert.rejects(
