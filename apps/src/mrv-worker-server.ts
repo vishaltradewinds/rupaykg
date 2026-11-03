@@ -5,7 +5,7 @@ import { assertMrvWorkerRoleContract, type MrvWorkerRoleContract } from "./mrv-w
 
 const requiredTables = [
   "organizations", "identities", "organization_memberships", "roles", "activities",
-  "evidence", "verifications", "geography", "mrv_submission_jobs",
+  "evidence", "verifications", "geography", "mrv_observations", "measurements", "mrv_submission_jobs",
   "mrv_submission_job_events", "mrv_provenance_events",
 ];
 
