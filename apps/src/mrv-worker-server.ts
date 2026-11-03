@@ -29,30 +29,45 @@ async function main(): Promise<void> {
 
   try {
     const identity = await pool.query<MrvWorkerRoleContract>(
-      `select current_user, session_user,
-              r.rolcanlogin,r.rolinherit,r.rolsuper,r.rolbypassrls,r.rolcreatedb,r.rolcreaterole,r.rolreplication,
-              pg_has_role(current_user,'rupaykg_app_owner','MEMBER')
-                or pg_has_role(current_user,'rupaykg_auth_owner','MEMBER') as owner_membership,
-              pg_has_role(current_user,'pg_read_all_data','MEMBER')
-                or pg_has_role(current_user,'pg_write_all_data','MEMBER') as elevated_membership,
-              exists(select 1 from pg_auth_members m where m.member=r.oid) as any_role_membership,
-              has_schema_privilege(current_user,'public','CREATE') as public_create,
-              exists(
-                select 1 from information_schema.role_table_grants g
-                 where g.grantee=current_user and g.table_schema='public'
-                   and g.privilege_type in ('SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER')
-              ) as direct_table_privileges,
-              has_function_privilege(current_user,'mrv_worker_api.claim_next_job(text,integer)','EXECUTE')
-                as worker_api_execute,
-              exists(
-                select 1
-                  from pg_proc api
-                  cross join lateral aclexplode(coalesce(api.proacl, acldefault('f', api.proowner))) acl
-                 where api.oid=to_regprocedure('mrv_worker_api.claim_next_job(text,integer)')
-                   and acl.grantee=0
-                   and acl.privilege_type='EXECUTE'
-              ) as public_worker_api_execute
-         from pg_roles r where r.rolname=current_user`,
+      `with required(signature) as (values
+        ('mrv_worker_api.claim_next_job(text,integer)'),
+        ('mrv_worker_api.authorize_job(uuid)'),
+        ('mrv_worker_api.persist_guardian_binding(uuid,uuid,text)'),
+        ('mrv_worker_api.persist_hedera_binding(uuid,uuid,text,text,text)'),
+        ('mrv_worker_api.renew_lease(uuid,uuid,integer)'),
+        ('mrv_worker_api.advance_job(uuid,uuid,text,jsonb)'),
+        ('mrv_worker_api.release_job(uuid,uuid,timestamptz,text,text)'),
+        ('mrv_worker_api.finalize_provenance(uuid,uuid,text)')
+      ), api as (
+        select r.signature, p.oid, p.proowner, p.proconfig, p.prosecdef, p.proacl
+          from required r left join pg_proc p on p.oid=to_regprocedure(r.signature)
+      )
+      select current_user, session_user,
+             r.rolcanlogin,r.rolinherit,r.rolsuper,r.rolbypassrls,r.rolcreatedb,r.rolcreaterole,r.rolreplication,
+             pg_has_role(current_user,'rupaykg_app_owner','MEMBER')
+               or pg_has_role(current_user,'rupaykg_auth_owner','MEMBER') as owner_membership,
+             pg_has_role(current_user,'pg_read_all_data','MEMBER')
+               or pg_has_role(current_user,'pg_write_all_data','MEMBER') as elevated_membership,
+             exists(select 1 from pg_auth_members m where m.member=r.oid) as any_role_membership,
+             has_schema_privilege(current_user,'public','CREATE') as public_create,
+             exists(select 1 from information_schema.role_table_grants g
+                     where g.grantee=current_user and g.table_schema='public'
+                       and g.privilege_type in ('SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER')
+             ) as direct_table_privileges,
+             has_function_privilege(current_user,'mrv_worker_api.claim_next_job(text,integer)','EXECUTE')
+               as worker_api_execute,
+             exists(select 1 from api a cross join lateral aclexplode(coalesce(a.proacl,acldefault('f',a.proowner))) acl
+                     where a.signature='mrv_worker_api.claim_next_job(text,integer)'
+                       and acl.grantee=0 and acl.privilege_type='EXECUTE') as public_worker_api_execute,
+             (select count(*)=8 and bool_and(oid is not null) from api) as worker_api_complete,
+             (select count(*)=8 and bool_and(
+                prosecdef and proowner=(select oid from pg_roles where rolname='rupaykg_mrv_worker_api_owner')
+                and coalesce(proconfig,'{}'::text[]) @> array['search_path=pg_catalog']
+                and has_function_privilege(current_user,oid,'EXECUTE')
+                and not exists(select 1 from aclexplode(coalesce(proacl,acldefault('f',proowner))) x
+                                where x.grantee=0 and x.privilege_type='EXECUTE')
+              ) from api) as worker_api_secure
+        from pg_roles r where r.rolname=current_user`,
     );
     assertMrvWorkerRoleContract(identity.rows[0]);
     const rls = await pool.query<{ relname: string; relrowsecurity: boolean; relforcerowsecurity: boolean }>(
