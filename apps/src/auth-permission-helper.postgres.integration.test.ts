@@ -49,7 +49,7 @@ test("restricted app runtime can use only signed-context-bound boolean permissio
       [orgB],
     )).rows[0]!.id;
     const rolePending = (await client.query<{ id: string }>(
-      "insert into public.roles(organization_id,name,permissions,geography_scope) values($1,'tenant_reader','[\"epr:read\"]'::jsonb,'[]'::jsonb) returning id",
+      "insert into public.roles(organization_id,name,permissions,geography_scope) values($1,'tenant_reader_pending','[\"epr:read\"]'::jsonb,'[]'::jsonb) returning id",
       [orgA],
     )).rows[0]!.id;
     const roleNameOnly = (await client.query<{ id: string }>(
