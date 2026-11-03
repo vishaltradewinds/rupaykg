@@ -46,9 +46,19 @@ GRANT USAGE ON SCHEMA app_security TO rupaykg_auth_owner;
 GRANT EXECUTE ON FUNCTION app_security.current_request_context_claims() TO rupaykg_auth_owner;
 RESET ROLE;
 
+-- Exact column-level reads required by the two auth resolvers. No direct
+-- application-role membership/role grants are made.
 GRANT SELECT (id, activity_id) ON public.evidence TO rupaykg_auth_owner;
 GRANT SELECT (id, organization_id, geography_id, actor_identity_id, occurred_at, created_at)
   ON public.activities TO rupaykg_auth_owner;
+GRANT SELECT (identity_id, token_hash, revoked_at, expires_at)
+  ON public.identity_sessions TO rupaykg_auth_owner;
+GRANT SELECT (id, status, suspended_at)
+  ON public.identities TO rupaykg_auth_owner;
+GRANT SELECT (identity_id, organization_id, role_id, status)
+  ON public.organization_memberships TO rupaykg_auth_owner;
+GRANT SELECT (id, organization_id, permissions)
+  ON public.roles TO rupaykg_auth_owner;
 
 SET LOCAL ROLE rupaykg_auth_owner;
 
