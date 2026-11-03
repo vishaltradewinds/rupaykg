@@ -40,7 +40,7 @@ These are source-level observations, not an independent security certification.
 
 ## Important limitations and open questions
 
-1. **No auth-specific automated test file was found in the inspected `apps/src` inventory.** This is not proof that no tests exist elsewhere. Search the full repository and package test inventory, then add targeted auth lifecycle and abuse tests if absent.
+1. The repository contains `apps/test/auth-permissions.test.ts` (blob `c6478885319771e82e55f826e99ac4da0403ef48`), which covers high-risk permission allow-listing, database-backed role permission evaluation, active-organization/target-organization matching and fail-closed behavior. This is authorization-policy unit coverage, not a full authentication lifecycle suite. Registration/login, lockout, expiry/revocation, password recovery, multi-membership selection and route-level cross-tenant integration coverage remain to be demonstrated.
 2. `.github/workflows/ci.yml` provisions PostgreSQL, applies migrations, sets `RUPAYKG_RUN_DB_INTEGRATION_TESTS=1`, and runs `npm test`; therefore the evidence-vault integration test is intended to execute in CI. No workflow run was returned for the current PR head commit, so no pass/fail result is established for this change.
 3. The production build still requires Firebase variables even though the inspected current web sign-in path uses native API routes. Trace every Firebase reference, package dependency, CI validator and deployment variable before editing.
 4. Confirm all server entrypoints, worker processes and background jobs use the same approved authentication contract.
