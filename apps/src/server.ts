@@ -4,6 +4,7 @@ import fastifyStatic from "@fastify/static";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { Pool, type PoolClient, type PoolConfig } from "pg";
+import { readDatabaseConnectionOptions } from "./database-ssl.js";
 import { authenticate, bearerChallenge, canActForOrganization, hasOrganizationPermission, type AuthContext } from "./auth.js";
 import { registerOnboardingHierarchyRoutes } from "./onboarding-hierarchy-routes.js";
 import { registerValueRoutes } from "./value-routes.js";
@@ -23,9 +24,8 @@ await app.register(cors, { origin: allowedOrigins.length ? allowedOrigins : fals
 const webRoot = resolve(process.cwd(), "apps/web/dist");
 if (existsSync(webRoot)) await app.register(fastifyStatic, { root: webRoot, wildcard: false });
 const databaseUrl = process.env.DATABASE_URL;
-const poolConfig: PoolConfig = { connectionString: databaseUrl, max: 10 };
-if (process.env.DATABASE_SSL === "require") poolConfig.ssl = { rejectUnauthorized: true, ca: process.env.DATABASE_CA_CERT };
-else if (process.env.DATABASE_SSL !== "false") poolConfig.ssl = { rejectUnauthorized: false };
+const poolConfig: PoolConfig = { max: 10 };
+if (databaseUrl) Object.assign(poolConfig, readDatabaseConnectionOptions());
 const pool = databaseUrl ? new Pool(poolConfig) : null;
 async function query<T extends Record<string, unknown>>(text: string, values: unknown[] = []): Promise<T[]> { if (!pool) throw new Error("DATABASE_URL is not configured"); return (await pool.query<T>(text, values)).rows; }
 function bodyOf(request: { body: unknown }): Record<string, unknown> { return (request.body && typeof request.body === "object" ? request.body : {}) as Record<string, unknown>; }

@@ -3,14 +3,14 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
+import { readDatabaseConnectionOptions } from "./database-ssl.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) throw new Error("DATABASE_URL is required");
 
 const pool = new Pool({
-  connectionString: databaseUrl,
+  ...readDatabaseConnectionOptions(),
   max: 1,
-  ssl: process.env.DATABASE_SSL === "false" ? undefined : { rejectUnauthorized: false },
 });
 
 try {

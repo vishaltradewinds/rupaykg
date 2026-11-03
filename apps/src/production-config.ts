@@ -1,3 +1,5 @@
+import { isLoopbackDatabaseHost } from "./database-ssl.js";
+
 const PRODUCTION_ENV = "production";
 
 export type ProductionConfig = {
@@ -20,7 +22,7 @@ function productionDatabaseUrl(value: string): string {
   let parsed: URL;
   try { parsed = new URL(value); } catch { throw new Error("PRODUCTION_CONFIG_INVALID: DATABASE_URL must be a valid PostgreSQL URL"); }
   if (parsed.protocol !== "postgres:" && parsed.protocol !== "postgresql:") throw new Error("PRODUCTION_CONFIG_INVALID: DATABASE_URL must use postgres:// or postgresql://");
-  if (["localhost", "127.0.0.1", "::1"].includes(parsed.hostname.toLowerCase())) throw new Error("PRODUCTION_CONFIG_INVALID: production DATABASE_URL must not target localhost");
+  if (isLoopbackDatabaseHost(parsed.hostname)) throw new Error("PRODUCTION_CONFIG_INVALID: production DATABASE_URL must not target loopback");
   return value;
 }
 
