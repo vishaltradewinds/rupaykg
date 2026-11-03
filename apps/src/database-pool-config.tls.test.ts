@@ -29,12 +29,13 @@ describe("production PostgreSQL TLS policy handshake", () => {
     ], { stdio: "ignore" });
     certificate = await readFile(certificatePath, "utf8");
     privateKey = await readFile(privateKeyPath, "utf8");
-    server = tls.createServer({ key: privateKey, cert: certificate }, (socket) => socket.end());
+    const tlsServer = tls.createServer({ key: privateKey, cert: certificate }, (socket) => socket.end());
+    server = tlsServer;
     await new Promise<void>((resolve, reject) => {
-      server.once("error", reject);
-      server.listen(0, "127.0.0.1", resolve);
+      tlsServer.once("error", reject);
+      tlsServer.listen(0, "127.0.0.1", resolve);
     });
-    port = (server.address() as AddressInfo).port;
+    port = (tlsServer.address() as AddressInfo).port;
   });
 
   after(async () => {
