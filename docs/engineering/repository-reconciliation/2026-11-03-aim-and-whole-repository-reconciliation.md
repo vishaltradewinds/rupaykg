@@ -370,3 +370,40 @@ Observed candidate changes:
 - No production deployment, database change, seed, migration or external transaction was performed.
 
 **Disposition:** retain #234 as the current startup/TLS remediation candidate. Do not merge, deploy or remove draft status until exact-head CI, disposable PostgreSQL TLS acceptance, current Render private-host validation and independent security review are recorded.
+
+
+### 12.9 Exact legacy migration fixture recovery and verifier candidate review
+
+**Recovered source fixtures — PR #108 (shakti/dual-ledger-compatibility-tests):**
+
+The following exact files were fetched from the historical PR branch. SHA values below are Git blob IDs for the recovered fixture files, not SHA-256 checksums and not proof of deployment:
+
+| Historical fixture path | Git blob ID | Embedded upstream provenance |
+|---|---|---|
+| scripts/fixtures/legacy-migrations/096_verification_authorization_provenance.sql | 258b1f4534efbf915688f78aa84d4ec24a47cbc0 | historical RupayKg migration; matches previously recovered 096 blob |
+| scripts/fixtures/legacy-migrations/20261022_async_mirror_inbox.sql | da7bad12d12d791cc4bd75e772eca05c42dc3760 | intelligence/ai-evidence-intake-middleware, commit c56b9c1, upstream blob 4d08607e03561b9fbb4ce502b4c4211127237050 |
+| scripts/fixtures/legacy-migrations/20261023_async_mirror_worker_leases.sql | c1482ba72286657e8ef17bdd5cd6324a1c353af0 | intelligence/ai-evidence-intake-middleware, commit c56b9c1, upstream blob 33cb4d5d2e29a4a111340e5a0ac34170a0081895 |
+| scripts/fixtures/legacy-migrations/20261024_ai_intake_rate_limits.sql | 95a4d8ea93b5acf48927634406ecc7d2fc05f313 | intelligence/ai-evidence-intake-middleware, commit c56b9c1, upstream blob 87b51fe60a96a4e0752c8b0a9a170c81f9936dbb |
+| scripts/fixtures/legacy-migrations/20261025_ai_evidence_intake_jobs.sql | 169aeebbe44b31d2c43f86f39f2acada33bc52aa | intelligence/ai-evidence-intake-middleware, commit c56b9c1, upstream blob 6a0ae54530b7b756dac33589eaf18df3b071d8f2 |
+
+The four 20261022–25 fixtures are recoverable from the historical PR branch and reside in a test-only legacy-fixture directory. Do not move them into migrations/, include them in the production migration catalogue, or apply them until upstream repository/commit/blob provenance is independently fetched and byte-compared, and the staging catalog is reconciled against exact SQL semantics. In particular, 20261023 adds an append-only inbox event table and trigger; 20261025 adds durable AI evidence-intake idempotency/lease state. Review tenant ownership, RLS, worker principal, retention and data-classification boundaries before any activation.
+
+Migration 096 remains historical evidence only. Its exact blob and limitations are recorded in PR #204's recovered-source provenance note. Do not replay it or treat it as the final verifier authorization design.
+
+**Verification candidate — PR #213 (security/epr-explicit-client-read-2026-11-02):**
+- Latest inspected head: 8c32583683320642e15bb48f43454d87d5537917; PR remains draft and connector reports mergeable=false.
+- Candidate migrations 20261106/07 remove role-name fallback, bind verified membership to the activity organization, check verified/non-suspended identity, apply authorization to APPROVED and REJECTED, and remove the legacy global-membership trigger. Candidate 20261108 fails closed for missing geography scope and bounds recursive traversal with a visited path and depth ceiling.
+- The branch adds route coverage for EPR, BWG, CPCB-SWM, Evidence Vault, MRV, workspaces and value routes, plus an opt-in PostgreSQL verifier acceptance test. Issue #215 comments state the test is gated by RUPAYKG_RUN_DB_INTEGRATION_TESTS=1 and DATABASE_URL and had not yet been executed against PostgreSQL at that time.
+- The candidate accepts three permission strings: VERIFY_EVIDENCE, verification:approve, and verification.approve. The canonical permission registry and migration history must establish whether the latter two are stable permission keys or legacy aliases; do not equate compatibility aliases with canonical authority without evidence.
+- Review cycle handling against the stronger invariant that any encountered malformed cycle must fail closed, including a verified scope node inside the cycle. Bounded traversal prevents unbounded recursion but must be shown to reject every corrupt-cycle authorization path.
+- Verify immutability for all fields constituting an approved decision and its authorization snapshot, including DELETE and superseding-record reference. The patch explicitly rejects UPDATE mutation of an existing APPROVED row; verify the complete correction/deletion contract.
+- This broad stacked security change is not merge-ready. Test candidate migrations from a clean disposable production-derived branch using the exact full chain, not only static guards or mocked route clients.
+
+**PR #234 latest CI:** initial run failed one new TLS unit assertion because the helper rejected missing DATABASE_SSL=require before the more specific plaintext-production assertion. Commit 5e98e4f2731d9e1e8898fc6c45402088fc3b2384 reorders the explicit plaintext rejection. Exact-head CI run #41626454283 was still in progress at this update; no pass is claimed.
+
+**Next coordinated execution batch:**
+1. Finish #234 exact-head CI and inspect test/container stages; add disposable TLS-server acceptance for certificate and hostname rejection.
+2. Verify upstream source blob IDs for the four staging fixtures, compare staging objects against SQL, and produce a non-executable reconciliation manifest.
+3. Complete PR #213 verifier trigger review and execute opt-in PostgreSQL tests on a fresh disposable production-derived child only after independent review.
+4. Keep staging migrations out of the active release catalogue until lineage, data model, worker principal and RLS design are accepted.
+5. Keep production HOLD, no production DDL/DML, no global RLS, no worker activation, no issuance or settlement enablement.
