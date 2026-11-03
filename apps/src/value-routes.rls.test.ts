@@ -34,7 +34,7 @@ test("BWG workspace and all mutation handlers fail closed without signed tenant 
   ];
   try{
     for(const item of cases){
-      const response=await app.inject({method:item.method,url:item.url,headers:auth,payload:item.payload});
+      const response=item.method==="GET" ? await app.inject({method:"GET",url:item.url,headers:auth}) : await app.inject({method:"POST",url:item.url,headers:auth,payload:item.payload ?? {}});
       assert.equal(response.statusCode,503,item.url);
       assert.equal(response.json().code,"RLS_CONTEXT_CONFIG_REQUIRED",item.url);
     }
