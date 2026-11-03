@@ -83,3 +83,11 @@ No production migration, RLS activation, role grant, worker enablement, merge or
 - Provider binding functions are persistence-only: Guardian binding is permitted only in GUARDIAN_SUBMITTED; Hedera binding is permitted in GUARDIAN_VERIFIED and may idempotently confirm the exact same tuple in HCS_SUBMITTED. advance_job alone owns state transitions and event-trigger execution.
 - The worker test fixture now uses a contract-valid 64-character Guardian idempotency key.
 - Lease renewal response validation parses the returned timestamp but deliberately does not compare it with the application host clock; only PostgreSQL can authoritatively determine whether a lease is live. This avoids false rejection under host/database clock skew.
+
+
+## 2026-11-03 strict adapter argument boundary
+
+- Commit `87ddff5c36f71b9faa9e1db06961bd902c656722` validates job and lease UUIDs before every UUID-bound API call, validates Guardian idempotency key length, validates Hedera binding inputs, restricts advance targets to known statuses and rejects unknown stage-patch keys before issuing SQL. Worker IDs are trimmed before claim.
+- Commit `fbd843797703d776cd9a31b92df9dba9a769322d` adds regression tests asserting malformed identifiers, idempotency keys, statuses and patch keys are rejected without issuing a database query. The adapter test fixture now uses a 64-character Guardian key.
+- Commit `2808ade43849dd2cfb7d2c297183d66bed4a0cb0` corrects lease timestamp tests: the adapter accepts any parseable PostgreSQL timestamp and rejects malformed/wrong-type values; expiry remains a database-side decision, avoiding client/database clock-skew assumptions.
+- These are source and test changes only. They have not been executed locally or by exact-head CI. PostgreSQL must independently enforce all input, state-transition, lease and tenant invariants; TypeScript validation is defense in depth, not a replacement for SQL authorization.
