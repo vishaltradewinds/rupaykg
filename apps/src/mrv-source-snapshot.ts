@@ -132,14 +132,18 @@ export async function captureMrvSourceSnapshot(input: {
     const evidenceResult = await client.query<EvidenceRow>(
       `select e.id,e.activity_id,e.measurement_id,e.evidence_type,e.status::text status,e.captured_at,
               e.content_uri,e.content_hash,e.metadata,
-              v.id artifact_version_id,v.version_number artifact_version_number,v.sha256 artifact_sha256,
+              v.id artifact_version_id,v.series_id artifact_series_id,v.version_number artifact_version_number,v.sha256 artifact_sha256,
               v.size_bytes artifact_size_bytes,v.media_type artifact_media_type,
+              s.organization_id artifact_series_organization_id,s.activity_id artifact_series_activity_id,
+              s.evidence_type artifact_series_evidence_type,s.created_by_identity_id artifact_series_created_by_identity_id,
+              s.created_at artifact_series_created_at,
               coalesce((select jsonb_agg(jsonb_build_object(
                 'id',r.id,'artifactVersionId',r.artifact_version_id,'reviewerIdentityId',r.reviewer_identity_id,
                 'decision',r.decision,'rationale',r.rationale,'createdAt',r.created_at
               ) order by r.created_at,r.id) from evidence_artifact_reviews r where r.evidence_id=e.id),'[]'::jsonb) reviews
          from evidence e
          left join evidence_artifact_versions v on v.evidence_id=e.id
+         left join evidence_artifact_series s on s.id=v.series_id
         where e.activity_id=$1 order by e.captured_at,e.id`,
       [input.activityId],
     );
