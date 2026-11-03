@@ -99,3 +99,35 @@ The three branches have different parents/creation points and different ledger c
 5. Make the migration acceptance gate assert both ledger state and catalog postconditions. A migration must fail acceptance if its expected objects, definitions, constraints, triggers or privileges are absent even when its version is recorded.
 
 No changes were made to any Neon branch during this follow-up.
+
+
+## Migration-runner source review — 2026-11-03
+
+Inspected `apps/src/migrate.ts` at the same PR head and the root/workspace package scripts.
+
+The checked-in runner's normal per-file path is transactionally ordered:
+
+1. It creates/uses `schema_migrations(version, filename, applied_at)`.
+2. It checks whether the version is already recorded and, if so, compares the stored filename.
+3. For a new version it reads the SQL file, opens a checked-out client, begins a transaction, executes the entire SQL file, inserts the migration ledger row, and commits.
+4. On error it rolls back and throws; it does not intentionally continue after a failed migration.
+
+Therefore, **the rehearsal ledger/schema inconsistency is not explained by this runner simply writing the version before executing the migration**. The source runner inserts the row after SQL execution in the same transaction. The observed discrepancy needs a deeper forensic explanation; likely avenues to verify include whether the rehearsal used this exact runner and exact migration file bytes, whether the SQL was later changed under the same filename, whether the ledger was copied/seeded or manually altered, whether a different database/schema was queried, and whether the migration execution was subsequently rolled back or objects removed out-of-band. These are investigation hypotheses, not established causes.
+
+### Runner integrity gap
+
+The runner stores only `version`, `filename` and `applied_at`; it does not store or compare a cryptographic checksum of the migration file contents. If a numbered SQL file is edited after successful application, the runner sees the same version/filename and silently skips the changed contents. This prevents reliable proof that the SQL bytes currently in Git are the bytes applied to a database.
+
+### Required engineering correction
+
+Before accepting another rehearsal or production migration, add a forward-compatible migration manifest/checksum mechanism that:
+- calculates SHA-256 over the exact UTF-8 migration bytes;
+- records the checksum atomically with the successful migration transaction;
+- refuses startup when an already-recorded version/filename has a different checksum;
+- handles legacy ledger rows without checksums explicitly as `LEGACY_UNVERIFIED` (never silently backfill a checksum and claim historical provenance);
+- validates expected catalog postconditions for critical migrations, including relation definitions, constraints, indexes, triggers, functions, owners and grants;
+- emits a machine-readable applied/pending/drift report and stops on any unexplained mismatch.
+
+Do not change or rewrite existing applied migration rows in place. A new forward-only migration/runner upgrade and a separately reviewed reconciliation procedure are required. Do not apply this runner change to live main until it has been tested on clean-install, legacy-upgrade, checksum-mismatch and rollback fixtures.
+
+The runner source review does not explain the missing objects and does not establish which migration bytes, if any, were applied on the rehearsal branch.
