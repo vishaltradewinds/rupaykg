@@ -5,6 +5,61 @@ import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
 import { assertNoOrphanedMigrations, sha256Hex } from "./migration-integrity.js";
 
+type SqlExecutor = { query: (sql: string) => Promise<{ rows: Array<Record<string, unknown>> }> };
+
+async function assertCriticalPostconditions(client: SqlExecutor, filename: string): Promise<void> {
+  if (filename === "20261109_durable_mrv_submission_jobs.sql") {
+    const result = await client.query(`
+      select
+        to_regclass('public.mrv_submission_jobs') is not null as jobs,
+        to_regclass('public.mrv_submission_job_events') is not null as events,
+        to_regprocedure('public.validate_mrv_submission_job_bindings()') is not null as binding_function,
+        to_regprocedure('public.guard_mrv_submission_job_update()') is not null as update_guard_function,
+        to_regprocedure('public.reject_mrv_submission_job_event_mutation()') is not null as event_guard_function,
+        to_regprocedure('public.record_mrv_submission_job_event()') is not null as event_writer_function
+    `);
+    const row = result.rows[0];
+    for (const key of ["jobs", "events", "binding_function", "update_guard_function", "event_guard_function", "event_writer_function"]) {
+      if (row?.[key] !== true) throw new Error(`MIGRATION_POSTCONDITION_FAILED: ${filename} missing ${key}`);
+    }
+    const triggers = await client.query(`
+      select tgname from pg_trigger
+       where not tgisinternal
+         and tgrelid in ('public.mrv_submission_jobs'::regclass, 'public.mrv_submission_job_events'::regclass)
+    `);
+    const names = new Set(triggers.rows.map((row) => row.tgname));
+    for (const name of [
+      "mrv_submission_job_binding_guard", "mrv_submission_job_update_guard",
+      "mrv_submission_job_event_insert", "mrv_submission_job_event_update",
+      "mrv_submission_job_events_no_update",
+    ]) {
+      if (!names.has(name)) throw new Error(`MIGRATION_POSTCONDITION_FAILED: ${filename} missing trigger ${name}`);
+    }
+  }
+
+  if (filename === "20261113_mrv_worker_claim_index_reconcile.sql") {
+    const result = await client.query(`
+      select indexdef, indisvalid
+        from pg_indexes i
+        join pg_class c on c.relname = i.indexname
+        join pg_index x on x.indexrelid = c.oid
+       where i.schemaname = 'public'
+         and i.tablename = 'mrv_submission_jobs'
+         and i.indexname = 'mrv_submission_jobs_claim_idx'
+    `);
+    const row = result.rows[0];
+    const definition = typeof row?.indexdef === "string" ? row.indexdef : "";
+    if (!row || row.indisvalid !== true ||
+        !/\(next_attempt_at, created_at, id\)/i.test(definition) ||
+        !/NEEDS_RECONCILIATION/i.test("NEEDS_RECONCILIATION") ||
+        /'NEEDS_RECONCILIATION'/i.test(definition) ||
+        !/'GUARDIAN_SUBMITTED'/i.test(definition) ||
+        !/'HCS_CONSENSUS_CONFIRMED'/i.test(definition)) {
+      throw new Error(`MIGRATION_POSTCONDITION_FAILED: ${filename} claim index does not match the required valid predicate and key order`);
+    }
+  }
+}
+
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) throw new Error("DATABASE_URL is required");
 
