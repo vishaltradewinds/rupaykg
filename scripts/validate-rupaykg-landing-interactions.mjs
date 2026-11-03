@@ -125,11 +125,16 @@ try {
   assert.equal(trapped, true, "Tab from the last control must wrap to the first dialog control");
 
   const escaped = await evaluate(`(async()=> {
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    document.activeElement?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
     ${waitForRender}
-    return !document.querySelector('[role="dialog"]') && document.activeElement === document.querySelectorAll(".landing-actions button")[0];
+    return {
+      dialogStillOpen: !!document.querySelector('[role="dialog"]'),
+      triggerRestored: document.activeElement === document.querySelectorAll(".landing-actions button")[0],
+      activeElement: document.activeElement?.outerHTML?.slice(0,160) ?? null
+    };
   })()`);
-  assert.equal(escaped, true, "Escape must close account access");
+  assert.equal(escaped.dialogStillOpen, false, `Escape must close account access: ${JSON.stringify(escaped)}`);
+  assert.equal(escaped.triggerRestored, true, `Escape must restore focus to the invoking CTA: ${JSON.stringify(escaped)}`);
 
   const register = await evaluate(`(async()=> {
     document.querySelectorAll('.landing-actions button')[1]?.click();
