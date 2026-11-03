@@ -57,7 +57,7 @@ GRANT SELECT (id, status, suspended_at)
   ON public.identities TO rupaykg_auth_owner;
 GRANT SELECT (id, status, verification_status)
   ON public.organizations TO rupaykg_auth_owner;
-GRANT SELECT (identity_id, organization_id, role_id, status)
+GRANT SELECT (identity_id, organization_id, role_id, status, last_revoked_at)
   ON public.organization_memberships TO rupaykg_auth_owner;
 GRANT SELECT (id, organization_id, permissions)
   ON public.roles TO rupaykg_auth_owner;
@@ -87,6 +87,7 @@ AS $function$
     JOIN public.organization_memberships membership_row
       ON membership_row.identity_id = identity_row.id
      AND membership_row.status = 'VERIFIED'
+     AND membership_row.last_revoked_at IS NULL
     JOIN public.organizations organization_row
       ON organization_row.id = membership_row.organization_id
      AND organization_row.status = 'VERIFIED'
@@ -136,6 +137,7 @@ BEGIN
         ON membership_row.identity_id = identity_row.id
        AND membership_row.organization_id = p_organization_id
        AND membership_row.status = 'VERIFIED'
+     AND membership_row.last_revoked_at IS NULL
       JOIN public.organizations organization_row
         ON organization_row.id = membership_row.organization_id
        AND organization_row.status = 'VERIFIED'
