@@ -145,6 +145,11 @@ describe("runtime acceptance", () => {
     const accepted = await make(verifiedDeviceId, actorToken); assert.equal(accepted.status, 202); envelopeId = (await body(accepted)).envelope.id;
     const replay = await make(verifiedDeviceId, actorToken); assert.equal(replay.status, 200); assert.equal((await body(replay)).replay, true);
     const cross = await make(verifiedDeviceId, verifierToken); assert.equal(cross.status, 403);
+    const inventory = await request("/api/v1/field-devices", {}, actorToken); assert.equal(inventory.status, 200);
+    const inventoryBody = await body(inventory); assert.ok(Array.isArray(inventoryBody.devices));
+    assert.ok((inventoryBody.devices as Array<{organization_id:string}>).some(device => device.organization_id === orgId));
+    assert.ok((inventoryBody.devices as Array<{organization_id:string}>).every(device => device.organization_id === orgId), "inventory must not expose devices from another organization");
+    const deniedInventory = await request("/api/v1/field-devices", {}, verifierToken); assert.equal(deniedInventory.status, 403);
   });
 
   it("executes activity, measurement, evidence and independent verification through the authoritative API", async () => {
