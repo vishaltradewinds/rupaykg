@@ -462,3 +462,13 @@ Direct current-main source review confirms migrations/008_verification_integrity
 **Acceptance additions:** (1) persist the decision-time membership, role, permission snapshot and checked-at for both APPROVED and REJECTED; (2) explicitly deny ambiguous eligible memberships or define a reviewed deterministic selection contract; (3) reject mutation of snapshot fields and approved-row DELETE; (4) require superseding correction linkage; (5) test verified scope inside a malformed cycle, exact match, ancestor, child, sibling, unrelated and depth ceiling; (6) execute all cases through the exact clean migration chain on disposable PostgreSQL. The permission-key aliases themselves are not a blocker after registry confirmation.
 
 No production or staging writes, migrations, trigger changes or role changes occurred.
+
+
+### 12.15 Staging inbox event integrity: search_path and TRUNCATE bypass
+
+Further read-only review of staging branch br-spring-hill-b4544vz5 found:
+- public.record_async_mirror_inbox_event() has no function-level search_path setting (pg_proc.proconfig is NULL), is invoker-security, and inserts into async_mirror_inbox_events without schema qualification. A safe forward design must pin search_path and explicitly write to public.async_mirror_inbox_events; acceptance must prove temp-schema/search_path shadowing cannot redirect or suppress the event write.
+- async_mirror_inbox_events has a row-level BEFORE UPDATE OR DELETE trigger, but the current table owner rupaykg has TRUNCATE privilege. PostgreSQL TRUNCATE does not fire row-level triggers, so the append-only guarantee is not effective against the elevated owner. Add statement-level BEFORE TRUNCATE rejection as defense in depth and separate ownership from runtime authority.
+- The four staging tables remain RLS/FORCE RLS disabled with no policies. The elevated owner has BYPASSRLS, DDL and replication capabilities. A dedicated NOLOGIN schema owner and least-privilege runtime/worker principal without ownership, BYPASSRLS, DDL or TRUNCATE are mandatory before activation.
+
+This is staging-only. No DDL/DML, role/grant change, payload read or worker activation occurred. Do not add these staging-only objects to production as part of the hardening exercise. Any future implementation must be a reviewed forward migration and disposable PostgreSQL acceptance package, not an edit/replay of historical fixtures.
