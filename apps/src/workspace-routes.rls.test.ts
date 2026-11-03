@@ -29,11 +29,11 @@ class TenantClient {
     if (sql === "BEGIN" || sql === "COMMIT" || sql === "ROLLBACK") return { rows: [], rowCount: 0 };
     if (sql.includes("set_config('app.request_context'")) return { rows: [{ set_config: "signed" }], rowCount: 1 };
     if (sql.includes("auth_private.has_organization_permission")) return { rows: [{ ok: this.permission }], rowCount: 1 };
-    if (sql.includes("organization_has_geography_scope")) return { rows: [{ ok: this.geographyAllowed }], rowCount: 1 };
     if (sql.includes("select m.id")) {
       if (this.failProtectedRead) { this.protectedReadFailureTriggered = true; throw new Error("synthetic protected read failure"); }
       return { rows: [{ id: "measurement-a", organization_id: organizationA }], rowCount: 1 };
     }
+    if (sql.includes("organization_has_geography_scope")) return { rows: [{ ok: this.geographyAllowed }], rowCount: 1 };
     if (sql.includes("from activities a") || sql.includes("from evidence e") || sql.includes("from verifications v")) {
       return { rows: [{ organization_id: organizationA }], rowCount: 1 };
     }
@@ -121,9 +121,10 @@ test("MRV workspace binds permission and all four protected reads to one signed 
       assert.ok(calls[1]?.sql.includes("set_config('app.request_context', $1, true)"));
       const signedClaims = String(calls[1]?.values?.[0]).split("|");
       assert.deepEqual(signedClaims.slice(0, 2), [identityId, organizationA]);
-      assert.match(signedClaims[2] ?? "", /^\\d+$/);
-      assert.match(signedClaims[3] ?? "", /^\\d+$/);
-      assert.match(signedClaims[4] ?? "", /^mrv_workspace_test\\.[a-f0-9]{64}$/);
+      assert.equal(Number.isInteger(Number(signedClaims[2])), true);
+      assert.equal(Number.isInteger(Number(signedClaims[3])), true);
+      assert.equal((signedClaims[4] ?? "").startsWith("mrv_workspace_test."), true);
+      assert.equal(/^[0-9a-f]{64}$/.test((signedClaims[4] ?? "").split(".")[1] ?? ""), true);
       const permission = calls.find((call) => call.sql.includes("auth_private.has_organization_permission"));
       assert.deepEqual(permission?.values, [identityId, organizationA, ["evidence:upload", "evidence:review", "guardian:read"]]);
       const geographyCheck = calls.find((call) => call.sql.includes("select organization_has_geography_scope"));
