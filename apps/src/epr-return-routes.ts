@@ -90,33 +90,42 @@ export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool |
     const evidenceId = requiredString(body, "evidenceId");
     const verificationId = requiredString(body, "verificationId");
     if (!evidenceId || !verificationId) return reply.code(400).send({ error: "Verified evidence and approved verification are required to submit a statutory EPR return", code: "EVIDENCE_REQUIRED" });
-    const client = await pool.connect();
+    const organizationId = auth.activeOrganizationId;
+    if (!organizationId || !canAct(auth, organizationId)) return reply.code(403).send({ error: "One explicitly active verified organization is required", code: "ORG_FORBIDDEN" });
+    if (!requestContext) return reply.code(503).send({ error: "Signed tenant request context is not configured", code: "RLS_CONTEXT_CONFIG_REQUIRED", syntheticData: false });
     try {
-      await client.query("BEGIN");
-      const current = await client.query(`select r.*,eo.target_quantity,eo.fulfilled_quantity as obligation_fulfilled,eo.status as obligation_status,s.code as scheme_code from epr_returns r join epr_obligations eo on eo.id=r.obligation_id join epr_schemes s on s.id=r.scheme_id where r.id=$1 for update`, [returnId]);
-      const row = current.rows[0];
-      if (!row) { await client.query("ROLLBACK"); return reply.code(404).send({ error: "EPR return not found", code: "EPR_RETURN_NOT_FOUND" }); }
-      if (!canAct(auth, row.organization_id) || !await hasOrganizationPermission(client, auth, row.organization_id, ["epr:manage"])) { await client.query("ROLLBACK"); return reply.code(403).send({ error: "EPR management permission required", code: "EPR_RETURN_WRITE_FORBIDDEN" }); }
-      if (row.status !== "DRAFT" && row.status !== "REJECTED") { await client.query("ROLLBACK"); return reply.code(409).send({ error: `Return cannot be submitted from ${row.status}`, code: "INVALID_EPR_RETURN_STATE" }); }
-      const obligation = await client.query(`select id,target_quantity,fulfilled_quantity,status from epr_obligations where id=$1 for update`, [row.obligation_id]);
-      const obligationRow = obligation.rows[0];
-      if (!obligationRow) { await client.query("ROLLBACK"); return reply.code(409).send({ error: "Bound EPR obligation not found", code: "OBLIGATION_NOT_FOUND" }); }
-      if (!["OPEN", "ELIGIBLE"].includes(obligationRow.status)) { await client.query("ROLLBACK"); return reply.code(409).send({ error: `EPR obligation cannot be fulfilled from ${obligationRow.status}`, code: "OBLIGATION_NOT_ELIGIBLE" }); }
-      const evidence = await client.query(`select e.id,e.status,e.content_hash,e.content_uri,a.organization_id,a.geography_id from evidence e join activities a on a.id=e.activity_id join verifications v on v.id=$2 and v.evidence_id=e.id and v.decision='APPROVED' where e.id=$1`, [evidenceId, verificationId]);
-      const evidenceRow = evidence.rows[0];
-      if (!evidenceRow || evidenceRow.status !== "VERIFIED" || (!evidenceRow.content_hash && !evidenceRow.content_uri) || evidenceRow.organization_id !== row.organization_id || !evidenceRow.geography_id) { await client.query("ROLLBACK"); return reply.code(409).send({ error: "Submission evidence must be verified, provenance-backed, approved and organization-scoped", code: "EVIDENCE_NOT_ELIGIBLE" }); }
-      const geo = await client.query(`select organization_has_geography_scope($1,$2) as ok`, [row.organization_id, evidenceRow.geography_id]);
-      if (!geo.rows[0]?.ok) { await client.query("ROLLBACK"); return reply.code(403).send({ error: "Evidence geography is outside organization authorization scope", code: "GEOGRAPHY_FORBIDDEN" }); }
-      const fulfilled = Number(row.reported_quantity);
-      const balance = Number(obligationRow.target_quantity) - Number(obligationRow.fulfilled_quantity);
-      if (!Number.isFinite(fulfilled) || fulfilled <= 0) { await client.query("ROLLBACK"); return reply.code(400).send({ error: "Reported quantity must be positive", code: "INVALID_QUANTITY" }); }
-      if (fulfilled > balance + 1e-9) { await client.query("ROLLBACK"); return reply.code(409).send({ error: "Reported quantity exceeds remaining EPR obligation balance", code: "OBLIGATION_BALANCE_EXCEEDED", remainingQuantity: Math.max(balance, 0) }); }
-      const updated = await client.query(`update epr_returns set fulfilled_quantity=$2,obligation_quantity=$3,evidence_id=$4,verification_id=$5,status='SUBMITTED',submitted_at=now() where id=$1 returning *`, [returnId, fulfilled, obligationRow.target_quantity, evidenceId, verificationId]);
-      await client.query(`update epr_obligations set fulfilled_quantity=fulfilled_quantity+$2,status=case when fulfilled_quantity+$2 >= target_quantity then 'COMPLIANT' else 'OPEN' end where id=$1`, [row.obligation_id, fulfilled]);
-      await client.query("COMMIT");
-      return { source: "postgresql", syntheticData: false, authoritativeMutation: true, eprReturn: updated.rows[0], externalSubmission: "NOT_SUBMITTED" };
-    } catch (error) { await client.query("ROLLBACK"); request.log.error(error); return reply.code(503).send({ error: "EPR return submission unavailable", syntheticData: false }); }
-    finally { client.release(); }
+      const result = await withRlsRequestTransaction(pool, auth, requestContext, async (client) => {
+        const permitted = await hasOrganizationPermission(client, auth, organizationId, ["epr:manage"], "security_definer");
+        if (!permitted) throw Object.assign(new Error("EPR management permission required"), { code: "EPR_RETURN_WRITE_FORBIDDEN" });
+        const current = await client.query(`select r.*,eo.target_quantity,eo.fulfilled_quantity as obligation_fulfilled,eo.status as obligation_status,s.code as scheme_code from epr_returns r join epr_obligations eo on eo.id=r.obligation_id join epr_schemes s on s.id=r.scheme_id where r.id=$1 and r.organization_id=$2 for update`, [returnId, organizationId]);
+        const row = current.rows[0];
+        if (!row) throw Object.assign(new Error("EPR return not found"), { code: "EPR_RETURN_NOT_FOUND" });
+        if (row.status !== "DRAFT" && row.status !== "REJECTED") throw Object.assign(new Error("Return cannot be submitted from current state"), { code: "INVALID_EPR_RETURN_STATE" });
+        const obligation = await client.query(`select id,target_quantity,fulfilled_quantity,status from epr_obligations where id=$1 and obligated_organization_id=$2 for update`, [row.obligation_id, organizationId]);
+        const obligationRow = obligation.rows[0];
+        if (!obligationRow) throw Object.assign(new Error("Bound EPR obligation not found"), { code: "OBLIGATION_NOT_FOUND" });
+        if (!["OPEN", "ELIGIBLE"].includes(obligationRow.status)) throw Object.assign(new Error("EPR obligation is not eligible"), { code: "OBLIGATION_NOT_ELIGIBLE" });
+        const evidence = await client.query(`select e.id,e.status,e.content_hash,e.content_uri,a.organization_id,a.geography_id from evidence e join activities a on a.id=e.activity_id join verifications v on v.id=$2 and v.evidence_id=e.id and v.decision='APPROVED' where e.id=$1`, [evidenceId, verificationId]);
+        const evidenceRow = evidence.rows[0];
+        if (!evidenceRow || evidenceRow.status !== "VERIFIED" || (!evidenceRow.content_hash && !evidenceRow.content_uri) || evidenceRow.organization_id !== organizationId || !evidenceRow.geography_id) throw Object.assign(new Error("Submission evidence must be verified, provenance-backed, approved and organization-scoped"), { code: "EVIDENCE_NOT_ELIGIBLE" });
+        const geo = await client.query(`select organization_has_geography_scope($1,$2) as ok`, [organizationId, evidenceRow.geography_id]);
+        if (!geo.rows[0]?.ok) throw Object.assign(new Error("Evidence geography is outside organization authorization scope"), { code: "GEOGRAPHY_FORBIDDEN" });
+        const fulfilled = Number(row.reported_quantity);
+        const balance = Number(obligationRow.target_quantity) - Number(obligationRow.fulfilled_quantity);
+        if (!Number.isFinite(fulfilled) || fulfilled <= 0) throw Object.assign(new Error("Reported quantity must be positive"), { code: "INVALID_QUANTITY" });
+        if (fulfilled > balance + 1e-9) throw Object.assign(new Error("Reported quantity exceeds remaining EPR obligation balance"), { code: "OBLIGATION_BALANCE_EXCEEDED", remainingQuantity: Math.max(balance, 0) });
+        const updated = await client.query(`update epr_returns set fulfilled_quantity=$2,obligation_quantity=$3,evidence_id=$4,verification_id=$5,status='SUBMITTED',submitted_at=now() where id=$1 and organization_id=$6 returning *`, [returnId, fulfilled, obligationRow.target_quantity, evidenceId, verificationId, organizationId]);
+        if (!updated.rows[0]) throw Object.assign(new Error("EPR return not found"), { code: "EPR_RETURN_NOT_FOUND" });
+        await client.query(`update epr_obligations set fulfilled_quantity=fulfilled_quantity+$2,status=case when fulfilled_quantity+$2 >= target_quantity then 'COMPLIANT' else 'OPEN' end where id=$1 and obligated_organization_id=$3`, [row.obligation_id, fulfilled, organizationId]);
+        return updated.rows[0];
+      });
+      return { source: "postgresql", syntheticData: false, authoritativeMutation: true, eprReturn: result, externalSubmission: "NOT_SUBMITTED" };
+    } catch (error) {
+      const code = error && typeof error === "object" && "code" in error ? String((error as {code:unknown}).code) : "";
+      const status: Record<string, number> = { EPR_RETURN_WRITE_FORBIDDEN: 403, EPR_RETURN_NOT_FOUND: 404, INVALID_EPR_RETURN_STATE: 409, OBLIGATION_NOT_FOUND: 409, OBLIGATION_NOT_ELIGIBLE: 409, EVIDENCE_NOT_ELIGIBLE: 409, GEOGRAPHY_FORBIDDEN: 403, INVALID_QUANTITY: 400, OBLIGATION_BALANCE_EXCEEDED: 409 };
+      if (status[code]) return reply.code(status[code]!).send({ error: error instanceof Error ? error.message : "EPR return submission rejected", code, ...(code === "OBLIGATION_BALANCE_EXCEEDED" && error && typeof error === "object" && "remainingQuantity" in error ? { remainingQuantity: (error as {remainingQuantity: number}).remainingQuantity } : {}) });
+      request.log.error(error); return reply.code(503).send({ error: "EPR return submission unavailable", syntheticData: false });
+    }
   });
 
   app.post("/api/v1/epr/returns/:returnId/external-reference", async (request, reply) => {
