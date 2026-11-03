@@ -1,5 +1,10 @@
 -- One-time, two-custodian bootstrap of the first platform authority.
 -- Production role provisioning and the ceremony itself require separate founder/DBA approval.
+-- Compatibility guard for databases that recorded earlier migrations before the
+-- identity suspension field was introduced. Safe and idempotent on fresh installs.
+ALTER TABLE public.identities
+  ADD COLUMN IF NOT EXISTS suspended_at timestamptz;
+
 DO $preflight$
 DECLARE owner_role record;
 BEGIN
