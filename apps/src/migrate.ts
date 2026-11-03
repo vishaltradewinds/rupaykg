@@ -62,7 +62,7 @@ async function assertCriticalPostconditions(client: SqlExecutor, filename: strin
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) throw new Error("DATABASE_URL is required");
 
-const pool = new Pool({
+const migrationReport = { status: "RUNNING", applied: [] as string[], verified: [] as string[], pending: [] as string[] };\n\nconst pool = new Pool({
   connectionString: databaseUrl,
   max: 2,
   ssl: process.env.DATABASE_SSL === "false" ? undefined : { rejectUnauthorized: false },
@@ -117,7 +117,7 @@ try {
       }])),
     );
 
-    // A previously recorded migration is not accepted on ledger evidence alone.
+    migrationReport.verified.push(...ledger.rows.map((row) => row.version));\n    migrationReport.pending.push(...[...manifest].filter(([version]) => !recorded.has(version)).map(([, migration]) => migration.filename));\n\n    // A previously recorded migration is not accepted on ledger evidence alone.
     // Re-check critical catalog postconditions on every run, including rehearsals.
     for (const [version, migration] of manifest) {
       if (recorded.has(version)) await assertCriticalPostconditions(lock, migration.filename);
