@@ -88,3 +88,12 @@ After all eight functions and their disposable PostgreSQL tests exist, replace `
 - The provenance uniqueness key is `(activity_id, verification_id, integrity_hash)`; the finalize function must verify an existing row's evidence, Guardian execution, HCS transaction and Mirror timestamp before treating a conflict as idempotent.
 
 No API migration or owner role is included in this design update. These contracts must be implemented against the full migration chain and verified on disposable PostgreSQL before the runtime role is provisioned.
+
+
+### Claim index and legacy transition reconciliation (2026-11-03)
+
+The durable-job migration's original partial index covered only REQUESTED, RETRYABLE_FAILURE and CLAIMED, although the legacy claim query's exact allow-list also includes GUARDIAN_SUBMITTED, GUARDIAN_VERIFIED, HCS_SUBMITTED, HCS_CONSENSUS_CONFIRMED and MIRROR_VERIFIED. Migration `20261113_mrv_worker_claim_index_reconcile.sql` replaces that partial index with the complete eight-status predicate and aligns its key order with `next_attempt_at, created_at, id`. The SQL claim function must use the identical predicate and ordering; the index is an optimization, not an authorization boundary.
+
+The legacy `persistMrvHcsTransactionId` helper updates status to HCS_SUBMITTED while persisting the HCS binding. The restricted worker intentionally makes two API calls: persist the immutable network/topic/transaction tuple while the job remains GUARDIAN_VERIFIED, then call `advance_job` to HCS_SUBMITTED. The restricted SQL binding function must update only the tuple and must not change status or clear the lease. The transition function alone changes status, clears the lease, and relies on the existing event trigger. The legacy helper must not be called by the restricted worker.
+
+The existing migration's status guard permits NEEDS_RECONCILIATION -> CLAIMED, but the worker claim allow-list excludes NEEDS_RECONCILIATION. Preserve that quarantine in the worker API: only a separately audited operator reconciliation action may request a controlled transition. Do not infer safety from the generic trigger's wider transition matrix.
