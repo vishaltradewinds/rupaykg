@@ -240,3 +240,82 @@ No step is skipped because a later screen or integration appears ready. Independ
 **Next controlling blockers:** GitHub issues [#215](https://github.com/vishaltradewinds/rupaykg/issues/215) and [#214](https://github.com/vishaltradewinds/rupaykg/issues/214).  
 **Current Evidence Vault candidate:** [PR #232](https://github.com/vishaltradewinds/rupaykg/pull/232).  
 **Current CDPI Wave 1 foundation:** [PR #230](https://github.com/vishaltradewinds/rupaykg/pull/230).
+
+---
+
+## 12. Source-level audit addendum — 2026-11-03 10:35 UTC
+
+This addendum records further direct source inspection on the canonical `main` SHA `a3fecc0abd2c46549a201058d3963afc0e3a73c9`. It supersedes no prior evidence and does not claim a complete line-by-line audit.
+
+### 12.1 Production startup ordering — P0
+
+Observed mainline files:
+
+- `Dockerfile` (blob `502178d64801215c05abb10d74ccbc14bc97bd1c`) starts the container with: `node apps/dist/src/migrate.js && node apps/dist/src/acceptance-seed.js && node apps/dist/src/production-server.js`.
+- `apps/package.json` (blob `a63906efbfd495110c705dffa762f51114759020`) starts with `node dist/src/acceptance-seed.js && node dist/src/production-server.js`.
+- `apps/src/production-server.ts` calls `readProductionConfig()` before importing `server.js`, but this validated entrypoint is reached only after the Docker migration and seed commands.
+- `apps/src/acceptance-seed.ts` performs database writes when `RUPAYKG_ACCEPTANCE_SEED_ON_START=true`; the mainline production config does not reject that flag before this script is invoked.
+- `apps/src/production-config.ts` validates the production contract, but the current Docker command runs migrations and the optional seed before that validation.
+
+**Finding:** the production configuration gate is too late in the container startup sequence. A misconfigured production environment can reach migration SQL before the validated production entrypoint runs. If the acceptance-seed flag is enabled, the seed script can write before production config validation. This is a release-blocking startup-order defect; it does not prove the flag is currently enabled in Render.
+
+**Required correction:** one validated startup preflight must run before any database connection, migration, seed, or application import. Production must categorically prohibit acceptance seeding. The default production container must not silently perform schema changes or fixture writes at startup. Migration execution must be a separately controlled, reviewed operation after source/ledger reconciliation and explicit release approval.
+
+Related existing work: PR #43 removes migration/seed execution from the container command but is based on an older mainline; PR #120 adds a startup-preflight before migration, but its candidate migration client still uses a non-verifying TLS configuration. Neither branch is approved for merge or production deployment. Port only reviewed, necessary behavior onto the current canonical base after exact-head testing; do not merge stale histories wholesale.
+
+### 12.2 PostgreSQL TLS trust mismatch — P1
+
+- Mainline `apps/src/migrate.ts` constructs its PostgreSQL pool with `ssl: { rejectUnauthorized: false }` unless `DATABASE_SSL=false`.
+- Mainline `apps/src/server.ts` verifies the certificate when `DATABASE_SSL=require` and passes `DATABASE_CA_CERT`, but has a non-verifying fallback when the environment is not normalized.
+- Mainline `render.yaml` sets `DATABASE_SSL=require`, but this does not override the explicit `rejectUnauthorized:false` setting in the migration runner.
+
+**Finding:** application-pool TLS verification and migration-pool TLS verification are inconsistent. The migration connection can accept an untrusted server certificate while the API pool verifies it. Do not treat `DATABASE_SSL=require` alone as proof of certificate validation.
+
+**Required correction:** share one tested TLS-policy helper across API, migration and any database-seed clients; production external connections must verify the configured CA/hostname. Internal database connections may disable TLS only when the production configuration has explicitly classified the destination as a trusted internal endpoint. Add tests for missing CA, invalid CA, TLS downgrade/connection-string overrides, and exact production startup ordering.
+
+### 12.3 Mainline authorization and route-boundary observations — P0/P1
+
+- `apps/src/auth.ts` selects the active organization from a requested organization selector after checking membership, otherwise defaults to the first verified membership. `canActForOrganization` relies on this active-organization boundary unless bilateral scope is explicitly enabled.
+- Mainline `apps/src/epr-return-routes.ts` reads EPR returns using the general pool; its create and submit paths also use direct pool/client operations rather than the signed tenant transaction helper. Some authorization is performed before protected reads/writes, but this does not prove same-transaction tenant isolation under the intended restricted database role.
+- Mainline `apps/src/workspace-routes.ts` still contains general-pool workspace reads and legacy verification mutations. The MRV workspace signed-read candidate #218 covers a specific workspace endpoint, not every route in the file.
+- Mainline `apps/src/mrv-routes.ts` performs Guardian submission preparation, MRV provenance reads/writes and Mirror Node verification persistence through pooled queries. PR #218/#229 do not, by themselves, certify all MRV route families or all background/worker operations.
+- Mainline `apps/src/server.ts` mounts several route families directly against the general pool. Route registration and permission metadata are not proof that each protected query uses one trusted tenant transaction.
+
+**Required correction:** build a route-to-query inventory with, for each route, authentication source, active-tenant source, permission, geography rule, protected SQL statements, transaction/client identity, side effects, tests and downstream UI caller. Do not mark an entire module tenant-safe because one route in it has been corrected. Complete two-tenant adversarial PostgreSQL acceptance for each read, write, download, export, sync and callback path.
+
+### 12.4 Guardian / Hedera evidence boundary
+
+Mainline `render.yaml` sets `HEDERA_NETWORK=testnet`. The Hedera adapter accepts a configured network and reports a consensus timestamp when submission succeeds; the MRV route separately persists Mirror Node verification time before reporting registry eligibility.
+
+**Finding:** repository code supports a staged Guardian/HCS/Mirror Node flow, but the current deployment blueprint explicitly defaults to Hedera testnet. This is not evidence of mainnet operation, external partner acceptance, statutory approval or registry issuance. A testnet round trip can validate integration mechanics only.
+
+**Required correction:** keep environment/network labels visible in every stakeholder view and provenance record. Separate testnet acceptance from production network readiness; verify topic ownership, operator custody, policy version, Guardian execution, HCS transaction/consensus, Mirror Node payload match, retry/idempotency and independent evidence before any production eligibility claim.
+
+### 12.5 Migration branch topology — do not duplicate or cherry-pick blindly
+
+Direct GitHub metadata review found:
+
+| PR | Branch relationship | Reconciliation decision |
+|---|---|---|
+| #108 | Dual-ledger runner acceptance; older base; currently non-mergeable | Preserve as historical test evidence; extract only tests that remain valid after comparing exact current runner behavior. |
+| #107 | Orphan-ledger guard; older base; non-mergeable | Do not merge as-is. Its fail-closed behavior is a requirement, not a reason to retain stale branch ancestry. |
+| #132 | Canonical history contract stacked on disposable-DB test branch | Dependency candidate, not standalone. |
+| #134 | Canonical history guard based on older main | Fresh exact-head CI and base reconciliation required. |
+| #148 | Preflight-before-bootstrap DDL and advisory-lock serialization; stacked on #134 | Stronger runner candidate; depends on #134 and needs current-main integration, PostgreSQL concurrency tests and independent review. |
+| #179 | Captured production migration-ledger parity gate, based on main | Useful production snapshot gate; explicitly does not resolve staging-only source history or deployment-source provenance. |
+| #139 / #140 | Disposable-only verification provenance regression/forward-fix tests | Keep as test evidence; no migration version or production SQL may be inferred from these fixtures. |
+| #43 / #120 | Older production startup/TLS/safety candidates | Port only isolated reviewed fixes to current main; do not merge broad stale branches. |
+
+The correct integration sequence is to select one canonical migration-history validator, one runner implementation, one authoritative production manifest plus a separate staging-history manifest, and one disposable PostgreSQL acceptance suite that exercises the actual runner. It must fail before DDL when any applied source is missing, any version/filename mapping is ambiguous, any source is unaccounted for, or environment identity is unknown. Session-level advisory locking must cover preflight and all migration execution on the same connection.
+
+### 12.6 Newly confirmed workstream risks and status
+
+1. **P0 — startup preflight ordering:** production database operations can precede validated config; optional seed can run before that gate.
+2. **P1 — migration TLS:** certificate verification is disabled in the mainline migration pool.
+3. **P0 — migration history:** production 096 and staging 20261022–20261025 source histories remain unresolved; parity CI does not reconstruct missing source or deployment provenance.
+4. **P0 — verification authorization:** legacy trigger conflict and decision-snapshot immutability remain unresolved; use #215 as controlling issue.
+5. **P0 — tenant boundary:** #218/#229/#232 are narrow, stacked changes; they do not establish full application or database tenant isolation.
+6. **P1 — EPR/BWG duplication:** EPR #213/#228 and BWG #194/#231 require one canonical implementation each, with dependency and exact-head tests reconciled.
+7. **P1 — external trust integration:** current Render blueprint points to Hedera testnet; mainnet/real Guardian evidence remains unproven.
+
+**Audit status after this addendum:** repository inventory and selected critical-path source review are complete to this checkpoint; route-by-route and all-file independent review remains in progress. Production remains HOLD, certification OFF, worker activation OFF. No production database, deployment, branch protection, role/grant, migration, external transaction or credential was changed.
