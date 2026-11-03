@@ -102,7 +102,15 @@ after(async () => {
     await c.query("delete from field_devices where organization_id=$1", [orgId]);
     await c.query("delete from environmental_attribute_claims where activity_id in (select id from activities where organization_id=$1)", [orgId]);
     await c.query("delete from carbon_calculations where activity_id in (select id from activities where organization_id=$1)", [orgId]);
-    await c.query("delete from verifications where evidence_id in (select id from evidence where activity_id in (select id from activities where organization_id=$1))", [orgId]);
+    // CI fixture teardown is the only path allowed to bypass append-only decision retention.
+    // The disposable PostgreSQL database is destroyed after the suite; production roles
+    // never receive permission to disable triggers or delete verification decisions.
+    await c.query("ALTER TABLE public.verifications DISABLE TRIGGER verifications_immutable_guard");
+    try {
+      await c.query("delete from verifications where evidence_id in (select id from evidence where activity_id in (select id from activities where organization_id=$1))", [orgId]);
+    } finally {
+      await c.query("ALTER TABLE public.verifications ENABLE TRIGGER verifications_immutable_guard");
+    }
     await c.query("delete from evidence where activity_id in (select id from activities where organization_id=$1)", [orgId]);
     await c.query("delete from measurements where activity_id in (select id from activities where organization_id=$1)", [orgId]);
     await c.query("delete from activities where organization_id=$1", [orgId]);
