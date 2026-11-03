@@ -200,7 +200,7 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
         source: "postgresql",
         syntheticData: false,
         eligibleForRegistry: !acceptanceFixture && rows.rows.some(r => r.guardian_status === "VERIFIED" && r.hcs_status === "CONSENSUS_CONFIRMED" && r.mirror_node_verified_at != null && r.source_snapshot_current === true),
-        ...(acceptanceFixture ? { registryEligibilityReason: "ACCEPTANCE_FIXTURE_NOT_REGISTRY_ELIGIBLE" } : rows.rows.some(r => r.mirror_node_verified_at != null && r.source_snapshot_current !== true) ? { registryEligibilityReason: "SOURCE_SNAPSHOT_SUPERSEDED_OR_LEGACY" } : {}),
+        ...(acceptanceFixture ? { registryEligibilityReason: "ACCEPTANCE_FIXTURE_NOT_REGISTRY_ELIGIBLE" } : rows.rows.some(r => r.mirror_node_verified_at != null && r.source_snapshot_current !== true) ? { registryEligibilityReason: "SOURCE_SNAPSHOT_NOT_CURRENT_OR_LEGACY" } : {}),
         provenance: rows.rows,
       };
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "MRV provenance unavailable", syntheticData: false }); }
@@ -265,7 +265,7 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
         syntheticData: false,
         ...verification,
         eligibleForRegistry: !acceptanceFixture && sourceSnapshotCurrent,
-        ...(acceptanceFixture ? { registryEligibilityReason: "ACCEPTANCE_FIXTURE_NOT_REGISTRY_ELIGIBLE" } : !sourceSnapshotCurrent ? { registryEligibilityReason: "SOURCE_SNAPSHOT_SUPERSEDED_OR_LEGACY" } : {}),
+        ...(acceptanceFixture ? { registryEligibilityReason: "ACCEPTANCE_FIXTURE_NOT_REGISTRY_ELIGIBLE" } : !sourceSnapshotCurrent ? { registryEligibilityReason: "SOURCE_SNAPSHOT_NOT_CURRENT_OR_LEGACY" } : {}),
         persistedVerificationAt: persistedAt,
       };
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Hedera mirror-node verification unavailable", code: "HCS_VERIFY_UNAVAILABLE", syntheticData: false }); }
