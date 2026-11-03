@@ -83,17 +83,28 @@ function completeJob(value: unknown, leaseToken: string): MrvSubmissionJob {
   const rowLeaseToken = nullableString(row, "lease_token");
   const leaseExpiresAt = dateValue(row, "lease_expires_at", true);
   if (!leaseOwner || !rowLeaseToken || !UUID.test(rowLeaseToken) || !leaseExpiresAt || rowLeaseToken !== leaseToken) throw new Error("MRV_WORKER_API_INVALID_JOB_LEASE");
+  const idempotencyKey = requiredString(row, "idempotency_key");
+  if (idempotencyKey.length < 32 || idempotencyKey.length > 128) throw new Error("MRV_WORKER_API_INVALID_JOB_FIELD:idempotency_key");
+  const payloadHash = requiredString(row, "payload_hash");
+  if (!/^[a-f0-9]{64}$/.test(payloadHash)) throw new Error("MRV_WORKER_API_INVALID_JOB_FIELD:payload_hash");
+  const foreignIds = ["activity_id", "verification_id", "evidence_id", "organization_id", "geography_id", "requested_by_identity_id"] as const;
+  const foreignValues = Object.fromEntries(foreignIds.map(key => {
+    const fieldValue = requiredString(row, key);
+    if (!UUID.test(fieldValue)) throw new Error(`MRV_WORKER_API_INVALID_JOB_FIELD:${key}`);
+    return [key, fieldValue];
+  }));
+  const guardianPolicyId = requiredString(row, "guardian_policy_id");
   return {
     id, status: status as MrvJobStatus,
-    idempotency_key: requiredString(row, "idempotency_key"),
-    payload_hash: requiredString(row, "payload_hash"),
-    activity_id: requiredString(row, "activity_id"),
-    verification_id: requiredString(row, "verification_id"),
-    evidence_id: requiredString(row, "evidence_id"),
-    organization_id: requiredString(row, "organization_id"),
-    geography_id: requiredString(row, "geography_id"),
-    requested_by_identity_id: requiredString(row, "requested_by_identity_id"),
-    guardian_policy_id: requiredString(row, "guardian_policy_id"),
+    idempotency_key: idempotencyKey,
+    payload_hash: payloadHash,
+    activity_id: foreignValues.activity_id,
+    verification_id: foreignValues.verification_id,
+    evidence_id: foreignValues.evidence_id,
+    organization_id: foreignValues.organization_id,
+    geography_id: foreignValues.geography_id,
+    requested_by_identity_id: foreignValues.requested_by_identity_id,
+    guardian_policy_id: guardianPolicyId,
     methodology_code: nullableString(row, "methodology_code"),
     payload_snapshot: payloadSnapshot,
     attempt_count: attemptCount as number,
