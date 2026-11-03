@@ -29,7 +29,8 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
     if (!requestContext) return reply.code(503).send({ error: "Signed tenant request context is not configured", code: "RLS_CONTEXT_CONFIG_REQUIRED", syntheticData: false });
     try {
       const calculation = await withRlsRequestTransaction(pool, auth, requestContext, async (client) => {
-        const access = await activityAccess(client, activityId, auth.identityId);
+        const accessResult = await client.query<{ organization_id: string; geography_id: string | null }>("select organization_id, geography_id from activities where id = $1 and organization_id = $2", [activityId, auth.activeOrganizationId]);
+        const access = accessResult.rows[0] ?? null;
         if (!access || access.organization_id !== auth.activeOrganizationId) throw Object.assign(new Error("Activity is not in the active organization"), { code: "ACTIVITY_FORBIDDEN" });
         if (!await hasOrganizationPermission(client, auth, auth.activeOrganizationId!, ["projects:manage"], "security_definer")) throw Object.assign(new Error("Explicit projects:manage permission is required"), { code: "CARBON_CALCULATION_FORBIDDEN" });
         const geography = await assertActivityGeographyScope(client, access.organization_id, access.geography_id, auth.identityId);
