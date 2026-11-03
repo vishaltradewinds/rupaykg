@@ -44,8 +44,14 @@ async function main(): Promise<void> {
               ) as direct_table_privileges,
               has_function_privilege(current_user,'mrv_worker_api.claim_next_job(text,integer)','EXECUTE')
                 as worker_api_execute,
-              has_function_privilege('PUBLIC','mrv_worker_api.claim_next_job(text,integer)','EXECUTE')
-                as public_worker_api_execute
+              exists(
+                select 1
+                  from pg_proc api
+                  cross join lateral aclexplode(coalesce(api.proacl, acldefault('f', api.proowner))) acl
+                 where api.oid=to_regprocedure('mrv_worker_api.claim_next_job(text,integer)')
+                   and acl.grantee=0
+                   and acl.privilege_type='EXECUTE'
+              ) as public_worker_api_execute
          from pg_roles r where r.rolname=current_user`,
     );
     assertMrvWorkerRoleContract(identity.rows[0]);
