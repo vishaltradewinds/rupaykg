@@ -35,10 +35,10 @@ export class MrvSnapshotError extends Error {
 
 type ActivityRow = {
   id: string; organization_id: string; actor_identity_id: string | null; geography_id: string | null; activity_type: string;
-  status: string; occurred_at: Date | string | null; completed_at: Date | string | null; created_at: Date | string; mrv_source_revision: number | string; metadata: Record<string, unknown>; snapshot_record: Record<string, unknown>;
+  status: string; occurred_at: Date | string | null; completed_at: Date | string | null; created_at: Date | string; mrv_source_revision: number | string; metadata: Record<string, unknown>; snapshot_record_json: string;
 };
 type VerificationRow = {
-  id: string; evidence_id: string; verifier_identity_id: string; decision: string; scope: string; rationale: string | null; decided_at: Date | string; snapshot_record: Record<string, unknown>;
+  id: string; evidence_id: string; verifier_identity_id: string; decision: string; scope: string; rationale: string | null; decided_at: Date | string; snapshot_record_json: string;
 };
 type EvidenceRow = Record<string, unknown> & { id: string; status: string; evidence_snapshot_record_json: string; artifact_version_snapshot_record_json: string | null; artifact_series_snapshot_record_json: string | null; reviews_snapshot_records_json: string };
 type MeasurementRow = Record<string, unknown> & { value: string | number; unit: string; snapshot_record_json: string };
@@ -66,7 +66,7 @@ export async function captureMrvSourceSnapshot(input: {
     transactionOpen = true;
 
     const activityResult = await client.query<ActivityRow>(
-      "select a.id,a.organization_id,a.actor_identity_id,a.geography_id,a.activity_type,a.status::text,a.occurred_at,a.completed_at,a.created_at,a.mrv_source_revision,a.metadata,to_jsonb(a) snapshot_record from activities a where a.id=$1 for share",
+      "select a.id,a.organization_id,a.actor_identity_id,a.geography_id,a.activity_type,a.status::text,a.occurred_at,a.completed_at,a.created_at,a.mrv_source_revision,a.metadata,to_jsonb(a)::text snapshot_record_json from activities a where a.id=$1 for share",
       [input.activityId],
     );
     const activity = activityResult.rows[0];
@@ -89,7 +89,7 @@ export async function captureMrvSourceSnapshot(input: {
     if (geography.rows[0]?.ok !== true) throw new MrvSnapshotError("GEOGRAPHY_FORBIDDEN", "Activity geography is outside organization authorization scope", 403);
 
     const verificationResult = await client.query<VerificationRow>(
-      "select v.id,v.evidence_id,v.verifier_identity_id,v.decision::text,v.scope,v.rationale,v.decided_at,to_jsonb(v) snapshot_record from verifications v where v.id=$1 and v.activity_id=$2 for share",
+      "select v.id,v.evidence_id,v.verifier_identity_id,v.decision::text,v.scope,v.rationale,v.decided_at,to_jsonb(v)::text snapshot_record_json from verifications v where v.id=$1 and v.activity_id=$2 for share",
       [input.verificationId, input.activityId],
     );
     const verification = verificationResult.rows[0];
@@ -139,8 +139,8 @@ export async function captureMrvSourceSnapshot(input: {
 
     const payload = {
       schema: "rupaykg:mrv-source-snapshot:v1",
-      activity: { ...activity.snapshot_record, sourceRevision: activity.mrv_source_revision },
-      verification: verification.snapshot_record,
+      activity: { id: activity.id, sourceRevision: activity.mrv_source_revision, recordJson: activity.snapshot_record_json },
+      verification: { id: verification.id, recordJson: verification.snapshot_record_json },
       selectedEvidenceId: input.evidenceId,
       guardianPolicyId: input.guardianPolicyId,
       methodologyCode: input.methodologyCode ?? null,
