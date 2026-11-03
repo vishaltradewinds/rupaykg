@@ -56,7 +56,7 @@ before(async () => {
     [evidence, activity, verifier],
   )).rows[0]!.id;
   const snapshotDigest = "d".repeat(64);
-  const sourceRevision = (await pool.query<{ mrv_source_revision: number }>("select mrv_source_revision from activities where id=$1", [activity])).rows[0]!.mrv_source_revision;
+  const sourceRevision = (await pool.query<{ mrv_source_revision: string | number }>("select mrv_source_revision from activities where id=$1", [activity])).rows[0]!.mrv_source_revision;
   const snapshotPayload = { schema: "rupaykg:mrv-source-snapshot:v1", activity: { id: activity, sourceRevision }, verification: { id: verification }, selectedEvidenceId: evidence, guardianPolicyId: "settlement-reconciliation-policy-" + suffix };
   const snapshotId = (await pool.query<{ id: string }>("insert into mrv_source_snapshots(activity_id,verification_id,evidence_id,guardian_policy_id,snapshot_version,source_revision,source_digest,source_payload,created_by_identity_id) values($1,$2,$3,$4,1,$5,$6,$7::jsonb,$8) returning id", [activity, verification, evidence, "settlement-reconciliation-policy-" + suffix, sourceRevision, snapshotDigest, JSON.stringify(snapshotPayload), verifier])).rows[0]!.id;
   await pool.query(
