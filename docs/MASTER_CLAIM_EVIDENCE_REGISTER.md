@@ -71,3 +71,45 @@ Required resolution record:
 - Reconcile the register at each material commit and before any external white-paper publication.
 
 **Current assessment:** The repository has substantial documented architecture and standards work, but this first pass is not a complete source-code audit. Native PostgreSQL authentication and the evidence-vault route implementation are directly visible in source. Firebase authentication documentation and build-time requirements conflict with the inspected native auth path. A provisional ADR now records the evidence and safe disposition. Evidence-vault integration test is opt-in but the CI workflow explicitly enables it; no exact-head run result is available for this PR head. Do not remove Firebase build requirements, change production auth/database settings, or enable RLS globally until the complete dependency trace and acceptance evidence are available. All other capability states remain limited to the evidence explicitly described above.
+
+
+## 5. Supplemental repository and CI reconciliation — 2026-11-03
+
+### Exact-head CI result — RK-014 / PR #241
+
+GitHub Actions CI run [#5208](https://github.com/vishaltradewinds/rupaykg/actions/runs/41679358836) completed with conclusion **SUCCESS** on the exact PR #241 head `650ed37db50739924a383ccae756d92daef52d84`. The single `validate` job passed dependency installation, production dependency audit, migration validation, disposable PostgreSQL migration execution, TypeScript typecheck, production build, browser smoke test, automated tests including disposable PostgreSQL acceptance, production-container build and cleanup.
+
+This is exact-head engineering CI evidence for the documentation PR. It does not prove deployed database state, production security, regulatory approval, pilot operation or TRL 9. PR #241 remains open and draft.
+
+### Authentication test inventory correction
+
+The first-pass ADR incorrectly stated that no auth-specific automated test file was found in the inspected `apps/src` inventory without acknowledging the separate `apps/test` directory. The repository tree contains `apps/test/auth-permissions.test.ts` (blob `c6478885319771e82e55f826e99ac4da0403ef48`). It tests the high-risk permission allow-list, database-backed role permission evaluation, active-organization/target-organization matching and fail-closed behavior when permission is absent.
+
+This is meaningful authorization-policy unit coverage. It is **not** a full authentication lifecycle suite: it does not by itself establish registration/login, password lockout, session expiry/revocation, multi-membership selection, password recovery or full cross-tenant negative integration coverage. The precise gap is therefore "full auth lifecycle and route-level integration coverage not yet demonstrated", not "no auth-specific test exists".
+
+### Migration and tenant-boundary sample
+
+The repository tree contains migrations `001_core.sql` through `087_acceptance_fixture_registry_exclusion.sql`, plus dated migrations `20261018` through `20261021`; the README documents ordered migration ownership. This is a source-tree inventory, not proof of the production migration ledger or deployed schema.
+
+The inspected migrations `004_security_auth.sql`, `012_geography_authorization.sql`, `030_authorization_role_defaults.sql`, `032_authorization_lifecycle_hardening.sql`, `033_field_sync_tenant_integrity.sql`, and `079_native_password_auth.sql` provide organization membership/session structures, geography-scope enforcement, role-permission defaults, authorization helpers/guards, field-device binding and native password credential storage. The inspected sample did not show `ENABLE ROW LEVEL SECURITY`, `FORCE ROW LEVEL SECURITY` or `CREATE POLICY`. This is not an exhaustive scan of every migration and does not establish that RLS is absent or present across the deployed database. Full policy/role audit and negative cross-tenant tests remain P0.
+
+### MRV/EPR route boundary — preliminary source finding
+
+The inspected `apps/src/mrv-routes.ts` and `apps/src/epr-return-routes.ts` authenticate a request, check organization membership/permission and then perform protected reads/writes using the shared `Pool` in multiple separate queries. The EPR submit/update paths do use explicit transactions and row locks for parts of the workflow, but the reviewed source does not establish that authentication, permission revalidation, target-row lock and mutation are consistently bound to one tenant-scoped transaction. The MRV provenance path similarly performs several pool-level reads before persistence.
+
+Disposition: **P0 route-level transaction/authorization review required**, not a confirmed exploit. Build a per-route matrix for target organization, active organization, geography, permission, transaction boundary, row lock, and final mutation; then move sensitive write paths to a transaction that revalidates membership/permission and locks the authoritative target row before mutation. Add two-tenant negative tests and race tests before any RLS activation.
+
+### Live authorization-provenance work — PR #238
+
+PR #238 remains open and draft. Its current head `33d229181f3057158ab27c8fbf5de5fe2e9a3747` passed CI run [#5209](https://github.com/vishaltradewinds/rupaykg/actions/runs/41679597943), including disposable PostgreSQL tests for legacy authorization-snapshot rewrite, hostile search_path, and concurrent approval versus membership revocation, role permission changes and identity suspension.
+
+However, PR #238 explicitly records unresolved production blockers: actual Render runtime database role is unidentified; read-only Neon inspection found elevated `rupaykg` and `neon_service` roles with BYPASSRLS and powerful privileges; least-privilege runtime role, production trigger execution context/grants/RLS, correction lineage and independent security review remain open. Its forward-fix SQL remains a disposable fixture, not a numbered migration. Do not merge/deploy or apply it to production on CI success alone.
+
+### Updated disposition
+
+- PR #241 exact-head CI: PASS; draft documentation PR.
+- Authentication: native PostgreSQL implementation observed; Firebase docs/build mismatch remains unresolved; authorization-policy unit test exists; full lifecycle coverage not demonstrated.
+- Migration/RLS: sampled migrations show database-level organization/geography guards; exhaustive RLS/policy and live role audit remains open.
+- MRV/EPR: preliminary transaction-boundary/authorization revalidation gap requires route-by-route review.
+- PR #238: exact-head disposable CI PASS; production least-privilege and independent review blockers remain.
+- No live DB changes, RLS activation, auth/config edits, deployment, merge or certification were performed.
