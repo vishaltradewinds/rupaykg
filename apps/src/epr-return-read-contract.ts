@@ -36,6 +36,14 @@ type EprReturnReadContractRow = {
   verifier_schema_usage: boolean;
   verifier_execute: boolean;
   verifier_valid: boolean;
+  can_read_memberships: boolean;
+  can_read_roles: boolean;
+  permission_schema_usage: boolean;
+  permission_helper_execute: boolean;
+  permission_helper_public_execute: boolean;
+  permission_helper_valid: boolean;
+  permission_owner_valid: boolean;
+  permission_owner_no_memberships: boolean;
 };
 
 const EPR_RETURN_READ_CONTRACT_SQL = `select
@@ -94,7 +102,50 @@ const EPR_RETURN_READ_CONTRACT_SQL = `select
        and p.prosecdef
        and p.proconfig @> ARRAY['search_path=pg_catalog, app_security']
        and owner_role.rolname='rupaykg_security_definer'
-  ) as verifier_valid
+  ) as verifier_valid,
+  has_table_privilege(current_user,'public.organization_memberships','SELECT') as can_read_memberships,
+  has_table_privilege(current_user,'public.roles','SELECT') as can_read_roles,
+  has_schema_privilege(current_user,'auth_private','USAGE') as permission_schema_usage,
+  has_function_privilege(current_user,'auth_private.has_organization_permission(uuid,uuid,text[])','EXECUTE') as permission_helper_execute,
+  exists (
+    select 1 from pg_catalog.pg_proc p
+      join pg_catalog.pg_namespace n on n.oid=p.pronamespace
+     where n.nspname='auth_private'
+       and p.proname='has_organization_permission'
+       and p.pronargs=3
+       and exists (
+         select 1 from pg_catalog.aclexplode(coalesce(p.proacl,pg_catalog.acldefault('f',p.proowner))) acl
+          where acl.grantee=0 and acl.privilege_type='EXECUTE'
+       )
+  ) as permission_helper_public_execute,
+  exists (
+    select 1 from pg_catalog.pg_proc p
+      join pg_catalog.pg_namespace n on n.oid=p.pronamespace
+      join pg_catalog.pg_roles owner_role on owner_role.oid=p.proowner
+     where n.nspname='auth_private'
+       and p.proname='has_organization_permission'
+       and p.pronargs=3
+       and p.prosecdef
+       and p.proconfig @> ARRAY['search_path=pg_catalog, pg_temp']
+       and owner_role.rolname='rupaykg_auth_owner'
+       and p.prosrc ilike '%current_request_context_claims%'
+       and p.prosrc ilike '%organization_memberships%'
+       and p.prosrc ilike '%role.organization_id%'
+       and p.prosrc ilike '%permissions%'
+  ) as permission_helper_valid,
+  exists (
+    select 1 from pg_catalog.pg_roles owner_role
+     where owner_role.rolname='rupaykg_auth_owner'
+       and not owner_role.rolcanlogin and not owner_role.rolsuper
+       and not owner_role.rolbypassrls and not owner_role.rolcreatedb
+       and not owner_role.rolcreaterole and not owner_role.rolinherit
+       and not owner_role.rolreplication
+  ) as permission_owner_valid,
+  not exists (
+    select 1 from pg_catalog.pg_auth_members membership
+    join pg_catalog.pg_roles owner_role on owner_role.oid=membership.member
+     where owner_role.rolname='rupaykg_auth_owner'
+  ) as permission_owner_no_memberships
 from pg_catalog.pg_roles r
 join pg_catalog.pg_class epr_table
   on epr_table.oid = 'public.epr_returns'::regclass
@@ -139,7 +190,15 @@ export async function assertEprReturnReadDatabaseContract(pool: Pick<Pool, "quer
     row.can_create_database ||
     !row.verifier_schema_usage ||
     !row.verifier_execute ||
-    !row.verifier_valid
+    !row.verifier_valid ||
+    row.can_read_memberships ||
+    row.can_read_roles ||
+    !row.permission_schema_usage ||
+    !row.permission_helper_execute ||
+    row.permission_helper_public_execute ||
+    !row.permission_helper_valid ||
+    !row.permission_owner_valid ||
+    !row.permission_owner_no_memberships
   ) {
     throw new Error("EPR_RETURN_READ_DATABASE_CONTRACT_INVALID");
   }
