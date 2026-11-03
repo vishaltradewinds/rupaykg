@@ -109,3 +109,26 @@ test("fails closed on any EPR mutation privilege or request-signing-key access",
     );
   }
 });
+
+test("fails closed when tenant permission helpers or restricted owner grants are unsafe", async () => {
+  const invalid = [
+    ["can_read_memberships", true],
+    ["can_read_roles", true],
+    ["permission_schema_usage", false],
+    ["permission_helper_execute", false],
+    ["permission_helper_public_execute", true],
+    ["permission_helper_valid", false],
+    ["permission_owner_valid", false],
+    ["permission_owner_no_memberships", false],
+    ["session_resolver_execute", false],
+    ["session_resolver_public_execute", true],
+    ["session_resolver_valid", false],
+  ] as const;
+  for (const [field, value] of invalid) {
+    await assert.rejects(
+      assertEprReturnReadDatabaseContract(fakePool({ ...validRow, [field]: value })),
+      /EPR_RETURN_READ_DATABASE_CONTRACT_INVALID/,
+      field,
+    );
+  }
+});
