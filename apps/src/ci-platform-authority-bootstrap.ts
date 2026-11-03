@@ -805,7 +805,7 @@ async function run(): Promise<void> {
         `${contract.function_name} must be owned by the dedicated NOLOGIN bootstrap owner`);
       assert.equal(contract.security_definer, true,
         `${contract.function_name} must be SECURITY DEFINER`);
-      assert.ok(contract.function_config?.some(value => value.replace(/\\s+/g, "") === "search_path=pg_catalog,pg_temp"),
+      assert.ok(contract.function_config?.some(value => value.replace(/\s+/g, "") === "search_path=pg_catalog,pg_temp"),
         `${contract.function_name} must pin search_path to pg_catalog,pg_temp`);
       assert.equal(contract.runtime_execute, false,
         `${contract.function_name} must not be executable by auth runtime`);
