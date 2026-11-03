@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import type { Pool, PoolClient } from "pg";
 import { authenticate, bearerChallenge, hasOrganizationPermission } from "./auth.js";
+import { withRlsRequestTransaction, type RlsRequestContextConfig } from "./rls-request-transaction.js";
 import { validateConflictResolution, validateSyncEnvelope } from "./sync-validation.js";
 
 type AuthContext = Awaited<ReturnType<typeof authenticate>>;
@@ -61,7 +62,7 @@ async function applyOperation(client: PoolClient, auth: NonNullable<AuthContext>
   throw Object.assign(new Error(`Unsupported operationType: ${operationType}`), { code: "UNSUPPORTED_OPERATION" });
 }
 
-export async function registerSyncRoutes(app: FastifyInstance, pool: Pool | null): Promise<void> {
+export async function registerSyncRoutes(app: FastifyInstance, pool: Pool | null, requestContext?: RlsRequestContextConfig): Promise<void> {
   app.post("/api/v1/field-devices/enroll", async (request, reply) => {
     if (!pool) return reply.code(503).send({ error: "Field-device enrollment unavailable", code: "DATABASE_UNAVAILABLE", syntheticData: false });
     let auth: AuthContext; try { auth = await authenticate(request, pool); if (!auth) return reply.code(401).send(bearerChallenge()); } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Authentication service unavailable", code: "AUTH_UNAVAILABLE" }); }
@@ -95,7 +96,23 @@ export async function registerSyncRoutes(app: FastifyInstance, pool: Pool | null
   });
 
   app.get("/api/v1/field-sync/conflicts", async (request, reply) => {
-    if (!pool) return reply.code(503).send({ error: "Field sync unavailable", code: "DATABASE_UNAVAILABLE", syntheticData: false }); let auth: AuthContext; try { auth = await authenticate(request, pool); if (!auth) return reply.code(401).send(bearerChallenge()); } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Authentication service unavailable", code: "AUTH_UNAVAILABLE" }); } try { const result = await pool.query(`select c.id, c.envelope_id, c.entity_type, c.entity_id, c.conflict_type, c.authoritative_version, c.client_version, c.resolution_status, c.resolution_reason, c.resolved_by_identity_id, c.resolved_at, c.created_at from field_sync_conflicts c join field_sync_envelopes e on e.id = c.envelope_id where e.identity_id = $1 order by c.created_at desc`, [auth.identityId]); return { source: "postgresql", syntheticData: false, conflicts: result.rows }; } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Field sync conflicts unavailable", syntheticData: false }); }
+    if (!pool) return reply.code(503).send({ error: "Field sync unavailable", code: "DATABASE_UNAVAILABLE", syntheticData: false });
+    let auth: AuthContext; try { auth = await authenticate(request, pool); if (!auth) return reply.code(401).send(bearerChallenge()); } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Authentication service unavailable", code: "AUTH_UNAVAILABLE" }); }
+    if (!auth.activeOrganizationId) return reply.code(403).send({ error: "Select one verified organization to read field-sync conflicts", code: "RLS_ORGANIZATION_CONTEXT_REQUIRED" });
+    if (!requestContext) return reply.code(503).send({ error: "Signed tenant request context is not configured", code: "RLS_CONTEXT_CONFIG_REQUIRED", syntheticData: false });
+    try {
+      const conflicts = await withRlsRequestTransaction(pool, auth, requestContext, async (client) => {
+        const permitted = await hasOrganizationPermission(client, auth, auth.activeOrganizationId!, ["reports:read"], "security_definer");
+        if (!permitted) throw Object.assign(new Error("Field-sync conflict read permission required"), { code: "FIELD_SYNC_READ_FORBIDDEN" });
+        const result = await client.query(`select c.id, c.envelope_id, c.entity_type, c.entity_id, c.conflict_type, c.authoritative_version, c.client_version, c.resolution_status, c.resolution_reason, c.resolved_by_identity_id, c.resolved_at, c.created_at from field_sync_conflicts c join field_sync_envelopes e on e.id = c.envelope_id where e.identity_id = $1 and e.organization_id = $2 order by c.created_at desc`, [auth.identityId, auth.activeOrganizationId]);
+        return result.rows;
+      });
+      return { source: "postgresql", syntheticData: false, conflicts };
+    } catch (error) {
+      const code = error && typeof error === "object" && "code" in error ? String((error as {code:unknown}).code) : "";
+      if (code === "FIELD_SYNC_READ_FORBIDDEN") return reply.code(403).send({ error: "Field-sync conflict read permission required", code });
+      request.log.error(error); return reply.code(503).send({ error: "Field sync conflicts unavailable", syntheticData: false });
+    }
   });
 
   app.post("/api/v1/field-sync/conflicts/:conflictId/resolve", async (request, reply) => {
