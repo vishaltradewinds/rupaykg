@@ -66,7 +66,7 @@ A missing signal means the simple static scan did not find the pattern; it is a 
 | GET /api/v1/workspaces/carbon | workspace-routes.ts | GEO | Verify MRV read permission, methodology version and activity scope |
 | GET /api/v1/workspaces/registry | workspace-routes.ts | GEO | Verify registry read permission and issuer/holder visibility |
 | GET /api/v1/workspaces/settlement | workspace-routes.ts | GEO | Verify settlement read permission and bilateral visibility |
-| GET /api/v1/workspaces/esg | workspace-routes.ts | None detected | P0 trace: prove auth, permission, organisation and geography scope |
+| GET /api/v1/workspaces/esg | workspace-routes.ts | AUTH, ACTIVE, verified membership-derived orgIds, PERM via route preHandler | Shared workspace preHandler maps esg to WORKSPACE_READ_PERMISSIONS.esg = reports:read/epr:read/csr:read/audit:read and denies before handler. Preserve and test hook; no duplicate gate needed |
 | GET /api/v1/epr/obligations | bwg-routes.ts | PERM, ACTIVE | Verify authenticated actor, active organisation and jurisdiction/source filtering |
 | GET /api/v1/cpcb-swm/workspaces | cpcb-swm-routes.ts | MEM, PERM, ACTIVE, GEO, AUDIT | Confirm read query and audit data share identical tenant scope |
 | POST /api/v1/cpcb-swm/workspaces | cpcb-swm-routes.ts | MEM, PERM, ACTIVE, GEO, TX, WRITE, AUDIT | Confirm tenant context, validation, audit and insert are one client transaction |
@@ -95,7 +95,7 @@ A missing signal means the simple static scan did not find the pattern; it is a 
 
 ### P0 — resolve before publishing partner APIs
 
-- **ESG workspace:** static scan did not find an auth, permission, membership, active-org or geography signal. Inspect handler line-by-line and add explicit proof/tests before exposing it.
+- **ESG workspace:** manual review of the shared workspace preHandler confirms authentication and authorizeWorkspaceRead run before the handler; ESG is mapped to reports:read, epr:read, csr:read or audit:read. The initial route-local scan missed this shared hook. Add route-level tests proving the hook is not bypassed and results remain tenant-scoped.
 - **Evidence upload/list:** permission signal exists but direct AUTH was not detected in the handler; trace module wrapper, activity ownership, reviewer and same-client behaviour.
 - **EPR obligations and BWG workspace:** active organisation and permission signals exist; verify actor authentication, scope derivation and statutory jurisdiction filters.
 - **Resource flow and measurement writes:** organisation/permission/geography checks appear, but separate pool/client calls can create TOCTOU risk. Move to one signed tenant-context client transaction before RLS enforcement.
@@ -199,7 +199,7 @@ The suite must assert persisted row counts and audit records after each denial; 
 ## 10. Precision correction after manual handler review
 
 The first-pass signal table used a deliberately simple text-pattern scan. Manual inspection of the P0 handlers corrected several false negatives:
-- The ESG workspace does call the module-level requireAuth wrapper and derives its organisation list from verified memberships/active organisation. The confirmed gap is the absence of a dedicated read-permission gate before returning ESG reporting periods and metrics, not missing authentication.
+- The ESG workspace route is protected by the shared workspace preHandler: it calls requireAuth, maps the route to WORKSPACE_READ_PERMISSIONS.esg, and invokes authorizeWorkspaceRead before the handler. The configured ESG read permissions are reports:read, epr:read, csr:read and audit:read. The earlier claim that no read-permission gate existed was incorrect; the route-local scan missed the shared hook. Preserve and test this hook.
 - The BWG workspace also authenticates and uses the active verified organisation, but appears to return reporting data before the permission booleans are calculated for the UI. Permission metadata is not a substitute for denying unauthorised reads.
 - Evidence Vault handlers all call authFor. Upload/list/download do perform activity, geography and permission checks, but those checks are split across pool queries and the protected read/write. Upload's database transaction does not revalidate activity ownership/geography/permission on the same client before writing. Review is stronger: it locks the evidence row and performs geography, permission, independent-review and state checks plus writes inside one transaction client, while the authenticated membership snapshot is still established earlier.
 - EPR obligations does authenticate, verify organisation membership and check EPR read permission. Remaining review is statutory jurisdiction/source correctness and same-client tenant-context binding.
