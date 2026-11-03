@@ -176,7 +176,8 @@ try {
           [version, migration.filename, migration.checksum],
         );
         await client.query("commit");
-        migrationReport.applied.push(migration.filename);\n        migrationReport.pending = migrationReport.pending.filter((filename) => filename !== migration.filename);
+        migrationReport.applied.push(migration.filename);
+        migrationReport.pending = migrationReport.pending.filter((filename) => filename !== migration.filename);
       } catch (error) {
         await client.query("rollback");
         throw new Error("Migration " + migration.filename + " failed; ledger row was not committed", { cause: error });
