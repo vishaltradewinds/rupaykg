@@ -92,7 +92,7 @@ CREATE TRIGGER verification_authorization_snapshot_guard
 
 -- Decisions are append-only, including REJECTED outcomes. Corrections require
 -- a separately linked superseding decision; history is never rewritten/deleted.
-CREATE OR REPLACE FUNCTION public.prevent_approved_verification_delete()
+CREATE OR REPLACE FUNCTION public.prevent_verification_delete()
 RETURNS trigger
 LANGUAGE plpgsql
 SET search_path = pg_catalog, pg_temp
@@ -106,4 +106,4 @@ DROP TRIGGER IF EXISTS approved_verification_delete_guard ON public.verification
 DROP TRIGGER IF EXISTS verification_delete_guard ON public.verifications;
 CREATE TRIGGER verification_delete_guard
   BEFORE DELETE ON public.verifications
-  FOR EACH ROW EXECUTE FUNCTION public.prevent_approved_verification_delete();
+  FOR EACH ROW EXECUTE FUNCTION public.prevent_verification_delete();
