@@ -12,6 +12,7 @@ type QueryResult = { rows: Array<Record<string, unknown>> };
 
 function fakePool(options: {
   ledgerExists: boolean;
+  schemaHasObjects?: boolean;
   applied?: Array<{ version: string; filename: string }>;
   lockFails?: boolean;
   unlockFails?: boolean;
@@ -42,6 +43,9 @@ function fakePool(options: {
     }
     if (normalized.includes("to_regclass('schema_migrations')")) {
       return { rows: [{ ledger_exists: options.ledgerExists ? "schema_migrations" : null }] };
+    }
+    if (normalized.includes("has_application_objects")) {
+      return { rows: [{ has_application_objects: options.schemaHasObjects ?? false }] };
     }
     if (normalized.startsWith("select version, filename from schema_migrations order by version")) {
       return { rows: options.applied ?? [] };
@@ -92,6 +96,23 @@ test("conflicting existing ledger fails before ledger DDL and pending SQL, then 
     assert.equal(calls.some((sql) => sql.startsWith("create table if not exists schema_migrations")), false);
     assert.equal(calls.some((sql) => sql === "select 1;"), false);
     assert.ok(calls[0]?.startsWith("select pg_advisory_lock"));
+    assert.ok(calls.at(-1)?.startsWith("select pg_advisory_unlock"));
+    assert.equal(getReleaseCount(), 1);
+  });
+});
+
+test("orphaned schema without a migration ledger fails before ledger DDL or pending SQL", async () => {
+  await withCatalog(async (dir) => {
+    const { pool, calls, getReleaseCount } = fakePool({
+      ledgerExists: false,
+      schemaHasObjects: true,
+    });
+    await assert.rejects(
+      runMigrations(pool, dir),
+      /MIGRATION_HISTORY_UNRESOLVED: schema_migrations ledger is absent but the target schema contains existing application objects/,
+    );
+    assert.equal(calls.some((sql) => sql.startsWith("create table if not exists schema_migrations")), false);
+    assert.equal(calls.some((sql) => sql === "select 1;"), false);
     assert.ok(calls.at(-1)?.startsWith("select pg_advisory_unlock"));
     assert.equal(getReleaseCount(), 1);
   });
@@ -169,6 +190,55 @@ test(
         );
         assert.deepEqual(ledger.rows, [{ version: "001", filename: "001_lock_test.sql" }]);
         assert.equal(probe.rows[0]?.probe, `${schema}.migration_probe`);
+      } finally {
+        await rm(dir, { recursive: true, force: true });
+      }
+    } finally {
+      await migrationPool?.end();
+      await adminPool.query(`drop schema if exists "${schema}" cascade`);
+      await adminPool.end();
+    }
+  },
+);
+
+
+test(
+  "real PostgreSQL refuses to bootstrap a ledger over an orphaned application schema",
+  { skip: process.env.RUPAYKG_RUN_DB_INTEGRATION_TESTS !== "1" || !process.env.DATABASE_URL },
+  async () => {
+    const adminPool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      max: 2,
+      ...(process.env.DATABASE_SSL === "false" ? { ssl: false } : {}),
+    });
+    const schema = `rk_orphan_schema_test_${randomUUID().replace(/-/g, "")}`;
+    let migrationPool: Pool | undefined;
+    try {
+      await adminPool.query(`create schema "${schema}"`);
+      await adminPool.query(`create table "${schema}".orphan_marker (id integer primary key)`);
+      migrationPool = new Pool({
+        connectionString: process.env.DATABASE_URL,
+        max: 1,
+        options: `-c search_path=${schema}`,
+        ...(process.env.DATABASE_SSL === "false" ? { ssl: false } : {}),
+      });
+      const dir = await mkdtemp(path.join(os.tmpdir(), "rupaykg-orphan-schema-"));
+      try {
+        await writeFile(path.join(dir, "001_safe.sql"), "select 1;", "utf8");
+        await assert.rejects(
+          runMigrations(migrationPool as unknown as PoolType, dir),
+          /MIGRATION_HISTORY_UNRESOLVED: schema_migrations ledger is absent but the target schema contains existing application objects/,
+        );
+        const ledger = await adminPool.query(
+          "select to_regclass($1)::text as ledger",
+          [`${schema}.schema_migrations`],
+        );
+        const marker = await adminPool.query(
+          "select to_regclass($1)::text as marker",
+          [`${schema}.orphan_marker`],
+        );
+        assert.equal(ledger.rows[0]?.ledger, null, "runner must not create a ledger over an unknown schema");
+        assert.equal(marker.rows[0]?.marker, `${schema}.orphan_marker`);
       } finally {
         await rm(dir, { recursive: true, force: true });
       }
