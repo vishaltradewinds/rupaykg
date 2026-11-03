@@ -45,7 +45,7 @@ Credential issuance requires Guardian VERIFIED, HCS consensus confirmation, pers
 ## Important limitations
 
 - This migration and code change do not prove that migration 088 has been applied to the authoritative Neon database.
-- Existing v1 provenance remains historical and is not retroactively upgraded or represented as snapshot-bound.
+- Existing v1 provenance remains historical and is not retroactively upgraded or represented as snapshot-bound. If a snapshot row was created before the source-revision migration, that migration advances its activity revision so the old snapshot cannot authorize new issuance.
 - Source observation and measurement tables are not globally made append-only by this change. Instead, source mutations advance a database revision, making prior snapshots ineligible for new credential issuance until a new correction snapshot and provider anchor are completed. Each MRV execution preserves a complete immutable source snapshot. Independent evidence review remains necessary.
 - A source correction after an external Guardian/HCS operation creates a new snapshot and requires a new provider execution and anchor. Existing anchors remain historical evidence for the earlier snapshot.
 - No production deployment, live DB migration, RLS activation, external provider configuration or TRL 9 certification is authorized by this implementation.
