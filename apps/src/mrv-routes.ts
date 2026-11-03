@@ -151,6 +151,16 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
           await persistClient.query("rollback");
           return reply.code(403).send({ error: "Authorization changed during MRV provider execution; the external anchor is not accepted as persisted provenance", code: "MRV_AUTHORIZATION_CHANGED", syntheticData: false, hederaTransactionId: anchor.transactionId, hederaConsensusTimestamp: anchor.consensusTimestamp, sourceSnapshotId: snapshot.id });
         }
+        const scope = await persistClient.query<{ ok: boolean }>(
+          `select exists(select 1 from organization_memberships om join activities a on a.organization_id=om.organization_id
+            where om.identity_id=$1 and om.organization_id=$2 and om.status='VERIFIED' and a.id=$3
+              and a.geography_id is not null and organization_has_geography_scope(om.organization_id,a.geography_id)) ok`,
+          [auth.identityId, captured.organizationId, activityId],
+        );
+        if (scope.rows[0]?.ok !== true) {
+          await persistClient.query("rollback");
+          return reply.code(403).send({ error: "Activity geography authorization changed during MRV provider execution", code: "GEOGRAPHY_FORBIDDEN", syntheticData: false, hederaTransactionId: anchor.transactionId, hederaConsensusTimestamp: anchor.consensusTimestamp, sourceSnapshotId: snapshot.id });
+        }
         const snapshotStillExists = await persistClient.query<{ ok: boolean }>("select exists(select 1 from mrv_source_snapshots where id=$1 and source_digest=$2 and snapshot_version=$3) ok", [snapshot.id, snapshot.source_digest, snapshot.snapshot_version]);
         if (snapshotStillExists.rows[0]?.ok !== true) throw new Error("Immutable MRV source snapshot disappeared before provenance persistence");
         const persisted = await persistClient.query(`insert into mrv_provenance_events(activity_id,verification_id,evidence_id,guardian_policy_id,guardian_execution_id,guardian_status,hcs_status,hcs_topic_id,hcs_transaction_id,hcs_consensus_timestamp,integrity_hash,methodology_code,metadata,source_snapshot_id,source_snapshot_digest,source_snapshot_version) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) on conflict(activity_id,verification_id,integrity_hash) do update set guardian_execution_id=excluded.guardian_execution_id,guardian_status=excluded.guardian_status,hcs_status=excluded.hcs_status,hcs_topic_id=excluded.hcs_topic_id,hcs_transaction_id=excluded.hcs_transaction_id,hcs_consensus_timestamp=excluded.hcs_consensus_timestamp,metadata=excluded.metadata,source_snapshot_id=excluded.source_snapshot_id,source_snapshot_digest=excluded.source_snapshot_digest,source_snapshot_version=excluded.source_snapshot_version,mirror_node_verified_at=null returning *`, [activityId, verificationId, evidenceId, policyId, guardian.executionId, guardian.status, anchor.status, anchor.topicId || null, anchor.transactionId, anchor.consensusTimestamp, anchor.integrityHash, methodologyCode || null, JSON.stringify({ guardian: guardian.raw ?? null, sourceSnapshotDigest: snapshot.source_digest }), snapshot.id, snapshot.source_digest, snapshot.snapshot_version]);
