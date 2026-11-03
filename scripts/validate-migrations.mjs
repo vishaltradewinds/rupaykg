@@ -31,6 +31,19 @@ for (const file of files) {
 }
 
 
+const identitySuspensionMigration = await readFile(path.join(dir, "20261026_auth_scoped_onboarding_mutations.sql"), "utf8");
+if (!/alter\s+table\s+public\.identities\s+add\s+column\s+if\s+not\s+exists\s+suspended_at\s+timestamptz/i.test(identitySuspensionMigration)) {
+  throw new Error("identity suspension column must be created before the first authorization functions reference it");
+}
+for (const [name, sql] of [
+  ["20261102", await readFile(path.join(dir, "20261102_platform_authority_bootstrap.sql"), "utf8")],
+  ["20261104", await readFile(path.join(dir, "20261104_identity_bound_hierarchical_onboarding.sql"), "utf8")],
+  ["20261106", await readFile(path.join(dir, "20261106_verifier_same_org_geography_scope.sql"), "utf8")],
+]) {
+  if (!/alter\s+table\s+public\.identities\s+add\s+column\s+if\s+not\s+exists\s+suspended_at\s+timestamptz/i.test(sql)) {
+    throw new Error(`${name} must retain an idempotent suspension-column compatibility guard`);
+  }
+}
 const verificationTriggerMigration = await readFile(path.join(dir, "008_verification_integrity.sql"), "utf8");
 const verificationGuard = await readFile(path.join(dir, "20261106_verifier_same_org_geography_scope.sql"), "utf8");
 const verificationPermission = await readFile(path.join(dir, "20261107_verifier_subject_org_verified.sql"), "utf8");
