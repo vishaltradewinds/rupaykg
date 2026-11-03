@@ -39,6 +39,10 @@ test("restricted app runtime can use only signed-context-bound boolean permissio
       "insert into public.identities(external_subject,display_name,status) values($1,$2,'VERIFIED') returning id",
       ["auth-helper-name-only:" + suffix, "Auth Helper Name Only"],
     )).rows[0]!.id;
+    const identityRevoked = (await client.query<{ id: string }>(
+      "insert into public.identities(external_subject,display_name,status) values($1,$2,'VERIFIED') returning id",
+      ["auth-helper-revoked:" + suffix, "Auth Helper Revoked"],
+    )).rows[0]!.id;
 
     const roleA = (await client.query<{ id: string }>(
       "insert into public.roles(organization_id,name,permissions,geography_scope) values($1,'tenant_reader','[\"epr:read\"]'::jsonb,'[]'::jsonb) returning id",
@@ -56,11 +60,15 @@ test("restricted app runtime can use only signed-context-bound boolean permissio
       "insert into public.roles(organization_id,name,permissions,geography_scope) values($1,'epr_admin','[\"dashboard:read\"]'::jsonb,'[]'::jsonb) returning id",
       [orgA],
     )).rows[0]!.id;
+    const roleRevoked = (await client.query<{ id: string }>(
+      "insert into public.roles(organization_id,name,permissions,geography_scope) values($1,'tenant_reader_revoked','[\"epr:read\"]'::jsonb,'[]'::jsonb) returning id",
+      [orgA],
+    )).rows[0]!.id;
 
     await client.query("ALTER TABLE public.organization_memberships DISABLE TRIGGER stakeholder_membership_application_guard");
     await client.query(
-      "insert into public.organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED'),($4,$5,$6,'VERIFIED'),($7,$8,$9,'PENDING'),($10,$11,$12,'VERIFIED')",
-      [identityA, orgA, roleA, identityB, orgB, roleB, identityPending, orgA, rolePending, identityNameOnly, orgA, roleNameOnly],
+      "insert into public.organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED'),($4,$5,$6,'VERIFIED'),($7,$8,$9,'PENDING'),($10,$11,$12,'VERIFIED'),($13,$14,$15,'REVOKED')",
+      [identityA, orgA, roleA, identityB, orgB, roleB, identityPending, orgA, rolePending, identityNameOnly, orgA, roleNameOnly, identityRevoked, orgA, roleRevoked],
     );
     await client.query("ALTER TABLE public.organization_memberships ENABLE TRIGGER stakeholder_membership_application_guard");
 
@@ -145,6 +153,11 @@ test("restricted app runtime can use only signed-context-bound boolean permissio
       { secret, keyId, ttlSeconds: 60 },
     );
     assert.equal(await authorize(identityNameOnly, orgA, nameOnlyToken), false, "a privileged-looking role name without an explicit permission is denied");
+    const revokedToken = createSignedRequestContextToken(
+      { actorIdentityId: identityRevoked, organizationId: orgA },
+      { secret, keyId, ttlSeconds: 60 },
+    );
+    assert.equal(await authorize(identityRevoked, orgA, revokedToken), false, "revoked membership is denied even when its role contains the explicit permission");
 
     assert.equal(await authorize(identityA, orgA, "forged.context"), false, "forged signed context is denied");
     assert.equal(await authorize(identityA, orgA), false, "missing signed context is denied");
