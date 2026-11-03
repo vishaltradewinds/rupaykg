@@ -69,6 +69,11 @@ test("MRV source snapshots are immutable, idempotent and require explicit correc
       pool, auth, activityId: activity.rows[0]!.id, verificationId: verification.rows[0]!.id,
       evidenceId: evidence.rows[0]!.id, guardianPolicyId: "test-policy", methodologyCode: "BM WA03.001",
     };
+    const golden = await pool.query<{ digest: string }>(
+      "select mrv_source_snapshot_digest('{\\"b\\":2,\\"a\\":1}'::jsonb) as digest",
+    );
+    assert.equal(golden.rows[0]?.digest, "d8497d9d82770a70729261095aa98f7ef5154d7af499f8037b6ca250296785a6");
+
     const first = await captureMrvSourceSnapshot(input);
     assert.equal(first.snapshot.snapshot_version, 1);
     assert.equal(first.snapshot.supersedes_snapshot_id, null);
@@ -104,6 +109,24 @@ test("MRV source snapshots are immutable, idempotent and require explicit correc
     await assert.rejects(
       () => pool.query("update credentials set status='ISSUED' where id=$1", [staleCredential.rows[0]!.id]),
       /CREDENTIAL_MRV_REQUIRED/,
+    );
+
+    await assert.rejects(
+      () => pool.query(
+        `insert into mrv_source_snapshots(
+           activity_id,verification_id,evidence_id,guardian_policy_id,methodology_code,
+           snapshot_version,source_revision,source_digest,source_payload,supersedes_snapshot_id,correction_reason,created_by_identity_id
+         ) select activity_id,verification_id,evidence_id,guardian_policy_id,methodology_code,
+                  99,source_revision,source_digest,jsonb_set(source_payload,'{observations,0,observed_value}','"forged"'::jsonb),
+                  id,'Forged payload must be rejected',created_by_identity_id
+             from mrv_source_snapshots where id=$1`,
+        [first.snapshot.id],
+      ),
+      /MRV_SOURCE_SNAPSHOT_DIGEST_MISMATCH/,
+    );
+    await assert.rejects(
+      () => pool.query("truncate mrv_source_snapshots"),
+      /MRV source snapshots cannot be truncated/,
     );
 
     await assert.rejects(
