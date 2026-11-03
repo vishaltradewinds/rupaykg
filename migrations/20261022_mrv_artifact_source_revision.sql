@@ -40,3 +40,9 @@ drop trigger if exists evidence_artifact_reviews_mrv_source_revision on evidence
 create trigger evidence_artifact_reviews_mrv_source_revision
 after insert or update or delete on evidence_artifact_reviews
 for each row execute function bump_mrv_source_revision_from_evidence_artifact();
+
+
+drop trigger if exists evidence_artifact_series_mrv_source_revision on evidence_artifact_series;
+create trigger evidence_artifact_series_mrv_source_revision
+after insert or update or delete on evidence_artifact_series
+for each row execute function bump_activity_mrv_source_revision();
