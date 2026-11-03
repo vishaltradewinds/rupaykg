@@ -127,6 +127,10 @@ begin
          and s.evidence_id = m.evidence_id
          and s.source_digest = m.source_snapshot_digest
          and s.snapshot_version = m.source_snapshot_version
+         and not exists (
+           select 1 from mrv_source_snapshots newer
+            where newer.activity_id=s.activity_id and newer.snapshot_version>s.snapshot_version
+         )
        where m.activity_id = new.activity_id
          and m.verification_id = new.verification_id
          and m.evidence_id = v.evidence_id
