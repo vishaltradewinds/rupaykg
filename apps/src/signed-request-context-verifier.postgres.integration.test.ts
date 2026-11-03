@@ -275,8 +275,8 @@ test("PostgreSQL verifier trigger enforces tenant authority, independence, geogr
       [pendingEvidence, pendingActivity, pendingVerifier],
     );
 
-    // Cyclic hierarchy data must terminate and fail closed when no assigned root
-    // covers the requested geography.
+    // Even a verified scope attached to a node inside a malformed cycle must
+    // not authorize the activity: cycle detection invalidates the hierarchy.
     const cycleA = (await client.query<{ id: string }>(
       "insert into public.geography(kind,name) values('DISTRICT','Verifier cycle A') returning id",
     )).rows[0]!.id;
@@ -285,17 +285,15 @@ test("PostgreSQL verifier trigger enforces tenant authority, independence, geogr
     )).rows[0]!.id;
     await client.query("update public.geography set parent_id=$2 where id=$1", [cycleA, cycleB]);
     await client.query("update public.geography set parent_id=$2 where id=$1", [cycleB, cycleA]);
-    // Give the organization a different verified root so the cycle is actually
-    // traversed rather than short-circuited by the no-roots fail-closed case.
     await client.query(
       "insert into public.organization_geography_scopes(organization_id,geography_id,status) values($1,$2,'VERIFIED')",
-      [orgB, geographyId],
+      [orgB, cycleB],
     );
     const cycleResult = await client.query<{ allowed: boolean }>(
       "select public.organization_has_geography_scope($1,$2) as allowed",
       [orgB, cycleA],
     );
-    assert.equal(cycleResult.rows[0]?.allowed, false, "cyclic hierarchy without a verified assigned root must fail closed");
+    assert.equal(cycleResult.rows[0]?.allowed, false, "a verified scope inside a cyclic hierarchy must fail closed");
   } finally {
     await client.query("ROLLBACK").catch(() => undefined);
     client.release();
