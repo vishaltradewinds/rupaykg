@@ -160,6 +160,9 @@ jobs:
               raise SystemExit('No Hedera consensus timestamp was returned.')
           with open('/tmp/acceptance.env', 'w') as f:
               f.write('CONSENSUS_TIMESTAMP=' + timestamp + '\n')
+              f.write('SOURCE_SNAPSHOT_ID=' + snapshot['id'] + '\n')
+              f.write('SOURCE_SNAPSHOT_VERSION=' + str(snapshot['version']) + '\n')
+              f.write('SOURCE_SNAPSHOT_DIGEST=' + snapshot['digest'] + '\n')
           print('Guardian VERIFIED and Hedera CONSENSUS_CONFIRMED.')
           print('Registry eligibility:', data.get('eligibleForRegistry'))
           PY
