@@ -25,10 +25,10 @@ class FakeClient {
   async query(sql: string, values?: unknown[]) {
     this.calls.push({ sql, ...(values === undefined ? {} : { values }) });
     if (["BEGIN", "COMMIT", "ROLLBACK"].includes(sql)) return { rows: [], rowCount: 0 };
-    if (sql.includes("FOR SHARE OF s, i, om, r")) {
+    if (sql.toLowerCase().includes("for share of s, i, om, r")) {
       return { rows: this.permission ? [{ ok: true }] : [], rowCount: this.permission ? 1 : 0 };
     }
-    if (sql.includes("FOR SHARE OF s, eo, o")) {
+    if (sql.toLowerCase().includes("for share of s, eo, o")) {
       return { rows: this.eligible ? [{ id: schemeId }] : [], rowCount: this.eligible ? 1 : 0 };
     }
     if (sql.toLowerCase().includes("insert into epr_returns")) {
@@ -83,8 +83,8 @@ const createPayload = {
 function callKinds(calls: Call[]): string[] {
   return calls.map(({ sql }) => {
     if (sql === "BEGIN" || sql === "COMMIT" || sql === "ROLLBACK") return sql;
-    if (sql.includes("FOR SHARE OF s, i, om, r")) return "AUTHORIZATION_LOCK";
-    if (sql.includes("FOR SHARE OF s, eo, o")) return "ELIGIBILITY_LOCK";
+    if (sql.toLowerCase().includes("for share of s, i, om, r")) return "AUTHORIZATION_LOCK";
+    if (sql.toLowerCase().includes("for share of s, eo, o")) return "ELIGIBILITY_LOCK";
     if (sql.toLowerCase().includes("insert into epr_returns")) return "INSERT_RETURN";
     if (sql.includes("from epr_returns r join epr_schemes")) return "LIST_RETURNS";
     return "UNEXPECTED";
