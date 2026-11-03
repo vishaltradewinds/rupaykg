@@ -203,5 +203,43 @@
     "neonBranch": "br-restless-base-b44cip2h",
     "database": "rupaykg"
   },
-  "currentAim": "Pan-India Circular Economy Operating System for trusted environmental resource flows; real activity to evidence, regulatory applicability, MRV, verification, eligibility, registry, settlement and reporting."
+  "currentAim": "Pan-India Circular Economy Operating System for trusted environmental resource flows; real activity to evidence, regulatory applicability, MRV, verification, eligibility, registry, settlement and reporting.",
+  "masterExecutionPlan": {
+    "version": "2026-11-03-user-approved",
+    "source": "docs/engineering/repository-reconciliation/2026-11-03-aim-and-whole-repository-reconciliation.md#section-13",
+    "objective": "Pan-India Circular Economy Operating System; real activity to evidence, regulatory applicability, MRV, verification, eligibility, registry, settlement and reporting.",
+    "executionOrder": [
+      "P0-01",
+      "P0-02",
+      "P0-03",
+      "P0-04",
+      "P0-05",
+      "P0-06",
+      "P1-01",
+      "P1-02",
+      "P1-03",
+      "P1-04",
+      "P1-05",
+      "P1-06",
+      "P1-07",
+      "FINAL-01"
+    ],
+    "parallelStreams": [
+      "migration-lineage",
+      "verifier-and-geography",
+      "tenant-route-integration",
+      "cdpi-wave1",
+      "jabalpur-field-workflow-and-hardware",
+      "guardian-hedera-vc",
+      "stakeholder-demo"
+    ],
+    "controls": [
+      "No production/staging mutation without explicit authorization and independent gates.",
+      "No duplicate route implementations or blind stacked-branch merges.",
+      "CI, UI presence or synthetic data alone never establishes operational readiness or TRL 9.",
+      "Track evidence by exact commit, test, reviewer and environment."
+    ],
+    "productionCertification": "HOLD_OFF",
+    "trl9": "NOT_ESTABLISHED"
+  }
 }
