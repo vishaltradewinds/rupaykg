@@ -22,6 +22,10 @@ test("restricted app runtime can use only signed-context-bound boolean permissio
       "insert into public.organizations(name,organization_type,status) values($1,'test_fixture','VERIFIED') returning id",
       ["Auth Helper Tenant B " + suffix],
     )).rows[0]!.id;
+    const orgPendingVerification = (await client.query<{ id: string }>(
+      "insert into public.organizations(name,organization_type,status) values($1,'test_fixture','VERIFIED') returning id",
+      ["Auth Helper Legally Unverified Tenant " + suffix],
+    )).rows[0]!.id;
 
     const identityA = (await client.query<{ id: string }>(
       "insert into public.identities(external_subject,display_name,status) values($1,$2,'VERIFIED') returning id",
@@ -43,6 +47,14 @@ test("restricted app runtime can use only signed-context-bound boolean permissio
       "insert into public.identities(external_subject,display_name,status) values($1,$2,'VERIFIED') returning id",
       ["auth-helper-revoked:" + suffix, "Auth Helper Revoked"],
     )).rows[0]!.id;
+    await client.query(
+      "update public.organizations set verification_status='VERIFIED',verified_by_identity_id=$2,verified_at=clock_timestamp() where id=$1",
+      [orgA, identityA],
+    );
+    await client.query(
+      "update public.organizations set verification_status='VERIFIED',verified_by_identity_id=$2,verified_at=clock_timestamp() where id=$1",
+      [orgB, identityB],
+    );
 
     const roleA = (await client.query<{ id: string }>(
       "insert into public.roles(organization_id,name,permissions,geography_scope) values($1,'tenant_reader','[\"epr:read\"]'::jsonb,'[]'::jsonb) returning id",
@@ -64,11 +76,15 @@ test("restricted app runtime can use only signed-context-bound boolean permissio
       "insert into public.roles(organization_id,name,permissions,geography_scope) values($1,'tenant_reader_revoked','[\"epr:read\"]'::jsonb,'[]'::jsonb) returning id",
       [orgA],
     )).rows[0]!.id;
+    const rolePendingVerification = (await client.query<{ id: string }>(
+      "insert into public.roles(organization_id,name,permissions,geography_scope) values($1,'tenant_reader_unverified_org','[\"epr:read\"]'::jsonb,'[]'::jsonb) returning id",
+      [orgPendingVerification],
+    )).rows[0]!.id;
 
     await client.query("ALTER TABLE public.organization_memberships DISABLE TRIGGER stakeholder_membership_application_guard");
     await client.query(
-      "insert into public.organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED'),($4,$5,$6,'VERIFIED'),($7,$8,$9,'PENDING'),($10,$11,$12,'VERIFIED'),($13,$14,$15,'REVOKED')",
-      [identityA, orgA, roleA, identityB, orgB, roleB, identityPending, orgA, rolePending, identityNameOnly, orgA, roleNameOnly, identityRevoked, orgA, roleRevoked],
+      "insert into public.organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED'),($4,$5,$6,'VERIFIED'),($7,$8,$9,'PENDING'),($10,$11,$12,'VERIFIED'),($13,$14,$15,'REVOKED'),($1,$16,$17,'VERIFIED')",
+      [identityA, orgA, roleA, identityB, orgB, roleB, identityPending, orgA, rolePending, identityNameOnly, orgA, roleNameOnly, identityRevoked, orgA, roleRevoked, orgPendingVerification, rolePendingVerification],
     );
     await client.query("ALTER TABLE public.organization_memberships ENABLE TRIGGER stakeholder_membership_application_guard");
 
@@ -158,6 +174,11 @@ test("restricted app runtime can use only signed-context-bound boolean permissio
       { secret, keyId, ttlSeconds: 60 },
     );
     assert.equal(await authorize(identityRevoked, orgA, revokedToken), false, "revoked membership is denied even when its role contains the explicit permission");
+    const unverifiedOrganizationToken = createSignedRequestContextToken(
+      { actorIdentityId: identityA, organizationId: orgPendingVerification },
+      { secret, keyId, ttlSeconds: 60 },
+    );
+    assert.equal(await authorize(identityA, orgPendingVerification, unverifiedOrganizationToken), false, "membership in an organization whose legal verification is pending is denied");
 
     assert.equal(await authorize(identityA, orgA, "forged.context"), false, "forged signed context is denied");
     assert.equal(await authorize(identityA, orgA), false, "missing signed context is denied");
