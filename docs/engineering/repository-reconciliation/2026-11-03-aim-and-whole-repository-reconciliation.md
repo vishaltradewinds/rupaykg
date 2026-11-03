@@ -442,3 +442,10 @@ PR #234 remains draft: its CI suite does not exercise a real PostgreSQL TLS hand
 PR #219 remains draft and stacked on the MRV workspace security branch. Its head-to-base comparison remains 9 commits ahead and 9 behind from merge base 337bc5cc6abbf09acdc786c7c37ab7b4d1a57eb6. Do not rebase or merge until the MRV parent head is reconciled. The UI's reference-parity token layer uses near-black #050505, charcoal #151619 and emerald #10b981; the pilot fixture is opt-in (?demo=1), synthetic-only and browser-local.
 
 These exact-head CI successes validate only the branches and workflow stages described above. They do not certify production tenant isolation, historical migration parity, real Guardian/HCS/Mirror Node operation, regulatory approval, live pilot readiness or TRL 9.
+
+
+### 12.13 Additional planned inbox crosswalk correction — not applied
+
+PR #108 also contains scripts/fixtures/legacy-migrations/20261101_async_mirror_unresolved_crosswalk.sql (fixture Git blob b38ce7632869dce5d6837442035b845a1bbc8802; embedded upstream source blob 4f9776bc449025e795cb0d5c93e8bace9dea280b). Its header explicitly marks it as planned corrective source and not an applied/live migration. It adds UNRESOLVED to the inbox status domain for structurally valid source batches lacking one unambiguous, currently valid, verified jurisdiction crosswalk.
+
+A read-only staging ledger query found no 20261101 row; the actual staging status constraint also does not include UNRESOLVED. This state is a useful national platform requirement: do not convert ambiguous or unmapped authority/municipal identifiers into accepted/rejected MRV facts. Preserve the source as a design fixture only. Before implementing, define crosswalk authority, hierarchy, effective dates, source provenance, ambiguity behavior, retry/quarantine and operator adjudication. Do not add this fixture to the active migration catalogue or imply it was deployed.
