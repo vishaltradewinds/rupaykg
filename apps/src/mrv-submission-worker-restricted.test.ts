@@ -7,6 +7,21 @@ import type { MrvWorkerDatabaseApi } from "./mrv-worker-database-api.js";
 const JOB_ID = "00000000-0000-4000-8000-000000000010";
 const TOKEN = "00000000-0000-4000-8000-000000000001";
 
+test("restricted worker fails closed before claiming when disabled", async () => {
+  const previous = process.env.RUPAYKG_MRV_WORKER_ENABLED;
+  delete process.env.RUPAYKG_MRV_WORKER_ENABLED;
+  let claims = 0;
+  const database = { claim: async () => { claims += 1; return null; } } as unknown as MrvWorkerDatabaseApi;
+  try {
+    await assert.rejects(() => runMrvSubmissionWorkerOnce(database, "worker-a"), /MRV_WORKER_DISABLED/);
+    assert.equal(claims, 0);
+  } finally {
+    if (previous === undefined) delete process.env.RUPAYKG_MRV_WORKER_ENABLED;
+    else process.env.RUPAYKG_MRV_WORKER_ENABLED = previous;
+  }
+});
+
+
 function job(status: MrvSubmissionJob["status"], overrides: Partial<MrvSubmissionJob> = {}): MrvSubmissionJob {
   return {
     id: JOB_ID, idempotency_key: "a".repeat(64), payload_hash: "b".repeat(64),
