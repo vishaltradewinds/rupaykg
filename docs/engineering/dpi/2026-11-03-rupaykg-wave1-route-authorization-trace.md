@@ -1,0 +1,143 @@
+# RupayKg Wave 1 — route-to-actor and authorization trace (static mainline audit)
+
+**Date:** 2026-11-03  
+**Mainline inspection baseline:** a3fecc0abd2c46549a201058d3963afc0e3a73c9  
+**Status:** Engineering discovery / NOT an approved security assessment or API release contract.  
+**Method:** Static inspection of route declarations and route-handler source in mainline. Signals below indicate patterns found in the handler text; they are not proof that the pattern is correctly implemented, called on every branch, or enforced by PostgreSQL. No production calls or database writes were made.
+
+## 1. Executive findings
+
+1. Mainline has a broad API surface spanning operations, geography, evidence, MRV, credentials, settlement, compliance, offline sync and onboarding.
+2. Authentication is implemented inconsistently: some handlers call the shared authentication helper, some use module-local wrappers, and some route handlers delegate to helper functions. A static string match is not sufficient to prove route protection.
+3. Organisation context is not uniformly derived from a single verified signed tenant context. Some handlers use the active organisation; some accept an organisation identifier in request data or headers; others derive access from membership/geography or record ownership.
+4. Multiple handlers perform auth/permission reads and protected reads/writes through separate pool queries or separately acquired clients. A route-level transaction in one operation does not automatically make the earlier authentication/permission decision atomic with the protected mutation.
+5. Offline sync has stronger explicit idempotency/replay handling and transaction use than several synchronous routes, but device-to-organisation binding and every downstream operation still need adversarial two-tenant tests.
+6. Some read endpoints are permission-gated and others use scoped queries; the precise permission key and active-organisation behaviour must be tested route by route.
+7. The current inventory is not sufficient to generate a trustworthy OpenAPI security section. Route auth, request/response schema and error semantics must be traced to runtime validators and serializers before publication.
+
+## 2. Signal legend
+
+- **AUTH** — handler text calls authenticate or a module auth wrapper.
+- **MEM** — verified membership or organisation membership lookup is visible.
+- **PERM** — permission helper or explicit permission/role check is visible.
+- **ACTIVE** — active organisation or explicit organisation header context is visible.
+- **GEO** — geography scope check or geography ownership/scope field is visible.
+- **TX** — explicit transaction commands or a transaction-scoped client is visible.
+- **WRITE** — insert/update/delete statement is visible.
+- **AUDIT** — audit table/event reference is visible.
+- **IDEMP** — idempotency/replay logic is visible.
+- **EXT** — external authority/provider reference is visible.
+
+A missing signal means the simple static scan did not find the pattern; it is a review flag, not proof that no protection exists. A present signal is not proof of correctness.
+
+## 3. Route-by-route trace
+
+| Method and path | Module | Static signals | First review requirement |
+|---|---|---|---|
+| GET /health | server.ts | DB readiness | Public liveness/readiness response must not leak secrets or topology |
+| GET /api/v1/status | server.ts | None | Explicitly classify as public metadata; constrain fields |
+| GET /api/v1/overview | server.ts | AUTH, PERM, GEO, DB reads | Verify active-organisation default, multi-org aggregation and every count's scope |
+| GET /api/v1/regulatory/sources | server.ts | DB read | Confirm public/reference-data policy and source freshness |
+| GET /api/v1/geography/roots | server.ts | AUTH, MEM, GEO | Ensure fallback and recursive branches have equivalent scope |
+| GET /api/v1/geography/children/:parentId | server.ts | AUTH, MEM, GEO | Parent scope and child rows must be constrained in the same query/transaction |
+| POST /api/v1/operations/sync | server.ts | AUTH header, delegated intake, IDEMP | Confirm header org is bound to verified device and same authorised tenant |
+| POST /api/v1/resource-flows | server.ts | AUTH, MEM, PERM, GEO, WRITE | Body organisationId must be bound to verified membership and tenant context atomically |
+| POST /api/v1/activities/:activityId/measurements | server.ts | AUTH, MEM, PERM, GEO, WRITE | Activity ownership/scope and measurement insert must share tenant-bound client |
+| POST /api/v1/credentials | registry-routes.ts | MEM, PERM, WRITE, EXT | Prove issuer authority, evidence prerequisites, transaction and credential state machine |
+| POST /api/v1/credentials/:credentialId/activate | registry-routes.ts | MEM, PERM, WRITE | Prove issuer/owner authority and state transition under row lock |
+| POST /api/v1/credentials/:credentialId/transfer | registry-routes.ts | MEM, PERM, WRITE | Bilateral sender/receiver policy, acceptance, replay and ownership visibility |
+| POST /api/v1/credentials/:credentialId/retire | registry-routes.ts | MEM, PERM, WRITE | Prove authorised retirement and immutable lifecycle history |
+| POST /api/v1/settlements | registry-routes.ts | MEM, PERM, WRITE | Keep private until financial authority, reconciliation and regulatory boundary review |
+| POST /api/v1/settlements/:settlementId/authorize | registry-routes.ts | MEM, PERM, WRITE | Separation of duties, payer/payee rights, amount/currency and idempotency |
+| POST /api/v1/settlements/:settlementId/settle | registry-routes.ts | MEM, PERM, WRITE | External payment proof/reconciliation; no false settled state |
+| POST /api/v1/settlements/:settlementId/confirm | registry-routes.ts | MEM, PERM, WRITE | Confirm only against authoritative settlement evidence |
+| POST /api/v1/evidence-vault/upload | evidence-vault-routes.ts | PERM, TX, WRITE | Trace AUTH wrapper, activity tenant binding, size/content/hash and same-client transaction |
+| GET /api/v1/evidence-vault | evidence-vault-routes.ts | PERM | Trace actor and activity scope; ensure listing cannot enumerate another tenant |
+| GET /api/v1/evidence-vault/:evidenceId | evidence-vault-routes.ts | MEM, PERM, GEO | Same-client ownership check and artifact retrieval; no cross-tenant existence leak |
+| POST /api/v1/evidence-vault/:evidenceId/review | evidence-vault-routes.ts | MEM, PERM, GEO, TX, WRITE | Reviewer separation, same-client lock/write and immutable decision audit |
+| GET /api/v1/mrv/status | mrv-routes.ts | PERM, ACTIVE, EXT | Restrict provider diagnostics; ensure active org and permission semantics |
+| POST /api/v1/mrv/activities/:activityId/submit | mrv-routes.ts | MEM, PERM, WRITE, EXT, IDEMP | Same-client source/evidence snapshot, external submission and persisted outcome |
+| GET /api/v1/mrv/provenance/:activityId | mrv-routes.ts | MEM, PERM, EXT | Prove activity visibility and external provenance separation |
+| GET /api/v1/mrv/hedera/verify/:consensusTimestamp | mrv-routes.ts | MEM, PERM, EXT, WRITE | Read-only verification must not mutate local trust state without an explicit audited action |
+| GET /api/v1/workspaces/resource-flows | workspace-routes.ts | GEO | Verify AUTH and waste:read path, active org and every joined resource |
+| GET /api/v1/workspaces/mrv | workspace-routes.ts | GEO | Verify AUTH and evidence/MRV read scopes and each aggregate join |
+| POST /api/v1/evidence/:evidenceId/verification | workspace-routes.ts | AUTH, PERM, ACTIVE, TX, WRITE | Reviewer authority, evidence ownership, same-client transaction and immutable audit |
+| GET /api/v1/workspaces/compliance | workspace-routes.ts | GEO | Verify compliance permission and statutory/jurisdiction filtering |
+| GET /api/v1/workspaces/carbon | workspace-routes.ts | GEO | Verify MRV read permission, methodology version and activity scope |
+| GET /api/v1/workspaces/registry | workspace-routes.ts | GEO | Verify registry read permission and issuer/holder visibility |
+| GET /api/v1/workspaces/settlement | workspace-routes.ts | GEO | Verify settlement read permission and bilateral visibility |
+| GET /api/v1/workspaces/esg | workspace-routes.ts | None detected | P0 trace: prove auth, permission, organisation and geography scope |
+| GET /api/v1/epr/obligations | bwg-routes.ts | PERM, ACTIVE | Verify authenticated actor, active organisation and jurisdiction/source filtering |
+| GET /api/v1/cpcb-swm/workspaces | cpcb-swm-routes.ts | MEM, PERM, ACTIVE, GEO, AUDIT | Confirm read query and audit data share identical tenant scope |
+| POST /api/v1/cpcb-swm/workspaces | cpcb-swm-routes.ts | MEM, PERM, ACTIVE, GEO, TX, WRITE, AUDIT | Confirm tenant context, validation, audit and insert are one client transaction |
+| PATCH /api/v1/cpcb-swm/workspaces/:workspaceId | cpcb-swm-routes.ts | MEM, PERM, ACTIVE, GEO, TX, WRITE, AUDIT | Lock row, prevent tenant reassignment and atomically write history |
+| POST /api/v1/carbon/calculations | value-routes.ts | PERM, GEO, WRITE | Trace AUTH, tenant ownership, deterministic methodology and numeric precision |
+| POST /api/v1/epr/obligations/:obligationId/assess | value-routes.ts | MEM, PERM, GEO, WRITE | Verify source obligation, jurisdiction, actor and assessment transaction |
+| POST /api/v1/esg/reporting-periods/:periodId/metrics | value-routes.ts | MEM, PERM, GEO, WRITE | Verify period ownership, metric schema/unit and duplicate semantics |
+| GET /api/v1/workspaces/bwg | value-routes.ts | PERM, ACTIVE, GEO | Verify actor authentication and complete BWG scope |
+| POST /api/v1/bwg/profile | value-routes.ts | MEM, PERM, GEO, WRITE | Verify organisation profile owner and unique identity constraints |
+| POST /api/v1/bwg/reporting-periods | value-routes.ts | MEM, PERM, WRITE | Verify profile/organisation linkage and period uniqueness |
+| POST /api/v1/bwg/reporting-periods/:periodId/waste | value-routes.ts | MEM, PERM, WRITE | Verify reporting period owner and source evidence |
+| POST /api/v1/bwg/reporting-periods/:periodId/epr | value-routes.ts | MEM, PERM, WRITE | Verify obligation linkage, statutory scheme and source provenance |
+| POST /api/v1/bwg/reporting-periods/:periodId/esg | value-routes.ts | MEM, PERM, WRITE | Verify reporting period owner, metric schema and unit |
+| POST /api/v1/field-devices/enroll | sync-routes.ts | AUTH, MEM, PERM, TX, WRITE, AUDIT | Device owner, enrollment authority, key lifecycle and revocation |
+| POST /api/v1/field-devices/:deviceId/verify | sync-routes.ts | AUTH, PERM, TX, WRITE, AUDIT | Independent verifier, device owner and key attestation |
+| GET /api/v1/field-devices | sync-routes.ts | AUTH, MEM | Prove device list tenant scope and role-based visibility |
+| POST /api/v1/field-sync/envelopes | sync-routes.ts | AUTH, TX, WRITE, IDEMP | Bind device to identity + organisation; sequence collision and payload hash |
+| POST /api/v1/field-sync/envelopes/:envelopeId/apply | sync-routes.ts | AUTH, TX, WRITE | Apply only under same authenticated identity and authorised organisation context |
+| GET /api/v1/field-sync/conflicts | sync-routes.ts | AUTH | Current query is identity-scoped; verify organisation-level delegation requirements |
+| POST /api/v1/field-sync/conflicts/:conflictId/resolve | sync-routes.ts | AUTH, WRITE | Identity ownership check exists; add/verify reviewer role and organisation scope |
+| GET /api/v1/onboarding/review-queue | onboarding-hierarchy-routes.ts | GEO, role eligibility | Verify auth wrapper errors, authority levels, geography and data minimisation |
+| POST /api/v1/onboarding/applications/:applicationId/verify-legal | onboarding-hierarchy-routes.ts | TX, WRITE, platform role | Verify identity authentication and platform authority on same transaction; evidence sufficiency |
+| POST /api/v1/onboarding/applications/:applicationId/:action | onboarding-hierarchy-routes.ts | MEM, GEO, TX, WRITE | Verify authenticated reviewer, ordered approvals, conflict-of-interest and membership activation |
+
+## 4. Highest-priority route findings
+
+### P0 — resolve before publishing partner APIs
+
+- **ESG workspace:** static scan did not find an auth, permission, membership, active-org or geography signal. Inspect handler line-by-line and add explicit proof/tests before exposing it.
+- **Evidence upload/list:** permission signal exists but direct AUTH was not detected in the handler; trace module wrapper, activity ownership, reviewer and same-client behaviour.
+- **EPR obligations and BWG workspace:** active organisation and permission signals exist; verify actor authentication, scope derivation and statutory jurisdiction filters.
+- **Resource flow and measurement writes:** organisation/permission/geography checks appear, but separate pool/client calls can create TOCTOU risk. Move to one signed tenant-context client transaction before RLS enforcement.
+- **Onboarding review queue:** handler obtains authenticated context via a module wrapper, but queries pending applications before filtering which rows the actor can review. Ensure no data is returned for unauthorised applications and limit applicant PII to minimum necessary.
+- **Field sync apply:** checks envelope identity and state under transaction, but organisation/device authority must be proven for every operation applied from its payload.
+- **Overview:** aggregates several domains and permission classes; test no cross-organisation counts and no widening when a user has multiple memberships.
+
+### P1 — high-impact lifecycle / external boundaries
+
+- Credential transfer must model both issuer/holder parties and avoid single-tenant assumptions.
+- Settlement endpoints remain internal until payment rail/partner authority, regulated scope, reconciliation and independent security review are approved.
+- Guardian/Hedera/Mirror Node statuses must remain distinct; provider response alone is not local proof of a valid, persisted MRV state.
+- CPCB workspace changes require immutable audit/history and organisation scope in the same transaction.
+- Offline sync conflict resolution needs clear distinction between device owner, organisation reviewer and platform operator.
+
+## 5. Route-to-actor model to standardise
+
+Every route contract must declare:
+- **Principal:** human identity, organisation client, field device, platform service or external verifier.
+- **Actor organisation:** derived from verified membership and signed tenant context; never trusted from request body alone.
+- **Delegation:** grantor, delegate, scope, resource, purpose, issued/expiry time, revocation and proof.
+- **Permission:** stable permission key and action; no UI role name substituted for a permission.
+- **Geography:** jurisdiction/resource scope and authoritative source version.
+- **Resource owner:** tenant/organisation and, where bilateral, both counterparties.
+- **Transaction boundary:** one tenant-bound database client for context, permission, resource read, mutation and audit.
+- **Idempotency:** key, payload hash, replay response, collision behaviour and expiry/retention.
+- **Audit:** actor, organisation, purpose, target, decision, timestamp, correlation id and before/after reference.
+- **Response policy:** no cross-tenant existence disclosure; stable Problem error envelope.
+
+## 6. Required next technical actions
+
+1. Inspect route handlers and auth wrappers for all P0 findings, especially ESG workspace, evidence list/upload and onboarding queue.
+2. Build disposable PostgreSQL two-tenant tests that create same-shaped data in tenants A and B, then assert every read, write, list, aggregate, export, retry and sync path is isolated.
+3. Bind auth, permission, active tenant and protected SQL to one transaction-scoped client, with PostgreSQL role unable to bypass RLS.
+4. Test cross-tenant ID substitution for every resource path and parent/child mismatch.
+5. Add contract schemas only after actual route validators and response serializers are traced.
+6. Add an independent partner-client test suite using API contracts only, with no database credentials.
+7. Keep settlements and credential exchange disabled for external partners until separate assurance sign-off.
+
+## 7. Explicit non-claims
+
+- This is not a completed penetration test.
+- Static signals do not prove authentication, authorisation, RLS, transaction isolation or audit completeness.
+- No route is declared production-safe by this inventory.
+- This does not authorise global RLS enablement, production migration, external partner access, payment integration, VC issuance, or DPI qualification.
