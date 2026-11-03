@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type { Pool } from "pg";
-import { authenticate, bearerChallenge, hasOrganizationPermission, type AuthContext } from "./auth.js";
+import { authenticate, bearerChallenge, canActForOrganization, hasOrganizationPermission, type AuthContext } from "./auth.js";
 
 function bodyOf(request: { body: unknown }): Record<string, unknown> {
   return request.body && typeof request.body === "object" ? request.body as Record<string, unknown> : {};
@@ -24,15 +24,11 @@ async function authFor(request: Parameters<typeof authenticate>[0], reply: { cod
     return null;
   }
 }
-function canAct(auth: AuthContext, organizationId: string): boolean {
-  return auth.memberships.some((membership) => membership.organization_id === organizationId && membership.status === "VERIFIED");
-}
-
 export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool | null): Promise<void> {
   app.get("/api/v1/epr/returns", async (request, reply) => {
     const auth = await authFor(request, reply, pool); if (!auth || !pool) return;
     const organizationId = typeof request.headers["x-rupaykg-organization-id"] === "string" ? request.headers["x-rupaykg-organization-id"] : auth.activeOrganizationId;
-    if (!organizationId || !canAct(auth, organizationId)) return reply.code(403).send({ error: "Verified organization membership required", code: "ORG_FORBIDDEN" });
+    if (!organizationId || !canActForOrganization(auth, organizationId)) return reply.code(403).send({ error: "Verified organization membership required", code: "ORG_FORBIDDEN" });
     if (!await hasOrganizationPermission(pool, auth, organizationId, ["epr:read", "epr:manage", "reports:read"])) return reply.code(403).send({ error: "EPR return read permission required", code: "EPR_RETURN_READ_FORBIDDEN" });
     try {
       const rows = await pool.query(`select r.id,r.scheme_id,s.code as scheme_code,s.name as scheme_name,r.organization_id,r.obligation_id,r.period_start,r.period_end,r.return_type,r.reported_quantity,r.obligation_quantity,r.fulfilled_quantity,r.status,r.external_reference,r.evidence_id,r.verification_id,r.submitted_at,r.created_at from epr_returns r join epr_schemes s on s.id=r.scheme_id where r.organization_id=$1 order by r.period_end desc,r.created_at desc limit 100`, [organizationId]);
@@ -51,7 +47,7 @@ export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool |
     const returnType = requiredString(body, "returnType");
     const reportedQuantity = positiveNumber(body, "reportedQuantity");
     if (!organizationId || !schemeId || !obligationId || !periodStart || !periodEnd || !returnType || reportedQuantity === null) return reply.code(400).send({ error: "organizationId, schemeId, obligationId, periodStart, periodEnd, returnType and positive reportedQuantity are required", code: "INVALID_EPR_RETURN" });
-    if (!canAct(auth, organizationId)) return reply.code(403).send({ error: "Verified organization membership required", code: "ORG_FORBIDDEN" });
+    if (!canActForOrganization(auth, organizationId)) return reply.code(403).send({ error: "Verified organization membership required", code: "ORG_FORBIDDEN" });
     if (!await hasOrganizationPermission(pool, auth, organizationId, ["epr:manage"])) return reply.code(403).send({ error: "EPR management permission required", code: "EPR_RETURN_WRITE_FORBIDDEN" });
     if (Number.isNaN(Date.parse(periodStart)) || Number.isNaN(Date.parse(periodEnd)) || periodStart > periodEnd) return reply.code(400).send({ error: "Valid periodStart and periodEnd are required", code: "INVALID_PERIOD" });
     try {
@@ -79,7 +75,7 @@ export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool |
       const current = await client.query(`select r.*,eo.target_quantity,eo.fulfilled_quantity as obligation_fulfilled,eo.status as obligation_status,s.code as scheme_code from epr_returns r join epr_obligations eo on eo.id=r.obligation_id join epr_schemes s on s.id=r.scheme_id where r.id=$1 for update`, [returnId]);
       const row = current.rows[0];
       if (!row) { await client.query("ROLLBACK"); return reply.code(404).send({ error: "EPR return not found", code: "EPR_RETURN_NOT_FOUND" }); }
-      if (!canAct(auth, row.organization_id) || !await hasOrganizationPermission(pool, auth, row.organization_id, ["epr:manage"])) { await client.query("ROLLBACK"); return reply.code(403).send({ error: "EPR management permission required", code: "EPR_RETURN_WRITE_FORBIDDEN" }); }
+      if (!canActForOrganization(auth, row.organization_id) || !await hasOrganizationPermission(client, auth, row.organization_id, ["epr:manage"])) { await client.query("ROLLBACK"); return reply.code(403).send({ error: "EPR management permission required", code: "EPR_RETURN_WRITE_FORBIDDEN" }); }
       if (row.status !== "DRAFT" && row.status !== "REJECTED") { await client.query("ROLLBACK"); return reply.code(409).send({ error: `Return cannot be submitted from ${row.status}`, code: "INVALID_EPR_RETURN_STATE" }); }
       const obligation = await client.query(`select id,target_quantity,fulfilled_quantity,status from epr_obligations where id=$1 for update`, [row.obligation_id]);
       const obligationRow = obligation.rows[0];
@@ -112,7 +108,7 @@ export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool |
       const returnId = (request.params as { returnId: string }).returnId;
       const row = await client.query<{ organization_id: string; status: string; external_reference: string | null }>("select organization_id,status,external_reference from epr_returns where id=$1 for update", [returnId]);
       if (!row.rows[0]) { await client.query("ROLLBACK"); return reply.code(404).send({ error: "EPR return not found", code: "EPR_RETURN_NOT_FOUND" }); }
-      if (!canAct(auth, row.rows[0].organization_id) || !await hasOrganizationPermission(pool, auth, row.rows[0].organization_id, ["epr:manage"])) { await client.query("ROLLBACK"); return reply.code(403).send({ error: "EPR management permission required", code: "EPR_RETURN_WRITE_FORBIDDEN" }); }
+      if (!canActForOrganization(auth, row.rows[0].organization_id) || !await hasOrganizationPermission(client, auth, row.rows[0].organization_id, ["epr:manage"])) { await client.query("ROLLBACK"); return reply.code(403).send({ error: "EPR management permission required", code: "EPR_RETURN_WRITE_FORBIDDEN" }); }
       if (!["SUBMITTED","ACCEPTED","COMPLETED"].includes(row.rows[0].status)) { await client.query("ROLLBACK"); return reply.code(409).send({ error: "External reference can only be recorded after submission", code: "INVALID_EPR_RETURN_STATE" }); }
       if (row.rows[0].external_reference && row.rows[0].external_reference !== externalReference) { await client.query("ROLLBACK"); return reply.code(409).send({ error: "A different external reference is already recorded for this EPR return", code: "EXTERNAL_REFERENCE_IMMUTABLE" }); }
       const updated = await client.query("update epr_returns set external_reference=$2 where id=$1 returning *", [returnId, externalReference]);
