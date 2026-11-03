@@ -136,3 +136,134 @@ test("database signed-context verifier authenticates claims and fails closed", {
     await pool.end();
   }
 });
+
+
+test("PostgreSQL verifier trigger enforces tenant authority, independence, geography and approval immutability", { skip: !enabled }, async () => {
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
+  const client = await pool.connect();
+  const expectRejected = async (sql: string, values: unknown[] = []) => {
+    await client.query("SAVEPOINT verifier_negative_case");
+    try {
+      await assert.rejects(client.query(sql, values));
+    } finally {
+      await client.query("ROLLBACK TO SAVEPOINT verifier_negative_case");
+      await client.query("RELEASE SAVEPOINT verifier_negative_case");
+    }
+  };
+  try {
+    await client.query("BEGIN");
+
+    const orgA = (await client.query<{ id: string }>(
+      "insert into public.organizations(name,organization_type,status) values('Verifier test A','TEST','VERIFIED') returning id",
+    )).rows[0]!.id;
+    const orgB = (await client.query<{ id: string }>(
+      "insert into public.organizations(name,organization_type,status) values('Verifier test B','TEST','VERIFIED') returning id",
+    )).rows[0]!.id;
+
+    const makeIdentity = async (name: string, suspended = false) => (await client.query<{ id: string }>(
+      "insert into public.identities(display_name,status,suspended_at) values($1,'VERIFIED',$2) returning id",
+      [name, suspended ? new Date() : null],
+    )).rows[0]!.id;
+    const actor = await makeIdentity("Verifier test activity actor");
+    const validVerifier = await makeIdentity("Verifier test authorized verifier");
+    const roleOnlyVerifier = await makeIdentity("Verifier test role-name-only verifier");
+    const foreignVerifier = await makeIdentity("Verifier test foreign tenant verifier");
+    const suspendedVerifier = await makeIdentity("Verifier test suspended verifier", true);
+
+    const makeRole = async (organizationId: string, name: string, permissions: string[]) => (await client.query<{ id: string }>(
+      "insert into public.roles(organization_id,name,permissions) values($1,$2,$3::jsonb) returning id",
+      [organizationId, name, JSON.stringify(permissions)],
+    )).rows[0]!.id;
+    const roleA = await makeRole(orgA, "VERIFIER", ["VERIFY_EVIDENCE"]);
+    const roleNameOnly = await makeRole(orgA, "AUDITOR", []);
+    const roleB = await makeRole(orgB, "VERIFIER", ["VERIFY_EVIDENCE"]);
+
+    const membership = async (identityId: string, organizationId: string, roleId: string) => {
+      await client.query(
+        "insert into public.organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED')",
+        [identityId, organizationId, roleId],
+      );
+    };
+    await membership(validVerifier, orgA, roleA);
+    await membership(roleOnlyVerifier, orgA, roleNameOnly);
+    await membership(foreignVerifier, orgB, roleB);
+    await membership(suspendedVerifier, orgA, roleA);
+    await membership(actor, orgA, roleA);
+
+    const geographyId = (await client.query<{ id: string }>(
+      "insert into public.geography(kind,name) values('DISTRICT','Verifier test district') returning id",
+    )).rows[0]!.id;
+    const activityId = (await client.query<{ id: string }>(
+      "insert into public.activities(organization_id,actor_identity_id,geography_id,activity_type) values($1,$2,$3,'VERIFIER_TEST') returning id",
+      [orgA, actor, geographyId],
+    )).rows[0]!.id;
+    const evidenceId = (await client.query<{ id: string }>(
+      "insert into public.evidence(activity_id,evidence_type,captured_at) values($1,'VERIFIER_TEST',now()) returning id",
+      [activityId],
+    )).rows[0]!.id;
+
+    const insertVerification = (verifierId: string, decision: "APPROVED" | "REJECTED") =>
+      client.query(
+        "insert into public.verifications(evidence_id,activity_id,verifier_identity_id,decision,scope) values($1,$2,$3,$4,'TEST')",
+        [evidenceId, activityId, verifierId, decision],
+      );
+
+    // Both decisions require explicit authority in the subject organization's tenant.
+    await expectRejected(
+      "insert into public.verifications(evidence_id,activity_id,verifier_identity_id,decision,scope) values($1,$2,$3,'REJECTED','TEST')",
+      [evidenceId, activityId, roleOnlyVerifier],
+    );
+    await expectRejected(
+      "insert into public.verifications(evidence_id,activity_id,verifier_identity_id,decision,scope) values($1,$2,$3,'REJECTED','TEST')",
+      [evidenceId, activityId, foreignVerifier],
+    );
+    await expectRejected(
+      "insert into public.verifications(evidence_id,activity_id,verifier_identity_id,decision,scope) values($1,$2,$3,'REJECTED','TEST')",
+      [evidenceId, activityId, suspendedVerifier],
+    );
+    await expectRejected(
+      "insert into public.verifications(evidence_id,activity_id,verifier_identity_id,decision,scope) values($1,$2,$3,'REJECTED','TEST')",
+      [evidenceId, activityId, actor],
+    );
+
+    // A valid verifier may reject, but cannot approve until the subject organization
+    // has a verified geography scope covering the activity.
+    await insertVerification(validVerifier, "REJECTED");
+    await expectRejected(
+      "insert into public.verifications(evidence_id,activity_id,verifier_identity_id,decision,scope) values($1,$2,$3,'APPROVED','TEST')",
+      [evidenceId, activityId, validVerifier],
+    );
+    await client.query(
+      "insert into public.organization_geography_scopes(organization_id,geography_id,status) values($1,$2,'VERIFIED')",
+      [orgA, geographyId],
+    );
+    const approved = await client.query<{ id: string }>(
+      "insert into public.verifications(evidence_id,activity_id,verifier_identity_id,decision,scope) values($1,$2,$3,'APPROVED','TEST') returning id",
+      [evidenceId, activityId, validVerifier],
+    );
+    await expectRejected(
+      "update public.verifications set rationale='attempted rewrite' where id=$1",
+      [approved.rows[0]!.id],
+    );
+
+    // Cyclic hierarchy data must terminate and fail closed when no assigned root
+    // covers the requested geography.
+    const cycleA = (await client.query<{ id: string }>(
+      "insert into public.geography(kind,name) values('DISTRICT','Verifier cycle A') returning id",
+    )).rows[0]!.id;
+    const cycleB = (await client.query<{ id: string }>(
+      "insert into public.geography(kind,name) values('DISTRICT','Verifier cycle B') returning id",
+    )).rows[0]!.id;
+    await client.query("update public.geography set parent_id=$2 where id=$1", [cycleA, cycleB]);
+    await client.query("update public.geography set parent_id=$2 where id=$1", [cycleB, cycleA]);
+    const cycleResult = await client.query<{ allowed: boolean }>(
+      "select public.organization_has_geography_scope($1,$2) as allowed",
+      [orgB, cycleA],
+    );
+    assert.equal(cycleResult.rows[0]?.allowed, false, "cyclic hierarchy without a verified assigned root must fail closed");
+  } finally {
+    await client.query("ROLLBACK").catch(() => undefined);
+    client.release();
+    await pool.end();
+  }
+});
