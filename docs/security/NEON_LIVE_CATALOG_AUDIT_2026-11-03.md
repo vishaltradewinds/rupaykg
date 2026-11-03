@@ -131,3 +131,43 @@ Before accepting another rehearsal or production migration, add a forward-compat
 Do not change or rewrite existing applied migration rows in place. A new forward-only migration/runner upgrade and a separately reviewed reconciliation procedure are required. Do not apply this runner change to live main until it has been tested on clean-install, legacy-upgrade, checksum-mismatch and rollback fixtures.
 
 The runner source review does not explain the missing objects and does not establish which migration bytes, if any, were applied on the rehearsal branch.
+
+
+## Checksum runner implementation and branch-ledger evidence — 2026-11-03
+
+### Repository changes
+
+The migration runner has been upgraded on this draft PR to:
+- add nullable `schema_migrations.checksum_sha256` for forward compatibility;
+- calculate SHA-256 over the exact migration file bytes and reject invalid UTF-8;
+- write the checksum in the same transaction as the migration SQL and ledger row;
+- acquire a PostgreSQL advisory lock for the runner;
+- fail closed on legacy NULL checksums, malformed hashes, filename drift, checksum drift and ledger rows with no repository file;
+- re-check critical MRV catalog postconditions even when a migration is already recorded;
+- check the durable queue's tables, trigger functions, triggers, constraints and required indexes, plus the final claim-index key order, validity and status predicate;
+- emit a JSON applied/verified/pending report or a JSON BLOCKED report.
+
+New unit tests cover exact-byte/newline hashing, successful matching, legacy NULL rejection, changed bytes under the same filename, filename drift, orphaned ledger rows and malformed checksums. The static migration validator now requires the checksum helper/tests and both existing/new migration postcondition paths.
+
+### Actual branch ledger schema
+
+A follow-up read-only query checked the columns and row counts on all four branches:
+
+| Branch | Ledger rows | First applied | Last applied | Checksum column |
+|---|---:|---|---|---|
+| live main | 92 | 2026-10-17 | 2026-10-27 | Absent |
+| verifier rehearsal | 92 | 2026-10-17 | 2026-10-27 | Absent |
+| unresolved migration rehearsal | 95 | 2026-10-17 | 2026-10-20 | Absent |
+| worker migration rehearsal | 115 | 2026-10-17 | 2026-10-31 | Absent |
+
+All four ledgers use only `version`, `filename` and `applied_at`. They contain no historical checksums. The worker rehearsal's 115 rows and later cutoff are therefore not proof of successful execution of the queue migration; the catalog still lacks the queue tables, event table and worker API schema.
+
+### Deployment consequence
+
+The new runner will intentionally stop on the first historical row with a NULL checksum and report `LEGACY_UNVERIFIED`. It will not silently backfill hashes from current Git files. The existing live main branch and all three inspected rehearsal branches are therefore **not eligible to run the new migration runner unattended**.
+
+A controlled recovery must first establish migration provenance from the exact deployed migration artifacts and execution evidence. Where historical bytes cannot be established, retain an explicit legacy-unverified record and use a separately reviewed forward-only baseline/reconciliation procedure. Never manufacture historical checksums from current repository files. The runner change is source code only and has not been executed against any Neon branch.
+
+### Verification boundary
+
+No local TypeScript/Node test execution was available in this environment, and GitHub Actions has not returned a run for the latest PR head. The implementation is committed but **not yet CI-validated**. No Neon branch was modified.
