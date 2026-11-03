@@ -94,3 +94,29 @@ test("Guardian idempotency key changes when the immutable source snapshot change
     else process.env.GUARDIAN_MRV_SUBMIT_URL = previousUrl;
   }
 });
+
+test("Guardian receives the complete measurements and immutable snapshot digest", async () => {
+  const previousUrl = process.env.GUARDIAN_MRV_SUBMIT_URL;
+  const previousFetch = globalThis.fetch;
+  let sent: Record<string, unknown> | null = null;
+  process.env.GUARDIAN_MRV_SUBMIT_URL = "https://guardian.test/mrv";
+  globalThis.fetch = async (_input, init) => {
+    sent = JSON.parse(String(init?.body)) as Record<string, unknown>;
+    return new Response(JSON.stringify({ status: "VERIFIED", executionId: "guardian-execution-snapshot" }), {
+      status: 200, headers: { "content-type": "application/json" },
+    });
+  };
+  try {
+    await executeGuardianMrv({
+      ...request,
+      measurements: [{ id: "measurement-1", value: "12.5", unit: "kg" }],
+      metadata: { sourceSnapshotId: "snapshot-1", sourceSnapshotVersion: 1, sourceSnapshotDigest: "c".repeat(64) },
+    });
+    assert.deepEqual(sent?.measurements, [{ id: "measurement-1", value: "12.5", unit: "kg" }]);
+    assert.equal((sent?.metadata as Record<string, unknown>).sourceSnapshotDigest, "c".repeat(64));
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousUrl === undefined) delete process.env.GUARDIAN_MRV_SUBMIT_URL;
+    else process.env.GUARDIAN_MRV_SUBMIT_URL = previousUrl;
+  }
+});
