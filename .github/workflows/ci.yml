@@ -35,13 +35,21 @@ jobs:
         with:
           node-version: '22.x'
           package-manager-cache: false
-      - run: npm install --no-audit --no-fund
+      - run: npm ci --no-audit --no-fund
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=high
       - run: npm run validate:migrations
       - run: npm run migrate -w @rupaykg/api
       - run: npm run typecheck
       - run: npm run build
+      - name: Dual-ledger migration compatibility (disposable PostgreSQL schemas)
+        env:
+          RUPAYKG_RUN_DUAL_LEDGER_TESTS: "1"
+        run: node scripts/test-dual-ledger-compatibility.mjs
+      - name: Actual migration runner against dual-ledger fixtures
+        env:
+          RUPAYKG_RUN_DUAL_LEDGER_TESTS: "1"
+        run: node scripts/test-actual-migration-runner.mjs
       - name: Browser smoke test production web build
         shell: bash
         run: |

@@ -3,14 +3,26 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
+import { assertNoOrphanedMigrationRecords } from "./migration-ledger.js";
+import { readProductionConfig } from "./production-config.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) throw new Error("DATABASE_URL is required");
 
+const productionConfig = process.env.NODE_ENV === "production" ? readProductionConfig() : null;
 const pool = new Pool({
-  connectionString: databaseUrl,
+  connectionString: productionConfig?.databaseUrl ?? databaseUrl,
   max: 1,
-  ssl: process.env.DATABASE_SSL === "false" ? undefined : { rejectUnauthorized: false },
+  ...(productionConfig?.databaseSsl === "false" || (!productionConfig && process.env.DATABASE_SSL === "false")
+    ? {}
+    : {
+        ssl: {
+          rejectUnauthorized: productionConfig !== null || process.env.DATABASE_SSL === "require",
+          ...((productionConfig?.databaseCaCert || process.env.DATABASE_CA_CERT)
+            ? { ca: productionConfig?.databaseCaCert || process.env.DATABASE_CA_CERT }
+            : {}),
+        },
+      }),
 });
 
 try {
@@ -26,11 +38,22 @@ try {
   // container (/app/apps/dist/src). Never assume a single filesystem root.
   const here = path.dirname(fileURLToPath(import.meta.url));
   const candidates = [path.resolve(here, "../../migrations"), path.resolve(here, "../../../migrations")];
-  const migrationDir = candidates.find((candidate) => existsSync(candidate));
-  if (!migrationDir) throw new Error(`Migration directory not found. Checked: ${candidates.join(", ")}`);
+  // Test-only override is gated by the acceptance-test flag.
+  const testMigrationDir = process.env.RUPAYKG_RUN_DUAL_LEDGER_TESTS === "1"
+    ? process.env.RUPAYKG_TEST_MIGRATIONS_DIR
+    : undefined;
+  const migrationDir = testMigrationDir
+    ? path.resolve(testMigrationDir)
+    : candidates.find((candidate) => existsSync(candidate));
+  if (!migrationDir || !existsSync(migrationDir)) throw new Error(`Migration directory not found. Checked: ${[testMigrationDir, ...candidates].filter(Boolean).join(", ")}`);
   const files = (await readdir(migrationDir))
     .filter((name) => /^\d+_.+\.sql$/.test(name))
     .sort();
+
+  const recorded = await pool.query<{ version: string; filename: string }>(
+    "select version, filename from schema_migrations order by version",
+  );
+  assertNoOrphanedMigrationRecords(recorded.rows, files);
 
   for (const filename of files) {
     const version = filename.split("_", 1)[0];
