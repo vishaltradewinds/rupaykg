@@ -1,0 +1,156 @@
+-- Narrow, signed-context-bound permission resolvers for restricted application roles.
+-- The application role receives EXECUTE only; it never receives broad SELECT on memberships or roles.
+-- The NOLOGIN auth owner has narrowly granted SELECT and does not bypass RLS.
+
+DO $preflight$
+DECLARE owner_role record;
+BEGIN
+  SELECT rolcanlogin, rolsuper, rolbypassrls, rolcreatedb, rolcreaterole,
+         rolinherit, rolreplication
+    INTO owner_role
+    FROM pg_catalog.pg_roles
+   WHERE rolname = 'rupaykg_auth_owner';
+  IF NOT FOUND OR owner_role.rolcanlogin OR owner_role.rolsuper
+     OR owner_role.rolbypassrls OR owner_role.rolcreatedb
+     OR owner_role.rolcreaterole OR owner_role.rolinherit
+     OR owner_role.rolreplication THEN
+    RAISE EXCEPTION 'AUTH_PERMISSION_OWNER_INVALID: rupaykg_auth_owner must be a restricted NOLOGIN role';
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname='rupaykg_app_runtime')
+     OR NOT EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname='rupaykg_auth_runtime') THEN
+    RAISE EXCEPTION 'AUTH_PERMISSION_RUNTIME_ROLE_MISSING';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+      FROM pg_catalog.pg_proc p
+      JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace
+      JOIN pg_catalog.pg_roles r ON r.oid=p.proowner
+     WHERE n.nspname='app_security'
+       AND p.proname='current_request_context_claims'
+       AND p.pronargs=0
+       AND p.prosecdef
+       AND p.proconfig @> ARRAY['search_path=pg_catalog, app_security']
+       AND r.rolname='rupaykg_security_definer'
+  ) THEN
+    RAISE EXCEPTION 'AUTH_PERMISSION_SIGNED_CONTEXT_VERIFIER_INVALID';
+  END IF;
+END
+$preflight$;
+
+-- Permit the auth owner to call the signed verifier; the verifier itself retains
+-- ownership of the signing key table and does not disclose the key material.
+SET LOCAL ROLE rupaykg_security_definer;
+GRANT USAGE ON SCHEMA app_security TO rupaykg_auth_owner;
+GRANT EXECUTE ON FUNCTION app_security.current_request_context_claims() TO rupaykg_auth_owner;
+RESET ROLE;
+
+SET LOCAL ROLE rupaykg_auth_owner;
+
+CREATE OR REPLACE FUNCTION auth_private.has_organization_permission(
+  p_identity_id uuid,
+  p_organization_id uuid,
+  p_permissions text[]
+) RETURNS boolean
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = pg_catalog, pg_temp
+AS $function$
+DECLARE
+  signed_claims text[];
+BEGIN
+  IF p_identity_id IS NULL OR p_organization_id IS NULL
+     OR coalesce(cardinality(p_permissions),0)=0 THEN
+    RETURN false;
+  END IF;
+
+  signed_claims := app_security.current_request_context_claims();
+  IF signed_claims IS NULL OR cardinality(signed_claims) <> 2
+     OR signed_claims[1] IS DISTINCT FROM p_identity_id::text
+     OR signed_claims[2] IS DISTINCT FROM p_organization_id::text THEN
+    RETURN false;
+  END IF;
+
+  RETURN EXISTS (
+    SELECT 1
+      FROM public.identities identity
+      JOIN public.organization_memberships membership
+        ON membership.identity_id=identity.id
+       AND membership.organization_id=p_organization_id
+       AND membership.status='VERIFIED'
+      JOIN public.roles role
+        ON role.id=membership.role_id
+       AND role.organization_id=membership.organization_id
+     WHERE identity.id=p_identity_id
+       AND identity.status='VERIFIED'
+       AND identity.suspended_at IS NULL
+       AND EXISTS (
+         SELECT 1
+           FROM pg_catalog.jsonb_array_elements_text(role.permissions) permission(value)
+          WHERE permission.value = ANY(p_permissions)
+       )
+  );
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION auth_private.can_verify_evidence(
+  p_identity_id uuid,
+  p_evidence_id uuid
+) RETURNS boolean
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = pg_catalog, pg_temp
+AS $function$
+DECLARE
+  signed_claims text[];
+  subject_activity_id uuid;
+  subject_organization_id uuid;
+BEGIN
+  IF p_identity_id IS NULL OR p_evidence_id IS NULL THEN
+    RETURN false;
+  END IF;
+
+  signed_claims := app_security.current_request_context_claims();
+  IF signed_claims IS NULL OR cardinality(signed_claims) <> 2
+     OR signed_claims[1] IS DISTINCT FROM p_identity_id::text THEN
+    RETURN false;
+  END IF;
+
+  SELECT activity.id, activity.organization_id
+    INTO subject_activity_id, subject_organization_id
+    FROM public.evidence evidence
+    JOIN public.activities activity ON activity.id=evidence.activity_id
+   WHERE evidence.id=p_evidence_id;
+
+  IF subject_activity_id IS NULL
+     OR signed_claims[2] IS DISTINCT FROM subject_organization_id::text THEN
+    RETURN false;
+  END IF;
+
+  RETURN public.has_verification_permission_for_activity(
+    p_identity_id, subject_activity_id
+  );
+END;
+$function$;
+
+ALTER FUNCTION auth_private.has_organization_permission(uuid,uuid,text[]) OWNER TO rupaykg_auth_owner;
+ALTER FUNCTION auth_private.can_verify_evidence(uuid,uuid) OWNER TO rupaykg_auth_owner;
+ALTER FUNCTION auth_private.has_organization_permission(uuid,uuid,text[]) SET search_path = pg_catalog, pg_temp;
+ALTER FUNCTION auth_private.can_verify_evidence(uuid,uuid) SET search_path = pg_catalog, pg_temp;
+
+REVOKE ALL ON FUNCTION auth_private.has_organization_permission(uuid,uuid,text[]) FROM PUBLIC;
+REVOKE ALL ON FUNCTION auth_private.can_verify_evidence(uuid,uuid) FROM PUBLIC;
+GRANT USAGE ON SCHEMA auth_private TO rupaykg_app_runtime;
+GRANT USAGE ON SCHEMA auth_private TO rupaykg_auth_runtime;
+GRANT EXECUTE ON FUNCTION auth_private.has_organization_permission(uuid,uuid,text[]) TO rupaykg_app_runtime, rupaykg_auth_runtime;
+GRANT EXECUTE ON FUNCTION auth_private.can_verify_evidence(uuid,uuid) TO rupaykg_app_runtime, rupaykg_auth_runtime;
+
+RESET ROLE;
+
+COMMENT ON FUNCTION auth_private.has_organization_permission(uuid,uuid,text[]) IS
+  'Returns only a boolean; requires a valid signed request context whose actor and organization exactly match the arguments. Exposes no membership or role rows to the app runtime.';
+COMMENT ON FUNCTION auth_private.can_verify_evidence(uuid,uuid) IS
+  'Evidence verifier authorization bound to the signed request actor and the evidence activity organization.';
