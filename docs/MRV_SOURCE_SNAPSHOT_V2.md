@@ -17,6 +17,10 @@ The application captures the following in one PostgreSQL \`REPEATABLE READ\` tra
 
 The snapshot JSON uses schema \`rupaykg:mrv-source-snapshot:v1\`; its canonical, key-order-independent SHA-256 digest is stored with the immutable snapshot row.
 
+## Canonical digest and database enforcement
+
+PostgreSQL `jsonb::text` is the canonical serialization contract. `mrv_source_snapshot_digest(jsonb)` computes SHA-256 over the UTF-8 bytes of that representation. The application requests the digest from PostgreSQL, and a `BEFORE INSERT` trigger independently recomputes it. The same trigger binds the `methodology_code` column to `source_payload.methodologyCode`. The disposable PostgreSQL integration test includes a fixed golden digest vector. Database triggers reject UPDATE, DELETE and TRUNCATE of snapshot rows.
+
 ## Version and correction rules
 
 - First capture creates version 1.
