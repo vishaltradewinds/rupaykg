@@ -112,3 +112,23 @@ $function$;
 -- The legacy trigger checks membership globally and role names. The unified
 -- guard above now covers all decisions, including independence and tenant scope.
 DROP TRIGGER IF EXISTS verification_independence_guard ON public.verifications;
+
+
+-- Approved decisions are append-only: prevent deletion as well as mutation.
+CREATE OR REPLACE FUNCTION public.prevent_approved_verification_delete()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = pg_catalog, pg_temp
+AS $function$
+BEGIN
+  IF OLD.decision = 'APPROVED' THEN
+    RAISE EXCEPTION 'approved verification is immutable; create a superseding record';
+  END IF;
+  RETURN OLD;
+END;
+$function$;
+
+DROP TRIGGER IF EXISTS approved_verification_delete_guard ON public.verifications;
+CREATE TRIGGER approved_verification_delete_guard
+  BEFORE DELETE ON public.verifications
+  FOR EACH ROW EXECUTE FUNCTION public.prevent_approved_verification_delete();
