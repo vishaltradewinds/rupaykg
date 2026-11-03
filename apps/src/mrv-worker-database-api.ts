@@ -182,7 +182,9 @@ export class MrvWorkerDatabaseApi {
   async persistHedera(jobId: string, token: string, network: "testnet" | "previewnet" | "mainnet", topicId: string, txId: string): Promise<boolean> {
     assertUuid(jobId, "jobId");
     assertUuid(token, "leaseToken");
-    if (!["testnet", "previewnet", "mainnet"].includes(network) || !topicId.trim() || !txId.trim()) throw new TypeError("MRV_WORKER_INVALID_HEDERA_BINDING");
+    if (typeof network !== "string" || !["testnet", "previewnet", "mainnet"].includes(network)
+        || typeof topicId !== "string" || !topicId.trim()
+        || typeof txId !== "string" || !txId.trim()) throw new TypeError("MRV_WORKER_INVALID_HEDERA_BINDING");
     const q = await this.pool.query<ApiResult<unknown>>("select mrv_worker_api.persist_hedera_binding($1::uuid,$2::uuid,$3,$4,$5) as result", [jobId, token, network, topicId, txId]);
     return booleanResult(one(q.rows, "persist_hedera_binding"), "persist_hedera_binding");
   }
@@ -206,7 +208,8 @@ export class MrvWorkerDatabaseApi {
     assertUuid(jobId, "jobId");
     assertUuid(token, "leaseToken");
     if (!JOB_STATUSES.has(status)) throw new TypeError("MRV_WORKER_INVALID_NEXT_STATUS");
-    if (!patch || typeof patch !== "object" || Array.isArray(patch) || Object.keys(patch).some(key => !PATCH_KEYS.has(key as keyof MrvJobStagePatch))) {
+    if (!patch || typeof patch !== "object" || Object.getPrototypeOf(patch) !== Object.prototype
+        || Object.keys(patch).some(key => !PATCH_KEYS.has(key as keyof MrvJobStagePatch))) {
       throw new TypeError("MRV_WORKER_INVALID_STAGE_PATCH");
     }
     const q = await this.pool.query<ApiResult<unknown>>("select mrv_worker_api.advance_job($1::uuid,$2::uuid,$3,$4::jsonb) as result", [jobId, token, status, JSON.stringify(patch)]);
@@ -216,7 +219,9 @@ export class MrvWorkerDatabaseApi {
   async release(jobId: string, token: string, nextAttemptAt: Date, code: string, detail: string): Promise<boolean> {
     assertUuid(jobId, "jobId");
     assertUuid(token, "leaseToken");
-    if (!Number.isFinite(nextAttemptAt.getTime()) || !code.trim() || code.length > 128 || detail.length > 2000) throw new TypeError("MRV_WORKER_INVALID_RELEASE_ARGUMENT");
+    if (!(nextAttemptAt instanceof Date) || !Number.isFinite(nextAttemptAt.getTime())
+        || typeof code !== "string" || !code.trim() || code.length > 128
+        || typeof detail !== "string" || detail.length > 2000) throw new TypeError("MRV_WORKER_INVALID_RELEASE_ARGUMENT");
     const q = await this.pool.query<ApiResult<unknown>>("select mrv_worker_api.release_job($1::uuid,$2::uuid,$3::timestamptz,$4,$5) as result", [jobId, token, nextAttemptAt, code, detail]);
     return booleanResult(one(q.rows, "release_job"), "release_job");
   }
