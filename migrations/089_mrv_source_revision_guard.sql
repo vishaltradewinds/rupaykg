@@ -45,7 +45,7 @@ before update on activities
 for each row execute function guard_activity_mrv_source_revision();
 
 create or replace function bump_activity_mrv_source_revision()
-returns trigger language plpgsql security definer set search_path = pg_catalog, public as $
+returns trigger language plpgsql security definer set search_path = pg_catalog, public as $$
 declare
   old_activity_id uuid;
   new_activity_id uuid;
@@ -59,7 +59,7 @@ begin
     update public.activities set mrv_source_revision=mrv_source_revision+1 where id=old_activity_id;
   end if;
   if new_activity_id is not null then
-    update activities set mrv_source_revision=mrv_source_revision+1 where id=new_activity_id;
+    update public.activities set mrv_source_revision=mrv_source_revision+1 where id=new_activity_id;
   end if;
   return null;
 end;
