@@ -1,0 +1,165 @@
+import { createHash } from "node:crypto";
+
+export const ODK_QUARANTINE_STATE = "QUARANTINED" as const;
+const MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024;
+const ALLOWED_MEDIA_TYPES = new Set(["image/jpeg", "image/png", "application/pdf", "text/csv", "text/plain", "application/json"]);
+const CONTROL_CHARS = /[\u0000-\u001f\u007f]/;
+
+export interface OdkApprovedSourceConfig {
+  centralOrigin: string;
+  projectId: number;
+  xmlFormId: string;
+  formVersions: readonly string[];
+  organizationId: string;
+  siteId: string;
+  activityId: string | null;
+}
+
+export interface OdkSubmissionMetadata {
+  instanceId: string;
+  instanceIdOriginal?: string;
+  formVersion?: string;
+  submitterId?: string | number;
+  submitterType?: string;
+  deviceId?: string;
+  userAgent?: string;
+  createdAt?: string;
+  updatedAt?: string | null;
+  deletedAt?: string | null;
+  reviewState?: string;
+}
+
+export interface OdkAttachmentMetadata {
+  filename: string;
+  contentType: string;
+}
+
+export interface OdkQuarantinedAttachment {
+  filename: string;
+  mediaType: string;
+  sizeBytes: number;
+  sha256: string;
+}
+
+export interface OdkQuarantineEnvelope {
+  sourceSystem: "ODK_CENTRAL";
+  sourceKey: string;
+  sourceMetadataSha256: string;
+  centralOrigin: string;
+  projectId: number;
+  xmlFormId: string;
+  formVersion: string;
+  originalInstanceId: string;
+  versionInstanceId: string;
+  mappedOrganizationId: string;
+  mappedSiteId: string;
+  mappedActivityId: string | null;
+  centralReviewState: string | null;
+  deletedAt: string | null;
+  attachments: OdkQuarantinedAttachment[];
+  rupayKgState: typeof ODK_QUARANTINE_STATE;
+}
+
+export type OdkNormalizeResult =
+  | { ok: true; value: OdkQuarantineEnvelope }
+  | { ok: false; code: string };
+
+function normalizeOrigin(value: string): string | null {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:" || url.username || url.password || url.pathname !== "/" || url.search || url.hash) return null;
+    return url.origin.toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
+function validIdentifier(value: string): boolean {
+  return value.length > 0 && value.length <= 200 && !CONTROL_CHARS.test(value) && !value.includes("/") && !value.includes("\\");
+}
+
+function validIsoDate(value: string | undefined | null): boolean {
+  return value == null || (Number.isFinite(Date.parse(value)) && /^\d{4}-\d{2}-\d{2}T/.test(value));
+}
+
+function sha256(bytes: Buffer): string {
+  return createHash("sha256").update(bytes).digest("hex");
+}
+
+function canonicalJson(value: unknown): string {
+  if (value === null || typeof value !== "object") return JSON.stringify(value);
+  if (Array.isArray(value)) return "[" + value.map(canonicalJson).join(",") + "]";
+  const object = value as Record<string, unknown>;
+  return "{" + Object.keys(object).sort().map(key => JSON.stringify(key) + ":" + canonicalJson(object[key])).join(",") + "}";
+}
+
+export function normalizeOdkSubmission(
+  config: OdkApprovedSourceConfig,
+  submission: OdkSubmissionMetadata,
+  attachments: readonly { metadata: OdkAttachmentMetadata; bytes: Buffer }[]
+): OdkNormalizeResult {
+  const origin = normalizeOrigin(config.centralOrigin);
+  if (!origin || !Number.isSafeInteger(config.projectId) || config.projectId <= 0) return { ok: false, code: "ODK_CONFIG_INVALID" };
+  if (!validIdentifier(config.xmlFormId) || !config.organizationId || !config.siteId) return { ok: false, code: "ODK_MAPPING_INVALID" };
+  if (!validIdentifier(submission.instanceId)) return { ok: false, code: "ODK_INSTANCE_ID_INVALID" };
+  const originalId = submission.instanceIdOriginal ?? submission.instanceId;
+  if (!validIdentifier(originalId)) return { ok: false, code: "ODK_ORIGINAL_INSTANCE_ID_INVALID" };
+  if (!submission.formVersion || !config.formVersions.includes(submission.formVersion)) return { ok: false, code: "ODK_FORM_VERSION_NOT_ALLOWED" };
+  if (!validIsoDate(submission.createdAt) || !validIsoDate(submission.updatedAt) || !validIsoDate(submission.deletedAt)) return { ok: false, code: "ODK_TIMESTAMP_INVALID" };
+  if (attachments.length > 100) return { ok: false, code: "ODK_ATTACHMENT_COUNT_LIMIT" };
+
+  const normalizedAttachments: OdkQuarantinedAttachment[] = [];
+  for (const item of attachments) {
+    const { filename, contentType } = item.metadata;
+    if (!filename || filename.length > 180 || CONTROL_CHARS.test(filename) || filename === "." || filename === ".." || filename.includes("/") || filename.includes("\\") || filename !== filename.trim()) {
+      return { ok: false, code: "ODK_ATTACHMENT_FILENAME_INVALID" };
+    }
+    const mediaType = contentType.toLowerCase().split(";")[0].trim();
+    if (!ALLOWED_MEDIA_TYPES.has(mediaType)) return { ok: false, code: "ODK_ATTACHMENT_MEDIA_TYPE_UNSUPPORTED" };
+    if (!Buffer.isBuffer(item.bytes) || item.bytes.length === 0 || item.bytes.length > MAX_ATTACHMENT_BYTES) return { ok: false, code: "ODK_ATTACHMENT_SIZE_INVALID" };
+    if (mediaType === "image/jpeg" && !(item.bytes[0] === 0xff && item.bytes[1] === 0xd8 && item.bytes[2] === 0xff)) return { ok: false, code: "ODK_ATTACHMENT_SIGNATURE_MISMATCH" };
+    if (mediaType === "image/png" && !item.bytes.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10]))) return { ok: false, code: "ODK_ATTACHMENT_SIGNATURE_MISMATCH" };
+    if (mediaType === "application/pdf" && item.bytes.subarray(0, 5).toString("ascii") !== "%PDF-") return { ok: false, code: "ODK_ATTACHMENT_SIGNATURE_MISMATCH" };
+    if ((mediaType === "text/plain" || mediaType === "text/csv") && item.bytes.includes(0)) return { ok: false, code: "ODK_ATTACHMENT_SIGNATURE_MISMATCH" };
+    if (mediaType === "application/json") {
+      try { JSON.parse(item.bytes.toString("utf8")); } catch { return { ok: false, code: "ODK_ATTACHMENT_SIGNATURE_MISMATCH" }; }
+    }
+    normalizedAttachments.push({ filename, mediaType, sizeBytes: item.bytes.length, sha256: sha256(item.bytes) });
+  }
+
+  const versionId = submission.instanceId;
+  const sourceKey = [origin, config.projectId, config.xmlFormId, originalId, versionId].join("/");
+  const sourceMetadata = {
+    sourceKey,
+    formVersion: submission.formVersion,
+    submitterId: submission.submitterId ?? null,
+    submitterType: submission.submitterType ?? null,
+    deviceId: submission.deviceId ?? null,
+    userAgent: submission.userAgent ?? null,
+    createdAt: submission.createdAt ?? null,
+    updatedAt: submission.updatedAt ?? null,
+    deletedAt: submission.deletedAt ?? null,
+    attachments: normalizedAttachments
+  };
+  return {
+    ok: true,
+    value: {
+      sourceSystem: "ODK_CENTRAL",
+      sourceKey,
+      sourceMetadataSha256: sha256(Buffer.from(canonicalJson(sourceMetadata))),
+      centralOrigin: origin,
+      projectId: config.projectId,
+      xmlFormId: config.xmlFormId,
+      formVersion: submission.formVersion,
+      originalInstanceId: originalId,
+      versionInstanceId: versionId,
+      mappedOrganizationId: config.organizationId,
+      mappedSiteId: config.siteId,
+      mappedActivityId: config.activityId,
+      centralReviewState: submission.reviewState ?? null,
+      deletedAt: submission.deletedAt ?? null,
+      attachments: normalizedAttachments,
+      rupayKgState: ODK_QUARANTINE_STATE
+    }
+  };
+}
