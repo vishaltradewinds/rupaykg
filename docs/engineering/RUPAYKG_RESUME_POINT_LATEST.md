@@ -550,3 +550,12 @@ Next: rehearse the guard against a disposable copy of the recovered 096 schema a
 - Refreshed canonical resume point and execution log at PR #244 head `1d2079517f1e5ca346b9ab7f02de9eb4b5e8106a` passed exact-head CI #5526 / `41876020597` SUCCESS, 17/17 steps (migration validation, disposable PostgreSQL migration/acceptance, typecheck, build, browser smoke and production-container build).
 - Handoff checkpoint: `docs/engineering/checkpoints/2026-11-04-cto-run-29-handoff-ci.md`; session log: `docs/engineering/session-logs/2026-11-04-cto-session-29-handoff-ci.md`.
 - Documentation validation does not change the production HOLD or certify the combined verification stack.
+
+
+## Standing CTO / Co-founder KRA — effective 2026-11-04
+
+The standing evidence-integrity and execution-discipline KRA is recorded in the authoritative execution log: `docs/engineering/EXECUTION_LOG.md`, section **Standing CTO / Co-founder KRA — evidence integrity and execution discipline** (commit `10a30568988424223e3d48ee600d614d79784a27`). It governs all continuation work and supplements—not replaces—the existing TRL 9 Execution Plan and Shakti Standards.
+
+Resume rule: first reconcile the approved objective, latest resume point, execution log, current repository head, open workstreams and exact CI/deployment/database evidence. Do not invent or infer missing facts. Distinguish verified completion from implementation, queued/running validation, proposals and unknowns. Do not create duplicate initiatives or claim production, field, regulatory, certification or TRL readiness without the corresponding evidence. If authoritative material cannot be accessed, disclose that limitation and do not guess.
+
+Current continuation: security convergence and release-governance blockers remain tracked in GitHub issue #285. Combined validation PR #288 is validation-only and unmerged; run `41877322334` remains queued at the last check. Production remains READ-ONLY / HOLD. TRL 9 NOT ACHIEVED.
