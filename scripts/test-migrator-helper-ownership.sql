@@ -23,13 +23,13 @@ SET ROLE rupaykg_migrator_proof;
 CREATE ROLE rupaykg_migrator_helper_proof
   NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;
 GRANT rupaykg_migrator_helper_proof TO CURRENT_USER
-  WITH ADMIN TRUE, SET TRUE, INHERIT FALSE;
+  WITH SET TRUE, INHERIT FALSE;
 GRANT CREATE ON SCHEMA public TO rupaykg_migrator_helper_proof;
 ALTER FUNCTION public.migrator_owner_transfer_proof()
   OWNER TO rupaykg_migrator_helper_proof;
 REVOKE CREATE ON SCHEMA public FROM rupaykg_migrator_helper_proof;
 GRANT rupaykg_migrator_helper_proof TO CURRENT_USER
-  WITH ADMIN TRUE, SET FALSE, INHERIT FALSE;
+  WITH SET FALSE, INHERIT FALSE;
 
 RESET ROLE;
 
