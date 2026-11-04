@@ -69,6 +69,32 @@ export function canActForOrganization(auth: AuthContext, organizationId: string)
     && (auth.bilateralOrganizationScope || !auth.activeOrganizationId || auth.activeOrganizationId === organizationId);
 }
 
+/**
+ * Geography authorization is scoped to the explicitly selected organization.
+ * A shared geography catalogue does not make organization scope assignments global.
+ */
+export async function canReadGeography(
+  client: Pool | PoolClient,
+  auth: AuthContext,
+  organizationId: string,
+  geographyId: string,
+): Promise<boolean> {
+  if (!UUID_RE.test(geographyId)) return false;
+  if (!auth.activeOrganizationId || auth.activeOrganizationId !== organizationId) return false;
+  if (!canActForOrganization(auth, organizationId)) return false;
+  const result = await client.query<{ ok: boolean }>(
+    `select exists (
+       select 1 from organization_memberships om
+        where om.identity_id = $1
+          and om.organization_id = $2
+          and om.status = 'VERIFIED'
+          and organization_has_geography_scope(om.organization_id, $3)
+     ) as ok`,
+    [auth.identityId, organizationId, geographyId],
+  );
+  return result.rows[0]?.ok === true;
+}
+
 export const HIGH_RISK_PERMISSIONS = {
   VERIFY_EVIDENCE: ["VERIFY_EVIDENCE", "verification:approve", "verification.approve"],
   ISSUE_CREDENTIAL: ["ISSUE_CREDENTIAL", "registry:issue", "registry.issue"],
