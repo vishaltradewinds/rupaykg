@@ -137,3 +137,10 @@ Exact recovered SQL and security analysis are preserved in [Recovered migration 
 5. Preserve staging-only migrations 20261022–20261025 as separate, unreviewed artifacts until their exact source is recovered.
 6. Any remediation must be a new, forward-only migration with a new version, tested on a disposable clone and independently reviewed.
 7. Production remains READ-ONLY / HOLD pending independent DBA/security review and explicit approval.
+
+
+## Staging-only migration source recovery
+
+Neon staging branch `br-spring-hill-b4544vz5` records four additional migrations `20261022`–`20261025`, applied 2026-10-20 10:48:38.647 UTC. Their exact SQL source remains absent from current GitHub main and was not recovered in repository branch/commit searches. A catalog-only schema/data-state reconstruction (not original SQL) is preserved in [Staging async mirror and AI intake evidence](STAGING_ASYNC_MIRROR_AI_INTAKE_EVIDENCE_2026-11-04.md).
+
+The staging inbox has 12 test-labelled rows and 29 append-only events; eight PROCESSING leases have expired and one RETRY is past due. The AI evidence-intake job and rate-limit tables are empty. All four tables have RLS/FORCE RLS disabled and are owned by `rupaykg`. No matching application/worker source files or independent worker deployment were proven. This is abandoned staging test state, not evidence of a live authority feed or operational worker.
