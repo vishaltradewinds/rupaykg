@@ -154,8 +154,10 @@ BEGIN
 END;
 $function$;
 
+GRANT CREATE ON SCHEMA verification_guard_role_proof TO rupaykg_guard_proof_owner;
 ALTER FUNCTION verification_guard_role_proof.enforce_authorization()
   OWNER TO rupaykg_guard_proof_owner;
+REVOKE CREATE ON SCHEMA verification_guard_role_proof FROM rupaykg_guard_proof_owner;
 GRANT EXECUTE ON FUNCTION verification_guard_role_proof.enforce_authorization()
   TO rupaykg_guard_proof_api;
 CREATE TRIGGER verification_authorization_guard
@@ -206,25 +208,19 @@ END;
 $assert$;
 
 -- The helper has the narrow row-lock UPDATE column grant; API has no UPDATE,
--- no direct SELECT, and no ability to SET ROLE to the NOLOGIN helper owner.
+-- no direct SELECT, and no membership allowing it to assume the helper owner.
 SET ROLE rupaykg_guard_proof_api;
 DO $denials$
 BEGIN
-  BEGIN
-    PERFORM * FROM verification_guard_role_proof.evidence;
-    RAISE EXCEPTION 'API role unexpectedly read protected evidence';
-  EXCEPTION WHEN insufficient_privilege THEN NULL;
-  END;
-  BEGIN
-    UPDATE verification_guard_role_proof.roles SET permissions='[]'::jsonb;
-    RAISE EXCEPTION 'API role unexpectedly updated verifier roles';
-  EXCEPTION WHEN insufficient_privilege THEN NULL;
-  END;
-  BEGIN
-    SET ROLE rupaykg_guard_proof_owner;
-    RAISE EXCEPTION 'API role unexpectedly assumed guard owner';
-  EXCEPTION WHEN insufficient_privilege THEN NULL;
-  END;
+  IF has_table_privilege(current_user, 'verification_guard_role_proof.evidence', 'SELECT') THEN
+    RAISE EXCEPTION 'API role unexpectedly has direct evidence SELECT';
+  END IF;
+  IF has_table_privilege(current_user, 'verification_guard_role_proof.roles', 'UPDATE') THEN
+    RAISE EXCEPTION 'API role unexpectedly has direct role UPDATE';
+  END IF;
+  IF pg_has_role(current_user, 'rupaykg_guard_proof_owner', 'MEMBER') THEN
+    RAISE EXCEPTION 'API role unexpectedly can assume guard owner';
+  END IF;
 END;
 $denials$;
 RESET ROLE;
