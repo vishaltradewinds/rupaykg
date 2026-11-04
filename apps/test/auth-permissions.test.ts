@@ -45,6 +45,8 @@ describe("high-risk authorization policy", () => {
     assert.equal(await canVerifyEvidence(client, "identity-1", "evidence-1", "organization-1"), true);
     assert.equal(queries.length, 1);
     assert.doesNotMatch(queries[0]!.text, /lower\(r\.name\)/);
-    assert.match(queries[0]!.text, /om\\.organization_id = a\\.organization_id/);\n    assert.match(queries[0]!.text, /a\\.organization_id = \\$3/);\n    assert.deepEqual(queries[0]!.values, ["evidence-1", "identity-1", "organization-1", ["VERIFY_EVIDENCE", "verification:approve", "verification.approve"]]);
+    assert.match(queries[0]!.text, /om\.organization_id = a\.organization_id/);
+    assert.match(queries[0]!.text, /a\.organization_id = \$3/);
+    assert.deepEqual(queries[0]!.values, ["evidence-1", "identity-1", "organization-1", ["VERIFY_EVIDENCE", "verification:approve", "verification.approve"]]);
   });
 });
