@@ -49,7 +49,7 @@ test("verification SECURITY DEFINER guard runs under a NOLOGIN non-owner role wi
           select g.parent_id from ${s}.geography g join ancestors a on g.id = a.id where g.parent_id is not null
         )
         select case
-          when not exists (select 1 from ${s}.organization_geography_scopes x where x.organization_id=p_org and x.status='VERIFIED') then true
+          when not exists (select 1 from ${s}.organization_geography_scopes x where x.organization_id=p_org and x.status='VERIFIED') then false
           else exists (
             select 1 from ${s}.organization_geography_scopes x
             join ancestors a on a.id=x.geography_id
@@ -243,7 +243,7 @@ test("verification SECURITY DEFINER guard runs under a NOLOGIN non-owner role wi
     const suspendedEvidence = uuid();
 
     await pool.query(`insert into ${s}.geography(id) values ($1),($2)`, [geoA, geoB]);
-    await pool.query(`insert into ${s}.organization_geography_scopes(organization_id,geography_id,status) values ($1,$2,'VERIFIED')`, [orgA, geoA]);
+    await pool.query(`insert into ${s}.organization_geography_scopes(organization_id,geography_id,status) values ($1,$2,'VERIFIED'),($3,$2,'VERIFIED')`, [orgA, geoA, orgB]);
     await pool.query(`insert into ${s}.identities(id,status) values ($1,'VERIFIED'),($2,'SUSPENDED')`, [identity, suspendedIdentity]);
     await pool.query(`insert into ${s}.roles(id,organization_id,permissions) values ($1,$2,'["VERIFY_EVIDENCE"]'::jsonb),($3,$2,'["VERIFY_EVIDENCE"]'::jsonb)`, [roleId, orgA, suspendedRole]);
     await pool.query(`insert into ${s}.organization_memberships(id,identity_id,organization_id,role_id,status) values ($1,$2,$3,$4,'VERIFIED'),($5,$6,$3,$7,'VERIFIED')`, [membership, identity, orgA, roleId, suspendedMembership, suspendedIdentity, suspendedRole]);
@@ -331,6 +331,12 @@ test("verification SECURITY DEFINER guard runs under a NOLOGIN non-owner role wi
         apiClient.query(`insert into ${s}.verifications(evidence_id,verifier_identity_id,decision) values ($1,$2,'REJECTED')`, [evidenceB, identity]),
         /verification requires active explicit verifier permission/,
       );
+      await pool.query(`update ${s}.organization_geography_scopes set status='PENDING' where organization_id=$1`, [orgB]);
+      await assert.rejects(
+        apiClient.query(`insert into ${s}.verifications(evidence_id,verifier_identity_id,decision) values ($1,$2,'REJECTED')`, [evidenceB, identity]),
+        /verification geography is outside organization scope/,
+      );
+      await pool.query(`update ${s}.organization_geography_scopes set status='VERIFIED' where organization_id=$1`, [orgB]);
       const restoredAfterDenied = await apiClient.query<{ value: string }>("select current_setting('rupaykg_guard.evidence_id', true) as value");
       assert.equal(restoredAfterDenied.rows[0]?.value, evidenceA, "failed trigger execution must restore the caller's pre-existing guard GUC");
       await assert.rejects(
@@ -387,7 +393,7 @@ test("verification SECURITY DEFINER guard runs under a NOLOGIN non-owner role wi
       apiRace.release();
     }
 
-    const assertNonOwnerRevocationRace = async (label: string, updateSql: string, values: unknown[], expected: RegExp) => {
+    const assertNonOwnerRevocationRace = async (label: string, updateSql: string, values: unknown[], expected: RegExp, requestEvidenceId: string = evidenceA) => {
       const mutationSession = await pool.connect();
       const requestSession = await apiPool!.connect();
       let mutationCommitted = false;
@@ -400,7 +406,7 @@ test("verification SECURITY DEFINER guard runs under a NOLOGIN non-owner role wi
         const pid = (await requestSession.query<{ pid: number }>("select pg_backend_pid() as pid")).rows[0]!.pid;
         pending = requestSession.query(
           `insert into ${s}.verifications(evidence_id,verifier_identity_id,decision) values ($1,$2,'REJECTED')`,
-          [evidenceA, identity],
+          [requestEvidenceId, identity],
         ).then(() => ({ ok: true as const }), (error: unknown) => ({ ok: false as const, error }));
         let waiting = false;
         for (let i = 0; i < 400; i++) {
@@ -431,6 +437,27 @@ test("verification SECURITY DEFINER guard runs under a NOLOGIN non-owner role wi
       /verification requires active explicit verifier permission/,
     );
     await pool.query(`update ${s}.organization_memberships set status='VERIFIED' where id=$1`, [membership]);
+    await assertNonOwnerRevocationRace(
+      "evidence-to-activity reassignment",
+      `update ${s}.evidence set activity_id=$2 where id=$1`,
+      [evidenceA, activityB],
+      /verification requires active explicit verifier permission/,
+    );
+    await pool.query(`update ${s}.evidence set activity_id=$2 where id=$1`, [evidenceA, activityA]);
+    await assertNonOwnerRevocationRace(
+      "activity organization reassignment",
+      `update ${s}.activities set organization_id=$2 where id=$1`,
+      [activityA, orgB],
+      /verification requires active explicit verifier permission/,
+    );
+    await pool.query(`update ${s}.activities set organization_id=$2 where id=$1`, [activityA, orgA]);
+    await assertNonOwnerRevocationRace(
+      "activity geography reassignment",
+      `update ${s}.activities set geography_id=$2 where id=$1`,
+      [activityA, geoB],
+      /verification geography is outside organization scope/,
+    );
+    await pool.query(`update ${s}.activities set geography_id=$2 where id=$1`, [activityA, geoA]);
     await assertNonOwnerRevocationRace(
       "identity suspension",
       `update ${s}.identities set status='SUSPENDED', suspended_at=now() where id=$1`,
