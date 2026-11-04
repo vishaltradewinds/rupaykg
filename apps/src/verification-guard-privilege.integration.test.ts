@@ -276,6 +276,7 @@ test("verification SECURITY DEFINER guard runs under a NOLOGIN non-owner role wi
         const locked = await guardCheck.query(`select id from ${s}.${q(table)} where id=$1 for share`, [rowId]);
         assert.equal(locked.rowCount, 1, `exact-row UPDATE RLS policy must permit FOR SHARE on ${table}`);
       }
+      await guardCheck.query("savepoint deny_mutation");
       const mutation = await guardCheck.query<{ id: string }>(
         `update ${s}.evidence set id=$2 where id=$1 returning id`,
         [evidenceA, orgB],
@@ -283,6 +284,8 @@ test("verification SECURITY DEFINER guard runs under a NOLOGIN non-owner role wi
         result => ({ rowCount: result.rowCount ?? 0, code: null as string | null }),
         error => ({ rowCount: 0, code: (error as { code?: string }).code ?? "UNKNOWN" }),
       );
+      await guardCheck.query("rollback to savepoint deny_mutation");
+      await guardCheck.query("release savepoint deny_mutation");
       assert.equal(mutation.rowCount, 0, "RLS must prevent the guard from changing the evidence identifier");
       if (mutation.code !== null) assert.equal(mutation.code, "42501");
       const unchanged = await guardCheck.query(`select id from ${s}.evidence where id=$1`, [evidenceA]);
