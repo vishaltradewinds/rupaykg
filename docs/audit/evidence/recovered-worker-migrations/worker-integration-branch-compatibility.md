@@ -17,7 +17,9 @@ The worker operations document explicitly describes engineering capability only;
 
 ## Proposed branch-only migration dependencies
 
-The same feature branch contains five additional migrations, archived byte-for-byte in this evidence folder:
+The same feature branch contains a much larger migration chain than the five crosswalk files archived in this evidence folder. The tree includes dated migrations from `20261018` through `20261129`. The key later dependency chain includes `20261026_organization_stakeholder_authorization.sql`, `20261027_stakeholder_authorization_dual_control.sql`, `20261028_platform_audit_hash_versions.sql`, `20261029_cpcb_swm_workspace_geography_required.sql`, `20261030_explicit_geography_scope.sql`, the five crosswalk migrations below, `20261103_swm_stakeholder_taxonomy_registry.sql`, `20261104_source_snapshot_and_regulatory_rule_versions.sql`, `20261106_regulatory_rule_source_gate.sql`, `20261107_approved_source_snapshot_immutability.sql`, `20261109_source_snapshot_retirement_terminal.sql`, `20261110_failed_settlement_terminal_for_retirement.sql`, and further strict geography/SWM/EPR migrations through `20261129_credential_descendant_scope.sql`. This is a full feature-branch migration lineage, not a five-file isolated patch.
+
+The following five crosswalk files are archived byte-for-byte in this evidence folder:
 - `20261031_government_jurisdiction_crosswalk.sql` — request and mapping tables, dual-control lifecycle and crosswalk constraints.
 - `20261101_async_mirror_unresolved_crosswalk.sql` — adds the internal `UNRESOLVED` inbox state.
 - `20261102_government_crosswalk_evidence_binding.sql` — binds crosswalk request/mapping evidence to immutable Evidence Vault artifacts and verified evidence.
@@ -29,13 +31,15 @@ Three historical refs returned identical Git blob SHAs for these five files; the
 ## Read-only compatibility inspection
 
 On 2026-11-04, the authoritative production branch `br-restless-base-b44cip2h` and non-authoritative staging branch `br-spring-hill-b4544vz5` were inspected:
-- production ledger rows for these five filenames: **0**;
-- staging ledger rows for these five filenames: **0**;
+- production dated migration ledger ends at `20261021_evidence_artifact_vault.sql`;
+- staging dated migration ledger ends at `20261025_ai_evidence_intake_jobs.sql`;
+- production and staging ledger rows for the five crosswalk filenames archived here: **0**;
+- production and staging have no applied entries for the feature-branch dated migration chain after their respective cutoffs;
 - production and staging presence of `government_jurisdiction_crosswalks`: absent;
 - production and staging presence of `authoritative_source_snapshots`: absent on the inspected branches;
 - staging `async_mirror_inbox.status` constraint allows RECEIVED, PROCESSING, PROCESSED, VALIDATED, REJECTED, RETRY, QUARANTINED, but **not UNRESOLVED**.
 
-The four 20261022–20261025 migrations are separately confirmed staging-only and archived in PR #261. They create the inbox, worker lease/event foundation, AI rate-limit table and AI intake idempotency ledger. They do not create the crosswalk tables required by the feature-branch worker. The feature-branch worker therefore cannot safely run against the inspected staging schema snapshot: its crosswalk and source-snapshot dependencies are missing, and the UNRESOLVED status is not enabled.
+The four 20261022–20261025 migrations are separately confirmed staging-only and archived in PR #261. Production has only 20261018–20261021 from this dated series; staging has 20261018–20261025. The four staging-only migrations create the inbox, worker lease/event foundation, AI rate-limit table and AI intake idempotency ledger. They do not create the crosswalk tables required by the feature-branch worker. The worker feature branch depends on a later, much larger migration chain through 20261129 that is absent from both inspected databases. The feature-branch worker therefore cannot safely run against the inspected staging schema snapshot: its crosswalk and source-snapshot dependencies are missing, and the UNRESOLVED status is not enabled.
 
 ## Important source-code and schema boundary
 - The presence of code and migrations on a feature/CI branch is not evidence that they were deployed.
