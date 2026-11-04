@@ -29,6 +29,19 @@ The candidate SECURITY INVOKER trigger successfully inserts a verification under
 
 The same test deliberately checks visibility of a second tenant's evidence. It confirms that the non-owner API role can read that row on the current migration baseline because RLS is not enabled on the relevant tables. This is an explicit, reproducible isolation blocker, not a passing tenant-isolation test.
 
+## Additional candidate-migration findings from source review
+
+The exact candidate migration also leaves several independent authorization and immutability questions unresolved:
+
+- **Verifier identity is caller-supplied:** the trigger validates `NEW.verifier_identity_id` against an active membership but does not bind that identity to the authenticated API session. A database caller with INSERT authority can name another eligible verifier unless the runtime/API boundary supplies an independently trusted identity binding.
+- **Tenant context is not authenticated by the trigger:** the candidate function does not derive a trusted tenant context. A custom PostgreSQL setting supplied by the caller is not sufficient proof of identity or tenant authority.
+- **Organization status is not checked or locked:** the function does not require the activity organization to remain `VERIFIED`, nor does it lock the organization row during authorization.
+- **Geography scope can be fail-open:** the existing `organization_has_geography_scope` helper returns true when an organization has no verified geography roots. The candidate requires a non-null activity geography, but that alone does not prove the organization has an explicit authorized root.
+- **Geography scope is not locked:** the candidate reads the geography-scope helper result without locking the relevant scope rows or testing concurrent scope revocation against a verification decision.
+- **DELETE/TRUNCATE remain outside this trigger:** it blocks UPDATE and authorizes INSERT, but has no DELETE trigger. TRUNCATE is not row-triggered. Privilege, owner and replication paths remain separate controls.
+
+These are source-level review findings, not all independently exercised by the non-owner insert test. They remain release gates.
+
 ## What this does not establish
 
 - It does not establish the live Render API database role or its grants.
