@@ -65,3 +65,8 @@ Governing standard: Shakti Standards — one lifecycle standard, project-specifi
 
 ## Safety boundary
 All current engineering evidence described above is from GitHub disposable CI and read-only Neon inspection. No production DDL/DML, migration, role/grant/RLS change, Neon branch operation, deployment, worker activation, external provider write, merge or certification occurred. Production HOLD; worker OFF; certification OFF; TRL 9 NOT ESTABLISHED.
+
+
+## Documentation handoff
+- Draft documentation PR #283: https://github.com/vishaltradewinds/rupaykg/pull/283, head `e1e45516095d5f34f6a558873979611252a9184d`, stacked on the existing PR #204 documentation branch. It is open/draft/unmerged and targets the PR #204 branch, not main.
+- No workflow runs were returned for the documentation commit; no CI pass is claimed for PR #283. The engineering CI evidence is limited to PR #282/#277/#278 as stated above.
