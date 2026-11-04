@@ -163,9 +163,11 @@ SAVEPOINT valid_context;
 SET LOCAL ROLE rupaykg_test_verification_api;
 SELECT public.rupaykg_set_authenticated_context('ci-active-authctx-valid-token-a', :'org_a');
 INSERT INTO public.verifications(evidence_id,activity_id,verifier_identity_id,decision,scope,rationale)
-VALUES (:'evidence_a',:'activity_a',:'verifier_a','APPROVED','CI_ACTIVE_AUTHCTX','valid signed context')
-RETURNING id AS verification_a \gset
+VALUES (:'evidence_a',:'activity_a',:'verifier_a','APPROVED','CI_ACTIVE_AUTHCTX','valid signed context');
 RESET ROLE;
+SELECT id AS verification_a FROM public.verifications
+WHERE evidence_id=:'evidence_a' AND scope='CI_ACTIVE_AUTHCTX'
+ORDER BY decided_at DESC LIMIT 1 \gset
 SELECT CASE WHEN public.rupaykg_test_delete_guard(:'verification_a') THEN 1 ELSE 0 END AS delete_guard_passed \gset
 \if :delete_guard_passed
 \else
