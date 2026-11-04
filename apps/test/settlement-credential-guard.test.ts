@@ -1,11 +1,13 @@
 import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { Pool } from "pg";
-import { randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 
 const databaseUrl = process.env.DATABASE_URL;
 const pool = databaseUrl ? new Pool({ connectionString: databaseUrl, max: 2 }) : null;
 const suffix = randomUUID();
+const verifierToken = randomBytes(32).toString("base64url");
+const hashToken = (value: string) => createHash("sha256").update(value).digest("hex");
 
 let retiredCredentialId = "";
 let openSettlementCredentialId = "";
@@ -15,13 +17,15 @@ before(async () => {
   const c = await pool.connect();
   try {
     await c.query("begin");
-    const owner = (await c.query<{ id: string }>("insert into organizations(name,organization_type) values($1,'PROCESSOR') returning id", [`settlement-guard-owner-${suffix}`])).rows[0]!.id;
+    const owner = (await c.query<{ id: string }>("insert into organizations(name,organization_type,status) values($1,'PROCESSOR','VERIFIED') returning id", [`settlement-guard-owner-${suffix}`])).rows[0]!.id;
     const geography = (await c.query<{ id: string }>("insert into geography(kind,code,name,source) values('DISTRICT',$1,$2,'test') returning id", [`SETTLEMENT-GUARD-${suffix}`, `Settlement Guard District ${suffix}`])).rows[0]!.id;
     await c.query("insert into organization_geography_scopes(organization_id,geography_id,status) values($1,$2,'VERIFIED')", [owner, geography]);
-    const actor = (await c.query<{ id: string }>("insert into identities(external_subject,display_name) values($1,$2) returning id", [`settlement-guard-actor-${suffix}`, "Settlement Guard Actor"])).rows[0]!.id;
+    const actor = (await c.query<{ id: string }>("insert into identities(external_subject,display_name,status) values($1,$2,'VERIFIED') returning id", [`settlement-guard-actor-${suffix}`, "Settlement Guard Actor"])).rows[0]!.id;
     const verifier = (await c.query<{ id: string }>("insert into identities(external_subject,display_name) values($1,$2) returning id", [`settlement-guard-verifier-${suffix}`, "Settlement Guard Independent Verifier"])).rows[0]!.id;
     const verifierRole = (await c.query<{ id: string }>("insert into roles(organization_id,name,permissions) values($1,$2,$3::jsonb) returning id", [owner, `settlement-guard-verifier-role-${suffix}`, JSON.stringify(["VERIFY_EVIDENCE", "ISSUE_CREDENTIAL"])] )).rows[0]!.id;
     await c.query("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED')", [verifier, owner, verifierRole]);
+    await c.query("insert into identity_sessions(identity_id,expires_at,token_hash) values($1,now()+interval '1 hour',$2)", [verifier, hashToken(verifierToken)]);
+    await c.query("select public.rupaykg_set_authenticated_context($1,$2::uuid)", [verifierToken, owner]);
 
     const retiredActivity = (await c.query<{ id: string }>("insert into activities(organization_id,actor_identity_id,geography_id,activity_type,status,completed_at) values($1,$2,$3,'COLLECTION','COMPLETED',now()) returning id", [owner, actor, geography])).rows[0]!.id;
     const retiredEvidence = (await c.query<{ id: string }>("insert into evidence(activity_id,evidence_type,status,captured_at,content_hash) values($1,'SETTLEMENT_GUARD','VERIFIED',now(),$2) returning id", [retiredActivity, `settlement-guard-retired-${suffix}`])).rows[0]!.id;
