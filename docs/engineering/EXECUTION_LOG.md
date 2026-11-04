@@ -79,3 +79,11 @@
 - Updated P0 issue #214, migration inventory, and canonical resume point. No staging or production writes, schema changes, worker activation or migrations performed.
 - PR #244 latest documentation head requires exact-head CI check; prior #5337 success applies only to head `92b5215a56cba12a5880175e9b63e44c2aedb4b3`.
 - Production remains READ-ONLY / HOLD; no DDL/DML, role/grant/RLS/function/trigger changes, deployment, merge or certification. TRL 9 NOT ACHIEVED.
+
+
+## 2026-11-04 — CTO Run 20 (verification trigger clarification)
+- PR #244 head `0a8b55f62065080163bec5db858e6f75c2b03ad6` passed exact-head CI #5346 (`41787820120`) across all configured stages.
+- Clarified that the legacy `verification_independence_guard` role-name fallback is contradictory/redundant but not a demonstrated bypass while strict `verifications_integrity_guard` remains active; alphabetical trigger order runs the legacy BEFORE INSERT guard first, strict guard afterward.
+- Confirmed separate snapshot-mutability defect: strict guard overwrites authorization snapshot on every APPROVED-row UPDATE. Updated issue #214 and recovered 096 review to separate confirmed defect from unproven bypass.
+- Preserved staging-only async mirror/AI intake catalog evidence; 8 test inbox rows have expired leases, one retry overdue, no current-main worker source or independent worker deployment proven. No staging/production writes.
+- Latest documentation head after clarification requires its own exact-head CI; #5346 does not cover subsequent commits. Production remains READ-ONLY / HOLD. TRL 9 NOT ACHIEVED.
