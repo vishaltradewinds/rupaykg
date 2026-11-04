@@ -81,10 +81,10 @@ function validIdentifier(value: string): boolean {
 
 function validIsoDate(value: string | undefined | null): boolean {
   if (value == null) return true;
-  const match = /^(\\d{4})-(\\d{2})-(\\d{2})T(\\d{2}):(\\d{2}):(\\d{2})(?:\\.(\\d{1,9}))?(Z|[+-]\\d{2}:\\d{2})$/.exec(value);
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\\.(\d{1,9}))?(Z|[+-]\d{2}:\d{2})$/.exec(value);
   if (!match) return false;
   const [, yearText, monthText, dayText, hourText, minuteText, secondText] = match;
-  const zone = match[8] ?? "";
+  const zone: string = match[8] ?? "";
   const year = Number(yearText);
   const month = Number(monthText);
   const day = Number(dayText);
@@ -96,7 +96,7 @@ function validIsoDate(value: string | undefined | null): boolean {
   if (month < 1 || month > 12 || day < 1 || day > (daysInMonth[month - 1] ?? 0)) return false;
   if (hour > 23 || minute > 59 || second > 59) return false;
   if (zone !== "Z") {
-    const offset = /[+-](\\d{2}):(\\d{2})$/.exec(zone);
+    const offset = /[+-](\d{2}):(\d{2})$/.exec(zone);
     if (!offset || Number(offset[1]) > 23 || Number(offset[2]) > 59) return false;
   }
   return true;
