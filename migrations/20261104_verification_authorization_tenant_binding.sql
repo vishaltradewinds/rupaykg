@@ -38,13 +38,15 @@ grant select on public.evidence,
                 public.roles,
                 public.identities,
                 public.organization_geography_scopes,
-                public.geography
+                public.geography,
+                public.organizations
   to rupaykg_verification_guard;
 grant update (id) on public.evidence,
                      public.activities,
                      public.organization_memberships,
                      public.roles,
-                     public.identities
+                     public.identities,
+                     public.organizations
   to rupaykg_verification_guard;
 
 alter table public.verifications
@@ -64,8 +66,11 @@ declare
   activity_actor uuid;
   activity_organization_id uuid;
   activity_geography_id uuid;
+  activity_organization_status text;
   evidence_activity_id uuid;
   membership_row record;
+  role_row record;
+  identity_row record;
 begin
   if tg_op = 'UPDATE' then
     raise exception 'verification records are immutable; create a superseding verification';
@@ -101,6 +106,18 @@ begin
     raise exception 'verification requires an activity with an organization';
   end if;
 
+  -- Lock the organization after evidence and activity. This serializes
+  -- verification against organization suspension and geography-scope changes.
+  select o.status::text
+    into activity_organization_status
+    from public.organizations o
+   where o.id = activity_organization_id
+   for share;
+
+  if activity_organization_status is distinct from 'VERIFIED' then
+    raise exception 'verification requires a verified activity organization';
+  end if;
+
   if activity_geography_id is null
      or not public.organization_has_geography_scope(activity_organization_id, activity_geography_id) then
     raise exception 'verification requires an activity within an authorized organization geography';
@@ -110,37 +127,52 @@ begin
     raise exception 'activity actor cannot self-approve evidence';
   end if;
 
-  -- Lock the exact identity, membership and role rows while evaluating the
-  -- permission. Concurrent suspension, revocation or permission mutation must
-  -- serialize with this decision transaction.
-  select m.id as membership_id, m.role_id, r.permissions
+  -- Fixed authorization lock order after evidence/activity/organization:
+  -- membership -> role -> identity. Read each row again after acquiring its
+  -- lock so concurrent revocation, reassignment, or suspension fails closed.
+  select m.id, m.role_id, m.status
     into membership_row
     from public.organization_memberships m
-    join public.roles r on r.id = m.role_id and r.organization_id = m.organization_id
-    join public.identities i on i.id = m.identity_id
    where m.identity_id = new.verifier_identity_id
      and m.organization_id = activity_organization_id
-     and m.status = 'VERIFIED'
-     and i.status = 'VERIFIED'
-     and i.suspended_at is null
-     and (
-       r.permissions @> '["VERIFY_EVIDENCE"]'::jsonb
-       or r.permissions @> '["verification:approve"]'::jsonb
-       or r.permissions @> '["verification.approve"]'::jsonb
-     )
    order by m.created_at desc, m.id desc
    limit 1
-   for share of m, r, i;
+   for share;
 
-  if membership_row.membership_id is null then
+  if membership_row.id is null or membership_row.status <> 'VERIFIED' then
+    raise exception 'verification requires active explicit verifier permission in the activity organization';
+  end if;
+
+  select r.permissions
+    into role_row
+    from public.roles r
+   where r.id = membership_row.role_id
+     and r.organization_id = activity_organization_id
+   for share;
+
+  if role_row.permissions is null or not (
+       role_row.permissions @> '["VERIFY_EVIDENCE"]'::jsonb
+       or role_row.permissions @> '["verification:approve"]'::jsonb
+       or role_row.permissions @> '["verification.approve"]'::jsonb
+     ) then
+    raise exception 'verification requires active explicit verifier permission in the activity organization';
+  end if;
+
+  select i.status, i.suspended_at
+    into identity_row
+    from public.identities i
+   where i.id = new.verifier_identity_id
+   for share;
+
+  if identity_row.status <> 'VERIFIED' or identity_row.suspended_at is not null then
     raise exception 'verification requires active explicit verifier permission in the activity organization';
   end if;
 
   -- Never accept client-supplied authorization provenance. Capture the exact
   -- membership, role and permission set used by this decision.
-  new.authorization_membership_id := membership_row.membership_id;
+  new.authorization_membership_id := membership_row.id;
   new.authorization_role_id := membership_row.role_id;
-  new.authorization_permissions_snapshot := membership_row.permissions;
+  new.authorization_permissions_snapshot := role_row.permissions;
   new.authorization_checked_at := clock_timestamp();
 
   return new;
@@ -164,3 +196,48 @@ for each row execute function public.enforce_verification_authorization();
 
 comment on function public.enforce_verification_authorization() is
   'Requires explicit active verifier authority in the exact evidence activity organization for every decision; snapshots are captured at insert and verification rows cannot be updated.';
+
+-- Geography-scope mutations take an UPDATE lock on the owning organization.
+-- Verification takes SHARE on that same organization before evaluating scope,
+-- preventing a decision from racing a newly added or changed geography root.
+create or replace function public.lock_organization_for_geography_scope_change()
+returns trigger
+language plpgsql
+security definer
+set search_path = pg_catalog, public
+as $scope_lock$
+declare
+  old_organization_id uuid;
+  new_organization_id uuid;
+begin
+  if tg_op <> 'INSERT' then
+    old_organization_id := old.organization_id;
+  end if;
+  if tg_op <> 'DELETE' then
+    new_organization_id := new.organization_id;
+  end if;
+
+  perform o.id
+    from public.organizations o
+   where o.id = any(array_remove(array[old_organization_id, new_organization_id], null))
+   order by o.id
+   for update;
+
+  if tg_op = 'DELETE' then
+    return old;
+  end if;
+  return new;
+end;
+$scope_lock$;
+
+grant create on schema public to rupaykg_verification_guard;
+alter function public.lock_organization_for_geography_scope_change()
+  owner to rupaykg_verification_guard;
+revoke create on schema public from rupaykg_verification_guard;
+
+drop trigger if exists verification_geography_scope_serialization_guard
+  on public.organization_geography_scopes;
+create trigger verification_geography_scope_serialization_guard
+before insert or update or delete on public.organization_geography_scopes
+for each row execute function public.lock_organization_for_geography_scope_change();
+
