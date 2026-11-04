@@ -13,6 +13,7 @@ test("verification SECURITY DEFINER guard runs under a NOLOGIN non-owner role wi
   const apiRole = "api_proto_" + suffix;
   const apiPassword = randomBytes(24).toString("hex");
   let apiPool: Pool | undefined;
+  const uuid = () => { const hex = randomBytes(16).toString("hex"); return [hex.slice(0,8),hex.slice(8,12),hex.slice(12,16),hex.slice(16,20),hex.slice(20)].join("-"); };
   const q = (value: string) => '"' + value.replace(/"/g, '""') + '"';
   const s = q(schema);
   const guard = q(guardRole);
@@ -220,26 +221,26 @@ test("verification SECURITY DEFINER guard runs under a NOLOGIN non-owner role wi
     apiUrl.password = apiPassword;
     apiPool = new Pool({ connectionString: apiUrl.toString(), max: 4, ssl: false });
 
-    const orgA = randomBytes(16).toString("hex").match(/.{1,8}/g)!.join("-");
-    const orgB = randomBytes(16).toString("hex").match(/.{1,8}/g)!.join("-");
-    const geoA = randomBytes(16).toString("hex").match(/.{1,8}/g)!.join("-");
-    const geoB = randomBytes(16).toString("hex").match(/.{1,8}/g)!.join("-");
-    const identity = randomBytes(16).toString("hex").match(/.{1,8}/g)!.join("-");
-    const roleId = randomBytes(16).toString("hex").match(/.{1,8}/g)!.join("-");
-    const membership = randomBytes(16).toString("hex").match(/.{1,8}/g)!.join("-");
-    const activityA = randomBytes(16).toString("hex").match(/.{1,8}/g)!.join("-");
-    const activityB = randomBytes(16).toString("hex").match(/.{1,8}/g)!.join("-");
-    const evidenceA = randomBytes(16).toString("hex").match(/.{1,8}/g)!.join("-");
-    const evidenceB = randomBytes(16).toString("hex").match(/.{1,8}/g)!.join("-");
-    const selfActivity = randomBytes(16).toString("hex").match(/.{1,8}/g)!.join("-");
-    const selfEvidence = randomBytes(16).toString("hex").match(/.{1,8}/g)!.join("-");
-    const scopeActivity = randomBytes(16).toString("hex").match(/.{1,8}/g)!.join("-");
-    const scopeEvidence = randomBytes(16).toString("hex").match(/.{1,8}/g)!.join("-");
-    const suspendedIdentity = randomBytes(16).toString("hex").match(/.{1,8}/g)!.join("-");
-    const suspendedRole = randomBytes(16).toString("hex").match(/.{1,8}/g)!.join("-");
-    const suspendedMembership = randomBytes(16).toString("hex").match(/.{1,8}/g)!.join("-");
-    const suspendedActivity = randomBytes(16).toString("hex").match(/.{1,8}/g)!.join("-");
-    const suspendedEvidence = randomBytes(16).toString("hex").match(/.{1,8}/g)!.join("-");
+    const orgA = uuid();
+    const orgB = uuid();
+    const geoA = uuid();
+    const geoB = uuid();
+    const identity = uuid();
+    const roleId = uuid();
+    const membership = uuid();
+    const activityA = uuid();
+    const activityB = uuid();
+    const evidenceA = uuid();
+    const evidenceB = uuid();
+    const selfActivity = uuid();
+    const selfEvidence = uuid();
+    const scopeActivity = uuid();
+    const scopeEvidence = uuid();
+    const suspendedIdentity = uuid();
+    const suspendedRole = uuid();
+    const suspendedMembership = uuid();
+    const suspendedActivity = uuid();
+    const suspendedEvidence = uuid();
 
     await pool.query(`insert into ${s}.geography(id) values ($1),($2)`, [geoA, geoB]);
     await pool.query(`insert into ${s}.organization_geography_scopes(organization_id,geography_id,status) values ($1,$2,'VERIFIED')`, [orgA, geoA]);
@@ -330,6 +331,8 @@ test("verification SECURITY DEFINER guard runs under a NOLOGIN non-owner role wi
         apiClient.query(`insert into ${s}.verifications(evidence_id,verifier_identity_id,decision) values ($1,$2,'REJECTED')`, [evidenceB, identity]),
         /verification requires active explicit verifier permission/,
       );
+      const restoredAfterDenied = await apiClient.query<{ value: string }>("select current_setting('rupaykg_guard.evidence_id', true) as value");
+      assert.equal(restoredAfterDenied.rows[0]?.value, evidenceA, "failed trigger execution must restore the caller's pre-existing guard GUC");
       await assert.rejects(
         apiClient.query(`insert into ${s}.verifications(evidence_id,verifier_identity_id,decision) values ($1,$2,'REJECTED')`, [selfEvidence, identity]),
         /activity actor cannot verify own evidence/,
@@ -383,6 +386,57 @@ test("verification SECURITY DEFINER guard runs under a NOLOGIN non-owner role wi
       revoker.release();
       apiRace.release();
     }
+
+    const assertNonOwnerRevocationRace = async (label: string, updateSql: string, values: unknown[], expected: RegExp) => {
+      const mutationSession = await pool.connect();
+      const requestSession = await apiPool!.connect();
+      let mutationCommitted = false;
+      let pending: Promise<{ ok: true } | { ok: false; error: unknown }> | undefined;
+      try {
+        await mutationSession.query("begin");
+        await mutationSession.query(updateSql, values);
+        const login = await requestSession.query<{ current_user: string }>("select current_user");
+        assert.equal(login.rows[0]?.current_user, apiRole);
+        const pid = (await requestSession.query<{ pid: number }>("select pg_backend_pid() as pid")).rows[0]!.pid;
+        pending = requestSession.query(
+          `insert into ${s}.verifications(evidence_id,verifier_identity_id,decision) values ($1,$2,'REJECTED')`,
+          [evidenceA, identity],
+        ).then(() => ({ ok: true as const }), (error: unknown) => ({ ok: false as const, error }));
+        let waiting = false;
+        for (let i = 0; i < 400; i++) {
+          const state = await pool.query<{ wait_event_type: string | null }>("select wait_event_type from pg_stat_activity where pid=$1", [pid]);
+          if (state.rows[0]?.wait_event_type === "Lock") { waiting = true; break; }
+          await new Promise(resolve => setTimeout(resolve, 10));
+        }
+        assert.equal(waiting, true, `${label}: API verification must wait for the concurrent revocation`);
+        await mutationSession.query("commit");
+        mutationCommitted = true;
+        const outcome = await pending;
+        assert.equal(outcome.ok, false, `${label}: revoked authority must deny the verification`);
+        if (!outcome.ok) assert.match(outcome.error instanceof Error ? outcome.error.message : String(outcome.error), expected);
+      } finally {
+        if (!mutationCommitted) await mutationSession.query("rollback").catch(() => undefined);
+        if (pending) await pending.catch(() => undefined);
+        await requestSession.query("reset role").catch(() => undefined);
+        mutationSession.release();
+        requestSession.release();
+      }
+    };
+
+    await pool.query(`update ${s}.roles set permissions='["VERIFY_EVIDENCE"]'::jsonb where id=$1`, [roleId]);
+    await assertNonOwnerRevocationRace(
+      "membership deactivation",
+      `update ${s}.organization_memberships set status='PENDING' where id=$1`,
+      [membership],
+      /verification requires active explicit verifier permission/,
+    );
+    await pool.query(`update ${s}.organization_memberships set status='VERIFIED' where id=$1`, [membership]);
+    await assertNonOwnerRevocationRace(
+      "identity suspension",
+      `update ${s}.identities set status='SUSPENDED', suspended_at=now() where id=$1`,
+      [identity],
+      /verification requires an active non-suspended identity/,
+    );
   } finally {
     await apiPool?.end().catch(() => undefined);
     await pool.query(`drop schema if exists ${s} cascade`).catch(() => undefined);
