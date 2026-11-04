@@ -37,7 +37,7 @@ begin
     into evidence_activity_id
     from public.evidence e
    where e.id = new.evidence_id
-   for key share;
+   for share;
 
   if evidence_activity_id is null then
     raise exception 'verification evidence must be bound to an activity';
