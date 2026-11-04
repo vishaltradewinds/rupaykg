@@ -18,8 +18,9 @@
 - Created draft PR #246: `security/geography-active-organization-scope-2026-11-04`.
 - Current head: `2fc6e37fc8000e766ac24cff8d234ce1c84aa327`.
 - Added shared active-organization-bound `canReadGeography`, restricted roots/children queries to active organization, and added five unit tests (cross-org denial, SQL organization binding, missing active organization, malformed UUID, absent verified scope).
-- CI run #5329 (`41784724429`) started on exact head. At checkpoint time, dependency installation was still running; no pass/fail conclusion yet.
-- PR #246 remains draft and unmerged. Do not merge or deploy on pending CI.
+- Exact-head CI run #5329 (`41784724429`) completed SUCCESS on `2fc6e37fc8000e766ac24cff8d234ce1c84aa327`.
+- Passed dependency audit, migration validation, disposable PostgreSQL migration, TypeScript typecheck, production build, browser smoke, full test suite including the five geography authorization tests, production-container build and cleanup.
+- PR #246 remains draft and unmerged pending independent review and broader tenant-isolation release gates. Do not merge or deploy on pending CI.
 
 ## Verification authorization follow-up
 - Reviewed PR #238 and issue #215. `canVerifyEvidence` helper does not itself accept/bind the subject organization; current route call sites add outer checks. The helper should be bound to the exact activity organization or accept an already-bound authorization context to avoid unsafe future reuse.
