@@ -120,6 +120,9 @@ DECLARE
   v_payload text;
   v_signature text;
 BEGIN
+  RAISE NOTICE 'context issuer definer current_user=%, session_user=%', current_user, session_user;
+  RAISE NOTICE 'context owner identity_sessions SELECT privilege=%',
+    has_table_privilege('rupaykg_context_owner','public.identity_sessions','SELECT');
   IF p_bearer_token IS NULL OR length(p_bearer_token) < 20
      OR p_organization_id IS NULL THEN
     RAISE EXCEPTION 'authenticated bearer token and organization are required';
@@ -208,6 +211,12 @@ BEGIN
   IF NOT (SELECT p.prosecdef AND p.proowner=(SELECT oid FROM pg_roles WHERE rolname='rupaykg_context_owner')
           FROM pg_proc p WHERE p.oid='public.rupaykg_set_authenticated_context(text,uuid)'::regprocedure) THEN
     RAISE EXCEPTION 'context issuer must be SECURITY DEFINER owned by the dedicated context owner';
+  END IF;
+  IF NOT has_table_privilege('rupaykg_context_owner','public.identity_sessions','SELECT')
+     OR NOT has_table_privilege('rupaykg_context_owner','public.identities','SELECT')
+     OR NOT has_table_privilege('rupaykg_context_owner','public.organization_memberships','SELECT')
+     OR NOT has_table_privilege('rupaykg_context_owner','public.organizations','SELECT') THEN
+    RAISE EXCEPTION 'context owner missing required session and authorization read privileges';
   END IF;
   IF (SELECT rolcanlogin OR rolsuper OR rolbypassrls FROM pg_roles
       WHERE rolname='rupaykg_context_owner') THEN
