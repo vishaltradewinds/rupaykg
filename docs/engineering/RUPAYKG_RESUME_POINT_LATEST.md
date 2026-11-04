@@ -47,7 +47,7 @@
 3. Reconcile migration 096 by exact historical SQL/hash and preserve the production ledger; recover staging-only migrations separately.
 4. Complete combined #252 + #272 + #250/#251 + #284 rehearsal with #268's migration boundary. One canonical guard owner and one trigger only.
 5. Complete 67-table tenant classification and RLS policy matrix; rehearse only on an already-authorized disposable environment.
-6. Obtain safe, redacted runtime identity proof from Render. Log access remains blocked pending user confirmation of workspace selection.
+6. Render logs were inspected after user confirmation. Actual runtime database role and target branch remain UNPROVEN; implement and validate a safe diagnostic on a non-production candidate.
 7. Keep production read-only and release HOLD until independent gates and explicit approval are satisfied.
 
 ## Evidence discipline
@@ -63,3 +63,7 @@ CI success is engineering evidence only. It does not establish production deploy
 - The Neon query's `current_user/session_user = rupaykg` describes the audit connector session, not the Render application. Therefore the actual Render runtime database identity and target branch remain UNPROVEN. Do not infer them from service health, audit connector identity, table ownership or secret names.
 - No Render settings/secrets, deployments, Neon production data, roles, grants, migrations or RLS were changed.
 - Next proof: implement a minimal authenticated/operationally gated diagnostic on a non-production candidate that logs only `current_database()`, `current_user`, `session_user`, server/branch identity and deployed commit; no connection strings or secret values. Validate it on a disposable environment and deploy only after explicit release approval.
+
+
+## Migration-lineage warning from production boot log
+The live boot log says 91 migration files are current, while authoritative Neon main contains 92 ledger rows. The runner's current implementation iterates present source files but does not fail on ledger entries whose source file is missing or compare stored source checksums. Thus the "current" message is not proof of complete source/ledger reconciliation and is consistent with the missing applied migration 096 already tracked in #214. Issue #214 has been updated. Do not modify production ledger or replay migrations; recover exact 096 source/hash and reconcile all ledger/source records first.
