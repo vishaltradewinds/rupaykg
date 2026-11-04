@@ -80,3 +80,8 @@ Production Neon remains 0/67 RLS, 0 FORCE RLS, 0 policies; the elevated `rupaykg
 **Release:** Production READ-ONLY / HOLD. Worker OFF. Certification OFF. National platform provisional TRL 3; tested components at most TRL 4; TRL 9 NOT ESTABLISHED.
 
 **Explicitly not performed:** production DDL/DML, migration, role/grant/RLS change, Neon branch operation, deployment, worker/scheduler activation, external provider write, merge or certification.
+
+## Documentation handoff
+
+- Draft PR #283 preserves this run's four documentation artifacts. It is stacked on PR #204's documentation branch, open/draft/unmerged, and targets that branch rather than main.
+- No workflow runs were returned for the documentation commit; this checkpoint is not represented as CI-validated. The engineering CI claims refer only to exact-head disposable PostgreSQL runs #5474, #5465 and #5457.
