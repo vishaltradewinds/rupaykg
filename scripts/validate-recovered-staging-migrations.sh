@@ -51,15 +51,15 @@ done
 psql --dbname="$DB_NAME" --set=ON_ERROR_STOP=1 <<'SQL'
 do $$
 declare
-  identity_id uuid := gen_random_uuid();
-  organization_id uuid := gen_random_uuid();
+  v_identity_id uuid := gen_random_uuid();
+  v_organization_id uuid := gen_random_uuid();
   evidence_id uuid := gen_random_uuid();
-  inbox_id uuid;
+  v_inbox_id uuid;
   blocked boolean;
   event_count integer;
 begin
-  insert into identities(id) values (identity_id);
-  insert into organizations(id) values (organization_id);
+  insert into identities(id) values (v_identity_id);
+  insert into organizations(id) values (v_organization_id);
   insert into evidence(id) values (evidence_id);
 
   insert into async_mirror_inbox
@@ -68,31 +68,31 @@ begin
     ('TEST-AUTH', 'TEST-MUNI', gen_random_uuid(), now(),
      '{"batchMetadata":{"sourceVersion":"test-v1"},"rawDataLogs":["synthetic test payload"]}'::jsonb,
      repeat('a', 64))
-  returning id into inbox_id;
+  returning id into v_inbox_id;
 
   select count(*) into event_count
-    from async_mirror_inbox_events where inbox_id = inbox_id;
+    from async_mirror_inbox_events where inbox_id = v_inbox_id;
   if event_count <> 1 then
     raise exception 'expected one INSERT event, got %', event_count;
   end if;
 
   update async_mirror_inbox
      set status = 'PROCESSING', attempts = 1, lease_token = gen_random_uuid(), lease_until = now() + interval '2 minutes'
-   where id = inbox_id;
+   where id = v_inbox_id;
 
   select count(*) into event_count
-    from async_mirror_inbox_events where inbox_id = inbox_id;
+    from async_mirror_inbox_events where inbox_id = v_inbox_id;
   if event_count <> 2 then
     raise exception 'expected a second status/attempt event, got %', event_count;
   end if;
 
-  update async_mirror_inbox set status = 'VALIDATED' where id = inbox_id;
+  update async_mirror_inbox set status = 'VALIDATED' where id = v_inbox_id;
 
   blocked := false;
   begin
     update async_mirror_inbox_events
        set error_code = 'tamper'
-     where inbox_id = inbox_id;
+     where inbox_id = v_inbox_id;
   exception when others then
     blocked := true;
   end;
@@ -102,7 +102,7 @@ begin
 
   blocked := false;
   begin
-    delete from async_mirror_inbox_events where inbox_id = inbox_id;
+    delete from async_mirror_inbox_events where inbox_id = v_inbox_id;
   exception when others then
     blocked := true;
   end;
@@ -124,12 +124,12 @@ begin
   end if;
 
   insert into ai_intake_rate_limits(identity_id, organization_id, window_start, request_count)
-  values(identity_id, organization_id, date_trunc('minute', now()), 10);
+  values(v_identity_id, v_organization_id, date_trunc('minute', now()), 10);
 
   blocked := false;
   begin
     insert into ai_intake_rate_limits(identity_id, organization_id, window_start, request_count)
-    values(identity_id, organization_id, date_trunc('minute', now()) + interval '1 minute', 11);
+    values(v_identity_id, v_organization_id, date_trunc('minute', now()) + interval '1 minute', 11);
   exception when check_violation then
     blocked := true;
   end;
@@ -139,13 +139,13 @@ begin
 
   insert into ai_evidence_intake_jobs
     (identity_id, organization_id, idempotency_key, request_sha256)
-  values(identity_id, organization_id, 'test-idempotency-key', repeat('c', 64));
+  values(v_identity_id, v_organization_id, 'test-idempotency-key', repeat('c', 64));
 
   blocked := false;
   begin
     insert into ai_evidence_intake_jobs
       (identity_id, organization_id, idempotency_key, request_sha256)
-    values(identity_id, organization_id, 'test-idempotency-key', repeat('c', 64));
+    values(v_identity_id, v_organization_id, 'test-idempotency-key', repeat('c', 64));
   exception when unique_violation then
     blocked := true;
   end;
@@ -157,7 +157,7 @@ begin
   begin
     update ai_evidence_intake_jobs
        set status = 'COMPLETED', completed_at = now()
-     where identity_id = identity_id and organization_id = organization_id;
+     where identity_id = v_identity_id and organization_id = v_organization_id;
   exception when check_violation then
     blocked := true;
   end;
@@ -167,7 +167,7 @@ begin
 
   update ai_evidence_intake_jobs
      set status = 'COMPLETED', completed_at = now(), response_json = '{"ok":true}'::jsonb
-   where identity_id = identity_id and organization_id = organization_id;
+   where identity_id = v_identity_id and organization_id = v_organization_id;
 
   if to_regclass('public.async_mirror_inbox_due_idx') is null
      or to_regclass('public.async_mirror_inbox_expired_lease_idx') is null
