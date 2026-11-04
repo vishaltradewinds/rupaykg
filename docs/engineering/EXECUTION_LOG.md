@@ -113,3 +113,11 @@
 - PR #247 remains draft/unmerged; migration unapplied. Identity suspension/membership revocation race tests, non-owner runtime role, production-like schema with recovered 096 columns/triggers, DELETE privilege/tamper controls and geography fail-closed remain open.
 - PR #244 latest documentation head `c15536707d3326156286b89bcea2b84d3a228a51` passed CI #5356 (`41789332489`) end-to-end.
 - Updated canonical resume point. Production remains READ-ONLY / HOLD; no production/staging writes, migrations, role/grant/RLS/function/trigger changes, deployment, worker activation or certification. TRL 9 NOT ACHIEVED.
+
+
+## 2026-11-04 — CTO Run 24 (three verification revocation race tests green)
+- PR #247 exact head `4fed4494bfada75f0cb4c1cfbb4e10a8108198fc` passed CI #5360 (`41789915766`) end-to-end, including three two-session PostgreSQL races: role permission revocation, membership status deactivation, and identity suspension. In each, the verification insert is observed waiting on the relevant row lock and fails after the revocation/suspension commits.
+- Confirmed prior approved decision-time permission snapshot remains unchanged after role permission revocation/restoration.
+- PR #247 remains draft/unmerged; candidate migration unapplied. Remaining: production-like schema rehearsal with 096 columns/triggers, non-owner runtime role grants, lock-order/deadlock review, geography fail-closed, deletion/tamper controls and independent DBA/security review.
+- PR #244 exact latest head `ff6872c1f90c0964bd9c1e31cbeb1adbf96410a3` passed CI #5359 (`41789805891`) end-to-end.
+- Updated canonical resume point. Production remains READ-ONLY / HOLD. No production/staging writes, migration, role/grant/RLS/function/trigger changes, deployment, worker activation or certification. TRL 9 NOT ACHIEVED.
