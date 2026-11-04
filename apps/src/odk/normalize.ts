@@ -125,7 +125,7 @@ export function normalizeOdkSubmission(
     if (!Buffer.isBuffer(item.bytes) || item.bytes.length === 0 || item.bytes.length > MAX_ATTACHMENT_BYTES) return { ok: false, code: "ODK_ATTACHMENT_SIZE_INVALID" };
     totalAttachmentBytes += item.bytes.length;
     if (totalAttachmentBytes > MAX_SUBMISSION_ATTACHMENT_BYTES) return { ok: false, code: "ODK_SUBMISSION_ATTACHMENT_SIZE_LIMIT" };
-    if (mediaType === "image/jpeg" && !(item.bytes[0] === 0xff && item.bytes[1] === 0xd8 && item.bytes[2] === 0xff)) return { ok: false, code: "ODK_ATTACHMENT_SIGNATURE_MISMATCH" };
+    if (mediaType === "image/jpeg" && !item.bytes.subarray(0, 3).equals(Buffer.from([0xff, 0xd8, 0xff]))) return { ok: false, code: "ODK_ATTACHMENT_SIGNATURE_MISMATCH" };
     if (mediaType === "image/png" && !item.bytes.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10]))) return { ok: false, code: "ODK_ATTACHMENT_SIGNATURE_MISMATCH" };
     if (mediaType === "application/pdf" && item.bytes.subarray(0, 5).toString("ascii") !== "%PDF-") return { ok: false, code: "ODK_ATTACHMENT_SIGNATURE_MISMATCH" };
     if ((mediaType === "text/plain" || mediaType === "text/csv") && item.bytes.includes(0)) return { ok: false, code: "ODK_ATTACHMENT_SIGNATURE_MISMATCH" };
