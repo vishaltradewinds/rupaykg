@@ -96,3 +96,12 @@
 - PR #247 initial head `6a5fd9c5288e56d7243ab70f39f5a928f6235208`; CI #5350 (`41788676133`) in progress at this checkpoint.
 - PR #244 latest documentation head `12d9664e3e4b62138a0f69d0588715b743d63ee8` passed CI #5349 end-to-end; remains draft/unmerged.
 - Production remains READ-ONLY / HOLD. No production or staging writes, migrations, role/grant/RLS/function/trigger changes, worker activation, deployment, merge or certification. TRL 9 NOT ACHIEVED.
+
+
+## 2026-11-04 — CTO Run 22 (verification tenant-binding CI accepted)
+- PR #247 exact head `50b0391dab1f2564f1d8e7a48ec592466eaa79e3` passed CI #5354 (`41789024956`) end-to-end: audit, migration validation, disposable PostgreSQL migration, typecheck, build, browser smoke, full PostgreSQL tests, production container and cleanup.
+- Corrected missed second `canVerifyEvidence` call in `workspace-routes.ts`; exact active organization now passed and enforced in both review/verification endpoints.
+- First CI failure was the missed second callsite; second CI failure was an established self-approval error-text assertion. Both corrected. New evidence-vault tests passed: cross-org rejected insert blocked at API and DB, same-org approved/rejected valid, snapshot captured, update blocked.
+- PR #247 remains draft/unmerged; candidate migration unapplied. Two-session race tests, geography fail-open remediation, non-owner runtime role and independent DBA/security review remain open.
+- PR #244 exact head `76dfd7bbdc272bfbe98963005dd2727e177a46c5` passed CI #5351 (`41788775436`) end-to-end.
+- Production remains READ-ONLY / HOLD. No production/staging writes, migrations, role/grant/RLS changes, deployments, worker activation or certification. TRL 9 NOT ACHIEVED.
