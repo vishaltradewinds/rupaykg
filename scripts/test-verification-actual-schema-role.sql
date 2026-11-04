@@ -4,7 +4,14 @@
 -- requirements; it is not a production-role or RLS certification.
 \set ON_ERROR_STOP on
 
-DROP ROLE IF EXISTS rupaykg_actual_schema_api_proof;
+DO $cleanup$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='rupaykg_actual_schema_api_proof') THEN
+    EXECUTE 'DROP OWNED BY rupaykg_actual_schema_api_proof';
+    EXECUTE 'DROP ROLE rupaykg_actual_schema_api_proof';
+  END IF;
+END;
+$cleanup$;
 CREATE ROLE rupaykg_actual_schema_api_proof
   NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;
 
@@ -113,17 +120,23 @@ INSERT INTO public.evidence(activity_id,evidence_type,status,captured_at,content
 SELECT a.id,'CI_OTHER_TENANT_EVIDENCE','UNDER_REVIEW',now(),repeat('b',64)
 FROM public.activities a WHERE a.activity_type='CI_OTHER_TENANT_ACTIVITY';
 
--- The proof role is not the table owner and must successfully invoke the
--- exact candidate trigger using only SELECT + UPDATE(id) on lock targets.
-SET ROLE rupaykg_actual_schema_api_proof;
-INSERT INTO public.verifications(evidence_id,activity_id,verifier_identity_id,decision,scope,rationale)
-SELECT e.id,a.id,i.id,'APPROVED','CI_ACTUAL_SCHEMA','Exact candidate migration non-owner role proof'
+-- Resolve fixture IDs as the migration/test owner; the API proof role receives
+-- no organization-table read grant merely to locate its own test fixture.
+SELECT e.id AS proof_evidence_id, a.id AS proof_activity_id, i.id AS proof_identity_id
 FROM public.evidence e
 JOIN public.activities a ON a.id=e.activity_id
 JOIN public.organizations o ON o.id=a.organization_id
 JOIN public.identities i ON i.external_subject='ci-actual-schema-verifier'
 WHERE e.evidence_type='CI_ACTUAL_SCHEMA'
-  AND o.name='CI-ACTUAL-SCHEMA-ORG-A';
+  AND o.name='CI-ACTUAL-SCHEMA-ORG-A'
+\gset
+
+-- The proof role is not the table owner and must successfully invoke the
+-- exact candidate trigger using only SELECT + UPDATE(id) on lock targets.
+SET ROLE rupaykg_actual_schema_api_proof;
+INSERT INTO public.verifications(evidence_id,activity_id,verifier_identity_id,decision,scope,rationale)
+VALUES (:'proof_evidence_id', :'proof_activity_id', :'proof_identity_id',
+        'APPROVED','CI_ACTUAL_SCHEMA','Exact candidate migration non-owner role proof');
 
 -- Explicitly record whether another tenant's evidence is directly readable.
 -- On the current migration baseline RLS is disabled; this is expected to expose
@@ -132,10 +145,7 @@ DO $tenant_read_assertion$
 BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM public.evidence e
-    JOIN public.activities a ON a.id=e.activity_id
-    JOIN public.organizations o ON o.id=a.organization_id
-    WHERE o.name='CI-ACTUAL-SCHEMA-ORG-B'
-      AND e.evidence_type='CI_OTHER_TENANT_EVIDENCE'
+    WHERE e.evidence_type='CI_OTHER_TENANT_EVIDENCE'
   ) THEN
     RAISE EXCEPTION 'unexpectedly could not observe the baseline cross-tenant read finding';
   END IF;
@@ -160,4 +170,5 @@ BEGIN
 END;
 $snapshot_assertion$;
 
+DROP OWNED BY rupaykg_actual_schema_api_proof;
 DROP ROLE rupaykg_actual_schema_api_proof;
