@@ -1,6 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash, randomBytes } from "node:crypto";
+import { existsSync } from "node:fs";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import Fastify from "fastify";
 import { Pool } from "pg";
 import { registerEvidenceVaultRoutes } from "./evidence-vault-routes.js";
@@ -12,6 +15,26 @@ test("evidence vault enforces tenant scope, versioned storage, integrity and ind
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
   const app = Fastify({ logger: false });
   await registerEvidenceVaultRoutes(app, pool);
+  // Rehearse the forward-only migration against a production-like catalog:
+  // snapshot columns already exist and both historical trigger names are present.
+  const migrationCandidates = [
+    path.resolve(process.cwd(), "migrations/20261104_verification_authorization_tenant_binding.sql"),
+    path.resolve(process.cwd(), "../migrations/20261104_verification_authorization_tenant_binding.sql"),
+  ];
+  const migrationPath = migrationCandidates.find(candidate => existsSync(candidate));
+  assert.ok(migrationPath, "verification authorization migration must be available to the integration test");
+  const migrationSql = await readFile(migrationPath, "utf8");
+  await pool.query("drop trigger if exists verification_authorization_guard on public.verifications");
+  await pool.query(`create or replace function public.test_legacy_verification_independence()
+    returns trigger language plpgsql as $ begin return new; end $`);
+  await pool.query("create trigger verification_independence_guard before insert on public.verifications for each row execute function public.test_legacy_verification_independence()");
+  await pool.query("create trigger verifications_integrity_guard before insert or update on public.verifications for each row execute function public.prevent_invalid_verification()");
+  await pool.query(migrationSql);
+  const remainingVerificationTriggers = await pool.query<{ tgname: string }>(
+    "select tgname from pg_trigger where tgrelid='public.verifications'::regclass and not tgisinternal order by tgname",
+  );
+  assert.deepEqual(remainingVerificationTriggers.rows.map(row => row.tgname), ["verification_authorization_guard"]);
+  await pool.query("drop function public.test_legacy_verification_independence()");
   const suffix = randomBytes(8).toString("hex");
   const uploaderToken = randomBytes(32).toString("base64url");
   const reviewerToken = randomBytes(32).toString("base64url");
