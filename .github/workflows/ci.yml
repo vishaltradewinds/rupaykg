@@ -44,6 +44,11 @@ jobs:
           RUPAYKG_MIGRATOR_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/rupaykg
           RUPAYKG_MIGRATOR_DATABASE_SSL: "false"
         run: npm run migrate -w @rupaykg/api
+      - name: Verify orphaned migration ledger fails closed
+        env:
+          RUPAYKG_MIGRATOR_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/rupaykg
+          RUPAYKG_MIGRATOR_DATABASE_SSL: "false"
+        run: bash scripts/test-migrator-orphan-ledger.sh
       - run: npm run typecheck
       - run: npm run build
       - name: Browser smoke test production web build
