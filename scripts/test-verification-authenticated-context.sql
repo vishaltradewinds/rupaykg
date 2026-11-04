@@ -36,6 +36,11 @@ GRANT CREATE ON SCHEMA public TO rupaykg_context_owner;
 GRANT SELECT ON public.identity_sessions,public.identities,
   public.organization_memberships,public.organizations,public.activities
   TO rupaykg_context_owner;
+-- PostgreSQL requires UPDATE privilege for SELECT ... FOR SHARE. Grant only
+-- the immutable primary-key column used for row locking, never table UPDATE.
+GRANT UPDATE (id) ON public.identity_sessions,public.identities,
+  public.organization_memberships,public.organizations,public.activities
+  TO rupaykg_context_owner;
 GRANT SELECT ON public.evidence,public.activities,public.organization_memberships,
   public.roles,public.identities,public.geography,public.organization_geography_scopes
   TO rupaykg_context_api;
@@ -217,6 +222,20 @@ BEGIN
      OR NOT has_table_privilege('rupaykg_context_owner','public.organization_memberships','SELECT')
      OR NOT has_table_privilege('rupaykg_context_owner','public.organizations','SELECT') THEN
     RAISE EXCEPTION 'context owner missing required session and authorization read privileges';
+  END IF;
+  IF has_table_privilege('rupaykg_context_owner','public.identity_sessions','UPDATE')
+     OR has_table_privilege('rupaykg_context_owner','public.identities','UPDATE')
+     OR has_table_privilege('rupaykg_context_owner','public.organization_memberships','UPDATE')
+     OR has_table_privilege('rupaykg_context_owner','public.organizations','UPDATE')
+     OR has_table_privilege('rupaykg_context_owner','public.activities','UPDATE') THEN
+    RAISE EXCEPTION 'context owner must not have table-wide UPDATE';
+  END IF;
+  IF NOT has_column_privilege('rupaykg_context_owner','public.identity_sessions','id','UPDATE')
+     OR NOT has_column_privilege('rupaykg_context_owner','public.identities','id','UPDATE')
+     OR NOT has_column_privilege('rupaykg_context_owner','public.organization_memberships','id','UPDATE')
+     OR NOT has_column_privilege('rupaykg_context_owner','public.organizations','id','UPDATE')
+     OR NOT has_column_privilege('rupaykg_context_owner','public.activities','id','UPDATE') THEN
+    RAISE EXCEPTION 'context owner missing narrow row-lock UPDATE(id) privilege';
   END IF;
   IF (SELECT rolcanlogin OR rolsuper OR rolbypassrls FROM pg_roles
       WHERE rolname='rupaykg_context_owner') THEN
