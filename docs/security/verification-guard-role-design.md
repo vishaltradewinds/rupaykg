@@ -34,7 +34,7 @@ The intended lock order is:
 5. membership's role row;
 6. verifier identity row.
 
-The organization row is locked before checking VERIFIED status and geography scope. A companion trigger on `organization_geography_scopes` takes an UPDATE lock on the owning organization before a scope insert, update, or delete. This serializes verification against organization suspension and geography-scope mutation. Membership, role and identity are then locked and re-read in that order before permission is evaluated and provenance is snapshotted.
+The organization row is locked before checking VERIFIED status and geography scope. A companion trigger on `organization_geography_scopes` takes an UPDATE lock on the owning organization before a scope insert, update, or delete. This serializes verification against organization suspension and geography-scope mutation. The verification trigger evaluates geography scope with its own query after acquiring the organization lock; it deliberately does not call the existing STABLE geography helper, whose snapshot can remain pinned to the outer INSERT while waiting on a concurrent scope change. Membership, role and identity are then locked and re-read in that order before permission is evaluated and provenance is snapshotted.
 
 ## Disposable full-schema proof
 
@@ -45,7 +45,7 @@ The integration test runs after the repository's active migrations have been app
 - the decision captures membership, role, permission snapshot and timestamp;
 - the API proof role has no UPDATE, DELETE or TRUNCATE privilege on verification decisions;
 - the helper role is NOLOGIN/NOBYPASSRLS, does not own protected tables, has only the required column-scoped lock privileges, and cannot be assumed by the API proof role;
-- concurrent role permission revocation, membership deactivation, identity suspension, organization status change and geography-scope mutation serialize with verification and fail closed after the competing change commits.
+- concurrent role permission revocation, membership deactivation, identity suspension, organization status change and geography-scope mutation serialize with verification and fail closed after the competing change commits. The first full-schema run exposed that the existing STABLE geography helper did not observe a scope change committed while the INSERT was waiting; the trigger now runs a fresh scope query after the organization lock, and the regression test remains mandatory.
 
 The test runs only against GitHub Actions disposable PostgreSQL. It does not connect to Neon, Render, or any persistent database.
 
