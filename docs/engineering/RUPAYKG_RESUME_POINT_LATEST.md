@@ -134,3 +134,30 @@ This proves source/config does not demonstrate credential separation; it does no
 3. Continue dynamic workspace, evidence-vault, bilateral settlement and field-device authorization tests under the actual non-owner runtime role in an isolated disposable environment.
 4. Build and review the 67-table policy matrix and migration-drift reconciliation plan.
 5. Keep all PRs draft/unmerged and production READ-ONLY / HOLD pending independent review and controlled approvals.
+
+
+## 2026-11-04 authoritative refresh — CTO Run 17 (06:28 UTC onward)
+
+### Production migration ledger reconciliation — exact read-only evidence
+- Queried the complete production `public.schema_migrations` ledger on Neon project `steep-mud-79906940`, branch `br-restless-base-b44cip2h`, database `rupaykg`; exactly 92 rows returned.
+- Ledger records numbered migrations `001`–`087`, then `096_verification_authorization_provenance.sql`, plus dated migrations `20261018`–`20261021`. Versions `088`–`095` are absent from production ledger.
+- Fresh current-main Git tree contains 91 migration SQL files: 87 numbered files `001`–`087` plus four dated files `20261018`–`20261021`. It does not contain active migration source `096`.
+- Current-main `migrations/023_lifecycle_state_guards.sql` exists and production ledger records it, contradicting README's claim that 023 is absent.
+- README inventory stops at 028 and omits 029–087 and dated migrations. It mislabels 015 as high-risk action permissions; actual 015 is Guardian/Hedera MRV and actual high-risk permission migration is 041.
+- `scripts/validate-migrations.mjs` and `apps/src/migrate.ts` discover numeric SQL files from the directory, including 023 and 029–087; README is not the migration runner's inventory.
+- The issue #214 thread now contains this source/tree/ledger discrepancy and the prior 096 history. Do not replay 096, rewrite ledger rows, rename or renumber migrations, or assume missing 088–095 should be restored. Recover source and deployment chronology before any reconciliation proposal.
+
+### Production SQL authorization function inspection
+- Read-only `pg_proc` inspection returned `can_assess_epr(uuid,uuid)`, `can_write_esg(uuid,uuid)`, `has_verification_permission(uuid)`, and `identity_has_permission(uuid,text,text[])` as owned by `rupaykg`, SECURITY INVOKER, STABLE, with no function-level `search_path` setting.
+- Production `can_assess_epr` includes `epr:manage` and `epr.manage` aliases; production `can_write_esg` includes `csr:manage` and `csr.manage` aliases. These aliases are absent from current-main migration 018, indicating live definition/source drift.
+- A database function-source search for calls to these functions returned no matches among other public PL/pgSQL/SQL function bodies. Application call sites have not yet been exhaustively proven absent; do not label them unused until source-tree search is complete.
+- Current-main migration 018 includes role-name fallback for EPR/ESG management. Reconcile this with explicit permission-only policy and test all actual call paths under intended non-owner runtime identity before proposing forward-only changes.
+
+### Validation and PR status
+- PR #244 documentation head `9081e98fec3e263fc95c8a377ebd2156d6ea4cb3` passed exact-head CI run #5335 (`41785611740`) end-to-end: dependency audit, migration validation, disposable PostgreSQL migration, typecheck, production build, browser smoke, full tests/PostgreSQL acceptance, production-container build and cleanup.
+- PR #244 remains OPEN / DRAFT / UNMERGED. PR #246 remains OPEN / DRAFT / UNMERGED with exact-head CI #5329 SUCCESS.
+
+### Safety / next actions
+- Production remains READ-ONLY / HOLD. No production SQL writes, DDL, migrations, function changes, role/grant/ownership changes, RLS activation, branch operations, deployments, merges, worker activation or certification.
+- Continue with exact migration checksum/source chronology (including 096 and staging-only 20261022–20261025 artifacts), full application call-site map for DB authorization functions, 67-table policy matrix, actual non-owner runtime role proof, and disposable cross-tenant regression harness.
+- Independent DBA/security review, production tenant isolation, Guardian/Hedera live round-trip, SITE-JBP-01 Kathonda field acceptance and TRL 9 remain NOT ACHIEVED.
