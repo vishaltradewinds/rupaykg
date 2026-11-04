@@ -41,7 +41,7 @@ test("verification SECURITY DEFINER guard runs under a NOLOGIN non-owner role wi
     await pool.query(`
       create or replace function ${s}.organization_has_geography_scope(p_org uuid, p_geo uuid)
       returns boolean language sql stable security invoker
-      set search_path = pg_catalog, ${schema}
+      set search_path = pg_catalog, ${schema}, pg_temp
       as $scope$
         with recursive ancestors(id) as (
           select g.id from ${s}.geography g where g.id = p_geo
@@ -87,7 +87,7 @@ test("verification SECURITY DEFINER guard runs under a NOLOGIN non-owner role wi
       returns trigger
       language plpgsql
       security definer
-      set search_path = pg_catalog, ${schema}
+      set search_path = pg_catalog, ${schema}, pg_temp
       set row_security = on
       as $guard_fn$
       declare
