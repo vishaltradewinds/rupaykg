@@ -12,8 +12,8 @@ create or replace function public.organization_has_geography_scope(
 ) returns boolean
 language sql
 stable
-set search_path = pg_catalog, public
-as $$
+set search_path = pg_catalog, public, pg_temp
+as $geo_scope$
   with recursive ancestors(id) as (
     select g.id
       from public.geography g
@@ -34,7 +34,7 @@ as $$
        where s.organization_id = p_organization_id
          and s.status::text = 'VERIFIED'
     );
-$$;
+$geo_scope$;
 
 comment on function public.organization_has_geography_scope(uuid, uuid) is
   'Fail-closed geography authorization: requires a verified organization geography root equal to or ancestral to the requested geography; missing, pending or foreign scopes return false.';
