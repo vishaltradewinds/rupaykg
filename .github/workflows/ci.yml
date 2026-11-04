@@ -40,6 +40,8 @@ jobs:
         run: npm audit --omit=dev --audit-level=high
       - run: npm run validate:migrations
       - run: npm run migrate -w @rupaykg/api
+      - name: Prove active authenticated verification migration on disposable PostgreSQL
+        run: psql "$DATABASE_URL" --set=ON_ERROR_STOP=1 --file=scripts/test-authenticated-verification-context.sql
       - run: npm run typecheck
       - run: npm run build
       - name: Browser smoke test production web build
