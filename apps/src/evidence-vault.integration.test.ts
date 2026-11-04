@@ -480,6 +480,16 @@ test("evidence vault enforces tenant scope, versioned storage, integrity and ind
       await scopeVerifier.query("rollback").catch(() => undefined);
       scopeChanger.release();
       scopeVerifier.release();
+      // Restore the fixture's original verified root so later evidence-review
+      // assertions continue to run within the tenant's authorized geography.
+      await pool.query(
+        "update organization_geography_scopes set status='VERIFIED' where organization_id=$1 and geography_id=$2",
+        [organizationId, geography.rows[0]!.id],
+      );
+      await pool.query(
+        "delete from organization_geography_scopes where organization_id=$1 and geography_id=$2",
+        [organizationId, newScopeGeography],
+      );
     }
 
     const snapshotAfterRevocation = await pool.query<{ authorization_permissions_snapshot: string[] }>(
