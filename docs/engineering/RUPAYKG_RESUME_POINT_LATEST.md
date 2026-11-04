@@ -213,3 +213,26 @@ This proves source/config does not demonstrate credential separation; it does no
 3. Design worker lease fencing, claim exclusivity, retry/backoff, quarantine, idempotency and stale-lease recovery tests; prove worker runtime and tenant mapping before any operational claim.
 4. Continue verification trigger unified design and EPR/ESG permission alias/caller tests on disposable PostgreSQL.
 5. Production remains READ-ONLY / HOLD. No staging data, production schema, data, roles, grants, functions or triggers changed. TRL 9 NOT ACHIEVED.
+
+
+## 2026-11-04 authoritative refresh — CTO Run 20 (verification guard clarification)
+
+### Exact-head CI closure
+- PR #244 head `0a8b55f62065080163bec5db858e6f75c2b03ad6` passed exact-head CI #5346 (`41787820120`) end-to-end, including dependency audit, migration validation, disposable PostgreSQL migration, typecheck, production build, browser smoke, full tests/PostgreSQL acceptance, production-container build and cleanup.
+- Later clarification/documentation commit `5c4df001a91f4c1e7337d266a7b7abde759501aa` is newer and needs exact-head CI; #5346 must not be attributed to it.
+
+### Verification-trigger interaction clarification
+- `verification_independence_guard` is a BEFORE INSERT trigger; `verifications_integrity_guard` is BEFORE INSERT OR UPDATE. PostgreSQL fires same-event triggers alphabetically, so the legacy independence guard runs first and the strict 096 guard runs afterward.
+- The legacy trigger's `VERIFIER` / `AUDITOR` role-name fallback is contradictory/redundant, but with the strict 096 guard still enabled it does **not** prove a successful role-name-only authorization bypass: the strict trigger subsequently rejects the verifier without explicit same-organization permission.
+- Confirmed security defect remains snapshot mutability: every UPDATE of an APPROVED verification re-evaluates authorization and overwrites the four decision-time snapshot columns. This contradicts the intended immutable provenance. Decision downgrade/re-approval semantics are also undefined.
+- Updated issue #214 and the recovered 096 review document to distinguish a confirmed defect from an unproven bypass. Consolidation must preserve self-approval protection, remove role-name fallback, and implement write-once snapshot/explicit transition semantics in one reviewed forward-only change.
+
+### Current staging migration evidence
+- The staging-only 20261022–20261025 schema reconstruction is preserved in `docs/engineering/STAGING_ASYNC_MIRROR_AI_INTAKE_EVIDENCE_2026-11-04.md`. It is catalog evidence, not original migration source. Eight TEST-AUTH/TEST-MUNI PROCESSING inbox rows have expired leases; one RETRY is overdue; no current-main worker source or independently deployed worker was proven. No staging writes were made.
+
+### Next steps
+1. Validate the latest PR #244 head after the clarification commit.
+2. Recover original staging migration SQL and worker source/deployment artifact; keep staging test objects out of production.
+3. Implement a single verification guard plus snapshot immutability and decision-state tests only on a disposable non-production environment after review.
+4. Map all EPR/ESG function callers and permission aliases; test role-name-only and explicit-permission cases under non-owner runtime.
+5. Production remains READ-ONLY / HOLD; no production/staging writes, DDL, migration, function/trigger, role/grant/RLS change, worker activation, deployment, merge or certification. TRL 9 NOT ACHIEVED.
