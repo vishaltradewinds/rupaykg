@@ -33,3 +33,11 @@
 - Updated P0 issue #196 with production catalog evidence. No role, grant, ownership, RLS, schema or data mutation was made.
 - Refreshed canonical resume point with exact CI and production catalog evidence. PR #243 and PR #244 remain draft/unmerged.
 - Production remains READ-ONLY / HOLD. No production migration, deployment, merge, worker activation or certification.
+
+## 2026-11-04 — CTO Run 15 (06:10 UTC onward)
+- Confirmed PR #244 documentation head 61094b13 passed exact-head CI #5327 end-to-end, including dependency audit, migration validation, disposable PostgreSQL migration, typecheck, build, browser smoke, full tests and production container.
+- Completed read-only production 67-table/181-FK tenant-isolation inventory; confirmed 0/67 RLS, 0/67 FORCE RLS, all tables owned by BYPASSRLS-capable privileged role. Committed full classification and release gates on PR #244 branch.
+- Completed static route-family map across 90 route declarations in 15 source files; documented positive controls, unresolved dynamic tests, worker inventory and shared DB URL/migration-in-web-startup issue.
+- Found geography roots/children endpoints scope via any verified membership rather than selected active organization. Created draft PR #246 with active-org-bound helper, endpoint filters and five regression tests. Exact-head CI #5329 is running; typecheck is in progress after dependency audit, migration validation and disposable DB migration passed. No CI pass claimed yet.
+- Updated issue #196 with tenant inventory/route-surface evidence and issue #215 with the canVerifyEvidence organization-binding design requirement.
+- PR #246 remains draft/unmerged. Production remains READ-ONLY / HOLD; no production SQL, DDL, role/grant/RLS, migration, deployment, merge, worker activation or certification.
