@@ -414,3 +414,30 @@ This proves source/config does not demonstrate credential separation; it does no
 - Added design-only proposal `docs/security/VERIFICATION_GUARD_NON_OWNER_EXECUTION_DESIGN_2026-11-04.md`: dedicated NOLOGIN/NOBYPASSRLS SECURITY DEFINER guard role, column-limited lock privilege, guard-context RLS policies, fixed search_path, deterministic lock contract and disposable FORCE RLS test gates. This is a candidate for prototyping only; it is not implemented, approved or production-applied.
 
 - Documentation head `1c39a399218584fc3ce8f143385e3e54adec754f` passed exact-head CI #5372 (`41794655157`) SUCCESS across all configured stages. The subsequently added non-owner guard design proposal is a newer docs-only change and requires its own exact-head CI.
+
+
+## 2026-11-04 authoritative refresh — CTO Run 27 (membership-role tenant integrity)
+
+### New structural finding and production evidence
+- The database previously enforced only `organization_memberships.role_id -> roles.id`; it did not enforce that the referenced role belonged to the same organization as the membership. Multiple auth, onboarding and platform-admin joins also omitted the organization equality.
+- Read-only Neon production main query (project `steep-mud-79906940`, branch `br-restless-base-b44cip2h`, database `rupaykg`) returned 0 mismatched membership-role pairs: 0 VERIFIED and 0 PENDING. No production rows were changed.
+
+### PR #252 — stacked database/application hardening
+- Branch `security/membership-role-tenant-integrity-2026-11-04`; exact head `2228100e0da0a1dc9321b11e48f6b2fa4ee6ba33`.
+- PR #252 is OPEN / DRAFT / UNMERGED, stacked on PR #247's branch. New migration `2026110401_membership_role_tenant_binding.sql` adds a validated composite FK `(role_id, organization_id) -> roles(id, organization_id)` plus supporting indexes.
+- Auth membership projections, onboarding hierarchy authority, platform-admin authorization, reserved-role checks, access-change review, membership directory and revocation queries now bind role organization to membership organization.
+- PostgreSQL integration test reapplies and validates the migration, rejects cross-org role assignment on INSERT, and rejects membership organization reassignment on UPDATE. Platform-admin unit tests assert the equality in exercised authorization queries.
+- Local evidence: migration validation PASS (93 migrations / 73 schema objects); typecheck PASS; production build PASS; focused platform-admin/auth permission tests 19/19 PASS; `git diff --check` PASS.
+- Exact combined-stack CI #5376 (`41796337375`) was running via temporary validation PR #254. At checkpoint, dependency audit, migration validation, disposable PostgreSQL migration, typecheck, build, browser smoke and PostgreSQL acceptance had passed; production-container build remained in progress. Close #254 after final CI evidence; keep #252 as the authoritative stacked draft.
+
+### Run 27 next actions
+1. Verify exact-head CI #5376 final result and production-container build; add the evidence to PR #252 and issue #215.
+2. Close temporary validation-only PR #254 after capturing the result.
+3. Audit all historical SQL authorization functions against exact production definitions; preserve migration 096 source drift and do not replay/overwrite absent versions.
+4. Rehearse composite FK on production-like disposable schema with recovered 096 trigger composition; independent DBA review remains required.
+5. Continue the non-owner verification guard prototype under FORCE RLS; the design remains proposal-only.
+
+### Current safety/TRL posture
+- Production remains READ-ONLY / HOLD. Composite FK migration is not applied to production. No production writes, grants, role changes, RLS activation, deployments, merges, worker activation or certification.
+- PR #247 and PR #252 remain draft/unmerged. Temporary PR #254 is CI-only and will be closed after evidence capture.
+- Global 67-table RLS, geography fail-closed behavior, runtime/migrator separation, live Guardian/Hedera acceptance and SITE-JBP-01 field validation remain open. Production certification and TRL 9 NOT ACHIEVED.

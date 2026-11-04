@@ -144,3 +144,12 @@
 - Run-26 documentation head `3926690892527584c0cc7e3397d4f2ae79000caf` passed exact-head CI #5368 (`41794335224`) SUCCESS across all stages. Added the exact-head CI closure to the canonical resume point and commented on PR #244.
 - Added `docs/security/VERIFICATION_GUARD_NON_OWNER_EXECUTION_DESIGN_2026-11-04.md`, a design-only prototype proposal for a NOLOGIN/NOBYPASSRLS SECURITY DEFINER guard role, narrow lock privilege, GUC-scoped RLS policies and deterministic lock order. It remains unimplemented/unapproved and requires disposable FORCE RLS proof plus independent DBA/security review.
 - PR #244 documentation head `1c39a399218584fc3ce8f143385e3e54adec754f` passed exact-head CI #5372 (`41794655157`) SUCCESS across all configured stages. The later-added guard-role design proposal will be validated on the next docs head.
+
+
+## 2026-11-04 — CTO Run 27 (membership-role tenant integrity)
+- Found that the schema's single-column `organization_memberships.role_id -> roles.id` FK did not require role and membership organizations to match; several application authorization joins also omitted the equality.
+- Read-only Neon main check returned 0 mismatched membership-role pairs (0 VERIFIED, 0 PENDING). No production data was changed.
+- Created stacked draft PR #252, exact head `2228100e0da0a1dc9321b11e48f6b2fa4ee6ba33`, based on PR #247. Added migration `2026110401_membership_role_tenant_binding.sql` with a validated composite FK and supporting indexes; hardened auth-routes, onboarding hierarchy and platform-admin role joins; added direct DB INSERT/UPDATE rejection tests and platform-admin SQL-shape assertion.
+- Local validation passed: 93 migrations / 73 schema objects; typecheck; production build; focused platform-admin/auth tests 19/19; diff check.
+- Temporary validation-only PR #254 targets main to run CI for the combined stack. Exact-head CI #5376 (`41796337375`) had passed dependency audit, migration validation, fresh PostgreSQL migration, typecheck, build, browser smoke and disposable PostgreSQL acceptance; production-container build was still running at checkpoint.
+- Added Run-27 checkpoint and refreshed canonical resume point. Production remains READ-ONLY / HOLD; no production migration or release action; TRL 9 NOT ACHIEVED.
