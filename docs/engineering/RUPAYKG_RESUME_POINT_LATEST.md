@@ -544,3 +544,9 @@ Next: rehearse the guard against a disposable copy of the recovered 096 schema a
 - PR #284 prior no-PUBLIC-EXECUTE head `2b1ebc88237e9274e563b5605295ce925cabd234`: CI #5518 / `41874715707` **SUCCESS**, 18/18 steps.
 - These are isolated branch validations only. The combined #252 + #272 + #250/#251 + #284 migration/role/context rehearsal remains NOT DONE. One canonical trigger and one shared `rupaykg_verification_guard` owner are mandatory; do not merge individual drafts out of order.
 - Follow-up immutable closure checkpoint: `docs/engineering/checkpoints/2026-11-04-cto-run-29-closure.md`. Closure session log: `docs/engineering/session-logs/2026-11-04-cto-session-29-closure.md`.
+
+
+## 2026-11-04 Run 29 handoff verification
+- Refreshed canonical resume point and execution log at PR #244 head `1d2079517f1e5ca346b9ab7f02de9eb4b5e8106a` passed exact-head CI #5526 / `41876020597` SUCCESS, 17/17 steps (migration validation, disposable PostgreSQL migration/acceptance, typecheck, build, browser smoke and production-container build).
+- Handoff checkpoint: `docs/engineering/checkpoints/2026-11-04-cto-run-29-handoff-ci.md`; session log: `docs/engineering/session-logs/2026-11-04-cto-session-29-handoff-ci.md`.
+- Documentation validation does not change the production HOLD or certify the combined verification stack.
