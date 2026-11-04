@@ -5,7 +5,7 @@ import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import Fastify from "fastify";
-import { Pool } from "pg";
+import { Pool, PoolClient } from "pg";
 import { registerEvidenceVaultRoutes } from "./evidence-vault-routes.js";
 
 const enabled = process.env.RUPAYKG_RUN_DB_INTEGRATION_TESTS === "1" && Boolean(process.env.DATABASE_URL);
@@ -14,6 +14,8 @@ const hash = (value: string) => createHash("sha256").update(value).digest("hex")
 test("evidence vault enforces tenant scope, versioned storage, integrity and independent review", { skip: !enabled }, async (t) => {
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
   const app = Fastify({ logger: false });
+  let apiProofClient: PoolClient | null = null;
+  let apiProofRoleCreated = false;
   await registerEvidenceVaultRoutes(app, pool);
   // Rehearse the forward-only migration against a production-like catalog:
   // snapshot columns already exist and both historical trigger names are present.
@@ -89,6 +91,92 @@ test("evidence vault enforces tenant scope, versioned storage, integrity and ind
       "insert into identity_sessions(identity_id,expires_at,token_hash) values($1,now()+interval '1 hour',$2),($3,now()+interval '1 hour',$4),($5,now()+interval '1 hour',$6),($7,now()+interval '1 hour',$8)",
       [uploaderId,hash(uploaderToken),reviewerId,hash(reviewerToken),outsiderId,hash(outsiderToken),crossOrgReviewerId,hash(crossOrgReviewerToken)],
     );
+
+    // Prove the candidate trigger on the complete migrated RupayKg schema,
+    // using a non-owner API role with INSERT only. This role exists only in
+    // the disposable integration database and is removed in the test cleanup.
+    await pool.query("drop role if exists rupaykg_api_verification_proof");
+    await pool.query("create role rupaykg_api_verification_proof nologin nosuperuser nocreatedb nocreaterole noinherit nobypassrls");
+    apiProofRoleCreated = true;
+    await pool.query("grant usage on schema public to rupaykg_api_verification_proof");
+    await pool.query("grant insert on public.verifications to rupaykg_api_verification_proof");
+
+    const apiProofEvidence = (await pool.query<{ id: string }>(
+      "insert into evidence(activity_id,evidence_type,status,captured_at,content_hash) values($1,'FIELD','UNDER_REVIEW',now(),$2) returning id",
+      [activity.rows[0]!.id, "actual-schema-guard-role-" + suffix],
+    )).rows[0]!.id;
+
+    const guardCatalog = await pool.query<{
+      rolcanlogin: boolean; rolsuper: boolean; rolbypassrls: boolean;
+      owns_protected_table: boolean; has_broad_update: boolean;
+      has_id_lock_columns: boolean; is_member: boolean;
+    }>(
+      `select r.rolcanlogin, r.rolsuper, r.rolbypassrls,
+        exists (
+          select 1 from pg_class c join pg_namespace n on n.oid=c.relnamespace
+           where n.nspname='public' and c.relkind in ('r','p')
+             and c.relowner=r.oid
+             and c.relname in ('evidence','activities','organization_memberships','roles','identities','verifications')
+        ) as owns_protected_table,
+        has_table_privilege(r.oid,'public.evidence','UPDATE')
+          or has_table_privilege(r.oid,'public.activities','UPDATE')
+          or has_table_privilege(r.oid,'public.organization_memberships','UPDATE')
+          or has_table_privilege(r.oid,'public.roles','UPDATE')
+          or has_table_privilege(r.oid,'public.identities','UPDATE') as has_broad_update,
+        has_column_privilege(r.oid,'public.evidence','id','UPDATE')
+          and has_column_privilege(r.oid,'public.activities','id','UPDATE')
+          and has_column_privilege(r.oid,'public.organization_memberships','id','UPDATE')
+          and has_column_privilege(r.oid,'public.roles','id','UPDATE')
+          and has_column_privilege(r.oid,'public.identities','id','UPDATE') as has_id_lock_columns,
+        pg_has_role('rupaykg_api_verification_proof','rupaykg_verification_guard','MEMBER') as is_member
+       from pg_roles r where r.rolname='rupaykg_verification_guard'`,
+    );
+    assert.equal(guardCatalog.rows[0]?.rolcanlogin, false);
+    assert.equal(guardCatalog.rows[0]?.rolsuper, false);
+    assert.equal(guardCatalog.rows[0]?.rolbypassrls, false);
+    assert.equal(guardCatalog.rows[0]?.owns_protected_table, false);
+    assert.equal(guardCatalog.rows[0]?.has_broad_update, false);
+    assert.equal(guardCatalog.rows[0]?.has_id_lock_columns, true);
+    assert.equal(guardCatalog.rows[0]?.is_member, false);
+    assert.equal(await pool.query("select has_table_privilege('rupaykg_api_verification_proof','public.verifications','INSERT') as ok").then(r => r.rows[0]?.ok), true);
+    assert.equal(await pool.query("select has_table_privilege('rupaykg_api_verification_proof','public.evidence','SELECT') as ok").then(r => r.rows[0]?.ok), false);
+    assert.equal(await pool.query("select has_table_privilege('rupaykg_api_verification_proof','public.verifications','UPDATE') as ok").then(r => r.rows[0]?.ok), false);
+    assert.equal(await pool.query("select has_table_privilege('rupaykg_api_verification_proof','public.verifications','DELETE') as ok").then(r => r.rows[0]?.ok), false);
+    assert.equal(await pool.query("select has_table_privilege('rupaykg_api_verification_proof','public.verifications','TRUNCATE') as ok").then(r => r.rows[0]?.ok), false);
+
+    apiProofClient = await pool.connect();
+    await apiProofClient.query("begin");
+    await apiProofClient.query("set local role rupaykg_api_verification_proof");
+    await apiProofClient.query(
+      "insert into public.verifications(evidence_id,activity_id,verifier_identity_id,decision,scope,rationale) values($1,$2,$3,'REJECTED','ACTUAL_SCHEMA_GUARD_ROLE_PROOF','non-owner API role trigger proof')",
+      [apiProofEvidence, activity.rows[0]!.id, reviewerId],
+    );
+    await apiProofClient.query("commit");
+    const actualSchemaSnapshot = await pool.query<{
+      authorization_membership_id: string; authorization_role_id: string;
+      authorization_permissions_snapshot: string[]; authorization_checked_at: Date;
+    }>(
+      "select authorization_membership_id,authorization_role_id,authorization_permissions_snapshot,authorization_checked_at from verifications where evidence_id=$1 and decision='REJECTED'",
+      [apiProofEvidence],
+    );
+    assert.ok(actualSchemaSnapshot.rows[0]?.authorization_membership_id);
+    assert.ok(actualSchemaSnapshot.rows[0]?.authorization_role_id);
+    assert.ok(actualSchemaSnapshot.rows[0]?.authorization_checked_at);
+    assert.ok(actualSchemaSnapshot.rows[0]?.authorization_permissions_snapshot.includes("VERIFY_EVIDENCE"));
+
+    for (const forbiddenSql of [
+      "select id from public.evidence limit 1",
+      "update public.verifications set rationale='api mutation attempt'",
+      "delete from public.verifications",
+      "truncate public.verifications",
+    ]) {
+      await apiProofClient.query("begin");
+      await apiProofClient.query("set local role rupaykg_api_verification_proof");
+      await assert.rejects(apiProofClient.query(forbiddenSql), /permission denied/);
+      await apiProofClient.query("rollback");
+    }
+    apiProofClient.release();
+    apiProofClient = null;
     const headers = (token: string, orgId = organizationId) => ({ authorization: "Bearer " + token, "x-rupaykg-organization-id": orgId });
     const bytes = Buffer.from("%PDF-1.7\nMRV evidence fixture\n");
     const upload = await app.inject({
@@ -300,6 +388,14 @@ test("evidence vault enforces tenant scope, versioned storage, integrity and ind
     const spoofedPdf = await app.inject({ method: "POST", url: "/api/v1/evidence-vault/upload", headers: headers(uploaderToken), payload: { activityId: activity.rows[0]!.id, evidenceType: "MALICIOUS", fileName: "not-a-pdf.pdf", mediaType: "application/pdf", contentBase64: Buffer.from("MZ executable bytes").toString("base64") } });
     assert.equal(spoofedPdf.statusCode, 415, spoofedPdf.body);
   } finally {
+    if (apiProofClient) {
+      await apiProofClient.query("rollback").catch(() => undefined);
+      apiProofClient.release();
+    }
+    if (apiProofRoleCreated) {
+      await pool.query("drop owned by rupaykg_api_verification_proof").catch(() => undefined);
+      await pool.query("drop role if exists rupaykg_api_verification_proof").catch(() => undefined);
+    }
     await app.close();
     await pool.end();
   }
