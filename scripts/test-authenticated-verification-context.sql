@@ -302,7 +302,7 @@ SELECT set_config('rupaykg.context.session', :'replay_session', true);
 SELECT set_config('rupaykg.context.expiry', :'replay_expiry', true);
 SELECT set_config('rupaykg.context.xid', :'replay_xid', true);
 SELECT set_config('rupaykg.context.signature', :'replay_signature', true);
-SELECT public.rupaykg_context_is_valid() AS replay_context_valid \gset
+SELECT has_function_privilege(current_user,'public.rupaykg_context_is_valid()','EXECUTE') AS replay_context_valid \gset
 \if :replay_context_valid
   \echo 'signed context from a previous transaction was replayable'
   \quit 1
