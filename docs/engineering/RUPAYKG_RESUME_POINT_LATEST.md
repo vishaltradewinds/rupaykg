@@ -161,3 +161,32 @@ This proves source/config does not demonstrate credential separation; it does no
 - Production remains READ-ONLY / HOLD. No production SQL writes, DDL, migrations, function changes, role/grant/ownership changes, RLS activation, branch operations, deployments, merges, worker activation or certification.
 - Continue with exact migration checksum/source chronology (including 096 and staging-only 20261022–20261025 artifacts), full application call-site map for DB authorization functions, 67-table policy matrix, actual non-owner runtime role proof, and disposable cross-tenant regression harness.
 - Independent DBA/security review, production tenant isolation, Guardian/Hedera live round-trip, SITE-JBP-01 Kathonda field acceptance and TRL 9 remain NOT ACHIEVED.
+
+
+## 2026-11-04 authoritative refresh — CTO Run 18 (06:40 UTC onward)
+
+### PR #244 exact-head CI closure
+- Documentation head `92b5215a56cba12a5880175e9b63e44c2aedb4b3` completed exact-head CI run #5337 (`41785952488`) SUCCESS. All configured stages passed: dependency audit, migration validation, disposable PostgreSQL migration, typecheck, production build, browser smoke, full tests/PostgreSQL acceptance, production-container build and cleanup.
+- PR #244 remains OPEN / DRAFT / UNMERGED. Subsequent Run 18 evidence/documentation commits below require their own exact-head CI; do not reuse the #5337 result for later heads.
+
+### Migration 096 exact-source recovery and verification guard review
+- Recovered exact 97-line SQL from original commit `ca8f4100782e13f8d72106187fafc8e1e446214f`, Git blob `258b1f4534efbf915688f78aa84d4ec24a47cbc0`; removed by `54a7fe1ceb41b37a68720a71c10a1dd03af30dea` with explicit message that it was an unreviewed migration.
+- Preserved the exact source as review-only evidence in `docs/security/RECOVERED_MIGRATION_096_REVIEW_2026-11-04.md`. Not restored to active migrations and not replayed.
+- Read-only production trigger inspection confirmed `verifications_integrity_guard` (BEFORE INSERT OR UPDATE) calls `prevent_invalid_verification()` and matches recovered 096; separate `verification_independence_guard` (BEFORE INSERT) still allows role-name fallback `VERIFIER` / `AUDITOR`.
+- The recovered/live 096 function recomputes and overwrites authorization snapshot columns on every APPROVED-row update. Snapshot immutability is therefore not enforced despite the column comments. Decision downgrade/re-approval semantics also remain undefined. Same-event trigger ordering must be considered; PostgreSQL orders same-kind triggers alphabetically by trigger name.
+- Current-main `apps/src/value-routes.ts` calls `can_assess_epr` for EPR obligation assessment and `can_write_esg` for ESG metric writes and BWG workspace capability projection. Both functions have role-name fallback and live permission aliases that differ from migration 018. Route-level organization checks exist, but SQL permission vocabulary must be reconciled and tested, not silently rewritten.
+- Targeted source search found no calls in inspected auth/server/EPR/BWG/statutory/MRV/evidence/workspace/registry/value route files beyond the confirmed `value-routes.ts` paths. A complete repository-wide application caller map remains open.
+
+### Migration documentation repair on handoff branch
+- Added `docs/engineering/MIGRATION_SOURCE_INVENTORY_2026-11-04.md` with the exact 91-file manifest and production ledger comparison.
+- Added `docs/security/RECOVERED_MIGRATION_096_REVIEW_2026-11-04.md` with exact historical SQL, security findings and forward-only remediation design.
+- Corrected `migrations/README.md`: current source inventory is 001–087 plus dated 20261018–20261021; 023 exists; 015 is Guardian/Hedera; 041 is high-risk permissions; production-only ledger 096 is documented as source drift, not as an active migration.
+- Issue #214 updated with recovered source, exact trigger/function evidence, value-routes call sites and no-write release boundary.
+
+### Next batch and release boundary
+1. Add disposable PostgreSQL regression tests for a unified verification guard, strict same-organization explicit permission, no role-name fallback, self-approval, snapshot write-once, decision transitions, trigger-order independence and concurrency/revocation.
+2. Build exact caller map and permission alias matrix for `can_assess_epr` / `can_write_esg`, including BWG workspace projection and any other DB callers.
+3. Recover staging-only 20261022–20261025 source and deployment/build provenance for 096; compare exact checksums and deployed artifact chronology.
+4. Run all security tests under a genuine non-owner runtime role on disposable PostgreSQL; production runtime separation and RLS remain unproven.
+5. Keep PRs draft/unmerged and production READ-ONLY / HOLD. No production SQL/DDL, migration, trigger/function edit, role/grant/ownership/RLS change, branch operation, deployment, worker activation or certification occurred.
+6. Independent DBA/security review, production tenant isolation, live Guardian/Hedera acceptance, SITE-JBP-01 field acceptance and TRL 9 remain NOT ACHIEVED.
