@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 
 export const ODK_QUARANTINE_STATE = "QUARANTINED" as const;
 const MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024;
+const MAX_SUBMISSION_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 const ALLOWED_MEDIA_TYPES = new Set(["image/jpeg", "image/png", "application/pdf", "text/csv", "text/plain", "application/json"]);
 const CONTROL_CHARS = /[\u0000-\u001f\u007f]/;
 
@@ -109,14 +110,21 @@ export function normalizeOdkSubmission(
   if (attachments.length > 100) return { ok: false, code: "ODK_ATTACHMENT_COUNT_LIMIT" };
 
   const normalizedAttachments: OdkQuarantinedAttachment[] = [];
+  const seenFilenames = new Set<string>();
+  let totalAttachmentBytes = 0;
   for (const item of attachments) {
     const { filename, contentType } = item.metadata;
     if (!filename || filename.length > 180 || CONTROL_CHARS.test(filename) || filename === "." || filename === ".." || filename.includes("/") || filename.includes("\\") || filename !== filename.trim()) {
       return { ok: false, code: "ODK_ATTACHMENT_FILENAME_INVALID" };
     }
+    if (seenFilenames.has(filename)) return { ok: false, code: "ODK_ATTACHMENT_DUPLICATE_FILENAME" };
+    seenFilenames.add(filename);
+    if (typeof contentType !== "string" || contentType.length > 200) return { ok: false, code: "ODK_ATTACHMENT_MEDIA_TYPE_UNSUPPORTED" };
     const mediaType = contentType.toLowerCase().split(";")[0].trim();
     if (!ALLOWED_MEDIA_TYPES.has(mediaType)) return { ok: false, code: "ODK_ATTACHMENT_MEDIA_TYPE_UNSUPPORTED" };
     if (!Buffer.isBuffer(item.bytes) || item.bytes.length === 0 || item.bytes.length > MAX_ATTACHMENT_BYTES) return { ok: false, code: "ODK_ATTACHMENT_SIZE_INVALID" };
+    totalAttachmentBytes += item.bytes.length;
+    if (totalAttachmentBytes > MAX_SUBMISSION_ATTACHMENT_BYTES) return { ok: false, code: "ODK_SUBMISSION_ATTACHMENT_SIZE_LIMIT" };
     if (mediaType === "image/jpeg" && !(item.bytes[0] === 0xff && item.bytes[1] === 0xd8 && item.bytes[2] === 0xff)) return { ok: false, code: "ODK_ATTACHMENT_SIGNATURE_MISMATCH" };
     if (mediaType === "image/png" && !item.bytes.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10]))) return { ok: false, code: "ODK_ATTACHMENT_SIGNATURE_MISMATCH" };
     if (mediaType === "application/pdf" && item.bytes.subarray(0, 5).toString("ascii") !== "%PDF-") return { ok: false, code: "ODK_ATTACHMENT_SIGNATURE_MISMATCH" };
