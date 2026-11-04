@@ -62,11 +62,16 @@ test("verification SECURITY DEFINER guard runs under a NOLOGIN non-owner role wi
       await pool.query(`alter table ${s}.${q(table)} force row level security`);
     }
     await pool.query(`create policy guard_geo_scope on ${s}.organization_geography_scopes for select to ${guard} using (organization_id = nullif(current_setting('rupaykg_guard.organization_id', true), '')::uuid)`);
-    await pool.query(`create policy guard_identity on ${s}.identities for select to ${guard} using (id = nullif(current_setting('rupaykg_guard.identity_id', true), '')::uuid)`);
-    await pool.query(`create policy guard_roles on ${s}.roles for select to ${guard} using (organization_id = nullif(current_setting('rupaykg_guard.organization_id', true), '')::uuid)`);
-    await pool.query(`create policy guard_memberships on ${s}.organization_memberships for select to ${guard} using (identity_id = nullif(current_setting('rupaykg_guard.identity_id', true), '')::uuid and organization_id = nullif(current_setting('rupaykg_guard.organization_id', true), '')::uuid)`);
-    await pool.query(`create policy guard_activities on ${s}.activities for select to ${guard} using (id = nullif(current_setting('rupaykg_guard.activity_id', true), '')::uuid)`);
-    await pool.query(`create policy guard_evidence on ${s}.evidence for select to ${guard} using (id = nullif(current_setting('rupaykg_guard.evidence_id', true), '')::uuid)`);
+    await pool.query(`create policy guard_identity_read on ${s}.identities for select to ${guard} using (id = nullif(current_setting('rupaykg_guard.identity_id', true), '')::uuid)`);
+    await pool.query(`create policy guard_identity_lock on ${s}.identities for update to ${guard} using (id = nullif(current_setting('rupaykg_guard.identity_id', true), '')::uuid) with check (id = nullif(current_setting('rupaykg_guard.identity_id', true), '')::uuid)`);
+    await pool.query(`create policy guard_roles_read on ${s}.roles for select to ${guard} using (organization_id = nullif(current_setting('rupaykg_guard.organization_id', true), '')::uuid)`);
+    await pool.query(`create policy guard_roles_lock on ${s}.roles for update to ${guard} using (id = nullif(current_setting('rupaykg_guard.role_id', true), '')::uuid) with check (id = nullif(current_setting('rupaykg_guard.role_id', true), '')::uuid)`);
+    await pool.query(`create policy guard_memberships_read on ${s}.organization_memberships for select to ${guard} using (identity_id = nullif(current_setting('rupaykg_guard.identity_id', true), '')::uuid and organization_id = nullif(current_setting('rupaykg_guard.organization_id', true), '')::uuid)`);
+    await pool.query(`create policy guard_memberships_lock on ${s}.organization_memberships for update to ${guard} using (id = nullif(current_setting('rupaykg_guard.membership_id', true), '')::uuid) with check (id = nullif(current_setting('rupaykg_guard.membership_id', true), '')::uuid)`);
+    await pool.query(`create policy guard_activities_read on ${s}.activities for select to ${guard} using (id = nullif(current_setting('rupaykg_guard.activity_id', true), '')::uuid)`);
+    await pool.query(`create policy guard_activities_lock on ${s}.activities for update to ${guard} using (id = nullif(current_setting('rupaykg_guard.activity_id', true), '')::uuid) with check (id = nullif(current_setting('rupaykg_guard.activity_id', true), '')::uuid)`);
+    await pool.query(`create policy guard_evidence_read on ${s}.evidence for select to ${guard} using (id = nullif(current_setting('rupaykg_guard.evidence_id', true), '')::uuid)`);
+    await pool.query(`create policy guard_evidence_lock on ${s}.evidence for update to ${guard} using (id = nullif(current_setting('rupaykg_guard.evidence_id', true), '')::uuid) with check (id = nullif(current_setting('rupaykg_guard.evidence_id', true), '')::uuid)`);
 
     await pool.query(`grant select on ${s}.geography, ${s}.organization_geography_scopes, ${s}.identities, ${s}.roles, ${s}.organization_memberships, ${s}.activities, ${s}.evidence to ${guard}`);
     for (const table of ["identities", "roles", "organization_memberships", "activities", "evidence"]) {
@@ -87,6 +92,7 @@ test("verification SECURITY DEFINER guard runs under a NOLOGIN non-owner role wi
         v_org_id uuid;
         v_geo_id uuid;
         v_actor_id uuid;
+        v_identity_id uuid;
         v_membership_id uuid;
         v_role_id uuid;
         v_permissions jsonb;
@@ -94,6 +100,8 @@ test("verification SECURITY DEFINER guard runs under a NOLOGIN non-owner role wi
         v_old_activity text := current_setting('rupaykg_guard.activity_id', true);
         v_old_identity text := current_setting('rupaykg_guard.identity_id', true);
         v_old_org text := current_setting('rupaykg_guard.organization_id', true);
+        v_old_membership text := current_setting('rupaykg_guard.membership_id', true);
+        v_old_role text := current_setting('rupaykg_guard.role_id', true);
       begin
         if tg_op = 'UPDATE' then
           raise exception 'verification records are immutable';
@@ -124,25 +132,54 @@ test("verification SECURITY DEFINER guard runs under a NOLOGIN non-owner role wi
           if v_actor_id is not null and v_actor_id = new.verifier_identity_id then
             raise exception 'activity actor cannot verify own evidence';
           end if;
-          select m.id, m.role_id, r.permissions
-            into v_membership_id, v_role_id, v_permissions
+          select i.id into v_identity_id
+            from ${s}.identities i
+           where i.id=new.verifier_identity_id
+             and i.status='VERIFIED'
+             and i.suspended_at is null
+           for share;
+          if v_identity_id is null then
+            raise exception 'verification requires an active non-suspended identity';
+          end if;
+
+          -- Resolve the membership without a lock, then lock that exact row.
+          -- The UPDATE RLS policy is keyed to the exact membership id, so the
+          -- technical UPDATE(id) grant cannot expose or mutate other rows.
+          select m.id, m.role_id into v_membership_id, v_role_id
             from ${s}.organization_memberships m
-            join ${s}.roles r on r.id=m.role_id and r.organization_id=m.organization_id
-            join ${s}.identities i on i.id=m.identity_id
            where m.identity_id=new.verifier_identity_id
              and m.organization_id=v_org_id
              and m.status='VERIFIED'
-             and i.status='VERIFIED'
-             and i.suspended_at is null
+           order by m.created_at desc, m.id desc
+           limit 1;
+          if v_membership_id is null then
+            raise exception 'verification requires active explicit verifier permission';
+          end if;
+          perform set_config('rupaykg_guard.membership_id', v_membership_id::text, true);
+          select m.role_id into v_role_id
+            from ${s}.organization_memberships m
+           where m.id=v_membership_id
+             and m.identity_id=new.verifier_identity_id
+             and m.organization_id=v_org_id
+             and m.status='VERIFIED'
+           for share;
+          if v_role_id is null then
+            raise exception 'verification requires active explicit verifier permission';
+          end if;
+
+          -- Lock and re-read the exact organization role after membership lock.
+          perform set_config('rupaykg_guard.role_id', v_role_id::text, true);
+          select r.permissions into v_permissions
+            from ${s}.roles r
+           where r.id=v_role_id
+             and r.organization_id=v_org_id
              and (
                r.permissions @> '["VERIFY_EVIDENCE"]'::jsonb
                or r.permissions @> '["verification:approve"]'::jsonb
                or r.permissions @> '["verification.approve"]'::jsonb
              )
-           order by m.created_at desc, m.id desc
-           limit 1
-           for share of m, r, i;
-          if v_membership_id is null then
+           for share;
+          if v_permissions is null then
             raise exception 'verification requires active explicit verifier permission';
           end if;
           new.authorization_membership_id := v_membership_id;
@@ -153,12 +190,16 @@ test("verification SECURITY DEFINER guard runs under a NOLOGIN non-owner role wi
           perform set_config('rupaykg_guard.activity_id', coalesce(v_old_activity, ''), true);
           perform set_config('rupaykg_guard.identity_id', coalesce(v_old_identity, ''), true);
           perform set_config('rupaykg_guard.organization_id', coalesce(v_old_org, ''), true);
+          perform set_config('rupaykg_guard.membership_id', coalesce(v_old_membership, ''), true);
+          perform set_config('rupaykg_guard.role_id', coalesce(v_old_role, ''), true);
           return new;
         exception when others then
           perform set_config('rupaykg_guard.evidence_id', coalesce(v_old_evidence, ''), true);
           perform set_config('rupaykg_guard.activity_id', coalesce(v_old_activity, ''), true);
           perform set_config('rupaykg_guard.identity_id', coalesce(v_old_identity, ''), true);
           perform set_config('rupaykg_guard.organization_id', coalesce(v_old_org, ''), true);
+          perform set_config('rupaykg_guard.membership_id', coalesce(v_old_membership, ''), true);
+          perform set_config('rupaykg_guard.role_id', coalesce(v_old_role, ''), true);
           raise;
         end;
       end;
@@ -227,10 +268,21 @@ test("verification SECURITY DEFINER guard runs under a NOLOGIN non-owner role wi
       await guardCheck.query("select set_config('rupaykg_guard.activity_id',$1,true)", [activityA]);
       await guardCheck.query("select set_config('rupaykg_guard.organization_id',$1,true)", [orgA]);
       await guardCheck.query("select set_config('rupaykg_guard.identity_id',$1,true)", [identity]);
-      const visible = await guardCheck.query(`select id from ${s}.evidence where id=$1 for share`, [evidenceA]);
-      assert.equal(visible.rowCount, 1, "column-limited UPDATE(id) must permit the trigger's FOR SHARE lock");
-      const mutation = await guardCheck.query(`update ${s}.evidence set id=id where id=$1 returning id`, [evidenceA]);
-      assert.equal(mutation.rowCount, 0, "without an UPDATE RLS policy the guard's technical column grant must not authorize mutation");
+      await guardCheck.query("select set_config('rupaykg_guard.membership_id',$1,true)", [membership]);
+      await guardCheck.query("select set_config('rupaykg_guard.role_id',$1,true)", [roleId]);
+      const visibleBeforeLock = await guardCheck.query(`select count(*)::int as n from ${s}.evidence where id=$1`, [evidenceA]);
+      assert.equal(visibleBeforeLock.rows[0]!.n, 1, "SELECT policy must expose only the selected evidence row");
+      for (const [table, rowId] of [["evidence", evidenceA], ["activities", activityA], ["identities", identity], ["organization_memberships", membership], ["roles", roleId]] as const) {
+        const locked = await guardCheck.query(`select id from ${s}.${q(table)} where id=$1 for share`, [rowId]);
+        assert.equal(locked.rowCount, 1, `exact-row UPDATE RLS policy must permit FOR SHARE on ${table}`);
+      }
+      await guardCheck.query("savepoint deny_mutation");
+      await assert.rejects(
+        guardCheck.query(`update ${s}.evidence set id=$2 where id=$1 returning id`, [evidenceA, orgB]),
+        /row-level security policy/,
+      );
+      await guardCheck.query("rollback to savepoint deny_mutation");
+      await guardCheck.query("release savepoint deny_mutation");
       const hiddenOther = await guardCheck.query(`select count(*)::int as n from ${s}.evidence where id=$1`, [evidenceB]);
       assert.equal(hiddenOther.rows[0]!.n, 0, "guard context must not expose another tenant's evidence");
       const memberships = await guardCheck.query(`select count(*)::int as n from ${s}.organization_memberships`);
