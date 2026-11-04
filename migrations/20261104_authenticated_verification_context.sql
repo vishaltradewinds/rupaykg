@@ -195,10 +195,9 @@ $$;
 ALTER FUNCTION public.rupaykg_set_authenticated_context(text,uuid)
   OWNER TO rupaykg_auth_context_owner;
 REVOKE ALL ON FUNCTION public.rupaykg_set_authenticated_context(text,uuid) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.rupaykg_set_authenticated_context(text,uuid) TO PUBLIC;
-GRANT EXECUTE ON FUNCTION public.rupaykg_context_is_valid() TO PUBLIC;
-GRANT EXECUTE ON FUNCTION public.rupaykg_authenticated_identity() TO PUBLIC;
-GRANT EXECUTE ON FUNCTION public.rupaykg_authenticated_organization() TO PUBLIC;
+-- No PUBLIC EXECUTE grants: the controlled runtime role is granted
+-- the context issuer only after its identity and least-privilege contract
+-- are established. Trigger-owned helper calls run as this role's owner.
 
 CREATE OR REPLACE FUNCTION public.enforce_verification_authorization()
 RETURNS trigger
