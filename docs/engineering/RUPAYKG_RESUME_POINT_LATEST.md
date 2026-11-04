@@ -492,3 +492,9 @@ Next: rehearse the guard against a disposable copy of the recovered 096 schema a
 - Prototype does not provision production roles, grants, policies or triggers. Production remains READ-ONLY / HOLD.
 - No production/staging writes, migrations, role/grant/ownership changes, RLS activation, deployments, merges, worker activation or certification.
 - PRs #247, #252 and #263 remain draft/unmerged. SITE-JBP-01 Kathonda remains PRE-VALIDATION. Production certification and TRL 9 NOT ACHIEVED.
+
+
+### Run 28 — 67-table policy matrix refresh
+- Read-only Neon catalog extraction returned column lists and foreign-key relationships for all 67 public base tables. Each remains RLS-disabled and FORCE-RLS-disabled; all are owned by rupaykg at the catalog snapshot.
+- Added docs/engineering/PRODUCTION_TENANT_POLICY_MATRIX_2026-11-04.md, a 67-row table-by-table candidate matrix covering direct tenant keys, activity/evidence descendants, EPR/ESG/BWG reporting, bilateral credits/transfers/settlements, field-device/sync, identity/security, platform audit and governance/reference data. It specifies candidate access boundaries and required cross-tenant consistency checks without authoring policy SQL.
+- Linked the matrix from PRODUCTION_TENANT_ISOLATION_INVENTORY_2026-11-04.md. This is a design inventory only; it is not approved policy or a production rollout authorization.

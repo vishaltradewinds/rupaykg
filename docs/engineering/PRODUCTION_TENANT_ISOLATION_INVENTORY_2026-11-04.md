@@ -112,6 +112,10 @@ stakeholder_applications
 verifications
 ```
 
+## Complete candidate policy matrix
+
+See `docs/engineering/PRODUCTION_TENANT_POLICY_MATRIX_2026-11-04.md` for the 67-row table-by-table candidate tenant derivation, read/write boundary, multi-party handling, identity/platform exceptions and mandatory consistency checks. It is grounded in the live production catalog and is a design inventory only, not approved policy SQL.
+
 ## Relationship-driven classification required before policy design
 
 Tables without a direct tenant key cannot be declared global. Their foreign keys and application joins indicate tenant inheritance or multi-party access:

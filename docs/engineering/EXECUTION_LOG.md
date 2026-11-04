@@ -166,6 +166,8 @@ Added Run-28 checkpoint and refreshed the canonical resume point and guard desig
 
 
 ## 2026-11-04 — CTO Run 28 (non-owner verification guard and recovered 096 rehearsal)
+- Additional read-only production catalog extraction covered columns and FK relationships for all 67 public base tables. Added `PRODUCTION_TENANT_POLICY_MATRIX_2026-11-04.md` with per-table tenant derivation, candidate access boundary, bilateral/identity/governance exceptions and consistency checks. Linked it from the tenant-isolation inventory. This is a design inventory only; no RLS SQL or production change.
+
 - PR #263 prototype head `1f5e4a6f195f0514f7fe46be696b73561caeb80d` passed exact-head CI #5409 (`41805919316`) end-to-end, including dependency audit, migration validation, disposable PostgreSQL migration, typecheck, production build, browser smoke, full tests/PostgreSQL acceptance, production-container build and cleanup.
 - The non-owner/FORCE RLS guard test passed (API test 57); API suite 100/100, other workspace suites 22/22, 2/2, 29/29, 1/1 and 2/2. Separate real LOGIN/NOBYPASSRLS API role and NOLOGIN/NOBYPASSRLS guard owner; no API EXECUTE or SET ROLE; exact-row lock policies; spoofed GUC isolation and caller GUC restoration; same-org success and cross-org/self/geography/suspended-identity denial; three revocation races all passed.
 - Disposable evidence-vault integration now reconstructs the recovered migration-096 function and migration-010 independence trigger composition, demonstrates the cross-org REJECTED path before replacement, applies the candidate migration and asserts exactly one authoritative verification trigger remains. This is not a full production-schema restore or authorization to replay migration 096.
