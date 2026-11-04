@@ -19,17 +19,36 @@ begin
     create role rupaykg_verification_guard
       nologin nosuperuser nocreatedb nocreaterole noinherit nobypassrls;
   end if;
-  alter role rupaykg_verification_guard
-    nologin nosuperuser nocreatedb nocreaterole noinherit nobypassrls;
-
-  if exists (
-    select 1 from pg_catalog.pg_auth_members
-     where roleid = (select oid from pg_catalog.pg_roles where rolname = 'rupaykg_verification_guard')
-  ) then
-    raise exception 'verification guard role must not be assumable by any login or application role';
-  end if;
 end;
 $role$;
+
+-- CREATEROLE grants ADMIN OPTION on roles it creates, but not SET ROLE.
+-- Temporarily enable SET for function ownership transfer, then remove it.
+grant rupaykg_verification_guard to current_user
+  with admin true, set true, inherit false;
+alter role rupaykg_verification_guard
+  nologin nosuperuser nocreatedb nocreaterole noinherit nobypassrls;
+
+do $role_check$
+declare
+  guard_oid oid;
+  migrator_oid oid;
+begin
+  select oid into guard_oid from pg_catalog.pg_roles where rolname = 'rupaykg_verification_guard';
+  select oid into migrator_oid from pg_catalog.pg_roles where rolname = current_user;
+  if exists (
+    select 1 from pg_catalog.pg_auth_members
+     where roleid = guard_oid and member <> migrator_oid
+  ) then
+    raise exception 'verification guard role must not be granted to any non-migrator role';
+  end if;
+  if exists (
+    select 1 from pg_catalog.pg_auth_members where member = guard_oid
+  ) then
+    raise exception 'verification guard role must not be a member of another role';
+  end if;
+end;
+$role_check$;
 
 grant usage on schema public to rupaykg_verification_guard;
 grant select on public.evidence,
@@ -271,4 +290,25 @@ drop trigger if exists verification_geography_scope_serialization_guard
 create trigger verification_geography_scope_serialization_guard
 before insert or update or delete on public.organization_geography_scopes
 for each row execute function public.lock_organization_for_geography_scope_change();
+
+-- Leave the migration principal as ADMIN-only, without SET ROLE access.
+grant rupaykg_verification_guard to current_user
+  with admin true, set false, inherit false;
+
+do $role_check$
+declare
+  guard_oid oid;
+  migrator_oid oid;
+begin
+  select oid into guard_oid from pg_catalog.pg_roles where rolname = 'rupaykg_verification_guard';
+  select oid into migrator_oid from pg_catalog.pg_roles where rolname = current_user;
+  if exists (
+    select 1 from pg_catalog.pg_auth_members
+     where roleid = guard_oid
+       and (member <> migrator_oid or set_option)
+  ) then
+    raise exception 'only the migration principal may retain ADMIN-only membership in the verification guard role';
+  end if;
+end;
+$role_check$;
 
