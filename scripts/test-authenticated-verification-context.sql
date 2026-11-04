@@ -238,7 +238,7 @@ SELECT set_config('rupaykg.context.organization', :'org_b', true);
 SELECT set_config('rupaykg.context.session','00000000-0000-4000-8000-000000000000',true);
 SELECT set_config('rupaykg.context.expiry',(extract(epoch FROM now()+interval '5 minutes')::bigint)::text,true);
 SELECT set_config('rupaykg.context.signature',repeat('0',64),true);
-SELECT NOT public.rupaykg_context_is_valid() AS forged_context_invalid \gset
+SELECT NOT has_function_privilege(current_user,'public.rupaykg_context_is_valid()','EXECUTE') AS forged_context_invalid \gset
 \if :forged_context_invalid
 \else
   \echo 'caller-forged context unexpectedly validated'
