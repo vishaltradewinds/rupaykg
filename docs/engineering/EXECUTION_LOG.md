@@ -60,3 +60,13 @@
 - Updated P0 issue #214 with exact ledger, source tree and live function-definition evidence. Refreshed canonical resume point.
 - PR #244 head `9081e98fec3e263fc95c8a377ebd2156d6ea4cb3` passed exact-head CI #5335 (`41785611740`) across all configured stages. PR remains draft/unmerged.
 - Production remains READ-ONLY / HOLD. No SQL writes, DDL, migration, function change, role/grant/ownership/RLS change, branch operation, deployment, merge, worker activation or certification. TRL 9 NOT ACHIEVED.
+
+
+## 2026-11-04 — CTO Run 18 (06:40 UTC onward)
+- Confirmed PR #244 head `92b5215a56cba12a5880175e9b63e44c2aedb4b3` exact-head CI #5337 (`41785952488`) SUCCESS across all stages, including full tests/PostgreSQL acceptance and production-container build.
+- Recovered exact historical migration 096 SQL from commit `ca8f4100782e13f8d72106187fafc8e1e446214f` / blob `258b1f4534efbf915688f78aa84d4ec24a47cbc0`; confirmed removal commit `54a7fe1ceb41b37a68720a71c10a1dd03af30dea`. Preserved source and review-only findings in `docs/security/RECOVERED_MIGRATION_096_REVIEW_2026-11-04.md`; did not restore or replay it.
+- Read-only production trigger inspection confirmed separate legacy `verification_independence_guard` still accepts role names VERIFIER/AUDITOR and strict `verifications_integrity_guard` matches recovered 096. The strict trigger overwrites the authorization snapshot on approved-row UPDATE; immutability and downgrade/re-approval semantics are not enforced.
+- Confirmed current-main `apps/src/value-routes.ts` invokes `can_assess_epr` and `can_write_esg`; production definitions have role-name fallback and live aliases beyond migration 018. Added exact evidence and remediation requirements to issue #214.
+- Added exact 91-file source inventory, recovered 096 evidence/review document, and corrected migration README on PR #244 branch. 096 remains absent from active source; no production data/schema/function/trigger/role change occurred.
+- Updated canonical resume point with Run 18 findings and next work. Commits after CI #5337 are new docs-only heads and require their own exact-head CI validation.
+- Production remains READ-ONLY / HOLD. No SQL writes, DDL, migration, trigger/function change, role/grant/ownership/RLS change, branch operation, deployment, merge, worker activation or certification. TRL 9 NOT ACHIEVED.
