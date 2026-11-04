@@ -535,3 +535,12 @@ Next: rehearse the guard against a disposable copy of the recovered 096 schema a
 - Production remains READ-ONLY / HOLD. No production DDL/DML, migrations, role/grant/ownership changes, RLS, branch operations, secret/config changes, deployments, worker activation, merges or certification occurred.
 - SITE-JBP-01 Kathonda remains PRE-VALIDATION. Provisional national-platform TRL 3; individual tested components at most TRL 4. Production certification and TRL 9 NOT ACHIEVED.
 - Immutable Run-29 checkpoint: `docs/engineering/checkpoints/2026-11-04-cto-run-29-security-convergence-and-release-governance.md`. Session log: `docs/engineering/session-logs/2026-11-04-cto-session-29.md`.
+
+
+## 2026-11-04 Run 29 CI closure — exact-head results confirmed
+
+- PR #272 head `a8ce1c9bbb1d88a88dffe142967fec65d7ad77d9`: CI #5516 / `41874461093` **SUCCESS**, 18/18 steps.
+- PR #284 head `cbd743a8d2e17100cd1607ef19f90bef6a6ccc6d`: CI #5521 / `41875338287` **SUCCESS**, 18/18 steps. This includes the exact activity-organization/role-organization application authorization port, both route call sites, context migration proof, typecheck, build, browser smoke, PostgreSQL acceptance and production-container build.
+- PR #284 prior no-PUBLIC-EXECUTE head `2b1ebc88237e9274e563b5605295ce925cabd234`: CI #5518 / `41874715707` **SUCCESS**, 18/18 steps.
+- These are isolated branch validations only. The combined #252 + #272 + #250/#251 + #284 migration/role/context rehearsal remains NOT DONE. One canonical trigger and one shared `rupaykg_verification_guard` owner are mandatory; do not merge individual drafts out of order.
+- Follow-up immutable closure checkpoint: `docs/engineering/checkpoints/2026-11-04-cto-run-29-closure.md`. Closure session log: `docs/engineering/session-logs/2026-11-04-cto-session-29-closure.md`.
