@@ -64,11 +64,11 @@ before(async () => {
   const c = await pool.connect();
   try {
     await c.query("BEGIN");
-    orgId = (await c.query<{ id: string }>("insert into organizations(name,organization_type) values($1,'COLLECTOR') returning id", [`runtime-${suffix}`])).rows[0]!.id;
+    orgId = (await c.query<{ id: string }>("insert into organizations(name,organization_type,status) values($1,'COLLECTOR','VERIFIED') returning id", [`runtime-${suffix}`])).rows[0]!.id;
     geographyId = (await c.query<{ id: string }>("insert into geography(kind,code,name) values('STATE_UT',$1,$2) returning id", [`RUNTIME-${suffix}`, `Runtime ${suffix}`])).rows[0]!.id;
     outOfScopeGeographyId = (await c.query<{ id: string }>("insert into geography(kind,code,name) values('STATE_UT',$1,$2) returning id", [`OTHER-${suffix}`, `Other ${suffix}`])).rows[0]!.id;
-    await c.query("insert into organization_geography_scopes(organization_id,geography_id) values($1,$2)", [orgId, geographyId]);
-    actorId = (await c.query<{ id: string }>("insert into identities(external_subject,display_name) values($1,$2) returning id", [`runtime-actor-${suffix}`, "Runtime Actor"])).rows[0]!.id;
+    await c.query("insert into organization_geography_scopes(organization_id,geography_id,status) values($1,$2,'VERIFIED')", [orgId, geographyId]);
+    actorId = (await c.query<{ id: string }>("insert into identities(external_subject,display_name,status) values($1,$2,'VERIFIED') returning id", [`runtime-actor-${suffix}`, "Runtime Actor"])).rows[0]!.id;
     verifierId = (await c.query<{ id: string }>("insert into identities(external_subject,display_name) values($1,$2) returning id", [`runtime-verifier-${suffix}`, "Runtime Verifier"])).rows[0]!.id;
     const actorRole = (await c.query<{ id: string }>("insert into roles(organization_id,name,permissions) values($1,$2,'[\"FIELD_SYNC\",\"waste:record\",\"evidence:upload\",\"projects:manage\"]') returning id", [orgId, `ACTOR-${suffix}`])).rows[0]!.id;
     const verifierRole = (await c.query<{ id: string }>("insert into roles(organization_id,name,permissions) values($1,$2,'[\"VERIFY_EVIDENCE\"]') returning id", [orgId, `VERIFIER-${suffix}`])).rows[0]!.id;
@@ -100,7 +100,12 @@ after(async () => {
     await c.query("delete from field_devices where organization_id=$1", [orgId]);
     await c.query("delete from environmental_attribute_claims where activity_id in (select id from activities where organization_id=$1)", [orgId]);
     await c.query("delete from carbon_calculations where activity_id in (select id from activities where organization_id=$1)", [orgId]);
-    await c.query("delete from verifications where evidence_id in (select id from evidence where activity_id in (select id from activities where organization_id=$1))", [orgId]);
+    await c.query("ALTER TABLE public.verifications DISABLE TRIGGER verification_delete_guard");
+    try {
+      await c.query("delete from verifications where evidence_id in (select id from evidence where activity_id in (select id from activities where organization_id=$1))", [orgId]);
+    } finally {
+      await c.query("ALTER TABLE public.verifications ENABLE TRIGGER verification_delete_guard");
+    }
     await c.query("delete from evidence where activity_id in (select id from activities where organization_id=$1)", [orgId]);
     await c.query("delete from measurements where activity_id in (select id from activities where organization_id=$1)", [orgId]);
     await c.query("delete from activities where organization_id=$1", [orgId]);
