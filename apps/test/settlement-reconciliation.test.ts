@@ -1,17 +1,19 @@
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { Pool } from "pg";
-import { randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 
 const databaseUrl = process.env.DATABASE_URL;
 const pool = databaseUrl ? new Pool({ connectionString: databaseUrl }) : null;
 const suffix = randomUUID();
+const verifierToken = randomBytes(32).toString("base64url");
+const hashToken = (value: string) => createHash("sha256").update(value).digest("hex");
 let settlementId = "";
 
 before(async () => {
   if (!pool) return;
   const owner = (await pool.query<{ id: string }>(
-    "insert into organizations(name,organization_type) values($1,'PROCESSOR') returning id",
+    "insert into organizations(name,organization_type,status) values($1,'PROCESSOR','VERIFIED') returning id",
     [`settlement-reconciliation-owner-${suffix}`],
   )).rows[0]!.id;
   const counterparty = (await pool.query<{ id: string }>(
@@ -27,7 +29,7 @@ before(async () => {
     [owner, geography],
   );
   const actor = (await pool.query<{ id: string }>(
-    "insert into identities(external_subject,display_name) values($1,$2) returning id",
+    "insert into identities(external_subject,display_name,status) values($1,$2,'VERIFIED') returning id",
     [`settlement-reconciliation-actor-${suffix}`, "Settlement Reconciliation Actor"],
   )).rows[0]!.id;
   const verifier = (await pool.query<{ id: string }>(
@@ -42,6 +44,7 @@ before(async () => {
     "insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED')",
     [verifier, owner, role],
   );
+  await pool.query("insert into identity_sessions(identity_id,expires_at,token_hash) values($1,now()+interval '1 hour',$2)",[verifier,hashToken(verifierToken)]);
 
   const activity = (await pool.query<{ id: string }>(
     "insert into activities(organization_id,actor_identity_id,geography_id,activity_type,status,completed_at) values($1,$2,$3,'COLLECTION','COMPLETED',now()) returning id",
@@ -51,10 +54,22 @@ before(async () => {
     "insert into evidence(activity_id,evidence_type,status,captured_at,content_hash) values($1,'SETTLEMENT_RECON','VERIFIED',now(),$2) returning id",
     [activity, `settlement-reconciliation-evidence-${suffix}`],
   )).rows[0]!.id;
-  const verification = (await pool.query<{ id: string }>(
-    "insert into verifications(evidence_id,activity_id,verifier_identity_id,decision,scope,rationale) values($1,$2,$3,'APPROVED','settlement-reconciliation','independent database guard test') returning id",
-    [evidence, activity, verifier],
-  )).rows[0]!.id;
+  const verificationClient = await pool.connect();
+  let verification = "";
+  try {
+    await verificationClient.query("BEGIN");
+    await verificationClient.query("select public.rupaykg_set_authenticated_context($1,$2::uuid)",[verifierToken,owner]);
+    verification = (await verificationClient.query<{ id: string }>(
+      "insert into verifications(evidence_id,activity_id,verifier_identity_id,decision,scope,rationale) values($1,$2,$3,'APPROVED','settlement-reconciliation','independent database guard test') returning id",
+      [evidence, activity, verifier],
+    )).rows[0]!.id;
+    await verificationClient.query("COMMIT");
+  } catch(error) {
+    await verificationClient.query("ROLLBACK");
+    throw error;
+  } finally {
+    verificationClient.release();
+  }
   await pool.query(
     "insert into mrv_provenance_events(activity_id,verification_id,evidence_id,guardian_policy_id,guardian_execution_id,guardian_status,hcs_status,hcs_topic_id,hcs_transaction_id,hcs_consensus_timestamp,integrity_hash,metadata,mirror_node_verified_at) values($1,$2,$3,$4,$5,'VERIFIED','CONSENSUS_CONFIRMED','0.0.123',$6,now(),$7,$8::jsonb,clock_timestamp())",
     [
