@@ -37,17 +37,171 @@ test("evidence vault enforces tenant scope, versioned storage, integrity and ind
   const migrationPath = migrationCandidates.find(candidate => existsSync(candidate));
   assert.ok(migrationPath, "verification authorization migration must be available to the integration test");
   const migrationSql = await readFile(migrationPath, "utf8");
+  // Recreate the exact recovered migration-096 function body and the real
+  // migration-010 independence trigger before rehearsing the new forward-only
+  // migration. This is disposable CI state only; migration 096 stays review-only.
+  const recovered096Sql = `
+    alter table verifications
+      add column if not exists authorization_membership_id uuid references organization_memberships(id),
+      add column if not exists authorization_role_id uuid references roles(id),
+      add column if not exists authorization_permissions_snapshot jsonb,
+      add column if not exists authorization_checked_at timestamptz;
+
+    create or replace function prevent_invalid_verification()
+    returns trigger
+    language plpgsql
+    as $$
+    declare
+      resolved_activity_id uuid;
+      activity_actor uuid;
+      activity_organization_id uuid;
+      membership_row record;
+      evidence_activity_id uuid;
+    begin
+      resolved_activity_id := new.activity_id;
+      if new.evidence_id is not null then
+        select e.activity_id into evidence_activity_id from evidence e where e.id = new.evidence_id;
+        if evidence_activity_id is null then
+          raise exception 'verification evidence must be bound to an activity';
+        end if;
+        if resolved_activity_id is not null and resolved_activity_id is distinct from evidence_activity_id then
+          raise exception 'verification activity must match the evidence activity';
+        end if;
+        resolved_activity_id := evidence_activity_id;
+        new.activity_id := evidence_activity_id;
+      end if;
+      if resolved_activity_id is not null then
+        select a.actor_identity_id, a.organization_id
+          into activity_actor, activity_organization_id
+          from activities a where a.id = resolved_activity_id;
+      end if;
+      if new.decision = 'APPROVED' then
+        if activity_organization_id is null then
+          raise exception 'approved verification requires an activity with an organization';
+        end if;
+        if activity_actor is not null and activity_actor = new.verifier_identity_id then
+          raise exception 'activity actor cannot verify its own evidence';
+        end if;
+        select m.id as membership_id, m.role_id, r.permissions
+          into membership_row
+          from organization_memberships m
+          join roles r on r.id = m.role_id
+          join identities i on i.id = m.identity_id
+         where m.identity_id = new.verifier_identity_id
+           and m.organization_id = activity_organization_id
+           and m.status = 'VERIFIED'
+           and i.status = 'VERIFIED'
+           and i.suspended_at is null
+           and (
+             r.permissions @> '[\"VERIFY_EVIDENCE\"]'::jsonb
+             or r.permissions @> '[\"verification:approve\"]'::jsonb
+             or r.permissions @> '[\"verification.approve\"]'::jsonb
+           )
+         order by m.created_at desc
+         limit 1;
+        if membership_row.membership_id is null then
+          raise exception 'approved verification requires active verifier permission in the activity organization';
+        end if;
+        new.authorization_membership_id := membership_row.membership_id;
+        new.authorization_role_id := membership_row.role_id;
+        new.authorization_permissions_snapshot := membership_row.permissions;
+        new.authorization_checked_at := now();
+      end if;
+      return new;
+    end;
+    $$;
+  `;
   await pool.query("drop trigger if exists verification_authorization_guard on public.verifications");
-  await pool.query(`create or replace function public.test_legacy_verification_independence()
-    returns trigger language plpgsql as $body$ begin return new; end $body$`);
-  await pool.query("create trigger verification_independence_guard before insert on public.verifications for each row execute function public.test_legacy_verification_independence()");
+  await pool.query("drop trigger if exists verification_independence_guard on public.verifications");
+  await pool.query("drop trigger if exists verifications_integrity_guard on public.verifications");
+  await pool.query(recovered096Sql);
+  await pool.query("create trigger verification_independence_guard before insert on public.verifications for each row execute function public.enforce_verification_independence()");
   await pool.query("create trigger verifications_integrity_guard before insert or update on public.verifications for each row execute function public.prevent_invalid_verification()");
+  const historicalVerificationTriggers = await pool.query<{ tgname: string }>(
+    "select tgname from pg_trigger where tgrelid='public.verifications'::regclass and not tgisinternal order by tgname",
+  );
+  assert.deepEqual(historicalVerificationTriggers.rows.map(row => row.tgname), ["verification_independence_guard", "verifications_integrity_guard"]);
+  const recoveredFunction = await pool.query<{ definition: string }>(
+    "select pg_get_functiondef('public.prevent_invalid_verification()'::regprocedure) as definition",
+  );
+  assert.match(recoveredFunction.rows[0]?.definition ?? "", /approved verification requires active verifier permission in the activity organization/);
+  const legacyFunction = await pool.query<{ definition: string }>(
+    "select pg_get_functiondef('public.enforce_verification_independence()'::regprocedure) as definition",
+  );
+  assert.match(legacyFunction.rows[0]?.definition ?? "", /VERIFIER/);
+  assert.match(legacyFunction.rows[0]?.definition ?? "", /AUDITOR/);
+
+  // Demonstrate the historical trigger composition before replacing it:
+  // migration 010's cross-org permission lookup lets REJECTED through, while
+  // recovered 096 applies its strict same-org check only to APPROVED.
+  const legacySuffix = randomBytes(6).toString("hex");
+  const legacyOrgA = (await pool.query<{ id: string }>(
+    "insert into organizations(name,organization_type,status) values($1,'test_fixture','VERIFIED') returning id",
+    ["TEST-096-ORG-A-" + legacySuffix],
+  )).rows[0]!.id;
+  const legacyOrgB = (await pool.query<{ id: string }>(
+    "insert into organizations(name,organization_type,status) values($1,'test_fixture','VERIFIED') returning id",
+    ["TEST-096-ORG-B-" + legacySuffix],
+  )).rows[0]!.id;
+  const legacyGeo = (await pool.query<{ id: string }>(
+    "insert into geography(kind,name,source,source_version) values('STATE_UT',$1,'integration-test','legacy-096') returning id",
+    ["TEST-096-GEO-" + legacySuffix],
+  )).rows[0]!.id;
+  const legacyIdentity = (await pool.query<{ id: string }>(
+    "insert into identities(external_subject,display_name,email,status) values($1,$2,$3,'VERIFIED') returning id",
+    ["test-096-cross-org:" + legacySuffix, "Legacy 096 Cross Org Verifier", "legacy-096-" + legacySuffix + "@example.invalid"],
+  )).rows[0]!.id;
+  const legacyRoleA = (await pool.query<{ id: string }>(
+    "insert into roles(organization_id,name,permissions,geography_scope) values($1,'legacy_reviewer',$2::jsonb,'[]') returning id",
+    [legacyOrgA, JSON.stringify(["evidence:review"])],
+  )).rows[0]!.id;
+  const legacyRoleB = (await pool.query<{ id: string }>(
+    "insert into roles(organization_id,name,permissions,geography_scope) values($1,'legacy_verifier',$2::jsonb,'[]') returning id",
+    [legacyOrgB, JSON.stringify(["VERIFY_EVIDENCE"])],
+  )).rows[0]!.id;
+  await pool.query("alter table organization_memberships disable trigger stakeholder_membership_application_guard");
+  try {
+    await pool.query(
+      "insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED'),($1,$4,$5,'VERIFIED')",
+      [legacyIdentity, legacyOrgA, legacyRoleA, legacyOrgB, legacyRoleB],
+    );
+  } finally {
+    await pool.query("alter table organization_memberships enable trigger stakeholder_membership_application_guard");
+  }
+  const legacyActivity = (await pool.query<{ id: string }>(
+    "insert into activities(organization_id,geography_id,activity_type,status) values($1,$2,'WASTE_WEIGHT_MEASUREMENT','COMPLETED') returning id",
+    [legacyOrgA, legacyGeo],
+  )).rows[0]!.id;
+  const legacyEvidence = (await pool.query<{ id: string }>(
+    "insert into evidence(activity_id,evidence_type,status,captured_at,content_hash) values($1,'FIELD','UNDER_REVIEW',now(),$2) returning id",
+    [legacyActivity, "legacy-096-" + legacySuffix],
+  )).rows[0]!.id;
+  await assert.rejects(
+    pool.query(
+      "insert into verifications(evidence_id,activity_id,verifier_identity_id,decision,scope,rationale) values($1,$2,$3,'APPROVED','LEGACY_096','Historical strict guard negative')",
+      [legacyEvidence, legacyActivity, legacyIdentity],
+    ),
+    /approved verification requires active verifier permission in the activity organization/,
+  );
+  const legacyRejected = await pool.query<{ id: string }>(
+    "insert into verifications(evidence_id,activity_id,verifier_identity_id,decision,scope,rationale) values($1,$2,$3,'REJECTED','LEGACY_096','Historical cross-org rejection path') returning id",
+    [legacyEvidence, legacyActivity, legacyIdentity],
+  );
+  assert.equal(legacyRejected.rowCount, 1, "historical trigger composition allowed the cross-org REJECTED path");
+  await pool.query("delete from verifications where id=$1", [legacyRejected.rows[0]!.id]);
+  await pool.query("delete from evidence where id=$1", [legacyEvidence]);
+  await pool.query("delete from activities where id=$1", [legacyActivity]);
+  await pool.query("delete from organization_memberships where identity_id=$1", [legacyIdentity]);
+  await pool.query("delete from roles where id in ($1,$2)", [legacyRoleA, legacyRoleB]);
+  await pool.query("delete from identities where id=$1", [legacyIdentity]);
+  await pool.query("delete from organizations where id in ($1,$2)", [legacyOrgA, legacyOrgB]);
+  await pool.query("delete from geography where id=$1", [legacyGeo]);
+
   await pool.query(migrationSql);
   const remainingVerificationTriggers = await pool.query<{ tgname: string }>(
     "select tgname from pg_trigger where tgrelid='public.verifications'::regclass and not tgisinternal order by tgname",
   );
   assert.deepEqual(remainingVerificationTriggers.rows.map(row => row.tgname), ["verification_authorization_guard"]);
-  await pool.query("drop function public.test_legacy_verification_independence()");
   const suffix = randomBytes(8).toString("hex");
   const uploaderToken = randomBytes(32).toString("base64url");
   const reviewerToken = randomBytes(32).toString("base64url");
