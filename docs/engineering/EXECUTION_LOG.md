@@ -41,3 +41,12 @@
 - Found geography roots/children endpoints scope via any verified membership rather than selected active organization. Created draft PR #246 with active-org-bound helper, endpoint filters and five regression tests. Exact-head CI #5329 is running; typecheck is in progress after dependency audit, migration validation and disposable DB migration passed. No CI pass claimed yet.
 - Updated issue #196 with tenant inventory/route-surface evidence and issue #215 with the canVerifyEvidence organization-binding design requirement.
 - PR #246 remains draft/unmerged. Production remains READ-ONLY / HOLD; no production SQL, DDL, role/grant/RLS, migration, deployment, merge, worker activation or certification.
+
+
+## 2026-11-04 — CTO Run 16 (06:25 UTC onward)
+- Verified PR #244 current head `94d7eff6f1486e24dffc323b7eec7daca5fd8170`; exact-head CI run #5332 (`41784895122`) completed SUCCESS. Dependency audit, migration validation, disposable PostgreSQL migration, typecheck, production build, browser smoke, full tests/PostgreSQL acceptance, production-container build and cleanup all passed.
+- Verified PR #246 exact head `2fc6e37fc8000e766ac24cff8d234ce1c84aa327`; CI #5329 (`41784724429`) completed SUCCESS. Active-organization geography fix remains draft/unmerged.
+- Re-read EPR/BWG route authorization and auth helper. EPR route-local membership checks are followed by active-organization-aware `hasOrganizationPermission`; do not misclassify the preliminary check as a confirmed bypass. Existing `canVerifyEvidence` helper still lacks an explicit subject-organization argument and needs full call-site mapping plus disposable cross-org tests before modification.
+- A guessed migration-root fetch returned 404; no claims made about EPR/ESG database function definitions. Next locate authoritative migration directory through repository tree metadata and inspect exact function SQL, grants and search_path.
+- Refreshed canonical resume point with exact CI evidence, updated authorization review and next batch.
+- Production remains READ-ONLY / HOLD. No production SQL/DDL, migration, role/grant/ownership/RLS change, branch operation, deployment, merge, worker activation or certification. TRL 9 NOT ACHIEVED.
