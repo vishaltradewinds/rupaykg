@@ -315,3 +315,32 @@ This proves source/config does not demonstrate credential separation; it does no
 3. Test under an intended non-owner runtime role, including function EXECUTE, table SELECT/INSERT/UPDATE and trigger execution privileges; explicitly prove DELETE restrictions/compensating audit controls.
 4. Complete 67-table policy matrix and geography fail-closed design separately.
 5. Keep PRs draft/unmerged and production READ-ONLY / HOLD until independent DBA/security review and explicit approval. No production/staging writes, migrations, function/trigger, role/grant/RLS changes, deployments, worker activation or certification. TRL 9 NOT ACHIEVED.
+
+
+## 2026-11-04 authoritative refresh — CTO Run 24 (three revocation race tests green)
+
+### PR #247 exact-head CI closure
+- Latest PR #247 head `4fed4494bfada75f0cb4c1cfbb4e10a8108198fc` passed exact-head CI #5360 (`41789915766`) end-to-end: dependency audit, migration validation, disposable PostgreSQL migration, typecheck, production build, browser smoke, full tests/PostgreSQL acceptance, production-container build and cleanup.
+- Three two-session PostgreSQL races now pass on disposable PostgreSQL:
+  1. Role permission revocation: verification waits on role-row lock and fails after permission removal commits.
+  2. Membership status deactivation: verification waits on membership-row lock and fails after status changes from VERIFIED to PENDING.
+  3. Identity suspension: verification waits on identity-row lock and fails after suspension commits.
+- Previously approved decision's stored permission snapshot remains unchanged after role permission revocation/restoration.
+- PR #247 remains OPEN / DRAFT / UNMERGED. Migration unapplied.
+
+### PR #244 handoff exact-head CI closure
+- Latest PR #244 head `ff6872c1f90c0964bd9c1e31cbeb1adbf96410a3` passed exact-head CI #5359 (`41789805891`) end-to-end. PR #244 remains draft/unmerged.
+
+### Remaining gates
+- These are deterministic disposable PostgreSQL race tests, not a full proof of all deadlock/lock-order cases or production role behavior. Continue reviewing lock ordering, timeout/retry behavior, and row-level lock privileges.
+- Test migration on a production-like disposable schema where recovered 096 columns and both legacy triggers already exist; prove one canonical trigger remains and migration is repeatable.
+- Verify behavior under actual non-owner runtime role; current production role remains BYPASSRLS-capable and 0/67 tables have RLS/FORCE RLS.
+- Geography scope fail-open remains separate; this PR does not redefine global geography policy.
+- Verification rows are protected from UPDATE, but deletion/tamper prevention still depends on DB grants, owner separation and audit controls.
+
+### Next execution batch
+1. Add migration idempotency/production-like schema test with 096 columns and both historical triggers preinstalled.
+2. Test trigger/function execution under a dedicated non-owner role with exact grants and safe search_path.
+3. Add lock-order/deadlock test or document a reviewed lock-order contract and bounded transaction timeout/retry semantics.
+4. Complete 67-table tenant RLS matrix and geography fail-closed design separately.
+5. Keep PR #247 draft/unmerged and production READ-ONLY / HOLD pending independent DBA/security review and explicit approval. No production/staging writes, migration, role/grant/RLS/function/trigger change, deployment, worker activation or certification. TRL 9 NOT ACHIEVED.
