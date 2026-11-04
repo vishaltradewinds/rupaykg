@@ -33,7 +33,7 @@ before(async () => {
     [`settlement-reconciliation-actor-${suffix}`, "Settlement Reconciliation Actor"],
   )).rows[0]!.id;
   const verifier = (await pool.query<{ id: string }>(
-    "insert into identities(external_subject,display_name) values($1,$2) returning id",
+    "insert into identities(external_subject,display_name,status) values($1,$2,'VERIFIED') returning id",
     [`settlement-reconciliation-verifier-${suffix}`, "Settlement Reconciliation Verifier"],
   )).rows[0]!.id;
   const role = (await pool.query<{ id: string }>(
