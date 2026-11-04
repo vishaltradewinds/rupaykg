@@ -213,3 +213,5 @@ Prioritize P0 verification design/legacy-trigger/row-lock regression, migration 
 3. Continue migration 096 exact-byte and staging-only source recovery.
 4. Complete 67-table RLS/ownership/grant and endpoint-to-data matrix.
 5. Keep EPR feature flags and MRV workers OFF; no production release until independent review and explicit founder approval.
+
+- Opened draft documentation PR #283 (`e1e45516095d5f34f6a558873979611252a9184d`) stacked onto PR #204's documentation branch. It remains unmerged and does not target main. No workflow runs were returned for this docs commit; no docs CI pass is claimed.
