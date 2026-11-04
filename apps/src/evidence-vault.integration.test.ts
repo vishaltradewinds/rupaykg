@@ -17,6 +17,12 @@ test("evidence vault enforces tenant scope, versioned storage, integrity and ind
   const reviewerToken = randomBytes(32).toString("base64url");
   const outsiderToken = randomBytes(32).toString("base64url");
   try {
+    const geographyFunction = await pool.query<{ proconfig: string[] | null; prosecdef: boolean }>(
+      "select p.proconfig, p.prosecdef from pg_proc p where p.oid='public.organization_has_geography_scope(uuid,uuid)'::regprocedure",
+    );
+    assert.equal(geographyFunction.rows[0]?.prosecdef, false, "geography scope helper remains SECURITY INVOKER");
+    assert.deepEqual(geographyFunction.rows[0]?.proconfig, ["search_path=pg_catalog, public, pg_temp"], "geography helper path keeps pg_temp last");
+
     const org = await pool.query<{ id: string }>(
       "insert into organizations(name,organization_type,status) values($1,'test_fixture','VERIFIED') returning id",
       ["TEST-EVIDENCE-" + suffix],
