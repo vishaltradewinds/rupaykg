@@ -259,12 +259,12 @@ WHERE m.identity_id=i.id AND i.external_subject='ci-active-authctx-verifier-a'
   AND m.organization_id=:'org_a';
 SET LOCAL ROLE rupaykg_test_verification_api;
 SELECT public.rupaykg_test_expect_spoof_rejected(
-  :'evidence_a',:'activity_a',:'verifier_a') AS membership_change_rejected \\gset
-\\if :membership_change_rejected
-\\else
-  \\echo 'verification insert accepted a context after membership was deactivated'
-  \\quit 1
-\\endif
+  :'evidence_a',:'activity_a',:'verifier_a') AS membership_change_rejected \gset
+\if :membership_change_rejected
+\else
+  \echo 'verification insert accepted a context after membership was deactivated'
+  \quit 1
+\endif
 RESET ROLE;
 ROLLBACK TO SAVEPOINT membership_changed_context;
 
