@@ -30,7 +30,7 @@ test("verification SECURITY DEFINER guard runs under a NOLOGIN non-owner role wi
     await pool.query(`grant usage on schema ${s} to ${guard}, ${api}`);
 
     await pool.query(`create table ${s}.geography(id uuid primary key, parent_id uuid)`);
-    await pool.query(`create table ${s}.organization_geography_scopes(organization_id uuid not null, geography_id uuid not null, status text not null)`);
+    await pool.query(`create table ${s}.organization_geography_scopes(id uuid primary key, organization_id uuid not null, geography_id uuid not null, status text not null)`);
     await pool.query(`create table ${s}.identities(id uuid primary key, status text not null, suspended_at timestamptz)`);
     await pool.query(`create table ${s}.roles(id uuid primary key, organization_id uuid not null, permissions jsonb not null)`);
     await pool.query(`create table ${s}.organization_memberships(id uuid primary key, identity_id uuid not null, organization_id uuid not null, role_id uuid not null, status text not null, created_at timestamptz not null default now())`);
@@ -40,22 +40,46 @@ test("verification SECURITY DEFINER guard runs under a NOLOGIN non-owner role wi
 
     await pool.query(`
       create or replace function ${s}.organization_has_geography_scope(p_org uuid, p_geo uuid)
-      returns boolean language sql stable security invoker
+      returns boolean language plpgsql volatile security invoker
       set search_path = pg_catalog, ${schema}, pg_temp
       as $scope$
-        with recursive ancestors(id) as (
-          select g.id from ${s}.geography g where g.id = p_geo
-          union all
-          select g.parent_id from ${s}.geography g join ancestors a on g.id = a.id where g.parent_id is not null
-        )
-        select case
-          when not exists (select 1 from ${s}.organization_geography_scopes x where x.organization_id=p_org and x.status='VERIFIED') then false
-          else exists (
-            select 1 from ${s}.organization_geography_scopes x
-            join ancestors a on a.id=x.geography_id
-            where x.organization_id=p_org and x.status='VERIFIED'
-          )
-        end
+      declare
+        v_scope record;
+        v_scope_count integer := 0;
+        v_matches boolean := false;
+        v_is_ancestor boolean := false;
+        v_old_scope text := current_setting('rupaykg_guard.scope_id', true);
+      begin
+        -- Lock all currently verified organization scopes before deciding.
+        -- A concurrent revocation waits, then the row is re-evaluated.
+        for v_scope in
+          select x.id, x.geography_id
+            from ${s}.organization_geography_scopes x
+           where x.organization_id=p_org and x.status='VERIFIED'
+           order by x.id
+        loop
+          v_scope_count := v_scope_count + 1;
+          perform set_config('rupaykg_guard.scope_id', v_scope.id::text, true);
+          perform 1 from ${s}.organization_geography_scopes x
+           where x.id=v_scope.id and x.organization_id=p_org and x.status='VERIFIED'
+           for share;
+          if found then
+            with recursive ancestors(id) as (
+              select g.id from ${s}.geography g where g.id = p_geo
+              union all
+              select g.parent_id from ${s}.geography g join ancestors a on g.id = a.id where g.parent_id is not null
+            )
+            select exists(select 1 from ancestors where id=v_scope.geography_id) into v_is_ancestor;
+            v_matches := v_matches or v_is_ancestor;
+          end if;
+        end loop;
+        perform set_config('rupaykg_guard.scope_id', coalesce(v_old_scope, ''), true);
+        -- No verified scope is not unrestricted access.
+        return v_scope_count > 0 and v_matches;
+      exception when others then
+        perform set_config('rupaykg_guard.scope_id', coalesce(v_old_scope, ''), true);
+        raise;
+      end;
       $scope$
     `);
 
@@ -65,6 +89,7 @@ test("verification SECURITY DEFINER guard runs under a NOLOGIN non-owner role wi
       await pool.query(`alter table ${s}.${q(table)} force row level security`);
     }
     await pool.query(`create policy guard_geo_scope on ${s}.organization_geography_scopes for select to ${guard} using (organization_id = nullif(current_setting('rupaykg_guard.organization_id', true), '')::uuid)`);
+    await pool.query(`create policy guard_geo_scope_lock on ${s}.organization_geography_scopes for update to ${guard} using (id = nullif(current_setting('rupaykg_guard.scope_id', true), '')::uuid) with check (id = nullif(current_setting('rupaykg_guard.scope_id', true), '')::uuid)`);
     await pool.query(`create policy guard_identity_read on ${s}.identities for select to ${guard} using (id = nullif(current_setting('rupaykg_guard.identity_id', true), '')::uuid)`);
     await pool.query(`create policy guard_identity_lock on ${s}.identities for update to ${guard} using (id = nullif(current_setting('rupaykg_guard.identity_id', true), '')::uuid) with check (id = nullif(current_setting('rupaykg_guard.identity_id', true), '')::uuid)`);
     await pool.query(`create policy guard_roles_read on ${s}.roles for select to ${guard} using (organization_id = nullif(current_setting('rupaykg_guard.organization_id', true), '')::uuid)`);
@@ -77,7 +102,7 @@ test("verification SECURITY DEFINER guard runs under a NOLOGIN non-owner role wi
     await pool.query(`create policy guard_evidence_lock on ${s}.evidence for update to ${guard} using (id = nullif(current_setting('rupaykg_guard.evidence_id', true), '')::uuid) with check (id = nullif(current_setting('rupaykg_guard.evidence_id', true), '')::uuid)`);
 
     await pool.query(`grant select on ${s}.geography, ${s}.organization_geography_scopes, ${s}.identities, ${s}.roles, ${s}.organization_memberships, ${s}.activities, ${s}.evidence to ${guard}`);
-    for (const table of ["identities", "roles", "organization_memberships", "activities", "evidence"]) {
+    for (const table of ["organization_geography_scopes", "identities", "roles", "organization_memberships", "activities", "evidence"]) {
       await pool.query(`grant update(id) on ${s}.${q(table)} to ${guard}`);
     }
     await pool.query(`grant execute on function ${s}.organization_has_geography_scope(uuid,uuid) to ${guard}`);
@@ -225,6 +250,8 @@ test("verification SECURITY DEFINER guard runs under a NOLOGIN non-owner role wi
     const orgB = uuid();
     const geoA = uuid();
     const geoB = uuid();
+    const scopeA = uuid();
+    const scopeB = uuid();
     const identity = uuid();
     const roleId = uuid();
     const membership = uuid();
@@ -243,7 +270,7 @@ test("verification SECURITY DEFINER guard runs under a NOLOGIN non-owner role wi
     const suspendedEvidence = uuid();
 
     await pool.query(`insert into ${s}.geography(id) values ($1),($2)`, [geoA, geoB]);
-    await pool.query(`insert into ${s}.organization_geography_scopes(organization_id,geography_id,status) values ($1,$2,'VERIFIED'),($3,$2,'VERIFIED')`, [orgA, geoA, orgB]);
+    await pool.query(`insert into ${s}.organization_geography_scopes(id,organization_id,geography_id,status) values ($1,$2,$3,'VERIFIED'),($4,$5,$3,'VERIFIED')`, [scopeA, orgA, geoA, scopeB, orgB]);
     await pool.query(`insert into ${s}.identities(id,status) values ($1,'VERIFIED'),($2,'SUSPENDED')`, [identity, suspendedIdentity]);
     await pool.query(`insert into ${s}.roles(id,organization_id,permissions) values ($1,$2,'["VERIFY_EVIDENCE"]'::jsonb),($3,$2,'["VERIFY_EVIDENCE"]'::jsonb)`, [roleId, orgA, suspendedRole]);
     await pool.query(`insert into ${s}.organization_memberships(id,identity_id,organization_id,role_id,status) values ($1,$2,$3,$4,'VERIFIED'),($5,$6,$3,$7,'VERIFIED')`, [membership, identity, orgA, roleId, suspendedMembership, suspendedIdentity, suspendedRole]);
@@ -278,9 +305,10 @@ test("verification SECURITY DEFINER guard runs under a NOLOGIN non-owner role wi
       await guardCheck.query("select set_config('rupaykg_guard.identity_id',$1,true)", [identity]);
       await guardCheck.query("select set_config('rupaykg_guard.membership_id',$1,true)", [membership]);
       await guardCheck.query("select set_config('rupaykg_guard.role_id',$1,true)", [roleId]);
+      await guardCheck.query("select set_config('rupaykg_guard.scope_id',$1,true)", [scopeA]);
       const visibleBeforeLock = await guardCheck.query(`select count(*)::int as n from ${s}.evidence where id=$1`, [evidenceA]);
       assert.equal(visibleBeforeLock.rows[0]!.n, 1, "SELECT policy must expose only the selected evidence row");
-      for (const [table, rowId] of [["evidence", evidenceA], ["activities", activityA], ["identities", identity], ["organization_memberships", membership], ["roles", roleId]] as const) {
+      for (const [table, rowId] of [["evidence", evidenceA], ["activities", activityA], ["identities", identity], ["organization_memberships", membership], ["roles", roleId], ["organization_geography_scopes", scopeA]] as const) {
         const locked = await guardCheck.query(`select id from ${s}.${q(table)} where id=$1 for share`, [rowId]);
         assert.equal(locked.rowCount, 1, `exact-row UPDATE RLS policy must permit FOR SHARE on ${table}`);
       }
@@ -458,6 +486,13 @@ test("verification SECURITY DEFINER guard runs under a NOLOGIN non-owner role wi
       /verification geography is outside organization scope/,
     );
     await pool.query(`update ${s}.activities set geography_id=$2 where id=$1`, [activityA, geoA]);
+    await assertNonOwnerRevocationRace(
+      "geography scope revocation",
+      `update ${s}.organization_geography_scopes set status='PENDING' where id=$1`,
+      [scopeA],
+      /verification geography is outside organization scope/,
+    );
+    await pool.query(`update ${s}.organization_geography_scopes set status='VERIFIED' where id=$1`, [scopeA]);
     await assertNonOwnerRevocationRace(
       "identity suspension",
       `update ${s}.identities set status='SUSPENDED', suspended_at=now() where id=$1`,
