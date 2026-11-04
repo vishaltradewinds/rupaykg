@@ -192,3 +192,11 @@ Added Run-28 checkpoint and refreshed the canonical resume point and guard desig
 - Neon production read-only audit: 67 tables, 0 RLS/FORCE/policies, all owned by `rupaykg`; 92 migration rows/latest `20261021`; observed role LOGIN/BYPASSRLS/CREATEROLE/CREATEDB/REPLICATION and member of `neon_superuser`.
 - Render live service auto-deploys on commits while manifest declares checks-pass; GitHub main is unprotected and rulesets are empty. No settings changed.
 - Added immutable Run-29 checkpoint and session log; refreshed canonical resume point. Production READ-ONLY/HOLD; no production writes, migrations, role/grant/RLS changes, branches, deployments, merges, worker activation or certification. SITE-JBP-01 PRE-VALIDATION; TRL 9 NOT ACHIEVED.
+
+
+## 2026-11-04 — Run 29 CI closure
+- PR #272 exact head `a8ce1c9bbb1d88a88dffe142967fec65d7ad77d9` passed CI #5516 / `41874461093` SUCCESS, 18/18 steps.
+- PR #284 exact head `cbd743a8d2e17100cd1607ef19f90bef6a6ccc6d` passed CI #5521 / `41875338287` SUCCESS, 18/18 steps, including tenant-bound application helpers/routes and production-container build.
+- PR #284 prior no-PUBLIC-EXECUTE head `2b1ebc88237e9274e563b5605295ce925cabd234` passed CI #5518 / `41874715707` SUCCESS, 18/18 steps.
+- Created Run-29 closure checkpoint and closure session log; appended exact-head results to canonical resume point.
+- Combined migration/trigger/guard-owner integration remains unvalidated. Production remains READ-ONLY/HOLD; no production writes, migrations, role/grant/RLS changes, branch operations, Render config/secrets, deployments, merges, worker activation or certification. TRL 9 NOT ACHIEVED.
