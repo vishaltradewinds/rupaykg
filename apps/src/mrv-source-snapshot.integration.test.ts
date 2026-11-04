@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { Pool } from "pg";
 import type { AuthContext } from "./auth.js";
 import { captureMrvSourceSnapshot, MrvSnapshotError } from "./mrv-source-snapshot.js";
@@ -134,6 +134,55 @@ test("MRV source snapshots are immutable, idempotent and require explicit correc
     await assertMutationInvalidatesSnapshot(
       "update mrv_observations set observed_value=observed_value+1 where activity_id=$1",
       [activity.rows[0]!.id],
+    );
+
+    // Artifact series are mutable metadata; every change must invalidate a prior snapshot.
+    const artifactSeries = await pool.query<{ id: string }>(
+      "insert into evidence_artifact_series(organization_id,activity_id,evidence_type,created_by_identity_id) values($1,$2,'WEIGHBRIDGE_TICKET',$3) returning id",
+      [organizationId, activity.rows[0]!.id, identityId],
+    );
+    await assertMutationInvalidatesSnapshot(
+      "update evidence_artifact_series set evidence_type='WEIGHBRIDGE_TICKET_CORRECTED' where id=$1",
+      [artifactSeries.rows[0]!.id],
+    );
+
+    // Artifact versions and reviews are append-only. Their inserts advance the
+    // activity revision; UPDATE/DELETE must fail at their immutable-table guards.
+    const artifactBytes = Buffer.from("artifact revision regression fixture");
+    const artifactSha256 = createHash("sha256").update(artifactBytes).digest("hex");
+    const artifactVersionId = randomBytes(16).toString("hex");
+    await pool.query(
+      "update evidence set content_uri=$2,content_hash=$3 where id=$1",
+      [evidence.rows[0]!.id, "db://evidence-vault/pending-" + suffix, artifactSha256],
+    );
+    await assertMutationInvalidatesSnapshot(
+      "insert into evidence_artifact_versions(series_id,evidence_id,version_number,file_name,media_type,size_bytes,sha256,content,uploaded_by_identity_id) values($1,$2,1,'mrv-fixture.txt','text/plain',$3,$4,$5,$6)",
+      [artifactSeries.rows[0]!.id, evidence.rows[0]!.id, artifactBytes.length, artifactSha256, artifactBytes, identityId],
+    );
+    const artifactVersion = await pool.query<{ id: string }>(
+      "select id from evidence_artifact_versions where evidence_id=$1",
+      [evidence.rows[0]!.id],
+    );
+    assert.ok(artifactVersion.rows[0]?.id);
+    await assertMutationInvalidatesSnapshot(
+      "insert into evidence_artifact_reviews(evidence_id,artifact_version_id,reviewer_identity_id,decision,rationale) values($1,$2,$3,'APPROVED','Independent artifact fixture review')",
+      [evidence.rows[0]!.id, artifactVersion.rows[0]!.id, identityId],
+    );
+    await assert.rejects(
+      () => pool.query("update evidence_artifact_versions set file_name='mutated.txt' where id=$1", [artifactVersion.rows[0]!.id]),
+      /evidence artifact versions are immutable/,
+    );
+    await assert.rejects(
+      () => pool.query("delete from evidence_artifact_versions where id=$1", [artifactVersion.rows[0]!.id]),
+      /evidence artifact versions are immutable/,
+    );
+    await assert.rejects(
+      () => pool.query("update evidence_artifact_reviews set rationale='mutated review rationale' where evidence_id=$1", [evidence.rows[0]!.id]),
+      /evidence artifact reviews are append-only/,
+    );
+    await assert.rejects(
+      () => pool.query("delete from evidence_artifact_reviews where evidence_id=$1", [evidence.rows[0]!.id]),
+      /evidence artifact reviews are append-only/,
     );
 
     const staleSnapshotDigest = first.snapshot.source_digest;
