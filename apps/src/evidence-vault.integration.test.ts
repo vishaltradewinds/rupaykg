@@ -16,6 +16,7 @@ test("evidence vault enforces tenant scope, versioned storage, integrity and ind
   const uploaderToken = randomBytes(32).toString("base64url");
   const reviewerToken = randomBytes(32).toString("base64url");
   const outsiderToken = randomBytes(32).toString("base64url");
+  const crossOrgReviewerToken = randomBytes(32).toString("base64url");
   try {
     const org = await pool.query<{ id: string }>(
       "insert into organizations(name,organization_type,status) values($1,'test_fixture','VERIFIED') returning id",
@@ -34,31 +35,36 @@ test("evidence vault enforces tenant scope, versioned storage, integrity and ind
       "insert into activities(organization_id,geography_id,activity_type,status) values($1,$2,'WASTE_WEIGHT_MEASUREMENT','COMPLETED') returning id",
       [organizationId, geography.rows[0]!.id],
     );
+    await pool.query("insert into organization_geography_scopes(organization_id,geography_id) values($1,$3),($2,$3)", [organizationId, otherOrg.rows[0]!.id, geography.rows[0]!.id]);
     const identities = await Promise.all([
       pool.query<{ id: string }>("insert into identities(external_subject,display_name,email,status) values($1,$2,$3,'VERIFIED') returning id", ["test-evidence-uploader:"+suffix,"Evidence Uploader","uploader-"+suffix+"@example.invalid"]),
       pool.query<{ id: string }>("insert into identities(external_subject,display_name,email,status) values($1,$2,$3,'VERIFIED') returning id", ["test-evidence-reviewer:"+suffix,"Evidence Reviewer","reviewer-"+suffix+"@example.invalid"]),
       pool.query<{ id: string }>("insert into identities(external_subject,display_name,email,status) values($1,$2,$3,'VERIFIED') returning id", ["test-evidence-outsider:"+suffix,"Evidence Outsider","outsider-"+suffix+"@example.invalid"]),
+      pool.query<{ id: string }>("insert into identities(external_subject,display_name,email,status) values($1,$2,$3,'VERIFIED') returning id", ["test-evidence-cross-org-reviewer:"+suffix,"Cross Org Reviewer","cross-reviewer-"+suffix+"@example.invalid"]),
     ]);
     const uploaderId = identities[0].rows[0]!.id;
     const reviewerId = identities[1].rows[0]!.id;
     const outsiderId = identities[2].rows[0]!.id;
+    const crossOrgReviewerId = identities[3].rows[0]!.id;
     const roles = await Promise.all([
       pool.query<{ id: string }>("insert into roles(organization_id,name,permissions,geography_scope) values($1,'evidence_uploader_test',$2::jsonb,'[]') returning id",[organizationId,JSON.stringify(["evidence:upload","evidence:read"])]),
       pool.query<{ id: string }>("insert into roles(organization_id,name,permissions,geography_scope) values($1,'evidence_reviewer_test',$2::jsonb,'[]') returning id",[organizationId,JSON.stringify(["evidence:read","evidence:review","VERIFY_EVIDENCE"])]),
       pool.query<{ id: string }>("insert into roles(organization_id,name,permissions,geography_scope) values($1,'evidence_outsider_test',$2::jsonb,'[]') returning id",[otherOrg.rows[0]!.id,JSON.stringify(["evidence:read","evidence:upload"])]),
+      pool.query<{ id: string }>("insert into roles(organization_id,name,permissions,geography_scope) values($1,'cross_org_review_test',$2::jsonb,'[]') returning id",[organizationId,JSON.stringify(["evidence:review"])]),
+      pool.query<{ id: string }>("insert into roles(organization_id,name,permissions,geography_scope) values($1,'cross_org_verifier_test',$2::jsonb,'[]') returning id",[otherOrg.rows[0]!.id,JSON.stringify(["VERIFY_EVIDENCE"])]),
     ]);
     await pool.query("alter table organization_memberships disable trigger stakeholder_membership_application_guard");
     try {
       await pool.query(
-        "insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED'),($4,$2,$5,'VERIFIED'),($6,$7,$8,'VERIFIED')",
-        [uploaderId,organizationId,roles[0].rows[0]!.id,reviewerId,roles[1].rows[0]!.id,outsiderId,otherOrg.rows[0]!.id,roles[2].rows[0]!.id],
+        "insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED'),($4,$2,$5,'VERIFIED'),($6,$7,$8,'VERIFIED'),($9,$2,$10,'VERIFIED'),($9,$7,$11,'VERIFIED')",
+        [uploaderId,organizationId,roles[0].rows[0]!.id,reviewerId,roles[1].rows[0]!.id,outsiderId,otherOrg.rows[0]!.id,roles[2].rows[0]!.id,crossOrgReviewerId,roles[3].rows[0]!.id,roles[4].rows[0]!.id],
       );
     } finally {
       await pool.query("alter table organization_memberships enable trigger stakeholder_membership_application_guard");
     }
     await pool.query(
-      "insert into identity_sessions(identity_id,expires_at,token_hash) values($1,now()+interval '1 hour',$2),($3,now()+interval '1 hour',$4),($5,now()+interval '1 hour',$6)",
-      [uploaderId,hash(uploaderToken),reviewerId,hash(reviewerToken),outsiderId,hash(outsiderToken)],
+      "insert into identity_sessions(identity_id,expires_at,token_hash) values($1,now()+interval '1 hour',$2),($3,now()+interval '1 hour',$4),($5,now()+interval '1 hour',$6),($7,now()+interval '1 hour',$8)",
+      [uploaderId,hash(uploaderToken),reviewerId,hash(reviewerToken),outsiderId,hash(outsiderToken),crossOrgReviewerId,hash(crossOrgReviewerToken)],
     );
     const headers = (token: string, orgId = organizationId) => ({ authorization: "Bearer " + token, "x-rupaykg-organization-id": orgId });
     const bytes = Buffer.from("%PDF-1.7\nMRV evidence fixture\n");
@@ -97,9 +103,32 @@ test("evidence vault enforces tenant scope, versioned storage, integrity and ind
     const outsiderRead = await app.inject({ method: "GET", url: "/api/v1/evidence-vault?activityId="+activity.rows[0]!.id, headers: headers(outsiderToken, otherOrg.rows[0]!.id) });
     assert.equal(outsiderRead.statusCode, 403, outsiderRead.body);
 
+    const crossOrgDirectInsert = pool.query(
+      "insert into verifications(evidence_id,activity_id,verifier_identity_id,decision,scope,rationale) values($1,$2,$3,'REJECTED','EVIDENCE_VAULT','Cross-org negative fixture')",
+      [second.evidenceId, activity.rows[0]!.id, crossOrgReviewerId],
+    );
+    await assert.rejects(crossOrgDirectInsert, /verification requires active explicit verifier permission in the activity organization/);
+    const crossOrgReview = await app.inject({ method: "POST", url: "/api/v1/evidence-vault/"+second.evidenceId+"/review", headers: headers(crossOrgReviewerToken), payload: { decision: "REJECTED", rationale: "Cross-organization review must be denied" } });
+    assert.equal(crossOrgReview.statusCode, 403, crossOrgReview.body);
+
     const reviewerDecision = await app.inject({ method: "POST", url: "/api/v1/evidence-vault/"+uploaded.evidenceId+"/review", headers: headers(reviewerToken), payload: { decision: "APPROVED", rationale: "Checked against the cited source record" } });
     assert.equal(reviewerDecision.statusCode, 200, reviewerDecision.body);
     assert.equal(reviewerDecision.json().data.status, "VERIFIED");
+    const snapshot = await pool.query<{ authorization_membership_id: string; authorization_role_id: string; authorization_permissions_snapshot: string[]; authorization_checked_at: Date }>(
+      "select authorization_membership_id,authorization_role_id,authorization_permissions_snapshot,authorization_checked_at from verifications where evidence_id=$1 and decision='APPROVED'",
+      [uploaded.evidenceId],
+    );
+    assert.ok(snapshot.rows[0]?.authorization_membership_id);
+    assert.ok(snapshot.rows[0]?.authorization_role_id);
+    assert.ok(snapshot.rows[0]?.authorization_checked_at);
+    assert.ok(snapshot.rows[0]?.authorization_permissions_snapshot.includes("VERIFY_EVIDENCE"));
+    await assert.rejects(
+      pool.query("update verifications set rationale='attempted provenance rewrite' where evidence_id=$1", [uploaded.evidenceId]),
+      /verification records are immutable/,
+    );
+    const validRejectedDecision = await app.inject({ method: "POST", url: "/api/v1/evidence-vault/"+second.evidenceId+"/review", headers: headers(reviewerToken), payload: { decision: "REJECTED", rationale: "Valid same-organization rejection" } });
+    assert.equal(validRejectedDecision.statusCode, 200, validRejectedDecision.body);
+    assert.equal(validRejectedDecision.json().data.status, "REJECTED");
 
     const secondReview = await app.inject({ method: "POST", url: "/api/v1/evidence-vault/"+uploaded.evidenceId+"/review", headers: headers(reviewerToken), payload: { decision: "REJECTED", rationale: "Attempt a second decision" } });
     assert.equal(secondReview.statusCode, 409, secondReview.body);
