@@ -23,7 +23,9 @@ test("organization geography authorization fails closed without a verified root"
         ["TEST-GEO-VALID-SCOPE-" + suffix],
       ),
     ]);
-    const [unscopedOrg, pendingOrg, scopedOrg] = organizations.map(result => result.rows[0]!.id);
+    const unscopedOrg = organizations[0]!.rows[0]!.id;
+    const pendingOrg = organizations[1]!.rows[0]!.id;
+    const scopedOrg = organizations[2]!.rows[0]!.id;
 
     const root = await pool.query<{ id: string }>(
       "insert into geography(kind,name,source,source_version) values('STATE_UT',$1,'integration-test','fail-closed-v1') returning id",
