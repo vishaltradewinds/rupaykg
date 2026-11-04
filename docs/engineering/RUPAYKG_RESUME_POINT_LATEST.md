@@ -236,3 +236,32 @@ This proves source/config does not demonstrate credential separation; it does no
 3. Implement a single verification guard plus snapshot immutability and decision-state tests only on a disposable non-production environment after review.
 4. Map all EPR/ESG function callers and permission aliases; test role-name-only and explicit-permission cases under non-owner runtime.
 5. Production remains READ-ONLY / HOLD; no production/staging writes, DDL, migration, function/trigger, role/grant/RLS change, worker activation, deployment, merge or certification. TRL 9 NOT ACHIEVED.
+
+
+## 2026-11-04 authoritative refresh — CTO Run 21 (cross-organization verification authorization)
+
+### New P0 finding confirmed by route-to-database trace
+- Evidence-vault review route `POST /api/v1/evidence-vault/:evidenceId/review` first checks `evidence:review` in the subject organization, then calls `canVerifyEvidence(client, identityId, evidenceId)`.
+- Previous `canVerifyEvidence` SQL accepted `VERIFY_EVIDENCE` from any verified organization membership and checked geography scope against that membership's organization; it did not bind membership organization to `activities.organization_id`.
+- Production 096 `prevent_invalid_verification()` applies same-organization permission only for APPROVED decisions. The legacy global-membership trigger can authorize a REJECTED insert based on a different organization membership.
+- Thus an identity with `evidence:review` in Organization A and `VERIFY_EVIDENCE` in Organization B, both covering the activity geography, can satisfy the old API checks and create a REJECTED verification for A's evidence. This is a cross-org decision/write authorization defect, not an APPROVED-verification bypass.
+- Issue #215 updated with exact route/function chain and remediation evidence.
+
+### Focused candidate remediation — PR #247
+- Branch: `security/verification-authorization-tenant-binding-2026-11-04`.
+- PR #247 OPEN / DRAFT / UNMERGED; exact initial head `6a5fd9c5288e56d7243ab70f39f5a928f6235208`; CI run #5350 (`41788676133`) was in progress at checkpoint time.
+- Application helper `canVerifyEvidence` now requires exact organization ID, joins membership to subject activity organization, and verifies identity active/non-suspended; evidence-vault route passes `row.organization_id`.
+- Added unit query assertions and integration fixture for cross-org REJECTED API/direct-DB denial, valid same-org REJECTED, snapshot capture and update rejection.
+- Added forward-only migration `20261104_verification_authorization_tenant_binding.sql` to replace legacy and recovered-096 triggers with one strict BEFORE INSERT/UPDATE guard; explicit same-org permission applies to every decision, self-verification/mismatch rejected, subject/identity/membership/role rows locked during decision, snapshot captured at insert, and verification UPDATE rejected.
+- This migration is a candidate only and has not been applied to any database. Exact-head CI and disposable PostgreSQL tests must pass; independent DBA/security review remains required.
+
+### CI and documentation status
+- PR #244 latest docs head `12d9664e3e4b62138a0f69d0588715b743d63ee8` passed exact-head CI #5349 (`41788047688`) end-to-end. PR #244 remains draft/unmerged.
+- PR #247 initial exact-head CI #5350 was in progress; no pass claim for PR #247 until exact head completes.
+
+### Safety and next steps
+1. Verify PR #247 migration syntax and integration test behaviour in exact-head CI; correct failures without weakening negative assertions.
+2. Review any other insert/update paths for verifications; ensure every decision type is bound to the exact subject organization and explicit permission.
+3. Validate transaction lock ordering and two-session race behaviour for identity suspension, membership revocation and role permission mutation.
+4. Rehearse migration on disposable PostgreSQL and compare fresh-schema and production-like schema (where 096 columns already exist); never run against production.
+5. Production remains READ-ONLY / HOLD. No production or staging writes, DDL, migration, function/trigger, role/grant/RLS change, worker activation, deployment, merge or certification. TRL 9 NOT ACHIEVED.
