@@ -105,3 +105,11 @@
 - PR #247 remains draft/unmerged; candidate migration unapplied. Two-session race tests, geography fail-open remediation, non-owner runtime role and independent DBA/security review remain open.
 - PR #244 exact head `76dfd7bbdc272bfbe98963005dd2727e177a46c5` passed CI #5351 (`41788775436`) end-to-end.
 - Production remains READ-ONLY / HOLD. No production/staging writes, migrations, role/grant/RLS changes, deployments, worker activation or certification. TRL 9 NOT ACHIEVED.
+
+
+## 2026-11-04 — CTO Run 23 (verification revocation race assurance)
+- PR #247 latest head `39ecdb1e373a4ffcc80c1465cfc6d42bfd10482f` passed exact-head CI #5357 (`41789402772`) end-to-end, including new two-session role-permission revocation race test, full PostgreSQL acceptance and production container build.
+- Race test proves verification insert waits behind an in-flight role permission update and re-evaluates after revocation commits; no cross-tenant decision proceeds, and prior approved snapshot remains unchanged.
+- PR #247 remains draft/unmerged; migration unapplied. Identity suspension/membership revocation race tests, non-owner runtime role, production-like schema with recovered 096 columns/triggers, DELETE privilege/tamper controls and geography fail-closed remain open.
+- PR #244 latest documentation head `c15536707d3326156286b89bcea2b84d3a228a51` passed CI #5356 (`41789332489`) end-to-end.
+- Updated canonical resume point. Production remains READ-ONLY / HOLD; no production/staging writes, migrations, role/grant/RLS/function/trigger changes, deployment, worker activation or certification. TRL 9 NOT ACHIEVED.
