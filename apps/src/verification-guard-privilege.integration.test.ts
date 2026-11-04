@@ -276,13 +276,13 @@ test("verification SECURITY DEFINER guard runs under a NOLOGIN non-owner role wi
         const locked = await guardCheck.query(`select id from ${s}.${q(table)} where id=$1 for share`, [rowId]);
         assert.equal(locked.rowCount, 1, `exact-row UPDATE RLS policy must permit FOR SHARE on ${table}`);
       }
-      await guardCheck.query("savepoint deny_mutation");
-      await assert.rejects(
-        guardCheck.query(`update ${s}.evidence set id=$2 where id=$1 returning id`, [evidenceA, orgB]),
-        /row-level security policy/,
+      const mutation = await guardCheck.query<{ id: string }>(
+        `update ${s}.evidence set id=$2 where id=$1 returning id`,
+        [evidenceA, orgB],
       );
-      await guardCheck.query("rollback to savepoint deny_mutation");
-      await guardCheck.query("release savepoint deny_mutation");
+      assert.equal(mutation.rowCount, 0, "RLS must prevent the guard from changing the evidence identifier");
+      const unchanged = await guardCheck.query(`select id from ${s}.evidence where id=$1`, [evidenceA]);
+      assert.equal(unchanged.rowCount, 1, "the exact evidence row must remain unchanged");
       const hiddenOther = await guardCheck.query(`select count(*)::int as n from ${s}.evidence where id=$1`, [evidenceB]);
       assert.equal(hiddenOther.rows[0]!.n, 0, "guard context must not expose another tenant's evidence");
       const memberships = await guardCheck.query(`select count(*)::int as n from ${s}.organization_memberships`);
