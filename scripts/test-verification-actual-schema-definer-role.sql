@@ -165,13 +165,13 @@ FROM public.organizations WHERE name IN ('CI-DEFINER-ORG-A','CI-DEFINER-ORG-B');
 ALTER TABLE public.organization_memberships
   DISABLE TRIGGER stakeholder_membership_application_guard;
 INSERT INTO public.organization_memberships(identity_id,organization_id,role_id,status)
-SELECT i.id,o.id,r.id,'VERIFIED'
+SELECT i.id,o.id,r.id,'VERIFIED'::record_status
 FROM public.identities i
 JOIN public.organizations o ON o.name='CI-DEFINER-ORG-A'
 JOIN public.roles r ON r.organization_id=o.id
 WHERE i.external_subject='ci-definer-verifier-a'
 UNION ALL
-SELECT i.id,o.id,r.id,'VERIFIED'
+SELECT i.id,o.id,r.id,'VERIFIED'::record_status
 FROM public.identities i
 JOIN public.organizations o ON o.name='CI-DEFINER-ORG-B'
 JOIN public.roles r ON r.organization_id=o.id
