@@ -228,11 +228,26 @@ $assert$;
 SET ROLE rupaykg_guard_proof_api;
 DO $denials$
 BEGIN
-  IF has_table_privilege(current_user, 'verification_guard_role_proof.evidence', 'SELECT') THEN
-    RAISE EXCEPTION 'API role unexpectedly has direct evidence SELECT';
+  IF has_table_privilege(current_user, 'verification_guard_role_proof.evidence', 'SELECT')
+     OR has_table_privilege(current_user, 'verification_guard_role_proof.activities', 'SELECT')
+     OR has_table_privilege(current_user, 'verification_guard_role_proof.memberships', 'SELECT')
+     OR has_table_privilege(current_user, 'verification_guard_role_proof.roles', 'SELECT')
+     OR has_table_privilege(current_user, 'verification_guard_role_proof.identities', 'SELECT') THEN
+    RAISE EXCEPTION 'API role unexpectedly has direct SELECT on protected authorization rows';
   END IF;
-  IF has_table_privilege(current_user, 'verification_guard_role_proof.roles', 'UPDATE') THEN
-    RAISE EXCEPTION 'API role unexpectedly has direct role UPDATE';
+  IF has_table_privilege(current_user, 'verification_guard_role_proof.evidence', 'UPDATE')
+     OR has_table_privilege(current_user, 'verification_guard_role_proof.activities', 'UPDATE')
+     OR has_table_privilege(current_user, 'verification_guard_role_proof.memberships', 'UPDATE')
+     OR has_table_privilege(current_user, 'verification_guard_role_proof.roles', 'UPDATE')
+     OR has_table_privilege(current_user, 'verification_guard_role_proof.identities', 'UPDATE')
+     OR has_table_privilege(current_user, 'verification_guard_role_proof.verifications', 'UPDATE') THEN
+    RAISE EXCEPTION 'API role unexpectedly has direct UPDATE on protected rows';
+  END IF;
+  IF has_table_privilege(current_user, 'verification_guard_role_proof.verifications', 'DELETE') THEN
+    RAISE EXCEPTION 'API role unexpectedly has direct DELETE on verification decisions';
+  END IF;
+  IF has_column_privilege(current_user, 'verification_guard_role_proof.evidence', 'id', 'UPDATE') THEN
+    RAISE EXCEPTION 'API role unexpectedly has the helper row-lock column privilege';
   END IF;
   IF pg_has_role(current_user, 'rupaykg_guard_proof_owner', 'MEMBER') THEN
     RAISE EXCEPTION 'API role unexpectedly can assume guard owner';
