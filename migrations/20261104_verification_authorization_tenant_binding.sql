@@ -67,6 +67,7 @@ declare
   activity_organization_id uuid;
   activity_geography_id uuid;
   activity_organization_status text;
+  geography_scope_authorized boolean;
   evidence_activity_id uuid;
   membership_row record;
   role_row record;
@@ -118,8 +119,41 @@ begin
     raise exception 'verification requires a verified activity organization';
   end if;
 
-  if activity_geography_id is null
-     or not public.organization_has_geography_scope(activity_organization_id, activity_geography_id) then
+  if activity_geography_id is null then
+    raise exception 'verification requires an activity within an authorized organization geography';
+  end if;
+
+  -- Do not call the existing STABLE scope helper here: its snapshot can be
+  -- pinned to the outer INSERT statement while waiting for the organization
+  -- lock. This VOLATILE trigger performs a fresh SPI query after the lock so
+  -- a committed concurrent scope change is visible before the decision.
+  with recursive ancestors(id) as (
+    select g.id
+      from public.geography g
+     where g.id = activity_geography_id
+    union all
+    select g.parent_id
+      from public.geography g
+      join ancestors a on a.id = g.id
+     where g.parent_id is not null
+  )
+  select case
+    when not exists (
+      select 1 from public.organization_geography_scopes s
+       where s.organization_id = activity_organization_id
+         and s.status = 'VERIFIED'
+    ) then true
+    else exists (
+      select 1
+        from public.organization_geography_scopes s
+        join ancestors a on a.id = s.geography_id
+       where s.organization_id = activity_organization_id
+         and s.status = 'VERIFIED'
+    )
+  end
+    into geography_scope_authorized;
+
+  if geography_scope_authorized is not true then
     raise exception 'verification requires an activity within an authorized organization geography';
   end if;
 
@@ -187,9 +221,6 @@ grant create on schema public to rupaykg_verification_guard;
 alter function public.enforce_verification_authorization()
   owner to rupaykg_verification_guard;
 revoke create on schema public from rupaykg_verification_guard;
-grant execute on function public.organization_has_geography_scope(uuid, uuid)
-  to rupaykg_verification_guard;
-
 create trigger verification_authorization_guard
 before insert or update on public.verifications
 for each row execute function public.enforce_verification_authorization();
