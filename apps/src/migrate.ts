@@ -3,17 +3,64 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
+import { assertProductionMigrationTarget, requiresExplicitMigrationTarget } from "./production-config.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) throw new Error("DATABASE_URL is required");
 
+const ssl =
+  process.env.DATABASE_SSL === "false"
+    ? undefined
+    : process.env.DATABASE_SSL === "require"
+      ? {
+          rejectUnauthorized: true,
+          ...(process.env.DATABASE_CA_CERT ? { ca: process.env.DATABASE_CA_CERT } : {}),
+        }
+      : { rejectUnauthorized: false };
+
 const pool = new Pool({
   connectionString: databaseUrl,
-  max: 1,
-  ssl: process.env.DATABASE_SSL === "false" ? undefined : { rejectUnauthorized: false },
+  // One connection holds the advisory lock while a second executes migration SQL.
+  max: 2,
+  ssl,
 });
 
+const lockClient = await pool.connect();
+let migrationLockAcquired = false;
+
 try {
+  const lock = await lockClient.query<{ locked: boolean }>(
+    "select pg_try_advisory_lock(20261101, 1) as locked",
+  );
+  migrationLockAcquired = lock.rows[0]?.locked === true;
+  if (!migrationLockAcquired) {
+    throw new Error("Another RupayKg migration run is already active; refusing concurrent execution");
+  }
+
+  if (requiresExplicitMigrationTarget(databaseUrl)) {
+    const expectedBranchId = process.env.RUPAYKG_EXPECTED_NEON_BRANCH_ID?.trim() ?? "";
+    const expectedDatabaseName = process.env.RUPAYKG_EXPECTED_DATABASE_NAME?.trim() ?? "";
+    const expectedRoleName = process.env.RUPAYKG_EXPECTED_DATABASE_ROLE?.trim() ?? "";
+    const identity = await lockClient.query<{
+      branch_id: string | null;
+      database_name: string;
+      role_name: string;
+    }>(`select current_setting('neon.branch_id', true) as branch_id,
+              current_database() as database_name,
+              current_user as role_name`);
+    const connected = identity.rows[0];
+    if (!connected) throw new Error("PRODUCTION_MIGRATION_TARGET_MISMATCH: database identity could not be read");
+    assertProductionMigrationTarget(
+      { expectedBranchId, expectedDatabaseName, expectedRoleName },
+      {
+        branchId: connected.branch_id,
+        databaseName: connected.database_name,
+        roleName: connected.role_name,
+      },
+    );
+    console.log("Verified exact production migration target identity.");
+  }
+
   await pool.query(`
     create table if not exists schema_migrations (
       version text primary key,
@@ -66,5 +113,14 @@ try {
 
   console.log(`Database migrations are current (${files.length} files).`);
 } finally {
+  if (migrationLockAcquired) {
+    try {
+      await lockClient.query("select pg_advisory_unlock(20261101, 1)");
+    } finally {
+      lockClient.release();
+    }
+  } else {
+    lockClient.release();
+  }
   await pool.end();
 }
