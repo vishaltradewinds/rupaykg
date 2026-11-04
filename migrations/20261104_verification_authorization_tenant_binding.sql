@@ -25,7 +25,7 @@ $role$;
 -- CREATEROLE grants ADMIN OPTION on roles it creates, but not SET ROLE.
 -- Temporarily enable SET for function ownership transfer, then remove it.
 grant rupaykg_verification_guard to current_user
-  with admin true, set true, inherit false;
+  with set true, inherit false;
 alter role rupaykg_verification_guard
   nologin nosuperuser nocreatedb nocreaterole noinherit nobypassrls;
 
@@ -293,7 +293,7 @@ for each row execute function public.lock_organization_for_geography_scope_chang
 
 -- Leave the migration principal as ADMIN-only, without SET ROLE access.
 grant rupaykg_verification_guard to current_user
-  with admin true, set false, inherit false;
+  with set false, inherit false;
 
 do $role_check$
 declare
