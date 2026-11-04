@@ -47,6 +47,22 @@ BEGIN
      OR has_schema_privilege('rupaykg_test_verification_api','rupaykg_private','USAGE') THEN
     RAISE EXCEPTION 'API role has direct protected-table or private-key access';
   END IF;
+  IF EXISTS (
+    SELECT 1 FROM pg_proc p
+    CROSS JOIN LATERAL aclexplode(COALESCE(p.proacl,acldefault('f',p.proowner))) acl
+    WHERE p.oid IN (
+      'public.rupaykg_context_is_valid()'::regprocedure,
+      'public.rupaykg_authenticated_identity()'::regprocedure,
+      'public.rupaykg_authenticated_organization()'::regprocedure,
+      'public.rupaykg_set_authenticated_context(text,uuid)'::regprocedure
+    ) AND acl.grantee=0 AND acl.privilege_type='EXECUTE'
+  ) THEN
+    RAISE EXCEPTION 'authenticated context functions must not be executable by PUBLIC';
+  END IF;
+  IF NOT has_function_privilege('rupaykg_test_verification_api',
+       'public.rupaykg_set_authenticated_context(text,uuid)','EXECUTE') THEN
+    RAISE EXCEPTION 'designated API role must receive explicit authenticated-context issuer EXECUTE';
+  END IF;
   IF has_table_privilege('rupaykg_auth_context_owner','public.identity_sessions','UPDATE')
      OR has_table_privilege('rupaykg_auth_context_owner','public.identities','UPDATE')
      OR has_table_privilege('rupaykg_auth_context_owner','public.organization_memberships','UPDATE')
@@ -139,15 +155,21 @@ WHERE o.name='CI-ACTIVE-AUTHCTX-ORG-B'
 
 CREATE OR REPLACE FUNCTION public.rupaykg_test_expect_spoof_rejected(
   p_evidence uuid,p_activity uuid,p_verifier uuid
-) RETURNS boolean LANGUAGE plpgsql AS $$
+) RETURNS boolean LANGUAGE plpgsql AS $
 BEGIN
   INSERT INTO public.verifications(evidence_id,activity_id,verifier_identity_id,decision,scope,rationale)
   VALUES (p_evidence,p_activity,p_verifier,'APPROVED','CI_SPOOF','must be rejected');
   RETURN false;
-EXCEPTION WHEN SQLSTATE '28000' THEN
-  RETURN true;
+EXCEPTION
+  WHEN SQLSTATE '28000' THEN
+    RETURN true;
+  WHEN raise_exception THEN
+    IF SQLERRM = 'verification requires active explicit verifier permission in the activity organization' THEN
+      RETURN true;
+    END IF;
+    RAISE;
 END;
-$$;
+$;
 
 CREATE OR REPLACE FUNCTION public.rupaykg_test_expect_revoked_rejected(
   p_organization uuid
