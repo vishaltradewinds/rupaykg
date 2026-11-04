@@ -22,6 +22,7 @@ declare
   resolved_activity_id uuid;
   activity_actor uuid;
   activity_organization_id uuid;
+  activity_geography_id uuid;
   evidence_activity_id uuid;
   membership_row record;
 begin
@@ -49,14 +50,19 @@ begin
   end if;
   new.activity_id := resolved_activity_id;
 
-  select a.actor_identity_id, a.organization_id
-    into activity_actor, activity_organization_id
+  select a.actor_identity_id, a.organization_id, a.geography_id
+    into activity_actor, activity_organization_id, activity_geography_id
     from public.activities a
    where a.id = resolved_activity_id
    for share;
 
   if activity_organization_id is null then
     raise exception 'verification requires an activity with an organization';
+  end if;
+
+  if activity_geography_id is null
+     or not public.organization_has_geography_scope(activity_organization_id, activity_geography_id) then
+    raise exception 'verification requires an activity within an authorized organization geography';
   end if;
 
   if activity_actor is not null and activity_actor = new.verifier_identity_id then
@@ -69,7 +75,7 @@ begin
   select m.id as membership_id, m.role_id, r.permissions
     into membership_row
     from public.organization_memberships m
-    join public.roles r on r.id = m.role_id
+    join public.roles r on r.id = m.role_id and r.organization_id = m.organization_id
     join public.identities i on i.id = m.identity_id
    where m.identity_id = new.verifier_identity_id
      and m.organization_id = activity_organization_id

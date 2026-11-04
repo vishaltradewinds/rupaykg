@@ -79,7 +79,7 @@ test("evidence vault enforces tenant scope, versioned storage, integrity and ind
     await pool.query("alter table organization_memberships disable trigger stakeholder_membership_application_guard");
     try {
       await pool.query(
-        "insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED'),($4,$2,$5,'VERIFIED'),($6,$7,$8,'VERIFIED'),($9,$2,$10,'VERIFIED'),($9,$7,$11,'VERIFIED')",
+        "insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED'),($4,$2,$5,'VERIFIED'),($6,$7,$8,'VERIFIED'),($9,$2,$10,'VERIFIED'),($9,$7,$11,'VERIFIED'),($9,$2,$11,'VERIFIED')",
         [uploaderId,organizationId,roles[0].rows[0]!.id,reviewerId,roles[1].rows[0]!.id,outsiderId,otherOrg.rows[0]!.id,roles[2].rows[0]!.id,crossOrgReviewerId,roles[3].rows[0]!.id,roles[4].rows[0]!.id],
       );
     } finally {
@@ -131,6 +131,25 @@ test("evidence vault enforces tenant scope, versioned storage, integrity and ind
       [second.evidenceId, activity.rows[0]!.id, crossOrgReviewerId],
     );
     await assert.rejects(crossOrgDirectInsert, /verification requires active explicit verifier permission in the activity organization/);
+
+    // The database guard must also reject direct inserts for activities with
+    // no geography, even when the verifier has same-organization permission.
+    const unscopedActivity = await pool.query<{ id: string }>(
+      "insert into activities(organization_id,activity_type,status) values($1,'TEST_UNSCOPED_VERIFICATION','COMPLETED') returning id",
+      [organizationId],
+    );
+    const unscopedEvidence = await pool.query<{ id: string }>(
+      "insert into evidence(activity_id,evidence_type,status,captured_at,content_hash) values($1,'FIELD','UNDER_REVIEW',now(),$2) returning id",
+      [unscopedActivity.rows[0]!.id, "unscoped-verification-"+suffix],
+    );
+    await assert.rejects(
+      pool.query(
+        "insert into verifications(evidence_id,activity_id,verifier_identity_id,decision,scope) values($1,$2,$3,'REJECTED','UNSCOPED_GEOGRAPHY')",
+        [unscopedEvidence.rows[0]!.id, unscopedActivity.rows[0]!.id, reviewerId],
+      ),
+      /verification requires an activity within an authorized organization geography/,
+    );
+
     const crossOrgReview = await app.inject({ method: "POST", url: "/api/v1/evidence-vault/"+second.evidenceId+"/review", headers: headers(crossOrgReviewerToken), payload: { decision: "REJECTED", rationale: "Cross-organization review must be denied" } });
     assert.equal(crossOrgReview.statusCode, 403, crossOrgReview.body);
 

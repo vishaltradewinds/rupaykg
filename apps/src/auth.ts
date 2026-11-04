@@ -84,7 +84,7 @@ export async function hasOrganizationPermission(client: Pool | PoolClient, auth:
   if (auth.memberships.length > 0 && !canActForOrganization(auth, organizationId)) return false;
   const result = await client.query<{ ok: boolean }>(
     `select exists (
-       select 1 from organization_memberships om join roles r on r.id = om.role_id
+       select 1 from organization_memberships om join roles r on r.id = om.role_id and r.organization_id = om.organization_id
         where om.identity_id = $1 and om.organization_id = $2 and om.status = 'VERIFIED'
           and exists (select 1 from jsonb_array_elements_text(r.permissions) permission where permission = any($3::text[]))
      ) as ok`,
@@ -108,7 +108,7 @@ export async function canVerifyEvidence(client: PoolClient, identityId: string, 
         and om.status = 'VERIFIED'
        join identities i on i.id = om.identity_id
         and i.status = 'VERIFIED' and i.suspended_at is null
-       join roles r on r.id = om.role_id
+       join roles r on r.id = om.role_id and r.organization_id = om.organization_id
        where e.id = $1 and a.organization_id = $3
         and a.geography_id is not null
         and organization_has_geography_scope(a.organization_id, a.geography_id)
