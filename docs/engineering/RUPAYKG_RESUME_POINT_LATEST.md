@@ -404,3 +404,9 @@ This proves source/config does not demonstrate credential separation; it does no
 - Production tenant isolation remains 0/67 RLS and 0/67 FORCE RLS; runtime/migrator separation and non-owner role proof remain incomplete.
 - SITE-JBP-01 Kathonda remains PRE-VALIDATION; field evidence not established. Live Guardian/Hedera round-trip and independent statutory/field acceptance remain incomplete.
 - Production certification and TRL 9: NOT ACHIEVED.
+
+
+### Run 26 exact-head CI closure (07:45 UTC refresh)
+- PR #247 code head `ff75e989fcdef02cbb0719b8aaeb993e506c3a56` passed exact-head CI #5367 (`41794095914`) SUCCESS. All stages passed, including disposable PostgreSQL migration and acceptance tests, typecheck, build, browser smoke and production-container build. The malformed cross-tenant membership and geography-less direct-DB regressions passed in the PostgreSQL acceptance stage.
+- PR #244 documentation head `3926690892527584c0cc7e3397d4f2ae79000caf` passed exact-head CI #5368 (`41794335224`) SUCCESS across all configured stages, including PostgreSQL acceptance and production-container build.
+- PR #247 remains OPEN / DRAFT / UNMERGED; PR #244 remains OPEN / DRAFT / UNMERGED. CI success does not close the non-owner guard-role architecture, production RLS, migration drift, independent review, field acceptance or TRL 9 gates.

@@ -139,3 +139,6 @@
 - Local typecheck, build, migration validation (92 migrations / 73 schema objects), diff check and focused auth tests (5/5) passed. Full local suite had 90 pass, 8 skip, 1 Windows CORS runtime spawn failure; PostgreSQL integration tests skipped because no local DATABASE_URL or Docker engine was available.
 - Reviewed least-privilege constraint. No broad UPDATE grant or production change made. A dedicated NOLOGIN SECURITY DEFINER guard role with narrow column-level lock rights and explicit FORCE RLS policies is a candidate only; it requires disposable PostgreSQL proof and independent review.
 - Added checkpoint `docs/engineering/checkpoints/2026-11-04-cto-run-26-verification-tenant-binding.md` and refreshed the canonical resume point. Production remains READ-ONLY / HOLD; PRs remain draft/unmerged; candidate migration unapplied; TRL 9 NOT ACHIEVED.
+
+- Run-26 code head `ff75e989fcdef02cbb0719b8aaeb993e506c3a56` passed exact-head CI #5367 (`41794095914`) SUCCESS, including PostgreSQL acceptance for malformed cross-tenant role binding and geography-less verification denial.
+- Run-26 documentation head `3926690892527584c0cc7e3397d4f2ae79000caf` passed exact-head CI #5368 (`41794335224`) SUCCESS across all stages. Added the exact-head CI closure to the canonical resume point and commented on PR #244.

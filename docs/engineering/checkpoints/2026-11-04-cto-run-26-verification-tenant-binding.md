@@ -8,7 +8,8 @@
 ## Exact code state
 - PR #247 head: `ff75e989fcdef02cbb0719b8aaeb993e506c3a56`.
 - PR #247 remains OPEN / DRAFT / UNMERGED.
-- Exact-head CI #5367 / run ID `41794095914` was in progress when this checkpoint was written.
+- Exact-head CI #5367 / run ID `41794095914` completed SUCCESS; all stages passed, including disposable PostgreSQL acceptance for the new regressions.
+- Documentation head `3926690892527584c0cc7e3397d4f2ae79000caf` passed exact-head CI #5368 / run ID `41794335224` SUCCESS.
 - Candidate migration remains unapplied to every database.
 
 ## Changes in this run
