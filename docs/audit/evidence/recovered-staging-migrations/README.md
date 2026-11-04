@@ -32,6 +32,24 @@ The catalog state is consistent with:
 
 The staging branch also contains no RLS/FORCE RLS or policies on these four tables. This is a staging observation, not production authorization or proof of safe deployment.
 
+## Verification results
+
+The archived files were fetched back from the archive branch and their Git blob SHAs were compared with the original historical source blobs. All four are **identical at the Git object level**:
+
+| Migration | Original blob SHA | Archived blob SHA | Result |
+|---|---|---|---|
+| `20261022_async_mirror_inbox.sql` | `4d08607e03561b9fbb4ce502b4c4211127237050` | `4d08607e03561b9fbb4ce502b4c4211127237050` | PASS |
+| `20261023_async_mirror_worker_leases.sql` | `33cb4d5d2e29a4a111340e5a0ac34170a0081895` | `33cb4d5d2e29a4a111340e5a0ac34170a0081895` | PASS |
+| `20261024_ai_intake_rate_limits.sql` | `87b51fe60a96a4e0752c8b0a9a170c81f9936dbb` | `87b51fe60a96a4e0752c8b0a9a170c81f9936dbb` | PASS |
+| `20261025_ai_evidence_intake_jobs.sql` | `6a0ae54530b7b756dac33589eaf18df3b071d8f2` | `6a0ae54530b7b756dac33589eaf18df3b071d8f2` | PASS |
+
+A read-only query against the authoritative production Neon branch returned:
+- matching production ledger rows for these four filenames: **0**;
+- matching production tables present: **0**;
+- production ledger row for `096_verification_authorization_provenance.sql`: **1**.
+
+This independently confirms that the four migrations are staging-only relative to the inspected production ledger/schema. No production writes were performed.
+
 ## Critical boundary
 
 These migrations were recorded on a non-authoritative staging branch, not the authoritative production branch. The archive establishes exact historical source availability, not production applicability. Do not:
