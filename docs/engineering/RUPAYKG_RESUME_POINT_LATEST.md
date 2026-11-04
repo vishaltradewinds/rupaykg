@@ -52,3 +52,14 @@
 
 ## Evidence discipline
 CI success is engineering evidence only. It does not establish production deployment safety, statutory acceptance, live MRV operation, field commissioning, Guardian/Hedera consensus, independent review or TRL 9.
+
+
+## Render runtime identity audit — 4 November 2026 (workspace confirmed)
+- User explicitly confirmed the Render workspace; logs were read from service `srv-daki4d7qj5pc73b8qksg` in workspace `tea-dakh7k142hec73aj2kr0`.
+- Live deploy remains `dep-dblekp0473hc73b3qsag`, commit `934062ef8af2ca47bbcbf5e37c12de12a4f9f743`; service auto-deploy remains enabled on commits to `main`.
+- Render app log at `2026-11-04T08:19:23.898Z` states: `Database migrations are current (91 files).` This is direct evidence the live web-service boot executed the migration runner. The same startup window contains no matching `Applied` migration log entries and no matching acceptance-seed log entries; absence of those log entries does not prove no seed code ran.
+- Health-check requests returned HTTP 200. The current `/health` implementation runs `select 1` through the configured application pool, so this indicates database reachability but does not identify which Neon branch/database or database role the app used.
+- Read-only inspection of the confirmed authoritative Neon main branch `br-restless-base-b44cip2h` shows 67 public tables, 0 RLS, 0 FORCE RLS, 92 migration ledger rows, latest version `20261021`. A read-only `pg_stat_activity` snapshot showed no non-audit customer application client connection at that instant; only provider/admin/background connections were visible.
+- The Neon query's `current_user/session_user = rupaykg` describes the audit connector session, not the Render application. Therefore the actual Render runtime database identity and target branch remain UNPROVEN. Do not infer them from service health, audit connector identity, table ownership or secret names.
+- No Render settings/secrets, deployments, Neon production data, roles, grants, migrations or RLS were changed.
+- Next proof: implement a minimal authenticated/operationally gated diagnostic on a non-production candidate that logs only `current_database()`, `current_user`, `session_user`, server/branch identity and deployed commit; no connection strings or secret values. Validate it on a disposable environment and deploy only after explicit release approval.
