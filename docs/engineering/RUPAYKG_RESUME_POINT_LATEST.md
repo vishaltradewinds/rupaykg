@@ -103,3 +103,34 @@ This proves source/config does not demonstrate credential separation; it does no
 3. Complete all 67 table policies and actual-runtime-role cross-tenant tests on disposable Neon.
 4. Reconcile production migration source/ledger drift without rewriting ledger history or blind replay.
 5. Design and rehearse the dedicated migration job and least-privilege runtime identity. No production changes.
+
+
+## 2026-11-04 authoritative refresh — CTO Run 16 (06:25 UTC onward)
+
+### Exact-head CI closure
+- PR #244 current head is `94d7eff6f1486e24dffc323b7eec7daca5fd8170`.
+- Exact-head GitHub Actions CI run #5332 (`41784895122`) completed SUCCESS. Its single validation job passed dependency audit, migration validation, disposable PostgreSQL migration, TypeScript typecheck, production build, browser smoke, full tests including PostgreSQL acceptance, production-container build and cleanup.
+- PR #244 remains OPEN / DRAFT / UNMERGED. This is engineering handoff validation, not a production release gate or TRL claim.
+
+### Geography fix exact-head CI closure
+- PR #246 remains at `2fc6e37fc8000e766ac24cff8d234ce1c84aa327`; exact-head CI #5329 (`41784724429`) completed SUCCESS, including all configured validation stages.
+- The five active-organization geography authorization regression tests and build/test gates passed. PR #246 remains OPEN / DRAFT / UNMERGED pending independent review and broader tenant-isolation gates.
+
+### Additional authorization source review
+- Re-read current-main `apps/src/auth.ts`, `apps/src/epr-return-routes.ts`, `apps/src/bwg-routes.ts` and `apps/src/server.ts`.
+- EPR read/write route-local membership checks are followed by `hasOrganizationPermission`, whose `canActForOrganization` check binds non-bilateral operations to the selected active organization. This is a useful second authorization layer; do not classify the route-local membership helper alone as an exploitable cross-org bypass.
+- The known `canVerifyEvidence` helper concern remains: it takes identity and evidence IDs but not an explicit subject organization, and its query can consider any verified membership with geography scope. Current call sites must be exhaustively mapped and independently tested before a safe helper signature change is made. Do not change PR #238's legacy trigger until a single forward-only trigger design and regression coverage resolve the integration gap.
+- An initial attempt to locate migration SQL by guessed root paths returned 404; no migration/function definition conclusion is drawn from that failed lookup. Next locate the authoritative migration directory via repository tree metadata, then inspect the exact SQL definitions and grants for `can_assess_epr` and `can_write_esg`.
+
+### Safety / release status
+- Production remains READ-ONLY / HOLD. No production SQL writes, migrations, role/grant/ownership changes, RLS activation, branch operation, deployment, merge, worker activation or certification occurred.
+- Production catalog blocker remains 0/67 RLS and 0/67 FORCE RLS with privileged BYPASSRLS-capable table owner; no policy rollout is authorized by CI.
+- Independent DBA/security review, runtime-role separation, 67-table tenant policy matrix, migration drift reconciliation, live Guardian/Hedera round-trip, and SITE-JBP-01 Kathonda field acceptance remain incomplete.
+- Production certification and TRL 9 NOT ACHIEVED.
+
+### Next execution batch
+1. Resolve repository tree/migration directory and inspect exact SQL definitions, ownership, grants and search_path for EPR/ESG permission functions.
+2. Map every `canVerifyEvidence` call site and write a subject-org-bound authorization contract with cross-org and pooling regressions on disposable PostgreSQL.
+3. Continue dynamic workspace, evidence-vault, bilateral settlement and field-device authorization tests under the actual non-owner runtime role in an isolated disposable environment.
+4. Build and review the 67-table policy matrix and migration-drift reconciliation plan.
+5. Keep all PRs draft/unmerged and production READ-ONLY / HOLD pending independent review and controlled approvals.
