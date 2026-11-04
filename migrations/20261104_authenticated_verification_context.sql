@@ -142,22 +142,33 @@ BEGIN
       MESSAGE='authenticated bearer token and organization are required';
   END IF;
 
+  -- Lock only the bearer session here. Verification routes lock evidence and
+  -- activity first; the final trigger then locks organization, membership, role
+  -- and identity in that fixed order. Pre-locking identity/membership/organization
+  -- in this issuer would invert the trigger's order and create deadlock cycles.
   SELECT s.identity_id,s.id,extract(epoch FROM s.expires_at)::bigint
     INTO v_identity,v_session,v_expiry
     FROM public.identity_sessions s
-    JOIN public.identities i ON i.id=s.identity_id
-    JOIN public.organization_memberships m ON m.identity_id=i.id
-    JOIN public.organizations o ON o.id=m.organization_id
    WHERE s.token_hash=encode(public.digest(convert_to(p_bearer_token,'UTF8'),'sha256'),'hex')
      AND s.revoked_at IS NULL AND s.expires_at > clock_timestamp()
-     AND i.status='VERIFIED' AND i.suspended_at IS NULL
-     AND m.organization_id=p_organization_id AND m.status='VERIFIED'
-     AND o.status='VERIFIED'
    ORDER BY s.issued_at DESC,s.id DESC
    LIMIT 1
-   FOR SHARE OF s,i,m,o;
+   FOR SHARE;
 
-  IF v_identity IS NULL THEN
+  IF v_identity IS NULL
+     OR NOT EXISTS (
+       SELECT 1 FROM public.identities i
+        WHERE i.id=v_identity AND i.status='VERIFIED' AND i.suspended_at IS NULL
+     )
+     OR NOT EXISTS (
+       SELECT 1 FROM public.organizations o
+        WHERE o.id=p_organization_id AND o.status='VERIFIED'
+     )
+     OR NOT EXISTS (
+       SELECT 1 FROM public.organization_memberships m
+        WHERE m.identity_id=v_identity AND m.organization_id=p_organization_id
+          AND m.status='VERIFIED'
+     ) THEN
     RAISE EXCEPTION USING ERRCODE='28000',
       MESSAGE='bearer session, identity, membership or organization is not currently authorized';
   END IF;
