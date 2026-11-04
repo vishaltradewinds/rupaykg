@@ -48,6 +48,7 @@ test("verification SECURITY DEFINER guard runs under a NOLOGIN non-owner role wi
         v_scope_count integer := 0;
         v_matches boolean := false;
         v_is_ancestor boolean := false;
+        v_locked_geography_id uuid;
         v_old_scope text := current_setting('rupaykg_guard.scope_id', true);
       begin
         -- Lock all currently verified organization scopes before deciding.
@@ -60,7 +61,8 @@ test("verification SECURITY DEFINER guard runs under a NOLOGIN non-owner role wi
         loop
           v_scope_count := v_scope_count + 1;
           perform set_config('rupaykg_guard.scope_id', v_scope.id::text, true);
-          perform 1 from ${s}.organization_geography_scopes x
+          select x.geography_id into v_locked_geography_id
+            from ${s}.organization_geography_scopes x
            where x.id=v_scope.id and x.organization_id=p_org and x.status='VERIFIED'
            for share;
           if found then
@@ -69,7 +71,7 @@ test("verification SECURITY DEFINER guard runs under a NOLOGIN non-owner role wi
               union all
               select g.parent_id from ${s}.geography g join ancestors a on g.id = a.id where g.parent_id is not null
             )
-            select exists(select 1 from ancestors where id=v_scope.geography_id) into v_is_ancestor;
+            select exists(select 1 from ancestors where id=v_locked_geography_id) into v_is_ancestor;
             v_matches := v_matches or v_is_ancestor;
           end if;
         end loop;
@@ -341,6 +343,7 @@ test("verification SECURITY DEFINER guard runs under a NOLOGIN non-owner role wi
       const loginIdentity = await apiClient.query<{ current_user: string }>("select current_user");
       assert.equal(loginIdentity.rows[0]?.current_user, apiRole, "requests must use the actual non-owner API login");
       await apiClient.query("select set_config('rupaykg_guard.evidence_id',$1,false)", [evidenceA]);
+      await apiClient.query("select set_config('rupaykg_guard.scope_id',$1,false)", [scopeB]);
       const spoofedRead = await apiClient.query(`select count(*)::int as n from ${s}.evidence`);
       assert.equal(spoofedRead.rows[0]!.n, 0, "API-supplied guard GUCs must not bypass policies targeted only to the guard role");
       await assert.rejects(apiClient.query(`set role ${guard}`), /permission denied to set role/);
@@ -353,6 +356,8 @@ test("verification SECURITY DEFINER guard runs under a NOLOGIN non-owner role wi
       assert.deepEqual(allowed.rows[0]?.authorization_permissions_snapshot, ["VERIFY_EVIDENCE"]);
       const restoredGuc = await apiClient.query<{ value: string }>("select current_setting('rupaykg_guard.evidence_id', true) as value");
       assert.equal(restoredGuc.rows[0]?.value, evidenceA, "the trigger must restore caller GUC state after its scoped checks");
+      const restoredScopeGuc = await apiClient.query<{ value: string }>("select current_setting('rupaykg_guard.scope_id', true) as value");
+      assert.equal(restoredScopeGuc.rows[0]?.value, scopeB, "the geography helper must restore the caller's prior scope GUC");
       const stillHidden = await apiClient.query(`select count(*)::int as n from ${s}.evidence`);
       assert.equal(stillHidden.rows[0]!.n, 0, "restored caller GUC must not reveal evidence to the API role");
       await assert.rejects(
@@ -493,6 +498,13 @@ test("verification SECURITY DEFINER guard runs under a NOLOGIN non-owner role wi
       /verification geography is outside organization scope/,
     );
     await pool.query(`update ${s}.organization_geography_scopes set status='VERIFIED' where id=$1`, [scopeA]);
+    await assertNonOwnerRevocationRace(
+      "geography scope reassignment",
+      `update ${s}.organization_geography_scopes set geography_id=$2 where id=$1`,
+      [scopeA, geoB],
+      /verification geography is outside organization scope/,
+    );
+    await pool.query(`update ${s}.organization_geography_scopes set geography_id=$2 where id=$1`, [scopeA, geoA]);
     await assertNonOwnerRevocationRace(
       "identity suspension",
       `update ${s}.identities set status='SUSPENDED', suspended_at=now() where id=$1`,
