@@ -76,7 +76,7 @@ async function reject(c: PoolClient, action: () => Promise<unknown>, expected: R
     await assert.rejects(action, (error: unknown) => {
       assert.match(error instanceof Error ? error.message : String(error), expected);
       return true;
-    });
+    }, `expected rejection matching ${expected}`);
   } finally {
     await c.query("rollback to savepoint lifecycle_assertion");
     await c.query("release savepoint lifecycle_assertion");
