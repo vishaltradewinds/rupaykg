@@ -2,6 +2,8 @@
 
 **Status:** draft engineering evidence only — not approved for production execution.
 
+**CI:** exact-head validation is being rerun on the superseding draft PR; prior-branch success is not used as a substitute.
+
 ## Purpose
 
 The candidate verification authorization trigger uses `SELECT ... FOR SHARE` to serialize a decision against changes to its evidence, activity, organization, verifier membership, role permissions, and identity status. PostgreSQL requires UPDATE privilege on at least one column of each locked table. Giving the API role broad UPDATE would defeat least privilege.
