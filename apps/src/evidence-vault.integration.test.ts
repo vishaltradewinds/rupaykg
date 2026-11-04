@@ -365,7 +365,7 @@ test("evidence vault enforces tenant scope, versioned storage, integrity and ind
       await suspender.query("commit");
       suspensionCommitted = true;
       const result = await pending;
-      assert.equal(result.ok, false);
+      assert.equal(result.ok, false, "verification must fail after identity suspension commits");
       if (!result.ok) assert.match(result.error instanceof Error ? result.error.message : String(result.error), /verification requires active explicit verifier permission/);
       await suspensionVerifier.query("rollback").catch(() => undefined);
     } finally {
@@ -402,7 +402,7 @@ test("evidence vault enforces tenant scope, versioned storage, integrity and ind
       await organizationChanger.query("commit");
       organizationChangeCommitted = true;
       const result = await pending;
-      assert.equal(result.ok, false);
+      assert.equal(result.ok, false, "verification must fail after organization status change commits");
       if (!result.ok) assert.match(result.error instanceof Error ? result.error.message : String(result.error), /verification requires a verified activity organization/);
       await organizationVerifier.query("rollback").catch(() => undefined);
     } finally {
@@ -447,7 +447,7 @@ test("evidence vault enforces tenant scope, versioned storage, integrity and ind
       await scopeChanger.query("commit");
       scopeChangeCommitted = true;
       const result = await pending;
-      assert.equal(result.ok, false);
+      assert.equal(result.ok, false, "verification must fail after geography-scope change commits");
       if (!result.ok) assert.match(result.error instanceof Error ? result.error.message : String(result.error), /verification requires an activity within an authorized organization geography/);
       await scopeVerifier.query("rollback").catch(() => undefined);
     } finally {
