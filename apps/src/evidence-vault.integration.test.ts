@@ -5,7 +5,7 @@ import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import Fastify from "fastify";
-import { Pool, PoolClient } from "pg";
+import { Pool, type PoolClient } from "pg";
 import { registerEvidenceVaultRoutes } from "./evidence-vault-routes.js";
 
 const enabled = process.env.RUPAYKG_RUN_DB_INTEGRATION_TESTS === "1" && Boolean(process.env.DATABASE_URL);
@@ -116,7 +116,7 @@ test("evidence vault enforces tenant scope, versioned storage, integrity and ind
           select 1 from pg_class c join pg_namespace n on n.oid=c.relnamespace
            where n.nspname='public' and c.relkind in ('r','p')
              and c.relowner=r.oid
-             and c.relname in ('evidence','activities','organization_memberships','roles','identities','verifications')
+             and c.relname in ('evidence','activities','organizations','organization_memberships','roles','identities','verifications')
         ) as owns_protected_table,
         has_table_privilege(r.oid,'public.evidence','UPDATE')
           or has_table_privilege(r.oid,'public.activities','UPDATE')
