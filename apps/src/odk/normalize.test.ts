@@ -59,6 +59,27 @@ test("rejects invalid timestamps and unsafe original-version identifiers", () =>
   );
 });
 
+test("rejects calendar-invalid and timezone-free timestamps", () => {
+  for (const createdAt of [
+    "2026-02-30T10:00:00Z",
+    "2026-13-01T10:00:00Z",
+    "2026-01-01T25:00:00Z",
+    "2026-01-01T10:00:00"
+  ]) {
+    assert.deepEqual(
+      normalizeOdkSubmission(config, { ...submission, createdAt }, []),
+      { ok: false, code: "ODK_TIMESTAMP_INVALID" }
+    );
+  }
+  assert.equal(normalizeOdkSubmission(config, { ...submission, createdAt: "2024-02-29T10:00:00+05:30" }, []).ok, true);
+});
+
+test("source metadata digest includes Central review-state provenance", () => {
+  const approved = normalizeOdkSubmission(config, { ...submission, reviewState: "approved" }, []);
+  const submitted = normalizeOdkSubmission(config, { ...submission, reviewState: "submitted" }, []);
+  assert.equal(approved.ok && submitted.ok && approved.value.sourceMetadataSha256 !== submitted.value.sourceMetadataSha256, true);
+});
+
 test("rejects path traversal filenames, unsupported media, oversized and mismatched files", () => {
   const cases = [
     [{ filename: "../escape.pdf", contentType: "application/pdf" }, pdf, "ODK_ATTACHMENT_FILENAME_INVALID"],
