@@ -34,7 +34,7 @@ The intended lock order is:
 5. membership's role row;
 6. verifier identity row.
 
-The organization row is locked before checking VERIFIED status and geography scope. A companion trigger on `organization_geography_scopes` takes an UPDATE lock on the owning organization before a scope insert, update, or delete. This serializes verification against organization suspension and geography-scope mutation. The verification trigger evaluates geography scope with its own query after acquiring the organization lock; it deliberately does not call the existing STABLE geography helper, whose snapshot can remain pinned to the outer INSERT while waiting on a concurrent scope change. Membership, role and identity are then locked and re-read in that order before permission is evaluated and provenance is snapshotted.
+The organization row is locked before checking VERIFIED status and geography scope. A companion trigger on `organization_geography_scopes` takes an UPDATE lock on the owning organization before a scope insert, update, or delete. This serializes verification against organization suspension and geography-scope mutation. The verification trigger evaluates geography scope with its own query after acquiring the organization lock; it deliberately does not call the existing STABLE geography helper. The scope-race fixture replaces the existing verified root with a different root while a verification is waiting, so the old activity must be rejected after the scope change commits. Membership, role and identity are then locked and re-read in that order before permission is evaluated and provenance is snapshotted.
 
 ## Disposable full-schema proof
 
@@ -45,7 +45,7 @@ The integration test runs after the repository's active migrations have been app
 - the decision captures membership, role, permission snapshot and timestamp;
 - the API proof role has no UPDATE, DELETE or TRUNCATE privilege on verification decisions;
 - the helper role is NOLOGIN/NOBYPASSRLS, does not own protected tables, has only the required column-scoped lock privileges, and cannot be assumed by the API proof role;
-- concurrent role permission revocation, membership deactivation, identity suspension, organization status change and geography-scope mutation serialize with verification and fail closed after the competing change commits. The first full-schema run exposed that the existing STABLE geography helper did not observe a scope change committed while the INSERT was waiting; the trigger now runs a fresh scope query after the organization lock, and the regression test remains mandatory.
+- concurrent role permission revocation, membership deactivation, identity suspension, organization status change and geography-scope mutation serialize with verification and fail closed after the competing change commits. The first full-schema run exposed a fixture error: it added a second valid geography root without revoking the original root, so the activity correctly remained in scope. The fixture now revokes the old root and inserts the replacement before asserting denial.
 
 A separate CI SQL proof executes the helper ownership-transfer sequence as a non-superuser CREATEROLE migration principal. It verifies temporary SET access for function ownership transfer and the final SET-disabled migrator membership. This tests PostgreSQL privilege mechanics, not the actual Neon migration credential or its schema grant options.
 
