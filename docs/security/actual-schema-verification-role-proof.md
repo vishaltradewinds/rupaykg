@@ -42,6 +42,21 @@ The exact candidate migration also leaves several independent authorization and 
 
 These are source-level review findings, not all independently exercised by the non-owner insert test. They remain release gates.
 
+## Actual-schema SECURITY DEFINER helper proof
+
+A second disposable CI test, `scripts/test-verification-actual-schema-definer-role.sql`, now applies a temporary SECURITY DEFINER owner to the candidate trigger function and activates tenant-filtered RLS policies on the real evidence, activity, membership, role, identity and organization-geography-scope tables.
+
+The proof confirms that:
+
+- A separate NOLOGIN/NOSUPERUSER/NOBYPASSRLS helper owner can own the trigger function without owning protected tables.
+- The helper can execute the trigger through RLS with SELECT plus column-scoped UPDATE(id) on the lock targets.
+- The API proof role can insert through the trigger without direct SELECT on evidence, activities or verifications.
+- The policies and grants are removed and the ephemeral schema is restored before the remaining CI tests run.
+
+**The same test deliberately demonstrates a critical failure:** the API role can call `set_config('app.organization_id', ...)` with another tenant's ID and supply that tenant's valid verifier identity. The SECURITY DEFINER trigger accepts the insert. Thus, even a functioning RLS/helper-owner arrangement does not authenticate the caller's tenant or verifier identity when it relies on a caller-controlled custom GUC.
+
+This is a positive mechanics proof and a negative authentication-context proof. The latter is a release blocker. The test does not claim that a custom GUC is safe or suitable as production identity provenance.
+
 ## What this does not establish
 
 - It does not establish the live Render API database role or its grants.
