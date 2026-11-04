@@ -122,12 +122,14 @@ test("evidence vault enforces tenant scope, versioned storage, integrity and ind
           or has_table_privilege(r.oid,'public.activities','UPDATE')
           or has_table_privilege(r.oid,'public.organization_memberships','UPDATE')
           or has_table_privilege(r.oid,'public.roles','UPDATE')
-          or has_table_privilege(r.oid,'public.identities','UPDATE') as has_broad_update,
+          or has_table_privilege(r.oid,'public.identities','UPDATE')
+          or has_table_privilege(r.oid,'public.organizations','UPDATE') as has_broad_update,
         has_column_privilege(r.oid,'public.evidence','id','UPDATE')
           and has_column_privilege(r.oid,'public.activities','id','UPDATE')
           and has_column_privilege(r.oid,'public.organization_memberships','id','UPDATE')
           and has_column_privilege(r.oid,'public.roles','id','UPDATE')
-          and has_column_privilege(r.oid,'public.identities','id','UPDATE') as has_id_lock_columns,
+          and has_column_privilege(r.oid,'public.identities','id','UPDATE')
+          and has_column_privilege(r.oid,'public.organizations','id','UPDATE') as has_id_lock_columns,
         pg_has_role('rupaykg_api_verification_proof','rupaykg_verification_guard','MEMBER') as is_member
        from pg_roles r where r.rolname='rupaykg_verification_guard'`,
     );
@@ -371,6 +373,88 @@ test("evidence vault enforces tenant scope, versioned storage, integrity and ind
       await suspensionVerifier.query("rollback").catch(() => undefined);
       suspender.release();
       suspensionVerifier.release();
+    }
+
+    // Organization-status race: a decision must wait for a concurrent
+    // organization status change, then reject the now-unverified tenant.
+    const organizationRaceEvidence = (await pool.query<{ id: string }>(
+      "insert into evidence(activity_id,evidence_type,status,captured_at,content_hash) values($1,'FIELD','UNDER_REVIEW',now(),$2) returning id",
+      [activity.rows[0]!.id, "organization-status-race-" + suffix],
+    )).rows[0]!.id;
+    const organizationChanger = await pool.connect();
+    const organizationVerifier = await pool.connect();
+    let organizationChangeCommitted = false;
+    try {
+      await organizationChanger.query("begin");
+      await organizationChanger.query("update organizations set status='PENDING' where id=$1", [organizationId]);
+      const pid = (await organizationVerifier.query<{ pid: number }>("select pg_backend_pid() pid")).rows[0]!.pid;
+      const pending = organizationVerifier.query(
+        "insert into verifications(evidence_id,activity_id,verifier_identity_id,decision,scope) values($1,$2,$3,'REJECTED','ORGANIZATION_STATUS_RACE')",
+        [organizationRaceEvidence, activity.rows[0]!.id, reviewerId],
+      ).then(() => ({ ok: true as const }), (error: unknown) => ({ ok: false as const, error }));
+      let blocked = false;
+      for (let attempt = 0; attempt < 200; attempt += 1) {
+        const wait = await pool.query<{ wait_event_type: string | null }>("select wait_event_type from pg_stat_activity where pid=$1", [pid]);
+        if (wait.rows[0]?.wait_event_type === "Lock") { blocked = true; break; }
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      assert.equal(blocked, true, "verification insert must wait for organization status update");
+      await organizationChanger.query("commit");
+      organizationChangeCommitted = true;
+      const result = await pending;
+      assert.equal(result.ok, false);
+      if (!result.ok) assert.match(result.error instanceof Error ? result.error.message : String(result.error), /verification requires a verified activity organization/);
+      await organizationVerifier.query("rollback").catch(() => undefined);
+    } finally {
+      if (!organizationChangeCommitted) await organizationChanger.query("rollback").catch(() => undefined);
+      await organizationVerifier.query("rollback").catch(() => undefined);
+      organizationChanger.release();
+      organizationVerifier.release();
+      await pool.query("update organizations set status='VERIFIED' where id=$1", [organizationId]);
+    }
+
+    // Geography-scope race: adding a new root must serialize against a
+    // verification using the former root, then make that activity out of scope.
+    const newScopeGeography = (await pool.query<{ id: string }>(
+      "insert into geography(kind,name,source,source_version) values('STATE_UT',$1,'integration-test','scope-race-v1') returning id",
+      ["TEST-NEW-SCOPE-GEO-" + suffix],
+    )).rows[0]!.id;
+    const scopeRaceEvidence = (await pool.query<{ id: string }>(
+      "insert into evidence(activity_id,evidence_type,status,captured_at,content_hash) values($1,'FIELD','UNDER_REVIEW',now(),$2) returning id",
+      [activity.rows[0]!.id, "geography-scope-race-" + suffix],
+    )).rows[0]!.id;
+    const scopeChanger = await pool.connect();
+    const scopeVerifier = await pool.connect();
+    let scopeChangeCommitted = false;
+    try {
+      await scopeChanger.query("begin");
+      await scopeChanger.query(
+        "insert into organization_geography_scopes(organization_id,geography_id,status) values($1,$2,'VERIFIED')",
+        [organizationId, newScopeGeography],
+      );
+      const pid = (await scopeVerifier.query<{ pid: number }>("select pg_backend_pid() pid")).rows[0]!.pid;
+      const pending = scopeVerifier.query(
+        "insert into verifications(evidence_id,activity_id,verifier_identity_id,decision,scope) values($1,$2,$3,'REJECTED','GEOGRAPHY_SCOPE_RACE')",
+        [scopeRaceEvidence, activity.rows[0]!.id, reviewerId],
+      ).then(() => ({ ok: true as const }), (error: unknown) => ({ ok: false as const, error }));
+      let blocked = false;
+      for (let attempt = 0; attempt < 200; attempt += 1) {
+        const wait = await pool.query<{ wait_event_type: string | null }>("select wait_event_type from pg_stat_activity where pid=$1", [pid]);
+        if (wait.rows[0]?.wait_event_type === "Lock") { blocked = true; break; }
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      assert.equal(blocked, true, "verification insert must wait for geography-scope mutation");
+      await scopeChanger.query("commit");
+      scopeChangeCommitted = true;
+      const result = await pending;
+      assert.equal(result.ok, false);
+      if (!result.ok) assert.match(result.error instanceof Error ? result.error.message : String(result.error), /verification requires an activity within an authorized organization geography/);
+      await scopeVerifier.query("rollback").catch(() => undefined);
+    } finally {
+      if (!scopeChangeCommitted) await scopeChanger.query("rollback").catch(() => undefined);
+      await scopeVerifier.query("rollback").catch(() => undefined);
+      scopeChanger.release();
+      scopeVerifier.release();
     }
 
     const snapshotAfterRevocation = await pool.query<{ authorization_permissions_snapshot: string[] }>(
