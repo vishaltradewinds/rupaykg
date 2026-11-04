@@ -231,13 +231,13 @@ FROM public.organizations WHERE name IN ('CI-AUTHCTX-ORG-A','CI-AUTHCTX-ORG-B');
 ALTER TABLE public.organization_memberships
   DISABLE TRIGGER stakeholder_membership_application_guard;
 INSERT INTO public.organization_memberships(identity_id,organization_id,role_id,status)
-SELECT i.id,o.id,r.id,'VERIFIED'
+SELECT i.id,o.id,r.id,'VERIFIED'::record_status
 FROM public.identities i
 JOIN public.organizations o ON o.name='CI-AUTHCTX-ORG-A'
 JOIN public.roles r ON r.organization_id=o.id
 WHERE i.external_subject='ci-authctx-verifier-a'
 UNION ALL
-SELECT i.id,o.id,r.id,'VERIFIED'
+SELECT i.id,o.id,r.id,'VERIFIED'::record_status
 FROM public.identities i
 JOIN public.organizations o ON o.name='CI-AUTHCTX-ORG-B'
 JOIN public.roles r ON r.organization_id=o.id
