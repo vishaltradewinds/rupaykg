@@ -85,6 +85,46 @@ test("evidence vault enforces tenant scope, versioned storage, integrity and ind
     } finally {
       await pool.query("alter table organization_memberships enable trigger stakeholder_membership_application_guard");
     }
+
+    // A verified membership and geography scope must not authorize a decision
+    // when the owning organization itself is still PENDING.
+    const pendingOrg = await pool.query<{ id: string }>(
+      "insert into organizations(name,organization_type,status) values($1,'test_fixture','PENDING') returning id",
+      ["TEST-EVIDENCE-PENDING-ORG-" + suffix],
+    );
+    await pool.query(
+      "insert into organization_geography_scopes(organization_id,geography_id,status) values($1,$2,'VERIFIED')",
+      [pendingOrg.rows[0]!.id, geography.rows[0]!.id],
+    );
+    const pendingOrgActivity = await pool.query<{ id: string }>(
+      "insert into activities(organization_id,geography_id,activity_type,status) values($1,$2,'PENDING_ORG_VERIFICATION_TEST','COMPLETED') returning id",
+      [pendingOrg.rows[0]!.id, geography.rows[0]!.id],
+    );
+    const pendingOrgEvidence = await pool.query<{ id: string }>(
+      "insert into evidence(activity_id,evidence_type,status,captured_at,content_hash) values($1,'FIELD','UNDER_REVIEW',now(),$2) returning id",
+      [pendingOrgActivity.rows[0]!.id, "pending-org-verification-" + suffix],
+    );
+    const pendingOrgRole = await pool.query<{ id: string }>(
+      "insert into roles(organization_id,name,permissions,geography_scope) values($1,'pending_org_verifier_test',$2::jsonb,'[]') returning id",
+      [pendingOrg.rows[0]!.id, JSON.stringify(["VERIFY_EVIDENCE"])],
+    );
+    await pool.query("alter table organization_memberships disable trigger stakeholder_membership_application_guard");
+    try {
+      await pool.query(
+        "insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED')",
+        [reviewerId, pendingOrg.rows[0]!.id, pendingOrgRole.rows[0]!.id],
+      );
+    } finally {
+      await pool.query("alter table organization_memberships enable trigger stakeholder_membership_application_guard");
+    }
+    await assert.rejects(
+      pool.query(
+        "insert into verifications(evidence_id,activity_id,verifier_identity_id,decision,scope) values($1,$2,$3,'REJECTED','PENDING_ORG')",
+        [pendingOrgEvidence.rows[0]!.id, pendingOrgActivity.rows[0]!.id, reviewerId],
+      ),
+      /verification requires active explicit verifier permission in the activity organization/,
+    );
+
     await pool.query(
       "insert into identity_sessions(identity_id,expires_at,token_hash) values($1,now()+interval '1 hour',$2),($3,now()+interval '1 hour',$4),($5,now()+interval '1 hour',$6),($7,now()+interval '1 hour',$8)",
       [uploaderId,hash(uploaderToken),reviewerId,hash(reviewerToken),outsiderId,hash(outsiderToken),crossOrgReviewerId,hash(crossOrgReviewerToken)],
