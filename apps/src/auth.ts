@@ -25,6 +25,10 @@ export async function establishAuthenticatedDatabaseContext(
   auth: AuthContext,
   organizationId: string,
 ): Promise<boolean> {
+  // The database-issued context must bind the exact organization selected by
+  // the already-authenticated application request; do not let the DB helper
+  // establish a different tenant context from AuthContext.
+  if (!auth.activeOrganizationId || auth.activeOrganizationId !== organizationId) return false;
   const header = request.headers.authorization;
   if (!header?.startsWith("Bearer ")) return false;
   const token = header.slice("Bearer ".length).trim();
