@@ -120,7 +120,7 @@ export function normalizeOdkSubmission(
     if (seenFilenames.has(filename)) return { ok: false, code: "ODK_ATTACHMENT_DUPLICATE_FILENAME" };
     seenFilenames.add(filename);
     if (typeof contentType !== "string" || contentType.length > 200) return { ok: false, code: "ODK_ATTACHMENT_MEDIA_TYPE_UNSUPPORTED" };
-    const mediaType = contentType.toLowerCase().split(";")[0].trim();
+    const mediaType = contentType.toLowerCase().split(";")[0]?.trim() ?? "";
     if (!ALLOWED_MEDIA_TYPES.has(mediaType)) return { ok: false, code: "ODK_ATTACHMENT_MEDIA_TYPE_UNSUPPORTED" };
     if (!Buffer.isBuffer(item.bytes) || item.bytes.length === 0 || item.bytes.length > MAX_ATTACHMENT_BYTES) return { ok: false, code: "ODK_ATTACHMENT_SIZE_INVALID" };
     totalAttachmentBytes += item.bytes.length;
