@@ -143,7 +143,7 @@ test("evidence vault enforces tenant scope, versioned storage, integrity and ind
           select 1 from pg_auth_members m
            where m.roleid=r.oid
              and m.member=(select oid from pg_roles where rolname=current_user)
-             and m.admin_option and not m.set_option
+             and not m.set_option
         )
         and not exists (
           select 1 from pg_auth_members m
