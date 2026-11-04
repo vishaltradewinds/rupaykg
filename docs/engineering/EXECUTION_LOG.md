@@ -23,3 +23,13 @@
 - Read-only source inspection found runtime and migration clients both consume `DATABASE_URL`; Render declares one DB secret. Added evidence/remediation comment to issue #196. Actual deployed role and memberships remain unverified; no grants changed.
 - Added artifact test evidence to PR #243 and issue #245.
 - Production remains READ-ONLY / HOLD. No production write, migration, role/grant/RLS change, deployment, merge, worker activation or certification.
+
+
+
+## 2026-11-04 — CTO Run 14 final refresh
+- Exact current PR #243 head 9bd10a7ae63ac07fe642b4044ad30383f25d71f2 passed CI run #5324 (41783404982) end-to-end, including PostgreSQL acceptance and production-container build. Added CI evidence comments to PR #243 and issue #245.
+- Exact test head 4a8a4572 passed run #5323; artifact series/version/review invalidation tests and immutability guards passed.
+- Read-only Neon catalog query confirmed 67 public base tables, 181 public FKs, 0 RLS, 0 FORCE RLS, all 67 tables owned by rupaykg; role rupaykg has LOGIN, CREATEROLE, CREATEDB, REPLICATION, BYPASSRLS, INHERIT and is a member of neon_superuser.
+- Updated P0 issue #196 with production catalog evidence. No role, grant, ownership, RLS, schema or data mutation was made.
+- Refreshed canonical resume point with exact CI and production catalog evidence. PR #243 and PR #244 remain draft/unmerged.
+- Production remains READ-ONLY / HOLD. No production migration, deployment, merge, worker activation or certification.
