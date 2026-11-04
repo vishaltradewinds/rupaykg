@@ -1,27 +1,188 @@
-﻿{
+{
   "schemaVersion": 1,
   "system": "RupayKg Ecosystem Continuity & Reconciliation",
   "rule": "RECONCILE -> IDENTIFY NEXT UNFINISHED ITEM -> EXECUTE ONLY THAT ITEM -> VERIFY -> UPDATE CHECKPOINT",
   "sourceOfTruth": "vishaltradewinds/rupaykg",
-  "referenceOnly": ["vishaltradewinds/rupaykg-aistudio"],
-  "states": ["VERIFIED_DONE", "IN_PROGRESS", "BLOCKED", "UNVERIFIED", "NEXT", "NOT_STARTED"],
+  "referenceOnly": [
+    "vishaltradewinds/rupaykg-aistudio"
+  ],
+  "states": [
+    "VERIFIED_DONE",
+    "IN_PROGRESS",
+    "BLOCKED",
+    "UNVERIFIED",
+    "NEXT",
+    "NOT_STARTED"
+  ],
   "items": [
-    {"id":"repo-source-of-truth","area":"Repository","state":"VERIFIED_DONE","evidence":"Production repository is vishaltradewinds/rupaykg"},
-    {"id":"pc-clone","area":"Local workspace","state":"VERIFIED_DONE","evidence":"C:\\Users\\Vishal\\Documents\\GitHub\\rupaykg"},
-    {"id":"docker","area":"Infrastructure","state":"VERIFIED_DONE","evidence":"Docker Engine verified on connected PC"},
-    {"id":"rupaykg-production","area":"Production","state":"VERIFIED_DONE","evidence":"Render service rupaykg is live"},
-    {"id":"github-ci","area":"CI","state":"VERIFIED_DONE","evidence":"Latest verified CI run 35514484727 succeeded"},
-    {"id":"guardian-stack","area":"Guardian","state":"VERIFIED_DONE","evidence":"Local Guardian quickstart services running"},
-    {"id":"guardian-auth","area":"Guardian","state":"VERIFIED_DONE","evidence":"User confirmed Guardian authentication/setup already completed"},
-    {"id":"guardian-mrv-sender","area":"Guardian MRV","state":"VERIFIED_DONE","evidence":"guardian-mrv-sender-test is running"},
-    {"id":"rupaykg-guardian-adapter","area":"MRV","state":"VERIFIED_DONE","evidence":"apps/src/guardian-mrv.ts implements rupaykg:guardian-mrv:v1 contract"},
-    {"id":"live-acceptance-workflow","area":"Acceptance","state":"VERIFIED_DONE","evidence":".github/workflows/guardian-live-acceptance.yml exists and enforces non-synthetic Guardian/Hedera/Mirror Node proof"},
-    {"id":"guardian-policy-id","area":"Guardian","state":"NEXT","evidence":"Real published policy/workflow identifier still needs to be resolved from authenticated Guardian"},
-    {"id":"guardian-verified","area":"Acceptance","state":"NOT_STARTED","evidence":"Requires real live submission"},
-    {"id":"hedera-consensus","area":"Acceptance","state":"NOT_STARTED","evidence":"Requires real HCS confirmation"},
-    {"id":"persisted-provenance","area":"Acceptance","state":"NOT_STARTED","evidence":"Requires successful live acceptance"},
-    {"id":"mirror-node-verification","area":"Acceptance","state":"NOT_STARTED","evidence":"Requires real consensus timestamp and Mirror Node verification"},
-    {"id":"issue-11","area":"Governance","state":"BLOCKED","evidence":"Keep open until all real acceptance evidence exists"}
+    {
+      "id": "repo-source-of-truth",
+      "area": "Repository",
+      "state": "VERIFIED_DONE",
+      "evidence": "Production repository is vishaltradewinds/rupaykg"
+    },
+    {
+      "id": "pc-clone",
+      "area": "Local workspace",
+      "state": "UNVERIFIED",
+      "evidence": "Historical local path is recorded; current local workspace was not inspected in this repository audit."
+    },
+    {
+      "id": "docker",
+      "area": "Infrastructure",
+      "state": "UNVERIFIED",
+      "evidence": "Historical Docker verification exists; current local Docker runtime was not inspected."
+    },
+    {
+      "id": "rupaykg-production",
+      "area": "Production",
+      "state": "IN_PROGRESS",
+      "evidence": "Render service metadata confirms live main deployment at a3fecc0; Render-to-Neon DATABASE_URL binding and full production acceptance remain unverified."
+    },
+    {
+      "id": "github-ci",
+      "area": "CI",
+      "state": "IN_PROGRESS",
+      "evidence": "Exact-head PR #232 CI run 41615632245 passed all 18 stages; main commit status returned no status records and repository-wide release gates remain open."
+    },
+    {
+      "id": "guardian-stack",
+      "area": "Guardian",
+      "state": "UNVERIFIED",
+      "evidence": "Historical local Guardian setup note; no live service check performed in this audit."
+    },
+    {
+      "id": "guardian-auth",
+      "area": "Guardian",
+      "state": "UNVERIFIED",
+      "evidence": "Historical user-confirmed setup; current external authentication was not revalidated."
+    },
+    {
+      "id": "guardian-mrv-sender",
+      "area": "Guardian MRV",
+      "state": "UNVERIFIED",
+      "evidence": "Historical local sender status; no current runtime check performed."
+    },
+    {
+      "id": "rupaykg-guardian-adapter",
+      "area": "MRV",
+      "state": "VERIFIED_DONE",
+      "evidence": "apps/src/guardian-mrv.ts implements rupaykg:guardian-mrv:v1 contract"
+    },
+    {
+      "id": "live-acceptance-workflow",
+      "area": "Acceptance",
+      "state": "VERIFIED_DONE",
+      "evidence": ".github/workflows/guardian-live-acceptance.yml exists and enforces non-synthetic Guardian/Hedera/Mirror Node proof"
+    },
+    {
+      "id": "guardian-policy-id",
+      "area": "Guardian",
+      "state": "NOT_STARTED",
+      "evidence": "A real published Guardian policy/workflow identifier must be resolved from the authenticated service."
+    },
+    {
+      "id": "guardian-verified",
+      "area": "Acceptance",
+      "state": "NOT_STARTED",
+      "evidence": "Requires real non-synthetic Guardian submission and authoritative result."
+    },
+    {
+      "id": "hedera-consensus",
+      "area": "Acceptance",
+      "state": "NOT_STARTED",
+      "evidence": "Requires real HCS transaction and consensus proof."
+    },
+    {
+      "id": "persisted-provenance",
+      "area": "Acceptance",
+      "state": "NOT_STARTED",
+      "evidence": "Requires accepted live external transaction and persisted provenance proof."
+    },
+    {
+      "id": "mirror-node-verification",
+      "area": "Acceptance",
+      "state": "NOT_STARTED",
+      "evidence": "Requires real consensus tuple and independent Mirror Node verification."
+    },
+    {
+      "id": "issue-11",
+      "area": "Governance",
+      "state": "BLOCKED",
+      "evidence": "Production release remains blocked by tenant isolation, migration parity, verification authorization, external acceptance and operations evidence."
+    },
+    {
+      "id": "mainline-inventory",
+      "area": "Repository",
+      "state": "VERIFIED_DONE",
+      "evidence": "2026-11-03 main tree: 319 tracked files, 91 SQL migration files, 42 API source files, 31 web source files, 39 test/spec files, five domain/workflow packages."
+    },
+    {
+      "id": "migration-source-parity",
+      "area": "Database / migrations",
+      "state": "BLOCKED",
+      "evidence": "Production ledger has 92 rows including applied 096 absent from main source; staging has four additional 20261022–20261025 migrations absent from main source. See issues #214."
+    },
+    {
+      "id": "tenant-isolation",
+      "area": "Security / database",
+      "state": "BLOCKED",
+      "evidence": "Neon main: 0/67 public tables RLS-enabled or FORCE RLS; rupaykg role owns all 67 and has BYPASSRLS, CREATEDB and CREATEROLE."
+    },
+    {
+      "id": "verification-authorization",
+      "area": "Security / verification",
+      "state": "BLOCKED",
+      "evidence": "P0 issue #215: conflicting legacy trigger and candidate migration semantics require same-organization, explicit-permission, fail-closed and immutable decision controls."
+    },
+    {
+      "id": "evidence-vault-active-organization",
+      "area": "Security / Evidence Vault",
+      "state": "IN_PROGRESS",
+      "evidence": "PR #232 exact head ca403e962f9fa6c5f27a0e29151c47e27e42a614 passed CI run #41615632245; independent review still absent."
+    },
+    {
+      "id": "epr-route-canonicalization",
+      "area": "Security / EPR",
+      "state": "BLOCKED",
+      "evidence": "PR #213 and #228 implement overlapping obligations reads on different bases; #213 currently unmergeable and #228 has unresolved artifact-version regression."
+    },
+    {
+      "id": "bwg-route-canonicalization",
+      "area": "Security / BWG",
+      "state": "BLOCKED",
+      "evidence": "PR #194 and #231 duplicate the workspace read permission gate; reconcile behavior, tests and exact-head evidence before selecting one."
+    },
+    {
+      "id": "cdpi-wave1",
+      "area": "DPI / ecosystem",
+      "state": "IN_PROGRESS",
+      "evidence": "PR #230 foundation and #227 assessment remain open drafts; no CDPI/DPG qualification is claimed."
+    },
+    {
+      "id": "pilot-demo",
+      "area": "Pilot / UX",
+      "state": "IN_PROGRESS",
+      "evidence": "PR #219 is stacked on MRV workspace branch #218; demo remains distinct from production acceptance."
+    },
+    {
+      "id": "trl-assurance",
+      "area": "TRL / Shakti",
+      "state": "BLOCKED",
+      "evidence": "No authoritative current TRL9 plan is present on main; prior provisional software/platform TRL 4 is historical and requires component-level revalidation."
+    },
+    {
+      "id": "render-neon-binding",
+      "area": "Deployment / database",
+      "state": "UNVERIFIED",
+      "evidence": "Render service deploys main at a3fecc0; environment-to-Neon project/branch connection was not verified."
+    },
+    {
+      "id": "repository-p0-reconciliation",
+      "area": "Next execution",
+      "state": "NEXT",
+      "evidence": "Close the P0 verification authorization (#215) and migration source/ledger parity (#214) workstreams using disposable PostgreSQL, independent review and no production writes."
+    }
   ],
   "operatingRules": [
     "Never redo VERIFIED_DONE work unless new evidence contradicts it.",
@@ -30,5 +191,55 @@
     "Every new work session starts by reading this manifest and reconciling only changed or stale items.",
     "When an item is completed, update its state and evidence in the same coherent change.",
     "When blocked, record the exact blocker and continue with independent work instead of repeating completed setup."
-  ]
+  ],
+  "lastReconciledAt": "2026-11-03",
+  "currentBaseline": {
+    "repository": "vishaltradewinds/rupaykg",
+    "branch": "main",
+    "commit": "a3fecc0abd2c46549a201058d3963afc0e3a73c9",
+    "renderService": "srv-daki4d7qj5pc73b8qksg",
+    "renderDeployment": "dep-dbjo4dqvcj2c73f7bt00",
+    "neonProject": "steep-mud-79906940",
+    "neonBranch": "br-restless-base-b44cip2h",
+    "database": "rupaykg"
+  },
+  "currentAim": "Pan-India Circular Economy Operating System for trusted environmental resource flows; real activity to evidence, regulatory applicability, MRV, verification, eligibility, registry, settlement and reporting.",
+  "masterExecutionPlan": {
+    "version": "2026-11-03-user-approved",
+    "source": "docs/engineering/repository-reconciliation/2026-11-03-aim-and-whole-repository-reconciliation.md#section-13",
+    "objective": "Pan-India Circular Economy Operating System; real activity to evidence, regulatory applicability, MRV, verification, eligibility, registry, settlement and reporting.",
+    "executionOrder": [
+      "P0-01",
+      "P0-02",
+      "P0-03",
+      "P0-04",
+      "P0-05",
+      "P0-06",
+      "P1-01",
+      "P1-02",
+      "P1-03",
+      "P1-04",
+      "P1-05",
+      "P1-06",
+      "P1-07",
+      "FINAL-01"
+    ],
+    "parallelStreams": [
+      "migration-lineage",
+      "verifier-and-geography",
+      "tenant-route-integration",
+      "cdpi-wave1",
+      "jabalpur-field-workflow-and-hardware",
+      "guardian-hedera-vc",
+      "stakeholder-demo"
+    ],
+    "controls": [
+      "No production/staging mutation without explicit authorization and independent gates.",
+      "No duplicate route implementations or blind stacked-branch merges.",
+      "CI, UI presence or synthetic data alone never establishes operational readiness or TRL 9.",
+      "Track evidence by exact commit, test, reviewer and environment."
+    ],
+    "productionCertification": "HOLD_OFF",
+    "trl9": "NOT_ESTABLISHED"
+  }
 }
