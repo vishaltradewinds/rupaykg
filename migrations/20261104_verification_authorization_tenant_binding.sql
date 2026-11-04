@@ -78,7 +78,7 @@ create or replace function public.enforce_verification_authorization()
 returns trigger
 language plpgsql
 security definer
-set search_path = pg_catalog, public
+set search_path = pg_catalog
 as $$
 declare
   resolved_activity_id uuid;
@@ -285,7 +285,7 @@ create or replace function public.lock_organization_for_geography_scope_change()
 returns trigger
 language plpgsql
 security definer
-set search_path = pg_catalog, public
+set search_path = pg_catalog
 as $scope_lock$
 declare
   old_organization_id uuid;
