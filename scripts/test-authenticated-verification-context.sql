@@ -166,16 +166,18 @@ INSERT INTO public.verifications(evidence_id,activity_id,verifier_identity_id,de
 VALUES (:'evidence_a',:'activity_a',:'verifier_a','APPROVED','CI_ACTIVE_AUTHCTX','valid signed context')
 RETURNING id AS verification_a \gset
 RESET ROLE;
-DO $append_only$
-BEGIN
-  IF NOT public.rupaykg_test_delete_guard(:'verification_a'::uuid) THEN
-    RAISE EXCEPTION 'verification DELETE guard failed';
-  END IF;
-  IF NOT public.rupaykg_test_truncate_guard() THEN
-    RAISE EXCEPTION 'verification TRUNCATE guard failed';
-  END IF;
-END;
-$append_only$;
+SELECT CASE WHEN public.rupaykg_test_delete_guard(:'verification_a') THEN 1 ELSE 0 END AS delete_guard_passed \gset
+\if :delete_guard_passed
+\else
+  \echo 'verification DELETE guard failed'
+  \quit 1
+\endif
+SELECT CASE WHEN public.rupaykg_test_truncate_guard() THEN 1 ELSE 0 END AS truncate_guard_passed \gset
+\if :truncate_guard_passed
+\else
+  \echo 'verification TRUNCATE guard failed'
+  \quit 1
+\endif
 ROLLBACK TO SAVEPOINT valid_context;
 
 SAVEPOINT forged_context;
@@ -185,10 +187,19 @@ SELECT set_config('rupaykg.context.organization', :'org_b', true);
 SELECT set_config('rupaykg.context.session','00000000-0000-4000-8000-000000000000',true);
 SELECT set_config('rupaykg.context.expiry',(extract(epoch FROM now()+interval '5 minutes')::bigint)::text,true);
 SELECT set_config('rupaykg.context.signature',repeat('0',64),true);
-SELECT CASE WHEN public.rupaykg_context_is_valid() THEN
-  (SELECT 1/0) ELSE 1 END;
-SELECT CASE WHEN public.rupaykg_test_expect_spoof_rejected(
-  :'evidence_b',:'activity_b',:'verifier_b') THEN 1 ELSE 1/0 END;
+SELECT NOT public.rupaykg_context_is_valid() AS forged_context_invalid \gset
+\if :forged_context_invalid
+\else
+  \echo 'caller-forged context unexpectedly validated'
+  \quit 1
+\endif
+SELECT public.rupaykg_test_expect_spoof_rejected(
+  :'evidence_b',:'activity_b',:'verifier_b') AS spoof_rejected \gset
+\if :spoof_rejected
+\else
+  \echo 'caller-forged verification insert unexpectedly succeeded'
+  \quit 1
+\endif
 RESET ROLE;
 ROLLBACK TO SAVEPOINT forged_context;
 
@@ -197,7 +208,12 @@ UPDATE public.identity_sessions s SET revoked_at=now()
 FROM public.identities i
 WHERE s.identity_id=i.id AND i.external_subject='ci-active-authctx-verifier-a';
 SET LOCAL ROLE rupaykg_test_verification_api;
-SELECT CASE WHEN public.rupaykg_test_expect_revoked_rejected(:'org_a') THEN 1 ELSE 1/0 END;
+SELECT public.rupaykg_test_expect_revoked_rejected(:'org_a') AS revoked_rejected \gset
+\if :revoked_rejected
+\else
+  \echo 'revoked bearer session unexpectedly accepted'
+  \quit 1
+\endif
 RESET ROLE;
 ROLLBACK TO SAVEPOINT revoked_context;
 
