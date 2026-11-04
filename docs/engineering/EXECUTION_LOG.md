@@ -183,3 +183,12 @@ Added Run-28 checkpoint and refreshed the canonical resume point and guard desig
 - Six total mutation/revocation races pass: role permission revocation, membership deactivation, identity suspension, evidence reassignment, activity org reassignment, activity geography reassignment. API tests 100/100; other workspaces 22/22, 2/2, 29/29, 1/1, 2/2; browser smoke and production-container build passed.
 - Temporary validation PR #273 closed unmerged after CI evidence capture. PR #263 remains authoritative draft. Added follow-on checkpoint and updated canonical resume point.
 - Remaining: geography-scope row-lock/revocation race, complete lock/deadlock/timeout/retry analysis, Neon role provisioning, 67-table RLS rollout, owner tamper controls and independent DBA/security review. Production READ-ONLY/HOLD; TRL 9 NOT ACHIEVED.
+
+
+## 2026-11-04 — CTO Run 29
+- PR #272 no-verified-geography-root correction and full-schema regression passed exact-head CI #5516 / `41874461093` (18/18 steps).
+- PR #284 PUBLIC EXECUTE removal and private-helper API proof passed exact-head CI #5518 / `41874715707` (18/18 steps).
+- PR #284 current head `cbd743a8d2e17100cd1607ef19f90bef6a6ccc6d` adds exact activity/role organization binding to app authorization helpers and both verification routes; CI #5521 / `41875338287` remained in progress after PostgreSQL acceptance passed, container build pending.
+- Neon production read-only audit: 67 tables, 0 RLS/FORCE/policies, all owned by `rupaykg`; 92 migration rows/latest `20261021`; observed role LOGIN/BYPASSRLS/CREATEROLE/CREATEDB/REPLICATION and member of `neon_superuser`.
+- Render live service auto-deploys on commits while manifest declares checks-pass; GitHub main is unprotected and rulesets are empty. No settings changed.
+- Added immutable Run-29 checkpoint and session log; refreshed canonical resume point. Production READ-ONLY/HOLD; no production writes, migrations, role/grant/RLS changes, branches, deployments, merges, worker activation or certification. SITE-JBP-01 PRE-VALIDATION; TRL 9 NOT ACHIEVED.
