@@ -1,6 +1,6 @@
 # Verification guard execution under a non-owner runtime — design proposal
 
-**Date:** 2026-11-04  
+**Date:** 2026-11-04
 **Status:** DISPOSABLE POSTGRESQL PROTOTYPE PASSED — PRODUCTION DESIGN NOT IMPLEMENTED OR APPROVED
 **Related:** PR #247, issues #196 and #215
 
@@ -73,3 +73,30 @@ The actual API login could spoof the custom GUC values but still saw zero eviden
 **Boundary:** this is an isolated-schema privilege prototype, not a production migration or a rehearsal against the recovered migration-096 production schema. It does not establish Neon role-provisioning feasibility, actual production grants/RLS, geography-scope mutation race safety, evidence/activity reassignment race safety, global lock-order/deadlock/timeout/retry behavior, or independent DBA/security approval. The fixture's geography helper has configured test scope; production's no-verified-scope permissive behavior remains a separate fail-closed blocker.
 
 Temporary validation PR #264 was closed UNMERGED after CI #5407 passed. Production remains READ-ONLY / HOLD; no production or staging writes, role/grant changes, migrations, RLS activation, deployment, merge or certification occurred.
+
+
+## Run 28 authoritative update — exact-head CI and recovered 096 rehearsal (2026-11-04)
+
+This section supersedes the earlier Run-28 prototype evidence paragraph above where the earlier prototype head/CI and the migration-096 rehearsal status differ.
+
+**Prototype PR:** #263 (OPEN / DRAFT / UNMERGED)
+**Latest exact head:** `1f5e4a6f195f0514f7fe46be696b73561caeb80d`
+**Exact-head CI:** #5409 / run `41805919316` — SUCCESS end-to-end.
+
+The exact-head test now uses a real password-authenticated API LOGIN role (NOSUPERUSER/NOBYPASSRLS) and a separate NOLOGIN/NOSUPERUSER/NOBYPASSRLS guard function-owner role. It proves API cannot SET ROLE to guard or directly execute the trigger function, and spoofed custom GUCs do not expose rows. The guard has only SELECT plus column-level UPDATE(id) needed for SELECT ... FOR SHARE. Exact-row UPDATE RLS USING/WITH CHECK policies permit the lock while denying identifier changes. No table-level UPDATE or DELETE grant is provided. The function uses fixed search_path, row_security=on, and restores caller GUC state after successful and rejected decisions.
+
+The same disposable PostgreSQL CI run passed valid same-org verification, cross-org evidence, self-verification, out-of-scope geography, suspended identity, API UPDATE/DELETE denial, and role permission / membership deactivation / identity suspension revocation races. The dedicated test passed as API test 57; API suite 100/100; other workspace suites 22/22, 2/2, 29/29, 1/1 and 2/2. Browser smoke and production-container build also passed.
+
+### Recovered 096 trigger-composition rehearsal
+
+A separate integration fixture now reconstructs the recovered migration-096 verification function body and the actual migration-010 independence trigger using their historical trigger names. It proves that the old combined trigger composition rejected cross-org APPROVED while allowing cross-org REJECTED, then applies the forward-only candidate migration and asserts only one authoritative verification trigger remains. Migration 096 remains review-only: this is a disposable trigger-composition rehearsal, not a full production-schema restore, not a replay, and not authorization to restore the missing migration source.
+
+### Remaining production-design limitations
+
+- No production roles, grants, policies or triggers have been provisioned or changed. Neon managed-Postgres role/ownership feasibility must be demonstrated via a disposable branch/database and reviewed by an independent DBA.
+- The prototype does not yet lock organization geography-scope rows. Concurrent scope revocation/addition and fail-closed no-scope behavior need a dedicated design and race tests; production's permissive no-verified-scope behavior remains a P0 blocker.
+- Evidence-to-activity reassignment and activity organization/geography reassignment races remain to be added.
+- Full lock-order/deadlock/timeout/retry analysis remains open across evidence, activity, identity, membership, role and geography-scope rows.
+- Owner-side DELETE/tamper powers, full 67-table tenant RLS and independent DBA/security review remain open.
+
+Temporary validation PR #264 was closed unmerged after CI evidence capture. PR #263 remains the authoritative stacked draft on PR #252 and PR #247. Production remains READ-ONLY / HOLD; no deployment, migration, merge, certification or TRL 9 claim.

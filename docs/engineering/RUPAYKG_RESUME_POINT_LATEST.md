@@ -457,3 +457,38 @@ The database test also showed that a narrow column grant alone is insufficient f
 Remaining gates: this is an isolated-schema prototype, not a rehearsal against the recovered migration-096 production schema. Neon managed-role provisioning, actual production grants and policies, geography-scope mutation races, evidence/activity reassignment races, lock-order/deadlock/timeout/retry analysis, destructive-owner controls and independent DBA/security review remain open. The production no-verified-geography-scope permissive behavior is still a separate fail-closed blocker.
 
 Next: rehearse the guard against a disposable copy of the recovered 096 schema and trigger composition; validate role provisioning under Neon-like constraints; add geography and evidence/activity reassignment races; complete the 67-table tenant RLS matrix and runtime/migrator separation review. Production remains READ-ONLY / HOLD. No production or staging writes, grants, role changes, migrations, RLS activation, deployment or certification occurred. SITE-JBP-01 remains PRE-VALIDATION; TRL 9 NOT ACHIEVED.
+
+
+## 2026-11-04 authoritative refresh — CTO Run 28 (non-owner verification guard and recovered 096 rehearsal)
+
+### Prototype PR #263 — exact-head CI passed
+- PR #263 remains OPEN / DRAFT / UNMERGED, stacked on PR #252 and PR #247.
+- Latest exact head: `1f5e4a6f195f0514f7fe46be696b73561caeb80d`.
+- Exact-head CI #5409 (`41805919316`) completed SUCCESS across dependency audit, migration validation, fresh disposable PostgreSQL migration, typecheck, production build, browser smoke, full tests including PostgreSQL acceptance, production-container build and cleanup.
+- The dedicated non-owner/FORCE RLS guard test passed as API test 57. API suite 100/100; other workspace suites 22/22, 2/2, 29/29, 1/1 and 2/2.
+- Prototype uses a real password-authenticated API login and a separate NOLOGIN/NOSUPERUSER/NOBYPASSRLS guard function-owner role. Guard role is not a tenant-table owner and has no BYPASSRLS. API has no function EXECUTE privilege and no SET ROLE path to guard.
+- PostgreSQL SELECT ... FOR SHARE requires UPDATE privilege on at least one column. Prototype proves a narrow column-level UPDATE(id) grant plus exact-row UPDATE RLS USING/WITH CHECK policies allows locking while denying identifier mutation; no table-level UPDATE or DELETE is granted.
+- FORCE RLS hides evidence with missing context; API GUC spoofing does not reveal tenant rows because policies target only guard role. Trigger restores caller GUC state. Same-org verification succeeds; cross-org, self-verification, out-of-scope geography and suspended identity fail. Role revocation, membership deactivation and identity suspension races all serialize and deny after revocation commits.
+
+### Recovered migration 096 trigger-composition rehearsal
+- Disposable integration fixture now recreates recovered migration-096 verification function body and the real migration-010 independence trigger under their historical trigger names.
+- It proves the historical combined trigger composition rejects cross-org APPROVED but permits cross-org REJECTED, then applies the forward-only candidate migration and asserts exactly one authoritative verification trigger remains.
+- This is a disposable trigger-composition rehearsal, not a full production-schema restore or replay of migration 096. Migration 096 remains review-only and must not be restored/replayed blindly.
+
+### Temporary CI PR and documentation
+- Temporary validation PR #264 was closed UNMERGED after exact-head CI evidence capture. PR #263 remains the authoritative prototype.
+- Run-28 checkpoint: `docs/engineering/checkpoints/2026-11-04-cto-run-28-nonowner-verification-guard.md`.
+- Guard design doc now records the passed prototype and separates verified proof from open production gaps.
+
+### Remaining gates
+1. Add evidence-to-activity reassignment and activity organization/geography reassignment races.
+2. Geography-scope mutation locking and fail-closed no-scope behavior remain open; production permissive no-scope behavior remains a P0 blocker.
+3. Review lock ordering across evidence/activity/identity/membership/role/scope; add deadlock, timeout and bounded-retry tests.
+4. Validate Neon managed-Postgres role provisioning and ACL feasibility on disposable infrastructure only.
+5. Continue 67-table RLS matrix, dynamic tenant tests, migration drift and runtime/migrator separation.
+6. Independent DBA/security review is mandatory.
+
+### Safety / TRL
+- Prototype does not provision production roles, grants, policies or triggers. Production remains READ-ONLY / HOLD.
+- No production/staging writes, migrations, role/grant/ownership changes, RLS activation, deployments, merges, worker activation or certification.
+- PRs #247, #252 and #263 remain draft/unmerged. SITE-JBP-01 Kathonda remains PRE-VALIDATION. Production certification and TRL 9 NOT ACHIEVED.
