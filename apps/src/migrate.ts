@@ -4,13 +4,40 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
 
-const databaseUrl = process.env.DATABASE_URL;
-if (!databaseUrl) throw new Error("DATABASE_URL is required");
+// Deliberately distinct from the API's DATABASE_URL. Production migrations
+// must be invoked explicitly with a separately controlled migrator credential.
+const databaseUrl = process.env.RUPAYKG_MIGRATOR_DATABASE_URL;
+if (!databaseUrl) {
+  throw new Error("RUPAYKG_MIGRATOR_DATABASE_URL is required; API DATABASE_URL is never used for migrations");
+}
+let parsedDatabaseUrl: URL;
+try {
+  parsedDatabaseUrl = new URL(databaseUrl);
+} catch {
+  throw new Error("RUPAYKG_MIGRATOR_DATABASE_URL must be a valid PostgreSQL URL");
+}
+if (parsedDatabaseUrl.protocol !== "postgres:" && parsedDatabaseUrl.protocol !== "postgresql:") {
+  throw new Error("RUPAYKG_MIGRATOR_DATABASE_URL must use postgres:// or postgresql://");
+}
+
+const migrationSsl = process.env.RUPAYKG_MIGRATOR_DATABASE_SSL;
+if (process.env.NODE_ENV === "production" && migrationSsl !== "require") {
+  throw new Error("Production migrations require RUPAYKG_MIGRATOR_DATABASE_SSL=require");
+}
+if (migrationSsl && migrationSsl !== "require" && migrationSsl !== "false") {
+  throw new Error("RUPAYKG_MIGRATOR_DATABASE_SSL must be require or false");
+}
+const caCert = process.env.RUPAYKG_MIGRATOR_DATABASE_CA_CERT?.trim();
+if (migrationSsl === "require" && !caCert?.includes("BEGIN CERTIFICATE")) {
+  throw new Error("RUPAYKG_MIGRATOR_DATABASE_CA_CERT must contain a PEM certificate when TLS is required");
+}
 
 const pool = new Pool({
   connectionString: databaseUrl,
   max: 1,
-  ssl: process.env.DATABASE_SSL === "false" ? undefined : { rejectUnauthorized: false },
+  ...(migrationSsl === "false"
+    ? { ssl: false }
+    : { ssl: { rejectUnauthorized: true, ...(caCert ? { ca: caCert } : {}) } }),
 });
 
 try {
@@ -29,7 +56,7 @@ try {
   const migrationDir = candidates.find((candidate) => existsSync(candidate));
   if (!migrationDir) throw new Error(`Migration directory not found. Checked: ${candidates.join(", ")}`);
   const files = (await readdir(migrationDir))
-    .filter((name) => /^\d+_.+\.sql$/.test(name))
+    .filter((name) => /^\\d+_.+\\.sql$/.test(name))
     .sort();
 
   for (const filename of files) {
