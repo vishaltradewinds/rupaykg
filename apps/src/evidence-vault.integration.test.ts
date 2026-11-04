@@ -91,11 +91,22 @@ test("evidence vault enforces tenant scope, versioned storage, integrity and ind
     assert.deepEqual(download.rawPayload, bytes);
     assert.equal(download.headers["x-evidence-sha256"], uploaded.sha256);
 
+    const outsiderDownload = await app.inject({ method: "GET", url: "/api/v1/evidence-vault/"+uploaded.evidenceId, headers: headers(outsiderToken, otherOrg.rows[0]!.id) });
+    assert.equal(outsiderDownload.statusCode, 404, outsiderDownload.body);
+    assert.equal(outsiderDownload.json().code, "EVIDENCE_NOT_FOUND");
+
     const selfReview = await app.inject({ method: "POST", url: "/api/v1/evidence-vault/"+uploaded.evidenceId+"/review", headers: headers(uploaderToken), payload: { decision: "APPROVED", rationale: "Self review must be blocked" } });
     assert.equal(selfReview.statusCode, 403, selfReview.body);
 
     const outsiderRead = await app.inject({ method: "GET", url: "/api/v1/evidence-vault?activityId="+activity.rows[0]!.id, headers: headers(outsiderToken, otherOrg.rows[0]!.id) });
     assert.equal(outsiderRead.statusCode, 403, outsiderRead.body);
+
+    const outsiderUpload = await app.inject({
+      method: "POST", url: "/api/v1/evidence-vault/upload", headers: headers(outsiderToken, otherOrg.rows[0]!.id),
+      payload: { activityId: activity.rows[0]!.id, evidenceType: "WASTE_WEIGHT_TICKET", fileName: "cross-tenant.pdf", mediaType: "application/pdf", contentBase64: bytes.toString("base64") },
+    });
+    assert.equal(outsiderUpload.statusCode, 403, outsiderUpload.body);
+    assert.equal(outsiderUpload.json().code, "EVIDENCE_SCOPE_FORBIDDEN");
 
     const reviewerDecision = await app.inject({ method: "POST", url: "/api/v1/evidence-vault/"+uploaded.evidenceId+"/review", headers: headers(reviewerToken), payload: { decision: "APPROVED", rationale: "Checked against the cited source record" } });
     assert.equal(reviewerDecision.statusCode, 200, reviewerDecision.body);
