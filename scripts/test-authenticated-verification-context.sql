@@ -246,6 +246,28 @@ SELECT public.rupaykg_test_expect_revoked_rejected(:'org_a') AS revoked_rejected
 RESET ROLE;
 ROLLBACK TO SAVEPOINT revoked_context;
 
+-- A membership change after context issuance must be caught by the final
+-- verification trigger. The issuer intentionally locks only the bearer
+-- session; membership/role/identity/org are revalidated under trigger lock order.
+SAVEPOINT membership_changed_context;
+SET LOCAL ROLE rupaykg_test_verification_api;
+SELECT public.rupaykg_set_authenticated_context('ci-active-authctx-valid-token-a', :'org_a');
+RESET ROLE;
+UPDATE public.organization_memberships m SET status='PENDING'
+FROM public.identities i
+WHERE m.identity_id=i.id AND i.external_subject='ci-active-authctx-verifier-a'
+  AND m.organization_id=:'org_a';
+SET LOCAL ROLE rupaykg_test_verification_api;
+SELECT public.rupaykg_test_expect_spoof_rejected(
+  :'evidence_a',:'activity_a',:'verifier_a') AS membership_change_rejected \\gset
+\\if :membership_change_rejected
+\\else
+  \\echo 'verification insert accepted a context after membership was deactivated'
+  \\quit 1
+\\endif
+RESET ROLE;
+ROLLBACK TO SAVEPOINT membership_changed_context;
+
 COMMIT;
 
 -- A signed context captured in one transaction must not be replayable in a
