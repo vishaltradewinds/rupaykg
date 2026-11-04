@@ -12,7 +12,7 @@ The CI proof in 'scripts/test-verification-guard-role.sql' tests a narrower alte
 - Trigger owner: separate NOLOGIN, NOSUPERUSER, NOBYPASSRLS role; not owner of the protected tables.
 - Helper owner privileges: SELECT plus column-scoped UPDATE(id) on only the rows it must lock. This is sufficient for the proof's FOR SHARE clauses without granting table-wide UPDATE.
 - Trigger function: SECURITY DEFINER, fixed search_path, schema-qualified object references, and a narrowly scoped trigger entry point.
-- RLS: enabled on the proof's tenant-owned tables; the helper role has explicit tenant-filtered SELECT policies and does not bypass RLS.
+- RLS: enabled on the proof's tenant-owned tables; the helper role has explicit tenant-filtered SELECT and UPDATE policies for the row-lock operation, and does not bypass RLS. The first CI attempt demonstrated that SELECT policies alone are insufficient for this locking path.
 - The API role can insert a decision only through the trigger; the trigger resolves evidence/activity organization, validates active explicit verifier permission, and writes authorization provenance.
 
 ## Acceptance boundary
