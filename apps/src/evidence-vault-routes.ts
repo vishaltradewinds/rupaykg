@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import type { Pool } from "pg";
-import { authenticate, bearerChallenge, canActForOrganization, canVerifyEvidence, hasOrganizationPermission, type AuthContext } from "./auth.js";
+import { authenticate, bearerChallenge, canActForOrganization, canVerifyEvidence, establishAuthenticatedDatabaseContext, hasOrganizationPermission, type AuthContext } from "./auth.js";
 
 const MAX_BYTES = 5 * 1024 * 1024;
 const MEDIA = new Set(["application/pdf", "image/jpeg", "image/png", "text/csv", "text/plain", "application/json"]);
@@ -110,6 +110,7 @@ export async function registerEvidenceVaultRoutes(app:FastifyInstance,pool:Pool|
   const client=await pool.connect();try{await client.query("begin");
    const q=await client.query<{organization_id:string;activity_id:string;geography_id:string|null;status:string;artifact_id:string;uploaded_by_identity_id:string}>("select a.organization_id,a.id activity_id,a.geography_id,e.status::text status,v.id artifact_id,v.uploaded_by_identity_id from evidence e join activities a on a.id=e.activity_id join evidence_artifact_versions v on v.evidence_id=e.id where e.id=$1 for update of e",[id]),row=q.rows[0];
    if(!row||!row.geography_id||!canActForOrganization(auth,row.organization_id)){await client.query("rollback");return reply.code(404).send({error:"Evidence not found",code:"EVIDENCE_NOT_FOUND"});}
+   const contextReady=await establishAuthenticatedDatabaseContext(client,request,auth,row.organization_id);if(!contextReady){await client.query("rollback");return reply.code(401).send({error:"Authenticated database context could not be established",code:"AUTH_CONTEXT_INVALID"});}
    const g=await client.query<{ok:boolean}>("select organization_has_geography_scope($1::uuid,$2::uuid) ok",[row.organization_id,row.geography_id]);
    if(!g.rows[0]?.ok||!await hasOrganizationPermission(client,auth,row.organization_id,["evidence:review"])||!await canVerifyEvidence(client,auth.identityId,id)){await client.query("rollback");return reply.code(403).send({error:"Evidence review permission and geography scope required",code:"EVIDENCE_REVIEW_FORBIDDEN"});}
    if(row.status==="VERIFIED"||row.status==="REJECTED"){await client.query("rollback");return reply.code(409).send({error:"Reviewed evidence is immutable; upload a new version",code:"EVIDENCE_ALREADY_REVIEWED"});}
