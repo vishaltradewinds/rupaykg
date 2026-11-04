@@ -192,3 +192,24 @@ Resume the canonical RupayKg repository from the latest engineering checkpoint, 
 ## Next execution
 
 Prioritize P0 verification design/legacy-trigger/row-lock regression, migration 096/staging source reconciliation, and the 67-table tenant-isolation/runtime-role matrix. Then reconcile the EPR signed-RLS GET and transaction-bound write paths without duplicate registration. Keep production untouched until independent DBA/security review and explicit founder approval.
+
+
+## 2026-11-04 — authenticated verification context and P0 reconciliation
+
+- Resumed from the prior checkpoint on PR #204's documentation branch; inspected canonical GitHub, current PR/issue/branch state, and authoritative Neon main.
+- PR #282 v4 exact head `7963719280d20d2e285d3011ea390aee5ab46e9d` passed exact-head CI #5474 / 41815073863. All 37 reported job steps passed, including disposable PostgreSQL candidate migration fixture, authenticated context spoof/revocation tests, actual-schema non-owner and SECURITY DEFINER proofs, typecheck, build, browser smoke, PostgreSQL acceptance and production-container build.
+- PR #277 actual-schema proof exact-head CI #5465 / 41813321638 passed. It demonstrates candidate mechanics but confirms cross-tenant evidence visibility on the current no-RLS baseline and exposes caller-controlled tenant-GUC spoofing.
+- PR #278 geography-scope concurrency validation CI #5457 / 41812353414 passed. Closed the temporary validation PR unmerged after capturing evidence; retained branch and authoritative PR #263.
+- Closed PRs #279–#281 unmerged as superseded iterations of the authenticated-context proof. PR #282 is the sole current proof candidate; branches retained.
+- Recorded exact-head CI and limitations in PR #282 and issue #215.
+- Fresh read-only Neon main evidence: 67 public base tables, 0 RLS, 0 FORCE RLS, 0 public policies; schema_migrations 92 rows/latest 20261021; rupaykg login role BYPASSRLS/CREATEROLE/CREATEDB; no dedicated app/auth runtime roles observed; default branch protected=false.
+- Created branch `shakti/2026-11-04-daily-engineering-checkpoint` from the previous documentation handoff head. Refreshed `docs/engineering/RUPAYKG_RESUME_POINT_LATEST.md` and added session log `docs/engineering/session-logs/2026-11-04-cto-session-01.md`. Immutable checkpoint creation is the remaining documentation write to verify.
+- No production mutation, migration, role/grant/RLS change, Neon branch operation, deployment, worker activation, provider write, merge or certification.
+- Production READ-ONLY / HOLD; worker OFF; certification OFF; TRL 9 NOT ESTABLISHED.
+
+### Next execution
+1. Integrate signed context into the actual API transaction boundary only after tracing the complete request-to-connection-to-trigger path.
+2. Reconcile verification trigger semantics, legacy global-membership trigger, immutable snapshots and all decision types; extend two-tenant and concurrency regressions.
+3. Continue migration 096 exact-byte and staging-only source recovery.
+4. Complete 67-table RLS/ownership/grant and endpoint-to-data matrix.
+5. Keep EPR feature flags and MRV workers OFF; no production release until independent review and explicit founder approval.
