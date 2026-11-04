@@ -13,6 +13,20 @@ GRANT EXECUTE ON FUNCTION public.rupaykg_set_authenticated_context(text,uuid)
 
 DO $privilege_checks$
 BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_proc p
+    WHERE p.pronamespace='public'::regnamespace
+      AND p.proname IN (
+        'rupaykg_context_is_valid','rupaykg_authenticated_identity',
+        'rupaykg_authenticated_organization','rupaykg_set_authenticated_context',
+        'enforce_verification_authorization','reject_verification_delete',
+        'reject_verification_truncate'
+      )
+      AND p.prosecdef
+      AND COALESCE(p.proconfig,ARRAY[]::text[]) <> ARRAY['search_path=pg_catalog']::text[]
+  ) THEN
+    RAISE EXCEPTION 'SECURITY DEFINER functions must pin search_path to pg_catalog only';
+  END IF;
   IF (SELECT rolcanlogin OR rolsuper OR rolbypassrls FROM pg_roles
       WHERE rolname='rupaykg_auth_context_owner') THEN
     RAISE EXCEPTION 'auth context owner must be NOLOGIN/NOSUPERUSER/NOBYPASSRLS';
@@ -165,6 +179,12 @@ SELECT public.rupaykg_set_authenticated_context('ci-active-authctx-valid-token-a
 INSERT INTO public.verifications(evidence_id,activity_id,verifier_identity_id,decision,scope,rationale)
 VALUES (:'evidence_a',:'activity_a',:'verifier_a','APPROVED','CI_ACTIVE_AUTHCTX','valid signed context');
 RESET ROLE;
+SELECT current_setting('rupaykg.context.identity',true) AS replay_identity,
+       current_setting('rupaykg.context.organization',true) AS replay_organization,
+       current_setting('rupaykg.context.session',true) AS replay_session,
+       current_setting('rupaykg.context.expiry',true) AS replay_expiry,
+       current_setting('rupaykg.context.xid',true) AS replay_xid,
+       current_setting('rupaykg.context.signature',true) AS replay_signature \gset
 SELECT id AS verification_a FROM public.verifications
 WHERE evidence_id=:'evidence_a' AND scope='CI_ACTIVE_AUTHCTX'
 ORDER BY decided_at DESC LIMIT 1 \gset
@@ -219,8 +239,35 @@ SELECT public.rupaykg_test_expect_revoked_rejected(:'org_a') AS revoked_rejected
 RESET ROLE;
 ROLLBACK TO SAVEPOINT revoked_context;
 
+COMMIT;
+
+-- A signed context captured in one transaction must not be replayable in a
+-- later transaction, even while the bearer session itself remains active.
+BEGIN;
+SET LOCAL ROLE rupaykg_test_verification_api;
+SELECT set_config('rupaykg.context.identity', :'replay_identity', true);
+SELECT set_config('rupaykg.context.organization', :'replay_organization', true);
+SELECT set_config('rupaykg.context.session', :'replay_session', true);
+SELECT set_config('rupaykg.context.expiry', :'replay_expiry', true);
+SELECT set_config('rupaykg.context.xid', :'replay_xid', true);
+SELECT set_config('rupaykg.context.signature', :'replay_signature', true);
+SELECT public.rupaykg_context_is_valid() AS replay_context_valid \gset
+\if :replay_context_valid
+  \echo 'signed context from a previous transaction was replayable'
+  \quit 1
+\endif
+SELECT public.rupaykg_test_expect_spoof_rejected(
+  :'evidence_a',:'activity_a',:'verifier_a') AS replay_rejected \gset
+\if :replay_rejected
+\else
+  \echo 'verification insert accepted a signed context from a previous transaction'
+  \quit 1
+\endif
+RESET ROLE;
 DROP FUNCTION public.rupaykg_test_expect_spoof_rejected(uuid,uuid,uuid);
 DROP FUNCTION public.rupaykg_test_expect_revoked_rejected(uuid);
 DROP FUNCTION public.rupaykg_test_delete_guard(uuid);
 DROP FUNCTION public.rupaykg_test_truncate_guard();
-ROLLBACK;
+COMMIT;
+DROP OWNED BY rupaykg_test_verification_api;
+DROP ROLE rupaykg_test_verification_api;
