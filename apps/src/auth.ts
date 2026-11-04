@@ -19,6 +19,29 @@ export function issueOpaqueToken(): string {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+export async function establishAuthenticatedDatabaseContext(
+  client: PoolClient,
+  request: FastifyRequest,
+  auth: AuthContext,
+  organizationId: string,
+): Promise<boolean> {
+  const header = request.headers.authorization;
+  if (!header?.startsWith("Bearer ")) return false;
+  const token = header.slice("Bearer ".length).trim();
+  if (!token) return false;
+  try {
+    const result = await client.query<{ identity_id: string }>(
+      "select public.rupaykg_set_authenticated_context($1, $2::uuid) as identity_id",
+      [token, organizationId],
+    );
+    return result.rows[0]?.identity_id === auth.identityId;
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error
+      && (error as { code?: unknown }).code === "28000") return false;
+    throw error;
+  }
+}
+
 export async function authenticate(request: FastifyRequest, pool: Pool | null): Promise<AuthContext | null> {
   if (!pool) return null;
   const header = request.headers.authorization;
