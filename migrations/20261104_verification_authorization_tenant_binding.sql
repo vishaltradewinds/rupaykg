@@ -158,20 +158,13 @@ begin
       join ancestors a on a.id = g.id
      where g.parent_id is not null
   )
-  select case
-    when not exists (
-      select 1 from public.organization_geography_scopes s
-       where s.organization_id = activity_organization_id
-         and s.status = 'VERIFIED'
-    ) then true
-    else exists (
-      select 1
-        from public.organization_geography_scopes s
-        join ancestors a on a.id = s.geography_id
-       where s.organization_id = activity_organization_id
-         and s.status = 'VERIFIED'
-    )
-  end
+  select exists (
+    select 1
+      from public.organization_geography_scopes s
+      join ancestors a on a.id = s.geography_id
+     where s.organization_id = activity_organization_id
+       and s.status = 'VERIFIED'
+  )
     into geography_scope_authorized;
 
   if geography_scope_authorized is not true then
