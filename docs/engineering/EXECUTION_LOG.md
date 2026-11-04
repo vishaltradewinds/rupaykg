@@ -87,3 +87,12 @@
 - Confirmed separate snapshot-mutability defect: strict guard overwrites authorization snapshot on every APPROVED-row UPDATE. Updated issue #214 and recovered 096 review to separate confirmed defect from unproven bypass.
 - Preserved staging-only async mirror/AI intake catalog evidence; 8 test inbox rows have expired leases, one retry overdue, no current-main worker source or independent worker deployment proven. No staging/production writes.
 - Latest documentation head after clarification requires its own exact-head CI; #5346 does not cover subsequent commits. Production remains READ-ONLY / HOLD. TRL 9 NOT ACHIEVED.
+
+
+## 2026-11-04 — CTO Run 21 (cross-org verification authorization)
+- Traced evidence-vault review endpoint and confirmed cross-org REJECTED path: API helper previously accepted VERIFY_EVIDENCE from any verified org membership with matching geography; target org only required evidence:review; recovered 096 DB guard enforces same-org verifier permission only for APPROVED; legacy trigger globally accepts permission for both decisions.
+- This is a cross-organization REJECTED decision/write defect, not an APPROVED verification bypass. Issue #215 updated.
+- Opened focused draft PR #247 on `security/verification-authorization-tenant-binding-2026-11-04`: exact-org helper binding, route passes subject organization, unit/integration regressions, and forward-only migration replacing both triggers with one same-org explicit-permission/write-once snapshot guard. Migration not applied anywhere.
+- PR #247 initial head `6a5fd9c5288e56d7243ab70f39f5a928f6235208`; CI #5350 (`41788676133`) in progress at this checkpoint.
+- PR #244 latest documentation head `12d9664e3e4b62138a0f69d0588715b743d63ee8` passed CI #5349 end-to-end; remains draft/unmerged.
+- Production remains READ-ONLY / HOLD. No production or staging writes, migrations, role/grant/RLS/function/trigger changes, worker activation, deployment, merge or certification. TRL 9 NOT ACHIEVED.
