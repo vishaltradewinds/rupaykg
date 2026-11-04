@@ -70,3 +70,12 @@
 - Added exact 91-file source inventory, recovered 096 evidence/review document, and corrected migration README on PR #244 branch. 096 remains absent from active source; no production data/schema/function/trigger/role change occurred.
 - Updated canonical resume point with Run 18 findings and next work. Commits after CI #5337 are new docs-only heads and require their own exact-head CI validation.
 - Production remains READ-ONLY / HOLD. No SQL writes, DDL, migration, trigger/function change, role/grant/ownership/RLS change, branch operation, deployment, merge, worker activation or certification. TRL 9 NOT ACHIEVED.
+
+
+## 2026-11-04 — CTO Run 19 (staging migration recovery)
+- Read-only Neon staging inspection confirmed four staging-only ledger entries 20261022–20261025. Exact original SQL remains unrecovered; catalog-level reconstruction was recorded in `docs/engineering/STAGING_ASYNC_MIRROR_AI_INTAKE_EVIDENCE_2026-11-04.md`.
+- Staging tables: all four owned by `rupaykg`, all RLS/FORCE RLS off. Inbox is source/global (no organization_id); AI jobs/rate limits are tenant scoped. Inbox has 12 TEST-AUTH/TEST-MUNI rows and 29 append-only events. Eight PROCESSING leases expired; one RETRY is overdue; one quarantined after five attempts; one validated. AI jobs/rate limits empty.
+- No matching current-main worker/application files or independent deployed worker/scheduler/queue consumer were proven. This is abandoned staging test state, not live authority feed evidence.
+- Updated P0 issue #214, migration inventory, and canonical resume point. No staging or production writes, schema changes, worker activation or migrations performed.
+- PR #244 latest documentation head requires exact-head CI check; prior #5337 success applies only to head `92b5215a56cba12a5880175e9b63e44c2aedb4b3`.
+- Production remains READ-ONLY / HOLD; no DDL/DML, role/grant/RLS/function/trigger changes, deployment, merge or certification. TRL 9 NOT ACHIEVED.
