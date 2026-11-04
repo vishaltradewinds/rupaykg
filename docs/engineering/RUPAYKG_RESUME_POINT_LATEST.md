@@ -265,3 +265,28 @@ This proves source/config does not demonstrate credential separation; it does no
 3. Validate transaction lock ordering and two-session race behaviour for identity suspension, membership revocation and role permission mutation.
 4. Rehearse migration on disposable PostgreSQL and compare fresh-schema and production-like schema (where 096 columns already exist); never run against production.
 5. Production remains READ-ONLY / HOLD. No production or staging writes, DDL, migration, function/trigger, role/grant/RLS change, worker activation, deployment, merge or certification. TRL 9 NOT ACHIEVED.
+
+
+## 2026-11-04 authoritative refresh — CTO Run 22 (verification tenant-binding CI accepted)
+
+### PR #247 exact-head CI success
+- Focused security PR #247 branch `security/verification-authorization-tenant-binding-2026-11-04` exact head `50b0391dab1f2564f1d8e7a48ec592466eaa79e3` passed CI #5354 (`41789024956`) end-to-end: dependency audit, migration validation, disposable PostgreSQL migration, typecheck, production build, browser smoke, full tests/PostgreSQL acceptance, production-container build and cleanup.
+- First CI #5350 failed typecheck because the second caller in `workspace-routes.ts` still used the old helper signature. Fixed by binding the workspace verification route to the evidence activity's exact organization.
+- CI #5353 passed migration/typecheck/build/browser smoke and failed one lifecycle test only because the new self-approval error wording did not match the existing `/self-approve/` assertion. Updated the error text to preserve the established contract; exact-head #5354 then passed.
+- Evidence-vault integration regressions passed: cross-org REJECTED direct DB insert denied; cross-org REJECTED API call denied; same-org APPROVED and REJECTED decisions accepted; decision snapshot persisted; UPDATE mutation rejected.
+- PR #247 remains OPEN / DRAFT / UNMERGED. Migration `20261104_verification_authorization_tenant_binding.sql` is candidate-only and has not been applied to any database.
+
+### Security meaning and remaining limits
+- The confirmed cross-org REJECTED path is addressed in the candidate app helper and database trigger. APPROVED decisions were already rejected by the strict recovered-096 guard when same-org permission was absent; this PR unifies the boundary for both decisions.
+- Candidate trigger locks evidence/activity, identity, exact membership and role rows during authorization; two-session concurrency/revocation race tests are still required. Geography fail-open when no scope exists remains a separate issue #215 candidate migration concern. Table-owner deletion/tamper resistance still depends on runtime privilege separation and audit controls.
+- No independent DBA/security approval, production runtime-role proof, global RLS policy rollout or production migration is authorized by the CI result.
+
+### PR #244 documentation handoff
+- PR #244 head `76dfd7bbdc272bfbe98963005dd2727e177a46c5` passed exact-head CI #5351 (`41788775436`) end-to-end. PR #244 remains draft/unmerged.
+
+### Next execution batch
+1. Add two-session PostgreSQL concurrency tests for identity suspension, membership revocation and role permission mutation racing with verification insertion; test lock ordering and deadlock handling.
+2. Test candidate migration against both fresh schema and a production-like schema with the four 096 columns/triggers already present; verify no duplicate or stale triggers remain.
+3. Review DELETE privileges and immutable provenance under actual non-owner runtime role; update RLS/policy matrix and exact route/data map.
+4. Resolve geography fail-open behavior in the broader tenant-isolation programme, not by silently widening this focused PR.
+5. Keep PR #247 draft/unmerged and production READ-ONLY / HOLD until independent review and explicit approval. No production/staging writes, DDL, migration, function/trigger, role/grant/RLS change, deployment, worker activation or certification. TRL 9 NOT ACHIEVED.
