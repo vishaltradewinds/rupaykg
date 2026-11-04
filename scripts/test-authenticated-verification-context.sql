@@ -152,7 +152,7 @@ $$;
 CREATE OR REPLACE FUNCTION public.rupaykg_test_truncate_guard()
 RETURNS boolean LANGUAGE plpgsql AS $$
 BEGIN
-  EXECUTE 'TRUNCATE public.verifications';
+  EXECUTE 'TRUNCATE public.verifications CASCADE';
   RETURN false;
 EXCEPTION WHEN raise_exception THEN
   RETURN SQLERRM LIKE 'verification records are append-only%';
