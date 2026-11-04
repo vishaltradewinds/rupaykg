@@ -200,3 +200,9 @@ Added Run-28 checkpoint and refreshed the canonical resume point and guard desig
 - PR #284 prior no-PUBLIC-EXECUTE head `2b1ebc88237e9274e563b5605295ce925cabd234` passed CI #5518 / `41874715707` SUCCESS, 18/18 steps.
 - Created Run-29 closure checkpoint and closure session log; appended exact-head results to canonical resume point.
 - Combined migration/trigger/guard-owner integration remains unvalidated. Production remains READ-ONLY/HOLD; no production writes, migrations, role/grant/RLS changes, branch operations, Render config/secrets, deployments, merges, worker activation or certification. TRL 9 NOT ACHIEVED.
+
+
+## 2026-11-04 — Run 29 handoff CI verification
+- PR #244 head `1d2079517f1e5ca346b9ab7f02de9eb4b5e8106a` passed CI #5526 / `41876020597` SUCCESS, 17/17 steps, including disposable migration/acceptance and production-container build.
+- Added a dedicated handoff CI checkpoint and session log; refreshed the resume point with the exact result.
+- Production remains READ-ONLY/HOLD; no production changes, migrations, role/grant/RLS changes, branch operations, deployments, merges, worker activation or certification.
