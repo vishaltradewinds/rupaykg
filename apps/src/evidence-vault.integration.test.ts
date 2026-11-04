@@ -75,6 +75,24 @@ test("evidence vault enforces tenant scope, versioned storage, integrity and ind
       [uploaderId,hash(uploaderToken),reviewerId,hash(reviewerToken),outsiderId,hash(outsiderToken),crossOrgReviewerId,hash(crossOrgReviewerToken)],
     );
 
+    const reviewerVerifierMembershipId = (await pool.query<{ id: string }>(
+      "select id from organization_memberships where identity_id=$1 and organization_id=$2 and role_id=$3",
+      [reviewerId, organizationId, roles[1].rows[0]!.id],
+    )).rows[0]!.id;
+    const newerReviewOnlyRole = (await pool.query<{ id: string }>(
+      "insert into roles(organization_id,name,permissions,geography_scope) values($1,'newer_review_only_test_' || $2,$3::jsonb,'[]') returning id",
+      [organizationId, suffix, JSON.stringify(["evidence:review"])],
+    )).rows[0]!.id;
+    await pool.query("alter table organization_memberships disable trigger stakeholder_membership_application_guard");
+    try {
+      await pool.query(
+        "insert into organization_memberships(identity_id,organization_id,role_id,status,created_at) values($1,$2,$3,'VERIFIED',now()+interval '1 second')",
+        [reviewerId, organizationId, newerReviewOnlyRole],
+      );
+    } finally {
+      await pool.query("alter table organization_memberships enable trigger stakeholder_membership_application_guard");
+    }
+
     // Prove the candidate trigger on the complete migrated RupayKg schema,
     // using a non-owner API role with INSERT only. This role exists only in
     // the disposable integration database and is removed in the test cleanup.
@@ -165,6 +183,9 @@ test("evidence vault enforces tenant scope, versioned storage, integrity and ind
       "select authorization_membership_id,authorization_role_id,authorization_permissions_snapshot,authorization_checked_at from verifications where evidence_id=$1 and decision='REJECTED'",
       [apiProofEvidence],
     );
+    assert.equal(actualSchemaSnapshot.rows[0]?.authorization_membership_id, reviewerVerifierMembershipId,
+      "newer non-verifier membership must not mask an older active verifier role");
+    assert.equal(actualSchemaSnapshot.rows[0]?.authorization_role_id, roles[1].rows[0]!.id);
     assert.ok(actualSchemaSnapshot.rows[0]?.authorization_membership_id);
     assert.ok(actualSchemaSnapshot.rows[0]?.authorization_role_id);
     assert.ok(actualSchemaSnapshot.rows[0]?.authorization_checked_at);
