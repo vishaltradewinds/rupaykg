@@ -54,6 +54,17 @@ test("rejects path traversal filenames, unsupported media, oversized and mismatc
   for (const [metadata, bytes, code] of cases) assert.deepEqual(normalizeOdkSubmission(config, submission, [{ metadata, bytes }]), { ok: false, code });
 });
 
+test("rejects duplicate attachment filenames and aggregate payloads over 10 MiB", () => {
+  const one = { metadata: { filename: "same.pdf", contentType: "application/pdf" }, bytes: pdf };
+  assert.deepEqual(normalizeOdkSubmission(config, submission, [one, one]), { ok: false, code: "ODK_ATTACHMENT_DUPLICATE_FILENAME" });
+  const large = Buffer.from("%PDF-" + "x".repeat(5 * 1024 * 1024 - 5));
+  const tooLarge = normalizeOdkSubmission(config, submission, [
+    { metadata: { filename: "a.pdf", contentType: "application/pdf" }, bytes: large },
+    { metadata: { filename: "b.pdf", contentType: "application/pdf" }, bytes: large }
+  ]);
+  assert.deepEqual(tooLarge, { ok: false, code: "ODK_SUBMISSION_ATTACHMENT_SIZE_LIMIT" });
+});
+
 test("source key and metadata digest are deterministic for the same source version", () => {
   const a = normalizeOdkSubmission(config, submission, [{ metadata: { filename: "inspection.pdf", contentType: "application/pdf" }, bytes: pdf }]);
   const b = normalizeOdkSubmission(config, submission, [{ metadata: { filename: "inspection.pdf", contentType: "application/pdf" }, bytes: pdf }]);
