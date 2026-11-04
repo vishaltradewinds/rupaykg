@@ -159,6 +159,90 @@ test("evidence vault enforces tenant scope, versioned storage, integrity and ind
       verifier.release();
       await pool.query("update roles set permissions=$2::jsonb where id=$1", [roles[1].rows[0]!.id, JSON.stringify(["evidence:read", "evidence:review", "VERIFY_EVIDENCE"])]);
     }
+    // Membership deactivation race: the verification transaction must wait
+    // for a concurrent membership status change and then fail closed.
+    const membershipRaceIdentity = (await pool.query<{ id: string }>(
+      "insert into identities(external_subject,display_name,status) values($1,'Membership Race Verifier','VERIFIED') returning id",
+      ["test-membership-race:"+suffix],
+    )).rows[0]!.id;
+    await pool.query("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED')", [membershipRaceIdentity, organizationId, roles[1].rows[0]!.id]);
+    const membershipRaceEvidence = (await pool.query<{ id: string }>(
+      "insert into evidence(activity_id,evidence_type,status,captured_at,content_hash) values($1,'FIELD','UNDER_REVIEW',now(),$2) returning id",
+      [activity.rows[0]!.id, "membership-race-"+suffix],
+    )).rows[0]!.id;
+    const membershipRevoker = await pool.connect();
+    const membershipVerifier = await pool.connect();
+    let membershipChangeCommitted = false;
+    try {
+      await membershipRevoker.query("begin");
+      await membershipRevoker.query("update organization_memberships set status='PENDING' where identity_id=$1 and organization_id=$2 and role_id=$3", [membershipRaceIdentity, organizationId, roles[1].rows[0]!.id]);
+      const pid = (await membershipVerifier.query<{ pid: number }>("select pg_backend_pid() pid")).rows[0]!.pid;
+      const pending = membershipVerifier.query(
+        "insert into verifications(evidence_id,activity_id,verifier_identity_id,decision,scope) values($1,$2,$3,'REJECTED','MEMBERSHIP_RACE')",
+        [membershipRaceEvidence, activity.rows[0]!.id, membershipRaceIdentity],
+      ).then(() => ({ ok: true as const }), (error: unknown) => ({ ok: false as const, error }));
+      let blocked = false;
+      for (let attempt = 0; attempt < 200; attempt += 1) {
+        const wait = await pool.query<{ wait_event_type: string | null }>("select wait_event_type from pg_stat_activity where pid=$1", [pid]);
+        if (wait.rows[0]?.wait_event_type === "Lock") { blocked = true; break; }
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      assert.equal(blocked, true, "verification insert must wait for membership status update");
+      await membershipRevoker.query("commit");
+      membershipChangeCommitted = true;
+      const result = await pending;
+      assert.equal(result.ok, false);
+      if (!result.ok) assert.match(result.error instanceof Error ? result.error.message : String(result.error), /verification requires active explicit verifier permission/);
+      await membershipVerifier.query("rollback").catch(() => undefined);
+    } finally {
+      if (!membershipChangeCommitted) await membershipRevoker.query("rollback").catch(() => undefined);
+      await membershipVerifier.query("rollback").catch(() => undefined);
+      membershipRevoker.release();
+      membershipVerifier.release();
+    }
+
+    // Identity suspension race: a decision cannot commit using an identity
+    // whose suspension commits while authorization is waiting on its row lock.
+    const suspensionRaceIdentity = (await pool.query<{ id: string }>(
+      "insert into identities(external_subject,display_name,status) values($1,'Suspension Race Verifier','VERIFIED') returning id",
+      ["test-suspension-race:"+suffix],
+    )).rows[0]!.id;
+    await pool.query("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED')", [suspensionRaceIdentity, organizationId, roles[1].rows[0]!.id]);
+    const suspensionRaceEvidence = (await pool.query<{ id: string }>(
+      "insert into evidence(activity_id,evidence_type,status,captured_at,content_hash) values($1,'FIELD','UNDER_REVIEW',now(),$2) returning id",
+      [activity.rows[0]!.id, "suspension-race-"+suffix],
+    )).rows[0]!.id;
+    const suspender = await pool.connect();
+    const suspensionVerifier = await pool.connect();
+    let suspensionCommitted = false;
+    try {
+      await suspender.query("begin");
+      await suspender.query("update identities set suspended_at=now() where id=$1", [suspensionRaceIdentity]);
+      const pid = (await suspensionVerifier.query<{ pid: number }>("select pg_backend_pid() pid")).rows[0]!.pid;
+      const pending = suspensionVerifier.query(
+        "insert into verifications(evidence_id,activity_id,verifier_identity_id,decision,scope) values($1,$2,$3,'REJECTED','SUSPENSION_RACE')",
+        [suspensionRaceEvidence, activity.rows[0]!.id, suspensionRaceIdentity],
+      ).then(() => ({ ok: true as const }), (error: unknown) => ({ ok: false as const, error }));
+      let blocked = false;
+      for (let attempt = 0; attempt < 200; attempt += 1) {
+        const wait = await pool.query<{ wait_event_type: string | null }>("select wait_event_type from pg_stat_activity where pid=$1", [pid]);
+        if (wait.rows[0]?.wait_event_type === "Lock") { blocked = true; break; }
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      assert.equal(blocked, true, "verification insert must wait for identity suspension update");
+      await suspender.query("commit");
+      suspensionCommitted = true;
+      const result = await pending;
+      assert.equal(result.ok, false);
+      if (!result.ok) assert.match(result.error instanceof Error ? result.error.message : String(result.error), /verification requires active explicit verifier permission/);
+      await suspensionVerifier.query("rollback").catch(() => undefined);
+    } finally {
+      if (!suspensionCommitted) await suspender.query("rollback").catch(() => undefined);
+      await suspensionVerifier.query("rollback").catch(() => undefined);
+      suspender.release();
+      suspensionVerifier.release();
+    }
+
     const snapshotAfterRevocation = await pool.query<{ authorization_permissions_snapshot: string[] }>(
       "select authorization_permissions_snapshot from verifications where evidence_id=$1 and decision='APPROVED'",
       [uploaded.evidenceId],
