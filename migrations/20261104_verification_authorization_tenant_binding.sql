@@ -77,6 +77,7 @@ begin
     from public.organization_memberships m
     join public.roles r on r.id = m.role_id and r.organization_id = m.organization_id
     join public.identities i on i.id = m.identity_id
+    join public.organizations o on o.id = m.organization_id and o.status = 'VERIFIED'
    where m.identity_id = new.verifier_identity_id
      and m.organization_id = activity_organization_id
      and m.status = 'VERIFIED'
@@ -115,4 +116,4 @@ before insert or update on public.verifications
 for each row execute function public.enforce_verification_authorization();
 
 comment on function public.enforce_verification_authorization() is
-  'Requires explicit active verifier authority in the exact evidence activity organization for every decision; snapshots are captured at insert and verification rows cannot be updated.';
+  'Requires explicit active verifier authority in the exact VERIFIED evidence activity organization for every decision; snapshots are captured at insert and verification rows cannot be updated.';
