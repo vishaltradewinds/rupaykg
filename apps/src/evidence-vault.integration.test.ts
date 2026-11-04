@@ -110,6 +110,7 @@ test("evidence vault enforces tenant scope, versioned storage, integrity and ind
       rolcanlogin: boolean; rolsuper: boolean; rolbypassrls: boolean;
       owns_protected_table: boolean; has_broad_update: boolean;
       has_id_lock_columns: boolean; is_member: boolean;
+      owns_guard_functions: boolean; migrator_membership_safe: boolean;
     }>(
       `select r.rolcanlogin, r.rolsuper, r.rolbypassrls,
         exists (
@@ -130,7 +131,25 @@ test("evidence vault enforces tenant scope, versioned storage, integrity and ind
           and has_column_privilege(r.oid,'public.roles','id','UPDATE')
           and has_column_privilege(r.oid,'public.identities','id','UPDATE')
           and has_column_privilege(r.oid,'public.organizations','id','UPDATE') as has_id_lock_columns,
-        pg_has_role('rupaykg_api_verification_proof','rupaykg_verification_guard','MEMBER') as is_member
+        pg_has_role('rupaykg_api_verification_proof','rupaykg_verification_guard','MEMBER') as is_member,
+        exists (
+          select 1 from pg_proc p
+           where p.pronamespace='public'::regnamespace
+             and p.proname in ('enforce_verification_authorization','lock_organization_for_geography_scope_change')
+             and p.proowner=r.oid
+          group by p.proowner having count(*)=2
+        ) as owns_guard_functions,
+        exists (
+          select 1 from pg_auth_members m
+           where m.roleid=r.oid
+             and m.member=(select oid from pg_roles where rolname=current_user)
+             and m.admin_option and not m.set_option
+        )
+        and not exists (
+          select 1 from pg_auth_members m
+           where m.roleid=r.oid
+             and m.member<>(select oid from pg_roles where rolname=current_user)
+        ) as migrator_membership_safe
        from pg_roles r where r.rolname='rupaykg_verification_guard'`,
     );
     assert.equal(guardCatalog.rows[0]?.rolcanlogin, false);
@@ -140,6 +159,8 @@ test("evidence vault enforces tenant scope, versioned storage, integrity and ind
     assert.equal(guardCatalog.rows[0]?.has_broad_update, false);
     assert.equal(guardCatalog.rows[0]?.has_id_lock_columns, true);
     assert.equal(guardCatalog.rows[0]?.is_member, false);
+    assert.equal(guardCatalog.rows[0]?.owns_guard_functions, true);
+    assert.equal(guardCatalog.rows[0]?.migrator_membership_safe, true);
     assert.equal(await pool.query("select has_table_privilege('rupaykg_api_verification_proof','public.verifications','INSERT') as ok").then(r => r.rows[0]?.ok), true);
     assert.equal(await pool.query("select has_table_privilege('rupaykg_api_verification_proof','public.evidence','SELECT') as ok").then(r => r.rows[0]?.ok), false);
     assert.equal(await pool.query("select has_table_privilege('rupaykg_api_verification_proof','public.verifications','UPDATE') as ok").then(r => r.rows[0]?.ok), false);
