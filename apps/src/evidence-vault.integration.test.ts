@@ -434,8 +434,8 @@ test("evidence vault enforces tenant scope, versioned storage, integrity and ind
       await pool.query("update organizations set status='VERIFIED' where id=$1", [organizationId]);
     }
 
-    // Geography-scope race: adding a new root must serialize against a
-    // verification using the former root, then make that activity out of scope.
+    // Geography-scope race: replacing the existing root must serialize against
+    // a verification using the former root, then make that activity out of scope.
     const newScopeGeography = (await pool.query<{ id: string }>(
       "insert into geography(kind,name,source,source_version) values('STATE_UT',$1,'integration-test','scope-race-v1') returning id",
       ["TEST-NEW-SCOPE-GEO-" + suffix],
@@ -449,6 +449,10 @@ test("evidence vault enforces tenant scope, versioned storage, integrity and ind
     let scopeChangeCommitted = false;
     try {
       await scopeChanger.query("begin");
+      await scopeChanger.query(
+        "update organization_geography_scopes set status='PENDING' where organization_id=$1 and geography_id=$2",
+        [organizationId, geography.rows[0]!.id],
+      );
       await scopeChanger.query(
         "insert into organization_geography_scopes(organization_id,geography_id,status) values($1,$2,'VERIFIED')",
         [organizationId, newScopeGeography],
