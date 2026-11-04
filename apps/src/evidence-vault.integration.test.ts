@@ -265,6 +265,31 @@ test("evidence vault enforces tenant scope, versioned storage, integrity and ind
       /verification requires an activity within an authorized organization geography/,
     );
 
+    // A non-null activity geography is not enough: absence of any VERIFIED
+    // root for the owning organization must fail closed as well.
+    const noRootEvidence = await pool.query<{ id: string }>(
+      "insert into evidence(activity_id,evidence_type,status,captured_at,content_hash) values($1,'FIELD','UNDER_REVIEW',now(),$2) returning id",
+      [activity.rows[0]!.id, "no-verified-geography-root-" + suffix],
+    );
+    await pool.query(
+      "update organization_geography_scopes set status='PENDING' where organization_id=$1",
+      [organizationId],
+    );
+    try {
+      await assert.rejects(
+        pool.query(
+          "insert into verifications(evidence_id,activity_id,verifier_identity_id,decision,scope) values($1,$2,$3,'REJECTED','NO_VERIFIED_ROOT')",
+          [noRootEvidence.rows[0]!.id, activity.rows[0]!.id, reviewerId],
+        ),
+        /verification requires an activity within an authorized organization geography/,
+      );
+    } finally {
+      await pool.query(
+        "update organization_geography_scopes set status='VERIFIED' where organization_id=$1 and geography_id=$2",
+        [organizationId, geography.rows[0]!.id],
+      );
+    }
+
     const crossOrgReview = await app.inject({ method: "POST", url: "/api/v1/evidence-vault/"+second.evidenceId+"/review", headers: headers(crossOrgReviewerToken), payload: { decision: "REJECTED", rationale: "Cross-organization review must be denied" } });
     assert.equal(crossOrgReview.statusCode, 403, crossOrgReview.body);
 
