@@ -83,7 +83,8 @@ function validIsoDate(value: string | undefined | null): boolean {
   if (value == null) return true;
   const match = /^(\\d{4})-(\\d{2})-(\\d{2})T(\\d{2}):(\\d{2}):(\\d{2})(?:\\.(\\d{1,9}))?(Z|[+-]\\d{2}:\\d{2})$/.exec(value);
   if (!match) return false;
-  const [, yearText, monthText, dayText, hourText, minuteText, secondText, , zone] = match;
+  const [, yearText, monthText, dayText, hourText, minuteText, secondText] = match;
+  const zone = match[8] ?? "";
   const year = Number(yearText);
   const month = Number(monthText);
   const day = Number(dayText);
