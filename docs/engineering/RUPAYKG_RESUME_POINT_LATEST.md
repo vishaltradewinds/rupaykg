@@ -41,3 +41,26 @@ This section supersedes any conflicting PR #243/issue #245 status above.
 - Guardian/Hedera/Mirror Node live operational round-trip: NOT evidenced by this CI run.
 - SITE-JBP-01 Kathonda field validation: PRE-VALIDATION; field evidence not established here.
 - Production certification and TRL 9: NOT ACHIEVED.
+
+
+## 2026-11-04 refresh — CTO Run 14 (06:06 UTC onward)
+
+### MRV artifact invalidation tests
+- Exact test commit `4a8a4572a084811725eed8dd31c2c4a3f4d39eac` passed exact-head CI run #5323 (`41783246996`) with SUCCESS.
+- All configured stages passed: dependency audit, migration validation, disposable PostgreSQL migration, typecheck, production build, browser smoke, full tests including PostgreSQL acceptance, and production-container build.
+- Added integration regressions for artifact-series mutation, artifact-version insertion, independent artifact-review insertion, and immutable/append-only UPDATE/DELETE rejection.
+- Migration README documents 088, 089 and 20261022 in later commit `9bd10a7ae63ac07fe642b4044ad30383f25d71f2`. Exact-head CI #5324 (`41783404982`) is running; typecheck had started after dependency, migration validation and disposable PostgreSQL migration stages passed. Do not claim latest-docs-head CI pass until run completes.
+- PR #243 and issue #245 received the exact CI evidence.
+
+### Runtime/migrator privilege boundary finding
+Read-only source inspection of main shows one database credential contract, not demonstrated least-privilege separation:
+- `.env.example` documents only `DATABASE_URL`.
+- `apps/src/server.ts` builds the runtime pool from `DATABASE_URL`.
+- `apps/src/migrate.ts` builds the migration pool from the same `DATABASE_URL`.
+- `render.yaml` declares one `DATABASE_URL` secret, no dedicated migrator secret.
+This proves source/config does not demonstrate credential separation; it does not by itself prove the actual deployed role. Issue #196 has been updated with evidence and a safe remediation sequence. Production role membership/secret review remains required.
+
+### Production safety and release posture
+- Production remains READ-ONLY / HOLD. No production SQL writes, migrations, grants, RLS changes, deployment, merge, worker activation or certification.
+- PR #243 remains draft/unmerged. CI success on the artifact-test commit is engineering evidence only.
+- Independent DBA/security review, runtime-vs-migrator role proof, tenant isolation inventory, migration drift reconciliation, live external anchoring and Kathonda field evidence remain incomplete.
