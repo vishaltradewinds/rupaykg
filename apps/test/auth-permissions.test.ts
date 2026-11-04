@@ -42,9 +42,9 @@ describe("high-risk authorization policy", () => {
   it("uses explicit VERIFY_EVIDENCE permission instead of role-name elevation", async () => {
     const queries: Array<{ text: string; values: unknown[] }> = [];
     const client = { query: async (text: string, values: unknown[]) => { queries.push({ text, values }); return { rows: [{ ok: true }] }; } } as never;
-    assert.equal(await canVerifyEvidence(client, "identity-1", "evidence-1"), true);
+    assert.equal(await canVerifyEvidence(client, "identity-1", "evidence-1", "organization-1"), true);
     assert.equal(queries.length, 1);
     assert.doesNotMatch(queries[0]!.text, /lower\(r\.name\)/);
-    assert.deepEqual(queries[0]!.values, ["evidence-1", "identity-1", ["VERIFY_EVIDENCE", "verification:approve", "verification.approve"]]);
+    assert.match(queries[0]!.text, /om\\.organization_id = a\\.organization_id/);\n    assert.match(queries[0]!.text, /a\\.organization_id = \\$3/);\n    assert.deepEqual(queries[0]!.values, ["evidence-1", "identity-1", "organization-1", ["VERIFY_EVIDENCE", "verification:approve", "verification.approve"]]);
   });
 });
