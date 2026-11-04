@@ -88,8 +88,10 @@ declare
   activity_organization_status text;
   geography_scope_authorized boolean;
   evidence_activity_id uuid;
-  membership_row record;
-  role_row record;
+  membership_candidate record;
+  selected_membership_id uuid;
+  selected_role_id uuid;
+  selected_permissions jsonb;
   identity_row record;
 begin
   if tg_op = 'UPDATE' then
@@ -183,31 +185,60 @@ begin
   -- Fixed authorization lock order after evidence/activity/organization:
   -- membership -> role -> identity. Read each row again after acquiring its
   -- lock so concurrent revocation, reassignment, or suspension fails closed.
-  select m.id, m.role_id, m.status
-    into membership_row
-    from public.organization_memberships m
-   where m.identity_id = new.verifier_identity_id
-     and m.organization_id = activity_organization_id
-   order by m.created_at desc, m.id desc
-   limit 1
-   for share;
+  -- An identity may hold multiple roles in one organization. Consider
+  -- every active membership with a candidate verifier permission in stable
+  -- order, then lock and re-check each membership and role before selecting it.
+  -- A newer non-verifier role must not mask another valid active verifier role.
+  for membership_candidate in
+    select m.id
+      from public.organization_memberships m
+      join public.roles r
+        on r.id = m.role_id
+       and r.organization_id = m.organization_id
+     where m.identity_id = new.verifier_identity_id
+       and m.organization_id = activity_organization_id
+       and m.status = 'VERIFIED'
+       and (
+         r.permissions @> '["VERIFY_EVIDENCE"]'::jsonb
+         or r.permissions @> '["verification:approve"]'::jsonb
+         or r.permissions @> '["verification.approve"]'::jsonb
+       )
+     order by m.created_at desc, m.id desc
+  loop
+    select m.id, m.role_id
+      into selected_membership_id, selected_role_id
+      from public.organization_memberships m
+     where m.id = membership_candidate.id
+       and m.identity_id = new.verifier_identity_id
+       and m.organization_id = activity_organization_id
+       and m.status = 'VERIFIED'
+     for share;
 
-  if membership_row.id is null or membership_row.status <> 'VERIFIED' then
-    raise exception 'verification requires active explicit verifier permission in the activity organization';
-  end if;
+    if selected_membership_id is null then
+      continue;
+    end if;
 
-  select r.permissions
-    into role_row
-    from public.roles r
-   where r.id = membership_row.role_id
-     and r.organization_id = activity_organization_id
-   for share;
+    select r.permissions
+      into selected_permissions
+      from public.roles r
+     where r.id = selected_role_id
+       and r.organization_id = activity_organization_id
+     for share;
 
-  if role_row.permissions is null or not (
-       role_row.permissions @> '["VERIFY_EVIDENCE"]'::jsonb
-       or role_row.permissions @> '["verification:approve"]'::jsonb
-       or role_row.permissions @> '["verification.approve"]'::jsonb
-     ) then
+    if selected_permissions is not null and (
+         selected_permissions @> '["VERIFY_EVIDENCE"]'::jsonb
+         or selected_permissions @> '["verification:approve"]'::jsonb
+         or selected_permissions @> '["verification.approve"]'::jsonb
+       ) then
+      exit;
+    end if;
+
+    selected_membership_id := null;
+    selected_role_id := null;
+    selected_permissions := null;
+  end loop;
+
+  if selected_membership_id is null then
     raise exception 'verification requires active explicit verifier permission in the activity organization';
   end if;
 
@@ -223,9 +254,9 @@ begin
 
   -- Never accept client-supplied authorization provenance. Capture the exact
   -- membership, role and permission set used by this decision.
-  new.authorization_membership_id := membership_row.id;
-  new.authorization_role_id := membership_row.role_id;
-  new.authorization_permissions_snapshot := role_row.permissions;
+  new.authorization_membership_id := selected_membership_id;
+  new.authorization_role_id := selected_role_id;
+  new.authorization_permissions_snapshot := selected_permissions;
   new.authorization_checked_at := clock_timestamp();
 
   return new;
