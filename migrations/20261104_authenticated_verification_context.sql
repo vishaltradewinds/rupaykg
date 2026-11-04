@@ -48,6 +48,11 @@ GRANT UPDATE (id) ON public.identity_sessions,public.identities,
   public.evidence,public.activities,public.roles,
   public.geography,public.organization_geography_scopes
   TO rupaykg_auth_context_owner;
+-- The existing INVOKER geography helper uses unqualified public table names.
+-- Pin its own path (including pg_temp last) so the SECURITY DEFINER caller's
+-- pg_catalog-only path does not break it and temporary relations cannot shadow it.
+ALTER FUNCTION public.organization_has_geography_scope(uuid,uuid)
+  SET search_path = pg_catalog, public, pg_temp;
 GRANT EXECUTE ON FUNCTION public.organization_has_geography_scope(uuid,uuid)
   TO rupaykg_auth_context_owner;
 
