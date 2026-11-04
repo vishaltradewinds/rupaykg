@@ -53,7 +53,7 @@ begin
     into activity_actor, activity_organization_id
     from public.activities a
    where a.id = resolved_activity_id
-   for key share;
+   for share;
 
   if activity_organization_id is null then
     raise exception 'verification requires an activity with an organization';
