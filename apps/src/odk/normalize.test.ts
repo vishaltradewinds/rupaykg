@@ -57,10 +57,11 @@ test("rejects path traversal filenames, unsupported media, oversized and mismatc
 test("rejects duplicate attachment filenames and aggregate payloads over 10 MiB", () => {
   const one = { metadata: { filename: "same.pdf", contentType: "application/pdf" }, bytes: pdf };
   assert.deepEqual(normalizeOdkSubmission(config, submission, [one, one]), { ok: false, code: "ODK_ATTACHMENT_DUPLICATE_FILENAME" });
-  const large = Buffer.from("%PDF-" + "x".repeat(5 * 1024 * 1024 - 5));
+  const large = Buffer.from("%PDF-" + "x".repeat(4 * 1024 * 1024 - 5));
   const tooLarge = normalizeOdkSubmission(config, submission, [
     { metadata: { filename: "a.pdf", contentType: "application/pdf" }, bytes: large },
-    { metadata: { filename: "b.pdf", contentType: "application/pdf" }, bytes: large }
+    { metadata: { filename: "b.pdf", contentType: "application/pdf" }, bytes: large },
+    { metadata: { filename: "c.pdf", contentType: "application/pdf" }, bytes: large }
   ]);
   assert.deepEqual(tooLarge, { ok: false, code: "ODK_SUBMISSION_ATTACHMENT_SIZE_LIMIT" });
 });
