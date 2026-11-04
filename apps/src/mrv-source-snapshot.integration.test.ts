@@ -150,7 +150,6 @@ test("MRV source snapshots are immutable, idempotent and require explicit correc
     // activity revision; UPDATE/DELETE must fail at their immutable-table guards.
     const artifactBytes = Buffer.from("artifact revision regression fixture");
     const artifactSha256 = createHash("sha256").update(artifactBytes).digest("hex");
-    const artifactVersionId = randomBytes(16).toString("hex");
     await pool.query(
       "update evidence set content_uri=$2,content_hash=$3 where id=$1",
       [evidence.rows[0]!.id, "db://evidence-vault/pending-" + suffix, artifactSha256],
