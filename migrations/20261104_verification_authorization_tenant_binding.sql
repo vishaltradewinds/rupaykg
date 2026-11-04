@@ -164,7 +164,7 @@ begin
    where i.id = new.verifier_identity_id
    for share;
 
-  if identity_row.status <> 'VERIFIED' or identity_row.suspended_at is not null then
+  if identity_row.status is distinct from 'VERIFIED' or identity_row.suspended_at is not null then
     raise exception 'verification requires active explicit verifier permission in the activity organization';
   end if;
 
