@@ -11,6 +11,8 @@ test("verification SECURITY DEFINER guard runs under a NOLOGIN non-owner role wi
   const schema = "guard_proto_" + suffix;
   const guardRole = "guard_proto_" + suffix;
   const apiRole = "api_proto_" + suffix;
+  const apiPassword = randomBytes(24).toString("hex");
+  let apiPool: Pool | undefined;
   const q = (value: string) => '"' + value.replace(/"/g, '""') + '"';
   const s = q(schema);
   const guard = q(guardRole);
@@ -21,7 +23,7 @@ test("verification SECURITY DEFINER guard runs under a NOLOGIN non-owner role wi
   try {
     await pool.query(`create role ${guard} nologin nosuperuser nobypassrls nocreatedb nocreaterole noreplication`);
     createdGuard = true;
-    await pool.query(`create role ${api} nologin nosuperuser nobypassrls nocreatedb nocreaterole noreplication`);
+    await pool.query(`create role ${api} login nosuperuser nobypassrls nocreatedb nocreaterole noreplication password '${apiPassword}'`);
     createdApi = true;
     await pool.query(`create schema ${s}`);
     await pool.query(`grant usage on schema ${s} to ${guard}, ${api}`);
@@ -212,6 +214,11 @@ test("verification SECURITY DEFINER guard runs under a NOLOGIN non-owner role wi
     await pool.query(`revoke all on function ${s}.enforce_verification_authorization() from public, ${api}`);
     await pool.query(`create trigger verification_guard before insert or update on ${s}.verifications for each row execute function ${s}.enforce_verification_authorization()`);
     await pool.query(`grant insert, select on ${s}.verifications to ${api}`);
+    await pool.query(`grant select on ${s}.evidence to ${api}`);
+    const apiUrl = new URL(process.env.DATABASE_URL!);
+    apiUrl.username = apiRole;
+    apiUrl.password = apiPassword;
+    apiPool = new Pool({ connectionString: apiUrl.toString(), max: 4, ssl: false });
 
     const orgA = randomBytes(16).toString("hex").match(/.{1,8}/g)!.join("-");
     const orgB = randomBytes(16).toString("hex").match(/.{1,8}/g)!.join("-");
@@ -300,11 +307,14 @@ test("verification SECURITY DEFINER guard runs under a NOLOGIN non-owner role wi
       guardCheck.release();
     }
 
-    const apiClient = await pool.connect();
+    const apiClient = await apiPool!.connect();
     try {
-      await apiClient.query(`set role ${api}`);
+      const loginIdentity = await apiClient.query<{ current_user: string }>("select current_user");
+      assert.equal(loginIdentity.rows[0]?.current_user, apiRole, "requests must use the actual non-owner API login");
+      await apiClient.query("select set_config('rupaykg_guard.evidence_id',$1,false)", [evidenceA]);
+      const spoofedRead = await apiClient.query(`select count(*)::int as n from ${s}.evidence`);
+      assert.equal(spoofedRead.rows[0]!.n, 0, "API-supplied guard GUCs must not bypass policies targeted only to the guard role");
       await assert.rejects(apiClient.query(`set role ${guard}`), /permission denied to set role/);
-      await assert.rejects(apiClient.query(`select * from ${s}.evidence`), /permission denied/);
       const allowed = await apiClient.query<{ authorization_membership_id: string; authorization_role_id: string; authorization_permissions_snapshot: string[] }>(
         `insert into ${s}.verifications(evidence_id,verifier_identity_id,decision) values ($1,$2,'APPROVED') returning authorization_membership_id,authorization_role_id,authorization_permissions_snapshot`,
         [evidenceA, identity],
@@ -312,6 +322,10 @@ test("verification SECURITY DEFINER guard runs under a NOLOGIN non-owner role wi
       assert.equal(allowed.rows[0]?.authorization_membership_id, membership);
       assert.equal(allowed.rows[0]?.authorization_role_id, roleId);
       assert.deepEqual(allowed.rows[0]?.authorization_permissions_snapshot, ["VERIFY_EVIDENCE"]);
+      const restoredGuc = await apiClient.query<{ value: string }>("select current_setting('rupaykg_guard.evidence_id', true) as value");
+      assert.equal(restoredGuc.rows[0]?.value, evidenceA, "the trigger must restore caller GUC state after its scoped checks");
+      const stillHidden = await apiClient.query(`select count(*)::int as n from ${s}.evidence`);
+      assert.equal(stillHidden.rows[0]!.n, 0, "restored caller GUC must not reveal evidence to the API role");
       await assert.rejects(
         apiClient.query(`insert into ${s}.verifications(evidence_id,verifier_identity_id,decision) values ($1,$2,'REJECTED')`, [evidenceB, identity]),
         /verification requires active explicit verifier permission/,
@@ -326,7 +340,7 @@ test("verification SECURITY DEFINER guard runs under a NOLOGIN non-owner role wi
       );
       await assert.rejects(
         apiClient.query(`insert into ${s}.verifications(evidence_id,verifier_identity_id,decision) values ($1,$2,'REJECTED')`, [suspendedEvidence, suspendedIdentity]),
-        /verification requires active explicit verifier permission/,
+        /verification requires an active non-suspended identity/,
       );
       await assert.rejects(apiClient.query(`update ${s}.verifications set decision='REJECTED'`), /permission denied/);
       await assert.rejects(apiClient.query(`delete from ${s}.verifications`), /permission denied/);
@@ -339,12 +353,13 @@ test("verification SECURITY DEFINER guard runs under a NOLOGIN non-owner role wi
     // Revocation race through the actual non-owner API role. The guard's row
     // lock must serialize the decision after the role permission update.
     const revoker = await pool.connect();
-    const apiRace = await pool.connect();
+    const apiRace = await apiPool!.connect();
     let committed = false;
     try {
       await revoker.query("begin");
       await revoker.query(`update ${s}.roles set permissions='[]'::jsonb where id=$1`, [roleId]);
-      await apiRace.query(`set role ${api}`);
+      const raceLogin = await apiRace.query<{ current_user: string }>("select current_user");
+      assert.equal(raceLogin.rows[0]?.current_user, apiRole);
       const pid = (await apiRace.query<{ pid: number }>("select pg_backend_pid() as pid")).rows[0]!.pid;
       const pending = apiRace.query(
         `insert into ${s}.verifications(evidence_id,verifier_identity_id,decision) values ($1,$2,'REJECTED')`,
@@ -369,6 +384,7 @@ test("verification SECURITY DEFINER guard runs under a NOLOGIN non-owner role wi
       apiRace.release();
     }
   } finally {
+    await apiPool?.end().catch(() => undefined);
     await pool.query(`drop schema if exists ${s} cascade`).catch(() => undefined);
     if (createdApi) await pool.query(`drop role if exists ${api}`).catch(() => undefined);
     if (createdGuard) await pool.query(`drop role if exists ${guard}`).catch(() => undefined);
