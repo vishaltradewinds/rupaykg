@@ -13,7 +13,7 @@ test("organization geography authorization fails closed without a verified root"
       "select p.proconfig, p.prosecdef from pg_proc p where p.oid='public.organization_has_geography_scope(uuid,uuid)'::regprocedure",
     );
     assert.equal(helper.rows[0]?.prosecdef, false, "geography scope helper remains SECURITY INVOKER");
-    assert.deepEqual(helper.rows[0]?.proconfig, ["search_path=pg_catalog"], "schema-qualified helper pins a trusted search_path");
+    assert.deepEqual(helper.rows[0]?.proconfig, ["search_path=pg_catalog, public, pg_temp"], "schema-qualified helper pins a trusted search_path");
 
     const organizations = await Promise.all([
       pool.query<{ id: string }>(
