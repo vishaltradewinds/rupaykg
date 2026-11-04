@@ -290,3 +290,28 @@ This proves source/config does not demonstrate credential separation; it does no
 3. Review DELETE privileges and immutable provenance under actual non-owner runtime role; update RLS/policy matrix and exact route/data map.
 4. Resolve geography fail-open behavior in the broader tenant-isolation programme, not by silently widening this focused PR.
 5. Keep PR #247 draft/unmerged and production READ-ONLY / HOLD until independent review and explicit approval. No production/staging writes, DDL, migration, function/trigger, role/grant/RLS change, deployment, worker activation or certification. TRL 9 NOT ACHIEVED.
+
+
+## 2026-11-04 authoritative refresh — CTO Run 23 (verification revocation race assurance)
+
+### PR #247 exact-head CI success with concurrency regression
+- Latest PR #247 head `39ecdb1e373a4ffcc80c1465cfc6d42bfd10482f` passed exact-head CI #5357 (`41789402772`) end-to-end: dependency audit, migration validation, disposable PostgreSQL migration, typecheck, production build, browser smoke, full PostgreSQL acceptance tests, production-container build and cleanup.
+- Added two-session PostgreSQL race test: session 1 locks and revokes `VERIFY_EVIDENCE` from the exact organization role; session 2 starts verification insert and is observed waiting on a PostgreSQL lock; session 1 commits; session 2 resumes and rejects the insert after permission re-evaluation. The previously approved verification's captured permission snapshot remains unchanged after role mutation.
+- This proves the tested role-permission revocation serialization case in disposable PostgreSQL. Identity suspension and membership revocation race variants, lock-order/deadlock behaviour and non-owner runtime-role proof remain open.
+- PR #247 remains OPEN / DRAFT / UNMERGED. Migration `20261104_verification_authorization_tenant_binding.sql` is candidate-only and has not been applied to any database.
+
+### PR #244 documentation handoff exact-head CI success
+- Latest PR #244 head `c15536707d3326156286b89bcea2b84d3a228a51` passed exact-head CI #5356 (`41789332489`) end-to-end. PR #244 remains draft/unmerged.
+
+### Remaining assurance limits
+- The new verification trigger is SECURITY INVOKER, with explicit safe search_path and row locks; actual non-owner runtime privileges/grants still need to be tested.
+- It rejects UPDATE to verification rows, but table-owner DELETE/tamper resistance is not solved by this migration alone; runtime grants, audit chain and independent DB-owner separation remain required.
+- Geography scope fail-open when no verified scope exists remains a separate issue #215 / tenant-isolation blocker; this PR's route helper requires non-null geography and calls the existing scope function, but it does not change the global geography function.
+- Migration was tested on a fresh disposable schema. A separate production-like disposable schema test with the four recovered 096 columns and both existing triggers preinstalled is still required before independent DBA review.
+
+### Next batch
+1. Add two-session identity suspension and membership revocation race tests; review lock ordering and deadlock/timeout handling.
+2. Test migration idempotency against a production-like schema with 096 columns and both historical triggers already present; prove exactly one authoritative trigger remains.
+3. Test under an intended non-owner runtime role, including function EXECUTE, table SELECT/INSERT/UPDATE and trigger execution privileges; explicitly prove DELETE restrictions/compensating audit controls.
+4. Complete 67-table policy matrix and geography fail-closed design separately.
+5. Keep PRs draft/unmerged and production READ-ONLY / HOLD until independent DBA/security review and explicit approval. No production/staging writes, migrations, function/trigger, role/grant/RLS changes, deployments, worker activation or certification. TRL 9 NOT ACHIEVED.
