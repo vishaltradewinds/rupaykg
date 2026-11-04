@@ -198,4 +198,32 @@ describe("registry and settlement runtime acceptance", () => {
     const retiredSettlement = await request("/api/v1/settlements", { method: "POST", body: JSON.stringify({ credentialId, payerId: destinationOrgId, payeeId: ownerOrgId, amount: 1, currency: "INR" }) }, actorToken, destinationOrgId); assert.equal(retiredSettlement.status, 409); assert.equal((await body(retiredSettlement)).code, "CREDENTIAL_RETIRED");
     const state = await pool.query<{ status: string }>("select status from credentials where id=$1", [credentialId]); assert.equal(state.rows[0]?.status, "RETIRED");
   });
+  it("denies BWG workspace data to a verified member without reports:read", async () => {
+    if (!pool) return;
+    const response = await request("/api/v1/workspaces/bwg", {}, actorToken, ownerOrgId);
+    assert.equal(response.status, 403);
+    assert.equal((await body(response)).code, "BWG_WORKSPACE_READ_FORBIDDEN");
+  });
+
+  it("allows BWG workspace data only after reports:read is granted", async () => {
+    if (!pool) return;
+    const roleId = (await pool.query<{ id: string }>(
+      "insert into roles(organization_id,name,permissions) values($1,$2,$3::jsonb) returning id",
+      [ownerOrgId, `BWG-READER-${suffix}`, JSON.stringify(["reports:read"])],
+    )).rows[0]!.id;
+    const identityId = (await pool.query<{ id: string }>(
+      "insert into identities(external_subject,display_name) values($1,$2) returning id",
+      [`runtime-bwg-reader-${suffix}`, "BWG Reader"],
+    )).rows[0]!.id;
+    const readerToken = token();
+    await pool.query("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED')", [identityId, ownerOrgId, roleId]);
+    await pool.query("insert into identity_sessions(identity_id,expires_at,token_hash) values($1,now()+interval '1 hour',$2)", [identityId, hash(readerToken)]);
+    const response = await request("/api/v1/workspaces/bwg", {}, readerToken, ownerOrgId);
+    assert.equal(response.status, 200);
+    const payload = await body(response);
+    assert.ok(payload.data);
+    assert.ok(Array.isArray(payload.data.profiles));
+    assert.ok(Array.isArray(payload.data.periods));
+  });
+
 });
