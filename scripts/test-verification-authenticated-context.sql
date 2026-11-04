@@ -33,7 +33,7 @@ VALUES (true, decode(repeat('5a',32),'hex'));
 
 GRANT USAGE ON SCHEMA public TO rupaykg_context_owner,rupaykg_context_api;
 GRANT SELECT ON public.identity_sessions,public.identities,
-  public.organization_memberships,public.organizations
+  public.organization_memberships,public.organizations,public.activities
   TO rupaykg_context_owner;
 GRANT SELECT ON public.evidence,public.activities,public.organization_memberships,
   public.roles,public.identities,public.geography,public.organization_geography_scopes
@@ -303,10 +303,30 @@ BEGIN
 END;
 $spoof$;
 DO $insert_spoof$
+DECLARE
+  v_evidence uuid;
+  v_activity uuid;
+  v_verifier uuid;
 BEGIN
+  SELECT e.id,a.id,i.id INTO v_evidence,v_activity,v_verifier
+    FROM public.evidence e
+    JOIN public.activities a ON a.id=e.activity_id
+    JOIN public.identities i ON i.external_subject='ci-authctx-verifier-b'
+   WHERE e.evidence_type='CI_AUTHCTX_EVIDENCE'
+     AND a.organization_id=public.rupaykg_authenticated_organization();
+  -- The forged context is invalid, so authenticated_organization is NULL.
+  IF v_evidence IS NOT NULL THEN
+    RAISE EXCEPTION 'invalid GUC unexpectedly resolved a tenant';
+  END IF;
+  SELECT e.id,a.id,i.id INTO v_evidence,v_activity,v_verifier
+    FROM public.evidence e
+    JOIN public.activities a ON a.id=e.activity_id
+    JOIN public.identities i ON i.external_subject='ci-authctx-verifier-b'
+   WHERE e.evidence_type='CI_AUTHCTX_EVIDENCE'
+   ORDER BY e.id DESC LIMIT 1;
   BEGIN
     INSERT INTO public.verifications(evidence_id,activity_id,verifier_identity_id,decision,scope,rationale)
-    VALUES (:'evidence_b',:'activity_b',:'verifier_b','APPROVED','CI_AUTHCTX_SPOOF','Must reject forged GUC');
+    VALUES (v_evidence,v_activity,v_verifier,'APPROVED','CI_AUTHCTX_SPOOF','Must reject forged GUC');
     RAISE EXCEPTION 'caller-forged context unexpectedly inserted a verification';
   EXCEPTION WHEN raise_exception THEN
     IF SQLERRM = 'caller-forged context unexpectedly inserted a verification' THEN RAISE; END IF;
@@ -320,13 +340,13 @@ COMMIT;
 UPDATE public.identity_sessions s SET revoked_at=now()
 FROM public.identities i
 WHERE s.identity_id=i.id AND i.external_subject='ci-authctx-verifier-a';
-BEGIN;
-SET ROLE rupaykg_context_api;
 DO $revoked$
+DECLARE
+  v_org uuid;
 BEGIN
+  SELECT id INTO v_org FROM public.organizations WHERE name='CI-AUTHCTX-ORG-A';
   BEGIN
-    PERFORM public.rupaykg_set_authenticated_context('ci-authctx-valid-token-a',
-      (SELECT id FROM public.organizations WHERE name='CI-AUTHCTX-ORG-A'));
+    PERFORM public.rupaykg_set_authenticated_context('ci-authctx-valid-token-a',v_org);
     RAISE EXCEPTION 'revoked bearer session unexpectedly accepted';
   EXCEPTION WHEN raise_exception THEN
     IF SQLERRM = 'revoked bearer session unexpectedly accepted' THEN RAISE; END IF;
@@ -334,7 +354,7 @@ BEGIN
   END;
 END;
 $revoked$;
-COMMIT;
+
 
 RESET ROLE;
 DROP TRIGGER aaa_rupaykg_authenticated_verifier_guard ON public.verifications;
@@ -343,8 +363,8 @@ DROP FUNCTION public.rupaykg_set_authenticated_context(text,uuid);
 DROP FUNCTION public.rupaykg_authenticated_identity();
 DROP FUNCTION public.rupaykg_authenticated_organization();
 DROP FUNCTION public.rupaykg_context_is_valid();
+DROP SCHEMA rupaykg_private CASCADE;
 DROP OWNED BY rupaykg_context_owner;
 DROP OWNED BY rupaykg_context_api;
-DROP SCHEMA rupaykg_private CASCADE;
 DROP ROLE rupaykg_context_owner;
 DROP ROLE rupaykg_context_api;
