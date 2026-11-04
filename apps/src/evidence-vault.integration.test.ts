@@ -323,7 +323,7 @@ test("evidence vault enforces tenant scope, versioned storage, integrity and ind
       await membershipRevoker.query("commit");
       membershipChangeCommitted = true;
       const result = await pending;
-      assert.equal(result.ok, false, "verification must fail after the concurrent membership/identity/organization/scope change commits");
+      assert.equal(result.ok, false, "verification must fail after membership deactivation commits");
       if (!result.ok) assert.match(result.error instanceof Error ? result.error.message : String(result.error), /verification requires active explicit verifier permission/);
       await membershipVerifier.query("rollback").catch(() => undefined);
     } finally {
