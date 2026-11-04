@@ -21,7 +21,7 @@ before(async () => {
     const geography = (await c.query<{ id: string }>("insert into geography(kind,code,name,source) values('DISTRICT',$1,$2,'test') returning id", [`SETTLEMENT-GUARD-${suffix}`, `Settlement Guard District ${suffix}`])).rows[0]!.id;
     await c.query("insert into organization_geography_scopes(organization_id,geography_id,status) values($1,$2,'VERIFIED')", [owner, geography]);
     const actor = (await c.query<{ id: string }>("insert into identities(external_subject,display_name,status) values($1,$2,'VERIFIED') returning id", [`settlement-guard-actor-${suffix}`, "Settlement Guard Actor"])).rows[0]!.id;
-    const verifier = (await c.query<{ id: string }>("insert into identities(external_subject,display_name) values($1,$2) returning id", [`settlement-guard-verifier-${suffix}`, "Settlement Guard Independent Verifier"])).rows[0]!.id;
+    const verifier = (await c.query<{ id: string }>("insert into identities(external_subject,display_name,status) values($1,$2,'VERIFIED') returning id", [`settlement-guard-verifier-${suffix}`, "Settlement Guard Independent Verifier"])).rows[0]!.id;
     const verifierRole = (await c.query<{ id: string }>("insert into roles(organization_id,name,permissions) values($1,$2,$3::jsonb) returning id", [owner, `settlement-guard-verifier-role-${suffix}`, JSON.stringify(["VERIFY_EVIDENCE", "ISSUE_CREDENTIAL"])] )).rows[0]!.id;
     await c.query("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED')", [verifier, owner, verifierRole]);
     await c.query("insert into identity_sessions(identity_id,expires_at,token_hash) values($1,now()+interval '1 hour',$2)", [verifier, hashToken(verifierToken)]);
