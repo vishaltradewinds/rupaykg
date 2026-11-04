@@ -91,6 +91,10 @@ test("evidence vault enforces tenant scope, versioned storage, integrity and ind
     assert.deepEqual(download.rawPayload, bytes);
     assert.equal(download.headers["x-evidence-sha256"], uploaded.sha256);
 
+    const outsiderDownload = await app.inject({ method: "GET", url: "/api/v1/evidence-vault/"+uploaded.evidenceId, headers: headers(outsiderToken, otherOrg.rows[0]!.id) });
+    assert.equal(outsiderDownload.statusCode, 404, outsiderDownload.body);
+    assert.equal(outsiderDownload.json().code, "EVIDENCE_NOT_FOUND");
+
     const selfReview = await app.inject({ method: "POST", url: "/api/v1/evidence-vault/"+uploaded.evidenceId+"/review", headers: headers(uploaderToken), payload: { decision: "APPROVED", rationale: "Self review must be blocked" } });
     assert.equal(selfReview.statusCode, 403, selfReview.body);
 
