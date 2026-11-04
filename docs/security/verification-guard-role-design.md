@@ -44,7 +44,7 @@ The integration test runs after the repository's active migrations have been app
 
 - one authoritative verification trigger replaces both historical trigger names;
 - a non-owner API proof role can insert a valid decision through the SECURITY DEFINER trigger without direct SELECT on evidence;
-- the decision captures membership, role, permission snapshot and timestamp;
+- the decision captures membership, role, permission snapshot and timestamp, including a regression where the verifier has a newer review-only membership and a separate older active verifier role;
 - the API proof role has no UPDATE, DELETE or TRUNCATE privilege on verification decisions;
 - the helper role is NOLOGIN/NOBYPASSRLS, does not own protected tables, has only the required column-scoped lock privileges, and cannot be assumed by the API proof role;
 - concurrent role permission revocation, membership deactivation, identity suspension, organization status change and geography-scope mutation serialize with verification and fail closed after the competing change commits. The first full-schema run exposed a fixture error: it added a second valid geography root without revoking the original root, so the activity correctly remained in scope. The fixture now revokes the old root and inserts the replacement before asserting denial.
