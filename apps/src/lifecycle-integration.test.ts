@@ -20,6 +20,8 @@ test("production lifecycle integration gate", { skip: !url }, async () => {
     await c.query("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED')", [verifier, org, role]);
 
     const activity = (await c.query("insert into activities(organization_id,actor_identity_id,geography_id,activity_type,status) values($1,$2,$3,'COLLECTION','SUBMITTED') returning id", [org, actor, geography])).rows[0].id;
+    const persistedActor = await c.query("select actor_identity_id from activities where id=$1", [activity]);
+    assert.equal(persistedActor.rows[0]?.actor_identity_id, actor, "lifecycle fixture must persist the activity actor used by self-approval guard");
     const evidence = (await c.query("insert into evidence(activity_id,evidence_type,status,captured_at,content_hash) values($1,'FIELD','UNDER_REVIEW',now(),'integration') returning id", [activity])).rows[0].id;
     await reject(c, () => c.query("insert into verifications(evidence_id,activity_id,verifier_identity_id,decision,scope) values($1,$2,$3,'APPROVED','integration')", [evidence, activity, actor]), /self-approve/);
     const verification = (await c.query("insert into verifications(evidence_id,activity_id,verifier_identity_id,decision,scope) values($1,$2,$3,'APPROVED','integration') returning id", [evidence, activity, verifier])).rows[0].id;
