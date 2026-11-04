@@ -281,7 +281,7 @@ test("evidence vault enforces tenant scope, versioned storage, integrity and ind
       await revoker.query("commit");
       revocationCommitted = true;
       const raced = await pendingDecision;
-      assert.equal(raced.ok, false);
+      assert.equal(raced.ok, false, "verification must fail after role permission revocation commits");
       if (!raced.ok) assert.match(raced.error instanceof Error ? raced.error.message : String(raced.error), /verification requires active explicit verifier permission in the activity organization/);
       await verifier.query("rollback").catch(() => undefined);
     } finally {
@@ -323,7 +323,7 @@ test("evidence vault enforces tenant scope, versioned storage, integrity and ind
       await membershipRevoker.query("commit");
       membershipChangeCommitted = true;
       const result = await pending;
-      assert.equal(result.ok, false);
+      assert.equal(result.ok, false, "verification must fail after the concurrent membership/identity/organization/scope change commits");
       if (!result.ok) assert.match(result.error instanceof Error ? result.error.message : String(result.error), /verification requires active explicit verifier permission/);
       await membershipVerifier.query("rollback").catch(() => undefined);
     } finally {
