@@ -121,3 +121,11 @@
 - PR #247 remains draft/unmerged; candidate migration unapplied. Remaining: production-like schema rehearsal with 096 columns/triggers, non-owner runtime role grants, lock-order/deadlock review, geography fail-closed, deletion/tamper controls and independent DBA/security review.
 - PR #244 exact latest head `ff6872c1f90c0964bd9c1e31cbeb1adbf96410a3` passed CI #5359 (`41789805891`) end-to-end.
 - Updated canonical resume point. Production remains READ-ONLY / HOLD. No production/staging writes, migration, role/grant/RLS/function/trigger changes, deployment, worker activation or certification. TRL 9 NOT ACHIEVED.
+
+
+## 2026-11-04 — CTO Run 25 (verification migration reapplication rehearsal)
+- PR #247 head `c03e70b1f7a67f381479e4d63eed96b2d5c5f3c4` passed CI #5364 (`41790629910`) end-to-end, including disposable migration reapplication with pre-existing snapshot columns and both historical trigger names. Test asserts exactly one canonical verification trigger remains.
+- Three two-session role-permission, membership-deactivation and identity-suspension races remain green.
+- Documented critical least-privilege constraint: SECURITY INVOKER `SELECT ... FOR SHARE` requires UPDATE privilege on at least one column of each locked table. Do not grant broad UPDATE to API runtime. A narrow guard execution role or coordinated advisory-lock design must be reviewed/tested under FORCE RLS and non-owner runtime. Updated issues #196 and #215.
+- PR #247 remains draft/unmerged; candidate migration unapplied. PR #244 exact head `91554b8cc62b194388fe4bd01b27e259a835e372` passed CI #5362.
+- Production remains READ-ONLY / HOLD. No production/staging writes, migrations, role/grant/RLS/function/trigger changes, deployment, worker activation or certification. TRL 9 NOT ACHIEVED.
