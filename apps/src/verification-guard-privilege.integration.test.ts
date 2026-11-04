@@ -279,8 +279,12 @@ test("verification SECURITY DEFINER guard runs under a NOLOGIN non-owner role wi
       const mutation = await guardCheck.query<{ id: string }>(
         `update ${s}.evidence set id=$2 where id=$1 returning id`,
         [evidenceA, orgB],
+      ).then(
+        result => ({ rowCount: result.rowCount ?? 0, code: null as string | null }),
+        error => ({ rowCount: 0, code: (error as { code?: string }).code ?? "UNKNOWN" }),
       );
       assert.equal(mutation.rowCount, 0, "RLS must prevent the guard from changing the evidence identifier");
+      if (mutation.code !== null) assert.equal(mutation.code, "42501");
       const unchanged = await guardCheck.query(`select id from ${s}.evidence where id=$1`, [evidenceA]);
       assert.equal(unchanged.rowCount, 1, "the exact evidence row must remain unchanged");
       const hiddenOther = await guardCheck.query(`select count(*)::int as n from ${s}.evidence where id=$1`, [evidenceB]);
