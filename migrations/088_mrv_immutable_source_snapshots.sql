@@ -1,0 +1,326 @@
+-- Versioned, immutable MRV source snapshots.
+-- Corrections create a new snapshot linked to the previous one; prior snapshots are never overwritten.
+
+create table mrv_source_snapshots (
+  id uuid primary key default gen_random_uuid(),
+  activity_id uuid not null references activities(id),
+  verification_id uuid not null references verifications(id),
+  evidence_id uuid not null references evidence(id),
+  guardian_policy_id text not null,
+  methodology_code text,
+  snapshot_version integer not null check (snapshot_version > 0),
+  source_digest text not null check (source_digest ~ '^[0-9a-f]{64}$'),
+  source_payload jsonb not null,
+  supersedes_snapshot_id uuid references mrv_source_snapshots(id) on delete restrict,
+  correction_reason text,
+  created_by_identity_id uuid not null references identities(id),
+  created_at timestamptz not null default now(),
+  unique(activity_id, snapshot_version),
+  check (
+    (snapshot_version = 1 and supersedes_snapshot_id is null and correction_reason is null)
+    or
+    (snapshot_version > 1 and supersedes_snapshot_id is not null and correction_reason is not null and length(btrim(correction_reason)) between 10 and 2000)
+  )
+);
+
+-- PostgreSQL jsonb text is the single canonical serialization contract.
+-- The application asks PostgreSQL for this digest; the INSERT trigger independently
+-- recomputes it so a forged caller-supplied digest cannot be persisted.
+create or replace function mrv_source_snapshot_digest(payload jsonb)
+returns text language sql immutable strict parallel safe as $$
+  select encode(digest(convert_to(payload::text, 'UTF8'), 'sha256'), 'hex');
+$$;
+
+create or replace function validate_mrv_source_snapshot_digest()
+returns trigger language plpgsql as $$
+begin
+  if new.source_digest is distinct from mrv_source_snapshot_digest(new.source_payload) then
+    raise exception 'MRV_SOURCE_SNAPSHOT_DIGEST_MISMATCH';
+  end if;
+  if new.source_payload->>'methodologyCode' is distinct from new.methodology_code then
+    raise exception 'MRV_SOURCE_SNAPSHOT_METHODOLOGY_BINDING_INVALID';
+  end if;
+  return new;
+end;
+$$;
+
+create trigger mrv_source_snapshots_validate_digest
+before insert on mrv_source_snapshots
+for each row execute function validate_mrv_source_snapshot_digest();
+
+-- A row-level UPDATE/DELETE trigger does not intercept TRUNCATE.
+create or replace function prevent_mrv_source_snapshot_truncate()
+returns trigger language plpgsql as $$
+begin
+  raise exception 'MRV source snapshots cannot be truncated';
+end;
+$$;
+
+create trigger mrv_source_snapshots_no_truncate
+before truncate on mrv_source_snapshots
+for each statement execute function prevent_mrv_source_snapshot_truncate();
+
+create or replace function validate_mrv_source_snapshot_lineage()
+returns trigger language plpgsql as $$
+declare
+  prior_snapshot mrv_source_snapshots%rowtype;
+  activity_ok boolean;
+begin
+  if new.source_payload->>'schema' is distinct from 'rupaykg:mrv-source-snapshot:v1'
+     or new.source_payload->'activity'->>'id' is distinct from new.activity_id::text
+     or new.source_payload->'verification'->>'id' is distinct from new.verification_id::text
+     or new.source_payload->>'selectedEvidenceId' is distinct from new.evidence_id::text
+     or new.source_payload->>'guardianPolicyId' is distinct from new.guardian_policy_id then
+    raise exception 'MRV_SOURCE_SNAPSHOT_PAYLOAD_BINDING_INVALID';
+  end if;
+
+  select exists (
+    select 1
+      from activities a
+      join verifications v on v.id=new.verification_id and v.activity_id=a.id and v.decision='APPROVED'
+      join evidence e on e.id=new.evidence_id and e.activity_id=a.id and e.status='VERIFIED'
+     where a.id=new.activity_id and a.status='COMPLETED' and v.evidence_id=e.id
+  ) into activity_ok;
+  if not activity_ok then
+    raise exception 'MRV_SOURCE_SNAPSHOT_REQUIRES_COMPLETED_ACTIVITY_APPROVED_VERIFICATION_AND_VERIFIED_EVIDENCE';
+  end if;
+
+  select * into prior_snapshot
+    from mrv_source_snapshots
+   where activity_id=new.activity_id
+   order by snapshot_version desc
+   limit 1
+   for update;
+
+  if new.snapshot_version=1 then
+    if found or new.supersedes_snapshot_id is not null then
+      raise exception 'MRV_SOURCE_SNAPSHOT_INITIAL_VERSION_INVALID';
+    end if;
+  else
+    if not found
+       or prior_snapshot.id is distinct from new.supersedes_snapshot_id
+       or prior_snapshot.snapshot_version <> new.snapshot_version-1
+       or prior_snapshot.source_digest = new.source_digest then
+      raise exception 'MRV_SOURCE_SNAPSHOT_SUPERSESSION_LINEAGE_INVALID';
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+create or replace function prevent_mrv_source_snapshot_mutation()
+returns trigger language plpgsql as $$
+begin
+  raise exception 'MRV source snapshots are immutable; create a superseding correction snapshot';
+end;
+$$;
+
+create trigger mrv_source_snapshots_validate_lineage
+before insert on mrv_source_snapshots
+for each row execute function validate_mrv_source_snapshot_lineage();
+
+create trigger mrv_source_snapshots_immutable
+before update or delete on mrv_source_snapshots
+for each row execute function prevent_mrv_source_snapshot_mutation();
+
+create index mrv_source_snapshots_activity_version_idx
+  on mrv_source_snapshots(activity_id, snapshot_version desc);
+create index mrv_source_snapshots_digest_idx
+  on mrv_source_snapshots(activity_id, source_digest);
+
+alter table mrv_provenance_events
+  add column source_snapshot_id uuid references mrv_source_snapshots(id) on delete restrict,
+  add column source_snapshot_digest text,
+  add column source_snapshot_version integer;
+
+alter table mrv_provenance_events
+  add constraint mrv_provenance_source_snapshot_binding_check
+  check (
+    (source_snapshot_id is null and source_snapshot_digest is null and source_snapshot_version is null)
+    or
+    (source_snapshot_id is not null
+      and source_snapshot_digest is not null
+      and source_snapshot_digest ~ '^[0-9a-f]{64}$'
+      and source_snapshot_version is not null
+      and source_snapshot_version > 0)
+  );
+
+create index mrv_provenance_source_snapshot_idx
+  on mrv_provenance_events(source_snapshot_id)
+  where source_snapshot_id is not null;
+
+-- Credential issuance now requires provenance bound to the latest immutable source snapshot.
+create or replace function require_guardian_hcs_mrv_for_credential()
+returns trigger language plpgsql as $$
+declare
+  new_issuance boolean := true;
+begin
+  if tg_op = 'UPDATE' then
+    new_issuance := old.status not in ('ISSUED','ACTIVE','TRANSFERRED','RETIRED');
+  end if;
+
+  if new.status in ('ISSUED','ACTIVE','TRANSFERRED','RETIRED') then
+    if new_issuance and (
+      exists (
+        select 1 from activities a
+         where a.id = new.activity_id
+           and a.metadata->>'acceptanceFixture' = 'true'
+      )
+      or exists (
+        select 1
+          from evidence e
+          join verifications v on v.evidence_id=e.id
+         where e.activity_id=new.activity_id
+           and v.activity_id=new.activity_id
+           and v.id=new.verification_id
+           and e.metadata->>'acceptanceFixture'='true'
+      )
+    ) then
+      raise exception 'ACCEPTANCE_FIXTURE_NOT_REGISTRY_ELIGIBLE: acceptance fixture activity/evidence cannot back an issued registry credential';
+    end if;
+
+    if tg_op = 'UPDATE' then
+      if old.status in ('ISSUED','ACTIVE','TRANSFERRED','RETIRED') then
+        -- Existing credentials keep their forward lifecycle against their original anchor.
+        if not exists (
+          select 1
+            from mrv_provenance_events m
+            join verifications v on v.id = new.verification_id
+           where m.activity_id = new.activity_id
+             and m.verification_id = new.verification_id
+             and m.evidence_id = v.evidence_id
+             and m.guardian_status = 'VERIFIED'
+             and m.hcs_status = 'CONSENSUS_CONFIRMED'
+             and m.guardian_execution_id is not null
+             and btrim(m.guardian_execution_id) <> ''
+             and m.hcs_topic_id is not null
+             and btrim(m.hcs_topic_id) <> ''
+             and m.hcs_transaction_id is not null
+             and btrim(m.hcs_transaction_id) <> ''
+             and m.hcs_consensus_timestamp is not null
+             and btrim(m.hcs_consensus_timestamp) <> ''
+             and m.integrity_hash is not null
+             and btrim(m.integrity_hash) <> ''
+             and m.mirror_node_verified_at is not null
+        ) then
+          raise exception 'CREDENTIAL_MRV_REQUIRED: existing credential lifecycle requires its original verified Guardian, HCS and Mirror Node provenance';
+        end if;
+      else
+        -- A transition into issuance must bind the current immutable source snapshot.
+        if not exists (
+          select 1
+            from mrv_provenance_events m
+            join verifications v on v.id = new.verification_id
+            join mrv_source_snapshots s
+              on s.id = m.source_snapshot_id
+             and s.activity_id = m.activity_id
+             and s.verification_id = m.verification_id
+             and s.evidence_id = m.evidence_id
+             and s.source_digest = m.source_snapshot_digest
+             and s.snapshot_version = m.source_snapshot_version
+             and not exists (
+               select 1 from mrv_source_snapshots newer
+                where newer.activity_id=s.activity_id and newer.snapshot_version>s.snapshot_version
+             )
+           where m.activity_id = new.activity_id
+             and m.verification_id = new.verification_id
+             and m.evidence_id = v.evidence_id
+             and v.evidence_id = m.evidence_id
+             and m.guardian_status = 'VERIFIED'
+             and m.hcs_status = 'CONSENSUS_CONFIRMED'
+             and m.guardian_execution_id is not null
+             and btrim(m.guardian_execution_id) <> ''
+             and m.hcs_topic_id is not null
+             and btrim(m.hcs_topic_id) <> ''
+             and m.hcs_transaction_id is not null
+             and btrim(m.hcs_transaction_id) <> ''
+             and m.hcs_consensus_timestamp is not null
+             and btrim(m.hcs_consensus_timestamp) <> ''
+             and m.integrity_hash is not null
+             and btrim(m.integrity_hash) <> ''
+             and m.mirror_node_verified_at is not null
+        ) then
+          raise exception 'CREDENTIAL_MRV_REQUIRED: new credential issuance requires Guardian, HCS consensus, Mirror Node proof and the current immutable source snapshot';
+        end if;
+      end if;
+    else
+      -- Direct INSERT of an already-issued credential must also satisfy the current snapshot gate.
+      if not exists (
+        select 1
+          from mrv_provenance_events m
+          join verifications v on v.id = new.verification_id
+          join mrv_source_snapshots s
+            on s.id = m.source_snapshot_id
+           and s.activity_id = m.activity_id
+           and s.verification_id = m.verification_id
+           and s.evidence_id = m.evidence_id
+           and s.source_digest = m.source_snapshot_digest
+           and s.snapshot_version = m.source_snapshot_version
+           and not exists (
+             select 1 from mrv_source_snapshots newer
+              where newer.activity_id=s.activity_id and newer.snapshot_version>s.snapshot_version
+           )
+         where m.activity_id = new.activity_id
+           and m.verification_id = new.verification_id
+           and m.evidence_id = v.evidence_id
+           and v.evidence_id = m.evidence_id
+           and m.guardian_status = 'VERIFIED'
+           and m.hcs_status = 'CONSENSUS_CONFIRMED'
+           and m.guardian_execution_id is not null
+           and btrim(m.guardian_execution_id) <> ''
+           and m.hcs_topic_id is not null
+           and btrim(m.hcs_topic_id) <> ''
+           and m.hcs_transaction_id is not null
+           and btrim(m.hcs_transaction_id) <> ''
+           and m.hcs_consensus_timestamp is not null
+           and btrim(m.hcs_consensus_timestamp) <> ''
+           and m.integrity_hash is not null
+           and btrim(m.integrity_hash) <> ''
+           and m.mirror_node_verified_at is not null
+      ) then
+        raise exception 'CREDENTIAL_MRV_REQUIRED: new credential issuance requires Guardian, HCS consensus, Mirror Node proof and the current immutable source snapshot';
+      end if;
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+-- Any change to the anchor tuple, including its source snapshot binding, invalidates Mirror Node proof.
+create or replace function clear_mrv_mirror_verification_on_anchor_change()
+returns trigger language plpgsql as $$
+begin
+  if row(
+    new.activity_id,new.verification_id,new.evidence_id,new.guardian_execution_id,new.guardian_status,
+    new.hcs_status,new.hcs_topic_id,new.hcs_transaction_id,new.hcs_consensus_timestamp,new.integrity_hash,
+    new.source_snapshot_id,new.source_snapshot_digest,new.source_snapshot_version
+  ) is distinct from row(
+    old.activity_id,old.verification_id,old.evidence_id,old.guardian_execution_id,old.guardian_status,
+    old.hcs_status,old.hcs_topic_id,old.hcs_transaction_id,old.hcs_consensus_timestamp,old.integrity_hash,
+    old.source_snapshot_id,old.source_snapshot_digest,old.source_snapshot_version
+  ) then
+    if exists (
+      select 1 from credentials c
+       where c.activity_id=old.activity_id and c.verification_id=old.verification_id
+         and c.status in ('ISSUED','ACTIVE','TRANSFERRED','RETIRED')
+    ) then
+      raise exception 'MRV_PROVENANCE_IMMUTABLE_AFTER_CREDENTIAL_ISSUANCE';
+    end if;
+    new.mirror_node_verified_at := null;
+  end if;
+  if old.mirror_node_verified_at is not null and new.mirror_node_verified_at is null
+     and exists (
+       select 1 from credentials c
+        where c.activity_id=old.activity_id and c.verification_id=old.verification_id
+         and c.status in ('ISSUED','ACTIVE','TRANSFERRED','RETIRED')
+     ) then
+    raise exception 'MIRROR_NODE_PROOF_IMMUTABLE_AFTER_CREDENTIAL_ISSUANCE';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists mrv_anchor_change_clears_mirror_verification on mrv_provenance_events;
+create trigger mrv_anchor_change_clears_mirror_verification
+before update on mrv_provenance_events
+for each row execute function clear_mrv_mirror_verification_on_anchor_change();

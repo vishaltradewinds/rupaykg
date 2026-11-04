@@ -75,3 +75,12 @@ Migration `086_reserved_role_restoration_db_guard.sql` protects status reactivat
 ## Acceptance fixture registry exclusion
 
 Migration `087_acceptance_fixture_registry_exclusion.sql` prevents activities or evidence explicitly marked with `metadata.acceptanceFixture=true` from backing credentials in value-bearing states. It also binds the database gate to the exact activity, verification, and evidence tuple. The MRV API reports acceptance fixtures as not registry eligible even after real Guardian/Hedera/Mirror Node verification. External anchoring proves message integrity and consensus; it does not validate the underlying activity as a real eligible carbon project.
+
+
+## MRV immutable source snapshots and source revisions
+
+- `088_mrv_immutable_source_snapshots.sql` — creates immutable MRV source snapshots, binds methodology and payload fields, and has PostgreSQL calculate and independently verify the SHA-256 digest over UTF-8 `jsonb::text`. Snapshot UPDATE, DELETE and TRUNCATE are rejected. The database JSONB serializer is the digest contract; clients must request the digest from PostgreSQL rather than reimplementing serialization.
+- `089_mrv_source_revision_guard.sql` — maintains activity MRV source revisions as source records change, binds snapshots to the captured revision, and prevents credential issuance when the latest snapshot no longer matches the current source revision.
+- `20261022_mrv_artifact_source_revision.sql` — extends source-revision invalidation to evidence artifact series, immutable artifact versions and append-only independent artifact reviews.
+
+These migrations are branch implementation candidates only until migration-source/production-ledger reconciliation, independent DBA/security review, and controlled release approval are complete. Do not apply them directly to production. CI on a disposable PostgreSQL instance is not production migration approval.

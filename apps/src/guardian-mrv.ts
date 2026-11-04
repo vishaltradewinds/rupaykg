@@ -7,7 +7,9 @@ export interface GuardianMrvRequest {
   policyId: string;
   methodologyCode?: string | undefined;
   observations: unknown[];
+  measurements?: unknown[];
   evidence: unknown[];
+  artifactSeries?: unknown[];
   metadata?: Record<string, unknown>;
   correlationId?: string | undefined;
   idempotencyKey?: string | undefined;
@@ -35,7 +37,7 @@ function timeoutMs(): number {
 
 function deterministicIdempotencyKey(input: GuardianMrvRequest): string {
   return createHash("sha256")
-    .update([input.activityId, input.verificationId, input.evidenceId, input.policyId, input.methodologyCode || ""].join("|"))
+    .update([input.activityId, input.verificationId, input.evidenceId, input.policyId, input.methodologyCode || "", String(input.metadata?.sourceSnapshotDigest || "")].join("|"))
     .digest("hex");
 }
 
@@ -81,7 +83,9 @@ export async function executeGuardianMrv(input: GuardianMrvRequest): Promise<Gua
         evidenceId: input.evidenceId,
         ...(input.methodologyCode !== undefined ? { methodologyCode: input.methodologyCode } : {}),
         observations: input.observations,
+        measurements: input.measurements ?? [],
         evidence: input.evidence,
+        artifactSeries: input.artifactSeries ?? [],
         metadata: input.metadata,
       }),
     });

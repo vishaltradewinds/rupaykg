@@ -74,3 +74,54 @@ test("MRV integrity hash survives JSON serialization when optional fields are un
   const serialized = JSON.parse(JSON.stringify(withUndefined)) as AnchorPayload;
   assert.equal(integrityHash(withUndefined), integrityHash(serialized));
 });
+
+test("Mirror Node verification confirms v2 anchors are bound to the exact source snapshot", async () => {
+  await withEnvironment(async () => {
+    const wirePayload: AnchorPayload = {
+      schema: "rupaykg:mrv:v2",
+      activityId: payload.activityId,
+      verificationId: payload.verificationId,
+      evidenceId: payload.evidenceId,
+      guardianPolicyId: payload.guardianPolicyId,
+      guardianExecutionId: payload.guardianExecutionId,
+      mrvStatus: "VERIFIED",
+      sourceSnapshotId: "snapshot-1",
+      sourceSnapshotDigest: "a".repeat(64),
+      sourceSnapshotVersion: 2,
+      methodologyCode: payload.methodologyCode,
+      quantity: payload.quantity,
+      unit: payload.unit,
+      metadata: { guardianStatus: "VERIFIED" },
+    };
+    const hash = integrityHash(wirePayload);
+    const anchored = { ...wirePayload, integrityHash: hash, anchoredAt: "2026-10-10T00:00:00.000Z" };
+    globalThis.fetch = async () => new Response(JSON.stringify({ messages: [{
+      consensus_timestamp: timestamp, sequence_number: 9, topic_id: topicId,
+      message: Buffer.from(JSON.stringify(anchored), "utf8").toString("base64"),
+    }] }), { status: 200, headers: { "content-type": "application/json" } });
+    const result = await verifyHcsMessage(timestamp, topicId, hash, payload.activityId, payload.verificationId, payload.evidenceId, payload.guardianExecutionId, "snapshot-1", "a".repeat(64), 2);
+    assert.equal(result.verified, true);
+  });
+});
+
+test("Mirror Node verification rejects a v2 anchor missing source snapshot binding", async () => {
+  await withEnvironment(async () => {
+    const wirePayload = {
+      schema: "rupaykg:mrv:v2" as const,
+      activityId: payload.activityId,
+      verificationId: payload.verificationId,
+      evidenceId: payload.evidenceId,
+      guardianPolicyId: payload.guardianPolicyId,
+      guardianExecutionId: payload.guardianExecutionId,
+      mrvStatus: "VERIFIED" as const,
+    };
+    const hash = integrityHash(wirePayload);
+    const anchored = { ...wirePayload, integrityHash: hash, anchoredAt: "2026-10-10T00:00:00.000Z" };
+    globalThis.fetch = async () => new Response(JSON.stringify({ messages: [{
+      consensus_timestamp: timestamp, sequence_number: 10, topic_id: topicId,
+      message: Buffer.from(JSON.stringify(anchored), "utf8").toString("base64"),
+    }] }), { status: 200, headers: { "content-type": "application/json" } });
+    const result = await verifyHcsMessage(timestamp, topicId, hash, payload.activityId, payload.verificationId, payload.evidenceId, payload.guardianExecutionId, "snapshot-1", "a".repeat(64), 1);
+    assert.equal(result.verified, false);
+  });
+});

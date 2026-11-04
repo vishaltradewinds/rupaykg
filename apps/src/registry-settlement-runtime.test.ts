@@ -50,7 +50,11 @@ before(async () => {
     const measurementId = (await c.query<{ id: string }>("insert into measurements(activity_id,value,unit,method,source,measured_at,quality_status) values($1,100,'kg','WEIGHBRIDGE','FIELD',now(),'VERIFIED') returning id", [activityId])).rows[0]!.id;
     evidenceId = (await c.query<{ id: string }>("insert into evidence(activity_id,measurement_id,evidence_type,status,captured_at,content_hash) values($1,$2,'WEIGHBRIDGE_RECORD','VERIFIED',now(),$3) returning id", [activityId, measurementId, `runtime-${suffix}`])).rows[0]!.id;
     verificationId = (await c.query<{ id: string }>("insert into verifications(evidence_id,activity_id,verifier_identity_id,decision,scope,rationale) values($1,$2,$3,'APPROVED','runtime','independent runtime acceptance') returning id", [evidenceId, activityId, verifierId])).rows[0]!.id;
-    await c.query("insert into mrv_provenance_events(activity_id,verification_id,evidence_id,guardian_policy_id,guardian_execution_id,guardian_status,hcs_status,hcs_topic_id,hcs_transaction_id,hcs_consensus_timestamp,integrity_hash,metadata,mirror_node_verified_at) values($1,$2,$3,'runtime-policy','runtime-guardian','VERIFIED','CONSENSUS_CONFIRMED','0.0.123',$4,$5,$6,'{\"testFixture\":true}',clock_timestamp())", [activityId, verificationId, evidenceId, `runtime-tx-${suffix}`, `runtime-consensus-${suffix}`, `runtime-hash-${suffix}`]);
+    const sourceRevision = (await c.query<{ mrv_source_revision: string | number }>("select mrv_source_revision from activities where id=$1", [activityId])).rows[0]!.mrv_source_revision;
+    const snapshotPayload = { schema: "rupaykg:mrv-source-snapshot:v1", activity: { id: activityId, sourceRevision }, verification: { id: verificationId }, selectedEvidenceId: evidenceId, guardianPolicyId: "runtime-policy" };
+    const snapshotDigest = (await c.query<{ digest: string }>("select mrv_source_snapshot_digest($1::jsonb) digest", [JSON.stringify(snapshotPayload)])).rows[0]!.digest;
+    const sourceSnapshotId = (await c.query<{ id: string }>("insert into mrv_source_snapshots(activity_id,verification_id,evidence_id,guardian_policy_id,snapshot_version,source_revision,source_digest,source_payload,created_by_identity_id) values($1,$2,$3,$4,1,$5,$6,$7::jsonb,$8) returning id", [activityId, verificationId, evidenceId, "runtime-policy", sourceRevision, snapshotDigest, JSON.stringify(snapshotPayload), verifierId])).rows[0]!.id;
+    await c.query("insert into mrv_provenance_events(activity_id,verification_id,evidence_id,guardian_policy_id,guardian_execution_id,guardian_status,hcs_status,hcs_topic_id,hcs_transaction_id,hcs_consensus_timestamp,integrity_hash,metadata,mirror_node_verified_at,source_snapshot_id,source_snapshot_digest,source_snapshot_version) values($1,$2,$3,'runtime-policy','runtime-guardian','VERIFIED','CONSENSUS_CONFIRMED','0.0.123',$4,$5,$6,jsonb_build_object('testFixture',true),clock_timestamp(),$7,$8,1)", [activityId, verificationId, evidenceId, `runtime-tx-${suffix}`, `runtime-consensus-${suffix}`, `runtime-hash-${suffix}`, sourceSnapshotId, snapshotDigest]);
     await c.query("commit");
   } catch (error) { await c.query("rollback"); throw error; } finally { c.release(); }
   server = spawn(process.execPath, ["dist/src/server.js"], { cwd: process.cwd(), env: { ...process.env, PORT: String(port), HOST: "127.0.0.1", DATABASE_URL: databaseUrl, DATABASE_SSL: "false" }, stdio: ["ignore", "ignore", "pipe"] });
@@ -97,41 +101,29 @@ describe("registry and settlement runtime acceptance", () => {
 
   it("blocks acceptance fixture evidence from becoming a registry credential", async () => {
     if (!pool) return;
-    await pool.query(
-      "update evidence set metadata=coalesce(metadata,'{}'::jsonb) || jsonb_build_object('acceptanceFixture',true) where id=$1",
-      [evidenceId],
-    );
+    const fixtureActivityId = (await pool.query<{ id: string }>("insert into activities(organization_id,actor_identity_id,geography_id,activity_type,status,completed_at,metadata) values($1,$2,$3,'COLLECTION','COMPLETED',now(),jsonb_build_object('acceptanceFixture',true)) returning id", [ownerOrgId, actorId, geographyId])).rows[0]!.id;
+    const fixtureEvidenceId = (await pool.query<{ id: string }>("insert into evidence(activity_id,evidence_type,status,captured_at,content_hash,metadata) values($1,'WEIGHBRIDGE_RECORD','VERIFIED',now(),$2,jsonb_build_object('acceptanceFixture',true)) returning id", [fixtureActivityId, hash("acceptance-fixture-evidence:"+suffix)])).rows[0]!.id;
+    const fixtureVerificationId = (await pool.query<{ id: string }>("insert into verifications(evidence_id,activity_id,verifier_identity_id,decision,scope,rationale) values($1,$2,$3,'APPROVED','runtime-fixture','independent fixture verification') returning id", [fixtureEvidenceId, fixtureActivityId, verifierId])).rows[0]!.id;
+    const fixtureSourceRevision = (await pool.query<{ mrv_source_revision: string | number }>("select mrv_source_revision from activities where id=$1", [fixtureActivityId])).rows[0]!.mrv_source_revision;
+    const fixtureSnapshotPayload = { schema: "rupaykg:mrv-source-snapshot:v1", activity: { id: fixtureActivityId, sourceRevision: fixtureSourceRevision }, verification: { id: fixtureVerificationId }, selectedEvidenceId: fixtureEvidenceId, guardianPolicyId: "runtime-policy" };
+    const fixtureSnapshotDigest = (await pool.query<{ digest: string }>("select mrv_source_snapshot_digest($1::jsonb) digest", [JSON.stringify(fixtureSnapshotPayload)])).rows[0]!.digest;
+    const fixtureSnapshotId = (await pool.query<{ id: string }>("insert into mrv_source_snapshots(activity_id,verification_id,evidence_id,guardian_policy_id,snapshot_version,source_revision,source_digest,source_payload,created_by_identity_id) values($1,$2,$3,'runtime-policy',1,$4,$5,$6::jsonb,$7) returning id", [fixtureActivityId, fixtureVerificationId, fixtureEvidenceId, fixtureSourceRevision, fixtureSnapshotDigest, JSON.stringify(fixtureSnapshotPayload), verifierId])).rows[0]!.id;
+    await pool.query("insert into mrv_provenance_events(activity_id,verification_id,evidence_id,guardian_policy_id,guardian_execution_id,guardian_status,hcs_status,hcs_topic_id,hcs_transaction_id,hcs_consensus_timestamp,integrity_hash,metadata,mirror_node_verified_at,source_snapshot_id,source_snapshot_digest,source_snapshot_version) values($1,$2,$3,'runtime-policy','fixture-guardian','VERIFIED','CONSENSUS_CONFIRMED','0.0.123',$4,$5,$6,jsonb_build_object('testFixture',true),clock_timestamp(),$7,$8,1)", [fixtureActivityId, fixtureVerificationId, fixtureEvidenceId, "fixture-tx-"+suffix, "fixture-consensus-"+suffix, hash("fixture-anchor:"+suffix), fixtureSnapshotId, fixtureSnapshotDigest]);
     let pendingCredentialId = "";
     try {
-      const provenanceResponse = await request(`/api/v1/mrv/provenance/${activityId}`, {}, actorToken, ownerOrgId);
+      const provenanceResponse = await request(`/api/v1/mrv/provenance/${fixtureActivityId}`, {}, actorToken, ownerOrgId);
       assert.equal(provenanceResponse.status, 200);
       const provenanceBody = await body(provenanceResponse);
       assert.equal(provenanceBody.eligibleForRegistry, false, "MRV API must never present acceptance fixture evidence as registry eligible");
       assert.equal(provenanceBody.registryEligibilityReason, "ACCEPTANCE_FIXTURE_NOT_REGISTRY_ELIGIBLE");
-
-      const apiIssuance = await request("/api/v1/credentials", {
-        method: "POST",
-        body: JSON.stringify({ activityId, trustRootId: "runtime-root-fixture-api-" + suffix, verificationId, issuerOrganizationId: ownerOrgId, quantity: 1, unit: "kg" }),
-      }, actorToken, ownerOrgId);
+      const apiIssuance = await request("/api/v1/credentials", { method: "POST", body: JSON.stringify({ activityId: fixtureActivityId, trustRootId: "runtime-root-fixture-api-" + suffix, verificationId: fixtureVerificationId, issuerOrganizationId: ownerOrgId, quantity: 1, unit: "kg" }) }, actorToken, ownerOrgId);
       assert.equal(apiIssuance.status, 409);
       assert.equal((await body(apiIssuance)).code, "ACCEPTANCE_FIXTURE_NOT_REGISTRY_ELIGIBLE");
-
-      const pending = await pool.query<{ id: string }>(
-        "insert into credentials(activity_id,issuer_organization_id,trust_root_id,status,verification_id,quantity,unit,issued_at) values($1,$2,$3,'ELIGIBLE',$4,1,'kg',now()) returning id",
-        [activityId, ownerOrgId, "runtime-root-acceptance-fixture-" + suffix, verificationId],
-      );
+      const pending = await pool.query<{ id: string }>("insert into credentials(activity_id,issuer_organization_id,trust_root_id,status,verification_id,quantity,unit,issued_at) values($1,$2,$3,'ELIGIBLE',$4,1,'kg',now()) returning id", [fixtureActivityId, ownerOrgId, "runtime-root-acceptance-fixture-" + suffix, fixtureVerificationId]);
       pendingCredentialId = pending.rows[0]!.id;
-      await assert.rejects(
-        pool.query("update credentials set status='ISSUED' where id=$1", [pendingCredentialId]),
-        /ACCEPTANCE_FIXTURE_NOT_REGISTRY_ELIGIBLE/,
-        "database must prevent acceptance fixture evidence from backing an issued credential",
-      );
+      await assert.rejects(pool.query("update credentials set status='ISSUED' where id=$1", [pendingCredentialId]), /ACCEPTANCE_FIXTURE_NOT_REGISTRY_ELIGIBLE/, "database must prevent acceptance fixture evidence from backing an issued credential");
     } finally {
       if (pendingCredentialId) await pool.query("delete from credentials where id=$1", [pendingCredentialId]);
-      await pool.query(
-        "update evidence set metadata=coalesce(metadata,'{}'::jsonb) - 'acceptanceFixture' where id=$1",
-        [evidenceId],
-      );
     }
   });
 

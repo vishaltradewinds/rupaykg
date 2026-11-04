@@ -55,18 +55,13 @@ before(async () => {
     "insert into verifications(evidence_id,activity_id,verifier_identity_id,decision,scope,rationale) values($1,$2,$3,'APPROVED','settlement-reconciliation','independent database guard test') returning id",
     [evidence, activity, verifier],
   )).rows[0]!.id;
+  const sourceRevision = (await pool.query<{ mrv_source_revision: string | number }>("select mrv_source_revision from activities where id=$1", [activity])).rows[0]!.mrv_source_revision;
+  const snapshotPayload = { schema: "rupaykg:mrv-source-snapshot:v1", activity: { id: activity, sourceRevision }, verification: { id: verification }, selectedEvidenceId: evidence, guardianPolicyId: "settlement-reconciliation-policy-" + suffix };
+  const snapshotDigest = (await pool.query<{ digest: string }>("select mrv_source_snapshot_digest($1::jsonb) digest", [JSON.stringify(snapshotPayload)])).rows[0]!.digest;
+  const snapshotId = (await pool.query<{ id: string }>("insert into mrv_source_snapshots(activity_id,verification_id,evidence_id,guardian_policy_id,snapshot_version,source_revision,source_digest,source_payload,created_by_identity_id) values($1,$2,$3,$4,1,$5,$6,$7::jsonb,$8) returning id", [activity, verification, evidence, "settlement-reconciliation-policy-" + suffix, sourceRevision, snapshotDigest, JSON.stringify(snapshotPayload), verifier])).rows[0]!.id;
   await pool.query(
-    "insert into mrv_provenance_events(activity_id,verification_id,evidence_id,guardian_policy_id,guardian_execution_id,guardian_status,hcs_status,hcs_topic_id,hcs_transaction_id,hcs_consensus_timestamp,integrity_hash,metadata,mirror_node_verified_at) values($1,$2,$3,$4,$5,'VERIFIED','CONSENSUS_CONFIRMED','0.0.123',$6,now(),$7,$8::jsonb,clock_timestamp())",
-    [
-      activity,
-      verification,
-      evidence,
-      `settlement-reconciliation-policy-${suffix}`,
-      `settlement-reconciliation-execution-${suffix}`,
-      `settlement-reconciliation-tx-${suffix}`,
-      `settlement-reconciliation-hash-${suffix}`,
-      JSON.stringify({ testFixture: true }),
-    ],
+    "insert into mrv_provenance_events(activity_id,verification_id,evidence_id,guardian_policy_id,guardian_execution_id,guardian_status,hcs_status,hcs_topic_id,hcs_transaction_id,hcs_consensus_timestamp,integrity_hash,metadata,mirror_node_verified_at,source_snapshot_id,source_snapshot_digest,source_snapshot_version) values($1,$2,$3,$4,$5,'VERIFIED','CONSENSUS_CONFIRMED','0.0.123',$6,now(),$7,$8::jsonb,clock_timestamp(),$9,$10,1)",
+    [activity, verification, evidence, `settlement-reconciliation-policy-${suffix}`, `settlement-reconciliation-execution-${suffix}`, `settlement-reconciliation-tx-${suffix}`, `settlement-reconciliation-hash-${suffix}`, JSON.stringify({ testFixture: true }), snapshotId, snapshotDigest],
   );
   const credential = (await pool.query<{ id: string }>(
     "insert into credentials(activity_id,issuer_organization_id,trust_root_id,status,verification_id,quantity,unit,issued_at) values($1,$2,$3,'ELIGIBLE',$4,1,'kg',now()) returning id",

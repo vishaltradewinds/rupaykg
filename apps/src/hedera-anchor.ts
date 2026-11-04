@@ -4,7 +4,10 @@ import { AccountId, Client, PrivateKey, TopicId, TopicMessageSubmitTransaction }
 export type HederaAnchorState = "NOT_CONFIGURED" | "CONSENSUS_CONFIRMED" | "RETRYABLE_FAILURE" | "FAILED";
 
 export interface AnchorPayload {
-  schema: "rupaykg:mrv:v1";
+  schema: "rupaykg:mrv:v1" | "rupaykg:mrv:v2";
+  sourceSnapshotId?: string | undefined;
+  sourceSnapshotDigest?: string | undefined;
+  sourceSnapshotVersion?: number | undefined;
   activityId: string;
   verificationId: string;
   evidenceId: string;
@@ -54,8 +57,12 @@ function canonical(value: unknown): string {
   return `{${keys.map(key => `${JSON.stringify(key)}:${canonical(object[key])}`).join(",")}}`;
 }
 
+export function canonicalIntegrityHash(value: unknown): string {
+  return crypto.createHash("sha256").update(canonical(value)).digest("hex");
+}
+
 export function integrityHash(payload: AnchorPayload): string {
-  return crypto.createHash("sha256").update(canonical(payload)).digest("hex");
+  return canonicalIntegrityHash(payload);
 }
 
 export function hederaStatus() {
@@ -102,7 +109,7 @@ export async function submitHcsAnchor(payload: AnchorPayload): Promise<AnchorRes
   }
 }
 
-export async function verifyHcsMessage(consensusTimestamp: string, topicId = process.env.HEDERA_TOPIC_ID || "", expectedIntegrityHash?: string, expectedActivityId?: string, expectedVerificationId?: string, expectedEvidenceId?: string, expectedGuardianExecutionId?: string) {
+export async function verifyHcsMessage(consensusTimestamp: string, topicId = process.env.HEDERA_TOPIC_ID || "", expectedIntegrityHash?: string, expectedActivityId?: string, expectedVerificationId?: string, expectedEvidenceId?: string, expectedGuardianExecutionId?: string, expectedSourceSnapshotId?: string, expectedSourceSnapshotDigest?: string, expectedSourceSnapshotVersion?: number) {
   const network = networkName();
   if (!topicId) return { verified: false, network, error: "HEDERA_TOPIC_ID is not configured" };
   const response = await fetch(`${mirrorEndpoint(network)}/api/v1/topics/${encodeURIComponent(topicId)}/messages?timestamp=${encodeURIComponent(`eq:${consensusTimestamp}`)}&limit=1&order=desc`);
@@ -118,8 +125,11 @@ export async function verifyHcsMessage(consensusTimestamp: string, topicId = pro
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) return { verified: false, network, consensusTimestamp: found.consensus_timestamp, sequenceNumber: found.sequence_number, payload, error: "HCS message payload is not a structured RupayKG provenance record" };
   const record = payload as Record<string, unknown>;
   const requiredMatches = [
-    ["schema", "rupaykg:mrv:v1"],
+    ["schema", expectedSourceSnapshotId ? "rupaykg:mrv:v2" : "rupaykg:mrv:v1"],
     ["mrvStatus", "VERIFIED"],
+    ...(expectedSourceSnapshotId ? [["sourceSnapshotId", expectedSourceSnapshotId]] as const : []),
+    ...(expectedSourceSnapshotDigest ? [["sourceSnapshotDigest", expectedSourceSnapshotDigest]] as const : []),
+    ...(expectedSourceSnapshotVersion !== undefined ? [["sourceSnapshotVersion", expectedSourceSnapshotVersion]] as const : []),
     ...(expectedIntegrityHash ? [["integrityHash", expectedIntegrityHash]] as const : []),
     ...(expectedActivityId ? [["activityId", expectedActivityId]] as const : []),
     ...(expectedVerificationId ? [["verificationId", expectedVerificationId]] as const : []),
@@ -127,6 +137,7 @@ export async function verifyHcsMessage(consensusTimestamp: string, topicId = pro
     ...(expectedGuardianExecutionId ? [["guardianExecutionId", expectedGuardianExecutionId]] as const : []),
   ];
   for (const [field, expected] of requiredMatches) if (record[field] !== expected) return { verified: false, network, consensusTimestamp: found.consensus_timestamp, sequenceNumber: found.sequence_number, payload, error: `HCS provenance field mismatch: ${field}` };
+  if (record.schema === "rupaykg:mrv:v2" && (typeof record.sourceSnapshotId !== "string" || !/^[0-9a-f]{64}$/.test(String(record.sourceSnapshotDigest)) || !Number.isInteger(record.sourceSnapshotVersion) || Number(record.sourceSnapshotVersion) < 1)) return { verified: false, network, consensusTimestamp: found.consensus_timestamp, sequenceNumber: found.sequence_number, payload, error: "HCS v2 message is missing its immutable source snapshot binding" };
   const { integrityHash: anchoredHash, anchoredAt: _anchoredAt, ...unsignedPayload } = record;
   const candidate = unsignedPayload as unknown as AnchorPayload;
   if (typeof anchoredHash !== "string" || integrityHash(candidate) !== anchoredHash) return { verified: false, network, consensusTimestamp: found.consensus_timestamp, sequenceNumber: found.sequence_number, payload, error: "HCS integrity hash does not match the anchored provenance payload" };

@@ -32,6 +32,11 @@ on:
         required: false
         type: string
         default: ""
+      correction_reason:
+        description: "Required only when changed source data must supersede the previous snapshot"
+        required: false
+        type: string
+        default: ""
 
 jobs:
   live-acceptance:
@@ -108,6 +113,7 @@ jobs:
           EVIDENCE_ID: ${{ inputs.evidence_id }}
           POLICY_ID: ${{ inputs.guardian_policy_id }}
           METHODOLOGY_CODE: ${{ inputs.methodology_code }}
+          CORRECTION_REASON: ${{ inputs.correction_reason }}
           TOKEN: ${{ secrets.RUPAYKG_SESSION_TOKEN }}
         run: |
           set -euo pipefail
@@ -120,6 +126,8 @@ jobs:
           }
           if os.environ.get('METHODOLOGY_CODE', '').strip():
               body['methodologyCode'] = os.environ['METHODOLOGY_CODE'].strip()
+          if os.environ.get('CORRECTION_REASON', '').strip():
+              body['correctionReason'] = os.environ['CORRECTION_REASON'].strip()
           print(json.dumps(body))
           PY
           )
@@ -144,13 +152,18 @@ jobs:
               raise SystemExit('Guardian did not return VERIFIED with an authoritative executionId.')
           if hedera.get('status') != 'CONSENSUS_CONFIRMED':
               raise SystemExit('Hedera HCS consensus was not confirmed.')
-          if not data.get('eligibleForRegistry'):
-              raise SystemExit('Submission did not become registry-eligible.')
+          snapshot = data.get('sourceSnapshot') or {}
+          if not snapshot.get('id') or not snapshot.get('digest') or not snapshot.get('version') or not snapshot.get('sourceRevision'):
+              raise SystemExit('Submission did not return a versioned immutable source snapshot.')
           timestamp = hedera.get('consensusTimestamp')
           if not timestamp:
               raise SystemExit('No Hedera consensus timestamp was returned.')
           with open('/tmp/acceptance.env', 'w') as f:
               f.write('CONSENSUS_TIMESTAMP=' + timestamp + '\n')
+              f.write('SOURCE_SNAPSHOT_ID=' + snapshot['id'] + '\n')
+              f.write('SOURCE_SNAPSHOT_VERSION=' + str(snapshot['version']) + '\n')
+              f.write('SOURCE_SNAPSHOT_DIGEST=' + snapshot['digest'] + '\n')
+              f.write('SOURCE_SNAPSHOT_REVISION=' + str(snapshot['sourceRevision']) + '\n')
           print('Guardian VERIFIED and Hedera CONSENSUS_CONFIRMED.')
           print('Registry eligibility:', data.get('eligibleForRegistry'))
           PY
@@ -163,19 +176,18 @@ jobs:
           TOKEN: ${{ secrets.RUPAYKG_SESSION_TOKEN }}
         run: |
           set -euo pipefail
+          source /tmp/acceptance.env
           curl --fail-with-body --silent --show-error \
             --header "Authorization: Bearer $TOKEN" \
             --header "X-RupayKG-Organization-Id: $ORGANIZATION_ID" \
             "$BASE_URL/api/v1/mrv/provenance/$ACTIVITY_ID" > /tmp/provenance.json
           python - <<'PY'
-          import json
+          import json, os
           data = json.load(open('/tmp/provenance.json'))
           if data.get('syntheticData') is not False:
               raise SystemExit('Persisted provenance is not explicitly non-synthetic.')
-          if not data.get('eligibleForRegistry'):
-              raise SystemExit('Persisted provenance is not registry-eligible.')
           rows = data.get('provenance') or []
-          confirmed = [r for r in rows if r.get('guardian_status') == 'VERIFIED' and r.get('hcs_status') == 'CONSENSUS_CONFIRMED']
+          confirmed = [r for r in rows if r.get('guardian_status') == 'VERIFIED' and r.get('hcs_status') == 'CONSENSUS_CONFIRMED' and r.get('source_snapshot_id') == os.environ['SOURCE_SNAPSHOT_ID'] and r.get('source_snapshot_digest') == os.environ['SOURCE_SNAPSHOT_DIGEST'] and str(r.get('source_snapshot_version')) == os.environ['SOURCE_SNAPSHOT_VERSION'] and str(r.get('source_snapshot_source_revision')) == os.environ['SOURCE_SNAPSHOT_REVISION']]
           if not confirmed:
               raise SystemExit('No persisted Guardian VERIFIED + HCS CONSENSUS_CONFIRMED provenance row found.')
           print('Persisted authoritative provenance confirmed.')
@@ -195,16 +207,22 @@ jobs:
             --header "X-RupayKG-Organization-Id: $ORGANIZATION_ID" \
             "$BASE_URL/api/v1/mrv/hedera/verify/$(python -c 'import os,urllib.parse; print(urllib.parse.quote(os.environ["CONSENSUS_TIMESTAMP"], safe=""))')" > /tmp/hedera-verify.json
           python - <<'PY'
-          import json
+          import json, os
           data = json.load(open('/tmp/hedera-verify.json'))
           if data.get('verified') is not True:
               raise SystemExit('Mirror Node did not verify the persisted Hedera provenance record.')
+          payload = data.get('payload') or {}
+          if payload.get('sourceSnapshotId') != os.environ['SOURCE_SNAPSHOT_ID'] or payload.get('sourceSnapshotDigest') != os.environ['SOURCE_SNAPSHOT_DIGEST'] or str(payload.get('sourceSnapshotVersion')) != os.environ['SOURCE_SNAPSHOT_VERSION']:
+              raise SystemExit('Mirror Node verified a different source snapshot than the one submitted.')
+          if data.get('eligibleForRegistry') is not False or data.get('registryEligibilityReason') != 'ACCEPTANCE_FIXTURE_NOT_REGISTRY_ELIGIBLE':
+              raise SystemExit('Acceptance fixture must remain explicitly excluded from registry eligibility.')
           print('Mirror Node verification: true')
           print('Network:', data.get('network'))
           print('Consensus timestamp:', data.get('consensusTimestamp'))
           print('Sequence number:', data.get('sequenceNumber'))
+          print('Registry exclusion:', data.get('registryEligibilityReason'))
           PY
 
       - name: Acceptance result
         run: |
-          echo "LIVE ACCEPTANCE PASSED: RupayKG -> Guardian VERIFIED -> Hedera HCS CONSENSUS_CONFIRMED -> persisted provenance -> Mirror Node verified."
+          echo "LIVE ACCEPTANCE PASSED: Guardian VERIFIED -> HCS consensus -> immutable source snapshot -> persisted provenance -> Mirror Node verified; acceptance fixture remains explicitly registry-ineligible."
