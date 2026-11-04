@@ -54,13 +54,15 @@ GRANT EXECUTE ON FUNCTION public.organization_has_geography_scope(uuid,uuid)
 CREATE OR REPLACE FUNCTION public.rupaykg_context_is_valid()
 RETURNS boolean
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER
-SET search_path = pg_catalog, public, rupaykg_private
+SET search_path = pg_catalog
 AS $$
 DECLARE
   v_identity text;
   v_org text;
   v_session text;
   v_expiry text;
+  v_xid text;
+  v_current_xid text;
   v_signature text;
   v_secret bytea;
   v_payload text;
@@ -70,9 +72,12 @@ BEGIN
   v_org := current_setting('rupaykg.context.organization',true);
   v_session := current_setting('rupaykg.context.session',true);
   v_expiry := current_setting('rupaykg.context.expiry',true);
+  v_xid := current_setting('rupaykg.context.xid',true);
   v_signature := current_setting('rupaykg.context.signature',true);
+  v_current_xid := pg_current_xact_id_if_assigned()::text;
   IF v_identity IS NULL OR v_org IS NULL OR v_session IS NULL
-     OR v_expiry IS NULL OR v_signature IS NULL THEN
+     OR v_expiry IS NULL OR v_xid IS NULL OR v_signature IS NULL
+     OR v_current_xid IS NULL OR v_xid <> v_current_xid THEN
     RETURN false;
   END IF;
   IF v_expiry !~ '^[0-9]+$' OR to_timestamp(v_expiry::bigint) <= clock_timestamp() THEN
@@ -81,7 +86,7 @@ BEGIN
   SELECT k.secret INTO v_secret
     FROM rupaykg_private.auth_context_key k WHERE k.singleton;
   IF v_secret IS NULL THEN RETURN false; END IF;
-  v_payload := v_identity || '|' || v_org || '|' || v_session || '|' || v_expiry;
+  v_payload := v_identity || '|' || v_org || '|' || v_session || '|' || v_expiry || '|' || v_xid;
   v_expected := encode(public.hmac(convert_to(v_payload,'UTF8'),v_secret,'sha256'),'hex');
   RETURN v_signature = v_expected;
 EXCEPTION WHEN others THEN
@@ -93,7 +98,7 @@ REVOKE ALL ON FUNCTION public.rupaykg_context_is_valid() FROM PUBLIC;
 
 CREATE OR REPLACE FUNCTION public.rupaykg_authenticated_identity()
 RETURNS uuid LANGUAGE sql STABLE SECURITY DEFINER
-SET search_path = pg_catalog, public
+SET search_path = pg_catalog
 AS $$
   SELECT CASE WHEN public.rupaykg_context_is_valid()
     THEN current_setting('rupaykg.context.identity',true)::uuid ELSE NULL END
@@ -103,7 +108,7 @@ REVOKE ALL ON FUNCTION public.rupaykg_authenticated_identity() FROM PUBLIC;
 
 CREATE OR REPLACE FUNCTION public.rupaykg_authenticated_organization()
 RETURNS uuid LANGUAGE sql STABLE SECURITY DEFINER
-SET search_path = pg_catalog, public
+SET search_path = pg_catalog
 AS $$
   SELECT CASE WHEN public.rupaykg_context_is_valid()
     THEN current_setting('rupaykg.context.organization',true)::uuid ELSE NULL END
@@ -115,12 +120,13 @@ CREATE OR REPLACE FUNCTION public.rupaykg_set_authenticated_context(
   p_bearer_token text, p_organization_id uuid
 ) RETURNS uuid
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER
-SET search_path = pg_catalog, public, rupaykg_private
+SET search_path = pg_catalog
 AS $$
 DECLARE
   v_identity uuid;
   v_session uuid;
   v_expiry bigint;
+  v_xid text;
   v_secret bytea;
   v_payload text;
   v_signature text;
@@ -151,19 +157,21 @@ BEGIN
       MESSAGE='bearer session, identity, membership or organization is not currently authorized';
   END IF;
 
+  v_xid := pg_current_xact_id()::text;
   SELECT k.secret INTO v_secret
     FROM rupaykg_private.auth_context_key k WHERE k.singleton;
   IF v_secret IS NULL THEN
     RAISE EXCEPTION 'authenticated context signing key is unavailable';
   END IF;
   v_payload := v_identity::text || '|' || p_organization_id::text || '|' ||
-               v_session::text || '|' || v_expiry::text;
+               v_session::text || '|' || v_expiry::text || '|' || v_xid;
   v_signature := encode(public.hmac(convert_to(v_payload,'UTF8'),v_secret,'sha256'),'hex');
 
   PERFORM set_config('rupaykg.context.identity',v_identity::text,true);
   PERFORM set_config('rupaykg.context.organization',p_organization_id::text,true);
   PERFORM set_config('rupaykg.context.session',v_session::text,true);
   PERFORM set_config('rupaykg.context.expiry',v_expiry::text,true);
+  PERFORM set_config('rupaykg.context.xid',v_xid,true);
   PERFORM set_config('rupaykg.context.signature',v_signature,true);
   RETURN v_identity;
 END;
@@ -180,7 +188,7 @@ CREATE OR REPLACE FUNCTION public.enforce_verification_authorization()
 RETURNS trigger
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = pg_catalog, public
+SET search_path = pg_catalog
 AS $$
 DECLARE
   resolved_activity_id uuid;
@@ -295,7 +303,7 @@ ALTER FUNCTION public.enforce_verification_authorization()
 
 CREATE OR REPLACE FUNCTION public.reject_verification_delete()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER
-SET search_path = pg_catalog, public
+SET search_path = pg_catalog
 AS $$
 BEGIN
   RAISE EXCEPTION 'verification records are append-only; DELETE is prohibited';
@@ -305,7 +313,7 @@ ALTER FUNCTION public.reject_verification_delete() OWNER TO rupaykg_auth_context
 
 CREATE OR REPLACE FUNCTION public.reject_verification_truncate()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER
-SET search_path = pg_catalog, public
+SET search_path = pg_catalog
 AS $$
 BEGIN
   RAISE EXCEPTION 'verification records are append-only; TRUNCATE is prohibited';
