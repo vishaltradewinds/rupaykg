@@ -161,6 +161,10 @@ $$;
 ALTER FUNCTION public.rupaykg_set_authenticated_context(text,uuid)
   OWNER TO rupaykg_context_owner;
 REVOKE ALL ON FUNCTION public.rupaykg_set_authenticated_context(text,uuid) FROM PUBLIC;
+GRANT USAGE ON SCHEMA public TO rupaykg_context_owner;
+GRANT SELECT ON public.identity_sessions,public.identities,
+  public.organization_memberships,public.organizations,public.activities
+  TO rupaykg_context_owner;
 GRANT EXECUTE ON FUNCTION public.rupaykg_set_authenticated_context(text,uuid)
   TO rupaykg_context_api;
 GRANT EXECUTE ON FUNCTION public.rupaykg_context_is_valid()
@@ -201,6 +205,10 @@ FOR EACH ROW EXECUTE FUNCTION public.rupaykg_require_authenticated_verifier();
 
 DO $owner_checks$
 BEGIN
+  IF NOT (SELECT p.prosecdef AND p.proowner=(SELECT oid FROM pg_roles WHERE rolname='rupaykg_context_owner')
+          FROM pg_proc p WHERE p.oid='public.rupaykg_set_authenticated_context(text,uuid)'::regprocedure) THEN
+    RAISE EXCEPTION 'context issuer must be SECURITY DEFINER owned by the dedicated context owner';
+  END IF;
   IF (SELECT rolcanlogin OR rolsuper OR rolbypassrls FROM pg_roles
       WHERE rolname='rupaykg_context_owner') THEN
     RAISE EXCEPTION 'context owner must be NOLOGIN/NOSUPERUSER/NOBYPASSRLS';
