@@ -64,3 +64,42 @@ This proves source/config does not demonstrate credential separation; it does no
 - Production remains READ-ONLY / HOLD. No production SQL writes, migrations, grants, RLS changes, deployment, merge, worker activation or certification.
 - PR #243 remains draft/unmerged. CI success on the artifact-test commit is engineering evidence only.
 - Independent DBA/security review, runtime-vs-migrator role proof, tenant isolation inventory, migration drift reconciliation, live external anchoring and Kathonda field evidence remain incomplete.
+
+## 2026-11-04 authoritative refresh — CTO Run 15 (06:10 UTC onward)
+
+### PR #244 handoff validation
+- PR #244 exact documentation head 61094b13a1f9c76e78965765082b5791beaf4422 passed CI run #5327 (41784108394) end-to-end: dependency audit, migration validation, disposable PostgreSQL migration, typecheck, production build, browser smoke, full tests and production-container build.
+- This confirms the handoff branch pipeline only; it does not prove production readiness or certification.
+- Added a detailed production tenant-isolation inventory and API authorization/execution-surface review. Run-15 checkpoint: docs/engineering/checkpoints/2026-11-04-cto-run-15-tenant-isolation-and-geography-context.md.
+
+### Tenant catalog and API review
+- Production catalog remains 67 public tables, 181 FKs, 0 RLS, 0 FORCE RLS; all 67 tables owned by rupaykg, which remains BYPASSRLS-capable and privileged.
+- 23 tables have direct organization/tenant keys; other tables need relationship-derived, identity-scoped, multi-party or explicit shared-reference policies.
+- Static source map covers 90 API route declarations across 15 source files. It is a route-family inventory, not complete dynamic handler sign-off.
+- No independent server-side worker/cron/queue consumer found in the repository tree. Operation sync is synchronous route intake/apply; offline queue is browser-side. External Render cron/worker services remain unverified. Guardian/Hedera live acceptance is a manual workflow_dispatch.
+- Runtime and migration pool use the same DATABASE_URL; Docker web-service boot runs migrations before the API. Dedicated one-shot migration job and separate credential remain required.
+
+### New geography authorization fix — PR #246
+- Found geography roots/children reading any verified membership's scope rather than the selected active organization.
+- Created draft PR #246, branch security/geography-active-organization-scope-2026-11-04, exact head 2fc6e37fc8000e766ac24cff8d234ce1c84aa327.
+- New helper canReadGeography requires explicit active organization, exact verified membership and organization-bound geography scope. Roots/children endpoints now use active organization only.
+- Added five unit tests: cross-org access denied without DB call; SQL binds selected org; no active org fails closed; malformed UUID fails closed; missing verified scope fails closed.
+- CI #5329 (41784724429) reached migration validation and disposable DB migration success; TypeScript typecheck is currently running. Build, browser, full tests and container build remain pending at this refresh. Do not call PR #246 validated until exact-head CI completes.
+- PR #246 remains draft/unmerged.
+
+### Verification authorization
+- Issue #215 updated: shared canVerifyEvidence does not itself take the subject organization; current call sites supply outer active-org/activity checks. Bind exact subject organization in helper or require a bound authorization context.
+- PR #238 remains draft because legacy verification_independence_guard integration/removal and unified trigger design remain open. No production trigger change.
+
+### Safety and release
+- Production remains READ-ONLY / HOLD. No production SQL writes, DDL, role/grant/ownership changes, RLS activation, migration, branch protection change, deployment, merge, worker activation or certification.
+- PR #243, #244, #238 and #246 remain draft/unmerged.
+- Production migration drift, tenant RLS, runtime least privilege, independent DBA/security review, live Guardian/Hedera round-trip and SITE-JBP-01 field acceptance remain open.
+- TRL 9 and production certification NOT ACHIEVED.
+
+### Next actions
+1. Complete exact-head CI #5329 on PR #246; fix any failure and rerun.
+2. Continue dynamic route authorization tests for EPR/ESG DB permission functions, workspaces, evidence/artifacts and bilateral resources.
+3. Complete all 67 table policies and actual-runtime-role cross-tenant tests on disposable Neon.
+4. Reconcile production migration source/ledger drift without rewriting ledger history or blind replay.
+5. Design and rehearse the dedicated migration job and least-privilege runtime identity. No production changes.
