@@ -155,7 +155,7 @@ WHERE o.name='CI-ACTIVE-AUTHCTX-ORG-B'
 
 CREATE OR REPLACE FUNCTION public.rupaykg_test_expect_spoof_rejected(
   p_evidence uuid,p_activity uuid,p_verifier uuid
-) RETURNS boolean LANGUAGE plpgsql AS $
+) RETURNS boolean LANGUAGE plpgsql AS $$
 BEGIN
   INSERT INTO public.verifications(evidence_id,activity_id,verifier_identity_id,decision,scope,rationale)
   VALUES (p_evidence,p_activity,p_verifier,'APPROVED','CI_SPOOF','must be rejected');
@@ -169,7 +169,7 @@ EXCEPTION
     END IF;
     RAISE;
 END;
-$;
+$$;
 
 CREATE OR REPLACE FUNCTION public.rupaykg_test_expect_revoked_rejected(
   p_organization uuid
