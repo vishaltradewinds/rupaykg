@@ -84,7 +84,7 @@ export async function hasOrganizationPermission(client: Pool | PoolClient, auth:
   if (auth.memberships.length > 0 && !canActForOrganization(auth, organizationId)) return false;
   const result = await client.query<{ ok: boolean }>(
     `select exists (
-       select 1 from organization_memberships om join roles r on r.id = om.role_id
+       select 1 from organization_memberships om join roles r on r.id = om.role_id and r.organization_id = om.organization_id
         where om.identity_id = $1 and om.organization_id = $2 and om.status = 'VERIFIED'
           and exists (select 1 from jsonb_array_elements_text(r.permissions) permission where permission = any($3::text[]))
      ) as ok`,
@@ -103,7 +103,7 @@ export async function canVerifyEvidence(client: PoolClient, identityId: string, 
        select 1 from evidence e join activities a on a.id = e.activity_id
        join organization_memberships om on om.identity_id = $2 and om.status = 'VERIFIED'
         and a.geography_id is not null and organization_has_geography_scope(om.organization_id, a.geography_id)
-       join roles r on r.id = om.role_id where e.id = $1
+       join roles r on r.id = om.role_id and r.organization_id = om.organization_id where e.id = $1
         and exists (select 1 from jsonb_array_elements_text(r.permissions) permission where permission = any($3::text[]))
      ) as ok`,
     [evidenceId, identityId, HIGH_RISK_PERMISSIONS.VERIFY_EVIDENCE],
@@ -113,4 +113,29 @@ export async function canVerifyEvidence(client: PoolClient, identityId: string, 
 
 export function bearerChallenge(): { error: string; code: "AUTH_REQUIRED" } {
   return { error: "Authenticated session required", code: "AUTH_REQUIRED" };
+}
+
+/**
+ * Re-attest and lock the exact verified membership/role rows for a high-risk
+ * mutation. The SHARE locks remain held until the caller's transaction ends,
+ * so a concurrent membership revocation or role-permission update cannot
+ * race past the authorization decision.
+ */
+export async function lockOrganizationPermission(client: PoolClient, auth: AuthContext, organizationId: string, permissions: readonly string[]): Promise<boolean> {
+  if (auth.memberships.length > 0 && !canActForOrganization(auth, organizationId)) return false;
+  const result = await client.query<{ id: string }>(
+    `select om.id
+       from organization_memberships om
+       join roles r on r.id = om.role_id and r.organization_id = om.organization_id
+      where om.identity_id = $1
+        and om.organization_id = $2
+        and om.status = 'VERIFIED'
+        and exists (
+          select 1 from jsonb_array_elements_text(r.permissions) permission
+           where permission = any($3::text[])
+        )
+      for share of om, r`,
+    [auth.identityId, organizationId, permissions],
+  );
+  return result.rows.length > 0;
 }
