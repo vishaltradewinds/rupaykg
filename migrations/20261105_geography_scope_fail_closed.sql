@@ -12,8 +12,8 @@ create or replace function public.organization_has_geography_scope(
 ) returns boolean
 language sql
 stable
-set search_path = pg_catalog
-as $$
+set search_path = pg_catalog, public, pg_temp
+as $
   with recursive ancestors(id) as (
     select g.id
       from public.geography g
