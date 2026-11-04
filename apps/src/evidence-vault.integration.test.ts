@@ -97,6 +97,13 @@ test("evidence vault enforces tenant scope, versioned storage, integrity and ind
     const outsiderRead = await app.inject({ method: "GET", url: "/api/v1/evidence-vault?activityId="+activity.rows[0]!.id, headers: headers(outsiderToken, otherOrg.rows[0]!.id) });
     assert.equal(outsiderRead.statusCode, 403, outsiderRead.body);
 
+    const outsiderUpload = await app.inject({
+      method: "POST", url: "/api/v1/evidence-vault/upload", headers: headers(outsiderToken, otherOrg.rows[0]!.id),
+      payload: { activityId: activity.rows[0]!.id, evidenceType: "WASTE_WEIGHT_TICKET", fileName: "cross-tenant.pdf", mediaType: "application/pdf", contentBase64: bytes.toString("base64") },
+    });
+    assert.equal(outsiderUpload.statusCode, 403, outsiderUpload.body);
+    assert.equal(outsiderUpload.json().code, "EVIDENCE_SCOPE_FORBIDDEN");
+
     const reviewerDecision = await app.inject({ method: "POST", url: "/api/v1/evidence-vault/"+uploaded.evidenceId+"/review", headers: headers(reviewerToken), payload: { decision: "APPROVED", rationale: "Checked against the cited source record" } });
     assert.equal(reviewerDecision.statusCode, 200, reviewerDecision.body);
     assert.equal(reviewerDecision.json().data.status, "VERIFIED");
