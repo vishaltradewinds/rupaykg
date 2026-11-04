@@ -15,6 +15,19 @@ test("evidence vault enforces tenant scope, versioned storage, integrity and ind
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
   const app = Fastify({ logger: false });
   await registerEvidenceVaultRoutes(app, pool);
+  const membershipMigrationCandidates = [
+    path.resolve(process.cwd(), "migrations/2026110401_membership_role_tenant_binding.sql"),
+    path.resolve(process.cwd(), "../migrations/2026110401_membership_role_tenant_binding.sql"),
+  ];
+  const membershipMigrationPath = membershipMigrationCandidates.find(candidate => existsSync(candidate));
+  assert.ok(membershipMigrationPath, "membership role tenant-binding migration must be available to the integration test");
+  const membershipMigrationSql = await readFile(membershipMigrationPath, "utf8");
+  await pool.query(membershipMigrationSql);
+  const membershipRoleConstraint = await pool.query<{ convalidated: boolean; definition: string }>(
+    "select convalidated, pg_get_constraintdef(oid) as definition from pg_constraint where conrelid='public.organization_memberships'::regclass and conname='organization_memberships_role_organization_fk'",
+  );
+  assert.equal(membershipRoleConstraint.rows[0]?.convalidated, true);
+  assert.match(membershipRoleConstraint.rows[0]?.definition ?? "", /FOREIGN KEY \(role_id, organization_id\) REFERENCES roles\(id, organization_id\)/);
   // Rehearse the forward-only migration against a production-like catalog:
   // snapshot columns already exist and both historical trigger names are present.
   const migrationCandidates = [
@@ -79,12 +92,32 @@ test("evidence vault enforces tenant scope, versioned storage, integrity and ind
     await pool.query("alter table organization_memberships disable trigger stakeholder_membership_application_guard");
     try {
       await pool.query(
-        "insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED'),($4,$2,$5,'VERIFIED'),($6,$7,$8,'VERIFIED'),($9,$2,$10,'VERIFIED'),($9,$7,$11,'VERIFIED'),($9,$2,$11,'VERIFIED')",
+        "insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED'),($4,$2,$5,'VERIFIED'),($6,$7,$8,'VERIFIED'),($9,$2,$10,'VERIFIED'),($9,$7,$11,'VERIFIED')",
         [uploaderId,organizationId,roles[0].rows[0]!.id,reviewerId,roles[1].rows[0]!.id,outsiderId,otherOrg.rows[0]!.id,roles[2].rows[0]!.id,crossOrgReviewerId,roles[3].rows[0]!.id,roles[4].rows[0]!.id],
       );
     } finally {
       await pool.query("alter table organization_memberships enable trigger stakeholder_membership_application_guard");
     }
+    await assert.rejects(
+      pool.query(
+        "insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED')",
+        [crossOrgReviewerId, organizationId, roles[4].rows[0]!.id],
+      ),
+      (error: unknown) => {
+        const dbError = error as { code?: string; constraint?: string };
+        return dbError.code === "23503" && dbError.constraint === "organization_memberships_role_organization_fk";
+      },
+    );
+    await assert.rejects(
+      pool.query(
+        "update organization_memberships set organization_id=$2 where identity_id=$1 and organization_id=$3 and role_id=$4",
+        [uploaderId, otherOrg.rows[0]!.id, organizationId, roles[0].rows[0]!.id],
+      ),
+      (error: unknown) => {
+        const dbError = error as { code?: string; constraint?: string };
+        return dbError.code === "23503" && dbError.constraint === "organization_memberships_role_organization_fk";
+      },
+    );
     await pool.query(
       "insert into identity_sessions(identity_id,expires_at,token_hash) values($1,now()+interval '1 hour',$2),($3,now()+interval '1 hour',$4),($5,now()+interval '1 hour',$6),($7,now()+interval '1 hour',$8)",
       [uploaderId,hash(uploaderToken),reviewerId,hash(reviewerToken),outsiderId,hash(outsiderToken),crossOrgReviewerId,hash(crossOrgReviewerToken)],

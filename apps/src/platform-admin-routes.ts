@@ -68,7 +68,7 @@ async function authorize(
     const result = await pool.query<{ ok: boolean }>(
       `select exists (
          select 1 from organization_memberships om
-         join roles r on r.id = om.role_id
+         join roles r on r.id = om.role_id and r.organization_id = om.organization_id
          join identities i on i.id = om.identity_id
          where om.identity_id = $1 and om.status = 'VERIFIED'
            and r.name = 'super_admin' and i.suspended_at is null
@@ -215,7 +215,7 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
         const identity = row.rows[0];
         if (!identity) return { status: 404 as const, body: { error: "Identity not found", code: "IDENTITY_NOT_FOUND" } };
         if (identity.status !== "VERIFIED") return { status: 409 as const, body: { error: "Only a verified identity can be suspended", code: "IDENTITY_NOT_ACTIVE" } };
-        const reserved = await client.query<{ ok: boolean }>("select exists(select 1 from organization_memberships om join roles r on r.id=om.role_id where om.identity_id=$1 and om.status='VERIFIED' and r.name in ('super_admin','platform_admin')) ok", [identityId]);
+        const reserved = await client.query<{ ok: boolean }>("select exists(select 1 from organization_memberships om join roles r on r.id=om.role_id and r.organization_id=om.organization_id where om.identity_id=$1 and om.status='VERIFIED' and r.name in ('super_admin','platform_admin')) ok", [identityId]);
         if (reserved.rows[0]?.ok) return { status: 409 as const, body: { error: "Platform-reserved administrators require a separately governed suspension workflow", code: "RESERVED_ADMIN_SUSPENSION_BLOCKED" } };
         if (identity.suspended_at) return { status: 200 as const, body: { source: "postgresql", syntheticData: false, replay: true, suspended: true } };
         await client.query("update identities set suspended_at=now(),last_suspended_by_identity_id=$2,last_suspension_reason=$3 where id=$1", [identityId, context.auth.identityId, reason]);
@@ -245,7 +245,7 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
         const identity = row.rows[0];
         if (!identity) return { status: 404 as const, body: { error: "Identity not found", code: "IDENTITY_NOT_FOUND" } };
         if (identity.status !== "VERIFIED") return { status: 409 as const, body: { error: "Identity verification must remain VERIFIED before reactivation", code: "IDENTITY_NOT_VERIFIED" } };
-        const reserved = await client.query<{ ok: boolean }>("select exists(select 1 from organization_memberships om join roles r on r.id=om.role_id where om.identity_id=$1 and om.status='VERIFIED' and r.name in ('super_admin','platform_admin')) ok", [identityId]);
+        const reserved = await client.query<{ ok: boolean }>("select exists(select 1 from organization_memberships om join roles r on r.id=om.role_id and r.organization_id=om.organization_id where om.identity_id=$1 and om.status='VERIFIED' and r.name in ('super_admin','platform_admin')) ok", [identityId]);
         if (reserved.rows[0]?.ok) return { status: 409 as const, body: { error: "Platform-reserved administrators require a separately governed reactivation workflow", code: "RESERVED_ADMIN_REACTIVATION_BLOCKED" } };
         if (!identity.suspended_at) return { status: 200 as const, body: { source: "postgresql", syntheticData: false, replay: true, suspended: false } };
         await client.query("update identities set suspended_at=null where id=$1", [identityId]);
@@ -385,7 +385,7 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
         } else {
           const selected = await client.query<{ identity_id: string; organization_id: string; role_id: string; role_name: string; identity_status: string; suspended_at: Date | null; organization_status: string; role_organization_id: string; status: string; last_revoked_at: Date | null }>(
             `select om.identity_id,om.organization_id,om.role_id,r.name role_name,i.status identity_status,i.suspended_at,o.status organization_status,r.organization_id role_organization_id,om.status,om.last_revoked_at
-             from organization_memberships om join identities i on i.id=om.identity_id join organizations o on o.id=om.organization_id join roles r on r.id=om.role_id
+             from organization_memberships om join identities i on i.id=om.identity_id join organizations o on o.id=om.organization_id join roles r on r.id=om.role_id and r.organization_id=om.organization_id
              where om.id=$1 for update of om,i,o,r`,
             [membershipId],
           );
@@ -472,10 +472,10 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
         if (expectedRequestHash !== change.request_hash) return { status: 409 as const, body: { error: "Access request contents no longer match their recorded integrity hash", code: "ACCESS_CHANGE_INTEGRITY_MISMATCH" } };
         const authorities = await client.query<{ requester_active: boolean; approver_active: boolean }>(
           `select
-             exists(select 1 from organization_memberships om join roles r on r.id=om.role_id join identities i on i.id=om.identity_id join organizations o on o.id=om.organization_id and o.status='VERIFIED'
+             exists(select 1 from organization_memberships om join roles r on r.id=om.role_id and r.organization_id=om.organization_id join identities i on i.id=om.identity_id join organizations o on o.id=om.organization_id and o.status='VERIFIED'
                     where om.identity_id=$1 and om.status='VERIFIED' and r.name='super_admin' and i.status='VERIFIED' and i.suspended_at is null
                       and exists(select 1 from jsonb_array_elements_text(r.permissions) as permission(value) where permission.value='admin:users')) requester_active,
-             exists(select 1 from organization_memberships om join roles r on r.id=om.role_id join identities i on i.id=om.identity_id join organizations o on o.id=om.organization_id and o.status='VERIFIED'
+             exists(select 1 from organization_memberships om join roles r on r.id=om.role_id and r.organization_id=om.organization_id join identities i on i.id=om.identity_id join organizations o on o.id=om.organization_id and o.status='VERIFIED'
                     where om.identity_id=$2 and om.status='VERIFIED' and r.name='super_admin' and i.status='VERIFIED' and i.suspended_at is null
                       and exists(select 1 from jsonb_array_elements_text(r.permissions) as permission(value) where permission.value='admin:users')) approver_active`,
           [change.requester_identity_id, context.auth.identityId],
@@ -567,7 +567,7 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
         `select om.id,om.identity_id, i.display_name,i.email,om.organization_id,o.name organization_name,
           om.role_id,r.name role_name,om.status,om.created_at,om.last_revoked_at,om.last_revocation_reason
          from organization_memberships om join identities i on i.id=om.identity_id
-         join organizations o on o.id=om.organization_id join roles r on r.id=om.role_id
+         join organizations o on o.id=om.organization_id join roles r on r.id=om.role_id and r.organization_id=om.organization_id
          where ($1='' or om.identity_id::text=$1) and ($2='' or om.organization_id::text=$2)
          order by o.name,i.display_name,r.name limit 300`,
         [identityId, organizationId],
@@ -658,7 +658,7 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
           `select om.id,om.identity_id,om.organization_id,o.status organization_status,om.role_id,r.name role_name,
              om.status,i.status identity_status,i.suspended_at,om.last_revoked_at
            from organization_memberships om join identities i on i.id=om.identity_id
-           join organizations o on o.id=om.organization_id join roles r on r.id=om.role_id
+           join organizations o on o.id=om.organization_id join roles r on r.id=om.role_id and r.organization_id=om.organization_id
            where om.id=$1 for update of om,i,o,r`,
           [membershipId],
         );
@@ -678,7 +678,7 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
         if (m.status !== "VERIFIED") return { status: 200 as const, body: { source: "postgresql", syntheticData: false, replay: true, status: "REVOKED" } };
         if (m.role_name === "super_admin") {
           const count = await client.query<{ count: string }>(
-            `select count(distinct om.identity_id)::text count from organization_memberships om join roles r on r.id=om.role_id
+            `select count(distinct om.identity_id)::text count from organization_memberships om join roles r on r.id=om.role_id and r.organization_id=om.organization_id
              join identities i on i.id=om.identity_id where r.name='super_admin' and om.status='VERIFIED'
              and i.status='VERIFIED' and i.suspended_at is null`,
           );

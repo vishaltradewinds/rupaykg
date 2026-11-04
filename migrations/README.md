@@ -1,6 +1,6 @@
 # Database migrations
 
-Apply all SQL migration files discovered in `migrations/` in lexicographic filename order against a fresh PostgreSQL database. The authoritative active migration source inventory as of 2026-11-04 contains **92 SQL files**: numbered migrations `001`–`087` and dated migrations `20261018`–`20261021`.
+Apply all SQL migration files discovered in `migrations/` in lexicographic filename order against a fresh PostgreSQL database. The authoritative active migration source inventory as of 2026-11-04 contains **93 SQL files**: numbered migrations `001`–`087` and six dated migrations spanning `20261018`–`20261104`.
 
 The numbered migration sequence includes:
 - `001_core.sql`
@@ -96,6 +96,7 @@ The dated migration files are:
 - `20261019_cpcb_bwg_workflow_tracking.sql`
 - `20261020_ccts_methodology_registry.sql`
 - `20261021_evidence_artifact_vault.sql`
+- `2026110401_membership_role_tenant_binding.sql`
 - `20261104_verification_authorization_tenant_binding.sql`
 
 This manifest is maintained with the repository migration source.
@@ -103,6 +104,10 @@ This manifest is maintained with the repository migration source.
 **Production source-drift warning (2026-11-04):** the authoritative production ledger records `096_verification_authorization_provenance.sql`, but that file is not present in current-main source. Its exact historical SQL is preserved in the security review evidence associated with issue #214. Do not restore it under version 096, replay it, or rewrite production ledger history. Versions 088–095 are absent from the production ledger and must not be inferred as required migrations.
 
 Migration filenames/versions are identity. Do not renumber, reuse or duplicate migration versions. The runner and validator discover numbered SQL files from the migration directory; keep this README synchronized with the source manifest.
+
+## Membership-role tenant integrity
+
+Migration `2026110401_membership_role_tenant_binding.sql` adds a validated composite foreign key from `(organization_memberships.role_id, organization_memberships.organization_id)` to `(roles.id, roles.organization_id)`. A membership can no longer point to a role owned by another organization, including through direct SQL writes or organization/role reassignment. Application authorization joins must retain the same organization equality as defense in depth.
 
 ## Production rule
 
