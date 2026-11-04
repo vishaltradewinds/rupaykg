@@ -14,3 +14,12 @@
 - Inspect artifact table creation schema and add precise mutation invalidation tests on disposable PostgreSQL.
 - Continue role/owner/runtime privilege mapping and full tenant table/endpoint/worker inventory.
 - Keep PR #243 draft until independent DBA/security review and production blockers are resolved.
+
+
+## 2026-11-04 — CTO Run 14 (06:06 UTC onward)
+- Inspected PR #243 CI after adding artifact mutation tests. Latest test commit `4a8a4572a084811725eed8dd31c2c4a3f4d39eac` passed run #5323 (`41783246996`) end-to-end, including PostgreSQL acceptance and production-container build.
+- Verified migration 20261021 actual evidence artifact table schema and added precise series/version/review invalidation regressions; UPDATE/DELETE attempts against immutable versions and append-only reviews are asserted to fail with their explicit trigger errors.
+- Updated `migrations/README.md` to document migrations 088, 089 and 20261022 in commit `9bd10a7ae63ac07fe642b4044ad30383f25d71f2`. New exact-head CI #5324 (`41783404982`) was in progress at typecheck after migration validation and disposable PostgreSQL migration passed.
+- Read-only source inspection found runtime and migration clients both consume `DATABASE_URL`; Render declares one DB secret. Added evidence/remediation comment to issue #196. Actual deployed role and memberships remain unverified; no grants changed.
+- Added artifact test evidence to PR #243 and issue #245.
+- Production remains READ-ONLY / HOLD. No production write, migration, role/grant/RLS change, deployment, merge, worker activation or certification.
