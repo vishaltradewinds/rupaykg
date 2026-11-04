@@ -129,3 +129,13 @@
 - Documented critical least-privilege constraint: SECURITY INVOKER `SELECT ... FOR SHARE` requires UPDATE privilege on at least one column of each locked table. Do not grant broad UPDATE to API runtime. A narrow guard execution role or coordinated advisory-lock design must be reviewed/tested under FORCE RLS and non-owner runtime. Updated issues #196 and #215.
 - PR #247 remains draft/unmerged; candidate migration unapplied. PR #244 exact head `91554b8cc62b194388fe4bd01b27e259a835e372` passed CI #5362.
 - Production remains READ-ONLY / HOLD. No production/staging writes, migrations, role/grant/RLS/function/trigger changes, deployment, worker activation or certification. TRL 9 NOT ACHIEVED.
+
+
+## 2026-11-04 — CTO Run 26 (07:28 UTC onward)
+- Resumed from Run 25 and created a clean local worktree from PR #247 exact head `c03e70b1f7a67f381479e4d63eed96b2d5c5f3c4`.
+- Code review found an additional role-tenant binding gap: a membership in organization A could reference a role owned by organization B. Bound both `hasOrganizationPermission` and `canVerifyEvidence` to `roles.organization_id = organization_memberships.organization_id`; added a unit assertion and a malformed cross-tenant membership in the PostgreSQL regression fixture.
+- Found the candidate verification trigger omitted the non-null activity-geography check and existing organization geography-scope function that the application helper already enforced. Added both checks to the DB trigger and a direct-DB geography-less activity negative regression. The no-configured-scope permissive behavior in `organization_has_geography_scope` remains a separate open fail-closed issue.
+- Committed and pushed code head `ff75e989fcdef02cbb0719b8aaeb993e506c3a56` to PR #247; exact-head CI #5367 (`41794095914`) started. Added PR comment #6625463871 with evidence and local validation limitations.
+- Local typecheck, build, migration validation (92 migrations / 73 schema objects), diff check and focused auth tests (5/5) passed. Full local suite had 90 pass, 8 skip, 1 Windows CORS runtime spawn failure; PostgreSQL integration tests skipped because no local DATABASE_URL or Docker engine was available.
+- Reviewed least-privilege constraint. No broad UPDATE grant or production change made. A dedicated NOLOGIN SECURITY DEFINER guard role with narrow column-level lock rights and explicit FORCE RLS policies is a candidate only; it requires disposable PostgreSQL proof and independent review.
+- Added checkpoint `docs/engineering/checkpoints/2026-11-04-cto-run-26-verification-tenant-binding.md` and refreshed the canonical resume point. Production remains READ-ONLY / HOLD; PRs remain draft/unmerged; candidate migration unapplied; TRL 9 NOT ACHIEVED.

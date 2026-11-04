@@ -368,3 +368,39 @@ This proves source/config does not demonstrate credential separation; it does no
 3. Add production-like schema rehearsal that reproduces exact historical 096 function body and trigger composition, not only the trigger names; compare before/after function/trigger definitions.
 4. Continue geography fail-closed policy and 67-table tenant matrix separately.
 5. Keep PR #247 draft/unmerged and production READ-ONLY / HOLD pending independent DBA/security review and explicit approval. No production/staging writes, migration, role/grant/RLS/function/trigger change, deployment, worker activation or certification. TRL 9 NOT ACHIEVED.
+
+
+## 2026-11-04 authoritative refresh — CTO Run 26 (07:28 UTC onward)
+
+### PR #247 — additional tenant-binding corrections
+- Latest code head: `ff75e989fcdef02cbb0719b8aaeb993e506c3a56`; PR #247 remains OPEN / DRAFT / UNMERGED. Exact-head CI run #5367 (`41794095914`) was IN PROGRESS at this checkpoint.
+- Extended membership-to-activity binding to the role row itself: both application permission helpers and the database verification guard now require `roles.organization_id = organization_memberships.organization_id`. This closes a malformed-membership case where an organization-A membership could reference an organization-B verifier role.
+- Expanded the disposable PostgreSQL fixture to create that cross-organization role binding and assert a direct REJECTED verification insert is denied.
+- Found that the candidate database trigger did not itself require a non-null activity geography or invoke `organization_has_geography_scope`, although the application helper did. The trigger now requires non-null geography and checks the existing organization scope function. Added a direct-DB regression for geography-less activities.
+- Important boundary: `organization_has_geography_scope` still treats an organization with no VERIFIED configured geography roots as unrestricted. This is an existing global fail-open design decision and remains OPEN; Run 26 does not claim to have solved it.
+
+### Local validation evidence and limitations
+- On the clean Run-26 worktree, `npm run typecheck`, `npm run build`, `npm run validate:migrations` (92 migrations / 73 schema objects), and `git diff --check` passed.
+- Focused `auth-permissions` suite passed 5/5.
+- Full local workspace suite: 90 passed, 8 skipped, 1 failed. The failure was the CORS runtime spawn test because the spawned runtime exited on this Windows host; this is not yet classified as a code regression. PostgreSQL integration tests were skipped because no local `DATABASE_URL` or Docker engine was available. Exact-head CI is the authoritative PostgreSQL acceptance gate.
+- PR comment #6625463871 records the two findings, local results and limitations. No production/staging DB was accessed or modified during this batch.
+
+### Least-privilege trigger execution — still unresolved
+- Current trigger remains SECURITY INVOKER with row-locking SELECT on evidence, activities, memberships, roles and identities. It cannot be validated under a restricted non-owner runtime without solving the UPDATE privilege requirement for row locks.
+- No broad UPDATE grant was added. A narrow non-login SECURITY DEFINER guard role with column-limited lock privileges and explicit RLS policies remains one candidate architecture; it must be tested under FORCE RLS and reviewed for safe search_path, function ownership/EXECUTE exposure, GUC scoping, row visibility and lock order. Do not implement from design assumptions alone.
+- Advisory-lock alternative remains unproven until mutation-side lock coverage, READ COMMITTED snapshot freshness and concurrent revocation tests are demonstrated.
+
+### Immediate next actions
+1. Complete exact-head CI #5367 for `ff75e989fcdef02cbb0719b8aaeb993e506c3a56`; inspect PostgreSQL acceptance logs and repair any failure without relaxing negative assertions.
+2. Prototype the dedicated NOLOGIN guard-role design on disposable PostgreSQL with FORCE RLS and a genuine non-owner runtime; grant only the minimum SELECT and column-level UPDATE needed for row-locking, and ensure the API role cannot SET ROLE or invoke the guard function directly.
+3. Add positive/negative tests for guard-role RLS visibility, trigger execution, function privilege boundaries, cross-tenant rows and DELETE/tamper resistance; verify role cannot login and has no BYPASSRLS.
+4. Extend role/membership organization-consistency audit beyond verification to all shared permission helpers and DB functions, without widening this PR beyond reviewed dependencies.
+5. Resolve the global geography no-scope behavior in the 67-table tenant/geography programme; do not silently change it in this focused verification patch.
+6. Continue exact production-like 096 body/trigger rehearsal and independent DBA/security review.
+
+### Production / TRL posture
+- Production Neon remains READ-ONLY / HOLD. No production SQL writes, migrations, role/grant/ownership changes, RLS activation, deployment, merge, worker activation or certification.
+- PR #247 and PR #244 remain DRAFT / UNMERGED. Candidate migration unapplied.
+- Production tenant isolation remains 0/67 RLS and 0/67 FORCE RLS; runtime/migrator separation and non-owner role proof remain incomplete.
+- SITE-JBP-01 Kathonda remains PRE-VALIDATION; field evidence not established. Live Guardian/Hedera round-trip and independent statutory/field acceptance remain incomplete.
+- Production certification and TRL 9: NOT ACHIEVED.
