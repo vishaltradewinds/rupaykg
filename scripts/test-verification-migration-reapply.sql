@@ -39,6 +39,19 @@ BEGIN
   IF trigger_names IS DISTINCT FROM ARRAY['verification_authorization_guard']::text[] THEN
     RAISE EXCEPTION 'verification migration reapplication left unexpected triggers: %', trigger_names;
   END IF;
+
+  IF EXISTS (
+    SELECT 1
+      FROM pg_proc p
+     WHERE p.oid IN (
+       'public.enforce_verification_authorization()'::regprocedure,
+       'public.lock_organization_for_geography_scope_change()'::regprocedure
+     )
+       AND (NOT p.prosecdef OR COALESCE(p.proconfig,ARRAY[]::text[]) <> ARRAY['search_path=pg_catalog']::text[]
+            OR pg_get_userbyid(p.proowner) <> 'rupaykg_verification_guard')
+  ) THEN
+    RAISE EXCEPTION 'verification SECURITY DEFINER functions must be guard-owned with pg_catalog-only search_path';
+  END IF;
 END;
 $assert$;
 
