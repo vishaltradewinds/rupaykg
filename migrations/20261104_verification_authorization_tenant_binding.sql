@@ -60,7 +60,7 @@ begin
   end if;
 
   if activity_actor is not null and activity_actor = new.verifier_identity_id then
-    raise exception 'activity actor cannot verify its own evidence';
+    raise exception 'activity actor cannot self-approve evidence';
   end if;
 
   -- Lock the exact identity, membership and role rows while evaluating the
