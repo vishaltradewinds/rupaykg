@@ -47,6 +47,8 @@ The integration test runs after the repository's active migrations have been app
 - the helper role is NOLOGIN/NOBYPASSRLS, does not own protected tables, has only the required column-scoped lock privileges, and cannot be assumed by the API proof role;
 - concurrent role permission revocation, membership deactivation, identity suspension, organization status change and geography-scope mutation serialize with verification and fail closed after the competing change commits. The first full-schema run exposed that the existing STABLE geography helper did not observe a scope change committed while the INSERT was waiting; the trigger now runs a fresh scope query after the organization lock, and the regression test remains mandatory.
 
+A separate CI SQL proof executes the helper ownership-transfer sequence as a non-superuser CREATEROLE migration principal. It verifies temporary SET access for function ownership transfer and the final ADMIN-only / SET-disabled membership. This tests PostgreSQL privilege mechanics, not the actual Neon migration credential or its schema grant options.
+
 The test runs only against GitHub Actions disposable PostgreSQL. It does not connect to Neon, Render, or any persistent database.
 
 ## Explicit limitations and release blockers
