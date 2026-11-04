@@ -26,7 +26,7 @@ test("evidence vault enforces tenant scope, versioned storage, integrity and ind
   const migrationSql = await readFile(migrationPath, "utf8");
   await pool.query("drop trigger if exists verification_authorization_guard on public.verifications");
   await pool.query(`create or replace function public.test_legacy_verification_independence()
-    returns trigger language plpgsql as $ begin return new; end $`);
+    returns trigger language plpgsql as $body$ begin return new; end $body$`);
   await pool.query("create trigger verification_independence_guard before insert on public.verifications for each row execute function public.test_legacy_verification_independence()");
   await pool.query("create trigger verifications_integrity_guard before insert or update on public.verifications for each row execute function public.prevent_invalid_verification()");
   await pool.query(migrationSql);
