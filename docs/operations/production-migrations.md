@@ -9,6 +9,7 @@ The long-running RupayKg API container must never apply schema migrations or see
 - There is deliberately no fallback from the migrator variable to `DATABASE_URL`.
 - Production migration execution requires `RUPAYKG_MIGRATOR_DATABASE_SSL=require` and a valid `RUPAYKG_MIGRATOR_DATABASE_CA_CERT` PEM certificate.
 - The migrator credential must be separate from the API runtime credential and must not be configured on the web service.
+- A session-level PostgreSQL advisory lock serializes concurrent invocations of the migration runner.
 - The acceptance fixture seeder is not part of production startup and must never be run against production.
 
 ## CI
@@ -34,8 +35,8 @@ Before a production migration can be considered:
 After building the workspace, an operator can explicitly invoke:
 
 ```sh
-RUPAYKG_MIGRATOR_DATABASE_URL="$DISPOSABLE_POSTGRES_URL" \
-RUPAYKG_MIGRATOR_DATABASE_SSL=false \
+RUPAYKG_MIGRATOR_DATABASE_URL="$DISPOSABLE_POSTGRES_URL" \\
+RUPAYKG_MIGRATOR_DATABASE_SSL=false \\
 npm run migrate -w @rupaykg/api
 ```
 
