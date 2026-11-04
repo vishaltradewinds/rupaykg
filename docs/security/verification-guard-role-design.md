@@ -13,7 +13,7 @@ The candidate migration therefore assigns the two SECURITY DEFINER trigger funct
 The migration configures the role as:
 
 - `NOLOGIN`, `NOSUPERUSER`, `NOCREATEDB`, `NOCREATEROLE`, `NOINHERIT`, `NOBYPASSRLS`;
-- not a member of any other role and not granted to the API role; the designated migration principal retains ADMIN-only membership with `SET FALSE` after ownership transfer, so it can administer the helper role but cannot directly assume it;
+- not a member of any other role and not granted to the API role; the designated migration principal retains a membership with `SET FALSE` after ownership transfer, so it cannot directly assume the helper; when it created the role, PostgreSQL may retain ADMIN OPTION for that principal, but no API/runtime role is a member;
 - not owner of evidence, activities, organizations, memberships, roles, identities, verifications, or geography tables;
 - owner only of the two trigger functions, with a fixed `search_path` and schema-qualified object references.
 
@@ -47,7 +47,7 @@ The integration test runs after the repository's active migrations have been app
 - the helper role is NOLOGIN/NOBYPASSRLS, does not own protected tables, has only the required column-scoped lock privileges, and cannot be assumed by the API proof role;
 - concurrent role permission revocation, membership deactivation, identity suspension, organization status change and geography-scope mutation serialize with verification and fail closed after the competing change commits. The first full-schema run exposed that the existing STABLE geography helper did not observe a scope change committed while the INSERT was waiting; the trigger now runs a fresh scope query after the organization lock, and the regression test remains mandatory.
 
-A separate CI SQL proof executes the helper ownership-transfer sequence as a non-superuser CREATEROLE migration principal. It verifies temporary SET access for function ownership transfer and the final ADMIN-only / SET-disabled membership. This tests PostgreSQL privilege mechanics, not the actual Neon migration credential or its schema grant options.
+A separate CI SQL proof executes the helper ownership-transfer sequence as a non-superuser CREATEROLE migration principal. It verifies temporary SET access for function ownership transfer and the final SET-disabled migrator membership. This tests PostgreSQL privilege mechanics, not the actual Neon migration credential or its schema grant options.
 
 The test runs only against GitHub Actions disposable PostgreSQL. It does not connect to Neon, Render, or any persistent database.
 
@@ -56,7 +56,7 @@ The test runs only against GitHub Actions disposable PostgreSQL. It does not con
 - The test API role is synthetic and NOLOGIN. It is not evidence of the actual Render API database identity or grants.
 - Production catalog inspection found the visible `rupaykg` role is table owner and BYPASSRLS; production RLS/FORCE RLS is disabled on the inspected security-critical tables. This migration does not change that state.
 - The migration does not define RLS policies. If RLS is enabled, the helper role's access and any tenant-context mechanism must be separately designed and tested. A caller-controlled session variable is not trusted identity.
-- The migration temporarily grants the current migration principal `SET ROLE` on the helper solely to transfer function ownership, then resets that membership to `SET FALSE` while retaining ADMIN OPTION for controlled reapplication. This requires the actual migrator to have CREATEROLE/role-administration authority and must be proven using the intended credential. Do not assume disposable CI's superuser migration identity is equivalent.
+- The migration temporarily grants the current migration principal `SET ROLE` on the helper solely to transfer function ownership, then resets that membership to `SET FALSE`. If the principal created the role, PostgreSQL's creator grant can retain ADMIN OPTION; the migration verifies that no other role is a member. This requires the actual migrator to have CREATEROLE/role-administration authority and must be proven using the intended credential. Do not assume disposable CI's superuser migration identity is equivalent.
 - Existing table-owner, superuser, replication, and administrative bypass paths remain outside the synthetic API-role proof. Append-only guarantees against UPDATE, DELETE, TRUNCATE, owner, superuser and replication paths require separate controls and tests.
 - The trigger does not certify a real MRV activity, evidence authenticity, statutory eligibility, or field verification.
 - Independent DBA/security review and explicit founder authorization remain required before any production migration, role, grant, RLS, or deployment change.
