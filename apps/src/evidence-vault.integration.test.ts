@@ -1,9 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash, randomBytes } from "node:crypto";
-import { existsSync } from "node:fs";
-import { readFile } from "node:fs/promises";
-import path from "node:path";
 import Fastify from "fastify";
 import { Pool, type PoolClient } from "pg";
 import { registerEvidenceVaultRoutes } from "./evidence-vault-routes.js";
@@ -17,38 +14,12 @@ test("evidence vault enforces tenant scope, versioned storage, integrity and ind
   let apiProofClient: PoolClient | null = null;
   let apiProofRoleCreated = false;
   await registerEvidenceVaultRoutes(app, pool);
-  // Rehearse the forward-only migration against a production-like catalog:
-  // snapshot columns already exist and both historical trigger names are present.
-  const migrationCandidates = [
-    path.resolve(process.cwd(), "migrations/20261104_verification_authorization_tenant_binding.sql"),
-    path.resolve(process.cwd(), "../migrations/20261104_verification_authorization_tenant_binding.sql"),
-  ];
-  const migrationPath = migrationCandidates.find(candidate => existsSync(candidate));
-  assert.ok(migrationPath, "verification authorization migration must be available to the integration test");
-  const migrationSql = await readFile(migrationPath, "utf8");
-  // Hold the verifications table DDL lock for the entire legacy-trigger
-  // rehearsal. Other integration tests share this disposable database; they
-  // must not insert during the deliberate drop/recreate window.
-  const migrationClient = await pool.connect();
-  try {
-    await migrationClient.query("begin");
-    await migrationClient.query("drop trigger if exists verification_authorization_guard on public.verifications");
-    await migrationClient.query("create or replace function public.test_legacy_verification_independence() returns trigger language plpgsql as $body$ begin return new; end $body$");
-    await migrationClient.query("create trigger verification_independence_guard before insert on public.verifications for each row execute function public.test_legacy_verification_independence()");
-    await migrationClient.query("create trigger verifications_integrity_guard before insert or update on public.verifications for each row execute function public.prevent_invalid_verification()");
-    await migrationClient.query(migrationSql);
-    const remainingVerificationTriggers = await migrationClient.query<{ tgname: string }>(
-      "select tgname from pg_trigger where tgrelid='public.verifications'::regclass and not tgisinternal order by tgname",
-    );
-    assert.deepEqual(remainingVerificationTriggers.rows.map(row => row.tgname), ["verification_authorization_guard"]);
-    await migrationClient.query("drop function public.test_legacy_verification_independence()");
-    await migrationClient.query("commit");
-  } catch (error) {
-    await migrationClient.query("rollback").catch(() => undefined);
-    throw error;
-  } finally {
-    migrationClient.release();
-  }
+  // The migration reapplication rehearsal runs as a separate CI step before
+  // the parallel Node test suite; assert that its authoritative trigger remains.
+  const remainingVerificationTriggers = await pool.query<{ tgname: string }>(
+    "select tgname from pg_trigger where tgrelid='public.verifications'::regclass and not tgisinternal order by tgname",
+  );
+  assert.deepEqual(remainingVerificationTriggers.rows.map(row => row.tgname), ["verification_authorization_guard"]);
   const suffix = randomBytes(8).toString("hex");
   const uploaderToken = randomBytes(32).toString("base64url");
   const reviewerToken = randomBytes(32).toString("base64url");
