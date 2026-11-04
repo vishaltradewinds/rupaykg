@@ -44,6 +44,21 @@ test("rejects unapproved form versions and unsafe submission identifiers", () =>
   assert.deepEqual(normalizeOdkSubmission(config, { ...submission, instanceId: "../escape" }, []), { ok: false, code: "ODK_INSTANCE_ID_INVALID" });
 });
 
+test("rejects invalid timestamps and unsafe original-version identifiers", () => {
+  assert.deepEqual(
+    normalizeOdkSubmission(config, { ...submission, createdAt: "not-a-timestamp" }, []),
+    { ok: false, code: "ODK_TIMESTAMP_INVALID" }
+  );
+  assert.deepEqual(
+    normalizeOdkSubmission(config, { ...submission, updatedAt: "2026-99-99T25:61:00Z" }, []),
+    { ok: false, code: "ODK_TIMESTAMP_INVALID" }
+  );
+  assert.deepEqual(
+    normalizeOdkSubmission(config, { ...submission, instanceIdOriginal: "../other-submission" }, []),
+    { ok: false, code: "ODK_ORIGINAL_INSTANCE_ID_INVALID" }
+  );
+});
+
 test("rejects path traversal filenames, unsupported media, oversized and mismatched files", () => {
   const cases = [
     [{ filename: "../escape.pdf", contentType: "application/pdf" }, pdf, "ODK_ATTACHMENT_FILENAME_INVALID"],
