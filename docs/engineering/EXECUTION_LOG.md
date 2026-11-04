@@ -153,3 +153,13 @@
 - Local validation passed: 93 migrations / 73 schema objects; typecheck; production build; focused platform-admin/auth tests 19/19; diff check.
 - Temporary validation-only PR #254 targets main to run CI for the combined stack. Exact-head CI #5376 (`41796337375`) had passed dependency audit, migration validation, fresh PostgreSQL migration, typecheck, build, browser smoke and disposable PostgreSQL acceptance; production-container build was still running at checkpoint.
 - Added Run-27 checkpoint and refreshed canonical resume point. Production remains READ-ONLY / HOLD; no production migration or release action; TRL 9 NOT ACHIEVED.
+
+
+## 2026-11-04 — CTO Run 28 (non-owner verification guard prototype)
+- Added isolated-schema disposable PostgreSQL prototype in PR #263, stacked on PR #252 and PR #247. Latest exact head `1ce986d3e5ceab339a77fd1d64d4911b0fbabad4`; PR remains open/draft/unmerged.
+- Exact-head CI #5407 (`41804235750`) passed all stages, including disposable PostgreSQL integration and production-container build. Earlier head `178e7c77bb5c848fdef27281acdf6a404894d0d4` also passed CI #5402.
+- Replaced simulated API identity with a real password-authenticated non-owner API login and separate non-login function-owner role. API cannot assume the function-owner role; spoofed context settings do not expose evidence; trigger restores caller settings.
+
+The prototype confirmed that row locking under FORCE RLS needs both a narrow column-level lock privilege and exact-row policies. These policies allow locking but reject identifier changes; the function-owner role receives no table-level mutation or delete grant. Disposable tests passed for same-organization success, cross-organization/self/geography/suspended-identity denial, and concurrent role-permission revocation, membership deactivation and identity suspension.
+
+Added Run-28 checkpoint and refreshed the canonical resume point and guard design. Temporary validation PR #264 closed unmerged. Production remains READ-ONLY / HOLD; no production changes; TRL 9 NOT ACHIEVED.

@@ -1,7 +1,7 @@
 # Verification guard execution under a non-owner runtime — design proposal
 
 **Date:** 2026-11-04  
-**Status:** DESIGN CANDIDATE — NOT IMPLEMENTED, NOT APPROVED  
+**Status:** DISPOSABLE POSTGRESQL PROTOTYPE PASSED — PRODUCTION DESIGN NOT IMPLEMENTED OR APPROVED
 **Related:** PR #247, issues #196 and #215
 
 ## Problem statement
@@ -14,11 +14,11 @@ Use a dedicated, non-login guard execution role that owns only the SECURITY DEFI
 
 - Role attributes: `NOLOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION`.
 - No membership from the API runtime role; no API `SET ROLE` path.
-- Grant the guard role `SELECT` on the exact required source columns/tables and column-level `UPDATE(id)` only on the five rows that the trigger locks. Do not grant table-level UPDATE. This is a narrowly held technical privilege to satisfy PostgreSQL row-lock requirements; it is not a business mutation permission.
-- Make the guard function `SECURITY DEFINER`, owned by this role, with fixed `search_path = pg_catalog, public`, schema-qualified table/function references, no dynamic SQL, and `row_security = on`.
+- Grant the guard role `SELECT` on the exact required source columns/tables and column-level `UPDATE(id)` only on the five rows that the trigger locks. Do not grant table-level UPDATE. The disposable prototype demonstrated that column privilege alone is insufficient under FORCE RLS: an exact-row UPDATE policy is also required for SELECT ... FOR SHARE visibility. The UPDATE policy must pin both USING and WITH CHECK to the transaction-local row id; the guard can lock the row but cannot change its identifier. No other column UPDATE or DELETE grant is given.
+- Make the guard function `SECURITY DEFINER`, owned by this role, with fixed `search_path = pg_catalog, trusted_schema, pg_temp` (pg_temp last), schema-qualified table/function references, no dynamic SQL, and `row_security = on`.
 - Revoke direct EXECUTE from PUBLIC and the API runtime. The function is invoked only by the database trigger. Confirm in PostgreSQL that trigger execution still succeeds when the caller lacks EXECUTE.
-- Add SELECT RLS policies for the guard role on evidence, activities, identities, memberships, roles and organization geography scopes. Policies must be scoped by transaction-local guard context; the global geography reference catalog may be read-only to the guard role if needed for ancestor traversal.
-- Function sets and restores custom transaction-local GUCs (`set_config(..., true)`) before each source-row lookup. Policies must return no rows when guard context is absent. API callers cannot assume the guard role, and GUC values alone must not confer access to any other role.
+- Add SELECT RLS policies and exact-row UPDATE lock policies for the guard role on evidence, activities, identities, memberships and roles. Each UPDATE policy pins both USING and WITH CHECK to the exact row id carried in transaction-local guard context. Geography-scope rows remain read-only in this prototype; their concurrent revocation semantics remain open. The global geography reference catalog may be read-only to the guard role for ancestor traversal.
+- Function sets and restores custom transaction-local GUCs (`set_config(..., true)`) before each source-row lookup. Policies return no rows when guard context is absent. The disposable test uses a real password-authenticated API LOGIN role: it can set spoofed custom GUCs but still sees zero evidence rows because policies target only the inaccessible guard role. The trigger restores caller GUC values after successful and rejected decisions.
 - Keep the guard role distinct from table owners and ensure it has no BYPASSRLS. FORCE RLS must apply to it.
 - Provision role ownership/grants through the dedicated migrator/DBA path, never through the web API credential. Verify the actual managed-Postgres CREATEROLE/role-membership semantics before encoding role creation into a production migration.
 
@@ -56,3 +56,20 @@ A SECURITY DEFINER function owned by the existing `rupaykg` BYPASSRLS/table-owne
 ## Decision gate
 
 This is a prototype plan, not a production migration or approval. Do not add broad UPDATE to the API role, alter production roles/grants/ownership/RLS, apply the candidate migration, deploy, merge or certify based on this proposal. Independent DBA/security review is required before any release decision.
+
+
+## Run 28 — disposable PostgreSQL prototype evidence (2026-11-04)
+
+**Prototype PR:** #263 (OPEN / DRAFT / UNMERGED)
+**Exact head:** `1ce986d3e5ceab339a77fd1d64d4911b0fbabad4`
+**CI:** #5407 / run `41804235750` — SUCCESS across all stages, including disposable PostgreSQL acceptance and production-container build. Earlier exact head `178e7c77bb5c848fdef27281acdf6a404894d0d4` also passed CI #5402.
+
+The isolated-schema fixture created a NOLOGIN/NOSUPERUSER/NOBYPASSRLS guard role and a separate password-authenticated LOGIN/NOSUPERUSER/NOBYPASSRLS API role. The guard role owned only the SECURITY DEFINER trigger function, not the tenant tables. The API role had no EXECUTE privilege on the trigger function and could not SET ROLE to guard.
+
+The prototype established an important PostgreSQL detail: SELECT ... FOR SHARE under FORCE RLS requires both the narrow column UPDATE(id) privilege and a matching UPDATE RLS policy. Exact-row USING and WITH CHECK policies tied to transaction-local row-id GUCs made the row lock succeed while preventing identifier mutation. The guard received no table-level UPDATE and no DELETE grants. The function uses a fixed search_path with pg_catalog first and pg_temp last, and row_security=on.
+
+The actual API login could spoof the custom GUC values but still saw zero evidence rows because policies target only the inaccessible guard role. The trigger restored the API's prior GUC values after successful and failed attempts. Disposable PostgreSQL tests passed for valid same-org verification, cross-org evidence, self-verification, out-of-scope geography, suspended identity, and concurrent role-permission revocation, membership deactivation and identity suspension. The API could not UPDATE/DELETE verification rows; owner-side UPDATE was rejected by the immutable trigger.
+
+**Boundary:** this is an isolated-schema privilege prototype, not a production migration or a rehearsal against the recovered migration-096 production schema. It does not establish Neon role-provisioning feasibility, actual production grants/RLS, geography-scope mutation race safety, evidence/activity reassignment race safety, global lock-order/deadlock/timeout/retry behavior, or independent DBA/security approval. The fixture's geography helper has configured test scope; production's no-verified-scope permissive behavior remains a separate fail-closed blocker.
+
+Temporary validation PR #264 was closed UNMERGED after CI #5407 passed. Production remains READ-ONLY / HOLD; no production or staging writes, role/grant changes, migrations, RLS activation, deployment, merge or certification occurred.

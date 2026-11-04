@@ -441,3 +441,19 @@ This proves source/config does not demonstrate credential separation; it does no
 - Production remains READ-ONLY / HOLD. Composite FK migration is not applied to production. No production writes, grants, role changes, RLS activation, deployments, merges, worker activation or certification.
 - PR #247 and PR #252 remain draft/unmerged. Temporary PR #254 is CI-only and will be closed after evidence capture.
 - Global 67-table RLS, geography fail-closed behavior, runtime/migrator separation, live Guardian/Hedera acceptance and SITE-JBP-01 field validation remain open. Production certification and TRL 9 NOT ACHIEVED.
+
+
+## Run 28 — non-owner guard prototype checkpoint
+
+
+Prototype PR #263 remains OPEN / DRAFT / UNMERGED, stacked on PR #252 and PR #247. Latest exact code head: 1ce986d3e5ceab339a77fd1d64d4911b0fbabad4. Exact-head CI #5407 (run 41804235750) completed SUCCESS across all configured stages, including disposable PostgreSQL integration and production-container build. Earlier exact head 178e7c77bb5c848fdef27281acdf6a404894d0d4 also passed CI #5402. Temporary validation-only PR #264 was closed unmerged after CI evidence capture.
+
+
+Prototype results: the disposable PostgreSQL test used a real password-authenticated API login and a separate non-login function-owner role. The API could not assume the function-owner role. Custom context settings supplied by the API did not reveal protected evidence, and the trigger restored the caller's prior settings after both success and rejection. The trigger function used a fixed search path and enabled row security.
+
+The database test also showed that a narrow column grant alone is insufficient for row locking under FORCE RLS. Exact-row policies are required as well: they allow the function-owner role to lock the selected row but reject changes to that row's identifier. The test covered same-organization success, cross-organization denial, self-verification denial, out-of-scope geography, suspended identities, and concurrent role, membership and identity revocation. The guard role has no table-level mutation or delete grant in the fixture.
+
+
+Remaining gates: this is an isolated-schema prototype, not a rehearsal against the recovered migration-096 production schema. Neon managed-role provisioning, actual production grants and policies, geography-scope mutation races, evidence/activity reassignment races, lock-order/deadlock/timeout/retry analysis, destructive-owner controls and independent DBA/security review remain open. The production no-verified-geography-scope permissive behavior is still a separate fail-closed blocker.
+
+Next: rehearse the guard against a disposable copy of the recovered 096 schema and trigger composition; validate role provisioning under Neon-like constraints; add geography and evidence/activity reassignment races; complete the 67-table tenant RLS matrix and runtime/migrator separation review. Production remains READ-ONLY / HOLD. No production or staging writes, grants, role changes, migrations, RLS activation, deployment or certification occurred. SITE-JBP-01 remains PRE-VALIDATION; TRL 9 NOT ACHIEVED.
