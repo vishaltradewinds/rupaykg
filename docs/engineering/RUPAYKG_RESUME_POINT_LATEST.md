@@ -190,3 +190,26 @@ This proves source/config does not demonstrate credential separation; it does no
 4. Run all security tests under a genuine non-owner runtime role on disposable PostgreSQL; production runtime separation and RLS remain unproven.
 5. Keep PRs draft/unmerged and production READ-ONLY / HOLD. No production SQL/DDL, migration, trigger/function edit, role/grant/ownership/RLS change, branch operation, deployment, worker activation or certification occurred.
 6. Independent DBA/security review, production tenant isolation, live Guardian/Hedera acceptance, SITE-JBP-01 field acceptance and TRL 9 remain NOT ACHIEVED.
+
+
+## 2026-11-04 authoritative refresh — CTO Run 19 (staging migration recovery)
+
+### Staging-only 20261022–20261025 catalog inspection
+- Read-only Neon inspection of staging branch `br-spring-hill-b4544vz5` (`rupaykg-gov-inbox-staging-20261020`) confirms ledger rows for `20261022_async_mirror_inbox.sql`, `20261023_async_mirror_worker_leases.sql`, `20261024_ai_intake_rate_limits.sql`, and `20261025_ai_evidence_intake_jobs.sql`, all applied at `2026-10-20T10:48:38.647Z`.
+- Exact original migration SQL remains unrecovered; live catalog has been documented as a reconstruction only in `docs/engineering/STAGING_ASYNC_MIRROR_AI_INTAKE_EVIDENCE_2026-11-04.md`. Do not claim this catalog snapshot is original source.
+- Four tables are owned by `rupaykg`, with RLS/FORCE RLS disabled. `async_mirror_inbox` has no organization_id; `ai_evidence_intake_jobs` and `ai_intake_rate_limits` are organization/identity scoped.
+- Staging data: 12 test-labelled inbox rows, 29 append-only events; 8 PROCESSING rows with expired leases, one RETRY past due, one QUARANTINED after 5 attempts, one RECEIVED and one VALIDATED. AI intake jobs and rate-limit tables are empty.
+- Inbox has a status/attempt event trigger and append-only event-log guard. No user trigger on AI intake jobs. No matching current-main application/worker source files or independent deployed worker/scheduler/queue consumer was found/proven.
+- Interpretation: abandoned staging test activity, not a live authority feed or healthy operational worker. Do not replay or reconstruct migrations for production from catalog state.
+- Issue #214 updated with these findings and the recovery/assurance requirements.
+
+### Updated handoff branch changes
+- Recovered 096 review-only source, current migration source inventory, corrected migration README and staging schema evidence have been added to PR #244 branch.
+- PR #244 latest branch head must be rechecked and CI must pass on that exact final head; prior CI #5337 passed only for earlier head `92b5215a56cba12a5880175e9b63e44c2aedb4b3`.
+
+### Next actions
+1. Verify exact-head CI for the new docs branch head and repair any issues.
+2. Recover original staging migration SQL and worker source/deployment artifact from the actual deployment/build history; do not treat schema reconstruction as migration source.
+3. Design worker lease fencing, claim exclusivity, retry/backoff, quarantine, idempotency and stale-lease recovery tests; prove worker runtime and tenant mapping before any operational claim.
+4. Continue verification trigger unified design and EPR/ESG permission alias/caller tests on disposable PostgreSQL.
+5. Production remains READ-ONLY / HOLD. No staging data, production schema, data, roles, grants, functions or triggers changed. TRL 9 NOT ACHIEVED.
