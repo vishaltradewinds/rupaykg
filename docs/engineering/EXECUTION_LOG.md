@@ -50,3 +50,13 @@
 - A guessed migration-root fetch returned 404; no claims made about EPR/ESG database function definitions. Next locate authoritative migration directory through repository tree metadata and inspect exact function SQL, grants and search_path.
 - Refreshed canonical resume point with exact CI evidence, updated authorization review and next batch.
 - Production remains READ-ONLY / HOLD. No production SQL/DDL, migration, role/grant/ownership/RLS change, branch operation, deployment, merge, worker activation or certification. TRL 9 NOT ACHIEVED.
+
+
+## 2026-11-04 — CTO Run 17 (06:28 UTC onward)
+- Reconciled the exact production `schema_migrations` ledger (92 rows) against current-main migration tree (91 SQL files). Production records 001–087, 096, and 20261018–20261021; active current-main source lacks 096. Versions 088–095 are absent from production ledger.
+- Confirmed migration 023 exists in current main and is recorded in production despite README claiming it is absent. README also omits migrations 029–087 and dated migrations, and incorrectly describes migration 015 as the high-risk permission migration (actual 015 is Guardian/Hedera; 041 is high-risk permissions).
+- Verified `migrate.ts` and migration validator enumerate all numbered SQL files in the directory, not the stale README list. No ledger or migration source was modified.
+- Read-only production function inspection found EPR/ESG authorization functions SECURITY INVOKER, owned by `rupaykg`, without function-level search_path configuration; live definitions include permission aliases absent from current migration 018. A DB-function body scan found no internal SQL/PLpgSQL callers; exhaustive application call-site proof remains outstanding.
+- Updated P0 issue #214 with exact ledger, source tree and live function-definition evidence. Refreshed canonical resume point.
+- PR #244 head `9081e98fec3e263fc95c8a377ebd2156d6ea4cb3` passed exact-head CI #5335 (`41785611740`) across all configured stages. PR remains draft/unmerged.
+- Production remains READ-ONLY / HOLD. No SQL writes, DDL, migration, function change, role/grant/ownership/RLS change, branch operation, deployment, merge, worker activation or certification. TRL 9 NOT ACHIEVED.
