@@ -39,8 +39,15 @@ const pool = new Pool({
     : { ssl: { rejectUnauthorized: true, ...(caCert ? { ca: caCert } : {}) } }),
 });
 
+// Keep one session for the entire run: the session-level advisory lock prevents
+// two independently invoked migrators from racing over the same ledger.
+const client = await pool.connect();
+let migrationLockAcquired = false;
 try {
-  await pool.query(
+  await client.query("select pg_advisory_lock(741852963)");
+  migrationLockAcquired = true;
+
+  await client.query(
     "create table if not exists schema_migrations (" +
     "version text primary key, filename text not null, applied_at timestamptz not null default now())"
   );
@@ -55,7 +62,7 @@ try {
 
   // Stop when a ledger row has no active source. Reconcile archived files first.
   const activeVersions = new Set(files.map((filename) => filename.split("_", 1)[0]));
-  const recorded = await pool.query<{ version: string; filename: string }>(
+  const recorded = await client.query<{ version: string; filename: string }>(
     "select version, filename from schema_migrations order by version",
   );
   const orphaned = recorded.rows.filter((row) => !activeVersions.has(row.version));
@@ -66,7 +73,7 @@ try {
 
   for (const filename of files) {
     const version = filename.split("_", 1)[0];
-    const existing = await pool.query<{ version: string; filename: string }>(
+    const existing = await client.query<{ version: string; filename: string }>(
       "select version, filename from schema_migrations where version = $1",
       [version],
     );
@@ -78,7 +85,6 @@ try {
     }
 
     const sql = await readFile(path.join(migrationDir, filename), "utf8");
-    const client = await pool.connect();
     try {
       await client.query("begin");
       await client.query(sql);
@@ -91,12 +97,15 @@ try {
     } catch (error) {
       await client.query("rollback");
       throw new Error("Migration " + filename + " failed", { cause: error });
-    } finally {
-      client.release();
     }
   }
 
   console.log("Database migrations are current (" + files.length + " files).");
 } finally {
-  await pool.end();
+  try {
+    if (migrationLockAcquired) await client.query("select pg_advisory_unlock(741852963)");
+  } finally {
+    client.release();
+    await pool.end();
+  }
 }
