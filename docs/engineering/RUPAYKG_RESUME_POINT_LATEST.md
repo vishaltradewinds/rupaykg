@@ -508,3 +508,30 @@ Next: rehearse the guard against a disposable copy of the recovered 096 schema a
 - API suite 100/100; other workspace suites 22/22, 2/2, 29/29, 1/1 and 2/2. Browser smoke and production-container build passed.
 - Temporary validation PR #273 was closed UNMERGED after CI #5445. PR #263 remains the authoritative stacked draft.
 - Remaining: concurrent geography-scope row revocation locking; complete global lock order/deadlock/timeout/retry; Neon role provisioning feasibility; 67-table policy and actual non-owner runtime rollout; owner tamper controls; independent DBA/security review.
+
+
+## 2026-11-04 authoritative refresh — CTO Run 29 (security convergence and release governance)
+
+### Exact-head engineering evidence
+- PR #272 head `a8ce1c9bbb1d88a88dffe142967fec65d7ad77d9` passed exact-head CI #5516 / run `41874461093` SUCCESS (18/18 steps). Verification now denies when an organization has no VERIFIED geography root; a full-schema PostgreSQL regression sets the only root to PENDING and proves denial.
+- PR #284 prior head `2b1ebc88237e9274e563b5605295ce925cabd234` passed exact-head CI #5518 / run `41874715707` SUCCESS (18/18 steps). PUBLIC EXECUTE was removed from the signed-context helper functions; the disposable API role has only an explicit context-issuer grant and cannot directly call private validators.
+- PR #284 current head `cbd743a8d2e17100cd1607ef19f90bef6a6ccc6d` ports exact activity-organization and role-organization binding into `hasOrganizationPermission` and `canVerifyEvidence`, checks active/non-suspended identity, passes the resolved organization from both verification write routes and adds SQL-shape/parameter assertions. CI #5521 / run `41875338287` is still in progress at this refresh; migration validation, context proof, typecheck, build, browser smoke and PostgreSQL acceptance have passed; production-container build remains pending.
+- PR #252 tenant-role binding exact-head CI #5376 passed. PR #250/#251 combined geography rehearsal temporary PR #287 CI #5506 passed; #287 is closed unmerged. PR #268 migrator separation CI #5406 passed but remains draft/unmerged. PR #263 prototype CI #5457 passed. PR #282 and #277 proof branches have successful CI but remain evidence-only drafts.
+
+### Fresh authoritative production and release-control evidence
+- Neon main recheck: 67 public tables, 0 RLS, 0 FORCE RLS, 0 public policies; all 67 owned by `rupaykg`; 92 migration rows, latest `20261021`. `rupaykg` is LOGIN, BYPASSRLS, CREATEROLE, CREATEDB, REPLICATION and member of `neon_superuser`. Audit connection `current_user=session_user='rupaykg'` is not proof of the Render API identity.
+- Render live service `srv-daki4d7qj5pc73b8qksg` auto-deploys on `commit` from `main`; checked-in `render.yaml` says `checksPass`. Latest live commit remains `934062ef8af2ca47bbcbf5e37c12de12a4f9f743`. No Render settings, secrets or deployments changed.
+- GitHub `main.protected=false`; repository rulesets query is empty. No branch protection was changed.
+
+### Convergence blockers and next actions
+1. Finish PR #284 CI #5521. Do not claim exact-head success until container build/cleanup completes.
+2. Consolidate #252 + #272 + #250/#251 + #284 into one canonical verification trigger and one shared NOLOGIN/NOBYPASSRLS guard owner. #272 and #284 currently define the same trigger/function; naive migration ordering replaces the signed-context trigger. Reuse `rupaykg_verification_guard`, do not retain separate `rupaykg_auth_context_owner`.
+3. Preserve both context layers: `app.request_context` for general RLS and DB-issued bearer context for verification writes. Set both on the same client/top-level transaction, bind the same actor and active organization, compare claims in the final trigger, and prove pool/rollback/savepoint reset.
+4. Identify the actual Render API runtime role safely; grant EXECUTE only on the context issuer to that role after proof. No PUBLIC grant.
+5. Reconcile 92 production ledger rows against 91 active source files; preserve orphaned 096 as evidence and do not replay/rewrite it. Complete 67-table RLS matrix and actual non-owner FORCE RLS rehearsal.
+6. Reconcile Render commit-trigger drift and unprotected main through a separately approved release-governance change.
+
+### Readiness and safety
+- Production remains READ-ONLY / HOLD. No production DDL/DML, migrations, role/grant/ownership changes, RLS, branch operations, secret/config changes, deployments, worker activation, merges or certification occurred.
+- SITE-JBP-01 Kathonda remains PRE-VALIDATION. Provisional national-platform TRL 3; individual tested components at most TRL 4. Production certification and TRL 9 NOT ACHIEVED.
+- Immutable Run-29 checkpoint: `docs/engineering/checkpoints/2026-11-04-cto-run-29-security-convergence-and-release-governance.md`. Session log: `docs/engineering/session-logs/2026-11-04-cto-session-29.md`.
