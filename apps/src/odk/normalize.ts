@@ -81,7 +81,7 @@ function validIdentifier(value: string): boolean {
 
 function validIsoDate(value: string | undefined | null): boolean {
   if (value == null) return true;
-  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\\.(\d{1,9}))?(Z|[+-]\d{2}:\d{2})$/.exec(value);
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,9}))?(Z|[+-]\d{2}:\d{2})$/.exec(value);
   if (!match) return false;
   const [, yearText, monthText, dayText, hourText, minuteText, secondText] = match;
   const zone: string = match[8] ?? "";
@@ -166,6 +166,7 @@ export function normalizeOdkSubmission(
     createdAt: submission.createdAt ?? null,
     updatedAt: submission.updatedAt ?? null,
     deletedAt: submission.deletedAt ?? null,
+    reviewState: submission.reviewState ?? null,
     attachments: normalizedAttachments
   };
   return {
