@@ -190,9 +190,29 @@ BEGIN
   IF role_state.rolcanlogin OR role_state.rolbypassrls OR role_state.rolsuper THEN
     RAISE EXCEPTION 'guard owner must be NOLOGIN/NOBYPASSRLS/NOSUPERUSER';
   END IF;
-  IF (SELECT relowner FROM pg_class WHERE oid='verification_guard_role_proof.evidence'::regclass)
-       = (SELECT oid FROM pg_roles WHERE rolname='rupaykg_guard_proof_owner') THEN
-    RAISE EXCEPTION 'guard owner must not own protected tables';
+  IF EXISTS (
+    SELECT 1
+      FROM pg_class c
+      JOIN pg_namespace n ON n.oid = c.relnamespace
+     WHERE n.nspname = 'verification_guard_role_proof'
+       AND c.relkind IN ('r', 'p')
+       AND c.relowner = (SELECT oid FROM pg_roles WHERE rolname='rupaykg_guard_proof_owner')
+  ) THEN
+    RAISE EXCEPTION 'guard owner must not own any protected table';
+  END IF;
+  IF NOT has_column_privilege('rupaykg_guard_proof_owner', 'verification_guard_role_proof.evidence', 'id', 'UPDATE')
+     OR NOT has_column_privilege('rupaykg_guard_proof_owner', 'verification_guard_role_proof.activities', 'id', 'UPDATE')
+     OR NOT has_column_privilege('rupaykg_guard_proof_owner', 'verification_guard_role_proof.memberships', 'id', 'UPDATE')
+     OR NOT has_column_privilege('rupaykg_guard_proof_owner', 'verification_guard_role_proof.roles', 'id', 'UPDATE')
+     OR NOT has_column_privilege('rupaykg_guard_proof_owner', 'verification_guard_role_proof.identities', 'id', 'UPDATE') THEN
+    RAISE EXCEPTION 'guard owner is missing a required row-lock column privilege';
+  END IF;
+  IF has_column_privilege('rupaykg_guard_proof_owner', 'verification_guard_role_proof.evidence', 'organization_id', 'UPDATE')
+     OR has_column_privilege('rupaykg_guard_proof_owner', 'verification_guard_role_proof.activities', 'organization_id', 'UPDATE')
+     OR has_column_privilege('rupaykg_guard_proof_owner', 'verification_guard_role_proof.memberships', 'organization_id', 'UPDATE')
+     OR has_column_privilege('rupaykg_guard_proof_owner', 'verification_guard_role_proof.roles', 'permissions', 'UPDATE')
+     OR has_column_privilege('rupaykg_guard_proof_owner', 'verification_guard_role_proof.identities', 'suspended', 'UPDATE') THEN
+    RAISE EXCEPTION 'guard owner unexpectedly has UPDATE on protected data columns';
   END IF;
 END;
 $check$;
