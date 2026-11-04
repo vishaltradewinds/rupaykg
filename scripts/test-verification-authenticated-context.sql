@@ -32,6 +32,7 @@ INSERT INTO rupaykg_private.auth_context_key(singleton,secret)
 VALUES (true, decode(repeat('5a',32),'hex'));
 
 GRANT USAGE ON SCHEMA public TO rupaykg_context_owner,rupaykg_context_api;
+GRANT CREATE ON SCHEMA public TO rupaykg_context_owner;
 GRANT SELECT ON public.identity_sessions,public.identities,
   public.organization_memberships,public.organizations,public.activities
   TO rupaykg_context_owner;
@@ -192,6 +193,7 @@ END;
 $$;
 ALTER FUNCTION public.rupaykg_require_authenticated_verifier()
   OWNER TO rupaykg_context_owner;
+REVOKE CREATE ON SCHEMA public FROM rupaykg_context_owner;
 REVOKE ALL ON FUNCTION public.rupaykg_require_authenticated_verifier() FROM PUBLIC;
 CREATE TRIGGER aaa_rupaykg_authenticated_verifier_guard
 BEFORE INSERT ON public.verifications
@@ -335,6 +337,7 @@ BEGIN
 END;
 $insert_spoof$;
 COMMIT;
+RESET ROLE;
 
 -- Revocation is checked by the context issuer on every transaction.
 UPDATE public.identity_sessions s SET revoked_at=now()
