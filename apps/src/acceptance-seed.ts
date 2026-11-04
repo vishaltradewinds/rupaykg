@@ -2,13 +2,14 @@ import { createHash } from "node:crypto";
 import { Pool } from "pg";
 
 /**
- * Creates one deterministic, idempotent live-acceptance dataset.
+ * Creates one deterministic, idempotent acceptance-only dataset.
  *
- * Safety: this file does nothing unless RUPAYKG_ACCEPTANCE_SEED_ON_START=true.
- * It prefers an existing source-versioned operational geography. If none exists,
- * it uses the dedicated source-versioned acceptance fixture geography created by
- * migration 081; it never invents LGD/government geography data.
+ * This is not a production startup task. Production execution is rejected
+ * even if an operator accidentally sets the opt-in flag.
  */
+if (process.env.NODE_ENV === "production") {
+  throw new Error("RUPAYKG_ACCEPTANCE_SEED_FORBIDDEN: acceptance fixtures must never run in production");
+}
 
 if (process.env.RUPAYKG_ACCEPTANCE_SEED_ON_START !== "true") {
   process.exit(0);
