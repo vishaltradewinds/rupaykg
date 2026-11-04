@@ -87,3 +87,30 @@ An earlier exact head `1ce986d3e5ceab339a77fd1d64d4911b0fbabad4` also passed CI 
 ## Production and TRL boundary
 
 Production Neon remains READ-ONLY / HOLD. No production/staging SQL writes, migrations, role/grant/ownership changes, RLS activation, deployments, merges, worker activation or certification occurred. PRs #247, #252 and #263 remain draft/unmerged. SITE-JBP-01 Kathonda remains PRE-VALIDATION. Production certification and TRL 9 are NOT ACHIEVED.
+
+
+## Run 28 follow-on — evidence/activity mutation races and fail-closed geography (2026-11-04)
+
+**Prototype PR:** #263 (OPEN / DRAFT / UNMERGED)
+**Exact head:** `d297861d9e6dc5b7b03cfb6162902e57a5893b00`
+**Exact-head CI:** #5444 / run `41810684565` — SUCCESS; combined main-base CI #5445 / run `41810809297` — SUCCESS.
+
+### Additional disposable PostgreSQL regressions
+- Added evidence-to-activity reassignment race: API verification waits on the evidence row lock, then resolves the committed activity and denies when its organization no longer matches the verifier membership.
+- Added activity organization reassignment race: API verification waits on the activity row lock, then re-reads committed organization and denies the verifier's now-invalid tenant permission.
+- Added activity geography reassignment race: API verification waits on the activity row lock, then re-evaluates the committed geography and denies an out-of-scope decision.
+- Changed the prototype geography helper's no-verified-scope behavior to fail closed and added a direct regression proving an organization with no VERIFIED scope cannot verify.
+- Existing role-permission revocation, membership deactivation and identity suspension races remain green. The test now exercises six revocation/mutation races under the actual non-owner API LOGIN role.
+
+### Exact validation
+- CI #5444 passed all configured stages: dependency audit, migration validation, disposable PostgreSQL migration, typecheck, production build, browser smoke, full tests/PostgreSQL acceptance, production-container build and cleanup.
+- API suite 100/100; other workspace suites 22/22, 2/2, 29/29, 1/1 and 2/2. No failures or skips in the reported suites.
+- CI #5445 on temporary validation PR #273 passed all stages for the same exact commit. PR #273 was closed UNMERGED after evidence capture; PR #263 remains authoritative.
+
+### Remaining limits
+- The prototype's geography helper is fail-closed, but it does not yet lock scope rows against concurrent scope revocation. That race remains open and must be designed/tested before production.
+- Evidence/activity reassignment races now pass in isolation, but complete lock-order analysis across all app mutation paths, deadlock/timeout/retry behavior and mutation paths not represented in this fixture remain open.
+- Production geography function's no-scope permissive behavior is not changed by this test fixture; production remains a P0 fail-closed blocker.
+- Neon managed role provisioning, production runtime/migrator separation, 67-table RLS rollout, owner DELETE/tamper controls and independent DBA/security review remain open.
+
+No production/staging writes, migrations, role/grant/ownership changes, RLS activation, deployments, merges, worker activation or certification. Production remains READ-ONLY / HOLD; TRL 9 NOT ACHIEVED.

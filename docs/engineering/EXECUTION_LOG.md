@@ -174,3 +174,12 @@ Added Run-28 checkpoint and refreshed the canonical resume point and guard desig
 - Updated PR #263 description and commented on PRs #247/#252 with exact-head evidence. Temporary validation PR #264 was closed unmerged. PR #263 remains authoritative, open/draft/unmerged.
 - Added Run-28 checkpoint and refreshed canonical resume point. Remaining: evidence/activity reassignment races; geography-scope row-locking and fail-closed no-scope behavior; complete lock-order/deadlock/timeout/retry review; Neon role provisioning feasibility; 67-table RLS matrix; independent DBA/security review.
 - Production remains READ-ONLY / HOLD. No production/staging writes, migrations, role/grant/ownership changes, RLS activation, deployments, merges, worker activation or certification. SITE-JBP-01 remains PRE-VALIDATION; TRL 9 NOT ACHIEVED.
+
+
+## 2026-11-04 — Run 28 follow-on (evidence/activity reassignment and geography fail-closed)
+- PR #263 exact head `d297861d9e6dc5b7b03cfb6162902e57a5893b00` passed CI #5444 (`41810684565`) and combined main-base CI #5445 (`41810809297`) end-to-end.
+- Added three more two-session races under real non-owner API login: evidence-to-activity reassignment, activity organization reassignment and activity geography reassignment. Verification waits on evidence/activity row lock and denies after committed state changes.
+- Prototype geography helper changed to fail closed when no VERIFIED scope exists; direct negative PostgreSQL regression passed. This is prototype-only; production's permissive no-scope behavior remains unchanged and is a P0 blocker.
+- Six total mutation/revocation races pass: role permission revocation, membership deactivation, identity suspension, evidence reassignment, activity org reassignment, activity geography reassignment. API tests 100/100; other workspaces 22/22, 2/2, 29/29, 1/1, 2/2; browser smoke and production-container build passed.
+- Temporary validation PR #273 closed unmerged after CI evidence capture. PR #263 remains authoritative draft. Added follow-on checkpoint and updated canonical resume point.
+- Remaining: geography-scope row-lock/revocation race, complete lock/deadlock/timeout/retry analysis, Neon role provisioning, 67-table RLS rollout, owner tamper controls and independent DBA/security review. Production READ-ONLY/HOLD; TRL 9 NOT ACHIEVED.

@@ -100,3 +100,28 @@ A separate integration fixture now reconstructs the recovered migration-096 veri
 - Owner-side DELETE/tamper powers, full 67-table tenant RLS and independent DBA/security review remain open.
 
 Temporary validation PR #264 was closed unmerged after CI evidence capture. PR #263 remains the authoritative stacked draft on PR #252 and PR #247. Production remains READ-ONLY / HOLD; no deployment, migration, merge, certification or TRL 9 claim.
+
+
+## Run 28 follow-on — reassignment race and fail-closed geography proof (2026-11-04)
+
+**Latest prototype head:** `d297861d9e6dc5b7b03cfb6162902e57a5893b00`
+**Exact-head CI:** #5444 / `41810684565` — SUCCESS; combined main-base CI #5445 / `41810809297` — SUCCESS.
+
+The disposable test now adds three two-session mutation races using the actual password-authenticated non-owner API login:
+
+- Evidence `activity_id` reassignment: the API verification waits for the evidence row lock, then reads the committed new activity and denies because the verifier has no permission in that activity organization.
+- Activity `organization_id` reassignment: the API verification waits for the activity row lock, re-reads the committed organization and denies.
+- Activity `geography_id` reassignment: the API verification waits for the activity row lock, re-reads the committed geography and denies an out-of-scope decision.
+
+The prototype's geography helper now returns false when no VERIFIED organization geography scope exists. A direct PostgreSQL negative test removes the only verified scope for a tenant and confirms verification is denied. This corrects the prototype helper only; production's current permissive no-scope behavior remains unchanged and remains a P0 blocker.
+
+Six races now pass in the test fixture: role permission revocation, membership deactivation, identity suspension, evidence-to-activity reassignment, activity organization reassignment and activity geography reassignment. Exact-head CI passed audit, migration validation, disposable PostgreSQL migration, typecheck, production build, browser smoke, all tests, production-container build and cleanup. API suite 100/100; other workspace suites 22/22, 2/2, 29/29, 1/1 and 2/2.
+
+### Still not proven
+
+- Geography-scope row locking under concurrent revocation is not implemented; a separate race could still occur between scope read and decision. Add scope-row locks with a narrow guard privilege/policy and a two-session race before production design approval.
+- Full global lock ordering across scope/evidence/activity/identity/membership/role and all application mutation paths remains unreviewed. Deadlock, timeout and bounded retry behavior remain open.
+- Production geography no-scope fail-closed change has not been applied.
+- Neon managed-role provisioning, production grants/ownership separation, actual runtime/migrator split, 67-table RLS and independent DBA/security review remain open.
+
+PR #273 was a temporary validation-only PR and was closed unmerged after CI #5445. PR #263 remains the authoritative stacked draft. Production remains READ-ONLY / HOLD; no migration, role/grant change, RLS activation, deployment, merge or certification. TRL 9 NOT ACHIEVED.

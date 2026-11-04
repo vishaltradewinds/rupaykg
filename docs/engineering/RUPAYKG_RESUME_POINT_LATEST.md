@@ -498,3 +498,13 @@ Next: rehearse the guard against a disposable copy of the recovered 096 schema a
 - Read-only Neon catalog extraction returned column lists and foreign-key relationships for all 67 public base tables. Each remains RLS-disabled and FORCE-RLS-disabled; all are owned by rupaykg at the catalog snapshot.
 - Added docs/engineering/PRODUCTION_TENANT_POLICY_MATRIX_2026-11-04.md, a 67-row table-by-table candidate matrix covering direct tenant keys, activity/evidence descendants, EPR/ESG/BWG reporting, bilateral credits/transfers/settlements, field-device/sync, identity/security, platform audit and governance/reference data. It specifies candidate access boundaries and required cross-tenant consistency checks without authoring policy SQL.
 - Linked the matrix from PRODUCTION_TENANT_ISOLATION_INVENTORY_2026-11-04.md. This is a design inventory only; it is not approved policy or a production rollout authorization.
+
+
+### Run 28 follow-on — reassignment races and fail-closed geography
+- Latest prototype PR #263 head `d297861d9e6dc5b7b03cfb6162902e57a5893b00` passed exact-head CI #5444 (`41810684565`) and combined main-base CI #5445 (`41810809297`) SUCCESS end-to-end.
+- Added and passed three new two-session races under the actual non-owner API login: evidence-to-activity reassignment, activity organization reassignment, and activity geography reassignment. In each, verification waits for the relevant evidence/activity row lock, then re-reads committed state and denies after ownership/scope changes.
+- Prototype geography helper now fails closed when no VERIFIED geography scope exists; a direct PostgreSQL negative test confirms denial. This change is test-only. Production's existing no-scope permissive behavior remains a P0 blocker.
+- Six races now pass: role permission revocation, membership deactivation, identity suspension, evidence reassignment, activity organization reassignment and activity geography reassignment.
+- API suite 100/100; other workspace suites 22/22, 2/2, 29/29, 1/1 and 2/2. Browser smoke and production-container build passed.
+- Temporary validation PR #273 was closed UNMERGED after CI #5445. PR #263 remains the authoritative stacked draft.
+- Remaining: concurrent geography-scope row revocation locking; complete global lock order/deadlock/timeout/retry; Neon role provisioning feasibility; 67-table policy and actual non-owner runtime rollout; owner tamper controls; independent DBA/security review.
