@@ -67,6 +67,22 @@ CREATE POLICY guard_membership_scope ON verification_guard_role_proof.membership
 CREATE POLICY guard_role_scope ON verification_guard_role_proof.roles
   FOR SELECT TO rupaykg_guard_proof_owner
   USING (organization_id = current_setting('app.organization_id', true)::uuid);
+CREATE POLICY guard_evidence_lock_scope ON verification_guard_role_proof.evidence
+  FOR UPDATE TO rupaykg_guard_proof_owner
+  USING (organization_id = current_setting('app.organization_id', true)::uuid)
+  WITH CHECK (organization_id = current_setting('app.organization_id', true)::uuid);
+CREATE POLICY guard_activity_lock_scope ON verification_guard_role_proof.activities
+  FOR UPDATE TO rupaykg_guard_proof_owner
+  USING (organization_id = current_setting('app.organization_id', true)::uuid)
+  WITH CHECK (organization_id = current_setting('app.organization_id', true)::uuid);
+CREATE POLICY guard_membership_lock_scope ON verification_guard_role_proof.memberships
+  FOR UPDATE TO rupaykg_guard_proof_owner
+  USING (organization_id = current_setting('app.organization_id', true)::uuid)
+  WITH CHECK (organization_id = current_setting('app.organization_id', true)::uuid);
+CREATE POLICY guard_role_lock_scope ON verification_guard_role_proof.roles
+  FOR UPDATE TO rupaykg_guard_proof_owner
+  USING (organization_id = current_setting('app.organization_id', true)::uuid)
+  WITH CHECK (organization_id = current_setting('app.organization_id', true)::uuid);
 CREATE POLICY api_verification_insert_scope ON verification_guard_role_proof.verifications
   FOR INSERT TO rupaykg_guard_proof_api
   WITH CHECK (organization_id = current_setting('app.organization_id', true)::uuid);
