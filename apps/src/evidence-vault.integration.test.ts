@@ -126,6 +126,44 @@ test("evidence vault enforces tenant scope, versioned storage, integrity and ind
       pool.query("update verifications set rationale='attempted provenance rewrite' where evidence_id=$1", [uploaded.evidenceId]),
       /verification records are immutable/,
     );
+    // Two-session race: a permission revocation that obtains the role-row
+    // lock first must serialize before a verification decision.
+    const revoker = await pool.connect();
+    const verifier = await pool.connect();
+    let revocationCommitted = false;
+    try {
+      await revoker.query("begin");
+      await revoker.query("update roles set permissions=$2::jsonb where id=$1", [roles[1].rows[0]!.id, JSON.stringify(["evidence:read", "evidence:review"])]);
+      const verifierPid = (await verifier.query<{ pid: number }>("select pg_backend_pid() pid")).rows[0]!.pid;
+      const pendingDecision = verifier.query(
+        "insert into verifications(evidence_id,activity_id,verifier_identity_id,decision,scope,rationale) values($1,$2,$3,'REJECTED','EVIDENCE_VAULT','Concurrent revocation fixture')",
+        [second.evidenceId, activity.rows[0]!.id, reviewerId],
+      ).then(() => ({ ok: true as const }), (error: unknown) => ({ ok: false as const, error }));
+      let blockedOnLock = false;
+      for (let attempt = 0; attempt < 200; attempt += 1) {
+        const wait = await pool.query<{ wait_event_type: string | null }>("select wait_event_type from pg_stat_activity where pid=$1", [verifierPid]);
+        if (wait.rows[0]?.wait_event_type === "Lock") { blockedOnLock = true; break; }
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      assert.equal(blockedOnLock, true, "verification insert must wait for the in-flight role permission update");
+      await revoker.query("commit");
+      revocationCommitted = true;
+      const raced = await pendingDecision;
+      assert.equal(raced.ok, false);
+      if (!raced.ok) assert.match(raced.error instanceof Error ? raced.error.message : String(raced.error), /verification requires active explicit verifier permission in the activity organization/);
+      await verifier.query("rollback").catch(() => undefined);
+    } finally {
+      if (!revocationCommitted) await revoker.query("rollback").catch(() => undefined);
+      await verifier.query("rollback").catch(() => undefined);
+      revoker.release();
+      verifier.release();
+      await pool.query("update roles set permissions=$2::jsonb where id=$1", [roles[1].rows[0]!.id, JSON.stringify(["evidence:read", "evidence:review", "VERIFY_EVIDENCE"])]);
+    }
+    const snapshotAfterRevocation = await pool.query<{ authorization_permissions_snapshot: string[] }>(
+      "select authorization_permissions_snapshot from verifications where evidence_id=$1 and decision='APPROVED'",
+      [uploaded.evidenceId],
+    );
+    assert.ok(snapshotAfterRevocation.rows[0]?.authorization_permissions_snapshot.includes("VERIFY_EVIDENCE"));
     const validRejectedDecision = await app.inject({ method: "POST", url: "/api/v1/evidence-vault/"+second.evidenceId+"/review", headers: headers(reviewerToken), payload: { decision: "REJECTED", rationale: "Valid same-organization rejection" } });
     assert.equal(validRejectedDecision.statusCode, 200, validRejectedDecision.body);
     assert.equal(validRejectedDecision.json().data.status, "REJECTED");
