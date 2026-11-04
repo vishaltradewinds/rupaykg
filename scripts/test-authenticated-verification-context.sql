@@ -27,6 +27,13 @@ BEGIN
   ) THEN
     RAISE EXCEPTION 'SECURITY DEFINER functions must pin search_path to pg_catalog only';
   END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_proc p
+    WHERE p.oid='public.organization_has_geography_scope(uuid,uuid)'::regprocedure
+      AND p.proconfig = ARRAY['search_path=pg_catalog, public, pg_temp']::text[]
+  ) THEN
+    RAISE EXCEPTION 'geography helper must pin its invoker search_path and put pg_temp last';
+  END IF;
   IF (SELECT rolcanlogin OR rolsuper OR rolbypassrls FROM pg_roles
       WHERE rolname='rupaykg_auth_context_owner') THEN
     RAISE EXCEPTION 'auth context owner must be NOLOGIN/NOSUPERUSER/NOBYPASSRLS';
