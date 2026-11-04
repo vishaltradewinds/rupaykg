@@ -344,3 +344,27 @@ This proves source/config does not demonstrate credential separation; it does no
 3. Add lock-order/deadlock test or document a reviewed lock-order contract and bounded transaction timeout/retry semantics.
 4. Complete 67-table tenant RLS matrix and geography fail-closed design separately.
 5. Keep PR #247 draft/unmerged and production READ-ONLY / HOLD pending independent DBA/security review and explicit approval. No production/staging writes, migration, role/grant/RLS/function/trigger change, deployment, worker activation or certification. TRL 9 NOT ACHIEVED.
+
+
+## 2026-11-04 authoritative refresh — CTO Run 25 (verification migration reapplication rehearsal)
+
+### PR #247 exact-head CI closure
+- Latest PR #247 head `c03e70b1f7a67f381479e4d63eed96b2d5c5f3c4` passed exact-head CI #5364 (`41790629910`) end-to-end: dependency audit, migration validation, disposable PostgreSQL migration, typecheck, production build, browser smoke, full tests/PostgreSQL acceptance, production-container build and cleanup.
+- Added migration reapplication rehearsal in the disposable evidence-vault integration test: pre-existing authorization snapshot columns and both historical trigger names are recreated, the candidate migration is rerun, and the test confirms exactly one canonical `verification_authorization_guard` remains.
+- The three two-session role permission, membership deactivation and identity suspension race tests remain green.
+- PR #247 remains OPEN / DRAFT / UNMERGED. Candidate migration is not applied to any database.
+
+### Newly documented runtime privilege constraint
+- Candidate guard is SECURITY INVOKER and uses `SELECT ... FOR SHARE` on evidence, activities, organization_memberships, roles and identities.
+- PostgreSQL row-locking SELECT requires UPDATE privilege on at least one column of each locked table. Current table-owner runtime satisfies this; a restricted non-owner runtime may not.
+- Do not grant broad UPDATE to the API runtime role to satisfy row locks. A dedicated restricted guard execution role or coordinated advisory-lock design must be independently reviewed and tested under FORCE RLS before runtime separation. Issue #196 and #215 updated with this constraint.
+
+### PR #244 handoff CI status
+- PR #244 latest head `91554b8cc62b194388fe4bd01b27e259a835e372` passed exact-head CI #5362 (`41790300090`) end-to-end. Subsequent Run 25 checkpoint additions require their own exact-head CI.
+
+### Next execution batch
+1. Design a least-privilege-safe lock architecture that does not require broad UPDATE rights on tenant tables; assess a dedicated narrow execution role versus advisory locks with mutation-side triggers and consistent lock ordering.
+2. Prove the chosen mechanism on a disposable schema with FORCE RLS and a genuine non-owner role; test cross-org negative paths and revocation races.
+3. Add production-like schema rehearsal that reproduces exact historical 096 function body and trigger composition, not only the trigger names; compare before/after function/trigger definitions.
+4. Continue geography fail-closed policy and 67-table tenant matrix separately.
+5. Keep PR #247 draft/unmerged and production READ-ONLY / HOLD pending independent DBA/security review and explicit approval. No production/staging writes, migration, role/grant/RLS/function/trigger change, deployment, worker activation or certification. TRL 9 NOT ACHIEVED.
