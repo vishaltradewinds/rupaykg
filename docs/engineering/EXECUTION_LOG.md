@@ -142,3 +142,5 @@
 
 - Run-26 code head `ff75e989fcdef02cbb0719b8aaeb993e506c3a56` passed exact-head CI #5367 (`41794095914`) SUCCESS, including PostgreSQL acceptance for malformed cross-tenant role binding and geography-less verification denial.
 - Run-26 documentation head `3926690892527584c0cc7e3397d4f2ae79000caf` passed exact-head CI #5368 (`41794335224`) SUCCESS across all stages. Added the exact-head CI closure to the canonical resume point and commented on PR #244.
+- Added `docs/security/VERIFICATION_GUARD_NON_OWNER_EXECUTION_DESIGN_2026-11-04.md`, a design-only prototype proposal for a NOLOGIN/NOBYPASSRLS SECURITY DEFINER guard role, narrow lock privilege, GUC-scoped RLS policies and deterministic lock order. It remains unimplemented/unapproved and requires disposable FORCE RLS proof plus independent DBA/security review.
+- PR #244 documentation head `1c39a399218584fc3ce8f143385e3e54adec754f` passed exact-head CI #5372 (`41794655157`) SUCCESS across all configured stages. The later-added guard-role design proposal will be validated on the next docs head.
