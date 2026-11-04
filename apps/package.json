@@ -9,7 +9,7 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "migrate": "tsx src/migrate.ts",
-    "test": "npm run build && node --test \"dist/**/*.test.js\""
+    "test": "npm run build && node --test \"dist/**/*.test.js\" && node ../scripts/test-authorization-provenance-forward-fix.mjs"
   },
   "dependencies": {
     "@fastify/cors": "^11.0.0",
