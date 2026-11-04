@@ -76,7 +76,7 @@ Every transition needs actor, timestamp, reason, source reference and append-onl
 
 Build a **non-production, read-only ODK Central connector first**:
 
-1. Use a dedicated ODK Central App User restricted to the specific test project; keep its credential server-side.
+1. Use a dedicated non-human ODK Central User with the minimum project-scoped REST read permissions needed to list submissions, read metadata and download attachments. An App User is not sufficient for this REST pull workflow; use a separate App User only for its intended ODK Collect/OpenRosa workflow. Keep integration credentials server-side.
 2. Pull submissions and attachments into an isolated quarantine/staging area, preserving source IDs, raw payloads, timestamps and file hashes.
 3. Validate project/form/version and resolve activity/site only through a pre-approved RupayKg mapping.
 4. Produce a validation report and deterministic replay/conflict result; do not write to Neon or call the current Evidence Vault upload route yet.
