@@ -1,64 +1,43 @@
-# RupayKg CTO Resume Point — 2026-11-03 17:53 UTC
 
-## Authority and safety
-- Repository: `vishaltradewinds/rupaykg`, default branch `main`.
-- Authoritative live database: Neon project `steep-mud-79906940`, primary branch `br-restless-base-b44cip2h` (`main`), database `rupaykg`.
-- Production is READ-ONLY / HOLD. No production DDL/DML, migration, role/grant/RLS change, branch operation, deployment, worker activation, merge or certification is authorized by this checkpoint.
-- Render auto-deploys from GitHub main; do not merge to main without explicit release approval and controls.
-- Desktop Commander device `DESKTOP-AGPFFLB` was offline at 17:49 UTC. Local shell execution and local test reruns were unavailable.
 
-## Verified current repository state
-- Main base SHA: `a3fecc0abd2c46549a201058d3963afc0e3a73c9`.
-- The requested historical `docs/engineering/RUPAYKG_RESUME_POINT_LATEST.md` and `docs/engineering/EXECUTION_LOG.md` did not exist on main (GitHub contents API returned 404). PR #244 restores a canonical handoff location; it does not claim prior history existed.
-- `migrations/README.md` on main says migration 023 is intentionally absent. Do not repeat the prior claim that 023 was restored without checking actual directory contents and production ledger.
-- Main migration directory listing shows numbered migrations 001–087 (023 absent) and dated migrations through `20261021_evidence_artifact_vault.sql`. Production ledger must not be rewritten to match this list.
-- Main README describes RupayKg as India's Circular Economy Operating System and identifies current validation work on statutory BWG nullability and onboarding governance fetch interception.
+## 2026-11-04 authoritative refresh — CTO Run 13
 
-## Authoritative Neon read-only evidence (2026-11-03)
-Read-only query against `br-restless-base-b44cip2h`:
-- database: `rupaykg`; current role: `rupaykg`
-- public base tables: 67
-- RLS-enabled tables: 0
-- FORCE RLS tables: 0
-- migration ledger rows: 92
-- latest ledger version: `20261021`
-- `to_regclass('public.mrv_source_snapshots')` is NULL; migration 088 is not recorded in production ledger
-- role `rupaykg` is BYPASSRLS-capable (one matching login role)
-- Neon reports production main `protected=false`
+This section supersedes any conflicting PR #243/issue #245 status above.
 
-This confirms the production tenant-isolation release blocker. No write was performed.
+### PR #243 exact-head evidence
+- PR #243 remains OPEN, DRAFT and UNMERGED; branch `feat/mrv-source-snapshot-v2`.
+- Exact head: `b700db8ffde6cd6492b545ed4c6e5bf2271b53b8`.
+- Exact-head GitHub Actions run #5320 (`41693406353`) completed SUCCESS on 2026-11-04.
+- The single `validate` job passed all configured stages: production dependency audit; migration validation; migrations applied to disposable PostgreSQL; TypeScript typecheck; production build; browser smoke test; full tests including disposable PostgreSQL acceptance; production-container build.
+- The strict test assertion requiring the custom `MRV source snapshots cannot be truncated` trigger error is present in this exact tested head. The assertion was not relaxed to accept a foreign-key-only error.
+- CI evidence closes the exact-head automated-validation item for this revision; it does not close independent DBA/security review, owner/runtime role boundary proof, migration drift, production tenant isolation, field acceptance or TRL 9.
+- Issue #245 received the exact-head CI evidence comment. PR #243 received the exact-head validation comment.
 
-## Current high-priority PRs
-- **PR #243 — MRV immutable source snapshots v2.** Draft/unmerged. Current head `88b4b8f2db042c277b8de8b47077b1ab8722625f`. Exact-head CI run #5255 (`41689563015`) is IN PROGRESS; migration validation, disposable PostgreSQL migration, typecheck, build and browser smoke have passed, automated tests are running. Run #5244 passed migration validation, disposable PostgreSQL migration, typecheck, build and browser smoke, but failed tests (107/108) because acceptance-fixture credential exclusion was dropped by migration 088. Previous head `313a644...` failed typecheck at `apps/test/settlement-reconciliation.test.ts(59,3)`; a subsequent branch update removed that malformed fragment. Further source inspection found the credential-guard PL/pgSQL function body closed with malformed `$;`; corrected to `$;` in commit `582fade6...` and verified all four function bodies close with `$;`. CI #5237 then failed at `apps/src/lifecycle-integration.test.ts(31,22): TS2532 Object is possibly 'undefined'`. Corrected the snapshot fixture access to `rows[0]!.id` in commit `f9b7805...`. No workflow run was visible for the newest head when this handoff was refreshed; a fresh exact-head CI result is required.
-- PR #243 technical review comments and issue #245 identify unresolved MRV integrity requirements: PostgreSQL does not recompute/verify `source_digest` against `source_payload`; source revision invalidation has now been added in migrations 089 and 20261022 (await CI/independent review); UPDATE/DELETE trigger still does not cover TRUNCATE or privileged runtime writers; artifact-version join ordering lacks a deterministic version tie-breaker. PostgreSQL does not yet recompute/verify `source_digest` against `source_payload`. These require design correction and disposable PostgreSQL regression tests before approval. Migration 088 also initially dropped migration 087's acceptance-fixture exclusion; restored in `d00c530...` and awaiting CI #5247.
-- **PR #238** — forward-only verification authorization provenance repair. Draft/unmerged. Exact-head CI evidence reported passing disposable PostgreSQL regression, but independent review must reconcile the live legacy `verification_independence_guard` and unified same-organization/permission model.
-- **PR #242** — EPR transaction-bound authorization hardening. Draft/unmerged; do not register its dormant legacy route alongside PR #213's signed-RLS GET route.
-- **PR #237** — migration checksum integrity. Draft/unmerged; inspect latest head and exact CI before relying on it.
-- **PR #240/#241** — strategic positioning and claim/evidence documentation; draft/unmerged.
-- **PR #244** — this documentation-only handoff restoration. Draft/unmerged; CI run #5232 (`41688183202`) had passed dependency audit, migration validation, disposable PostgreSQL migration, typecheck, build, browser smoke and tests; production-container build was still running at last inspection. Do not claim full pass until final job conclusion is SUCCESS.
+### Current PR #243 implementation checkpoint
+- PostgreSQL owns canonical snapshot digest calculation over UTF-8 bytes of `jsonb::text`; application obtains digest from PostgreSQL and the insert trigger independently recomputes it.
+- Methodology code is bound to payload; a fixed golden digest vector is tested.
+- Snapshot rows reject UPDATE, DELETE and TRUNCATE; strict TRUNCATE-trigger behavior is tested with CASCADE in disposable PostgreSQL.
+- Activity source revisions are advanced by triggers for activity, verification, evidence, observations, measurements, artifact versions and independent reviews; credential issuance requires a current latest snapshot revision.
+- Artifact version/review revision-trigger migration is present, but targeted regression tests for those two mutation paths have not yet been added. Inspect actual artifact schema and fixture constraints before writing those tests; do not guess column names or fixture shape.
+- A preliminary code inspection found the artifact version/review trigger function resolves evidence IDs to activity IDs and increments old/new activities. Independently review its behavior for UPDATEs that move an artifact between evidence records and for missing/deleted evidence.
 
-## P0/P1 issues
-- #215: verification authorization must be tenant-bound and fail closed. Require same-organization active verified membership and explicit permission for every decision; no role-name fallback; geography fails closed; immutable approval lineage; legacy trigger resolved only after replacement tests.
-- #214: production migration source drift and staging-only migration history. Preserve recovered migration 096 as evidence only; recover staging 20261022–25 sources; no ledger rewrites or blind replay.
-- #196: production tenant isolation. 0/67 RLS; runtime role privilege separation not established; inventory every tenant-owned table, endpoint and worker before any policy rollout.
-- #101: Render database network allowlist finding. Verify actual database/workspace status before any action; do not recreate or overwrite a suspended database.
-- #245: MRV source snapshot cryptographic binding, source-change invalidation, TRUNCATE/privilege boundary and deterministic capture.
-- #112: whole-platform Shakti operational/compliance/security/TRL audit; continue source-backed stakeholder and statutory coverage.
+### Production safety / known blocker (unchanged)
+- Authoritative Neon production main remains READ-ONLY / HOLD. Prior read-only evidence: 67 public base tables, 0 RLS, 0 FORCE RLS, 92 migration-ledger rows, latest `20261021`; `mrv_source_snapshots` absent; migration 088 not applied; login role `rupaykg` is BYPASSRLS-capable; Neon branch reported `protected=false`.
+- No production migration, SQL write, role/grant/RLS change, branch operation, deployment, worker activation, merge or certification was performed in Run 13.
+- PR #243 must remain draft until independent DBA/security review and all production/tenant-isolation dependencies are reconciled.
 
-## Next execution sequence
-1. Inspect exact-head CI #5237 for PR #243; fix any migration/type/test failures on the feature branch only and rerun exact-head CI.
-2. Resolve MRV snapshot integrity: database-verifiable digest/payload binding; bind methodology and security-relevant fields; ensure source changes invalidate prior eligibility or force superseding snapshot + new Guardian/HCS/Mirror Node proof; enforce TRUNCATE and writer privilege boundaries; deterministic evidence artifact version ordering.
-3. Reconcile PR #243 migration 088 with current verification/tenant-isolation and credential issuance triggers; do not merge while P0 #215/#196 contracts conflict.
-4. Continue #238 unified verification authorization correction and include the live legacy trigger in disposable PostgreSQL tests.
-5. Reconcile migration sources against production and staging ledgers read-only; exact filename, checksum, object definitions and timestamp evidence.
-6. Build the 67-table tenant ownership/endpoint/worker matrix and dedicated least-privilege runtime design. Rehearse only on approved disposable environments.
-7. Keep EPR/MRV feature flags, worker/scheduler and production certification OFF until independent security/DBA and founder gates are satisfied.
+### Next actions
+1. Inspect source migrations that create `evidence_artifact_series`, `evidence_artifact_versions` and `evidence_artifact_reviews`; verify actual FK and key columns.
+2. Add targeted integration assertions proving artifact-version insert/update/delete and independent-review insert/update/delete each increment the correct activity revision, including evidence reassignment if schema permits. Use disposable PostgreSQL and preserve strict assertions.
+3. Map actual application pool role, migration role, table owner, role memberships and deployment secret wiring from source/configuration without exposing secrets; test role boundaries in disposable PostgreSQL only.
+4. Continue complete 67-table tenant ownership, endpoint and worker inventory before any RLS policy rollout.
+5. Reconcile PR #215/#196 authorization and tenant isolation, PR #214 migration drift, PR #238 verification provenance and PR #242 EPR authorization. No overlapping incompatible routes or triggers.
+6. Keep production READ-ONLY / HOLD; do not merge or deploy based on CI success alone.
 
-## TRL posture
-- National platform: provisional TRL 3 based on repository evidence and lack of field-operational acceptance.
-- Tested software components: at most TRL 4 where exact-head CI and disposable PostgreSQL evidence exist.
-- Field hardware, full statutory acceptance, live Guardian/Hedera/Mirror Node round-trip, independent assurance and TRL 9 are not established.
-- SITE-JBP-01 Kathonda remains pre-validation until real field evidence is recorded.
-
-## Evidence rule
-Every status claim must link to a commit, exact-head workflow, read-only database result, official source, or field artifact. CI success is engineering evidence only; it is not legal acceptance, production readiness, carbon-credit issuance or TRL 9.
+### TRL / release posture
+- Exact-head engineering CI for PR #243: PASS.
+- Independent security/DBA review: NOT COMPLETE.
+- Production migration and tenant isolation: NOT COMPLETE.
+- Guardian/Hedera/Mirror Node live operational round-trip: NOT evidenced by this CI run.
+- SITE-JBP-01 Kathonda field validation: PRE-VALIDATION; field evidence not established here.
+- Production certification and TRL 9: NOT ACHIEVED.
