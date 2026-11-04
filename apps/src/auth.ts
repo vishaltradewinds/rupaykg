@@ -4,6 +4,7 @@ import type { Pool, PoolClient } from "pg";
 
 export type AuthContext = {
   identityId: string;
+  sessionTokenHash?: string;
   memberships: Array<{ organization_id: string; role_id: string; status: string }>;
   activeOrganizationId?: string;
   bilateralOrganizationScope?: boolean;
@@ -25,6 +26,7 @@ export async function authenticate(request: FastifyRequest, pool: Pool | null): 
   if (!header?.startsWith("Bearer ")) return null;
   const token = header.slice("Bearer ".length).trim();
   if (!token) return null;
+  const sessionTokenHash = hashToken(token);
   const rows = await pool.query<{ identity_id: string }>(
     `select s.identity_id
        from identity_sessions s
@@ -34,7 +36,7 @@ export async function authenticate(request: FastifyRequest, pool: Pool | null): 
         and s.expires_at > now()
         and i.status = 'VERIFIED'
         and i.suspended_at is null`,
-    [hashToken(token)],
+    [sessionTokenHash],
   );
   if (!rows.rows[0]) return null;
   const memberships = await pool.query<{ organization_id: string; role_id: string; status: string }>(
@@ -58,6 +60,7 @@ export async function authenticate(request: FastifyRequest, pool: Pool | null): 
     || requestPath.startsWith("/api/v1/settlements/");
   return {
     identityId: rows.rows[0].identity_id,
+    sessionTokenHash,
     memberships: memberships.rows,
     ...(activeOrganizationId ? { activeOrganizationId } : {}),
     ...(bilateralOrganizationScope ? { bilateralOrganizationScope: true } : {}),
@@ -80,8 +83,43 @@ export const HIGH_RISK_PERMISSIONS = {
 
 export type HighRiskAction = keyof typeof HIGH_RISK_PERMISSIONS;
 
-export async function hasOrganizationPermission(client: Pool | PoolClient, auth: AuthContext, organizationId: string, permissions: readonly string[]): Promise<boolean> {
+export async function hasOrganizationPermission(
+  client: Pool | PoolClient,
+  auth: AuthContext,
+  organizationId: string,
+  permissions: readonly string[],
+  options: { lockAuthorizationState?: boolean } = {},
+): Promise<boolean> {
   if (auth.memberships.length > 0 && !canActForOrganization(auth, organizationId)) return false;
+
+  // Protected operations can serialize against session revocation, identity suspension,
+  // membership changes and role-permission edits by locking the authorization rows.
+  if (options.lockAuthorizationState) {
+    if (!auth.sessionTokenHash) return false;
+    const locked = await client.query<{ ok: boolean }>(
+      `select true as ok
+         from identity_sessions s
+         join identities i on i.id = s.identity_id
+         join organization_memberships om on om.identity_id = i.id
+         join roles r on r.id = om.role_id
+        where s.token_hash = $1
+          and s.revoked_at is null
+          and s.expires_at > now()
+          and i.status = 'VERIFIED'
+          and i.suspended_at is null
+          and om.identity_id = $2
+          and om.organization_id = $3
+          and om.status = 'VERIFIED'
+          and exists (
+            select 1 from jsonb_array_elements_text(r.permissions) permission
+             where permission = any($4::text[])
+          )
+        for share of s, i, om, r`,
+      [auth.sessionTokenHash, auth.identityId, organizationId, permissions],
+    );
+    return locked.rows.length > 0;
+  }
+
   const result = await client.query<{ ok: boolean }>(
     `select exists (
        select 1 from organization_memberships om join roles r on r.id = om.role_id
@@ -92,7 +130,6 @@ export async function hasOrganizationPermission(client: Pool | PoolClient, auth:
   );
   return result.rows[0]?.ok === true;
 }
-
 export async function canPerformHighRiskActionInDatabase(client: Pool | PoolClient, auth: AuthContext, organizationId: string, action: HighRiskAction): Promise<boolean> {
   return hasOrganizationPermission(client, auth, organizationId, HIGH_RISK_PERMISSIONS[action]);
 }
