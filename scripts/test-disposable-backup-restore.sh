@@ -35,16 +35,25 @@ PGPASSWORD=postgres dropdb --if-exists --host=127.0.0.1 --username=postgres "$re
 PGPASSWORD=postgres createdb --host=127.0.0.1 --username=postgres "$restore_db"
 
 dump_file="$(mktemp)"
+pg_container="$(docker ps --filter "ancestor=postgres:16" --format "{{.ID}}" | head -n 1)"
+if [ -z "$pg_container" ]; then
+  echo "FAIL: postgres:16 service container not found." >&2
+  exit 1
+fi
 
 before_count="$(timeout --preserve-status "$query_timeout"s psql "$DATABASE_URL" --set=ON_ERROR_STOP=1 --tuples-only --no-align -c "SELECT count(*) FROM public.schema_migrations")"
 before_latest="$(timeout --preserve-status "$query_timeout"s psql "$DATABASE_URL" --set=ON_ERROR_STOP=1 --tuples-only --no-align -c "SELECT coalesce(max(version),'NONE') FROM public.schema_migrations")"
 
 echo "Creating disposable custom-format backup..."
-PGPASSWORD=postgres timeout --preserve-status "$dump_timeout"s pg_dump --host=127.0.0.1 --username=postgres --format=custom --file="$dump_file" "$source_db"
+echo "Using PostgreSQL 16 client inside disposable service container..."
+timeout --preserve-status "$dump_timeout"s docker exec "$pg_container" pg_dump --username=postgres --format=custom --file=/tmp/rupaykg-recovery.dump "$source_db"
+timeout --preserve-status "$dump_timeout"s docker cp "$pg_container:/tmp/rupaykg-recovery.dump" "$dump_file"
 
 echo "Restoring into separate disposable database..."
-PGPASSWORD=postgres timeout --preserve-status "$restore_timeout"s pg_restore --host=127.0.0.1 --username=postgres --clean --if-exists --dbname="$restore_db" "$dump_file"
+timeout --preserve-status "$restore_timeout"s docker cp "$dump_file" "$pg_container:/tmp/rupaykg-recovery.dump"
+timeout --preserve-status "$restore_timeout"s docker exec "$pg_container" pg_restore --username=postgres --clean --if-exists --dbname="$restore_db" /tmp/rupaykg-recovery.dump
 
+timeout --preserve-status "$query_timeout"s docker exec "$pg_container" rm -f /tmp/rupaykg-recovery.dump
 after_count="$(timeout --preserve-status "$query_timeout"s psql "$local_pg_url/$restore_db" --set=ON_ERROR_STOP=1 --tuples-only --no-align -c "SELECT count(*) FROM public.schema_migrations")"
 after_latest="$(timeout --preserve-status "$query_timeout"s psql "$local_pg_url/$restore_db" --set=ON_ERROR_STOP=1 --tuples-only --no-align -c "SELECT coalesce(max(version),'NONE') FROM public.schema_migrations")"
 
