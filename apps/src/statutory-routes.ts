@@ -152,7 +152,7 @@ export async function registerStatutoryRoutes(app: FastifyInstance, pool: Pool |
   app.post("/api/v1/statutory/epr", async (request, reply) => {
     const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
     const body = bodyOf(request as never);
-    const organizationId = text(body, "organizationId") || auth.activeOrganizationId || auth.memberships[0]?.organization_id || null;
+    const organizationId = auth.activeOrganizationId;
     if (!organizationId || !canActForOrganization(auth, organizationId)) return reply.code(403).send({ error: "No verified membership for organization", code: "ORG_FORBIDDEN" });
     if (!await hasOrganizationPermission(pool, auth, organizationId, ["epr:manage", "audit:execute", "reports:export"])) return reply.code(403).send({ error: "EPR applicability management permission required", code: "STATUTORY_EPR_WRITE_REQUIRED" });
     const scheme = text(body, "scheme");
@@ -164,12 +164,14 @@ export async function registerStatutoryRoutes(app: FastifyInstance, pool: Pool |
     if (!allowed.has(status)) return reply.code(400).send({ error: "Invalid EPR applicability status", code: "INVALID_EPR_APPLICABILITY" });
     const evidenceId = text(body, "evidenceId");
     const verificationId = text(body, "verificationId");
-    if (!await evidenceBindingValid(pool, organizationId, evidenceId, verificationId)) return reply.code(400).send({ error: "Evidence and verification must be supplied together and be verified, approved, and organization/geography scoped", code: "STATUTORY_EVIDENCE_BINDING_INVALID" });
+
     const metadata = schemeRow.rows[0].metadata ?? {};
     const metadataRule = typeof metadata.rule_reference === "string" ? metadata.rule_reference : null;
     const registrationInput = normalizeEprRegistrationInput(text(body, "cpcbRegistrationReference"), text(body, "cpcbRegistrationStatus"), body.basis);
     try {
-      const result = await pool.query(
+      const result = await withDatabaseTenantContext(pool, { identityId: auth.identityId, organizationId: organizationId!, bilateralOrganizationScope: auth.bilateralOrganizationScope ?? false, serviceMode: false }, async client => {
+        if (!await evidenceBindingValid(client, organizationId!, evidenceId, verificationId)) throw Object.assign(new Error("Evidence and verification must be supplied together and be verified, approved, and organization/geography scoped"), { code: "STATUTORY_EVIDENCE_BINDING_INVALID" });
+        return client.query(
         `insert into organization_epr_applicability
           (organization_id,scheme,rule_reference,applicability_status,basis,cpcb_registration_status,cpcb_registration_reference,evidence_id,verification_id,determination_note,determined_by_identity_id,determined_at)
          values($1,$2,coalesce($3,$4),$5,$6::jsonb,$7,$8,$9,$10,$11,$12,now())
@@ -181,6 +183,7 @@ export async function registerStatutoryRoutes(app: FastifyInstance, pool: Pool |
          returning *`,
         [organizationId, scheme, text(body, "ruleReference"), metadataRule, status, JSON.stringify(registrationInput.basis), registrationInput.persistedStatus, registrationInput.reference, evidenceId, verificationId, text(body, "determinationNote"), auth.identityId],
       );
+      });
       return reply.code(201).send({ source: "postgresql", syntheticData: false, applicability: result.rows[0], scheme: schemeRow.rows[0], statutoryBoundary: "INTERNAL_APPLICABILITY_PREPARATION_ONLY", cpcbExternalStatus: result.rows[0]?.cpcb_registration_status, externalRegistrationState: registrationInput.reference ? "USER_REPORTED_UNVERIFIED" : "NOT_ASSERTED" });
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "EPR applicability could not be persisted", code: "EPR_WRITE_UNAVAILABLE", syntheticData: false }); }
   });
@@ -196,7 +199,7 @@ export async function registerStatutoryRoutes(app: FastifyInstance, pool: Pool |
     if (!organizationId || !canActForOrganization(auth, organizationId)) return reply.code(403).send({ error: "Organization access denied", code: "ORG_FORBIDDEN" });
     if (!await hasOrganizationPermission(pool, auth, organizationId, ["epr:manage", "audit:execute"])) return reply.code(403).send({ error: "EPR management permission required", code: "STATUTORY_EPR_WRITE_REQUIRED" });
     try {
-      const result = await pool.query(
+      const result = await withDatabaseTenantContext(pool, { identityId: auth.identityId, organizationId, bilateralOrganizationScope: auth.bilateralOrganizationScope ?? false, serviceMode: false }, async client => client.query(
         `update organization_epr_applicability
            set cpcb_registration_status=$4,
                cpcb_registration_reference=$2,
