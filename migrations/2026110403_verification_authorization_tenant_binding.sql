@@ -30,6 +30,7 @@ declare
   activity_geography_id uuid;
   evidence_activity_id uuid;
   membership_row record;
+  membership_candidate record;
 begin
   if tg_op = 'UPDATE' then
     raise exception 'verification records are immutable; create a superseding verification';
