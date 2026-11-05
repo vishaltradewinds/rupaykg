@@ -3,10 +3,6 @@ import type { Pool } from "pg";
 import { authenticate, bearerChallenge, hasOrganizationPermission, type AuthContext } from "./auth.js";
 import { withDatabaseTenantContext } from "./db-context.js";
 
-function orgIds(auth: AuthContext): string[] {
-  return auth.activeOrganizationId ? [auth.activeOrganizationId] : [...new Set(auth.memberships.map((m) => m.organization_id))];
-}
-
 function requestedGeography(request: { query: unknown }): string | null {
   const q = request.query && typeof request.query === "object" ? request.query as Record<string, unknown> : {};
   return typeof q.geographyId === "string" && q.geographyId.trim() ? q.geographyId.trim() : null;
