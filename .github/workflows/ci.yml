@@ -39,7 +39,51 @@ jobs:
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=high
       - run: npm run validate:migrations
-      - run: npm run migrate -w @rupaykg/api
+      - name: Generate and validate migration manifest
+        run: |
+          mkdir -p artifacts
+          npm run generate:migration-manifest -- artifacts/migration-manifest.json
+          MIGRATOR_MANIFEST_PATH=artifacts/migration-manifest.json npm run validate:migration-manifest
+      - name: Validate protected migrator configuration contract
+        env:
+          DATABASE_URL: ""
+          MIGRATOR_DATABASE_URL: postgresql://protected-migrator.invalid/rupaykg
+          MIGRATOR_MODE: "true"
+          NODE_ENV: production
+          MIGRATOR_MANIFEST_PATH: artifacts/migration-manifest.json
+          MIGRATOR_EXPECTED_DATABASE: rupaykg
+          MIGRATOR_EXPECTED_USER: rupaykg_migrator
+          DATABASE_SSL_CA_CERT: /tmp/ci-placeholder-ca.pem
+          MIGRATOR_DATABASE_SSL_STRICT: "true"
+        run: npm run validate:protected-migrator-config
+      - name: Build API dependency graph and migrator artifact for protected CI rehearsal
+        run: npm run build
+      - name: Apply migrations to disposable CI PostgreSQL
+        env:
+          DATABASE_URL: ""
+          MIGRATOR_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/rupaykg
+          MIGRATOR_MODE: "true"
+          NODE_ENV: production
+          MIGRATOR_MANIFEST_PATH: artifacts/migration-manifest.json
+          MIGRATOR_EXPECTED_DATABASE: rupaykg
+          MIGRATOR_EXPECTED_USER: postgres
+          MIGRATOR_REHEARSAL: "true"
+          MIGRATOR_DATABASE_SSL_STRICT: "false"
+          DATABASE_SSL_CA_CERT: /tmp/ci-placeholder-ca.pem
+        run: npm run migrate:protected
+      - name: Verify orphaned migration ledger fails closed
+        env:
+          MIGRATOR_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/rupaykg
+          MIGRATOR_DATABASE_SSL: "false"
+        run: bash scripts/test-migrator-orphan-ledger.sh
+      - name: Prove non-superuser migration helper ownership transfer
+        run: psql "$DATABASE_URL" --set=ON_ERROR_STOP=1 --file=scripts/test-migrator-helper-ownership.sql
+      - name: Rehearse verification migration over legacy trigger names
+        run: psql "$DATABASE_URL" --set=ON_ERROR_STOP=1 --file=scripts/test-verification-migration-reapply.sql
+      - name: Prove authenticated verification context convergence
+        run: psql "$DATABASE_URL" --set=ON_ERROR_STOP=1 --file=scripts/test-authenticated-verification-context.sql
+      - name: Rehearse geography revocation versus verification approval concurrency
+        run: bash scripts/test-verification-geography-concurrency.sh
       - run: npm run typecheck
       - run: npm run build
       - name: Browser smoke test production web build
@@ -77,3 +121,12 @@ jobs:
         run: npm test
       - name: Build production container
         run: docker build --pull --tag rupaykg:ci .
+      - name: Rehearse disposable backup and restore before release decision
+        run: bash scripts/test-disposable-backup-restore.sh
+      - name: Assert production startup cannot execute migrations or fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          command="$(docker image inspect rupaykg:ci --format '{{json .Config.Cmd}}')"
+          test "$command" = '["node","apps/dist/src/production-server.js"]'
+          echo "Verified production container starts only the API server."

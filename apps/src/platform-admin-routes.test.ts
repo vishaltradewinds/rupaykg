@@ -11,6 +11,9 @@ const roleId = "323e4567-e89b-42d3-a456-426614174000";
 function fakePool(isSuperAdmin: boolean): Pool {
   return {
     query: async (sql: string) => {
+      if (sql.includes("join roles r on r.id") && sql.includes("organization_memberships om")) {
+        assert.match(sql, /r\.organization_id\s*=\s*om\.organization_id/);
+      }
       if (sql.includes("from identity_sessions")) return { rows: [{ identity_id: identityId }] };
       if (sql.includes("from organization_memberships") && sql.includes("where identity_id")) {
         return { rows: [{ organization_id: organizationId, role_id: roleId, status: "VERIFIED" }] };
