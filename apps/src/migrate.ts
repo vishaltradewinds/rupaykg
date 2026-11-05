@@ -84,7 +84,7 @@ try {
   }
 
   console.log(`Database migrations are current (${files.length} files).`);
- } finally {
+} finally {
   await migrationClient.query("select pg_advisory_unlock(hashtext('rupaykg:protected:migrations'))").catch(() => {});
   migrationClient.release();
   await pool.end();
