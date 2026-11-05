@@ -88,3 +88,18 @@ No production DDL/DML or security mutation was executed.
 - RLS policy inventory: VERIFIED ZERO.
 - Tenant isolation safety: NOT ACCEPTED / BLOCKED pending repository-level policy design and controlled validation.
 - TRL 9: NOT CLAIMED.
+
+
+## 2026-11-05 tenant-isolation reconstruction — IN PROGRESS / RELEASE BLOCKED
+Branch: `shakti/2026-11-05-tenant-isolation-reconstruction`.
+PR #305 is OPEN / DRAFT / UNMERGED / validation-only. Commits on this branch record the verified tenant-scope inventory, policy matrix, and transaction-scoped database-context design.
+
+Direct Neon `information_schema.columns` inspection verified 31 organization-bearing column occurrences across 28 table names: single-organization ownership columns and bilateral relationships such as processor, actor, issuer, recycler, from/to, and obligated organization identifiers. This is an inventory input, not a completed RLS policy set.
+
+The repository API currently uses a shared PostgreSQL pool and many direct `pool.query()` calls. Therefore RLS must not be enabled before protected data access is migrated to transaction-scoped authorization context. Session-level tenant state on pooled connections is prohibited.
+
+Required next implementation batch: build the transaction-scoped DB context abstraction, migrate protected route/data-access paths, and add disposable PostgreSQL cross-tenant isolation plus pooled-connection leakage tests. Only after those tests pass should RLS SQL policies be implemented and rehearsed on disposable PostgreSQL.
+
+Migration 096 remains unresolved at source/ledger lineage level: the inspected production ledger records `096_verification_authorization_provenance.sql`, while exact active-path checks did not locate that filename. Commit-history search identified historical authorization/provenance work but did not establish the exact missing migration filename/path. Do not mark 096 resolved by inference.
+
+No production DDL/DML, role/grant change, RLS mutation, deployment, merge, certification, or TRL 9 declaration was performed in this batch.
