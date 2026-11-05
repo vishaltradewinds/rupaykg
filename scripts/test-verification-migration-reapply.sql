@@ -48,14 +48,21 @@ BEGIN
      AND NOT tgisinternal
      AND tgname = 'verification_authorization_guard';
 
+  SELECT count(*)
+    INTO scope_lock_count
+    FROM pg_trigger
+   WHERE tgrelid = 'public.organization_geography_scopes'::regclass
+     AND NOT tgisinternal
+     AND tgname = 'verification_geography_scope_serialization_guard';
+
   -- Other independent verification triggers may legitimately remain on the table.
   -- The convergence contract is specifically that every known legacy
   -- authorization trigger name is gone and exactly one canonical authorization
   -- trigger remains.
-  IF legacy_count <> 0 OR canonical_count <> 1 THEN
+  IF legacy_count <> 0 OR canonical_count <> 1 OR scope_lock_count <> 1 THEN
     RAISE EXCEPTION
-      'verification authorization trigger convergence failed: legacy=%, canonical=%',
-      legacy_count, canonical_count;
+      'verification authorization trigger convergence failed: legacy=%, canonical=%, scope_lock=%',
+      legacy_count, canonical_count, scope_lock_count;
   END IF;
 
   RAISE NOTICE 'verification migration reapply over legacy trigger names verified';
