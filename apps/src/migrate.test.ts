@@ -3,46 +3,57 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-const migrator = fileURLToPath(new URL("./migrate.js", import.meta.url));
+const projectRoot = fileURLToPath(new URL("../../", import.meta.url));
+const protectedMigrator = fileURLToPath(
+  new URL("../../scripts/run-protected-migrator.mjs", import.meta.url),
+);
+const configValidator = fileURLToPath(
+  new URL("../../scripts/validate-protected-migrator-config.mjs", import.meta.url),
+);
 
-function run(env: NodeJS.ProcessEnv) {
-  return spawnSync(process.execPath, [migrator], {
+function run(script: string, env: NodeJS.ProcessEnv) {
+  return spawnSync(process.execPath, [script], {
     encoding: "utf8",
+    cwd: projectRoot,
     env: { ...process.env, ...env },
   });
 }
 
-describe("production migration execution boundary", () => {
+describe("protected production migration execution boundary", () => {
   it("never falls back to the API DATABASE_URL", () => {
-    const result = run({
-      NODE_ENV: "test",
+    const result = run(protectedMigrator, {
+      NODE_ENV: "production",
       DATABASE_URL: "postgresql://api-runtime.invalid/rupaykg",
-      RUPAYKG_MIGRATOR_DATABASE_URL: "",
+      MIGRATOR_DATABASE_URL: "",
     });
     assert.notEqual(result.status, 0);
-    assert.match(result.stderr, /RUPAYKG_MIGRATOR_DATABASE_URL is required/);
+    assert.match(result.stderr, /MIGRATOR_DATABASE_URL is required/);
     assert.doesNotMatch(result.stderr, /api-runtime\.invalid/);
   });
 
-  it("requires explicit TLS for production migration execution", () => {
-    const result = run({
+  it("rejects an API DATABASE_URL even when a migrator URL is supplied", () => {
+    const result = run(protectedMigrator, {
       NODE_ENV: "production",
-      RUPAYKG_MIGRATOR_DATABASE_URL: "postgresql://migrator.invalid/rupaykg",
-      RUPAYKG_MIGRATOR_DATABASE_SSL: "",
-      RUPAYKG_MIGRATOR_DATABASE_CA_CERT: "",
+      MIGRATOR_DATABASE_URL: "postgresql://migrator.invalid/rupaykg",
+      MIGRATOR_MODE: "true",
+      DATABASE_URL: "postgresql://api-runtime.invalid/rupaykg",
     });
     assert.notEqual(result.status, 0);
-    assert.match(result.stderr, /Production migrations require RUPAYKG_MIGRATOR_DATABASE_SSL=require/);
+    assert.match(result.stderr, /DATABASE_URL must not be supplied to the protected migrator job/);
   });
 
-  it("requires a CA certificate when production TLS is enabled", () => {
-    const result = run({
+  it("requires strict TLS for production protected migrations", () => {
+    const result = run(configValidator, {
       NODE_ENV: "production",
-      RUPAYKG_MIGRATOR_DATABASE_URL: "postgresql://migrator.invalid/rupaykg",
-      RUPAYKG_MIGRATOR_DATABASE_SSL: "require",
-      RUPAYKG_MIGRATOR_DATABASE_CA_CERT: "",
+      MIGRATOR_DATABASE_URL: "postgresql://migrator.invalid/rupaykg",
+      MIGRATOR_MODE: "true",
+      MIGRATOR_MANIFEST_PATH: "migrations/manifest.json",
+      MIGRATOR_EXPECTED_DATABASE: "rupaykg",
+      MIGRATOR_EXPECTED_USER: "rupaykg_migrator",
+      DATABASE_SSL_CA_CERT: "/tmp/test-ca.pem",
+      MIGRATOR_DATABASE_SSL_STRICT: "false",
     });
     assert.notEqual(result.status, 0);
-    assert.match(result.stderr, /RUPAYKG_MIGRATOR_DATABASE_CA_CERT must contain a PEM certificate/);
+    assert.match(result.stderr, /Production protected migrations require MIGRATOR_DATABASE_SSL_STRICT=true/);
   });
 });
