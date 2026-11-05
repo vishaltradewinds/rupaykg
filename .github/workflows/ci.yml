@@ -56,6 +56,8 @@ jobs:
           DATABASE_SSL_CA_CERT: /tmp/ci-placeholder-ca.pem
           MIGRATOR_DATABASE_SSL_STRICT: "true"
         run: npm run validate:protected-migrator-config
+      - name: Build API migrator artifact for protected CI rehearsal
+        run: npm run build -w @rupaykg/api
       - name: Apply migrations to disposable CI PostgreSQL
         env:
           DATABASE_URL: ""
