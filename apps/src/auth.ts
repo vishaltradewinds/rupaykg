@@ -19,6 +19,33 @@ export function issueOpaqueToken(): string {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+export async function establishAuthenticatedDatabaseContext(
+  client: PoolClient,
+  request: FastifyRequest,
+  auth: AuthContext,
+  organizationId: string,
+): Promise<boolean> {
+  // The database-issued context must bind the exact organization selected by
+  // the already-authenticated application request; do not let the DB helper
+  // establish a different tenant context from AuthContext.
+  if (!auth.activeOrganizationId || auth.activeOrganizationId !== organizationId) return false;
+  const header = request.headers.authorization;
+  if (!header?.startsWith("Bearer ")) return false;
+  const token = header.slice("Bearer ".length).trim();
+  if (!token) return false;
+  try {
+    const result = await client.query<{ identity_id: string }>(
+      "select public.rupaykg_set_authenticated_context($1, $2::uuid) as identity_id",
+      [token, organizationId],
+    );
+    return result.rows[0]?.identity_id === auth.identityId;
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error
+      && (error as { code?: unknown }).code === "28000") return false;
+    throw error;
+  }
+}
+
 export async function authenticate(request: FastifyRequest, pool: Pool | null): Promise<AuthContext | null> {
   if (!pool) return null;
   const header = request.headers.authorization;
@@ -84,7 +111,7 @@ export async function hasOrganizationPermission(client: Pool | PoolClient, auth:
   if (auth.memberships.length > 0 && !canActForOrganization(auth, organizationId)) return false;
   const result = await client.query<{ ok: boolean }>(
     `select exists (
-       select 1 from organization_memberships om join roles r on r.id = om.role_id
+       select 1 from organization_memberships om join roles r on r.id = om.role_id and r.organization_id = om.organization_id
         where om.identity_id = $1 and om.organization_id = $2 and om.status = 'VERIFIED'
           and exists (select 1 from jsonb_array_elements_text(r.permissions) permission where permission = any($3::text[]))
      ) as ok`,
@@ -97,16 +124,24 @@ export async function canPerformHighRiskActionInDatabase(client: Pool | PoolClie
   return hasOrganizationPermission(client, auth, organizationId, HIGH_RISK_PERMISSIONS[action]);
 }
 
-export async function canVerifyEvidence(client: PoolClient, identityId: string, evidenceId: string): Promise<boolean> {
+export async function canVerifyEvidence(client: PoolClient, identityId: string, evidenceId: string, organizationId: string): Promise<boolean> {
   const result = await client.query<{ ok: boolean }>(
     `select exists (
-       select 1 from evidence e join activities a on a.id = e.activity_id
-       join organization_memberships om on om.identity_id = $2 and om.status = 'VERIFIED'
-        and a.geography_id is not null and organization_has_geography_scope(om.organization_id, a.geography_id)
-       join roles r on r.id = om.role_id where e.id = $1
-        and exists (select 1 from jsonb_array_elements_text(r.permissions) permission where permission = any($3::text[]))
+       select 1 from evidence e
+       join activities a on a.id = e.activity_id
+       join organization_memberships om on om.identity_id = $2
+        and om.organization_id = a.organization_id
+        and om.organization_id = $3
+        and om.status = 'VERIFIED'
+       join identities i on i.id = om.identity_id
+        and i.status = 'VERIFIED' and i.suspended_at is null
+       join roles r on r.id = om.role_id and r.organization_id = om.organization_id
+       where e.id = $1 and a.organization_id = $3
+        and a.geography_id is not null
+        and organization_has_geography_scope(a.organization_id, a.geography_id)
+        and exists (select 1 from jsonb_array_elements_text(r.permissions) permission where permission = any($4::text[]))
      ) as ok`,
-    [evidenceId, identityId, HIGH_RISK_PERMISSIONS.VERIFY_EVIDENCE],
+    [evidenceId, identityId, organizationId, HIGH_RISK_PERMISSIONS.VERIFY_EVIDENCE],
   );
   return result.rows[0]?.ok === true;
 }

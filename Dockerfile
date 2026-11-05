@@ -22,4 +22,6 @@ COPY --from=build /app/migrations ./migrations
 
 USER node
 EXPOSE 8080
-CMD ["sh", "-c", "node apps/dist/src/migrate.js && node apps/dist/src/acceptance-seed.js && node apps/dist/src/production-server.js"]
+# Schema changes are an explicit operator-controlled action. A web-service
+# restart/redeploy must never run migrations or acceptance fixture seeding.
+CMD ["node", "apps/dist/src/production-server.js"]
