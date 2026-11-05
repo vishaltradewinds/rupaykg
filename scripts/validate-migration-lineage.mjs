@@ -30,12 +30,28 @@ if (!databaseUrl) {
   process.exit(0);
 }
 
+if (process.env.DATABASE_URL && databaseUrl === process.env.DATABASE_URL) {
+  throw new Error("MIGRATION_LINEAGE_DATABASE_URL must be explicitly separated from DATABASE_URL");
+}
+
+const caPath = process.env.MIGRATION_LINEAGE_DATABASE_SSL_CA_CERT;
+const ssl =
+  process.env.MIGRATION_LINEAGE_DATABASE_SSL === "false"
+    ? undefined
+    : process.env.MIGRATION_LINEAGE_DATABASE_SSL_STRICT === "true"
+      ? { rejectUnauthorized: true, ...(caPath ? { ca: await readFile(caPath, "utf8") } : {}) }
+      : { rejectUnauthorized: true };
+
+if (process.env.MIGRATION_LINEAGE_DATABASE_SSL !== "false" && !caPath) {
+  throw new Error(
+    "MIGRATION_LINEAGE_DATABASE_SSL_CA_CERT is required for read-only lineage reconciliation unless SSL is explicitly disabled",
+  );
+}
+
 const pool = new Pool({
   connectionString: databaseUrl,
   max: 1,
-  ssl: process.env.MIGRATION_LINEAGE_DATABASE_SSL === "false"
-    ? undefined
-    : { rejectUnauthorized: false },
+  ssl,
 });
 
 try {
