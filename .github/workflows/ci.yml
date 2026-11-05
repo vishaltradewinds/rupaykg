@@ -54,6 +54,7 @@ jobs:
           MIGRATOR_EXPECTED_DATABASE: rupaykg
           MIGRATOR_EXPECTED_USER: rupaykg_migrator
           DATABASE_SSL_CA_CERT: /tmp/ci-placeholder-ca.pem
+          MIGRATOR_DATABASE_SSL_STRICT: "true"
         run: npm run validate:protected-migrator-config
       - name: Apply migrations to disposable CI PostgreSQL
         env:
