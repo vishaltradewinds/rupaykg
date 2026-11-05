@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-: "${RUPAYKG_MIGRATOR_DATABASE_URL:?CI migrator URL is required}"
-: "${RUPAYKG_MIGRATOR_DATABASE_SSL:?CI migrator SSL mode is required}"
+: "${MIGRATOR_DATABASE_URL:?CI migrator URL is required}"
+: "${MIGRATOR_DATABASE_SSL:?CI migrator SSL mode is required}"
 
 # This runs only against the disposable GitHub Actions PostgreSQL service.
 # Simulate a historical ledger row whose original source is archived outside
 # migrations/. The runner must stop before applying any pending migration.
-psql "$RUPAYKG_MIGRATOR_DATABASE_URL" --set=ON_ERROR_STOP=1 <<'SQL'
+psql "$MIGRATOR_DATABASE_URL" --set=ON_ERROR_STOP=1 <<'SQL'
 insert into schema_migrations(version, filename)
 values ('096', '096_verification_authorization_provenance.sql')
 on conflict (version) do update
@@ -16,8 +16,8 @@ SQL
 
 set +e
 output="$(
-  RUPAYKG_MIGRATOR_DATABASE_URL="$RUPAYKG_MIGRATOR_DATABASE_URL" \
-  RUPAYKG_MIGRATOR_DATABASE_SSL="$RUPAYKG_MIGRATOR_DATABASE_SSL" \
+  MIGRATOR_DATABASE_URL="$MIGRATOR_DATABASE_URL" \
+  MIGRATOR_DATABASE_SSL="$MIGRATOR_DATABASE_SSL" \
   NODE_ENV=test npm run migrate -w @rupaykg/api 2>&1
 )"
 status=$?
