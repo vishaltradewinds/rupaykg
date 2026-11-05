@@ -56,6 +56,23 @@ try {
   const migrationDir = candidates.find((candidate) => existsSync(candidate));
   if (!migrationDir) throw new Error(`Migration directory not found. Checked: ${candidates.join(", ")}`);
   const files = (await readdir(migrationDir)).filter((name) => /^\d+_.+\.sql$/.test(name)).sort();
+  const sourceByVersion = new Map(files.map((filename) => [filename.split("_", 1)[0], filename]));
+
+  // Fail closed if the database ledger contains a migration that is no longer
+  // present in the active source inventory. This prevents an incomplete or
+  // rewritten migration history from being silently accepted.
+  const ledger = await migrationClient.query<{ version: string; filename: string }>(
+    "select version, filename from schema_migrations order by version::bigint asc",
+  );
+  for (const row of ledger.rows) {
+    const sourceFilename = sourceByVersion.get(row.version);
+    if (!sourceFilename) {
+      throw new Error(`Migration ledger version ${row.version} (${row.filename}) has no active source migration`);
+    }
+    if (sourceFilename !== row.filename) {
+      throw new Error(`Migration ledger version ${row.version} is recorded as ${row.filename}, not active source ${sourceFilename}`);
+    }
+  }
 
   for (const filename of files) {
     const version = filename.split("_", 1)[0];
