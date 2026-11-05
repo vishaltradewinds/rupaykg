@@ -7,19 +7,27 @@ const manifestPath = process.env.MIGRATOR_MANIFEST_PATH;
 if (!manifestPath) throw new Error("MIGRATOR_MANIFEST_PATH is required");
 
 const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
-if (!Array.isArray(manifest.migrations) || manifest.migrations.length === 0) throw new Error("Migration manifest must contain a non-empty migrations array");
+if (manifest?.schema !== "rupaykg.migration-manifest.v1") {
+  throw new Error("Migration manifest schema must be rupaykg.migration-manifest.v1");
+}
+if (manifest?.generated_from !== "active migration source inventory") {
+  throw new Error("Migration manifest generated_from value is invalid");
+}
+if (!Array.isArray(manifest.migrations) || manifest.migrations.length === 0) {
+  throw new Error("Migration manifest must contain a non-empty migrations array");
+}
 
 const here = path.dirname(new URL(import.meta.url).pathname);
 const candidates = [path.resolve(here, "../migrations"), path.resolve(here, "../../migrations")];
 const migrationDir = candidates.find((candidate) => existsSync(candidate));
 if (!migrationDir) throw new Error(`Migration directory not found. Checked: ${candidates.join(", ")}`);
 
-const files = (await readdir(migrationDir)).filter((name) => /^\d+_.+\.sql$/.test(name)).sort();
+const files = (await readdir(migrationDir)).filter((name) => /^\\d+_.+\\.sql$/.test(name)).sort();
 const expected = new Map();
 const expectedVersions = new Set();
 for (const entry of manifest.migrations) {
   if (!entry || typeof entry.filename !== "string" || typeof entry.sha256 !== "string") throw new Error("Invalid migration manifest entry");
-  if (!/^\d+_.+\.sql$/.test(entry.filename)) throw new Error(`Invalid migration filename: ${entry.filename}`);
+  if (!/^\\d+_.+\\.sql$/.test(entry.filename)) throw new Error(`Invalid migration filename: ${entry.filename}`);
   if (!/^[a-f0-9]{64}$/i.test(entry.sha256)) throw new Error(`Invalid migration SHA-256: ${entry.filename}`);
   const version = entry.filename.split("_", 1)[0];
   if (expectedVersions.has(version)) throw new Error(`Duplicate manifest migration version: ${version}`);
