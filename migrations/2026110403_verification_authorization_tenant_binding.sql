@@ -132,7 +132,7 @@ begin
      order by m.created_at desc, m.id desc
   loop
     select m.id, m.role_id
-      into membership_row.membership_id, membership_row.role_id
+      into membership_id, membership_role_id
       from public.organization_memberships m
      where m.id = membership_candidate.id
        and m.identity_id = new.verifier_identity_id
@@ -145,26 +145,26 @@ begin
     end if;
 
     select r.permissions
-      into membership_row.permissions
+      into membership_permissions
       from public.roles r
-     where r.id = membership_row.role_id
+     where r.id = membership_role_id
        and r.organization_id = activity_organization_id
      for share;
 
-    if membership_row.permissions is not null and (
-         membership_row.permissions @> '["VERIFY_EVIDENCE"]'::jsonb
-         or membership_row.permissions @> '["verification:approve"]'::jsonb
-         or membership_row.permissions @> '["verification.approve"]'::jsonb
+    if membership_permissions is not null and (
+         membership_permissions @> '["VERIFY_EVIDENCE"]'::jsonb
+         or membership_permissions @> '["verification:approve"]'::jsonb
+         or membership_permissions @> '["verification.approve"]'::jsonb
        ) then
       exit;
     end if;
 
-    membership_row.membership_id := null;
-    membership_row.role_id := null;
-    membership_row.permissions := null;
+    membership_id := null;
+    membership_role_id := null;
+    membership_permissions := null;
   end loop;
 
-  if membership_row.membership_id is null then
+  if membership_id is null then
     raise exception 'verification requires active explicit verifier permission in the activity organization';
   end if;
 
@@ -180,9 +180,9 @@ begin
 
   -- Never accept client-supplied authorization provenance. Capture the exact
   -- membership, role and permission set used by this decision.
-  new.authorization_membership_id := membership_row.membership_id;
-  new.authorization_role_id := membership_row.role_id;
-  new.authorization_permissions_snapshot := membership_row.permissions;
+  new.authorization_membership_id := membership_id;
+  new.authorization_role_id := membership_role_id;
+  new.authorization_permissions_snapshot := membership_permissions;
   new.authorization_checked_at := clock_timestamp();
 
   return new;
