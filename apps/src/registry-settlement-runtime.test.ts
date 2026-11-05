@@ -34,12 +34,12 @@ before(async () => {
   const c = await pool.connect();
   try {
     await c.query("begin");
-    ownerOrgId = (await c.query<{ id: string }>("insert into organizations(name,organization_type) values($1,'COLLECTOR') returning id", [`runtime-registry-owner-${suffix}`])).rows[0]!.id;
+    ownerOrgId = (await c.query<{ id: string }>("insert into organizations(name,organization_type,status) values($1,'COLLECTOR','VERIFIED') returning id", [`runtime-registry-owner-${suffix}`])).rows[0]!.id;
     destinationOrgId = (await c.query<{ id: string }>("insert into organizations(name,organization_type) values($1,'PROCESSOR') returning id", [`runtime-registry-destination-${suffix}`])).rows[0]!.id;
     geographyId = (await c.query<{ id: string }>("insert into geography(kind,code,name) values('STATE_UT',$1,$2) returning id", [`REGISTRY-${suffix}`, `Registry Runtime ${suffix}`])).rows[0]!.id;
-    await c.query("insert into organization_geography_scopes(organization_id,geography_id) values($1,$2)", [ownerOrgId, geographyId]);
-    actorId = (await c.query<{ id: string }>("insert into identities(external_subject,display_name) values($1,$2) returning id", [`runtime-registry-actor-${suffix}`, "Registry Runtime Actor"])).rows[0]!.id;
-    verifierId = (await c.query<{ id: string }>("insert into identities(external_subject,display_name) values($1,$2) returning id", [`runtime-registry-verifier-${suffix}`, "Registry Runtime Verifier"])).rows[0]!.id;
+    await c.query("insert into organization_geography_scopes(organization_id,geography_id,status) values($1,$2,'VERIFIED')", [ownerOrgId, geographyId]);
+    actorId = (await c.query<{ id: string }>("insert into identities(external_subject,display_name,status) values($1,$2,'VERIFIED') returning id", [`runtime-registry-actor-${suffix}`, "Registry Runtime Actor"])).rows[0]!.id;
+    verifierId = (await c.query<{ id: string }>("insert into identities(external_subject,display_name,status) values($1,$2,'VERIFIED') returning id", [`runtime-registry-verifier-${suffix}`, "Registry Runtime Verifier"])).rows[0]!.id;
     const actorRole = (await c.query<{ id: string }>("insert into roles(organization_id,name,permissions) values($1,$2,$3::jsonb) returning id", [ownerOrgId, `REGISTRY-OPERATOR-${suffix}`, JSON.stringify(["ISSUE_CREDENTIAL","TRANSFER_CREDENTIAL","RETIRE_CREDENTIAL","AUTHORIZE_SETTLEMENT","SETTLE_FUNDS","settlement:authorize","settlement:settle","guardian:read"])] )).rows[0]!.id;
     const verifierRole = (await c.query<{ id: string }>("insert into roles(organization_id,name,permissions) values($1,$2,'[\"VERIFY_EVIDENCE\"]') returning id", [ownerOrgId, `REGISTRY-VERIFIER-${suffix}`])).rows[0]!.id;
     await c.query("insert into roles(organization_id,name,permissions) values($1,$2,$3::jsonb)", [destinationOrgId, `SETTLEMENT-PARTY-${suffix}`, JSON.stringify(["settlement:authorize","settlement:settle"])]);
@@ -49,6 +49,7 @@ before(async () => {
     activityId = (await c.query<{ id: string }>("insert into activities(organization_id,actor_identity_id,geography_id,activity_type,status,completed_at) values($1,$2,$3,'COLLECTION','COMPLETED',now()) returning id", [ownerOrgId, actorId, geographyId])).rows[0]!.id;
     const measurementId = (await c.query<{ id: string }>("insert into measurements(activity_id,value,unit,method,source,measured_at,quality_status) values($1,100,'kg','WEIGHBRIDGE','FIELD',now(),'VERIFIED') returning id", [activityId])).rows[0]!.id;
     evidenceId = (await c.query<{ id: string }>("insert into evidence(activity_id,measurement_id,evidence_type,status,captured_at,content_hash) values($1,$2,'WEIGHBRIDGE_RECORD','VERIFIED',now(),$3) returning id", [activityId, measurementId, `runtime-${suffix}`])).rows[0]!.id;
+    await c.query("select public.rupaykg_set_authenticated_context($1,$2::uuid)", [verifierToken, ownerOrgId]);
     verificationId = (await c.query<{ id: string }>("insert into verifications(evidence_id,activity_id,verifier_identity_id,decision,scope,rationale) values($1,$2,$3,'APPROVED','runtime','independent runtime acceptance') returning id", [evidenceId, activityId, verifierId])).rows[0]!.id;
     await c.query("insert into mrv_provenance_events(activity_id,verification_id,evidence_id,guardian_policy_id,guardian_execution_id,guardian_status,hcs_status,hcs_topic_id,hcs_transaction_id,hcs_consensus_timestamp,integrity_hash,metadata,mirror_node_verified_at) values($1,$2,$3,'runtime-policy','runtime-guardian','VERIFIED','CONSENSUS_CONFIRMED','0.0.123',$4,$5,$6,'{\"testFixture\":true}',clock_timestamp())", [activityId, verificationId, evidenceId, `runtime-tx-${suffix}`, `runtime-consensus-${suffix}`, `runtime-hash-${suffix}`]);
     await c.query("commit");
