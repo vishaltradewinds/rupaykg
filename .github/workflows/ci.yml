@@ -63,13 +63,14 @@ jobs:
           MIGRATOR_MANIFEST_PATH: artifacts/migration-manifest.json
           MIGRATOR_EXPECTED_DATABASE: rupaykg
           MIGRATOR_EXPECTED_USER: postgres
-          DATABASE_SSL: "false"
+          MIGRATOR_REHEARSAL: "true"
+          MIGRATOR_DATABASE_SSL_STRICT: "false"
           DATABASE_SSL_CA_CERT: /tmp/ci-placeholder-ca.pem
         run: npm run migrate:protected
       - name: Verify orphaned migration ledger fails closed
         env:
           MIGRATOR_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/rupaykg
-          DATABASE_SSL: "false"
+          MIGRATOR_DATABASE_SSL: "false"
         run: bash scripts/test-migrator-orphan-ledger.sh
       - name: Prove non-superuser migration helper ownership transfer
         run: psql "$DATABASE_URL" --set=ON_ERROR_STOP=1 --file=scripts/test-migrator-helper-ownership.sql
