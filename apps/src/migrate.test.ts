@@ -52,6 +52,7 @@ describe("protected production migration execution boundary", () => {
       MIGRATOR_EXPECTED_USER: "rupaykg_migrator",
       DATABASE_SSL_CA_CERT: "/tmp/test-ca.pem",
       MIGRATOR_DATABASE_SSL_STRICT: "false",
+      DATABASE_URL: "",
     });
     assert.notEqual(result.status, 0);
     assert.match(result.stderr, /Production protected migrations require MIGRATOR_DATABASE_SSL_STRICT=true/);
