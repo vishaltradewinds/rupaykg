@@ -78,6 +78,8 @@ jobs:
         run: psql "$DATABASE_URL" --set=ON_ERROR_STOP=1 --file=scripts/test-verification-migration-reapply.sql
       - name: Prove authenticated verification context convergence
         run: psql "$DATABASE_URL" --set=ON_ERROR_STOP=1 --file=scripts/test-authenticated-verification-context.sql
+      - name: Rehearse geography revocation versus verification approval concurrency
+        run: bash scripts/test-verification-geography-concurrency.sh
       - run: npm run typecheck
       - run: npm run build
       - name: Browser smoke test production web build
