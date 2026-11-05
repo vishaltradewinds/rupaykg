@@ -16,13 +16,14 @@ execFileSync(process.execPath, ["scripts/validate-migration-manifest.mjs"], {
   env: process.env,
 });
 
+const { MIGRATOR_DATABASE_URL: _migratorDatabaseUrl, ...childEnv } = process.env;
+
 const child = spawn(process.execPath, ["apps/dist/src/migrate.js"], {
   stdio: "inherit",
   env: {
-    ...process.env,
+    ...childEnv,
     DATABASE_URL: url,
     DATABASE_SSL_STRICT: "true",
-    MIGRATOR_DATABASE_URL: undefined,
   },
 });
 
