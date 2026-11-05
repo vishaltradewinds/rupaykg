@@ -167,3 +167,29 @@ No production DDL/DML, role/grant change, RLS mutation, deployment, merge, certi
 ### Next protected-access batch
 
 Continue from the same branch and prioritize remaining high-risk organization-scoped mutation paths, especially CPCB/SWM stakeholder workspace writes and other statutory/operational writes still using direct shared-pool access. Preserve the transaction-scoped context rule and run the full CI gate after each coherent batch. Migration 096 source/ledger reconciliation remains a separate release blocker.
+
+
+## 2026-11-05 CPCB/SWM Protected Access Batch — VERIFIED CI
+
+- Branch: `shakti/2026-11-05-tenant-isolation-reconstruction`.
+- CPCB/SWM stakeholder workspace protected paths were migrated in commit `87047e53760b1fc8f257c2c275248c9c98719360`.
+- CI #5677 / workflow run `42085738435`: **SUCCESS**.
+- All validation steps 1–17 completed successfully: migration validation, migration manifest, protected migrator contract, CI migration execution, typecheck, build, browser smoke, disposable PostgreSQL acceptance, production container build, bounded disposable backup/restore rehearsal, and startup-isolation assertion.
+- Migrated CPCB/SWM paths:
+  - `GET /api/v1/cpcb-swm/workspaces`
+  - `POST /api/v1/cpcb-swm/workspaces`
+  - `PATCH /api/v1/cpcb-swm/workspaces/:workspaceId`
+- These protected paths now use `withDatabaseTenantContext(...)`; authorization, geography checks, reads/writes, status history, and audit writes are executed through the same transaction-scoped client.
+- The file inspection after the change confirmed no direct `pool.query`, `pool.connect`, manual BEGIN/COMMIT/ROLLBACK, or client release remains in those protected CPCB/SWM paths.
+- Status: **VERIFIED COMPLETE at engineering/CI level for this bounded batch only**.
+- This does not establish complete tenant isolation, production RLS completion, production readiness, field acceptance, statutory/regulatory approval, certification, or TRL 9.
+- Production remains READ-ONLY / HOLD. No production DDL/DML, RLS enablement, role/grant change, deployment, merge, certification, or TRL 9 declaration was performed.
+
+### Next protected-access batch — EPR return workspace
+
+- Started bounded migration of `apps/src/epr-return-routes.ts` in commit `66c04a6d09b3c600d823413e0241685666dba97f`.
+- Migrated EPR return list/create/submit/external-reference paths from split shared-pool/manual transaction access to `withDatabaseTenantContext(...)`.
+- Authorization checks in those migrated paths now use the same tenant transaction client as the protected data access.
+- CI validation for this new EPR-return head is **PENDING**; do not mark the batch complete until the full 17-step gate succeeds.
+- Before production RLS is proposed, protected access still requires broader route/data-access migration and complete policy-matrix reconciliation.
+- Migration 096 source/ledger lineage remains a separate unresolved release blocker.
