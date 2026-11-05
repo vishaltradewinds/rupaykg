@@ -77,3 +77,11 @@ jobs:
         run: npm test
       - name: Build production container
         run: docker build --pull --tag rupaykg:ci .
+      - name: Rehearse bounded disposable backup and restore
+        run: bash scripts/test-disposable-backup-restore.sh
+      - name: Assert production startup cannot execute migrations or fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmd="$(docker inspect rupaykg:ci --format '{{json .Config.Cmd}}')"
+          test "$cmd" = '["node","apps/dist/src/production-server.js"]'
