@@ -17,8 +17,15 @@ SQL
 set +e
 output="$(
   MIGRATOR_DATABASE_URL="$MIGRATOR_DATABASE_URL" \
-  MIGRATOR_DATABASE_SSL="$MIGRATOR_DATABASE_SSL" \
-  NODE_ENV=test npm run migrate -w @rupaykg/api 2>&1
+  MIGRATOR_MODE=true \
+  NODE_ENV=production \
+  MIGRATOR_MANIFEST_PATH="${MIGRATOR_MANIFEST_PATH:-artifacts/migration-manifest.json}" \
+  MIGRATOR_EXPECTED_DATABASE=rupaykg \
+  MIGRATOR_EXPECTED_USER=postgres \
+  MIGRATOR_REHEARSAL=true \
+  MIGRATOR_DATABASE_SSL_STRICT=false \
+  DATABASE_SSL_CA_CERT="${DATABASE_SSL_CA_CERT:-/tmp/ci-placeholder-ca.pem}" \
+  npm run migrate:protected 2>&1
 )"
 status=$?
 set -e
