@@ -16,6 +16,7 @@ SQL
 
 set +e
 output="$(
+  env -u DATABASE_URL \
   MIGRATOR_DATABASE_URL="$MIGRATOR_DATABASE_URL" \
   MIGRATOR_MODE=true \
   NODE_ENV=production \
