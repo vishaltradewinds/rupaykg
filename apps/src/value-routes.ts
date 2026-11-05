@@ -28,18 +28,20 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
     const leakageTco2e = nonNegative(body, "leakageTco2e"); const uncertaintyTco2e = nonNegative(body, "uncertaintyTco2e");
     if (!activityId || !methodologyCode || !methodologyVersion || !evidenceId || baselineTco2e === null || projectTco2e === null || leakageTco2e === null || uncertaintyTco2e === null) return reply.code(400).send({ error: "activityId, methodologyCode, methodologyVersion, evidenceId, baselineTco2e, projectTco2e, leakageTco2e and uncertaintyTco2e are required", code: "CARBON_INPUTS_REQUIRED" });
     try {
-      const access = await activityAccess(pool, activityId, auth.identityId); if (!access) return reply.code(403).send({ error: "Activity access denied", code: "ACTIVITY_FORBIDDEN" });
-      if (!await hasOrganizationPermission(pool, auth, access.organization_id, ["projects:manage"])) return reply.code(403).send({ error: "Explicit projects:manage permission is required", code: "CARBON_CALCULATION_FORBIDDEN" });
-      const geography = await assertActivityGeographyScope(pool, access.geography_id, auth.identityId);
+      if (!auth.activeOrganizationId) return reply.code(403).send({ error: "An active organization is required for carbon calculation", code: "ACTIVE_ORGANIZATION_REQUIRED" });
+      const calculation = await withDatabaseTenantContext(pool, { identityId: auth.identityId, organizationId: auth.activeOrganizationId, bilateralOrganizationScope: auth.bilateralOrganizationScope ?? false, serviceMode: false }, async client => {
+      const access = await activityAccess(client, activityId, auth.identityId); if (!access) throw Object.assign(new Error("Activity access denied"), { code: "ACTIVITY_FORBIDDEN" });
+      if (!await hasOrganizationPermission(client, auth, access.organization_id, ["projects:manage"])) return reply.code(403).send({ error: "Explicit projects:manage permission is required", code: "CARBON_CALCULATION_FORBIDDEN" });
+      const geography = await assertActivityGeographyScope(client, access.geography_id, auth.identityId);
       if (!geography.ok) return reply.code(geography.code === "ACTIVITY_GEOGRAPHY_REQUIRED" ? 409 : 403).send({ error: geography.code === "ACTIVITY_GEOGRAPHY_REQUIRED" ? "Activity must have an authorized geography before value calculation" : "Activity geography is outside organization authorization scope", code: geography.code });
-      const evidence = await pool.query<{ id: string; activity_id: string | null; content_hash: string | null; content_uri: string | null; status: string }>("select id, activity_id, content_hash, content_uri, status from evidence where id = $1", [evidenceId]);
+      const evidence = await client.query<{ id: string; activity_id: string | null; content_hash: string | null; content_uri: string | null; status: string }>("select id, activity_id, content_hash, content_uri, status from evidence where id = $1", [evidenceId]);
       const evidenceRow = evidence.rows[0];
       if (!evidenceRow || evidenceRow.activity_id !== activityId) return reply.code(409).send({ error: "Evidence must exist and belong to the activity", code: "EVIDENCE_ACTIVITY_MISMATCH" });
       if (evidenceRow.status !== "VERIFIED") return reply.code(409).send({ error: "Evidence must be verified before value calculation", code: "EVIDENCE_NOT_VERIFIED" });
-      const verification = await pool.query<{ id: string }>("select id from verifications where evidence_id = $1 and decision = 'APPROVED' limit 1", [evidenceId]);
+      const verification = await client.query<{ id: string }>("select id from verifications where evidence_id = $1 and decision = 'APPROVED' limit 1", [evidenceId]);
       if (!verification.rows[0]) return reply.code(409).send({ error: "Approved verification is required before value calculation", code: "VERIFICATION_REQUIRED" });
       if (!evidenceRow.content_hash && !evidenceRow.content_uri) return reply.code(409).send({ error: "Evidence must have a content hash or authoritative content URI", code: "EVIDENCE_PROVENANCE_REQUIRED" });
-      const method = await pool.query<{ id: string; rules: unknown; governance_status: string }>("select id, rules, governance_status from methodology_versions where methodology_code = $1 and version = $2", [methodologyCode, methodologyVersion]);
+      const method = await client.query<{ id: string; rules: unknown; governance_status: string }>("select id, rules, governance_status from methodology_versions where methodology_code = $1 and version = $2", [methodologyCode, methodologyVersion]);
       if (!method.rows[0]) return reply.code(409).send({ error: "Methodology version is not registered", code: "METHODOLOGY_NOT_REGISTERED" });
       if (!isGenericCalculationMethodAllowed(methodologyCode)) return reply.code(409).send({ error: "Official BEE CCTS methodologies require a reviewed, method-specific calculation adapter; generic baseline/project arithmetic is blocked", code: "METHODOLOGY_ADAPTER_NOT_VALIDATED" });
       const result = calculateEmissionReduction({ activityId, methodologyCode, methodologyVersion, baselineTco2e, projectTco2e, leakageTco2e, uncertaintyTco2e });
@@ -49,9 +51,11 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
       const calculationTrace = result.trace.map(step => ({ ...step, evidenceId, evidenceHash: datasetHash }));
       const calculationHash = sha256Canonical({ provenanceVersion: "1", methodologyCode, methodologyVersion, methodologyGovernanceStatus: method.rows[0].governance_status, datasetHash, formulaHash, calculationTrace, result: { grossReductionTco2e: result.grossReductionTco2e, netReductionTco2e: result.netReductionTco2e, uncertaintyTco2e: result.uncertaintyTco2e } });
       const inputs = { ...result.normalizedInputs, evidenceId };
-      const inserted = await pool.query("insert into carbon_calculations (activity_id, methodology_version_id, inputs, result, unit, status, calculated_at, baseline_result, uncertainty, dataset_hash, formula_hash, calculation_trace, provenance_version, calculation_hash) values ($1,$2,$3,$4,$5,$6,now(),$7,$8,$9,$10,$11,$12,$13) returning *", [activityId, method.rows[0].id, inputs, result.netReductionTco2e, "tCO2e", result.status, baselineTco2e, uncertaintyTco2e, datasetHash, formulaHash, JSON.stringify(calculationTrace), "1", calculationHash]);
-      return reply.code(201).send({ source: "postgresql", syntheticData: false, calculation: inserted.rows[0], calculationResult: { ...result, evidenceId, datasetHash, formulaHash, calculationTrace, calculationHash } });
-    } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Carbon calculation unavailable", syntheticData: false }); }
+      const inserted = await client.query("insert into carbon_calculations (activity_id, methodology_version_id, inputs, result, unit, status, calculated_at, baseline_result, uncertainty, dataset_hash, formula_hash, calculation_trace, provenance_version, calculation_hash) values ($1,$2,$3,$4,$5,$6,now(),$7,$8,$9,$10,$11,$12,$13) returning *", [activityId, method.rows[0].id, inputs, result.netReductionTco2e, "tCO2e", result.status, baselineTco2e, uncertaintyTco2e, datasetHash, formulaHash, JSON.stringify(calculationTrace), "1", calculationHash]);
+      return { calculation: inserted.rows[0], calculationResult: { ...result, evidenceId, datasetHash, formulaHash, calculationTrace, calculationHash } };
+      });
+      return reply.code(201).send({ source: "postgresql", syntheticData: false, ...calculation });
+    } catch (error) { const code=(error as {code?:string}).code; if(code==="ACTIVE_ORGANIZATION_REQUIRED"||code==="ACTIVITY_FORBIDDEN"||code==="CARBON_CALCULATION_FORBIDDEN") return reply.code(403).send({error:(error as Error).message,code}); request.log.error(error); return reply.code(503).send({ error: "Carbon calculation unavailable", syntheticData: false }); }
   });
 
   app.post("/api/v1/epr/obligations/:obligationId/assess", async (request, reply) => {
