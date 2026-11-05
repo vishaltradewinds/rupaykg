@@ -78,8 +78,30 @@ begin
     raise exception 'verification requires a verified activity organization';
   end if;
 
-  if activity_geography_id is null
-     or not public.organization_has_geography_scope(activity_organization_id, activity_geography_id) then
+  if activity_geography_id is null then
+    raise exception 'verification requires an activity within an authorized organization geography';
+  end if;
+
+  -- Evaluate the scope after the organization lock using a VOLATILE trigger-local
+  -- query. The STABLE helper can retain the outer statement snapshot and is not
+  -- sufficient for this concurrency boundary.
+  if not exists (
+    with recursive ancestors(id) as (
+      select g.id
+        from public.geography g
+       where g.id = activity_geography_id
+      union all
+      select g.parent_id
+        from public.geography g
+        join ancestors a on a.id = g.id
+       where g.parent_id is not null
+    )
+    select 1
+      from public.organization_geography_scopes s
+      join ancestors a on a.id = s.geography_id
+     where s.organization_id = activity_organization_id
+       and s.status = 'VERIFIED'
+  ) then
     raise exception 'verification requires an activity within an authorized organization geography';
   end if;
 
@@ -174,6 +196,48 @@ for each row execute function public.enforce_verification_authorization();
 
 comment on function public.enforce_verification_authorization() is
   'Requires explicit active verifier authority in the exact evidence activity organization for every decision; snapshots are captured at insert and verification rows cannot be updated.';
+
+-- Serialize geography-scope mutations with verification decisions by taking
+-- the same organization-row lock used by the verification trigger.
+create or replace function public.lock_organization_for_geography_scope_change()
+returns trigger
+language plpgsql
+security definer
+set search_path = pg_catalog
+as $scope_lock$
+declare
+  old_organization_id uuid;
+  new_organization_id uuid;
+begin
+  if tg_op <> 'INSERT' then
+    old_organization_id := old.organization_id;
+  end if;
+  if tg_op <> 'DELETE' then
+    new_organization_id := new.organization_id;
+  end if;
+
+  perform o.id
+    from public.organizations o
+   where o.id = any(array_remove(array[old_organization_id, new_organization_id], null))
+   order by o.id
+   for update;
+
+  if tg_op = 'DELETE' then
+    return old;
+  end if;
+  return new;
+end;
+$scope_lock$;
+
+alter function public.lock_organization_for_geography_scope_change()
+  owner to rupaykg_auth_context_owner;
+
+drop trigger if exists verification_geography_scope_serialization_guard
+  on public.organization_geography_scopes;
+create trigger verification_geography_scope_serialization_guard
+before insert or update or delete on public.organization_geography_scopes
+for each row execute function public.lock_organization_for_geography_scope_change();
+
 
 
 ALTER FUNCTION public.enforce_verification_authorization()
