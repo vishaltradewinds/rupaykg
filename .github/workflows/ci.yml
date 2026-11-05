@@ -39,15 +39,37 @@ jobs:
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=high
       - run: npm run validate:migrations
+      - name: Generate and validate migration manifest
+        run: |
+          mkdir -p artifacts
+          npm run generate:migration-manifest -- artifacts/migration-manifest.json
+          MIGRATOR_MANIFEST_PATH=artifacts/migration-manifest.json npm run validate:migration-manifest
+      - name: Validate protected migrator configuration contract
+        env:
+          DATABASE_URL: ""
+          MIGRATOR_DATABASE_URL: postgresql://protected-migrator.invalid/rupaykg
+          MIGRATOR_MODE: "true"
+          NODE_ENV: production
+          MIGRATOR_MANIFEST_PATH: artifacts/migration-manifest.json
+          MIGRATOR_EXPECTED_DATABASE: rupaykg
+          MIGRATOR_EXPECTED_USER: rupaykg_migrator
+          DATABASE_SSL_CA_CERT: /tmp/ci-placeholder-ca.pem
+        run: npm run validate:protected-migrator-config
       - name: Apply migrations to disposable CI PostgreSQL
         env:
-          RUPAYKG_MIGRATOR_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/rupaykg
-          RUPAYKG_MIGRATOR_DATABASE_SSL: "false"
-        run: npm run migrate -w @rupaykg/api
+          MIGRATOR_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/rupaykg
+          MIGRATOR_MODE: "true"
+          NODE_ENV: production
+          MIGRATOR_MANIFEST_PATH: artifacts/migration-manifest.json
+          MIGRATOR_EXPECTED_DATABASE: rupaykg
+          MIGRATOR_EXPECTED_USER: postgres
+          DATABASE_SSL: "false"
+          DATABASE_SSL_CA_CERT: /tmp/ci-placeholder-ca.pem
+        run: npm run migrate:protected
       - name: Verify orphaned migration ledger fails closed
         env:
-          RUPAYKG_MIGRATOR_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/rupaykg
-          RUPAYKG_MIGRATOR_DATABASE_SSL: "false"
+          MIGRATOR_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/rupaykg
+          DATABASE_SSL: "false"
         run: bash scripts/test-migrator-orphan-ledger.sh
       - name: Prove non-superuser migration helper ownership transfer
         run: psql "$DATABASE_URL" --set=ON_ERROR_STOP=1 --file=scripts/test-migrator-helper-ownership.sql
