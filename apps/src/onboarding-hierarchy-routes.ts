@@ -19,10 +19,10 @@ export async function registerOnboardingHierarchyRoutes(app:FastifyInstance,pool
     const a=await authn(request,reply,pool); if(!a||!pool)return;
     try{
       const applications=await withDatabaseTenantContext(pool,{identityId:a.identityId,organizationId:a.activeOrganizationId,bilateralOrganizationScope:false,serviceMode:false},async(db)=>{
-        const rows=await db.query(\`select sa.id,sa.organization_id,sa.identity_id as applicant_identity_id,sa.requested_role_key,sa.requested_organization_type,sa.geography_id,sa.status,sa.applicant_note,sa.created_at,sa.reviewed_at,sa.review_note,o.name organization_name,o.legal_name,o.legal_form,o.registration_identifier,o.registration_authority,o.verification_status,o.verification_note,(select count(*) from organization_verification_evidence e where e.organization_id=o.id) evidence_count,g.name geography_name,g.kind geography_kind,i.display_name applicant_name,i.email applicant_email from stakeholder_applications sa join organizations o on o.id=sa.organization_id left join geography g on g.id=sa.geography_id left join identities i on i.id=sa.identity_id where sa.status='PENDING' order by sa.created_at\`);
+        const rows=await db.query(`select sa.id,sa.organization_id,sa.identity_id as applicant_identity_id,sa.requested_role_key,sa.requested_organization_type,sa.geography_id,sa.status,sa.applicant_note,sa.created_at,sa.reviewed_at,sa.review_note,o.name organization_name,o.legal_name,o.legal_form,o.registration_identifier,o.registration_authority,o.verification_status,o.verification_note,(select count(*) from organization_verification_evidence e where e.organization_id=o.id) evidence_count,g.name geography_name,g.kind geography_kind,i.display_name applicant_name,i.email applicant_email from stakeholder_applications sa join organizations o on o.id=sa.organization_id left join geography g on g.id=sa.geography_id left join identities i on i.id=sa.identity_id where sa.status='PENDING' order by sa.created_at`);
         const result=[];
         for(const r of rows.rows){
-          const approvals=await db.query(\`select step_order,approval_level,geography_id,status,approved_by_identity_id,reviewed_at,review_note from stakeholder_application_approvals where application_id=$1 order by step_order\`,[r.id]);
+          const approvals=await db.query(`select step_order,approval_level,geography_id,status,approved_by_identity_id,reviewed_at,review_note from stakeholder_application_approvals where application_id=$1 order by step_order`,[r.id]);
           const next=approvals.rows.find((x:any)=>x.status==="PENDING")??null;
           const canReview=next?await eligible(db,a,next.approval_level,r.geography_kind??null,r.geography_id??null):false;
           const canVerifyLegal=r.requested_organization_type!=="individual"&&r.verification_status!=="VERIFIED"&&await hasAuthority(db,a,PLATFORM,null);
@@ -47,7 +47,7 @@ export async function registerOnboardingHierarchyRoutes(app:FastifyInstance,pool
         if(!q.rows[0])throw Object.assign(new Error("Pending stakeholder application not found"),{code:"APPLICATION_NOT_FOUND"});
         const oid=q.rows[0].organization_id;
         if(status==="VERIFIED"){
-          const evidence=await db.query<{count:string}>(\`select count(*)::text as count from organization_verification_evidence where organization_id=$1 and document_reference is not null and btrim(document_reference)<>'' and content_hash is not null and btrim(content_hash)<>''\`,[oid]);
+          const evidence=await db.query<{count:string}>(`select count(*)::text as count from organization_verification_evidence where organization_id=$1 and document_reference is not null and btrim(document_reference)<>'' and content_hash is not null and btrim(content_hash)<>''`,[oid]);
           if(Number(evidence.rows[0]?.count??0)<1)throw Object.assign(new Error("At least one persisted legal evidence reference with a content hash is required before legal verification."),{code:"LEGAL_EVIDENCE_MISSING"});
         }
         await db.query("update organization_verification_evidence set status=$1,verification_note=$2,verified_by_identity_id=$3,verified_at=now() where organization_id=$4 and status in ('PENDING','REJECTED')",[status,note,a.identityId,oid]);
@@ -72,13 +72,13 @@ export async function registerOnboardingHierarchyRoutes(app:FastifyInstance,pool
     if(action==="reject"&&!note)return reply.code(400).send({error:"A review rationale is required when rejecting an application.",code:"REVIEW_NOTE_REQUIRED"});
     try{
       const result=await withDatabaseTenantContext(pool,{identityId:a.identityId,organizationId:a.activeOrganizationId,bilateralOrganizationScope:false,serviceMode:false},async(db)=>{
-        const q=await db.query<any>(\`select sa.*,g.kind geography_kind,o.verification_status from stakeholder_applications sa left join geography g on g.id=sa.geography_id join organizations o on o.id=sa.organization_id where sa.id=$1 and sa.status='PENDING' for update\`,[id]);
+        const q=await db.query<any>(`select sa.*,g.kind geography_kind,o.verification_status from stakeholder_applications sa left join geography g on g.id=sa.geography_id join organizations o on o.id=sa.organization_id where sa.id=$1 and sa.status='PENDING' for update`,[id]);
         const appn=q.rows[0];
         if(!appn)throw Object.assign(new Error("Pending stakeholder application not found"),{code:"APPLICATION_NOT_FOUND"});
         const chain=await db.query<any>("select * from stakeholder_application_approvals where application_id=$1 order by step_order for update",[id]);
         const next=chain.rows.find((x:any)=>x.status==="PENDING");
         if(!next)throw Object.assign(new Error("No pending approval step remains"),{code:"APPROVAL_CHAIN_COMPLETE"});
-        if(!await eligible(db,a,next.approval_level,appn.geography_kind??null,appn.geography_id??null))throw Object.assign(new Error(\`Authorized \${next.approval_level.toLowerCase()} authority required\`),{code:"ONBOARDING_AUTHORITY_FORBIDDEN",requiredLevel:next.approval_level});
+        if(!await eligible(db,a,next.approval_level,appn.geography_kind??null,appn.geography_id??null))throw Object.assign(new Error(`Authorized ${next.approval_level.toLowerCase()} authority required`),{code:"ONBOARDING_AUTHORITY_FORBIDDEN",requiredLevel:next.approval_level});
         if(next.approval_level==="PLATFORM"&&action==="approve"&&appn.requested_organization_type!=="individual"&&appn.verification_status!=="VERIFIED")throw Object.assign(new Error("Legal organization verification must be VERIFIED before final platform approval"),{code:"LEGAL_VERIFICATION_REQUIRED"});
         if(action==="reject"){
           await db.query("update stakeholder_application_approvals set status='REJECTED',approved_by_identity_id=$2,reviewed_at=now(),review_note=$3 where id=$1",[next.id,a.identityId,note]);
