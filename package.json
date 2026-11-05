@@ -18,7 +18,9 @@
     "validate:migrations": "node scripts/validate-migrations.mjs",
     "ecosystem:reconcile": "node scripts/reconcile-ecosystem-state.mjs",
     "validate:protected-migrator-config": "node scripts/validate-protected-migrator-config.mjs",
-    "migrate:protected": "node scripts/run-protected-migrator.mjs"
+    "migrate:protected": "node scripts/run-protected-migrator.mjs",
+    "generate:migration-manifest": "node scripts/generate-migration-manifest.mjs",
+    "validate:migration-manifest": "node scripts/validate-migration-manifest.mjs"
   },
   "overrides": {
     "protobufjs": "8.8.0",
