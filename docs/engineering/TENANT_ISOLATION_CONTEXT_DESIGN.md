@@ -1,6 +1,6 @@
 # Tenant-Isolation Database Context Design
 
-Status: **PROPOSED — NOT IMPLEMENTED**
+Status: **PARTIALLY IMPLEMENTED — CONTEXT PRIMITIVE + REPRESENTATIVE ROUTE ONLY**
 
 ## Objective
 
@@ -34,9 +34,9 @@ The context must use PostgreSQL transaction-local settings (`SET LOCAL` or an eq
 
 The current API uses a shared PostgreSQL pool and many routes currently call `pool.query()` directly. Therefore enabling RLS before migrating protected data access to transaction-scoped context would risk false denials, partial authorization, or unsafe context leakage.
 
-The correct sequence is:
+The current sequence is:
 
-**context abstraction -> protected route migration -> disposable isolation tests -> RLS policy migration -> disposable migration rehearsal -> independent release gate -> production proposal.**
+**context abstraction [DONE IN PR] -> representative protected route migration [DONE IN PR] -> disposable isolation tests [NEXT] -> broader protected-route migration -> RLS policy migration -> disposable migration rehearsal -> independent release gate -> production proposal.**
 
 ## Validation requirements
 
