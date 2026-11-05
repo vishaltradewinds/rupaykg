@@ -31,9 +31,9 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
       if (!auth.activeOrganizationId) return reply.code(403).send({ error: "An active organization is required for carbon calculation", code: "ACTIVE_ORGANIZATION_REQUIRED" });
       const calculation = await withDatabaseTenantContext(pool, { identityId: auth.identityId, organizationId: auth.activeOrganizationId, bilateralOrganizationScope: auth.bilateralOrganizationScope ?? false, serviceMode: false }, async client => {
       const access = await activityAccess(client, activityId, auth.identityId); if (!access) throw Object.assign(new Error("Activity access denied"), { code: "ACTIVITY_FORBIDDEN" });
-      if (!await hasOrganizationPermission(client, auth, access.organization_id, ["projects:manage"])) return reply.code(403).send({ error: "Explicit projects:manage permission is required", code: "CARBON_CALCULATION_FORBIDDEN" });
+      if (!await hasOrganizationPermission(client, auth, access.organization_id, ["projects:manage"])) throw Object.assign(new Error("Explicit projects:manage permission is required"), { code: "CARBON_CALCULATION_FORBIDDEN" });
       const geography = await assertActivityGeographyScope(client, access.geography_id, auth.identityId);
-      if (!geography.ok) return reply.code(geography.code === "ACTIVITY_GEOGRAPHY_REQUIRED" ? 409 : 403).send({ error: geography.code === "ACTIVITY_GEOGRAPHY_REQUIRED" ? "Activity must have an authorized geography before value calculation" : "Activity geography is outside organization authorization scope", code: geography.code });
+      if (!geography.ok) throw Object.assign(new Error(geography.code === "ACTIVITY_GEOGRAPHY_REQUIRED" ? "Activity must have an authorized geography before value calculation" : "Activity geography is outside organization authorization scope"), { code: geography.code });
       const evidence = await client.query<{ id: string; activity_id: string | null; content_hash: string | null; content_uri: string | null; status: string }>("select id, activity_id, content_hash, content_uri, status from evidence where id = $1", [evidenceId]);
       const evidenceRow = evidence.rows[0];
       if (!evidenceRow || evidenceRow.activity_id !== activityId) return reply.code(409).send({ error: "Evidence must exist and belong to the activity", code: "EVIDENCE_ACTIVITY_MISMATCH" });
