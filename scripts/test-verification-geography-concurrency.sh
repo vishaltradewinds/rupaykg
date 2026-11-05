@@ -191,4 +191,4 @@ END
 \$assert\$;
 SQL
 
-echo "PASS: geography revocation and verification approval serialized on the organization lock (${elapsed_ms}ms)."
+echo "PASS: geography revocation and verification approval serialized on the organization lock (${verifier_elapsed_ms}ms)."
