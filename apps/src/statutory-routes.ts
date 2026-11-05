@@ -69,7 +69,7 @@ async function organizationFor(auth: AuthContext, pool: Pool, request: Request, 
 async function evidenceBindingValid(db: Pool | PoolClient, organizationId: string, evidenceId: string | null, verificationId: string | null): Promise<boolean> {
   if (!evidenceId && !verificationId) return true;
   if (!evidenceId || !verificationId) return false;
-  const result = await pool.query<{ ok: boolean }>(
+  const result = await db.query<{ ok: boolean }>(
     `select exists(
        select 1 from evidence e
        join activities a on a.id=e.activity_id
