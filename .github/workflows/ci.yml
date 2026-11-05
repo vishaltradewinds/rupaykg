@@ -121,6 +121,8 @@ jobs:
         run: npm test
       - name: Build production container
         run: docker build --pull --tag rupaykg:ci .
+      - name: Rehearse disposable backup and restore before release decision
+        run: bash scripts/test-disposable-backup-restore.sh
       - name: Assert production startup cannot execute migrations or fixtures
         shell: bash
         run: |
