@@ -103,3 +103,15 @@ Required next implementation batch: build the transaction-scoped DB context abst
 Migration 096 remains unresolved at source/ledger lineage level: the inspected production ledger records `096_verification_authorization_provenance.sql`, while exact active-path checks did not locate that filename. Commit-history search identified historical authorization/provenance work but did not establish the exact missing migration filename/path. Do not mark 096 resolved by inference.
 
 No production DDL/DML, role/grant change, RLS mutation, deployment, merge, certification, or TRL 9 declaration was performed in this batch.
+
+
+## 2026-11-05 Tenant Context Implementation Batch
+
+- Branch: `shakti/2026-11-05-tenant-isolation-reconstruction`.
+- Implemented a reusable transaction-scoped PostgreSQL tenant/security context primitive in `apps/src/db-context.ts`.
+- Context uses parameterized `set_config(..., true)` inside an explicit transaction, so the identity/organization/bilateral/service settings are transaction-local rather than session-local.
+- Added unit tests in `apps/src/db-context.test.ts` covering commit/release and rollback/release behavior.
+- Migrated the `POST /api/v1/resource-flows` protected write path to execute authorization, geography checks, and the insert in one tenant-context transaction.
+- This is a bounded implementation checkpoint, not completion of tenant isolation.
+- RLS remains disabled in the inspected Neon database and no production RLS mutation has been performed.
+- Required next validation: CI on the new head, then disposable PostgreSQL isolation tests and pooled-connection reset evidence before broader protected-route migration or any RLS migration.
