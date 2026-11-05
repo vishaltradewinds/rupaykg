@@ -38,11 +38,9 @@ type WorkspaceName = "resourceFlows" | "mrv" | "compliance" | "carbon" | "regist
 const WORKSPACE_READ_PERMISSIONS: Record<WorkspaceName, readonly string[]> = {
   resourceFlows: ["waste:read"], mrv: ["evidence:upload", "evidence:review", "guardian:read"], compliance: ["reports:read", "swm:read", "epr:read", "audit:read"], carbon: ["reports:read", "credits:read", "projects:read"], registry: ["registry:read", "credits:read"], settlement: ["credits:read", "settlement:authorize", "settlement:settle", "AUTHORIZE_SETTLEMENT", "SETTLE_FUNDS"], esg: ["reports:read", "epr:read", "csr:read", "audit:read"],
 };
-async function authorizeWorkspaceRead(pool: Pool, auth: AuthContext, workspace: WorkspaceName): Promise<boolean> {
-  const organizations = orgIds(auth); if (!organizations.length) return false;
-  const permissions = WORKSPACE_READ_PERMISSIONS[workspace];
-  for (const organizationId of organizations) if (!await hasOrganizationPermission(pool, auth, organizationId, permissions)) return false;
-  return true;
+async function authorizeWorkspaceRead(db: Pool | PoolClient, auth: AuthContext, workspace: WorkspaceName): Promise<boolean> {
+  if (!auth.activeOrganizationId) return false;
+  return hasOrganizationPermission(db, auth, auth.activeOrganizationId, WORKSPACE_READ_PERMISSIONS[workspace]);
 }
 
 export async function registerWorkspaceRoutes(app: FastifyInstance, pool: Pool | null): Promise<void> {
@@ -50,7 +48,14 @@ export async function registerWorkspaceRoutes(app: FastifyInstance, pool: Pool |
     const route = request.routeOptions.url ?? ""; if (!route.startsWith("/api/v1/workspaces/")) return;
     const routeWorkspace = route.split("/").pop() ?? ""; const workspace = routeWorkspace === "resource-flows" ? "resourceFlows" : routeWorkspace as WorkspaceName;
     if (!(workspace in WORKSPACE_READ_PERMISSIONS)) return; const auth = await requireAuth(app, pool, request, reply); if (!auth || !pool) return;
-    if (!await authorizeWorkspaceRead(pool, auth, workspace)) return reply.code(403).send({ error: "Workspace read permission required", code: "WORKSPACE_READ_FORBIDDEN", workspace });
+    if (!auth.activeOrganizationId) return reply.code(403).send({ error: "An active organization is required for workspace access", code: "ACTIVE_ORGANIZATION_REQUIRED", workspace });
+    try {
+      const allowed = await withDatabaseTenantContext(pool, { identityId: auth.identityId, organizationId: auth.activeOrganizationId, bilateralOrganizationScope: auth.bilateralOrganizationScope ?? false, serviceMode: false }, async (client) => authorizeWorkspaceRead(client, auth, workspace));
+      if (!allowed) return reply.code(403).send({ error: "Workspace read permission required", code: "WORKSPACE_READ_FORBIDDEN", workspace });
+    } catch (error) {
+      request.log.error(error);
+      return reply.code(503).send({ error: "Workspace authorization unavailable", code: "WORKSPACE_AUTH_UNAVAILABLE", syntheticData: false });
+    }
   });
 
   app.get("/api/v1/workspaces/resource-flows", async (request, reply) => {
@@ -170,22 +175,49 @@ export async function registerWorkspaceRoutes(app: FastifyInstance, pool: Pool |
   });
 
   app.get("/api/v1/workspaces/registry", async (request, reply) => {
-    const auth=await requireAuth(app,pool,request,reply);if(!auth||!pool)return;const ids=orgIds(auth);if(!ids.length)return result({credentials:[],events:[]});const geographyId=requestedGeography(request);if(geographyId&&!await authorizeGeography(pool,auth,geographyId))return reply.code(403).send({error:"Geography outside organization authorization scope",code:"GEOGRAPHY_FORBIDDEN"});
-    try{const params:unknown[]=[ids];if(geographyId)params.push(geographyId);const clause=geoClause(geographyId,"a.geography_id");const scopeClause=" and organization_has_geography_scope(a.organization_id,a.geography_id)";const [credentials,events]=await Promise.all([pool.query(`select c.id,c.activity_id,c.issuer_organization_id,o.name as issuer_name,c.trust_root_id,c.status,c.credential_uri,c.issued_at from credentials c join organizations o on o.id=c.issuer_organization_id join activities a on a.id=c.activity_id left join lateral (select re.to_owner_id as current_owner_id from registry_events re where re.credential_id=c.id and re.event_type in('ISSUED','TRANSFERRED') order by re.created_at desc limit 1) current_owner on true where (c.issuer_organization_id=any($1::uuid[]) or current_owner.current_owner_id=any($1::uuid[]))${scopeClause}${clause} order by c.issued_at desc nulls last,c.id desc limit 100`,params),pool.query(`select re.id,re.credential_id,re.event_type,re.from_owner_id,fo.name as from_owner_name,re.to_owner_id,too.name as to_owner_name,re.external_reference,re.event_hash,re.created_at from registry_events re left join organizations fo on fo.id=re.from_owner_id left join organizations too on too.id=re.to_owner_id join credentials c on c.id=re.credential_id join activities a on a.id=c.activity_id left join lateral (select re2.to_owner_id as current_owner_id from registry_events re2 where re2.credential_id=c.id and re2.event_type in('ISSUED','TRANSFERRED') order by re2.created_at desc limit 1) current_owner on true where (c.issuer_organization_id=any($1::uuid[]) or current_owner.current_owner_id=any($1::uuid[]))${scopeClause}${clause} order by re.created_at desc limit 200`,params)]);return result({credentials:credentials.rows,events:events.rows});}catch(error){request.log.error(error);return reply.code(503).send({error:"Registry workspace unavailable",syntheticData:false});}
+    const auth=await requireAuth(app,pool,request,reply);if(!auth||!pool)return;
+    if (!auth.activeOrganizationId) return reply.code(403).send({ error: "An active organization is required for registry workspace access", code: "ACTIVE_ORGANIZATION_REQUIRED" });
+    const organizationId=auth.activeOrganizationId; const geographyId=requestedGeography(request);
+    try {
+      const data=await withDatabaseTenantContext(pool,{identityId:auth.identityId,organizationId,bilateralOrganizationScope:auth.bilateralOrganizationScope ?? false,serviceMode:false},async(client)=>{
+        if(geographyId&&!await authorizeGeography(client,auth,geographyId)) throw Object.assign(new Error("Geography outside organization authorization scope"),{code:"GEOGRAPHY_FORBIDDEN"});
+        const params:unknown[]=[[organizationId]];if(geographyId)params.push(geographyId);const clause=geoClause(geographyId,"a.geography_id");const scopeClause=" and organization_has_geography_scope(a.organization_id,a.geography_id)";
+        const [credentials,events]=await Promise.all([
+          client.query(`select c.id,c.activity_id,c.issuer_organization_id,o.name as issuer_name,c.trust_root_id,c.status,c.credential_uri,c.issued_at from credentials c join organizations o on o.id=c.issuer_organization_id join activities a on a.id=c.activity_id left join lateral (select re.to_owner_id as current_owner_id from registry_events re where re.credential_id=c.id and re.event_type in('ISSUED','TRANSFERRED') order by re.created_at desc limit 1) current_owner on true where (c.issuer_organization_id=any($1::uuid[]) or current_owner.current_owner_id=any($1::uuid[]))${scopeClause}${clause} order by c.issued_at desc nulls last,c.id desc limit 100`,params),
+          client.query(`select re.id,re.credential_id,re.event_type,re.from_owner_id,fo.name as from_owner_name,re.to_owner_id,too.name as to_owner_name,re.external_reference,re.event_hash,re.created_at from registry_events re left join organizations fo on fo.id=re.from_owner_id left join organizations too on too.id=re.to_owner_id join credentials c on c.id=re.credential_id join activities a on a.id=c.activity_id left join lateral (select re2.to_owner_id as current_owner_id from registry_events re2 where re2.credential_id=c.id and re2.event_type in('ISSUED','TRANSFERRED') order by re2.created_at desc limit 1) current_owner on true where (c.issuer_organization_id=any($1::uuid[]) or current_owner.current_owner_id=any($1::uuid[]))${scopeClause}${clause} order by re.created_at desc limit 200`,params)
+        ]);
+        return {credentials:credentials.rows,events:events.rows};
+      });
+      return result(data);
+    } catch(error){const code=(error as {code?:string}).code;if(code==="GEOGRAPHY_FORBIDDEN")return reply.code(403).send({error:"Geography outside organization authorization scope",code});request.log.error(error);return reply.code(503).send({error:"Registry workspace unavailable",syntheticData:false});}
   });
 
   app.get("/api/v1/workspaces/settlement", async (request, reply) => {
-    const auth=await requireAuth(app,pool,request,reply);if(!auth||!pool)return;const ids=orgIds(auth);if(!ids.length)return result({settlements:[]});const geographyId=requestedGeography(request);if(geographyId&&!await authorizeGeography(pool,auth,geographyId))return reply.code(403).send({error:"Geography outside organization authorization scope",code:"GEOGRAPHY_FORBIDDEN"});
-    try{const params:unknown[]=[ids];if(geographyId)params.push(geographyId);const rows=await pool.query(`select s.id,s.obligation_id,s.credential_id,s.payer_id,p.name as payer_name,s.payee_id,py.name as payee_name,s.amount,s.currency,s.status,s.external_reference,s.created_at,s.settled_at from settlements s left join organizations p on p.id=s.payer_id left join organizations py on py.id=s.payee_id left join credentials c on c.id=s.credential_id left join activities a on a.id=c.activity_id where (s.payer_id=any($1::uuid[]) or s.payee_id=any($1::uuid[])) and organization_has_geography_scope(a.organization_id,a.geography_id)${geoClause(geographyId,"a.geography_id")} order by s.created_at desc limit 100`,params);return result({settlements:rows.rows});}catch(error){request.log.error(error);return reply.code(503).send({error:"Settlement workspace unavailable",syntheticData:false});}
+    const auth=await requireAuth(app,pool,request,reply);if(!auth||!pool)return;
+    if (!auth.activeOrganizationId) return reply.code(403).send({ error: "An active organization is required for settlement workspace access", code: "ACTIVE_ORGANIZATION_REQUIRED" });
+    const organizationId=auth.activeOrganizationId; const geographyId=requestedGeography(request);
+    try {
+      const data=await withDatabaseTenantContext(pool,{identityId:auth.identityId,organizationId,bilateralOrganizationScope:auth.bilateralOrganizationScope ?? false,serviceMode:false},async(client)=>{
+        if(geographyId&&!await authorizeGeography(client,auth,geographyId)) throw Object.assign(new Error("Geography outside organization authorization scope"),{code:"GEOGRAPHY_FORBIDDEN"});
+        const params:unknown[]=[[organizationId]];if(geographyId)params.push(geographyId);
+        const rows=await client.query(`select s.id,s.obligation_id,s.credential_id,s.payer_id,p.name as payer_name,s.payee_id,py.name as payee_name,s.amount,s.currency,s.status,s.external_reference,s.created_at,s.settled_at from settlements s left join organizations p on p.id=s.payer_id left join organizations py on py.id=s.payee_id left join credentials c on c.id=s.credential_id left join activities a on a.id=c.activity_id where (s.payer_id=any($1::uuid[]) or s.payee_id=any($1::uuid[])) and organization_has_geography_scope(a.organization_id,a.geography_id)${geoClause(geographyId,"a.geography_id")} order by s.created_at desc limit 100`,params);
+        return {settlements:rows.rows};
+      });
+      return result(data);
+    } catch(error){const code=(error as {code?:string}).code;if(code==="GEOGRAPHY_FORBIDDEN")return reply.code(403).send({error:"Geography outside organization authorization scope",code});request.log.error(error);return reply.code(503).send({error:"Settlement workspace unavailable",syntheticData:false});}
   });
 
   app.get("/api/v1/workspaces/esg", async (request, reply) => {
     const auth = await requireAuth(app, pool, request, reply); if (!auth || !pool) return;
-    const ids = orgIds(auth); if (!ids.length) return result({ reportingPeriods: [], metrics: [] });
+    if (!auth.activeOrganizationId) return reply.code(403).send({ error: "An active organization is required for ESG workspace access", code: "ACTIVE_ORGANIZATION_REQUIRED" });
+    const organizationId = auth.activeOrganizationId;
     try {
-      const periods = await pool.query(`select id,organization_id,period_start,period_end,framework,status,reporting_standard,applicability_status,value_chain_reporting,assurance_mode,external_submission_status,methodology_notes,reporting_boundary from esg_reporting_periods where organization_id=any($1::uuid[]) order by period_end desc,period_start desc limit 100`, [ids]);
-      const metrics = await pool.query(`select em.id,em.reporting_period_id,em.metric_code,em.scope,em.value,em.unit,em.source_activity_id,em.evidence_id,em.verification_id,em.status,em.metadata,em.disclosure_id,em.esg_attribute,em.value_chain_direction,em.methodology,em.assumptions,em.reporting_boundary,em.data_quality,em.assurance_status from esg_metrics em join esg_reporting_periods rp on rp.id=em.reporting_period_id where rp.organization_id=any($1::uuid[]) order by em.id desc limit 200`, [ids]);
-      return result({ reportingPeriods: periods.rows, metrics: metrics.rows });
+      const data = await withDatabaseTenantContext(pool, { identityId: auth.identityId, organizationId, bilateralOrganizationScope: auth.bilateralOrganizationScope ?? false, serviceMode: false }, async (client) => {
+        const periods = await client.query(`select id,organization_id,period_start,period_end,framework,status,reporting_standard,applicability_status,value_chain_reporting,assurance_mode,external_submission_status,methodology_notes,reporting_boundary from esg_reporting_periods where organization_id=any($1::uuid[]) order by period_end desc,period_start desc limit 100`, [[organizationId]]);
+        const metrics = await client.query(`select em.id,em.reporting_period_id,em.metric_code,em.scope,em.value,em.unit,em.source_activity_id,em.evidence_id,em.verification_id,em.status,em.metadata,em.disclosure_id,em.esg_attribute,em.value_chain_direction,em.methodology,em.assumptions,em.reporting_boundary,em.data_quality,em.assurance_status from esg_metrics em join esg_reporting_periods rp on rp.id=em.reporting_period_id where rp.organization_id=any($1::uuid[]) order by em.id desc limit 200`, [[organizationId]]);
+        return { reportingPeriods: periods.rows, metrics: metrics.rows };
+      });
+      return result(data);
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "ESG workspace unavailable", syntheticData: false }); }
   });
 }
