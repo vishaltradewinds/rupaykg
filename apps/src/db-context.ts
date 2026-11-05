@@ -3,8 +3,8 @@ import type { Pool, PoolClient } from "pg";
 export type DatabaseTenantContext = {
   identityId: string;
   organizationId?: string;
-  bilateralOrganizationScope?: boolean;
-  serviceMode?: boolean;
+  bilateralOrganizationScope: boolean;
+  serviceMode: boolean;
 };
 
 export type DatabaseContextClient = Pick<PoolClient, "query" | "release">;
