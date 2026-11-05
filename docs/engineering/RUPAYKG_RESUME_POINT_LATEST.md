@@ -135,3 +135,14 @@ No production DDL/DML, role/grant change, RLS mutation, deployment, merge, certi
 - This validates the **context primitive + representative disposable RLS semantics**. It does **not** prove that RupayKg's 67 production tables have correct policies.
 - Production remains unchanged: no production RLS enablement, policy creation, DDL/DML, role/grant change, deployment, merge, certification, or TRL 9 declaration.
 - Next safe implementation gate: reconcile the tested policy semantics against the full repository organization/bilateral table inventory, then build the complete production RLS policy migration and rehearse it on disposable PostgreSQL. Migration 096 source/ledger reconciliation remains a separate blocker.
+
+
+## 2026-11-05 Protected Write-Path Expansion — IMPLEMENTED / VALIDATION PENDING
+
+- Extended the tenant-context migration beyond `POST /api/v1/resource-flows`.
+- `POST /api/v1/activities/:activityId/measurements` now executes authorization and the protected measurement INSERT inside `withDatabaseTenantContext(...)`.
+- Measurement writes require an explicit active organization context; this avoids ambiguous multi-organization pooled-connection access before RLS is enabled.
+- The protected write uses the transaction client for both authorization and mutation, preserving one authorization/data transaction.
+- No production database mutation, RLS enablement, role/grant change, deployment, merge, certification, or TRL 9 declaration was performed.
+- **Validation pending:** CI on commit `2183dab781b16fa28704bb2c4e914e2b1fd5cd91`.
+- After CI, continue migrating additional protected write/read paths and maintain the rule that no production RLS migration is proposed until the complete policy matrix is reconciled with protected access paths.
