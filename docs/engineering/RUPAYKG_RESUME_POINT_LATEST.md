@@ -146,3 +146,24 @@ No production DDL/DML, role/grant change, RLS mutation, deployment, merge, certi
 - No production database mutation, RLS enablement, role/grant change, deployment, merge, certification, or TRL 9 declaration was performed.
 - **Validation pending:** CI on commit `2183dab781b16fa28704bb2c4e914e2b1fd5cd91`.
 - After CI, continue migrating additional protected write/read paths and maintain the rule that no production RLS migration is proposed until the complete policy matrix is reconciled with protected access paths.
+
+
+## 2026-11-05 MRV Protected Access Expansion — VERIFIED CI
+
+- Branch: `shakti/2026-11-05-tenant-isolation-reconstruction`.
+- Commit: `72fdaba350042dea0933b4cf6635081cb3632acf`.
+- CI #5675 / workflow run `42085269136`: **SUCCESS**.
+- Validation steps 1–17 completed successfully, including migration validation, migration-manifest validation, protected-migrator configuration validation, CI migration execution, typecheck, build, browser smoke, disposable PostgreSQL acceptance, production-container build, bounded disposable backup/restore rehearsal, and startup-isolation assertion.
+- MRV protected paths migrated in this batch:
+  - `POST /api/v1/mrv/activities/:activityId/submit`
+  - `GET /api/v1/mrv/provenance/:activityId`
+  - `GET /api/v1/mrv/hedera/verify/:consensusTimestamp`
+- These paths now use the transaction-scoped tenant context for protected authorization/data access and, where applicable, provenance persistence.
+- The MRV submission path requires an explicit active organization and keeps authorization, geography, evidence/verification checks, measurements, provenance reads and provenance persistence on the same tenant transaction client.
+- The Hedera verification path likewise performs the protected read/authorization and verification persistence through the same tenant transaction client.
+- This is **VERIFIED COMPLETE at the engineering/CI level for this bounded batch only**. It is not tenant-isolation completion, production RLS completion, production readiness, field acceptance, statutory/regulatory approval, certification, or TRL 9.
+- Production remains READ-ONLY / HOLD. No production DDL/DML, RLS enablement, role/grant change, deployment, merge, certification, or TRL 9 declaration was performed.
+
+### Next protected-access batch
+
+Continue from the same branch and prioritize remaining high-risk organization-scoped mutation paths, especially CPCB/SWM stakeholder workspace writes and other statutory/operational writes still using direct shared-pool access. Preserve the transaction-scoped context rule and run the full CI gate after each coherent batch. Migration 096 source/ledger reconciliation remains a separate release blocker.
