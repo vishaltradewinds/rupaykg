@@ -3,12 +3,12 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-const projectRoot = fileURLToPath(new URL("../../", import.meta.url));
+const projectRoot = fileURLToPath(new URL("../../../", import.meta.url));
 const protectedMigrator = fileURLToPath(
-  new URL("../../scripts/run-protected-migrator.mjs", import.meta.url),
+  new URL("../../../scripts/run-protected-migrator.mjs", import.meta.url),
 );
 const configValidator = fileURLToPath(
-  new URL("../../scripts/validate-protected-migrator-config.mjs", import.meta.url),
+  new URL("../../../scripts/validate-protected-migrator-config.mjs", import.meta.url),
 );
 
 function run(script: string, env: NodeJS.ProcessEnv) {
