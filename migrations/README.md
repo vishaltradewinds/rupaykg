@@ -1,38 +1,113 @@
 # Database migrations
 
-Apply migrations in filename order against a fresh PostgreSQL database:
+Apply all SQL migration files discovered in `migrations/` in lexicographic filename order against a fresh PostgreSQL database. The authoritative active migration source inventory as of 2026-11-04 contains **93 SQL files**: numbered migrations `001`–`087` and six dated migrations spanning `20261018`–`20261104`.
 
-1. `001_core.sql` — authoritative core entities and lifecycle enums.
-2. `002_regulatory.sql` — versioned regulatory source catalog; this historical seed migration is immutable and later provenance corrections belong in subsequent migrations.
-3. `003_identity_geography_operations.sql` — source-versioned geography, identity credentials, assignments and offline operation intake.
-4. `004_security_auth.sql` — organization memberships and opaque identity sessions.
-5. `005_carbon_epr_esg.sql` — carbon projects/calculations, EPR and ESG reporting records.
-6. `006_registry_settlement_guardrails.sql` — database-level issuance and settlement safety guards.
-7. `007_resource_flow_mrv.sql` — resource custody links and MRV observation/verification requirements.
-8. `008_verification_integrity.sql` — independent verifier authorization and verification integrity controls.
-9. `009_field_sync.sql` — durable offline field envelopes, conflicts and cursors.
-10. `010_integrity_controls.sql` — tamper-evident registry/settlement event hashing and append-only guards.
-11. `011_field_sync_application.sql` — authoritative entity-application metadata for field envelopes.
-12. `012_geography_authorization.sql` — organization geography roots and database-enforced descendant scope.
-13. `013_settlement_external_confirmation.sql` — external authority confirmation and reconciliation gates before settlement finalization.
-14. `014_registry_settlement_idempotency.sql` — idempotency constraints for registry and settlement mutations.
-15. `015_high_risk_action_permissions.sql` — explicit high-risk action permissions for registry and settlement operations.
-16. `016_field_device_enrollment.sql` — field-device enrollment and lifecycle controls.
-17. `017_field_device_provenance.sql` — field-device provenance metadata and integrity controls.
-18. `018_value_mutation_permissions.sql` — authorization boundaries for value-layer mutations.
-19. `019_settlement_reconciliation_immutability.sql` — immutable settlement reconciliation evidence and state controls.
-20. `020_carbon_calculation_provenance.sql` — evidence-bound carbon calculation provenance.
-21. `021_methodology_governance.sql` — methodology source lock, applicability/parameter/equation mapping and production-eligibility governance.
-22. `022_carbon_provenance_integrity.sql` — database integrity controls for carbon provenance.
-23. `024_methodology_governance_immutability.sql` — forward-only methodology governance and immutable mapped/reconciled state.
-24. `025_methodology_reconciliation_evidence.sql` — independent numerical reconciliation and regression-verification evidence required for production eligibility.
-25. `026_regulatory_source_provenance.sql` — exact verified official-source corrections and verification dates for regulatory records; does not rewrite the historical seed migration.
-26. `027_verification_permission_guard.sql` — database verification authorization guard requiring explicit `VERIFY_EVIDENCE` permission rather than legacy role-name elevation.
-27. `028_settlement_retired_credential_guard.sql` — prevents settlement creation for retired credentials and prevents retirement while an attached settlement remains open.
+The numbered migration sequence includes:
+- `001_core.sql`
+- `002_regulatory.sql`
+- `003_identity_geography_operations.sql`
+- `004_security_auth.sql`
+- `005_carbon_epr_esg.sql`
+- `006_registry_settlement_guardrails.sql`
+- `007_resource_flow_mrv.sql`
+- `008_verification_integrity.sql`
+- `009_field_sync.sql`
+- `010_integrity_controls.sql`
+- `011_field_sync_application.sql`
+- `012_geography_authorization.sql`
+- `013_settlement_external_confirmation.sql`
+- `014_registry_settlement_idempotency.sql`
+- `015_guardian_hedera_mrv.sql`
+- `016_field_device_enrollment.sql`
+- `017_field_device_provenance.sql`
+- `018_value_mutation_permissions.sql`
+- `019_settlement_reconciliation_immutability.sql`
+- `020_carbon_calculation_provenance.sql`
+- `021_methodology_governance.sql`
+- `022_carbon_provenance_integrity.sql`
+- `023_lifecycle_state_guards.sql`
+- `024_methodology_governance_immutability.sql`
+- `025_methodology_reconciliation_evidence.sql`
+- `026_regulatory_source_provenance.sql`
+- `027_verification_permission_hardening.sql`
+- `028_settlement_retired_credential_guard.sql`
+- `029_stakeholder_onboarding.sql`
+- `030_authorization_role_defaults.sql`
+- `031_settlement_credential_owner_authorization.sql`
+- `032_authorization_lifecycle_hardening.sql`
+- `033_field_sync_tenant_integrity.sql`
+- `034_operation_sync_device_binding.sql`
+- `035_cpcb_epr_portal_baseline.sql`
+- `036_bwg_epr_esg_reporting.sql`
+- `037_bwg_regulatory_registration_state.sql`
+- `038_bwg_registration_unknown_default.sql`
+- `039_india_regulatory_requirements.sql`
+- `040_india_regulatory_extensions.sql`
+- `041_high_risk_action_permissions.sql`
+- `042_india_regulatory_requirement_catalog.sql`
+- `043_bwg_epr_invariants.sql`
+- `044_bwg_reporting_requires_applicability.sql`
+- `045_guardian_mrv_registry_provenance_integrity.sql`
+- `046_epr_credit_allocation_integrity.sql`
+- `047_settlement_party_integrity.sql`
+- `048_settlement_party_integrity_compatibility.sql`
+- `049_credential_geography_integrity.sql`
+- `050_field_sync_conflict_audit.sql`
+- `051_registry_transfer_recipient_integrity.sql`
+- `052_stakeholder_approval_guard.sql`
+- `053_authoritative_regulatory_baseline.sql`
+- `054_circular_economy_carbon_regulatory_baseline.sql`
+- `055_carbon_market_mechanisms.sql`
+- `056_environmental_attribute_claim_controls.sql`
+- `057_environmental_attribute_allocation_api.sql`
+- `058_environmental_attribute_reporting_references.sql`
+- `059_epr_credit_environmental_claims.sql`
+- `060_brsr_structured_reporting.sql`
+- `061_brsr_metadata_projection.sql`
+- `062_stakeholder_onboarding_governance.sql`
+- `063_organization_legal_verification.sql`
+- `064_statutory_applicability_controls.sql`
+- `065_governance_integrity_and_profile_seeding.sql`
+- `066_organization_governance_cleanup.sql`
+- `067_epr_scheme_catalog.sql`
+- `068_epr_lifecycle_controls.sql`
+- `069_epr_evidence_guards.sql`
+- `070_epr_obligations_returns.sql`
+- `071_epr_return_obligation_binding.sql`
+- `072_epr_external_reference_uniqueness.sql`
+- `073_settlement_integrity.sql`
+- `074_settlement_party_integrity.sql`
+- `075_settlement_registry_owner_integrity.sql`
+- `076_settlement_reconciliation_reference_uniqueness.sql`
+- `077_hierarchical_stakeholder_onboarding.sql`
+- `078_stakeholder_approval_separation.sql`
+- `079_native_password_auth.sql`
+- `080_geography_created_at.sql`
+- `081_acceptance_fixture_geography.sql`
+- `082_super_admin_identity_governance.sql`
+- `083_mrv_mirror_node_registry_gate.sql`
+- `084_platform_audit_chain_head.sql`
+- `085_platform_access_dual_control.sql`
+- `086_reserved_role_restoration_db_guard.sql`
+- `087_acceptance_fixture_registry_exclusion.sql`
 
-Migration `023` is intentionally absent from the current repository history; do not renumber later migrations to fill the gap. Migration numbering is identity, not a requirement for contiguous integers.
+The dated migration files are:
+- `20261018_cpcb_swm_stakeholder_workspaces.sql`
+- `20261019_cpcb_bwg_workflow_tracking.sql`
+- `20261020_ccts_methodology_registry.sql`
+- `20261021_evidence_artifact_vault.sql`
+- `2026110401_membership_role_tenant_binding.sql`
+- `20261104_verification_authorization_tenant_binding.sql`
 
-Migration files are intentionally ordered and each numbered migration must have one authoritative owner. Do not reintroduce duplicate numbered migrations containing the same tables or enums.
+This manifest is maintained with the repository migration source.
+
+**Production source-drift warning (2026-11-04):** the authoritative production ledger records `096_verification_authorization_provenance.sql`, but that file is not present in current-main source. Its exact historical SQL is preserved in the security review evidence associated with issue #214. Do not restore it under version 096, replay it, or rewrite production ledger history. Versions 088–095 are absent from the production ledger and must not be inferred as required migrations.
+
+Migration filenames/versions are identity. Do not renumber, reuse or duplicate migration versions. The runner and validator discover numbered SQL files from the migration directory; keep this README synchronized with the source manifest.
+
+## Membership-role tenant integrity
+
+Migration `2026110401_membership_role_tenant_binding.sql` adds a validated composite foreign key from `(organization_memberships.role_id, organization_memberships.organization_id)` to `(roles.id, roles.organization_id)`. A membership can no longer point to a role owned by another organization, including through direct SQL writes or organization/role reassignment. Application authorization joins must retain the same organization equality as defense in depth.
 
 ## Production rule
 
