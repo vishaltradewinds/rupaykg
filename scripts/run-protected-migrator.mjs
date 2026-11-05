@@ -23,7 +23,7 @@ const child = spawn(process.execPath, ["apps/dist/src/migrate.js"], {
   env: {
     ...childEnv,
     DATABASE_URL: url,
-    DATABASE_SSL_STRICT: "true",
+    DATABASE_SSL_STRICT: process.env.MIGRATOR_DATABASE_SSL_STRICT ?? "true",
   },
 });
 
