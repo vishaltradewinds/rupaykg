@@ -65,6 +65,19 @@ begin
     raise exception 'verification requires an activity with an organization';
   end if;
 
+  -- Lock the owning organization before evaluating geography or membership.
+  -- This serializes verification against concurrent organization suspension and
+  -- geography-scope changes and preserves a deterministic lock order:
+  -- evidence -> activity -> organization -> membership -> role -> identity.
+  perform 1
+    from public.organizations o
+   where o.id = activity_organization_id
+     and o.status = 'VERIFIED'
+   for share;
+  if not found then
+    raise exception 'verification requires a verified activity organization';
+  end if;
+
   if activity_geography_id is null
      or not public.organization_has_geography_scope(activity_organization_id, activity_geography_id) then
     raise exception 'verification requires an activity within an authorized organization geography';
@@ -74,29 +87,69 @@ begin
     raise exception 'activity actor cannot self-approve evidence';
   end if;
 
-  -- Lock the exact identity, membership and role rows while evaluating the
-  -- permission. Concurrent suspension, revocation or permission mutation must
-  -- serialize with this decision transaction.
-  select m.id as membership_id, m.role_id, r.permissions
-    into membership_row
-    from public.organization_memberships m
-    join public.roles r on r.id = m.role_id and r.organization_id = m.organization_id
-    join public.identities i on i.id = m.identity_id
-   where m.identity_id = new.verifier_identity_id
-     and m.organization_id = activity_organization_id
-     and m.status = 'VERIFIED'
-     and i.status = 'VERIFIED'
-     and i.suspended_at is null
-     and (
-       r.permissions @> '["VERIFY_EVIDENCE"]'::jsonb
-       or r.permissions @> '["verification:approve"]'::jsonb
-       or r.permissions @> '["verification.approve"]'::jsonb
-     )
-   order by m.created_at desc, m.id desc
-   limit 1
-   for share of m, r, i;
+  -- Consider every active membership carrying a verifier permission. A newer
+  -- non-verifier membership must not mask another valid verifier membership.
+  -- Lock and re-check each membership and role after the candidate is selected.
+  for membership_candidate in
+    select m.id
+      from public.organization_memberships m
+      join public.roles r
+        on r.id = m.role_id
+       and r.organization_id = m.organization_id
+     where m.identity_id = new.verifier_identity_id
+       and m.organization_id = activity_organization_id
+       and m.status = 'VERIFIED'
+       and (
+         r.permissions @> '["VERIFY_EVIDENCE"]'::jsonb
+         or r.permissions @> '["verification:approve"]'::jsonb
+         or r.permissions @> '["verification.approve"]'::jsonb
+       )
+     order by m.created_at desc, m.id desc
+  loop
+    select m.id, m.role_id
+      into membership_row.membership_id, membership_row.role_id
+      from public.organization_memberships m
+     where m.id = membership_candidate.id
+       and m.identity_id = new.verifier_identity_id
+       and m.organization_id = activity_organization_id
+       and m.status = 'VERIFIED'
+     for share;
+
+    if membership_row.membership_id is null then
+      continue;
+    end if;
+
+    select r.permissions
+      into membership_row.permissions
+      from public.roles r
+     where r.id = membership_row.role_id
+       and r.organization_id = activity_organization_id
+     for share;
+
+    if membership_row.permissions is not null and (
+         membership_row.permissions @> '["VERIFY_EVIDENCE"]'::jsonb
+         or membership_row.permissions @> '["verification:approve"]'::jsonb
+         or membership_row.permissions @> '["verification.approve"]'::jsonb
+       ) then
+      exit;
+    end if;
+
+    membership_row.membership_id := null;
+    membership_row.role_id := null;
+    membership_row.permissions := null;
+  end loop;
 
   if membership_row.membership_id is null then
+    raise exception 'verification requires active explicit verifier permission in the activity organization';
+  end if;
+
+  perform 1
+    from public.identities i
+   where i.id = new.verifier_identity_id
+     and i.status = 'VERIFIED'
+     and i.suspended_at is null
+   for share;
+  if not found then
     raise exception 'verification requires active explicit verifier permission in the activity organization';
   end if;
 
