@@ -24,7 +24,7 @@ COMMIT;
 
 -- Reapply the migration under test. It must be idempotent and converge the
 -- three legacy trigger names to the single canonical trigger.
-\i migrations/20261104_verification_authorization_tenant_binding.sql
+\i migrations/2026110403_verification_authorization_tenant_binding.sql
 
 DO $assert$
 DECLARE
