@@ -82,8 +82,9 @@ export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool |
     const evidenceId = requiredString(body, "evidenceId");
     const verificationId = requiredString(body, "verificationId");
     if (!evidenceId || !verificationId) return reply.code(400).send({ error: "Verified evidence and approved verification are required to submit a statutory EPR return", code: "EVIDENCE_REQUIRED" });
+    if (!auth.activeOrganizationId) return reply.code(403).send({ error: "Active organization context required", code: "ORG_CONTEXT_REQUIRED" });
     try {
-      return await withDatabaseTenantContext(pool, { identityId: auth.identityId, organizationId: auth.activeOrganizationId ?? undefined, bilateralOrganizationScope: false, serviceMode: false }, async (client) => {
+      return await withDatabaseTenantContext(pool, { identityId: auth.identityId, organizationId: auth.activeOrganizationId, bilateralOrganizationScope: false, serviceMode: false }, async (client) => {
         const current = await client.query(`select r.*,eo.target_quantity,eo.fulfilled_quantity as obligation_fulfilled,eo.status as obligation_status,s.code as scheme_code from epr_returns r join epr_obligations eo on eo.id=r.obligation_id join epr_schemes s on s.id=r.scheme_id where r.id=$1 for update`, [returnId]);
         const row = current.rows[0];
         if (!row) return reply.code(404).send({ error: "EPR return not found", code: "EPR_RETURN_NOT_FOUND" });
@@ -113,6 +114,7 @@ export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool |
     const auth = await authFor(request, reply, pool); if (!auth || !pool) return;
     const body = bodyOf(request); const externalReference = requiredString(body, "externalReference");
     if (!externalReference) return reply.code(400).send({ error: "externalReference is required", code: "EXTERNAL_REFERENCE_REQUIRED" });
+    if (!auth.activeOrganizationId) return reply.code(403).send({ error: "Active organization context required", code: "ORG_CONTEXT_REQUIRED" });
     try {
       return await withDatabaseTenantContext(pool, { identityId: auth.identityId, organizationId: auth.activeOrganizationId ?? undefined, bilateralOrganizationScope: false, serviceMode: false }, async (client) => {
         const returnId = (request.params as { returnId: string }).returnId;
