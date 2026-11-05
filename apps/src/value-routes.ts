@@ -58,7 +58,7 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
     const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
     const obligationId = (request.params as { obligationId: string }).obligationId;
     try {
-      const obligation = await client.query<{ id: string; organization_id: string; jurisdiction_id: string | null; required_quantity: string }>("select id, organization_id, jurisdiction_id, required_quantity from obligations where id = $1", [obligationId]);
+      const obligation = await pool.query<{ id: string; organization_id: string; jurisdiction_id: string | null; required_quantity: string }>("select id, organization_id, jurisdiction_id, required_quantity from obligations where id = $1", [obligationId]);
       if (!obligation.rows[0]) return reply.code(404).send({ error: "Obligation not found" });
       const organizationId = obligation.rows[0].organization_id;
       if (!canActForOrganization(auth, organizationId)) return reply.code(403).send({ error: "Organization access denied", code: "ORG_FORBIDDEN" });
