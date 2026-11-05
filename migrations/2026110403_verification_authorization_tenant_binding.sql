@@ -20,8 +20,8 @@ alter table public.verifications
 create or replace function public.enforce_verification_authorization()
 returns trigger
 language plpgsql
-security invoker
-set search_path = pg_catalog, public
+security definer
+set search_path = pg_catalog
 as $$
 declare
   resolved_activity_id uuid;
