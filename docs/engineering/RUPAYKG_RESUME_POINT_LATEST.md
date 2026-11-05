@@ -15,7 +15,7 @@ Production remains READ-ONLY / HOLD.
 ## Latest engineering batch
 Branch: shakti/2026-11-05-bounded-recovery-rehearsal.
 PR #303.
-Latest commit before documentation: e1953d434265a882db5cc588f86fece6e8c68b2f.
+Latest branch commit: 97717d6f7c4e29a9c6549616f16e5dbbc5d29bec (documentation checkpoint commit).
 CI #5624 at prior head 321e5bdf: steps 1–14 passed; step 14 proved disposable pg_dump/pg_restore recovery and preserved schema_migrations count 91/latest 20261021. Step 15 failed because Dockerfile still used migrate.js and acceptance-seed.js at web startup.
 The Dockerfile has now been corrected on PR #303 to CMD ["node","apps/dist/src/production-server.js"]. Fresh CI is required; this is not yet validated.
 
@@ -32,4 +32,4 @@ The Dockerfile has now been corrected on PR #303 to CMD ["node","apps/dist/src/p
 - Render previously logged web startup migration check (Database migrations are current (91 files)), proving the old web startup path executed migration logic.
 
 ## Next safe action
-Verify fresh CI for e1953d434265a882db5cc588f86fece6e8c68b2f, fix only observed failures, then preserve exact CI evidence in this resume point/checkpoint. Do not merge/deploy or touch production without the required independent gates and explicit founder approval.
+Verify fresh CI for the current branch head 97717d6f7c4e29a9c6549616f16e5dbbc5d29bec, fix only observed failures, then preserve exact CI evidence in this resume point/checkpoint. Do not merge/deploy or touch production without the required independent gates and explicit founder approval.
