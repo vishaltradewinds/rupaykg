@@ -72,3 +72,19 @@ Do not rewrite, delete, reintroduce, or mark migration 096 resolved based on inf
 3. Continue repository/database release-gate audit for tenant isolation/RLS, runtime DB identity, and least privilege using actual source and metadata evidence.
 4. Keep recovery rehearsals disposable and bounded.
 5. Do not perform production DDL/DML, role/grant/RLS changes, deployment, worker activation, certification, or TRL 9 declaration without the required independent gates and explicit founder approval.
+
+## 2026-11-05 tenant isolation / RLS gate — VERIFIED BLOCKER
+Fresh read-only SQL against the authoritative Neon branch/database succeeded.
+Runtime identity observed: current_database=rupaykg, current_user=rupaykg, session_user=rupaykg.
+Production schema_migrations is now directly VERIFIED for the current branch: the latest visible entries include 20261021, 20261020, 20261019, 20261018, then 096, followed by 087 and earlier entries. Version 096 is recorded as 096_verification_authorization_provenance.sql. This resolves the previous session's SQL-authentication evidence gap for the inspected branch; it does NOT establish that the source migration lineage is reconciled, because source-file inventory still needs to be compared against this ledger.
+Most importantly, direct PostgreSQL catalog inspection shows all 67 public tables have relrowsecurity=false and relforcerowsecurity=false. A direct policy count returns 0 rows. Therefore RLS is NOT ENABLED and there are NO PostgreSQL RLS policies on the inspected database.
+This is a release-critical tenant-isolation blocker. Do not enable RLS ad hoc in production: the correct next step is repository/source/migration reconciliation to design and validate the complete tenant-boundary policy set, including service-role/migrator exceptions, before any controlled migration is proposed.
+No production DDL/DML or security mutation was executed.
+
+### Evidence classification
+- Runtime DB identity: VERIFIED for inspected Neon branch/database.
+- Production migration ledger contents: VERIFIED for inspected Neon branch/database.
+- RLS enablement: VERIFIED FALSE.
+- RLS policy inventory: VERIFIED ZERO.
+- Tenant isolation safety: NOT ACCEPTED / BLOCKED pending repository-level policy design and controlled validation.
+- TRL 9: NOT CLAIMED.
