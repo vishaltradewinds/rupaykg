@@ -54,9 +54,24 @@ export async function registerWorkspaceRoutes(app: FastifyInstance, pool: Pool |
   });
 
   app.get("/api/v1/workspaces/resource-flows", async (request, reply) => {
-    const auth = await requireAuth(app, pool, request, reply); if (!auth || !pool) return; const ids = orgIds(auth); if (!ids.length) return result({ resourceFlows: [] });
-    const geographyId = requestedGeography(request); if (geographyId && !await authorizeGeography(pool, auth, geographyId)) return reply.code(403).send({ error: "Geography outside organization authorization scope", code: "GEOGRAPHY_FORBIDDEN" });
-    try { const params: unknown[]=[ids]; if(geographyId)params.push(geographyId); const rows=await pool.query(`select rf.id,rf.organization_id,o.name as organization_name,rf.origin_type,rf.resource_form,rf.material_code,rf.declared_quantity,rf.unit,rf.status,rf.source_geography_id,sg.name as source_geography_name,rf.destination_geography_id,dg.name as destination_geography_name,rf.created_at from resource_flows rf join organizations o on o.id=rf.organization_id left join geography sg on sg.id=rf.source_geography_id left join geography dg on dg.id=rf.destination_geography_id where rf.organization_id=any($1::uuid[]) and (organization_has_geography_scope(rf.organization_id,rf.source_geography_id) or organization_has_geography_scope(rf.organization_id,rf.destination_geography_id))${geographyId?" and (rf.source_geography_id=$2 or rf.destination_geography_id=$2)":""} order by rf.created_at desc limit 100`,params); return result({resourceFlows:rows.rows}); } catch(error){request.log.error(error);return reply.code(503).send({error:"Resource-flow workspace unavailable",syntheticData:false});}
+    const auth = await requireAuth(app, pool, request, reply); if (!auth || !pool) return;
+    if (!auth.activeOrganizationId) return reply.code(403).send({ error: "An active organization is required for resource-flow workspace access", code: "ACTIVE_ORGANIZATION_REQUIRED" });
+    const organizationId = auth.activeOrganizationId;
+    const geographyId = requestedGeography(request);
+    try {
+      const data = await withDatabaseTenantContext(pool, { identityId: auth.identityId, organizationId, bilateralOrganizationScope: auth.bilateralOrganizationScope ?? false, serviceMode: false }, async (client) => {
+        if (geographyId && !await authorizeGeography(client, auth, geographyId)) throw Object.assign(new Error("Geography outside organization authorization scope"), { code: "GEOGRAPHY_FORBIDDEN" });
+        const params: unknown[] = [[organizationId]];
+        if (geographyId) params.push(geographyId);
+        const rows = await client.query(`select rf.id,rf.organization_id,o.name as organization_name,rf.origin_type,rf.resource_form,rf.material_code,rf.declared_quantity,rf.unit,rf.status,rf.source_geography_id,sg.name as source_geography_name,rf.destination_geography_id,dg.name as destination_geography_name,rf.created_at from resource_flows rf join organizations o on o.id=rf.organization_id left join geography sg on sg.id=rf.source_geography_id left join geography dg on dg.id=rf.destination_geography_id where rf.organization_id=any($1::uuid[]) and (organization_has_geography_scope(rf.organization_id,rf.source_geography_id) or organization_has_geography_scope(rf.organization_id,rf.destination_geography_id))${geographyId?" and (rf.source_geography_id=$2 or rf.destination_geography_id=$2)":""} order by rf.created_at desc limit 100`, params);
+        return { resourceFlows: rows.rows };
+      });
+      return result(data);
+    } catch (error) {
+      const code = (error as { code?: string }).code;
+      if (code === "GEOGRAPHY_FORBIDDEN") return reply.code(403).send({ error: "Geography outside organization authorization scope", code });
+      request.log.error(error); return reply.code(503).send({ error: "Resource-flow workspace unavailable", syntheticData: false });
+    }
   });
 
   app.get("/api/v1/workspaces/mrv", async (request, reply) => {
@@ -125,13 +140,33 @@ export async function registerWorkspaceRoutes(app: FastifyInstance, pool: Pool |
     }
   });
   app.get("/api/v1/workspaces/compliance", async (request, reply) => {
-    const auth=await requireAuth(app,pool,request,reply);if(!auth||!pool)return;const ids=orgIds(auth);if(!ids.length)return result({obligations:[]});const geographyId=requestedGeography(request);if(geographyId&&!await authorizeGeography(pool,auth,geographyId))return reply.code(403).send({error:"Geography outside organization authorization scope",code:"GEOGRAPHY_FORBIDDEN"});
-    try{const params:unknown[]=[ids];if(geographyId)params.push(geographyId);const clause=geoClause(geographyId,"ob.jurisdiction_id");const rows=await pool.query(`select ob.id,ob.organization_id,o.name as organization_name,ob.jurisdiction_id,g.name as jurisdiction_name,ob.obligation_type,ob.period_start,ob.period_end,ob.required_quantity,ob.status from obligations ob join organizations o on o.id=ob.organization_id left join geography g on g.id=ob.jurisdiction_id where ob.organization_id=any($1::uuid[]) and organization_has_geography_scope(ob.organization_id,ob.jurisdiction_id)${clause} order by ob.period_end desc limit 100`,params);return result({obligations:rows.rows});}catch(error){request.log.error(error);return reply.code(503).send({error:"Compliance workspace unavailable",syntheticData:false});}
+    const auth=await requireAuth(app,pool,request,reply);if(!auth||!pool)return;
+    if (!auth.activeOrganizationId) return reply.code(403).send({ error: "An active organization is required for compliance workspace access", code: "ACTIVE_ORGANIZATION_REQUIRED" });
+    const organizationId=auth.activeOrganizationId; const geographyId=requestedGeography(request);
+    try {
+      const data=await withDatabaseTenantContext(pool,{identityId:auth.identityId,organizationId,bilateralOrganizationScope:auth.bilateralOrganizationScope ?? false,serviceMode:false},async(client)=>{
+        if(geographyId&&!await authorizeGeography(client,auth,geographyId)) throw Object.assign(new Error("Geography outside organization authorization scope"),{code:"GEOGRAPHY_FORBIDDEN"});
+        const params:unknown[]=[[organizationId]];if(geographyId)params.push(geographyId);const clause=geoClause(geographyId,"ob.jurisdiction_id");
+        const rows=await client.query(`select ob.id,ob.organization_id,o.name as organization_name,ob.jurisdiction_id,g.name as jurisdiction_name,ob.obligation_type,ob.period_start,ob.period_end,ob.required_quantity,ob.status from obligations ob join organizations o on o.id=ob.organization_id left join geography g on g.id=ob.jurisdiction_id where ob.organization_id=any($1::uuid[]) and organization_has_geography_scope(ob.organization_id,ob.jurisdiction_id)${clause} order by ob.period_end desc limit 100`,params);
+        return {obligations:rows.rows};
+      });
+      return result(data);
+    } catch(error){const code=(error as {code?:string}).code;if(code==="GEOGRAPHY_FORBIDDEN")return reply.code(403).send({error:"Geography outside organization authorization scope",code});request.log.error(error);return reply.code(503).send({error:"Compliance workspace unavailable",syntheticData:false});}
   });
 
   app.get("/api/v1/workspaces/carbon", async (request, reply) => {
-    const auth=await requireAuth(app,pool,request,reply);if(!auth||!pool)return;const ids=orgIds(auth);if(!ids.length)return result({calculations:[]});const geographyId=requestedGeography(request);if(geographyId&&!await authorizeGeography(pool,auth,geographyId))return reply.code(403).send({error:"Geography outside organization authorization scope",code:"GEOGRAPHY_FORBIDDEN"});
-    try{const params:unknown[]=[ids];if(geographyId)params.push(geographyId);const rows=await pool.query(`select cc.id,cc.activity_id,cc.methodology_version_id,mv.methodology_code,mv.version as methodology_version,mv.governance_status,cc.inputs,cc.result,cc.unit,cc.status,cc.calculated_at,cc.dataset_hash,cc.formula_hash,cc.calculation_hash,cc.provenance_version,cc.calculation_trace from carbon_calculations cc join activities a on a.id=cc.activity_id join methodology_versions mv on mv.id=cc.methodology_version_id where a.organization_id=any($1::uuid[]) and organization_has_geography_scope(a.organization_id,a.geography_id)${geoClause(geographyId,"a.geography_id")} order by cc.calculated_at desc nulls last,cc.id desc limit 100`,params);return result({calculations:rows.rows});}catch(error){request.log.error(error);return reply.code(503).send({error:"Carbon workspace unavailable",syntheticData:false});}
+    const auth=await requireAuth(app,pool,request,reply);if(!auth||!pool)return;
+    if (!auth.activeOrganizationId) return reply.code(403).send({ error: "An active organization is required for carbon workspace access", code: "ACTIVE_ORGANIZATION_REQUIRED" });
+    const organizationId=auth.activeOrganizationId; const geographyId=requestedGeography(request);
+    try {
+      const data=await withDatabaseTenantContext(pool,{identityId:auth.identityId,organizationId,bilateralOrganizationScope:auth.bilateralOrganizationScope ?? false,serviceMode:false},async(client)=>{
+        if(geographyId&&!await authorizeGeography(client,auth,geographyId)) throw Object.assign(new Error("Geography outside organization authorization scope"),{code:"GEOGRAPHY_FORBIDDEN"});
+        const params:unknown[]=[[organizationId]];if(geographyId)params.push(geographyId);
+        const rows=await client.query(`select cc.id,cc.activity_id,cc.methodology_version_id,mv.methodology_code,mv.version as methodology_version,mv.governance_status,cc.inputs,cc.result,cc.unit,cc.status,cc.calculated_at,cc.dataset_hash,cc.formula_hash,cc.calculation_hash,cc.provenance_version,cc.calculation_trace from carbon_calculations cc join activities a on a.id=cc.activity_id join methodology_versions mv on mv.id=cc.methodology_version_id where a.organization_id=any($1::uuid[]) and organization_has_geography_scope(a.organization_id,a.geography_id)${geoClause(geographyId,"a.geography_id")} order by cc.calculated_at desc nulls last,cc.id desc limit 100`,params);
+        return {calculations:rows.rows};
+      });
+      return result(data);
+    } catch(error){const code=(error as {code?:string}).code;if(code==="GEOGRAPHY_FORBIDDEN")return reply.code(403).send({error:"Geography outside organization authorization scope",code});request.log.error(error);return reply.code(503).send({error:"Carbon workspace unavailable",syntheticData:false});}
   });
 
   app.get("/api/v1/workspaces/registry", async (request, reply) => {
