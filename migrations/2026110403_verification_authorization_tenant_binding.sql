@@ -38,6 +38,19 @@ begin
     raise exception 'verification records are immutable; create a superseding verification';
   end if;
 
+  -- Preserve the authenticated transaction-bound context established by
+  -- 2026110402. This trigger must not be able to authorize a client-forged
+  -- verifier identity or organization merely because the row values look valid.
+  if not public.rupaykg_context_is_valid() then
+    raise exception using errcode='28000',
+      message='verification requires cryptographically authenticated transaction context';
+  end if;
+
+  if new.verifier_identity_id is distinct from public.rupaykg_authenticated_identity() then
+    raise exception using errcode='28000',
+      message='verification identity does not match authenticated bearer session';
+  end if;
+
   if new.evidence_id is null then
     raise exception 'verification evidence is required';
   end if;
@@ -68,6 +81,11 @@ begin
     raise exception 'verification requires an activity with an organization';
   end if;
 
+  if activity_organization_id is distinct from public.rupaykg_authenticated_organization() then
+    raise exception using errcode='28000',
+      message='verification activity organization does not match authenticated organization';
+  end if;
+
   -- Lock the owning organization before evaluating geography or membership.
   -- This serializes verification against concurrent organization suspension and
   -- geography-scope changes and preserves a deterministic lock order:
@@ -85,8 +103,8 @@ begin
     raise exception 'verification requires an activity within an authorized organization geography';
   end if;
 
-  -- Evaluate the scope after the organization lock using a VOLATILE trigger-local
-  -- query. The STABLE helper can retain the outer statement snapshot and is not
+  -- Evaluate scope after the organization lock using a trigger-local recursive
+  -- query rather than the STABLE helper, whose outer-statement snapshot is not
   -- sufficient for this concurrency boundary.
   if not exists (
     with recursive ancestors(id) as (
@@ -121,13 +139,17 @@ begin
       join public.roles r
         on r.id = m.role_id
        and r.organization_id = m.organization_id
+     join public.identities i
+       on i.id = m.identity_id
      where m.identity_id = new.verifier_identity_id
        and m.organization_id = activity_organization_id
        and m.status = 'VERIFIED'
+       and i.status = 'VERIFIED'
+       and i.suspended_at is null
        and (
-         r.permissions @> '["VERIFY_EVIDENCE"]'::jsonb
-         or r.permissions @> '["verification:approve"]'::jsonb
-         or r.permissions @> '["verification.approve"]'::jsonb
+         r.permissions @> '[\"VERIFY_EVIDENCE\"]'::jsonb
+         or r.permissions @> '[\"verification:approve\"]'::jsonb
+         or r.permissions @> '[\"verification.approve\"]'::jsonb
        )
      order by m.created_at desc, m.id desc
   loop
@@ -152,9 +174,9 @@ begin
      for share;
 
     if membership_permissions is not null and (
-         membership_permissions @> '["VERIFY_EVIDENCE"]'::jsonb
-         or membership_permissions @> '["verification:approve"]'::jsonb
-         or membership_permissions @> '["verification.approve"]'::jsonb
+         membership_permissions @> '[\"VERIFY_EVIDENCE\"]'::jsonb
+         or membership_permissions @> '[\"verification:approve\"]'::jsonb
+         or membership_permissions @> '[\"verification.approve\"]'::jsonb
        ) then
       exit;
     end if;
