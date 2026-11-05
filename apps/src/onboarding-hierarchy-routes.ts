@@ -17,8 +17,10 @@ async function eligible(db:Pool|PoolClient,a:AuthContext,level:string,kind:strin
 export async function registerOnboardingHierarchyRoutes(app:FastifyInstance,pool:Pool|null):Promise<void>{
   app.get("/api/v1/onboarding/review-queue",async(request,reply)=>{
     const a=await authn(request,reply,pool); if(!a||!pool)return;
+    const activeOrganizationId=a.activeOrganizationId;
+    if(!activeOrganizationId)return reply.code(403).send({error:"Active organization is required",code:"ACTIVE_ORGANIZATION_REQUIRED"});
     try{
-      const applications=await withDatabaseTenantContext(pool,{identityId:a.identityId,organizationId:a.activeOrganizationId,bilateralOrganizationScope:false,serviceMode:false},async(db)=>{
+      const applications=await withDatabaseTenantContext(pool,{identityId:a.identityId,organizationId:activeOrganizationId,bilateralOrganizationScope:false,serviceMode:false},async(db)=>{
         const rows=await db.query(`select sa.id,sa.organization_id,sa.identity_id as applicant_identity_id,sa.requested_role_key,sa.requested_organization_type,sa.geography_id,sa.status,sa.applicant_note,sa.created_at,sa.reviewed_at,sa.review_note,o.name organization_name,o.legal_name,o.legal_form,o.registration_identifier,o.registration_authority,o.verification_status,o.verification_note,(select count(*) from organization_verification_evidence e where e.organization_id=o.id) evidence_count,g.name geography_name,g.kind geography_kind,i.display_name applicant_name,i.email applicant_email from stakeholder_applications sa join organizations o on o.id=sa.organization_id left join geography g on g.id=sa.geography_id left join identities i on i.id=sa.identity_id where sa.status='PENDING' order by sa.created_at`);
         const result=[];
         for(const r of rows.rows){
@@ -36,12 +38,14 @@ export async function registerOnboardingHierarchyRoutes(app:FastifyInstance,pool
 
   app.post("/api/v1/onboarding/applications/:applicationId/verify-legal",async(request,reply)=>{
     const a=await authn(request,reply,pool); if(!a||!pool)return;
+    const activeOrganizationId=a.activeOrganizationId;
+    if(!activeOrganizationId)return reply.code(403).send({error:"Active organization is required",code:"ACTIVE_ORGANIZATION_REQUIRED"});
     const id=(request.params as any).applicationId;
     if(!UUID.test(id))return reply.code(400).send({error:"Invalid application id",code:"INVALID_APPLICATION_ID"});
     const b=bodyOf(request),status=text(b,"verificationStatus"),note=text(b,"verificationNote");
     if(!note||!["VERIFIED","REJECTED"].includes(status??""))return reply.code(400).send({error:"verificationStatus and verificationNote are required",code:"LEGAL_REVIEW_INVALID"});
     try{
-      const result=await withDatabaseTenantContext(pool,{identityId:a.identityId,organizationId:a.activeOrganizationId,bilateralOrganizationScope:false,serviceMode:false},async(db)=>{
+      const result=await withDatabaseTenantContext(pool,{identityId:a.identityId,organizationId:activeOrganizationId,bilateralOrganizationScope:false,serviceMode:false},async(db)=>{
         if(!await hasAuthority(db,a,PLATFORM,null))throw Object.assign(new Error("Platform authority required for legal verification"),{code:"ONBOARDING_AUTHORITY_FORBIDDEN"});
         const q=await db.query<{organization_id:string}>("select organization_id from stakeholder_applications where id=$1 and status='PENDING' for update",[id]);
         if(!q.rows[0])throw Object.assign(new Error("Pending stakeholder application not found"),{code:"APPLICATION_NOT_FOUND"});
@@ -54,7 +58,7 @@ export async function registerOnboardingHierarchyRoutes(app:FastifyInstance,pool
         await db.query("update organizations set verification_status=$1,verification_note=$2,verified_by_identity_id=case when $1='VERIFIED' then $3 else null end,verified_at=case when $1='VERIFIED' then now() else null end where id=$4",[status,note,a.identityId,oid]);
         return{status,organizationId:oid};
       });
-      return{source:"postgresql",syntheticData:false,...result};
+      return{source:"postgresql",syntheticData:false,status:result.status,organizationId:result.organizationId};
     }catch(e){
       request.log.error(e); const code=(e as {code?:string}).code;
       if(code==="ONBOARDING_AUTHORITY_FORBIDDEN")return reply.code(403).send({error:"Platform authority required for legal verification",code});
@@ -66,12 +70,14 @@ export async function registerOnboardingHierarchyRoutes(app:FastifyInstance,pool
 
   app.post("/api/v1/onboarding/applications/:applicationId/:action",async(request,reply)=>{
     const a=await authn(request,reply,pool); if(!a||!pool)return;
+    const activeOrganizationId=a.activeOrganizationId;
+    if(!activeOrganizationId)return reply.code(403).send({error:"Active organization is required",code:"ACTIVE_ORGANIZATION_REQUIRED"});
     const p=request.params as any,id=p.applicationId,action=p.action;
     if(!UUID.test(id)||!["approve","reject"].includes(action))return reply.code(400).send({error:"Invalid onboarding decision",code:"INVALID_DECISION"});
     const b=bodyOf(request),note=text(b,"reviewNote");
     if(action==="reject"&&!note)return reply.code(400).send({error:"A review rationale is required when rejecting an application.",code:"REVIEW_NOTE_REQUIRED"});
     try{
-      const result=await withDatabaseTenantContext(pool,{identityId:a.identityId,organizationId:a.activeOrganizationId,bilateralOrganizationScope:false,serviceMode:false},async(db)=>{
+      const result=await withDatabaseTenantContext(pool,{identityId:a.identityId,organizationId:activeOrganizationId,bilateralOrganizationScope:false,serviceMode:false},async(db)=>{
         const q=await db.query<any>(`select sa.*,g.kind geography_kind,o.verification_status from stakeholder_applications sa left join geography g on g.id=sa.geography_id join organizations o on o.id=sa.organization_id where sa.id=$1 and sa.status='PENDING' for update`,[id]);
         const appn=q.rows[0];
         if(!appn)throw Object.assign(new Error("Pending stakeholder application not found"),{code:"APPLICATION_NOT_FOUND"});
@@ -99,7 +105,7 @@ export async function registerOnboardingHierarchyRoutes(app:FastifyInstance,pool
         }
         return{status:remaining===0?"APPROVED":"PENDING",approvalLevel:next.approval_level};
       });
-      return{source:"postgresql",syntheticData:false,...result};
+      return{source:"postgresql",syntheticData:false,status:result.status,approvalLevel:result.approvalLevel};
     }catch(e){
       request.log.error(e); const code=(e as {code?:string}).code;
       if(code==="ONBOARDING_AUTHORITY_FORBIDDEN")return reply.code(403).send({error:"Authorized authority required",code,requiredLevel:(e as {requiredLevel?:string}).requiredLevel});
