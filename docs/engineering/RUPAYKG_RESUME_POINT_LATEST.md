@@ -43,3 +43,20 @@ This validates the branch-level engineering gate in CI. It does not validate pro
 
 ## Next safe action
 Treat #303 as a verified validation artifact, not a production release. Reconcile its startup-isolation change with protected migrator #291 and security convergence #298 without duplicating migration logic. Continue the P0 release gates: authoritative Neon migration lineage, tenant isolation/RLS, runtime DB identity, and least privilege. Do not merge/deploy or touch production without the required independent gates and explicit founder approval.
+
+
+## 2026-11-05 protected-migrator/startup reconciliation — VERIFIED ENGINEERING BATCH
+
+Branch: shakti/2026-11-05-protected-migrator-startup-reconciliation. PR #304 is OPEN / DRAFT / UNMERGED / validation-only.
+Head at reconciliation checkpoint: a1beb93f2650e1f1cf0243220a1437198fd45e04.
+
+Reconciled without merging into main:
+- #303 verified web startup isolation and bounded disposable recovery rehearsal retained.
+- #291 protected migrator implementation retained: dedicated migrator URL, fail-closed configuration contract, target identity verification, strict TLS/CA contract, migration manifest checksum validation, advisory lock, transactional migration execution.
+- CI now validates the migration manifest and protected-migrator configuration contract while retaining the existing disposable CI migration/recovery path.
+
+Safety boundary: no production database access or mutation, no deployment, no RLS/role/grant changes, no worker activation, no certification, and no TRL 9 claim.
+
+Important: PR #304 is a reconciliation candidate only. It is not yet evidence that the protected migrator has been independently validated against the authoritative production database. Production remains READ-ONLY / HOLD.
+
+Next safe gate: obtain fresh CI evidence for #304, then reconcile authoritative migration lineage (including unresolved production ledger version 096) before any production migration decision.
