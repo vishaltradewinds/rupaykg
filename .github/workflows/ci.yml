@@ -58,6 +58,7 @@ jobs:
         run: npm run validate:protected-migrator-config
       - name: Apply migrations to disposable CI PostgreSQL
         env:
+          DATABASE_URL: ""
           MIGRATOR_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/rupaykg
           MIGRATOR_MODE: "true"
           NODE_ENV: production
