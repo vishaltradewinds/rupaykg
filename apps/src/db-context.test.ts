@@ -10,7 +10,7 @@ function fakePool() {
 
   const client = {
     async query(text: string, values?: unknown[]) {
-      calls.push({ text, values });
+      calls.push(values === undefined ? { text } : { text, values });
       return { rows: [] };
     },
     release() {
@@ -51,13 +51,13 @@ test("binds tenant context with transaction-scoped SET LOCAL semantics", async (
 
   assert.equal(result, "ok");
   assert.deepEqual(state.calls, [
-    { text: "BEGIN", values: undefined },
+    { text: "BEGIN" },
     { text: "select set_config('app.rupaykg.identity_id', $1, true)", values: ["identity-1"] },
     { text: "select set_config('app.rupaykg.organization_id', $1, true)", values: ["organization-1"] },
     { text: "select set_config('app.rupaykg.bilateral_scope', $1, true)", values: ["true"] },
     { text: "select set_config('app.rupaykg.service_mode', $1, true)", values: ["false"] },
-    { text: "select current_setting('app.rupaykg.organization_id', true)", values: undefined },
-    { text: "COMMIT", values: undefined },
+    { text: "select current_setting('app.rupaykg.organization_id', true)" },
+    { text: "COMMIT" },
   ]);
   assert.equal(state.released, true);
 });
