@@ -11,16 +11,17 @@ restore_db="rupaykg_recovery_rehearsal"
 dump_timeout="${RECOVERY_DUMP_TIMEOUT_SECONDS:-120}"
 restore_timeout="${RECOVERY_RESTORE_TIMEOUT_SECONDS:-120}"
 query_timeout="${RECOVERY_QUERY_TIMEOUT_SECONDS:-30}"
+local_pg_url="postgresql://postgres:postgres@127.0.0.1:5432"
 
 cleanup() {
   rm -f "${dump_file:-}"
-  dropdb --if-exists --host=127.0.0.1 --username=postgres "$restore_db" >/dev/null 2>&1 || true
+  PGPASSWORD=postgres dropdb --if-exists --host=127.0.0.1 --username=postgres "$restore_db" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
 
 echo "Waiting for disposable PostgreSQL..."
 for attempt in {1..30}; do
-  if pg_isready --host=127.0.0.1 --port=5432 --username=postgres --dbname="$source_db" >/dev/null 2>&1; then
+  if PGPASSWORD=postgres pg_isready --timeout=1 --host=127.0.0.1 --port=5432 --username=postgres --dbname="$source_db" >/dev/null 2>&1; then
     break
   fi
   if [ "$attempt" -eq 30 ]; then
@@ -30,8 +31,8 @@ for attempt in {1..30}; do
   sleep 1
 done
 
-dropdb --if-exists --host=127.0.0.1 --username=postgres "$restore_db" >/dev/null 2>&1 || true
-createdb --host=127.0.0.1 --username=postgres "$restore_db"
+PGPASSWORD=postgres dropdb --if-exists --host=127.0.0.1 --username=postgres "$restore_db" >/dev/null 2>&1 || true
+PGPASSWORD=postgres createdb --host=127.0.0.1 --username=postgres "$restore_db"
 
 dump_file="$(mktemp)"
 
@@ -39,13 +40,13 @@ before_count="$(timeout --preserve-status "$query_timeout"s psql "$DATABASE_URL"
 before_latest="$(timeout --preserve-status "$query_timeout"s psql "$DATABASE_URL" --set=ON_ERROR_STOP=1 --tuples-only --no-align -c "SELECT coalesce(max(version),'NONE') FROM public.schema_migrations")"
 
 echo "Creating disposable custom-format backup..."
-timeout --preserve-status "$dump_timeout"s pg_dump --host=127.0.0.1 --username=postgres --format=custom --file="$dump_file" "$source_db"
+PGPASSWORD=postgres timeout --preserve-status "$dump_timeout"s pg_dump --host=127.0.0.1 --username=postgres --format=custom --file="$dump_file" "$source_db"
 
 echo "Restoring into separate disposable database..."
-timeout --preserve-status "$restore_timeout"s pg_restore --host=127.0.0.1 --username=postgres --clean --if-exists --dbname="$restore_db" "$dump_file"
+PGPASSWORD=postgres timeout --preserve-status "$restore_timeout"s pg_restore --host=127.0.0.1 --username=postgres --clean --if-exists --dbname="$restore_db" "$dump_file"
 
-after_count="$(timeout --preserve-status "$query_timeout"s psql "postgresql://postgres:postgres@127.0.0.1:5432/$restore_db" --set=ON_ERROR_STOP=1 --tuples-only --no-align -c "SELECT count(*) FROM public.schema_migrations")"
-after_latest="$(timeout --preserve-status "$query_timeout"s psql "postgresql://postgres:postgres@127.0.0.1:5432/$restore_db" --set=ON_ERROR_STOP=1 --tuples-only --no-align -c "SELECT coalesce(max(version),'NONE') FROM public.schema_migrations")"
+after_count="$(timeout --preserve-status "$query_timeout"s psql "$local_pg_url/$restore_db" --set=ON_ERROR_STOP=1 --tuples-only --no-align -c "SELECT count(*) FROM public.schema_migrations")"
+after_latest="$(timeout --preserve-status "$query_timeout"s psql "$local_pg_url/$restore_db" --set=ON_ERROR_STOP=1 --tuples-only --no-align -c "SELECT coalesce(max(version),'NONE') FROM public.schema_migrations")"
 
 test "$before_count" = "$after_count"
 test "$before_latest" = "$after_latest"
