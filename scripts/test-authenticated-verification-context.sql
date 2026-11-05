@@ -242,14 +242,14 @@ SELECT NOT has_function_privilege(current_user,'public.rupaykg_context_is_valid(
 \if :forged_context_invalid
 \else
   \echo 'caller-forged context unexpectedly validated'
-  \quit 1
+  SELECT 1/0;
 \endif
 SELECT public.rupaykg_test_expect_spoof_rejected(
   :'evidence_b',:'activity_b',:'verifier_b') AS spoof_rejected \gset
 \if :spoof_rejected
 \else
   \echo 'caller-forged verification insert unexpectedly succeeded'
-  \quit 1
+  SELECT 1/0;
 \endif
 RESET ROLE;
 ROLLBACK TO SAVEPOINT forged_context;
@@ -263,7 +263,7 @@ SELECT public.rupaykg_test_expect_revoked_rejected(:'org_a') AS revoked_rejected
 \if :revoked_rejected
 \else
   \echo 'revoked bearer session unexpectedly accepted'
-  \quit 1
+  SELECT 1/0;
 \endif
 RESET ROLE;
 ROLLBACK TO SAVEPOINT revoked_context;
@@ -285,7 +285,7 @@ SELECT public.rupaykg_test_expect_spoof_rejected(
 \if :membership_change_rejected
 \else
   \echo 'verification insert accepted a context after membership was deactivated'
-  \quit 1
+  SELECT 1/0;
 \endif
 RESET ROLE;
 ROLLBACK TO SAVEPOINT membership_changed_context;
@@ -305,14 +305,14 @@ SELECT set_config('rupaykg.context.signature', :'replay_signature', true);
 SELECT has_function_privilege(current_user,'public.rupaykg_context_is_valid()','EXECUTE') AS replay_context_valid \gset
 \if :replay_context_valid
   \echo 'signed context from a previous transaction was replayable'
-  \quit 1
+  SELECT 1/0;
 \endif
 SELECT public.rupaykg_test_expect_spoof_rejected(
   :'evidence_a',:'activity_a',:'verifier_a') AS replay_rejected \gset
 \if :replay_rejected
 \else
   \echo 'verification insert accepted a signed context from a previous transaction'
-  \quit 1
+  SELECT 1/0;
 \endif
 RESET ROLE;
 DROP FUNCTION public.rupaykg_test_expect_spoof_rejected(uuid,uuid,uuid);
