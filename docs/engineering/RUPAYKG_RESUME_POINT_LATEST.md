@@ -193,3 +193,11 @@ Continue from the same branch and prioritize remaining high-risk organization-sc
 - CI validation for this new EPR-return head is **PENDING**; do not mark the batch complete until the full 17-step gate succeeds.
 - Before production RLS is proposed, protected access still requires broader route/data-access migration and complete policy-matrix reconciliation.
 - Migration 096 source/ledger lineage remains a separate unresolved release blocker.
+
+
+### 2026-11-05 EPR Return CI Failure and Correction
+- CI #5678 / run `42086424930`: **FAILURE** at TypeScript typecheck; migration validation and protected-migrator configuration gates passed before the failure.
+- Exact failure: `DatabaseTenantContext.organizationId` requires `string`, while two EPR return transaction contexts supplied `string | undefined` via `auth.activeOrganizationId ?? undefined`.
+- No production change occurred.
+- Correction commit: `921aa260ad102fabd146b8c3676f230a47d80856` — requires an explicit active organization before EPR return submit/external-reference contexts and passes the narrowed organization ID into `withDatabaseTenantContext`.
+- New CI validation is pending; EPR return batch remains **IMPLEMENTED BUT NOT VALIDATED** until the full gate succeeds.
