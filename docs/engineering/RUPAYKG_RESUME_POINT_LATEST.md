@@ -201,3 +201,45 @@ Continue from the same branch and prioritize remaining high-risk organization-sc
 - No production change occurred.
 - Correction commit: `921aa260ad102fabd146b8c3676f230a47d80856` — requires an explicit active organization before EPR return submit/external-reference contexts and passes the narrowed organization ID into `withDatabaseTenantContext`.
 - New CI validation is pending; EPR return batch remains **IMPLEMENTED BUT NOT VALIDATED** until the full gate succeeds.
+
+## 2026-11-05 EPR Return + Workspace Tenant-Context Expansion — VERIFIED CI
+
+- EPR return protected paths were corrected after CI #5678 TypeScript failure.
+- Correction commit: `921aa260ad102fabd146b8c3676f230a47d80856`.
+- CI #5680 / workflow run `42086785425`: **SUCCESS**.
+- All validation steps 1–17 completed successfully.
+- Verified EPR return paths:
+  - `GET /api/v1/epr/returns`
+  - `POST /api/v1/epr/returns`
+  - `POST /api/v1/epr/returns/:returnId/submit`
+  - `POST /api/v1/epr/returns/:returnId/external-reference`
+- These paths now require/propagate explicit active organization context and use the same tenant transaction client for protected authorization/data access.
+
+### Workspace route expansion
+
+- Commit: `dde00fb02b8f97c1e77aeeaa6b8fe6ea2ffc1f2d`.
+- CI #5684 / workflow run `42088209275`: **SUCCESS**.
+- All validation steps 1–17 completed successfully.
+- The bounded workspace migration now covers:
+  - resource-flow workspace reads;
+  - compliance workspace reads;
+  - carbon workspace reads;
+  - registry workspace reads;
+  - settlement workspace reads;
+  - ESG workspace reads;
+  - workspace permission pre-handler;
+  - workspace authorization helper;
+  - MRV workspace read;
+  - evidence verification write.
+- Direct inspection of `apps/src/workspace-routes.ts` at the validated head found no remaining `pool.query`, `hasOrganizationPermission(pool,` or `authorizeGeography(pool,` usage in that module.
+- Status: **VERIFIED COMPLETE at engineering/CI level for this bounded batch only**.
+
+### Current release-gate position
+
+- PR #305 remains **OPEN / DRAFT / UNMERGED / VALIDATION-ONLY**.
+- Production remains **READ-ONLY / HOLD**.
+- RLS remains disabled in the inspected authoritative Neon database; zero PostgreSQL policies remain a verified release blocker.
+- Migration 096 source/ledger lineage remains unresolved and must not be resolved by inference.
+- Tenant isolation is **NOT COMPLETE** merely because these route batches passed CI. Remaining repository-wide protected data-access paths must still be reconciled before a complete RLS migration can be designed.
+- Next action: continue systematic repository-wide protected-access inventory/migration, prioritizing remaining organization-scoped operational, registry, sync, onboarding, evidence-vault, BWG, intelligence, and platform-admin paths; preserve transaction-scoped context and validate each coherent batch through the full CI gate before any RLS proposal.
+\n
