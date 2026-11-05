@@ -115,3 +115,23 @@ No production DDL/DML, role/grant change, RLS mutation, deployment, merge, certi
 - This is a bounded implementation checkpoint, not completion of tenant isolation.
 - RLS remains disabled in the inspected Neon database and no production RLS mutation has been performed.
 - Required next validation: CI on the new head, then disposable PostgreSQL isolation tests and pooled-connection reset evidence before broader protected-route migration or any RLS migration.
+
+
+## 2026-11-05 Disposable Tenant-Isolation Acceptance Batch — VERIFIED CI
+
+- Added `apps/src/tenant-isolation.integration.test.ts`.
+- The suite creates a disposable schema and a dedicated non-superuser/non-BYPASSRLS PostgreSQL test role so the acceptance tests exercise actual PostgreSQL RLS semantics rather than the CI superuser bypass path.
+- Verified in CI run **#5654** / workflow **42078866425** on branch `shakti/2026-11-05-tenant-isolation-reconstruction`.
+- CI steps 1–17 completed successfully, including typecheck, build, browser smoke, disposable PostgreSQL acceptance, production-container build, bounded backup/restore rehearsal, and startup-isolation assertion.
+- Disposable acceptance coverage now includes:
+  - cross-tenant SELECT isolation;
+  - cross-tenant INSERT denial;
+  - cross-tenant UPDATE/DELETE isolation;
+  - revoked-membership denial;
+  - suspended-identity denial;
+  - pooled-connection context reset;
+  - bilateral organization scope;
+  - explicit service-mode exception.
+- This validates the **context primitive + representative disposable RLS semantics**. It does **not** prove that RupayKg's 67 production tables have correct policies.
+- Production remains unchanged: no production RLS enablement, policy creation, DDL/DML, role/grant change, deployment, merge, certification, or TRL 9 declaration.
+- Next safe implementation gate: reconcile the tested policy semantics against the full repository organization/bilateral table inventory, then build the complete production RLS policy migration and rehearse it on disposable PostgreSQL. Migration 096 source/ledger reconciliation remains a separate blocker.
