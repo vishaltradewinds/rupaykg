@@ -128,26 +128,39 @@ WHERE e.id='$evidence_id'::uuid;
 COMMIT;
 SQL
 
-start_ns="$(date +%s%N)"
 psql "$DATABASE_URL" --set=ON_ERROR_STOP=1 --file="$revoker_sql" >"$out_a" 2>&1 &
 pid_a=$!
 
 sleep 0.5
+verifier_start_ns="$(date +%s%N)"
 psql "$DATABASE_URL" --set=ON_ERROR_STOP=1 --file="$verifier_sql" >"$out_b" 2>&1 &
 pid_b=$!
 
-wait "$pid_a"
-wait "$pid_b"
-end_ns="$(date +%s%N)"
+revoker_status=0
+verifier_status=0
+wait "$pid_a" || revoker_status=$?
+wait "$pid_b" || verifier_status=$?
+verifier_end_ns="$(date +%s%N)"
+verifier_elapsed_ms="$(( (verifier_end_ns - verifier_start_ns) / 1000000 ))"
 
-elapsed_ms="$(( (end_ns - start_ns) / 1000000 ))"
-
-# The verifier must have waited for the revoker's organization lock. With a
-# three-second hold and a 0.5s stagger, completion below 2.0s would indicate
-# that the expected serialization boundary was not exercised.
-if (( elapsed_ms < 2000 )); then
-  echo "FAIL: verification completed too quickly (${elapsed_ms}ms); expected organization-lock serialization"
+if (( revoker_status != 0 || verifier_status != 0 )); then
+  echo "FAIL: concurrent sessions returned non-zero status (revoker=$revoker_status verifier=$verifier_status)"
+  echo "--- revoker output ---"
   cat "$out_a"
+  echo "--- verifier output ---"
+  cat "$out_b"
+  exit 1
+fi
+
+# The verifier must have waited for the revoker organization lock. The revoker
+# holds that lock for 3 seconds and the verifier starts 0.5s later, so a
+# successful verifier should take roughly >=2.5s. Measure the verifier itself
+# rather than total process lifetime, which includes the revoker sleep.
+if (( verifier_elapsed_ms < 2000 )); then
+  echo "FAIL: verification completed too quickly (${verifier_elapsed_ms}ms); expected organization-lock serialization"
+  echo "--- revoker output ---"
+  cat "$out_a"
+  echo "--- verifier output ---"
   cat "$out_b"
   exit 1
 fi
