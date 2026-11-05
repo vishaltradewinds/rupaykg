@@ -4,6 +4,7 @@ import { calculateEmissionReduction, isGenericCalculationMethodAllowed, sha256Ca
 import { assessEprObligation } from "@rupaykg/compliance";
 import { classifyMetric } from "@rupaykg/esg";
 import { authenticate, canActForOrganization, hasOrganizationPermission, type AuthContext } from "./auth.js";
+import { withDatabaseTenantContext } from "./db-context.js";
 import { registerAuthRoutes } from "./auth-routes.js";
 
 type Reply = { code: (status: number) => { send: (body: unknown) => unknown } };
