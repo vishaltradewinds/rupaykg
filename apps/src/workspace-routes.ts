@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
-import type { Pool } from "pg";
+import type { Pool, PoolClient } from "pg";
 import { authenticate, bearerChallenge, canVerifyEvidence, hasOrganizationPermission, type AuthContext } from "./auth.js";
+import { withDatabaseTenantContext } from "./db-context.js";
 
 async function requireAuth(app: FastifyInstance, pool: Pool | null, request: Parameters<typeof authenticate>[0], reply: { code: (status: number) => { send: (body: unknown) => unknown } }): Promise<AuthContext | null> {
   if (!pool) { reply.code(503).send({ error: "Authoritative API unavailable", code: "DATABASE_UNAVAILABLE", syntheticData: false }); return null; }
@@ -26,9 +27,9 @@ function requestedOperatingContext(request: { query: unknown }): { context?: Ope
   if (raw === "urban" || raw === "rural") return { context: raw, invalid: false };
   return { invalid: true };
 }
-async function authorizeGeography(pool: Pool, auth: AuthContext, geographyId: string): Promise<boolean> {
+async function authorizeGeography(db: Pool | PoolClient, auth: AuthContext, geographyId: string): Promise<boolean> {
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(geographyId)) return false;
-  const check = await pool.query<{ ok: boolean }>(`select exists (select 1 from organization_memberships om where om.identity_id=$1 and om.status='VERIFIED' and ($3::uuid is null or om.organization_id=$3::uuid) and organization_has_geography_scope(om.organization_id,$2)) as ok`, [auth.identityId, geographyId, auth.activeOrganizationId ?? null]);
+  const check = await db.query<{ ok: boolean }>(`select exists (select 1 from organization_memberships om where om.identity_id=$1 and om.status='VERIFIED' and ($3::uuid is null or om.organization_id=$3::uuid) and organization_has_geography_scope(om.organization_id,$2)) as ok`, [auth.identityId, geographyId, auth.activeOrganizationId ?? null]);
   return check.rows[0]?.ok === true;
 }
 function geoClause(geographyId: string | null, column: string): string { return geographyId ? ` and ${column} = $2` : ""; }
@@ -60,36 +61,69 @@ export async function registerWorkspaceRoutes(app: FastifyInstance, pool: Pool |
 
   app.get("/api/v1/workspaces/mrv", async (request, reply) => {
     const auth = await requireAuth(app, pool, request, reply); if (!auth || !pool) return;
-    const ids = orgIds(auth); if (!ids.length) return result({ activities: [], measurements: [], evidence: [], verifications: [] });
+    if (!auth.activeOrganizationId) return reply.code(403).send({ error: "An active organization is required for MRV workspace access", code: "ACTIVE_ORGANIZATION_REQUIRED" });
+    const organizationId = auth.activeOrganizationId;
     const geographyId = requestedGeography(request);
-    if (geographyId && !await authorizeGeography(pool, auth, geographyId)) return reply.code(403).send({ error: "Geography outside organization authorization scope", code: "GEOGRAPHY_FORBIDDEN" });
     const contextRequest = requestedOperatingContext(request);
     if (contextRequest.invalid) return reply.code(400).send({ error: "Context must be urban or rural", code: "INVALID_OPERATING_CONTEXT", syntheticData: false });
     try {
-      const params: unknown[] = [ids];
-      if (geographyId) params.push(geographyId);
-      if (contextRequest.context) params.push(operatingContextGeographyKinds(contextRequest.context));
-      const geographyClause = geoClause(geographyId, "a.geography_id");
-      const contextClause = operatingContextSqlClause(contextRequest.context, params.length);
-      const scopeClause = " and organization_has_geography_scope(a.organization_id,a.geography_id)";
-      const [activities, measurements, evidence, verifications] = await Promise.all([
-        pool.query(`select a.id,a.activity_type,a.status,a.occurred_at,a.created_at,a.geography_id,g.name as geography_name,g.kind::text as geography_kind from activities a left join geography g on g.id=a.geography_id where a.organization_id=any($1::uuid[])${scopeClause}${geographyClause}${contextClause} order by a.created_at desc limit 100`, params),
-        pool.query(`select m.id,m.activity_id,m.value,m.unit,m.method,m.source,m.measured_at,m.quality_status from measurements m join activities a on a.id=m.activity_id where a.organization_id=any($1::uuid[])${scopeClause}${geographyClause}${contextClause} order by m.measured_at desc limit 100`, params),
-        pool.query(`select e.id,e.activity_id,e.measurement_id,e.evidence_type,e.status,e.captured_at,e.content_uri,e.content_hash from evidence e join activities a on a.id=e.activity_id where a.organization_id=any($1::uuid[])${scopeClause}${geographyClause}${contextClause} order by e.captured_at desc limit 100`, params),
-        pool.query(`select v.id,v.evidence_id,v.activity_id,v.verifier_identity_id,v.decision,v.scope,v.rationale,v.decided_at from verifications v join evidence e on e.id=v.evidence_id join activities a on a.id=e.activity_id where a.organization_id=any($1::uuid[])${scopeClause}${geographyClause}${contextClause} order by v.decided_at desc limit 100`, params),
-      ]);
-      return result({ activities: activities.rows, measurements: measurements.rows, evidence: evidence.rows, verifications: verifications.rows, ...(contextRequest.context ? { operatingContext: contextRequest.context, geographyKinds: operatingContextGeographyKinds(contextRequest.context) } : {}) });
-    } catch (error) { request.log.error(error); return reply.code(503).send({ error: "MRV workspace unavailable", syntheticData: false }); }
+      const data = await withDatabaseTenantContext(pool, { identityId: auth.identityId, organizationId, bilateralOrganizationScope: auth.bilateralOrganizationScope ?? false, serviceMode: false }, async (client) => {
+        if (geographyId && !await authorizeGeography(client, auth, geographyId)) throw Object.assign(new Error("Geography outside organization authorization scope"), { code: "GEOGRAPHY_FORBIDDEN" });
+        const params: unknown[] = [[organizationId]];
+        if (geographyId) params.push(geographyId);
+        if (contextRequest.context) params.push(operatingContextGeographyKinds(contextRequest.context));
+        const geographyClause = geoClause(geographyId, "a.geography_id");
+        const contextClause = operatingContextSqlClause(contextRequest.context, params.length);
+        const scopeClause = " and organization_has_geography_scope(a.organization_id,a.geography_id)";
+        const [activities, measurements, evidence, verifications] = await Promise.all([
+          client.query("select a.id,a.activity_type,a.status,a.occurred_at,a.created_at,a.geography_id,g.name as geography_name,g.kind::text as geography_kind from activities a left join geography g on g.id=a.geography_id where a.organization_id=any($1::uuid[])"+scopeClause+geographyClause+contextClause+" order by a.created_at desc limit 100", params),
+          client.query("select m.id,m.activity_id,m.value,m.unit,m.method,m.source,m.measured_at,m.quality_status from measurements m join activities a on a.id=m.activity_id where a.organization_id=any($1::uuid[])"+scopeClause+geographyClause+contextClause+" order by m.measured_at desc limit 100", params),
+          client.query("select e.id,e.activity_id,e.measurement_id,e.evidence_type,e.status,e.captured_at,e.content_uri,e.content_hash from evidence e join activities a on a.id=e.activity_id where a.organization_id=any($1::uuid[])"+scopeClause+geographyClause+contextClause+" order by e.captured_at desc limit 100", params),
+          client.query("select v.id,v.evidence_id,v.activity_id,v.verifier_identity_id,v.decision,v.scope,v.rationale,v.decided_at from verifications v join evidence e on e.id=v.evidence_id join activities a on a.id=e.activity_id where a.organization_id=any($1::uuid[])"+scopeClause+geographyClause+contextClause+" order by v.decided_at desc limit 100", params),
+        ]);
+        return { activities: activities.rows, measurements: measurements.rows, evidence: evidence.rows, verifications: verifications.rows, ...(contextRequest.context ? { operatingContext: contextRequest.context, geographyKinds: operatingContextGeographyKinds(contextRequest.context) } : {}) };
+      });
+      return result(data);
+    } catch (error) {
+      const code = (error as { code?: string }).code;
+      if (code === "GEOGRAPHY_FORBIDDEN") return reply.code(403).send({ error: "Geography outside organization authorization scope", code });
+      request.log.error(error); return reply.code(503).send({ error: "MRV workspace unavailable", syntheticData: false });
+    }
   });
-
   app.post("/api/v1/evidence/:evidenceId/verification", async (request, reply) => {
-    if (!pool) return reply.code(503).send({error:"Evidence verification unavailable",code:"DATABASE_UNAVAILABLE",syntheticData:false}); let auth:AuthContext|null;
-    try{auth=await authenticate(request,pool);}catch(error){request.log.error(error);return reply.code(503).send({error:"Authentication service unavailable",code:"AUTH_UNAVAILABLE",syntheticData:false});} if(!auth)return reply.code(401).send(bearerChallenge());
-    const {evidenceId}=request.params as {evidenceId:string}; if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(evidenceId))return reply.code(400).send({error:"evidenceId must be a UUID",code:"INVALID_EVIDENCE_ID"});
-    const body=request.body&&typeof request.body==="object"?request.body as Record<string,unknown>:{};const decision=typeof body.decision==="string"?body.decision.trim().toUpperCase():"";const scope=typeof body.scope==="string"?body.scope.trim():"";if(decision!=="APPROVED"||!scope)return reply.code(400).send({error:"decision=APPROVED and scope are required",code:"INVALID_VERIFICATION"});
-    const client=await pool.connect();try{await client.query("BEGIN");const evidence=await client.query<{activity_id:string}>("select activity_id from evidence where id=$1 for update",[evidenceId]);const activityId=evidence.rows[0]?.activity_id;if(!activityId){await client.query("ROLLBACK");return reply.code(404).send({error:"Evidence not found",code:"EVIDENCE_NOT_FOUND"});}if(auth.activeOrganizationId){const scopeCheck=await client.query<{ok:boolean}>("select exists(select 1 from activities where id=$1 and organization_id=$2) as ok",[activityId,auth.activeOrganizationId]);if(!scopeCheck.rows[0]?.ok){await client.query("ROLLBACK");return reply.code(403).send({error:"Evidence is outside the active organization scope",code:"ORGANIZATION_FORBIDDEN"});}}const authorized=await canVerifyEvidence(client,auth.identityId,evidenceId);if(!authorized){await client.query("ROLLBACK");return reply.code(403).send({error:"Explicit verification permission required",code:"VERIFY_EVIDENCE_FORBIDDEN"});}const inserted=await client.query("insert into verifications(evidence_id,activity_id,verifier_identity_id,decision,scope) values($1,$2,$3,$4,$5) returning id,evidence_id,activity_id,verifier_identity_id,decision,scope,decided_at",[evidenceId,activityId,auth.identityId,decision,scope]);await client.query("update evidence set status='VERIFIED' where id=$1",[evidenceId]);await client.query("COMMIT");return reply.code(201).send({source:"postgresql",syntheticData:false,authoritativeMutation:true,verification:inserted.rows[0]});}catch(error){await client.query("ROLLBACK");request.log.error(error);return reply.code(503).send({error:"Evidence verification unavailable",code:"VERIFICATION_UNAVAILABLE",syntheticData:false});}finally{client.release();}
+    if (!pool) return reply.code(503).send({ error: "Evidence verification unavailable", code: "DATABASE_UNAVAILABLE", syntheticData: false });
+    let auth: AuthContext | null;
+    try { auth = await authenticate(request, pool); } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Authentication service unavailable", code: "AUTH_UNAVAILABLE", syntheticData: false }); }
+    if (!auth) return reply.code(401).send(bearerChallenge());
+    if (!auth.activeOrganizationId) return reply.code(403).send({ error: "An active organization is required for evidence verification", code: "ACTIVE_ORGANIZATION_REQUIRED" });
+    const organizationId = auth.activeOrganizationId;
+    const { evidenceId } = request.params as { evidenceId: string };
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(evidenceId)) return reply.code(400).send({ error: "evidenceId must be a UUID", code: "INVALID_EVIDENCE_ID" });
+    const body = request.body && typeof request.body === "object" ? request.body as Record<string, unknown> : {};
+    const decision = typeof body.decision === "string" ? body.decision.trim().toUpperCase() : "";
+    const scope = typeof body.scope === "string" ? body.scope.trim() : "";
+    if (decision !== "APPROVED" || !scope) return reply.code(400).send({ error: "decision=APPROVED and scope are required", code: "INVALID_VERIFICATION" });
+    try {
+      const verification = await withDatabaseTenantContext(pool, { identityId: auth.identityId, organizationId, bilateralOrganizationScope: auth.bilateralOrganizationScope ?? false, serviceMode: false }, async (client) => {
+        const evidence = await client.query<{ activity_id: string }>("select activity_id from evidence where id=$1 for update", [evidenceId]);
+        const activityId = evidence.rows[0]?.activity_id;
+        if (!activityId) throw Object.assign(new Error("Evidence not found"), { code: "EVIDENCE_NOT_FOUND" });
+        const scopeCheck = await client.query<{ ok: boolean }>("select exists(select 1 from activities where id=$1 and organization_id=$2) as ok", [activityId, organizationId]);
+        if (!scopeCheck.rows[0]?.ok) throw Object.assign(new Error("Evidence is outside the active organization scope"), { code: "ORGANIZATION_FORBIDDEN" });
+        if (!await canVerifyEvidence(client, auth.identityId, evidenceId)) throw Object.assign(new Error("Explicit verification permission required"), { code: "VERIFY_EVIDENCE_FORBIDDEN" });
+        const inserted = await client.query("insert into verifications(evidence_id,activity_id,verifier_identity_id,decision,scope) values($1,$2,$3,$4,$5) returning id,evidence_id,activity_id,verifier_identity_id,decision,scope,decided_at", [evidenceId, activityId, auth.identityId, decision, scope]);
+        await client.query("update evidence set status='VERIFIED' where id=$1", [evidenceId]);
+        return inserted.rows[0];
+      });
+      return reply.code(201).send({ source: "postgresql", syntheticData: false, authoritativeMutation: true, verification });
+    } catch (error) {
+      const code = (error as { code?: string }).code;
+      if (code === "EVIDENCE_NOT_FOUND") return reply.code(404).send({ error: "Evidence not found", code });
+      if (code === "ORGANIZATION_FORBIDDEN") return reply.code(403).send({ error: "Evidence is outside the active organization scope", code });
+      if (code === "VERIFY_EVIDENCE_FORBIDDEN") return reply.code(403).send({ error: "Explicit verification permission required", code });
+      request.log.error(error); return reply.code(503).send({ error: "Evidence verification unavailable", code: "VERIFICATION_UNAVAILABLE", syntheticData: false });
+    }
   });
-
   app.get("/api/v1/workspaces/compliance", async (request, reply) => {
     const auth=await requireAuth(app,pool,request,reply);if(!auth||!pool)return;const ids=orgIds(auth);if(!ids.length)return result({obligations:[]});const geographyId=requestedGeography(request);if(geographyId&&!await authorizeGeography(pool,auth,geographyId))return reply.code(403).send({error:"Geography outside organization authorization scope",code:"GEOGRAPHY_FORBIDDEN"});
     try{const params:unknown[]=[ids];if(geographyId)params.push(geographyId);const clause=geoClause(geographyId,"ob.jurisdiction_id");const rows=await pool.query(`select ob.id,ob.organization_id,o.name as organization_name,ob.jurisdiction_id,g.name as jurisdiction_name,ob.obligation_type,ob.period_start,ob.period_end,ob.required_quantity,ob.status from obligations ob join organizations o on o.id=ob.organization_id left join geography g on g.id=ob.jurisdiction_id where ob.organization_id=any($1::uuid[]) and organization_has_geography_scope(ob.organization_id,ob.jurisdiction_id)${clause} order by ob.period_end desc limit 100`,params);return result({obligations:rows.rows});}catch(error){request.log.error(error);return reply.code(503).send({error:"Compliance workspace unavailable",syntheticData:false});}
