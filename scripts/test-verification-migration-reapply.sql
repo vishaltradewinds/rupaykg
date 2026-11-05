@@ -30,6 +30,7 @@ DO $assert$
 DECLARE
   legacy_count integer;
   canonical_count integer;
+  scope_lock_count integer;
 BEGIN
   SELECT count(*)
     INTO legacy_count
