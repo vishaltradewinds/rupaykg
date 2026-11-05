@@ -11,6 +11,7 @@ const pool = integrationEnabled && databaseUrl
   : null;
 
 const schema = `rupaykg_tenant_isolation_${process.pid}_${Date.now().toString(36)}`;
+const testRole = `rupaykg_ti_${process.pid}_${Date.now().toString(36)}`;
 
 function qid(value: string): string {
   return `"${value.replaceAll('"', '""')}"`;
@@ -37,13 +38,17 @@ async function contextQuery(
       bilateralOrganizationScope: options.bilateral ?? false,
       serviceMode: options.serviceMode ?? false,
     },
-    (client) => client.query(sql, values),
+    async (client) => {
+      await client.query(`set local role ${qid(testRole)}`);
+      return client.query(sql, values);
+    },
   );
 }
 
 before(async () => {
   if (!integrationEnabled || !pool) return;
 
+  await query(`create role ${qid(testRole)} nosuperuser nobypassrls nologin`);
   await query(`create schema ${qid(schema)}`);
   await query(`
     create table ${qid(schema)}.identities (
@@ -70,6 +75,11 @@ before(async () => {
   `);
 
   await query(`
+    grant usage on schema ${qid(schema)} to ${qid(testRole)};
+    grant select on ${qid(schema)}.identities, ${qid(schema)}.memberships to ${qid(testRole)};
+    grant select, insert, update, delete on ${qid(schema)}.tenant_records, ${qid(schema)}.bilateral_records to ${qid(testRole)};
+    grant usage, select on all sequences in schema ${qid(schema)} to ${qid(testRole);
+
     insert into ${qid(schema)}.identities(identity_id, status)
     values ('identity-a', 'ACTIVE'), ('identity-b', 'ACTIVE'), ('identity-suspended', 'SUSPENDED');
     insert into ${qid(schema)}.memberships(identity_id, organization_id, status)
@@ -167,6 +177,7 @@ after(async () => {
   if (!pool) return;
   try {
     await query(`drop schema if exists ${qid(schema)} cascade`);
+    await query(`drop role if exists ${qid(testRole)}`);
   } finally {
     await pool.end();
   }
