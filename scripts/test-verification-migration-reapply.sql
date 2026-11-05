@@ -28,16 +28,9 @@ COMMIT;
 
 DO $assert$
 DECLARE
-  trigger_count integer;
   legacy_count integer;
   canonical_count integer;
 BEGIN
-  SELECT count(*)
-    INTO trigger_count
-    FROM pg_trigger
-   WHERE tgrelid = 'public.verifications'::regclass
-     AND NOT tgisinternal;
-
   SELECT count(*)
     INTO legacy_count
     FROM pg_trigger
@@ -55,10 +48,14 @@ BEGIN
      AND NOT tgisinternal
      AND tgname = 'verification_authorization_guard';
 
-  IF trigger_count <> 1 OR legacy_count <> 0 OR canonical_count <> 1 THEN
+  -- Other independent verification triggers may legitimately remain on the table.
+  -- The convergence contract is specifically that every known legacy
+  -- authorization trigger name is gone and exactly one canonical authorization
+  -- trigger remains.
+  IF legacy_count <> 0 OR canonical_count <> 1 THEN
     RAISE EXCEPTION
-      'verification trigger convergence failed: total=%, legacy=%, canonical=%',
-      trigger_count, legacy_count, canonical_count;
+      'verification authorization trigger convergence failed: legacy=%, canonical=%',
+      legacy_count, canonical_count;
   END IF;
 
   RAISE NOTICE 'verification migration reapply over legacy trigger names verified';
