@@ -29,7 +29,9 @@ declare
   activity_organization_id uuid;
   activity_geography_id uuid;
   evidence_activity_id uuid;
-  membership_row record;
+  membership_id uuid;
+  membership_role_id uuid;
+  membership_permissions jsonb;
   membership_candidate record;
 begin
   if tg_op = 'UPDATE' then
@@ -138,7 +140,7 @@ begin
        and m.status = 'VERIFIED'
      for share;
 
-    if membership_row.membership_id is null then
+    if membership_id is null then
       continue;
     end if;
 
