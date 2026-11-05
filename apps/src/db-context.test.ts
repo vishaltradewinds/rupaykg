@@ -69,7 +69,7 @@ test("rolls back and releases the pooled client when protected work fails", asyn
   await assert.rejects(
     withDatabaseTenantContext(
       state.pool,
-      { identityId: "identity-1", organizationId: "organization-1" },
+      { identityId: "identity-1", organizationId: "organization-1", bilateralOrganizationScope: false, serviceMode: false },
       async () => {
         throw expected;
       },
