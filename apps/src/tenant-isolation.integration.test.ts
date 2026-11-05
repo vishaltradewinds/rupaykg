@@ -78,7 +78,7 @@ before(async () => {
     grant usage on schema ${qid(schema)} to ${qid(testRole)};
     grant select on ${qid(schema)}.identities, ${qid(schema)}.memberships to ${qid(testRole)};
     grant select, insert, update, delete on ${qid(schema)}.tenant_records, ${qid(schema)}.bilateral_records to ${qid(testRole)};
-    grant usage, select on all sequences in schema ${qid(schema)} to ${qid(testRole);
+    grant usage, select on all sequences in schema ${qid(schema)} to ${qid(testRole)};
 
     insert into ${qid(schema)}.identities(identity_id, status)
     values ('identity-a', 'ACTIVE'), ('identity-b', 'ACTIVE'), ('identity-suspended', 'SUSPENDED');
