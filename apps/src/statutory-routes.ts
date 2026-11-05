@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
-import type { Pool } from "pg";
+import type { Pool, PoolClient } from "pg";
+import { withDatabaseTenantContext } from "./db-context.js";
 import { authenticate, canActForOrganization, hasOrganizationPermission, type AuthContext } from "./auth.js";
 
 type Reply = { code: (status: number) => { send: (body: unknown) => unknown } };
@@ -65,7 +66,7 @@ async function organizationFor(auth: AuthContext, pool: Pool, request: Request, 
   return requested;
 }
 
-async function evidenceBindingValid(pool: Pool, organizationId: string, evidenceId: string | null, verificationId: string | null): Promise<boolean> {
+async function evidenceBindingValid(db: Pool | PoolClient, organizationId: string, evidenceId: string | null, verificationId: string | null): Promise<boolean> {
   if (!evidenceId && !verificationId) return true;
   if (!evidenceId || !verificationId) return false;
   const result = await pool.query<{ ok: boolean }>(
@@ -119,7 +120,7 @@ export async function registerStatutoryRoutes(app: FastifyInstance, pool: Pool |
   app.post("/api/v1/statutory/bwg/assess", async (request, reply) => {
     const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
     const body = bodyOf(request as never);
-    const organizationId = text(body, "organizationId") || auth.activeOrganizationId || auth.memberships[0]?.organization_id || null;
+    const organizationId = auth.activeOrganizationId;
     if (!organizationId || !canActForOrganization(auth, organizationId)) return reply.code(403).send({ error: "No verified membership for organization", code: "ORG_FORBIDDEN" });
     if (!await hasOrganizationPermission(pool, auth, organizationId, ["swm:manage", "audit:execute", "reports:export"])) return reply.code(403).send({ error: "BWG applicability assessment permission required", code: "STATUTORY_WRITE_REQUIRED" });
     const floorArea = nonNegative(body, "floorAreaSqM");
@@ -132,7 +133,9 @@ export async function registerStatutoryRoutes(app: FastifyInstance, pool: Pool |
     const status = bwgStatus(floorArea, water, waste);
     const note = text(body, "determinationNote");
     try {
-      const result = await pool.query(
+      const result = await withDatabaseTenantContext(pool, { identityId: auth.identityId, organizationId: organizationId!, bilateralOrganizationScope: auth.bilateralOrganizationScope ?? false, serviceMode: false }, async client => {
+        if (!await evidenceBindingValid(client, organizationId!, evidenceId, verificationId)) throw Object.assign(new Error("Evidence and verification must be supplied together and be verified, approved, and organization/geography scoped"), { code: "STATUTORY_EVIDENCE_BINDING_INVALID" });
+        return client.query(
         `insert into organization_bwg_assessments
           (organization_id,assessment_date,floor_area_sq_m,water_consumption_lpd,solid_waste_kgpd,
            floor_area_threshold_sq_m,water_threshold_lpd,waste_threshold_kgpd,threshold_basis,
@@ -141,6 +144,7 @@ export async function registerStatutoryRoutes(app: FastifyInstance, pool: Pool |
          returning *`,
         [organizationId, text(body, "assessmentDate"), floorArea ?? null, water ?? null, waste ?? null, status, evidenceId, verificationId, note, auth.identityId],
       );
+      });
       return reply.code(201).send({ source: "postgresql", syntheticData: false, assessment: result.rows[0], statutoryBoundary: "INTERNAL_APPLICABILITY_PREPARATION_ONLY", externalRegistrationRequired: status === "APPLICABLE" });
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "BWG assessment could not be persisted", code: "STATUTORY_WRITE_UNAVAILABLE", syntheticData: false }); }
   });
