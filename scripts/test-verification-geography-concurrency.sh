@@ -83,12 +83,27 @@ COMMIT;
 \echo "evidence_id=:'evidence_id'"
 SQL
 
-psql "$DATABASE_URL" --set=ON_ERROR_STOP=1 --file="$setup_sql" >"$workdir/setup.out"
+psql "$DATABASE_URL" --set=ON_ERROR_STOP=1 --file="$setup_sql" >"$workdir/setup.out" 2>&1
 
-org_id="$(sed -n 's/^org_id=//p' "$workdir/setup.out" | tail -1)"
-geo_id="$(sed -n 's/^geo_id=//p' "$workdir/setup.out" | tail -1)"
-verifier_id="$(sed -n 's/^verifier_id=//p' "$workdir/setup.out" | tail -1)"
-evidence_id="$(sed -n 's/^evidence_id=//p' "$workdir/setup.out" | tail -1)"
+# Resolve committed fixture IDs with deterministic unique fixture names rather
+# than parsing psql \gset/\echo output. This makes the concurrency harness
+# independent of psql output formatting.
+org_id="$(psql "$DATABASE_URL" --set=ON_ERROR_STOP=1 --tuples-only --no-align -c \
+  "SELECT id FROM public.organizations WHERE name='CI-LOCK-REHEARSAL-ORG' ORDER BY created_at DESC LIMIT 1")"
+geo_id="$(psql "$DATABASE_URL" --set=ON_ERROR_STOP=1 --tuples-only --no-align -c \
+  "SELECT id FROM public.geography WHERE name='CI-LOCK-REHEARSAL-GEO' ORDER BY created_at DESC LIMIT 1")"
+verifier_id="$(psql "$DATABASE_URL" --set=ON_ERROR_STOP=1 --tuples-only --no-align -c \
+  "SELECT id FROM public.identities WHERE external_subject='ci-lock-rehearsal-verifier' ORDER BY created_at DESC LIMIT 1")"
+evidence_id="$(psql "$DATABASE_URL" --set=ON_ERROR_STOP=1 --tuples-only --no-align -c \
+  "SELECT e.id FROM public.evidence e JOIN public.activities a ON a.id=e.activity_id \
+   WHERE e.evidence_type='CI_LOCK_REHEARSAL_EVIDENCE' \
+     AND a.activity_type='CI_LOCK_REHEARSAL_ACTIVITY' \
+   ORDER BY e.captured_at DESC LIMIT 1")"
+
+org_id="${org_id//[[:space:]]/}"
+geo_id="${geo_id//[[:space:]]/}"
+verifier_id="${verifier_id//[[:space:]]/}"
+evidence_id="${evidence_id//[[:space:]]/}"
 
 test -n "$org_id"
 test -n "$geo_id"
