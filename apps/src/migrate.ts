@@ -55,7 +55,7 @@ try {
   const candidates = [path.resolve(here, "../../migrations"), path.resolve(here, "../../../migrations")];
   const migrationDir = candidates.find((candidate) => existsSync(candidate));
   if (!migrationDir) throw new Error(`Migration directory not found. Checked: ${candidates.join(", ")}`);
-  const files = (await readdir(migrationDir)).filter((name) => /^\\d+_.+\\.sql$/.test(name)).sort();
+  const files = (await readdir(migrationDir)).filter((name) => /^\d+_.+\.sql$/.test(name)).sort();
 
   // Fail closed when the ledger references an archived source that is absent from
   // the active migration tree. Historical lineage must be reconciled before apply.
