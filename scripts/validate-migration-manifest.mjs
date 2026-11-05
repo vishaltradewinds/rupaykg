@@ -16,8 +16,14 @@ if (!migrationDir) throw new Error(`Migration directory not found. Checked: ${ca
 
 const files = (await readdir(migrationDir)).filter((name) => /^\d+_.+\.sql$/.test(name)).sort();
 const expected = new Map();
+const expectedVersions = new Set();
 for (const entry of manifest.migrations) {
   if (!entry || typeof entry.filename !== "string" || typeof entry.sha256 !== "string") throw new Error("Invalid migration manifest entry");
+  if (!/^\\d+_.+\\.sql$/.test(entry.filename)) throw new Error(`Invalid migration filename: ${entry.filename}`);
+  if (!/^[a-f0-9]{64}$/i.test(entry.sha256)) throw new Error(`Invalid migration SHA-256: ${entry.filename}`);
+  const version = entry.filename.split("_", 1)[0];
+  if (expectedVersions.has(version)) throw new Error(`Duplicate manifest migration version: ${version}`);
+  expectedVersions.add(version);
   if (expected.has(entry.filename)) throw new Error(`Duplicate manifest filename: ${entry.filename}`);
   expected.set(entry.filename, entry.sha256.toLowerCase());
 }
