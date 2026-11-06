@@ -91,6 +91,8 @@ jobs:
         env:
           RUPAYKG_RUN_DB_INTEGRATION_TESTS: "1"
         run: npm test
+      - name: Execute tenant isolation RLS acceptance harness
+        run: npm run test:tenant-isolation
       - name: Build production container
         run: docker build --pull --tag rupaykg:ci .
       - name: Rehearse bounded disposable backup and restore
