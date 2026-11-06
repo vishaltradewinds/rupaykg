@@ -55,3 +55,19 @@ A workstream is not marked complete because code exists. It requires its defined
 - This closes a type-level escape hatch; it does not by itself prove complete route/worker coverage or production RLS.
 
 The latest code changes remain unvalidated by an exact-head CI run. Therefore Workstream C is **implementation advanced / CI gate pending**, not complete.
+
+
+## Migration 096 lineage recovery — 2026-11-06
+
+**Workstream D advanced from UNRESOLVED to SOURCE RECOVERED / RECONCILIATION PENDING.**
+
+Evidence recovered from repository history:
+
+- Production evidence recorded in issue #214 states the authoritative Neon ledger contains `096_verification_authorization_provenance.sql`, while the current migration directory does not.
+- Exact historical source is recoverable at commit `ca8f4100782e13f8d72106187fafc8e1e446214f`.
+- The corresponding blob is `258b1f4534efbf915688f78aa84d4ec24a47cbc0`.
+- Commit `54a7fe1ceb41b37a68720a71c10a1dd03af30dea` explicitly removed that exact file with message: `Remove accidentally placed unreviewed verification migration from main`.
+- The recovered migration adds four authorization snapshot columns to `verifications` and replaces `prevent_invalid_verification()` with a same-organization, verified-membership, explicit-permission check for APPROVED decisions, including a decision-time authorization snapshot.
+- No production source restoration, ledger rewrite, replay, DDL, DML, role/grant change, or deployment was performed.
+
+**Important:** source recovery does **not** equal release reconciliation. The next gate is to compare the recovered SQL against the production schema/function/trigger definitions and application/deployment chronology, then determine the approved forward-only migration strategy. Do not restore or replay 096 blindly.
