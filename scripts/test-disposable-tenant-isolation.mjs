@@ -74,8 +74,13 @@ try {
 
   await runtime.query("BEGIN");
   await runtime.query("select set_config('app.rupaykg.organization_id', $1, true)", [orgA]);
-  const deniedUpdate = await runtime.query(`UPDATE ${table} SET organization_id=$1 WHERE id=$2 RETURNING id`, [orgB, rowA]);
-  if (deniedUpdate.rows.length !== 0) throw new Error("FAIL: organization A moved a row into organization B");
+  let updateDenied = false;
+  try {
+    await runtime.query(`UPDATE ${table} SET organization_id=$1 WHERE id=$2 RETURNING id`, [orgB, rowA]);
+  } catch {
+    updateDenied = true;
+  }
+  if (!updateDenied) throw new Error("FAIL: organization A moved a row into organization B");
   await runtime.query("ROLLBACK");
 
   await runtime.query("BEGIN");
