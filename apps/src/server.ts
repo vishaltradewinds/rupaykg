@@ -5,7 +5,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { Pool, type PoolClient, type PoolConfig } from "pg";
 import { authenticate, bearerChallenge, canActForOrganization, hasOrganizationPermission, type AuthContext } from "./auth.js";
-import { withDatabaseTenantContext } from "./db-context.js";
+import { withDatabaseBootstrapContext, withDatabaseTenantContext } from "./db-context.js";
 import { registerOnboardingHierarchyRoutes } from "./onboarding-hierarchy-routes.js";
 import { registerValueRoutes } from "./value-routes.js";
 import { registerRegistryRoutes } from "./registry-routes.js";
@@ -28,11 +28,13 @@ const poolConfig: PoolConfig = { connectionString: databaseUrl, max: 10 };
 if (process.env.DATABASE_SSL === "require") poolConfig.ssl = { rejectUnauthorized: true, ca: process.env.DATABASE_CA_CERT };
 else if (process.env.DATABASE_SSL !== "false") poolConfig.ssl = { rejectUnauthorized: false };
 const pool = databaseUrl ? new Pool(poolConfig) : null;
-async function query<T extends Record<string, unknown>>(text: string, values: unknown[] = []): Promise<T[]> { if (!pool) throw new Error("DATABASE_URL is not configured"); return (await pool.query<T>(text, values)).rows; }
+async function query<T extends Record<string, unknown>>(text: string, values: unknown[] = []): Promise<T[]> {
+  if (!pool) throw new Error("DATABASE_URL is not configured");
+  return withDatabaseBootstrapContext(pool, async client => (await client.query<T>(text, values)).rows);
+}
 function bodyOf(request: { body: unknown }): Record<string, unknown> { return (request.body && typeof request.body === "object" ? request.body : {}) as Record<string, unknown>; }
 function requiredString(body: Record<string, unknown>, key: string): string | null { return typeof body[key] === "string" && body[key].trim() ? body[key].trim() : null; }
 function requiredPositiveNumber(body: Record<string, unknown>, key: string): number | null { const value = Number(body[key]); return Number.isFinite(value) && value > 0 ? value : null; }
-async function withClient<T>(fn: (client: PoolClient) => Promise<T>): Promise<T> { if (!pool) throw new Error("DATABASE_URL is not configured"); const client = await pool.connect(); try { return await fn(client); } finally { client.release(); } }
 async function requireAuth(request: Parameters<typeof authenticate>[0], reply: { code: (status: number) => { send: (body: unknown) => unknown } }): Promise<AuthContext | null> { try { const auth = await authenticate(request, pool); if (!auth) { reply.code(401).send(bearerChallenge()); return null; } return auth; } catch (error) { request.log.error(error); reply.code(503).send({ error: "Authentication service unavailable", code: "AUTH_UNAVAILABLE" }); return null; } }
 function requireOrganization(auth: AuthContext, organizationId: string, reply: { code: (status: number) => { send: (body: unknown) => unknown } }): boolean { if (!canActForOrganization(auth, organizationId)) { reply.code(403).send({ error: "No verified membership for organization", code: "ORG_FORBIDDEN" }); return false; } return true; }
 async function canReadGeography(client: PoolClient, auth: AuthContext, geographyId: string): Promise<boolean> { if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(geographyId)) return false; const result = await client.query<{ ok: boolean }>(`select exists(select 1 from organization_memberships om where om.identity_id=$1 and om.status='VERIFIED' and organization_has_geography_scope(om.organization_id,$2)) as ok`, [auth.identityId, geographyId]); return result.rows[0]?.ok === true; }
