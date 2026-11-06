@@ -61,9 +61,9 @@ begin
       and i.status = 'VERIFIED'
       and i.suspended_at is null
       and (
-        r.permissions @> '[\"VERIFY_EVIDENCE\"]'::jsonb
-        or r.permissions @> '[\"verification:approve\"]'::jsonb
-        or r.permissions @> '[\"verification.approve\"]'::jsonb
+        r.permissions @> '["VERIFY_EVIDENCE"]'::jsonb
+        or r.permissions @> '["verification:approve"]'::jsonb
+        or r.permissions @> '["verification.approve"]'::jsonb
       )
     order by m.created_at desc
     limit 1;
