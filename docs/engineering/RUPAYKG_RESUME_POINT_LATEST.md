@@ -275,3 +275,17 @@ Evidence-backed failure:
 - Bootstrap context semantics remain organization-neutral, identity-neutral, service_mode=false, bilateral_scope=false.
 
 Current status: corrective commit implemented; awaiting fresh CI validation. Production remains READ-ONLY / HOLD.
+
+
+## 2026-11-06 CI #5712 correction checkpoint
+
+CI #5712 / run 42155494022 completed with migration validation, protected migrator validation, migration execution, typecheck, build and browser smoke passing; disposable acceptance failed.
+
+Exact evidence:
+- platform-admin tests 35–46 returned 503 instead of expected authorization/business responses because the fake pool response matcher classified the authorization query as an organization-membership query before checking the super_admin role predicate.
+- tenant bootstrap test 60 expected empty-string unset settings, but PostgreSQL current_setting(..., true) returned NULL for unset organization/identity context.
+- Corrective changes:
+  - platform-admin fake query matcher reordered to recognize the super_admin authorization query before generic membership SQL.
+  - bootstrap integration assertions changed to PostgreSQL-correct NULL semantics and test wording corrected to non-service-scoped.
+- Production remains READ-ONLY / HOLD.
+- Awaiting fresh CI validation.
