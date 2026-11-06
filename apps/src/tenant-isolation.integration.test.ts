@@ -233,12 +233,6 @@ before(async () => {
     values (1, 'evidence-a'), (2, 'evidence-b');
     insert into ${qid(schema)}.verifications(evidence_id, decision, payload)
     values (1, 'APPROVED', 'verification-a'), (2, 'APPROVED', 'verification-b');
-    insert into "rupaykg_tenant_isolation".activities(organization_id, actor_identity_id, payload)
-    values ('org-a', 'identity-a', 'activity-a'), ('org-b', 'identity-b', 'activity-b');
-    insert into "rupaykg_tenant_isolation".evidence(activity_id, payload)
-    values (1, 'evidence-a'), (2, 'evidence-b');
-    insert into "rupaykg_tenant_isolation".verifications(evidence_id, decision, payload)
-    values (1, 'APPROVED', 'verification-a'), (2, 'APPROVED', 'verification-b');
   `);
 });
 
