@@ -11,6 +11,9 @@ const roleId = "323e4567-e89b-42d3-a456-426614174000";
 function fakePool(isSuperAdmin: boolean): Pool {
   const query = async (sql: string) => {
     if (/^(begin|commit|rollback)$/i.test(sql.trim())) return { rows: [], rowCount: 0 };
+    if (sql.includes("set_config('app.rupaykg.bilateral_scope'") || sql.includes("set_config('app.rupaykg.service_mode'") || sql.includes("set_config('app.rupaykg.organization_id'") || sql.includes("set_config('app.rupaykg.identity_id'")) {
+      return { rows: [{ set_config: "false" }], rowCount: 1 };
+    }
     if (sql.includes("r.name = 'super_admin'")) return { rows: [{ ok: isSuperAdmin }] };
     if (sql.includes("from identity_sessions")) return { rows: [{ identity_id: identityId }] };
     if (sql.includes("from organization_memberships") && sql.includes("where identity_id")) {
