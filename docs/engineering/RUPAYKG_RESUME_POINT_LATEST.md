@@ -243,3 +243,21 @@ Continue from the same branch and prioritize remaining high-risk organization-sc
 - Tenant isolation is **NOT COMPLETE** merely because these route batches passed CI. Remaining repository-wide protected data-access paths must still be reconciled before a complete RLS migration can be designed.
 - Next action: continue systematic repository-wide protected-access inventory/migration, prioritizing remaining organization-scoped operational, registry, sync, onboarding, evidence-vault, BWG, intelligence, and platform-admin paths; preserve transaction-scoped context and validate each coherent batch through the full CI gate before any RLS proposal.
 \n
+
+## 2026-11-06 Tenant-Isolation Route Expansion — VERIFIED CI
+
+- Onboarding hierarchy correction commit: `c3a6edc56eff0951d33f9855b974ba531fcb8886`.
+- CI #5697 / workflow run `42093472038`: **SUCCESS**.
+- All validation steps 1–17 completed successfully.
+- Field-sync migration commit `c4378a75aa87691f19a567785bee5e9a39d77b3b` is **VERIFIED COMPLETE at engineering/CI level** via CI #5694 / workflow run `42092552103`.
+- Onboarding, registry, intelligence, sync, evidence-vault, and BWG modules inspected on the current branch contain no direct shared-pool query/connect patterns in the inspected source and use transaction-scoped tenant context where migrated.
+- This remains bounded engineering validation only; tenant isolation, production RLS, production readiness, field acceptance, regulatory approval, certification, and TRL 9 remain unverified/not achieved.
+- Production remains **READ-ONLY / HOLD**. No production DDL/DML, RLS enablement, deployment, merge, role/grant mutation, certification, or TRL 9 declaration was performed.
+
+### Immediate next release-blocker work
+
+1. Complete semantic repository-wide protected-access review; do not rely only on regex absence of shared-pool patterns.
+2. Reconcile production migration ledger version `096_verification_authorization_provenance.sql` against authoritative active source/history; unresolved until exact lineage is proven.
+3. Convert the proposed tenant policy matrix into reviewed SQL policy semantics for the complete 67-table production inventory.
+4. Rehearse the complete RLS migration on disposable PostgreSQL, including service/migrator exceptions and bilateral semantics.
+5. Obtain the independent release gate before any production proposal.
