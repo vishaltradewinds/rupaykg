@@ -95,14 +95,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          source_expected="$(grep -F 'assert.equal(response.json().revokedSessions, ' apps/src/platform-admin-routes.test.ts | tail -1 | sed 's/^[[:space:]]*//')"
-          test -n "$source_expected"
-          echo "Source assertion: $source_expected"
+          source_contract="$(grep -F 'assert.ok(revokedSessions > 0' apps/src/platform-admin-routes.test.ts | tail -1 | sed 's/^[[:space:]]*//')"
+          test -n "$source_contract"
+          echo "Source revocation contract: $source_contract"
           npm run build -w @rupaykg/api
-          generated_expected="$(grep -F 'assert.equal(response.json().revokedSessions, ' apps/dist/src/platform-admin-routes.test.js | tail -1 | sed 's/^[[:space:]]*//')"
-          test -n "$generated_expected"
-          echo "Generated assertion: $generated_expected"
-          test "$source_expected" = "$generated_expected"
+          generated_contract="$(grep -F 'assert.ok(revokedSessions > 0' apps/dist/src/platform-admin-routes.test.js | tail -1 | sed 's/^[[:space:]]*//')"
+          test -n "$generated_contract"
+          echo "Generated revocation contract: $generated_contract"
+          test "$source_contract" = "$generated_contract"
       - name: Run tests including disposable PostgreSQL acceptance
         env:
           RUPAYKG_RUN_DB_INTEGRATION_TESTS: "1"
