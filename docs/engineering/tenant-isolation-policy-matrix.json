@@ -1,0 +1,96 @@
+{
+  "status": "PROPOSED_POLICY_MATRIX__NOT_YET_IMPLEMENTED",
+  "basis": "Direct information_schema inspection of Neon branch br-restless-base-b44cip2h on 2026-11-05",
+  "denyByDefault": true,
+  "contextRequired": {
+    "identity_id": "Authenticated identity UUID, transaction-scoped",
+    "organization_id": "Explicit active organization UUID, transaction-scoped",
+    "bilateral_scope": "Explicitly authorized organization set for bilateral workflows, transaction-scoped",
+    "service_mode": "Explicit non-request service/migrator context; never inferred from client headers"
+  },
+  "singleOrganizationTables": [
+    "activities",
+    "audit_events",
+    "bwg_profiles",
+    "bwg_reporting_periods",
+    "carbon_projects",
+    "cpcb_swm_stakeholder_workspaces",
+    "cpcb_swm_status_history",
+    "environmental_attribute_claims",
+    "epr_returns",
+    "esg_reporting_periods",
+    "evidence_artifact_series",
+    "field_devices",
+    "obligations",
+    "organization_bwg_assessments",
+    "organization_epr_applicability",
+    "organization_geography_scopes",
+    "organization_memberships",
+    "organization_statutory_profiles",
+    "organization_verification_evidence",
+    "platform_access_change_requests",
+    "resource_flows",
+    "roles",
+    "stakeholder_applications"
+  ],
+  "bilateralTables": {
+    "bwg_waste_reports": {
+      "columns": [
+        "processor_organization_id"
+      ],
+      "relationship": "processor organization; inspect all other party/ownership columns before policy implementation"
+    },
+    "chain_of_custody_links": {
+      "columns": [
+        "actor_organization_id"
+      ],
+      "relationship": "actor organization; access must follow chain-of-custody semantics"
+    },
+    "credentials": {
+      "columns": [
+        "issuer_organization_id"
+      ],
+      "relationship": "issuer organization; credential subject/holder semantics require separate policy review"
+    },
+    "epr_credit_transfers": {
+      "columns": [
+        "from_organization_id",
+        "to_organization_id"
+      ],
+      "relationship": "bilateral transfer; authorized sender/receiver visibility must be defined"
+    },
+    "epr_credits": {
+      "columns": [
+        "issuer_organization_id",
+        "recycler_organization_id"
+      ],
+      "relationship": "issuer/recycler bilateral relationship"
+    },
+    "epr_obligations": {
+      "columns": [
+        "obligated_organization_id"
+      ],
+      "relationship": "obligated organization"
+    }
+  },
+  "rootOrCrossTenantTablesRequiringSeparateReview": [
+    "organizations",
+    "identities",
+    "identity_sessions",
+    "roles",
+    "organization_memberships"
+  ],
+  "requiredPolicyTests": [
+    "organization A cannot SELECT organization B rows",
+    "organization A cannot INSERT a row claiming organization B",
+    "organization A cannot UPDATE a row into organization B",
+    "organization A cannot DELETE organization B rows",
+    "multi-organization identity is restricted to selected active organization unless bilateral workflow explicitly permits both sides",
+    "revoked membership immediately loses database visibility",
+    "suspended identity loses database visibility",
+    "pooled connections cannot retain previous request's organization context",
+    "service/migrator context is explicit and cannot be supplied by ordinary API request headers",
+    "bilateral transfer/credential semantics do not accidentally broaden access"
+  ],
+  "releaseRule": "No production RLS enablement until this matrix is converted into reviewed SQL policies and all disposable PostgreSQL isolation tests pass."
+}
