@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { withDatabaseTenantContext } from "./db-context.js";
+import { withDatabaseBootstrapContext, withDatabaseTenantContext } from "./db-context.js";
 
 function fakePool() {
   const calls: Array<{ text: string; values?: unknown[] }> = [];
@@ -78,5 +78,22 @@ test("rolls back and releases the pooled client when protected work fails", asyn
   );
 
   assert.equal(state.calls.at(-1)?.text, "ROLLBACK");
+  assert.equal(state.released, true);
+});
+
+test("bootstrap context binds service mode without organization or bilateral scope", async () => {
+  const state = fakePool();
+  const result = await withDatabaseBootstrapContext(state.pool, async (client) => {
+    await client.query("select current_setting('app.rupaykg.organization_id', true)");
+    return "bootstrap-ok";
+  });
+  assert.equal(result, "bootstrap-ok");
+  assert.deepEqual(state.calls, [
+    { text: "BEGIN" },
+    { text: "select set_config('app.rupaykg.bilateral_scope', 'false', true)" },
+    { text: "select set_config('app.rupaykg.service_mode', 'true', true)" },
+    { text: "select current_setting('app.rupaykg.organization_id', true)" },
+    { text: "COMMIT" },
+  ]);
   assert.equal(state.released, true);
 });
