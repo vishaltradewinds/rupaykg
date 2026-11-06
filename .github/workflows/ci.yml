@@ -90,7 +90,19 @@ jobs:
           test -s /tmp/rupaykg-web-smoke.png
           echo "Chrome DOM exit: $dom_status; screenshot exit: $shot_status"
       - name: Clean API test build output
-        run: rm -rf apps/dist
+        run: rm -rf apps/dist apps/tsconfig.tsbuildinfo tsconfig.tsbuildinfo
+      - name: Verify API test source and generated artifact alignment
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_expected="$(grep -F 'assert.equal(response.json().revokedSessions, ' apps/src/platform-admin-routes.test.ts | tail -1)"
+          test -n "$source_expected"
+          echo "Source assertion: $source_expected"
+          npm run build -w @rupaykg/api
+          generated_expected="$(grep -F 'assert.equal(response.json().revokedSessions, ' apps/dist/src/platform-admin-routes.test.js | tail -1)"
+          test -n "$generated_expected"
+          echo "Generated assertion: $generated_expected"
+          test "$source_expected" = "$generated_expected"
       - name: Run tests including disposable PostgreSQL acceptance
         env:
           RUPAYKG_RUN_DB_INTEGRATION_TESTS: "1"
