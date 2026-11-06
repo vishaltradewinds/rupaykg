@@ -53,6 +53,9 @@ VALUES
 ('00000000-0000-0000-0000-00000000c101','00000000-0000-0000-0000-00000000c001','POOL_A'),
 ('00000000-0000-0000-0000-00000000c102','00000000-0000-0000-0000-00000000c002','POOL_B');
 
+-- Execute authorization assertions as a non-bypass runtime identity.
+SET ROLE rupaykg_ci_pool_worker;
+
 BEGIN;
 SET LOCAL app.organization_id='00000000-0000-0000-0000-00000000c001';
 DO $a$
@@ -100,7 +103,8 @@ $c$;
 COMMIT;
 
 -- Worker/system actor: no tenant context means no tenant rows.
-SET ROLE rupaykg_ci_pool_worker;
+BEGIN;
+RESET app.organization_id;
 DO $worker$
 BEGIN
   IF NOT EXISTS (
@@ -121,6 +125,7 @@ BEGIN
   END IF;
 END
 $worker$;
+COMMIT;
 RESET ROLE;
 
 -- Cleanup disposable rehearsal.
