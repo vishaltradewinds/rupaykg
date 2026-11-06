@@ -32,7 +32,9 @@ try {
   runtime = new Client({ connectionString: url, user: runtimeRole, password: runtimePassword });
   await runtime.connect();
 
-  const role = await runtime.query(`SELECT current_user, rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user`);
+  const identity = await runtime.query("SELECT current_user AS current_user");
+  if (identity.rows[0]?.current_user !== runtimeRole) throw new Error("FAIL: disposable acceptance did not connect as the dedicated runtime role");
+  const role = await admin.query("SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = $1", [runtimeRole]);
   if (!role.rows[0] || role.rows[0].rolsuper || role.rows[0].rolbypassrls) throw new Error("FAIL: disposable acceptance requires a non-superuser, non-BYPASSRLS runtime role");
 
   const orgA = randomUUID();
