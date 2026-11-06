@@ -147,14 +147,13 @@ test("dual-control access requests cannot be approved by their requester", async
   const pool = {
     query: async (sql: string) => {
       if (sql.includes("from identity_sessions")) return { rows: [{ identity_id: identityId }] };
-      if (sql.includes("from organization_memberships") && sql.includes("where identity_id")) return { rows: [{ organization_id: organizationId, role_id: roleId, status: "VERIFIED" }] };
       if (sql.includes("r.name = 'super_admin'")) return { rows: [{ ok: true }] };
+      if (sql.includes("from organization_memberships") && sql.includes("where identity_id")) return { rows: [{ organization_id: organizationId, role_id: roleId, status: "VERIFIED" }] };
       throw new Error("Unexpected pool SQL in dual-control self-approval test: " + sql);
     },
     connect: async () => ({
       query: async (sql: string) => {
         if (/^(begin|commit|rollback)$/i.test(sql.trim())) return { rows: [], rowCount: 0 };
-        if (sql.includes("set_config('app.rupaykg.bilateral_scope'") || sql.includes("set_config('app.rupaykg.service_mode'") || sql.includes("set_config('app.rupaykg.organization_id'") || sql.includes("set_config('app.rupaykg.identity_id'")) return { rows: [{ set_config: "" }], rowCount: 1 };
         if (sql.includes("set_config('app.rupaykg.bilateral_scope'") || sql.includes("set_config('app.rupaykg.service_mode'") || sql.includes("set_config('app.rupaykg.organization_id'") || sql.includes("set_config('app.rupaykg.identity_id'")) return { rows: [{ set_config: "" }], rowCount: 1 };
         if (sql.includes("from platform_access_change_requests where id=$1 for update")) return { rows: [{
           id: "423e4567-e89b-42d3-a456-426614174000",
@@ -189,14 +188,13 @@ test("dual-control access targets cannot approve their own reserved-role grant",
   const pool = {
     query: async (sql: string) => {
       if (sql.includes("from identity_sessions")) return { rows: [{ identity_id: identityId }] };
-      if (sql.includes("from organization_memberships") && sql.includes("where identity_id")) return { rows: [{ organization_id: organizationId, role_id: roleId, status: "VERIFIED" }] };
       if (sql.includes("r.name = 'super_admin'")) return { rows: [{ ok: true }] };
+      if (sql.includes("from organization_memberships") && sql.includes("where identity_id")) return { rows: [{ organization_id: organizationId, role_id: roleId, status: "VERIFIED" }] };
       throw new Error("Unexpected pool SQL in dual-control self-approval test: " + sql);
     },
     connect: async () => ({
       query: async (sql: string) => {
         if (/^(begin|commit|rollback)$/i.test(sql.trim())) return { rows: [], rowCount: 0 };
-        if (sql.includes("set_config('app.rupaykg.bilateral_scope'") || sql.includes("set_config('app.rupaykg.service_mode'") || sql.includes("set_config('app.rupaykg.organization_id'") || sql.includes("set_config('app.rupaykg.identity_id'")) return { rows: [{ set_config: "" }], rowCount: 1 };
         if (sql.includes("set_config('app.rupaykg.bilateral_scope'") || sql.includes("set_config('app.rupaykg.service_mode'") || sql.includes("set_config('app.rupaykg.organization_id'") || sql.includes("set_config('app.rupaykg.identity_id'")) return { rows: [{ set_config: "" }], rowCount: 1 };
         if (sql.includes("from platform_access_change_requests where id=$1 for update")) return { rows: [{
           id: "423e4567-e89b-42d3-a456-426614174000",
@@ -231,16 +229,15 @@ test("the last active Super Admin membership cannot be revoked", async () => {
   const pool = {
     query: async (sql: string) => {
       if (sql.includes("from identity_sessions")) return { rows: [{ identity_id: identityId }] };
+      if (sql.includes("r.name = 'super_admin'")) return { rows: [{ ok: true }] };
       if (sql.includes("from organization_memberships") && sql.includes("where identity_id")) {
         return { rows: [{ organization_id: organizationId, role_id: roleId, status: "VERIFIED" }] };
       }
-      if (sql.includes("r.name = 'super_admin'")) return { rows: [{ ok: true }] };
       throw new Error(`Unexpected pool SQL in last-admin test: ${sql}`);
     },
     connect: async () => ({
       query: async (sql: string) => {
         if (/^(begin|commit|rollback)$/i.test(sql.trim())) return { rows: [], rowCount: 0 };
-        if (sql.includes("set_config('app.rupaykg.bilateral_scope'") || sql.includes("set_config('app.rupaykg.service_mode'") || sql.includes("set_config('app.rupaykg.organization_id'") || sql.includes("set_config('app.rupaykg.identity_id'")) return { rows: [{ set_config: "" }], rowCount: 1 };
         if (sql.includes("set_config('app.rupaykg.bilateral_scope'") || sql.includes("set_config('app.rupaykg.service_mode'") || sql.includes("set_config('app.rupaykg.organization_id'") || sql.includes("set_config('app.rupaykg.identity_id'")) return { rows: [{ set_config: "" }], rowCount: 1 };
         if (sql.includes("where om.id=$1 for update")) return { rows: [{
           id: "423e4567-e89b-42d3-a456-426614174000",
@@ -279,17 +276,16 @@ test("identity suspension revokes active sessions and records an audit event tra
   const pool = {
     query: async (sql: string) => {
       if (sql.includes("from identity_sessions")) return { rows: [{ identity_id: identityId }] };
+      if (sql.includes("r.name = 'super_admin'")) return { rows: [{ ok: true }] };
       if (sql.includes("from organization_memberships") && sql.includes("where identity_id")) {
         return { rows: [{ organization_id: organizationId, role_id: roleId, status: "VERIFIED" }] };
       }
-      if (sql.includes("r.name = 'super_admin'")) return { rows: [{ ok: true }] };
       throw new Error(`Unexpected pool SQL in identity-suspension test: ${sql}`);
     },
     connect: async () => ({
       query: async (sql: string) => {
         statements.push(sql);
         if (/^(begin|commit|rollback)$/i.test(sql.trim())) return { rows: [], rowCount: 0 };
-        if (sql.includes("set_config('app.rupaykg.bilateral_scope'") || sql.includes("set_config('app.rupaykg.service_mode'") || sql.includes("set_config('app.rupaykg.organization_id'") || sql.includes("set_config('app.rupaykg.identity_id'")) return { rows: [{ set_config: "" }], rowCount: 1 };
         if (sql.includes("set_config('app.rupaykg.bilateral_scope'") || sql.includes("set_config('app.rupaykg.service_mode'") || sql.includes("set_config('app.rupaykg.organization_id'") || sql.includes("set_config('app.rupaykg.identity_id'")) return { rows: [{ set_config: "" }], rowCount: 1 };
         if (sql.includes("select id,status,suspended_at from identities")) return { rows: [{
           id: "523e4567-e89b-42d3-a456-426614174000", status: "VERIFIED", suspended_at: null,
@@ -331,14 +327,13 @@ test("platform_admin membership cannot be restored through the generic membershi
   const pool = {
     query: async (sql: string) => {
       if (sql.includes("from identity_sessions")) return { rows: [{ identity_id: identityId }] };
-      if (sql.includes("from organization_memberships") && sql.includes("where identity_id")) return { rows: [{ organization_id: organizationId, role_id: roleId, status: "VERIFIED" }] };
       if (sql.includes("r.name = 'super_admin'")) return { rows: [{ ok: true }] };
+      if (sql.includes("from organization_memberships") && sql.includes("where identity_id")) return { rows: [{ organization_id: organizationId, role_id: roleId, status: "VERIFIED" }] };
       throw new Error("Unexpected pool SQL in reserved-role restore test: " + sql);
     },
     connect: async () => ({
       query: async (sql: string) => {
         if (/^(begin|commit|rollback)$/i.test(sql.trim())) return { rows: [], rowCount: 0 };
-        if (sql.includes("set_config('app.rupaykg.bilateral_scope'") || sql.includes("set_config('app.rupaykg.service_mode'") || sql.includes("set_config('app.rupaykg.organization_id'") || sql.includes("set_config('app.rupaykg.identity_id'")) return { rows: [{ set_config: "" }], rowCount: 1 };
         if (sql.includes("set_config('app.rupaykg.bilateral_scope'") || sql.includes("set_config('app.rupaykg.service_mode'") || sql.includes("set_config('app.rupaykg.organization_id'") || sql.includes("set_config('app.rupaykg.identity_id'")) return { rows: [{ set_config: "" }], rowCount: 1 };
         if (sql.includes("where om.id=$1 for update")) return { rows: [{
           id: "423e4567-e89b-42d3-a456-426614174000",
@@ -375,17 +370,16 @@ test("platform-reserved administrators cannot be suspended through the generic i
   const pool = {
     query: async (sql: string) => {
       if (sql.includes("from identity_sessions")) return { rows: [{ identity_id: identityId }] };
+      if (sql.includes("r.name = 'super_admin'")) return { rows: [{ ok: true }] };
       if (sql.includes("from organization_memberships") && sql.includes("where identity_id")) {
         return { rows: [{ organization_id: organizationId, role_id: roleId, status: "VERIFIED" }] };
       }
-      if (sql.includes("r.name = 'super_admin'")) return { rows: [{ ok: true }] };
       throw new Error(`Unexpected pool SQL in reserved-admin test: ${sql}`);
     },
     connect: async () => ({
       query: async (sql: string) => {
         statements.push(sql);
         if (/^(begin|commit|rollback)$/i.test(sql.trim())) return { rows: [], rowCount: 0 };
-        if (sql.includes("set_config('app.rupaykg.bilateral_scope'") || sql.includes("set_config('app.rupaykg.service_mode'") || sql.includes("set_config('app.rupaykg.organization_id'") || sql.includes("set_config('app.rupaykg.identity_id'")) return { rows: [{ set_config: "" }], rowCount: 1 };
         if (sql.includes("set_config('app.rupaykg.bilateral_scope'") || sql.includes("set_config('app.rupaykg.service_mode'") || sql.includes("set_config('app.rupaykg.organization_id'") || sql.includes("set_config('app.rupaykg.identity_id'")) return { rows: [{ set_config: "" }], rowCount: 1 };
         if (sql.includes("select id,status,suspended_at from identities")) return { rows: [{
           id: "523e4567-e89b-42d3-a456-426614174000", status: "VERIFIED", suspended_at: null,
