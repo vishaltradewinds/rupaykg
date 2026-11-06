@@ -81,3 +81,18 @@ These helpers were narrowed to `PoolClient` on the same runtime-hardening branch
 A branch-head static scan now finds no remaining `Pool | PoolClient` helper signatures in the inspected API route set and no request-path `pool.query`, `pool.connect`, or pool-based organization-permission bypass in the protected patterns.
 
 This is still a code-level semantic gate. It does not establish production RLS, production least-privilege roles, migration-096 reconciliation, or TRL 9.
+
+
+## 2026-11-06 migration 096 source recovery
+
+The previously unresolved migration-096 source has now been recovered exactly from Git history.
+
+- File: `migrations/096_verification_authorization_provenance.sql`
+- Recovery commit: `ca8f4100782e13f8d72106187fafc8e1e446214f`
+- Git blob: `258b1f4534efbf915688f78aa84d4ec24a47cbc0`
+- Removal commit: `54a7fe1ceb41b37a68720a71c10a1dd03af30dea`
+- Removal message: `Remove accidentally placed unreviewed verification migration from main`
+
+The recovered SQL is now evidence-backed rather than inferred. It adds the four authorization snapshot columns and replaces `prevent_invalid_verification()` with same-organization verified-membership and explicit-permission enforcement for APPROVED verification, while capturing membership/role/permissions/timestamp provenance.
+
+**Release status:** migration-096 lineage is no longer a missing-source blocker, but reconciliation remains OPEN. Production schema/function/trigger definitions, ledger chronology, deployment evidence, and the forward-only remediation strategy still require independent review. No production mutation was performed.
