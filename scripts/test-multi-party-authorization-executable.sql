@@ -69,7 +69,7 @@ LANGUAGE sql STABLE AS $$
         (p_table IN ('bwg_waste_reports','chain_of_custody_links','credentials','epr_credit_allocations','epr_credits','registry_events')
           AND a.organization_id=d.subject_org)
       )
-      AND p_operation IN ('SELECT','INSERT','UPDATE','DELETE')
+      AND p_operation IN ('SELECT','INSERT','UPDATE')
   )
 $$;
 
@@ -103,7 +103,7 @@ BEGIN
     IF pg_temp.shakti_domain_authorized(t,'00000000-0000-0000-0000-0000000000f1','SELECT') THEN
       RAISE EXCEPTION 'Unverified geography unexpectedly authorized for %',t;
     END IF;
-    IF pg_temp.shakti_domain_authorized(t,'00000000-0000-0000-0000-0000000000b1','DELETE') AND t NOT IN ('settlements') THEN
+    IF pg_temp.shakti_domain_authorized(t,'00000000-0000-0000-0000-0000000000b1','DELETE') THEN
       RAISE EXCEPTION 'Foreign organization DELETE unexpectedly authorized for %',t;
     END IF;
   END LOOP;
