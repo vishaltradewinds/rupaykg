@@ -43,43 +43,68 @@ app.get("/health", async (_request, reply) => { let database: "AVAILABLE" | "UNA
 app.get("/api/v1/status", async () => ({ service: "rupaykg-api", version: "0.1.0", sourceOfTruth: "postgresql", syntheticData: false }));
 app.get("/api/v1/overview", async (request, reply) => {
   const auth = await requireAuth(request, reply); if (!auth || !pool) return;
+  const organizationId = auth.activeOrganizationId;
+  if (!organizationId) return reply.code(403).send({ error: "An active organization is required for overview access", code: "ACTIVE_ORGANIZATION_REQUIRED" });
   try {
-    const organizationIds = auth.activeOrganizationId ? [auth.activeOrganizationId] : [...new Set(auth.memberships.map(m => m.organization_id))];
-    if (!organizationIds.length) return { source: "postgresql", syntheticData: false, counts: { activities: null, measurements: null, evidence: null, approvedVerifications: null, openObligations: null, issuedOrActiveCredentials: null, settledTransactions: null } };
-    const permittedIds = async (permissions: string[]) => {
-      const ids: string[] = [];
-      for (const organizationId of organizationIds) if (await hasOrganizationPermission(pool!, auth, organizationId, permissions)) ids.push(organizationId);
-      return ids;
-    };
-    const [operationsIds, mrvIds, complianceIds, registryIds, settlementIds] = await Promise.all([
-      permittedIds(["waste:read"]), permittedIds(["evidence:upload", "evidence:review", "guardian:read"]),
-      permittedIds(["reports:read", "swm:read", "epr:read", "audit:read"]),
-      permittedIds(["registry:read", "credits:read"]),
-      permittedIds(["credits:read", "settlement:authorize", "settlement:settle", "AUTHORIZE_SETTLEMENT", "SETTLE_FUNDS"]),
-    ]);
-    const activityIds = [...new Set([...operationsIds, ...mrvIds])];
-    const countFor = async (sql: string, ids: string[], identityScoped = false): Promise<number | null> => {
-      if (!ids.length) return null;
-      const rows = await query<{ count: string }>(sql, identityScoped ? [ids, auth.identityId] : [ids]);
-      return Number(rows[0]?.count ?? 0);
-    };
-    const [activities, measurements, evidence, verifications, obligations, credentials, settlements] = await Promise.all([
-      countFor("select count(*)::text as count from activities a where a.organization_id = any($1::uuid[]) and a.geography_id is not null and exists (select 1 from organization_memberships om where om.organization_id=a.organization_id and om.identity_id=$2 and om.status='VERIFIED' and organization_has_geography_scope(om.organization_id,a.geography_id))", activityIds, true),
-      countFor("select count(*)::text as count from measurements m join activities a on a.id=m.activity_id where a.organization_id = any($1::uuid[]) and a.geography_id is not null and exists (select 1 from organization_memberships om where om.organization_id=a.organization_id and om.identity_id=$2 and om.status='VERIFIED' and organization_has_geography_scope(om.organization_id,a.geography_id))", mrvIds, true),
-      countFor("select count(*)::text as count from evidence e join activities a on a.id=e.activity_id where a.organization_id = any($1::uuid[]) and a.geography_id is not null and exists (select 1 from organization_memberships om where om.organization_id=a.organization_id and om.identity_id=$2 and om.status='VERIFIED' and organization_has_geography_scope(om.organization_id,a.geography_id))", mrvIds, true),
-      countFor("select count(*)::text as count from verifications v join activities a on a.id=v.activity_id where a.organization_id = any($1::uuid[]) and a.geography_id is not null and exists (select 1 from organization_memberships om where om.organization_id=a.organization_id and om.identity_id=$2 and om.status='VERIFIED' and organization_has_geography_scope(om.organization_id,a.geography_id)) and v.decision = 'APPROVED'", mrvIds, true),
-      countFor("select count(*)::text as count from obligations where organization_id = any($1::uuid[]) and status = 'OPEN'", complianceIds),
-      countFor("select count(*)::text as count from credentials where issuer_organization_id = any($1::uuid[]) and status in ('ISSUED','ACTIVE','TRANSFERRED','RETIRED')", registryIds),
-      countFor("select count(*)::text as count from settlements where (payer_id = any($1::uuid[]) or payee_id = any($1::uuid[])) and status = 'SETTLED'", settlementIds),
-    ]);
-    return { source: "postgresql", syntheticData: false, counts: { activities, measurements, evidence, approvedVerifications: verifications, openObligations: obligations, issuedOrActiveCredentials: credentials, settledTransactions: settlements } };
+    const counts = await withDatabaseTenantContext(pool, { identityId: auth.identityId, organizationId, bilateralOrganizationScope: auth.bilateralOrganizationScope ?? false, serviceMode: false }, async (client) => {
+      const permitted = async (permissions: string[]) => hasOrganizationPermission(client, auth, organizationId, permissions);
+      const [operations, mrv, compliance, registry, settlement] = await Promise.all([
+        permitted(["waste:read"]), permitted(["evidence:upload", "evidence:review", "guardian:read"]),
+        permitted(["reports:read", "swm:read", "epr:read", "audit:read"]),
+        permitted(["registry:read", "credits:read"]),
+        permitted(["credits:read", "settlement:authorize", "settlement:settle", "AUTHORIZE_SETTLEMENT", "SETTLE_FUNDS"]),
+      ]);
+      const count = async (sql: string, identityScoped = false): Promise<number | null> => {
+        const values = identityScoped ? [organizationId, auth.identityId] : [organizationId];
+        const rows = await client.query<{ count: string }>(sql, values);
+        return Number(rows.rows[0]?.count ?? 0);
+      };
+      return {
+        activities: operations || mrv ? await count("select count(*)::text as count from activities a where a.organization_id=$1 and a.geography_id is not null and exists (select 1 from organization_memberships om where om.organization_id=a.organization_id and om.identity_id=$2 and om.status='VERIFIED' and organization_has_geography_scope(om.organization_id,a.geography_id))", true) : null,
+        measurements: mrv ? await count("select count(*)::text as count from measurements m join activities a on a.id=m.activity_id where a.organization_id=$1 and a.geography_id is not null and exists (select 1 from organization_memberships om where om.organization_id=a.organization_id and om.identity_id=$2 and om.status='VERIFIED' and organization_has_geography_scope(om.organization_id,a.geography_id))", true) : null,
+        evidence: mrv ? await count("select count(*)::text as count from evidence e join activities a on a.id=e.activity_id where a.organization_id=$1 and a.geography_id is not null and exists (select 1 from organization_memberships om where om.organization_id=a.organization_id and om.identity_id=$2 and om.status='VERIFIED' and organization_has_geography_scope(om.organization_id,a.geography_id))", true) : null,
+        approvedVerifications: mrv ? await count("select count(*)::text as count from verifications v join activities a on a.id=v.activity_id where a.organization_id=$1 and a.geography_id is not null and exists (select 1 from organization_memberships om where om.organization_id=a.organization_id and om.identity_id=$2 and om.status='VERIFIED' and organization_has_geography_scope(om.organization_id,a.geography_id)) and v.decision='APPROVED'", true) : null,
+        openObligations: compliance ? await count("select count(*)::text as count from obligations where organization_id=$1 and status='OPEN'") : null,
+        issuedOrActiveCredentials: registry ? await count("select count(*)::text as count from credentials where issuer_organization_id=$1 and status in ('ISSUED','ACTIVE','TRANSFERRED','RETIRED')") : null,
+        settledTransactions: settlement ? await count("select count(*)::text as count from settlements where (payer_id=$1 or payee_id=$1) and status='SETTLED'") : null,
+      };
+    });
+    return { source: "postgresql", syntheticData: false, counts };
   } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Authoritative overview unavailable", syntheticData: false }); }
 });
 app.get("/api/v1/regulatory/sources", async (_request, reply) => { try { return { source: "postgresql", syntheticData: false, sources: await query("select id, authority, title, instrument, reference, published_on, effective_from, jurisdiction, source_url, verified_on, status, affected_module, notes from regulatory_sources order by effective_from desc nulls last, published_on desc") }; } catch (error) { return reply.code(503).send({ error: "Regulatory source catalog unavailable", syntheticData: false }); } });
 
-app.get("/api/v1/geography/roots", async (request, reply) => { const auth = await requireAuth(request, reply); if (!auth || !pool) return; try { const rows = await pool.query(`with recursive scoped as (select g.id,g.parent_id,g.kind,g.code,g.external_code,g.name,g.source,g.source_version,g.valid_from,g.valid_to,g.metadata from geography g join organization_geography_scopes s on s.geography_id=g.id and s.status='VERIFIED' join organization_memberships om on om.organization_id=s.organization_id and om.identity_id=$1 and om.status='VERIFIED' union select g.id,g.parent_id,g.kind,g.code,g.external_code,g.name,g.source,g.source_version,g.valid_from,g.valid_to,g.metadata from geography g join scoped p on g.parent_id=p.id) select distinct id,parent_id,kind,code,external_code,name,source,source_version,valid_from,valid_to,metadata from scoped order by name`, [auth.identityId]); if (rows.rows.length) return { source: "postgresql", syntheticData: false, data: { geography: rows.rows } }; const fallback = await pool.query(`select id,parent_id,kind,code,external_code,name,source,source_version,valid_from,valid_to,metadata from geography where parent_id is null order by name`); const visible: unknown[] = []; for (const row of fallback.rows) if (await withClient(client => canReadGeography(client, auth, row.id))) visible.push(row); return { source: "postgresql", syntheticData: false, data: { geography: visible } }; } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Authoritative geography unavailable", syntheticData: false }); } });
-app.get("/api/v1/geography/children/:parentId", async (request, reply) => { const auth = await requireAuth(request, reply); if (!auth || !pool) return; try { const { parentId } = request.params as { parentId: string }; if (!await withClient(client => canReadGeography(client, auth, parentId))) return reply.code(403).send({ error: "Geography outside organization authorization scope", code: "GEOGRAPHY_FORBIDDEN" }); const rows = await pool.query("select id,parent_id,kind,code,external_code,name,source,source_version,valid_from,valid_to,metadata from geography where parent_id=$1 order by name", [parentId]); return { source: "postgresql", syntheticData: false, data: { geography: rows.rows } }; } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Authoritative geography unavailable", syntheticData: false }); } });
-
+app.get("/api/v1/geography/roots", async (request, reply) => {
+  const auth = await requireAuth(request, reply); if (!auth || !pool) return;
+  if (!auth.activeOrganizationId) return reply.code(403).send({ error: "An active organization is required for geography access", code: "ACTIVE_ORGANIZATION_REQUIRED" });
+  try {
+    const rows = await withDatabaseTenantContext(pool, { identityId: auth.identityId, organizationId: auth.activeOrganizationId, bilateralOrganizationScope: false, serviceMode: false }, async (client) => {
+      const scoped = await client.query("with recursive scoped as (select g.id,g.parent_id,g.kind,g.code,g.external_code,g.name,g.source,g.source_version,g.valid_from,g.valid_to,g.metadata from geography g join organization_geography_scopes s on s.geography_id=g.id and s.status='VERIFIED' join organization_memberships om on om.organization_id=s.organization_id and om.identity_id=$1 and om.organization_id=$2 and om.status='VERIFIED' union select g.id,g.parent_id,g.kind,g.code,g.external_code,g.name,g.source,g.source_version,g.valid_from,g.valid_to,g.metadata from geography g join scoped p on g.parent_id=p.id) select distinct id,parent_id,kind,code,external_code,name,source,source_version,valid_from,valid_to,metadata from scoped order by name", [auth.identityId, auth.activeOrganizationId]);
+      if (scoped.rows.length) return scoped.rows;
+      const fallback = await client.query("select id,parent_id,kind,code,external_code,name,source,source_version,valid_from,valid_to,metadata from geography where parent_id is null order by name");
+      const visible: unknown[] = [];
+      for (const row of fallback.rows) if (await canReadGeography(client, auth, row.id)) visible.push(row);
+      return visible;
+    });
+    return { source: "postgresql", syntheticData: false, data: { geography: rows } };
+  } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Authoritative geography unavailable", syntheticData: false }); }
+});
+app.get("/api/v1/geography/children/:parentId", async (request, reply) => {
+  const auth = await requireAuth(request, reply); if (!auth || !pool) return;
+  if (!auth.activeOrganizationId) return reply.code(403).send({ error: "An active organization is required for geography access", code: "ACTIVE_ORGANIZATION_REQUIRED" });
+  try {
+    const { parentId } = request.params as { parentId: string };
+    const rows = await withDatabaseTenantContext(pool, { identityId: auth.identityId, organizationId: auth.activeOrganizationId, bilateralOrganizationScope: false, serviceMode: false }, async (client) => {
+      if (!await canReadGeography(client, auth, parentId)) throw Object.assign(new Error("Geography outside organization authorization scope"), { code: "GEOGRAPHY_FORBIDDEN" });
+      const result = await client.query("select id,parent_id,kind,code,external_code,name,source,source_version,valid_from,valid_to,metadata from geography where parent_id=$1 order by name", [parentId]);
+      return result.rows;
+    });
+    return { source: "postgresql", syntheticData: false, data: { geography: rows } };
+  } catch (error) {
+    if ((error as {code?:string}).code === "GEOGRAPHY_FORBIDDEN") return reply.code(403).send({ error: "Geography outside organization authorization scope", code: "GEOGRAPHY_FORBIDDEN" });
+    request.log.error(error); return reply.code(503).send({ error: "Authoritative geography unavailable", syntheticData: false });
+  }
+});
 app.post("/api/v1/operations/sync", async (request, reply) => {
   const body = bodyOf(request); const idempotencyKey = requiredString(body, "idempotencyKey"); const deviceId = requiredString(body, "deviceId"); const capturedAt = requiredString(body, "capturedAt"); const payload = body.payload;
   if (!idempotencyKey || !deviceId || !capturedAt || payload === undefined) return reply.code(400).send({ error: "idempotencyKey, deviceId, capturedAt and payload are required" });
