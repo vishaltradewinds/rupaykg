@@ -81,8 +81,14 @@ BEGIN
     IF good IS NOT TRUE THEN RAISE EXCEPTION 'Expected valid same-domain authorization for %',t; END IF;
 
     SELECT pg_temp.shakti_domain_authorized(t,'00000000-0000-0000-0000-0000000000b1','SELECT') INTO good;
-    IF good IS NOT TRUE AND t <> 'settlement_events' THEN
-      RAISE EXCEPTION 'Expected counterparty/actor boundary authorization for %',t;
+    IF t IN ('epr_credit_transfers','settlements') THEN
+      IF good IS NOT TRUE THEN
+        RAISE EXCEPTION 'Expected explicit counterparty authorization for %',t;
+      END IF;
+    ELSE
+      IF good IS TRUE THEN
+        RAISE EXCEPTION 'Foreign organization unexpectedly authorized for %',t;
+      END IF;
     END IF;
 
     IF pg_temp.shakti_domain_authorized(t,'00000000-0000-0000-0000-0000000000c1','SELECT') THEN
@@ -97,8 +103,8 @@ BEGIN
     IF pg_temp.shakti_domain_authorized(t,'00000000-0000-0000-0000-0000000000f1','SELECT') THEN
       RAISE EXCEPTION 'Unverified geography unexpectedly authorized for %',t;
     END IF;
-    IF pg_temp.shakti_domain_authorized(t,'00000000-0000-0000-0000-0000000000b1','DELETE') AND t='settlement_events' THEN
-      RAISE EXCEPTION 'Settlement event DELETE incorrectly independently authorized';
+    IF pg_temp.shakti_domain_authorized(t,'00000000-0000-0000-0000-0000000000b1','DELETE') AND t NOT IN ('settlements') THEN
+      RAISE EXCEPTION 'Foreign organization DELETE unexpectedly authorized for %',t;
     END IF;
   END LOOP;
 END
