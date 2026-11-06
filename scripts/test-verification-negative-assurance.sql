@@ -21,14 +21,16 @@ BEGIN
   IF v_owner <> 'rupaykg_verification_guard' THEN RAISE EXCEPTION 'verification guard owner is %',v_owner; END IF;
   IF v_config <> ARRAY['search_path=pg_catalog']::text[] THEN RAISE EXCEPTION 'unsafe verification guard search_path'; END IF;
 
-  -- Tenant binding must be explicit, not inferred from a verifier role name.
-  IF position('m.organization_id=activity_organization_id' in replace(lower(v_def),' ','')) = 0
-     AND position('m.organization_id = activity_organization_id' in lower(v_def)) = 0 THEN
+  -- Tenant binding must be explicit and transitive to the activity organization.
+  IF position('m.organization_id=activity_organization_id' in replace(lower(v_def),' ','')) = 0 THEN
     RAISE EXCEPTION 'membership is not explicitly bound to the activity organization';
   END IF;
-  IF position('r.organization_id=activity_organization_id' in replace(lower(v_def),' ','')) = 0
-     AND position('r.organization_id = activity_organization_id' in lower(v_def)) = 0 THEN
-    RAISE EXCEPTION 'role is not explicitly bound to the activity organization';
+  IF position('r.organization_id=m.organization_id' in replace(lower(v_def),' ','')) = 0 THEN
+    RAISE EXCEPTION 'role is not explicitly bound to the membership organization';
+  END IF;
+  IF position('m.organization_id=activity_organization_id' in replace(lower(v_def),' ','')) = 0
+     OR position('r.organization_id=m.organization_id' in replace(lower(v_def),' ','')) = 0 THEN
+    RAISE EXCEPTION 'tenant binding chain is incomplete';
   END IF;
 
   -- Explicit permission keys are the only authority.
@@ -42,21 +44,23 @@ BEGIN
   END IF;
 
   -- Fail-closed identity/org/geography conditions.
-  IF position('status is distinct from ''VERIFIED''' in lower(v_def)) = 0 THEN
-    RAISE EXCEPTION 'verified organization/identity fail-closed check missing';
+  IF position("i.status='VERIFIED'" in v_def) = 0
+     OR position("o.status='VERIFIED'" in v_def) = 0
+     OR position("m.status='VERIFIED'" in v_def) = 0 THEN
+    RAISE EXCEPTION 'verified identity/organization/membership checks are incomplete';
   END IF;
-  IF position('suspended_at is not null' in lower(v_def)) = 0 THEN
+  IF position('i.suspended_at IS NULL' in v_def) = 0 THEN
     RAISE EXCEPTION 'identity suspension fail-closed check missing';
   END IF;
-  IF position('geography_scope_authorized is not true' in lower(v_def)) = 0 THEN
+  IF position('activity_geography_id IS NULL OR NOT public.organization_has_geography_scope' in v_def) = 0 THEN
     RAISE EXCEPTION 'geography fail-closed check missing';
   END IF;
 
   -- Decision-time provenance must be server-derived.
-  IF position('new.authorization_membership_id := selected_membership_id' in lower(v_def)) = 0
-     OR position('new.authorization_role_id := selected_role_id' in lower(v_def)) = 0
-     OR position('new.authorization_permissions_snapshot := selected_permissions' in lower(v_def)) = 0
-     OR position('new.authorization_checked_at := clock_timestamp()' in lower(v_def)) = 0 THEN
+  IF position('NEW.authorization_membership_id := membership_row.membership_id' in v_def) = 0
+     OR position('NEW.authorization_role_id := membership_row.role_id' in v_def) = 0
+     OR position('NEW.authorization_permissions_snapshot := membership_row.permissions' in v_def) = 0
+     OR position('NEW.authorization_checked_at := clock_timestamp()' in v_def) = 0 THEN
     RAISE EXCEPTION 'immutable decision-time authorization provenance is incomplete';
   END IF;
 
