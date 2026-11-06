@@ -204,15 +204,16 @@ export async function registerStatutoryRoutes(app: FastifyInstance, pool: Pool |
     if (!report) return reply.code(400).send({ error: "A CPCB registration reference and cpcbRegistrationStatus=REGISTERED_EXTERNALLY are required to record a user-reported reference", code: "EXTERNAL_REGISTRATION_REFERENCE_REQUIRED" });
     const organizationId = auth.activeOrganizationId;
     if (!organizationId || !canActForOrganization(auth, organizationId)) return reply.code(403).send({ error: "Select a verified organization", code: "ORG_FORBIDDEN" });
-    if (!await hasOrganizationPermission(pool, auth, organizationId, ["epr:manage", "audit:execute"])) return reply.code(403).send({ error: "EPR management permission required", code: "STATUTORY_EPR_WRITE_REQUIRED" });
+    if (!canActForOrganization(auth, organizationId)) return reply.code(403).send({ error: "Organization access denied", code: "ORG_FORBIDDEN" });
     try {
       const result = await withDatabaseTenantContext(pool, { identityId: auth.identityId, organizationId, bilateralOrganizationScope: auth.bilateralOrganizationScope ?? false, serviceMode: false }, async client => {
+        if (!await hasOrganizationPermission(client, auth, organizationId, ["epr:manage", "audit:execute"])) throw Object.assign(new Error("EPR management permission required"), { code: "STATUTORY_EPR_WRITE_REQUIRED" });
         const result = await client.query<{ organization_id: string }>("update organization_epr_applicability set cpcb_registration_status=$4,cpcb_registration_reference=$2,basis=coalesce(basis,'{}'::jsonb) || jsonb_build_object('cpcb_registration_reference_trust_state',$5,'cpcb_registration_reference_reported_at',now()),determined_by_identity_id=$3,determined_at=now() where id=$1 and organization_id=$6 returning *", [id, report.reference, auth.identityId, report.persistedStatus, report.trustState, organizationId]);
         return result;
       });
       if (!result.rows[0]) return reply.code(404).send({ error: "EPR applicability record not found", code: "EPR_RECORD_NOT_FOUND" });
       return { source: "postgresql", syntheticData: false, applicability: result.rows[0], statutoryBoundary: "USER_REPORTED_UNVERIFIED_NOT_AUTHORITY_VERIFIED", externalRegistrationState: report.trustState };
-    } catch (error) { request.log.error(error); return reply.code(503).send({ error: "External EPR registration reference could not be recorded", code: "EPR_EXTERNAL_STATUS_UNAVAILABLE", syntheticData: false }); }
+    } catch (error) { const code = (error as { code?: string }).code; if (code === "STATUTORY_EPR_WRITE_REQUIRED" || code === "ORG_FORBIDDEN") return reply.code(403).send({ error: (error as Error).message, code }); request.log.error(error); return reply.code(503).send({ error: "External EPR registration reference could not be recorded", code: "EPR_EXTERNAL_STATUS_UNAVAILABLE", syntheticData: false }); }
   });
 
 }
