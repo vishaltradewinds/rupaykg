@@ -20,7 +20,8 @@
     "validate:protected-migrator-config": "node scripts/validate-protected-migrator-config.mjs",
     "migrate:protected": "node scripts/run-protected-migrator.mjs",
     "generate:migration-manifest": "node scripts/generate-migration-manifest.mjs",
-    "validate:migration-manifest": "node scripts/validate-migration-manifest.mjs"
+    "validate:migration-manifest": "node scripts/validate-migration-manifest.mjs",
+    "test:tenant-isolation": "node scripts/test-disposable-tenant-isolation.mjs"
   },
   "overrides": {
     "protobufjs": "8.8.0",
