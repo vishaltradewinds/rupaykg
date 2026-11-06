@@ -38,6 +38,20 @@ A/B/C/D/E run in parallel. F begins only when B/C/E policy semantics are suffici
 - Live database object inspection independently confirmed the four 096 provenance columns, the verification integrity trigger, and the organization-scoped approval authorization logic.
 - No production DDL/DML, role/grant/ownership mutation, RLS enablement, deployment, or replay of migration 096 was performed.
 
+## Runtime privilege model rehearsal update — 2026-11-06
+
+- CI #5801 on commit `2af2d77f4ad703ba3b726b8a66690e1e578684f3` completed successfully with all 20 validation gates passed.
+- The adversarial runtime acceptance ownership fixture is therefore corrected and CI-validated.
+- Disposable branch `br-dry-base-b42zrepz` was used to derive and rehearse the 67-table runtime privilege baseline.
+- Separate NOLOGIN owner role `rupaykg_owner_model_20261106` owned all 67 public application tables in the rehearsal; runtime role `rupaykg_runtime_model_20261106` owned zero.
+- PUBLIC application table privileges were reduced to zero in the rehearsal.
+- Runtime access to `schema_migrations` and credential-control tables was denied.
+- Runtime role flags were validated as NOSUPERUSER/NOCREATEROLE/NOCREATEDB/NOREPLICATION/NOBYPASSRLS.
+- The resulting model is documented in `docs/engineering/RUNTIME_PRIVILEGE_MODEL_2026-11-06.md`.
+- CI #5802 on commit `321ede44445c08b48669f16b697a2805cbc64a3c` completed successfully with all 20 validation gates passed.
+
+**Gate status:** Workstream H has passed disposable adversarial acceptance and privilege-model rehearsal. Production remediation remains blocked pending complete 67-table access-path reconciliation, service/bootstrap/worker privilege analysis, independent security review, and explicit production approval.
+
 ## Current blockers
 1. RLS is verified disabled on all 67 inspected public tables and PostgreSQL policy count is zero.
 2. Complete repository-wide protected-route migration and independent semantic audit remain release gates.
