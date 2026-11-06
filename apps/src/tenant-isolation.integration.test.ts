@@ -72,12 +72,29 @@ before(async () => {
       to_organization_id text not null,
       payload text not null
     );
+    create table ${qid(schema)}.activities (
+      id integer generated always as identity primary key,
+      organization_id text not null,
+      actor_identity_id text,
+      payload text not null
+    );
+    create table ${qid(schema)}.evidence (
+      id integer generated always as identity primary key,
+      activity_id integer not null references ${qid(schema)}.activities(id),
+      payload text not null
+    );
+    create table ${qid(schema)}.verifications (
+      id integer generated always as identity primary key,
+      evidence_id integer not null references ${qid(schema)}.evidence(id),
+      decision text not null,
+      payload text not null
+    );
   `);
 
   await query(`
     grant usage on schema ${qid(schema)} to ${qid(testRole)};
     grant select on ${qid(schema)}.identities, ${qid(schema)}.memberships to ${qid(testRole)};
-    grant select, insert, update, delete on ${qid(schema)}.tenant_records, ${qid(schema)}.bilateral_records to ${qid(testRole)};
+    grant select, insert, update, delete on ${qid(schema)}.tenant_records, ${qid(schema)}.bilateral_records, ${qid(schema)}.activities, ${qid(schema)}.evidence, ${qid(schema)}.verifications to ${qid(testRole)};
     grant usage, select on all sequences in schema ${qid(schema)} to ${qid(testRole)};
 
     insert into ${qid(schema)}.identities(identity_id, status)
@@ -95,6 +112,12 @@ before(async () => {
     alter table ${qid(schema)}.tenant_records force row level security;
     alter table ${qid(schema)}.bilateral_records enable row level security;
     alter table ${qid(schema)}.bilateral_records force row level security;
+    alter table ${qid(schema)}.activities enable row level security;
+    alter table ${qid(schema)}.activities force row level security;
+    alter table ${qid(schema)}.evidence enable row level security;
+    alter table ${qid(schema)}.evidence force row level security;
+    alter table ${qid(schema)}.verifications enable row level security;
+    alter table ${qid(schema)}.verifications force row level security;
 
     create policy tenant_records_isolation on ${qid(schema)}.tenant_records
       using (
@@ -123,6 +146,40 @@ before(async () => {
             and m.organization_id = current_setting('app.rupaykg.organization_id', true)
         )
       );
+
+    create policy activities_isolation on ${qid(schema)}.activities
+      using (current_setting('app.rupaykg.service_mode', true) = 'true'
+        or exists (select 1 from ${qid(schema)}.memberships m join ${qid(schema)}.identities i on i.identity_id=m.identity_id
+          where m.identity_id=current_setting('app.rupaykg.identity_id', true) and m.organization_id=${qid(schema)}.activities.organization_id
+            and m.organization_id=current_setting('app.rupaykg.organization_id', true) and m.status='ACTIVE' and i.status='ACTIVE'))
+      with check (current_setting('app.rupaykg.service_mode', true) = 'true'
+        or exists (select 1 from ${qid(schema)}.memberships m join ${qid(schema)}.identities i on i.identity_id=m.identity_id
+          where m.identity_id=current_setting('app.rupaykg.identity_id', true) and m.organization_id=${qid(schema)}.activities.organization_id
+            and m.organization_id=current_setting('app.rupaykg.organization_id', true) and m.status='ACTIVE' and i.status='ACTIVE'));
+
+    create policy evidence_isolation on ${qid(schema)}.evidence
+      using (current_setting('app.rupaykg.service_mode', true) = 'true'
+        or exists (select 1 from ${qid(schema)}.activities a join ${qid(schema)}.memberships m on m.organization_id=a.organization_id
+          join ${qid(schema)}.identities i on i.identity_id=m.identity_id
+          where a.id=${qid(schema)}.evidence.activity_id and m.identity_id=current_setting('app.rupaykg.identity_id', true)
+            and m.organization_id=current_setting('app.rupaykg.organization_id', true) and m.status='ACTIVE' and i.status='ACTIVE'))
+      with check (current_setting('app.rupaykg.service_mode', true) = 'true'
+        or exists (select 1 from ${qid(schema)}.activities a join ${qid(schema)}.memberships m on m.organization_id=a.organization_id
+          join ${qid(schema)}.identities i on i.identity_id=m.identity_id
+          where a.id=${qid(schema)}.evidence.activity_id and m.identity_id=current_setting('app.rupaykg.identity_id', true)
+            and m.organization_id=current_setting('app.rupaykg.organization_id', true) and m.status='ACTIVE' and i.status='ACTIVE'));
+
+    create policy verifications_isolation on ${qid(schema)}.verifications
+      using (current_setting('app.rupaykg.service_mode', true) = 'true'
+        or exists (select 1 from ${qid(schema)}.evidence e join ${qid(schema)}.activities a on a.id=e.activity_id
+          join ${qid(schema)}.memberships m on m.organization_id=a.organization_id join ${qid(schema)}.identities i on i.identity_id=m.identity_id
+          where e.id=${qid(schema)}.verifications.evidence_id and m.identity_id=current_setting('app.rupaykg.identity_id', true)
+            and m.organization_id=current_setting('app.rupaykg.organization_id', true) and m.status='ACTIVE' and i.status='ACTIVE'))
+      with check (current_setting('app.rupaykg.service_mode', true) = 'true'
+        or exists (select 1 from ${qid(schema)}.evidence e join ${qid(schema)}.activities a on a.id=e.activity_id
+          join ${qid(schema)}.memberships m on m.organization_id=a.organization_id join ${qid(schema)}.identities i on i.identity_id=m.identity_id
+          where e.id=${qid(schema)}.verifications.evidence_id and m.identity_id=current_setting('app.rupaykg.identity_id', true)
+            and m.organization_id=current_setting('app.rupaykg.organization_id', true) and m.status='ACTIVE' and i.status='ACTIVE'));
 
     create policy bilateral_records_isolation on ${qid(schema)}.bilateral_records
       using (
@@ -170,6 +227,12 @@ before(async () => {
     values ('org-a', 'a-row'), ('org-b', 'b-row');
     insert into ${qid(schema)}.bilateral_records(from_organization_id, to_organization_id, payload)
     values ('org-a', 'org-b', 'a-b-row'), ('org-b', 'org-c', 'b-c-row');
+    insert into ${qid(schema)}.activities(organization_id, actor_identity_id, payload)
+    values ('org-a', 'identity-a', 'activity-a'), ('org-b', 'identity-b', 'activity-b');
+    insert into ${qid(schema)}.evidence(activity_id, payload)
+    values (1, 'evidence-a'), (2, 'evidence-b');
+    insert into ${qid(schema)}.verifications(evidence_id, decision, payload)
+    values (1, 'APPROVED', 'verification-a'), (2, 'APPROVED', 'verification-b');
     insert into "rupaykg_tenant_isolation".activities(organization_id, actor_identity_id, payload)
     values ('org-a', 'identity-a', 'activity-a'), ('org-b', 'identity-b', 'activity-b');
     insert into "rupaykg_tenant_isolation".evidence(activity_id, payload)
