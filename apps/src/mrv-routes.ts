@@ -18,11 +18,11 @@ async function authFor(request: Request, reply: Reply, pool: Pool | null): Promi
   catch (error) { request.log.error(error); reply.code(503).send({ error: "Authentication service unavailable", code: "AUTH_UNAVAILABLE" }); return null; }
 }
 
-async function requirePermission(db: Pool | PoolClient, auth: AuthContext, organizationId: string, permissions: readonly string[]): Promise<boolean> {
+async function requirePermission(db: PoolClient, auth: AuthContext, organizationId: string, permissions: readonly string[]): Promise<boolean> {
   return hasOrganizationPermission(db, auth, organizationId, permissions);
 }
 
-async function activityInAuthorizedGeography(db: Pool | PoolClient, auth: AuthContext, activityId: string, organizationId: string): Promise<boolean> {
+async function activityInAuthorizedGeography(db: PoolClient, auth: AuthContext, activityId: string, organizationId: string): Promise<boolean> {
   const result = await db.query<{ ok: boolean }>(
     `select exists(
        select 1 from activities a
@@ -49,7 +49,7 @@ async function activityInAuthorizedGeography(db: Pool | PoolClient, auth: AuthCo
  * Acceptance fixtures may exercise the real external trust rail, but they are
  * never evidence of a real carbon project and must not be presented as registry eligible.
  */
-async function isAcceptanceFixture(db: Pool | PoolClient, activityId: string): Promise<boolean> {
+async function isAcceptanceFixture(db: PoolClient, activityId: string): Promise<boolean> {
   const result = await db.query<{ is_fixture: boolean }>(
     `select
        exists(select 1 from activities a where a.id=$1 and a.metadata->>'acceptanceFixture'='true')
@@ -64,7 +64,9 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
   app.get("/api/v1/mrv/status", async (request, reply) => {
     const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
     const organizationId = auth.activeOrganizationId || auth.memberships[0]?.organization_id;
-    if (!organizationId || !await requirePermission(pool, auth, organizationId, ["guardian:read"])) return reply.code(403).send({ error: "Guardian read permission required", code: "MRV_PERMISSION_REQUIRED" });
+    if (!organizationId) return reply.code(403).send({ error: "Guardian read permission required", code: "MRV_PERMISSION_REQUIRED" });
+    const allowed = await withDatabaseTenantContext(pool, { identityId: auth.identityId, organizationId, bilateralOrganizationScope: auth.bilateralOrganizationScope ?? false, serviceMode: false }, client => requirePermission(client, auth, organizationId, ["guardian:read"]));
+    if (!allowed) return reply.code(403).send({ error: "Guardian read permission required", code: "MRV_PERMISSION_REQUIRED" });
     const guardian = guardianStatus();
     const hedera = hederaStatus();
     return {
