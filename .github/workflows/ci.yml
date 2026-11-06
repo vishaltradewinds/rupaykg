@@ -107,6 +107,8 @@ jobs:
         env:
           RUPAYKG_RUN_DB_INTEGRATION_TESTS: "1"
         run: npm test
+      - name: Execute verification authorization convergence rehearsal
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/test-verification-convergence.sql
       - name: Execute tenant isolation RLS acceptance harness
         run: npm run test:tenant-isolation
       - name: Build production container
