@@ -9,23 +9,26 @@ const organizationId = "223e4567-e89b-42d3-a456-426614174000";
 const roleId = "323e4567-e89b-42d3-a456-426614174000";
 
 function fakePool(isSuperAdmin: boolean): Pool {
+  const query = async (sql: string) => {
+    if (/^(begin|commit|rollback)$/i.test(sql.trim())) return { rows: [], rowCount: 0 };
+    if (sql.includes("from identity_sessions")) return { rows: [{ identity_id: identityId }] };
+    if (sql.includes("from organization_memberships") && sql.includes("where identity_id")) {
+      return { rows: [{ organization_id: organizationId, role_id: roleId, status: "VERIFIED" }] };
+    }
+    if (sql.includes("r.name = 'super_admin'")) return { rows: [{ ok: isSuperAdmin }] };
+    if (sql.includes('as "verifiedIdentities"')) return { rows: [{
+      verifiedIdentities: "12",
+      organizations: "7",
+      verifiedMemberships: "9",
+      pendingApplications: "3",
+      pendingLegalReviews: "2",
+      anchoredMrvRecords: "4",
+    }] };
+    throw new Error(`Unexpected SQL in platform-admin test: ${sql}`);
+  };
   return {
-    query: async (sql: string) => {
-      if (sql.includes("from identity_sessions")) return { rows: [{ identity_id: identityId }] };
-      if (sql.includes("from organization_memberships") && sql.includes("where identity_id")) {
-        return { rows: [{ organization_id: organizationId, role_id: roleId, status: "VERIFIED" }] };
-      }
-      if (sql.includes("r.name = 'super_admin'")) return { rows: [{ ok: isSuperAdmin }] };
-      if (sql.includes('as "verifiedIdentities"')) return { rows: [{
-        verifiedIdentities: "12",
-        organizations: "7",
-        verifiedMemberships: "9",
-        pendingApplications: "3",
-        pendingLegalReviews: "2",
-        anchoredMrvRecords: "4",
-      }] };
-      throw new Error(`Unexpected SQL in platform-admin test: ${sql}`);
-    },
+    query,
+    connect: async () => ({ query, release: () => undefined }),
   } as unknown as Pool;
 }
 
