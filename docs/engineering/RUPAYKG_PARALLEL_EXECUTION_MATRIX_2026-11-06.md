@@ -120,3 +120,11 @@ Passing the disposable rehearsal will not authorize production role changes or R
 - Commit: `a3dd9b9909a9fbc6a98870dc1bff4774a3d60efb`.
 
 **Next gate:** complete repository-wide access-path inventory for workers/background jobs, scheduled tasks, bootstrap/control-plane paths, bilateral settlement/registry paths, and sequence/function privileges; then run independent semantic review before any production role/RLS proposal.
+
+## Production startup / fixture isolation closure — 2026-11-06
+
+- Repository startup contract was hardened so the production API start command now launches only `dist/src/production-server.js`.
+- The acceptance fixture is no longer part of the production startup command. It remains an explicit, separately invocable `acceptance-seed` script for controlled acceptance environments.
+- This removes the previous structural coupling where production startup invoked `acceptance-seed.js` before the production server, even though the fixture itself was environment-gated.
+- No production database was modified and no fixture was executed against production.
+- This strengthens Workstream C/J startup isolation evidence; it does not authorize production deployment or merge.
