@@ -93,6 +93,18 @@ BEGIN
   END IF;
 END $$;
 
+-- The current authoritative catalog baseline is 67 public ordinary tables.
+DO $
+DECLARE total_tables integer;
+BEGIN
+  SELECT count(*) INTO total_tables
+  FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+  WHERE c.relkind='r' AND n.nspname='public';
+  IF total_tables <> 67 THEN
+    RAISE EXCEPTION 'authoritative tenant-isolation baseline drift: expected 67 public ordinary tables, found %', total_tables;
+  END IF;
+END $;
+
 -- Every public ordinary table must have an explicit provisional classification.
 DO $$
 DECLARE total_tables integer; classified integer;
