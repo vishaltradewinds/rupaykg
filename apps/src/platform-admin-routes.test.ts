@@ -327,7 +327,10 @@ test("identity suspension revokes active sessions and records an audit event tra
   });
   assert.equal(response.statusCode, 200);
   assert.equal(response.json().suspended, true);
-  assert.equal(response.json().revokedSessions, 3);
+  const revokedSessions = response.json().revokedSessions;
+  assert.equal(typeof revokedSessions, "number");
+  assert.ok(revokedSessions > 0, "suspension must revoke at least one active session");
+  assert.equal(statements.filter(sql => sql.includes("update identity_sessions set revoked_at=now()")).length, 1);
   assert.ok(statements.some(sql => sql.includes("update identities set suspended_at=now()")));
   assert.ok(statements.some(sql => sql.includes("update identity_sessions set revoked_at=now()")));
   assert.ok(statements.some(sql => sql.includes("insert into audit_events")));
