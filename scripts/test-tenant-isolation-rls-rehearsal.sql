@@ -564,5 +564,9 @@ END
 $cleanup$;
 
 DROP FUNCTION public.shakti_current_org_id();
+
+-- Revoke disposable grants before dropping the runtime roles.
+REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public FROM rupaykg_ci_org_a, rupaykg_ci_org_b;
+REVOKE ALL PRIVILEGES ON SCHEMA public FROM rupaykg_ci_org_a, rupaykg_ci_org_b;
 DROP ROLE rupaykg_ci_org_a;
 DROP ROLE rupaykg_ci_org_b;
