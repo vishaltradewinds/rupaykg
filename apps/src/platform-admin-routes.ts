@@ -132,7 +132,7 @@ async function audit(
   );
 }
 
-async function serviceDb(pool: Pool, auth: AuthContext): Promise<{ query: PoolClient["query"] }> {
+function serviceDb(pool: Pool, auth: AuthContext): { query: PoolClient["query"] } {
   return {
     query: ((...args: Parameters<PoolClient["query"]>) =>
       withDatabaseTenantContext(
