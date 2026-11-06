@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import type { FastifyRequest } from "fastify";
 import type { Pool, PoolClient } from "pg";
+import { withDatabaseBootstrapContext } from "./db-context.js";
 
 export type AuthContext = {
   identityId: string;
@@ -25,24 +26,25 @@ export async function authenticate(request: FastifyRequest, pool: Pool | null): 
   if (!header?.startsWith("Bearer ")) return null;
   const token = header.slice("Bearer ".length).trim();
   if (!token) return null;
-  const rows = await pool.query<{ identity_id: string }>(
-    `select s.identity_id
-       from identity_sessions s
-       join identities i on i.id = s.identity_id
-      where s.token_hash = $1
-        and s.revoked_at is null
-        and s.expires_at > now()
-        and i.status = 'VERIFIED'
-        and i.suspended_at is null`,
-    [hashToken(token)],
-  );
-  if (!rows.rows[0]) return null;
-  const memberships = await pool.query<{ organization_id: string; role_id: string; status: string }>(
-    `select organization_id, role_id, status
-       from organization_memberships
-      where identity_id = $1 and status = 'VERIFIED'`,
-    [rows.rows[0].identity_id],
-  );
+  return withDatabaseBootstrapContext(pool, async (client) => {
+    const rows = await client.query<{ identity_id: string }>(
+      `select s.identity_id
+         from identity_sessions s
+         join identities i on i.id = s.identity_id
+        where s.token_hash = $1
+          and s.revoked_at is null
+          and s.expires_at > now()
+          and i.status = 'VERIFIED'
+          and i.suspended_at is null`,
+      [hashToken(token)],
+    );
+    if (!rows.rows[0]) return null;
+    const memberships = await client.query<{ organization_id: string; role_id: string; status: string }>(
+      `select organization_id, role_id, status
+         from organization_memberships
+        where identity_id = $1 and status = 'VERIFIED'`,
+      [rows.rows[0].identity_id],
+    );
   const requested = request.headers["x-rupaykg-organization-id"];
   const requestedOrganizationId = typeof requested === "string" && requested.trim() ? requested.trim() : undefined;
   if (requestedOrganizationId && !UUID_RE.test(requestedOrganizationId)) return null;
@@ -56,13 +58,13 @@ export async function authenticate(request: FastifyRequest, pool: Pool | null): 
   const requestPath = ((request.url ?? "").split("?", 1)[0]) ?? "";
   const bilateralOrganizationScope = requestPath === "/api/v1/settlements"
     || requestPath.startsWith("/api/v1/settlements/");
-  return {
-    identityId: rows.rows[0].identity_id,
-    memberships: memberships.rows,
-    ...(activeOrganizationId ? { activeOrganizationId } : {}),
-    ...(bilateralOrganizationScope ? { bilateralOrganizationScope: true } : {}),
-  };
-}
+    return {
+      identityId: rows.rows[0].identity_id,
+      memberships: memberships.rows,
+      ...(activeOrganizationId ? { activeOrganizationId } : {}),
+      ...(bilateralOrganizationScope ? { bilateralOrganizationScope: true } : {}),
+    };
+  });
 
 export function canActForOrganization(auth: AuthContext, organizationId: string): boolean {
   return auth.memberships.some((m) => m.organization_id === organizationId)
