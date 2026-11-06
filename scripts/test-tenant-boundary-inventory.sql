@@ -94,7 +94,7 @@ BEGIN
 END $$;
 
 -- The current authoritative catalog baseline is 67 public ordinary tables.
-DO $
+DO $assert$
 DECLARE total_tables integer;
 BEGIN
   SELECT count(*) INTO total_tables
@@ -103,7 +103,7 @@ BEGIN
   IF total_tables <> 67 THEN
     RAISE EXCEPTION 'authoritative tenant-isolation baseline drift: expected 67 public ordinary tables, found %', total_tables;
   END IF;
-END $;
+END $assert$;
 
 -- Every public ordinary table must have an explicit provisional classification.
 DO $$
