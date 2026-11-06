@@ -10,14 +10,14 @@ if (/localhost|127\\.0.0.1/.test(url) === false && process.env.ALLOW_DISPOSABLE_
 const admin = new Client({ connectionString: url });
 const schema = "tenant_acceptance_" + randomUUID().replaceAll("-", "_");
 const table = schema + ".tenant_rows";
-const runtimeRole = "tenant_acceptance_" + randomUUID().replaceAll("-", "_");
-const runtimePassword = randomUUID();
+const runtimeRole = "tenant_acceptance_" + randomUUID().replaceAll("-", "");
+const runtimePassword = randomUUID().replaceAll("-", "");
 
 let runtime;
 try {
   await admin.connect();
 
-  await admin.query("CREATE ROLE " + JSON.stringify(runtimeRole) + " LOGIN NOSUPERUSER NOBYPASSRLS NOINHERIT PASSWORD $1", [runtimePassword]);
+  await admin.query(`CREATE ROLE "${runtimeRole}" LOGIN NOSUPERUSER NOBYPASSRLS NOINHERIT PASSWORD '${runtimePassword}'`);
   await admin.query(`CREATE SCHEMA "${schema}"`);
   await admin.query(`CREATE TABLE "${schema}".tenant_rows (id uuid primary key, organization_id uuid not null, payload text not null)`);
   await admin.query(`ALTER TABLE "${schema}".tenant_rows ENABLE ROW LEVEL SECURITY`);
