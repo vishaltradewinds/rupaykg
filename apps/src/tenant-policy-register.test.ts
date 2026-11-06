@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
-const registerPath = path.resolve(process.cwd(), "docs/engineering/TENANT_POLICY_CLASSIFICATION_WORKING_REGISTER_2026-11-06.md");
+const registerPath = path.resolve(process.cwd(), "..", "docs/engineering/TENANT_POLICY_CLASSIFICATION_WORKING_REGISTER_2026-11-06.md");
 
 function section(text: string, heading: string, nextHeading: string): string {
   const start = text.indexOf(heading);
