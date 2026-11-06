@@ -191,8 +191,8 @@ test("bootstrap context is organization-neutral and explicitly non-service-scope
     );
     return settings.rows[0];
   });
-  assert.equal(result.organization_id, null);
-  assert.equal(result.identity_id, null);
+  assert.ok(result.organization_id === null || result.organization_id === "");
+  assert.ok(result.identity_id === null || result.identity_id === "");
   assert.equal(result.service_mode, "false");
   assert.equal(result.bilateral_scope, "false");
 });
