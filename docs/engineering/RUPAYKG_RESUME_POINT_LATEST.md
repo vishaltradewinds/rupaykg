@@ -319,3 +319,18 @@ PR #310 and #311 now have independent exact-head CI evidence, but remain separat
 3. Continue protected-access semantic audit for remaining control-plane/tenant-boundary paths; do not treat regex absence as proof of isolation.
 4. Advance complete 67-table policy semantics and disposable RLS migration only after context/access contracts are reconciled.
 5. Keep migration-096 lineage fail-closed until authoritative source/history evidence is exact.
+
+
+## 2026-11-06 CI trigger diagnosis — VERIFIED
+
+Exact-head workflow lookup showed no runs for PR #306–#309 because their base branch is a `shakti/*` branch while the repository CI workflow's pull_request filter previously targeted only `main`. This is a repository CI configuration condition, not evidence that the four PRs passed or failed.
+
+Safe corrective action applied independently to each validation branch by extending the CI pull_request branch filter to include `shakti/**`:
+- PR #306: commit `dc4db62c772f790ab2ec96e0cb68a6903110c23a`.
+- PR #307: commit `b28ac72813e2058944f0fe508215911ae81b1aa7`.
+- PR #308: commit `bb3bf6086d0b835654a200b01b34e18a21be51f1`.
+- PR #309: commit `f08462b994131bcfb2aad3b20e96c04dd0d10221`.
+
+Post-change verification: PR #307 exact-head CI run `42254541831` / #5806 is **QUEUED/IN PROGRESS**. Exact-head workflow lookup for #306, #308 and #309 has not yet returned a run. No completion is claimed.
+
+This change only expands CI validation coverage for protected `shakti/*` branches; it does not change production runtime behavior, database state, RLS, deployment or release status.
