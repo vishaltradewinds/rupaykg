@@ -44,7 +44,7 @@ async function authFor(req:Req,reply:Rep,pool:Pool|null):Promise<AuthContext|nul
  try{const auth=await authenticate(req as never,pool);if(!auth){reply.code(401).send(bearerChallenge());return null;}return auth;}
  catch(e){req.log.error(e);reply.code(503).send({error:"Authentication service unavailable",code:"AUTH_UNAVAILABLE"});return null;}
 }
-async function activityContext(db:Pool|PoolClient,auth:AuthContext,id:string):Promise<{organization_id:string;geography_id:string}|null>{
+async function activityContext(db:PoolClient,auth:AuthContext,id:string):Promise<{organization_id:string;geography_id:string}|null>{
  if(!UUID.test(id))return null;
  const r=await db.query<{organization_id:string;geography_id:string|null}>("select organization_id,geography_id from activities where id=$1",[id]);
  const a=r.rows[0];if(!a||!a.geography_id||!canActForOrganization(auth,a.organization_id))return null;
