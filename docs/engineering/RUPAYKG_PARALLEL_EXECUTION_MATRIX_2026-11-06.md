@@ -31,17 +31,18 @@ A/B/C/D/E run in parallel. F begins only when B/C/E policy semantics are suffici
 - No deployment, worker activation, merge, certification, or TRL 9 declaration without the required independent gates and explicit founder approval.
 
 ## Current evidence update — 2026-11-06
-- PR #311 head `f266900065049e7eb1ce34605c0fdcf982ff3def` completed CI run #5736 successfully.
-- CI completed all 17 validation steps, including migration validation, migration-manifest validation, protected-migrator configuration contract, API migration execution, typecheck/build, browser smoke, disposable PostgreSQL acceptance, production container build, bounded backup/restore rehearsal, and startup-isolation assertion.
-- Authentication bootstrap integration is therefore validated at the repository/CI gate level on this head.
-- This does not validate production RLS state, production migration lineage, production deployment, field acceptance, statutory approval, certification, or TRL 9.
+- CI #5793 on commit `eb5c3e505e9223d24e25ea45557a67a8989ee0e4` completed successfully with all 20 validation gates passed, including migration validation/execution, typecheck, build, browser smoke, disposable PostgreSQL acceptance, tenant-isolation RLS acceptance, production container build, bounded backup/restore rehearsal, and startup migration/fixture isolation.
+- Migration 096 is now exactly restored in the repository: the restored file blob is `258b1f4534efbf915688f78aa84d4ec24a47cbc0`, matching the recovered historical blob byte-for-byte.
+- Live Neon `schema_migrations` evidence confirms version `096` with filename `096_verification_authorization_provenance.sql` and applied timestamp `2026-10-27T13:46:14.262Z`.
+- Live database object inspection independently confirmed the four 096 provenance columns, the verification integrity trigger, and the organization-scoped approval authorization logic.
+- No production DDL/DML, role/grant/ownership mutation, RLS enablement, deployment, or replay of migration 096 was performed.
 
 ## Current blockers
 1. RLS is verified disabled on all 67 inspected public tables and PostgreSQL policy count is zero.
-2. Migration 096 source/ledger lineage remains unresolved. Exact filename searches across the active migration paths and inspected historical refs did not locate `096_verification_authorization_provenance.sql`; no replacement source is being invented.
-3. Complete repository-wide protected-route migration and independent semantic audit remain release gates.
-4. Disposable cross-tenant/RLS evidence must be validated against the actual production-representative schema before any production RLS proposal.
-5. Runtime DB identity/least-privilege evidence and independent release governance remain pending.
+2. Complete repository-wide protected-route migration and independent semantic audit remain release gates.
+3. Disposable cross-tenant/RLS evidence must be validated against the actual production-representative schema before any production RLS proposal.
+4. Runtime DB identity/least-privilege production posture remains blocked: the inspected runtime role is `rupaykg`, which owns the inspected public application tables and has `CREATEROLE`, `CREATEDB`, `REPLICATION`, and `BYPASSRLS`. A suitable least-privilege runtime identity is not yet evidenced.
+5. Independent release governance and production role/ownership remediation remain pending.
 
 ## Completion rule
 A workstream is not marked complete because code exists. It requires its defined evidence gate.
@@ -52,22 +53,35 @@ A workstream is not marked complete because code exists. It requires its defined
 - The affected helpers are in evidence-vault, onboarding-hierarchy, statutory, and value route modules.
 - Their call sites were inspected and use the transaction-scoped client.
 - Static protected-pattern scan now reports no remaining `Pool | PoolClient` helper signatures in the inspected API route set.
-- This closes a type-level escape hatch; it does not by itself prove complete route/worker coverage or production RLS.
-
-The latest code changes remain unvalidated by an exact-head CI run. Therefore Workstream C is **implementation advanced / CI gate pending**, not complete.
-
+- CI #5793 now validates the current head, including the full disposable acceptance sequence.
+- This closes a type-level escape hatch and validates the current CI gate; it does not by itself prove complete route/worker coverage or production RLS.
 
 ## Migration 096 lineage recovery — 2026-11-06
 
-**Workstream D advanced from UNRESOLVED to SOURCE RECOVERED / RECONCILIATION PENDING.**
+**Workstream D advanced to SOURCE RECOVERED / LIVE RECONCILED / EXACT SOURCE RESTORED / CI VALIDATED.**
 
-Evidence recovered from repository history:
+Evidence:
 
-- Production evidence recorded in issue #214 states the authoritative Neon ledger contains `096_verification_authorization_provenance.sql`, while the current migration directory does not.
 - Exact historical source is recoverable at commit `ca8f4100782e13f8d72106187fafc8e1e446214f`.
-- The corresponding blob is `258b1f4534efbf915688f78aa84d4ec24a47cbc0`.
-- Commit `54a7fe1ceb41b37a68720a71c10a1dd03af30dea` explicitly removed that exact file with message: `Remove accidentally placed unreviewed verification migration from main`.
-- The recovered migration adds four authorization snapshot columns to `verifications` and replaces `prevent_invalid_verification()` with a same-organization, verified-membership, explicit-permission check for APPROVED decisions, including a decision-time authorization snapshot.
-- No production source restoration, ledger rewrite, replay, DDL, DML, role/grant change, or deployment was performed.
+- Corresponding original blob: `258b1f4534efbf915688f78aa84d4ec24a47cbc0`.
+- Commit `54a7fe1ceb41b37a68720a71c10a1dd03af30dea` removed that exact file with message: `Remove accidentally placed unreviewed verification migration from main`.
+- The restored repository file now has the exact original blob SHA `258b1f4534efbf915688f78aa84d4ec24a47cbc0`.
+- Live ledger confirms version `096` and the exact filename.
+- Live trigger/function inspection confirms the intended verification provenance/authorization behavior.
+- CI #5793 passed migration validation and migration execution against the restored tree.
 
-**Important:** source recovery does **not** equal release reconciliation. The next gate is to compare the recovered SQL against the production schema/function/trigger definitions and application/deployment chronology, then determine the approved forward-only migration strategy. Do not restore or replay 096 blindly.
+**Release interpretation:** this is a reconciled lineage state, not authorization to replay 096 in production. The forward release path must continue to respect the existing live ledger and avoid duplicate application.
+
+## Runtime identity / least privilege update — 2026-11-06
+
+**Workstream H advanced to READ-ONLY EVIDENCE COMPLETE / REMEDIATION DESIGN REQUIRED.**
+
+- Production/default Neon branch remains read-only/HOLD.
+- A disposable role-split rehearsal branch `br-dry-base-b42zrepz` was inspected read-only.
+- Current database role is `rupaykg`.
+- `rupaykg` has `rolcreaterole=true`, `rolcreatedb=true`, `rolreplication=true`, and `rolbypassrls=true`.
+- Inspected public application objects are owned by `rupaykg`.
+- `token_roles` exists without those four elevated capabilities, but its suitability as the runtime role is not yet proven by grants/connectivity analysis.
+- No role/grant/ownership mutation was performed.
+
+The remediation target is a separated owner/migrator/runtime model with a least-privilege runtime identity and explicit application connectivity contract. The next action is a disposable-branch-only role/grant rehearsal and acceptance suite; production changes remain prohibited until independent security/release gates pass.
