@@ -103,8 +103,14 @@ BEGIN
     IF pg_temp.shakti_domain_authorized(t,'00000000-0000-0000-0000-0000000000f1','SELECT') THEN
       RAISE EXCEPTION 'Unverified geography unexpectedly authorized for %',t;
     END IF;
+    IF pg_temp.shakti_domain_authorized(t,'00000000-0000-0000-0000-0000000000a1','DELETE') THEN
+      RAISE EXCEPTION 'Same-domain DELETE unexpectedly authorized for %',t;
+    END IF;
     IF pg_temp.shakti_domain_authorized(t,'00000000-0000-0000-0000-0000000000b1','DELETE') THEN
       RAISE EXCEPTION 'Foreign organization DELETE unexpectedly authorized for %',t;
+    END IF;
+    IF pg_temp.shakti_domain_authorized(t,'00000000-0000-0000-0000-0000000000a1','TRUNCATE') THEN
+      RAISE EXCEPTION 'TRUNCATE unexpectedly authorized for %',t;
     END IF;
   END LOOP;
 END
