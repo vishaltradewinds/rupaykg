@@ -71,6 +71,10 @@ jobs:
           grep -q 'RupayKG' /tmp/rupaykg-web-dom.html
           test -s /tmp/rupaykg-web-smoke.png
           echo "Chrome DOM exit: $dom_status; screenshot exit: $shot_status"
+      - name: Run Shakti verification authorization convergence rehearsal
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/test-verification-convergence.sql
+      - name: Run Shakti verification negative authorization assurance
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/test-verification-negative-assurance.sql
       - name: Run Shakti tenant-boundary inventory rehearsal
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/test-tenant-boundary-inventory.sql
       - name: Run Shakti tenant-isolation RLS rehearsal
