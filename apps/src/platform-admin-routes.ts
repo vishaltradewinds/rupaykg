@@ -186,7 +186,7 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
     const limitValue = Number(query.limit ?? 50);
     const limit = Number.isInteger(limitValue) ? Math.max(1, Math.min(100, limitValue)) : 50;
     try {
-      const result = await serviceDb(pool, context.auth).query(
+      const result = await (await serviceDb(pool, context.auth)).query(
         `select i.id, i.display_name, i.email, i.status,
            case when i.suspended_at is null then false else true end as suspended,
            i.created_at, i.suspended_at, i.last_suspended_by_identity_id, i.last_suspension_reason,
