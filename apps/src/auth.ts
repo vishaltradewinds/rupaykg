@@ -65,6 +65,7 @@ export async function authenticate(request: FastifyRequest, pool: Pool | null): 
       ...(bilateralOrganizationScope ? { bilateralOrganizationScope: true } : {}),
     };
   });
+}
 
 export function canActForOrganization(auth: AuthContext, organizationId: string): boolean {
   return auth.memberships.some((m) => m.organization_id === organizationId)
