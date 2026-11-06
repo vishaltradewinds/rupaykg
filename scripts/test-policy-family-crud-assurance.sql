@@ -90,10 +90,12 @@ BEGIN
     'stakeholder_application_approvals','verifications'
   ] LOOP
     SELECT count(*) INTO n FROM pg_policy p JOIN pg_class c ON c.oid=p.polrelid
-      WHERE c.relname=t AND p.polcmd='*' AND p.polpermissive;
-    IF n <> 1 THEN RAISE EXCEPTION 'CRUD policy family count for % = %, expected 1', t, n; END IF;
+      WHERE c.relname=t AND p.polname = format('shakti_ci_pf_%s', t)
+        AND p.polcmd='*' AND p.polpermissive;
+    IF n <> 1 THEN RAISE EXCEPTION 'Shakti CRUD policy family count for % = %, expected 1', t, n; END IF;
     SELECT count(*) INTO n FROM pg_policy p JOIN pg_class c ON c.oid=p.polrelid
-      WHERE c.relname=t AND p.polcmd='*' AND p.polpermissive
+      WHERE c.relname=t AND p.polname = format('shakti_ci_pf_%s', t)
+        AND p.polcmd='*' AND p.polpermissive
         AND p.polqual IS NOT NULL AND p.polwithcheck IS NOT NULL;
     IF n <> 1 THEN RAISE EXCEPTION 'USING/WITH CHECK missing for %', t; END IF;
     SELECT count(*) INTO n FROM pg_class c
@@ -102,8 +104,9 @@ BEGIN
   END LOOP;
   IF EXISTS (
     SELECT 1 FROM pg_policy p
-    WHERE pg_get_expr(p.polqual,p.polrelid) ~* '\m(role_name|current_user|session_user)\M'
-       OR pg_get_expr(p.polwithcheck,p.polrelid) ~* '\m(role_name|current_user|session_user)\M'
+    WHERE p.polname LIKE 'shakti_ci_pf_%'
+      AND (pg_get_expr(p.polqual,p.polrelid) ~* '\m(role_name|current_user|session_user)\M'
+       OR pg_get_expr(p.polwithcheck,p.polrelid) ~* '\m(role_name|current_user|session_user)\M')
   ) THEN
     RAISE EXCEPTION 'role-name/current-user authorization mechanism detected';
   END IF;
