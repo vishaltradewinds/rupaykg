@@ -348,8 +348,8 @@ CREATE POLICY shakti_ci_verification_isolation ON public.verifications
 -- Seed only the minimum rows needed for CRUD and context-reset proof.
 INSERT INTO public.organizations (id,name,organization_type,verification_status)
 VALUES
- ('00000000-0000-0000-0000-0000000000a1','Shakti CI Org A','TEST','VERIFIED'),
- ('00000000-0000-0000-0000-0000000000b1','Shakti CI Org B','TEST','VERIFIED');
+ ('00000000-0000-0000-0000-0000000000a1','Shakti CI Org A','TEST','PENDING'),
+ ('00000000-0000-0000-0000-0000000000b1','Shakti CI Org B','TEST','PENDING');
 
 INSERT INTO public.activities (id,organization_id,activity_type)
 VALUES
