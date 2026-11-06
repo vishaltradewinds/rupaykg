@@ -29,10 +29,7 @@ try {
   const owner = await admin.query(`SELECT pg_get_userbyid(relowner) AS owner FROM pg_class WHERE oid = $1::regclass`, [table]);
   if (!owner.rows[0] || owner.rows[0].owner === runtimeRole) throw new Error("FAIL: disposable tenant table must be owned by an administrative role distinct from the runtime role");
 
-  const runtimeUrl = new URL(url);
-  runtimeUrl.username = encodeURIComponent(runtimeRole);
-  runtimeUrl.password = encodeURIComponent(runtimePassword);
-  runtime = new Client({ connectionString: runtimeUrl.toString() });
+  runtime = new Client({ connectionString: url, user: runtimeRole, password: runtimePassword });
   await runtime.connect();
 
   const role = await runtime.query(`SELECT current_user, rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user`);
