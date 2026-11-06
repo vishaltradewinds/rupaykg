@@ -13,7 +13,7 @@ function section(text: string, heading: string, nextHeading: string): string {
 }
 
 function entries(block: string): string[] {
-  return block.split("\n").map((line) => line.trim()).filter((line) => /^[a-z_]+$/.test(line));
+  return block.split("\n").map((line) => line.trim().split(" -> ", 1)[0]).filter((line) => /^[a-z_]+$/.test(line));
 }
 
 test("tenant policy register is internally consistent and duplicate-free", async () => {
