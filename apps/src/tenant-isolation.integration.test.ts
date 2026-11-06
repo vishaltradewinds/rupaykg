@@ -183,7 +183,7 @@ after(async () => {
   }
 });
 
-test("bootstrap context is organization-neutral and explicitly service-scoped", { skip: !integrationEnabled || !databaseUrl }, async () => {
+test("bootstrap context is organization-neutral and explicitly non-service-scoped", { skip: !integrationEnabled || !databaseUrl }, async () => {
   const result = await withDatabaseBootstrapContext(pool!, async (client) => {
     await client.query(`set local role ${qid(testRole)}`);
     const settings = await client.query(
@@ -191,8 +191,8 @@ test("bootstrap context is organization-neutral and explicitly service-scoped", 
     );
     return settings.rows[0];
   });
-  assert.equal(result.organization_id, "");
-  assert.equal(result.identity_id, "");
+  assert.equal(result.organization_id, null);
+  assert.equal(result.identity_id, null);
   assert.equal(result.service_mode, "false");
   assert.equal(result.bilateral_scope, "false");
 });
