@@ -159,7 +159,7 @@ export async function registerStatutoryRoutes(app: FastifyInstance, pool: Pool |
     const body = bodyOf(request as never);
     const organizationId = auth.activeOrganizationId;
     if (!organizationId || !canActForOrganization(auth, organizationId)) return reply.code(403).send({ error: "No verified membership for organization", code: "ORG_FORBIDDEN" });
-    if (!await hasOrganizationPermission(pool, auth, organizationId, ["epr:manage", "audit:execute", "reports:export"])) return reply.code(403).send({ error: "EPR applicability management permission required", code: "STATUTORY_EPR_WRITE_REQUIRED" });
+    if (!canActForOrganization(auth, organizationId)) return reply.code(403).send({ error: "Organization access denied", code: "ORG_FORBIDDEN" });
     const scheme = text(body, "scheme");
     if (!scheme) return reply.code(400).send({ error: "EPR scheme is required", code: "EPR_SCHEME_REQUIRED" });
     const schemeRow = await pool.query<{ code: string; name: string; metadata: Record<string, unknown> }>("select code,name,metadata from epr_schemes where code=$1 and status='VERIFIED'", [scheme]);
@@ -170,11 +170,14 @@ export async function registerStatutoryRoutes(app: FastifyInstance, pool: Pool |
     const evidenceId = text(body, "evidenceId");
     const verificationId = text(body, "verificationId");
 
-    const metadata = schemeRow.rows[0].metadata ?? {};
-    const metadataRule = typeof metadata.rule_reference === "string" ? metadata.rule_reference : null;
     const registrationInput = normalizeEprRegistrationInput(text(body, "cpcbRegistrationReference"), text(body, "cpcbRegistrationStatus"), body.basis);
     try {
       const result = await withDatabaseTenantContext(pool, { identityId: auth.identityId, organizationId: organizationId!, bilateralOrganizationScope: auth.bilateralOrganizationScope ?? false, serviceMode: false }, async client => {
+        if (!await hasOrganizationPermission(client, auth, organizationId!, ["epr:manage", "audit:execute", "reports:export"])) throw Object.assign(new Error("EPR applicability management permission required"), { code: "STATUTORY_EPR_WRITE_REQUIRED" });
+        const schemeRow = await client.query<{ code: string; name: string; metadata: Record<string, unknown> }>("select code,name,metadata from epr_schemes where code=$1 and status='VERIFIED'", [scheme]);
+        if (!schemeRow.rows[0]) throw Object.assign(new Error("Unsupported EPR scheme. Select a scheme from the RupayKG statutory catalog."), { code: "EPR_SCHEME_UNSUPPORTED" });
+        const metadata = schemeRow.rows[0].metadata ?? {};
+        const metadataRule = typeof metadata.rule_reference === "string" ? metadata.rule_reference : null;
         if (!await evidenceBindingValid(client, organizationId!, evidenceId, verificationId)) throw Object.assign(new Error("Evidence and verification must be supplied together and be verified, approved, and organization/geography scoped"), { code: "STATUTORY_EVIDENCE_BINDING_INVALID" });
         return client.query(
         `insert into organization_epr_applicability
@@ -189,8 +192,8 @@ export async function registerStatutoryRoutes(app: FastifyInstance, pool: Pool |
         [organizationId, scheme, text(body, "ruleReference"), metadataRule, status, JSON.stringify(registrationInput.basis), registrationInput.persistedStatus, registrationInput.reference, evidenceId, verificationId, text(body, "determinationNote"), auth.identityId],
       );
       });
-      return reply.code(201).send({ source: "postgresql", syntheticData: false, applicability: result.rows[0], scheme: schemeRow.rows[0], statutoryBoundary: "INTERNAL_APPLICABILITY_PREPARATION_ONLY", cpcbExternalStatus: result.rows[0]?.cpcb_registration_status, externalRegistrationState: registrationInput.reference ? "USER_REPORTED_UNVERIFIED" : "NOT_ASSERTED" });
-    } catch (error) { request.log.error(error); return reply.code(503).send({ error: "EPR applicability could not be persisted", code: "EPR_WRITE_UNAVAILABLE", syntheticData: false }); }
+      return reply.code(201).send({ source: "postgresql", syntheticData: false, applicability: result.rows[0], statutoryBoundary: "INTERNAL_APPLICABILITY_PREPARATION_ONLY", cpcbExternalStatus: result.rows[0]?.cpcb_registration_status, externalRegistrationState: registrationInput.reference ? "USER_REPORTED_UNVERIFIED" : "NOT_ASSERTED" });
+    } catch (error) { const code = (error as { code?: string }).code; if (code === "STATUTORY_EPR_WRITE_REQUIRED" || code === "EPR_SCHEME_UNSUPPORTED") return reply.code(code === "STATUTORY_EPR_WRITE_REQUIRED" ? 403 : 400).send({ error: (error as Error).message, code }); if (code === "ORG_FORBIDDEN") return reply.code(403).send({ error: (error as Error).message, code }); request.log.error(error); return reply.code(503).send({ error: "EPR applicability could not be persisted", code: "EPR_WRITE_UNAVAILABLE", syntheticData: false }); }
   });
 
   app.post("/api/v1/statutory/epr/:id/external-registration", async (request, reply) => {
