@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
+const repoRoot = path.resolve(process.cwd(), "..");
 const routeFiles = [
   "apps/src/server.ts",
   "apps/src/value-routes.ts",
@@ -24,7 +25,7 @@ test("request-path database access stays transaction-context-bound", async () =>
   const violations: string[] = [];
 
   for (const relativePath of routeFiles) {
-    const source = await readFile(path.resolve(process.cwd(), relativePath), "utf8");
+    const source = await readFile(path.resolve(repoRoot, relativePath), "utf8");
     const lines = source.split("\n");
 
     lines.forEach((line, index) => {
