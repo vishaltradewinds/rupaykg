@@ -12,7 +12,6 @@ function fakePool(isSuperAdmin: boolean): Pool {
   const query = async (sql: string) => {
     if (/^(begin|commit|rollback)$/i.test(sql.trim())) return { rows: [], rowCount: 0 };
         if (sql.includes("set_config('app.rupaykg.bilateral_scope'") || sql.includes("set_config('app.rupaykg.service_mode'") || sql.includes("set_config('app.rupaykg.organization_id'") || sql.includes("set_config('app.rupaykg.identity_id'")) return { rows: [{ set_config: "" }], rowCount: 1 };
-    if (sql.includes("set_config('app.rupaykg.bilateral_scope'") || sql.includes("set_config('app.rupaykg.service_mode'") || sql.includes("set_config('app.rupaykg.organization_id'") || sql.includes("set_config('app.rupaykg.identity_id'")) return { rows: [{ set_config: "" }], rowCount: 1 };
     if (sql.includes("r.name = 'super_admin'")) return { rows: [{ ok: isSuperAdmin }] };
     if (sql.includes("from identity_sessions")) return { rows: [{ identity_id: identityId }] };
     if (sql.includes("from organization_memberships") && sql.includes("where identity_id")) return { rows: [{ organization_id: organizationId, role_id: roleId, status: "VERIFIED" }] };
@@ -155,7 +154,7 @@ test("dual-control access requests cannot be approved by their requester", async
       query: async (sql: string) => {
         if (/^(begin|commit|rollback)$/i.test(sql.trim())) return { rows: [], rowCount: 0 };
         if (sql.includes("set_config('app.rupaykg.bilateral_scope'") || sql.includes("set_config('app.rupaykg.service_mode'") || sql.includes("set_config('app.rupaykg.organization_id'") || sql.includes("set_config('app.rupaykg.identity_id'")) return { rows: [{ set_config: "" }], rowCount: 1 };
-        if (sql.includes("from platform_access_change_requests where id=$1 for update")) return { rows: [{
+        if (sql.includes("from platform_access_change_requests") && sql.includes("for update")) return { rows: [{
           id: "423e4567-e89b-42d3-a456-426614174000",
           request_type: "GRANT_RESERVED_ROLE",
           target_identity_id: "523e4567-e89b-42d3-a456-426614174000",
@@ -196,7 +195,7 @@ test("dual-control access targets cannot approve their own reserved-role grant",
       query: async (sql: string) => {
         if (/^(begin|commit|rollback)$/i.test(sql.trim())) return { rows: [], rowCount: 0 };
         if (sql.includes("set_config('app.rupaykg.bilateral_scope'") || sql.includes("set_config('app.rupaykg.service_mode'") || sql.includes("set_config('app.rupaykg.organization_id'") || sql.includes("set_config('app.rupaykg.identity_id'")) return { rows: [{ set_config: "" }], rowCount: 1 };
-        if (sql.includes("from platform_access_change_requests where id=$1 for update")) return { rows: [{
+        if (sql.includes("from platform_access_change_requests") && sql.includes("for update")) return { rows: [{
           id: "423e4567-e89b-42d3-a456-426614174000",
           request_type: "GRANT_RESERVED_ROLE",
           target_identity_id: identityId,
