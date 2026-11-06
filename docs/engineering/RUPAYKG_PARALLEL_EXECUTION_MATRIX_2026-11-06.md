@@ -30,11 +30,18 @@ A/B/C/D/E run in parallel. F begins only when B/C/E policy semantics are suffici
 - No role/grant/ownership mutation.
 - No deployment, worker activation, merge, certification, or TRL 9 declaration without the required independent gates and explicit founder approval.
 
+## Current evidence update — 2026-11-06
+- PR #311 head `f266900065049e7eb1ce34605c0fdcf982ff3def` completed CI run #5736 successfully.
+- CI completed all 17 validation steps, including migration validation, migration-manifest validation, protected-migrator configuration contract, API migration execution, typecheck/build, browser smoke, disposable PostgreSQL acceptance, production container build, bounded backup/restore rehearsal, and startup-isolation assertion.
+- Authentication bootstrap integration is therefore validated at the repository/CI gate level on this head.
+- This does not validate production RLS state, production migration lineage, production deployment, field acceptance, statutory approval, certification, or TRL 9.
+
 ## Current blockers
 1. RLS is verified disabled on all 67 inspected public tables and PostgreSQL policy count is zero.
-2. Migration 096 source/ledger lineage is unresolved.
-3. CI #5710 failed in disposable acceptance tests after typecheck/build passed; exact failing assertion must be extracted before a corrective claim.
-4. Authentication integration is implemented but not yet validated by a successful full CI run.
+2. Migration 096 source/ledger lineage remains unresolved. Exact filename searches across the active migration paths and inspected historical refs did not locate `096_verification_authorization_provenance.sql`; no replacement source is being invented.
+3. Complete repository-wide protected-route migration and independent semantic audit remain release gates.
+4. Disposable cross-tenant/RLS evidence must be validated against the actual production-representative schema before any production RLS proposal.
+5. Runtime DB identity/least-privilege evidence and independent release governance remain pending.
 
 ## Completion rule
 A workstream is not marked complete because code exists. It requires its defined evidence gate.
