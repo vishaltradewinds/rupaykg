@@ -2,6 +2,7 @@
 -- Disposable rehearsal only. No production migration or mutation.
 \set ON_ERROR_STOP on
 BEGIN;
+\set KEEP_CONVERGENCE true
 
 \i scripts/test-verification-convergence.sql
 
