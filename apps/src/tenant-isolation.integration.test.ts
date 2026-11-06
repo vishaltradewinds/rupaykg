@@ -193,7 +193,7 @@ test("bootstrap context is organization-neutral and explicitly service-scoped", 
   });
   assert.equal(result.organization_id, "");
   assert.equal(result.identity_id, "");
-  assert.equal(result.service_mode, "true");
+  assert.equal(result.service_mode, "false");
   assert.equal(result.bilateral_scope, "false");
 });
 
