@@ -11,11 +11,11 @@ const roleId = "323e4567-e89b-42d3-a456-426614174000";
 function fakePool(isSuperAdmin: boolean): Pool {
   const query = async (sql: string) => {
     if (/^(begin|commit|rollback)$/i.test(sql.trim())) return { rows: [], rowCount: 0 };
+    if (sql.includes("r.name = 'super_admin'")) return { rows: [{ ok: isSuperAdmin }] };
     if (sql.includes("from identity_sessions")) return { rows: [{ identity_id: identityId }] };
     if (sql.includes("from organization_memberships") && sql.includes("where identity_id")) {
       return { rows: [{ organization_id: organizationId, role_id: roleId, status: "VERIFIED" }] };
     }
-    if (sql.includes("r.name = 'super_admin'")) return { rows: [{ ok: isSuperAdmin }] };
     if (sql.includes('as "verifiedIdentities"')) return { rows: [{
       verifiedIdentities: "12",
       organizations: "7",
