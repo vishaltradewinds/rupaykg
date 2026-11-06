@@ -251,4 +251,7 @@ BEGIN
 END
 $assert$;
 
+\if :{?KEEP_CONVERGENCE}
+\else
 ROLLBACK;
+\endif
