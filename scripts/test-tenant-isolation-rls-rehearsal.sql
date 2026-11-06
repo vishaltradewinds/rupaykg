@@ -494,20 +494,69 @@ $roles$;
 
 -- Cleanup: disposable rehearsal only.
 DO $cleanup$
-DECLARE r text;
 BEGIN
-  FOREACH r IN ARRAY ARRAY[
-    'activities','organizations','evidence','measurements','mrv_observations','epr_obligations',
-    'activity_assignments','bwg_epr_reports','bwg_esg_reports','carbon_calculations','esg_metrics',
-    'evidence_artifact_reviews','evidence_artifact_versions','evidence_verification_requirements',
-    'field_sync_conflicts','field_sync_cursors','field_sync_envelopes','mrv_provenance_events',
-    'stakeholder_application_approvals','verifications'
-  ]
-  LOOP
-    EXECUTE format('DROP POLICY IF EXISTS shakti_ci_%s_isolation ON public.%I', replace(r,'-','_'), r);
-    EXECUTE format('ALTER TABLE public.%I NO FORCE ROW LEVEL SECURITY', r);
-    EXECUTE format('ALTER TABLE public.%I DISABLE ROW LEVEL SECURITY', r);
-  END LOOP;
+  DROP POLICY IF EXISTS shakti_ci_org_isolation ON public.organizations;
+  DROP POLICY IF EXISTS shakti_ci_activity_isolation ON public.activities;
+  DROP POLICY IF EXISTS shakti_ci_evidence_isolation ON public.evidence;
+  DROP POLICY IF EXISTS shakti_ci_measurement_isolation ON public.measurements;
+  DROP POLICY IF EXISTS shakti_ci_mrv_observation_isolation ON public.mrv_observations;
+  DROP POLICY IF EXISTS shakti_ci_epr_obligation_isolation ON public.epr_obligations;
+  DROP POLICY IF EXISTS shakti_ci_activity_assignment_isolation ON public.activity_assignments;
+  DROP POLICY IF EXISTS shakti_ci_bwg_epr_report_isolation ON public.bwg_epr_reports;
+  DROP POLICY IF EXISTS shakti_ci_bwg_esg_report_isolation ON public.bwg_esg_reports;
+  DROP POLICY IF EXISTS shakti_ci_carbon_calculation_isolation ON public.carbon_calculations;
+  DROP POLICY IF EXISTS shakti_ci_esg_metric_isolation ON public.esg_metrics;
+  DROP POLICY IF EXISTS shakti_ci_evidence_artifact_review_isolation ON public.evidence_artifact_reviews;
+  DROP POLICY IF EXISTS shakti_ci_evidence_artifact_version_isolation ON public.evidence_artifact_versions;
+  DROP POLICY IF EXISTS shakti_ci_evidence_verification_requirement_isolation ON public.evidence_verification_requirements;
+  DROP POLICY IF EXISTS shakti_ci_field_sync_cursor_isolation ON public.field_sync_cursors;
+  DROP POLICY IF EXISTS shakti_ci_field_sync_envelope_isolation ON public.field_sync_envelopes;
+  DROP POLICY IF EXISTS shakti_ci_field_sync_conflict_isolation ON public.field_sync_conflicts;
+  DROP POLICY IF EXISTS shakti_ci_mrv_provenance_event_isolation ON public.mrv_provenance_events;
+  DROP POLICY IF EXISTS shakti_ci_stakeholder_application_approval_isolation ON public.stakeholder_application_approvals;
+  DROP POLICY IF EXISTS shakti_ci_verification_isolation ON public.verifications;
+
+  ALTER TABLE public.organizations NO FORCE ROW LEVEL SECURITY;
+  ALTER TABLE public.activities NO FORCE ROW LEVEL SECURITY;
+  ALTER TABLE public.evidence NO FORCE ROW LEVEL SECURITY;
+  ALTER TABLE public.measurements NO FORCE ROW LEVEL SECURITY;
+  ALTER TABLE public.mrv_observations NO FORCE ROW LEVEL SECURITY;
+  ALTER TABLE public.epr_obligations NO FORCE ROW LEVEL SECURITY;
+  ALTER TABLE public.activity_assignments NO FORCE ROW LEVEL SECURITY;
+  ALTER TABLE public.bwg_epr_reports NO FORCE ROW LEVEL SECURITY;
+  ALTER TABLE public.bwg_esg_reports NO FORCE ROW LEVEL SECURITY;
+  ALTER TABLE public.carbon_calculations NO FORCE ROW LEVEL SECURITY;
+  ALTER TABLE public.esg_metrics NO FORCE ROW LEVEL SECURITY;
+  ALTER TABLE public.evidence_artifact_reviews NO FORCE ROW LEVEL SECURITY;
+  ALTER TABLE public.evidence_artifact_versions NO FORCE ROW LEVEL SECURITY;
+  ALTER TABLE public.evidence_verification_requirements NO FORCE ROW LEVEL SECURITY;
+  ALTER TABLE public.field_sync_cursors NO FORCE ROW LEVEL SECURITY;
+  ALTER TABLE public.field_sync_envelopes NO FORCE ROW LEVEL SECURITY;
+  ALTER TABLE public.field_sync_conflicts NO FORCE ROW LEVEL SECURITY;
+  ALTER TABLE public.mrv_provenance_events NO FORCE ROW LEVEL SECURITY;
+  ALTER TABLE public.stakeholder_application_approvals NO FORCE ROW LEVEL SECURITY;
+  ALTER TABLE public.verifications NO FORCE ROW LEVEL SECURITY;
+
+  ALTER TABLE public.organizations DISABLE ROW LEVEL SECURITY;
+  ALTER TABLE public.activities DISABLE ROW LEVEL SECURITY;
+  ALTER TABLE public.evidence DISABLE ROW LEVEL SECURITY;
+  ALTER TABLE public.measurements DISABLE ROW LEVEL SECURITY;
+  ALTER TABLE public.mrv_observations DISABLE ROW LEVEL SECURITY;
+  ALTER TABLE public.epr_obligations DISABLE ROW LEVEL SECURITY;
+  ALTER TABLE public.activity_assignments DISABLE ROW LEVEL SECURITY;
+  ALTER TABLE public.bwg_epr_reports DISABLE ROW LEVEL SECURITY;
+  ALTER TABLE public.bwg_esg_reports DISABLE ROW LEVEL SECURITY;
+  ALTER TABLE public.carbon_calculations DISABLE ROW LEVEL SECURITY;
+  ALTER TABLE public.esg_metrics DISABLE ROW LEVEL SECURITY;
+  ALTER TABLE public.evidence_artifact_reviews DISABLE ROW LEVEL SECURITY;
+  ALTER TABLE public.evidence_artifact_versions DISABLE ROW LEVEL SECURITY;
+  ALTER TABLE public.evidence_verification_requirements DISABLE ROW LEVEL SECURITY;
+  ALTER TABLE public.field_sync_cursors DISABLE ROW LEVEL SECURITY;
+  ALTER TABLE public.field_sync_envelopes DISABLE ROW LEVEL SECURITY;
+  ALTER TABLE public.field_sync_conflicts DISABLE ROW LEVEL SECURITY;
+  ALTER TABLE public.mrv_provenance_events DISABLE ROW LEVEL SECURITY;
+  ALTER TABLE public.stakeholder_application_approvals DISABLE ROW LEVEL SECURITY;
+  ALTER TABLE public.verifications DISABLE ROW LEVEL SECURITY;
 END
 $cleanup$;
 
