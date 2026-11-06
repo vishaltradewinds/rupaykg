@@ -17,6 +17,12 @@ test("evidence vault enforces tenant scope, versioned storage, integrity and ind
   const reviewerToken = randomBytes(32).toString("base64url");
   const outsiderToken = randomBytes(32).toString("base64url");
   try {
+    const geographyFunction = await pool.query<{ proconfig: string[] | null; prosecdef: boolean }>(
+      "select p.proconfig, p.prosecdef from pg_proc p where p.oid='public.organization_has_geography_scope(uuid,uuid)'::regprocedure",
+    );
+    assert.equal(geographyFunction.rows[0]?.prosecdef, false, "geography scope helper remains SECURITY INVOKER");
+    assert.deepEqual(geographyFunction.rows[0]?.proconfig, ["search_path=pg_catalog, public, pg_temp"], "geography helper path keeps pg_temp last");
+
     const org = await pool.query<{ id: string }>(
       "insert into organizations(name,organization_type,status) values($1,'test_fixture','VERIFIED') returning id",
       ["TEST-EVIDENCE-" + suffix],
@@ -29,6 +35,10 @@ test("evidence vault enforces tenant scope, versioned storage, integrity and ind
     const geography = await pool.query<{ id: string }>(
       "insert into geography(kind,name,source,source_version) values('STATE_UT',$1,'integration-test','fixture-v1') returning id",
       ["TEST-EVIDENCE-GEO-" + suffix],
+    );
+    await pool.query(
+      "insert into organization_geography_scopes(organization_id,geography_id,status) values($1,$2,'VERIFIED')",
+      [organizationId, geography.rows[0]!.id],
     );
     const activity = await pool.query<{ id: string }>(
       "insert into activities(organization_id,geography_id,activity_type,status) values($1,$2,'WASTE_WEIGHT_MEASUREMENT','COMPLETED') returning id",
