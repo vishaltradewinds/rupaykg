@@ -83,6 +83,8 @@ jobs:
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/test-multi-party-domain-contract.sql
       - name: Run Shakti multi-party concurrency assurance rehearsal
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/test-multi-party-concurrency-assurance.sql
+      - name: Run Shakti concrete multi-party concurrency race assurance
+        run: bash scripts/test-multi-party-concurrency-races.sh
       - name: Run Shakti pool context and worker boundary rehearsal
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/test-pool-context-worker-boundary.sql
       - name: Run tests including disposable PostgreSQL acceptance
