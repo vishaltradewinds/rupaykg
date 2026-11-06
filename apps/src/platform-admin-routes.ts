@@ -168,21 +168,6 @@ async function adminQuery<T extends Record<string, unknown>>(
   );
 }
 
-
-  const client = await pool.connect();
-  try {
-    await client.query("begin");
-    const result = await work(client);
-    await client.query("commit");
-    return result;
-  } catch (error) {
-    await client.query("rollback");
-    throw error;
-  } finally {
-    client.release();
-  }
-}
-
 export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Pool | null): Promise<void> {
   app.get("/api/v1/admin/overview", async (request, reply) => {
     const context = await authorize(request, reply, pool, null);
