@@ -71,6 +71,13 @@ before(async () => {
   `);
 
   await query(`
+    alter table ${qid(schema)}.tenant_data owner to ${qid(ownerRole)};
+    alter table ${qid(schema)}.shared_catalog owner to ${qid(ownerRole)};
+    alter table ${qid(schema)}.protected_control owner to ${qid(ownerRole)};
+    alter table ${qid(schema)}.schema_migrations owner to ${qid(ownerRole)};
+    alter sequence ${qid(schema)}.tenant_data_id_seq owner to ${qid(ownerRole)};
+    alter function ${qid(schema)}.runtime_allowed_function() owner to ${qid(ownerRole)};
+
     revoke all on schema ${qid(schema)} from public;
     revoke all on all tables in schema ${qid(schema)} from public;
     revoke all on all sequences in schema ${qid(schema)} from public;
