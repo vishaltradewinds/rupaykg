@@ -22,7 +22,8 @@ export async function registerRegistryRoutes(app:FastifyInstance,pool:Pool|null)
     if(!activityId||!trustRootId||!verificationId||!issuerOrganizationId||quantity===null||!unit)return reply.code(400).send({error:"activityId, trustRootId, verificationId, issuerOrganizationId, positive quantity and unit are required"});
     if(!auth.activeOrganizationId||auth.activeOrganizationId!==issuerOrganizationId)return reply.code(403).send({error:"Explicit active organization context is required",code:"ORG_CONTEXT_REQUIRED"});
     if(!canActForOrganization(auth,issuerOrganizationId))return reply.code(403).send({error:"Issuer organization access denied",code:"ORG_FORBIDDEN"});
-    if(!await canPerformHighRiskActionInDatabase(pool,auth,issuerOrganizationId,"ISSUE_CREDENTIAL"))return reply.code(403).send({error:"Explicit ISSUE_CREDENTIAL permission is required",code:"HIGH_RISK_PERMISSION_REQUIRED"});
+    const issuePermission = await withDatabaseTenantContext(pool, { identityId: auth.identityId, organizationId: issuerOrganizationId, bilateralOrganizationScope: false, serviceMode: false }, client => canPerformHighRiskActionInDatabase(client,auth,issuerOrganizationId,"ISSUE_CREDENTIAL"));
+    if(!issuePermission)return reply.code(403).send({error:"Explicit ISSUE_CREDENTIAL permission is required",code:"HIGH_RISK_PERMISSION_REQUIRED"});
     try{return reply.code(201).send({source:"postgresql",syntheticData:false,credential:await tx(pool,auth,issuerOrganizationId,async c=>{
       const v=await c.query<{evidence_id:string;decision:string;activity_id:string}>("select evidence_id,decision,activity_id from verifications where id=$1 for update",[verificationId]);
       if(!v.rows[0]||v.rows[0].decision!=="APPROVED")throw Object.assign(new Error("Approved verification required"),{code:"VERIFICATION_REQUIRED"});
