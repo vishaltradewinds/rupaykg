@@ -1,7 +1,7 @@
 import test, { after, before } from "node:test";
 import assert from "node:assert/strict";
 import { Pool } from "pg";
-import { withDatabaseTenantContext } from "./db-context.js";
+import { withDatabaseBootstrapContext, withDatabaseTenantContext } from "./db-context.js";
 
 const integrationEnabled = process.env.RUPAYKG_RUN_DB_INTEGRATION_TESTS === "1";
 const databaseUrl = process.env.DATABASE_URL;
@@ -181,6 +181,20 @@ after(async () => {
   } finally {
     await pool.end();
   }
+});
+
+test("bootstrap context is organization-neutral and explicitly service-scoped", { skip: !integrationEnabled || !databaseUrl }, async () => {
+  const result = await withDatabaseBootstrapContext(pool!, async (client) => {
+    await client.query(`set local role ${qid(testRole)}`);
+    const settings = await client.query(
+      "select current_setting('app.rupaykg.organization_id', true) as organization_id, current_setting('app.rupaykg.identity_id', true) as identity_id, current_setting('app.rupaykg.service_mode', true) as service_mode, current_setting('app.rupaykg.bilateral_scope', true) as bilateral_scope",
+    );
+    return settings.rows[0];
+  });
+  assert.equal(result.organization_id, "");
+  assert.equal(result.identity_id, "");
+  assert.equal(result.service_mode, "true");
+  assert.equal(result.bilateral_scope, "false");
 });
 
 test("cross-tenant SELECT/INSERT/UPDATE/DELETE is denied", { skip: !integrationEnabled || !databaseUrl }, async () => {
