@@ -8,9 +8,9 @@
 
 BEGIN;
 
-\i migrations/2026110401_membership_role_tenant_binding.sql
-\i migrations/20261105_geography_scope_fail_closed.sql
-\i migrations/20261104_verification_authorization_tenant_binding.sql
+\i scripts/fixtures/verification-convergence/2026110401_membership_role_tenant_binding.sql
+\i scripts/fixtures/verification-convergence/20261105_geography_scope_fail_closed.sql
+\i scripts/fixtures/verification-convergence/20261104_verification_authorization_tenant_binding.sql
 
 DO $$
 BEGIN
