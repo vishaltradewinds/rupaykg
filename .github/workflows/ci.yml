@@ -79,6 +79,10 @@ jobs:
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/test-policy-family-crud-assurance.sql
       - name: Run Shakti multi-party authorization boundary rehearsal
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/test-multi-party-authorization-boundaries.sql
+      - name: Run Shakti multi-party domain contract reconciliation
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/test-multi-party-domain-contract.sql
+      - name: Run Shakti multi-party concurrency assurance rehearsal
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/test-multi-party-concurrency-assurance.sql
       - name: Run Shakti pool context and worker boundary rehearsal
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/test-pool-context-worker-boundary.sql
       - name: Run tests including disposable PostgreSQL acceptance
