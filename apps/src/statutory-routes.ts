@@ -75,7 +75,7 @@ async function withStatutoryTenantContext<T>(pool: Pool, auth: AuthContext, orga
   }, fn);
 }
 
-async function evidenceBindingValid(db: Pool | PoolClient, organizationId: string, evidenceId: string | null, verificationId: string | null): Promise<boolean> {
+async function evidenceBindingValid(db: PoolClient, organizationId: string, evidenceId: string | null, verificationId: string | null): Promise<boolean> {
   if (!evidenceId && !verificationId) return true;
   if (!evidenceId || !verificationId) return false;
   const result = await db.query<{ ok: boolean }>(
