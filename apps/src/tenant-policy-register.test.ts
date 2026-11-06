@@ -14,7 +14,10 @@ function section(text: string, heading: string, nextHeading: string): string {
 }
 
 function entries(block: string): string[] {
-  return block.split("\n").map((line) => line.trim().split(" -> ", 1)[0]).filter((line) => /^[a-z_]+$/.test(line));
+  return block.split("\n").flatMap((line) => {
+    const table = line.trim().split(" -> ", 1)[0];
+    return table && /^[a-z_]+$/.test(table) ? [table] : [];
+  });
 }
 
 test("tenant policy register is internally consistent and duplicate-free", async () => {
