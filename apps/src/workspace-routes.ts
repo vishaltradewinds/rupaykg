@@ -27,7 +27,7 @@ function requestedOperatingContext(request: { query: unknown }): { context?: Ope
   if (raw === "urban" || raw === "rural") return { context: raw, invalid: false };
   return { invalid: true };
 }
-async function authorizeGeography(db: Pool | PoolClient, auth: AuthContext, geographyId: string): Promise<boolean> {
+async function authorizeGeography(db: PoolClient, auth: AuthContext, geographyId: string): Promise<boolean> {
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(geographyId)) return false;
   const check = await db.query<{ ok: boolean }>(`select exists (select 1 from organization_memberships om where om.identity_id=$1 and om.status='VERIFIED' and ($3::uuid is null or om.organization_id=$3::uuid) and organization_has_geography_scope(om.organization_id,$2)) as ok`, [auth.identityId, geographyId, auth.activeOrganizationId ?? null]);
   return check.rows[0]?.ok === true;
@@ -38,7 +38,7 @@ type WorkspaceName = "resourceFlows" | "mrv" | "compliance" | "carbon" | "regist
 const WORKSPACE_READ_PERMISSIONS: Record<WorkspaceName, readonly string[]> = {
   resourceFlows: ["waste:read"], mrv: ["evidence:upload", "evidence:review", "guardian:read"], compliance: ["reports:read", "swm:read", "epr:read", "audit:read"], carbon: ["reports:read", "credits:read", "projects:read"], registry: ["registry:read", "credits:read"], settlement: ["credits:read", "settlement:authorize", "settlement:settle", "AUTHORIZE_SETTLEMENT", "SETTLE_FUNDS"], esg: ["reports:read", "epr:read", "csr:read", "audit:read"],
 };
-async function authorizeWorkspaceRead(db: Pool | PoolClient, auth: AuthContext, workspace: WorkspaceName): Promise<boolean> {
+async function authorizeWorkspaceRead(db: PoolClient, auth: AuthContext, workspace: WorkspaceName): Promise<boolean> {
   if (!auth.activeOrganizationId) return false;
   return hasOrganizationPermission(db, auth, auth.activeOrganizationId, WORKSPACE_READ_PERMISSIONS[workspace]);
 }
