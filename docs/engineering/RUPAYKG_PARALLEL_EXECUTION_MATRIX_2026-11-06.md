@@ -110,3 +110,13 @@ The current next gate is:
 **67-table policy classification → disposable owner/runtime privilege model → adversarial privilege/RLS acceptance → CI full gate → independent security review → production change proposal only after explicit approval.**
 
 Passing the disposable rehearsal will not authorize production role changes or RLS enablement.
+
+## Access-path reconciliation update — 2026-11-06
+
+- Inspected `apps/src/server.ts` after the runtime-context hardening batch.
+- The unauthenticated `/health` database probe was the remaining direct `pool.query` path in the inspected server module; it has now been bound to `withDatabaseBootstrapContext()` so the probe uses an explicit transaction-scoped bootstrap boundary rather than a raw pooled connection.
+- The shared regulatory catalog query already uses `withDatabaseBootstrapContext()`.
+- This closes the identified direct shared-pool query escape in `server.ts` for the inspected paths. It does **not** yet constitute repository-wide worker/background-job or service-mode coverage.
+- Commit: `a3dd9b9909a9fbc6a98870dc1bff4774a3d60efb`.
+
+**Next gate:** complete repository-wide access-path inventory for workers/background jobs, scheduled tasks, bootstrap/control-plane paths, bilateral settlement/registry paths, and sequence/function privileges; then run independent semantic review before any production role/RLS proposal.
