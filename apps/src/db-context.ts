@@ -65,3 +65,26 @@ export async function withDatabaseTenantContext<T>(
     client.release();
   }
 }
+
+/**
+ * Executes authentication/bootstrap work in an explicit PostgreSQL service context.
+ * This context intentionally carries no organization scope and must remain limited
+ * to control-plane bootstrap reads such as session, identity, and membership lookup.
+ */
+export async function withDatabaseBootstrapContext<T>(
+  pool: Pool,
+  fn: (client: PoolClient) => Promise<T>,
+): Promise<T> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query("select set_config('app.rupaykg.bilateral_scope', 'false', true)");
+    await client.query("select set_config('app.rupaykg.service_mode', 'true', true)");
+    const result = await fn(client);
+    await client.query("COMMIT");
+    return result;
+  } catch (error) {
+    try { await client.query("ROLLBACK"); } catch {}
+    throw error;
+  } finally { client.release(); }
+}
