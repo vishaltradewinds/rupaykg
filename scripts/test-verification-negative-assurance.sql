@@ -44,9 +44,9 @@ BEGIN
   END IF;
 
   -- Fail-closed identity/org/geography conditions.
-  IF position("i.status='VERIFIED'" in v_def) = 0
-     OR position("o.status='VERIFIED'" in v_def) = 0
-     OR position("m.status='VERIFIED'" in v_def) = 0 THEN
+  IF position($needle$i.status='VERIFIED'$needle$ in lower(v_def)) = 0
+     OR position($needle$o.status='VERIFIED'$needle$ in lower(v_def)) = 0
+     OR position($needle$m.status='VERIFIED'$needle$ in lower(v_def)) = 0 THEN
     RAISE EXCEPTION 'verified identity/organization/membership checks are incomplete';
   END IF;
   IF position('i.suspended_at IS NULL' in v_def) = 0 THEN
