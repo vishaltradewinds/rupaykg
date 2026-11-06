@@ -18,9 +18,13 @@ const history = execFileSync("git", [
   "log", "--all", "--full-history", "--name-status", "--format=%H %s", "--", ...activeCandidates,
 ], { encoding: "utf8" });
 
-const exactHistory = history
-  .split("\n")
-  .filter((line) => line.includes(target))
+const repositoryWideHistory = execFileSync("git", [
+  "log", "--all", "--full-history", "-S", target, "--name-status", "--format=%H %s",
+], { encoding: "utf8" });
+
+const exactHistory = [history, repositoryWideHistory]
+  .flatMap((value) => value.split("\n"))
+  .filter((line, index, lines) => line.includes(target) && lines.indexOf(line) === index)
   .join("\n");
 
 if (active.length === 1) {
@@ -32,6 +36,7 @@ if (active.length === 1) {
 if (exactHistory) {
   console.error("Migration 096 lineage audit: UNRESOLVED");
   console.error("Historical references exist, but no active authoritative source file is present.");
+    console.error("Repository-wide content history was also searched for the exact migration filename.");
   console.error(exactHistory);
   process.exit(2);
 }
