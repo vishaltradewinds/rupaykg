@@ -67,8 +67,8 @@ export async function withDatabaseTenantContext<T>(
 }
 
 /**
- * Executes authentication/bootstrap work in an explicit PostgreSQL service context.
- * This context intentionally carries no organization scope and must remain limited
+ * Executes authentication/bootstrap work in an explicit organization-neutral context.
+ * This context intentionally carries no organization or service scope and must remain limited
  * to control-plane bootstrap reads such as session, identity, and membership lookup.
  */
 export async function withDatabaseBootstrapContext<T>(
