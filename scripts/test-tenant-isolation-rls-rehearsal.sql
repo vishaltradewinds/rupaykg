@@ -375,6 +375,7 @@ VALUES
  ('00000000-0000-0000-0000-00000000b301','00000000-0000-0000-0000-00000000b001','CI_TEST',2,'kg','CI',now());
 
 -- Owner can bypass RLS, so all security assertions below are executed after SET ROLE.
+BEGIN;
 SET ROLE rupaykg_ci_org_a;
 SELECT set_config('app.organization_id','00000000-0000-0000-0000-0000000000a1',true);
 
@@ -433,6 +434,8 @@ END
 $reset$;
 
 -- Re-enter as Org B and prove the opposite boundary.
+RESET ROLE;
+BEGIN;
 SET ROLE rupaykg_ci_org_b;
 SELECT set_config('app.organization_id','00000000-0000-0000-0000-0000000000b1',true);
 
