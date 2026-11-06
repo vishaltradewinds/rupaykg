@@ -152,7 +152,7 @@ DO $behavior$
 BEGIN
   BEGIN
     INSERT INTO public.activities(id,organization_id,activity_type)
-    VALUES ('00000000-0000-0000-0000-00000000c0af4','00000000-0000-0000-0000-00000000c0b1','CROSS_TENANT');
+    VALUES ('00000000-0000-0000-0000-00000000c0af','00000000-0000-0000-0000-00000000c0b1','CROSS_TENANT');
     RAISE EXCEPTION 'cross-tenant INSERT unexpectedly succeeded';
   EXCEPTION WHEN insufficient_privilege THEN NULL;
   END;
