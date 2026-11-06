@@ -97,8 +97,10 @@ export async function registerStatutoryRoutes(app: FastifyInstance, pool: Pool |
     const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
     const organizationId = await organizationFor(auth, pool, request as never, reply); if (!organizationId) return;
     try {
-      if (!await hasOrganizationPermission(pool, auth, organizationId, ["epr:read", "reports:read"])) return reply.code(403).send({ error: "EPR scheme catalog read permission required", code: "STATUTORY_PERMISSION_REQUIRED" });
-      const result = await pool.query(`select code,name,authority,metadata from epr_schemes where status='VERIFIED' order by name`);
+      const result = await withDatabaseTenantContext(pool, { identityId: auth.identityId, organizationId, bilateralOrganizationScope: auth.bilateralOrganizationScope ?? false, serviceMode: false }, async client => {
+        if (!await hasOrganizationPermission(client, auth, organizationId, ["epr:read", "reports:read"])) throw Object.assign(new Error("EPR scheme catalog read permission required"), { code: "STATUTORY_PERMISSION_REQUIRED" });
+        return client.query(`select code,name,authority,metadata from epr_schemes where status='VERIFIED' order by name`);
+      });
       return { source: "postgresql", syntheticData: false, schemes: result.rows, statutoryBoundary: "INTERNAL_APPLICABILITY_PREPARATION_ONLY" };
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "EPR scheme catalog unavailable", code: "STATUTORY_UNAVAILABLE", syntheticData: false }); }
   });
@@ -107,13 +109,16 @@ export async function registerStatutoryRoutes(app: FastifyInstance, pool: Pool |
     const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
     const organizationId = await organizationFor(auth, pool, request as never, reply); if (!organizationId) return;
     try {
-      if (!await hasOrganizationPermission(pool, auth, organizationId, ["swm:read", "epr:read", "reports:read"])) return reply.code(403).send({ error: "Statutory applicability read permission required", code: "STATUTORY_PERMISSION_REQUIRED" });
-      const [profiles, bwg, epr] = await Promise.all([
-        pool.query("select id,framework,rule_reference,effective_from,effective_to,applicability_status,basis,determination_note,externally_confirmed,external_authority,external_reference,determined_by_identity_id,determined_at,created_at from organization_statutory_profiles where organization_id=$1 order by effective_from desc nulls last,created_at desc", [organizationId]),
-        pool.query("select * from organization_bwg_assessments where organization_id=$1 order by assessment_date desc,created_at desc", [organizationId]),
-        pool.query("select a.*,s.name scheme_name,s.authority scheme_authority,s.metadata scheme_metadata from organization_epr_applicability a left join epr_schemes s on s.code=a.scheme where a.organization_id=$1 order by a.scheme", [organizationId]),
-      ]);
-      return { source: "postgresql", syntheticData: false, statutoryBoundary: "INTERNAL_APPLICABILITY_PREPARATION_ONLY", profiles: profiles.rows, bwgAssessments: bwg.rows, eprApplicability: epr.rows };
+      const result = await withDatabaseTenantContext(pool, { identityId: auth.identityId, organizationId, bilateralOrganizationScope: auth.bilateralOrganizationScope ?? false, serviceMode: false }, async client => {
+        if (!await hasOrganizationPermission(client, auth, organizationId, ["swm:read", "epr:read", "reports:read"])) throw Object.assign(new Error("Statutory applicability read permission required"), { code: "STATUTORY_PERMISSION_REQUIRED" });
+        const [profiles, bwg, epr] = await Promise.all([
+          client.query("select id,framework,rule_reference,effective_from,effective_to,applicability_status,basis,determination_note,externally_confirmed,external_authority,external_reference,determined_by_identity_id,determined_at,created_at from organization_statutory_profiles where organization_id=$1 order by effective_from desc nulls last,created_at desc", [organizationId]),
+          client.query("select * from organization_bwg_assessments where organization_id=$1 order by assessment_date desc,created_at desc", [organizationId]),
+          client.query("select a.*,s.name scheme_name,s.authority scheme_authority,s.metadata scheme_metadata from organization_epr_applicability a left join epr_schemes s on s.code=a.scheme where a.organization_id=$1 order by a.scheme", [organizationId]),
+        ]);
+        return { profiles, bwg, epr };
+      });
+      return { source: "postgresql", syntheticData: false, statutoryBoundary: "INTERNAL_APPLICABILITY_PREPARATION_ONLY", profiles: result.profiles.rows, bwgAssessments: result.bwg.rows, eprApplicability: result.epr.rows };
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Statutory applicability unavailable", code: "STATUTORY_UNAVAILABLE", syntheticData: false }); }
   });
 
@@ -122,18 +127,18 @@ export async function registerStatutoryRoutes(app: FastifyInstance, pool: Pool |
     const body = bodyOf(request as never);
     const organizationId = auth.activeOrganizationId;
     if (!organizationId || !canActForOrganization(auth, organizationId)) return reply.code(403).send({ error: "No verified membership for organization", code: "ORG_FORBIDDEN" });
-    if (!await hasOrganizationPermission(pool, auth, organizationId, ["swm:manage", "audit:execute", "reports:export"])) return reply.code(403).send({ error: "BWG applicability assessment permission required", code: "STATUTORY_WRITE_REQUIRED" });
+    if (!canActForOrganization(auth, organizationId)) return reply.code(403).send({ error: "Organization access denied", code: "ORG_FORBIDDEN" });
     const floorArea = nonNegative(body, "floorAreaSqM");
     const water = nonNegative(body, "waterConsumptionLpd");
     const waste = nonNegative(body, "solidWasteKgpd");
     if (floorArea === null || water === null || waste === null) return reply.code(400).send({ error: "BWG measurements must be non-negative numbers", code: "INVALID_BWG_MEASUREMENTS" });
     const evidenceId = text(body, "evidenceId");
     const verificationId = text(body, "verificationId");
-    if (!await evidenceBindingValid(pool, organizationId, evidenceId, verificationId)) return reply.code(400).send({ error: "Evidence and verification must be supplied together and be verified, approved, and organization/geography scoped", code: "STATUTORY_EVIDENCE_BINDING_INVALID" });
     const status = bwgStatus(floorArea, water, waste);
     const note = text(body, "determinationNote");
     try {
       const result = await withDatabaseTenantContext(pool, { identityId: auth.identityId, organizationId: organizationId!, bilateralOrganizationScope: auth.bilateralOrganizationScope ?? false, serviceMode: false }, async client => {
+        if (!await hasOrganizationPermission(client, auth, organizationId!, ["swm:manage", "audit:execute", "reports:export"])) throw Object.assign(new Error("BWG applicability assessment permission required"), { code: "STATUTORY_WRITE_REQUIRED" });
         if (!await evidenceBindingValid(client, organizationId!, evidenceId, verificationId)) throw Object.assign(new Error("Evidence and verification must be supplied together and be verified, approved, and organization/geography scoped"), { code: "STATUTORY_EVIDENCE_BINDING_INVALID" });
         return client.query(
         `insert into organization_bwg_assessments
@@ -146,7 +151,7 @@ export async function registerStatutoryRoutes(app: FastifyInstance, pool: Pool |
       );
       });
       return reply.code(201).send({ source: "postgresql", syntheticData: false, assessment: result.rows[0], statutoryBoundary: "INTERNAL_APPLICABILITY_PREPARATION_ONLY", externalRegistrationRequired: status === "APPLICABLE" });
-    } catch (error) { request.log.error(error); return reply.code(503).send({ error: "BWG assessment could not be persisted", code: "STATUTORY_WRITE_UNAVAILABLE", syntheticData: false }); }
+    } catch (error) { const code = (error as { code?: string }).code; if (code === "STATUTORY_WRITE_REQUIRED" || code === "STATUTORY_EVIDENCE_BINDING_INVALID") return reply.code(code === "STATUTORY_WRITE_REQUIRED" ? 403 : 400).send({ error: (error as Error).message, code }); if (code === "ORG_FORBIDDEN") return reply.code(403).send({ error: (error as Error).message, code }); request.log.error(error); return reply.code(503).send({ error: "BWG assessment could not be persisted", code: "STATUTORY_WRITE_UNAVAILABLE", syntheticData: false }); }
   });
 
   app.post("/api/v1/statutory/epr", async (request, reply) => {
