@@ -79,7 +79,7 @@ export async function withDatabaseBootstrapContext<T>(
   try {
     await client.query("BEGIN");
     await client.query("select set_config('app.rupaykg.bilateral_scope', 'false', true)");
-    await client.query("select set_config('app.rupaykg.service_mode', 'true', true)");
+    await client.query("select set_config('app.rupaykg.service_mode', 'false', true)");
     const result = await fn(client);
     await client.query("COMMIT");
     return result;
