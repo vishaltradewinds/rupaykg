@@ -261,3 +261,17 @@ Continue from the same branch and prioritize remaining high-risk organization-sc
 3. Convert the proposed tenant policy matrix into reviewed SQL policy semantics for the complete 67-table production inventory.
 4. Rehearse the complete RLS migration on disposable PostgreSQL, including service/migrator exceptions and bilateral semantics.
 5. Obtain the independent release gate before any production proposal.
+
+
+## 2026-11-06 CI recovery checkpoint — authentication bootstrap test compatibility
+
+Verified CI #5711 / run 42155117584 on tenant-isolation reconstruction head e5990915bfe97dfda57a79d3dc5e56c462046eb3 failed at validation step 14 (disposable PostgreSQL acceptance tests), after migration validation, manifest validation, protected migrator validation, migration execution, typecheck, build and browser smoke all passed.
+
+Evidence-backed failure:
+- Tests 35–46 in platform-admin-routes.test.ts returned 503 where the existing unit tests expected authorization/business statuses (403/200/409/400).
+- Test 60, bootstrap context, also failed in that prior test suite.
+- Root cause for tests 35–46 is confirmed: authenticate() now uses withDatabaseBootstrapContext(), which requires pool.connect(); the shared fakePool() test double only implemented pool.query(), causing authentication to fail closed as AUTH_UNAVAILABLE and downstream tests to receive 503.
+- Corrective commit 4a0fb01cd37dfdb6feb03cffcb020beee731cc61 updates the platform-admin fakePool test double to implement a transaction-capable connect()/release() path and recognize BEGIN/COMMIT/ROLLBACK. This is test infrastructure only; no production runtime behavior or database mutation.
+- Bootstrap context semantics remain organization-neutral, identity-neutral, service_mode=false, bilateral_scope=false.
+
+Current status: corrective commit implemented; awaiting fresh CI validation. Production remains READ-ONLY / HOLD.
