@@ -14,11 +14,9 @@ function fakePool(isSuperAdmin: boolean): Pool {
         if (sql.includes("set_config('app.rupaykg.bilateral_scope'") || sql.includes("set_config('app.rupaykg.service_mode'") || sql.includes("set_config('app.rupaykg.organization_id'") || sql.includes("set_config('app.rupaykg.identity_id'")) return { rows: [{ set_config: "" }], rowCount: 1 };
         if (sql.includes("from identity_sessions")) return { rows: [{ identity_id: identityId }] };
         if (sql.includes("from organization_memberships") && sql.includes("where identity_id")) return { rows: [{ organization_id: organizationId, role_id: roleId, status: "VERIFIED" }] };
-        if (sql.includes("r.name = 'super_admin'")) return { rows: [{ ok: true }], rowCount: 1 };
     if (sql.includes("r.name = 'super_admin'")) return { rows: [{ ok: isSuperAdmin }] };
     if (sql.includes("from identity_sessions")) return { rows: [{ identity_id: identityId }] };
     if (sql.includes("from organization_memberships") && sql.includes("where identity_id")) return { rows: [{ organization_id: organizationId, role_id: roleId, status: "VERIFIED" }] };
-        if (sql.includes("r.name = 'super_admin'")) return { rows: [{ ok: true }], rowCount: 1 };
     if (sql.includes('as "verifiedIdentities"')) return { rows: [{
       verifiedIdentities: "12",
       organizations: "7",
