@@ -10,6 +10,7 @@ const explicitExceptions = new Map([
   ["apps/src/auth-routes.ts", "identity/bootstrap/control-plane operations; tenant-scoped onboarding mutations require separate boundary review"],
 ]);
 const exceptionHits = [];
+const findings = [];
 
 async function walk(dir) {
   for (const entry of await readdir(dir, { withFileTypes: true })) {
@@ -28,7 +29,7 @@ async function walk(dir) {
           const relative = path.relative(process.cwd(), full).replaceAll("\\", "/");
           const exception = explicitExceptions.get(relative);
           if (exception) exceptionHits.push(relative + ": " + pattern.label + " — " + exception);
-          else violations.push(relative + ": " + pattern.label);
+          else { violations.push(relative + ": " + pattern.label); findings.push({ file: relative, pattern: pattern.label }); }
         }
       }
     }
@@ -36,6 +37,10 @@ async function walk(dir) {
 }
 
 await walk(root);
+if (findings.length) {
+  console.log("Protected database access audit: findings");
+  for (const finding of findings) console.log(`${finding.file}: ${finding.pattern}`);
+}
 if (exceptionHits.length) {
   console.log("Protected database access audit: explicit exceptions");
   for (const hit of exceptionHits) console.log(hit);
