@@ -289,3 +289,33 @@ Exact evidence:
   - bootstrap integration assertions changed to PostgreSQL-correct NULL semantics and test wording corrected to non-service-scoped.
 - Production remains READ-ONLY / HOLD.
 - Awaiting fresh CI validation.
+
+
+## 2026-11-06 Parallel Release-Gate Execution Checkpoint — VERIFIED / IN PROGRESS
+
+### Exact-head CI verification
+- PR #310 statutory tenant-context migration: head `2223d46455c232380dbd7b93644b8ed9cba34760`; CI #5733 / run `42180300605`: **SUCCESS**. Full 17-step validation completed.
+- PR #311 value-route tenant-context migration: head `6c282242bc845218b460c55a406e495bd0a25d3a`; CI #5735 / run `42187226319`: **SUCCESS**. Full 17-step validation completed.
+- PR #306 authentication bootstrap boundary: head `68842480f48675701ab3285b90ce7c7f6125f5d5`; exact-head workflow lookup returned **no workflow run**. Status: **IMPLEMENTED BUT NOT VALIDATED**.
+- PR #307 migration-096 lineage audit: head `6e5ee2ad38d1cbaca6b6825374e6c9c52dc0373f`; exact-head workflow lookup returned **no workflow run**. Status: **IMPLEMENTED BUT NOT VALIDATED**.
+- PR #308 tenant policy-matrix coverage validator: head `7c39924dde6becfc7603b786ad9a2d198cb186d0`; exact-head workflow lookup returned **no workflow run**. Status: **IMPLEMENTED BUT NOT VALIDATED**.
+- PR #309 protected DB-access static audit: head `582a5b858bbf31c91a678a3aee0c63f22b32e6d1`; exact-head workflow lookup returned **no workflow run**. Status: **IMPLEMENTED BUT NOT VALIDATED**.
+
+### Integration decision
+PR #310 and #311 now have independent exact-head CI evidence, but remain separate validation branches. They are not merged into the controlled integration spine. PR #306–#309 remain pending exact-head CI evidence. No blind merge is permitted.
+
+### Safety / release state
+- Authoritative repository: `vishaltradewinds/rupaykg`.
+- Controlled integration spine remains PR #305 branch; current validated tenant-isolation work remains validation-only.
+- Neon production remains **READ-ONLY / HOLD**.
+- No production DDL/DML, migration, RLS enablement, role/grant change, deployment, worker activation, branch mutation or certification was performed.
+- RLS remains a verified release blocker: inspected authoritative database has RLS disabled on all 67 public tables and zero PostgreSQL RLS policies.
+- Migration 096 remains unresolved at active-source lineage level despite the production ledger entry being directly verified.
+- TRL 9 remains **NOT CLAIMED**. Engineering CI evidence does not substitute for integrated acceptance, production readiness, field acceptance, regulatory approval or certification.
+
+### Next safe batch
+1. Obtain exact-head CI evidence for #306–#309; if absent because workflow triggering is not occurring, diagnose the repository/CI trigger condition without fabricating a pass.
+2. Reconcile #310/#311 changes against PR #305 before any integration decision, including shared-file conflicts and semantic tenant-context dependencies.
+3. Continue protected-access semantic audit for remaining control-plane/tenant-boundary paths; do not treat regex absence as proof of isolation.
+4. Advance complete 67-table policy semantics and disposable RLS migration only after context/access contracts are reconciled.
+5. Keep migration-096 lineage fail-closed until authoritative source/history evidence is exact.
