@@ -213,6 +213,21 @@ test("cross-tenant SELECT/INSERT/UPDATE/DELETE is denied", { skip: !integrationE
   assert.equal(deleted.rowCount, 0);
 });
 
+test("inherited activity/evidence/verification scope follows the parent organization", { skip: !integrationEnabled || !databaseUrl }, async () => {
+  const orgA = await contextQuery("identity-a", "org-a", {}, `select a.payload as activity, e.payload as evidence, v.payload as verification
+    from ${qid(schema)}.activities a join ${qid(schema)}.evidence e on e.activity_id=a.id
+    join ${qid(schema)}.verifications v on v.evidence_id=e.id order by a.id`);
+  assert.deepEqual(orgA.rows, [{ activity: "activity-a", evidence: "evidence-a", verification: "verification-a" }]);
+
+  const orgB = await contextQuery("identity-b", "org-b", {}, `select a.payload as activity, e.payload as evidence, v.payload as verification
+    from ${qid(schema)}.activities a join ${qid(schema)}.evidence e on e.activity_id=a.id
+    join ${qid(schema)}.verifications v on v.evidence_id=e.id order by a.id`);
+  assert.deepEqual(orgB.rows, [{ activity: "activity-b", evidence: "evidence-b", verification: "verification-b" }]);
+
+  const crossTenantUpdate = await contextQuery("identity-a", "org-a", {}, `update ${qid(schema)}.verifications set payload='tampered' where id=2`);
+  assert.equal(crossTenantUpdate.rowCount, 0);
+});
+
 test("revoked membership denies tenant access", { skip: !integrationEnabled || !databaseUrl }, async () => {
   const visible = await contextQuery("identity-a", "org-b", {}, `select * from ${qid(schema)}.tenant_records`);
   assert.equal(visible.rowCount, 0);
