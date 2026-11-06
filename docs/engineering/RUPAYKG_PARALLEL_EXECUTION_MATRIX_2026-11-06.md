@@ -45,3 +45,13 @@ A/B/C/D/E run in parallel. F begins only when B/C/E policy semantics are suffici
 
 ## Completion rule
 A workstream is not marked complete because code exists. It requires its defined evidence gate.
+
+## Runtime-context closure update — 2026-11-06
+
+- Workstream C advanced: the remaining inspected route-helper signatures that accepted `Pool | PoolClient` were narrowed to `PoolClient`.
+- The affected helpers are in evidence-vault, onboarding-hierarchy, statutory, and value route modules.
+- Their call sites were inspected and use the transaction-scoped client.
+- Static protected-pattern scan now reports no remaining `Pool | PoolClient` helper signatures in the inspected API route set.
+- This closes a type-level escape hatch; it does not by itself prove complete route/worker coverage or production RLS.
+
+The latest code changes remain unvalidated by an exact-head CI run. Therefore Workstream C is **implementation advanced / CI gate pending**, not complete.
