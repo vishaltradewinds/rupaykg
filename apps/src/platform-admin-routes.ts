@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { Pool, PoolClient } from "pg";
 import { authenticate, type AuthContext } from "./auth.js";
+import { withDatabaseTenantContext } from "./db-context.js";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const SAFE_PERMISSIONS = new Set([
@@ -65,7 +66,10 @@ async function authorize(
     return null;
   }
   try {
-    const result = await pool.query<{ ok: boolean }>(
+    const result = await withDatabaseTenantContext(
+      pool,
+      { identityId: auth.identityId, bilateralOrganizationScope: true, serviceMode: true },
+      (client) => client.query<{ ok: boolean }>(
       `select exists (
          select 1 from organization_memberships om
          join roles r on r.id = om.role_id
@@ -76,7 +80,8 @@ async function authorize(
              select 1 from jsonb_array_elements_text(r.permissions) p where p = $2
            ))
        ) as ok`,
-      [auth.identityId, permission],
+        [auth.identityId, permission],
+      ),
     );
     if (result.rows[0]?.ok !== true) {
       routeError(reply, 403, "Super Admin authority and required permission are required", "PLATFORM_ADMIN_FORBIDDEN");
@@ -131,7 +136,39 @@ async function audit(
   );
 }
 
-async function transaction<T>(pool: Pool, work: (client: PoolClient) => Promise<T>): Promise<T> {
+async function transaction<T>(pool: Pool, auth: AuthContext, work: (client: PoolClient) => Promise<T>): Promise<T> {
+  return withDatabaseTenantContext(
+    pool,
+    {
+      identityId: auth.identityId,
+      bilateralOrganizationScope: true,
+      serviceMode: true,
+    },
+    async (client) => {
+      const result = await work(client);
+      return result;
+    },
+  );
+}
+
+async function adminQuery<T extends Record<string, unknown>>(
+  pool: Pool,
+  auth: AuthContext,
+  sql: string,
+  values: unknown[] = [],
+): Promise<{ rows: T[]; rowCount: number | null }> {
+  return withDatabaseTenantContext(
+    pool,
+    {
+      identityId: auth.identityId,
+      bilateralOrganizationScope: true,
+      serviceMode: true,
+    },
+    (client) => client.query<T>(sql, values),
+  );
+}
+
+
   const client = await pool.connect();
   try {
     await client.query("begin");
@@ -151,10 +188,10 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
     const context = await authorize(request, reply, pool, null);
     if (!context || !pool) return;
     try {
-      const result = await pool.query<{
+      const result = await adminQuery<{
         verifiedIdentities: string; organizations: string; verifiedMemberships: string;
         pendingApplications: string; pendingLegalReviews: string; anchoredMrvRecords: string;
-      }>(
+      }>(pool, context.auth, 
         `select
           (select count(*)::text from identities where status = 'VERIFIED' and suspended_at is null) as "verifiedIdentities",
           (select count(*)::text from organizations) as organizations,
@@ -181,7 +218,7 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
     const limitValue = Number(query.limit ?? 50);
     const limit = Number.isInteger(limitValue) ? Math.max(1, Math.min(100, limitValue)) : 50;
     try {
-      const result = await pool.query(
+      const result = await adminQuery(pool, context.auth, 
         `select i.id, i.display_name, i.email, i.status,
            case when i.suspended_at is null then false else true end as suspended,
            i.created_at, i.suspended_at, i.last_suspended_by_identity_id, i.last_suspension_reason,
@@ -208,7 +245,7 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
     if (identityId === context.auth.identityId) return routeError(reply, 409, "You cannot suspend your own identity", "SELF_SUSPENSION_FORBIDDEN");
     if (!validReason(reason)) return routeError(reply, 400, "A reason of 8–1000 characters is required", "ADMIN_REASON_REQUIRED");
     try {
-      const result = await transaction(pool, async (client) => {
+      const result = await transaction(pool, context.auth, async (client) => {
         const row = await client.query<{ id: string; status: string; suspended_at: Date | null }>(
           "select id,status,suspended_at from identities where id=$1 for update", [identityId],
         );
@@ -238,7 +275,7 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
     if (!UUID.test(identityId)) return routeError(reply, 400, "A valid identity UUID is required", "IDENTITY_ID_INVALID");
     if (!validReason(reason)) return routeError(reply, 400, "A reason of 8–1000 characters is required", "ADMIN_REASON_REQUIRED");
     try {
-      const result = await transaction(pool, async (client) => {
+      const result = await transaction(pool, context.auth, async (client) => {
         const row = await client.query<{ id: string; status: string; suspended_at: Date | null }>(
           "select id,status,suspended_at from identities where id=$1 for update", [identityId],
         );
@@ -267,7 +304,7 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
     if (!UUID.test(identityId)) return routeError(reply, 400, "A valid identity UUID is required", "IDENTITY_ID_INVALID");
     if (!validReason(reason)) return routeError(reply, 400, "A reason of 8–1000 characters is required", "ADMIN_REASON_REQUIRED");
     try {
-      const result = await transaction(pool, async (client) => {
+      const result = await transaction(pool, context.auth, async (client) => {
         const target = await client.query<{ id: string }>("select id from identities where id=$1 for update", [identityId]);
         if (!target.rows[0]) return { status: 404 as const, body: { error: "Identity not found", code: "IDENTITY_NOT_FOUND" } };
         const sessions = await client.query("update identity_sessions set revoked_at=now() where identity_id=$1 and revoked_at is null", [identityId]);
@@ -285,7 +322,7 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
     const context = await authorize(request, reply, pool, "admin:roles");
     if (!context || !pool) return;
     try {
-      const result = await pool.query(
+      const result = await adminQuery(pool, context.auth, 
         `select r.id,r.organization_id,o.name as organization_name,r.name,r.permissions,
           (select count(*)::int from organization_memberships om where om.role_id=r.id and om.status='VERIFIED') as verified_memberships,
           (r.name=any($1::text[])) as reserved
@@ -315,7 +352,7 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
       return routeError(reply, 400, "Permissions must be a unique list from the approved low-risk permission catalogue", "ROLE_PERMISSIONS_INVALID");
     }
     try {
-      const result = await transaction(pool, async (client) => {
+      const result = await transaction(pool, context.auth, async (client) => {
         const selected = await client.query<{ id: string; organization_id: string; name: string; permissions: string[] }>(
           "select id,organization_id,name,permissions from roles where id=$1 for update", [roleId],
         );
@@ -361,7 +398,7 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
       return routeError(reply, 400, "A valid membershipId is required for reserved-role restoration", "ACCESS_CHANGE_INPUT_INVALID");
     }
     try {
-      const result = await transaction(pool, async (client) => {
+      const result = await transaction(pool, context.auth, async (client) => {
         let target: { identity_id: string; organization_id: string; role_id: string; role_name: string; identity_status: string; suspended_at: Date | null; organization_status: string; role_organization_id: string; membership_id: string | null };
         if (requestType === "GRANT_RESERVED_ROLE") {
           const selected = await client.query<{ identity_status: string; suspended_at: Date | null; organization_status: string; role_name: string; role_organization_id: string }>(
@@ -427,7 +464,7 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
     const status = typeof query.status === "string" ? query.status : "PENDING";
     if (!["PENDING", "APPROVED", "REJECTED", "ALL"].includes(status)) return routeError(reply, 400, "status must be PENDING, APPROVED, REJECTED or ALL", "ACCESS_CHANGE_STATUS_INVALID");
     try {
-      const result = await pool.query(
+      const result = await adminQuery(pool, context.auth, 
         `select q.id,q.request_type,q.target_identity_id,i.display_name target_display_name,q.organization_id,o.name organization_name,q.role_id,r.name role_name,q.membership_id,q.requester_identity_id,requester.display_name requester_display_name,q.approver_identity_id,approver.display_name approver_display_name,q.status,q.reason,q.decision_reason,q.request_hash,q.created_at,q.decided_at,q.applied_at
          from platform_access_change_requests q
          join identities i on i.id=q.target_identity_id join organizations o on o.id=q.organization_id join roles r on r.id=q.role_id
@@ -450,7 +487,7 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
     if (!UUID.test(requestId)) return routeError(reply, 400, "A valid requestId is required", "ACCESS_CHANGE_ID_INVALID");
     if (!validReason(reason)) return routeError(reply, 400, "A decision reason of 8–1000 characters is required", "ADMIN_REASON_REQUIRED");
     try {
-      const result = await transaction(pool, async (client) => {
+      const result = await transaction(pool, context.auth, async (client) => {
         const selected = await client.query<{ id: string; request_type: string; target_identity_id: string; organization_id: string; role_id: string; membership_id: string | null; requester_identity_id: string; status: string; reason: string; request_hash: string }>(
           "select id,request_type,target_identity_id,organization_id,role_id,membership_id,requester_identity_id,status,reason,request_hash from platform_access_change_requests where id=$1 for update",
           [requestId],
@@ -563,7 +600,7 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
       return routeError(reply, 400, "Identity and organization filters must be valid UUIDs", "MEMBERSHIP_FILTER_INVALID");
     }
     try {
-      const result = await pool.query(
+      const result = await adminQuery(pool, context.auth, 
         `select om.id,om.identity_id, i.display_name,i.email,om.organization_id,o.name organization_name,
           om.role_id,r.name role_name,om.status,om.created_at,om.last_revoked_at,om.last_revocation_reason
          from organization_memberships om join identities i on i.id=om.identity_id
@@ -593,7 +630,7 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
     if (identityId === context.auth.identityId) return routeError(reply, 409, "You cannot grant or escalate your own membership", "SELF_ROLE_CHANGE_FORBIDDEN");
     if (!validReason(reason)) return routeError(reply, 400, "A reason of 8–1000 characters is required", "ADMIN_REASON_REQUIRED");
     try {
-      const result = await transaction(pool, async (client) => {
+      const result = await transaction(pool, context.auth, async (client) => {
         const selected = await client.query<{ identity_status: string; suspended_at: Date | null; organization_status: string; role_name: string; role_organization_id: string; role_permissions: string[] }>(
           `select i.status identity_status,i.suspended_at,o.status organization_status,r.name role_name,r.organization_id role_organization_id,r.permissions role_permissions
            from identities i cross join organizations o join roles r on r.organization_id=o.id
@@ -649,7 +686,7 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
     if (!["VERIFIED", "REVOKED"].includes(requestedStatus ?? "")) return routeError(reply, 400, "status must be VERIFIED or REVOKED", "MEMBERSHIP_STATUS_INVALID");
     if (!validReason(reason)) return routeError(reply, 400, "A reason of 8–1000 characters is required", "ADMIN_REASON_REQUIRED");
     try {
-      const result = await transaction(pool, async (client) => {
+      const result = await transaction(pool, context.auth, async (client) => {
         // Acquire the global membership-revocation lock before row locks. This prevents
         // opposite-direction concurrent revocations from deadlocking while each holds
         // its own target membership and waits for the other target's identity/role rows.
@@ -707,7 +744,7 @@ export async function registerPlatformAdminRoutes(app: FastifyInstance, pool: Po
     const value = Number(query.limit ?? 50);
     const limit = Number.isInteger(value) ? Math.max(1, Math.min(200, value)) : 50;
     try {
-      const result = await pool.query(
+      const result = await adminQuery(pool, context.auth, 
         `select id,actor_identity_id,organization_id,action,target_type,target_id,request_id,previous_hash,event_hash,payload,created_at
          from audit_events order by created_at desc,id desc limit $1`,
         [limit],
