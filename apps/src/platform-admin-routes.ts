@@ -138,7 +138,7 @@ function serviceDb(pool: Pool, auth: AuthContext): { query: PoolClient["query"] 
       withDatabaseTenantContext(
         pool,
         { identityId: auth.identityId, bilateralOrganizationScope: false, serviceMode: true },
-        client => client.query(...args),
+        client => Promise.resolve(client.query(...args)),
       )) as PoolClient["query"],
   };
 }
