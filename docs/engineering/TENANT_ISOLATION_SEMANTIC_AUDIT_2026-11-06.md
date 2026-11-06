@@ -66,3 +66,18 @@ The disposable acceptance harness must prove all of the following against a disp
 ## No-go rule
 
 Passing this disposable harness does not authorize production RLS. Production promotion still requires migration-lineage reconciliation, policy-matrix review, runtime least-privilege evidence, independent security/DBA release approval, field/operational acceptance and explicit release authorization.
+
+## 2026-11-06 runtime helper closure
+
+A follow-up semantic scan of the PR #318 code head found four remaining helper signatures accepting `Pool | PoolClient`:
+
+- `apps/src/evidence-vault-routes.ts` — `activityContext`
+- `apps/src/onboarding-hierarchy-routes.ts` — `hasAuthority`, `eligible`
+- `apps/src/statutory-routes.ts` — `evidenceBindingValid`
+- `apps/src/value-routes.ts` — `activityAccess`, `assertActivityGeographyScope`, `hasValuePermission`, `evidenceIsVerified`
+
+These helpers were narrowed to `PoolClient` on the same runtime-hardening branch. Their observed call sites already execute through tenant-context transactions, so the change removes a type-level escape hatch without changing the intended request-path transaction model.
+
+A branch-head static scan now finds no remaining `Pool | PoolClient` helper signatures in the inspected API route set and no request-path `pool.query`, `pool.connect`, or pool-based organization-permission bypass in the protected patterns.
+
+This is still a code-level semantic gate. It does not establish production RLS, production least-privilege roles, migration-096 reconciliation, or TRL 9.
