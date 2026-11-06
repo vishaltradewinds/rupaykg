@@ -363,10 +363,10 @@ VALUES
  ('00000000-0000-0000-0000-00000000b101','00000000-0000-0000-0000-00000000b001',20,'kg','CI','CI',now());
 
 INSERT INTO public.evidence
- (id,activity_id,evidence_type,captured_at)
+ (id,activity_id,evidence_type,captured_at,content_hash)
 VALUES
- ('00000000-0000-0000-0000-00000000a201','00000000-0000-0000-0000-00000000a001','CI',now()),
- ('00000000-0000-0000-0000-00000000b201','00000000-0000-0000-0000-00000000b001','CI',now());
+ ('00000000-0000-0000-0000-00000000a201','00000000-0000-0000-0000-00000000a001','CI',now(),'ci-evidence-a201'),
+ ('00000000-0000-0000-0000-00000000b201','00000000-0000-0000-0000-00000000b001','CI',now(),'ci-evidence-b201');
 
 INSERT INTO public.mrv_observations
  (id,activity_id,parameter_code,observed_value,unit,method,observed_at)
