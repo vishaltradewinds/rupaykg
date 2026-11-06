@@ -1,6 +1,6 @@
 # Tenant-Isolation Database Context Design
 
-Status: **PARTIALLY IMPLEMENTED — CONTEXT PRIMITIVE + REPRESENTATIVE ROUTE ONLY**
+Status: **IN PROGRESS — CONTEXT PRIMITIVE + PROTECTED ROUTE MIGRATION + BOOTSTRAP BOUNDARY TESTED; AUTH INTEGRATION PENDING**
 
 ## Objective
 
@@ -10,7 +10,7 @@ Move tenant enforcement from application-only authorization toward database-enfo
 
 For an authenticated organization-scoped request:
 
-1. Authenticate the identity.
+1. Execute authentication bootstrap reads inside an explicit, organization-neutral PostgreSQL bootstrap context.
 2. Resolve verified organization membership and permissions in application code.
 3. Open a dedicated PostgreSQL transaction.
 4. Set transaction-local authorization context: identity UUID, active organization UUID, and explicit bilateral scope where required.
@@ -36,7 +36,23 @@ The current API uses a shared PostgreSQL pool and many routes currently call `po
 
 The current sequence is:
 
-**context abstraction [DONE IN PR] -> representative protected route migration [DONE IN PR] -> disposable isolation tests [NEXT] -> broader protected-route migration -> RLS policy migration -> disposable migration rehearsal -> independent release gate -> production proposal.**
+**context abstraction [DONE] -> representative protected-route migration [DONE] -> broader protected-route migration [IN PROGRESS] -> explicit bootstrap context [DONE] -> bootstrap boundary disposable test [DONE] -> authentication integration [PENDING] -> complete RLS policy migration [PENDING] -> disposable migration rehearsal [PENDING] -> independent release gate -> production proposal.**
+
+### Authentication bootstrap boundary
+
+`identity_sessions`, `identities`, and `organization_memberships` are control-plane records required to establish an authenticated organization context. They cannot depend on the user's tenant context before authentication has completed.
+
+The approved engineering boundary is an explicit bootstrap transaction with:
+
+- `service_mode=true`;
+- `bilateral_scope=false`;
+- no organization context;
+- pooled connection released after the transaction;
+- scope limited to authentication/control-plane bootstrap reads.
+
+This is **not** an unrestricted application service bypass. The remaining implementation gate is to integrate `authenticate()` with this primitive and prove, in disposable PostgreSQL, that the bootstrap path can read only the intended control-plane records and cannot use service mode to reach arbitrary tenant data.
+
+No production RLS mutation is authorized by this document.
 
 ## Validation requirements
 
