@@ -13,11 +13,16 @@ const table = schema + ".tenant_rows";
 
 try {
   await client.connect();
+  const role = await client.query(`SELECT current_user, rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user`);
+  if (!role.rows[0] || role.rows[0].rolsuper || role.rows[0].rolbypassrls) throw new Error("FAIL: disposable acceptance requires a non-superuser, non-BYPASSRLS runtime role");
+
   await client.query("BEGIN");
   await client.query(`CREATE SCHEMA "${schema}"`);
   await client.query(`CREATE TABLE "${schema}".tenant_rows (id uuid primary key, organization_id uuid not null, payload text not null)`);
   await client.query(`ALTER TABLE "${schema}".tenant_rows ENABLE ROW LEVEL SECURITY`);
   await client.query(`ALTER TABLE "${schema}".tenant_rows FORCE ROW LEVEL SECURITY`);
+  const owner = await client.query(`SELECT pg_get_userbyid(relowner) AS owner FROM pg_class WHERE oid = $1::regclass`, [table]);
+  if (owner.rows[0]?.owner === role.rows[0].current_user) throw new Error("FAIL: runtime role owns the tenant table");
   await client.query(`CREATE POLICY tenant_rows_isolation ON "${schema}".tenant_rows USING (organization_id = current_setting('app.rupaykg.organization_id', true)::uuid) WITH CHECK (organization_id = current_setting('app.rupaykg.organization_id', true)::uuid)`);
   await client.query("COMMIT");
 
@@ -44,8 +49,13 @@ try {
 
   await client.query("BEGIN");
   await client.query("select set_config('app.rupaykg.organization_id', $1, true)", [orgA]);
-  const deniedInsert = await client.query(`INSERT INTO ${table} (id, organization_id, payload) VALUES ($1,$2,'spoof') ON CONFLICT DO NOTHING RETURNING id`, [randomUUID(), orgB]);
-  if (deniedInsert.rows.length !== 0) throw new Error("FAIL: organization A inserted a row for organization B");
+  let insertDenied = false;
+  try {
+    await client.query(`INSERT INTO ${table} (id, organization_id, payload) VALUES ($1,$2,'spoof')`, [randomUUID(), orgB]);
+  } catch {
+    insertDenied = true;
+  }
+  if (!insertDenied) throw new Error("FAIL: organization A inserted a row for organization B");
   await client.query("ROLLBACK");
 
   await client.query("BEGIN");
@@ -76,7 +86,7 @@ try {
   if (!policies.rows[0]?.relrowsecurity || !policies.rows[0]?.relforcerowsecurity) throw new Error("FAIL: disposable RLS policy was not enforced");
   await client.query("ROLLBACK");
 
-  console.log("PASS: disposable tenant isolation, write guards, RLS enforcement and transaction-local context cleanup.");
+  console.log("PASS: disposable tenant isolation, write guards, RLS enforcement, transaction-local context cleanup, and runtime-role safety.");
 } finally {
   try {
     await client.query(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`);
