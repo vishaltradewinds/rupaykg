@@ -1,6 +1,6 @@
 # Tenant-Isolation Database Context Design
 
-Status: **IN PROGRESS — CONTEXT PRIMITIVE + PROTECTED ROUTE MIGRATION + BOOTSTRAP BOUNDARY TESTED; AUTH INTEGRATION PENDING**
+Status: **IN PROGRESS — CONTEXT PRIMITIVE + PROTECTED ROUTE MIGRATION + EXPLICIT AUTH BOOTSTRAP INTEGRATED; RLS POLICY MIGRATION PENDING**
 
 ## Objective
 
@@ -36,21 +36,21 @@ The current API uses a shared PostgreSQL pool and many routes currently call `po
 
 The current sequence is:
 
-**context abstraction [DONE] -> representative protected-route migration [DONE] -> broader protected-route migration [IN PROGRESS] -> explicit bootstrap context [DONE] -> bootstrap boundary disposable test [DONE] -> authentication integration [PENDING] -> complete RLS policy migration [PENDING] -> disposable migration rehearsal [PENDING] -> independent release gate -> production proposal.**
+**context abstraction [DONE] -> representative protected-route migration [DONE] -> broader protected-route migration [IN PROGRESS] -> explicit bootstrap context [DONE] -> bootstrap boundary disposable test [DONE] -> authentication integration [DONE ON PR #311] -> complete RLS policy migration [PENDING] -> disposable cross-tenant/RLS rehearsal [PENDING] -> independent release gate -> production proposal.**
 
 ### Authentication bootstrap boundary
 
 `identity_sessions`, `identities`, and `organization_memberships` are control-plane records required to establish an authenticated organization context. They cannot depend on the user's tenant context before authentication has completed.
 
-The approved engineering boundary is an explicit bootstrap transaction with:
+The implemented engineering boundary is an explicit bootstrap transaction with:
 
-- `service_mode=true`;
+- `service_mode=false`;
 - `bilateral_scope=false`;
 - no organization context;
 - pooled connection released after the transaction;
 - scope limited to authentication/control-plane bootstrap reads.
 
-This is **not** an unrestricted application service bypass. The remaining implementation gate is to integrate `authenticate()` with this primitive and prove, in disposable PostgreSQL, that the bootstrap path can read only the intended control-plane records and cannot use service mode to reach arbitrary tenant data.
+This is **not** an unrestricted application service bypass. `authenticate()` is now integrated with this primitive on the tenant-isolation work branch. The remaining gate is disposable PostgreSQL proof that the bootstrap path can read only the intended control-plane records and cannot reach arbitrary tenant data.
 
 No production RLS mutation is authorized by this document.
 
