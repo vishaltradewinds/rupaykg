@@ -32,6 +32,7 @@ A/B/C/D/E run in parallel. F begins only when B/C/E policy semantics are suffici
 
 ## Current evidence update — 2026-11-06
 - CI #5793 on commit `eb5c3e505e9223d24e25ea45557a67a8989ee0e4` completed successfully with all 20 validation gates passed, including migration validation/execution, typecheck, build, browser smoke, disposable PostgreSQL acceptance, tenant-isolation RLS acceptance, production container build, bounded backup/restore rehearsal, and startup migration/fixture isolation.
+- CI #5798 on commit `d32be993106a2146c6fa99770e95b275816c6e9f` completed successfully with all 20 validation gates passed.
 - Migration 096 is now exactly restored in the repository: the restored file blob is `258b1f4534efbf915688f78aa84d4ec24a47cbc0`, matching the recovered historical blob byte-for-byte.
 - Live Neon `schema_migrations` evidence confirms version `096` with filename `096_verification_authorization_provenance.sql` and applied timestamp `2026-10-27T13:46:14.262Z`.
 - Live database object inspection independently confirmed the four 096 provenance columns, the verification integrity trigger, and the organization-scoped approval authorization logic.
@@ -82,6 +83,16 @@ Evidence:
 - `rupaykg` has `rolcreaterole=true`, `rolcreatedb=true`, `rolreplication=true`, and `rolbypassrls=true`.
 - Inspected public application objects are owned by `rupaykg`.
 - `token_roles` exists without those four elevated capabilities, but its suitability as the runtime role is not yet proven by grants/connectivity analysis.
-- No role/grant/ownership mutation was performed.
+- A disposable adversarial runtime privilege acceptance harness has now been integrated at `apps/src/runtime-privilege-acceptance.integration.test.ts`. It covers separate NOLOGIN ownership, runtime-role flags, PUBLIC privilege leakage, explicit table/sequence/function grants, grant-option denial, protected control data, migration-ledger write denial, runtime DDL/role-administration denial, and tenant RLS behavior.
+- Commit `1bf2992e5f8bb9cde30e5d79581346b2767035b1` contains the harness. Its CI run is pending/has not yet registered at the time of this update.
+- No role/grant/ownership mutation was performed against production.
 
-The remediation target is a separated owner/migrator/runtime model with a least-privilege runtime identity and explicit application connectivity contract. The next action is a disposable-branch-only role/grant rehearsal and acceptance suite; production changes remain prohibited until independent security/release gates pass.
+The remediation target remains a separated owner/migrator/runtime model with a least-privilege runtime identity and explicit application connectivity contract. The acceptance harness must pass on CI before any production remediation proposal is considered.
+
+## Disposable acceptance gate
+
+The current next gate is:
+
+**67-table policy classification → disposable owner/runtime privilege model → adversarial privilege/RLS acceptance → CI full gate → independent security review → production change proposal only after explicit approval.**
+
+Passing the disposable rehearsal will not authorize production role changes or RLS enablement.
