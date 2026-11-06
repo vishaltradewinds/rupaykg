@@ -73,6 +73,8 @@ jobs:
           echo "Chrome DOM exit: $dom_status; screenshot exit: $shot_status"
       - name: Run Shakti tenant-boundary inventory rehearsal
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/test-tenant-boundary-inventory.sql
+      - name: Run Shakti tenant-isolation RLS rehearsal
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/test-tenant-isolation-rls-rehearsal.sql
       - name: Run tests including disposable PostgreSQL acceptance
         env:
           RUPAYKG_RUN_DB_INTEGRATION_TESTS: "1"
