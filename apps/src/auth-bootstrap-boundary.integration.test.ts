@@ -56,8 +56,8 @@ test("authentication bootstrap cannot project tenant data or enable service mode
     const settings = await client.query(
       "select current_setting('app.rupaykg.organization_id', true) as organization_id, current_setting('app.rupaykg.identity_id', true) as identity_id, current_setting('app.rupaykg.service_mode', true) as service_mode, current_setting('app.rupaykg.bilateral_scope', true) as bilateral_scope",
     );
-    assert.equal(settings.rows[0]?.organization_id, "");
-    assert.equal(settings.rows[0]?.identity_id, "");
+    assert.equal(settings.rows[0]?.organization_id, null);
+    assert.equal(settings.rows[0]?.identity_id, null);
     assert.equal(settings.rows[0]?.service_mode, "false");
     assert.equal(settings.rows[0]?.bilateral_scope, "false");
 
