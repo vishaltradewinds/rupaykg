@@ -129,3 +129,53 @@ The current catalog therefore supports the next engineering gate: policy design 
 This reconciliation does **not** authorize production RLS activation, role/grant/ownership changes, deployment, worker activation, certification or TRL 9.
 
 Production remains READ-ONLY/HOLD.
+
+
+## Exact FK-path reconciliation completed in Batch C follow-up
+
+Read-only catalog traversal identified the shortest single-owner tenant path for the following indirect tables:
+
+| Table | FK path to `organizations` |
+|---|---|
+| activity_assignments | activity_assignments → activities → organizations |
+| bwg_epr_reports | bwg_epr_reports → bwg_reporting_periods → organizations |
+| bwg_esg_reports | bwg_esg_reports → bwg_reporting_periods → organizations |
+| carbon_calculations | carbon_calculations → activities → organizations |
+| esg_metrics | esg_metrics → activities → organizations |
+| evidence | evidence → activities → organizations |
+| evidence_artifact_reviews | evidence_artifact_reviews → evidence → activities → organizations |
+| evidence_artifact_versions | evidence_artifact_versions → evidence_artifact_series → organizations |
+| evidence_verification_requirements | evidence_verification_requirements → activities → organizations |
+| field_sync_conflicts | field_sync_conflicts → field_sync_envelopes → field_devices → organizations |
+| field_sync_cursors | field_sync_cursors → field_devices → organizations |
+| field_sync_envelopes | field_sync_envelopes → field_devices → organizations |
+| measurements | measurements → activities → organizations |
+| mrv_observations | mrv_observations → activities → organizations |
+| mrv_provenance_events | mrv_provenance_events → activities → organizations |
+| stakeholder_application_approvals | stakeholder_application_approvals → stakeholder_applications → organizations |
+| verifications | verifications → activities → organizations |
+| epr_obligations | epr_obligations → organizations |
+
+### Multi-party boundary requiring explicit semantics
+
+The following are not safe to reduce to one arbitrary organization path:
+
+- `bwg_waste_reports`: processor organization plus reporting-period organization.
+- `chain_of_custody_links`: actor organization plus activity/resource-flow ownership.
+- `credentials`: issuer organization plus activity/verification ownership.
+- `epr_credit_allocations`: credit and obligation organizational paths.
+- `epr_credit_transfers`: from/to organizations.
+- `epr_credits`: issuer/recycler organizations.
+- `registry_events`: from/to owners.
+- `settlements`: payer/payee organizations.
+- `settlement_events`: inherits settlement multi-party semantics.
+
+No policy is being asserted for these ambiguous tables until the business authorization model is explicitly defined and independently reviewed.
+
+The resulting policy rehearsal is therefore intentionally split into:
+1. single-owner FK-path policy candidates;
+2. multi-party policy design;
+3. security/control-table policy design;
+4. global/reference-table exposure review.
+
+This prevents a false "tenant isolation complete" conclusion from a blanket organization-id policy.
