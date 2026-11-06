@@ -76,9 +76,7 @@
   "rootOrCrossTenantTablesRequiringSeparateReview": [
     "organizations",
     "identities",
-    "identity_sessions",
-    "roles",
-    "organization_memberships"
+    "identity_sessions"
   ],
   "requiredPolicyTests": [
     "organization A cannot SELECT organization B rows",
