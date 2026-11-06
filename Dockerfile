@@ -22,4 +22,6 @@ COPY --from=build /app/migrations ./migrations
 
 USER node
 EXPOSE 8080
-CMD ["sh", "-c", "node apps/dist/src/migrate.js && node apps/dist/src/acceptance-seed.js && node apps/dist/src/production-server.js"]
+# Web-service startup is API-only. Database migrations must run through a
+# separately authorized, explicitly invoked migrator workflow; never at boot.
+CMD ["node", "apps/dist/src/production-server.js"]
