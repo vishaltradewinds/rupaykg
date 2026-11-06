@@ -226,9 +226,17 @@ BEGIN
   IF v_guard_owner <> 'rupaykg_verification_guard' OR v_search_path <> ARRAY['search_path=pg_catalog']::text[] THEN
     RAISE EXCEPTION 'verification authorization function has incorrect owner/search_path: % / %',v_guard_owner,v_search_path;
   END IF;
-  SELECT position('VERIFIER' in upper(pg_get_functiondef(p.oid))) > 0 OR position('AUDITOR' in upper(pg_get_functiondef(p.oid))) > 0
-    INTO v_has_role_fallback FROM pg_proc p WHERE p.oid='public.enforce_verification_authorization()'::regprocedure;
+  SELECT position('R.NAME' in upper(pg_get_functiondef(p.oid))) > 0
+      OR position('ROLE_NAME' in upper(pg_get_functiondef(p.oid))) > 0
+      OR position('CURRENT_USER' in upper(pg_get_functiondef(p.oid))) > 0
+      OR position('SESSION_USER' in upper(pg_get_functiondef(p.oid))) > 0
+    INTO v_has_role_fallback
+    FROM pg_proc p WHERE p.oid='public.enforce_verification_authorization()'::regprocedure;
   IF v_has_role_fallback THEN RAISE EXCEPTION 'role-name authorization fallback remains in converged verification guard'; END IF;
+  IF position('PERMISSIONS' in upper(pg_get_functiondef((SELECT p.oid FROM pg_proc p WHERE p.oid='public.enforce_verification_authorization()'::regprocedure)))) = 0
+     OR position('ORGANIZATION_ID' in upper(pg_get_functiondef((SELECT p.oid FROM pg_proc p WHERE p.oid='public.enforce_verification_authorization()'::regprocedure)))) = 0 THEN
+    RAISE EXCEPTION 'explicit tenant-bound permission checks are absent from converged verification guard';
+  END IF;
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='rupaykg_auth_context_owner') THEN RAISE EXCEPTION 'competing authentication context owner remains'; END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_proc p WHERE p.oid='public.rupaykg_set_authenticated_context(text,uuid)'::regprocedure AND p.prosecdef AND pg_get_userbyid(p.proowner)='rupaykg_verification_guard' AND p.proconfig=ARRAY['search_path=pg_catalog']::text[]) THEN
     RAISE EXCEPTION 'authenticated context issuer is not guard-owned with fixed search_path';
