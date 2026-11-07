@@ -413,6 +413,9 @@ CREATE POLICY shakti_batchd_bwg_profile_guard_fixture
 -- epr_returns WITH CHECK assertion; the policy is dropped below.
 CREATE POLICY shakti_batchd_epr_obligation_guard_fixture
   ON public.epr_obligations FOR SELECT USING (true);
+-- SELECT ... FOR UPDATE also requires the UPDATE RLS visibility policy.
+CREATE POLICY shakti_batchd_epr_obligation_lock_fixture
+  ON public.epr_obligations FOR UPDATE USING (true) WITH CHECK (true);
 SET LOCAL ROLE rupaykg_ci_batchd_org_a;
 
 DO $bwg_insert$
@@ -434,6 +437,7 @@ $bwg_insert$;
 RESET ROLE;
 DROP POLICY shakti_batchd_bwg_profile_guard_fixture ON public.bwg_profiles;
 DROP POLICY shakti_batchd_epr_obligation_guard_fixture ON public.epr_obligations;
+DROP POLICY shakti_batchd_epr_obligation_lock_fixture ON public.epr_obligations;
 SET LOCAL ROLE rupaykg_ci_batchd_org_a;
 DO $bwg_visibility$
 BEGIN
