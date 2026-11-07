@@ -124,7 +124,7 @@ app.post("/api/v1/resource-flows", async (request, reply) => {
   const organizationId = requiredString(body,"organizationId"), originType = requiredString(body,"originType"), resourceForm = requiredString(body,"resourceForm");
   const materialCode = requiredString(body,"materialCode"), unit = requiredString(body,"unit"), quantity = requiredPositiveNumber(body,"quantity");
   if (!organizationId || !originType || !resourceForm || !materialCode || !unit || quantity === null) return reply.code(400).send({ error:"organizationId, originType, resourceForm, positive quantity and unit are required" });
-  const activeOrganizationId = auth.activeOrganizationId ?? (auth.memberships.length === 1 ? auth.memberships[0]?.organization_id ?? null);
+  const activeOrganizationId = auth.activeOrganizationId;
   if (!activeOrganizationId || organizationId !== activeOrganizationId) return reply.code(403).send({ error:"Active organization must match resource flow organization", code:"ORG_FORBIDDEN" });
   const tenantAuth: AuthContext = { ...auth, activeOrganizationId };
   const sourceGeographyId = requiredString(body,"sourceGeographyId"), destinationGeographyId = requiredString(body,"destinationGeographyId");
@@ -145,7 +145,7 @@ app.post("/api/v1/activities/:activityId/measurements", async (request, reply) =
   const body=bodyOf(request);
   const value=requiredPositiveNumber(body,"value"),unit=requiredString(body,"unit"),method=requiredString(body,"method"),source=requiredString(body,"source"),measuredAt=requiredString(body,"measuredAt");
   if(value===null||!unit||!method||!source||!measuredAt||Number.isNaN(Date.parse(measuredAt)))return reply.code(400).send({error:"positive value, unit, method, source and valid measuredAt are required"});
-  const activeOrganizationId = auth.activeOrganizationId ?? (auth.memberships.length === 1 ? auth.memberships[0]?.organization_id ?? null);
+  const activeOrganizationId = auth.activeOrganizationId;
   if (!activeOrganizationId) return reply.code(400).send({error:"Active organization is required for measurement recording",code:"TENANT_CONTEXT_REQUIRED"});
   const tenantAuth: AuthContext = {...auth,activeOrganizationId};
   try {
