@@ -1,58 +1,70 @@
-# Shakti Tenant-Isolation Residual Audit — 2026-11-07
+# Shakti Tenant-Isolation Residual Audit — 2026-11-07 (Re-audit)
 
 ## Scope
-Repository: vishaltradewinds/rupaykg
-Audit ref: f881599ff4bb4130636cc5e9d1a5566c2d62b15d
-Purpose: identify remaining application paths that access tenant-sensitive PostgreSQL data without the new `withTenantTransaction` request-context boundary.
+Repository: vishaltradewinds/rupaykg  
+Controlled ref: cto/20261107-protected-migration-ci  
+Latest controlled head at this checkpoint: e9d6c138ae33f06a06869ce9cc555f1786cd7052
 
-This is an engineering audit only. It does not establish production exploitability, production RLS status, regulatory acceptance, or TRL.
+This is an engineering re-audit. It does not establish production exploitability, production RLS activation, regulatory acceptance, certification, or TRL 9.
 
-## Confirmed residual paths
+## Re-audit result
 
-### 1. Onboarding hierarchy
-File: `apps/src/onboarding-hierarchy-routes.ts`
-- `GET /api/v1/onboarding/review-queue` performs direct pool queries against stakeholder applications, organizations, geography, identities and approval-chain data.
-- `POST /api/v1/onboarding/applications/:applicationId/verify-legal` uses a manually opened transaction and `set_platform_context`, not tenant context.
-- `POST /api/v1/onboarding/applications/:applicationId/:action` uses authority context and direct organization/membership updates.
-Assessment: platform/authority workflows require separate policy treatment, but they must remain explicitly bounded and must not be assumed tenant-safe merely because an authenticated identity is present.
+The previously identified high-risk surfaces have been remediated on the controlled branch:
 
-### 2. Evidence vault
-File: `apps/src/evidence-vault-routes.ts`
-- `activityContext()` uses direct pool queries.
-- Evidence list/download/permission checks use direct pool queries.
-- Review uses a manual transaction without `app.set_request_context`.
-Assessment: tenant-sensitive evidence/activity access is a priority Batch E remediation surface before production RLS activation.
+- Evidence Vault: tenant-sensitive operations use `withTenantTransaction`.
+- MRV/provenance: tenant-sensitive operations use `withTenantTransaction`; route-level session advisory locking was moved to transaction-scoped locking.
+- CPCB SWM: tenant-sensitive workspace operations use `withTenantTransaction`.
+- Value/BWG/ESG: tenant-sensitive operations use `withTenantTransaction`; broad organization fallback paths were removed.
+- Workspace: tenant-sensitive operations use `withTenantTransaction`; arbitrary-membership fallback was removed.
+- Sync/field routes: tenant-sensitive operations use `withTenantTransaction`.
+- Onboarding hierarchy: platform and authority workflows use explicit `withPlatformTransaction` / `withAuthorityTransaction` boundaries.
+- Platform admin: platform operations use explicit platform transaction context.
+- EPR returns: the current controlled branch now binds list/create/submit/external-reference operations to tenant transaction context.
 
-### 3. MRV
-File: `apps/src/mrv-routes.ts`
-- Multiple activity/evidence/measurement/provenance queries use the pool directly.
-- Provenance reads/writes and MRV acceptance checks require tenant-bound request context when RLS is active.
-Assessment: high-priority because this is core MRV evidence/provenance functionality.
+Static checks on the controlled branch found zero direct `pool.query` / `pool.connect` calls in the remediated Evidence Vault, CPCB SWM, BWG, Sync, Workspace and Intelligence route files. Remaining `pool.query` calls in MRV/Value are helper functions that accept the transaction client and require continued review rather than being treated as automatic violations.
 
-### 4. CPCB SWM
-File: `apps/src/cpcb-swm-routes.ts`
-- Read/write permission and geography checks use direct pool queries.
-- Several mutation paths open manual transactions without the tenant request-context helper.
-Assessment: high-priority because this surface feeds statutory reporting workflows.
+## Remaining priority surfaces
 
-### 5. Value/workspace
-File: `apps/src/value-routes.ts`
-- Activity/evidence/ESG/BWG/workspace queries include direct pool access and multi-organization ID arrays.
-Assessment: requires reconciliation against the active-organization rule and the 67-table policy matrix; broad organization iteration must not bypass tenant context.
+### 1. Statutory routes — NOT YET REMEDIATED
+File: `apps/src/statutory-routes.ts`
 
-## Control conclusion
-The new `withTenantTransaction` boundary is implemented on selected routes, but the repository is not yet demonstrably uniform. The residual paths above are therefore NOT VERIFIED tenant-safe for a future production RLS-enabled runtime.
+Tenant-sensitive applicability, BWG and EPR operations still contain direct pool access and require active-organization transaction binding.
 
-## Required remediation order
-1. Evidence vault: convert tenant-sensitive reads/writes to one active-organization tenant transaction.
-2. MRV/provenance: apply the same boundary and add negative cross-tenant acceptance coverage.
-3. CPCB SWM: separate platform-authority operations from tenant-scoped stakeholder workspaces and bind the latter to tenant context.
-4. Value/workspace: remove broad multi-organization request execution from tenant-sensitive paths and use active-organization context.
-5. Re-audit onboarding hierarchy separately under authority/platform context rules.
-6. Reconcile each changed table against `docs/RUPAYKG_RLS_TABLE_POLICY_MATRIX_20261107.md` before any production RLS proposal.
+Required next action:
+- convert all organization-scoped reads/writes and evidence-binding checks to `withTenantTransaction`;
+- reject body-supplied organization IDs that differ from the active organization;
+- retain explicit statutory boundary labels.
 
-## Release impact
+### 2. Auth/onboarding routes — SPECIAL BOUNDARY REVIEW REQUIRED
+File: `apps/src/auth-routes.ts`
+
+Authentication/session operations are intentionally pre-tenant in some paths, but authenticated onboarding application reads/writes still need classification and explicit platform/tenant boundaries.
+
+Required next action:
+- separate identity/session operations from tenant-scoped onboarding operations;
+- bind tenant-scoped application access to active organization context;
+- keep registration/login/session issuance outside ordinary tenant RLS where appropriate.
+
+### 3. Registry routes — SPECIAL BOUNDARY REVIEW REQUIRED
+File: `apps/src/registry-routes.ts`
+
+A manual transaction helper remains. Registry operations need classification as tenant, platform, or multi-party registry authority before any RLS activation proposal.
+
+### 4. RLS policy matrix reconciliation
+Every changed table must be reconciled against the authoritative policy matrix before production RLS activation.
+
+## Current release gate
+
+- Production Neon: READ-ONLY / HOLD.
 - Production RLS activation: HOLD.
-- Production migration/DDL/DML: HOLD.
-- TRL 9: not claimed.
-- This audit is evidence for the next safe engineering batch, not a production certification.
+- Production DDL/DML/role/grant changes: HOLD.
+- Controlled CI execution: NOT VERIFIED for the latest head.
+- TRL 9: NOT CLAIMED.
+
+## Next execution order
+
+1. Finish statutory-route tenant boundary remediation.
+2. Re-audit auth/onboarding and registry boundary classification.
+3. Reconcile affected tables against the RLS policy matrix.
+4. Execute disposable CI and runtime tenant-isolation acceptance.
+5. Only after those gates pass, prepare the next production-readiness gate.
