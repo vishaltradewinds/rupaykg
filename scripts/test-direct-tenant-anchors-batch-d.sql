@@ -531,10 +531,10 @@ BEGIN
     EXECUTE format('SELECT count(*) FROM public.%I WHERE id=%L::uuid',r.table_name,r.a_id) INTO own_count;
     EXECUTE format('SELECT count(*) FROM public.%I WHERE id=%L::uuid',r.table_name,r.b_id) INTO foreign_count;
     IF own_count <> 1 OR foreign_count <> 0 THEN RAISE EXCEPTION 'Org B row visibility failed for %',r.table_name; END IF;
-    EXECUTE format('UPDATE public.%I SET id=id WHERE id=%L::uuid',r.table_name,r.b_id);
+    EXECUTE format('UPDATE public.%I SET id=id WHERE id=%L::uuid',r.table_name,r.a_id);
     GET DIAGNOSTICS changed = ROW_COUNT;
     IF changed <> 1 THEN RAISE EXCEPTION 'Org B UPDATE own row failed for %',r.table_name; END IF;
-    EXECUTE format('DELETE FROM public.%I WHERE id=%L::uuid',r.table_name,r.a_id);
+    EXECUTE format('DELETE FROM public.%I WHERE id=%L::uuid',r.table_name,r.b_id);
     GET DIAGNOSTICS changed = ROW_COUNT;
     IF changed <> 0 THEN RAISE EXCEPTION 'Org B DELETE crossed tenant boundary for %',r.table_name; END IF;
   END LOOP;
