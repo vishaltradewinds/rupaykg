@@ -52,3 +52,14 @@
 - Latest PR #332 code head: `ff29013085d78d55800f4fe6edf0c2905aae79ee`.
 - Exact-head workflow lookup returned no runs; CI/runtime validation remains **NOT VERIFIED**.
 - Production database/RLS/deployment remains **HOLD**; no production changes made.
+
+
+### 2026-11-07 — Value/BWG tenant-isolation remediation
+- Refactored `apps/src/value-routes.ts` across carbon calculations, EPR assessment, ESG metric recording, BWG workspace reads and BWG profile/reporting-period/waste/EPR/ESG writes to use `withTenantTransaction` for tenant-sensitive database operations.
+- Permission and geography checks for BWG profile/reporting-period writes are now executed inside the same tenant transaction as the mutation.
+- Body-specified BWG writes require the requested organization to be the active organization, preventing a request from selecting a different membership while the database context remains another tenant.
+- Removed the BWG workspace fallback to an arbitrary first membership; tenant workspace access now requires an explicit active organization.
+- Latest code head: `40c6d5f50e9f8b3b0e211391c2c46b3153422e3a`.
+- Static route audit: 2 remaining `pool.query` references are helper internals accepting `Pool | PoolClient`; no direct tenant-route `pool.connect` remains. Ten tenant transaction wrappers are present across the route surface.
+- Exact-head GitHub workflow lookup and combined status returned no runs/statuses; CI remains **NOT VERIFIED**.
+- Production Neon/RLS/deployment remains **HOLD**; no production changes made.
