@@ -64,7 +64,8 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
   app.get("/api/v1/mrv/status", async (request, reply) => {
     const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
     const organizationId = auth.activeOrganizationId;
-    if (!organizationId || !await requirePermission(pool, auth, organizationId, ["guardian:read"])) return reply.code(403).send({ error: "Guardian read permission required", code: "MRV_PERMISSION_REQUIRED" });
+    if (!organizationId) return reply.code(400).send({ error: "Active organization is required", code: "TENANT_CONTEXT_REQUIRED" });
+    if (!await withTenantTransaction(pool, auth, client => requirePermission(client, auth, organizationId, ["guardian:read"]))) return reply.code(403).send({ error: "Guardian read permission required", code: "MRV_PERMISSION_REQUIRED" });
     const guardian = guardianStatus();
     const hedera = hederaStatus();
     return {
