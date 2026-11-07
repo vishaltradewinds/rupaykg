@@ -63,7 +63,7 @@ async function isAcceptanceFixture(pool: Pool|PoolClient, activityId: string): P
 export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null): Promise<void> {
   app.get("/api/v1/mrv/status", async (request, reply) => {
     const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
-    const organizationId = auth.activeOrganizationId || auth.memberships[0]?.organization_id;
+    const organizationId = auth.activeOrganizationId;
     if (!organizationId || !await requirePermission(pool, auth, organizationId, ["guardian:read"])) return reply.code(403).send({ error: "Guardian read permission required", code: "MRV_PERMISSION_REQUIRED" });
     const guardian = guardianStatus();
     const hedera = hederaStatus();
