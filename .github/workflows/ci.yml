@@ -42,6 +42,7 @@ jobs:
       - name: Provision disposable Shakti runtime role
         run: |
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "create role rupaykg_app_runtime nologin nobypassrls"
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "alter role rupaykg_app_runtime login password 'ci-runtime-only-password'"
       - name: Run migrations with explicit protected-Shakti test gate
         env:
           RUPAYKG_ALLOW_PROTECTED_SHAKTI_MIGRATIONS: "1"
@@ -79,7 +80,10 @@ jobs:
           echo "Chrome DOM exit: $dom_status; screenshot exit: $shot_status"
       - name: Run tests including disposable PostgreSQL acceptance
         env:
+          DATABASE_URL: postgresql://rupaykg_app_runtime:ci-runtime-only-password@localhost:5432/rupaykg
+          RUPAYKG_TEST_OWNER_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/rupaykg
           RUPAYKG_RUN_DB_INTEGRATION_TESTS: "1"
+          RUPAYKG_REQUIRE_NON_BYPASSRLS: "1"
         run: npm test
       - name: Build production container
         run: docker build --pull --tag rupaykg:ci .
