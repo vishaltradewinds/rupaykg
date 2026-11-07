@@ -157,7 +157,6 @@ export async function registerStatutoryRoutes(app: FastifyInstance, pool: Pool |
     if (!organizationId || !canActForOrganization(auth, organizationId)) return reply.code(403).send({ error: "No verified membership for organization", code: "ORG_FORBIDDEN" });
     const scheme = text(body, "scheme");
     if (!scheme) return reply.code(400).send({ error: "EPR scheme is required", code: "EPR_SCHEME_REQUIRED" });
-    if (!schemeRow.rows[0]) return reply.code(400).send({ error: "Unsupported EPR scheme. Select a scheme from the RupayKG statutory catalog.", code: "EPR_SCHEME_UNSUPPORTED" });
     const status = text(body, "applicabilityStatus") || "UNDER_REVIEW";
     const allowed = new Set(["UNKNOWN", "POTENTIALLY_APPLICABLE", "APPLICABLE", "NOT_APPLICABLE", "UNDER_REVIEW"]);
     if (!allowed.has(status)) return reply.code(400).send({ error: "Invalid EPR applicability status", code: "INVALID_EPR_APPLICABILITY" });
@@ -168,6 +167,8 @@ export async function registerStatutoryRoutes(app: FastifyInstance, pool: Pool |
     const registrationInput = normalizeEprRegistrationInput(text(body, "cpcbRegistrationReference"), text(body, "cpcbRegistrationStatus"), body.basis);
     try {
       return await withTenantTransaction(pool, auth, async client => {
+        const schemeRow = await client.query<{ code: string; name: string; metadata: Record<string, unknown> }>("select code,name,metadata from epr_schemes where code=$1 and status='VERIFIED'", [scheme]);
+        if (!schemeRow.rows[0]) return reply.code(400).send({ error: "Unsupported EPR scheme. Select a scheme from the RupayKG statutory catalog.", code: "EPR_SCHEME_UNSUPPORTED" });
         if (!await hasOrganizationPermission(client, auth, organizationId, ["epr:manage", "audit:execute", "reports:export"])) return reply.code(403).send({ error: "EPR applicability management permission required", code: "STATUTORY_EPR_WRITE_REQUIRED" });
         const schemeRow = await client.query<{ code: string; name: string; metadata: Record<string, unknown> }>("select code,name,metadata from epr_schemes where code=$1 and status='VERIFIED'", [scheme]);
         if (!schemeRow.rows[0]) return reply.code(400).send({ error: "Unsupported EPR scheme. Select a scheme from the RupayKG statutory catalog.", code: "EPR_SCHEME_UNSUPPORTED" });
