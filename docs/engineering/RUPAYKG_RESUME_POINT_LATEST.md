@@ -213,3 +213,10 @@
 - Added `workflow_dispatch` to the controlled CI workflow so the validation pipeline can be deliberately invoked without merging the controlled security work into main.
 - Commit: `19535ef952bd4c7606f5783583086ef8b227880a`.
 - This does not itself prove execution; GitHub Actions run evidence remains required.
+
+
+### 2026-11-07 — Batch E contract due-diligence correction
+- Re-inspected the newly restored Batch E SQL contract before execution.
+- Found an escaping defect in the PostgreSQL regex used to detect blanket organization-only policies: the pattern had double backslashes and therefore did not express the intended whitespace matcher.
+- Corrected the regex to the intended PostgreSQL pattern and committed `8b76770df8cfa8553052418c7b84b57928cc9f3f`.
+- This is a test-contract correctness fix; it does not alter production.
