@@ -1,40 +1,41 @@
-# G-002 Tenant RLS Rehearsal Finding — 2026-11-07
+# G-002 Tenant RLS Rehearsal — Corrected Evidence — 2026-11-07
 
-## Rehearsal target
+## Finding
 
-Neon project `rupaykg-production-fresh`, branch `rupaykg-tenant-isolation-lab-20261101` (`br-blue-tooth-b4kvuut7`).
+The initial NOBYPASSRLS rehearsal used a probe role that was not the role targeted by the tenant policies. The zero-row result was therefore a role-selection/test-harness error, not evidence of a broken RLS predicate.
 
-## Observed baseline
+## Authoritative policy target
 
-- RLS-enabled public tables: 22.
-- Public RLS policies: 88.
-- Tenant policy model uses `app.current_organization_id()`.
-- The function resolves `app.organization_id` from the current session.
+For public.activities, the tenant policies are explicitly scoped to:
 
-## Controlled NOBYPASSRLS test
+rupaykg_app_runtime
 
-A dedicated rehearsal role `rupaykg_runtime_g002_test_20261107` was created as NOLOGIN/NOBYPASSRLS for the test and granted only the required schema/table privileges.
+The role was independently inspected and confirmed:
+- rolsuper = false
+- rolcreaterole = false
+- rolcreatedb = false
+- rolreplication = false
+- rolbypassrls = false
+- rolcanlogin = true
 
-The role successfully became the current database role and successfully resolved:
+## Corrected A/B rehearsal
 
-`app.organization_id = 11111111-1111-4111-8111-111111111111`
-
-However, an Org-A fixture activity was not visible to that role. The expected tenant-scoped SELECT returned zero rows.
+Using the intended policy target role in the Neon rehearsal branch:
+- Org A context: 1 visible Org-A row, 0 Org-B rows.
+- Org B context: 1 visible Org-B row, 0 Org-A rows.
+- INSERT under Org A: succeeded, then rolled back.
+- UPDATE under Org A: succeeded, then rolled back.
+- DELETE against Org B from Org A context: affected 0 rows.
+- DELETE under Org B: succeeded, then rolled back.
 
 ## Determination
 
-**Tenant A/B isolation proof: FAIL / NOT CLOSED.**
+**Tenant RLS A/B isolation rehearsal: PASS for rupaykg_app_runtime.**
 
-This is an important security finding. It prevents any claim that the current RLS design is production-ready or that G-002 tenant isolation has closed.
+This closes the specific rehearsal failure recorded in issue #325.
 
-No production database mutation was performed.
+## Remaining G-002 requirement
 
-## Required remediation
+This rehearsal does not prove the deployed production runtime identity. Production remains unchanged. The next gate is to independently establish that the deployed service connects as the intended NOBYPASSRLS policy-target role and then run production-safe runtime evidence.
 
-1. Reproduce the policy evaluation with a minimal role/function privilege matrix.
-2. Determine why the NOBYPASSRLS role does not see the Org-A row under the matching tenant context.
-3. Verify that required `app` schema/function grants are represented in authoritative migration history.
-4. Re-run SELECT, INSERT, UPDATE and DELETE isolation tests for Org A versus Org B.
-5. Only close the tenant-isolation gate after repeatable non-bypass runtime evidence passes.
-
-Tracking issue: #325.
+Issue #325 is closed as resolved test-harness error.
