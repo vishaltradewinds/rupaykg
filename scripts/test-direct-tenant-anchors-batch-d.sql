@@ -408,6 +408,11 @@ $org_a$;
 RESET ROLE;
 CREATE POLICY shakti_batchd_bwg_profile_guard_fixture
   ON public.bwg_profiles FOR SELECT USING (true);
+-- The epr_returns quantity trigger locks its referenced obligation under the
+-- caller's RLS context. Expose this fixture obligation only during the target
+-- epr_returns WITH CHECK assertion; the policy is dropped below.
+CREATE POLICY shakti_batchd_epr_obligation_guard_fixture
+  ON public.epr_obligations FOR SELECT USING (true);
 SET LOCAL ROLE rupaykg_ci_batchd_org_a;
 
 DO $bwg_insert$
@@ -428,6 +433,7 @@ $bwg_insert$;
 
 RESET ROLE;
 DROP POLICY shakti_batchd_bwg_profile_guard_fixture ON public.bwg_profiles;
+DROP POLICY shakti_batchd_epr_obligation_guard_fixture ON public.epr_obligations;
 SET LOCAL ROLE rupaykg_ci_batchd_org_a;
 DO $bwg_visibility$
 BEGIN
@@ -436,6 +442,10 @@ BEGIN
                    '00000000-0000-0000-0000-00000000b101',
                    '00000000-0000-0000-0000-00000000c101')) <> 1 THEN
     RAISE EXCEPTION 'Temporary BWG fixture SELECT policy was not fully removed';
+  END IF;
+  IF (SELECT count(*) FROM public.epr_obligations
+      WHERE id='00000000-0000-0000-0000-00000000d120') <> 0 THEN
+    RAISE EXCEPTION 'Temporary EPR obligation fixture SELECT policy was not fully removed';
   END IF;
 END
 $bwg_visibility$;
