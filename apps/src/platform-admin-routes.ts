@@ -66,7 +66,9 @@ async function authorize(
     return null;
   }
   try {
-    const result = await pool.query<{ ok: boolean }>(
+    const result = await platformQuery<{ ok: boolean }>(
+      pool,
+      auth.identityId,
       `select exists (
          select 1 from organization_memberships om
          join roles r on r.id = om.role_id
