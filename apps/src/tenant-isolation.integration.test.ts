@@ -52,7 +52,7 @@ test("Shakti tenant context rejects cross-organization context switching", { ski
 
     const authA: AuthContext = {
       identityId,
-      memberships: [{ organization_id: organizationA, role_id: roleA, status: "VERIFIED", permissions: [] }],
+      memberships: [{ organization_id: organizationA, role_id: roleA, status: "VERIFIED" }],
       activeOrganizationId: organizationA,
     };
 
