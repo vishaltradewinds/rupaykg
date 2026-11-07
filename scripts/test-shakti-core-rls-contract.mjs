@@ -14,7 +14,7 @@ const expectedPolicies = {
 };
 
 for (const table of Object.keys(expectedPolicies)) {
-  if (!new RegExp(`alter table public\\\\.${table} enable row level security`).test(migration)) {
+  if (!new RegExp(`alter table public\\.${table} enable row level security`).test(migration)) {
     failures.push(`RLS is not enabled for ${table}`);
   }
   if (!expectedPolicies[table].test(migration)) {
