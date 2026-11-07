@@ -85,14 +85,10 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
     const policyId = str(body, "guardianPolicyId") || process.env.GUARDIAN_MRV_POLICY_ID || null;
     const methodologyCode = str(body, "methodologyCode") || undefined;
     if (!verificationId || !evidenceId || !policyId) return reply.code(400).send({ error: "verificationId, evidenceId and guardianPolicyId (or GUARDIAN_MRV_POLICY_ID) are required" });
-    let lockClient: PoolClient | null = null;
-    let lockAcquired = false;
     const idempotencyLockKey = [activityId, verificationId, evidenceId, policyId, methodologyCode ?? ""].join("|");
     try {
-      lockClient = await pool.connect();
-      await lockClient.query("select pg_advisory_lock(hashtext($1))", [idempotencyLockKey]);
-      lockAcquired = true;
-      return await withTenantTransaction(pool,auth,async(client)=>{
+       return await withTenantTransaction(pool,auth,async(client)=>{
+       await client.query("select pg_advisory_xact_lock(hashtext($1))", [idempotencyLockKey]);
       const context = await client.query<{ organization_id: string; activity_status: string; decision: string; evidence_status: string; evidence_activity_id: string | null; evidence_count: string; observation_count: string }>(
         `select a.organization_id, a.status activity_status, v.decision, e.status evidence_status, e.activity_id evidence_activity_id,
                 (select count(*)::text from evidence e2 where e2.activity_id=a.id) evidence_count,
