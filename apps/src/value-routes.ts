@@ -166,7 +166,7 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
         const row = await client.query("insert into bwg_reporting_periods (organization_id,period_start,period_end,reporting_basis) values ($1,$2,$3,$4) on conflict (organization_id,period_start,period_end,reporting_basis) do update set reporting_basis=excluded.reporting_basis returning *", [organizationId,start,end,basis]);
         return reply.code(201).send({ source: "postgresql", syntheticData: false, authoritativeMutation: true, period: row.rows[0] });
       });
-    catch (error) { request.log.error(error); return reply.code(503).send({ error: "BWG reporting period unavailable", code: "BWG_PERIOD_UNAVAILABLE", syntheticData: false }); }
+    } catch (error) { request.log.error(error); return reply.code(503).send({ error: "BWG reporting period unavailable", code: "BWG_PERIOD_UNAVAILABLE", syntheticData: false }); }
   });
 
   app.post("/api/v1/bwg/reporting-periods/:periodId/waste", async (request, reply) => {
