@@ -4,40 +4,35 @@
 - Primary working/release repository: vishaltradewinds/rupaykg
 - Authoritative branch: main
 - Secondary evidence repository: rupaykg-aistudio
-- Production database: Neon main; production remains READ-ONLY / HOLD.
-- No production DDL/DML, migration, role/grant/RLS mutation, deployment, worker activation or certification performed in this run.
+- Production Neon remains READ-ONLY / HOLD.
 
-## Current critical-path evidence
-- PR #331 head: 50e463df30f18a30e6a192da447a451d1816ea55
-- PR #331 scope: remaining tenant-sensitive Intelligence, BWG/EPR, overview, geography, resource-flow and measurement paths moved toward transaction-local tenant context.
-- PR #331 has no workflow run/status visible yet at inspected exact head; do not claim CI validation.
-- PR #332 head: 13d509a7c9c5764cbec9d820dfaa3c3535939668
-- PR #332 is a validation follow-up to #331.
+## Exact current engineering heads
+- PR #331: 50e463df30f18a30e6a192da447a451d1816ea55
+- PR #332: 1c0050eed3d507f49716f68ec3feeb69040369b0
 
-## Safe implementation completed this run
-1. Added fail-closed migration-runner protection for the four 20261107 Shakti migrations:
-   - authority_hierarchy_context
-   - platform_execution_context
-   - runtime_grant_reconciliation
-   - core_tenant_rls_activation_gate
-   They now require explicit RUPAYKG_ALLOW_PROTECTED_SHAKTI_MIGRATIONS=1.
-2. Added CI-only provisioning of disposable role rupaykg_app_runtime with NOLOGIN/NOBYPASSRLS before migration execution.
-3. CI runs the protected migration set only under the explicit test/rehearsal environment gate.
-4. Re-fetched changed files at exact PR #332 head and verified both safeguards are present.
+## Verified work in this batch
+- Added fail-closed protection to the migration runner for the four 20261107 protected Shakti migrations. They require explicit RUPAYKG_ALLOW_PROTECTED_SHAKTI_MIGRATIONS=1.
+- CI provisions a disposable runtime role with NOBYPASSRLS and NOLOGIN, then enables LOGIN only for the disposable CI test environment.
+- CI runs the protected migration gate explicitly.
+- CI now executes runtime-identity/tenant-isolation integration tests using the disposable non-BYPASSRLS runtime role while retaining a separate owner connection for fixture setup/cleanup.
+- Exact PR #332 head re-read and diff inspected after the changes.
 
-## Remaining blockers
-- Exact-head CI for #332 is not yet visible; no pass claimed.
-- Full application route/worker/export mapping remains incomplete.
-- Remaining 14 tenant/auth/audit/multi-party RLS surfaces from Issue #326 remain.
-- Exact deployed runtime identity remains unverified.
-- Production RLS remains 0/67 in the last inspected baseline; no production policy activation authorized.
-- Migration 096 provenance is substantially reconciled in current evidence but production release still requires independent authority/review gates.
-- Independent security/DBA review, rollback/restore proof and explicit founder release authorization remain required.
-- TRL 9 not achieved and not claimed.
+## Validation status
+- Exact-head GitHub Actions workflow runs for PR #331/#332 are still not visible through the available GitHub evidence surface.
+- Therefore CI PASS is NOT VERIFIED.
+- The new runtime integration test is configured to prove current_user is not SUPERUSER/CREATEROLE/CREATEDB/BYPASSRLS, tenant-A visibility excludes tenant-B, and cross-tenant insert is rejected by RLS when the test gate is enabled.
+- This is test configuration/code, not proof that the test has executed successfully.
+
+## Production gate
+- No production DDL/DML.
+- No production migration.
+- No production role/grant/RLS change.
+- No deployment, worker activation or certification.
+- Production RLS activation remains blocked pending independent review, runtime identity proof, representative negative tests, rollback/restore evidence and explicit release authorization.
+- TRL 9 remains NOT ACHIEVED / NOT CLAIMED.
 
 ## Next autonomous action
-- Obtain exact-head CI evidence for #332/#331.
-- If CI fails, diagnose and correct only safe validation failures.
-- Continue Issue #326 Batch E: remaining authorization, audit and multi-party policy contracts/tests, with one controlled integration spine.
-- Reconcile runtime route/worker/export access against the policy matrix before any production RLS proposal.
-- Keep production HOLD.
+1. Obtain exact-head CI evidence for PR #332; diagnose only safe CI failures.
+2. If validation passes, continue Issue #326 Batch E across remaining tenant/auth/audit/multi-party surfaces.
+3. Reconcile all route/worker/export access against the 67-table policy matrix.
+4. Prepare, but do not execute, a disposable full-RLS rehearsal before any production activation proposal.
