@@ -233,6 +233,8 @@ GRANT SELECT,INSERT,UPDATE,DELETE ON
  public.resource_flows, public.stakeholder_applications
 TO rupaykg_ci_batchd_org_a, rupaykg_ci_batchd_org_b;
 GRANT SELECT ON public.activities, public.evidence, public.verifications TO rupaykg_ci_batchd_org_a, rupaykg_ci_batchd_org_b;
+-- epr_returns' database trigger locks the matching obligation row with SELECT ... FOR UPDATE.
+GRANT SELECT, UPDATE ON public.epr_obligations TO rupaykg_ci_batchd_org_a, rupaykg_ci_batchd_org_b;
 
 -- Tenant rows are scoped directly by organization_id except where the table
 -- has an additional row-ownership invariant (activity-backed evidence or
