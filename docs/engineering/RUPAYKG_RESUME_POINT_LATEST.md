@@ -91,6 +91,14 @@
 - Production Neon/RLS/deployment remains **HOLD**; no production changes made.
 
 
+### 2026-11-07 — Field-device tenant-context hardening
+- `apps/src/sync-routes.ts` now binds field-device enrollment and verification to explicit `auth.activeOrganizationId` and executes their DB mutations through `withTenantTransaction`.
+- Enrollment rejects an organization different from the active tenant. Verification rejects devices outside the active tenant.
+- `requireFieldDevice` was prepared to operate against the tenant transaction client and return organization binding.
+- Commits: `cd2c33e383f89edcb65f5c4b7a7dcf1757f7deda`, `ccc867a7004712d8d9f9806d641690d93887daa3`, `19c6447f6151cf9d4e34ac3e2e9384c808fc0183`.
+- Exact-head GitHub Actions lookup for `19c6447f6151cf9d4e34ac3e2e9384c808fc0183` returned no workflow runs; CI remains NOT VERIFIED.
+- Production remains HOLD/READ-ONLY; no production DDL/DML, role/grant, RLS activation, deployment, worker activation, or certification was performed.
+
 ### 2026-11-07 — Workspace tenant-context hardening
 - Removed the multi-membership fallback in `apps/src/workspace-routes.ts`; workspace access now returns no organizations when `auth.activeOrganizationId` is absent instead of iterating every membership.
 - This is an incremental fail-closed improvement. Workspace DB reads still require a subsequent transaction-local tenant-context reconciliation pass; no production changes made.
