@@ -47,6 +47,14 @@ Production migration application remains **BLOCKED** until migration-history aut
 - Do not treat the aistudio repository as the release migration authority.
 - Do not declare G-002 closed from repository counts alone.
 
+## Confirmed production mismatch — 2026-11-07
+
+A read-only Neon query has now captured the complete production `public.schema_migrations` ledger. It contains 92 rows. The primary repository inventory contains 91 migration SQL files. The production ledger has one additional row: `096_verification_authorization_provenance.sql`, applied 2026-10-27T13:46:14.262Z. No matching `096_verification_authorization_provenance.sql` is present in the primary repository migration path inspected.
+
+This converts the migration-authority issue from an unresolved count discrepancy into a specific recoverable-history gap. The missing 096 SQL must be recovered from authoritative history or its exact schema effect reconstructed from preserved evidence. It must not be fabricated.
+
+Full read-only ledger snapshot: `docs/G002_PRODUCTION_MIGRATION_LEDGER_SNAPSHOT_20261107.md`.
+
 ## Current gate
 
 **G-002: BLOCKED / OPEN**
