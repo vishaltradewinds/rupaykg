@@ -189,3 +189,11 @@
 - Updated both `scripts/validate-migrations.mjs` and `apps/src/migrate.ts` to precompute prefix counts and apply this rule consistently.
 - Latest corrective commit: `235ef048ce7126dd1e44150831b9e157f406f82f`.
 - This correction is NOT considered validated until disposable CI executes migration validation and the full migration runner successfully.
+
+
+### 2026-11-07 — Due-diligence batch: migration compatibility invariant
+- Rechecked the corrected migration-version algorithm against the legacy compatibility requirement.
+- The intended invariant is now explicit: unique legacy numeric prefixes preserve their historical numeric `schema_migrations.version`; only duplicate prefixes are promoted to filename-based version identity.
+- Added explicit version bookkeeping in `scripts/validate-migrations.mjs` for the validator's uniqueness inventory.
+- Latest code checkpoint: `87732b402fdd99dc3d044a5e972abdac2e015e4b`.
+- Disposable CI execution is still unavailable for this exact head; no validation claim is made.
