@@ -199,3 +199,8 @@ Do not invent market size, price points, adoption numbers or public-sector deman
 The objective is a commercially sustainable RupayKg that can operate within government-led digital ecosystems while preserving lawful institutional boundaries, interoperable interfaces, customer trust and DIGICORE INFRASYS's defensible commercial value.
 
 **Document status:** Internal strategic direction and operating framework. Not a legal opinion, proof of IP ownership, government partnership, DPI recognition, customer contract or production acceptance.
+
+
+## 12. Execution control
+
+The work is to be carried out through the prioritised, evidence-gated backlog in [docs/DPI_ECOSYSTEM_EXECUTION_ROADMAP_RUPAYKG.md](DPI_ECOSYSTEM_EXECUTION_ROADMAP_RUPAYKG.md). That roadmap defines the DPGA source acquisition and component due diligence, GDPIR record extraction, national capability-gap audit, commercial buyer validation, DIGICORE INFRASYS operating prerequisites, and Jabalpur/national acceptance sequence. The roadmap is subordinate to this strategic direction and the SHAKTI production gates; it does not authorise production changes or assert completion.
