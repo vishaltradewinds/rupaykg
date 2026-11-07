@@ -153,3 +153,14 @@
 - Commit: `71b9102b5223b5386921268e71488b1e060e0f3a`.
 - This closes the identified workspace multi-membership fallback/query-scope residual; CI remains **NOT VERIFIED** until an exact-head workflow run is observed.
 - Production remains unchanged and all production RLS/migration/deployment gates remain HOLD.
+
+
+### 2026-11-07 — Batch E authorization/audit/multi-party contract
+- Advanced Issue #326 Batch E on the controlled PR #332 branch.
+- Added `docs/engineering/SHAKTI_BATCH_E_POLICY_CONTRACT_20261107.md` defining operation-specific boundaries for the remaining 3 authorization, 2 audit and 9 multi-party surfaces.
+- Added `scripts/test-shakti-batch-e-policy-contract.sql` as a disposable PostgreSQL schema/contract gate. It asserts the 14 surfaces and required authorization columns, rejects unsafe blanket organization policies on multi-party surfaces, and rejects role/session-name authorization on audit controls.
+- Commits: `aefdf1d3cedaf073381b45da6035c5b1e8fa1a6a`, `5538ca469fb014f9a3c41b40cf8cf6ef6e611429`.
+- This is contract/schema validation only; it does not implement or enable production RLS.
+- Next execution: wire the Batch E disposable contract gate into CI, then build executable positive/negative authorization and multi-party tests against the actual domain rows and route/worker access map.
+- CI exact-head evidence remains NOT VERIFIED.
+- Production remains READ-ONLY/HOLD; no production DDL/DML/RLS/role/grant/deployment/worker/certification action.
