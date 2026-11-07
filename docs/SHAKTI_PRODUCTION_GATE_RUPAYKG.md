@@ -6,6 +6,16 @@ This document is the production-control record for RupayKg under SHAKTI — Stan
 
 **Rule:** RupayKg must satisfy all applicable SHAKTI gates before it can be treated as SHAKTI-certified for live production. SHAKTI certification does not replace independent statutory, regulatory, contractual, infrastructure-provider, or third-party approvals.
 
+## Controlling architecture priority — national deployment first
+
+**National deployment objectives are the primary architecture objective. Jabalpur SITE-JBP-01 Kathonda is the first field implementation and validation instance of that same national architecture—not a separate pilot architecture.**
+
+RupayKg must be built as one pan-India platform. The Jabalpur implementation must use the same shared capabilities, data contracts, tenancy and security model, integration boundaries, release artefacts and operational controls intended for national deployment. Site-specific parameters belong in governed configuration and adapters. Do not introduce a Jabalpur-only fork, data model, API contract or workflow engine. Where a local shortcut conflicts with national operability, the national requirement takes priority.
+
+Controlling architecture record: [docs/RUPAYKG_NATIONAL_DEPLOYMENT_ARCHITECTURE_AND_JABALPUR_VALIDATION.md](RUPAYKG_NATIONAL_DEPLOYMENT_ARCHITECTURE_AND_JABALPUR_VALIDATION.md).
+
+**Validation boundary:** Jabalpur success proves only the site, workflows, integrations and operating conditions actually tested. It does not by itself prove national deployment readiness, nationwide statutory applicability, multi-state acceptance, capacity or TRL 9. National readiness requires separately evidenced tenant isolation, cross-jurisdiction coverage, load/resilience, security, backup/restore, external integration, field operations and rollout gates.
+
 ## Current verified baseline
 
 - Repository: `vishaltradewinds/rupaykg`
@@ -70,9 +80,6 @@ RupayKg becomes SHAKTI-certified for its defined production release only after e
 
 **Current certification decision: BLOCKED — evidence incomplete.**
 
-
-
-
 ## Commercial monetization and DPG sourcing — controlling direction
 
 RupayKg is a proprietary commercial product. The commercial objective is revenue through software subscriptions, enterprise/public-sector contracts, implementation, integration, managed operations, APIs, support, training and SLAs. DPG recognition is optional and subordinate to this objective.
@@ -81,5 +88,6 @@ Controlling companion records:
 - docs/RUPAYKG_COMMERCIAL_MONETIZATION_STRATEGY.md — commercial product packages, revenue models, pricing principles and IP boundaries.
 - docs/DPG_REGISTRY_COMPONENT_EVALUATION_RUPAYKG.md — ranked DPG component sourcing and integration evaluation.
 - docs/RUPAYKG_OPEN_MRV_CORE_FEASIBILITY_ASSESSMENT.md — revised commercial IP boundary; earlier Open MRV Core extraction is on hold.
+- docs/RUPAYKG_NATIONAL_DEPLOYMENT_ARCHITECTURE_AND_JABALPUR_VALIDATION.md — national-first architecture authority and Jabalpur field validation boundary.
 
 No root licence, package-publication flag or source-code release is authorised by this workstream. Use selected DPGs as separately governed dependencies/services only where customer value, exact licence, security, operating cost and support responsibilities have been validated.
