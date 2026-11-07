@@ -23,6 +23,31 @@ export async function withPlatformTransaction<T>(
 }
 
 
+export async function withAuthorityTransaction<T>(
+  pool: Pool,
+  identityId: string,
+  authorityLevel: string,
+  geographyId: string | null,
+  fn: (client: PoolClient) => Promise<T>,
+): Promise<T> {
+  if (!identityId || !authorityLevel) {
+    throw Object.assign(new Error("Authority context is required"), { code: "AUTHORITY_CONTEXT_REQUIRED" });
+  }
+  const client = await pool.connect();
+  try {
+    await client.query("begin");
+    await client.query("select app.set_authority_context($1,$2,$3)", [identityId, authorityLevel, geographyId]);
+    const result = await fn(client);
+    await client.query("commit");
+    return result;
+  } catch (error) {
+    try { await client.query("rollback"); } catch {}
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 export async function withTenantTransaction<T>(
   pool: Pool,
   auth: AuthContext,
