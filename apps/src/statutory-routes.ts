@@ -162,16 +162,14 @@ export async function registerStatutoryRoutes(app: FastifyInstance, pool: Pool |
     if (!allowed.has(status)) return reply.code(400).send({ error: "Invalid EPR applicability status", code: "INVALID_EPR_APPLICABILITY" });
     const evidenceId = text(body, "evidenceId");
     const verificationId = text(body, "verificationId");
-    const metadata = schemeRow.rows[0].metadata ?? {};
-    const metadataRule = typeof metadata.rule_reference === "string" ? metadata.rule_reference : null;
     const registrationInput = normalizeEprRegistrationInput(text(body, "cpcbRegistrationReference"), text(body, "cpcbRegistrationStatus"), body.basis);
     try {
       return await withTenantTransaction(pool, auth, async client => {
         const schemeRow = await client.query<{ code: string; name: string; metadata: Record<string, unknown> }>("select code,name,metadata from epr_schemes where code=$1 and status='VERIFIED'", [scheme]);
         if (!schemeRow.rows[0]) return reply.code(400).send({ error: "Unsupported EPR scheme. Select a scheme from the RupayKG statutory catalog.", code: "EPR_SCHEME_UNSUPPORTED" });
+        const metadata = schemeRow.rows[0].metadata ?? {};
+        const metadataRule = typeof metadata.rule_reference === "string" ? metadata.rule_reference : null;
         if (!await hasOrganizationPermission(client, auth, organizationId, ["epr:manage", "audit:execute", "reports:export"])) return reply.code(403).send({ error: "EPR applicability management permission required", code: "STATUTORY_EPR_WRITE_REQUIRED" });
-        const schemeRow = await client.query<{ code: string; name: string; metadata: Record<string, unknown> }>("select code,name,metadata from epr_schemes where code=$1 and status='VERIFIED'", [scheme]);
-        if (!schemeRow.rows[0]) return reply.code(400).send({ error: "Unsupported EPR scheme. Select a scheme from the RupayKG statutory catalog.", code: "EPR_SCHEME_UNSUPPORTED" });
         if (!await evidenceBindingValid(client, organizationId, evidenceId, verificationId)) return reply.code(400).send({ error: "Evidence and verification must be supplied together and be verified, approved, and organization/geography scoped", code: "STATUTORY_EVIDENCE_BINDING_INVALID" });
       const result = await client.query(
         `insert into organization_epr_applicability
