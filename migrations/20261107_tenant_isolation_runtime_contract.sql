@@ -77,7 +77,6 @@ begin
   end if;
 end $$;
 
-alter role rupaykg_app_runtime nosuperuser nocreatedb nocreaterole noinherit;
 grant usage on schema app to rupaykg_app_runtime;
 grant execute on function app.current_identity_id() to rupaykg_app_runtime;
 grant execute on function app.current_organization_id() to rupaykg_app_runtime;
