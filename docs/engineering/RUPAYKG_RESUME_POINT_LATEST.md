@@ -197,3 +197,12 @@
 - Added explicit version bookkeeping in `scripts/validate-migrations.mjs` for the validator's uniqueness inventory.
 - Latest code checkpoint: `87732b402fdd99dc3d044a5e972abdac2e015e4b`.
 - Disposable CI execution is still unavailable for this exact head; no validation claim is made.
+
+
+### 2026-11-07 — Batch E CI contract gap closed
+- Rechecked PR #332 CI against its referenced Batch E contract.
+- The workflow referenced `scripts/test-shakti-batch-e-policy-contract.sql`, but that file was absent on the controlled branch and absent on `main`; this would have caused CI to fail immediately if the workflow executed.
+- Added the missing disposable structural contract at commit `420f7e1851ef8c720e6876942c5d5d05338e9ded`.
+- Contract checks required Batch E surfaces, authoritative membership/audit provenance columns, rejects blanket organization-only policies on multi-party surfaces, rejects UPDATE/DELETE privilege on append-only audit surfaces, and verifies the disposable runtime role is non-superuser/non-BYPASSRLS.
+- This is a structural disposable-DB gate, not production certification.
+- Exact-head CI still requires verification.
