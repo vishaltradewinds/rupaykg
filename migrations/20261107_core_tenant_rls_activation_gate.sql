@@ -10,8 +10,8 @@ alter table public.epr_obligations enable row level security;
 
 drop policy if exists shakti_activities_tenant on public.activities;
 create policy shakti_activities_tenant on public.activities
-  using (obligated_organization_id = app.current_organization_id())
-  with check (obligated_organization_id = app.current_organization_id());
+  using (organization_id = app.current_organization_id())
+  with check (organization_id = app.current_organization_id());
 
 drop policy if exists shakti_measurements_tenant on public.measurements;
 create policy shakti_measurements_tenant on public.measurements
