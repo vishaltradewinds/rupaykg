@@ -181,3 +181,11 @@
 - Commits: `7258d0e25cf01b6e79fb76bc30566fcdbc9c9887`, `8136c0e10b07db3500ed4ba5e0e39f48670a3427`.
 - This is a high-value due-diligence correction and must be validated by disposable CI before being considered complete.
 - Exact-head CI remains NOT VERIFIED.
+
+
+### 2026-11-07 — Due-diligence correction: preserve legacy migration identities
+- Follow-up review found the first migration-version correction was too broad: using the full filename for every migration would make the runner fail to recognize previously recorded legacy numeric versions and could cause historical migrations to be replayed.
+- Corrected the design: legacy migration prefixes retain their existing numeric version identity; only duplicate numeric prefixes are disambiguated by full filename.
+- Updated both `scripts/validate-migrations.mjs` and `apps/src/migrate.ts` to precompute prefix counts and apply this rule consistently.
+- Latest corrective commit: `235ef048ce7126dd1e44150831b9e157f406f82f`.
+- This correction is NOT considered validated until disposable CI executes migration validation and the full migration runner successfully.
