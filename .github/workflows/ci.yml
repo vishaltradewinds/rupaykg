@@ -83,6 +83,8 @@ jobs:
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/test-shakti-batch-e-policy-contract.sql
       - name: Run tenant-route transaction boundary contract
         run: node scripts/test-shakti-tenant-route-contract.mjs
+      - name: Run Shakti operational invariants contract
+        run: node scripts/test-shakti-operational-invariants.mjs
       - name: Run platform-admin authorization contract
         run: node scripts/test-shakti-platform-admin-authorization-contract.mjs
       - name: Run tests including disposable PostgreSQL acceptance
