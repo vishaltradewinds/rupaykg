@@ -254,3 +254,18 @@
 - Migration order review: the four 20261107 migrations sort as authority context → core RLS gate → platform context → runtime grant reconciliation. The runtime grants therefore follow the protected context-function definitions; the core gate still remains a deployment gate and is not executed in production.
 - Production Neon/RLS/deployment remains **HOLD**; no production changes made.
 - Current controlled PR #332 head: `a636a26e81cdaac88c69247e333b88c64a7ececa`.
+
+
+### 2026-11-07 — Registry/statutory tenant-boundary hardening batch
+- Hardened registry credential and settlement routes to require explicit active-organization context and execute tenant-sensitive reads/writes inside `withTenantTransaction`; removed the raw registry transaction helper from these routes.
+- Credential issuance now binds the active organization to the issuer and performs high-risk authorization inside the tenant transaction.
+- Credential activation/transfer/retirement and settlement lifecycle routes now fail closed without an active organization and bind execution to the authoritative owner/payer organization.
+- Settlement creation now performs payer/payee authorization checks through tenant-scoped transactions rather than an unscoped pool authorization query.
+- Removed the intelligence workspace's implicit single-membership tenant fallback.
+- Workspace geography authorization now fails closed when active organization context is absent.
+- Statutory EPR applicability no longer falls back to the first membership and no longer performs unscoped EPR scheme/permission queries.
+- MRV status authorization now uses a tenant transaction rather than direct pool authorization.
+- Static residual audit of the hardened route set: no raw `pool.connect` in the reviewed route files; no remaining first-membership fallback in the reviewed surfaces. Remaining `pool.query` occurrences are limited to server health/catalog helpers and MRV helper functions that are passed a transaction client at tenant-sensitive call sites; these require final context review before closure.
+- Commits: `fc91c539221eea3ded1bf40fdedc62c7eee20eb4`, `3a0fa03eb6044e42212002eb90e8a8ea08129b7b`, `00dd73ba7ae0f02d40df762e6628941c1f4ae8fa`, `c4cf596bffe8b442a6970725044da420dd8f68c4`, `84238de51e0292f0afacb58f59feb639dd9de2a9`, `47f53eba91f2ad1e91fb16cb993f928b6ecacf27`.
+- Exact-head GitHub Actions lookup for current head `47f53eba91f2ad1e91fb16cb993f928b6ecacf27` returns no workflow runs. CI/runtime validation therefore remains **NOT VERIFIED**.
+- Production Neon/RLS/deployment remains **HOLD**; no production changes made.
