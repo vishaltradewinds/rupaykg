@@ -96,7 +96,20 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
       await lockClient.query("select pg_advisory_lock(hashtext($1))", [idempotencyLockKey]);
       lockAcquired = true;
 
-      const tenantTransaction = async <T>(fn: (client: PoolClient) => Promise<T>): Promise<T> => {\n        await lockClient!.query("begin");\n        try {\n          await lockClient!.query("select app.set_request_context($1,$2)", [auth.identityId, auth.activeOrganizationId]);\n          const result = await fn(lockClient!);\n          await lockClient!.query("commit");\n          return result;\n        } catch (error) {\n          try { await lockClient!.query("rollback"); } catch {}\n          throw error;\n        }\n      };\n\n      const preflight = await tenantTransaction(async client => {
+      const tenantTransaction = async <T>(fn: (client: PoolClient) => Promise<T>): Promise<T> => {
+        await lockClient!.query("begin");
+        try {
+          await lockClient!.query("select app.set_request_context($1,$2)", [auth.identityId, auth.activeOrganizationId]);
+          const result = await fn(lockClient!);
+          await lockClient!.query("commit");
+          return result;
+        } catch (error) {
+          try { await lockClient!.query("rollback"); } catch {}
+          throw error;
+        }
+      };
+
+      const preflight = await tenantTransaction(async client => {
         const context = await client.query<{ organization_id: string; activity_status: string; decision: string; evidence_status: string; evidence_activity_id: string | null; evidence_count: string; observation_count: string }>(
           `select a.organization_id, a.status activity_status, v.decision, e.status evidence_status, e.activity_id evidence_activity_id,
                   (select count(*)::text from evidence e2 where e2.activity_id=a.id) evidence_count,
