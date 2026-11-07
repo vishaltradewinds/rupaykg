@@ -236,3 +236,10 @@
 - Corrected the test to use `RUPAYKG_TEST_OWNER_DATABASE_URL` for fixture setup/cleanup and `DATABASE_URL` only for runtime/context assertions.
 - Corrected all four test cases consistently; no production database was touched.
 - Fix commits: `0f35da7fab7b9a41ca1f9ab9b262d22017859369`, `dc77a9b2331723f0b715fdea90aaff2bcbd08427`.
+
+
+### 2026-11-07 — Batch E regex re-audit
+- Re-audited the policy-contract SQL at the controlled head.
+- Found a remaining escaping mismatch in the `with_check` branch of the multi-party blanket-policy detector.
+- Corrected it so both `qual` and `with_check` use the same intended PostgreSQL regex semantics.
+- Commit: `8a7c5289226e66d68cc1dc26dea744501b9707a8`.
