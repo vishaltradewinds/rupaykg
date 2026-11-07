@@ -72,3 +72,12 @@
 - Latest code head: `e3b09b6956bdcce35cc6b492f41357e5d9c878d7`.
 - Exact-head GitHub workflow lookup returned no runs and combined status returned no statuses; CI remains **NOT VERIFIED**.
 - Production Neon/RLS/deployment remains **HOLD**; no production changes made.
+
+
+### 2026-11-07 — MRV idempotency/tenant-context hardening
+- Removed the remaining MRV route-level `pool.connect` session advisory lock from `apps/src/mrv-routes.ts`.
+- Replaced it with `pg_advisory_xact_lock` executed on the same `withTenantTransaction` client, so the idempotency lock is scoped to the transaction and cannot outlive/rely on a separate session connection.
+- MRV status now requires an explicit active organization rather than falling back to the first membership.
+- Latest code head: `482e77c42a2b46cfb8e0696405e5593d966e23c5`.
+- Static MRV audit: no remaining `pool.connect`; tenant-sensitive route work remains transaction-bound. CI/runtime validation remains **NOT VERIFIED**.
+- Production Neon/RLS/deployment remains **HOLD**; no production changes made.
