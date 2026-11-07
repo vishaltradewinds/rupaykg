@@ -8,7 +8,7 @@
 
 ## Exact current engineering heads
 - PR #331: 50e463df30f18a30e6a192da447a451d1816ea55
-- PR #332: 1f28690eb89643a3da44443493ddf936a0f340ae
+- PR #332: 6b182383ad46cc459068d350f1f2ee49e5ac8bb2
 
 ## Verified work in this batch
 - Added fail-closed protection to the migration runner for the four 20261107 protected Shakti migrations. They require explicit RUPAYKG_ALLOW_PROTECTED_SHAKTI_MIGRATIONS=1.
@@ -117,3 +117,16 @@
 - Platform-admin authorization now runs through `platformQuery` / `withPlatformTransaction`, rather than a direct pool query, so platform authority evaluation is transaction-context bound.
 - Commits: server `2059399aea4a68d5117c94469f91a6c7e4d7d732`; platform admin `88aa2eb400f872b0e384f67f3697cf281419882f`.
 - CI/runtime validation remains **NOT VERIFIED**. Production Neon/RLS/deployment remains **HOLD**; no production changes made.
+
+
+### 2026-11-07 — Field-sync tenant-isolation completion batch
+- Extended explicit active-organization tenant context across the remaining field-device/sync surfaces in `apps/src/sync-routes.ts`.
+- Field-device inventory now requires an explicit active organization and executes through `withTenantTransaction`.
+- Field-sync envelope intake now requires active organization, resolves the verified device through the tenant-bound client, and performs idempotency, sequence-conflict, cursor, envelope and last-seen mutations in the same tenant transaction.
+- Field-sync envelope application now resolves the envelope through its bound field-device organization and requires that organization to equal the active tenant before applying the operation.
+- Field-sync conflict inventory and conflict resolution now execute through `withTenantTransaction` and constrain access to the active organization.
+- Removed route-level manual `pool.connect()/BEGIN/COMMIT/ROLLBACK` from these sync flows.
+- Commit: `6b182383ad46cc459068d350f1f2ee49e5ac8bb2`.
+- Exact-head GitHub Actions lookup for this commit returned no workflow runs; CI remains **NOT VERIFIED**.
+- Production Neon/RLS/deployment remains **HOLD**; no production changes made.
+- Next autonomous action: reconcile the remaining `workspace-routes.ts` tenant-sensitive reads/verification mutation against the transaction-local tenant context, then continue the 67-table policy-matrix reconciliation.
