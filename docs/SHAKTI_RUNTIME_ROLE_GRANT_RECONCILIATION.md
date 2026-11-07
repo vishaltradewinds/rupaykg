@@ -15,7 +15,7 @@ The database owner/application role `rupaykg` remains privileged:
 - REPLICATION: yes
 - BYPASSRLS: **yes**
 
-The non-login `rupaykg_app_runtime` role is also provisioned on production:
+The dedicated non-login `rupaykg_app_runtime` role is provisioned on production:
 
 - LOGIN: no
 - SUPERUSER: no
@@ -49,25 +49,56 @@ Verified:
 
 This is live database/runtime-role evidence, but it is **not yet application cutover evidence** because the deployed web/API process has not been switched to this credential.
 
-## Grant reconciliation
+## Application-path grant inventory
 
-The managed LOGIN candidate was created with scoped read/write access to the public schema for this assurance exercise. That privilege envelope is broader than the final Shakti runtime boundary and must not be treated as the production least-privilege configuration.
+The audited API routes now provide a concrete runtime privilege baseline.
 
-The final runtime role must receive only the application privileges actually required by the audited routes, plus execute privileges for approved security-definer context functions. The core RLS activation migration currently grants DML on:
+### Read surface
 
-- activities
-- measurements
-- evidence
-- carbon_calculations
-- epr_obligations
+The runtime contract grants SELECT only to tables actually referenced by the audited application paths, including:
 
-This remains intentionally incomplete until the full application-path grant inventory is reconciled.
+- authentication/context: `identity_sessions`, `identities`, `organization_memberships`, `roles`, organization/geography scope tables;
+- operational/MRV: `activities`, `measurements`, `evidence`, `verifications`, `mrv_observations`, `mrv_provenance_events`, `resource_flows`;
+- carbon/registry: `carbon_calculations`, `methodology_versions`, `credentials`, `registry_events`, `obligations`, `settlements`, `settlement_events`;
+- EPR/ESG/BWG: `epr_obligations`, `epr_returns`, `epr_schemes`, `epr_credits`, `esg_reporting_periods`, `esg_metrics`, BWG workspace/report tables;
+- CPCB/SWM: stakeholder workspace and status-history tables;
+- field/sync: device, cursor, envelope and conflict tables;
+- authority/platform: organization verification, stakeholder application, platform access/audit tables;
+- regulatory/global catalog: regulatory source/requirement and methodology governance tables.
+
+The runtime contract deliberately does **not** grant access to `schema_migrations` or unrelated database objects.
+
+### Write surface
+
+Write privileges are derived from observed application mutations rather than blanket DML. The contract contains only the operations observed in the audited route set, including INSERT/UPDATE for operational evidence/MRV, EPR returns, CPCB workspace state, field sync, organization membership/application workflows, registry events, settlements, and approved platform audit paths.
+
+The exact grant contract is now codified in:
+
+`migrations/20261107_runtime_grant_reconciliation.sql`
+
+It does not enable RLS and does not create or expose a production credential.
+
+## Candidate-role hardening
+
+The LOGIN candidate was initially created with a broader Neon scoped read/write envelope for assurance. That direct broad grant was removed.
+
+The candidate now inherits the curated `rupaykg_app_runtime` privilege contract instead.
+
+Live privilege proof after reconciliation:
+
+- `activities` SELECT: true
+- `activities` INSERT: true
+- `organizations` SELECT: true
+- `schema_migrations` SELECT: false
+- `rolbypassrls`: false
+
+This is a materially stronger runtime boundary than the initial assurance role.
 
 ## Required production cutover
 
 The production deployment must:
 
-- use a non-BYPASSRLS LOGIN runtime identity;
+- use the non-BYPASSRLS LOGIN runtime identity;
 - switch the application's DATABASE_URL to that identity;
 - prove the live web/API process connection identity independently;
 - run representative cross-tenant negative business-route tests;
@@ -75,6 +106,12 @@ The production deployment must:
 - verify rollback before considering FORCE RLS.
 
 The owner role must remain reserved for migrations/privileged maintenance and must not be used by the web/API runtime.
+
+## CI gate
+
+PR #331 currently has no workflow run for its latest head. The repository workflow is configured for `pull_request` events targeting `main`, so the absence of a run is an execution/status problem, not evidence of a pass.
+
+No CI result is being inferred or fabricated.
 
 ## Safety rule
 
@@ -84,4 +121,13 @@ Do not switch DATABASE_URL, enable RLS, or enable FORCE RLS from an unattended a
 
 **FAIL-CLOSED / PRODUCTION HOLD**
 
-The live LOGIN-role proof is now complete. The remaining gate is application connection cutover plus route-level isolation evidence, followed by controlled persistent RLS activation.
+Completed in this batch:
+
+- application-path privilege inventory baseline;
+- curated runtime grant contract;
+- production LOGIN-role hardening;
+- live non-BYPASSRLS privilege proof.
+
+Remaining gate:
+
+**application connection cutover → representative route-level negative tests → persistent RLS activation → live isolation verification → FORCE RLS decision.**
