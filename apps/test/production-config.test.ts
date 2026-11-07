@@ -4,10 +4,14 @@ import { readProductionConfig } from "../src/production-config.js";
 
 const baseEnv = {
   NODE_ENV: "production",
-  DATABASE_URL: "postgresql://rupaykg:secret@db.example.com:5432/rupaykg",
+  DATABASE_URL: "postgresql://rupaykg_app_runtime:secret@db.example.com:5432/rupaykg",
+  AUTH_DATABASE_URL: "postgresql://rupaykg_auth_runtime:secret@db.example.com:5432/rupaykg",
   DATABASE_SSL: "require",
   DATABASE_CA_CERT: "-----BEGIN CERTIFICATE-----\nproduction-test-ca\n-----END CERTIFICATE-----",
   RUPAYKG_AUTH_MODE: "real",
+  RUPAYKG_AUTH_RESOLVER_MODE: "security_definer",
+  RUPAYKG_REQUEST_CONTEXT_SECRET: "production-test-request-context-secret-material",
+  RUPAYKG_REQUEST_CONTEXT_KEY_ID: "v1",
   RUPAYKG_ALLOWED_ORIGINS: "https://app.rupaykg.example,https://admin.rupaykg.example",
   RUPAYKG_SYNTHETIC_DATA: "false",
 };
@@ -16,6 +20,10 @@ test("production config accepts the fail-closed production contract", () => {
   assert.deepEqual(readProductionConfig(baseEnv), {
     environment: "production",
     databaseUrl: baseEnv.DATABASE_URL,
+    authDatabaseUrl: baseEnv.AUTH_DATABASE_URL,
+    authResolverMode: "security_definer",
+    requestContextSecret: baseEnv.RUPAYKG_REQUEST_CONTEXT_SECRET,
+    requestContextKeyId: baseEnv.RUPAYKG_REQUEST_CONTEXT_KEY_ID,
     databaseSsl: "require",
     databaseCaCert: baseEnv.DATABASE_CA_CERT,
     allowedOrigins: ["https://app.rupaykg.example", "https://admin.rupaykg.example"],
@@ -28,6 +36,10 @@ test("production config rejects missing or unsafe production requirements", () =
   const cases = [
     [{ ...baseEnv, NODE_ENV: "development" }, /NODE_ENV must be production/],
     [{ ...baseEnv, DATABASE_URL: "postgresql://localhost/rupaykg" }, /must not target localhost/],
+    [{ ...baseEnv, AUTH_DATABASE_URL: "" }, /AUTH_DATABASE_URL is required/],
+    [{ ...baseEnv, AUTH_DATABASE_URL: "postgresql://rupaykg_app_runtime:other@db.example.com:5432/rupaykg" }, /rupaykg_auth_runtime role/],
+    [{ ...baseEnv, AUTH_DATABASE_URL: "postgresql://rupaykg_auth_runtime:other@other.example.com:5432/rupaykg" }, /same Neon host/],
+    [{ ...baseEnv, RUPAYKG_AUTH_RESOLVER_MODE: "legacy" }, /must be security_definer/],
     [{ ...baseEnv, DATABASE_SSL: "false" }, /DATABASE_SSL must be require/],
     [{ ...baseEnv, DATABASE_CA_CERT: "" }, /DATABASE_CA_CERT must contain a PEM certificate/],
     [{ ...baseEnv, RUPAYKG_AUTH_MODE: "session" }, /RUPAYKG_AUTH_MODE must be real/],

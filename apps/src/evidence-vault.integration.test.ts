@@ -30,6 +30,10 @@ test("evidence vault enforces tenant scope, versioned storage, integrity and ind
       "insert into geography(kind,name,source,source_version) values('STATE_UT',$1,'integration-test','fixture-v1') returning id",
       ["TEST-EVIDENCE-GEO-" + suffix],
     );
+    await pool.query(
+      "insert into organization_geography_scopes(organization_id,geography_id,status) values($1,$2,'VERIFIED') on conflict do nothing",
+      [organizationId, geography.rows[0]!.id],
+    );
     const activity = await pool.query<{ id: string }>(
       "insert into activities(organization_id,geography_id,activity_type,status) values($1,$2,'WASTE_WEIGHT_MEASUREMENT','COMPLETED') returning id",
       [organizationId, geography.rows[0]!.id],
@@ -42,9 +46,13 @@ test("evidence vault enforces tenant scope, versioned storage, integrity and ind
     const uploaderId = identities[0].rows[0]!.id;
     const reviewerId = identities[1].rows[0]!.id;
     const outsiderId = identities[2].rows[0]!.id;
+    await pool.query(
+      "update organizations set verification_status='VERIFIED',verified_by_identity_id=$2,verified_at=clock_timestamp() where id=$1",
+      [organizationId, reviewerId],
+    );
     const roles = await Promise.all([
       pool.query<{ id: string }>("insert into roles(organization_id,name,permissions,geography_scope) values($1,'evidence_uploader_test',$2::jsonb,'[]') returning id",[organizationId,JSON.stringify(["evidence:upload","evidence:read"])]),
-      pool.query<{ id: string }>("insert into roles(organization_id,name,permissions,geography_scope) values($1,'evidence_reviewer_test',$2::jsonb,'[]') returning id",[organizationId,JSON.stringify(["evidence:read","evidence:review","VERIFY_EVIDENCE"])]),
+      pool.query<{ id: string }>("insert into roles(organization_id,name,permissions,geography_scope) values($1,'verifier',$2::jsonb,'[]') returning id",[organizationId,JSON.stringify(["evidence:read","evidence:review","VERIFY_EVIDENCE","verification:approve"])]),
       pool.query<{ id: string }>("insert into roles(organization_id,name,permissions,geography_scope) values($1,'evidence_outsider_test',$2::jsonb,'[]') returning id",[otherOrg.rows[0]!.id,JSON.stringify(["evidence:read","evidence:upload"])]),
     ]);
     await pool.query("alter table organization_memberships disable trigger stakeholder_membership_application_guard");

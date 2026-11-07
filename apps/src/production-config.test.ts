@@ -4,11 +4,15 @@ import { readProductionConfig } from "./production-config.js";
 
 const valid = {
   NODE_ENV: "production",
-  DATABASE_URL: "postgresql://prod.example.invalid:5432/rupaykg",
+  DATABASE_URL: "postgresql://rupaykg_app_runtime:app-secret@prod.example.invalid:5432/rupaykg",
+  AUTH_DATABASE_URL: "postgresql://rupaykg_auth_runtime:auth-secret@prod.example.invalid:5432/rupaykg",
   DATABASE_SSL: "require",
   DATABASE_CA_CERT: "-----BEGIN CERTIFICATE-----\nproduction-test-ca\n-----END CERTIFICATE-----",
   RUPAYKG_ALLOWED_ORIGINS: "https://app.rupaykg.example",
   RUPAYKG_AUTH_MODE: "real",
+  RUPAYKG_AUTH_RESOLVER_MODE: "security_definer",
+  RUPAYKG_REQUEST_CONTEXT_SECRET: "production-test-request-context-secret-material",
+  RUPAYKG_REQUEST_CONTEXT_KEY_ID: "v1",
 } as const;
 
 describe("production configuration", () => {
@@ -17,12 +21,28 @@ describe("production configuration", () => {
     assert.deepEqual(config, {
       environment: "production",
       databaseUrl: valid.DATABASE_URL,
+      authDatabaseUrl: valid.AUTH_DATABASE_URL,
+      authResolverMode: "security_definer",
+      requestContextSecret: valid.RUPAYKG_REQUEST_CONTEXT_SECRET,
+      requestContextKeyId: valid.RUPAYKG_REQUEST_CONTEXT_KEY_ID,
       databaseSsl: "require",
       databaseCaCert: valid.DATABASE_CA_CERT,
       allowedOrigins: ["https://app.rupaykg.example"],
       authMode: "real",
       syntheticData: false,
     });
+  });
+
+  it("requires a sufficiently strong signed request-context secret", () => {
+    assert.throws(() => readProductionConfig({ ...valid, RUPAYKG_REQUEST_CONTEXT_SECRET: "short" }), /RUPAYKG_REQUEST_CONTEXT_SECRET must be at least 32 bytes/);
+  });
+
+  it("requires a valid request-context key identifier", () => {
+    assert.throws(() => readProductionConfig({ ...valid, RUPAYKG_REQUEST_CONTEXT_KEY_ID: "INVALID KEY ID" }), /RUPAYKG_REQUEST_CONTEXT_KEY_ID is invalid/);
+  });
+
+  it("fails closed when request-context signing material is absent", () => {
+    assert.throws(() => readProductionConfig({ ...valid, RUPAYKG_REQUEST_CONTEXT_SECRET: "" }), /RUPAYKG_REQUEST_CONTEXT_SECRET is required/);
   });
 
   it("fails closed without real authentication", () => {
@@ -59,6 +79,14 @@ describe("production configuration", () => {
 
   it("forbids a client-bundled workspace session token in production", () => {
     assert.throws(() => readProductionConfig({ ...valid, VITE_RUPAYKG_SESSION_TOKEN: "secret" }), /VITE_RUPAYKG_SESSION_TOKEN must not be provided/);
+  });
+
+  it("never permits the request-context signing secret in a Vite client variable", () => {
+    assert.throws(() => readProductionConfig({ ...valid, VITE_RUPAYKG_REQUEST_CONTEXT_SECRET: "must-not-be-client-bundled" }), /must never be client-bundled/);
+  });
+
+  it("never permits the request-context key identifier in a Vite client variable", () => {
+    assert.throws(() => readProductionConfig({ ...valid, VITE_RUPAYKG_REQUEST_CONTEXT_KEY_ID: "v1" }), /must not be provided to the browser/);
   });
 
   it("requires HTTPS origins without paths", () => {

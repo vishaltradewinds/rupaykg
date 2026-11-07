@@ -4,7 +4,9 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
+    branches:
+      - main
+      - 'shakti/**'
 
 permissions:
   contents: read
@@ -39,9 +41,55 @@ jobs:
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=high
       - run: npm run validate:migrations
+      - name: Provision restricted verifier owner in disposable CI PostgreSQL
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE rupaykg_security_definer
+            NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;
+          GRANT CREATE ON DATABASE rupaykg TO rupaykg_security_definer;
+          GRANT rupaykg_security_definer TO postgres;
+          CREATE ROLE rupaykg_app_runtime LOGIN
+            NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS NOREPLICATION;
+          CREATE ROLE rupaykg_bootstrap_owner
+            NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS NOREPLICATION;
+          GRANT CREATE ON DATABASE rupaykg TO rupaykg_bootstrap_owner;
+          GRANT rupaykg_bootstrap_owner TO postgres WITH ADMIN OPTION;
+          SQL
       - run: npm run migrate -w @rupaykg/api
+      - name: Verify bootstrap owner temporary privileges are revoked
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          DO $assert_bootstrap_owner$
+          BEGIN
+            IF EXISTS (
+              SELECT 1 FROM pg_catalog.pg_auth_members m
+               WHERE m.roleid = (SELECT oid FROM pg_catalog.pg_roles WHERE rolname = 'rupaykg_bootstrap_owner')
+                 AND m.member = (SELECT oid FROM pg_catalog.pg_roles WHERE rolname = 'postgres')
+            ) THEN
+              RAISE EXCEPTION 'bootstrap owner direct membership must be revoked after migration';
+            END IF;
+            IF pg_catalog.has_database_privilege('rupaykg_bootstrap_owner', current_database(), 'CREATE') THEN
+              RAISE EXCEPTION 'bootstrap owner database CREATE must be revoked after migration';
+            END IF;
+          END
+          $assert_bootstrap_owner$;
+          SQL
+      - name: Provision synthetic bootstrap custodians in disposable CI PostgreSQL
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE rupaykg_bootstrap_custodian_a LOGIN
+            NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS NOREPLICATION;
+          CREATE ROLE rupaykg_bootstrap_custodian_b LOGIN
+            NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS NOREPLICATION;
+          GRANT rupaykg_bootstrap_custodian TO rupaykg_bootstrap_custodian_a WITH INHERIT FALSE, SET TRUE;
+          GRANT rupaykg_bootstrap_custodian TO rupaykg_bootstrap_custodian_b WITH INHERIT FALSE, SET TRUE;
+          SQL
       - run: npm run typecheck
       - run: npm run build
+      - name: Exercise two-custodian bootstrap with synthetic CI identities and secrets
+        env:
+          RUPAYKG_RUN_DB_INTEGRATION_TESTS: "1"
+        run: node apps/dist/src/ci-platform-authority-bootstrap.js
       - name: Browser smoke test production web build
         shell: bash
         run: |
@@ -66,11 +114,30 @@ jobs:
           google-chrome --headless=new --no-sandbox --disable-gpu --disable-dev-shm-usage --disable-extensions --no-first-run --user-data-dir=/tmp/rupaykg-chrome-shot --hide-scrollbars --window-size=1440,1200 --screenshot=/tmp/rupaykg-web-smoke.png --virtual-time-budget=2000 http://127.0.0.1:4173/ >/tmp/rupaykg-chrome-shot.out 2>&1
           shot_status=$?
           cat /tmp/rupaykg-chrome-shot.out
+          google-chrome --headless=new --no-sandbox --disable-gpu --disable-dev-shm-usage --disable-extensions --no-first-run --user-data-dir=/tmp/rupaykg-chrome-mobile --hide-scrollbars --window-size=390,844 --screenshot=/tmp/rupaykg-web-mobile.png --virtual-time-budget=2000 http://127.0.0.1:4173/ >/tmp/rupaykg-chrome-mobile.out 2>&1
+          mobile_shot_status=$?
+          cat /tmp/rupaykg-chrome-mobile.out
           set -e
+          test "$dom_status" -eq 0
+          test "$shot_status" -eq 0
+          test "$mobile_shot_status" -eq 0
           test -s /tmp/rupaykg-web-dom.html
-          grep -q 'RupayKG' /tmp/rupaykg-web-dom.html
+          grep -q 'id="root"' /tmp/rupaykg-web-dom.html
+          grep -q 'assets/' /tmp/rupaykg-web-dom.html
           test -s /tmp/rupaykg-web-smoke.png
-          echo "Chrome DOM exit: $dom_status; screenshot exit: $shot_status"
+          test -s /tmp/rupaykg-web-mobile.png
+          echo "Chrome DOM exit: $dom_status; desktop screenshot exit: $shot_status; mobile screenshot exit: $mobile_shot_status"
+      - name: Upload browser smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rupaykg-browser-smoke
+          path: |
+            /tmp/rupaykg-web-smoke.png
+            /tmp/rupaykg-web-mobile.png
+            /tmp/rupaykg-web-dom.html
+          if-no-files-found: warn
+          retention-days: 7
       - name: Run tests including disposable PostgreSQL acceptance
         env:
           RUPAYKG_RUN_DB_INTEGRATION_TESTS: "1"

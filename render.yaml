@@ -19,9 +19,17 @@ services:
         value: require
       - key: RUPAYKG_AUTH_MODE
         value: real
+      - key: RUPAYKG_AUTH_RESOLVER_MODE
+        value: security_definer
       - key: RUPAYKG_SYNTHETIC_DATA
         value: "false"
       - key: DATABASE_URL
+        sync: false
+      - key: AUTH_DATABASE_URL
+        sync: false
+      - key: RUPAYKG_REQUEST_CONTEXT_SECRET
+        sync: false
+      - key: RUPAYKG_REQUEST_CONTEXT_KEY_ID
         sync: false
       - key: DATABASE_CA_CERT
         sync: false

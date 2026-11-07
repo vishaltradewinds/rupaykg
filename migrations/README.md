@@ -75,3 +75,38 @@ Migration `086_reserved_role_restoration_db_guard.sql` protects status reactivat
 ## Acceptance fixture registry exclusion
 
 Migration `087_acceptance_fixture_registry_exclusion.sql` prevents activities or evidence explicitly marked with `metadata.acceptanceFixture=true` from backing credentials in value-bearing states. It also binds the database gate to the exact activity, verification, and evidence tuple. The MRV API reports acceptance fixtures as not registry eligible even after real Guardian/Hedera/Mirror Node verification. External anchoring proves message integrity and consensus; it does not validate the underlying activity as a real eligible carbon project.
+
+
+## Signed tenant request context verifier
+
+**DBA prerequisite before applying migration `20261101_signed_request_context_verifier.sql`:** provision `rupaykg_security_definer` as `NOLOGIN NOSUPERUSER NOBYPASSRLS NOCREATEROLE NOCREATEDB NOINHERIT NREPLICATION`. Grant it `CREATE` on the target database and grant membership only to the dedicated migration principal so the migration can `SET LOCAL ROLE`. Do not grant membership to the API runtime, authentication runtime, worker, or user-facing roles. The role must not own tenant application tables and must not inherit from a BYPASSRLS role. The migration fails closed if the role is absent or has any forbidden attribute. CI provisions this role only inside its disposable PostgreSQL service.
+
+
+Migration `20261101_signed_request_context_verifier.sql` creates the restricted `app_security` schema, protected HMAC key table and a `SECURITY DEFINER` verifier for short-lived signed request-context envelopes. The verifier validates actor UUID, organization UUID, issue/expiry times, key ID and HMAC-SHA256 signature; malformed, expired, unknown-key and forged contexts return NULL. The function pins its search path and the key table/function are not executable/readable by PUBLIC.
+
+This migration intentionally grants no privileges to application roles. A dedicated NOBYPASSRLS runtime role must be provisioned separately and receive only `USAGE` on `app_security` and `EXECUTE` on the verifier. The runtime role must not receive SELECT on the key table. The signing secret must be provisioned out-of-band and rotated by key ID. This verifier alone does not enable RLS or authorize tenant data; policies on each application table must consume its verified claims.
+
+
+## One-time platform authority bootstrap (20261102)
+
+This migration installs a **draft-only, one-time two-custodian bootstrap path**. It does not provision real identities, secrets or custodian logins.
+
+### Required DBA preconditions
+- Pre-provision `rupaykg_bootstrap_owner` as NOLOGIN, NOSUPERUSER, NOBYPASSRLS, NOCREATEDB, NOCREATEROLE, NOINHERIT and NOREPLICATION.
+- Temporarily grant that role CREATE on the authoritative database and grant membership with SET permission to the migration principal. The migration revokes the database CREATE privilege after creating its private schema.
+- The migration creates `rupaykg_bootstrap_custodian` as a NOLOGIN capability role with no outbound memberships and only EXECUTE on the two bootstrap functions.
+- After migration, provision exactly two distinct LOGIN custodian roles, both NOINHERIT/NOBYPASSRLS and with no elevated attributes or other role memberships. Grant each membership in `rupaykg_bootstrap_custodian` with `INHERIT FALSE, SET TRUE`. The migration does not create production custodian login credentials.
+
+### Ceremony protocol
+1. Founder selects two distinct identities already VERIFIED by the trusted identity process.
+2. Founder/DBA creates one time-limited ceremony and exactly two claims, each binding one identity to one custodian login role and a SHA-256 hash of a high-entropy single-use secret. Raw secrets are never stored.
+3. Each custodian independently connects using their own login role, executes `SET ROLE rupaykg_bootstrap_custodian`, and submits only their own secret through `bootstrap_private.submit_initial_platform_authority_claim`.
+4. After both claims are accepted, either custodian calls `bootstrap_private.finalize_initial_platform_authority_bootstrap`. The function atomically creates the platform authority organization and exactly two initial Super Admin memberships, consumes both claims and the ceremony, and writes a separate append-only hash-linked bootstrap audit event.
+5. The membership trigger exception is accepted only while the singleton bootstrap state is CONSUMING, only for the exact platform authority organization/role and the two claimed identities, and only when both independent custodian submissions are present. The ordinary approved-application and reserved-role dual-control guards remain in force for all other writes.
+
+### Security boundaries
+- Bootstrap functions are SECURITY DEFINER under the dedicated NOLOGIN/NOBYPASSRLS owner, have pinned search_path, and are not executable by PUBLIC or application runtime roles.
+- Custodian capability has no table access; it can only execute the two narrow functions. The login roles are separately bound to identity claims and must be distinct.
+- The bootstrap state is globally one-time. Reused, expired, cross-custodian, missing or malformed secrets fail closed.
+- CI uses synthetic identities and synthetic custodian login roles only. No production identities, secrets, claims or logins are created by this migration.
+- Production execution remains blocked until the founder approves the two initial identities and the out-of-band two-custodian secret-custody ceremony, and independent security review passes.

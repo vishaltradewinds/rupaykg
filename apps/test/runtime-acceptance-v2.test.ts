@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { spawn, type ChildProcess } from "node:child_process";
 import { Pool } from "pg";
+import { approveTestMembership } from "../src/test-support/approved-membership.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 const port = Number(process.env.RUNTIME_ACCEPTANCE_PORT ?? 43127);
@@ -64,27 +65,28 @@ before(async () => {
   const c = await pool.connect();
   try {
     await c.query("BEGIN");
-    orgId = (await c.query<{ id: string }>("insert into organizations(name,organization_type) values($1,'COLLECTOR') returning id", [`runtime-${suffix}`])).rows[0]!.id;
+    orgId = (await c.query<{ id: string }>("insert into organizations(name,organization_type,status) values($1,'COLLECTOR','VERIFIED') returning id", [`runtime-${suffix}`])).rows[0]!.id;
     geographyId = (await c.query<{ id: string }>("insert into geography(kind,code,name) values('STATE_UT',$1,$2) returning id", [`RUNTIME-${suffix}`, `Runtime ${suffix}`])).rows[0]!.id;
     outOfScopeGeographyId = (await c.query<{ id: string }>("insert into geography(kind,code,name) values('STATE_UT',$1,$2) returning id", [`OTHER-${suffix}`, `Other ${suffix}`])).rows[0]!.id;
-    await c.query("insert into organization_geography_scopes(organization_id,geography_id) values($1,$2)", [orgId, geographyId]);
+    await c.query("insert into organization_geography_scopes(organization_id,geography_id,status) values($1,$2,'VERIFIED')", [orgId, geographyId]);
     actorId = (await c.query<{ id: string }>("insert into identities(external_subject,display_name) values($1,$2) returning id", [`runtime-actor-${suffix}`, "Runtime Actor"])).rows[0]!.id;
     verifierId = (await c.query<{ id: string }>("insert into identities(external_subject,display_name) values($1,$2) returning id", [`runtime-verifier-${suffix}`, "Runtime Verifier"])).rows[0]!.id;
     const actorRole = (await c.query<{ id: string }>("insert into roles(organization_id,name,permissions) values($1,$2,'[\"FIELD_SYNC\",\"waste:record\",\"evidence:upload\",\"projects:manage\"]') returning id", [orgId, `ACTOR-${suffix}`])).rows[0]!.id;
-    const verifierRole = (await c.query<{ id: string }>("insert into roles(organization_id,name,permissions) values($1,$2,'[\"VERIFY_EVIDENCE\"]') returning id", [orgId, `VERIFIER-${suffix}`])).rows[0]!.id;
-    await c.query("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED'),($4,$2,$5,'VERIFIED')", [actorId, orgId, actorRole, verifierId, verifierRole]);
+    const verifierRole = (await c.query<{ id: string }>("insert into roles(organization_id,name,permissions) values($1,'verifier',$2::jsonb) returning id", [orgId, JSON.stringify(["VERIFY_EVIDENCE", "verification:approve"])] )).rows[0]!.id;
+    await approveTestMembership(c, actorId, orgId, actorRole, geographyId, "operator", "collector");
+    await approveTestMembership(c, verifierId, orgId, verifierRole, geographyId, "verifier", "collector");
     actorToken = token(); verifierToken = token();
     await c.query("insert into identity_sessions(identity_id,expires_at,token_hash) values($1,now()+interval '1 hour',$2),($3,now()+interval '1 hour',$4)", [actorId, hash(actorToken), verifierId, hash(verifierToken)]);
     verifiedDeviceId = (await c.query<{ id: string }>("insert into field_devices(device_id,identity_id,organization_id,status) values($1,$2,$3,'VERIFIED') returning id", [`verified-${suffix}`, actorId, orgId])).rows[0]!.id;
     await c.query("COMMIT");
   } catch (error) { await c.query("ROLLBACK"); throw error; } finally { c.release(); }
 
-  server = spawn(process.execPath, ["dist/src/server.js"], { cwd: process.cwd(), env: { ...process.env, PORT: String(port), HOST: "127.0.0.1", DATABASE_URL: databaseUrl, DATABASE_SSL: "false" }, stdio: ["ignore", "ignore", "pipe"] });
+  server = spawn(process.execPath, ["dist/src/server.js"], { cwd: process.cwd(), env: { ...process.env, PORT: String(port), HOST: "127.0.0.1", DATABASE_URL: databaseUrl, AUTH_DATABASE_URL: databaseUrl, DATABASE_SSL: "false" }, stdio: ["ignore", "ignore", "pipe"] });
   capture(server, "server");
   await waitFor(`${baseUrl}/health`, 200, server);
 
   const noDbPort = String(port + 1);
-  noDbServer = spawn(process.execPath, ["dist/src/server.js"], { cwd: process.cwd(), env: { ...process.env, PORT: noDbPort, HOST: "127.0.0.1", DATABASE_URL: "", DATABASE_SSL: "false" }, stdio: ["ignore", "ignore", "pipe"] });
+  noDbServer = spawn(process.execPath, ["dist/src/server.js"], { cwd: process.cwd(), env: { ...process.env, PORT: noDbPort, HOST: "127.0.0.1", DATABASE_URL: "", AUTH_DATABASE_URL: "", DATABASE_SSL: "false" }, stdio: ["ignore", "ignore", "pipe"] });
   capture(noDbServer, "noDb");
   await waitFor(`http://127.0.0.1:${noDbPort}/health`, 503, noDbServer);
 });
@@ -100,17 +102,28 @@ after(async () => {
     await c.query("delete from field_devices where organization_id=$1", [orgId]);
     await c.query("delete from environmental_attribute_claims where activity_id in (select id from activities where organization_id=$1)", [orgId]);
     await c.query("delete from carbon_calculations where activity_id in (select id from activities where organization_id=$1)", [orgId]);
-    await c.query("delete from verifications where evidence_id in (select id from evidence where activity_id in (select id from activities where organization_id=$1))", [orgId]);
+    // CI fixture teardown is the only path allowed to bypass append-only decision retention.
+    // The disposable PostgreSQL database is destroyed after the suite; production roles
+    // never receive permission to disable triggers or delete verification decisions.
+    await c.query("ALTER TABLE public.verifications DISABLE TRIGGER verifications_immutable_guard");
+    try {
+      await c.query("delete from verifications where evidence_id in (select id from evidence where activity_id in (select id from activities where organization_id=$1))", [orgId]);
+    } finally {
+      await c.query("ALTER TABLE public.verifications ENABLE TRIGGER verifications_immutable_guard");
+    }
     await c.query("delete from evidence where activity_id in (select id from activities where organization_id=$1)", [orgId]);
     await c.query("delete from measurements where activity_id in (select id from activities where organization_id=$1)", [orgId]);
     await c.query("delete from activities where organization_id=$1", [orgId]);
     if (methodologyId) await c.query("delete from methodology_versions where id=$1", [methodologyId]);
     await c.query("delete from identity_sessions where identity_id in ($1,$2)", [actorId, verifierId]);
     await c.query("delete from organization_memberships where organization_id=$1", [orgId]);
+    await c.query("delete from stakeholder_application_approvals where application_id in (select id from stakeholder_applications where organization_id=$1)", [orgId]);
+    await c.query("delete from stakeholder_applications where organization_id=$1", [orgId]);
     await c.query("delete from roles where organization_id=$1", [orgId]);
     await c.query("delete from organization_geography_scopes where organization_id=$1", [orgId]);
     await c.query("delete from identities where id in ($1,$2)", [actorId, verifierId]);
     await c.query("delete from geography where id in ($1,$2)", [geographyId, outOfScopeGeographyId]);
+    await c.query("delete from organization_statutory_profiles where organization_id=$1", [orgId]);
     await c.query("delete from organizations where id=$1", [orgId]);
   } finally { c.release(); await pool.end(); }
 });

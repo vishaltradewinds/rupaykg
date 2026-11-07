@@ -22,4 +22,5 @@ COPY --from=build /app/migrations ./migrations
 
 USER node
 EXPOSE 8080
-CMD ["sh", "-c", "node apps/dist/src/migrate.js && node apps/dist/src/acceptance-seed.js && node apps/dist/src/production-server.js"]
+# Application startup is side-effect-free. Migrations and acceptance fixtures are never run by the web container.
+CMD ["node", "apps/dist/src/production-server.js"]

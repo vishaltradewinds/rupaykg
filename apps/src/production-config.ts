@@ -3,6 +3,10 @@ const PRODUCTION_ENV = "production";
 export type ProductionConfig = {
   environment: "production";
   databaseUrl: string;
+  authDatabaseUrl: string;
+  authResolverMode: "security_definer";
+  requestContextSecret: string;
+  requestContextKeyId: string;
   databaseSsl: "require" | "false";
   databaseCaCert: string;
   allowedOrigins: string[];
@@ -24,12 +28,43 @@ function productionDatabaseUrl(value: string): string {
   return value;
 }
 
+function productionAuthDatabaseUrl(value: string, databaseUrl: string): string {
+  const auth = productionDatabaseUrl(value);
+  const appUrl = new URL(databaseUrl);
+  const authUrl = new URL(auth);
+  if (authUrl.hostname.toLowerCase() !== appUrl.hostname.toLowerCase() ||
+      authUrl.port !== appUrl.port || authUrl.pathname !== appUrl.pathname) {
+    throw new Error("PRODUCTION_CONFIG_INVALID: AUTH_DATABASE_URL must target the same Neon host, port, and database as DATABASE_URL");
+  }
+  if (decodeURIComponent(appUrl.username) !== "rupaykg_app_runtime") {
+    throw new Error("PRODUCTION_CONFIG_INVALID: DATABASE_URL must use the rupaykg_app_runtime role");
+  }
+  if (decodeURIComponent(authUrl.username) !== "rupaykg_auth_runtime") {
+    throw new Error("PRODUCTION_CONFIG_INVALID: AUTH_DATABASE_URL must use the rupaykg_auth_runtime role");
+  }
+  return auth;
+}
+
 function productionCaCert(value: string, databaseUrl: string): string {
   if (value.includes("BEGIN CERTIFICATE") && value.includes("END CERTIFICATE")) return value;
   let parsed: URL;
   try { parsed = new URL(databaseUrl); } catch { throw new Error("PRODUCTION_CONFIG_INVALID: DATABASE_URL must be a valid PostgreSQL URL"); }
   if (parsed.searchParams.get("sslmode") === "require") return "";
   throw new Error("PRODUCTION_CONFIG_INVALID: DATABASE_CA_CERT must contain a PEM certificate unless DATABASE_URL uses sslmode=require");
+}
+
+function requestContextSecret(value: string): string {
+  if (Buffer.byteLength(value, "utf8") < 32) {
+    throw new Error("PRODUCTION_CONFIG_INVALID: RUPAYKG_REQUEST_CONTEXT_SECRET must be at least 32 bytes");
+  }
+  return value;
+}
+
+function requestContextKeyId(value: string): string {
+  if (!/^[a-z0-9_-]{1,32}$/.test(value)) {
+    throw new Error("PRODUCTION_CONFIG_INVALID: RUPAYKG_REQUEST_CONTEXT_KEY_ID is invalid");
+  }
+  return value;
 }
 
 function origins(value: string): string[] {
@@ -48,8 +83,14 @@ export function readProductionConfig(env: NodeJS.ProcessEnv = process.env): Prod
   if (env.NODE_ENV !== PRODUCTION_ENV) throw new Error("PRODUCTION_CONFIG_NOT_ACTIVE: NODE_ENV must be production");
   if (env.RUPAYKG_SYNTHETIC_DATA?.toLowerCase() === "true") throw new Error("PRODUCTION_CONFIG_INVALID: synthetic data is forbidden in production");
   if (env.RUPAYKG_AUTH_MODE !== "real") throw new Error("PRODUCTION_CONFIG_INVALID: RUPAYKG_AUTH_MODE must be real");
+  if (env.RUPAYKG_AUTH_RESOLVER_MODE !== "security_definer") throw new Error("PRODUCTION_CONFIG_INVALID: RUPAYKG_AUTH_RESOLVER_MODE must be security_definer");
   if (env.VITE_RUPAYKG_SESSION_TOKEN?.trim()) throw new Error("PRODUCTION_CONFIG_INVALID: VITE_RUPAYKG_SESSION_TOKEN must not be provided in production");
+  if (env.VITE_RUPAYKG_REQUEST_CONTEXT_SECRET?.trim()) throw new Error("PRODUCTION_CONFIG_INVALID: VITE_RUPAYKG_REQUEST_CONTEXT_SECRET must never be client-bundled");
+  if (env.VITE_RUPAYKG_REQUEST_CONTEXT_KEY_ID?.trim()) throw new Error("PRODUCTION_CONFIG_INVALID: VITE_RUPAYKG_REQUEST_CONTEXT_KEY_ID must not be provided to the browser");
   const databaseUrl = productionDatabaseUrl(required(env, "DATABASE_URL"));
+  const authDatabaseUrl = productionAuthDatabaseUrl(required(env, "AUTH_DATABASE_URL"), databaseUrl);
+  const requestContextSecretValue = requestContextSecret(required(env, "RUPAYKG_REQUEST_CONTEXT_SECRET"));
+  const requestContextKeyIdValue = requestContextKeyId(required(env, "RUPAYKG_REQUEST_CONTEXT_KEY_ID"));
   const parsedDatabaseUrl = new URL(databaseUrl);
   const renderInternalDatabase =
     /^dpg-[a-z0-9-]+$/i.test(parsedDatabaseUrl.hostname) &&
@@ -58,6 +99,10 @@ export function readProductionConfig(env: NodeJS.ProcessEnv = process.env): Prod
   return {
     environment: "production",
     databaseUrl,
+    authDatabaseUrl,
+    authResolverMode: "security_definer",
+    requestContextSecret: requestContextSecretValue,
+    requestContextKeyId: requestContextKeyIdValue,
     databaseSsl: renderInternalDatabase ? "false" : "require",
     databaseCaCert: renderInternalDatabase ? "" : productionCaCert(env.DATABASE_CA_CERT?.trim() ?? "", databaseUrl),
     allowedOrigins: origins(required(env, "RUPAYKG_ALLOWED_ORIGINS")),
