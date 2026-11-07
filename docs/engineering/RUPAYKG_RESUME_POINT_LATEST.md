@@ -206,3 +206,10 @@
 - Contract checks required Batch E surfaces, authoritative membership/audit provenance columns, rejects blanket organization-only policies on multi-party surfaces, rejects UPDATE/DELETE privilege on append-only audit surfaces, and verifies the disposable runtime role is non-superuser/non-BYPASSRLS.
 - This is a structural disposable-DB gate, not production certification.
 - Exact-head CI still requires verification.
+
+
+### 2026-11-07 — CI trigger diagnosis
+- Main CI currently supports push-to-main and pull_request-to-main only; the controlled branch had no manual dispatch trigger.
+- Added `workflow_dispatch` to the controlled CI workflow so the validation pipeline can be deliberately invoked without merging the controlled security work into main.
+- Commit: `19535ef952bd4c7606f5783583086ef8b227880a`.
+- This does not itself prove execution; GitHub Actions run evidence remains required.
