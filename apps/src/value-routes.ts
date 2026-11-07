@@ -113,7 +113,7 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
 
   app.get("/api/v1/workspaces/bwg", async (request, reply) => {
     const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
-    const activeOrganizationId = auth.activeOrganizationId ?? auth.memberships[0]?.organization_id;
+    const activeOrganizationId = auth.activeOrganizationId;
     const ids = activeOrganizationId ? [activeOrganizationId] : [];
     if (!ids.length) return { source: "postgresql", syntheticData: false, data: { profiles: [], periods: [], wasteReports: [], eprReports: [], esgReports: [], jurisdictions: [], schemes: [] } };
     try {
@@ -165,7 +165,9 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
     if (!organizationId || !start || !end || !basis || Number.isNaN(Date.parse(start)) || Number.isNaN(Date.parse(end)) || start > end) return reply.code(400).send({ error: "organizationId, valid periodStart, periodEnd and reportingBasis are required", code: "BWG_PERIOD_REQUIRED" });
     if (!canActForOrganization(auth, organizationId) || auth.activeOrganizationId !== organizationId) return reply.code(403).send({ error: "Organization access denied; select the active organization before writing", code: "ORG_FORBIDDEN" });
     try {
-      return await withTenantTransaction(pool, auth, async (client) => { const row = await client.query("insert into bwg_reporting_periods (organization_id,period_start,period_end,reporting_basis) values ($1,$2,$3,$4) on conflict (organization_id,period_start,period_end,reporting_basis) do update set reporting_basis=excluded.reporting_basis returning *", [organizationId,start,end,basis]); return reply.code(201).send({ source: "postgresql", syntheticData: false, authoritativeMutation: true, period: row.rows[0] }); 
+      return await withTenantTransaction(pool, auth, async (client) => {
+       if (!await hasOrganizationPermission(client, auth, organizationId, ["reports:read", "waste:record"])) return reply.code(403).send({ error: "Reporting and waste recording permissions are required", code: "BWG_PERIOD_FORBIDDEN" });
+       const row = await client.query("insert into bwg_reporting_periods (organization_id,period_start,period_end,reporting_basis) values ($1,$2,$3,$4) on conflict (organization_id,period_start,period_end,reporting_basis) do update set reporting_basis=excluded.reporting_basis returning *", [organizationId,start,end,basis]); return reply.code(201).send({ source: "postgresql", syntheticData: false, authoritativeMutation: true, period: row.rows[0] }); 
       });
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "BWG reporting period unavailable", code: "BWG_PERIOD_UNAVAILABLE", syntheticData: false }); }
   });
