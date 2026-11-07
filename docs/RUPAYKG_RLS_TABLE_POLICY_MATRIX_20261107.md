@@ -80,29 +80,71 @@ These are governed by migration, platform-integrity or governance roles, not ord
 
 This legacy envelope table has actor/device fields but no declared foreign key proving device-to-organization binding. Do not classify it as public reference data. Reconcile every route, worker, device identity and payload scope; until then keep broad runtime access blocked and include it in the cutover deny list.
 
-## 2. Batch C policy rehearsal coverage
+## 2. Validated RLS rehearsal coverage — Batch C and Batch D
 
-The following 20 tables had candidate RLS policies exercised using two distinct non-owner `NOBYPASSRLS` test roles, with SELECT/INSERT/UPDATE/DELETE, transaction-local context and fail-closed context checks in the disposable test database:
+### Batch C — indirect FK paths and initial anchors
+
+The Batch C disposable PostgreSQL rehearsal passed on exact commit `da8a1a257a2b3a2258b690387cf74fe6d3e0eb73`, workflow run [#5932](https://github.com/vishaltradewinds/rupaykg/actions/runs/42370081515).
+
+Using two distinct non-owner `NOBYPASSRLS` runtime roles, the test covers:
+- All 17 tenant-owned indirect FK paths.
+- The two initial direct anchors: `organizations` and `activities`.
+- One tenant-authorization path: `stakeholder_application_approvals`.
+- SELECT/INSERT/UPDATE/DELETE isolation, transaction-local context reset, malformed-context fail-closed behavior, multi-party authorization boundary, concurrency, worker/pool context and disposable PostgreSQL acceptance.
+
+The 20 tables covered by Batch C are:
 
 `organizations`, `activities`, `evidence`, `measurements`, `mrv_observations`, `epr_obligations`, `activity_assignments`, `bwg_epr_reports`, `bwg_esg_reports`, `carbon_calculations`, `esg_metrics`, `evidence_artifact_reviews`, `evidence_artifact_versions`, `evidence_verification_requirements`, `field_sync_cursors`, `field_sync_envelopes`, `field_sync_conflicts`, `mrv_provenance_events`, `stakeholder_application_approvals`, `verifications`.
 
-Coverage within the classification above:
-- All 17 tenant-owned indirect FK paths were included.
-- 2 of 19 tenant-owned direct anchors were included: `organizations` and `activities`.
-- 1 of 4 tenant authorization controls was included: `stakeholder_application_approvals`.
-- 31 of the 51 single-tenant, authorization, audit and multi-party surfaces remain outside Batch C coverage: 17 direct anchors, 3 authorization controls, 2 audit controls and 9 multi-party controls.
+### Batch D — remaining 17 direct tenant anchors
 
-Identity, platform and global-reference surfaces require separate privilege models and are not counted as ordinary tenant-policy targets. `operation_sync_envelopes` is separately unresolved and is not part of the 31-table figure.
+The Batch D test is in `scripts/test-direct-tenant-anchors-batch-d.sql`. It passed on exact commit `5bfb5cad74e881a5b8c3232ab0eda934cef0f6eb`, workflow run [#5944](https://github.com/vishaltradewinds/rupaykg/actions/runs/42372289508). The entire workflow passed, including production dependency audit, migration validation/execution, typecheck, build, browser smoke, updated catalog inventory, Batch C, Batch D, policy-family CRUD, multi-party and concurrency checks, pooled-worker context, disposable PostgreSQL acceptance and production-container build.
+
+The 17 direct tenant tables tested in Batch D are:
+
+`bwg_profiles`, `bwg_reporting_periods`, `carbon_projects`, `cpcb_swm_stakeholder_workspaces`, `environmental_attribute_claims`, `epr_returns`, `esg_reporting_periods`, `evidence_artifact_series`, `field_devices`, `obligations`, `organization_bwg_assessments`, `organization_epr_applicability`, `organization_geography_scopes`, `organization_statutory_profiles`, `organization_verification_evidence`, `resource_flows`, `stakeholder_applications`.
+
+Batch D exercises the direct-anchor policies under two non-owner `NOBYPASSRLS` test roles:
+- Org A and Org B see their own direct-tenant rows and cannot enumerate the other tenant's rows.
+- Each organization can update its own fixture rows; delete attempts against the other organization's fixture rows affect zero rows.
+- Cross-tenant inserts are denied by the target table's RLS `WITH CHECK`.
+- Unassigned `field_devices` are not visible in either tenant context.
+- `stakeholder_applications` applicant self-service is identity-scoped even within the same organization; another applicant cannot enumerate the row.
+- Missing/malformed organization or identity context fails closed across the 17 tables.
+- Transaction-local organization and identity context is cleared after commit.
+
+Two live domain guards needed special handling so their errors would not preempt the target-table RLS assertions: BWG reporting-period creation checks for a verified BWG profile; EPR return creation locks and validates the referenced EPR obligation. In disposable CI only, temporary `SELECT`/appropriate `FOR UPDATE` fixture policies are installed on those prerequisite tables for the corresponding cross-tenant insert assertion, then dropped before tenant visibility is rechecked. These temporary policies are test-harness scaffolding, not proposed application or production policies.
+
+**Applicant/reviewer distinction:** Batch D establishes the applicant's identity-scoped self-service boundary for `stakeholder_applications`; it does not yet establish the separate reviewer/approver access workflow. That workflow remains within the authorization-control workstream.
+
+### Current coverage summary
+
+| Classification | Total tables | Validated | Remaining |
+|---|---:|---:|---:|
+| Tenant-owned direct anchors | 19 | 19 | 0 |
+| Tenant-owned indirect FK paths | 17 | 17 | 0 |
+| Tenant authorization controls | 4 | 1 | 3 |
+| Tenant audit controls | 2 | 0 | 2 |
+| Multi-party controls | 9 | 0 | 9 |
+| **Tenant/auth/audit/multi-party surfaces** | **51** | **37** | **14** |
+
+The one authorization control validated to date is `stakeholder_application_approvals`, exercised in Batch C through its application-parent FK path. The three authorization controls still requiring dedicated policy design/tests are `organization_memberships`, `roles` and `platform_access_change_requests`.
+
+The two audit controls still requiring dedicated tests are `audit_events` and `cpcb_swm_status_history`.
+
+The nine multi-party surfaces still requiring explicit participant-specific read/write semantics are `bwg_waste_reports`, `chain_of_custody_links`, `credentials`, `epr_credit_allocations`, `epr_credit_transfers`, `epr_credits`, `registry_events`, `settlements` and `settlement_events`.
+
+Identity-security (4), global-reference (8) and platform-control (3) surfaces require their own least-privilege/service-role assurance and are not ordinary tenant policy targets. `operation_sync_envelopes` remains a separately unresolved legacy surface and is not included in the 51 or the 14 remaining surfaces.
 
 ## 3. Required next batch
 
-1. Exercise the remaining 17 direct tenant anchors with explicit `USING` and `WITH CHECK` predicates, cross-tenant CRUD negatives, null/unknown organization cases and service-role tests.
-2. Design and test the three untested authorization controls: `organization_memberships`, `roles` and `platform_access_change_requests`. Include verified membership, permission keys, suspension/revocation, role mutation and cross-organization approver cases.
-3. Add tenant-audit tests for nullable platform events, workspace/organization consistency, append-only constraints and unauthorized actor writes.
-4. Define multi-party participant visibility and write authority for all nine surfaces; test each legitimate party and a non-participant before selecting policy semantics.
-5. Map and deny broad application access to `operation_sync_envelopes` until ownership, route and worker linkage is proven.
-6. Rehearse the final policies under the exact proposed runtime identity with `NOBYPASSRLS`, no table ownership, no DDL and least-privilege grants; test transaction and pooled-connection context reset.
-7. Inventory every API route, server action, job, worker, direct SQL path and export before any production rollout. Obtain independent security/DBA review, deployed runtime identity proof, backup/restore proof and a founder-approved cutover plan.
+1. Design and test the three untested authorization controls: `organization_memberships`, `roles` and `platform_access_change_requests`. Include verified membership, exact-organization binding, explicit permission keys, suspended/revoked identities, role mutation and cross-organization approver cases.
+2. Add tenant-audit tests for nullable platform-level events, workspace/organization consistency, append-only behavior, actor authorization, and unauthorized mutation.
+3. Define participant-specific visibility and action-specific write authority for all nine multi-party surfaces. Test every legitimate counterparty and an unauthorized third party; preserve settlement, EPR credit, credential and registry integrity.
+4. Complete independent reviewer/approver workflow tests for `stakeholder_applications`; Batch D only establishes identity-scoped applicant self-service.
+5. Map and deny broad application access to `operation_sync_envelopes` until ownership, device linkage, routes and workers are reconciled.
+6. Rehearse final policies and the full route/worker model under the exact proposed runtime identity with `NOBYPASSRLS`, no table ownership, no DDL and least-privilege grants; test pooled connection reuse and worker context reset.
+7. Inventory every API route, server action, job, worker, export and direct SQL path before any production rollout. Obtain independent security/DBA review, deployed runtime identity proof, backup/restore proof and a founder-approved cutover plan.
 
 ## 4. Non-negotiable evidence boundary
 
