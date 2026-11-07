@@ -31,6 +31,11 @@ try {
   const files = (await readdir(migrationDir))
     .filter((name) => /^\d+_.+\.sql$/.test(name))
     .sort();
+  const prefixCounts = new Map<string, number>();
+  for (const filename of files) {
+    const prefix = filename.split("_", 1)[0];
+    prefixCounts.set(prefix, (prefixCounts.get(prefix) ?? 0) + 1);
+  }
 
   for (const filename of files) {
     const prefix = filename.split("_", 1)[0];
