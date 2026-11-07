@@ -82,7 +82,7 @@ export const HIGH_RISK_PERMISSIONS = {
 export type HighRiskAction = keyof typeof HIGH_RISK_PERMISSIONS;
 
 export async function hasOrganizationPermission(client: Pool | PoolClient, auth: AuthContext, organizationId: string, permissions: readonly string[]): Promise<boolean> {
-  if (auth.memberships.length > 0 && !canActForOrganization(auth, organizationId)) return false;
+  if (!organizationId || auth.memberships.length === 0 || !canActForOrganization(auth, organizationId)) return false;
   const result = await client.query<{ ok: boolean }>(
     `select exists (
        select 1 from organization_memberships om join roles r on r.id = om.role_id
