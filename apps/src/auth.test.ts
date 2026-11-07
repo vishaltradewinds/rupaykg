@@ -18,12 +18,12 @@ test("organization permission lookup is never reached for an unscoped context", 
 });
 
 test("evidence verification requires membership in the evidence activity organization", async () => {
-  const queries: unknown[][] = [];
-  const client = { query: async (_sql: string, values: unknown[]) => {
-    queries.push(values);
+  const queries: Array<{ sql: string; values: unknown[] }> = [];
+  const client = { query: async (sql: string, values: unknown[]) => {
+    queries.push({ sql, values });
     return { rows: [{ ok: true }] };
   } } as never;
   assert.equal(await canVerifyEvidence(client, "identity-a", "evidence-a"), true);
-  assert.match(String((client as any).query ? "select" : ""), /select/);
-  assert.deepEqual(queries[0], ["evidence-a", "identity-a", ["VERIFY_EVIDENCE", "verification:approve", "verification.approve"]]);
+  assert.match(queries[0]!.sql, /om\.organization_id\s*=\s*a\.organization_id/);
+  assert.deepEqual(queries[0]!.values, ["evidence-a", "identity-a", ["VERIFY_EVIDENCE", "verification:approve", "verification.approve"]]);
 });
