@@ -277,3 +277,14 @@
 - Current controlled head: `2369af42288fc294c28e25a3045c339ad59e270f`.
 - Exact-head GitHub Actions lookup returns no workflow runs; CI/runtime validation remains **NOT VERIFIED**.
 - Production Neon/RLS/deployment remains **HOLD**; no production changes made.
+
+
+### 2026-11-07 — Controlled validation continuation: CI reproducibility + registry syntax + static residual check
+- Fixed a concrete registry route syntax defect introduced during tenant-transaction hardening: a literal escaped newline sequence in the credential issuance callback. Commit: `ccbbfad5271bf5356ffb0f119efa714ebbb60488`.
+- Re-audited the hardened route set at the controlled head: zero direct `pool.query`/`pool.connect` calls in BWG, CPCB SWM, EPR returns, Evidence Vault, Intelligence, MRV, Statutory, Sync, Value, Workspace and Registry route files. The remaining server `pool.query` is a global health/catalog helper, not a tenant-route transaction; MRV/Value helper calls require transaction-client context at sensitive call sites.
+- Removed an unused `orgIds` helper from Workspace routes; it no longer had callers after tenant fallback removal.
+- Changed CI dependency installation from `npm install` to lockfile-reproducible `npm ci`.
+- Latest controlled head: `35ec1f46bc11453cf2b11c09df23bcf6e14a2663`.
+- Exact-head GitHub Actions lookup: no workflow run. CI/runtime execution remains **NOT VERIFIED**.
+- Production Neon remains **READ-ONLY/HOLD**. No production DDL/DML/RLS/role/grant/deployment/certification action performed.
+- Next required gate: obtain disposable CI execution evidence, then close remaining auth/onboarding boundary classification and actual multi-party behavioral acceptance before any production cutover proposal.
