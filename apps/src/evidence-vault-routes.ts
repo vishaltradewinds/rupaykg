@@ -65,7 +65,10 @@ export async function registerEvidenceVaultRoutes(app:FastifyInstance,pool:Pool|
   if((periodStart&&!/^\d{4}-\d{2}-\d{2}$/.test(periodStart))||(periodEnd&&!/^\d{4}-\d{2}-\d{2}$/.test(periodEnd))||(periodStart&&periodEnd&&periodEnd<periodStart))return reply.code(400).send({error:"Measurement period must use ISO dates with end on/after start",code:"EVIDENCE_PERIOD_INVALID"});
   const ctx=await activityContext(pool,auth,activityId);if(!ctx)return reply.code(403).send({error:"Activity outside active organization/geography scope",code:"EVIDENCE_SCOPE_FORBIDDEN"});
   if(!await hasOrganizationPermission(pool,auth,ctx.organization_id,["evidence:upload"]))return reply.code(403).send({error:"Evidence upload permission required",code:"EVIDENCE_UPLOAD_FORBIDDEN"});
-  const sha=createHash("sha256").update(bytes).digest("hex");\n  return await withTenantTransaction(pool,auth,async client=>{\n   const ctx=await activityContext(client,auth,activityId);if(!ctx)throw Object.assign(new Error("Activity outside active organization/geography scope"),{code:"EVIDENCE_SCOPE_FORBIDDEN"});\n   if(!await hasOrganizationPermission(client,auth,ctx.organization_id,["evidence:upload"]))throw Object.assign(new Error("Evidence upload permission required"),{code:"EVIDENCE_UPLOAD_FORBIDDEN"});
+  const sha=createHash("sha256").update(bytes).digest("hex");
+  return await withTenantTransaction(pool,auth,async client=>{
+   const ctx=await activityContext(client,auth,activityId);if(!ctx)throw Object.assign(new Error("Activity outside active organization/geography scope"),{code:"EVIDENCE_SCOPE_FORBIDDEN"});
+   if(!await hasOrganizationPermission(client,auth,ctx.organization_id,["evidence:upload"]))throw Object.assign(new Error("Evidence upload permission required"),{code:"EVIDENCE_UPLOAD_FORBIDDEN"});
   try{
    await client.query("begin");
    let series:{id:string;evidence_type:string}|undefined;
@@ -97,12 +100,14 @@ export async function registerEvidenceVaultRoutes(app:FastifyInstance,pool:Pool|
  });
  app.get("/api/v1/evidence-vault/:evidenceId",async(request,reply)=>{
   const auth=await authFor(request as never,reply,pool);if(!auth||!pool)return;const id=(request.params as {evidenceId:string}).evidenceId;if(!UUID.test(id))return reply.code(400).send({error:"Invalid evidenceId",code:"EVIDENCE_ID_INVALID"});
-  return await withTenantTransaction(pool,auth,async client=>{\n  const q=await client.query<{organization_id:string;geography_id:string|null;artifact_id:string;version_number:number;file_name:string;media_type:string;size_bytes:number;sha256:string;content:Buffer;status:string;source_reference:string|null;measurement_period_start:string|null;measurement_period_end:string|null}>("select a.organization_id,a.geography_id,v.id artifact_id,v.version_number,v.file_name,v.media_type,v.size_bytes,v.sha256,v.content,e.status::text status,v.source_reference,v.measurement_period_start::text,v.measurement_period_end::text from evidence e join activities a on a.id=e.activity_id join evidence_artifact_versions v on v.evidence_id=e.id where e.id=$1",[id]);
+  return await withTenantTransaction(pool,auth,async client=>{
+  const q=await client.query<{organization_id:string;geography_id:string|null;artifact_id:string;version_number:number;file_name:string;media_type:string;size_bytes:number;sha256:string;content:Buffer;status:string;source_reference:string|null;measurement_period_start:string|null;measurement_period_end:string|null}>("select a.organization_id,a.geography_id,v.id artifact_id,v.version_number,v.file_name,v.media_type,v.size_bytes,v.sha256,v.content,e.status::text status,v.source_reference,v.measurement_period_start::text,v.measurement_period_end::text from evidence e join activities a on a.id=e.activity_id join evidence_artifact_versions v on v.evidence_id=e.id where e.id=$1",[id]);
   const row=q.rows[0];if(!row||!row.geography_id||!canActForOrganization(auth,row.organization_id))return reply.code(404).send({error:"Evidence not found",code:"EVIDENCE_NOT_FOUND"});
   const g=await client.query<{ok:boolean}>("select organization_has_geography_scope($1::uuid,$2::uuid) ok",[row.organization_id,row.geography_id]);
   if(!g.rows[0]?.ok||!await hasOrganizationPermission(client,auth,row.organization_id,["evidence:read","evidence:upload","evidence:review"]))return reply.code(403).send({error:"Evidence read permission required",code:"EVIDENCE_READ_FORBIDDEN"});
   if(row.content.length!==row.size_bytes||createHash("sha256").update(row.content).digest("hex")!==row.sha256)return reply.code(503).send({error:"Stored evidence integrity check failed",code:"EVIDENCE_INTEGRITY_FAILED"});
-  reply.header("Content-Disposition",'attachment; filename="'+row.file_name.replace(/["\\\r\n]/g,"_")+'"');reply.header("X-Content-Type-Options","nosniff");reply.header("X-Evidence-SHA256",row.sha256);reply.header("X-Evidence-Version",String(row.version_number));return reply.type(row.media_type).send(row.content);
+  reply.header("Content-Disposition",'attachment; filename="'+row.file_name.replace(/["\\\r
+]/g,"_")+'"');reply.header("X-Content-Type-Options","nosniff");reply.header("X-Evidence-SHA256",row.sha256);reply.header("X-Evidence-Version",String(row.version_number));return reply.type(row.media_type).send(row.content);
  });
  app.post("/api/v1/evidence-vault/:evidenceId/review",async(request,reply)=>{
   const auth=await authFor(request as never,reply,pool);if(!auth||!pool)return;const id=(request.params as {evidenceId:string}).evidenceId,b=bodyOf(request as never),decision=str(b,"decision"),rationale=str(b,"rationale");
@@ -120,6 +125,7 @@ export async function registerEvidenceVaultRoutes(app:FastifyInstance,pool:Pool|
    await client.query("insert into verifications(evidence_id,activity_id,verifier_identity_id,decision,scope,rationale) values($1,$2,$3,$4,'EVIDENCE_VAULT',$5)",[id,row.activity_id,auth.identityId,decision,rationale]);
    await client.query("update evidence set status=$2 where id=$1",[id,status]);await client.query("commit");
    return {source:"postgresql",syntheticData:false,data:{evidenceId:id,artifactVersionId:row.artifact_id,status,reviewDecision:decision,reviewerIdentityId:auth.identityId}};
-  }catch(e){request.log.error(e);return reply.code(503).send({error:"Evidence review failed",code:"EVIDENCE_REVIEW_UNAVAILABLE"});}\n  });
+  }catch(e){request.log.error(e);return reply.code(503).send({error:"Evidence review failed",code:"EVIDENCE_REVIEW_UNAVAILABLE"});}
+  });
  });
 }
