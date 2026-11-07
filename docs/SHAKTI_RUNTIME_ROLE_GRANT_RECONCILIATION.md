@@ -113,6 +113,12 @@ PR #331 currently has no workflow run for its latest head. The repository workfl
 
 No CI result is being inferred or fabricated.
 
+## CI trigger reconciliation
+
+A controlled documentation-only synchronization commit is being used to re-synchronize the PR branch with the repository's configured `pull_request` CI trigger. This does not alter runtime code, production configuration, database state, or the RLS gate.
+
+The resulting workflow run, if created, must still be evaluated by its actual GitHub Actions conclusion; the commit itself is not evidence of CI success.
+
 ## Safety rule
 
 Do not switch DATABASE_URL, enable RLS, or enable FORCE RLS from an unattended application migration. These are controlled deployment operations requiring a verified runtime connection and rollback path.
@@ -126,8 +132,9 @@ Completed in this batch:
 - application-path privilege inventory baseline;
 - curated runtime grant contract;
 - production LOGIN-role hardening;
-- live non-BYPASSRLS privilege proof.
+- live non-BYPASSRLS privilege proof;
+- CI trigger reconciliation commit.
 
 Remaining gate:
 
-**application connection cutover → representative route-level negative tests → persistent RLS activation → live isolation verification → FORCE RLS decision.**
+**fresh CI result → application connection cutover → representative route-level negative tests → persistent RLS activation → live isolation verification → FORCE RLS decision.**
