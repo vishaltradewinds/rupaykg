@@ -10,6 +10,9 @@ process.env.DATABASE_SSL = config.databaseSsl;
 process.env.DATABASE_CA_CERT = config.databaseCaCert;
 process.env.RUPAYKG_ALLOWED_ORIGINS = config.allowedOrigins.join(",");
 process.env.RUPAYKG_AUTH_MODE = config.authMode;
-process.env.RUPAYKG_SYNTHETIC_DATA = String(config.syntheticData);\n\nconst { assertProductionRuntimeDbRole } = await import("./runtime-db-role-guard.js");\nawait assertProductionRuntimeDbRole();
+process.env.RUPAYKG_SYNTHETIC_DATA = String(config.syntheticData);
+
+const { assertProductionRuntimeDbRole } = await import("./runtime-db-role-guard.js");
+await assertProductionRuntimeDbRole();
 
 await import("./server.js");
