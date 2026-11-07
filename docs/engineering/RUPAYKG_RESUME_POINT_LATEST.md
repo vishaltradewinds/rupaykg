@@ -8,7 +8,7 @@
 
 ## Exact current engineering heads
 - PR #331: 50e463df30f18a30e6a192da447a451d1816ea55
-- PR #332: 54369a4080949d92f58068103726a70859fc7937
+- PR #332: ff29013085d78d55800f4fe6edf0c2905aae79ee
 
 ## Verified work in this batch
 - Added fail-closed protection to the migration runner for the four 20261107 protected Shakti migrations. They require explicit RUPAYKG_ALLOW_PROTECTED_SHAKTI_MIGRATIONS=1.
@@ -43,3 +43,12 @@
 2. Continue Issue #326 Batch E with the highest-risk residual tenant paths, starting with evidence vault and MRV.
 3. Reconcile every changed table against the 67-table policy matrix.
 4. Prepare, but do not execute, a disposable full-RLS rehearsal before any production activation proposal.
+
+
+### 2026-11-07 — CPCB SWM tenant-isolation batch
+- Refactored `apps/src/cpcb-swm-routes.ts` so workspace list/read, create and update permission/geography checks and tenant-sensitive database operations execute through `withTenantTransaction`.
+- Removed direct `pool.query`/`pool.connect` tenant-sensitive access from CPCB SWM routes; the route now uses the active organization request context for database work.
+- Fixed the not-found update path so it returns from the tenant transaction without issuing a manual rollback that would invalidate the transaction helper.
+- Latest PR #332 code head: `ff29013085d78d55800f4fe6edf0c2905aae79ee`.
+- Exact-head workflow lookup returned no runs; CI/runtime validation remains **NOT VERIFIED**.
+- Production database/RLS/deployment remains **HOLD**; no production changes made.
