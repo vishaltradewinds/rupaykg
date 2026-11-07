@@ -103,6 +103,7 @@ export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool |
       const updated = await client.query(`update epr_returns set fulfilled_quantity=$2,obligation_quantity=$3,evidence_id=$4,verification_id=$5,status='SUBMITTED',submitted_at=now() where id=$1 returning *`, [returnId, fulfilled, obligationRow.target_quantity, evidenceId, verificationId]);
       await client.query(`update epr_obligations set fulfilled_quantity=fulfilled_quantity+$2,status=case when fulfilled_quantity+$2 >= target_quantity then 'COMPLIANT' else 'OPEN' end where id=$1`, [row.obligation_id, fulfilled]);
       return { source: "postgresql", syntheticData: false, authoritativeMutation: true, eprReturn: updated.rows[0], externalSubmission: "NOT_SUBMITTED" };
+      });
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "EPR return submission unavailable", syntheticData: false }); }
     });
   });
@@ -123,6 +124,7 @@ export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool |
       if (row.rows[0].external_reference && row.rows[0].external_reference !== externalReference) return reply.code(409).send({ error: "A different external reference is already recorded for this EPR return", code: "EXTERNAL_REFERENCE_IMMUTABLE" });
       const updated = await client.query("update epr_returns set external_reference=$2 where id=$1 returning *", [returnId, externalReference]);
       return { source: "postgresql", syntheticData: false, authoritativeMutation: true, eprReturn: updated.rows[0], externalSubmission: "EXTERNAL_REFERENCE_RECORDED_NOT_ISSUED_BY_RUPAYKG" };
+      });
     } catch (error: unknown) {
       request.log.error(error);
       const message = error instanceof Error ? error.message : "";
