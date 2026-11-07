@@ -60,23 +60,33 @@ test("Shakti production runtime identity is non-BYPASSRLS and tenant-isolated", 
     )).rows[0]!.id;
 
     try {
-      await pool.query("select app.set_request_context($1,$2)", [contextIdentity, organizationA]);
+      const client = await pool.connect();
+      try {
+        await client.query("begin");
+        await client.query("select app.set_request_context($1,$2)", [contextIdentity, organizationA]);
 
-      const visible = await pool.query<{ id: string; organization_id: string }>(
-        "select id, organization_id from activities where id in ($1,$2) order by id",
-        [activityA, activityB],
-      );
-      assert.equal(visible.rows.length, 1, "runtime role must not see another tenant's activity");
-      assert.equal(visible.rows[0]!.id, activityA);
-      assert.equal(visible.rows[0]!.organization_id, organizationA);
+        const visible = await client.query<{ id: string; organization_id: string }>(
+          "select id, organization_id from activities where id in ($1,$2) order by id",
+          [activityA, activityB],
+        );
+        assert.equal(visible.rows.length, 1, "runtime role must not see another tenant's activity");
+        assert.equal(visible.rows[0]!.id, activityA);
+        assert.equal(visible.rows[0]!.organization_id, organizationA);
 
-      await assert.rejects(
-        () => pool.query(
-          "insert into activities(organization_id,activity_type,status,metadata) values($1,'RUNTIME_IDENTITY_TEST','DRAFT','{}'::jsonb)",
-          [organizationB],
-        ),
-        /row-level security|policy/i,
-      );
+        await assert.rejects(
+          () => client.query(
+            "insert into activities(organization_id,activity_type,status,metadata) values($1,'RUNTIME_IDENTITY_TEST','DRAFT','{}'::jsonb)",
+            [organizationB],
+          ),
+          /row-level security|policy/i,
+        );
+        await client.query("rollback");
+      } catch (error) {
+        try { await client.query("rollback"); } catch {}
+        throw error;
+      } finally {
+        client.release();
+      }
     } finally {
       await pool.query("delete from organization_memberships where id=$1", [membershipA]);
       await pool.query("delete from roles where id=$1", [roleA]);
