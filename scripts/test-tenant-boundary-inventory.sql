@@ -76,6 +76,84 @@ BEGIN
   END LOOP;
 END $$;
 
+-- Reviewed domain overrides. A table's organization_id is not enough to decide
+-- whether it can use a generic single-tenant policy.
+UPDATE tenant_boundary_inventory
+   SET classification='tenant_authorization_control',
+       rationale='tenant-scoped authorization control; policy must validate identity/membership lifecycle'
+ WHERE table_name IN (
+   'organization_memberships','roles','platform_access_change_requests',
+   'stakeholder_application_approvals'
+ );
+
+UPDATE tenant_boundary_inventory
+   SET classification='tenant_audit_control',
+       rationale='tenant-linked audit/status history; preserve append-only and actor/workspace consistency'
+ WHERE table_name IN ('audit_events','cpcb_swm_status_history');
+
+UPDATE tenant_boundary_inventory
+   SET classification='multi_party_control',
+       rationale='multi-organization ownership/participation; no blanket single-tenant policy'
+ WHERE table_name IN (
+   'bwg_waste_reports','chain_of_custody_links','credentials',
+   'epr_credit_allocations','epr_credit_transfers','epr_credits',
+   'registry_events','settlements','settlement_events'
+ );
+
+UPDATE tenant_boundary_inventory
+   SET classification='identity_security_control',
+       rationale='identity-scoped or authentication secret/session surface; not organization-global data'
+ WHERE table_name IN (
+   'identities','identity_credentials','identity_password_credentials','identity_sessions'
+ );
+
+UPDATE tenant_boundary_inventory
+   SET classification='platform_control',
+       rationale='platform governance or migration control; service/owner-only access, not tenant data'
+ WHERE table_name IN (
+   'methodology_governance_evidence','platform_audit_chain_head','schema_migrations'
+ );
+
+UPDATE tenant_boundary_inventory
+   SET classification='unresolved_legacy_surface',
+       rationale='legacy sync envelope lacks tenant/device FK binding; hold from broad runtime access pending route and ownership reconciliation'
+ WHERE table_name='operation_sync_envelopes';
+
+-- Exact classification cardinality is part of the live-schema contract.
+DO $classification$
+DECLARE
+  actual_count integer;
+  expected record;
+BEGIN
+  FOR expected IN
+    SELECT * FROM (VALUES
+      ('tenant_owned_direct', 19),
+      ('tenant_owned_indirect', 17),
+      ('tenant_authorization_control', 4),
+      ('tenant_audit_control', 2),
+      ('multi_party_control', 9),
+      ('identity_security_control', 4),
+      ('global_reference', 8),
+      ('platform_control', 3),
+      ('unresolved_legacy_surface', 1)
+    ) AS x(classification, expected_count)
+  LOOP
+    SELECT count(*) INTO actual_count
+    FROM tenant_boundary_inventory
+    WHERE classification=expected.classification;
+    IF actual_count <> expected.expected_count THEN
+      RAISE EXCEPTION 'classification % has % tables; expected %',
+        expected.classification, actual_count, expected.expected_count;
+    END IF;
+  END LOOP;
+
+  SELECT count(*) INTO actual_count FROM tenant_boundary_inventory;
+  IF actual_count <> 67 THEN
+    RAISE EXCEPTION 'classification manifest has % tables; expected 67', actual_count;
+  END IF;
+END
+$classification$;
+
 -- Known tenant-sensitive domain tables must never be silently classified global.
 DO $$
 DECLARE bad text;
@@ -118,7 +196,12 @@ BEGIN
   END IF;
 END $$;
 
--- Emit the full classification and FK boundary map for CI evidence.
+-- Emit category totals, the full classification and FK boundary map for CI evidence.
+SELECT classification, count(*) AS table_count
+FROM tenant_boundary_inventory
+GROUP BY classification
+ORDER BY classification;
+
 SELECT table_schema,table_name,classification,tenant_key,rationale
 FROM tenant_boundary_inventory
 ORDER BY classification,table_name;
@@ -148,7 +231,10 @@ SELECT table_name,
 FROM tenant_boundary_inventory i
 JOIN pg_class c ON c.relname=i.table_name
 JOIN pg_namespace n ON n.oid=c.relnamespace AND n.nspname=i.table_schema
-WHERE i.classification IN ('tenant_owned_direct','tenant_owned_indirect')
+WHERE i.classification IN (
+  'tenant_owned_direct','tenant_owned_indirect','tenant_authorization_control',
+  'tenant_audit_control','multi_party_control','unresolved_legacy_surface'
+)
 ORDER BY table_name;
 
 ROLLBACK;
