@@ -138,3 +138,22 @@ Completed in this batch:
 Remaining gate:
 
 **fresh CI result → application connection cutover → representative route-level negative tests → persistent RLS activation → live isolation verification → FORCE RLS decision.**
+
+
+## Runtime-process assurance test
+A dedicated integration gate is now present at `apps/src/runtime-identity.integration.test.ts`.
+
+When explicitly enabled with:
+- `RUPAYKG_RUN_DB_INTEGRATION_TESTS=1`
+- `RUPAYKG_REQUIRE_NON_BYPASSRLS=1`
+- `DATABASE_URL` pointing to the candidate application runtime connection
+- `RUPAYKG_TEST_OWNER_DATABASE_URL` pointing only to a fixture/cleanup owner connection
+
+the test proves from the runtime connection itself that:
+- `current_user` is not SUPERUSER, CREATEROLE or CREATEDB;
+- `rolbypassrls=false`;
+- a tenant-A context can see tenant-A activity but not tenant-B activity;
+- a cross-tenant activity insert is rejected by RLS.
+
+The owner connection is used only for deterministic fixture creation/cleanup; protected assertions run through the candidate runtime connection. The test is opt-in and does not alter the default CI credential posture.
+
