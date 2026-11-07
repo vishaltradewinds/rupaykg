@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import type { Pool } from "pg";
+import type { Pool, PoolClient } from "pg";
 import { authenticate, bearerChallenge, hasOrganizationPermission, type AuthContext } from "./auth.js";
 import { withTenantTransaction } from "./tenant-db.js";
 
@@ -21,7 +21,7 @@ export async function registerIntelligenceRoutes(app: FastifyInstance, pool: Poo
 
     const geographyId = requestedGeography(request);
     try {
-      return await withTenantTransaction(pool, tenantAuth, async (client) => {
+      return await withTenantTransaction(pool, tenantAuth, async (client: PoolClient) => {
         if (!await hasOrganizationPermission(client, tenantAuth, activeOrganizationId, ["audit:read", "projects:manage"])) {
           return reply.code(403).send({ error: "Intelligence workspace read permission required", code: "WORKSPACE_READ_FORBIDDEN", workspace: "intelligence" });
         }
@@ -40,7 +40,7 @@ export async function registerIntelligenceRoutes(app: FastifyInstance, pool: Poo
         const params: unknown[] = [activeOrganizationId];
         const geographyClause = geographyId ? " and a.geography_id = $2" : "";
         if (geographyId) params.push(geographyId);
-        const rows = await client.query(`
+        const rows = await client.query<{ source_record_id: string; source_type: string; activity_type: string; status: string; geography_id: string | null; geography_name: string | null; occurred_at: string | null; created_at: string }>(`
           select a.id as source_record_id, 'ACTIVITY' as source_type,
                  a.activity_type, a.status, a.geography_id, g.name as geography_name,
                  a.occurred_at, a.created_at
@@ -50,7 +50,7 @@ export async function registerIntelligenceRoutes(app: FastifyInstance, pool: Poo
             and organization_has_geography_scope(a.organization_id, a.geography_id)
             ${geographyClause}
           order by a.created_at desc limit 100`, params);
-        const findings = rows.rows.map((row) => ({
+        const findings = rows.rows.map((row: { source_record_id: string; source_type: string; activity_type: string; status: string; geography_id: string | null; geography_name: string | null; occurred_at: string | null; created_at: string }) => ({
           kind: "OPERATIONAL_REVIEW",
           sourceRecordIds: [row.source_record_id],
           sourceType: row.source_type,
