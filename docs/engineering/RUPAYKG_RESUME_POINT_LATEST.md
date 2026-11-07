@@ -269,3 +269,11 @@
 - Commits: `fc91c539221eea3ded1bf40fdedc62c7eee20eb4`, `3a0fa03eb6044e42212002eb90e8a8ea08129b7b`, `00dd73ba7ae0f02d40df762e6628941c1f4ae8fa`, `c4cf596bffe8b442a6970725044da420dd8f68c4`, `84238de51e0292f0afacb58f59feb639dd9de2a9`, `47f53eba91f2ad1e91fb16cb993f928b6ecacf27`.
 - Exact-head GitHub Actions lookup for current head `47f53eba91f2ad1e91fb16cb993f928b6ecacf27` returns no workflow runs. CI/runtime validation therefore remains **NOT VERIFIED**.
 - Production Neon/RLS/deployment remains **HOLD**; no production changes made.
+
+
+### 2026-11-07 — Registry fail-closed residual closure
+- Re-audited registry transfer and settlement authorization entry points after the previous tenant-context batch.
+- Added explicit active-organization requirements to credential transfer and settlement authorization routes; previously these routes relied on the transaction helper to fail later with an internal context error.
+- Current controlled head: `2369af42288fc294c28e25a3045c339ad59e270f`.
+- Exact-head GitHub Actions lookup returns no workflow runs; CI/runtime validation remains **NOT VERIFIED**.
+- Production Neon/RLS/deployment remains **HOLD**; no production changes made.
