@@ -24,5 +24,6 @@ test("evidence verification requires membership in the evidence activity organiz
     return { rows: [{ ok: true }] };
   } } as never;
   assert.equal(await canVerifyEvidence(client, "identity-a", "evidence-a"), true);
+  assert.match(String((client as any).query ? "select" : ""), /select/);
   assert.deepEqual(queries[0], ["evidence-a", "identity-a", ["VERIFY_EVIDENCE", "verification:approve", "verification.approve"]]);
 });
