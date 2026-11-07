@@ -114,24 +114,24 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
     const ids = activeOrganizationId ? [activeOrganizationId] : [];
     if (!ids.length) return { source: "postgresql", syntheticData: false, data: { profiles: [], periods: [], wasteReports: [], eprReports: [], esgReports: [], jurisdictions: [], schemes: [] } };
     try {
-      const [profiles, periods, wasteReports, eprReports, esgReports, jurisdictions, schemes] = await Promise.all([
-        pool.query("select p.*, g.name as jurisdiction_name from bwg_profiles p left join geography g on g.id=p.jurisdiction_id where p.organization_id=any($1::uuid[]) order by p.updated_at desc", [ids]),
-        pool.query("select * from bwg_reporting_periods where organization_id=any($1::uuid[]) order by period_end desc", [ids]),
-        pool.query("select w.*, r.organization_id from bwg_waste_reports w join bwg_reporting_periods r on r.id=w.reporting_period_id where r.organization_id=any($1::uuid[]) order by w.created_at desc", [ids]),
-        pool.query("select e.*, r.organization_id, s.name as scheme_name from bwg_epr_reports e join bwg_reporting_periods r on r.id=e.reporting_period_id join epr_schemes s on s.id=e.scheme_id where r.organization_id=any($1::uuid[]) order by e.created_at desc", [ids]),
-        pool.query("select e.*, r.organization_id from bwg_esg_reports e join bwg_reporting_periods r on r.id=e.reporting_period_id where r.organization_id=any($1::uuid[]) order by e.created_at desc", [ids]),
-        pool.query("select distinct g.id, g.name from geography g join organization_geography_scopes ogs on ogs.geography_id=g.id where ogs.organization_id=any($1::uuid[]) and ogs.status='VERIFIED' order by g.name", [ids]),
-        pool.query("select id, code, name, authority, jurisdiction_id from epr_schemes where status='VERIFIED' order by name"),
-      ]);
-      const organizations = await Promise.all(ids.map(async (organizationId) => ({
-        organizationId,
-        profileUpdate: await hasOrganizationPermission(pool, auth, organizationId, ["profile:update", "waste:record"]),
-        periodCreate: await hasOrganizationPermission(pool, auth, organizationId, ["reports:read", "waste:record"]),
-        wasteRecord: await hasOrganizationPermission(pool, auth, organizationId, ["waste:record"]),
-        eprManage: await hasOrganizationPermission(pool, auth, organizationId, ["epr:manage"]),
-        esgWrite: await hasValuePermission(pool, "can_write_esg", auth.identityId, organizationId),
-      })));
-      return { source: "postgresql", syntheticData: false, data: { profiles: profiles.rows, periods: periods.rows, wasteReports: wasteReports.rows, eprReports: eprReports.rows, esgReports: esgReports.rows, jurisdictions: jurisdictions.rows, schemes: schemes.rows, organizations } };
+      return await withTenantTransaction(pool, auth, async client => {
+        const profiles = await client.query("select p.*, g.name as jurisdiction_name from bwg_profiles p left join geography g on g.id=p.jurisdiction_id where p.organization_id=any($1::uuid[]) order by p.updated_at desc", [ids]);
+        const periods = await client.query("select * from bwg_reporting_periods where organization_id=any($1::uuid[]) order by period_end desc", [ids]);
+        const wasteReports = await client.query("select w.*, r.organization_id from bwg_waste_reports w join bwg_reporting_periods r on r.id=w.reporting_period_id where r.organization_id=any($1::uuid[]) order by w.created_at desc", [ids]);
+        const eprReports = await client.query("select e.*, r.organization_id, s.name as scheme_name from bwg_epr_reports e join bwg_reporting_periods r on r.id=e.reporting_period_id join epr_schemes s on s.id=e.scheme_id where r.organization_id=any($1::uuid[]) order by e.created_at desc", [ids]);
+        const esgReports = await client.query("select e.*, r.organization_id from bwg_esg_reports e join bwg_reporting_periods r on r.id=e.reporting_period_id where r.organization_id=any($1::uuid[]) order by e.created_at desc", [ids]);
+        const jurisdictions = await client.query("select distinct g.id, g.name from geography g join organization_geography_scopes ogs on ogs.geography_id=g.id where ogs.organization_id=any($1::uuid[]) and ogs.status='VERIFIED' order by g.name", [ids]);
+        const schemes = await client.query("select id, code, name, authority, jurisdiction_id from epr_schemes where status='VERIFIED' order by name");
+        const organizations = [{
+          organizationId: activeOrganizationId,
+          profileUpdate: await hasOrganizationPermission(client, auth, activeOrganizationId!, ["profile:update", "waste:record"]),
+          periodCreate: await hasOrganizationPermission(client, auth, activeOrganizationId!, ["reports:read", "waste:record"]),
+          wasteRecord: await hasOrganizationPermission(client, auth, activeOrganizationId!, ["waste:record"]),
+          eprManage: await hasOrganizationPermission(client, auth, activeOrganizationId!, ["epr:manage"]),
+          esgWrite: await hasValuePermission(client, "can_write_esg", auth.identityId, activeOrganizationId!),
+        }];
+        return { source: "postgresql", syntheticData: false, data: { profiles: profiles.rows, periods: periods.rows, wasteReports: wasteReports.rows, eprReports: eprReports.rows, esgReports: esgReports.rows, jurisdictions: jurisdictions.rows, schemes: schemes.rows, organizations } };
+      });
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "BWG reporting workspace unavailable", code: "BWG_WORKSPACE_UNAVAILABLE", syntheticData: false }); }
   });
 
