@@ -32,7 +32,7 @@ async function tenantQuery<T>(pool: Pool, auth: AuthContext, sql: string, params
 }
 async function authorizeGeography(pool: Pool, auth: AuthContext, geographyId: string): Promise<boolean> {
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(geographyId)) return false;
-  const check = await tenantQuery<{ ok: boolean }>(pool, auth,(`select exists (select 1 from organization_memberships om where om.identity_id=$1 and om.status='VERIFIED' and ($3::uuid is null or om.organization_id=$3::uuid) and organization_has_geography_scope(om.organization_id,$2)) as ok`, [auth.identityId, geographyId, auth.activeOrganizationId ?? null]);
+  const check = await tenantQuery<{ ok: boolean }>(pool, auth,(`select exists (select 1 from organization_memberships om where om.identity_id=$1 and om.status='VERIFIED' and om.organization_id=$3::uuid and organization_has_geography_scope(om.organization_id,$2)) as ok`, [auth.identityId, geographyId, auth.activeOrganizationId]);
   return check.rows[0]?.ok === true;
 }
 function geoClause(geographyId: string | null, column: string): string { return geographyId ? ` and ${column} = $2` : ""; }
