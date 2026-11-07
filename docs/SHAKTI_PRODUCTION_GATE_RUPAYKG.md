@@ -71,20 +71,15 @@ RupayKg becomes SHAKTI-certified for its defined production release only after e
 **Current certification decision: BLOCKED — evidence incomplete.**
 
 
-## Separate DPG / DPI alignment track — non-release gate
 
-The DPGA DPG Standard and DPI collection are maintained as a separate product-recognition and architecture-assurance track. They do **not** replace or automatically pass any S01–S19 SHAKTI production gate, statutory approval, independent verification, production acceptance or TRL assessment.
+
+## Commercial monetization and DPG sourcing — controlling direction
+
+RupayKg is a proprietary commercial product. The commercial objective is revenue through software subscriptions, enterprise/public-sector contracts, implementation, integration, managed operations, APIs, support, training and SLAs. DPG recognition is optional and subordinate to this objective.
 
 Controlling companion records:
+- docs/RUPAYKG_COMMERCIAL_MONETIZATION_STRATEGY.md — commercial product packages, revenue models, pricing principles and IP boundaries.
+- docs/DPG_REGISTRY_COMPONENT_EVALUATION_RUPAYKG.md — ranked DPG component sourcing and integration evaluation.
+- docs/RUPAYKG_OPEN_MRV_CORE_FEASIBILITY_ASSESSMENT.md — revised commercial IP boundary; earlier Open MRV Core extraction is on hold.
 
-- docs/DPGA_DPG_DPI_ASSURANCE_GATE.md — DPGA indicators, DPI collection criteria, RIS crosswalk and Shakti DPG gates.
-- docs/RUPAYKG_OPEN_MRV_CORE_FEASIBILITY_ASSESSMENT.md — repository-backed assessment of the proposed reusable Open MRV Core boundary.
-
-Current decision as of 2026-11-07:
-
-- Whole RupayKg repository: **not ready for DPG nomination**.
-- Proposed Open MRV Core: **discovery/extraction design only; not released and not DPGA-recognised**.
-- Open licensing: **blocked pending rights-holder and contributor-rights review**.
-- DPI collection: **not ready; prerequisite DPG recognition and DPI-specific evidence are absent**.
-
-This track does not authorise a public licence, code publication, production change, deployment or DPGA submission. Any future nomination must be evidence-backed and made for a clearly bounded digital solution. DPGA recognition evaluates the core solution; local deployment, regulatory, field and production acceptance remain separate SHAKTI responsibilities.
+No root licence, package-publication flag or source-code release is authorised by this workstream. Use selected DPGs as separately governed dependencies/services only where customer value, exact licence, security, operating cost and support responsibilities have been validated.
