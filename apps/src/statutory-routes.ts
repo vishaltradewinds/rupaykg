@@ -65,6 +65,11 @@ async function organizationFor(auth: AuthContext, pool: Pool, request: Request, 
   return requested;
 }
 
+async function tenantQuery<T = Record<string, unknown>>(pool: Pool, auth: AuthContext, text: string, values: unknown[] = []) {
+  if (!auth.activeOrganizationId) throw Object.assign(new Error("Active organization is required for tenant-scoped database access"), { code: "TENANT_CONTEXT_REQUIRED" });
+  return withTenantTransaction(pool, auth, (client) => client.query<T>(text, values));
+}
+
 async function evidenceBindingValid(pool: Pool, organizationId: string, evidenceId: string | null, verificationId: string | null): Promise<boolean> {
   if (!evidenceId && !verificationId) return true;
   if (!evidenceId || !verificationId) return false;
@@ -97,7 +102,7 @@ export async function registerStatutoryRoutes(app: FastifyInstance, pool: Pool |
     const organizationId = await organizationFor(auth, pool, request as never, reply); if (!organizationId) return;
     try {
       if (!await hasOrganizationPermission(pool, auth, organizationId, ["epr:read", "reports:read"])) return reply.code(403).send({ error: "EPR scheme catalog read permission required", code: "STATUTORY_PERMISSION_REQUIRED" });
-      const result = await pool.query(`select code,name,authority,metadata from epr_schemes where status='VERIFIED' order by name`);
+      const result = await tenantQuery(pool, auth, `select code,name,authority,metadata from epr_schemes where status='VERIFIED' order by name`);
       return { source: "postgresql", syntheticData: false, schemes: result.rows, statutoryBoundary: "INTERNAL_APPLICABILITY_PREPARATION_ONLY" };
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "EPR scheme catalog unavailable", code: "STATUTORY_UNAVAILABLE", syntheticData: false }); }
   });
@@ -108,9 +113,9 @@ export async function registerStatutoryRoutes(app: FastifyInstance, pool: Pool |
     try {
       if (!await hasOrganizationPermission(pool, auth, organizationId, ["swm:read", "epr:read", "reports:read"])) return reply.code(403).send({ error: "Statutory applicability read permission required", code: "STATUTORY_PERMISSION_REQUIRED" });
       const [profiles, bwg, epr] = await Promise.all([
-        pool.query("select id,framework,rule_reference,effective_from,effective_to,applicability_status,basis,determination_note,externally_confirmed,external_authority,external_reference,determined_by_identity_id,determined_at,created_at from organization_statutory_profiles where organization_id=$1 order by effective_from desc nulls last,created_at desc", [organizationId]),
-        pool.query("select * from organization_bwg_assessments where organization_id=$1 order by assessment_date desc,created_at desc", [organizationId]),
-        pool.query("select a.*,s.name scheme_name,s.authority scheme_authority,s.metadata scheme_metadata from organization_epr_applicability a left join epr_schemes s on s.code=a.scheme where a.organization_id=$1 order by a.scheme", [organizationId]),
+        tenantQuery(pool, auth, "select id,framework,rule_reference,effective_from,effective_to,applicability_status,basis,determination_note,externally_confirmed,external_authority,external_reference,determined_by_identity_id,determined_at,created_at from organization_statutory_profiles where organization_id=$1 order by effective_from desc nulls last,created_at desc", [organizationId]),
+        tenantQuery(pool, auth, "select * from organization_bwg_assessments where organization_id=$1 order by assessment_date desc,created_at desc", [organizationId]),
+        tenantQuery(pool, auth, "select a.*,s.name scheme_name,s.authority scheme_authority,s.metadata scheme_metadata from organization_epr_applicability a left join epr_schemes s on s.code=a.scheme where a.organization_id=$1 order by a.scheme", [organizationId]),
       ]);
       return { source: "postgresql", syntheticData: false, statutoryBoundary: "INTERNAL_APPLICABILITY_PREPARATION_ONLY", profiles: profiles.rows, bwgAssessments: bwg.rows, eprApplicability: epr.rows };
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Statutory applicability unavailable", code: "STATUTORY_UNAVAILABLE", syntheticData: false }); }
@@ -132,7 +137,7 @@ export async function registerStatutoryRoutes(app: FastifyInstance, pool: Pool |
     const status = bwgStatus(floorArea, water, waste);
     const note = text(body, "determinationNote");
     try {
-      const result = await pool.query(
+      const result = await tenantQuery(pool, auth, 
         `insert into organization_bwg_assessments
           (organization_id,assessment_date,floor_area_sq_m,water_consumption_lpd,solid_waste_kgpd,
            floor_area_threshold_sq_m,water_threshold_lpd,waste_threshold_kgpd,threshold_basis,
@@ -165,7 +170,7 @@ export async function registerStatutoryRoutes(app: FastifyInstance, pool: Pool |
     const metadataRule = typeof metadata.rule_reference === "string" ? metadata.rule_reference : null;
     const registrationInput = normalizeEprRegistrationInput(text(body, "cpcbRegistrationReference"), text(body, "cpcbRegistrationStatus"), body.basis);
     try {
-      const result = await pool.query(
+      const result = await tenantQuery(pool, auth, 
         `insert into organization_epr_applicability
           (organization_id,scheme,rule_reference,applicability_status,basis,cpcb_registration_status,cpcb_registration_reference,evidence_id,verification_id,determination_note,determined_by_identity_id,determined_at)
          values($1,$2,coalesce($3,$4),$5,$6::jsonb,$7,$8,$9,$10,$11,$12,now())
@@ -187,12 +192,12 @@ export async function registerStatutoryRoutes(app: FastifyInstance, pool: Pool |
     const id = (request.params as { id: string }).id;
     const report = normalizeExternalRegistrationReport(text(body, "cpcbRegistrationReference"), text(body, "cpcbRegistrationStatus"));
     if (!report) return reply.code(400).send({ error: "A CPCB registration reference and cpcbRegistrationStatus=REGISTERED_EXTERNALLY are required to record a user-reported reference", code: "EXTERNAL_REGISTRATION_REFERENCE_REQUIRED" });
-    const organization = await pool.query<{ organization_id: string }>("select organization_id from organization_epr_applicability where id=$1", [id]);
+    const organization = await tenantQuery<{ organization_id: string }>(pool, auth, "select organization_id from organization_epr_applicability where id=$1", [id]);
     const organizationId = organization.rows[0]?.organization_id;
     if (!organizationId || !canActForOrganization(auth, organizationId)) return reply.code(403).send({ error: "Organization access denied", code: "ORG_FORBIDDEN" });
     if (!await hasOrganizationPermission(pool, auth, organizationId, ["epr:manage", "audit:execute"])) return reply.code(403).send({ error: "EPR management permission required", code: "STATUTORY_EPR_WRITE_REQUIRED" });
     try {
-      const result = await pool.query(
+      const result = await tenantQuery(pool, auth, 
         `update organization_epr_applicability
            set cpcb_registration_status=$4,
                cpcb_registration_reference=$2,
