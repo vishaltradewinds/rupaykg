@@ -202,7 +202,7 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
         [row.id, timestamp, row.hcs_topic_id, row.integrity_hash, row.guardian_execution_id],
       );
       if (!persisted.rows[0]?.mirror_node_verified_at) return { source: "hedera-mirror-node", syntheticData: false, verified: false, eligibleForRegistry: false, error: "MRV provenance changed during Mirror Node verification; retry against the current record" };
-      const acceptanceFixture = await isAcceptanceFixture(pool, row.activity_id);
+      const acceptanceFixture = await isAcceptanceFixture(client, row.activity_id);
       return {
         source: "hedera-mirror-node",
         syntheticData: false,
