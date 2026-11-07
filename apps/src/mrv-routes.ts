@@ -4,6 +4,7 @@ import { authenticate, canActForOrganization, hasOrganizationPermission, type Au
 import { executeGuardianMrv, guardianStatus } from "./guardian-mrv.js";
 import { hederaStatus, integrityHash, submitHcsAnchor, verifyHcsMessage } from "./hedera-anchor.js";
 import { registerStatutoryRoutes } from "./statutory-routes.js";
+import { withTenantTransaction } from "./tenant-db.js";
 
 type Reply = { code: (status: number) => { send: (body: unknown) => unknown } };
 type Request = { body: unknown; params: Record<string, string>; log: { error: (error: unknown) => void } };
@@ -158,11 +159,12 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
     const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
     const activityId = (request.params as { activityId: string }).activityId;
     try {
-      const owner = await pool.query<{ organization_id: string }>("select organization_id from activities where id=$1", [activityId]);
+      return await withTenantTransaction(pool, auth, async client => {
+      const owner = await client.query<{ organization_id: string }>("select organization_id from activities where id=$1", [activityId]);
       if (!owner.rows[0] || !canActForOrganization(auth, owner.rows[0].organization_id)) return reply.code(403).send({ error: "Organization access denied", code: "ORG_FORBIDDEN" });
       if (!await requirePermission(pool, auth, owner.rows[0].organization_id, ["guardian:read"])) return reply.code(403).send({ error: "Guardian read permission required", code: "MRV_PERMISSION_REQUIRED" });
       if (!await activityInAuthorizedGeography(pool, auth, activityId, owner.rows[0].organization_id)) return reply.code(403).send({ error: "Activity geography is outside organization authorization scope", code: "GEOGRAPHY_FORBIDDEN" });
-      const rows = await pool.query("select * from mrv_provenance_events where activity_id=$1 order by created_at desc", [activityId]);
+      const rows = await client.query("select * from mrv_provenance_events where activity_id=$1 order by created_at desc", [activityId]);
       const acceptanceFixture = await isAcceptanceFixture(pool, activityId);
       return {
         source: "postgresql",
@@ -171,6 +173,7 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
         ...(acceptanceFixture ? { registryEligibilityReason: "ACCEPTANCE_FIXTURE_NOT_REGISTRY_ELIGIBLE" } : {}),
         provenance: rows.rows,
       };
+      });
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "MRV provenance unavailable", syntheticData: false }); }
   });
 
