@@ -63,3 +63,12 @@
 - Static route audit: 2 remaining `pool.query` references are helper internals accepting `Pool | PoolClient`; no direct tenant-route `pool.connect` remains. Ten tenant transaction wrappers are present across the route surface.
 - Exact-head GitHub workflow lookup and combined status returned no runs/statuses; CI remains **NOT VERIFIED**.
 - Production Neon/RLS/deployment remains **HOLD**; no production changes made.
+
+
+### 2026-11-07 — Onboarding authority transaction hardening
+- Refactored `apps/src/onboarding-hierarchy-routes.ts` to use the existing `withPlatformTransaction` and `withAuthorityTransaction` helpers for legal-verification and onboarding-decision mutations.
+- Removed manual `pool.connect`/begin/commit/rollback/release handling from these mutation paths; explicit platform/authority context is now established by the transaction helpers.
+- This surface is intentionally treated as authority/platform workflow, not ordinary tenant workspace access; no tenant transaction was imposed on platform/regulator approval operations.
+- Latest code head: `e3b09b6956bdcce35cc6b492f41357e5d9c878d7`.
+- Exact-head GitHub workflow lookup returned no runs and combined status returned no statuses; CI remains **NOT VERIFIED**.
+- Production Neon/RLS/deployment remains **HOLD**; no production changes made.
