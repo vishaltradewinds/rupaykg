@@ -64,6 +64,7 @@ export async function registerIntelligenceRoutes(app: FastifyInstance, pool: Poo
         authoritativeMutation: false,
       }));
       return { source: "postgresql", syntheticData: false, advisory: true, findings };
+      });
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Intelligence workspace unavailable", syntheticData: false }); }
   });
 }
