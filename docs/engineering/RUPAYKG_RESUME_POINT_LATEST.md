@@ -8,7 +8,7 @@
 
 ## Exact current engineering heads
 - PR #331: 50e463df30f18a30e6a192da447a451d1816ea55
-- PR #332: a74e45ccd1e0d699f84cf74c4d610894cf9f8f08
+- PR #332: 54369a4080949d92f58068103726a70859fc7937
 
 ## Verified work in this batch
 - Added fail-closed protection to the migration runner for the four 20261107 protected Shakti migrations. They require explicit RUPAYKG_ALLOW_PROTECTED_SHAKTI_MIGRATIONS=1.
@@ -34,8 +34,9 @@
 ## Residual tenant-isolation audit and Evidence Vault remediation
 - Added `docs/engineering/SHAKTI_TENANT_ISOLATION_RESIDUAL_AUDIT_20261107.md`.
 - Refactored Evidence Vault upload/list/download/review database access to execute under `withTenantTransaction` and the active organization request context.
-- Evidence Vault no longer uses direct pool queries for tenant-sensitive route operations; the remaining `pool.query` occurrences are confined to the context helper's client parameter implementation.
-- This is repository implementation evidence only; CI/runtime execution and production RLS safety remain unverified.
+- Refactored MRV submission, provenance read, and Hedera provenance verification database operations to execute under `withTenantTransaction`.
+- MRV helper functions now accept the transaction client so geography, permission and acceptance-fixture checks remain on the same tenant-bound transaction.
+- Exact-head workflow lookup for the latest MRV head returns no runs; CI/runtime execution and production RLS safety remain unverified.
 
 ## Next autonomous action
 1. Obtain exact-head CI evidence for PR #332; diagnose only safe CI failures.
