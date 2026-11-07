@@ -195,12 +195,13 @@ export async function registerStatutoryRoutes(app: FastifyInstance, pool: Pool |
     const id = (request.params as { id: string }).id;
     const report = normalizeExternalRegistrationReport(text(body, "cpcbRegistrationReference"), text(body, "cpcbRegistrationStatus"));
     if (!report) return reply.code(400).send({ error: "A CPCB registration reference and cpcbRegistrationStatus=REGISTERED_EXTERNALLY are required to record a user-reported reference", code: "EXTERNAL_REGISTRATION_REFERENCE_REQUIRED" });
-    const organization = await pool.query<{ organization_id: string }>("select organization_id from organization_epr_applicability where id=$1", [id]);
-    const organizationId = organization.rows[0]?.organization_id;
-    if (!organizationId || !canActForOrganization(auth, organizationId)) return reply.code(403).send({ error: "Organization access denied", code: "ORG_FORBIDDEN" });
-    if (!await hasOrganizationPermission(pool, auth, organizationId, ["epr:manage", "audit:execute"])) return reply.code(403).send({ error: "EPR management permission required", code: "STATUTORY_EPR_WRITE_REQUIRED" });
     try {
-      const result = await pool.query(
+      return await withTenantTransaction(pool, auth, async client => {
+        const organization = await client.query<{ organization_id: string }>("select organization_id from organization_epr_applicability where id=$1", [id]);
+        const organizationId = organization.rows[0]?.organization_id;
+        if (!organizationId || !canActForOrganization(auth, organizationId)) return reply.code(403).send({ error: "Organization access denied", code: "ORG_FORBIDDEN" });
+        if (!await hasOrganizationPermission(client, auth, organizationId, ["epr:manage", "audit:execute"])) return reply.code(403).send({ error: "EPR management permission required", code: "STATUTORY_EPR_WRITE_REQUIRED" });
+      const result = await client.query(
         `update organization_epr_applicability
            set cpcb_registration_status=$4,
                cpcb_registration_reference=$2,
