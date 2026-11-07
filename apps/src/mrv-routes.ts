@@ -77,6 +77,8 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
 
   app.post("/api/v1/mrv/activities/:activityId/submit", async (request, reply) => {
     const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
+    const requestId = typeof request.id === "string" && request.id.trim() ? request.id : null;
+    if (!requestId) return reply.code(503).send({ error: "Request correlation ID unavailable; refusing unaudited MRV submission", code: "AUDIT_REQUEST_ID_REQUIRED", syntheticData: false });
     const activityId = (request.params as { activityId: string }).activityId;
     const body = bodyOf(request as never);
     const verificationId = str(body, "verificationId");
@@ -143,7 +145,30 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
       if (guardian.status !== "VERIFIED" || !guardian.executionId) return reply.code(503).send({ source: "guardian", syntheticData: false, guardian, eligibleForRegistry: false });
 
       const anchor = await submitHcsAnchor({ schema: "rupaykg:mrv:v1", activityId, verificationId, evidenceId, guardianPolicyId: policyId, guardianExecutionId: guardian.executionId, mrvStatus: "VERIFIED", methodologyCode, quantity, unit, metadata: { guardianStatus: guardian.status } });
-      const persisted = await pool.query(`insert into mrv_provenance_events(activity_id,verification_id,evidence_id,guardian_policy_id,guardian_execution_id,guardian_status,hcs_status,hcs_topic_id,hcs_transaction_id,hcs_consensus_timestamp,integrity_hash,methodology_code,metadata) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) on conflict(activity_id,verification_id,integrity_hash) do update set guardian_execution_id=excluded.guardian_execution_id,guardian_status=excluded.guardian_status,hcs_status=excluded.hcs_status,hcs_topic_id=excluded.hcs_topic_id,hcs_transaction_id=excluded.hcs_transaction_id,hcs_consensus_timestamp=excluded.hcs_consensus_timestamp,metadata=excluded.metadata,mirror_node_verified_at=null returning *`, [activityId, verificationId, evidenceId, policyId, guardian.executionId, guardian.status, anchor.status, anchor.topicId || null, anchor.transactionId, anchor.consensusTimestamp, anchor.integrityHash, methodologyCode || null, JSON.stringify({ guardian: guardian.raw ?? null })]);
+      const persistClient = await pool.connect();
+      let persisted: { rows: Record<string, unknown>[] };
+      try {
+        await persistClient.query("BEGIN");
+        persisted = await persistClient.query(`insert into mrv_provenance_events(activity_id,verification_id,evidence_id,guardian_policy_id,guardian_execution_id,guardian_status,hcs_status,hcs_topic_id,hcs_transaction_id,hcs_consensus_timestamp,integrity_hash,methodology_code,metadata) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) on conflict(activity_id,verification_id,integrity_hash) do update set guardian_execution_id=excluded.guardian_execution_id,guardian_status=excluded.guardian_status,hcs_status=excluded.hcs_status,hcs_topic_id=excluded.hcs_topic_id,hcs_transaction_id=excluded.hcs_transaction_id,hcs_consensus_timestamp=excluded.hcs_consensus_timestamp,metadata=excluded.metadata,mirror_node_verified_at=null returning *`, [activityId, verificationId, evidenceId, policyId, guardian.executionId, guardian.status, anchor.status, anchor.topicId || null, anchor.transactionId, anchor.consensusTimestamp, anchor.integrityHash, methodologyCode || null, JSON.stringify({ guardian: guardian.raw ?? null })]);
+        const provenance = persisted.rows[0];
+        if (!provenance || typeof provenance.id !== "string") throw new Error("MRV_PROVENANCE_PERSISTENCE_FAILED");
+        await persistClient.query(
+          "insert into audit_events(actor_identity_id,organization_id,action,target_type,target_id,request_id,payload) values($1,$2,'MRV_PROVENANCE_PERSISTED','mrv_provenance_event',$3,$4,$5)",
+          [auth.identityId, row.organization_id, provenance.id, requestId, {
+            activityId, verificationId, evidenceId, guardianPolicyId: policyId,
+            guardianExecutionId: guardian.executionId, guardianStatus: guardian.status,
+            hcsStatus: anchor.status, hcsTopicId: anchor.topicId || null,
+            hcsTransactionId: anchor.transactionId, hcsConsensusTimestamp: anchor.consensusTimestamp,
+            integrityHash: anchor.integrityHash, methodologyCode: methodologyCode || null,
+          }],
+        );
+        await persistClient.query("COMMIT");
+      } catch (error) {
+        await persistClient.query("ROLLBACK").catch(() => undefined);
+        throw error;
+      } finally {
+        persistClient.release();
+      }
       return reply.code(anchor.status === "CONSENSUS_CONFIRMED" ? 201 : 503).send({ source: "postgresql+guardian+hedera", syntheticData: false, guardian, hedera: anchor, provenance: persisted.rows[0], eligibleForRegistry: false });
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Authoritative MRV submission unavailable", code: "MRV_UNAVAILABLE", syntheticData: false }); }
     finally {

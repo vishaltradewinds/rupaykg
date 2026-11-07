@@ -109,9 +109,10 @@ after(async () => {
     await c.query("delete from organization_memberships where organization_id=$1", [orgId]);
     await c.query("delete from roles where organization_id=$1", [orgId]);
     await c.query("delete from organization_geography_scopes where organization_id=$1", [orgId]);
-    await c.query("delete from identities where id in ($1,$2)", [actorId, verifierId]);
+    // Audit events are append-only and retain FK references to their actor and organization.
+    // Keep these minimal fixture principals in this disposable CI database rather than
+    // deleting identities/organization and breaking audit-ledger referential integrity.
     await c.query("delete from geography where id in ($1,$2)", [geographyId, outOfScopeGeographyId]);
-    await c.query("delete from organizations where id=$1", [orgId]);
   } finally { c.release(); await pool.end(); }
 });
 

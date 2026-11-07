@@ -1,5 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import { hederaStatus, integrityHash, submitHcsAnchor } from "./hedera-anchor.js";
 import { guardianStatus } from "./guardian-mrv.js";
 
@@ -27,4 +29,23 @@ test("MRV integrity hash is deterministic and key-order independent", () => {
   const a = { schema: "rupaykg:mrv:v1" as const, activityId: "a", verificationId: "v", evidenceId: "e", guardianPolicyId: "p", guardianExecutionId: "g", mrvStatus: "VERIFIED" as const, metadata: { z: 1, a: 2 } };
   const b = { ...a, metadata: { a: 2, z: 1 } };
   assert.equal(integrityHash(a), integrityHash(b));
+});
+
+test("MRV provenance persistence and audit event share one transaction", async () => {
+  const source = await readFile(fileURLToPath(new URL("../../../apps/src/mrv-routes.ts", import.meta.url)), "utf8");
+  const submitStart = source.indexOf('app.post("/api/v1/mrv/activities/:activityId/submit"');
+  const submitEnd = source.indexOf("\n  });", submitStart);
+  assert.ok(submitStart >= 0 && submitEnd > submitStart, "MRV submission route must exist");
+  const route = source.slice(submitStart, submitEnd);
+
+  assert.match(route, /const persistClient = await pool\.connect\(\)/);
+  assert.match(route, /await persistClient\.query\("BEGIN"\)/);
+  assert.match(route, /insert into mrv_provenance_events/);
+  assert.match(route, /MRV_PROVENANCE_PERSISTED/);
+  assert.match(route, /auth\.identityId, row\.organization_id, provenance\.id, requestId/);
+  assert.match(route, /AUDIT_REQUEST_ID_REQUIRED/);
+  assert.ok(route.indexOf("AUDIT_REQUEST_ID_REQUIRED") < route.indexOf("executeGuardianMrv"), "request ID must be validated before provider side effects");
+  assert.match(route, /await persistClient\.query\("COMMIT"\)/);
+  assert.match(route, /await persistClient\.query\("ROLLBACK"\)/);
+  assert.match(route, /persistClient\.release\(\)/);
 });

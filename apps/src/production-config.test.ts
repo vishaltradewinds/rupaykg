@@ -4,7 +4,8 @@ import { readProductionConfig } from "./production-config.js";
 
 const valid = {
   NODE_ENV: "production",
-  DATABASE_URL: "postgresql://prod.example.invalid:5432/rupaykg",
+  DATABASE_URL: "postgresql://runtime_role:runtime-secret@prod.example.invalid:5432/rupaykg?sslmode=require",
+  MIGRATION_DATABASE_URL: "postgresql://migration_role:migration-secret@prod.example.invalid:5432/rupaykg?sslmode=require",
   DATABASE_SSL: "require",
   DATABASE_CA_CERT: "-----BEGIN CERTIFICATE-----\nproduction-test-ca\n-----END CERTIFICATE-----",
   RUPAYKG_ALLOWED_ORIGINS: "https://app.rupaykg.example",
@@ -17,6 +18,7 @@ describe("production configuration", () => {
     assert.deepEqual(config, {
       environment: "production",
       databaseUrl: valid.DATABASE_URL,
+      migrationDatabaseUrl: valid.MIGRATION_DATABASE_URL,
       databaseSsl: "require",
       databaseCaCert: valid.DATABASE_CA_CERT,
       allowedOrigins: ["https://app.rupaykg.example"],
@@ -37,6 +39,16 @@ describe("production configuration", () => {
     assert.throws(() => readProductionConfig({ ...valid, DATABASE_URL: "" }), /DATABASE_URL is required/);
   });
 
+  it("fails closed without a separate migration role", () => {
+    assert.throws(() => readProductionConfig({ ...valid, MIGRATION_DATABASE_URL: "" }), /MIGRATION_DATABASE_URL is required/);
+  });
+
+  it("requires migration credentials to use a different role on the same database", () => {
+    assert.throws(() => readProductionConfig({ ...valid, MIGRATION_DATABASE_URL: valid.DATABASE_URL }), /distinct non-empty database role/);
+    assert.throws(() => readProductionConfig({ ...valid, MIGRATION_DATABASE_URL: "postgresql://migration_role:secret@other.example.invalid:5432/rupaykg?sslmode=require" }), /same database host, port, and database name/);
+    assert.throws(() => readProductionConfig({ ...valid, MIGRATION_DATABASE_URL: "postgresql://migration_role:secret@prod.example.invalid:5433/rupaykg?sslmode=require" }), /same database host, port, and database name/);
+  });
+
   it("fails closed for local database targets", () => {
     assert.throws(() => readProductionConfig({ ...valid, DATABASE_URL: "postgresql://localhost:5432/rupaykg" }), /must not target localhost/);
   });
@@ -46,7 +58,7 @@ describe("production configuration", () => {
   });
 
   it("requires a production CA certificate for PostgreSQL TLS", () => {
-    assert.throws(() => readProductionConfig({ ...valid, DATABASE_CA_CERT: "" }), /DATABASE_CA_CERT must contain a PEM certificate/);
+    assert.throws(() => readProductionConfig({ ...valid, DATABASE_URL: "postgresql://runtime_role:runtime-secret@prod.example.invalid:5432/rupaykg", DATABASE_CA_CERT: "" }), /DATABASE_CA_CERT must contain a PEM certificate/);
   });
 
   it("requires real authentication", () => {
@@ -64,5 +76,13 @@ describe("production configuration", () => {
   it("requires HTTPS origins without paths", () => {
     assert.throws(() => readProductionConfig({ ...valid, RUPAYKG_ALLOWED_ORIGINS: "http://app.rupaykg.example" }), /origin must use HTTPS/);
     assert.throws(() => readProductionConfig({ ...valid, RUPAYKG_ALLOWED_ORIGINS: "https://app.rupaykg.example/path" }), /must not contain path/);
+  });
+});
+
+describe("production runtime credential isolation", () => {
+  it("removes migration credentials before importing the API server", async () => {
+    const { readFile } = await import("node:fs/promises");
+    const source = await readFile(new URL("./production-server.js", import.meta.url), "utf8");
+    assert.ok(source.indexOf("delete process.env.MIGRATION_DATABASE_URL") < source.indexOf("await import(\"./server.js\")"));
   });
 });

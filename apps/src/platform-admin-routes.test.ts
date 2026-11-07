@@ -308,10 +308,9 @@ test("identity suspension revokes active sessions and records an audit event tra
   assert.equal(response.json().revokedSessions, 2);
   assert.ok(statements.some(sql => sql.includes("update identities set suspended_at=now()")));
   assert.ok(statements.some(sql => sql.includes("update identity_sessions set revoked_at=now()")));
-  assert.ok(statements.some(sql => sql.includes("insert into audit_events")));
-  assert.ok(statements.some(sql => sql.includes("select last_event_hash from platform_audit_chain_head where singleton=true for update")), "audit append must lock the authoritative chain head");
-  assert.ok(statements.some(sql => sql.includes("update platform_audit_chain_head set last_event_id=$1,last_event_hash=$2")), "audit append must atomically advance the chain head");
-  assert.ok(statements.some(sql => sql.includes("returning id")), "audit append must capture the inserted event ID");
+
+  assert.ok(statements.some(sql => sql.includes("insert into audit_events")), "audit append must insert the event inside the business transaction");
+  assert.ok(!statements.some(sql => sql.includes("update platform_audit_chain_head")), "chain head must be advanced only by the database trigger so every writer uses the same canonical hash");
   assert.equal(statements.filter(sql => sql.trim().toLowerCase() === "commit").length, 1);
   await app.close();
 });

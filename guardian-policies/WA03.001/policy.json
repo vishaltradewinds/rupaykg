@@ -1,9 +1,9 @@
 {
-  "updateDate": "2026-09-24T09:14:36.144Z",
+  "updateDate": "2026-10-19T14:31:37.332Z",
   "uuid": "2b1dbf72-0d6c-4d90-9e16-5e8b8c000301",
   "name": "RupayKg BM WA03.001 Landfill Methane Recovery",
   "version": "1.0.0",
-  "description": "Guardian-native dMRV policy specification for BEE BM WA03.001 v1.0. BEE is the controlling regulatory authority. Guardian examples are not substituted.",
+  "description": "Guardian dMRV candidate for BEE BM WA03.001 v1.0. Baseline cross-form ID/value/hash consistency is checked; authoritative RupayKg approval and signature binding are not yet verified by Guardian. BEE is the controlling regulatory authority.",
   "topicDescription": "RupayKg WA03.001 policy",
   "creator": "",
   "owner": "",
@@ -13,7 +13,68 @@
     "NO_ROLE",
     "OWNER"
   ],
-  "policyNavigation": [],
+  "policyNavigation": [
+    {
+      "role": "Project Proponent",
+      "steps": [
+        {
+          "name": "WA03.001 Applicability",
+          "block": "wa03_applicability_form",
+          "level": 1
+        },
+        {
+          "name": "WA03.001 Baseline / BM-T-011",
+          "block": "wa03_baseline_form",
+          "level": 1
+        },
+        {
+          "name": "WA03.001 Project Monitoring",
+          "block": "wa03_monitoring_form",
+          "level": 1
+        },
+        {
+          "name": "WA03.001 Baseline Reconciliation",
+          "block": "wa03_baseline_reconciliation_validator",
+          "level": 1
+        },
+        {
+          "name": "WA03.001 Equation 4 Calculation",
+          "block": "wa03_equation4_calc",
+          "level": 1
+        }
+      ]
+    },
+    {
+      "role": "Verification Body",
+      "steps": [
+        {
+          "name": "WA03.001 Independent Verification",
+          "block": "wa03_verification_form",
+          "level": 1
+        }
+      ]
+    },
+    {
+      "role": "NO_ROLE",
+      "steps": [
+        {
+          "name": "Choose role",
+          "block": "Choose_Role",
+          "level": 1
+        }
+      ]
+    },
+    {
+      "role": "OWNER",
+      "steps": [
+        {
+          "name": "WA03.001 Workflow Overview",
+          "block": "WA03_001_ROOT",
+          "level": 1
+        }
+      ]
+    }
+  ],
   "policyGroups": [],
   "policyTopics": [],
   "policyTokens": [],
@@ -38,7 +99,7 @@
   "detailsUrl": "https://beeindia.gov.in/sites/default/files/BM%20WA03.001.pdf",
   "tools": [],
   "config": {
-    "id": "ee4fb9cf-947b-474a-a9b0-b3cd7dbeace2",
+    "id": "23af339e-9c03-429b-881e-6b27756b7cf6",
     "blockType": "interfaceContainerBlock",
     "permissions": [
       "ANY_ROLE"
@@ -53,7 +114,7 @@
     "tag": "WA03_001_ROOT",
     "children": [
       {
-        "id": "f88bbf83-1f85-4f52-982a-a3ef577d1dc7",
+        "id": "17508837-ce97-4923-839e-56e40a80ef69",
         "blockType": "policyRolesBlock",
         "defaultActive": true,
         "permissions": [
@@ -71,7 +132,7 @@
         ]
       },
       {
-        "id": "0df9a0ce-7b94-4494-81dd-fc4669b38db5",
+        "id": "5afadc28-d340-4616-92b3-e494193ec7df",
         "blockType": "interfaceContainerBlock",
         "defaultActive": true,
         "permissions": [
@@ -84,7 +145,7 @@
         "tag": "Project_Proponent",
         "children": [
           {
-            "id": "a0230842-f33c-4ca9-a499-f44bcb92460c",
+            "id": "83c69a1b-cd92-4338-a862-425961d95886",
             "blockType": "requestVcDocumentBlock",
             "defaultActive": true,
             "permissions": [
@@ -104,7 +165,7 @@
             "idType": "UUID"
           },
           {
-            "id": "2302bf51-71f7-440e-ba59-7b3691f8ddbd",
+            "id": "8d67e718-8090-4593-b406-ee76a3c3fd3e",
             "blockType": "requestVcDocumentBlock",
             "defaultActive": true,
             "permissions": [
@@ -124,7 +185,7 @@
             "idType": "UUID"
           },
           {
-            "id": "c9afb072-9781-4626-9b75-1cd7bce73d1b",
+            "id": "940bfe01-0163-46f7-89a1-1f2bb6407f1d",
             "blockType": "requestVcDocumentBlock",
             "defaultActive": true,
             "permissions": [
@@ -137,14 +198,88 @@
             },
             "tag": "wa03_monitoring_form",
             "children": [],
-            "events": [],
+            "events": [
+              {
+                "source": "wa03_monitoring_form",
+                "target": "wa03_baseline_reconciliation_validator",
+                "input": "RunEvent",
+                "output": "RunEvent"
+              }
+            ],
             "artifacts": [],
             "presetFields": [],
             "schema": "#8b2d9c31-5c1b-4a7f-9b5a-000000000003",
             "idType": "UUID"
           },
           {
-            "id": "7207cc7b-552a-4e45-9e69-6d15259160c5",
+            "id": "139b76b1-d170-4072-a6b1-6cfa3779285d",
+            "blockType": "documentValidatorBlock",
+            "defaultActive": true,
+            "permissions": [
+              "Project Proponent"
+            ],
+            "onErrorAction": "no-action",
+            "uiMetaData": {},
+            "tag": "wa03_baseline_reconciliation_validator",
+            "children": [],
+            "events": [
+              {
+                "source": "wa03_baseline_reconciliation_validator",
+                "target": "wa03_equation4_calc",
+                "input": "RunEvent",
+                "output": "RunEvent"
+              }
+            ],
+            "artifacts": [],
+            "options": {
+              "documentType": "vc-document",
+              "schema": "#8b2d9c31-5c1b-4a7f-9b5a-000000000003",
+              "conditions": [],
+              "sourceValidations": [
+                {
+                  "dbCollection": "VcDocument",
+                  "schema": "#8b2d9c31-5c1b-4a7f-9b5a-000000000002",
+                  "onlyOwnDocuments": false,
+                  "onlyOwnByGroupDocuments": false,
+                  "onlyAssignDocuments": false,
+                  "onlyAssignByGroupDocuments": false,
+                  "allowEmptySource": false,
+                  "filters": [
+                    {
+                      "field": "document.credentialSubject.0.activityId",
+                      "type": "equal",
+                      "typeValue": "variable",
+                      "value": "document.credentialSubject.0.activityId"
+                    },
+                    {
+                      "field": "document.credentialSubject.0.baselineRecordId",
+                      "type": "equal",
+                      "typeValue": "variable",
+                      "value": "document.credentialSubject.0.baselineRecordId"
+                    }
+                  ],
+                  "conditions": [
+                    {
+                      "field": "document.credentialSubject.0.fch4BL",
+                      "fieldSource": "source",
+                      "type": "equal",
+                      "value": "document.credentialSubject.0.fch4BL",
+                      "valueSource": "document"
+                    },
+                    {
+                      "field": "document.credentialSubject.0.baselineRecordSha256",
+                      "fieldSource": "source",
+                      "type": "equal",
+                      "value": "document.credentialSubject.0.baselineRecordSha256",
+                      "valueSource": "document"
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "id": "91bda446-b47d-44f0-bc0f-e5a4db55a60f",
             "blockType": "calculateContainerBlock",
             "defaultActive": true,
             "permissions": [
@@ -155,7 +290,7 @@
             "tag": "wa03_equation4_calc",
             "children": [
               {
-                "id": "aa7d80c7-49de-4bde-9b65-e5af7dc80dd5",
+                "id": "539542e3-1c10-41a7-bad9-611352a773b3",
                 "blockType": "calculateMathAddonBlock",
                 "defaultActive": true,
                 "permissions": [
@@ -263,7 +398,7 @@
         "artifacts": []
       },
       {
-        "id": "fcb9c262-c881-4dc0-8ab0-aa98de2c631f",
+        "id": "d8909a70-0009-4a37-9cd3-65f5d8ec2f58",
         "blockType": "interfaceContainerBlock",
         "defaultActive": true,
         "permissions": [
@@ -276,7 +411,7 @@
         "tag": "Verification_Body",
         "children": [
           {
-            "id": "8ed947fa-dd87-48b8-809a-21dd3b43556b",
+            "id": "c5ad229b-0e4d-4f1e-9984-401fb0a88142",
             "blockType": "requestVcDocumentBlock",
             "defaultActive": true,
             "permissions": [
