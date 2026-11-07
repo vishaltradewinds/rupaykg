@@ -91,6 +91,11 @@
 - Production Neon/RLS/deployment remains **HOLD**; no production changes made.
 
 
+### 2026-11-07 — Workspace tenant-context hardening
+- Removed the multi-membership fallback in `apps/src/workspace-routes.ts`; workspace access now returns no organizations when `auth.activeOrganizationId` is absent instead of iterating every membership.
+- This is an incremental fail-closed improvement. Workspace DB reads still require a subsequent transaction-local tenant-context reconciliation pass; no production changes made.
+- Commit: `2e2b21f843fd93aec9f35388a1deed43f844be42`.
+
 ### 2026-11-07 — Residual server tenant-fallback removal
 - Removed the final two single-membership tenant fallbacks from `apps/src/server.ts` for resource-flow and measurement routes.
 - Both routes now require an explicit `auth.activeOrganizationId`; they no longer infer tenant context from the first/only membership.
