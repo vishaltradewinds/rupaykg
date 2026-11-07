@@ -8,7 +8,7 @@
 
 ## Exact current engineering heads
 - PR #331: 50e463df30f18a30e6a192da447a451d1816ea55
-- PR #332: 6b182383ad46cc459068d350f1f2ee49e5ac8bb2
+- PR #332: a636a26e81cdaac88c69247e333b88c64a7ececa
 
 ## Verified work in this batch
 - Added fail-closed protection to the migration runner for the four 20261107 protected Shakti migrations. They require explicit RUPAYKG_ALLOW_PROTECTED_SHAKTI_MIGRATIONS=1.
@@ -243,3 +243,14 @@
 - Found a remaining escaping mismatch in the `with_check` branch of the multi-party blanket-policy detector.
 - Corrected it so both `qual` and `with_check` use the same intended PostgreSQL regex semantics.
 - Commit: `8a7c5289226e66d68cc1dc26dea744501b9707a8`.
+
+
+### 2026-11-07 — Batch E regex final correction + exact-head recheck
+- Re-audited `scripts/test-shakti-batch-e-policy-contract.sql` after the prior escaping correction.
+- Found the `with_check` branch still used a different escaping level from the `qual` branch, which could make the detector fail to match the intended PostgreSQL whitespace regex.
+- Corrected the `with_check` expression to use the same regex semantics as `qual`.
+- Commit: `a636a26e81cdaac88c69247e333b88c64a7ececa`.
+- Exact-head workflow lookup for this commit returned no workflow runs. CI execution remains **NOT VERIFIED**.
+- Migration order review: the four 20261107 migrations sort as authority context → core RLS gate → platform context → runtime grant reconciliation. The runtime grants therefore follow the protected context-function definitions; the core gate still remains a deployment gate and is not executed in production.
+- Production Neon/RLS/deployment remains **HOLD**; no production changes made.
+- Current controlled PR #332 head: `a636a26e81cdaac88c69247e333b88c64a7ececa`.
