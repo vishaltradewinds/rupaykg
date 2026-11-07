@@ -75,6 +75,8 @@ jobs:
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/test-tenant-boundary-inventory.sql
       - name: Run Shakti tenant-isolation RLS rehearsal
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/test-tenant-isolation-rls-rehearsal.sql
+      - name: Run Shakti direct tenant-anchor Batch D RLS assurance
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/test-direct-tenant-anchors-batch-d.sql
       - name: Run Shakti policy-family CRUD assurance rehearsal
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/test-policy-family-crud-assurance.sql
       - name: Run Shakti multi-party authorization boundary rehearsal
