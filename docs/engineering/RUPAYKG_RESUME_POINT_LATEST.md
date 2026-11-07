@@ -130,3 +130,17 @@
 - Exact-head GitHub Actions lookup for this commit returned no workflow runs; CI remains **NOT VERIFIED**.
 - Production Neon/RLS/deployment remains **HOLD**; no production changes made.
 - Next autonomous action: reconcile the remaining `workspace-routes.ts` tenant-sensitive reads/verification mutation against the transaction-local tenant context, then continue the 67-table policy-matrix reconciliation.
+
+
+### 2026-11-07 — Workspace tenant-context hardening batch
+- Hardened `apps/src/workspace-routes.ts` against tenant-context bypasses.
+- Workspace pre-handler now requires an explicit active organization and evaluates workspace permissions inside `withTenantTransaction`.
+- Geography authorization now runs through tenant-bound transaction context.
+- Resource-flow, MRV, compliance, carbon, registry, settlement and ESG workspace reads now use tenant-bound query transactions instead of direct pool queries.
+- Evidence verification mutation now uses one `withTenantTransaction` covering evidence lookup, organization scope check, verifier authorization, verification insert and evidence status mutation.
+- Removed route-level `pool.connect()` transaction handling from evidence verification.
+- Static inspection: `pool.query` in workspace route file = 0; `pool.connect` = 0; tenant-query wrappers = 14; tenant-context guards = 9.
+- Commit: `0163e686e04c1580ee420ef1dcbc4ebed88d4d76`.
+- Exact-head GitHub Actions lookup returned no workflow runs; CI remains **NOT VERIFIED**.
+- Production Neon/RLS/deployment remains **HOLD**; no production changes made.
+- Next autonomous action: continue residual access-surface reconciliation and map remaining application queries against the authoritative 67-table tenant/policy matrix.
