@@ -85,6 +85,8 @@ jobs:
         run: node scripts/test-shakti-tenant-route-contract.mjs
       - name: Run Shakti operational invariants contract
         run: node scripts/test-shakti-operational-invariants.mjs
+      - name: Run Shakti core RLS contract
+        run: node scripts/test-shakti-core-rls-contract.mjs
       - name: Run platform-admin authorization contract
         run: node scripts/test-shakti-platform-admin-authorization-contract.mjs
       - name: Run multi-party authorization contract
