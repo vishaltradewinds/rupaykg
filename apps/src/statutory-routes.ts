@@ -219,6 +219,7 @@ export async function registerStatutoryRoutes(app: FastifyInstance, pool: Pool |
         statutoryBoundary: "USER_REPORTED_UNVERIFIED_NOT_AUTHORITY_VERIFIED",
         externalRegistrationState: report.trustState,
       };
+      });
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "External EPR registration reference could not be recorded", code: "EPR_EXTERNAL_STATUS_UNAVAILABLE", syntheticData: false }); }
   });
 }
