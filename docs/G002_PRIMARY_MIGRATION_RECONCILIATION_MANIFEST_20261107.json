@@ -1,8 +1,8 @@
 {
   "manifest_version": "1.0",
-  "generated_at": "2026-11-07T11:21:16.179Z",
+  "generated_at": "2026-11-07T11:21:45.441Z",
   "repository": "vishaltradewinds/rupaykg",
-  "release_commit_sha": "1f362b7e519e3efdb071c26a322342791c7d4110",
+  "release_commit_sha": "99666a08a9412798cfdad5c6b504eb1bc7c05edd",
   "production_ledger_source": "docs/G002_PRODUCTION_MIGRATION_LEDGER_SNAPSHOT_20261107.md",
   "production_ledger_row_count": 92,
   "repository_migration_sql_count": 92,
