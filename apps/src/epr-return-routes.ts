@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import type { Pool } from "pg";
 import { authenticate, bearerChallenge, hasOrganizationPermission, type AuthContext } from "./auth.js";
+import { withTenantTransaction } from "./tenant-db.js";
 
 function bodyOf(request: { body: unknown }): Record<string, unknown> {
   return request.body && typeof request.body === "object" ? request.body as Record<string, unknown> : {};
@@ -35,8 +36,11 @@ export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool |
     if (!organizationId || !canAct(auth, organizationId)) return reply.code(403).send({ error: "Verified organization membership required", code: "ORG_FORBIDDEN" });
     if (!await hasOrganizationPermission(pool, auth, organizationId, ["epr:read", "epr:manage", "reports:read"])) return reply.code(403).send({ error: "EPR return read permission required", code: "EPR_RETURN_READ_FORBIDDEN" });
     try {
-      const rows = await pool.query(`select r.id,r.scheme_id,s.code as scheme_code,s.name as scheme_name,r.organization_id,r.obligation_id,r.period_start,r.period_end,r.return_type,r.reported_quantity,r.obligation_quantity,r.fulfilled_quantity,r.status,r.external_reference,r.evidence_id,r.verification_id,r.submitted_at,r.created_at from epr_returns r join epr_schemes s on s.id=r.scheme_id where r.organization_id=$1 order by r.period_end desc,r.created_at desc limit 100`, [organizationId]);
-      return { source: "postgresql", syntheticData: false, returns: rows.rows };
+      return await withTenantTransaction(pool, auth, async client => {
+        if (!await hasOrganizationPermission(client, auth, organizationId, ["epr:read", "epr:manage", "reports:read"])) return reply.code(403).send({ error: "EPR return read permission required", code: "EPR_RETURN_READ_FORBIDDEN" });
+        const rows = await client.query(`select r.id,r.scheme_id,s.code as scheme_code,s.name as scheme_name,r.organization_id,r.obligation_id,r.period_start,r.period_end,r.return_type,r.reported_quantity,r.obligation_quantity,r.fulfilled_quantity,r.status,r.external_reference,r.evidence_id,r.verification_id,r.submitted_at,r.created_at from epr_returns r join epr_schemes s on s.id=r.scheme_id where r.organization_id=$1 order by r.period_end desc,r.created_at desc limit 100`, [organizationId]);
+        return { source: "postgresql", syntheticData: false, returns: rows.rows };
+      });
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "EPR return workspace unavailable", syntheticData: false }); }
   });
 
@@ -55,9 +59,12 @@ export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool |
     if (!await hasOrganizationPermission(pool, auth, organizationId, ["epr:manage"])) return reply.code(403).send({ error: "EPR management permission required", code: "EPR_RETURN_WRITE_FORBIDDEN" });
     if (Number.isNaN(Date.parse(periodStart)) || Number.isNaN(Date.parse(periodEnd)) || periodStart > periodEnd) return reply.code(400).send({ error: "Valid periodStart and periodEnd are required", code: "INVALID_PERIOD" });
     try {
-      const rows = await pool.query(`insert into epr_returns(scheme_id,organization_id,obligation_id,period_start,period_end,return_type,reported_quantity,status) select $1,$2,$3,$4::date,$5::date,$6,$7,'DRAFT' where exists(select 1 from epr_schemes where id=$1 and status='VERIFIED') and exists(select 1 from epr_obligations eo join obligations o on o.id=eo.obligation_id where eo.id=$3 and eo.scheme_id=$1 and eo.obligated_organization_id=$2 and eo.status in ('OPEN','ELIGIBLE') and o.period_start <= $5::date and o.period_end >= $4::date) returning *`, [schemeId, organizationId, obligationId, periodStart, periodEnd, returnType, reportedQuantity]);
-      if (!rows.rows[0]) return reply.code(409).send({ error: "Verified EPR scheme and matching open/eligible obligation are required", code: "EPR_RETURN_NOT_ELIGIBLE" });
-      return reply.code(201).send({ source: "postgresql", syntheticData: false, authoritativeMutation: true, eprReturn: rows.rows[0] });
+      return await withTenantTransaction(pool, auth, async client => {
+        if (!await hasOrganizationPermission(client, auth, organizationId, ["epr:manage"])) return reply.code(403).send({ error: "EPR management permission required", code: "EPR_RETURN_WRITE_FORBIDDEN" });
+        const rows = await client.query(`insert into epr_returns(scheme_id,organization_id,obligation_id,period_start,period_end,return_type,reported_quantity,status) select $1,$2,$3,$4::date,$5::date,$6,$7,'DRAFT' where exists(select 1 from epr_schemes where id=$1 and status='VERIFIED') and exists(select 1 from epr_obligations eo join obligations o on o.id=eo.obligation_id where eo.id=$3 and eo.scheme_id=$1 and eo.obligated_organization_id=$2 and eo.status in ('OPEN','ELIGIBLE') and o.period_start <= $5::date and o.period_end >= $4::date) returning *`, [schemeId, organizationId, obligationId, periodStart, periodEnd, returnType, reportedQuantity]);
+        if (!rows.rows[0]) return reply.code(409).send({ error: "Verified EPR scheme and matching open/eligible obligation are required", code: "EPR_RETURN_NOT_ELIGIBLE" });
+        return reply.code(201).send({ source: "postgresql", syntheticData: false, authoritativeMutation: true, eprReturn: rows.rows[0] });
+      });
     } catch (error: unknown) {
       request.log.error(error);
       const message = error instanceof Error ? error.message : "";

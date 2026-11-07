@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import type { Pool } from "pg";
 import { authenticate, bearerChallenge, hasOrganizationPermission, type AuthContext } from "./auth.js";
+import { withTenantTransaction } from "./tenant-db.js";
 
 function orgIds(auth: AuthContext): string[] {
   return auth.activeOrganizationId ? [auth.activeOrganizationId] : [...new Set(auth.memberships.map((m) => m.organization_id))];
@@ -17,31 +18,30 @@ export async function registerIntelligenceRoutes(app: FastifyInstance, pool: Poo
     let auth: AuthContext | null;
     try { auth = await authenticate(request, pool); } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Authentication service unavailable", code: "AUTH_UNAVAILABLE", syntheticData: false }); }
     if (!auth) return reply.code(401).send(bearerChallenge());
-    const ids = orgIds(auth);
-    if (!ids.length) return { source: "postgresql", syntheticData: false, findings: [] };
-    for (const organizationId of ids) {
-      if (!await hasOrganizationPermission(pool, auth, organizationId, ["audit:read", "projects:manage"])) {
-        return reply.code(403).send({ error: "Intelligence workspace read permission required", code: "WORKSPACE_READ_FORBIDDEN", workspace: "intelligence" });
-      }
-    }
+    const organizationId = auth.activeOrganizationId;
+    if (!organizationId) return reply.code(400).send({ error: "An active organization is required for intelligence workspace access", code: "ORG_CONTEXT_REQUIRED" });
     const geographyId = requestedGeography(request);
-    if (geographyId) {
-      const scope = await pool.query<{ ok: boolean }>(
-        `select exists (
-           select 1 from organization_memberships om
-            where om.identity_id=$1 and om.status='VERIFIED'
-              and ($3::uuid is null or om.organization_id=$3::uuid)
-              and organization_has_geography_scope(om.organization_id,$2)
-         ) as ok`,
-        [auth.identityId, geographyId, auth.activeOrganizationId ?? null],
-      );
-      if (!scope.rows[0]?.ok) return reply.code(403).send({ error: "Geography outside organization authorization scope", code: "GEOGRAPHY_FORBIDDEN" });
-    }
     try {
-      const params: unknown[] = [ids];
+      return await withTenantTransaction(pool, auth, async client => {
+        if (!await hasOrganizationPermission(client, auth, organizationId, ["audit:read", "projects:manage"])) {
+          return reply.code(403).send({ error: "Intelligence workspace read permission required", code: "WORKSPACE_READ_FORBIDDEN", workspace: "intelligence" });
+        }
+        if (geographyId) {
+          const scope = await client.query<{ ok: boolean }>(
+            `select exists (
+               select 1 from organization_memberships om
+                where om.identity_id=$1 and om.status='VERIFIED'
+                  and om.organization_id=$3::uuid
+                  and organization_has_geography_scope(om.organization_id,$2)
+             ) as ok`,
+            [auth.identityId, geographyId, organizationId],
+          );
+          if (!scope.rows[0]?.ok) return reply.code(403).send({ error: "Geography outside organization authorization scope", code: "GEOGRAPHY_FORBIDDEN" });
+        }
+      const params: unknown[] = [[organizationId]];
       const geographyClause = geographyId ? " and a.geography_id = $2" : "";
       if (geographyId) params.push(geographyId);
-      const rows = await pool.query(`
+      const rows = await client.query(`
         select a.id as source_record_id, 'ACTIVITY' as source_type,
                a.activity_type, a.status, a.geography_id, g.name as geography_name,
                a.occurred_at, a.created_at
@@ -64,6 +64,7 @@ export async function registerIntelligenceRoutes(app: FastifyInstance, pool: Poo
         authoritativeMutation: false,
       }));
       return { source: "postgresql", syntheticData: false, advisory: true, findings };
+      });
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Intelligence workspace unavailable", syntheticData: false }); }
   });
 }

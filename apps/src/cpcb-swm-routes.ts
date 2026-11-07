@@ -3,6 +3,7 @@ import type { FastifyInstance } from "fastify";
 import type { Pool, PoolClient } from "pg";
 import { authenticate, bearerChallenge, canActForOrganization, hasOrganizationPermission, type AuthContext } from "./auth.js";
 import { initialSwmChecklist } from "@rupaykg/domain";
+import { withTenantTransaction } from "./tenant-db.js";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const STAKEHOLDERS = ["BWG", "WASTE_FACILITY", "ULB", "DISTRICT_PANCHAYAT", "GRAM_PANCHAYAT", "COLLECTOR_TRANSPORTER", "PROCESSOR"] as const;
@@ -93,10 +94,12 @@ export async function registerCpcbSwmRoutes(app: FastifyInstance, pool: Pool | n
     const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
     const organizationId = auth.activeOrganizationId;
     if (!organizationId || !canActForOrganization(auth, organizationId)) return reply.code(403).send({ error: "Select a verified organization", code: "ORG_FORBIDDEN" });
-    if (!await hasOrganizationPermission(pool, auth, organizationId, ["swm:read", "waste:read", "reports:read", "epr:read", "audit:read"])) return reply.code(403).send({ error: "CPCB SWM workspace read permission required", code: "SWM_READ_FORBIDDEN" });
     try {
-      const rows = await pool.query("select w.id,w.organization_id,w.geography_id,w.stakeholder_type,w.title,w.eligibility_observations,w.checklist,w.cpcb_application_reference,w.cpcb_status_claim,w.cpcb_reported_status,w.local_workflow_stage,w.cpcb_status_source_reference,w.cpcb_status_reference_recorded_at,w.cpcb_status_note,w.due_date,w.notes,w.created_by_identity_id,w.updated_by_identity_id,w.created_at,w.updated_at,coalesce((select json_agg(json_build_object('id',h.id,'previousReportedStatus',h.previous_reported_status,'reportedStatus',h.reported_status,'sourceReference',h.source_reference,'statusNote',h.status_note,'actorIdentityId',h.actor_identity_id,'recordedAt',h.recorded_at) order by h.recorded_at desc) from cpcb_swm_status_history h where h.workspace_id=w.id),'[]'::json) as status_history from cpcb_swm_stakeholder_workspaces w where w.organization_id=$1 order by w.updated_at desc limit 100", [organizationId]);
-      return { source: "postgresql", syntheticData: false, workspaces: rows.rows };
+      return await withTenantTransaction(pool, auth, async client => {
+        if (!await hasOrganizationPermission(client, auth, organizationId, ["swm:read", "waste:read", "reports:read", "epr:read", "audit:read"])) return reply.code(403).send({ error: "CPCB SWM workspace read permission required", code: "SWM_READ_FORBIDDEN" });
+        const rows = await client.query("select w.id,w.organization_id,w.geography_id,w.stakeholder_type,w.title,w.eligibility_observations,w.checklist,w.cpcb_application_reference,w.cpcb_status_claim,w.cpcb_reported_status,w.local_workflow_stage,w.cpcb_status_source_reference,w.cpcb_status_reference_recorded_at,w.cpcb_status_note,w.due_date,w.notes,w.created_by_identity_id,w.updated_by_identity_id,w.created_at,w.updated_at,coalesce((select json_agg(json_build_object('id',h.id,'previousReportedStatus',h.previous_reported_status,'reportedStatus',h.reported_status,'sourceReference',h.source_reference,'statusNote',h.status_note,'actorIdentityId',h.actor_identity_id,'recordedAt',h.recorded_at) order by h.recorded_at desc) from cpcb_swm_status_history h where h.workspace_id=w.id),'[]'::json) as status_history from cpcb_swm_stakeholder_workspaces w where w.organization_id=$1 order by w.updated_at desc limit 100", [organizationId]);
+        return { source: "postgresql", syntheticData: false, workspaces: rows.rows };
+      });
     } catch (error) { request.log.error(error); return reply.code(503).send({ error: "CPCB SWM workspace unavailable", code: "SWM_WORKSPACE_UNAVAILABLE", syntheticData: false }); }
   });
 
