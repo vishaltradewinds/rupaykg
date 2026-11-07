@@ -55,6 +55,9 @@ The two sources are complementary, not interchangeable:
 - DIGICORE INFRASYS: engineer, lawfully own/control, implement and commercialise the resulting products and services.
 
 ## 3. Priority workstreams
+## 3. Priority workstreams
+
+Repository-backed initial capability assessment: [docs/RUPAYKG_NATIONAL_CAPABILITY_GAP_MATRIX_20261107.md](RUPAYKG_NATIONAL_CAPABILITY_GAP_MATRIX_20261107.md). It distinguishes documented/test-backed core capabilities from national, external and field acceptance gaps. This assessment is not an independent code audit or production approval.
 
 | Priority | Workstream | Execution objective | Required output | Exit condition |
 |---|---|---|---|---|
