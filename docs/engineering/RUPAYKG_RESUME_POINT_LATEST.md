@@ -8,7 +8,7 @@
 
 ## Exact current engineering heads
 - PR #331: 50e463df30f18a30e6a192da447a451d1816ea55
-- PR #332: 1c0050eed3d507f49716f68ec3feeb69040369b0
+- PR #332: f881599ff4bb4130636cc5e9d1a5566c2d62b15d
 
 ## Verified work in this batch
 - Added fail-closed protection to the migration runner for the four 20261107 protected Shakti migrations. They require explicit RUPAYKG_ALLOW_PROTECTED_SHAKTI_MIGRATIONS=1.
@@ -31,8 +31,13 @@
 - Production RLS activation remains blocked pending independent review, runtime identity proof, representative negative tests, rollback/restore evidence and explicit release authorization.
 - TRL 9 remains NOT ACHIEVED / NOT CLAIMED.
 
+## Residual tenant-isolation audit completed
+- Added `docs/engineering/SHAKTI_TENANT_ISOLATION_RESIDUAL_AUDIT_20261107.md`.
+- Confirmed remaining tenant-sensitive application surfaces requiring remediation: evidence vault, MRV/provenance, CPCB SWM, value/workspace, plus separate authority/platform review for onboarding hierarchy.
+- This is repository evidence only; it does not establish production exploitability or TRL.
+
 ## Next autonomous action
 1. Obtain exact-head CI evidence for PR #332; diagnose only safe CI failures.
-2. If validation passes, continue Issue #326 Batch E across remaining tenant/auth/audit/multi-party surfaces.
-3. Reconcile all route/worker/export access against the 67-table policy matrix.
+2. Continue Issue #326 Batch E with the highest-risk residual tenant paths, starting with evidence vault and MRV.
+3. Reconcile every changed table against the 67-table policy matrix.
 4. Prepare, but do not execute, a disposable full-RLS rehearsal before any production activation proposal.
