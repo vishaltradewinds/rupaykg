@@ -101,11 +101,21 @@ export async function canPerformHighRiskActionInDatabase(client: Pool | PoolClie
 export async function canVerifyEvidence(client: PoolClient, identityId: string, evidenceId: string): Promise<boolean> {
   const result = await client.query<{ ok: boolean }>(
     `select exists (
-       select 1 from evidence e join activities a on a.id = e.activity_id
-       join organization_memberships om on om.identity_id = $2 and om.status = 'VERIFIED'
-        and a.geography_id is not null and organization_has_geography_scope(om.organization_id, a.geography_id)
-       join roles r on r.id = om.role_id where e.id = $1
-        and exists (select 1 from jsonb_array_elements_text(r.permissions) permission where permission = any($3::text[]))
+       select 1 from evidence e
+       join activities a on a.id = e.activity_id
+       join organization_memberships om
+         on om.organization_id = a.organization_id
+        and om.identity_id = $2
+        and om.status = 'VERIFIED'
+       join roles r on r.id = om.role_id
+       where e.id = $1
+         and a.geography_id is not null
+         and organization_has_geography_scope(om.organization_id, a.geography_id)
+         and exists (
+           select 1
+             from jsonb_array_elements_text(r.permissions) permission
+            where permission = any($3::text[])
+         )
      ) as ok`,
     [evidenceId, identityId, HIGH_RISK_PERMISSIONS.VERIFY_EVIDENCE],
   );
