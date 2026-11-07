@@ -228,3 +228,11 @@
 - Restored the manual `workflow_dispatch` trigger and committed `f03bce40ed66d0cc011b4507750c0cb6f01ced98`.
 - Revalidated PR #332 changed files: `scripts/test-shakti-batch-e-policy-contract.sql` is present in the PR.
 - CI execution remains unverified until an actual workflow run exists for the exact head.
+
+
+### 2026-11-07 — Integration test privilege-boundary correction
+- Re-audited the disposable CI test path against the actual CI environment variables.
+- Found a concrete defect: `tenant-isolation.integration.test.ts` was using `DATABASE_URL` for fixture creation while CI intentionally points `DATABASE_URL` at the non-BYPASSRLS runtime role. Fixture operations require owner privileges.
+- Corrected the test to use `RUPAYKG_TEST_OWNER_DATABASE_URL` for fixture setup/cleanup and `DATABASE_URL` only for runtime/context assertions.
+- Corrected all four test cases consistently; no production database was touched.
+- Fix commits: `0f35da7fab7b9a41ca1f9ab9b262d22017859369`, `dc77a9b2331723f0b715fdea90aaff2bcbd08427`.
