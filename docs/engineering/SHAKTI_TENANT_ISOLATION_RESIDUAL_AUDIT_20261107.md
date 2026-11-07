@@ -3,7 +3,7 @@
 ## Scope
 Repository: vishaltradewinds/rupaykg  
 Controlled ref: cto/20261107-protected-migration-ci  
-Latest controlled head at this checkpoint: e9d6c138ae33f06a06869ce9cc555f1786cd7052
+Latest controlled head at this checkpoint: 7ddef5142899fc1f3222eaec586b51061d52a65b
 
 This is an engineering re-audit. It does not establish production exploitability, production RLS activation, regulatory acceptance, certification, or TRL 9.
 
