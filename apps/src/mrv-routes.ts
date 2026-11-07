@@ -96,7 +96,7 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
       await lockClient.query("select pg_advisory_lock(hashtext($1))", [idempotencyLockKey]);
       lockAcquired = true;
 
-      const preflight = await withTenantTransaction(pool, auth, async client => {
+      const tenantTransaction = async <T>(fn: (client: PoolClient) => Promise<T>): Promise<T> => {\n        await lockClient!.query("begin");\n        try {\n          await lockClient!.query("select app.set_request_context($1,$2)", [auth.identityId, auth.activeOrganizationId]);\n          const result = await fn(lockClient!);\n          await lockClient!.query("commit");\n          return result;\n        } catch (error) {\n          try { await lockClient!.query("rollback"); } catch {}\n          throw error;\n        }\n      };\n\n      const preflight = await tenantTransaction(async client => {
         const context = await client.query<{ organization_id: string; activity_status: string; decision: string; evidence_status: string; evidence_activity_id: string | null; evidence_count: string; observation_count: string }>(
           `select a.organization_id, a.status activity_status, v.decision, e.status evidence_status, e.activity_id evidence_activity_id,
                   (select count(*)::text from evidence e2 where e2.activity_id=a.id) evidence_count,
@@ -164,7 +164,7 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
 
       const anchor = await submitHcsAnchor({ schema: "rupaykg:mrv:v1", activityId, verificationId, evidenceId, guardianPolicyId: policyId, guardianExecutionId: guardian.executionId, mrvStatus: "VERIFIED", methodologyCode, quantity: preflight.quantity, unit: preflight.unit, metadata: { guardianStatus: guardian.status } });
 
-      const persisted = await withTenantTransaction(pool, auth, async client => client.query(
+      const persisted = await tenantTransaction(async client => client.query(
         `insert into mrv_provenance_events(activity_id,verification_id,evidence_id,guardian_policy_id,guardian_execution_id,guardian_status,hcs_status,hcs_topic_id,hcs_transaction_id,hcs_consensus_timestamp,integrity_hash,methodology_code,metadata)
          values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
          on conflict(activity_id,verification_id,integrity_hash) do update set guardian_execution_id=excluded.guardian_execution_id,guardian_status=excluded.guardian_status,hcs_status=excluded.hcs_status,hcs_topic_id=excluded.hcs_topic_id,hcs_transaction_id=excluded.hcs_transaction_id,hcs_consensus_timestamp=excluded.hcs_consensus_timestamp,metadata=excluded.metadata,mirror_node_verified_at=null
