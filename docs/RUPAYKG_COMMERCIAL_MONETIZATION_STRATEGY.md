@@ -151,3 +151,8 @@ Track:
 **RupayKg remains a proprietary commercial environmental operating platform, engineered and commercialised by DIGICORE INFRASYS subject to documented rights and contracts.** DPGA helps discover reusable technology; GDPIR helps learn infrastructure implementation and governance; RupayKg turns validated learning into a customer-ready product and paid services. Open standards and carefully selected DPGs improve interoperability and reduce duplication. Proprietary workflows, deployment capability, operational evidence, service quality, support and customer relationships sustain the business.
 
 **Status:** Internal strategy proposal; not a price list, signed customer contract, revenue forecast, proof of legal IP ownership, DPGA recognition, DPI designation, government endorsement or legal opinion.
+
+
+## 12. Dual-DPI ecosystem execution backlog
+
+The operational work sequence, source limitations, DPGA candidate queue, GDPIR evidence-card schema, national capability map, commercial service validation, DIGICORE INFRASYS prerequisites and Jabalpur/national rollout gates are controlled by [docs/DPI_ECOSYSTEM_EXECUTION_ROADMAP_RUPAYKG.md](DPI_ECOSYSTEM_EXECUTION_ROADMAP_RUPAYKG.md). Do not treat a roadmap task as complete until its evidence and decision owner are recorded.
