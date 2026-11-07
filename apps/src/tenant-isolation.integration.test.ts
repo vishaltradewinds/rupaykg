@@ -34,7 +34,7 @@ test("Shakti tenant context rejects cross-organization context switching", { ski
       [organizationA],
     )).rows[0]!.id;
 
-    const fixtureClient = await runtimePool.connect();
+    const fixtureClient = await ownerPool.connect();
     try {
       await fixtureClient.query("begin");
       await fixtureClient.query("alter table organization_memberships disable trigger stakeholder_membership_application_guard");
@@ -101,7 +101,8 @@ test("Shakti tenant context rejects cross-organization context switching", { ski
 });
 
 test("Shakti business-route contract rejects a cross-tenant organization context", { skip: !enabled }, async () => {
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  const runtimePool = new Pool({ connectionString: process.env.DATABASE_URL });
+  const ownerPool = new Pool({ connectionString: process.env.RUPAYKG_TEST_OWNER_DATABASE_URL });
   const suffix = randomBytes(8).toString("hex");
   let identityId = "";
   let organizationA = "";
@@ -126,7 +127,7 @@ test("Shakti business-route contract rejects a cross-tenant organization context
       [organizationA],
     )).rows[0]!.id;
 
-    const fixtureClient = await runtimePool.connect();
+    const fixtureClient = await ownerPool.connect();
     try {
       await fixtureClient.query("begin");
       await fixtureClient.query("alter table organization_memberships disable trigger stakeholder_membership_application_guard");
@@ -172,7 +173,8 @@ test("Shakti business-route contract rejects a cross-tenant organization context
 });
 
 test("Shakti RLS runtime role isolates core tenant rows", { skip: !enabled }, async () => {
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  const runtimePool = new Pool({ connectionString: process.env.DATABASE_URL });
+  const ownerPool = new Pool({ connectionString: process.env.RUPAYKG_TEST_OWNER_DATABASE_URL });
   const suffix = randomBytes(8).toString("hex");
   let identityId = "";
   let organizationA = "";
@@ -259,7 +261,8 @@ test("Shakti RLS runtime role isolates core tenant rows", { skip: !enabled }, as
 
 
 test("Shakti RLS child-row scope follows the parent activity tenant", { skip: !enabled }, async () => {
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  const runtimePool = new Pool({ connectionString: process.env.DATABASE_URL });
+  const ownerPool = new Pool({ connectionString: process.env.RUPAYKG_TEST_OWNER_DATABASE_URL });
   const suffix = randomBytes(8).toString("hex");
   let identityId = "";
   let organizationA = "";
