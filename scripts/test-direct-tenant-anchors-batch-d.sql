@@ -87,7 +87,7 @@ VALUES ('00000000-0000-0000-0000-00000000e201','DISTRICT','Shakti Batch D Test D
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO public.carbon_market_mechanisms (code,name,participation_model,authority,source_url,description)
-VALUES ('SHK_CI_BATCH_D','CI-only Batch D mechanism','CI_ONLY','CI TEST AUTHORITY','https://example.invalid/shakti-ci-batch-d','Disposable CI fixture only')
+VALUES ('SHK_CI_BATCH_D','CI-only Batch D mechanism','VOLUNTARY_PROJECT_BASED','CI TEST AUTHORITY','https://example.invalid/shakti-ci-batch-d','Disposable CI fixture only')
 ON CONFLICT (code) DO NOTHING;
 
 INSERT INTO public.methodology_versions
