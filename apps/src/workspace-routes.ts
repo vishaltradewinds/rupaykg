@@ -7,7 +7,7 @@ async function requireAuth(app: FastifyInstance, pool: Pool | null, request: Par
   try { const auth = await authenticate(request, pool); if (!auth) { reply.code(401).send(bearerChallenge()); return null; } return auth; }
   catch (error) { request.log.error(error); reply.code(503).send({ error: "Authentication service unavailable", code: "AUTH_UNAVAILABLE", syntheticData: false }); return null; }
 }
-function orgIds(auth: AuthContext): string[] { return auth.activeOrganizationId ? [auth.activeOrganizationId] : [...new Set(auth.memberships.map((m) => m.organization_id))]; }
+function orgIds(auth: AuthContext): string[] { return auth.activeOrganizationId ? [auth.activeOrganizationId] : []; }
 function result<T>(data: T) { return { source: "postgresql", syntheticData: false, data }; }
 function requestedGeography(request: { query: unknown }): string | null { const q = request.query && typeof request.query === "object" ? request.query as Record<string, unknown> : {}; return typeof q.geographyId === "string" && q.geographyId.trim() ? q.geographyId.trim() : null; }
 export type OperatingContextRail = "urban" | "rural";
