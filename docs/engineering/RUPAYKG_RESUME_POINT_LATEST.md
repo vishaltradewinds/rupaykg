@@ -81,3 +81,11 @@
 - Latest code head: `482e77c42a2b46cfb8e0696405e5593d966e23c5`.
 - Static MRV audit: no remaining `pool.connect`; tenant-sensitive route work remains transaction-bound. CI/runtime validation remains **NOT VERIFIED**.
 - Production Neon/RLS/deployment remains **HOLD**; no production changes made.
+
+
+### 2026-11-07 — Residual authority/context batch
+- Evidence Vault `activityContext` now uses its supplied tenant `client` for activity and geography-scope reads; no remaining direct `pool.query` in the route.
+- Onboarding review queue now executes its pending-application/approval/authority checks inside `withPlatformTransaction`; no remaining direct `pool.query` in the route.
+- Latest commits: Evidence Vault `1e6e669dedd6adb383d86eeced0a2c4b880fad1d`; onboarding `b528267070f6ff587ca0bb1dd393ae5053f58dc6`.
+- Static audit result: Evidence Vault and onboarding route files have zero direct `pool.query`/route-level `pool.connect` references. CI/runtime validation remains **NOT VERIFIED**.
+- Production Neon/RLS/deployment remains **HOLD**; no production changes made.
