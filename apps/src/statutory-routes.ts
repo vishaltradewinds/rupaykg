@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type { Pool } from "pg";
+import { withTenantTransaction } from "./tenant-db.js";
 import { authenticate, canActForOrganization, hasOrganizationPermission, type AuthContext } from "./auth.js";
 
 type Reply = { code: (status: number) => { send: (body: unknown) => unknown } };
@@ -70,10 +71,10 @@ async function tenantQuery<T = Record<string, unknown>>(pool: Pool, auth: AuthCo
   return withTenantTransaction(pool, auth, (client) => client.query<T>(text, values));
 }
 
-async function evidenceBindingValid(pool: Pool, organizationId: string, evidenceId: string | null, verificationId: string | null): Promise<boolean> {
+async function evidenceBindingValid(pool: Pool, auth: AuthContext, organizationId: string, evidenceId: string | null, verificationId: string | null): Promise<boolean> {
   if (!evidenceId && !verificationId) return true;
   if (!evidenceId || !verificationId) return false;
-  const result = await pool.query<{ ok: boolean }>(
+  const result = await withTenantTransaction(pool, auth, (client) => client.query<{ ok: boolean }>(
     `select exists(
        select 1 from evidence e
        join activities a on a.id=e.activity_id
@@ -86,7 +87,7 @@ async function evidenceBindingValid(pool: Pool, organizationId: string, evidence
          and organization_has_geography_scope(a.organization_id,a.geography_id)
      ) ok`,
     [organizationId, evidenceId, verificationId],
-  );
+  ));
   return result.rows[0]?.ok === true;
 }
 
@@ -133,7 +134,7 @@ export async function registerStatutoryRoutes(app: FastifyInstance, pool: Pool |
     if (floorArea === null || water === null || waste === null) return reply.code(400).send({ error: "BWG measurements must be non-negative numbers", code: "INVALID_BWG_MEASUREMENTS" });
     const evidenceId = text(body, "evidenceId");
     const verificationId = text(body, "verificationId");
-    if (!await evidenceBindingValid(pool, organizationId, evidenceId, verificationId)) return reply.code(400).send({ error: "Evidence and verification must be supplied together and be verified, approved, and organization/geography scoped", code: "STATUTORY_EVIDENCE_BINDING_INVALID" });
+    if (!await evidenceBindingValid(pool, auth, organizationId, evidenceId, verificationId)) return reply.code(400).send({ error: "Evidence and verification must be supplied together and be verified, approved, and organization/geography scoped", code: "STATUTORY_EVIDENCE_BINDING_INVALID" });
     const status = bwgStatus(floorArea, water, waste);
     const note = text(body, "determinationNote");
     try {
@@ -165,7 +166,7 @@ export async function registerStatutoryRoutes(app: FastifyInstance, pool: Pool |
     if (!allowed.has(status)) return reply.code(400).send({ error: "Invalid EPR applicability status", code: "INVALID_EPR_APPLICABILITY" });
     const evidenceId = text(body, "evidenceId");
     const verificationId = text(body, "verificationId");
-    if (!await evidenceBindingValid(pool, organizationId, evidenceId, verificationId)) return reply.code(400).send({ error: "Evidence and verification must be supplied together and be verified, approved, and organization/geography scoped", code: "STATUTORY_EVIDENCE_BINDING_INVALID" });
+    if (!await evidenceBindingValid(pool, auth, organizationId, evidenceId, verificationId)) return reply.code(400).send({ error: "Evidence and verification must be supplied together and be verified, approved, and organization/geography scoped", code: "STATUTORY_EVIDENCE_BINDING_INVALID" });
     const metadata = schemeRow.rows[0].metadata ?? {};
     const metadataRule = typeof metadata.rule_reference === "string" ? metadata.rule_reference : null;
     const registrationInput = normalizeEprRegistrationInput(text(body, "cpcbRegistrationReference"), text(body, "cpcbRegistrationStatus"), body.basis);
