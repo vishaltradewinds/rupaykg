@@ -15,7 +15,7 @@ export async function registerIntelligenceRoutes(app: FastifyInstance, pool: Poo
     try { auth = await authenticate(request, pool); } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Authentication service unavailable", code: "AUTH_UNAVAILABLE", syntheticData: false }); }
     if (!auth) return reply.code(401).send(bearerChallenge());
 
-    const activeOrganizationId = auth.activeOrganizationId ?? (auth.memberships.length === 1 ? auth.memberships[0]?.organization_id ?? null : null);
+    const activeOrganizationId = auth.activeOrganizationId;
     if (!activeOrganizationId) return reply.code(400).send({ error: "Active organization is required for intelligence workspace access", code: "TENANT_CONTEXT_REQUIRED", workspace: "intelligence" });
     const tenantAuth: AuthContext = { ...auth, activeOrganizationId };
 
