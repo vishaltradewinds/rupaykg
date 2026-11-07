@@ -161,9 +161,10 @@ test("Shakti business-route contract rejects a cross-tenant organization context
       /not a verified member of the requested organization/i,
     );
 
-    const context = await withTenantTransaction(runtimePool, authA, async client =>
-      client.query<{ organization_id: string }>("select app.current_organization_id() as organization_id"),
-    );
+    const context = await withTenantTransaction(runtimePool, authA, async client => {
+      await client.query("set local role rupaykg_app_runtime");
+      return client.query<{ organization_id: string }>("select app.current_organization_id() as organization_id");
+    });
     assert.equal(context.rows[0]!.organization_id, organizationA);
   } finally {
     if (membershipA) await ownerPool.query("delete from organization_memberships where id=$1", [membershipA]);
