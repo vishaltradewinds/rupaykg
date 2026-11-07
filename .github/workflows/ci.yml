@@ -39,7 +39,13 @@ jobs:
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=high
       - run: npm run validate:migrations
-      - run: npm run migrate -w @rupaykg/api
+      - name: Provision disposable Shakti runtime role
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "create role rupaykg_app_runtime nologin nobypassrls"
+      - name: Run migrations with explicit protected-Shakti test gate
+        env:
+          RUPAYKG_ALLOW_PROTECTED_SHAKTI_MIGRATIONS: "1"
+        run: npm run migrate -w @rupaykg/api
       - run: npm run typecheck
       - run: npm run build
       - name: Browser smoke test production web build
