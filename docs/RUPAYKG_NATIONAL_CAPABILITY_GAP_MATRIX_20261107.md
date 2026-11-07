@@ -121,3 +121,65 @@ Each offer requires a named buyer, valid operating authority, price/cost evidenc
 - Production, SHAKTI certification, statutory, external trust, national readiness and TRL gates remain separately controlled.
 
 **Decision:** proceed with national-first engineering. Complete P0 proof and buyer validation before expanding the integration portfolio or representing RupayKg as nationally deployable.
+
+
+## 8. Fresh read-only Neon production and rehearsal audit — 2026-11-07
+
+**Source:** Neon project `rupaykg-production-fresh` (`steep-mud-79906940`), default branch `main` (`br-restless-base-b44cip2h`), database `rupaykg`. All queries in this section were read-only catalog/metadata SELECTs. No production DDL, DML, role/grant change, migration, branch mutation or deployment was performed.
+
+### 8.1 Production main — verified database facts
+
+| Control | Observed value | Determination |
+|---|---:|---|
+| Public base tables | 67 | Confirms the current production application table count |
+| Tables with RLS enabled | 0 / 67 | **BLOCKED** |
+| Tables with FORCE RLS | 0 / 67 | **BLOCKED** |
+| Rows in `pg_policies` for `public` | 0 | **BLOCKED** |
+| Owners of public tables | 67 / 67 owned by `rupaykg` | One login identity owns all application tables |
+| `schema_migrations` rows | 92 | Production schema ledger count |
+| Maximum migration version | `20261021` | Latest applied ledger version observed |
+
+Observed login/superuser roles on this branch:
+
+| Role | Login | Superuser | Create role | Create database | BYPASSRLS | Observation |
+|---|---:|---:|---:|---:|---:|---|
+| `cloud_admin` | Yes | Yes | Yes | Yes | Yes | Administrative/superuser identity |
+| `neon_service` | Yes | No | Yes | Yes | Yes | Neon service identity; member of Neon-managed `neon_superuser` |
+| `rupaykg` | Yes | No | Yes | Yes | Yes | Owns all 67 public tables and is a member of `neon_superuser` |
+
+The inspected `rupaykg` role has grantable `DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE` privileges across all 67 public tables (469 table-privilege entries marked grantable). It is not an acceptable least-privilege application runtime identity.
+
+No separate `rupaykg_app_runtime` or `rupaykg_auth_runtime` login role was present in the production-main role inventory at this snapshot.
+
+A read-only `pg_stat_activity` summary showed four sessions via `pgbouncer` under `rupaykg` (one active, three idle). The query cannot attribute each session to the Render application versus other clients, so this is **not** independent proof of the deployed service's exact runtime identity. The Render service's actual `DATABASE_URL` role remains unverified. The lack of a separate application role on production main nevertheless makes the privileged `rupaykg` account a critical cutover concern.
+
+The Neon default `main` branch was reported as not protected in branch metadata. This is a Neon branch setting, not a finding about GitHub branch protection; it should be reviewed separately.
+
+### 8.2 Existing rehearsal branches — separate from production
+
+| Branch | Public tables with RLS | FORCE RLS | Policies | Ownership / role finding | Scope |
+|---|---:|---:|---:|---|---|
+| `rupaykg-tenant-isolation-lab-20261101` (`br-blue-tooth-b4kvuut7`) | 22 / 67 | 4 | 88 | All 67 tables remain owned by `rupaykg`; includes a distinct `rupaykg_app_runtime` login with `BYPASSRLS=false` and role-targeted tenant policies | Partial policy rehearsal; 45 public tables still have RLS disabled |
+| `rupaykg-role-split-rehearsal-20261106` (`br-dry-base-b42zrepz`) | 0 / 67 | 0 | 0 | All 67 tables are owned by `rupaykg_owner_model_20261106`; non-admin runtime-role prototypes exist with restricted table privileges | Ownership/privilege split rehearsal only; no RLS/policy set |
+| `rupaykg-rls-assurance-lab-20261101` (`br-red-salad-b4oqb4nx`) | 1 / 67 | 1 | 1 | One `epr_returns` policy targets `rupaykg_app_runtime`; no complete runtime/table coverage | Narrow RLS mechanics experiment only |
+
+The tenant-isolation lab's 88 policies are explicitly scoped to its rehearsal runtime identity. The lab is not production and its database table ownership still resolves to `rupaykg`. Do not infer that the existence of policies in this branch enables policies or changes privileges on production main.
+
+### 8.3 Reconciliation with the existing Shakti engineering work
+
+- [PR #321 — Batch C FK-path RLS rehearsal](https://github.com/vishaltradewinds/rupaykg/pull/321) is a draft validation-only PR whose exact-head CI run #5867 completed successfully. Its disposable PostgreSQL rehearsal derives predicates from FK paths, tests SELECT/INSERT/UPDATE/DELETE using distinct non-owner `NOBYPASSRLS` roles, and covers 18 single-owner tenant paths. It deliberately excludes nine multi-party tables pending explicit domain authorization semantics. This is useful engineering evidence, not production RLS activation.
+- [PR #323 — G-002 primary-repository authority reconciliation](https://github.com/vishaltradewinds/rupaykg/pull/323) adds a startup guard that blocks superuser, CREATEROLE, CREATEDB, replication and BYPASSRLS runtime roles, plus migration/live-schema authority guards and a controlled runtime-role cutover runbook. It is open and not deployed; its associated workflow was reported as `action_required` in the observed run. G-002 remains open because the deployed service identity and production RLS/A/B proof are not yet established.
+- The PR #321 rehearsal uses disposable policy fixtures and simple transaction-local organization test context. Its results must not be treated as proof that the production authenticated-session context, every protected application route, worker path or external service uses the same identity/context correctly.
+- Nine multi-party tables remain excluded from single-owner policy assumptions: `bwg_waste_reports`, `chain_of_custody_links`, `credentials`, `epr_credit_allocations`, `epr_credit_transfers`, `epr_credits`, `registry_events`, `settlements`, and `settlement_events`. Each requires its own actor/counterparty/business-operation authorization model.
+
+### 8.4 Corrected P0 order
+
+1. Complete the G-002 production migration/source authority reconciliation on the canonical repository; do not replay historical migration 096.
+2. Establish, independently, the exact database role used by the deployed application. The application must not run as `rupaykg`, a superuser, a role with CREATEROLE/CREATEDB/REPLICATION, or any `BYPASSRLS` identity.
+3. Complete non-production role cutover and startup-guard validation with least-privilege grants. Do not put owner/migrator credentials in the application runtime.
+4. Finish the full application request/worker/context coverage and policy-family mapping before enabling RLS. Keep global/reference, identity/control-plane and multi-party records outside blanket policy generation.
+5. Extend FK-path policy rehearsal to every approved single-owner table and complete dedicated multi-party policy design. Include transaction-pool context, revocation/suspension, concurrency, worker/system actor, export, analytics and negative cross-tenant tests.
+6. Complete rollback/restore rehearsal and independent DBA/security review.
+7. Only then submit a separately approved, staged production change plan for runtime-role cutover and table-by-table RLS activation. Production remains READ-ONLY/HOLD until the change is authorised and evidence gates pass.
+
+**Current production tenant-isolation decision: FAIL / BLOCKED.** Application-layer checks and successful disposable tests do not compensate for zero production RLS policies and a table-owning BYPASSRLS role. No nationwide multi-tenant security/readiness claim is permitted on this basis.
