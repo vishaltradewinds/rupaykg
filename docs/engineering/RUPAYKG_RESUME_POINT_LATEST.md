@@ -89,3 +89,10 @@
 - Latest commits: Evidence Vault `1e6e669dedd6adb383d86eeced0a2c4b880fad1d`; onboarding `b528267070f6ff587ca0bb1dd393ae5053f58dc6`.
 - Static audit result: Evidence Vault and onboarding route files have zero direct `pool.query`/route-level `pool.connect` references. CI/runtime validation remains **NOT VERIFIED**.
 - Production Neon/RLS/deployment remains **HOLD**; no production changes made.
+
+
+### 2026-11-07 — Core tenant-context and platform-admin batch
+- Core `apps/src/server.ts` tenant-sensitive overview/geography/resource-flow/measurement routes now require an explicit `auth.activeOrganizationId`; the previous single-membership fallback was removed.
+- Platform-admin authorization now runs through `platformQuery` / `withPlatformTransaction`, rather than a direct pool query, so platform authority evaluation is transaction-context bound.
+- Commits: server `2059399aea4a68d5117c94469f91a6c7e4d7d732`; platform admin `88aa2eb400f872b0e384f67f3697cf281419882f`.
+- CI/runtime validation remains **NOT VERIFIED**. Production Neon/RLS/deployment remains **HOLD**; no production changes made.
