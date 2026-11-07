@@ -1,0 +1,54 @@
+name: Primary CI and G-002 security gate
+
+on:
+  push:
+    branches:
+      - main
+      - cto/g002-authority-reconciliation-20261107
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install
+        run: npm ci
+      - name: Validate migrations
+        run: npm run validate:migrations
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Build
+        run: npm run build
+      - name: Test
+        run: npm test
+      - name: Lint
+        run: npm run lint
+
+  runtime-guard-static:
+    runs-on: ubuntu-latest
+    needs: validate
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Verify runtime guard is wired into production startup
+        shell: bash
+        run: |
+          grep -q "assertProductionRuntimeDbRole" apps/src/production-server.ts
+          test -f apps/src/runtime-db-role-guard.ts
+          grep -q "RUNTIME_DB_ROLE_GUARD_BLOCKED" apps/src/runtime-db-role-guard.ts
+          grep -q "rolbypassrls" apps/src/runtime-db-role-guard.ts
+          grep -q "rolsuper" apps/src/runtime-db-role-guard.ts
+          echo "Runtime DB role guard wiring: PASS"

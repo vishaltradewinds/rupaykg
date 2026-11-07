@@ -12,4 +12,7 @@ process.env.RUPAYKG_ALLOWED_ORIGINS = config.allowedOrigins.join(",");
 process.env.RUPAYKG_AUTH_MODE = config.authMode;
 process.env.RUPAYKG_SYNTHETIC_DATA = String(config.syntheticData);
 
+const { assertProductionRuntimeDbRole } = await import("./runtime-db-role-guard.js");
+await assertProductionRuntimeDbRole();
+
 await import("./server.js");
