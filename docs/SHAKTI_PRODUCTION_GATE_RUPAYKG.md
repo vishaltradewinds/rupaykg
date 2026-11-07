@@ -105,5 +105,6 @@ Controlling companion records:
 - docs/DPI_ECOSYSTEM_STRATEGY_DIGICORE_INFRASYS_RUPAYKG.md — dual DPI ecosystem operating model and commercialisation strategy.
 
 - docs/DPI_ECOSYSTEM_EXECUTION_ROADMAP_RUPAYKG.md — prioritised DPGA/GDPIR research, national capability mapping, buyer validation, component due diligence, commercial service and rollout execution backlog.
+- docs/RUPAYKG_NATIONAL_CAPABILITY_GAP_MATRIX_20261107.md — initial repository-backed national capability status and P0/P1 deployment proof gaps.
 
 No root licence, package-publication flag or source-code release is authorised by this workstream. Use selected DPGs as separately governed dependencies/services only where customer value, exact licence, security, operating cost and support responsibilities have been validated.
