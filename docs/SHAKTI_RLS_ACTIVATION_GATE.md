@@ -26,5 +26,8 @@ Public regulatory-source catalogues, platform administration, onboarding authori
 ## Safety rule
 Do not execute this migration from application startup. Do not enable FORCE ROW LEVEL SECURITY until runtime ownership and role separation are proven.
 
+## CI gate
+This activation gate is only valid when the current branch head has a fresh CI run against the exact commit being evaluated. An absent workflow run or status is treated as unverified, not as a pass.
+
 ## Current state
 Production RLS remains OFF. This file is an activation artifact, not evidence of activation.
