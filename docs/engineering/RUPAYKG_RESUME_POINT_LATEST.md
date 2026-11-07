@@ -220,3 +220,11 @@
 - Found an escaping defect in the PostgreSQL regex used to detect blanket organization-only policies: the pattern had double backslashes and therefore did not express the intended whitespace matcher.
 - Corrected the regex to the intended PostgreSQL pattern and committed `8b76770df8cfa8553052418c7b84b57928cc9f3f`.
 - This is a test-contract correctness fix; it does not alter production.
+
+
+### 2026-11-07 — Exact-head CI trigger revalidation
+- Re-inspected `.github/workflows/ci.yml` at the live controlled branch head.
+- The previously expected `workflow_dispatch` trigger was absent from the exact file despite earlier checkpoint notes.
+- Restored the manual `workflow_dispatch` trigger and committed `f03bce40ed66d0cc011b4507750c0cb6f01ced98`.
+- Revalidated PR #332 changed files: `scripts/test-shakti-batch-e-policy-contract.sql` is present in the PR.
+- CI execution remains unverified until an actual workflow run exists for the exact head.
