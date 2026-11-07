@@ -156,3 +156,4 @@ Track:
 ## 12. Dual-DPI ecosystem execution backlog
 
 The operational work sequence, source limitations, DPGA candidate queue, GDPIR evidence-card schema, national capability map, commercial service validation, DIGICORE INFRASYS prerequisites and Jabalpur/national rollout gates are controlled by [docs/DPI_ECOSYSTEM_EXECUTION_ROADMAP_RUPAYKG.md](DPI_ECOSYSTEM_EXECUTION_ROADMAP_RUPAYKG.md). Do not treat a roadmap task as complete until its evidence and decision owner are recorded.
+The initial main-branch national capability and gap review is recorded in [docs/RUPAYKG_NATIONAL_CAPABILITY_GAP_MATRIX_20261107.md](RUPAYKG_NATIONAL_CAPABILITY_GAP_MATRIX_20261107.md). Its next P0 gates must be closed before claiming nationwide deployment readiness or scaling the product scope.
