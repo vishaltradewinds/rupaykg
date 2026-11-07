@@ -42,7 +42,7 @@ app.get("/health", async (_request, reply) => { let database: "AVAILABLE" | "UNA
 app.get("/api/v1/status", async () => ({ service: "rupaykg-api", version: "0.1.0", sourceOfTruth: "postgresql", syntheticData: false }));
 app.get("/api/v1/overview", async (request, reply) => {
   const auth = await requireAuth(request, reply); if (!auth || !pool) return;
-  const activeOrganizationId = auth.activeOrganizationId ?? (auth.memberships.length === 1 ? auth.memberships[0]?.organization_id ?? null : null);
+  const activeOrganizationId = auth.activeOrganizationId;
   if (!activeOrganizationId) return reply.code(400).send({ error: "Active organization is required for overview access", code: "TENANT_CONTEXT_REQUIRED" });
   const tenantAuth: AuthContext = { ...auth, activeOrganizationId };
   try {
@@ -79,7 +79,7 @@ app.get("/api/v1/regulatory/sources", async (_request, reply) => { try { return 
 
 app.get("/api/v1/geography/roots", async (request, reply) => {
   const auth = await requireAuth(request, reply); if (!auth || !pool) return;
-  const activeOrganizationId = auth.activeOrganizationId ?? (auth.memberships.length === 1 ? auth.memberships[0]?.organization_id ?? null : null);
+  const activeOrganizationId = auth.activeOrganizationId;
   if (!activeOrganizationId) return reply.code(400).send({ error: "Active organization is required for geography access", code: "TENANT_CONTEXT_REQUIRED" });
   const tenantAuth: AuthContext = { ...auth, activeOrganizationId };
   try {
@@ -98,7 +98,7 @@ app.get("/api/v1/geography/roots", async (request, reply) => {
 });
 app.get("/api/v1/geography/children/:parentId", async (request, reply) => {
   const auth = await requireAuth(request, reply); if (!auth || !pool) return;
-  const activeOrganizationId = auth.activeOrganizationId ?? (auth.memberships.length === 1 ? auth.memberships[0]?.organization_id ?? null : null);
+  const activeOrganizationId = auth.activeOrganizationId;
   if (!activeOrganizationId) return reply.code(400).send({ error: "Active organization is required for geography access", code: "TENANT_CONTEXT_REQUIRED" });
   const tenantAuth: AuthContext = { ...auth, activeOrganizationId };
   try {
