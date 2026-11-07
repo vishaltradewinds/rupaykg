@@ -36,3 +36,8 @@ They are intentionally fail-closed and observational. They do not mutate product
 ## Next controlled batch
 
 Reconcile the primary repository's migration inventory against the live ledger, then port tenant authorization and legacy workflow boundaries using the primary monorepo's actual package/service boundaries. Only after static reconciliation should runtime rehearsal be executed.
+
+
+## Deterministic manifest automation
+
+A repository-native generator and GitHub Actions workflow now generate `docs/G002_PRIMARY_MIGRATION_RECONCILIATION_MANIFEST_20261107.json` from the release checkout. The manifest records the triggering release commit, SHA-256 for every migration SQL file, the complete 92-row production ledger snapshot, migration classifications, the live structural metadata hash, and the recovered-096 provenance. The workflow is branch-scoped and does not mutate production.
