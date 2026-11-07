@@ -530,7 +530,7 @@ BEGIN
     IF visible_count <> 1 THEN RAISE EXCEPTION 'Org B sees % of two tenant rows in %, expected 1',visible_count,r.table_name; END IF;
     EXECUTE format('SELECT count(*) FROM public.%I WHERE id=%L::uuid',r.table_name,r.a_id) INTO own_count;
     EXECUTE format('SELECT count(*) FROM public.%I WHERE id=%L::uuid',r.table_name,r.b_id) INTO foreign_count;
-    IF own_count <> 0 OR foreign_count <> 1 THEN RAISE EXCEPTION 'Org B row visibility failed for %',r.table_name; END IF;
+    IF own_count <> 1 OR foreign_count <> 0 THEN RAISE EXCEPTION 'Org B row visibility failed for %',r.table_name; END IF;
     EXECUTE format('UPDATE public.%I SET id=id WHERE id=%L::uuid',r.table_name,r.b_id);
     GET DIAGNOSTICS changed = ROW_COUNT;
     IF changed <> 1 THEN RAISE EXCEPTION 'Org B UPDATE own row failed for %',r.table_name; END IF;
