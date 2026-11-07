@@ -8,7 +8,7 @@
 
 ## Exact current engineering heads
 - PR #331: 50e463df30f18a30e6a192da447a451d1816ea55
-- PR #332: f881599ff4bb4130636cc5e9d1a5566c2d62b15d
+- PR #332: a74e45ccd1e0d699f84cf74c4d610894cf9f8f08
 
 ## Verified work in this batch
 - Added fail-closed protection to the migration runner for the four 20261107 protected Shakti migrations. They require explicit RUPAYKG_ALLOW_PROTECTED_SHAKTI_MIGRATIONS=1.
@@ -31,10 +31,11 @@
 - Production RLS activation remains blocked pending independent review, runtime identity proof, representative negative tests, rollback/restore evidence and explicit release authorization.
 - TRL 9 remains NOT ACHIEVED / NOT CLAIMED.
 
-## Residual tenant-isolation audit completed
+## Residual tenant-isolation audit and Evidence Vault remediation
 - Added `docs/engineering/SHAKTI_TENANT_ISOLATION_RESIDUAL_AUDIT_20261107.md`.
-- Confirmed remaining tenant-sensitive application surfaces requiring remediation: evidence vault, MRV/provenance, CPCB SWM, value/workspace, plus separate authority/platform review for onboarding hierarchy.
-- This is repository evidence only; it does not establish production exploitability or TRL.
+- Refactored Evidence Vault upload/list/download/review database access to execute under `withTenantTransaction` and the active organization request context.
+- Evidence Vault no longer uses direct pool queries for tenant-sensitive route operations; the remaining `pool.query` occurrences are confined to the context helper's client parameter implementation.
+- This is repository implementation evidence only; CI/runtime execution and production RLS safety remain unverified.
 
 ## Next autonomous action
 1. Obtain exact-head CI evidence for PR #332; diagnose only safe CI failures.
