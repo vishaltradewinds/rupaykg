@@ -144,3 +144,12 @@
 - Exact-head GitHub Actions lookup returned no workflow runs; CI remains **NOT VERIFIED**.
 - Production Neon/RLS/deployment remains **HOLD**; no production changes made.
 - Next autonomous action: continue residual access-surface reconciliation and map remaining application queries against the authoritative 67-table tenant/policy matrix.
+
+
+### 2026-11-07 — Workspace active-tenant query reconciliation
+- Corrected residual multi-membership query scope in `apps/src/workspace-routes.ts`.
+- Although routes required an active organization, several queries still constructed `ids` from all verified memberships. Those queries now use only `[auth.activeOrganizationId]`.
+- Static inspection after commit: `pool.query=0`, `pool.connect=0`, `orgIds(auth)=0`, active-tenant arrays=8.
+- Commit: `71b9102b5223b5386921268e71488b1e060e0f3a`.
+- This closes the identified workspace multi-membership fallback/query-scope residual; CI remains **NOT VERIFIED** until an exact-head workflow run is observed.
+- Production remains unchanged and all production RLS/migration/deployment gates remain HOLD.
