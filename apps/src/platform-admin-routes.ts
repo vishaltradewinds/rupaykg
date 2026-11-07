@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-import type { Pool, PoolClient } from "pg";
+import type { Pool, PoolClient, QueryResultRow } from "pg";
 import { authenticate, type AuthContext } from "./auth.js";
 import { withPlatformTransaction } from "./tenant-db.js";
 
@@ -132,7 +132,7 @@ async function audit(
   );
 }
 
-async function platformQuery<T extends Record<string, unknown>>(pool: Pool, identityId: string, sql: string, values: unknown[] = []): Promise<{ rows: T[]; rowCount: number | null }> {
+async function platformQuery<T extends QueryResultRow>(pool: Pool, identityId: string, sql: string, values: unknown[] = []): Promise<{ rows: T[]; rowCount: number | null }> {
   return withPlatformTransaction(pool, identityId, async client => client.query<T>(sql, values));
 }
 
