@@ -52,7 +52,14 @@ export async function assertProductionRuntimeDbRole(): Promise<RuntimeDbRoleEvid
     }
 
     console.log(`RUNTIME_DB_ROLE_GUARD: PASS (${evidence.role_name}; NOBYPASSRLS/non-admin)`);
-    return {\n      roleName: evidence.role_name,\n      superuser: evidence.superuser,\n      createRole: evidence.create_role,\n      createDb: evidence.create_db,\n      replication: evidence.replication,\n      bypassRls: evidence.bypass_rls,\n    };
+    return {
+      roleName: evidence.role_name,
+      superuser: evidence.superuser,
+      createRole: evidence.create_role,
+      createDb: evidence.create_db,
+      replication: evidence.replication,
+      bypassRls: evidence.bypass_rls,
+    };
   } finally {
     await pool.end();
   }
