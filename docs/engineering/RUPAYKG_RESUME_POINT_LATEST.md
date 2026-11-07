@@ -164,3 +164,11 @@
 - Next execution: wire the Batch E disposable contract gate into CI, then build executable positive/negative authorization and multi-party tests against the actual domain rows and route/worker access map.
 - CI exact-head evidence remains NOT VERIFIED.
 - Production remains READ-ONLY/HOLD; no production DDL/DML/RLS/role/grant/deployment/worker/certification action.
+
+
+### 2026-11-07 — Batch E CI contract wiring
+- Wired `scripts/test-shakti-batch-e-policy-contract.sql` into `.github/workflows/ci.yml` immediately after disposable migrations.
+- The gate runs against the disposable PostgreSQL service only and does not touch production Neon.
+- Commit: `e64f2c54d8bfb144ce80bb28eed8340adfa5d3ad`.
+- Exact-head CI evidence is still pending/not verified.
+- Next: use the disposable CI database to execute the deeper Batch E behavioral authorization tests, including positive/negative multi-party participant boundaries and append-only audit controls.
