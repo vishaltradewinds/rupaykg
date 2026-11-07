@@ -1,0 +1,55 @@
+{
+  "status": "IN_PROGRESS",
+  "source": "authoritative Neon catalog inspection 2026-11-05",
+  "directOrganizationScopedTables": [
+    "activities",
+    "audit_events",
+    "bwg_profiles",
+    "bwg_reporting_periods",
+    "carbon_projects",
+    "cpcb_swm_stakeholder_workspaces",
+    "cpcb_swm_status_history",
+    "environmental_attribute_claims",
+    "evidence_artifact_series",
+    "field_devices",
+    "obligations",
+    "organization_bwg_assessments",
+    "organization_epr_applicability",
+    "organization_geography_scopes",
+    "organization_memberships",
+    "organization_statutory_profiles",
+    "organization_verification_evidence",
+    "platform_access_change_requests",
+    "resource_flows",
+    "roles",
+    "stakeholder_applications"
+  ],
+  "bilateralOrganizationColumns": {
+    "bwg_waste_reports": [
+      "processor_organization_id"
+    ],
+    "chain_of_custody_links": [
+      "actor_organization_id"
+    ],
+    "credentials": [
+      "issuer_organization_id"
+    ],
+    "epr_credit_transfers": [
+      "from_organization_id",
+      "to_organization_id"
+    ],
+    "epr_credits": [
+      "issuer_organization_id",
+      "recycler_organization_id"
+    ],
+    "epr_obligations": [
+      "obligated_organization_id"
+    ]
+  },
+  "productionRls": {
+    "enabledTables": 0,
+    "forcedTables": 0,
+    "policies": 0
+  },
+  "releaseGate": "BLOCKED_UNTIL_POLICY_MATRIX_CONTEXT_AND_DISPOSABLE_CROSS_TENANT_TESTS_PASS"
+}
