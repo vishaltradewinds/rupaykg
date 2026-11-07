@@ -31,7 +31,7 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
       return await withTenantTransaction(pool, auth, async client => {
       const access = await activityAccess(client, activityId, auth.identityId); if (!access) return reply.code(403).send({ error: "Activity access denied", code: "ACTIVITY_FORBIDDEN" });
       if (!await hasOrganizationPermission(client, auth, access.organization_id, ["projects:manage"])) return reply.code(403).send({ error: "Explicit projects:manage permission is required", code: "CARBON_CALCULATION_FORBIDDEN" });
-      const geography = await assertActivityGeographyScope(pool, access.geography_id, auth.identityId);
+      const geography = await assertActivityGeographyScope(client, access.geography_id, auth.identityId);
       if (!geography.ok) return reply.code(geography.code === "ACTIVITY_GEOGRAPHY_REQUIRED" ? 409 : 403).send({ error: geography.code === "ACTIVITY_GEOGRAPHY_REQUIRED" ? "Activity must have an authorized geography before value calculation" : "Activity geography is outside organization authorization scope", code: geography.code });
       const evidence = await client.query<{ id: string; activity_id: string | null; content_hash: string | null; content_uri: string | null; status: string }>("select id, activity_id, content_hash, content_uri, status from evidence where id = $1", [evidenceId]);
       const evidenceRow = evidence.rows[0];
