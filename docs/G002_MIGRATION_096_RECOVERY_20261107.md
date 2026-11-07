@@ -23,24 +23,38 @@ The exact SQL was recovered from the primary repository's authoritative Git hist
 
 3. Production ledger subsequently records version `096` as applied at 2026-10-27T13:46:14.262Z.
 
+## Live schema-effect verification
+
+Read-only inspection of production Neon confirms all effects of migration 096:
+
+- `verifications.authorization_membership_id`: UUID, nullable.
+- `verifications.authorization_role_id`: UUID, nullable.
+- `verifications.authorization_permissions_snapshot`: JSONB, nullable.
+- `verifications.authorization_checked_at`: timestamptz, nullable.
+- Foreign key `verifications_authorization_membership_id_fkey` → `organization_memberships(id)`.
+- Foreign key `verifications_authorization_role_id_fkey` → `roles(id)`.
+- Function `public.prevent_invalid_verification()` exists and matches the recovered migration logic.
+- Trigger `verifications_integrity_guard` exists as BEFORE INSERT OR UPDATE and invokes `prevent_invalid_verification()`.
+
 ## Reconciliation conclusion
 
-The previously unexplained production-only migration is now **recoverable historical SQL with authoritative provenance**.
+Migration 096 is now classified:
 
-It was intentionally removed from the then-current `main` because it was considered unreviewed, but production nevertheless recorded it as applied shortly afterward. Therefore:
+**RECOVERED HISTORICAL SQL + LIVE SCHEMA EFFECT CONFIRMED**
 
-- the SQL is not fabricated;
-- the production ledger entry is not deleted or rewritten;
-- the migration is restored on the G-002 reconciliation branch for lineage preservation;
-- this does **not** mean it is automatically approved for re-application to production;
-- the branch must next be checked for schema-effect parity against the live database.
+The production-only migration discrepancy is therefore resolved as a historical-lineage gap, not an unexplained schema divergence.
 
-## Required next checks
+Important: this does **not** authorize re-application of migration 096. Its production ledger entry remains authoritative evidence and must not be duplicated.
 
-1. Compare migration 096 SQL effects with live `verifications` columns, trigger definition, and related constraints.
-2. Verify whether the four authorization columns and `prevent_invalid_verification()` trigger exist in production.
-3. If live schema matches, classify 096 as **historically applied + schema-confirmed**.
-4. If live schema differs, classify the discrepancy explicitly and do not mutate production.
-5. Regenerate the deterministic migration reconciliation manifest.
+## G-002 impact
 
-**G-002 remains OPEN until live schema-effect parity is proven.**
+The 91 repository SQL-file count versus 92 production-ledger-row count is now explained by migration 096 being present in production history but intentionally absent from the current release branch.
+
+G-002 migration-history reconciliation is therefore **SUBSTANTIALLY RESOLVED**, subject to final deterministic manifest generation and independent review.
+
+Remaining G-002 blockers are separate:
+- deployed runtime DB identity is not yet independently proven NOBYPASSRLS;
+- production RLS/tenant isolation remains unproven;
+- two-organization runtime A/B isolation remains unproven.
+
+No production mutation was performed.
