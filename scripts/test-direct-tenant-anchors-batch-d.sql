@@ -358,7 +358,6 @@ BEGIN
     ('carbon_projects','00000000-0000-0000-0000-00000000a103','00000000-0000-0000-0000-0000000000d1'),
     ('cpcb_swm_stakeholder_workspaces','00000000-0000-0000-0000-00000000a104','00000000-0000-0000-0000-0000000000d1'),
     ('environmental_attribute_claims','00000000-0000-0000-0000-00000000a105','00000000-0000-0000-0000-0000000000d1'),
-    ('epr_returns','00000000-0000-0000-0000-00000000a106','00000000-0000-0000-0000-0000000000d1'),
     ('esg_reporting_periods','00000000-0000-0000-0000-00000000a107','00000000-0000-0000-0000-0000000000d1'),
     ('evidence_artifact_series','00000000-0000-0000-0000-00000000a108','00000000-0000-0000-0000-0000000000d1'),
     ('field_devices','00000000-0000-0000-0000-00000000a109','00000000-0000-0000-0000-0000000000d1'),
@@ -417,6 +416,29 @@ CREATE POLICY shakti_batchd_epr_obligation_guard_fixture
 CREATE POLICY shakti_batchd_epr_obligation_lock_fixture
   ON public.epr_obligations FOR UPDATE USING (true) WITH CHECK (true);
 SET LOCAL ROLE rupaykg_ci_batchd_org_a;
+
+-- The EPR return trigger uses SELECT ... FOR UPDATE against epr_obligations.
+-- The temporary SELECT and UPDATE policies above allow that business guard to
+-- validate the target obligation; the epr_returns WITH CHECK must still reject
+-- the row because the current organization context is Org A, not Org D.
+DO $epr_insert$
+BEGIN
+  BEGIN
+    INSERT INTO public.epr_returns
+      (id,scheme_id,organization_id,period_start,period_end,return_type,
+       reported_quantity,fulfilled_quantity,obligation_id)
+    VALUES
+      ('00000000-0000-0000-0000-00000000a198',
+       '00000000-0000-0000-0000-00000000e401',
+       '00000000-0000-0000-0000-0000000000d1',
+       '2025-01-01','2025-12-31','ANNUAL',10,0,
+       '00000000-0000-0000-0000-00000000d120');
+    RAISE EXCEPTION 'Cross-tenant INSERT unexpectedly succeeded for epr_returns';
+  EXCEPTION WHEN insufficient_privilege THEN
+    NULL;
+  END;
+END
+$epr_insert$;
 
 DO $bwg_insert$
 BEGIN
