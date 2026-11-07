@@ -87,7 +87,7 @@ BEGIN
     WHERE schemaname='public' AND tablename=t
       AND (
         coalesce(qual,'') ~* 'organization_id\s*=\s*app\.current_organization_id'
-        OR coalesce(with_check,'') ~* 'organization_id\\s*=\\s*app\\.current_organization_id'
+        OR coalesce(with_check,'') ~* 'organization_id\s*=\s*app\.current_organization_id'
       );
     IF policy_count > 0 THEN
       RAISE EXCEPTION 'Unsafe blanket organization policy detected on multi-party surface: %', t;
