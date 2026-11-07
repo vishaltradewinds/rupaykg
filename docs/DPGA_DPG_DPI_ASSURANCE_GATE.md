@@ -167,3 +167,21 @@ Reassess this gate when the nominated boundary, licence, dependencies, data flow
 - RIS, *Foundations of Digital Public Infrastructure*, 2025.
 
 **Document status:** Internal engineering assurance baseline. Not legal advice, DPGA recognition, DPI classification, statutory certification or production approval.
+
+
+## 10. Commercial-first rule
+
+RupayKg is a proprietary commercial product. DPG recognition is an optional recognition pathway for a specifically nominated solution; it is not a business objective that overrides monetization, IP protection, customer value or commercial sustainability.
+
+The company may use existing DPGA-listed components under their respective licences and charge for its own implementation, integration, managed operations, hosting, configuration and support. Such use does not make RupayKg a DPG, DPGA partner or DPI.
+
+No commercial source code, package or workflow is to be opened or relicensed merely to qualify for recognition. Where openness is strategically useful, first consider publishing interface specifications, data schemas and non-confidential conformance fixtures separately from the proprietary implementation.
+
+The DPGA review does not grant exclusivity. Any open-source release must be evaluated on the assumption that other organisations may also use, modify and commercially offer the released component under its licence.
+
+Controlling records:
+- docs/RUPAYKG_COMMERCIAL_MONETIZATION_STRATEGY.md
+- docs/DPG_REGISTRY_COMPONENT_EVALUATION_RUPAYKG.md
+- docs/RUPAYKG_OPEN_MRV_CORE_FEASIBILITY_ASSESSMENT.md
+
+The commercial go/no-go decision takes precedence over a speculative DPG nomination. This does not alter any statutory, production, security or TRL obligation.
