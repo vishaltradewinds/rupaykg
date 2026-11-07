@@ -334,3 +334,39 @@ Safe corrective action applied independently to each validation branch by extend
 Post-change verification: PR #307 exact-head CI run `42254541831` / #5806 is **QUEUED/IN PROGRESS**. Exact-head workflow lookup for #306, #308 and #309 has not yet returned a run. No completion is claimed.
 
 This change only expands CI validation coverage for protected `shakti/*` branches; it does not change production runtime behavior, database state, RLS, deployment or release status.
+
+
+## 2026-11-07 Autonomous CTO Batch 2 — Parallel Gates VERIFIED / Policy Classification Expanded
+
+- Exact-head CI is now verified for the four parallel validation branches and the controlled tenant-isolation checkpoint:
+  - PR #305 head `311014c5cd58ab244f85b953aa93429ec9b054a4`: CI #5809 / run `42254599274` SUCCESS, steps 1–17.
+  - PR #306 head `dc4db62c772f790ab2ec96e0cb68a6903110c23a`: CI #5805 / run `42254538219` SUCCESS, steps 1–17.
+  - PR #307 head `b28ac72813e2058944f0fe508215911ae81b1aa7`: CI #5806 / run `42254541831` SUCCESS, steps 1–17.
+  - PR #308 pre-classification head `7c39924dde6becfc7603b786ad9a2d198cb186d0`: CI #5807 / run `42254549533` SUCCESS, steps 1–17.
+  - PR #309 head `f08462b994131bcfb2aad3b20e96c04dd0d10221`: CI #5808 / run `42254557659` SUCCESS, steps 1–17.
+  - PR #310 head `2223d46455c232380dbd7b93644b8ed9cba34760`: CI #5733 / run `42180300605` SUCCESS, steps 1–17.
+  - PR #311 current head `6a5d01a856b39779d72fb074587d07151400271a`: CI #5737 / run `42200307687` SUCCESS, steps 1–17.
+- PR #308 policy classification was advanced from only direct/bilateral/root/unclassified buckets to an explicit `derivedTenantTables` bucket based on live foreign-key lineage from organization-bearing tables. This remains policy-semantics work, not SQL RLS implementation.
+- Live Neon read-only schema evidence for project `steep-mud-79906940`, branch `br-restless-base-b44cip2h`, database `rupaykg` verified the 67-table inventory and foreign-key relationships used for the classification.
+- New PR #308 commits:
+  - `03c2753be17d0777e55a4941431536605012f761`
+  - `abc1d33e716a2bc343af87b9194daaf30e369aab`
+- The new PR #308 head has not yet received exact-head CI; the earlier #5807 result validates only the previous head.
+- Migration 096 remains fail-closed/unresolved. Historical tree inspection at commit `9d93382aa0e7460c2e91b0af1bcbf641c0f80d28` found no path matching `096_verification_authorization_provenance.sql`; this does not identify an authoritative source and therefore does not resolve the ledger discrepancy.
+- Immutable checkpoint: `docs/engineering/checkpoints/2026-11-07-autonomous-cto-batch-02.md`, commit `016d936bf6749015b1a70f8e9a518a46a46332ae`.
+
+### Current gates
+- Engineering CI: **VERIFIED COMPLETE** for the exact heads listed above.
+- Tenant isolation: **IN PROGRESS**.
+- Production RLS: **BLOCKED**; authoritative inspected DB still has RLS disabled on all 67 public tables and zero PostgreSQL policies.
+- Migration 096 lineage: **BLOCKED / UNRESOLVED**.
+- Production readiness: **NOT VERIFIED**.
+- Field acceptance: **NOT VERIFIED**.
+- Regulatory acceptance/certification: **NOT VERIFIED**.
+- TRL 9: **NOT ACHIEVED / NOT CLAIMED**.
+
+### Next autonomous batch
+1. Obtain exact-head CI for PR #308 after commits `03c2753...` and `abc1d33...`.
+2. Continue semantic protected-access audit and reconcile #306 authentication boundary with actual auth call paths.
+3. Continue exact migration-096 lineage investigation without recreating or inferring the missing source.
+4. Only after policy/access semantics are complete, implement the full RLS SQL migration as disposable-first and validate it through the complete acceptance suite; never apply to production autonomously.
