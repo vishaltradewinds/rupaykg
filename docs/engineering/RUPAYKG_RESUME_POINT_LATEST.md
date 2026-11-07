@@ -172,3 +172,12 @@
 - Commit: `e64f2c54d8bfb144ce80bb28eed8340adfa5d3ad`.
 - Exact-head CI evidence is still pending/not verified.
 - Next: use the disposable CI database to execute the deeper Batch E behavioral authorization tests, including positive/negative multi-party participant boundaries and append-only audit controls.
+
+
+### 2026-11-07 — Due-diligence finding: date-stamped migration version collision
+- Deliberate review of PR #332 exposed a real CI/migration correctness defect: all four protected Shakti migrations use the filename prefix `20261107`, while the migration validator and runner previously treated the numeric prefix before the first underscore as the migration version.
+- That would classify all four files as the same migration version and cause duplicate-version validation / schema_migrations conflicts.
+- Corrected both `scripts/validate-migrations.mjs` and `apps/src/migrate.ts` to use the complete filename without `.sql` as the migration version identity. Existing legacy numeric versions remain stable; date-stamped migrations become uniquely identifiable.
+- Commits: `7258d0e25cf01b6e79fb76bc30566fcdbc9c9887`, `8136c0e10b07db3500ed4ba5e0e39f48670a3427`.
+- This is a high-value due-diligence correction and must be validated by disposable CI before being considered complete.
+- Exact-head CI remains NOT VERIFIED.
