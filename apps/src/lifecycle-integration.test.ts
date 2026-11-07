@@ -1,8 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { Pool, type PoolClient } from "pg";
+import { createHash, randomBytes } from "node:crypto";
 
 const url = process.env.DATABASE_URL;
+const hashToken = (value: string) => createHash('sha256').update(value).digest('hex');
 
 test("production lifecycle integration gate", { skip: !url }, async () => {
   assert.ok(url);
@@ -10,18 +12,25 @@ test("production lifecycle integration gate", { skip: !url }, async () => {
   const c = await pool.connect();
   try {
     await c.query("begin");
-    const org = (await c.query("insert into organizations(name,organization_type) values('integration','COLLECTOR') returning id")).rows[0].id;
-    const buyer = (await c.query("insert into organizations(name,organization_type) values('integration-buyer','INDUSTRY_GENERATOR') returning id")).rows[0].id;
+    const org = (await c.query("insert into organizations(name,organization_type,status) values('integration','COLLECTOR','VERIFIED') returning id")).rows[0].id;
+    const buyer = (await c.query("insert into organizations(name,organization_type,status) values('integration-buyer','INDUSTRY_GENERATOR','VERIFIED') returning id")).rows[0].id;
     const geography = (await c.query("insert into geography(kind,code,name,source) values('DISTRICT','INTEGRATION','Integration District','test') returning id")).rows[0].id;
     await c.query("insert into organization_geography_scopes(organization_id,geography_id,status) values($1,$2,'VERIFIED')", [org, geography]);
-    const actor = (await c.query("insert into identities(external_subject,display_name) values('integration-actor','actor') returning id")).rows[0].id;
-    const verifier = (await c.query("insert into identities(external_subject,display_name) values('integration-verifier','verifier') returning id")).rows[0].id;
+    const actor = (await c.query("insert into identities(external_subject,display_name,status) values('integration-actor','actor','VERIFIED') returning id")).rows[0].id;
+    const verifier = (await c.query("insert into identities(external_subject,display_name,status) values('integration-verifier','verifier','VERIFIED') returning id")).rows[0].id;
     const role = (await c.query("insert into roles(organization_id,name,permissions) values($1,'VERIFIER','[\"VERIFY_EVIDENCE\",\"ISSUE_CREDENTIAL\"]') returning id", [org])).rows[0].id;
     await c.query("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED')", [verifier, org, role]);
+    const actorRole = (await c.query("insert into roles(organization_id,name,permissions) values($1,'ACTOR-SELF-TEST','[\"VERIFY_EVIDENCE\"]') returning id",[org])).rows[0].id;
+    await c.query("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED')",[actor,org,actorRole]);
+    const actorToken = randomBytes(32).toString('base64url');
+    const verifierToken = randomBytes(32).toString('base64url');
+    await c.query("insert into identity_sessions(identity_id,expires_at,token_hash) values($1,now()+interval '1 hour',$2),($3,now()+interval '1 hour',$4)",[actor,hashToken(actorToken),verifier,hashToken(verifierToken)]);
 
     const activity = (await c.query("insert into activities(organization_id,actor_identity_id,geography_id,activity_type,status) values($1,$2,$3,'COLLECTION','SUBMITTED') returning id", [org, actor, geography])).rows[0].id;
     const evidence = (await c.query("insert into evidence(activity_id,evidence_type,status,captured_at,content_hash) values($1,'FIELD','UNDER_REVIEW',now(),'integration') returning id", [activity])).rows[0].id;
+    await c.query("select public.rupaykg_set_authenticated_context($1,$2::uuid)",[actorToken,org]);
     await reject(c, () => c.query("insert into verifications(evidence_id,activity_id,verifier_identity_id,decision,scope) values($1,$2,$3,'APPROVED','integration')", [evidence, activity, actor]), /self-approve/);
+    await c.query("select public.rupaykg_set_authenticated_context($1,$2::uuid)",[verifierToken,org]);
     const verification = (await c.query("insert into verifications(evidence_id,activity_id,verifier_identity_id,decision,scope) values($1,$2,$3,'APPROVED','integration') returning id", [evidence, activity, verifier])).rows[0].id;
     await c.query("update evidence set status='VERIFIED' where id=$1", [evidence]);
     await c.query("update activities set status='COMPLETED' where id=$1", [activity]);
