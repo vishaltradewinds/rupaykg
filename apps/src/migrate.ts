@@ -33,7 +33,8 @@ try {
     .sort();
 
   for (const filename of files) {
-    const version = filename.replace(/\.sql$/, "");
+    const prefix = filename.split("_", 1)[0];
+    const version = (prefixCounts.get(prefix) ?? 0) > 1 ? filename.replace(/\.sql$/, "") : prefix;
     const existing = await pool.query<{ version: string; filename: string }>(
       "select version, filename from schema_migrations where version = $1",
       [version],
