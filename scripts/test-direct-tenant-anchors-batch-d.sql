@@ -477,22 +477,35 @@ SELECT set_config('app.identity_id','not-a-uuid',true);
 DO $fail_closed$
 DECLARE r record; n integer;
 BEGIN
-  FOR r IN SELECT unnest(ARRAY[
-    'bwg_profiles','bwg_reporting_periods','carbon_projects','cpcb_swm_stakeholder_workspaces',
-    'environmental_attribute_claims','epr_returns','esg_reporting_periods','evidence_artifact_series',
-    'field_devices','obligations','organization_bwg_assessments','organization_epr_applicability',
-    'organization_geography_scopes','organization_statutory_profiles','organization_verification_evidence',
-    'resource_flows','stakeholder_applications'
-  ]) AS table_name
+  FOR r IN SELECT * FROM (VALUES
+    ('bwg_profiles','00000000-0000-0000-0000-00000000a101','00000000-0000-0000-0000-00000000b101'),
+    ('bwg_reporting_periods','00000000-0000-0000-0000-00000000a102','00000000-0000-0000-0000-00000000b102'),
+    ('carbon_projects','00000000-0000-0000-0000-00000000a103','00000000-0000-0000-0000-00000000b103'),
+    ('cpcb_swm_stakeholder_workspaces','00000000-0000-0000-0000-00000000a104','00000000-0000-0000-0000-00000000b104'),
+    ('environmental_attribute_claims','00000000-0000-0000-0000-00000000a105','00000000-0000-0000-0000-00000000b105'),
+    ('epr_returns','00000000-0000-0000-0000-00000000a106','00000000-0000-0000-0000-00000000b106'),
+    ('esg_reporting_periods','00000000-0000-0000-0000-00000000a107','00000000-0000-0000-0000-00000000b107'),
+    ('evidence_artifact_series','00000000-0000-0000-0000-00000000a108','00000000-0000-0000-0000-00000000b108'),
+    ('field_devices','00000000-0000-0000-0000-00000000a109','00000000-0000-0000-0000-00000000b109'),
+    ('obligations','00000000-0000-0000-0000-00000000a110','00000000-0000-0000-0000-00000000b110'),
+    ('organization_bwg_assessments','00000000-0000-0000-0000-00000000a111','00000000-0000-0000-0000-00000000b111'),
+    ('organization_epr_applicability','00000000-0000-0000-0000-00000000a112','00000000-0000-0000-0000-00000000b112'),
+    ('organization_geography_scopes','00000000-0000-0000-0000-00000000a113','00000000-0000-0000-0000-00000000b113'),
+    ('organization_statutory_profiles','00000000-0000-0000-0000-00000000a114','00000000-0000-0000-0000-00000000b114'),
+    ('organization_verification_evidence','00000000-0000-0000-0000-00000000a115','00000000-0000-0000-0000-00000000b115'),
+    ('resource_flows','00000000-0000-0000-0000-00000000a116','00000000-0000-0000-0000-00000000b116'),
+    ('stakeholder_applications','00000000-0000-0000-0000-00000000a117','00000000-0000-0000-0000-00000000b117')
+  ) AS x(table_name,a_id,b_id)
   LOOP
-    EXECUTE format('SELECT count(*) FROM public.%I WHERE id IN (SELECT id FROM public.%I WHERE id IN (''00000000-0000-0000-0000-00000000a101'',''00000000-0000-0000-0000-00000000b101''))',r.table_name,r.table_name) INTO n;
+    EXECUTE format('SELECT count(*) FROM public.%I WHERE id IN (%L::uuid,%L::uuid)',
+      r.table_name,r.a_id,r.b_id) INTO n;
     IF n <> 0 THEN RAISE EXCEPTION 'Malformed tenant context exposed rows in %',r.table_name; END IF;
   END LOOP;
   IF public.shakti_batchd_org_id() IS NOT NULL OR public.shakti_batchd_identity_id() IS NOT NULL THEN
     RAISE EXCEPTION 'Malformed Batch D context did not fail closed';
   END IF;
 END
-$fail_closed$;
+$fail_closed$
 COMMIT;
 RESET ROLE;
 
