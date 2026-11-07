@@ -33,5 +33,9 @@ create policy shakti_epr_obligations_tenant on public.epr_obligations
   using (organization_id = app.current_organization_id())
   with check (organization_id = app.current_organization_id());
 
+-- Minimum DML privileges for the dedicated runtime role on the protected core.
+-- Broader application grants must be reconciled before production cutover.
+grant select, insert, update, delete on public.activities, public.measurements, public.evidence, public.carbon_calculations, public.epr_obligations to rupaykg_app_runtime;
+
 -- FORCE ROW LEVEL SECURITY remains a separate deployment gate until runtime
 -- ownership/role separation has been independently proven.
