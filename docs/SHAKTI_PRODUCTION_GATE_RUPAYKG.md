@@ -69,3 +69,22 @@ A successful build, CI run, deployment, or HTTP 200 response is **not** sufficie
 RupayKg becomes SHAKTI-certified for its defined production release only after every applicable gate is evidenced, all material blockers are closed, and required independent external approvals/evidence are satisfied.
 
 **Current certification decision: BLOCKED — evidence incomplete.**
+
+
+## Separate DPG / DPI alignment track — non-release gate
+
+The DPGA DPG Standard and DPI collection are maintained as a separate product-recognition and architecture-assurance track. They do **not** replace or automatically pass any S01–S19 SHAKTI production gate, statutory approval, independent verification, production acceptance or TRL assessment.
+
+Controlling companion records:
+
+- docs/DPGA_DPG_DPI_ASSURANCE_GATE.md — DPGA indicators, DPI collection criteria, RIS crosswalk and Shakti DPG gates.
+- docs/RUPAYKG_OPEN_MRV_CORE_FEASIBILITY_ASSESSMENT.md — repository-backed assessment of the proposed reusable Open MRV Core boundary.
+
+Current decision as of 2026-11-07:
+
+- Whole RupayKg repository: **not ready for DPG nomination**.
+- Proposed Open MRV Core: **discovery/extraction design only; not released and not DPGA-recognised**.
+- Open licensing: **blocked pending rights-holder and contributor-rights review**.
+- DPI collection: **not ready; prerequisite DPG recognition and DPI-specific evidence are absent**.
+
+This track does not authorise a public licence, code publication, production change, deployment or DPGA submission. Any future nomination must be evidence-backed and made for a clearly bounded digital solution. DPGA recognition evaluates the core solution; local deployment, regulatory, field and production acceptance remain separate SHAKTI responsibilities.
