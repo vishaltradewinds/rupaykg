@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import type { Pool, PoolClient } from "pg";
 import { authenticate, bearerChallenge, hasOrganizationPermission } from "./auth.js";
+import { withTenantTransaction } from "./tenant-db.js";
 import { validateConflictResolution, validateSyncEnvelope } from "./sync-validation.js";
 
 type AuthContext = Awaited<ReturnType<typeof authenticate>>;
@@ -14,7 +15,7 @@ function stringValue(payload: OperationPayload, key: string): string | null { co
 function positiveNumber(payload: OperationPayload, key: string): number | null { const value = Number(payload[key]); return Number.isFinite(value) && value > 0 ? value : null; }
 function dateValue(payload: OperationPayload, key: string): string | null { const value = stringValue(payload, key); return value && !Number.isNaN(Date.parse(value)) ? value : null; }
 
-async function requireFieldDevice(pool: Pool, auth: NonNullable<AuthContext>, deviceId: string): Promise<{ id: string } | null> { const result = await pool.query<{ id: string }>(`select id from field_devices where id = $1 and identity_id = $2 and status = 'VERIFIED'`, [deviceId, auth.identityId]); return result.rows[0] ?? null; }
+async function requireFieldDevice(db: Pool | PoolClient, auth: NonNullable<AuthContext>, deviceId: string): Promise<{ id: string; organization_id: string } | null> { const result = await db.query<{ id: string; organization_id: string }>(`select id, organization_id from field_devices where id = $1 and identity_id = $2 and status = 'VERIFIED'`, [deviceId, auth.identityId]); return result.rows[0] ?? null; }
 async function nextServerCursor(client: PoolClient, deviceId: string): Promise<number> { await client.query(`insert into field_sync_cursors (device_id, acknowledged_cursor) values ($1, 0) on conflict (device_id) do nothing`, [deviceId]); const cursor = await client.query<{ acknowledged_cursor: string }>(`select acknowledged_cursor from field_sync_cursors where device_id = $1 for update`, [deviceId]); const next = Number(cursor.rows[0]?.acknowledged_cursor ?? 0) + 1; await client.query(`update field_sync_cursors set acknowledged_cursor = $2, updated_at = now() where device_id = $1`, [deviceId, next]); return next; }
 async function verifiedOrganizationAccess(client: PoolClient, identityId: string, organizationId: string): Promise<boolean> { const result = await client.query<{ ok: boolean }>(`select exists (select 1 from organization_memberships where identity_id = $1 and organization_id = $2 and status = 'VERIFIED') as ok`, [identityId, organizationId]); return result.rows[0]?.ok === true; }
 async function authorizedGeography(client: PoolClient, identityId: string, geographyId: string, organizationId?: string): Promise<boolean> { if (!isUuid(geographyId)) return false; const result = await client.query<{ ok: boolean }>(`select exists( select 1 from organization_memberships om where om.identity_id = $1 and om.status = 'VERIFIED' ${organizationId ? "and om.organization_id = $3" : ""} and organization_has_geography_scope(om.organization_id, $2) ) as ok`, organizationId ? [identityId, geographyId, organizationId] : [identityId, geographyId]); return result.rows[0]?.ok === true; }
