@@ -582,7 +582,7 @@ BEGIN
     RAISE EXCEPTION 'Malformed Batch D context did not fail closed';
   END IF;
 END
-$fail_closed$
+$fail_closed$;
 COMMIT;
 RESET ROLE;
 
