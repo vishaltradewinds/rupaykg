@@ -3,7 +3,7 @@
 ## Scope
 Repository: vishaltradewinds/rupaykg  
 Controlled ref: cto/20261107-protected-migration-ci  
-Latest controlled head at this checkpoint: 7ddef5142899fc1f3222eaec586b51061d52a65b
+Latest controlled head at this checkpoint: 925b61c317e677d67a91a3b79c6048f7af141aab
 
 This is an engineering re-audit. It does not establish production exploitability, production RLS activation, regulatory acceptance, certification, or TRL 9.
 
@@ -25,15 +25,15 @@ Static checks on the controlled branch found zero direct `pool.query` / `pool.co
 
 ## Remaining priority surfaces
 
-### 1. Statutory routes — NOT YET REMEDIATED
+### 1. Statutory routes — REMEDIATED ON CONTROLLED BRANCH
 File: `apps/src/statutory-routes.ts`
 
-Tenant-sensitive applicability, BWG and EPR operations still contain direct pool access and require active-organization transaction binding.
+Tenant-sensitive applicability, BWG and EPR operations now use a tenant transaction helper backed by `withTenantTransaction`; the evidence-binding helper also uses tenant context. Body-supplied organization IDs are rejected when they differ from the active organization.
 
-Required next action:
-- convert all organization-scoped reads/writes and evidence-binding checks to `withTenantTransaction`;
-- reject body-supplied organization IDs that differ from the active organization;
-- retain explicit statutory boundary labels.
+Validation still required:
+- compile/typecheck;
+- disposable runtime execution under the non-BYPASSRLS role;
+- behavioral negative cross-tenant acceptance tests.
 
 ### 2. Auth/onboarding routes — SPECIAL BOUNDARY REVIEW REQUIRED
 File: `apps/src/auth-routes.ts`
