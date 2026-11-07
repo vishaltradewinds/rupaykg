@@ -87,6 +87,8 @@ jobs:
         run: node scripts/test-shakti-operational-invariants.mjs
       - name: Run platform-admin authorization contract
         run: node scripts/test-shakti-platform-admin-authorization-contract.mjs
+      - name: Run multi-party authorization contract
+        run: node scripts/test-shakti-multi-party-authorization-contract.mjs
       - name: Run tests including disposable PostgreSQL acceptance
         env:
           DATABASE_URL: postgresql://rupaykg_app_runtime:ci-runtime-only-password@localhost:5432/rupaykg
