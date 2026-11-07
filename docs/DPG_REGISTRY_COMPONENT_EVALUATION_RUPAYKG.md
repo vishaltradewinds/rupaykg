@@ -20,7 +20,7 @@ Do not:
 
 ## 2. Registry discovery and data access
 
-The DPGA website states that registry-listed products have been reviewed against the DPG Standard. Recognition is time-limited and subject to reassessment. The live registry displayed 256 listed DPGs at the time of this review; counts and filters are dynamic.
+The DPGA website states that registry-listed products have been reviewed against the DPG Standard. Recognition is time-limited and subject to reassessment. On 2026-11-07, the official DPGA API repository snapshot contained **165 DPG records** in `docs/dpgs/index.json` (blob SHA `dae0a0a8706c5d45f4acb8bc23738c4cdd3b920d`) and **63 nominee records** in `docs/nominees/index.json` (blob SHA `f848cdafd11c28299f69ab91886a56826022a5b1`). Counts are dynamic; these are timestamped source snapshots, not a permanent registry total. A broad keyword screen produced 54 possible environment, climate, agriculture, geospatial, registry, field-data or data-exchange matches; this is only a discovery filter, not 54 approved candidates.
 
 The DPGA's public API project documents these endpoints:
 
@@ -58,30 +58,40 @@ Relevant current repository references:
 
 A DPG should fill a genuine gap or connect an external participant. It should not become a second source of truth for the same authoritative RupayKg business records.
 
-## 4. Ranked component shortlist
+## 4. Ranked component shortlist — reconciled to the 2026-11-07 API snapshot
 
-Ratings are internal fit assessments, not DPGA ratings or partner commitments.
+Ratings are internal fit assessments, not DPGA ratings or partner commitments. "DPG" below means the candidate appears in the retrieved official `/dpgs/` snapshot. A registry-level licence is metadata for the submitted/assessed component and is not blanket permission for every related repository, add-on, dataset or hosting arrangement.
 
-| Priority | DPG | Registry licence / DPGA status evidence | Potential RupayKg use | Decision |
+| Priority | DPG / component | Official DPGA API metadata on 2026-11-07 | Potential RupayKg use | Decision |
 |---|---|---|---|---|
-| P1 | OpenFn | Registry profile reports LGPL-3.0; DPGA DPI collection, Data Exchange; September 2026 collection assessment 14/18 | Orchestrate external APIs, ETL, webhooks and partner-system synchronisation | Evaluate a bounded integration pilot; resolve licence metadata discrepancy first |
-| P1 | ODK | Apache-2.0; recognised DPG | Ingest field survey data from contractors/partners into existing RupayKg validation workflows | Build an optional import/connector; do not replace RupayKg offline field app |
-| P2 | Sunbird RC | MIT; DPGA DPI collection, Registries; September 2026 collection assessment 15/18 | Optional external entity/facility/asset registry or W3C credential interoperability | Technical proof-of-fit only; avoid duplicating existing authoritative registries |
-| P2 | CREDEBL | Apache-2.0; DPGA DPI collection, Trust Infrastructure; September 2026 collection assessment 15/18 | Wallet/DID/credential issuance and external credential verification | Compare with Sunbird RC; choose at most one for a defined trust-rail gap |
-| P2 | CKAN | AGPL-3.0; recognised DPG | Publish customer-approved, aggregate non-PII environmental datasets and open data catalogues | Potential paid managed open-data portal, deployed separately after AGPL review |
-| P3 | X-Road | MIT; DPGA DPI collection, Data Exchange; September 2026 collection assessment 18/18 | Federated, secure inter-organisation exchange for government/PSU networks | Strategic only; evaluate when a government integration partner or programme requires it |
-| P3 | GeoPrism Registry | LGPL-3.0; recognised DPG and Climate Action collection | Geographic master-data and spatial hierarchy exchange | Do not replace LGD/geography model; consider only for a demonstrated authoritative geospatial gap |
-| P3 | Global Open Facility Registry (GOFR) | Apache-2.0; recognised DPG; facility registry profile is health-sector oriented | Reconcile facility lists and duplicate site records | Relevance uncertain outside health; inspect schema and extension cost before any pilot |
-| P3 | DHIS2 | BSD-3-Clause; DPGA DPI collection, Data Exchange; September 2026 collection assessment 17/18 | Large-scale aggregate reporting and indicator exchange where a public agency already uses DHIS2 | Prefer an API connector to the deployed instance; do not deploy a parallel MIS without a buyer |
-| P3 | Open Foris Collect | MIT; recognised DPG; Agriculture/Climate sectors | Forest, bamboo and biomass inventory data ingestion; particularly relevant to Aranya | Consider as an Aranya/forest-inventory connector, not RupayKg's core MRV system |
-| P3 | DiCRA | MIT; recognised DPG; agriculture/climate geospatial data | Contextual geospatial/climate-resilience datasets for rural biomass project planning | Data enrichment only; not an MRV measurement source or legal evidence |
-| P3 | farmOS | GPL-2.0; recognised DPG | Farm/producer operational data connector for biomass and agricultural residues | Consider only where an actual FPO/producer customer uses farmOS; separate service boundary |
-| P3 | KoboToolbox | Registry profile reports Apache-1.1 and AGPL-3.0; recognised DPG | Third-party field data import where partners already use Kobo | ODK is the cleaner first candidate; resolve exact component/licence scope before use |
-| P3 | OpenLitterMap | GPL-3.0; recognised DPG | Public litter observations and civic intelligence | Supplementary leads/map only; never authoritative quantity, compliance or carbon evidence |
+| P1 | ODK | DPG; Apache-2.0; API record points to `getodk/central`; DPGA profile last evaluated 09.01.2025 | Controlled import of offline forms and partner/contractor field data | First field-data connector candidate; preserve RupayKg's own authoritative field/evidence workflows |
+| P1 | FarmStack | DPG; Apache-2.0; API record points to `digitalgreenorg/farmstack-open`; profile's assessed repositories list backend and frontend repositories; profile last evaluated 07.02.2025 | Secure data exchange with agriculture/biomass ecosystem participants | Evaluate only for a named partner data-sharing use case; inspect component/repository scope and dependencies (profile notes SendGrid dependency replaceable with SMTP) |
+| P1 | Sunbird Obsrv | DPG; MIT in API snapshot; profile/source component detail not independently fetched in this review | Telemetry/event pipeline for devices, measurements and operations | High-value discovery candidate for weighbridge/IoT observability; validate each microservice, security, event semantics and operating footprint before prototype |
+| P1 | OpenFn Integration Toolkit / OpenFn Lightning | DPG API record: GPL-3.0 for `OpenFn/core`; separate DPGA profile for OpenFn Lightning: LGPL-3.0 and lists `OpenFn/lightning`; profile last evaluated 09.01.2025 | API/webhook orchestration, ETL and partner-system synchronisation | Priority integration assessment, but treat as two distinct named component scopes until OpenFn/DPGA confirms the exact supported product and licence for the intended deployment |
+| P2 | Sunbird RC | DPG; MIT; registry/credential capability; DPGA profile last evaluated 26.08.2025; DPI collection is shown on profile | Optional external entity/facility/asset registry or credential interoperability | Technical proof-of-fit only; do not duplicate RupayKg's authoritative registries |
+| P2 | GeoPrism Registry | DPG; LGPL-3.0; master lists, hierarchy and geospatial data; DPGA profile last evaluated 09.01.2025; Climate Action collection is shown on profile | Geographic/facility reference-data federation | Assess only against a proven national geography/facility master-data gap; review LGPL and data ownership |
+| P2 | X-Road | DPG; MIT; DPGA profile last evaluated 28.07.2026; DPI collection is shown on profile | Secure inter-organisational data exchange for government ecosystems | Keep conditional until a named government programme, institutional operator and counterpart require federation |
+| P2 | Open Foris Collect | DPG; MIT; Agriculture and Climate sectors in API; submitted repository `openforis/collect` | Forestry, bamboo, biomass and land-inventory field capture | Potential Aranya/forest-inventory connector; not a replacement for RupayKg MRV |
+| P2 | DiCRA | DPG; MIT; Agriculture sector in API; DPGA profile last evaluated 26.07.2024 | Geospatial/climate-resilience context for agriculture and biomass planning | Data/context enrichment only; not calibrated measurement, compliance proof or MRV evidence |
+| P2 | OpenLitterMap | DPG; GPL-3.0 | Citizen litter observations and supplementary pollution mapping | Research/lead generation only; not authoritative waste quantity, regulatory or carbon evidence |
+| P2 | Cloud Carbon Footprint | DPG; Apache-2.0 | Measure cloud-computing emissions and cost in DIGICORE/RupayKg operations | Internal sustainability/FinOps candidate, not a waste/landfill MRV engine |
+| P3 | Global Open Facility Registry (GOFR) | DPG; Apache-2.0; registry record is health-sector oriented | Facility-list reconciliation pattern | Study its federated matching approach; do not deploy as an environmental facility registry without domain proof |
+| P3 | Climate Information Platform | DPG; CC-BY-SA-4.0; type is data/content; API has no source-code repository URL | Climate/weather/water context data | Treat as licensed data/content, not reusable software; assess attribution/share-alike, geography and fitness |
+| P3 | Productive Forests | DPG; three MIT entries in API for separate repositories | Forest inventory and satellite-imagery processing | Possible forest/bamboo planning use; verify each repository and model/data rights separately |
+| P3 | Scottish Environment Protection Agency Hydrometric Data | DPG; OGL-UK-3.0; data product/API | Example of hydrometric time-series API design | Reference pattern only unless UK data has a valid use case; not India field evidence |
+| P3 | DHIS2 | DPG; BSD-3-Clause; API record describes health information management | Aggregate indicator exchange where a public partner already uses DHIS2 | Connector only when a buyer/agency uses DHIS2; not a parallel environmental MIS |
 
-### 4.1 Highest-priority evaluation: OpenFn
+### 4.1 OpenFn — exact component boundary must be resolved
 
-DPGA describes OpenFn as a data-exchange building block for workflow automation, ETL, API orchestration and webhooks. Its DPGA DPI collection page reports 14 of 18 checks met (September 2026).
+The currently retrieved DPGA profile is titled **OpenFn DPG Profile** and describes OpenFn Lightning. It reports LGPL-3.0, a last-evaluated date of 09.01.2025, and lists `github.com/OpenFn/lightning` as the core repository assessed/included.
+
+The 2026-11-07 DPGA API record is titled **OpenFn Integration Toolkit** and reports GPL-3.0, pointing to `github.com/OpenFn/core`.
+
+These records identify different repository/component scopes. The discrepancy must not be flattened into a single licence assertion. Before any prototype, distribution or hosted deployment:
+- identify the exact OpenFn runtime/product offered and the repositories required;
+- obtain the maintainer's written clarification of supported components and licences;
+- inspect each repository's current licence file, release tag and dependency licences;
+- decide whether the planned activity is use, modification, distribution or managed hosting and obtain legal review.
 
 Potential integration pattern:
 
@@ -95,11 +105,9 @@ Controls:
 - Workflow retries must be idempotent and observable.
 - Contractual data-processing, retention and hosting boundaries must be approved.
 
-**Licensing discrepancy:** the DPGA profile page reports LGPL-3.0 for OpenFn, while the DPGA API registry record available during this review reports GPL-3.0 for the OpenFn Integration Toolkit. Resolve the exact repository/component and current licence directly against the upstream source and owner before deployment, modification, distribution or managed hosting.
+### 4.2 ODK — first field-data connector candidate
 
-### 4.2 Field collection: ODK before adding another field application
-
-ODK's DPGA profile reports Apache-2.0 and export/import in CSV, API, JSON and XML. Its value is strongest where a municipality, contractor, auditor or field partner already collects data using ODK.
+The DPGA API record identifies ODK as a DPG under Apache-2.0 and points to `getodk/central`. Its DPGA profile reports Apache-2.0, identifies Get ODK Inc as owner and last evaluated 09.01.2025. The profile describes field data collection and lists CSV, API, JSON and XML as extraction/import mechanisms.
 
 Recommended approach:
 - create a read-only connector or controlled import;
@@ -108,32 +116,54 @@ Recommended approach:
 - quarantine missing, duplicate or out-of-scope records;
 - retain RupayKg's own authoritative device, organisation/geography and verification controls.
 
+The profile reports that PII may be collected and stored, though not distributed. Therefore, any ODK deployment/integration requires explicit field-level data classification, purpose, consent/lawful basis where applicable, access, retention and deletion controls. Do not assume an ODK instance is non-PII by default.
+
 Do not replace RupayKg's current offline workflow until a comparative field test proves lower total cost and equal or stronger controls.
 
-### 4.3 Registry and credential layer: Sunbird RC versus CREDEBL
+### 4.3 FarmStack — ecosystem data exchange candidate
 
-**Sunbird RC** is a configurable registry framework with schema-driven APIs, attestation workflows, consent management and W3C verifiable credentials. DPGA's September 2026 DPI assessment reports 15 of 18 checks met.
+The DPGA API record identifies FarmStack as a DPG under Apache-2.0. Its current DPGA profile identifies Digital Green as owner, last evaluated 07.02.2025, and describes secure data transfer across the agricultural ecosystem. The profile lists backend and frontend repositories among the components assessed and states that a SendGrid dependency can be replaced by an SMTP service.
 
-**CREDEBL** provides ledger-agnostic verifiable credential issuance, DIDs, wallets and verification. Its registry profile reports Apache-2.0; its September 2026 DPI assessment reports 15 of 18 checks met.
+Potential use is limited to a named agricultural residue, biomass, producer or FPO partner data-sharing requirement. Before a prototype, reconcile the profile's assessed repositories with the API record's `farmstack-open` repository, inspect the exact release and data-sharing model, and assess tenant separation, participant onboarding, PII, transfer permissions, operational cost and maintenance.
 
-They are not interchangeable:
-- Sunbird RC is the stronger candidate when an independent, schema-driven registry is the primary requirement.
-- CREDEBL is the stronger candidate when wallet/DID/credential lifecycle interoperability is the primary requirement.
+FarmStack is not approved as a general RupayKg data exchange backbone based on its DPG status alone.
 
-RupayKg already has registry/credential and verification boundaries. Therefore, neither should replace the core platform by default. First identify an external participant workflow that cannot be supported adequately by the existing implementation. If a pilot is justified, choose one candidate and use a separate bounded service with explicit trust and failure semantics.
+### 4.4 Sunbird Obsrv — device telemetry discovery
 
-### 4.4 Public environmental data: CKAN and open datasets
+The API snapshot identifies Sunbird Obsrv as a DPG under MIT and lists multiple telemetry, data-pipeline, analytics, reporting and core data-product repositories. Its description covers granular event capture, including events from users and devices/IoT systems, telemetry validation, aggregation and APIs.
 
-CKAN can support a customer-facing catalogue of datasets that the customer has approved for public release. Potential paid service:
-- managed CKAN instance;
-- dataset curation, metadata and publication workflow;
-- scheduled updates and API delivery;
-- access controls for pre-publication/private datasets;
-- uptime, backup, support and integration SLA.
+This makes it a promising discovery candidate for weighbridge/device events and operational observability. It is not yet an approved IoT ingestion choice. Validate exact repository boundaries, release health, schemas, queue/stream requirements, data retention, security, resource footprint, failure handling and whether it overlaps with existing RupayKg event/measurement pipelines. Start only with synthetic telemetry in an isolated environment.
 
-CKAN is AGPL-3.0. Keep it in a distinct deployment and obtain legal review of network-use, modification, distribution and source-availability obligations before commercial operation.
+### 4.5 Registry options — Sunbird RC versus GeoPrism
 
-DiCRA, climate datasets and OpenLitterMap may provide supplementary context or public observations. Their data must be validated for provenance, licence, geographic fit, freshness, completeness and fitness for purpose. None should be substituted for calibrated measurements, verified field evidence, approved methodology inputs or authoritative regulatory records.
+**Sunbird RC** is a configurable registry and credential framework. The DPGA profile lists MIT, the EkStep Foundation as owner, a last evaluation of 26.08.2025 and two included repositories (`sunbird-rc-core` and `sunbird-rc-ui`). Use only if a specific external ecosystem registry/credential workflow cannot be supported appropriately by the current RupayKg platform.
+
+**GeoPrism Registry** manages master lists, hierarchies and geospatial data. Its DPGA profile lists LGPL-3.0, last evaluated 09.01.2025, and the `terraframe/geoprism-registry` repository. It may be relevant to geography/facility reference-data federation but can overlap with existing RupayKg geography and facility identifiers.
+
+These are distinct product classes, not interchangeable choices. Neither is approved for production; establish the exact data authority and system of record before prototyping.
+
+### 4.6 X-Road — government federation only
+
+The DPGA profile identifies X-Road as MIT-licensed software for secure inter-organisational exchange, lists NIIS as owner and last evaluated 28.07.2026, and shows inclusion in the DPG for DPI collection.
+
+X-Road is a strategic candidate only where a named government programme establishes the participating institutions, operator, trust model, legal authority, funding, service levels and operational governance. RupayKg must not independently present itself as an X-Road public-sector security server or claim government federation authority.
+
+### 4.7 Environmental data/software records — distinct commercial treatment
+
+- **DiCRA:** geospatial climate-resilient agriculture platform and data; useful context for rural biomass planning. Its DPGA profile reports MIT and UNDP ownership. Validate dataset-specific terms, geographic coverage, update cadence, lineage and suitability. It is not a calibrated MRV measurement source.
+- **Open Foris Collect:** MIT field-based inventory software for forestry/agriculture/climate; a possible forest/bamboo survey adapter. Verify source and instrument/method compatibility.
+- **OpenLitterMap:** GPL-3.0 litter/plastic-pollution observations; useful for supplementary observations only. Crowdsourced observations are not automatically verified quantity or compliance data.
+- **Cloud Carbon Footprint:** Apache-2.0 tool for cloud-computing emissions and cost; could inform DIGICORE/RupayKg's own cloud footprint, not replace waste/landfill methodology.
+- **Climate Information Platform:** API identifies a CC-BY-SA-4.0 data/content product with no source repository URL. Treat as data/content with attribution/share-alike and geographic suitability checks, not as software.
+- **Productive Forests:** API reports MIT across three distinct repositories. Review each repository, any model weights and imagery/data terms independently.
+
+Non-commercial content such as WaPOR and the Hand-in-Hand Geospatial Platform is listed with CC-BY-NC-SA-3.0 in the API snapshot. Do not include such material in a commercial product or paid data service without specific permission or a separate legal basis. A DPG listing does not remove non-commercial restrictions.
+
+### 4.8 Items not found in the 2026-11-07 DPG API snapshot
+
+**CKAN and CREDEBL were not found in the retrieved `/dpgs/` list** under those names/IDs. They must not be described in this register as currently recognised DPGs based on this snapshot. They may be assessed separately as open-source technologies or as items in another DPGA collection only after their exact current status, component scope and sources are verified.
+
+The same verification rule applies to any candidate found through a collection page or secondary source but absent from the DPG API snapshot.
 
 ## 5. Business model: sell integration and outcomes, not the DPG itself
 
