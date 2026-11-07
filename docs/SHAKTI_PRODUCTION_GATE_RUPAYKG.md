@@ -104,4 +104,6 @@ Controlling companion records:
 - docs/RUPAYKG_NATIONAL_DEPLOYMENT_ARCHITECTURE_AND_JABALPUR_VALIDATION.md — national-first architecture and Jabalpur field validation boundary.
 - docs/DPI_ECOSYSTEM_STRATEGY_DIGICORE_INFRASYS_RUPAYKG.md — dual DPI ecosystem operating model and commercialisation strategy.
 
+- docs/DPI_ECOSYSTEM_EXECUTION_ROADMAP_RUPAYKG.md — prioritised DPGA/GDPIR research, national capability mapping, buyer validation, component due diligence, commercial service and rollout execution backlog.
+
 No root licence, package-publication flag or source-code release is authorised by this workstream. Use selected DPGs as separately governed dependencies/services only where customer value, exact licence, security, operating cost and support responsibilities have been validated.
