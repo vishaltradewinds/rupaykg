@@ -167,3 +167,88 @@ test("Shakti business-route contract rejects a cross-tenant organization context
     await pool.end();
   }
 });
+
+test("Shakti RLS runtime role isolates core tenant rows", { skip: !enabled }, async () => {
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  const suffix = randomBytes(8).toString("hex");
+  let identityId = "";
+  let organizationA = "";
+  let organizationB = "";
+  let roleA = "";
+  let membershipA = "";
+  let activityA = "";
+  let activityB = "";
+  try {
+    const runtimeRole = (await pool.query<{ exists: boolean }>(
+      "select exists(select 1 from pg_roles where rolname='rupaykg_app_runtime') as exists",
+    )).rows[0]!.exists;
+    if (!runtimeRole) throw new Error("RLS runtime role is not provisioned in the test database");
+
+    organizationA = (await pool.query<{ id: string }>(
+      "insert into organizations(name,organization_type,status) values($1,'test_fixture','VERIFIED') returning id",
+      ["TEST-RLS-A-" + suffix],
+    )).rows[0]!.id;
+    organizationB = (await pool.query<{ id: string }>(
+      "insert into organizations(name,organization_type,status) values($1,'test_fixture','VERIFIED') returning id",
+      ["TEST-RLS-B-" + suffix],
+    )).rows[0]!.id;
+    identityId = (await pool.query<{ id: string }>(
+      "insert into identities(external_subject,display_name,email,status) values($1,$2,$3,'VERIFIED') returning id",
+      ["rls-negative:" + suffix, "RLS Negative " + suffix, "rls-negative-" + suffix + "@example.invalid"],
+    )).rows[0]!.id;
+    roleA = (await pool.query<{ id: string }>(
+      "insert into roles(organization_id,name,permissions,geography_scope) values($1,'tenant_test_role','[\"activity:write\"]'::jsonb,'[]'::jsonb) returning id",
+      [organizationA],
+    )).rows[0]!.id;
+    membershipA = (await pool.query<{ id: string }>(
+      "insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED') returning id",
+      [identityId, organizationA, roleA],
+    )).rows[0]!.id;
+
+    activityA = (await pool.query<{ id: string }>(
+      "insert into activities(organization_id,activity_type,status,metadata) values($1,'RLS_TEST','DRAFT','{}'::jsonb) returning id",
+      [organizationA],
+    )).rows[0]!.id;
+    activityB = (await pool.query<{ id: string }>(
+      "insert into activities(organization_id,activity_type,status,metadata) values($1,'RLS_TEST','DRAFT','{}'::jsonb) returning id",
+      [organizationB],
+    )).rows[0]!.id;
+
+    const client = await pool.connect();
+    try {
+      await client.query("begin");
+      await client.query("set local role rupaykg_app_runtime");
+      await client.query("select app.set_request_context($1,$2)", [identityId, organizationA]);
+      const visible = await client.query<{ id: string; organization_id: string }>(
+        "select id, organization_id from activities where id in ($1,$2) order by id",
+        [activityA, activityB],
+      );
+      assert.equal(visible.rows.length, 1);
+      assert.equal(visible.rows[0]!.id, activityA);
+      assert.equal(visible.rows[0]!.organization_id, organizationA);
+
+      await assert.rejects(
+        () => client.query(
+          "insert into activities(organization_id,activity_type,status,metadata) values($1,'RLS_TEST','DRAFT','{}'::jsonb)",
+          [organizationB],
+        ),
+        /row-level security|policy/i,
+      );
+      await client.query("rollback");
+    } catch (error) {
+      try { await client.query("rollback"); } catch {}
+      throw error;
+    } finally {
+      client.release();
+    }
+  } finally {
+    if (activityA) await pool.query("delete from activities where id=$1", [activityA]);
+    if (activityB) await pool.query("delete from activities where id=$1", [activityB]);
+    if (membershipA) await pool.query("delete from organization_memberships where id=$1", [membershipA]);
+    if (roleA) await pool.query("delete from roles where id=$1", [roleA]);
+    if (identityId) await pool.query("delete from identities where id=$1", [identityId]);
+    if (organizationA) await pool.query("delete from organizations where id=$1", [organizationA]);
+    if (organizationB) await pool.query("delete from organizations where id=$1", [organizationB]);
+    await pool.end();
+  }
+});
