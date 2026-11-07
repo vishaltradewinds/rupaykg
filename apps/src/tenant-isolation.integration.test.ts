@@ -29,7 +29,7 @@ test("Shakti tenant context rejects cross-organization context switching", { ski
       [`tenant-negative:${suffix}`, `Tenant Negative ${suffix}`, `tenant-negative-${suffix}@example.invalid`],
     )).rows[0]!.id;
     roleA = (await pool.query<{ id: string }>(
-      "insert into roles(organization_id,name,permissions,geography_scope) values($1,'tenant_test_role','["dashboard:read"]'::jsonb,'[]'::jsonb) returning id",
+      "insert into roles(organization_id,name,permissions,geography_scope) values($1,'tenant_test_role','[\"dashboard:read\"]'::jsonb,'[]'::jsonb) returning id",
       [organizationA],
     )).rows[0]!.id;
 
