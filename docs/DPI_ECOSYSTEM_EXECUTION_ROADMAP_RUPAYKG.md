@@ -31,6 +31,11 @@ Source: https://github.com/DPGAlliance/dpg-api
 
 The API is appropriate for a curated, cached research/catalogue feed. It must not be a synchronous runtime dependency of the production environmental platform. The registry record is not a substitute for verifying the actual upstream release, source code, licence, notices, dependencies, security, maintenance and support terms.
 
+**Snapshot actually retrieved on 2026-11-07:** `DPGAlliance/dpg-api/docs/dpgs/index.json` contained 165 DPG records (blob SHA `dae0a0a8706c5d45f4acb8bc23738c4cdd3b920d`). `docs/nominees/index.json` contained 63 nominee records (blob SHA `f848cdafd11c28299f69ab91886a56826022a5b1`). These are timestamped snapshots, not permanent counts. A broad keyword search produced 54 potential environmental/climate/agriculture/geospatial/registry/data-exchange/field-data matches; each needs manual relevance assessment.
+
+The snapshot confirms entries such as ODK (Apache-2.0), FarmStack (Apache-2.0), Sunbird Obsrv (MIT), Sunbird RC (MIT), GeoPrism Registry (LGPL-3.0), X-Road (MIT), DiCRA (MIT), Open Foris Collect (MIT), OpenLitterMap (GPL-3.0), and Cloud Carbon Footprint (Apache-2.0). It also exposes component-boundary questions: the OpenFn API record identifies `OpenFn/core` under GPL-3.0, whereas the separate DPGA OpenFn profile identifies OpenFn Lightning/`OpenFn/lightning` under LGPL-3.0. Do not treat these as the same component or collapse their licences.
+
+
 ### Global DPI Repository (GDPIR)
 
 The Government of India's 23 November 2023 announcement describes GDPIR as a MeitY-developed resource hub pooling lessons and expertise from G20 members and guest nations. It says the standardised information includes DPIs developed at scale, maturity scales, source code where available and governance frameworks; the launch announcement reported 54 DPIs from 16 countries.
@@ -66,23 +71,33 @@ The two sources are complementary, not interchangeable:
 
 **Execution rule:** P0 items must produce the decision-quality evidence needed to stop wasteful integrations. P1 technical discovery and governance research can run in parallel once source acquisition starts. P2 deployment is not authorised merely because documents are complete.
 
-## 4. DPGA component portfolio — initial queue
+## 4. DPGA component portfolio — current snapshot and initial queue
 
-This is a research queue, not an approval to adopt. Revalidate every upstream version and exact licence before implementation.
+The following are candidate assessments, not integration approvals. The DPGA API records them as DPGs in the retrieved snapshot unless explicitly stated otherwise. Their registry licence metadata does not replace exact source/release and dependency review.
 
-| Candidate | Potential RupayKg use | Priority | Required due diligence / current decision boundary |
+| Candidate | Snapshot evidence | Potential RupayKg use | Priority / decision |
 |---|---|---|---|
-| OpenFn | API/webhook orchestration, ETL and integration automation | P1 | Prior source review found a discrepancy between DPGA profile and raw registry/API licence indications. Resolve exact component/version licence, deployment model, security and commercial-service obligations before prototype |
-| ODK | Partner/mobile field data collection and controlled offline ingestion | P1 | Validate exact ODK components, licence, deployment and data contract; integrate at the ingestion boundary only. Do not replace RupayKg's field/evidence core without a proven requirement |
-| Sunbird RC | Registry and verifiable credential infrastructure | P2 | Compare with CREDEBL against a single evidenced registry/credential use case, standards fit, operating model, security and lifecycle cost; choose at most one |
-| CREDEBL | Credential/trust infrastructure | P2 | Same comparative gate as Sunbird RC; no parallel adoption without separate buyer/use cases |
-| CKAN | Separate managed environmental/open-data portal | P2 | Separate service boundary and deployment; AGPL obligations and hosted-service implications require legal review; do not merge into proprietary core by assumption |
-| X-Road | Federated exchange between government institutions | P2 / conditional | Consider only where a named public programme requires governed institution-to-institution exchange and an authorised public-sector operator/architecture exists |
-| Open Foris Collect | Forestry, land and field inventory capture | Watch | Relevant only to a defined forestry/biomass/land use case; validate source, licence and field interoperability |
-| GeoPrism Registry / GOFR | Geospatial or facility registry patterns | Watch | Compare data model, domain fit, licence and maintainability against the existing organisation/facility registry; do not duplicate master data without a gap |
-| farmOS | Agricultural data and farm operations | Watch | Potential agriculture/biomass extension only after a buyer/use case and data interoperability requirement is established |
+| ODK | DPG; Apache-2.0; `getodk/central`; DPGA profile last evaluated 09.01.2025 | Offline forms and partner/contractor field data import | P1 connector discovery; retain RupayKg's own authoritative field/evidence workflow; PII controls required |
+| FarmStack | DPG; Apache-2.0; API points to `farmstack-open`; DPGA profile lists backend/frontend repositories and last evaluated 07.02.2025 | Secure agricultural ecosystem data transfer | P1 data-sharing use-case review; profile notes SendGrid can be replaced by SMTP; reconcile assessed repository scope |
+| Sunbird Obsrv | DPG; MIT in API record; multiple telemetry/pipeline/analytics/reporting repos | Device/IoT event capture, validation and telemetry aggregation | P1 technical discovery for weighbridge/sensor observability; synthetic isolated spike only after source and operations review |
+| OpenFn Integration Toolkit / OpenFn Lightning | API record identifies `OpenFn/core` GPL-3.0; separate profile identifies OpenFn Lightning/`OpenFn/lightning` LGPL-3.0; profile last evaluated 09.01.2025 | ETL, webhooks and API orchestration | P1 due diligence; get maintainer clarification on exact product, components and licence before selecting runtime |
+| Sunbird RC | DPG; MIT; registry/credential framework; profile last evaluated 26.08.2025 | External participant/facility/asset registry or credentials | P2; only if existing RupayKg registry lacks a specific ecosystem interoperability function |
+| GeoPrism Registry | DPG; LGPL-3.0; geographic master lists/hierarchies; profile last evaluated 09.01.2025 | Federated jurisdiction/facility reference data | P2; only after a clear national geography/facility authority gap is proven |
+| X-Road | DPG; MIT; profile last evaluated 28.07.2026; shown in DPI collection | Secure government-to-government exchange | P2 conditional; requires named government programme, institutional operator and counterparts |
+| Open Foris Collect | DPG; MIT; Agriculture/Climate metadata | Forest, bamboo, biomass and land-inventory surveys | P2 for a defined forestry/Aranya or biomass use case; not core MRV |
+| DiCRA | DPG; MIT; India/UNDP; geospatial climate-resilient agriculture | Contextual geospatial data for agriculture/biomass planning | P2 data enrichment; not measurement, verification or regulatory evidence |
+| OpenLitterMap | DPG; GPL-3.0 | Litter and plastic pollution observations | P2 research/lead map only; not authoritative quantity or carbon data |
+| Cloud Carbon Footprint | DPG; Apache-2.0 | Cloud infrastructure carbon and cost monitoring | P2 internal cloud footprint/FinOps, not waste or landfill MRV |
+| Global Open Facility Registry | DPG; Apache-2.0; health-oriented facility reconciliation | Reusable facility matching and duplicate-resolution pattern | P3 learn the pattern first; domain adaptation required |
+| Climate Information Platform | DPG; CC-BY-SA-4.0; data/content type, no source repo URL in API record | Climate/weather/water context information | P3 data/content use only after terms, geographic relevance and attribution/share-alike analysis |
+| Productive Forests | DPG; three MIT records for separate repositories | Forest inventory and satellite imagery processing | P3; assess each repository/model/data right separately |
+| Scottish Environment Protection Agency Hydrometric Data | DPG; OGL-UK-3.0; hydrometric API/data | Example of water-monitoring time-series APIs | P3 reference pattern; UK data itself is not India site evidence |
+| DHIS2 | DPG; BSD-3-Clause; health MIS | Indicator exchange if customer public agency already uses DHIS2 | P3 connector only where a customer/agency requires it |
+| CKAN | Not found as a DPG in the retrieved `/dpgs/` snapshot | Separate data portal technology option | Separate open-source review only; AGPL-3.0 legal review; do not label DPGA-recognised based on this snapshot |
+| CREDEBL | Not found as a DPG in the retrieved `/dpgs/` snapshot | Separate credential technology option to research if required | Separate status/licence/collection verification; do not label DPGA-recognised based on this snapshot |
+| WaPOR / Hand-in-Hand Geospatial Platform | DPG entries; CC-BY-NC-SA-3.0 in API | Agriculture/water/geospatial content | Do not use for paid/commercial product/service without specific permission or other valid rights |
 
-**Do not infer adoption from a DPGA listing.** Candidate due diligence must include source provenance, exact dependency graph, licence scan, vulnerability scan, build reproducibility, supported versions, data portability, operating cost, support ownership and exit strategy.
+**Selection rule:** do not add a candidate to product architecture merely because it is listed. Require a proven capability gap, named buyer/use case, component/version/rights review, data protection and security assessment, operating cost, fallback/exit plan and evidence-based acceptance.
 
 ## 5. GDPIR reference implementation research — record template
 
@@ -188,7 +203,7 @@ Allowed statuses: **RESEARCH**, **WATCH**, **PROTOTYPE**, **CUSTOMER-VALIDATION*
 | Order | Action | Owner role | Deliverable |
 |---|---|---|---|
 | 1 | Obtain a usable official GDPIR `dpicatedata` export/page record and record its actual schema, date, source links and reuse terms; preserve the 403 access blocker if access remains unavailable | Research lead / CTO | GDPIR source acquisition note and schema register |
-| 2 | Fetch a dated DPGA `/dpgs/` snapshot and nominate only candidate records relevant to resource flows, field data, geospatial reference, credentials, data exchange and environmental reporting | Integration research lead | Curated DPGA candidate register |
+| 2 | Complete the DPGA snapshot analysis: base snapshot and 165 DPG / 63 nominee counts have been retrieved; now deepen exact records for the ranked short-list and verify component/version/licence scope | Integration research lead | Curated, source-linked DPGA candidate register |
 | 3 | Resolve OpenFn and other licence/source discrepancies against exact upstream release artefacts; confirm ODK component selection and contracts | Engineering + legal review | Versioned candidate due diligence cards |
 | 4 | Audit the current RupayKg repository against the ten capability areas in Section 6 and cite files/tests for each status | CTO / architecture lead | Repository-backed capability and gap matrix |
 | 5 | Select the highest-value one or two customer problems and prepare buyer validation, procurement path, delivery scope and cost-to-serve | Product/commercial lead | Validated offer cards; no invented prices |
