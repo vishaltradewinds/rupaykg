@@ -355,7 +355,6 @@ BEGIN
   -- values are copied from a valid source row so business constraints are met.
   FOR r IN SELECT * FROM (VALUES
     ('bwg_profiles','00000000-0000-0000-0000-00000000a101','00000000-0000-0000-0000-0000000000d1'),
-    ('bwg_reporting_periods','00000000-0000-0000-0000-00000000a102','00000000-0000-0000-0000-0000000000c1'),
     ('carbon_projects','00000000-0000-0000-0000-00000000a103','00000000-0000-0000-0000-0000000000d1'),
     ('cpcb_swm_stakeholder_workspaces','00000000-0000-0000-0000-00000000a104','00000000-0000-0000-0000-0000000000d1'),
     ('environmental_attribute_claims','00000000-0000-0000-0000-00000000a105','00000000-0000-0000-0000-0000000000d1'),
@@ -400,6 +399,46 @@ BEGIN
   END LOOP;
 END
 $org_a$;
+
+-- BWG reporting-period trigger reads bwg_profiles before the target-table RLS
+-- WITH CHECK runs. In this disposable CI transaction only, add a temporary
+-- SELECT policy to bwg_profiles so the target's business precondition passes
+-- for Org C; then assert the reporting-period target's own RLS rejects Org C
+-- under Org A context. The temporary policy is immediately removed.
+RESET ROLE;
+CREATE POLICY shakti_batchd_bwg_profile_guard_fixture
+  ON public.bwg_profiles FOR SELECT USING (true);
+SET LOCAL ROLE rupaykg_ci_batchd_org_a;
+
+DO $bwg_insert$
+BEGIN
+  BEGIN
+    INSERT INTO public.bwg_reporting_periods
+      (id,organization_id,period_start,period_end,reporting_basis)
+    VALUES
+      ('00000000-0000-0000-0000-00000000a199',
+       '00000000-0000-0000-0000-0000000000c1',
+       '2026-01-01','2026-12-31','CI_BATCH_D_CROSS_ORG');
+    RAISE EXCEPTION 'Cross-tenant INSERT unexpectedly succeeded for bwg_reporting_periods';
+  EXCEPTION WHEN insufficient_privilege THEN
+    NULL;
+  END;
+END
+$bwg_insert$;
+
+RESET ROLE;
+DROP POLICY shakti_batchd_bwg_profile_guard_fixture ON public.bwg_profiles;
+SET LOCAL ROLE rupaykg_ci_batchd_org_a;
+DO $bwg_visibility$
+BEGIN
+  IF (SELECT count(*) FROM public.bwg_profiles
+      WHERE id IN ('00000000-0000-0000-0000-00000000a101',
+                   '00000000-0000-0000-0000-00000000b101',
+                   '00000000-0000-0000-0000-00000000c101')) <> 1 THEN
+    RAISE EXCEPTION 'Temporary BWG fixture SELECT policy was not fully removed';
+  END IF;
+END
+$bwg_visibility$;
 
 COMMIT;
 RESET ROLE;
