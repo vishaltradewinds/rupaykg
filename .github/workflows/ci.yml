@@ -81,6 +81,8 @@ jobs:
           echo "Chrome DOM exit: $dom_status; screenshot exit: $shot_status"
       - name: Run Batch E disposable policy contract
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/test-shakti-batch-e-policy-contract.sql
+      - name: Run tenant-route transaction boundary contract
+        run: node scripts/test-shakti-tenant-route-contract.mjs
       - name: Run tests including disposable PostgreSQL acceptance
         env:
           DATABASE_URL: postgresql://rupaykg_app_runtime:ci-runtime-only-password@localhost:5432/rupaykg
