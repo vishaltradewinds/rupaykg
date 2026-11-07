@@ -58,6 +58,7 @@ test("Shakti tenant context rejects cross-organization context switching", { ski
     };
 
     const context = await withTenantTransaction(runtimePool, authA, async client => {
+      await client.query("set local role rupaykg_app_runtime");
       const row = (await client.query<{ identity_id: string; organization_id: string }>(
         "select app.current_identity_id() as identity_id, app.current_organization_id() as organization_id",
       )).rows[0]!;
@@ -70,6 +71,7 @@ test("Shakti tenant context rejects cross-organization context switching", { ski
     const crossTenantClient = await runtimePool.connect();
     try {
       await crossTenantClient.query("begin");
+      await crossTenantClient.query("set local role rupaykg_app_runtime");
       await assert.rejects(
         () => crossTenantClient.query("select app.set_request_context($1,$2)", [identityId, organizationB]),
         /not a verified member of the requested organization/i,
@@ -83,6 +85,7 @@ test("Shakti tenant context rejects cross-organization context switching", { ski
     }
 
     const reset = await withTenantTransaction(runtimePool, authA, async client => {
+      await client.query("set local role rupaykg_app_runtime");
       const row = (await client.query<{ organization_id: string }>(
         "select app.current_organization_id() as organization_id",
       )).rows[0]!;
@@ -151,9 +154,10 @@ test("Shakti business-route contract rejects a cross-tenant organization context
     };
 
     await assert.rejects(
-      () => withTenantTransaction(runtimePool, { ...authA, activeOrganizationId: organizationB }, async client =>
-        client.query("insert into activities(organization_id,status) values($1,'DRAFT')", [organizationB]),
-      ),
+      () => withTenantTransaction(runtimePool, { ...authA, activeOrganizationId: organizationB }, async client => {
+        await client.query("set local role rupaykg_app_runtime");
+        return client.query("insert into activities(organization_id,status) values($1,'DRAFT')", [organizationB]);
+      }),
       /not a verified member of the requested organization/i,
     );
 
