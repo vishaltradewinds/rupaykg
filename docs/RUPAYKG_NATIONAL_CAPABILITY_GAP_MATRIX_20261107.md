@@ -161,6 +161,14 @@ The Neon default `main` branch was reported as not protected in branch metadata.
 |---|---:|---:|---:|---|---|
 | `rupaykg-tenant-isolation-lab-20261101` (`br-blue-tooth-b4kvuut7`) | 22 / 67 | 4 | 88 | All 67 tables remain owned by `rupaykg`; includes a distinct `rupaykg_app_runtime` login with `BYPASSRLS=false` and role-targeted tenant policies | Partial policy rehearsal; 45 public tables still have RLS disabled |
 | `rupaykg-role-split-rehearsal-20261106` (`br-dry-base-b42zrepz`) | 0 / 67 | 0 | 0 | All 67 tables are owned by `rupaykg_owner_model_20261106`; non-admin runtime-role prototypes exist with restricted table privileges | Ownership/privilege split rehearsal only; no RLS/policy set |
+
+Additional read-only role-split detail:
+- `rupaykg_owner_model_20261106` is NOLOGIN, non-superuser, non-admin and NOBYPASSRLS; it owns 67/67 public tables in this rehearsal.
+- `rupaykg_runtime_model_20261106` is LOGIN, non-superuser, no CREATEROLE/CREATEDB/REPLICATION and NOBYPASSRLS. It has SELECT on 64/67 tables and INSERT/UPDATE/DELETE on 53/67, with no public-schema CREATE privilege and no table ownership.
+- The three tables it cannot SELECT are `identity_credentials`, `identity_password_credentials` and `schema_migrations`. The 14 tables it cannot write include global/reference data, identity/authentication tables, organisations and migration metadata. This is a candidate least-privilege shape only; actual API route, bootstrap/auth and worker needs must be reconciled table-by-table.
+- A separate `rupaykg_runtime_20261107` role exists but currently has no table privileges; it is not a usable application runtime role in this snapshot.
+- The privileged `rupaykg` administration login remains BYPASSRLS and is a member of the non-login owner model with ADMIN OPTION on this lab. That owner/admin identity must not be used as the application runtime.
+- No public sequences were present in this role-split branch at inspection. Function EXECUTE, schema ownership, worker permissions, grants and route coverage still require a separate full privilege review.
 | `rupaykg-rls-assurance-lab-20261101` (`br-red-salad-b4oqb4nx`) | 1 / 67 | 1 | 1 | One `epr_returns` policy targets `rupaykg_app_runtime`; no complete runtime/table coverage | Narrow RLS mechanics experiment only |
 
 The tenant-isolation lab's 88 policies are explicitly scoped to its rehearsal runtime identity. The lab is not production and its database table ownership still resolves to `rupaykg`. Do not infer that the existence of policies in this branch enables policies or changes privileges on production main.
