@@ -15,18 +15,18 @@ create policy shakti_activities_tenant on public.activities
 
 drop policy if exists shakti_measurements_tenant on public.measurements;
 create policy shakti_measurements_tenant on public.measurements
-  using (exists (select 1 from public.activities a where a.id = measurements.activity_id and a.obligated_organization_id = app.current_organization_id()))
-  with check (exists (select 1 from public.activities a where a.id = measurements.activity_id and a.obligated_organization_id = app.current_organization_id()));
+  using (exists (select 1 from public.activities a where a.id = measurements.activity_id and a.organization_id = app.current_organization_id()))
+  with check (exists (select 1 from public.activities a where a.id = measurements.activity_id and a.organization_id = app.current_organization_id()));
 
 drop policy if exists shakti_evidence_tenant on public.evidence;
 create policy shakti_evidence_tenant on public.evidence
-  using (exists (select 1 from public.activities a where a.id = evidence.activity_id and a.obligated_organization_id = app.current_organization_id()))
-  with check (exists (select 1 from public.activities a where a.id = evidence.activity_id and a.obligated_organization_id = app.current_organization_id()));
+  using (exists (select 1 from public.activities a where a.id = evidence.activity_id and a.organization_id = app.current_organization_id()))
+  with check (exists (select 1 from public.activities a where a.id = evidence.activity_id and a.organization_id = app.current_organization_id()));
 
 drop policy if exists shakti_carbon_calculations_tenant on public.carbon_calculations;
 create policy shakti_carbon_calculations_tenant on public.carbon_calculations
-  using (exists (select 1 from public.activities a where a.id = carbon_calculations.activity_id and a.obligated_organization_id = app.current_organization_id()))
-  with check (exists (select 1 from public.activities a where a.id = carbon_calculations.activity_id and a.obligated_organization_id = app.current_organization_id()));
+  using (exists (select 1 from public.activities a where a.id = carbon_calculations.activity_id and a.organization_id = app.current_organization_id()))
+  with check (exists (select 1 from public.activities a where a.id = carbon_calculations.activity_id and a.organization_id = app.current_organization_id()));
 
 drop policy if exists shakti_epr_obligations_tenant on public.epr_obligations;
 create policy shakti_epr_obligations_tenant on public.epr_obligations
