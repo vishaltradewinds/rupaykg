@@ -8,7 +8,7 @@
 
 ## Exact current engineering heads
 - PR #331: 50e463df30f18a30e6a192da447a451d1816ea55
-- PR #332: ff29013085d78d55800f4fe6edf0c2905aae79ee
+- PR #332: 1f28690eb89643a3da44443493ddf936a0f340ae
 
 ## Verified work in this batch
 - Added fail-closed protection to the migration runner for the four 20261107 protected Shakti migrations. They require explicit RUPAYKG_ALLOW_PROTECTED_SHAKTI_MIGRATIONS=1.
@@ -89,6 +89,14 @@
 - Latest commits: Evidence Vault `1e6e669dedd6adb383d86eeced0a2c4b880fad1d`; onboarding `b528267070f6ff587ca0bb1dd393ae5053f58dc6`.
 - Static audit result: Evidence Vault and onboarding route files have zero direct `pool.query`/route-level `pool.connect` references. CI/runtime validation remains **NOT VERIFIED**.
 - Production Neon/RLS/deployment remains **HOLD**; no production changes made.
+
+
+### 2026-11-07 — Residual server tenant-fallback removal
+- Removed the final two single-membership tenant fallbacks from `apps/src/server.ts` for resource-flow and measurement routes.
+- Both routes now require an explicit `auth.activeOrganizationId`; they no longer infer tenant context from the first/only membership.
+- Commit: `1f28690eb89643a3da44443493ddf936a0f340ae`.
+- Exact-head CI remains NOT VERIFIED because the available GitHub evidence surface returns no workflow runs/statuses for the current head.
+- Production Neon/RLS/deployment remains HOLD; no production changes made.
 
 
 ### 2026-11-07 — Core tenant-context and platform-admin batch
