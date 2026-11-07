@@ -46,9 +46,9 @@ async function authFor(req:Req,reply:Rep,pool:Pool|null):Promise<AuthContext|nul
 }
 async function activityContext(client:Pool|PoolClient,auth:AuthContext,id:string):Promise<{organization_id:string;geography_id:string}|null>{
  if(!UUID.test(id))return null;
- const r=await pool.query<{organization_id:string;geography_id:string|null}>("select organization_id,geography_id from activities where id=$1",[id]);
+ const r=await client.query<{organization_id:string;geography_id:string|null}>("select organization_id,geography_id from activities where id=$1",[id]);
  const a=r.rows[0];if(!a||!a.geography_id||!canActForOrganization(auth,a.organization_id))return null;
- const scope=await pool.query<{ok:boolean}>("select organization_has_geography_scope($1::uuid,$2::uuid) ok",[a.organization_id,a.geography_id]);
+ const scope=await client.query<{ok:boolean}>("select organization_has_geography_scope($1::uuid,$2::uuid) ok",[a.organization_id,a.geography_id]);
  return scope.rows[0]?.ok?{organization_id:a.organization_id,geography_id:a.geography_id}:null;
 }
 export async function registerEvidenceVaultRoutes(app:FastifyInstance,pool:Pool|null):Promise<void>{
