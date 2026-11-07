@@ -65,7 +65,7 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
       if (!obligation.rows[0]) return reply.code(404).send({ error: "Obligation not found" });
       const organizationId = obligation.rows[0].organization_id;
       if (!canActForOrganization(auth, organizationId)) return reply.code(403).send({ error: "Organization access denied", code: "ORG_FORBIDDEN" });
-      if (!await hasValuePermission(pool, "can_assess_epr", auth.identityId, organizationId)) return reply.code(403).send({ error: "EPR assessment permission required", code: "EPR_ASSESS_FORBIDDEN" });
+      if (!await hasValuePermission(client, "can_assess_epr", auth.identityId, organizationId)) return reply.code(403).send({ error: "EPR assessment permission required", code: "EPR_ASSESS_FORBIDDEN" });
       const jurisdictionId = obligation.rows[0].jurisdiction_id;
       if (!jurisdictionId) return reply.code(409).send({ error: "EPR obligation must have an authorized jurisdiction before assessment", code: "OBLIGATION_JURISDICTION_REQUIRED" });
       const jurisdiction = await client.query<{ ok: boolean }>("select exists(select 1 from organization_memberships om where om.identity_id=$1 and om.organization_id=$2 and om.status='VERIFIED' and organization_has_geography_scope(om.organization_id,$3)) as ok", [auth.identityId, organizationId, jurisdictionId]);
@@ -88,7 +88,7 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
       if (!period.rows[0]) return reply.code(404).send({ error: "Reporting period not found" });
       const organizationId = period.rows[0].organization_id;
       if (!canActForOrganization(auth, organizationId)) return reply.code(403).send({ error: "Organization access denied", code: "ORG_FORBIDDEN" });
-      if (!await hasValuePermission(pool, "can_write_esg", auth.identityId, organizationId)) return reply.code(403).send({ error: "ESG metric write permission required", code: "ESG_WRITE_FORBIDDEN" });
+      if (!await hasValuePermission(client, "can_write_esg", auth.identityId, organizationId)) return reply.code(403).send({ error: "ESG metric write permission required", code: "ESG_WRITE_FORBIDDEN" });
       const evidenceId = str(body, "evidenceId"); const verificationId = str(body, "verificationId");
       if (verificationId && !evidenceId) return reply.code(400).send({ error: "verificationId requires evidenceId" });
       const metric = { code: metricCode, scope, value, unit, ...(evidenceId ? { evidenceId } : {}), ...(verificationId ? { verificationId } : {}) };
