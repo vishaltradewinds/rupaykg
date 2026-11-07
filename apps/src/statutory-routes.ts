@@ -58,8 +58,8 @@ async function authFor(request: Request, reply: Reply, pool: Pool | null): Promi
 }
 
 async function organizationFor(auth: AuthContext, pool: Pool, request: Request, reply: Reply): Promise<string | null> {
-  const requested = text(bodyOf(request), "organizationId") || auth.activeOrganizationId || auth.memberships[0]?.organization_id || null;
-  if (!requested || !canActForOrganization(auth, requested)) {
+  const requested = text(bodyOf(request), "organizationId") || auth.activeOrganizationId || null;
+  if (!auth.activeOrganizationId || requested !== auth.activeOrganizationId || !requested || !canActForOrganization(auth, requested)) {
     reply.code(403).send({ error: "No verified membership for organization", code: "ORG_FORBIDDEN" });
     return null;
   }
@@ -125,8 +125,8 @@ export async function registerStatutoryRoutes(app: FastifyInstance, pool: Pool |
   app.post("/api/v1/statutory/bwg/assess", async (request, reply) => {
     const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
     const body = bodyOf(request as never);
-    const organizationId = text(body, "organizationId") || auth.activeOrganizationId || auth.memberships[0]?.organization_id || null;
-    if (!organizationId || !canActForOrganization(auth, organizationId)) return reply.code(403).send({ error: "No verified membership for organization", code: "ORG_FORBIDDEN" });
+    const organizationId = text(body, "organizationId") || auth.activeOrganizationId || null;
+    if (!auth.activeOrganizationId || organizationId !== auth.activeOrganizationId || !organizationId || !canActForOrganization(auth, organizationId)) return reply.code(403).send({ error: "Select a verified active organization", code: "ORG_FORBIDDEN" });
     if (!await hasOrganizationPermission(pool, auth, organizationId, ["swm:manage", "audit:execute", "reports:export"])) return reply.code(403).send({ error: "BWG applicability assessment permission required", code: "STATUTORY_WRITE_REQUIRED" });
     const floorArea = nonNegative(body, "floorAreaSqM");
     const water = nonNegative(body, "waterConsumptionLpd");
@@ -155,7 +155,7 @@ export async function registerStatutoryRoutes(app: FastifyInstance, pool: Pool |
     const auth = await authFor(request as never, reply, pool); if (!auth || !pool) return;
     const body = bodyOf(request as never);
     const organizationId = text(body, "organizationId") || auth.activeOrganizationId || auth.memberships[0]?.organization_id || null;
-    if (!organizationId || !canActForOrganization(auth, organizationId)) return reply.code(403).send({ error: "No verified membership for organization", code: "ORG_FORBIDDEN" });
+    if (!auth.activeOrganizationId || organizationId !== auth.activeOrganizationId || !organizationId || !canActForOrganization(auth, organizationId)) return reply.code(403).send({ error: "Select a verified active organization", code: "ORG_FORBIDDEN" });
     if (!await hasOrganizationPermission(pool, auth, organizationId, ["epr:manage", "audit:execute", "reports:export"])) return reply.code(403).send({ error: "EPR applicability management permission required", code: "STATUTORY_EPR_WRITE_REQUIRED" });
     const scheme = text(body, "scheme");
     if (!scheme) return reply.code(400).send({ error: "EPR scheme is required", code: "EPR_SCHEME_REQUIRED" });
