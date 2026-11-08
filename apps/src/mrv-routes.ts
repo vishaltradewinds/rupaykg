@@ -157,7 +157,7 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
       if (!owner.rows[0] || !canActForOrganization(auth, owner.rows[0].organization_id)) return reply.code(403).send({ error: "Organization access denied", code: "ORG_FORBIDDEN" });
       if (!await requirePermission(client, auth, owner.rows[0].organization_id, ["guardian:read"])) return reply.code(403).send({ error: "Guardian read permission required", code: "MRV_PERMISSION_REQUIRED" });
       if (!await activityInAuthorizedGeography(client, auth, activityId, owner.rows[0].organization_id)) return reply.code(403).send({ error: "Activity geography is outside organization authorization scope", code: "GEOGRAPHY_FORBIDDEN" });
-      const rows = await client.query("select * from mrv_provenance_events where activity_id=$1 order by created_at desc", [activityId]);
+      const rows = await client.query("select * from mrv_provenance_events where activity_id=$1 order by created_at desc,id desc", [activityId]);
       const acceptanceFixture = await isAcceptanceFixture(client, activityId);
       return {
         source: "postgresql",
