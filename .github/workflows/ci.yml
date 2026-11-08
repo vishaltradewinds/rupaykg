@@ -141,6 +141,8 @@ jobs:
         run: node scripts/test-shakti-context-pool-isolation-contract.mjs
       - name: Run Shakti RLS write contract
         run: node scripts/test-shakti-rls-write-contract.mjs
+      - name: Run Shakti SECURITY DEFINER migration contract
+        run: node scripts/test-shakti-security-definer-migration-contract.mjs
       - name: Run Shakti protected migration gate contract
         shell: bash
         run: |
