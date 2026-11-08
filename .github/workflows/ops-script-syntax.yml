@@ -1,0 +1,40 @@
+name: Operational Script Syntax Gate
+
+on:
+  push:
+    paths:
+      - "ops/**/*.mjs"
+      - "ops/**/*.js"
+      - ".github/workflows/ops-script-syntax.yml"
+  pull_request:
+    paths:
+      - "ops/**/*.mjs"
+      - "ops/**/*.js"
+      - ".github/workflows/ops-script-syntax.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: package.json
+
+      - name: Validate operational JavaScript syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t scripts < <(find ops -type f \( -name '*.mjs' -o -name '*.js' \) -print | sort)
+          test "${#scripts[@]}" -gt 0
+          for script in "${scripts[@]}"; do
+            echo "Checking $script"
+            node --check "$script"
+          done
