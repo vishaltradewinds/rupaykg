@@ -846,3 +846,10 @@
 - Code checkpoint: `7c3903a954ebcc608f1fe58ad4bb532642c7cbf1`.
 - Exact-head CI: **NOT VERIFIED**.
 - Production remains **READ-ONLY/HOLD**.
+
+### 2026-11-08 — Identity liveness contract completed
+- Found that `test-shakti-context-identity-liveness-contract.mjs` only inspected `set_platform_context` and `set_authority_context`, while `set_identity_context` was hardened in the companion completion migration.
+- Extended the contract to inspect all three live context functions across the two 20261108 migrations.
+- Code checkpoint: `25742a31a767aba25ddc20de4c08e2a5a785ddab`.
+- Exact-head CI: **NOT VERIFIED**.
+- Production remains **READ-ONLY/HOLD**.
