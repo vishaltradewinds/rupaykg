@@ -2,10 +2,45 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import { Pool } from "pg";
-import { withTenantTransaction } from "./tenant-db.js";
+import { withIdentityTransaction, withTenantTransaction } from "./tenant-db.js";
 import type { AuthContext } from "./auth.js";
 
 const enabled = process.env.RUPAYKG_RUN_DB_INTEGRATION_TESTS === "1" && Boolean(process.env.DATABASE_URL) && Boolean(process.env.RUPAYKG_TEST_OWNER_DATABASE_URL);
+
+test("Shakti identity context rejects inactive identity and does not establish tenant scope", { skip: !enabled }, async () => {
+  const runtimePool = new Pool({ connectionString: process.env.DATABASE_URL });
+  const ownerPool = new Pool({ connectionString: process.env.RUPAYKG_TEST_OWNER_DATABASE_URL });
+  const suffix = randomBytes(8).toString("hex");
+  let identityId = "";
+  try {
+    identityId = (await ownerPool.query<{ id: string }>(
+      "insert into identities(external_subject,display_name,email,status) values($1,$2,$3,'VERIFIED') returning id",
+      ["identity-context:" + suffix, "Identity Context " + suffix, "identity-context-" + suffix + "@example.invalid"],
+    )).rows[0]!.id;
+
+    const context = await withIdentityTransaction(runtimePool, identityId, async client => {
+      await client.query("set local role rupaykg_app_runtime");
+      const row = (await client.query<{ identity_id: string; execution_scope: string; organization_id: string | null }>(
+        "select app.current_identity_id() as identity_id, current_setting('app.execution_scope', true) as execution_scope, app.current_organization_id() as organization_id",
+      )).rows[0]!;
+      assert.equal(row.identity_id, identityId);
+      assert.equal(row.execution_scope, "IDENTITY");
+      assert.equal(row.organization_id, null);
+      return row;
+    });
+    assert.equal(context.identity_id, identityId);
+
+    await ownerPool.query("update identities set status='SUSPENDED' where id=$1", [identityId]);
+    await assert.rejects(
+      () => withIdentityTransaction(runtimePool, identityId, async () => "must-not-run"),
+      /Identity is not active/i,
+    );
+  } finally {
+    if (identityId) await ownerPool.query("delete from identities where id=$1", [identityId]);
+    await runtimePool.end();
+    await ownerPool.end();
+  }
+});
 
 test("Shakti tenant context rejects cross-organization context switching", { skip: !enabled }, async () => {
   const runtimePool = new Pool({ connectionString: process.env.DATABASE_URL });
