@@ -35,6 +35,12 @@
 - Re-read the committed contract after the change.
 - No production database changes.
 
+## 2026-11-08 — SECURITY DEFINER runtime grant preservation
+- Strengthened `scripts/test-shakti-security-definer-migration-contract.mjs` to verify migration 101 preserves the six explicit least-privilege runtime execution grants after its PUBLIC EXECUTE revocation.
+- This closes a contract gap where the boundary revocation was tested but the required application execution surface was not.
+- Re-read the committed contract after the change.
+- No production database changes.
+
 ## Exact current engineering heads
 - PR #331: 50e463df30f18a30e6a192da447a451d1816ea55
 - PR #332: a636a26e81cdaac88c69247e333b88c64a7ececa
