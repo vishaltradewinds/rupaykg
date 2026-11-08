@@ -91,3 +91,18 @@ Minimum acceptance:
 - authoritative-state integrity.
 
 **Shakti rule:** Reuse what is proven. Verify what is adopted. Localise what is required. Evidence what is claimed.
+
+External mediator contract now has a concrete tenant-safe persistence and API intake path.
+
+### Runtime implementation
+
+- Persistence: `migrations/20261108_external_integration_mediator.sql`
+- Tenant-safe service: `apps/src/external-integration-mediator.ts`
+- API boundary: `POST /api/v1/integrations/messages`
+- Route registration: `apps/src/external-integration-routes.ts` and `apps/src/server.ts`
+- Runtime acceptance uses `withTenantTransaction()` and requires the authenticated active organization to equal the envelope organization.
+- Idempotency is persisted by `(integration_id, organization_id, idempotency_key)`.
+- Duplicate delivery is acknowledged without creating a second authoritative integration message.
+
+This closes the prior gap of having only a transport-neutral type without a runtime intake path. It does **not** mean any external government/PSU/registry connector is production accepted; provider-specific authentication, schema conformance, remote-call execution, external-response validation and field/production acceptance remain separate gates.
+
