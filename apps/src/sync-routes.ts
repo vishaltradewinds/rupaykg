@@ -83,7 +83,13 @@ export async function registerSyncRoutes(app: FastifyInstance, pool: Pool | null
         await client.query("insert into audit_events(actor_identity_id,organization_id,action,target_type,target_id,event_hash,payload) values($1,$2,'FIELD_DEVICE_ENROLLED','field_device',$3,$4,$5)", [auth.identityId, organizationId, device.id, payloadHash({ action: "FIELD_DEVICE_ENROLLED", deviceId: device.id, registeredIdentityId: identityId }), { deviceId: device.device_id, identityId: device.identity_id, status: device.status }]);
         return reply.code(201).send({ source: "postgresql", syntheticData: false, authoritativeMutation: true, device });
       });
-    } catch (error) { request.log.error(error); return reply.code(503).send({ error: "Field-device enrollment unavailable", code: "FIELD_DEVICE_ENROLLMENT_UNAVAILABLE", syntheticData: false }); }
+    } catch (error) {
+      if (error && typeof error === "object" && "code" in error && (error as { code?: string }).code === "23505") {
+        return reply.code(409).send({ error: "Device identifier is already enrolled", code: "DEVICE_ALREADY_ENROLLED" });
+      }
+      request.log.error(error);
+      return reply.code(503).send({ error: "Field-device enrollment unavailable", code: "FIELD_DEVICE_ENROLLMENT_UNAVAILABLE", syntheticData: false });
+    }
   });
 
   app.post("/api/v1/field-devices/:deviceId/verify", async (request, reply) => {
