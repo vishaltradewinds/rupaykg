@@ -82,3 +82,17 @@ This closes the repository dependency/lockfile reconciliation gate. It does not 
 The repository now contains `apps/src/otel-exporter-conformance.test.ts`. The test starts an ephemeral local HTTP collector endpoint, initializes the pinned OTLP protobuf exporter, emits a real OpenTelemetry span under the application trace identity, verifies an OTLP payload is received, and checks that known credential/payload sentinel strings are absent from the emitted payload.
 
 This is a repository-level exporter/conformance test. It does **not** prove production collector availability, production runtime configuration, end-to-end PostgreSQL/calculation/registry correlation, or production acceptance. Those remain open until executed against the deployed environment and retained as evidence.
+
+
+## Application-path span instrumentation
+
+The authoritative application path now creates OpenTelemetry spans at the principal control boundaries:
+
+- tenant-scoped PostgreSQL transactions: `rupaykg.db.tenant_transaction`;
+- carbon/MRV calculation: `rupaykg.mrv.calculation`;
+- Guardian MRV verification: `rupaykg.mrv.guardian_verification`;
+- Hedera HCS anchoring: `rupaykg.mrv.hedera_anchor`;
+- registry credential issuance: `rupaykg.registry.credential_issuance`;
+- external integration acceptance: `rupaykg.external_integration.accept`.
+
+These spans deliberately avoid request payloads, credentials and environmental measurement values as span attributes. They provide the application-level correlation structure needed for the production acceptance path. They do not by themselves prove that a deployed collector received the spans or that a real production request traversed every boundary.
