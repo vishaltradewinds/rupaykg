@@ -1,0 +1,101 @@
+name: Controlled Shakti Production Migration
+
+on:
+  workflow_dispatch:
+
+jobs:
+  migrate:
+    name: Controlled production Shakti migration
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: production-db-migration-approval
+    permissions:
+      contents: read
+    env:
+      DATABASE_URL: ${{ secrets.RUPAYKG_DDL_DATABASE_URL }}
+    steps:
+      - name: Checkout authoritative repository
+        uses: actions/checkout@v4
+
+      - name: Validate controlled migration secret
+        run: |
+          set -euo pipefail
+          if [ -z "${DATABASE_URL:-}" ]; then
+            echo "RUPAYKG_DDL_DATABASE_URL is required."
+            exit 1
+          fi
+
+      - name: Verify target identity before migration
+        run: |
+          set -euo pipefail
+          mkdir -p shakti-migration-evidence
+          psql "$DATABASE_URL" -At -v ON_ERROR_STOP=1 \
+            -c "select current_database() || '|' || coalesce(inet_server_addr()::text,'local') || '|' || inet_server_port() || '|' || current_setting('server_version_num');" \
+            | tee shakti-migration-evidence/target-fingerprint.txt
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+            -c "select current_database() as database, current_user as user_name, session_user as session_user;" \
+            | tee shakti-migration-evidence/target-identity.txt
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+            -c "select rolname, rolsuper, rolbypassrls, rolcanlogin, rolcreaterole, rolcreatedb from pg_roles where rolname=current_user;" \
+            | tee shakti-migration-evidence/ddl-role.txt
+
+      - name: Verify required DDL role safety
+        run: |
+          set -euo pipefail
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "select 1 / case when coalesce((select rolsuper from pg_roles where rolname=current_user),true)=false and coalesce((select rolbypassrls from pg_roles where rolname=current_user),true)=false then 1 else 0 end as ddl_role_safety_assertion;" \
+            | tee shakti-migration-evidence/ddl-role-safety.txt
+
+      - name: Record pre-migration baseline
+        run: |
+          set -euo pipefail
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+            -c "select version, filename, applied_at from schema_migrations order by applied_at desc limit 12;" \
+            | tee shakti-migration-evidence/pre-migration-baseline.txt
+
+      - name: Apply repository migrations
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          npm run migrate -w @rupaykg/api | tee shakti-migration-evidence/migration-output.txt
+
+      - name: Verify Shakti migrations 097-099
+        run: |
+          set -euo pipefail
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+            -c "select version, filename, applied_at from schema_migrations where version in ('097','098','099') order by version;" \
+            | tee shakti-migration-evidence/shakti-migrations-postcheck.txt
+          for version in 097 098 099; do
+            if ! grep -q "^ *${version} *|" shakti-migration-evidence/shakti-migrations-postcheck.txt; then
+              echo "Required Shakti migration ${version} is missing after controlled migration."
+              exit 1
+            fi
+          done
+
+      - name: Verify RLS remains controlled
+        run: |
+          set -euo pipefail
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+            -c "select count(*) filter (where c.relrowsecurity) as rls_enabled, count(*) filter (where c.relforcerowsecurity) as rls_forced from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind='r';" \
+            | tee shakti-migration-evidence/post-migration-rls-state.txt
+          echo "Migration complete. RLS activation remains a separate controlled DDL gate."
+
+      - name: Record migration metadata
+        run: |
+          set -euo pipefail
+          {
+            echo "repository=vishaltradewinds/rupaykg"
+            echo "commit=$GITHUB_SHA"
+            echo "workflow_run=$GITHUB_RUN_ID"
+            echo "workflow_attempt=$GITHUB_RUN_ATTEMPT"
+            echo "captured_at_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } > shakti-migration-evidence/acceptance-metadata.txt
+
+      - name: Upload migration evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shakti-production-migration-${{ github.run_id }}
+          path: shakti-migration-evidence/
+          if-no-files-found: error
+          retention-days: 30
