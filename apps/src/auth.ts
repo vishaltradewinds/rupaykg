@@ -38,9 +38,10 @@ export async function authenticate(request: FastifyRequest, pool: Pool | null): 
   );
   if (!rows.rows[0]) return null;
   const memberships = await pool.query<{ organization_id: string; role_id: string; status: string }>(
-    `select organization_id, role_id, status
-       from organization_memberships
-      where identity_id = $1 and status = 'VERIFIED'`,
+    `select om.organization_id, om.role_id, om.status
+       from organization_memberships om
+       join organizations o on o.id = om.organization_id and o.status = 'VERIFIED'
+      where om.identity_id = $1 and om.status = 'VERIFIED'`,
     [rows.rows[0].identity_id],
   );
   const requested = request.headers["x-rupaykg-organization-id"];
