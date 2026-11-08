@@ -264,6 +264,15 @@ test("Shakti transaction-local context does not leak across pooled transactions"
       )).rows[0]!;
       assert.equal(afterCommit.identity_id, null, "identity context must not survive transaction commit");
       assert.equal(afterCommit.organization_id, null, "tenant context must not survive transaction commit");
+
+      await client.query("begin");
+      await client.query("select app.set_request_context($1,$2)", [identityId, organizationId]);
+      await client.query("rollback");
+      const afterRollback = (await client.query<{ identity_id: string | null; organization_id: string | null }>(
+        "select app.current_identity_id() identity_id, app.current_organization_id() organization_id",
+      )).rows[0]!;
+      assert.equal(afterRollback.identity_id, null, "identity context must not survive transaction rollback");
+      assert.equal(afterRollback.organization_id, null, "tenant context must not survive transaction rollback");
     } finally {
       try { await client.query("rollback"); } catch {}
       client.release();
