@@ -28,16 +28,16 @@ for (const grant of requiredRuntimeExecutes) {
 }
 
 const requiredRuntimeFunctions = [
-  ["app.current_identity_id()", /create\\s+(?:or\\s+replace\\s+)?function\\s+app\\.current_identity_id\\s*\\(\\s*\\)\\s*[\\s\\S]*?security\\s+definer/i],
-  ["app.current_organization_id()", /create\\s+(?:or\\s+replace\\s+)?function\\s+app\\.current_organization_id\\s*\\(\\s*\\)\\s*[\\s\\S]*?security\\s+definer/i],
-  ["app.set_request_context(uuid,uuid)", /create\\s+(?:or\\s+replace\\s+)?function\\s+app\\.set_request_context\\s*\\(\\s*p_identity_id\\s+uuid\\s*,\\s*p_organization_id\\s+uuid\\s*\\)[\\s\\S]*?security\\s+definer/i],
-  ["app.set_identity_context(uuid)", /create\\s+(?:or\\s+replace\\s+)?function\\s+app\\.set_identity_context\\s*\\(\\s*p_identity_id\\s+uuid\\s*\\)[\\s\\S]*?security\\s+definer/i],
-  ["app.set_platform_context(uuid)", /create\\s+(?:or\\s+replace\\s+)?function\\s+app\\.set_platform_context\\s*\\(\\s*p_identity_id\\s+uuid\\s*\\)[\\s\\S]*?security\\s+definer/i],
-  ["app.set_authority_context(uuid,text,uuid)", /create\\s+(?:or\\s+replace\\s+)?function\\s+app\\.set_authority_context\\s*\\(\\s*p_identity_id\\s+uuid\\s*,\\s*p_authority_level\\s+text\\s*,\\s*p_geography_id\\s+uuid\\s*\\)[\\s\\S]*?security\\s+definer/i],
+  ["app.current_identity_id()", /create\s+(?:or\s+replace\s+)?function\s+app\.current_identity_id\s*\(\s*\)\s*[\s\S]*?security\s+definer/i],
+  ["app.current_organization_id()", /create\s+(?:or\s+replace\s+)?function\s+app\.current_organization_id\s*\(\s*\)\s*[\s\S]*?security\s+definer/i],
+  ["app.set_request_context(uuid,uuid)", /create\s+(?:or\s+replace\s+)?function\s+app\.set_request_context\s*\(\s*p_identity_id\s+uuid\s*,\s*p_organization_id\s+uuid\s*\)[\s\S]*?security\s+definer/i],
+  ["app.set_identity_context(uuid)", /create\s+(?:or\s+replace\s+)?function\s+app\.set_identity_context\s*\(\s*p_identity_id\s+uuid\s*\)[\s\S]*?security\s+definer/i],
+  ["app.set_platform_context(uuid)", /create\s+(?:or\s+replace\s+)?function\s+app\.set_platform_context\s*\(\s*p_identity_id\s+uuid\s*\)[\s\S]*?security\s+definer/i],
+  ["app.set_authority_context(uuid,text,uuid)", /create\s+(?:or\s+replace\s+)?function\s+app\.set_authority_context\s*\(\s*p_identity_id\s+uuid\s*,\s*p_authority_level\s+text\s*,\s*p_geography_id\s+uuid\s*\)[\s\S]*?security\s+definer/i],
 ];
 const allMigrationSource = [];
 for (const file of files) allMigrationSource.push(await readFile(path.join(dir, file), "utf8"));
-const combinedMigrationSource = allMigrationSource.join("\\n");
+const combinedMigrationSource = allMigrationSource.join("\n");
 for (const [name, pattern] of requiredRuntimeFunctions) {
   if (!pattern.test(combinedMigrationSource)) failures.push("required runtime function is not defined as SECURITY DEFINER in migrations: " + name);
 }
