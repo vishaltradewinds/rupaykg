@@ -176,7 +176,7 @@ export function mapRupayKgMeasurementToSensorThings(
       "@iot.id": propertyId,
       name: input.observedProperty.name,
       definition: input.observedProperty.definition,
-      description: input.observedProperty.description,
+      ...(input.observedProperty.description ? { description: input.observedProperty.description } : {}),
     },
     datastream: {
       "@iot.id": datastreamId,
