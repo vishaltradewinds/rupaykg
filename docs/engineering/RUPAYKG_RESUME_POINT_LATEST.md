@@ -725,3 +725,12 @@
 - Checkpoint: `1b3f25519131372faaa772afe2005d9a711bd8c4`.
 - Exact-head CI: **NOT VERIFIED**.
 - Production remains **READ-ONLY/HOLD**.
+
+
+### 2026-11-08 — Verified issuer organization gate
+- Strengthened assigned-verifier provenance reads to require the credential issuer organization itself to remain `VERIFIED`.
+- Added deterministic contract coverage for the issuer-organization status predicate.
+- Added DB acceptance coverage that suspending the issuer organization blocks a fresh verifier tenant context, then restores the fixture state.
+- Checkpoint: `071f4ed086029d7e5a648c3428caa366316016ae`.
+- Exact-head CI: **NOT VERIFIED**.
+- Production remains **READ-ONLY/HOLD**.
