@@ -44,7 +44,7 @@ if (missing.length) {
 if (/grant\s+(?:[^;]*\b)?delete\s+on\s+table\s+[^;]+\s+to\s+rupaykg_app_runtime/i.test(grantSource)) {
   throw new Error("Runtime role must not receive DELETE privilege.");
 }
-if (/grant\s+[^;]*\bon\s+schema_migrations\b/i.test(grantSource)) {
+if (/grant\s+[^;]*\bon\s+(?:table\s+)?schema_migrations\b/i.test(grantSource)) {
   throw new Error("schema_migrations must remain outside the runtime grant contract.");
 }
 
