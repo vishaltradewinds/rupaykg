@@ -11,7 +11,7 @@
   - the migration role has no PUBLIC default EXECUTE on newly-created functions.
 - Wired the SQL acceptance into disposable CI immediately after migrations.
 - This converts migration-101 boundary checking from static source inspection into actual database privilege-state acceptance.
-- Runtime acceptance checkpoint: `31e976eb2b27f4fce0d8b63028c5b41d30e92707`.
+- Runtime acceptance checkpoint: `1d1b25c2ea13804d7e2c45356dcadcb35778e28c`.
 - CI wiring checkpoint: `a2549767f8d1116b3b78ef28ce4e2f3a5352bf27`.
 - Exact-head GitHub Actions evidence remains **NOT VERIFIED**.
 - Production remains **READ-ONLY/HOLD**.
