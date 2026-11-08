@@ -75,3 +75,12 @@ Migration `086_reserved_role_restoration_db_guard.sql` protects status reactivat
 ## Acceptance fixture registry exclusion
 
 Migration `087_acceptance_fixture_registry_exclusion.sql` prevents activities or evidence explicitly marked with `metadata.acceptanceFixture=true` from backing credentials in value-bearing states. It also binds the database gate to the exact activity, verification, and evidence tuple. The MRV API reports acceptance fixtures as not registry eligible even after real Guardian/Hedera/Mirror Node verification. External anchoring proves message integrity and consensus; it does not validate the underlying activity as a real eligible carbon project.
+
+
+## Shakti tenant-isolation runtime gate
+
+29. `097_shakti_tenant_isolation_runtime_contract.sql` — establishes transaction-local identity/organization context and the dedicated non-BYPASSRLS runtime role contract. It does not enable RLS.
+30. `098_shakti_authentication_bootstrap.sql` — establishes the governed SECURITY DEFINER bearer-session bootstrap required before tenant context exists. It returns only verified memberships attached to a valid session and grants execution only to the application runtime role.
+31. `099_shakti_rls_policy_foundation.sql` — installs fail-closed organization/relationship-scoped RLS policies and runtime table privileges without enabling RLS. Production enablement remains a controlled deployment gate requiring role ownership separation, runtime context, authentication bootstrap validation and cross-tenant negative tests.
+
+These migrations replace the previously unnumbered Shakti tenant-isolation migration files. Migration numbering is authoritative for deployment ordering; do not add unnumbered production migrations.
