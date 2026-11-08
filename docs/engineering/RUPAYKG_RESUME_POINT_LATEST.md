@@ -751,3 +751,11 @@
 - Checkpoint: `0c81fd8d8a4e894ecce19fa04d3e0e1b0fe3fd3d`.
 - Exact-head CI: **NOT VERIFIED**.
 - Production remains **READ-ONLY/HOLD**.
+
+
+### 2026-11-08 — Verifier approval revocation acceptance
+- Added runtime acceptance proving assigned-verifier registry visibility fails closed when the underlying verification decision changes from `APPROVED` to `REJECTED`, even inside an already-established runtime transaction.
+- The fixture restores the approved decision before continuing and remains cleanup-safe.
+- Checkpoint: `9ba95dec743e3e108056c8727dfa9f2c18b8bfc6`.
+- Exact-head CI: **NOT VERIFIED**.
+- Production remains **READ-ONLY/HOLD**.
