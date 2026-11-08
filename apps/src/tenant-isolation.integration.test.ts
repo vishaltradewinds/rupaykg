@@ -988,12 +988,21 @@ test("Shakti credential runtime privilege is status-only", { skip: !enabled }, a
       await client.query("begin");
       await client.query("set local role rupaykg_app_runtime");
       await client.query("select app.set_request_context($1,$2)", [identityId, organizationA]);
+      await client.query("update credentials set status='ACTIVE' where id=$1", [credentialA]);
+      await client.query("rollback");
+      await client.query("begin");
+      await client.query("set local role rupaykg_app_runtime");
+      await client.query("select app.set_request_context($1,$2)", [identityId, organizationA]);
       await assert.rejects(
         () => client.query("update credentials set trust_root_id=$2 where id=$1", [credentialA, "PRIV-CHANGED-" + suffix]),
         /permission denied|not permitted/i,
       );
       await assert.rejects(
         () => client.query("update credentials set status='ACTIVE', trust_root_id=$2 where id=$1", [credentialA, "PRIV-COMBINED-" + suffix]),
+        /permission denied|not permitted/i,
+      );
+      await assert.rejects(
+        () => client.query("delete from credentials where id=$1", [credentialA]),
         /permission denied|not permitted/i,
       );
       await client.query("rollback");
