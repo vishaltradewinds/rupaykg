@@ -41,6 +41,12 @@
 - Re-read the committed contract after the change.
 - No production database changes.
 
+## 2026-11-08 — SECURITY DEFINER runtime EXECUTE allowlist
+- Strengthened the migration-101 contract to reject any runtime `GRANT EXECUTE` outside the six explicitly approved `rupaykg_app_runtime` functions.
+- This converts the runtime execution surface into a fail-closed allowlist rather than merely checking that required grants exist.
+- Re-read the committed contract after the change.
+- No production database changes.
+
 ## Exact current engineering heads
 - PR #331: 50e463df30f18a30e6a192da447a451d1816ea55
 - PR #332: a636a26e81cdaac88c69247e333b88c64a7ececa
