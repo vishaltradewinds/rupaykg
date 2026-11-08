@@ -21,21 +21,21 @@ for (const [name, pattern] of requiredWorkflowInvariants) {
   if (!pattern.test(workflow)) failures.push(`CI invariant missing: ${name}`);
 }
 
-const protectedMigrationNames = [
-  "20261107_authority_hierarchy_context.sql",
-  "20261107_context_identity_bootstrap.sql",
-  "20261107_context_organization_id.sql",
-  "20261107_platform_execution_context.sql",
-  "20261107_runtime_grant_reconciliation.sql",
-  "20261107_core_tenant_rls_activation_gate.sql",
-  "20261108_context_identity_liveness_hardening.sql",
-  "20261108_context_identity_liveness_completion.sql",
-  "082_settlement_reference_trigger_insert_safety.sql",
-  "088_field_sync_append_only_integrity.sql",
-  "089_settlement_reconciliation_reference_integrity.sql",
+const protectedMigrationPatterns = [
+  ["20261107_authority_hierarchy_context.sql", /authority_hierarchy_context/],
+  ["20261107_context_identity_bootstrap.sql", /context_identity_bootstrap/],
+  ["20261107_context_organization_id.sql", /context_organization_id/],
+  ["20261107_platform_execution_context.sql", /platform_execution_context/],
+  ["20261107_runtime_grant_reconciliation.sql", /runtime_grant_reconciliation/],
+  ["20261107_core_tenant_rls_activation_gate.sql", /core_tenant_rls_activation_gate/],
+  ["20261108_context_identity_liveness_hardening.sql", /context_identity_liveness_hardening/],
+  ["20261108_context_identity_liveness_completion.sql", /context_identity_liveness_completion/],
+  ["082_settlement_reference_trigger_insert_safety.sql", /082_settlement_reference_trigger_insert_safety/],
+  ["088_field_sync_append_only_integrity.sql", /088_field_sync_append_only_integrity/],
+  ["089_settlement_reconciliation_reference_integrity.sql", /089_settlement_reconciliation_reference_integrity/],
 ];
-for (const filename of protectedMigrationNames) {
-  if (!migrationRunner.includes(filename)) failures.push(`Migration invariant missing: protected migration ${filename}`);
+for (const [filename, pattern] of protectedMigrationPatterns) {
+  if (!pattern.test(migrationRunner)) failures.push(`Migration invariant missing: protected migration ${filename}`);
 }
 const requiredMigrationInvariants = [
   ["explicit protected gate", /RUPAYKG_ALLOW_PROTECTED_SHAKTI_MIGRATIONS/],
