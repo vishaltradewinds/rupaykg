@@ -149,6 +149,8 @@ jobs:
         run: node scripts/test-shakti-settlement-authorization-reference-contract.mjs
       - name: Run Shakti settlement execution external-reference contract
         run: node scripts/test-shakti-settlement-execution-external-reference-contract.mjs
+      - name: Run Shakti settlement event append-only contract
+        run: node scripts/test-shakti-settlement-event-append-only-contract.mjs
       - name: Run Shakti context pool isolation contract
         run: node scripts/test-shakti-context-pool-isolation-contract.mjs
       - name: Run Shakti RLS write contract
