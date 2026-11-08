@@ -73,4 +73,4 @@ Configure the GitHub Actions secret `RUPAYKG_RUNTIME_DATABASE_URL` with the exac
 
 ### Policy coverage evidence
 
-Before the cross-tenant negative test, the live acceptance workflow executes `ops/tenant-isolation/VERIFY_RLS_POLICY_COVERAGE.sql`. The evidence artifact records the protected-table policy inventory and fails closed if any protected table lacks either a read policy or a mutation policy. This is an evidence-strengthening gate; it does not replace tenant A/B read and mutation isolation testing.
+Before the cross-tenant negative test, the live acceptance workflow executes `ops/tenant-isolation/VERIFY_RLS_POLICY_COVERAGE.sql`. The evidence artifact records the protected-table policy inventory and fails closed if any protected table lacks a read policy. Mutation policy coverage is intentionally not required for read-only protected relations; cross-tenant mutation denial is proven separately by the transactional negative test. This is an evidence-strengthening gate; it does not replace tenant A/B read and mutation isolation testing.
