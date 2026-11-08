@@ -631,3 +631,12 @@
 - Latest checkpoint commit: `2308eec889568de5c74ee91167a85a9fe89f05c3`.
 - Exact-head CI: **NOT VERIFIED**.
 - Production remains **READ-ONLY/HOLD**.
+
+
+### 2026-11-08 — Credential privilege contract bound to migration 100
+- Tightened the deterministic credential authority contract so it directly inspects migration 100 for the runtime privilege controls.
+- The contract now independently verifies the migration contains status-only UPDATE scope and explicit DELETE denial, rather than relying only on route/migration text from separate files.
+- Runtime mutation surface remains verified against the three actual credential lifecycle status updates in `apps/src/registry-routes.ts`.
+- Latest engineering checkpoint commit: `083946d41e4bbe38586f11ba36656b029642aecd`.
+- Exact-head CI: **NOT VERIFIED**.
+- Production remains **READ-ONLY/HOLD**.
