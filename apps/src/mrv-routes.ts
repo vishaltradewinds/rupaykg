@@ -119,7 +119,7 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
             and hcs_topic_id is not null and btrim(hcs_topic_id)<>''
             and hcs_transaction_id is not null and btrim(hcs_transaction_id)<>''
             and hcs_consensus_timestamp is not null and btrim(hcs_consensus_timestamp)<>''
-          order by created_at desc`,
+          order by created_at desc,id desc`,
         [activityId, verificationId, evidenceId, policyId],
       );
       const existing = prior.rows.find(record => {
@@ -182,7 +182,7 @@ export async function registerMrvRoutes(app: FastifyInstance, pool: Pool | null)
     try {
       return await withTenantTransaction(pool,auth,async(client)=>{
       const provenance = await client.query<{ id: string; activity_id: string; verification_id: string; evidence_id: string; guardian_execution_id: string; integrity_hash: string; hcs_topic_id: string | null; mirror_node_verified_at: Date | null }>(
-        "select id, activity_id, verification_id, evidence_id, guardian_execution_id, integrity_hash, hcs_topic_id, mirror_node_verified_at from mrv_provenance_events where hcs_consensus_timestamp=$1 order by created_at desc limit 1",
+        "select id, activity_id, verification_id, evidence_id, guardian_execution_id, integrity_hash, hcs_topic_id, mirror_node_verified_at from mrv_provenance_events where hcs_consensus_timestamp=$1 order by created_at desc,id desc limit 1",
         [timestamp],
       );
       const row = provenance.rows[0];
