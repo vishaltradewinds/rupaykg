@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type { Pool, PoolClient } from "pg";
+import { trace } from "@opentelemetry/api";
 import { calculateEmissionReduction, isGenericCalculationMethodAllowed, sha256Canonical } from "@rupaykg/carbon";
 import { assessEprObligation } from "@rupaykg/compliance";
 import { classifyMetric } from "@rupaykg/esg";
@@ -43,7 +44,20 @@ export async function registerValueRoutes(app: FastifyInstance, pool: Pool | nul
       const method = await client.query<{ id: string; rules: unknown; governance_status: string }>("select id, rules, governance_status from methodology_versions where methodology_code = $1 and version = $2", [methodologyCode, methodologyVersion]);
       if (!method.rows[0]) return reply.code(409).send({ error: "Methodology version is not registered", code: "METHODOLOGY_NOT_REGISTERED" });
       if (!isGenericCalculationMethodAllowed(methodologyCode)) return reply.code(409).send({ error: "Official BEE CCTS methodologies require a reviewed, method-specific calculation adapter; generic baseline/project arithmetic is blocked", code: "METHODOLOGY_ADAPTER_NOT_VALIDATED" });
-      const result = calculateEmissionReduction({ activityId, methodologyCode, methodologyVersion, baselineTco2e, projectTco2e, leakageTco2e, uncertaintyTco2e });
+      const result = await trace.getTracer("rupaykg-calculation").startActiveSpan("rupaykg.mrv.calculation", async span => {
+        span.setAttribute("rupaykg.operation", "carbon_calculation");
+        span.setAttribute("rupaykg.authoritative_mutation", false);
+        span.setAttribute("rupaykg.methodology_code", methodologyCode);
+        span.setAttribute("rupaykg.methodology_version", methodologyVersion);
+        try {
+          const calculation = calculateEmissionReduction({ activityId, methodologyCode, methodologyVersion, baselineTco2e, projectTco2e, leakageTco2e, uncertaintyTco2e });
+          span.setAttribute("rupaykg.calculation.status", calculation.status);
+          return calculation;
+        } catch (error) {
+          span.recordException(error instanceof Error ? error : new Error(String(error)));
+          throw error;
+        } finally { span.end(); }
+      });
       const dataset = { activityId, evidence: { id: evidenceId, contentHash: evidenceRow.content_hash, contentUri: evidenceRow.content_uri, status: evidenceRow.status }, normalizedInputs: result.normalizedInputs };
       const datasetHash = sha256Canonical(dataset);
       const formulaHash = sha256Canonical(method.rows[0].rules);
