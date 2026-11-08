@@ -494,3 +494,13 @@
 - Latest checkpoint commit: `cc1431f9670e80f58f2b08446c0fe8d5dfc3bd1c`.
 - Exact-head CI: **NOT VERIFIED** until a workflow run is attached to this exact commit.
 - Production remains **READ-ONLY/HOLD**.
+
+
+### 2026-11-08 — Credential authority-field hardening
+- Added protected migration `096_credential_authority_field_immutability.sql`.
+- Value-bearing credentials can no longer rewrite activity, issuer, trust root, verification, quantity, unit, credential URI, or issued-at fields through the runtime UPDATE path.
+- Lifecycle status changes remain available to the governed lifecycle routes.
+- Added deterministic contract, protected migration classification, CI gate, and behavioral acceptance.
+- Latest checkpoint commit: `a78fb438557143f0fce15b47f2a1056650737136`.
+- Exact-head CI: **NOT VERIFIED**.
+- Production remains **READ-ONLY/HOLD**.
