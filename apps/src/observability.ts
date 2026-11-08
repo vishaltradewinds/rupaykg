@@ -28,7 +28,15 @@ export function createTraceContext(request: FastifyRequest): TraceContext {
   };
 }
 
-export type RuntimeAttestation = {\n  event: "rupaykg.runtime.attestation";\n  nodeVersion: string;\n  runtime: string;\n  platform: string;\n  arch: string;\n};\n\nexport function assertSupportedNodeRuntime(): void {
+export type RuntimeAttestation = {
+  event: "rupaykg.runtime.attestation";
+  nodeVersion: string;
+  runtime: string;
+  platform: string;
+  arch: string;
+};
+
+export function assertSupportedNodeRuntime(): void {
   const match = /^v(\\d+)\\.(\\d+)\\.(\\d+)/.exec(process.version);
   if (!match) throw new Error("Unable to determine Node.js runtime version");
   const major = Number(match[1]);
@@ -40,7 +48,17 @@ export type RuntimeAttestation = {\n  event: "rupaykg.runtime.attestation";\n  n
   void patch;
 }
 
-export function buildRuntimeAttestation(): RuntimeAttestation {\n  return {\n    event: "rupaykg.runtime.attestation",\n    nodeVersion: process.version,\n    runtime: "node",\n    platform: process.platform,\n    arch: process.arch,\n  };\n}\n\nexport function installObservability(app: FastifyInstance): void {
+export function buildRuntimeAttestation(): RuntimeAttestation {
+  return {
+    event: "rupaykg.runtime.attestation",
+    nodeVersion: process.version,
+    runtime: "node",
+    platform: process.platform,
+    arch: process.arch,
+  };
+}
+
+export function installObservability(app: FastifyInstance): void {
   app.addHook("onRequest", async request => {
     const context = createTraceContext(request);
     request.headers["x-rupaykg-trace-id"] = context.traceId;
