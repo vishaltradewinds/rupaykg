@@ -768,3 +768,11 @@
 - Current branch head: `eeab2d2e100fe5aeebc8e11e400b6f811ae59f6b`.
 - Exact-head CI: **NOT VERIFIED** until a workflow run is attached to the current head.
 - Production remains **READ-ONLY/HOLD**.
+
+### 2026-11-08 — Verifier SECURITY DEFINER contract tightened
+- Bound the assigned-verifier deterministic contract to the helper's actual security/read-only shape: `returns boolean`, SQL language, `security definer`, `stable`, and `select exists`.
+- Bound the contract to explicit replacement of the assigned-verifier SELECT policy.
+- No production data or production database changes.
+- Checkpoint: `e622d14f7e49cd2f30bbcb8b6c3abd05f45907b0`.
+- Exact-head CI: **NOT VERIFIED**.
+- Production remains **READ-ONLY/HOLD**.
