@@ -813,3 +813,72 @@ test("Shakti RLS settlement rows are bilateral-readable but payer-mutation-only"
     await ownerPool.end();
   }
 });
+
+
+test("Shakti RLS credential rows are current-owner-readable and owner-mutation-only", { skip: !enabled }, async () => {
+  const runtimePool = new Pool({ connectionString: process.env.DATABASE_URL });
+  const ownerPool = new Pool({ connectionString: process.env.RUPAYKG_TEST_OWNER_DATABASE_URL });
+  const suffix = randomBytes(8).toString("hex");
+  let identityId = "", organizationA = "", organizationB = "", roleA = "", membershipA = "", credentialA = "", registryEventA = "";
+  try {
+    organizationA = (await ownerPool.query<{ id: string }>("insert into organizations(name,organization_type,status) values($1,'test_fixture','VERIFIED') returning id", ["TEST-RLS-CREDENTIAL-A-" + suffix])).rows[0]!.id;
+    organizationB = (await ownerPool.query<{ id: string }>("insert into organizations(name,organization_type,status) values($1,'test_fixture','VERIFIED') returning id", ["TEST-RLS-CREDENTIAL-B-" + suffix])).rows[0]!.id;
+    identityId = (await ownerPool.query<{ id: string }>("insert into identities(external_subject,display_name,email,status) values($1,$2,$3,'VERIFIED') returning id", ["rls-credential:" + suffix, "RLS Credential " + suffix, "rls-credential-" + suffix + "@example.invalid"])).rows[0]!.id;
+    roleA = (await ownerPool.query<{ id: string }>("insert into roles(organization_id,name,permissions,geography_scope) values($1,'tenant_test_role','[]'::jsonb,'[]'::jsonb) returning id", [organizationA])).rows[0]!.id;
+    membershipA = (await ownerPool.query<{ id: string }>("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED') returning id", [identityId, organizationA, roleA])).rows[0]!.id;
+    credentialA = (await ownerPool.query<{ id: string }>("insert into credentials(issuer_organization_id,trust_root_id,status) values($1,$2,'ELIGIBLE') returning id", [organizationA, "RLS-TRUST-" + suffix])).rows[0]!.id;
+    registryEventA = (await ownerPool.query<{ id: string }>("insert into registry_events(credential_id,event_type,to_owner_id,recorded_by_identity_id,event_hash) values($1,'ISSUED',$2,$3,$4) returning id", [credentialA, organizationA, identityId, "RLS-EVENT-" + suffix])).rows[0]!.id;
+
+    const client = await runtimePool.connect();
+    try {
+      await client.query("begin");
+      await client.query("set local role rupaykg_app_runtime");
+      await client.query("select app.set_request_context($1,$2)", [identityId, organizationA]);
+
+      const visible = await client.query<{ id: string; issuer_organization_id: string }>("select id,issuer_organization_id from credentials where id=$1", [credentialA]);
+      assert.equal(visible.rows.length, 1);
+      assert.equal(visible.rows[0]!.issuer_organization_id, organizationA);
+
+      const updated = await client.query<{ id: string; trust_root_id: string }>("update credentials set trust_root_id=$1 where id=$2 returning id,trust_root_id", ["RLS-UPDATED-" + suffix, credentialA]);
+      assert.equal(updated.rows[0]!.id, credentialA);
+
+      await assert.rejects(
+        () => client.query("delete from credentials where id=$1", [credentialA]),
+        /permission denied|row-level security|policy/i,
+      );
+
+      await client.query("rollback");
+    } catch (error) {
+      try { await client.query("rollback"); } catch {}
+      throw error;
+    } finally {
+      client.release();
+    }
+
+    const crossClient = await runtimePool.connect();
+    try {
+      await crossClient.query("begin");
+      await crossClient.query("set local role rupaykg_app_runtime");
+      await assert.rejects(
+        () => crossClient.query("select id from credentials where id=$1", [credentialA]),
+        /row-level security|policy/i,
+      );
+      await crossClient.query("rollback");
+    } catch (error) {
+      try { await crossClient.query("rollback"); } catch {}
+      throw error;
+    } finally {
+      crossClient.release();
+    }
+  } finally {
+    if (registryEventA) await ownerPool.query("delete from registry_events where id=$1", [registryEventA]);
+    if (credentialA) await ownerPool.query("delete from credentials where id=$1", [credentialA]);
+    if (membershipA) await ownerPool.query("delete from organization_memberships where id=$1", [membershipA]);
+    if (roleA) await ownerPool.query("delete from roles where id=$1", [roleA]);
+    if (identityId) await ownerPool.query("delete from identities where id=$1", [identityId]);
+    if (organizationA) await ownerPool.query("delete from organizations where id=$1", [organizationA]);
+    if (organizationB) await ownerPool.query("delete from organizations where id=$1", [organizationB]);
+    await runtimePool.end();
+    await ownerPool.end();
+  }
+});
