@@ -68,3 +68,10 @@ Every changed table must be reconciled against the authoritative policy matrix b
 3. Reconcile affected tables against the RLS policy matrix.
 4. Execute disposable CI and runtime tenant-isolation acceptance.
 5. Only after those gates pass, prepare the next production-readiness gate.
+
+
+## 2026-11-08 registry boundary re-audit
+
+Registry mutation routes are classified as mixed tenant and multi-party authority surfaces. Credential issuance/activation/retirement are anchored to the authoritative issuer/current owner transaction context. Credential transfer and settlement lifecycle operations are multi-party: the transaction context is anchored to the current owner/payer while explicit authorization remains required for each participating organization. Request-body organization IDs do not replace the authoritative active tenant context.
+
+A disposable CI contract is now embedded in the controlled workflow to assert registry mutation transaction binding and bilateral settlement authorization. Registry RLS remains HOLD until the master policy matrix is reconciled and non-BYPASSRLS negative counterparty tests pass.
