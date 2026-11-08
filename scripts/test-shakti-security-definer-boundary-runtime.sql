@@ -68,7 +68,7 @@ begin
        from pg_proc p
        join pg_namespace n on n.oid = p.pronamespace
       where n.nspname = 'app'
-        and format('%I.%s(%s)', n.nspname, p.proname, pg_get_function_identity_arguments(p.oid)) = required.signature
+        and format('%s.%s(%s)', n.nspname, p.proname, pg_get_function_identity_arguments(p.oid)) = required.signature
         and p.prosecdef
         and has_function_privilege('rupaykg_app_runtime', p.oid, 'EXECUTE')
    );
@@ -83,7 +83,7 @@ begin
    where n.nspname = 'app'
      and p.prosecdef
      and has_function_privilege('rupaykg_app_runtime', p.oid, 'EXECUTE')
-     and format('%I.%s(%s)', n.nspname, p.proname, pg_get_function_identity_arguments(p.oid)) not in (
+     and format('%s.%s(%s)', n.nspname, p.proname, pg_get_function_identity_arguments(p.oid)) not in (
        'app.current_identity_id()',
        'app.current_organization_id()',
        'app.set_request_context(uuid,uuid)',
