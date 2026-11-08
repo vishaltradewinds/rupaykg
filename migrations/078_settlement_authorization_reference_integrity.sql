@@ -14,11 +14,26 @@ begin
      and new.authorization_reference is distinct from old.authorization_reference then
     raise exception 'settlement authorization reference cannot be changed after assignment';
   end if;
+
+  if old.verified_at is not null
+     and new.verified_at is distinct from old.verified_at then
+    raise exception 'settlement authorization verification timestamp cannot be changed after authorization';
+  end if;
+
+  if new.status in ('AUTHORIZED','EXECUTING','RECONCILING','SETTLED') then
+    if new.authorization_reference is null or btrim(new.authorization_reference) = '' then
+      raise exception 'authorized settlement requires authorization reference';
+    end if;
+    if new.verified_at is null then
+      raise exception 'authorized settlement requires verification timestamp';
+    end if;
+  end if;
+
   return new;
 end;
 $$;
 
 drop trigger if exists settlement_authorization_reference_guard on settlements;
 create trigger settlement_authorization_reference_guard
-before update on settlements
+before insert or update on settlements
 for each row execute function prevent_settlement_authorization_reference_mutation();
