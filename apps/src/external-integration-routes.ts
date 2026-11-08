@@ -33,7 +33,8 @@ export async function registerExternalIntegrationRoutes(app: FastifyInstance, po
       });
     } catch (error) {
       const code = (error as { code?: string }).code;
-      if (code === "ORG_FORBIDDEN") return reply.code(403).send({ error: (error as Error).message, code });
+      if (code === "ORG_FORBIDDEN" || code === "ACTOR_FORBIDDEN") return reply.code(403).send({ error: (error as Error).message, code });
+      if (code === "INTEGRATION_IDEMPOTENCY_CONFLICT") return reply.code(409).send({ error: (error as Error).message, code });
       if (code === "INVALID_INTEGRATION_ENVELOPE" || code === "UNSUPPORTED_CONTRACT_VERSION" || code === "INVALID_DIRECTION" || code === "INVALID_MESSAGE_KIND" || code === "INVALID_OCCURRED_AT" || code === "INVALID_PAYLOAD") {
         return reply.code(400).send({ error: (error as Error).message, code });
       }
