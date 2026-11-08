@@ -86,7 +86,9 @@ export async function hasOrganizationPermission(client: Pool | PoolClient, auth:
   if (!organizationId || auth.memberships.length === 0 || !canActForOrganization(auth, organizationId)) return false;
   const result = await client.query<{ ok: boolean }>(
     `select exists (
-       select 1 from organization_memberships om join roles r on r.id = om.role_id
+       select 1 from organization_memberships om
+       join organizations o on o.id = om.organization_id and o.status = 'VERIFIED'
+       join roles r on r.id = om.role_id
         where om.identity_id = $1 and om.organization_id = $2 and om.status = 'VERIFIED'
           and exists (select 1 from jsonb_array_elements_text(r.permissions) permission where permission = any($3::text[]))
      ) as ok`,
