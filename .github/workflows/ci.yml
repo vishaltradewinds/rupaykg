@@ -169,6 +169,7 @@ jobs:
         run: node scripts/test-shakti-field-sync-idempotency-replay-contract.mjs
       - name: Run Shakti field-sync append-only integrity contract
         run: node scripts/test-shakti-field-sync-append-only-integrity-contract.mjs
+      - node scripts/test-shakti-field-sync-concurrency-conflict-contract.mjs
       - node scripts/test-shakti-field-device-enrollment-race-contract.mjs
       - name: Run Shakti context pool isolation contract
         run: node scripts/test-shakti-context-pool-isolation-contract.mjs
