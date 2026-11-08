@@ -358,3 +358,12 @@
 - Exact-head GitHub Actions execution is **NOT VERIFIED** until a workflow run is observed for this controlled head.
 - Production Neon/RLS/deployment remains **READ-ONLY/HOLD**.
 - Next autonomous action: continue the multi-party protected-core acceptance matrix and close any remaining cross-tenant authority gaps, then obtain exact-head CI evidence before proposing any production cutover action.
+
+
+### 2026-11-08 — Settlement counterpart fixture correction
+- Corrected the disposable settlement runtime acceptance fixture so the payee-only identity/token used by the multi-party authority tests are explicitly declared and available to the test lifecycle.
+- No production database, RLS activation, deployment or certification action performed.
+- Latest controlled head: `cb52897b97ec55e80016c2159a7acfe10c2f6d8c`.
+- Exact-head GitHub Actions lookup returned no workflow runs; CI remains **NOT VERIFIED**.
+- Production Neon/RLS/deployment remains **READ-ONLY/HOLD**.
+- Next autonomous action: continue the multi-party/protected-core acceptance matrix and use exact-head CI evidence as the execution gate before any production cutover proposal.
