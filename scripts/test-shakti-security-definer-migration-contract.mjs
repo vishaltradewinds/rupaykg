@@ -6,6 +6,15 @@ const dir = path.resolve("migrations");
 const files = (await readdir(dir)).filter((name) => /^\d+_.+\.sql$/.test(name)).sort();
 const failures = [];
 
+const requiredBoundaryControls = [
+  ["public schema CREATE revoke", /revoke\s+create\s+on\s+schema\s+public\s+from\s+public/i],
+  ["app schema CREATE revoke", /revoke\s+create\s+on\s+schema\s+app\s+from\s+public/i],
+  ["PUBLIC EXECUTE revoke", /revoke\s+all\s+on\s+function\s+%I\.%I\(%s\)\s+from\s+public/i],
+];
+for (const [name, pattern] of requiredBoundaryControls) {
+  if (!pattern.test(boundaryMigration)) failures.push("101_security_definer_schema_boundary.sql: missing " + name);
+}
+
 const boundaryMigration = await readFile(path.join(dir, "101_security_definer_schema_boundary.sql"), "utf8");
 if (!/revoke\s+create\s+on\s+schema\s+public\s+from\s+public/i.test(boundaryMigration)) {
   failures.push("101_security_definer_schema_boundary.sql: public schema CREATE privilege must be revoked from PUBLIC");
