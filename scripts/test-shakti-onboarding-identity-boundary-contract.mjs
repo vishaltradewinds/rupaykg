@@ -25,7 +25,7 @@ if (!route.includes("insert into organization_memberships")) {
 if (!route.includes("insert into stakeholder_applications")) {
   throw new Error("Application creation is not inside the identity transaction");
 }
-if (/await pool\\.(query|connect)\\(/.test(route)) {
+if (/await pool\.(query|connect)\(/.test(route)) {
   throw new Error("Onboarding application route contains a direct pool query/connect");
 }
 console.log("Shakti onboarding identity-boundary contract PASSED");
