@@ -7,3 +7,12 @@ RupayKg is a nationwide platform for urban and rural resource flows, digital MRV
 CI verification marker: statutory applicability and onboarding governance type fixes are validated against the current main lifecycle without removing platform capabilities.
 
 Current validation target: statutory BWG nullability narrowing and type-safe onboarding governance fetch interception.
+## Engineering control baseline
+
+- [Environmental Operating System Architecture](docs/RUPAYKG_ENVIRONMENTAL_OPERATING_SYSTEM_ARCHITECTURE.md)
+- [Shakti Standards — External Reference Ecosystem](docs/SHAKTI_STANDARDS_EXTERNAL_REFERENCE_ECOSYSTEM.md)
+- [Environmental Operating System Control Matrix](docs/RUPAYKG_ENVIRONMENTAL_OPERATING_SYSTEM_CONTROL_MATRIX.md)
+- [Shakti Production Gate](docs/SHAKTI_PRODUCTION_GATE_RUPAYKG.md)
+- [Shakti Tenant Isolation Gate](docs/SHAKTI_TENANT_ISOLATION_GATE.md)
+
+These documents are controlled engineering references. They do not by themselves establish regulatory approval, field acceptance, certification, or TRL 9.
