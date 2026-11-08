@@ -29,6 +29,43 @@ jobs:
             exit 1
           fi
 
+      - name: Verify Shakti migration baseline
+        run: |
+          set -euo pipefail
+          mkdir -p tenant-isolation-evidence
+          psql "$RUPAYKG_DDL_DATABASE_URL" \
+            -v ON_ERROR_STOP=1 \
+            -c "select current_database() as database, current_user as user_name, session_user as session_user;" \
+            -c "select version, filename, applied_at from schema_migrations where version in ('097','098','099') order by version;" \
+            2>&1 | tee tenant-isolation-evidence/migration-baseline.txt
+          for version in 097 098 099; do
+            if ! grep -q "^ *${version} *|" tenant-isolation-evidence/migration-baseline.txt; then
+              echo "Required Shakti migration ${version} is not applied to the acceptance database."
+              exit 1
+            fi
+          done
+
+      - name: Verify runtime and DDL target identity match
+        run: |
+          set -euo pipefail
+          mkdir -p tenant-isolation-evidence
+          runtime_fingerprint="$(
+            psql "$RUPAYKG_RUNTIME_DATABASE_URL" \
+              -At -v ON_ERROR_STOP=1 \
+              -c "select current_database() || '|' || coalesce(inet_server_addr()::text,'local') || '|' || inet_server_port() || '|' || current_setting('server_version_num');"
+          )"
+          ddl_fingerprint="$(
+            psql "$RUPAYKG_DDL_DATABASE_URL" \
+              -At -v ON_ERROR_STOP=1 \
+              -c "select current_database() || '|' || coalesce(inet_server_addr()::text,'local') || '|' || inet_server_port() || '|' || current_setting('server_version_num');"
+          )"
+          printf 'runtime_target=%s\n' "$runtime_fingerprint" | tee tenant-isolation-evidence/runtime-ddl-target.txt
+          printf 'ddl_target=%s\n' "$ddl_fingerprint" | tee -a tenant-isolation-evidence/runtime-ddl-target.txt
+          if [ "$runtime_fingerprint" != "$ddl_fingerprint" ]; then
+            echo "Runtime and controlled DDL connections do not target the same PostgreSQL endpoint."
+            exit 1
+          fi
+
       - name: Verify controlled DDL role preflight
         run: |
           set -euo pipefail
@@ -51,9 +88,9 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p tenant-isolation-evidence
-          psql "$RUPAYKG_RUNTIME_DATABASE_URL" \\
-            -v ON_ERROR_STOP=1 \\
-            -f ops/tenant-isolation/VERIFY_SECURITY_DEFINER_BOUNDARIES.sql \\
+          psql "$RUPAYKG_RUNTIME_DATABASE_URL" \
+            -v ON_ERROR_STOP=1 \
+            -f ops/tenant-isolation/VERIFY_SECURITY_DEFINER_BOUNDARIES.sql \
             2>&1 | tee tenant-isolation-evidence/security-definer-boundaries.txt
 
       - name: Verify runtime role and pre-RLS contract
@@ -104,5 +141,5 @@ jobs:
       - name: Acceptance result
         run: |
           echo "TENANT ISOLATION LIVE ACCEPTANCE PASSED."
-          echo "Evidence: non-BYPASSRLS runtime role + required privileges + RLS enabled + cross-tenant read/mutate denial."
+          echo "Evidence: Shakti migrations 097-099 + non-BYPASSRLS runtime role + required privileges + RLS enabled + cross-tenant read/mutate denial."
           echo "Evidence artifact: tenant-isolation-live-acceptance-${GITHUB_RUN_ID}"

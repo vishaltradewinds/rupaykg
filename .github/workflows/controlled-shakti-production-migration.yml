@@ -1,0 +1,144 @@
+name: Controlled Shakti Production Migration
+
+on:
+  workflow_dispatch:
+
+jobs:
+  migrate:
+    name: Controlled production Shakti migration
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: production-db-migration-approval
+    permissions:
+      contents: read
+    env:
+      DATABASE_URL: ${{ secrets.RUPAYKG_DDL_DATABASE_URL }}
+      EXPECTED_DDL_ROLE: rupaykg_ddl_migration
+      EXPECTED_PRE_MIGRATION_VERSION: "096"
+      MIGRATION_MAX_VERSION: "099"
+    steps:
+      - name: Checkout authoritative repository
+        uses: actions/checkout@v4
+
+      - name: Validate controlled migration secret
+        run: |
+          set -euo pipefail
+          if [ -z "${DATABASE_URL:-}" ]; then
+            echo "RUPAYKG_DDL_DATABASE_URL is required."
+            exit 1
+          fi
+
+      - name: Verify target identity before migration
+        run: |
+          set -euo pipefail
+          mkdir -p shakti-migration-evidence
+          psql "$DATABASE_URL" -At -v ON_ERROR_STOP=1 \
+            -c "select current_database() || '|' || coalesce(inet_server_addr()::text,'local') || '|' || inet_server_port() || '|' || current_setting('server_version_num');" \
+            | tee shakti-migration-evidence/target-fingerprint.txt
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+            -c "select current_database() as database, current_user as user_name, session_user as session_user;" \
+            | tee shakti-migration-evidence/target-identity.txt
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+            -c "select rolname, rolsuper, rolbypassrls, rolcanlogin, rolcreaterole, rolcreatedb from pg_roles where rolname=current_user;" \
+            | tee shakti-migration-evidence/ddl-role.txt
+
+      - name: Verify required DDL role safety and identity
+        run: |
+          set -euo pipefail
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+            -c "select 1 / case when current_user = '$EXPECTED_DDL_ROLE' and session_user = '$EXPECTED_DDL_ROLE' and coalesce((select rolsuper from pg_roles where rolname=current_user),true)=false and coalesce((select rolbypassrls from pg_roles where rolname=current_user),true)=false and current_user <> 'rupaykg_app_runtime' then 1 else 0 end as ddl_role_identity_safety_assertion;" \
+            | tee shakti-migration-evidence/ddl-role-safety.txt
+
+      - name: Verify controlled DDL role owns protected tenant tables
+        run: |
+          set -euo pipefail
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+            -c "select 1 / case when (select rolsuper from pg_roles where rolname=current_user)=false and (select rolbypassrls from pg_roles where rolname=current_user)=false and current_user <> 'rupaykg_app_runtime' and (select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relname in ('organizations','roles','activities','obligations','credentials','settlements','audit_events','resource_flows','field_devices','organization_memberships','measurements','evidence','verifications','carbon_calculations','mrv_observations','evidence_verification_requirements','chain_of_custody_links') and pg_get_userbyid(c.relowner)=current_user)=17 then 1 else 0 end as ddl_owner_assertion;" \
+            | tee shakti-migration-evidence/ddl-owner-preflight.txt
+
+      - name: Record and lock pre-migration baseline
+        run: |
+          set -euo pipefail
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+            -c "select version, filename, applied_at from schema_migrations order by applied_at desc limit 12;" \
+            | tee shakti-migration-evidence/pre-migration-baseline.txt
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+            -c "select 1 / case when (select count(*) from schema_migrations where version in ('097','098','099')) = 0 and (select coalesce(max(version),'') from schema_migrations) = '$EXPECTED_PRE_MIGRATION_VERSION' then 1 else 0 end as pre_migration_baseline_assertion;" \
+            | tee shakti-migration-evidence/pre-migration-baseline-assertion.txt
+          echo "Only the Shakti 097-099 cutover is authorized from the expected 096 baseline."
+
+      - name: Apply repository migrations
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          MIGRATION_MAX_VERSION="$MIGRATION_MAX_VERSION" npm run migrate -w @rupaykg/api | tee shakti-migration-evidence/migration-output.txt
+
+      - name: Verify Shakti migrations 097-099
+        run: |
+          set -euo pipefail
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+            -c "select version, filename, applied_at from schema_migrations where version in ('097','098','099') order by version;" \
+            | tee shakti-migration-evidence/shakti-migrations-postcheck.txt
+          expected_097="097_shakti_tenant_isolation_runtime_contract.sql"
+          expected_098="098_shakti_authentication_bootstrap.sql"
+          expected_099="099_shakti_rls_policy_foundation.sql"
+          actual_097="$(psql "$DATABASE_URL" -At -v ON_ERROR_STOP=1 -c "select filename from schema_migrations where version='097';")"
+          actual_098="$(psql "$DATABASE_URL" -At -v ON_ERROR_STOP=1 -c "select filename from schema_migrations where version='098';")"
+          actual_099="$(psql "$DATABASE_URL" -At -v ON_ERROR_STOP=1 -c "select filename from schema_migrations where version='099';")"
+          if [ "$actual_097" != "$expected_097" ] || [ "$actual_098" != "$expected_098" ] || [ "$actual_099" != "$expected_099" ]; then
+            echo "Required Shakti migration filename/version mapping does not match the controlled 097-099 cutover."
+            exit 1
+          fi
+          for version in 097 098 099; do
+            if ! grep -q "^ *${version} *|" shakti-migration-evidence/shakti-migrations-postcheck.txt; then
+              echo "Required Shakti migration ${version} is missing after controlled migration."
+              exit 1
+            fi
+          done
+
+      - name: Verify Shakti runtime security contract
+        run: |
+          set -euo pipefail
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+            -c "select 1 / case when exists (select 1 from pg_roles where rolname='rupaykg_app_runtime' and rolsuper=false and rolbypassrls=false and rolcreaterole=false and rolcreatedb=false and rolcanlogin=false and rolinherit=false) and exists (select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='app' and p.proname='set_request_context' and p.prosecdef=true and has_function_privilege('rupaykg_app_runtime', p.oid, 'EXECUTE') and not has_function_privilege('public', p.oid, 'EXECUTE')) and exists (select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='app' and p.proname='authenticate_bearer_session' and p.prosecdef=true and has_function_privilege('rupaykg_app_runtime', p.oid, 'EXECUTE') and not has_function_privilege('public', p.oid, 'EXECUTE')) and exists (select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='app' and p.proname='is_verified_org_member' and p.prosecdef=true and has_function_privilege('rupaykg_app_runtime', p.oid, 'EXECUTE') and not has_function_privilege('public', p.oid, 'EXECUTE')) then 1 else 0 end as post_migration_runtime_security_contract_assertion;" \
+            | tee shakti-migration-evidence/post-migration-runtime-security-contract.txt
+          echo "097-099 runtime security contract verified; RLS activation remains a separate controlled DDL gate."
+
+      - name: Verify post-migration ownership boundary remains controlled
+        run: |
+          set -euo pipefail
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1             -c "select 1 / case when (select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relname in ('organizations','roles','activities','obligations','credentials','settlements','audit_events','resource_flows','field_devices','organization_memberships','measurements','evidence','verifications','carbon_calculations','mrv_observations','evidence_verification_requirements','chain_of_custody_links') and pg_get_userbyid(c.relowner)='rupaykg_ddl_migration') = 17 and (select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relname in ('organizations','roles','activities','obligations','credentials','settlements','audit_events','resource_flows','field_devices','organization_memberships','measurements','evidence','verifications','carbon_calculations','mrv_observations','evidence_verification_requirements','chain_of_custody_links') and pg_get_userbyid(c.relowner)='rupaykg_app_runtime') = 0 then 1 else 0 end as post_migration_ownership_boundary_assertion;"             | tee shakti-migration-evidence/post-migration-ownership-boundary.txt
+
+      - name: Verify RLS remains controlled
+        run: |
+          set -euo pipefail
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+            -c "select count(*) filter (where c.relrowsecurity) as rls_enabled, count(*) filter (where c.relforcerowsecurity) as rls_forced from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind='r';" \
+            | tee shakti-migration-evidence/post-migration-rls-state.txt
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+            -c "select 1 / case when (select count(*) filter (where c.relrowsecurity) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname=\'public\' and c.relkind=\'r\') = 0 and (select count(*) filter (where c.relforcerowsecurity) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname=\'public\' and c.relkind=\'r\') = 0 then 1 else 0 end as post_migration_rls_remains_controlled_assertion;" \
+            | tee shakti-migration-evidence/post-migration-rls-assertion.txt
+          echo "Migration complete. RLS activation remains a separate controlled DDL gate."
+
+      - name: Record migration metadata
+        run: |
+          set -euo pipefail
+          {
+            echo "repository=vishaltradewinds/rupaykg"
+            echo "commit=$GITHUB_SHA"
+            echo "workflow_run=$GITHUB_RUN_ID"
+            echo "workflow_attempt=$GITHUB_RUN_ATTEMPT"
+            echo "expected_ddl_role=$EXPECTED_DDL_ROLE"
+            echo "expected_pre_migration_version=$EXPECTED_PRE_MIGRATION_VERSION"
+            echo "captured_at_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } > shakti-migration-evidence/acceptance-metadata.txt
+
+      - name: Upload migration evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shakti-production-migration-${{ github.run_id }}
+          path: shakti-migration-evidence/
+          if-no-files-found: error
+          retention-days: 30

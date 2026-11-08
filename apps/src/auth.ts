@@ -25,6 +25,9 @@ export async function authenticate(request: FastifyRequest, pool: Pool | null): 
   if (!header?.startsWith("Bearer ")) return null;
   const token = header.slice("Bearer ".length).trim();
   if (!token) return null;
+  const requested = request.headers["x-rupaykg-organization-id"];
+  const requestedOrganizationId = typeof requested === "string" && requested.trim() ? requested.trim() : undefined;
+  if (requestedOrganizationId && !UUID_RE.test(requestedOrganizationId)) return null;
   // Authentication runs before tenant context exists. Do not query
   // organization_memberships directly from the ordinary runtime role: that
   // pre-context read would be incompatible with RLS. The SECURITY DEFINER
@@ -43,9 +46,6 @@ export async function authenticate(request: FastifyRequest, pool: Pool | null): 
   );
   if (!bootstrap.rows[0]) return null;
   const memberships = bootstrap;
-  const requested = request.headers["x-rupaykg-organization-id"];
-  const requestedOrganizationId = typeof requested === "string" && requested.trim() ? requested.trim() : undefined;
-  if (requestedOrganizationId && !UUID_RE.test(requestedOrganizationId)) return null;
   if (requestedOrganizationId && !memberships.rows.some((m) => m.organization_id === requestedOrganizationId)) return null;
 
   // All operational records are organization-scoped. A multi-organization identity

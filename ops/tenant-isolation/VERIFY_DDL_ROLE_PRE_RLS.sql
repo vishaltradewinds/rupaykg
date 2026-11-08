@@ -16,7 +16,6 @@ where rolname = current_user;
 
 select
   current_user = 'rupaykg_app_runtime'
-  or pg_has_role(current_user, 'rupaykg_app_runtime', 'member')
   as runtime_role_membership;
 
 select
@@ -36,10 +35,14 @@ where n.nspname = 'public'
 order by c.relname;
 
 select 1 / case
-  when coalesce((select rolsuper from pg_roles where rolname = current_user), true) = false
+  when current_user = session_user
+   and current_user = 'rupaykg_ddl_migration'
+   and coalesce((select rolcanlogin from pg_roles where rolname = current_user), false) = true
+   and coalesce((select rolinherit from pg_roles where rolname = current_user), true) = false
+   and coalesce((select rolsuper from pg_roles where rolname = current_user), true) = false
    and coalesce((select rolbypassrls from pg_roles where rolname = current_user), true) = false
    and current_user <> 'rupaykg_app_runtime'
-   and not pg_has_role(current_user, 'rupaykg_app_runtime', 'member')
+   and pg_has_role(current_user, 'rupaykg_app_runtime', 'member')
    and (
      select count(*)
      from pg_class c
@@ -53,7 +56,7 @@ select 1 / case
          'evidence_verification_requirements','chain_of_custody_links'
        )
        and pg_get_userbyid(c.relowner) = current_user
-   ) = 18
+   ) = 17
   then 1
   else 0
 end as tenant_ddl_role_preflight_assertion;

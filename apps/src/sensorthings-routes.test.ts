@@ -20,6 +20,9 @@ function makePool() {
   let sourceReadCount = 0;
   const pool = {
     async query(sql: string, params?: unknown[]) {
+      if (sql.includes("app.authenticate_bearer_session")) {
+        return { rows: params?.[0] ? [{ identity_id: IDENTITY_A, organization_id: ORG_A, role_id: ROLE_A, status: "VERIFIED" }] : [] };
+      }
       if (sql.includes("from identity_sessions")) {
         return { rows: params?.[0] ? [{ identity_id: IDENTITY_A }] : [] };
       }
