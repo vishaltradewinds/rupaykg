@@ -7,6 +7,7 @@ test("authorization fails closed without organization or verified membership con
   assert.equal(canActForOrganization({ identityId: "i", memberships: [{ organization_id: "org-a", role_id: "r", status: "VERIFIED" }] }, ""), false);
   assert.equal(canActForOrganization({ identityId: "i", memberships: [{ organization_id: "org-a", role_id: "r", status: "VERIFIED" }] }, "org-b"), false);
   assert.equal(canActForOrganization({ identityId: "i", memberships: [{ organization_id: "org-a", role_id: "r", status: "VERIFIED" }], activeOrganizationId: "org-a" }, "org-a"), true);
+  assert.equal(canActForOrganization({ identityId: "i", memberships: [{ organization_id: "org-a", role_id: "r", status: "PENDING" }], activeOrganizationId: "org-a" }, "org-a"), false);
 });
 
 test("organization permission lookup is never reached for an unscoped context", async () => {
