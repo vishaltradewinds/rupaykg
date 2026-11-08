@@ -25,7 +25,7 @@ A status must not be inferred from legacy/reference repositories.
 | IoT/Measurement | Field-device enrollment | Device enrollment/provenance migrations and runtime tests exist | GREEN |
 | IoT/Measurement | Physical instrumentation | Field-device software exists; physical site acceptance remains external | AMBER |
 | Data | Authoritative PostgreSQL path | Migration validation and DB-backed CI are present | GREEN |
-| Data | Tenant isolation | Runtime contract migration exists; tenant-scoped field-sync intake/apply now execute through `withTenantTransaction()`; pre-RLS gate checks non-BYPASSRLS runtime and protected-table ownership; live workflow now also records protected-table RLS policy coverage; production RLS/runtime deployment evidence remains | OPEN |
+| Data | Tenant isolation | Runtime contract and 18-table policy foundation now exist; DDL-role preflight verifies ownership of all protected tables; activation script fails closed on incomplete SELECT-policy coverage; live RLS/runtime deployment remains blocked until authentication/bootstrap is RLS-compatible and production role/context/negative-test evidence is captured | OPEN |
 | Data | Cross-tenant negative proof | Tenant isolation integration test exists; production evidence remains required | AMBER |
 | AI | Advisory boundary | Intelligence routes and lifecycle tests preserve authoritative state | GREEN |
 | AI | Model provenance/uncertainty | Advisory boundary exists; full model governance evidence requires expansion | AMBER |
