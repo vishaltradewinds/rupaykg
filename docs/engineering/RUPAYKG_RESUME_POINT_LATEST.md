@@ -688,3 +688,13 @@
 - Latest checkpoint commit: `612bf9acbbfc904262ff78637c1d1c98d2b59f57`.
 - Exact-head CI: **NOT VERIFIED**.
 - Production remains **READ-ONLY/HOLD**.
+
+
+### 2026-11-08 — Verifier organization binding hardening
+- Strengthened assigned-verifier registry read authorization.
+- Approved/verified verifier access now also requires a VERIFIED organization membership in the credential issuer organization.
+- This prevents a globally privileged verifier identity from receiving provenance read access outside its verified organizational assignment.
+- Deterministic contract updated accordingly.
+- Checkpoint: `78bff2339873b9cc381a5681127ec9917e146428`.
+- Exact-head CI: **NOT VERIFIED**.
+- Production remains **READ-ONLY/HOLD**.
