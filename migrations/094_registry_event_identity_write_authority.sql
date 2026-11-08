@@ -2,7 +2,9 @@
 -- RLS tenant scope alone is insufficient for append-only provenance: the
 -- authenticated identity must also be the identity recorded on the event.
 
-create or replace policy shakti_registry_events_insert_authorized_owner
+drop policy if exists shakti_registry_events_insert_authorized_owner on public.registry_events;
+
+create policy shakti_registry_events_insert_authorized_owner
 on public.registry_events
 for insert
 with check (
