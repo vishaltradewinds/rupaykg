@@ -37,3 +37,7 @@ Until those are evidenced, this control remains **PARTIAL**, not GREEN.
 The repository now exposes a transport-neutral HTTP span contract with W3C trace correlation, parent-span linkage, nanosecond timestamps, standard HTTP attributes and explicit error status mapping. Tests also assert that authorization, request-body and payload fields are not emitted as span attributes.
 
 This remains an interoperability foundation, not an OpenTelemetry SDK/OTLP deployment. SDK/exporter dependency review, collector configuration, runtime propagation, end-to-end service/database/calculation/registry correlation and production availability evidence remain required before production acceptance.
+
+## Span contract validation gate
+
+The transport-neutral span contract now includes deterministic validation for W3C trace/span identity, Unix-nanosecond timestamp ordering, and forbidden sensitive attribute names. Repository tests cover invalid timing and sensitive-attribute rejection. This strengthens the engineering interoperability gate but does not constitute SDK, OTLP collector, runtime, or production acceptance.
