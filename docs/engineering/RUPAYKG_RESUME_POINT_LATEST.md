@@ -867,3 +867,10 @@
 - Code checkpoint: `56e53b29699647a0e5bdc009559b5ca5ab459a19`.
 - Exact-head CI: **NOT VERIFIED**.
 - Production remains **READ-ONLY/HOLD**.
+
+### 2026-11-08 — Identity-liveness contract boundary hardened
+- Found a brittle executable boundary in `scripts/test-shakti-context-identity-liveness-contract.mjs`: it terminated function extraction only on `$$;`, while `app.set_identity_context` in the completion migration uses the distinct `$shakti$;` dollar-quote delimiter.
+- Hardened the contract to recognize the actual function terminator used by either migration form, preventing accidental EOF-wide inspection and keeping the identity-context contract semantically scoped to the target function.
+- Checkpoint: `928c0b4925ac7f834c0f65bbf290e186a7adc2ad`.
+- Exact-head CI: **NOT VERIFIED** until GitHub reports a workflow run for this head.
+- Production remains **READ-ONLY/HOLD**.
