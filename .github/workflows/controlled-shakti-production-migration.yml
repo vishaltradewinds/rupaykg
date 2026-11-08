@@ -43,7 +43,7 @@ jobs:
       - name: Verify required DDL role safety
         run: |
           set -euo pipefail
-          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "select 1 / case when coalesce((select rolsuper from pg_roles where rolname=current_user),true)=false and coalesce((select rolbypassrls from pg_roles where rolname=current_user),true)=false then 1 else 0 end as ddl_role_safety_assertion;" \
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "select 1 / case when coalesce((select rolsuper from pg_roles where rolname=current_user),true)=false and coalesce((select rolbypassrls from pg_roles where rolname=current_user),true)=false and current_user <> 'rupaykg_app_runtime' then 1 else 0 end as ddl_role_safety_assertion;" \
             | tee shakti-migration-evidence/ddl-role-safety.txt
 
       - name: Verify controlled DDL role owns protected tenant tables
