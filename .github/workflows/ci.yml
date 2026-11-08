@@ -194,6 +194,8 @@ jobs:
         run: node scripts/test-shakti-field-sync-concurrency-conflict-contract.mjs
       - name: Run Shakti field-device enrollment-race contract
         run: node scripts/test-shakti-field-device-enrollment-race-contract.mjs
+      - name: Run Shakti field hardware/software stack contract
+        run: node scripts/test-shakti-field-hardware-stack-contract.mjs
       - name: Run Shakti context pool isolation contract
         run: node scripts/test-shakti-context-pool-isolation-contract.mjs
       - name: Run Shakti RLS write contract
