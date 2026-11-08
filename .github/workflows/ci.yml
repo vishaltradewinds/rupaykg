@@ -156,7 +156,9 @@ jobs:
         run: node scripts/test-shakti-settlement-active-tenant-authority-contract.mjs
       - name: Run Shakti settlement lifecycle active-tenant contract
         run: node scripts/test-shakti-settlement-lifecycle-active-tenant-contract.mjs
-      - name:       - name:       - name:       - name: Run Shakti field-sync tenant RLS contract
+      - name:       - name:       - name:       - name: Run Shakti credential registry atomicity contract
+        run: node scripts/test-shakti-credential-registry-event-atomicity-contract.mjs
+      - name: Run Shakti field-sync tenant RLS contract
         run: node scripts/test-shakti-field-sync-tenant-rls-contract.mjs
       - name: Run Shakti credential authority immutability contract
         run: node scripts/test-shakti-credential-authority-immutability-contract.mjs
@@ -222,7 +224,7 @@ Run Shakti settlement lifecycle integrity contract
         shell: bash
         run: |
           set -euo pipefail
-          for migration in 20261107_authority_hierarchy_context.sql 20261107_context_identity_bootstrap.sql 20261107_platform_execution_context.sql 20261107_runtime_grant_reconciliation.sql 20261107_context_organization_id.sql 20261107_core_tenant_rls_activation_gate.sql 20261108_context_identity_liveness_hardening.sql 20261108_context_identity_liveness_completion.sql 088_field_sync_append_only_integrity.sql 082_settlement_reference_trigger_insert_safety.sql 089_settlement_reconciliation_reference_integrity.sql 090_runtime_dml_grant_reconciliation_completion.sql 091_settlement_tenant_rls.sql 092_settlement_lifecycle_transition_integrity.sql 093_registry_event_tenant_rls.sql 094_registry_event_identity_write_authority.sql 095_credentials_tenant_rls.sql 096_credential_authority_field_immutability.sql 097_field_sync_tenant_rls.sql; do
+          for migration in 20261107_authority_hierarchy_context.sql 20261107_context_identity_bootstrap.sql 20261107_platform_execution_context.sql 20261107_runtime_grant_reconciliation.sql 20261107_context_organization_id.sql 20261107_core_tenant_rls_activation_gate.sql 20261108_context_identity_liveness_hardening.sql 20261108_context_identity_liveness_completion.sql 088_field_sync_append_only_integrity.sql 082_settlement_reference_trigger_insert_safety.sql 089_settlement_reconciliation_reference_integrity.sql 090_runtime_dml_grant_reconciliation_completion.sql 091_settlement_tenant_rls.sql 092_settlement_lifecycle_transition_integrity.sql 093_registry_event_tenant_rls.sql 094_registry_event_identity_write_authority.sql 095_credentials_tenant_rls.sql 096_credential_authority_field_immutability.sql 097_field_sync_tenant_rls.sql 098_credential_registry_event_atomicity.sql; do
             grep -Fq "$migration" apps/src/migrate.ts
           done
           grep -Fq 'RUPAYKG_ALLOW_PROTECTED_SHAKTI_MIGRATIONS' apps/src/migrate.ts
