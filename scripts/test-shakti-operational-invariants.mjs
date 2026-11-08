@@ -44,6 +44,7 @@ const protectedMigrationIdentities = [
   ["098_credential_registry_event_atomicity", "098_credential_registry_event_atomicity"],
   ["099_registry_event_assigned_verifier_read", "099_registry_event_assigned_verifier_read"],
   ["100_credential_runtime_update_column_scope", "100_credential_runtime_update_column_scope"],
+  ["101_security_definer_schema_boundary", "101_security_definer_schema_boundary"],
 ];
 for (const [filename, identity] of protectedMigrationIdentities) {
   if (!migrationRunner.includes(identity)) failures.push(`Migration invariant missing: protected migration identity ${filename}`);
