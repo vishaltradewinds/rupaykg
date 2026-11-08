@@ -64,3 +64,5 @@ The release decision is controlled by the highest-severity unresolved applicable
 4. Demonstrate backup/restore, monitoring and rollback.
 5. Reconcile methodology source/version and obtain/record required external acceptance.
 6. Repeat end-to-end acceptance after these controls are closed.
+
+| External integration mediator runtime intake | **GREEN/AMBER** | Versioned contract, tenant-safe persistence, idempotency and authenticated API intake implemented. Provider-specific external connector, remote conformance and production acceptance remain open. |
