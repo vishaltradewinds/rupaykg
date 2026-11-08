@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildHttpSpan, parseTraceparent } from "./observability.js";
+import { buildHttpSpan, parseTraceparent, validateObservabilitySpan } from "./observability.js";
 
 test("accepts valid W3C traceparent", () => {
   const context = parseTraceparent("00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01");
@@ -47,4 +47,41 @@ test("builds an OTEL-compatible HTTP span without payload or credential attribut
   assert.equal("authorization" in span.attributes, false);
   assert.equal("request.body" in span.attributes, false);
   assert.equal("payload" in span.attributes, false);
+});
+
+
+test("validates OTEL span identity, timing and sensitive-attribute boundaries", () => {
+  const span = buildHttpSpan({
+    context: {
+      traceId: "4bf92f3577b34da6a3ce929d0e0e4736",
+      parentId: "00f067aa0ba902b7",
+      sampled: true,
+    },
+    spanId: "8f0a1e2b3c4d5e6f",
+    name: "HTTP GET /api/v1/measurements/:id",
+    startTimeUnixNano: "1794120000000000000",
+    endTimeUnixNano: "1794120000123000000",
+    method: "GET",
+    route: "/api/v1/measurements/:id",
+    statusCode: 200,
+    durationMs: 123,
+  });
+
+  validateObservabilitySpan(span);
+
+  assert.throws(
+    () => validateObservabilitySpan({
+      ...span,
+      endTimeUnixNano: "1794119999999999999",
+    }),
+    /precedes start time/,
+  );
+
+  assert.throws(
+    () => validateObservabilitySpan({
+      ...span,
+      attributes: { ...span.attributes, authorization: "redacted" },
+    }),
+    /Forbidden sensitive span attribute/,
+  );
 });
