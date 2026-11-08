@@ -55,6 +55,8 @@ jobs:
         env:
           RUPAYKG_ALLOW_PROTECTED_SHAKTI_MIGRATIONS: "1"
         run: npm run migrate -w @rupaykg/api
+      - name: Run disposable SECURITY DEFINER runtime boundary acceptance
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/test-shakti-security-definer-boundary-runtime.sql
       - name: Assert pre-tenant identity context is installed in disposable CI DB
         run: |
           identity_context_exists="$(psql "$DATABASE_URL" -Atc "select exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'app' and p.proname = 'set_identity_context')")"
