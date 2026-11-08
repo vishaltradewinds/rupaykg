@@ -640,3 +640,13 @@
 - Latest engineering checkpoint commit: `083946d41e4bbe38586f11ba36656b029642aecd`.
 - Exact-head CI: **NOT VERIFIED**.
 - Production remains **READ-ONLY/HOLD**.
+
+
+### 2026-11-08 — Credential status-only runtime DB acceptance added
+- Added disposable-runtime integration acceptance for the actual credential privilege boundary.
+- A correctly scoped runtime context must be unable to update `trust_root_id`.
+- A mixed update attempting lifecycle `status` plus authority field `trust_root_id` must also be rejected.
+- This complements the static migration/route contract with executable DB-level acceptance.
+- Latest checkpoint commit: `9dfafa944ce87b75e943a0f228213909ad7d3ee5`.
+- Exact-head CI: **NOT VERIFIED**.
+- Production remains **READ-ONLY/HOLD**.
