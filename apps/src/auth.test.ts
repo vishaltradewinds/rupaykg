@@ -12,7 +12,7 @@ test("authorization fails closed without organization or verified membership con
 
 test("organization permission lookup is never reached for an unscoped context", async () => {
   let queried = false;
-  const client = { query: async () => { queried = true; return { rows: [{ ok: true }] }; } } as never;
+  const client = { query: async () => { queried = true; return { rows: [{ id: "membership-a" }] }; } } as never;
   const result = await hasOrganizationPermission(client, { identityId: "i", memberships: [] }, "org-a", ["waste:read"]);
   assert.equal(result, false);
   assert.equal(queried, false);
@@ -113,5 +113,6 @@ test("database organization liveness revalidates identity, membership and organi
   assert.match(queries[0]!.sql, /i\.suspended_at\s+is\s+null/);
   assert.match(queries[0]!.sql, /om\.status\s*=\s*'VERIFIED'/);
   assert.match(queries[0]!.sql, /o\.status\s*=\s*'VERIFIED'/);
+  assert.match(queries[0]!.sql, /for share/);
   assert.deepEqual(queries[0]!.values, ["identity-a", "org-a"]);
 });
