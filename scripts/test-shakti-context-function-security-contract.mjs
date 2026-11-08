@@ -4,6 +4,7 @@ import fs from "node:fs";
 const files = [
   "migrations/20261107_platform_execution_context.sql",
   "migrations/20261107_authority_hierarchy_context.sql",
+  "migrations/20261108_context_identity_liveness_hardening.sql",
 ];
 const failures = [];
 for (const file of files) {
@@ -19,6 +20,11 @@ for (const file of files) {
   }
   if (!/grant execute on function app\./i.test(source)) {
     failures.push(file + ": runtime execute grant missing");
+  }
+  if (file.endsWith("20261108_context_identity_liveness_hardening.sql")) {
+    if (!/status = 'VERIFIED'/i.test(source) || !/suspended_at is null/i.test(source)) {
+      failures.push(file + ": privileged context must require verified, non-suspended identity");
+    }
   }
 }
 const runtimeGrant = fs.readFileSync("migrations/20261107_runtime_grant_reconciliation.sql", "utf8");
