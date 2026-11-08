@@ -1,6 +1,6 @@
 # Shakti Runtime Role & Grant Reconciliation
 
-Date: 2026-11-07
+Date: 2026-11-08
 
 ## Authoritative production finding
 
@@ -113,9 +113,26 @@ PR #331 currently has no workflow run for its latest head. The repository workfl
 
 No CI result is being inferred or fabricated.
 
+## 2026-11-08 DML grant closure
+
+A second application-path reconciliation confirmed that authentication, onboarding, legal-verification and platform-audit mutations require explicit runtime DML privileges. The controlled grant contract now explicitly covers:
+
+- `identities` INSERT;
+- `identity_password_credentials` INSERT/UPDATE;
+- `identity_sessions` INSERT/UPDATE;
+- `organizations` INSERT/UPDATE;
+- `roles` INSERT/UPDATE;
+- `organization_geography_scopes` INSERT/UPDATE;
+- `organization_verification_evidence` INSERT/UPDATE;
+- `stakeholder_applications` INSERT/UPDATE;
+- `stakeholder_application_approvals` UPDATE;
+- `audit_events` INSERT.
+
+No DELETE privilege was added. The accompanying static contract `scripts/test-shakti-runtime-dml-grants-contract.mjs` is wired into CI and fails if these required grants disappear or a runtime DELETE grant is introduced.
+
 ## CI trigger reconciliation
 
-A controlled documentation-only synchronization commit is being used to re-synchronize the PR branch with the repository's configured `pull_request` CI trigger. This does not alter runtime code, production configuration, database state, or the RLS gate.
+The controlled branch now contains additional CI-enforced runtime privilege reconciliation. The repository workflow remains configured for `pull_request` events targeting `main`; absence of a workflow run for the exact controlled head remains an execution/status problem, not evidence of a pass.
 
 The resulting workflow run, if created, must still be evaluated by its actual GitHub Actions conclusion; the commit itself is not evidence of CI success.
 
