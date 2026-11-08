@@ -14,6 +14,7 @@
 - This is repository/disposable-CI hardening only; production has not been mutated.
 - Engineering checkpoint: `6516edd19bd7268799148771796ca416d49bbe17`.
 - Migration checkpoint: `1fb3966f37f1cf1b664c6acb84f01548f83817f3`.
+- Resume-document checkpoint is the commit containing this entry.
 - Exact-head CI workflow runs/statuses are not yet verified.
 
 ## 2026-11-08 — SECURITY DEFINER latest-definition binding
