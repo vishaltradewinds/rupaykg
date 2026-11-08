@@ -39,12 +39,14 @@ try {
     .sort();
   const prefixCounts = new Map<string, number>();
   for (const filename of files) {
-    const prefix = filename.split("_", 1)[0];
+    const prefix = filename.match(/^(\d+)_/)?.[1] ?? "";
+    if (!prefix) throw new Error(`Invalid migration filename: ${filename}`);
     prefixCounts.set(prefix, (prefixCounts.get(prefix) ?? 0) + 1);
   }
 
   for (const filename of files) {
-    const prefix = filename.split("_", 1)[0];
+    const prefix = filename.match(/^(\d+)_/)?.[1] ?? "";
+    if (!prefix) throw new Error(`Invalid migration filename: ${filename}`);
     const version = (prefixCounts.get(prefix) ?? 0) > 1 ? filename.replace(/\.sql$/, "") : prefix;
     const sql = await readFile(path.join(migrationDir, filename), "utf8");
     const checksum = createHash("sha256").update(sql).digest("hex");
