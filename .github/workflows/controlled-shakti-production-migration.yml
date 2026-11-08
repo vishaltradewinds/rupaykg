@@ -16,6 +16,7 @@ jobs:
       DATABASE_URL: ${{ secrets.RUPAYKG_DDL_DATABASE_URL }}
       EXPECTED_DDL_ROLE: rupaykg_ddl_migration
       EXPECTED_PRE_MIGRATION_VERSION: "096"
+      MIGRATION_MAX_VERSION: "099"
     steps:
       - name: Checkout authoritative repository
         uses: actions/checkout@v4
@@ -71,7 +72,7 @@ jobs:
         run: |
           set -euo pipefail
           npm ci --no-audit --no-fund
-          npm run migrate -w @rupaykg/api | tee shakti-migration-evidence/migration-output.txt
+          MIGRATION_MAX_VERSION="$MIGRATION_MAX_VERSION" npm run migrate -w @rupaykg/api | tee shakti-migration-evidence/migration-output.txt
 
       - name: Verify Shakti migrations 097-099
         run: |
