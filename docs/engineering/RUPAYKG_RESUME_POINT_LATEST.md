@@ -759,3 +759,12 @@
 - Checkpoint: `9ba95dec743e3e108056c8727dfa9f2c18b8bfc6`.
 - Exact-head CI: **NOT VERIFIED**.
 - Production remains **READ-ONLY/HOLD**.
+
+### 2026-11-08 — Shakti contract syntax reconciliation
+- Removed the stale unqualified `has_verification_permission(...)` requirement from the assigned-verifier deterministic contract; the migration correctly uses the qualified `public.has_verification_permission(...)`.
+- Repaired the credential authority/runtime privilege contract: declarations now precede use and malformed literal newline escapes were removed.
+- Repaired the settlement tenant-RLS contract's missing closing block.
+- These were deterministic CI contract defects, not production-data changes.
+- Current branch head: `31913cb7519127225e74aa6359fb209cf3ea2d32`.
+- Exact-head CI: **NOT VERIFIED** until a workflow run is attached to this head.
+- Production remains **READ-ONLY/HOLD**.
