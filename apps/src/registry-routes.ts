@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type { Pool, PoolClient } from "pg";
+import { trace } from "@opentelemetry/api";
 import { authenticate, canActForOrganization, canPerformHighRiskActionInDatabase, hasOrganizationPermission, type AuthContext } from "./auth.js";
 import { withTenantTransaction } from "./tenant-db.js";
 
@@ -22,7 +23,11 @@ export async function registerRegistryRoutes(app:FastifyInstance,pool:Pool|null)
     if(!activityId||!trustRootId||!verificationId||!issuerOrganizationId||quantity===null||!unit)return reply.code(400).send({error:"activityId, trustRootId, verificationId, issuerOrganizationId, positive quantity and unit are required"});
     if(!canActForOrganization(auth,issuerOrganizationId))return reply.code(403).send({error:"Issuer organization access denied",code:"ORG_FORBIDDEN"});
     if(!await canPerformHighRiskActionInDatabase(pool,auth,issuerOrganizationId,"ISSUE_CREDENTIAL"))return reply.code(403).send({error:"Explicit ISSUE_CREDENTIAL permission is required",code:"HIGH_RISK_PERMISSION_REQUIRED"});
-    try{return reply.code(201).send({source:"postgresql",syntheticData:false,credential:await tx(pool,auth,async c=>{
+    try{return reply.code(201).send({source:"postgresql",syntheticData:false,credential:await trace.getTracer("rupaykg-registry").startActiveSpan("rupaykg.registry.credential_issuance", async span => {
+      span.setAttribute("rupaykg.operation", "credential_issuance");
+      span.setAttribute("rupaykg.authoritative_mutation", true);
+      try {
+        return await tx(pool,auth,async c=>{
       const v=await c.query<{evidence_id:string;decision:string;activity_id:string}>("select evidence_id,decision,activity_id from verifications where id=$1 for update",[verificationId]);
       if(!v.rows[0]||v.rows[0].decision!=="APPROVED")throw Object.assign(new Error("Approved verification required"),{code:"VERIFICATION_REQUIRED"});
       if(v.rows[0].activity_id!==activityId)throw Object.assign(new Error("Verification is not bound to the requested activity"),{code:"EVIDENCE_MISMATCH"});
@@ -50,6 +55,11 @@ export async function registerRegistryRoutes(app:FastifyInstance,pool:Pool|null)
       const existing=await c.query("select id from credentials where activity_id=$1 and verification_id=$2",[activityId,verificationId]);if(existing.rows[0])throw Object.assign(new Error("Credential already exists for verification"),{code:"CREDENTIAL_EXISTS"});
       const inserted=await c.query("insert into credentials(activity_id,issuer_organization_id,trust_root_id,status,verification_id,quantity,unit,issued_at) values($1,$2,$3,'ISSUED',$4,$5,$6,now()) returning *",[activityId,issuerOrganizationId,trustRootId,verificationId,quantity,unit]);
       await c.query("insert into registry_events(credential_id,event_type,from_owner_id,to_owner_id,verification_id,recorded_by_identity_id,event_hash) values($1,'ISSUED',null,$2,$3,$4,$5)",[inserted.rows[0].id,issuerOrganizationId,verificationId,auth.identityId,`issue:${inserted.rows[0].id}:${verificationId}`]);return inserted.rows[0]
+        });
+      } catch (error) {
+        span.recordException(error instanceof Error ? error : new Error(String(error)));
+        throw error;
+      } finally { span.end(); }
     })})}catch(error){request.log.error(error);const code=(error as {code?:string}).code;if(code==="HIGH_RISK_PERMISSION_REQUIRED")return reply.code(403).send({error:(error as Error).message,code});if(["VERIFICATION_REQUIRED","EVIDENCE_MISMATCH","ACTIVITY_NOT_ELIGIBLE","CREDENTIAL_EXISTS","MIRROR_NODE_VERIFICATION_REQUIRED","ACCEPTANCE_FIXTURE_NOT_REGISTRY_ELIGIBLE"].includes(code??""))return reply.code(409).send({error:(error as Error).message,code});return reply.code(503).send({error:"Credential issuance unavailable",syntheticData:false})}
   });
 
