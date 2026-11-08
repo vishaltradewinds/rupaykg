@@ -67,5 +67,8 @@ grant usage on schema app to rupaykg_app_runtime;
 grant execute on function app.current_identity_id() to rupaykg_app_runtime;
 grant execute on function app.current_organization_id() to rupaykg_app_runtime;
 grant execute on function app.set_request_context(uuid,uuid) to rupaykg_app_runtime;
+grant execute on function app.set_identity_context(uuid) to rupaykg_app_runtime;
+grant execute on function app.set_platform_context(uuid) to rupaykg_app_runtime;
+grant execute on function app.set_authority_context(uuid,text,uuid) to rupaykg_app_runtime;
 
 -- No blanket grant on schema_migrations or unrelated database objects.
