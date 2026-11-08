@@ -57,12 +57,12 @@ jobs:
         run: npm run migrate -w @rupaykg/api
       - name: Assert pre-tenant identity context is installed in disposable CI DB
         run: |
-          identity_context_exists="$(psql \"$DATABASE_URL\" -Atc \"select exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'app' and p.proname = 'set_identity_context')\")"
+          identity_context_exists="$(psql "$DATABASE_URL" -Atc "select exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'app' and p.proname = 'set_identity_context')")"
           echo "app.set_identity_context exists: $identity_context_exists"
           test "$identity_context_exists" = "t"
       - name: Assert protected Shakti core RLS is active in disposable CI DB
         run: |
-          protected_rls="$(psql \"$DATABASE_URL\" -Atc \"select (count(*) = 5 and bool_and(c.relrowsecurity))::int from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relname in ('activities','measurements','evidence','carbon_calculations','epr_obligations')\")"
+          protected_rls="$(psql "$DATABASE_URL" -Atc "select (count(*) = 5 and bool_and(c.relrowsecurity))::int from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relname in ('activities','measurements','evidence','carbon_calculations','epr_obligations')")"
           echo "Protected Shakti core RLS active: $protected_rls"
           test "$protected_rls" = "1"
       - run: npm run typecheck
