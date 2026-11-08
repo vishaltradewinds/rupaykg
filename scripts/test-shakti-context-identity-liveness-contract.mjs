@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 import fs from "node:fs";
-const source=fs.readFileSync("migrations/20261108_context_identity_liveness_hardening.sql","utf8");
+const hardening=fs.readFileSync("migrations/20261108_context_identity_liveness_hardening.sql","utf8");
+const completion=fs.readFileSync("migrations/20261108_context_identity_liveness_completion.sql","utf8");
 const failures=[];
-for(const fn of ["app.set_platform_context","app.set_authority_context"]){
+for(const [fn,source] of [["app.set_platform_context",hardening],["app.set_authority_context",hardening],["app.set_identity_context",completion]]){
  const start=source.indexOf(`function ${fn}`);
  const end=source.indexOf("\n$$;",start);
  const block=source.slice(start,end);
