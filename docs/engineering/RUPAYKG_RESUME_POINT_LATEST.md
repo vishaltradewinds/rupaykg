@@ -596,3 +596,12 @@
 - Latest checkpoint commit: `b78442dc50b395e1be3b4987f3ce0d8329cc92d6`.
 - Exact-head CI: **NOT VERIFIED**.
 - Production remains **READ-ONLY/HOLD**.
+
+
+### 2026-11-08 — Assigned-verifier behavioral acceptance added
+- Added DB integration coverage for migration `099_registry_event_assigned_verifier_read.sql`.
+- Acceptance now proves an assigned APPROVED verifier can read the credential's registry provenance.
+- The same test proves verifier write attempts are denied, suspended verifier context is rejected, and an unrelated verified verifier cannot read the event.
+- Latest checkpoint commit: `5c147a3242bd9d2c247bd9659184c941717cb14a`.
+- Exact-head CI: **NOT VERIFIED**.
+- Production remains **READ-ONLY/HOLD**.
