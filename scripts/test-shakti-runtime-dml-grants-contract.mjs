@@ -1,6 +1,7 @@
 import fs from "node:fs";
 
-const grantSource = fs.readFileSync("migrations/20261107_runtime_grant_reconciliation.sql", "utf8");
+const grantSource = fs.readFileSync("migrations/20261107_runtime_grant_reconciliation.sql", "utf8")
+  + "\n" + fs.readFileSync("migrations/090_runtime_dml_grant_reconciliation_completion.sql", "utf8");
 const routeFiles = [
   "apps/src/auth-routes.ts",
   "apps/src/onboarding-hierarchy-routes.ts",
