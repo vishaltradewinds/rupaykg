@@ -3,7 +3,11 @@ import fs from "node:fs";
 const migration = fs.readFileSync("migrations/099_registry_event_assigned_verifier_read.sql", "utf8");
 const required = [
   "create or replace function app.is_assigned_approved_verifier",
+  "returns boolean",
+  "language sql",
   "security definer",
+  "stable",
+  "select exists (",
   "set search_path = pg_catalog, public, app",
   "public.has_verification_permission(v.verifier_identity_id)",
   "v.verifier_identity_id = app.current_identity_id()",
@@ -21,6 +25,7 @@ const required = [
   "create policy shakti_registry_events_select_assigned_verifier",
   "app.is_assigned_approved_verifier(registry_events.credential_id)",
   "for select",
+  "drop policy if exists shakti_registry_events_select_assigned_verifier",
   "-- No additional write authority is granted by this policy.",
   "-- The helper is read-only by construction: it returns a boolean and grants no table DML.",
 ];
