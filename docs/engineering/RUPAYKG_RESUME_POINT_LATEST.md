@@ -899,3 +899,11 @@
 - Code checkpoint: `af43431cda09014fb6d3224e3b2e675803093b2e`.
 - Exact-head CI: **NOT VERIFIED** (`workflow_runs: []`).
 - Production remains **READ-ONLY/HOLD**.
+
+
+### 2026-11-08 — Identity-liveness contract boundary fail-closed hardening
+- Strengthened `test-shakti-context-identity-liveness-contract.mjs` so every expected context function must be found in its designated migration and must have a recognized PostgreSQL dollar-quote terminator before source extraction proceeds.
+- This prevents a missing function/terminator from silently degrading into an empty or EOF-wide block and makes the deterministic contract fail closed on malformed migration structure.
+- Code checkpoint: `dadfede5391c380de2fd9f860b5f586e0d9900e8`.
+- Exact-head CI: **NOT VERIFIED** until GitHub reports a workflow run for this head.
+- Production remains **READ-ONLY/HOLD**.
