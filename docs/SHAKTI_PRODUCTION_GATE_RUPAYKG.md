@@ -11,7 +11,8 @@ This document is the production-control record for RupayKg under SHAKTI — Stan
 - Repository: `vishaltradewinds/rupaykg`
 - Default branch: `main`
 - Current deployed commit: `5c1c215c777b0e7f15a4b74168db5c0f9307fbd5`
-- Current commit: `docs: add production backup and rollback runbook`
+- Repository head: `2e86d2afa74f7055d9d4307e95dc8f68ee3c82e6` (current control-matrix rollback-gate update)
+- The deployment identifiers recorded below are historical observed evidence and must not be treated as proof that this repository head is currently deployed.
 - Render service: `rupaykg`
 - Render URL: `https://rupaykg.onrender.com`
 - Render branch: `main`
