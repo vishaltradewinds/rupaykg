@@ -93,7 +93,8 @@ begin
        'app.is_assigned_approved_verifier(uuid)'
      );
   if unexpected_runtime_execute <> 0 then
-    raise exception 'SECURITY DEFINER boundary failed: % app SECURITY DEFINER function(s) have unapproved runtime EXECUTE';
+    raise exception 'SECURITY DEFINER boundary failed: % app SECURITY DEFINER function(s) have unapproved runtime EXECUTE',
+      unexpected_runtime_execute;
   end if;
 
   select count(*)
