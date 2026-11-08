@@ -702,3 +702,85 @@ test("Shakti RLS EPR obligations are tenant-isolated for insert, read and update
     await ownerPool.end();
   }
 });
+
+
+test("Shakti RLS settlement rows are bilateral-readable but payer-mutation-only", { skip: !enabled }, async () => {
+  const runtimePool = new Pool({ connectionString: process.env.DATABASE_URL });
+  const ownerPool = new Pool({ connectionString: process.env.RUPAYKG_TEST_OWNER_DATABASE_URL });
+  const suffix = randomBytes(8).toString("hex");
+  let identityId = "", organizationA = "", organizationB = "", organizationC = "", roleA = "", membershipA = "", settlementA = "", settlementB = "", eventA = "";
+  try {
+    organizationA = (await ownerPool.query<{ id: string }>("insert into organizations(name,organization_type,status) values($1,'test_fixture','VERIFIED') returning id", ["TEST-RLS-SETTLEMENT-A-" + suffix])).rows[0]!.id;
+    organizationB = (await ownerPool.query<{ id: string }>("insert into organizations(name,organization_type,status) values($1,'test_fixture','VERIFIED') returning id", ["TEST-RLS-SETTLEMENT-B-" + suffix])).rows[0]!.id;
+    organizationC = (await ownerPool.query<{ id: string }>("insert into organizations(name,organization_type,status) values($1,'test_fixture','VERIFIED') returning id", ["TEST-RLS-SETTLEMENT-C-" + suffix])).rows[0]!.id;
+    identityId = (await ownerPool.query<{ id: string }>("insert into identities(external_subject,display_name,email,status) values($1,$2,$3,'VERIFIED') returning id", ["rls-settlement:" + suffix, "RLS Settlement " + suffix, "rls-settlement-" + suffix + "@example.invalid"])).rows[0]!.id;
+    roleA = (await ownerPool.query<{ id: string }>("insert into roles(organization_id,name,permissions,geography_scope) values($1,'tenant_test_role','[\"settlement:authorize\"]'::jsonb,'[]'::jsonb) returning id", [organizationA])).rows[0]!.id;
+    membershipA = (await ownerPool.query<{ id: string }>("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED') returning id", [identityId, organizationA, roleA])).rows[0]!.id;
+    settlementA = (await ownerPool.query<{ id: string }>("insert into settlements(payer_id,payee_id,amount,currency,status) values($1,$2,10,'INR','CREATED') returning id", [organizationA, organizationB])).rows[0]!.id;
+    settlementB = (await ownerPool.query<{ id: string }>("insert into settlements(payer_id,payee_id,amount,currency,status) values($1,$2,20,'INR','CREATED') returning id", [organizationB, organizationC])).rows[0]!.id;
+
+    const client = await runtimePool.connect();
+    try {
+      await client.query("begin");
+      await client.query("set local role rupaykg_app_runtime");
+      await client.query("select app.set_request_context($1,$2)", [identityId, organizationA]);
+
+      const visible = await client.query<{ id: string; payer_id: string; payee_id: string }>(
+        "select id,payer_id,payee_id from settlements where id in ($1,$2) order by id",
+        [settlementA, settlementB],
+      );
+      assert.equal(visible.rows.length, 1);
+      assert.equal(visible.rows[0]!.id, settlementA);
+
+      const payerUpdate = await client.query<{ id: string; amount: string }>(
+        "update settlements set amount=11 where id=$1 returning id,amount",
+        [settlementA],
+      );
+      assert.equal(payerUpdate.rows[0]!.id, settlementA);
+      assert.equal(payerUpdate.rows[0]!.amount, "11");
+
+      await assert.rejects(
+        () => client.query("update settlements set amount=21 where id=$1", [settlementB]),
+        /row-level security|policy/i,
+      );
+
+      eventA = (await client.query<{ id: string }>(
+        "insert into settlement_events(settlement_id,event_type,event_hash) values($1,'RLS_TEST','rls-settlement-$2') returning id",
+        [settlementA, suffix],
+      )).rows[0]!.id;
+      const events = await client.query<{ id: string }>(
+        "select id from settlement_events where settlement_id in ($1,$2)",
+        [settlementA, settlementB],
+      );
+      assert.equal(events.rows.length, 1);
+      assert.equal(events.rows[0]!.id, eventA);
+
+      await assert.rejects(
+        () => client.query("insert into settlement_events(settlement_id,event_type,event_hash) values($1,'RLS_CROSS','rls-cross-$2')", [settlementB, suffix]),
+        /row-level security|policy/i,
+      );
+      await assert.rejects(
+        () => client.query("update settlement_events set event_type='MUTATED' where id=$1", [eventA]),
+        /permission denied|row-level security|policy/i,
+      );
+      await client.query("rollback");
+    } catch (error) {
+      try { await client.query("rollback"); } catch {}
+      throw error;
+    } finally {
+      client.release();
+    }
+  } finally {
+    if (eventA) await ownerPool.query("delete from settlement_events where id=$1", [eventA]);
+    if (settlementA) await ownerPool.query("delete from settlements where id=$1", [settlementA]);
+    if (settlementB) await ownerPool.query("delete from settlements where id=$1", [settlementB]);
+    if (membershipA) await ownerPool.query("delete from organization_memberships where id=$1", [membershipA]);
+    if (roleA) await ownerPool.query("delete from roles where id=$1", [roleA]);
+    if (identityId) await ownerPool.query("delete from identities where id=$1", [identityId]);
+    if (organizationA) await ownerPool.query("delete from organizations where id=$1", [organizationA]);
+    if (organizationB) await ownerPool.query("delete from organizations where id=$1", [organizationB]);
+    if (organizationC) await ownerPool.query("delete from organizations where id=$1", [organizationC]);
+    await runtimePool.end();
+    await ownerPool.end();
+  }
+});
