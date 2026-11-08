@@ -141,6 +141,15 @@ jobs:
         run: node scripts/test-shakti-context-pool-isolation-contract.mjs
       - name: Run Shakti RLS write contract
         run: node scripts/test-shakti-rls-write-contract.mjs
+      - name: Run Shakti protected migration gate contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          for migration in 20261107_authority_hierarchy_context.sql 20261107_platform_execution_context.sql 20261107_runtime_grant_reconciliation.sql 20261107_core_tenant_rls_activation_gate.sql 20261108_context_identity_liveness_hardening.sql; do
+            grep -Fq "$migration" apps/src/migrate.ts
+          done
+          grep -Fq 'RUPAYKG_ALLOW_PROTECTED_SHAKTI_MIGRATIONS' apps/src/migrate.ts
+          echo "Shakti protected migration gate contract PASSED"
       - name: Run Shakti context function security contract
         run: node scripts/test-shakti-context-function-security-contract.mjs
       - name: Run Shakti context identity liveness contract
