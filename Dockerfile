@@ -22,4 +22,4 @@ COPY --from=build /app/migrations ./migrations
 
 USER node
 EXPOSE 8080
-CMD ["node", "apps/dist/src/production-server.js"]
+CMD ["node", "--import", "./apps/dist/src/otel-bootstrap.js", "apps/dist/src/production-server.js"]
