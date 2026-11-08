@@ -134,3 +134,10 @@ select 1 / case
 --   3. Run VERIFY_PRE_RLS.sql using the exact application runtime login.
 --   4. Run authentication/security-definer/policy-coverage gates.
 --   5. Only then execute ACTIVATE_RLS.sql.
+
+-- Rollback note (manual, approval-gated): if provisioning must be reversed before
+-- any Shakti migration/RLS activation, restore ownership of the 17 protected tables
+-- to the previously authorized owner using an approved change procedure. Do not
+-- drop the new role while it still owns objects or is referenced by the workflow.
+-- RLS must remain disabled during this role-provisioning rollback unless a separate
+-- approved rollback procedure explicitly governs RLS state.
