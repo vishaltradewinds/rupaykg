@@ -147,6 +147,8 @@ jobs:
         run: node scripts/test-shakti-context-identity-liveness-contract.mjs
       - name: Run Shakti execution-context grant reconciliation contract
         run: node scripts/test-shakti-execution-context-grants-contract.mjs
+      - name: Run Shakti runtime DML grant contract
+        run: node scripts/test-shakti-runtime-dml-grants-contract.mjs
       - name: Run tests including disposable PostgreSQL acceptance
         env:
           DATABASE_URL: postgresql://rupaykg_app_runtime:ci-runtime-only-password@localhost:5432/rupaykg
