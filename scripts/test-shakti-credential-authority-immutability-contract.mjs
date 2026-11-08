@@ -21,3 +21,11 @@ if (failures.length) {
   process.exit(1);
 }
 console.log("Shakti credential authority immutability contract PASSED.");
+
+const grants = fs.readFileSync("migrations/100_credential_runtime_update_column_scope.sql", "utf8");
+for (const required of ["revoke update on public.credentials from rupaykg_app_runtime", "grant update (status) on public.credentials to rupaykg_app_runtime"]) {
+  if (!grants.includes(required)) {
+    console.error("Shakti credential runtime update scope contract FAILED: missing " + required);
+    process.exit(1);
+  }
+}
