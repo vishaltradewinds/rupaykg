@@ -968,3 +968,55 @@ test("Shakti RLS field-sync evidence is identity/device/tenant isolated", { skip
     await ownerPool.end();
   }
 });
+
+
+test("Shakti credential lifecycle cannot commit without matching registry provenance", { skip: !enabled }, async () => {
+  const runtimePool = new Pool({ connectionString: process.env.DATABASE_URL });
+  const ownerPool = new Pool({ connectionString: process.env.RUPAYKG_TEST_OWNER_DATABASE_URL });
+  const suffix = randomBytes(8).toString("hex");
+  let organizationA = "", credentialA = "", credentialB = "";
+  try {
+    organizationA = (await ownerPool.query<{ id: string }>("insert into organizations(name,organization_type,status) values($1,'test_fixture','VERIFIED') returning id", ["TEST-CRED-ATOMICITY-" + suffix])).rows[0]!.id;
+    credentialA = (await ownerPool.query<{ id: string }>("insert into credentials(issuer_organization_id,trust_root_id,status) values($1,$2,'ELIGIBLE') returning id", [organizationA, "ATOMICITY-TRUST-A-" + suffix])).rows[0]!.id;
+    credentialB = (await ownerPool.query<{ id: string }>("insert into credentials(issuer_organization_id,trust_root_id,status) values($1,$2,'ELIGIBLE') returning id", [organizationA, "ATOMICITY-TRUST-B-" + suffix])).rows[0]!.id;
+
+    const client = await runtimePool.connect();
+    try {
+      await client.query("begin");
+      await client.query("set local role rupaykg_app_runtime");
+      await client.query("select app.set_request_context($1,$2)", [crypto.randomUUID(), organizationA]);
+      await assert.rejects(
+        async () => {
+          await client.query("update credentials set status='ACTIVE' where id=$1", [credentialA]);
+          await client.query("commit");
+        },
+        /credential lifecycle state requires matching registry event: ACTIVATED/i,
+      );
+      try { await client.query("rollback"); } catch {}
+    } finally {
+      client.release();
+    }
+
+    await ownerPool.query("insert into registry_events(credential_id,event_type,to_owner_id,event_hash) values($1,'ISSUED',$2,$3)", [credentialB, organizationA, "ATOMICITY-ISSUED-" + suffix]);
+    const ownerClient = await ownerPool.connect();
+    try {
+      await ownerClient.query("begin");
+      await ownerClient.query("update credentials set status='ACTIVE' where id=$1", [credentialB]);
+      await ownerClient.query("insert into registry_events(credential_id,event_type,to_owner_id,event_hash) values($1,'ACTIVATED',$2,$3)", [credentialB, organizationA, "ATOMICITY-ACTIVATED-" + suffix]);
+      await ownerClient.query("commit");
+    } finally {
+      ownerClient.release();
+    }
+    const final = await ownerPool.query<{ status: string }>("select status from credentials where id=$1", [credentialB]);
+    assert.equal(final.rows[0]?.status, "ACTIVE");
+  } finally {
+    if (credentialA) await ownerPool.query("delete from credentials where id=$1", [credentialA]);
+    if (credentialB) {
+      await ownerPool.query("delete from registry_events where credential_id=$1", [credentialB]);
+      await ownerPool.query("delete from credentials where id=$1", [credentialB]);
+    }
+    if (organizationA) await ownerPool.query("delete from organizations where id=$1", [organizationA]);
+    await runtimePool.end();
+    await ownerPool.end();
+  }
+});
