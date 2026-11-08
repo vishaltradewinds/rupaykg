@@ -21,8 +21,23 @@ for (const [name, pattern] of requiredWorkflowInvariants) {
   if (!pattern.test(workflow)) failures.push(`CI invariant missing: ${name}`);
 }
 
+const protectedMigrationNames = [
+  "20261107_authority_hierarchy_context.sql",
+  "20261107_context_identity_bootstrap.sql",
+  "20261107_context_organization_id.sql",
+  "20261107_platform_execution_context.sql",
+  "20261107_runtime_grant_reconciliation.sql",
+  "20261107_core_tenant_rls_activation_gate.sql",
+  "20261108_context_identity_liveness_hardening.sql",
+  "20261108_context_identity_liveness_completion.sql",
+  "082_settlement_reference_trigger_insert_safety.sql",
+  "088_field_sync_append_only_integrity.sql",
+  "089_settlement_reconciliation_reference_integrity.sql",
+];
+for (const filename of protectedMigrationNames) {
+  if (!migrationRunner.includes(filename)) failures.push(`Migration invariant missing: protected migration ${filename}`);
+}
 const requiredMigrationInvariants = [
-  ["protected migration allowlist", /authority_hierarchy_context\|context_identity_bootstrap\|context_organization_id\|platform_execution_context\|runtime_grant_reconciliation\|core_tenant_rls_activation_gate/],
   ["explicit protected gate", /RUPAYKG_ALLOW_PROTECTED_SHAKTI_MIGRATIONS/],
   ["legacy numeric migration compatibility", /prefixCounts/],
   ["duplicate-prefix disambiguation", /filename\.replace\(\/\\\.sql\$\/, ""\)/],
@@ -40,7 +55,7 @@ if (!/auth\.activeOrganizationId/.test(tenantDb)) {
 if (!/auth\.memberships\.some\(\(m\) => m\.status === "VERIFIED" && m\.organization_id === auth\.activeOrganizationId\)/.test(tenantDb)) {
   failures.push("Tenant transaction invariant missing: active organization must have verified membership.");
 }
-if (!/select exists \(select 1 from organization_memberships om join organizations o on o.id=om.organization_id and o.status='VERIFIED' where om.identity_id=\$1 and om.organization_id=\$2 and om.status='VERIFIED'\)/.test(tenantDb)) {
+if (!/select exists \(select 1 from organization_memberships om\s+join organizations o on o\.id\s*=\s*om\.organization_id\s+and o\.status\s*=\s*'VERIFIED'\s+where om\.identity_id\s*=\s*\$1\s+and om\.organization_id\s*=\s*\$2\s+and om\.status\s*=\s*'VERIFIED'\)/.test(tenantDb)) {
   failures.push("Tenant transaction invariant missing: authoritative database membership must be revalidated inside the transaction.");
 }
 if (!/auth\.memberships\.length\s*===\s*0/.test(auth) || !/!organizationId/.test(auth) || !/m\.status\s*===\s*"VERIFIED"/.test(auth)) {
