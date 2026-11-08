@@ -1,6 +1,6 @@
-import { readProductionConfig } from "./production-config.js";\nimport { buildRuntimeAttestation } from "./observability.js";
+import { readProductionConfig } from "./production-config.js";\nimport { assertSupportedNodeRuntime, buildRuntimeAttestation } from "./observability.js";
 
-const config = readProductionConfig();
+assertSupportedNodeRuntime();\n\nconst config = readProductionConfig();
 
 // The authoritative server consumes the validated production contract.
 // Keep production-only configuration explicit here so TLS trust material is
