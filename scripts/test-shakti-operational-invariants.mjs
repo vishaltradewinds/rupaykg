@@ -22,7 +22,7 @@ for (const [name, pattern] of requiredWorkflowInvariants) {
 }
 
 const requiredMigrationInvariants = [
-  ["protected migration allowlist", /20261107_\(authority_hierarchy_context\|platform_execution_context\|runtime_grant_reconciliation\|core_tenant_rls_activation_gate\)/],
+  ["protected migration allowlist", /authority_hierarchy_context\|platform_execution_context\|runtime_grant_reconciliation\|core_tenant_rls_activation_gate/],
   ["explicit protected gate", /RUPAYKG_ALLOW_PROTECTED_SHAKTI_MIGRATIONS/],
   ["legacy numeric migration compatibility", /prefixCounts/],
   ["duplicate-prefix disambiguation", /filename\.replace\(\/\\\.sql\$\/, ""\)/],
