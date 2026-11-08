@@ -3,6 +3,17 @@ import fs from "node:fs";
 
 const source = fs.readFileSync("apps/src/registry-routes.ts", "utf8");
 const failures = [];
+const lifecycleMigration = fs.readFileSync("migrations/092_settlement_lifecycle_transition_integrity.sql", "utf8");
+for (const required of [
+  "enforce_settlement_lifecycle_transition",
+  "settlement_lifecycle_transition_guard",
+  "old.status = 'CREATED' and new.status = 'AUTHORIZED'",
+  "old.status = 'AUTHORIZED' and new.status = 'EXECUTING'",
+  "old.status = 'EXECUTING' and new.status = 'RECONCILING'",
+  "old.status = 'RECONCILING' and new.status = 'SETTLED'",
+]) {
+  if (!lifecycleMigration.includes(required)) failures.push("missing database lifecycle guard: " + required);
+}
 
 const required = [
   'where id=$1 for update',
