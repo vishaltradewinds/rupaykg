@@ -29,7 +29,7 @@ create or replace function app.set_request_context(
 returns void
 language plpgsql
 security definer
-set search_path = public, app
+set search_path = pg_catalog, public, app
 as $$
 begin
   if p_identity_id is null or p_organization_id is null then
