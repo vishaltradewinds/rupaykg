@@ -13,6 +13,8 @@ const required = [
   "authorization_reference=$2",
   "AUTHORIZATION_REFERENCE_EXISTS",
   "externalReference",
+  "status='EXECUTING'",
+  "status='RECONCILING'",
   "confirmationReference",
   "reconciliationReference",
   "confirmation_reference=$1 and id<>$2",
