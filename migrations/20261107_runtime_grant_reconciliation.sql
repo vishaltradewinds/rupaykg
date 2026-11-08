@@ -62,6 +62,18 @@ grant insert on table public.settlements to rupaykg_app_runtime;
 grant update on table public.settlements to rupaykg_app_runtime;
 grant insert on table public.verifications to rupaykg_app_runtime;
 
+-- Authentication/onboarding/platform writes observed in the audited application paths.
+-- These are explicit DML grants; no DELETE/DDL privilege is granted to the runtime role.
+grant insert on table public.identities to rupaykg_app_runtime;
+grant insert, update on table public.identity_password_credentials to rupaykg_app_runtime;
+grant insert, update on table public.identity_sessions to rupaykg_app_runtime;
+grant insert, update on table public.organizations to rupaykg_app_runtime;
+grant insert on table public.roles to rupaykg_app_runtime;
+grant insert, update on table public.organization_geography_scopes to rupaykg_app_runtime;
+grant insert on table public.organization_verification_evidence to rupaykg_app_runtime;
+grant insert, update on table public.stakeholder_applications to rupaykg_app_runtime;
+grant update on table public.stakeholder_application_approvals to rupaykg_app_runtime;
+
 -- Security-definer tenant/identity context helpers.
 grant usage on schema app to rupaykg_app_runtime;
 grant execute on function app.current_identity_id() to rupaykg_app_runtime;
