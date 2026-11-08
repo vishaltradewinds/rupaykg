@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { randomBytes } from "node:crypto";
 
 const baseUrl = process.env.RUPAYKG_BASE_URL?.replace(/\/$/, "");
 const token = process.env.RUPAYKG_BEARER_TOKEN;
@@ -24,7 +25,7 @@ if (!traceId || !/^[0-9a-f]{32}$/.test(traceId)) {
   throw new Error("health response did not expose a valid RupayKg trace correlation id");
 }
 
-const parentSpanId = crypto.randomUUID().replaceAll("-", "").slice(0, 16);
+const parentSpanId = randomBytes(8).toString("hex");
 const integrationResponse = await fetch(baseUrl + "/api/v1/integrations/messages", {
   method: "POST",
   headers: {
