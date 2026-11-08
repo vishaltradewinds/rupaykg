@@ -111,3 +111,15 @@ This closes the prior gap of having only a transport-neutral type without a runt
 ### Provider adapter registry
 
 `apps/src/external-integration-adapter-registry.ts` now provides a controlled adapter registry. It fails closed when no provider adapter is registered, rejects duplicate adapter registration, converts adapter exceptions into classified non-authoritative failures, and rejects correlation mismatches. This is an execution boundary only; no provider is represented as production accepted until its authentication, schema conformance, remote acceptance and field/production evidence are independently recorded.
+
+### Adapter conformance gate
+
+`apps/src/external-integration-adapter-conformance.test.ts` provides a provider-neutral conformance harness for the adapter execution boundary. It verifies:
+
+- successful adapter correlation preservation;
+- explicit non-authoritative mutation boundary;
+- remote exception isolation and retry classification;
+- correlation mismatch rejection;
+- missing-provider fail-closed behaviour.
+
+This is an engineering conformance gate for the mediator boundary. It is not evidence of conformance to any specific government, PSU, registry or external provider API. Provider-specific schema, authentication, remote endpoint behaviour and field/production acceptance remain mandatory before that provider is marked accepted.
