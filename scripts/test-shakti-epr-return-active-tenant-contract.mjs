@@ -2,6 +2,7 @@
 import fs from "node:fs";
 
 const source = fs.readFileSync("apps/src/epr-return-routes.ts", "utf8");
+const obligations = fs.readFileSync("apps/src/bwg-routes.ts", "utf8");
 const failures = [];
 
 if (source.includes('request.headers["x-rupaykg-organization-id"]')) {
