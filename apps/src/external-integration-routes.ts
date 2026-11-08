@@ -29,7 +29,6 @@ export async function registerExternalIntegrationRoutes(app: FastifyInstance, po
         source: "postgresql",
         traceId: (request as any).rupaykgTrace?.traceId,
         syntheticData: false,
-        authoritativeMutation: false,
         ...result,
       });
     } catch (error) {
