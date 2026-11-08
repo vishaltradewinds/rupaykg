@@ -20,8 +20,9 @@ All must be true before activation:
 
 1. Apply all migrations to the target PostgreSQL instance.
 2. Provision two distinct roles: (a) the application runtime login derived from `rupaykg_app_runtime`, and (b) a controlled migration/DDL role that owns the protected tenant tables and is not SUPERUSER or BYPASSRLS.
-3. Run `ops/tenant-isolation/VERIFY_PRE_RLS.sql` using the exact intended application runtime login role and preserve its output as deployment evidence.
-4. Confirm:
+3. Run `ops/tenant-isolation/VERIFY_DDL_ROLE_PRE_RLS.sql` using the controlled migration/DDL role and preserve its output. It must prove ownership of all 18 protected tenant tables and fail closed for SUPERUSER, BYPASSRLS, or runtime-role execution.
+4. Run `ops/tenant-isolation/VERIFY_PRE_RLS.sql` using the exact intended application runtime login role and preserve its output as deployment evidence.
+5. Confirm:
 
 ```sql
 select current_user, session_user;
@@ -36,13 +37,13 @@ Expected runtime result:
 - `rolbypassrls = false`
 - `runtime_role_owns_no_protected_tables = true`
 
-5. Run authenticated tenant transactions through the application and verify `app.current_identity_id()` and `app.current_organization_id()`.
-6. Execute the tenant-isolation integration suite with `RUPAYKG_RUN_DB_INTEGRATION_TESTS=1`.
-7. Confirm organization A cannot read or mutate organization B state.
-8. Only after steps 1–7 pass, execute `ops/tenant-isolation/ACTIVATE_RLS.sql` using the controlled migration/DDL role, not the application runtime role. The script is fail-closed and aborts before RLS changes if the executing role is SUPERUSER, BYPASSRLS, the application runtime role, or does not own the protected tenant tables.
-9. Execute `ops/tenant-isolation/VERIFY_RLS_NEGATIVE_TEST.sql` and preserve the PASS output as acceptance evidence. The test must prove tenant A cannot read or mutate tenant B and is transactional/rollback-safe.
-10. Repeat the complete application runtime acceptance suite, including cross-tenant negative tests.
-11. Record database role, migration fingerprint, preflight output, activation output, negative-test output, application test evidence, deployment commit and rollback procedure.
+6. Run authenticated tenant transactions through the application and verify `app.current_identity_id()` and `app.current_organization_id()`.
+7. Execute the tenant-isolation integration suite with `RUPAYKG_RUN_DB_INTEGRATION_TESTS=1`.
+8. Confirm organization A cannot read or mutate organization B state.
+9. Only after steps 1–8 pass, execute `ops/tenant-isolation/ACTIVATE_RLS.sql` using the controlled migration/DDL role, not the application runtime role. The script is fail-closed and aborts before RLS changes if the executing role is SUPERUSER, BYPASSRLS, the application runtime role, or does not own the protected tenant tables.
+10. Execute `ops/tenant-isolation/VERIFY_RLS_NEGATIVE_TEST.sql` and preserve the PASS output as acceptance evidence. The test must prove tenant A cannot read or mutate tenant B and is transactional/rollback-safe.
+11. Repeat the complete application runtime acceptance suite, including cross-tenant negative tests.
+12. Record database role, migration fingerprint, preflight output, activation output, negative-test output, application test evidence, deployment commit and rollback procedure.
 
 ## Rollback
 
