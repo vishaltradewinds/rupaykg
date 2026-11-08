@@ -129,6 +129,6 @@ export async function registerEprReturnRoutes(app: FastifyInstance, pool: Pool |
       const message = error instanceof Error ? error.message : "";
       if (message.toLowerCase().includes("duplicate key")) return reply.code(409).send({ error: "That external EPR reference is already recorded on another return", code: "EXTERNAL_REFERENCE_EXISTS" });
       return reply.code(503).send({ error: "External EPR reference recording unavailable", syntheticData: false });
-    });
+    }
   });
 }
