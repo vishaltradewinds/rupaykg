@@ -461,3 +461,13 @@
 - Latest checkpoint commit: `a3821f7499dee2f56b2a1d10b266d0c6dcad3d8c`.
 - Exact-head CI: **NOT VERIFIED**.
 - Production remains **READ-ONLY/HOLD**.
+
+
+### 2026-11-08 — Registry provenance identity authority
+- Added protected migration `094_registry_event_identity_write_authority.sql`.
+- Registry-event INSERT now requires `recorded_by_identity_id = app.current_identity_id()` in addition to tenant ownership scope.
+- This closes the remaining gap where tenant RLS could authorize a forged provenance actor within an otherwise valid organization context.
+- Added deterministic Shakti identity-authority contract and CI protected-migration gate.
+- Latest checkpoint commit: `90a5d3e25fb2eab03efb71a145b258238d04a03a`.
+- Exact-head CI: **NOT VERIFIED**.
+- Production remains **READ-ONLY/HOLD**.
