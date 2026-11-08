@@ -1,9 +1,12 @@
 -- Shakti tenant-isolation controlled activation
--- IMPORTANT: execute only after the preflight has passed and the deployment
--- login role is confirmed non-SUPERUSER and non-BYPASSRLS.
+-- IMPORTANT: execute only after the preflight has passed. This is a DDL
+-- activation step and therefore must run as the controlled migration/DDL role
+-- that owns the protected tables (or otherwise has ALTER TABLE privilege).
+-- It must NOT be the application runtime role. The runtime role is used for
+-- the subsequent negative acceptance test.
 --
 -- This script deliberately aborts before changing RLS if the executing role
--- is unsafe. It must be run as the controlled deployment operator.
+-- is SUPERUSER, BYPASSRLS, or the application runtime role.
 
 do $$
 declare
@@ -23,10 +26,10 @@ begin
     raise exception 'TENANT_ISOLATION_ACTIVATION_BLOCKED: current role is SUPERUSER or BYPASSRLS';
   end if;
 
-  if not v_member and current_user <> 'rupaykg_app_runtime' then
-    raise exception 'TENANT_ISOLATION_ACTIVATION_BLOCKED: current role is not derived from rupaykg_app_runtime';
+  if v_member or current_user = 'rupaykg_app_runtime' then
+    raise exception 'TENANT_ISOLATION_ACTIVATION_BLOCKED: application runtime role cannot perform DDL activation';
   end if;
-  if exists (
+  if not exists (
     select 1
       from pg_class c
       join pg_namespace n on n.oid = c.relnamespace
@@ -40,7 +43,7 @@ begin
        )
        and pg_get_userbyid(c.relowner) = current_user
   ) then
-    raise exception 'TENANT_ISOLATION_ACTIVATION_BLOCKED: current role owns a protected tenant table';
+    raise exception 'TENANT_ISOLATION_ACTIVATION_BLOCKED: current DDL role does not own the protected tenant tables';
   end if;
 end $;
 
