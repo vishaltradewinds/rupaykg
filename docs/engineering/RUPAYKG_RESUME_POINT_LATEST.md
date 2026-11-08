@@ -530,3 +530,15 @@
 - Latest checkpoint commit: `3d21f5c20a67c1a98e46a09d0c030442bc0025a7`.
 - Exact-head CI: **NOT VERIFIED**.
 - Production remains **READ-ONLY/HOLD**.
+
+
+### 2026-11-08 — Controlled verifier registry read boundary
+- Added protected migration `099_registry_event_assigned_verifier_read.sql`.
+- An approved verifier recorded on a credential's verification can read the credential's complete registry lifecycle.
+- Ownership-based bilateral registry access remains unchanged.
+- No verifier write authority is granted.
+- Added deterministic Shakti contract and protected CI gate.
+- This closes the previously identified verifier/auditor access-model gap without granting broad registry visibility.
+- Latest checkpoint commit: `79db7ffd4201f4d68d1b7198babc5f6ebc52e2e9`.
+- Exact-head CI: **NOT VERIFIED**.
+- Production remains **READ-ONLY/HOLD**.
