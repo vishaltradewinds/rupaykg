@@ -7,6 +7,10 @@ const required=[
   ["settlement authorization/execution/confirmation lock settlement row",/select status,payer_id,payee_id(?:,external_reference)? from settlements where id=\$1 for update/],
 ];
 for(const [name,re] of required) if(!re.test(source)) failures.push(name);
+const credentialLockCount=(source.match(/select status from credentials where id=\$1 for update/g)||[]).length;
+if(credentialLockCount<3) failures.push("credential lifecycle rows must be locked in transfer, retirement, and settlement creation");
+const settlementLockCount=(source.match(/select status,payer_id,payee_id(?:,external_reference)? from settlements where id=\$1 for update/g)||[]).length;
+if(settlementLockCount<3) failures.push("settlement lifecycle rows must be locked in authorize, execute, and confirm");
 const transferOwner=/select to_owner_id from registry_events where credential_id=\$1 and event_type in\('ISSUED','TRANSFERRED'\) order by created_at desc,id desc limit 1/.test(source);
 const retirementOwner=/select coalesce\(to_owner_id,from_owner_id\) owner_id from registry_events where credential_id=\$1 order by created_at desc,id desc limit 1/.test(source);
 const settlementOwner=/select id,from_owner_id,to_owner_id,event_type from registry_events where credential_id=\$1 and event_type in\('ISSUED','TRANSFERRED','RETIRED'\) order by created_at desc,id desc limit 1/.test(source);
