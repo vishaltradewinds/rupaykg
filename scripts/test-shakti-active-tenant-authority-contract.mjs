@@ -14,7 +14,7 @@ if (statutory.includes('const requested = text(bodyOf(request), "organizationId"
 }
 
 const helperStart = statutory.indexOf("async function organizationFor");
-const helperEnd = statutory.indexOf("\n}\n", helperStart);
+const helperEnd = statutory.indexOf("\n\nasync function tenantQuery", helperStart);
 const helper = helperStart >= 0 && helperEnd >= 0 ? statutory.slice(helperStart, helperEnd + 3) : "";
 if (!helper.includes("auth.activeOrganizationId") || helper.includes("bodyOf(request)")) {
   fail("Statutory tenant-authority contract FAILED: organizationFor must derive authority only from auth.activeOrganizationId.");
