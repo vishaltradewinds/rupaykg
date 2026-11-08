@@ -27,19 +27,46 @@ for (const grant of requiredRuntimeExecutes) {
   if (!boundaryMigration.includes(grant)) failures.push("101_security_definer_schema_boundary.sql: missing explicit runtime grant: " + grant);
 }
 
-const requiredRuntimeFunctions = [
-  ["app.current_identity_id()", /create\s+(?:or\s+replace\s+)?function\s+app\.current_identity_id\s*\(\s*\)\s*[\s\S]*?security\s+definer/i],
-  ["app.current_organization_id()", /create\s+(?:or\s+replace\s+)?function\s+app\.current_organization_id\s*\(\s*\)\s*[\s\S]*?security\s+definer/i],
-  ["app.set_request_context(uuid,uuid)", /create\s+(?:or\s+replace\s+)?function\s+app\.set_request_context\s*\(\s*p_identity_id\s+uuid\s*,\s*p_organization_id\s+uuid\s*\)[\s\S]*?security\s+definer/i],
-  ["app.set_identity_context(uuid)", /create\s+(?:or\s+replace\s+)?function\s+app\.set_identity_context\s*\(\s*p_identity_id\s+uuid\s*\)[\s\S]*?security\s+definer/i],
-  ["app.set_platform_context(uuid)", /create\s+(?:or\s+replace\s+)?function\s+app\.set_platform_context\s*\(\s*p_identity_id\s+uuid\s*\)[\s\S]*?security\s+definer/i],
-  ["app.set_authority_context(uuid,text,uuid)", /create\s+(?:or\s+replace\s+)?function\s+app\.set_authority_context\s*\(\s*p_identity_id\s+uuid\s*,\s*p_authority_level\s+text\s*,\s*p_geography_id\s+uuid\s*\)[\s\S]*?security\s+definer/i],
-];
+const requiredRuntimeFunctions = new Map([
+  ["app.current_identity_id()", { name: "app.current_identity_id", args: "" }],
+  ["app.current_organization_id()", { name: "app.current_organization_id", args: "" }],
+  ["app.set_request_context(uuid,uuid)", { name: "app.set_request_context", args: "p_identity_id uuid, p_organization_id uuid" }],
+  ["app.set_identity_context(uuid)", { name: "app.set_identity_context", args: "p_identity_id uuid" }],
+  ["app.set_platform_context(uuid)", { name: "app.set_platform_context", args: "p_identity_id uuid" }],
+  ["app.set_authority_context(uuid,text,uuid)", { name: "app.set_authority_context", args: "p_identity_id uuid, p_authority_level text, p_geography_id uuid" }],
+]);
+
 const allMigrationSource = [];
 for (const file of files) allMigrationSource.push(await readFile(path.join(dir, file), "utf8"));
-const combinedMigrationSource = allMigrationSource.join("\n");
-for (const [name, pattern] of requiredRuntimeFunctions) {
-  if (!pattern.test(combinedMigrationSource)) failures.push("required runtime function is not defined as SECURITY DEFINER in migrations: " + name);
+
+const functionBlocksBySignature = new Map();
+for (const source of allMigrationSource) {
+  const starts = [...source.matchAll(/create\s+(?:or\s+replace\s+)?function\s+app\.([a-z_][a-z0-9_]*)\s*\(([^)]*)\)/gi)];
+  for (let i = 0; i < starts.length; i++) {
+    const start = starts[i].index ?? 0;
+    const end = starts[i + 1]?.index ?? source.length;
+    const block = source.slice(start, end);
+    const name = starts[i][1];
+    const args = starts[i][2].replace(/\s+/g, " ").trim();
+    const signature = name + "(" + args + ")";
+    const existing = functionBlocksBySignature.get(signature) ?? [];
+    existing.push(block);
+    functionBlocksBySignature.set(signature, existing);
+  }
+}
+
+for (const [displayName, expected] of requiredRuntimeFunctions) {
+  const expectedSignature = expected.name + "(" + expected.args + ")";
+  const blocks = [...functionBlocksBySignature.entries()]
+    .filter(([signature]) => signature.replace(/\s+/g, " ").trim().toLowerCase() === expectedSignature.toLowerCase())
+    .flatMap(([, blocks]) => blocks);
+  if (blocks.length === 0) {
+    failures.push("required runtime function is not defined in migrations: " + displayName);
+    continue;
+  }
+  if (!blocks.some((block) => /security\s+definer/i.test(block))) {
+    failures.push("required runtime function is not defined as SECURITY DEFINER in migrations: " + displayName);
+  }
 }
 
 if (/grant\s+execute\s+on\s+function\s+app\.[^;]+\s+to\s+public/i.test(boundaryMigration)) {
