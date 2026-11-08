@@ -9,7 +9,7 @@ returns boolean
 language sql
 stable
 security definer
-set search_path = public, app
+set search_path = pg_catalog, public, app
 as $$
   select exists (
     select 1
