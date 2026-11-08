@@ -37,3 +37,20 @@ order by c.relname;
 select
   current_user = 'rupaykg_app_runtime'
   or pg_has_role(current_user, 'rupaykg_app_runtime', 'member') as runtime_role_membership;
+
+
+select
+  table_name,
+  has_table_privilege(current_user, table_name, 'SELECT') as can_select,
+  has_table_privilege(current_user, table_name, 'INSERT') as can_insert,
+  has_table_privilege(current_user, table_name, 'UPDATE') as can_update,
+  has_table_privilege(current_user, table_name, 'DELETE') as can_delete
+from (values
+  ('organizations'),('roles'),('activities'),('obligations'),('credentials'),
+  ('settlements'),('audit_events'),('resource_flows'),('field_devices'),
+  ('organization_memberships'),('measurements'),('evidence'),('verifications'),
+  ('carbon_calculations'),('mrv_observations'),
+  ('evidence_verification_requirements'),('chain_of_custody_links')
+) as protected(table_name)
+order by table_name;
+
