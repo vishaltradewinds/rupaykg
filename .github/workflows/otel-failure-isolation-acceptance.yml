@@ -1,0 +1,45 @@
+name: OTEL Failure Isolation Acceptance
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  otel-failure-isolation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: package.json
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Run engineering exporter failure-isolation test
+        run: npm test --workspace @rupaykg/api -- --test-name-pattern="authoritative application operation does not await OTLP collector availability"
+
+      - name: Run deployed availability probe
+        env:
+          RUPAYKG_BASE_URL: ${{ secrets.RUPAYKG_BASE_URL }}
+          RUPAYKG_BEARER_TOKEN: ${{ secrets.RUPAYKG_BEARER_TOKEN }}
+          RUPAYKG_ORGANIZATION_ID: ${{ secrets.RUPAYKG_ORGANIZATION_ID }}
+        run: |
+          test -n "$RUPAYKG_BASE_URL"
+          test -n "$RUPAYKG_BEARER_TOKEN"
+          test -n "$RUPAYKG_ORGANIZATION_ID"
+          node ops/observability/OTEL_FAILURE_ISOLATION_ACCEPTANCE.mjs | tee otel-failure-isolation-runtime.json
+
+      - name: Upload evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: rupaykg-otel-failure-isolation-acceptance
+          path: otel-failure-isolation-runtime.json
+          if-no-files-found: error
