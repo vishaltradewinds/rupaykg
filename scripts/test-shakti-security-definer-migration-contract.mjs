@@ -11,6 +11,7 @@ const requiredBoundaryControls = [
   ["public schema CREATE revoke", /revoke\s+create\s+on\s+schema\s+public\s+from\s+public/i],
   ["app schema CREATE revoke", /revoke\s+create\s+on\s+schema\s+app\s+from\s+public/i],
   ["PUBLIC EXECUTE revoke", /revoke\s+all\s+on\s+function\s+%I\.%I\(%s\)\s+from\s+public/i],
+  ["future function PUBLIC EXECUTE default revoke", /alter\s+default\s+privileges\s+for\s+role\s+%I\s+revoke\s+execute\s+on\s+functions\s+from\s+public/i],
 ];
 for (const [name, pattern] of requiredBoundaryControls) {
   if (!pattern.test(boundaryMigration)) failures.push("101_security_definer_schema_boundary.sql: missing " + name);
