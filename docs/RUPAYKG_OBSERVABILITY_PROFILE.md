@@ -54,3 +54,8 @@ The OpenTelemetry dependency review is recorded in `ops/observability/OTEL_DEPEN
 ## Runtime attestation foundation
 
 Production startup now emits a structured `rupaykg.runtime.attestation` event containing the executing Node.js version, runtime, platform and architecture before the authoritative server module is loaded. Repository tests validate the attestation shape and Node version format. This provides a machine-readable runtime-evidence hook; retained production log evidence is still required before declaring the live runtime gate closed.
+
+
+## Runtime fail-closed gate
+
+Production startup now validates `process.version` and fails closed below Node.js v22.15.0. This is aligned with the OpenTelemetry JavaScript SDK 3.x minimum runtime. The startup sequence performs the check before loading the authoritative server module, then emits the runtime attestation. This prevents an unsupported runtime from silently entering a future OTEL-enabled production path.
