@@ -19,7 +19,8 @@ All must be true before activation:
 
 1. Apply all migrations to the target PostgreSQL instance.
 2. Provision the deployment login role with the minimum required grants and membership in `rupaykg_app_runtime`.
-3. Confirm:
+3. Run `ops/tenant-isolation/VERIFY_PRE_RLS.sql` using the exact intended application runtime login role and preserve its output as deployment evidence.
+4. Confirm:
 
 ```sql
 select current_user, session_user;
@@ -33,12 +34,12 @@ Expected runtime result:
 - `rolsuper = false`
 - `rolbypassrls = false`
 
-4. Run authenticated tenant transactions through the application and verify `app.current_identity_id()` and `app.current_organization_id()`.
-5. Execute the tenant-isolation integration suite with `RUPAYKG_RUN_DB_INTEGRATION_TESTS=1`.
-6. Confirm organization A cannot read or mutate organization B state.
-7. Only after steps 1–6 pass, enable RLS on the policy-covered tables in a controlled deployment migration/change.
-8. Repeat the complete application runtime acceptance suite.
-9. Record database role, migration fingerprint, test evidence, deployment commit and rollback procedure.
+5. Run authenticated tenant transactions through the application and verify `app.current_identity_id()` and `app.current_organization_id()`.
+6. Execute the tenant-isolation integration suite with `RUPAYKG_RUN_DB_INTEGRATION_TESTS=1`.
+7. Confirm organization A cannot read or mutate organization B state.
+8. Only after steps 1–7 pass, execute `ops/tenant-isolation/ACTIVATE_RLS.sql`. The script is fail-closed and aborts before RLS changes if the executing role is SUPERUSER, BYPASSRLS, or not derived from `rupaykg_app_runtime`.
+9. Repeat the complete application runtime acceptance suite, including cross-tenant negative tests.
+10. Record database role, migration fingerprint, preflight output, activation output, test evidence, deployment commit and rollback procedure.
 
 ## Rollback
 
