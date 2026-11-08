@@ -53,6 +53,10 @@ if (!/Verify controlled DDL role owns protected tenant tables/.test(controlledMi
   failures.push("Controlled production migration must fail closed unless the executing DDL role owns all 17 protected tenant tables.");
 }
 const provisioning = fs.readFileSync("ops/tenant-isolation/PROVISION_CONTROLLED_DDL_ROLE.sql", "utf8");
+if (!/current_user = 'rupaykg_app_runtime'/.test(provisioning)
+ || !/provisioning administrator must be explicitly governed and non-BYPASSRLS\/non-SUPERUSER/.test(provisioning)) {
+  failures.push("Controlled DDL-role provisioning must reject runtime-role and unsafe SUPERUSER/BYPASSRLS provisioning sessions.");
+}
 if (!/authorized current owner\/admin/.test(provisioning)
  || !/target role will be non-BYPASSRLS/.test(provisioning)
  || !/expected runtime role rupaykg_app_runtime is missing/.test(provisioning)
