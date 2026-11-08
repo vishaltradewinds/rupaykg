@@ -11,6 +11,7 @@ const requiredAuth = [
   "s.expires_at > now()",
   "i.status = 'VERIFIED'",
   "i.suspended_at is null",
+  "join organizations o on o.id = om.organization_id and o.status = 'VERIFIED'",
   "organization_memberships",
   "status = 'VERIFIED'",
   "requestedOrganizationId",
