@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseTraceparent } from "./observability.js";
+import { buildHttpSpan, parseTraceparent } from "./observability.js";
 
 test("accepts valid W3C traceparent", () => {
   const context = parseTraceparent("00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01");
@@ -20,4 +20,31 @@ test("rejects malformed or zero traceparent", () => {
 test("preserves unsampled trace flag", () => {
   const context = parseTraceparent("00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-00");
   assert.equal(context?.sampled, false);
+});
+
+
+test("builds an OTEL-compatible HTTP span without payload or credential attributes", () => {
+  const span = buildHttpSpan({
+    context: {
+      traceId: "4bf92f3577b34da6a3ce929d0e0e4736",
+      parentId: "00f067aa0ba902b7",
+      sampled: true,
+    },
+    spanId: "8f0a1e2b3c4d5e6f",
+    name: "HTTP GET /api/v1/measurements/:id",
+    startTimeUnixNano: "1794120000000000000",
+    endTimeUnixNano: "1794120000123000000",
+    method: "GET",
+    route: "/api/v1/measurements/:id",
+    statusCode: 200,
+    durationMs: 123,
+  });
+
+  assert.equal(span.traceId, "4bf92f3577b34da6a3ce929d0e0e4736");
+  assert.equal(span.parentSpanId, "00f067aa0ba902b7");
+  assert.equal(span.status, "ok");
+  assert.equal(span.attributes["http.response.status_code"], 200);
+  assert.equal("authorization" in span.attributes, false);
+  assert.equal("request.body" in span.attributes, false);
+  assert.equal("payload" in span.attributes, false);
 });
