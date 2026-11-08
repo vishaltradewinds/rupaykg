@@ -45,6 +45,27 @@ jobs:
             fi
           done
 
+      - name: Verify runtime and DDL target identity match
+        run: |
+          set -euo pipefail
+          mkdir -p tenant-isolation-evidence
+          runtime_fingerprint="$(
+            psql "$RUPAYKG_RUNTIME_DATABASE_URL" \
+              -At -v ON_ERROR_STOP=1 \
+              -c "select current_database() || '|' || coalesce(inet_server_addr()::text,'local') || '|' || inet_server_port() || '|' || current_setting('server_version_num');"
+          )"
+          ddl_fingerprint="$(
+            psql "$RUPAYKG_DDL_DATABASE_URL" \
+              -At -v ON_ERROR_STOP=1 \
+              -c "select current_database() || '|' || coalesce(inet_server_addr()::text,'local') || '|' || inet_server_port() || '|' || current_setting('server_version_num');"
+          )"
+          printf 'runtime_target=%s\n' "$runtime_fingerprint" | tee tenant-isolation-evidence/runtime-ddl-target.txt
+          printf 'ddl_target=%s\n' "$ddl_fingerprint" | tee -a tenant-isolation-evidence/runtime-ddl-target.txt
+          if [ "$runtime_fingerprint" != "$ddl_fingerprint" ]; then
+            echo "Runtime and controlled DDL connections do not target the same PostgreSQL endpoint."
+            exit 1
+          fi
+
       - name: Verify controlled DDL role preflight
         run: |
           set -euo pipefail
