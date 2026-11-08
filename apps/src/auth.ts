@@ -110,6 +110,7 @@ export async function canVerifyEvidence(client: PoolClient, identityId: string, 
          on om.organization_id = a.organization_id
         and om.identity_id = $2
         and om.status = 'VERIFIED'
+       join organizations o on o.id = om.organization_id and o.status = 'VERIFIED'
        join roles r on r.id = om.role_id
        where e.id = $1
          and a.geography_id is not null
