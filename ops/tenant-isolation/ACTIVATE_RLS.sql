@@ -29,8 +29,8 @@ begin
   if v_member or current_user = 'rupaykg_app_runtime' then
     raise exception 'TENANT_ISOLATION_ACTIVATION_BLOCKED: application runtime role cannot perform DDL activation';
   end if;
-  if not exists (
-    select 1
+  if (
+    select count(*)
       from pg_class c
       join pg_namespace n on n.oid = c.relnamespace
      where n.nspname = 'public'
@@ -42,8 +42,8 @@ begin
          'evidence_verification_requirements','chain_of_custody_links'
        )
        and pg_get_userbyid(c.relowner) = current_user
-  ) then
-    raise exception 'TENANT_ISOLATION_ACTIVATION_BLOCKED: current DDL role does not own the protected tenant tables';
+  ) <> 18 then
+    raise exception 'TENANT_ISOLATION_ACTIVATION_BLOCKED: current DDL role does not own all protected tenant tables';
   end if;
 end $;
 
