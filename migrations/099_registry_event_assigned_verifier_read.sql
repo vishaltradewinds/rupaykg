@@ -2,9 +2,9 @@
 -- Ownership-based access remains unchanged. A verifier may additionally read the
 -- complete lifecycle of credentials for which that identity is the recorded verifier.
 --
--- SECURITY DEFINER is required here because registry_events RLS is evaluating
--- access to a credential that the verifier may not own. The helper is narrowly
--- scoped to one boolean lookup and exposes no credential data.
+-- SECURITY DEFINER is required here because registry_events RLS may evaluate a
+-- credential that the verifier does not own. The helper is narrowly scoped to
+-- one boolean lookup and exposes no credential data.
 
 create or replace function app.is_assigned_approved_verifier(p_credential_id uuid)
 returns boolean
@@ -17,9 +17,12 @@ as $$
     select 1
       from public.credentials c
       join public.verifications v on v.id = c.verification_id
+      join public.identities i on i.id = v.verifier_identity_id
      where c.id = p_credential_id
        and v.verifier_identity_id = app.current_identity_id()
        and v.decision = 'APPROVED'
+       and i.status = 'VERIFIED'
+       and has_verification_permission(v.verifier_identity_id)
   );
 $$;
 
