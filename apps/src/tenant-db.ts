@@ -80,3 +80,25 @@ export async function withTenantTransaction<T>(
     client.release();
   }
 }
+
+
+export async function withIdentityTransaction<T>(
+  pool: Pool,
+  identityId: string,
+  fn: (client: PoolClient) => Promise<T>,
+): Promise<T> {
+  if (!identityId) throw Object.assign(new Error("Identity context is required"), { code: "IDENTITY_CONTEXT_REQUIRED" });
+  const client = await pool.connect();
+  try {
+    await client.query("begin");
+    await client.query("select app.set_identity_context($1)", [identityId]);
+    const result = await fn(client);
+    await client.query("commit");
+    return result;
+  } catch (error) {
+    try { await client.query("rollback"); } catch {}
+    throw error;
+  } finally {
+    client.release();
+  }
+}
