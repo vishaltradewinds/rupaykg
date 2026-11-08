@@ -65,7 +65,7 @@ Production startup now validates `process.version` and fails closed below Node.j
 
 The repository now pins the OpenTelemetry runtime integration to `@opentelemetry/api` 1.10.0, `@opentelemetry/sdk-node` 0.301.0, `@opentelemetry/exporter-trace-otlp-proto` 0.301.0 and `@opentelemetry/instrumentation-http` 0.301.0. The production Docker command loads `otel-bootstrap.js` with Node `--import` before `production-server.js`, satisfying the required early-initialization ordering. OTEL is opt-in via `RUPAYKG_OTEL_ENABLED=true`; when enabled, an OTLP endpoint is mandatory and absence fails closed. SDK shutdown is handled on SIGTERM/SIGINT.
 
-The pinned SDK/exporter packages are the current 3.x-generation experimental Node integration line; OpenTelemetry documents Node.js >=22.15.0 for the 3.x generation and requires SDK initialization before application modules are loaded. citeturn605696search0turn605696search2
+The repository pins the OpenTelemetry JavaScript SDK/exporter packages at the versions recorded in `apps/package.json` and `package-lock.json`. The runtime floor is independently enforced at Node.js v22.15.0. SDK initialization is deliberately loaded before the production server module.
 
 **Production status remains PARTIAL:** dependency/bootstrap implementation is present, but collector connectivity, end-to-end trace evidence, redaction validation under live telemetry, runtime log retention and production acceptance are still required. The repository `package-lock.json` has not been regenerated in this tool session; deployment currently uses `npm install`, which resolves the declared dependencies, but lockfile reconciliation remains a release-integrity gate.
 
