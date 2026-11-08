@@ -765,6 +765,6 @@
 - Repaired the credential authority/runtime privilege contract: declarations now precede use and malformed literal newline escapes were removed.
 - Repaired the settlement tenant-RLS contract's missing closing block.
 - These were deterministic CI contract defects, not production-data changes.
-- Current branch head: `31913cb7519127225e74aa6359fb209cf3ea2d32`.
-- Exact-head CI: **NOT VERIFIED** until a workflow run is attached to this head.
+- Current branch head: `eeab2d2e100fe5aeebc8e11e400b6f811ae59f6b`.
+- Exact-head CI: **NOT VERIFIED** until a workflow run is attached to the current head.
 - Production remains **READ-ONLY/HOLD**.
