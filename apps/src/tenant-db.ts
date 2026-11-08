@@ -20,8 +20,13 @@ export async function withTenantTransaction<T>(
     await client.query("select app.set_request_context($1,$2)", [auth.identityId, auth.activeOrganizationId]);
     const result = await fn(client);
     await client.query("commit");
+    span.setAttribute("db.transaction.status", "committed");
+    span.end();
     return result;
   } catch (error) {
+    span.recordException(error instanceof Error ? error : new Error(String(error)));
+    span.setAttribute("db.transaction.status", "rolled_back");
+    span.end();
     try { await client.query("rollback"); } catch {}
     throw error;
   } finally {
