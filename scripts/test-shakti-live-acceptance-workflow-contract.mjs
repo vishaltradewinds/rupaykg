@@ -37,6 +37,15 @@ if (!/Verify required DDL role safety/.test(controlledMigration)
  || !/rolsuper.*rolbypassrls/.test(controlledMigration)) {
   failures.push("Controlled production migration must verify the DDL role is not SUPERUSER or BYPASSRLS.");
 }
+if (!/Verify controlled DDL role owns protected tenant tables/.test(controlledMigration)
+ || !/ddl_owner_assertion/.test(controlledMigration)
+ || !/\)=17 then 1 else 0 end/.test(controlledMigration)) {
+  failures.push("Controlled production migration must fail closed unless the executing DDL role owns all 17 protected tenant tables.");
+}
+if (!fs.existsSync("ops/tenant-isolation/PROVISION_CONTROLLED_DDL_ROLE.sql")) {
+  failures.push("Approval-gated controlled DDL-role provisioning plan is missing.");
+}
+
 if (!/npm run migrate -w @rupaykg\/api/.test(controlledMigration)) {
   failures.push("Controlled production migration must use the repository migration runner.");
 }
