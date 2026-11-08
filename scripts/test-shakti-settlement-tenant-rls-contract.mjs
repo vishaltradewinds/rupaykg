@@ -26,6 +26,8 @@ if (!migration.includes("grant select, insert, update on public.settlements to r
 if (!migration.includes("grant select, insert on public.settlement_events to rupaykg_app_runtime")) {
   failures.push("settlement_events runtime DML grant missing");
 }
+if (!migration.includes("revoke update, delete on public.settlement_events from rupaykg_app_runtime")) { failures.push("settlement_events destructive runtime privileges must be explicitly revoked"); }
+if (!migration.includes("revoke delete on public.settlements from rupaykg_app_runtime")) { failures.push("settlements DELETE runtime privilege must be explicitly revoked"); }
 if (migration.includes("grant update on public.settlement_events") || migration.includes("grant delete on public.settlement_events")) {
   failures.push("settlement_events must remain append-only for runtime role");
 }
