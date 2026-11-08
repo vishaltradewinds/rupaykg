@@ -9,7 +9,7 @@ Activate the tenant-isolation policy foundation only after the application runti
 All must be true before activation:
 
 1. The application deployment uses a dedicated login role derived from `rupaykg_app_runtime`.
-2. The effective runtime role is **not** SUPERUSER, does **not** have BYPASSRLS, and does **not** own any protected tenant table. PostgreSQL table owners normally bypass RLS, so runtime ownership would defeat the intended row-level boundary. citeturn420298search0
+2. The effective runtime role is **not** SUPERUSER, does **not** have BYPASSRLS, and does **not** own any protected tenant table. PostgreSQL table owners normally bypass RLS, so runtime ownership would defeat the intended row-level boundary.
 3. Authentication resolves a verified identity and active organization.
 4. Every tenant-scoped transaction executes `app.set_request_context(identity_id, organization_id)` before business-state access.
 5. The runtime role has the required DML privileges on protected tables; RLS remains the row-level boundary.
