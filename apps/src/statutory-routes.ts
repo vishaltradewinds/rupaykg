@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import type { Pool } from "pg";
+import type { Pool, QueryResultRow } from "pg";
 import { withTenantTransaction } from "./tenant-db.js";
 import { authenticate, canActForOrganization, hasOrganizationPermission, type AuthContext } from "./auth.js";
 
@@ -66,7 +66,7 @@ async function organizationFor(auth: AuthContext, reply: Reply): Promise<string 
   return organizationId;
 }
 
-async function tenantQuery<T = Record<string, unknown>>(pool: Pool, auth: AuthContext, text: string, values: unknown[] = []) {
+async function tenantQuery<T extends QueryResultRow = Record<string, unknown>>(pool: Pool, auth: AuthContext, text: string, values: unknown[] = []) {
   if (!auth.activeOrganizationId) throw Object.assign(new Error("Active organization is required for tenant-scoped database access"), { code: "TENANT_CONTEXT_REQUIRED" });
   return withTenantTransaction(pool, auth, (client) => client.query<T>(text, values));
 }
