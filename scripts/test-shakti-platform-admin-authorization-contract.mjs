@@ -16,7 +16,8 @@ const expected = [
 const failures = [];
 
 for (const [route, permission] of expected) {
-  const start = source.indexOf(`app.${route.includes("/memberships") && route.includes(":membershipId") ? "patch" : "post"}("${route}"`);
+  const method = route.includes("/roles/:roleId/permissions") || route.includes("/memberships/:membershipId/status") ? "patch" : "post";
+  const start = source.indexOf(`app.${method}("${route}"`);
   if (start < 0) {
     failures.push(`missing route: ${route}`);
     continue;
