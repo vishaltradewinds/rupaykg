@@ -1,5 +1,21 @@
 # RupayKg CTO Resume Point — 2026-11-08
 
+## 2026-11-08 — SECURITY DEFINER runtime boundary acceptance added
+- Added disposable PostgreSQL acceptance coverage for migration 101's actual runtime privilege state.
+- The acceptance now checks:
+  - PUBLIC cannot CREATE in `public` or `app` schemas;
+  - no `app` SECURITY DEFINER function retains PUBLIC EXECUTE;
+  - all SECURITY DEFINER functions use an approved fixed search path;
+  - all seven approved runtime SECURITY DEFINER functions retain runtime EXECUTE;
+  - no unapproved `rupaykg_app_runtime` EXECUTE grant exists on an `app` SECURITY DEFINER function;
+  - the migration role has no PUBLIC default EXECUTE on newly-created functions.
+- Wired the SQL acceptance into disposable CI immediately after migrations.
+- This converts migration-101 boundary checking from static source inspection into actual database privilege-state acceptance.
+- Runtime acceptance checkpoint: `13f7424e01e091322550fc720f3ad61c9b4f88bd`.
+- CI wiring checkpoint: `a2549767f8d1116b3b78ef28ce4e2f3a5352bf27`.
+- Exact-head GitHub Actions evidence remains **NOT VERIFIED**.
+- Production remains **READ-ONLY/HOLD**.
+
 ## 2026-11-08 — SECURITY DEFINER runtime grant reconciliation
 - Identified a concrete migration-101 regression risk: its dynamic PUBLIC revoke loop covers `app.is_assigned_approved_verifier(uuid)`, but the migration previously restored runtime EXECUTE only for the six context functions.
 - Added the explicit least-privilege runtime EXECUTE grant for `app.is_assigned_approved_verifier(uuid)`.
