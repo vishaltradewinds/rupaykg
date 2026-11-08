@@ -915,3 +915,11 @@
 - Code checkpoint: `b51586007fe2dd3a78ffc8e17f84c1d72a27ead8`.
 - Exact-head CI: **NOT VERIFIED** (`workflow_runs: []`; no combined statuses reported).
 - Production remains **READ-ONLY/HOLD**.
+
+
+### 2026-11-08 — Identity-liveness execution-scope acceptance strengthened
+- Extended the identity-liveness contract so all three protected context functions must establish both transaction-local `app.identity_id` and transaction-local `app.execution_scope`.
+- This aligns the executable liveness contract with the authoritative context-function security contract and prevents a function from passing identity validation while silently losing execution-scope isolation.
+- Code checkpoint: `a323d2d5d2b0fd20a80c50a9ee4edf82b74c5c5a`.
+- Exact-head CI: **NOT VERIFIED** until GitHub reports a workflow run for this head.
+- Production remains **READ-ONLY/HOLD**.
