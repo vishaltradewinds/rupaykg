@@ -3,8 +3,8 @@
 -- This file is intentionally NOT executed by any GitHub Actions workflow.
 --
 -- Purpose:
---   Replace the current production owner/runtime account with a dedicated,
---   non-BYPASSRLS controlled migration role before Shakti 097-099 and RLS
+--   Provision a dedicated, non-BYPASSRLS controlled migration role while
+--   leaving the application runtime login unchanged before Shakti 097-099 and RLS
 --   activation are executed.
 --
 -- Required operator inputs:
@@ -16,9 +16,9 @@
 -- Safety:
 --   - refuses execution if the requested role already exists;
 --   - refuses execution if any protected table is missing;
---   - refuses execution if the current session is SUPERUSER/BYPASSRLS only as
---     an informational warning is not sufficient; this script must be run by
---     an explicitly authorized provisioning administrator.
+--   - refuses execution if the provisioning session is SUPERUSER/BYPASSRLS;
+--   - refuses execution if the expected runtime role is missing;
+--   - this script must be run by an explicitly authorized provisioning administrator.
 --   - does NOT enable RLS.
 --   - does NOT modify application data.
 --
@@ -40,6 +40,14 @@ declare
   v_missing integer;
   v_owned integer;
 begin
+  if (select rolsuper or rolbypassrls from pg_roles where rolname = current_user) then
+    raise exception 'DDL_ROLE_PROVISIONING_BLOCKED: provisioning session must not be SUPERUSER or BYPASSRLS';
+  end if;
+
+  if not exists (select 1 from pg_roles where rolname = 'rupaykg_app_runtime') then
+    raise exception 'DDL_ROLE_PROVISIONING_BLOCKED: expected runtime role rupaykg_app_runtime is missing';
+  end if;
+
   if exists (select 1 from pg_roles where rolname = v_role) then
     raise exception 'DDL_ROLE_PROVISIONING_BLOCKED: role % already exists; use the verification/rotation procedure instead', v_role;
   end if;
