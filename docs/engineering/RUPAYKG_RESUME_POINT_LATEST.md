@@ -1,5 +1,14 @@
 # RupayKg CTO Resume Point — 2026-11-08
 
+## 2026-11-08 — SECURITY DEFINER runtime grant reconciliation
+- Identified a concrete migration-101 regression risk: its dynamic PUBLIC revoke loop covers `app.is_assigned_approved_verifier(uuid)`, but the migration previously restored runtime EXECUTE only for the six context functions.
+- Added the explicit least-privilege runtime EXECUTE grant for `app.is_assigned_approved_verifier(uuid)`.
+- Bound the SECURITY DEFINER contract to require that grant as well.
+- This preserves the assigned-verifier read path after migration 101 removes PUBLIC EXECUTE.
+- Code checkpoint: `3a547957652b04a41cae5e170243adc491a5671e`.
+- Exact-head GitHub Actions evidence remains unverified.
+- Production remains **READ-ONLY/HOLD**.
+
 ## 2026-11-08 — SECURITY DEFINER contract parser hardening
 - Reworked `scripts/test-shakti-security-definer-migration-contract.mjs` so SECURITY DEFINER function discovery strips SQL line/block comments before parsing function definitions.
 - Latest-definition binding remains ordered by migration filename, preventing an older definition from masking a later definition.
