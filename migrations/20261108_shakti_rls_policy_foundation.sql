@@ -150,6 +150,37 @@ create policy organization_memberships_tenant_select on organization_memberships
     and organization_id = app.current_organization_id()
   );
 
+-- Measurements are indirectly tenant-owned through their activity.
+-- The measurement row does not carry an organization_id; the authoritative
+-- activity relationship is therefore the tenant boundary.
+create policy measurements_tenant_select on measurements
+  for select using (
+    exists (
+      select 1 from activities a
+       where a.id = measurements.activity_id
+         and a.organization_id = app.current_organization_id()
+         and app.is_verified_org_member(a.organization_id)
+    )
+  );
+
+create policy measurements_tenant_modify on measurements
+  for all using (
+    exists (
+      select 1 from activities a
+       where a.id = measurements.activity_id
+         and a.organization_id = app.current_organization_id()
+         and app.is_verified_org_member(a.organization_id)
+    )
+  )
+  with check (
+    exists (
+      select 1 from activities a
+       where a.id = measurements.activity_id
+         and a.organization_id = app.current_organization_id()
+         and app.is_verified_org_member(a.organization_id)
+    )
+  );
+
 -- Evidence is indirectly tenant-owned through its activity.
 create policy evidence_tenant_select on evidence
   for select using (
