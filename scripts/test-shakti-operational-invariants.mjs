@@ -22,10 +22,10 @@ for (const [name, pattern] of requiredWorkflowInvariants) {
 }
 
 const requiredMigrationInvariants = [
-  ["protected migration allowlist", /PROTECTED_MIGRATIONS/],
+  ["protected migration allowlist", /20261107_\(authority_hierarchy_context\|platform_execution_context\|runtime_grant_reconciliation\|core_tenant_rls_activation_gate\)/],
   ["explicit protected gate", /RUPAYKG_ALLOW_PROTECTED_SHAKTI_MIGRATIONS/],
   ["legacy numeric migration compatibility", /prefixCounts/],
-  ["duplicate-prefix disambiguation", /migrationFile\.replace\(\/\\\.sql\$\/, ""\)/],
+  ["duplicate-prefix disambiguation", /filename\.replace\(\/\\\.sql\$\/, ""\)/],
 ];
 for (const [name, pattern] of requiredMigrationInvariants) {
   if (!pattern.test(migrationRunner)) failures.push(`Migration invariant missing: ${name}`);
@@ -37,7 +37,7 @@ if (!/withTenantTransaction/.test(tenantDb) || !/set_request_context/.test(tenan
 if (!/auth\.activeOrganizationId/.test(tenantDb)) {
   failures.push("Tenant transaction invariant missing: active organization context is required.");
 }
-if (!/memberships\.length === 0/.test(auth) || !/!organizationId/.test(auth)) {
+if (!/auth\.memberships\.length\s*===\s*0/.test(auth) || !/!organizationId/.test(auth)) {
   failures.push("Authorization fail-closed invariant missing for empty organization/membership context.");
 }
 
