@@ -54,6 +54,8 @@ create policy shakti_settlement_events_insert_payer on public.settlement_events
     )
   );
 
+revoke delete on public.settlements from rupaykg_app_runtime;
+revoke update, delete on public.settlement_events from rupaykg_app_runtime;
 grant select, insert, update on public.settlements to rupaykg_app_runtime;
 grant select, insert on public.settlement_events to rupaykg_app_runtime;
 
