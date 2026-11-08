@@ -1,5 +1,16 @@
 # RupayKg CTO Resume Point — 2026-11-08
 
+## 2026-11-08 — SECURITY DEFINER runtime acceptance privilege-check defect fixed
+- Re-inspected the disposable PostgreSQL SECURITY DEFINER runtime acceptance.
+- Found a real executable portability/correctness defect: the acceptance attempted to test the PostgreSQL `PUBLIC` pseudo-role with `has_schema_privilege('public', ...)`, which is not the correct way to inspect PUBLIC schema ACL membership.
+- Replaced both schema-`CREATE` checks with direct `pg_namespace.nspacl`/`aclexplode` inspection for grantee OID 0 (PUBLIC).
+- This keeps the acceptance testing the actual ACL state and avoids treating PUBLIC as an ordinary role name.
+- Code checkpoint: `4d6c7be8ebb1a27393159687f766dd786529ed43`.
+- Exact-head GitHub Actions evidence: **NOT VERIFIED**.
+- Production remains **READ-ONLY/HOLD**.
+
+# RupayKg CTO Resume Point — 2026-11-08
+
 ## 2026-11-08 — SECURITY DEFINER runtime acceptance executable defect fixed
 - Re-inspected the disposable PostgreSQL SECURITY DEFINER boundary acceptance after the previous runtime-hardening checkpoint.
 - Found a real executable defect in `scripts/test-shakti-security-definer-boundary-runtime.sql`: the unexpected-runtime-EXECUTE failure branch contained a `%` placeholder without supplying the `unexpected_runtime_execute` value to `RAISE EXCEPTION`.
