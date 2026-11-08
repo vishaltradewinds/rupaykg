@@ -34,6 +34,16 @@ const protectedMigrationIdentities = [
   ["088_field_sync_append_only_integrity", "088_field_sync_append_only_integrity"],
   ["089_settlement_reconciliation_reference_integrity", "089_settlement_reconciliation_reference_integrity"],
   ["090_runtime_dml_grant_reconciliation_completion", "090_runtime_dml_grant_reconciliation_completion"],
+  ["091_settlement_tenant_rls", "091_settlement_tenant_rls"],
+  ["092_settlement_lifecycle_transition_integrity", "092_settlement_lifecycle_transition_integrity"],
+  ["093_registry_event_tenant_rls", "093_registry_event_tenant_rls"],
+  ["094_registry_event_identity_write_authority", "094_registry_event_identity_write_authority"],
+  ["095_credentials_tenant_rls", "095_credentials_tenant_rls"],
+  ["096_credential_authority_field_immutability", "096_credential_authority_field_immutability"],
+  ["097_field_sync_tenant_rls", "097_field_sync_tenant_rls"],
+  ["098_credential_registry_event_atomicity", "098_credential_registry_event_atomicity"],
+  ["099_registry_event_assigned_verifier_read", "099_registry_event_assigned_verifier_read"],
+  ["100_credential_runtime_update_column_scope", "100_credential_runtime_update_column_scope"],
 ];
 for (const [filename, identity] of protectedMigrationIdentities) {
   if (!migrationRunner.includes(identity)) failures.push(`Migration invariant missing: protected migration identity ${filename}`);
