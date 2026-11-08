@@ -18,6 +18,7 @@ const required = [
   "app.is_assigned_approved_verifier(registry_events.credential_id)",
   "for select",
   "-- No additional write authority is granted by this policy.",
+  "-- The helper is read-only by construction: it returns a boolean and grants no table DML.",
 ];
 const failures = required.filter((x) => !migration.includes(x));
 if (failures.length) {
