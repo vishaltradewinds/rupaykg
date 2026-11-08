@@ -39,6 +39,7 @@ A status must not be inferred from legacy/reference repositories.
 | Ecosystem | CPCB/EPR integration | CPCB/EPR routes and migrations exist | AMBER |
 | Ecosystem | BEE/CCTS integration | CCTS methodology registry and carbon governance exist | AMBER |
 | Ecosystem | External system acceptance | External provider/government interfaces remain separately gated | OPEN |
+| Ecosystem | Reference ecosystem adoption control | Shakti reference ecosystem adoption matrix created; component-level adoption evidence and implementation mapping remain required | AMBER |
 | Security | Production identity | Production identity provisioning controls exist | AMBER |
 | Security | Runtime least privilege | Tenant isolation contract defines non-BYPASSRLS runtime role; deployment proof remains | OPEN |
 | Operations | Backup/restore | Production gate requires demonstrated backup/restore evidence | OPEN |
