@@ -698,3 +698,13 @@
 - Checkpoint: `78bff2339873b9cc381a5681127ec9917e146428`.
 - Exact-head CI: **NOT VERIFIED**.
 - Production remains **READ-ONLY/HOLD**.
+
+
+### 2026-11-08 — Verifier contract integrity cleanup
+- Inspected the verifier migration, deterministic contract, and integration-test fixture.
+- Removed stale undefined fixture-cleanup references introduced in the test file.
+- Repaired a malformed literal newline escape in the assigned-verifier deterministic contract so the Node script remains syntactically valid.
+- Reconfirmed verifier authorization remains issuer-organization bound.
+- Checkpoint: `cd51e24014a0911e33b335a69cb8498e749b4832`.
+- Exact-head CI: **NOT VERIFIED**.
+- Production remains **READ-ONLY/HOLD**.
