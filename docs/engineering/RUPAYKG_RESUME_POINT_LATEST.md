@@ -811,3 +811,10 @@
 - Checkpoint: `1822f8708aa44914030f344c4b159b5b2c90b120`.
 - Exact-head CI: **NOT VERIFIED**.
 - Production remains **READ-ONLY/HOLD**.
+
+### 2026-11-08 — RLS write contract assertion repaired
+- Found another deterministic-contract defect in `test-shakti-rls-write-contract.mjs`: it used `test.includes("row-level security|policy")`, treating a regex alternation as a literal substring.
+- Replaced it with an actual case-insensitive regex assertion so the contract correctly detects either RLS/policy evidence.
+- Checkpoint: `c84fd2272799673a4070a1632a7d644e023b0831`.
+- Exact-head CI: **NOT VERIFIED**.
+- Production remains **READ-ONLY/HOLD**.
