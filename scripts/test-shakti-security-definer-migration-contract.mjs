@@ -3,7 +3,7 @@ import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 
 const dir = path.resolve("migrations");
-const files = (await readdir(dir)).filter((name) => /^\d+_.+\\.sql$/.test(name)).sort();
+const files = (await readdir(dir)).filter((name) => /^\d+_.+\.sql$/.test(name)).sort();
 const failures = [];
 
 for (const file of files) {
