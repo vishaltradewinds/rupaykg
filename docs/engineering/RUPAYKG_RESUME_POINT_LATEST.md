@@ -1,5 +1,14 @@
 # RupayKg CTO Resume Point — 2026-11-08
 
+## 2026-11-08 — SECURITY DEFINER contract parser hardening
+- Reworked `scripts/test-shakti-security-definer-migration-contract.mjs` so SECURITY DEFINER function discovery strips SQL line/block comments before parsing function definitions.
+- Latest-definition binding remains ordered by migration filename, preventing an older definition from masking a later definition.
+- Added explicit deterministic checks that migration 101's dynamic revoke loop scans `app` SECURITY DEFINER functions, obtains identity arguments with `pg_get_function_identity_arguments(p.oid)`, and revokes PUBLIC privileges using the exact identity-argument form.
+- Re-read the resulting executable contract after correction of regex escaping; no production database mutation was performed.
+- Code checkpoint: `6483bfd7b22c7c845b8bfccda8c5e03f02d874d0`.
+- Exact-head GitHub Actions workflow/status evidence remains to be verified.
+- Production remains **READ-ONLY/HOLD**.
+
 ## Authority
 - Primary working/release repository: vishaltradewinds/rupaykg
 - Authoritative engineering branch: `cto/20261107-protected-migration-ci`
