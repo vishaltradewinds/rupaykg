@@ -15,6 +15,7 @@ for(const [fn,source] of [["app.set_platform_context",hardening],["app.set_autho
  if(!/security definer/.test(block)) failures.push(fn+": must remain SECURITY DEFINER");
  if(!/set search_path = public, app/.test(block)) failures.push(fn+": must use fixed search_path");
  if(!/set_config\('app\.identity_id'.*true\)/s.test(block)) failures.push(fn+": identity context must be transaction-local");
+ if(!/set_config\('app\.execution_scope'.*true\)/s.test(block)) failures.push(fn+": execution scope must be transaction-local");
 }
 if(failures.length){console.error("Shakti context identity liveness contract FAILED:\n"+failures.map(x=>"- "+x).join("\n"));process.exit(1);}
 console.log("Shakti context identity liveness contract PASSED");
