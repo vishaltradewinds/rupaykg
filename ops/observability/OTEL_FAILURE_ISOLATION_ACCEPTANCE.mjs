@@ -25,7 +25,7 @@ if (!traceId || !/^[0-9a-f]{32}$/.test(traceId)) {
   throw new Error("health response did not expose a valid RupayKg trace correlation id");
 }
 
-const parentSpanId = randomBytes(8).toString("hex");
+const id = `otel-failure-isolation-${Date.now()}-${randomBytes(8).toString("hex")}`;\nconst parentSpanId = randomBytes(8).toString("hex");
 const integrationResponse = await fetch(baseUrl + "/api/v1/integrations/messages", {
   method: "POST",
   headers: {
