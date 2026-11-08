@@ -109,24 +109,25 @@ export async function canPerformHighRiskActionInDatabase(client: Pool | PoolClie
  */
 export async function canActForOrganizationInDatabase(client: Pool | PoolClient, auth: AuthContext, organizationId: string): Promise<boolean> {
   if (!organizationId || !auth.identityId || !canActForOrganization(auth, organizationId)) return false;
-  const result = await client.query<{ ok: boolean }>(
-    `select exists (
-       select 1
-         from identities i
-         join organization_memberships om
-           on om.identity_id = i.id
-          and om.organization_id = $2
-          and om.status = 'VERIFIED'
-         join organizations o
-           on o.id = om.organization_id
-          and o.status = 'VERIFIED'
-        where i.id = $1
-          and i.status = 'VERIFIED'
-          and i.suspended_at is null
-     ) as ok`,
+  const result = await client.query<{ id: string }>(
+    `select om.id
+       from identities i
+       join organization_memberships om
+         on om.identity_id = i.id
+        and om.organization_id = $2
+        and om.status = 'VERIFIED'
+       join organizations o
+         on o.id = om.organization_id
+        and o.status = 'VERIFIED'
+      where i.id = $1
+        and i.status = 'VERIFIED'
+        and i.suspended_at is null
+      order by om.id
+      limit 1
+      for share`,
     [auth.identityId, organizationId],
   );
-  return result.rows[0]?.ok === true;
+  return result.rows.length === 1;
 }
 
 export async function canVerifyEvidence(client: PoolClient, identityId: string, evidenceId: string): Promise<boolean> {
