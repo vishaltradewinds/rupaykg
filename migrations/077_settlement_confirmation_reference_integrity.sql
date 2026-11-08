@@ -13,7 +13,7 @@ returns trigger
 language plpgsql
 as $$
 begin
-  if old.confirmation_reference is not null
+  if TG_OP = 'UPDATE' and old.confirmation_reference is not null
      and new.confirmation_reference is distinct from old.confirmation_reference then
     raise exception 'settlement confirmation reference cannot be changed after assignment';
   end if;
