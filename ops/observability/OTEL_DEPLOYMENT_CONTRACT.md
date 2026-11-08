@@ -70,3 +70,10 @@ The repository now includes `ops/observability/OTEL_RUNTIME_ACCEPTANCE.mjs`. It 
 The probe verifies authoritative PostgreSQL-backed health/status, sends a deterministic W3C `traceparent`, exercises the authenticated external-integration mediator, verifies that the response preserves the supplied trace identity, and fails if the acceptance response claims synthetic data or authoritative environmental mutation. It records the supplied and returned trace identity plus HTTP outcomes as evidence.
 
 A manual `workflow_dispatch` workflow is provided at `.github/workflows/otel-runtime-acceptance.yml`. It is evidence-producing but is not itself proof that a production collector received the spans. Collector receipt, end-to-end span correlation, redaction under live telemetry, and telemetry-failure acceptance remain separate gates.
+
+
+## Telemetry failure isolation acceptance
+
+The repository includes `apps/src/otel-failure-isolation.test.ts`. It exercises a real OTLP exporter against an HTTP endpoint that returns 503 and verifies that an application operation completes independently of collector availability. The test deliberately treats exporter shutdown failure as telemetry failure, not business-operation failure.
+
+This is an engineering isolation test. It does **not** prove production outage behavior. Production acceptance still requires an evidence-producing run against the deployed RupayKg service with the production collector unavailable or rejecting telemetry, while verifying that authoritative transactions continue to enforce authentication, authorization, tenant isolation, idempotency and commit/rollback semantics.
