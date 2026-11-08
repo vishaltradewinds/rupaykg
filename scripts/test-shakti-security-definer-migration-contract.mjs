@@ -38,28 +38,38 @@ const requiredRuntimeFunctions = new Map([
   ["app.is_assigned_approved_verifier(uuid)", { name: "app.is_assigned_approved_verifier", args: "p_credential_id uuid", searchPath: "pg_catalog, public, app" }],
 ]);
 
+const stripSqlComments = (source) =>
+  source
+    .replace(/--[^\\n]*$/gm, "")
+    .replace(/\\/\\*[\\s\\S]*?\\*\\//g, "");
+
 const allMigrationSource = [];
-for (const file of files) allMigrationSource.push(await readFile(path.join(dir, file), "utf8"));
+for (const file of files) {
+  allMigrationSource.push({
+    file,
+    source: stripSqlComments(await readFile(path.join(dir, file), "utf8")),
+  });
+}
 
 const functionBlocksBySignature = new Map();
-for (const source of allMigrationSource) {
-  const starts = [...source.matchAll(/create\s+(?:or\s+replace\s+)?function\s+app\.([a-z_][a-z0-9_]*)\s*\(([^)]*)\)/gi)];
+for (const { file, source } of allMigrationSource) {
+  const starts = [...source.matchAll(/create\\s+(?:or\\s+replace\\s+)?function\\s+app\\.([a-z_][a-z0-9_]*)\\s*\\(([^)]*)\\)/gi)];
   for (let i = 0; i < starts.length; i++) {
     const start = starts[i].index ?? 0;
     const end = starts[i + 1]?.index ?? source.length;
-    const block = source.slice(start, end);
     const name = starts[i][1];
-    const args = starts[i][2].replace(/\s+/g, " ").trim();
+    const args = starts[i][2].replace(/\\s+/g, " ").trim();
     const signature = name + "(" + args + ")";
-    functionBlocksBySignature.set(signature, block);
+    functionBlocksBySignature.set(signature, { file, block: source.slice(start, end) });
   }
 }
 
 for (const [displayName, expected] of requiredRuntimeFunctions) {
   const expectedSignature = expected.name + "(" + expected.args + ")";
-  const block = [...functionBlocksBySignature.entries()]
+  const matching = [...functionBlocksBySignature.entries()]
     .filter(([signature]) => signature.replace(/\s+/g, " ").trim().toLowerCase() === expectedSignature.toLowerCase())
     .at(-1)?.[1];
+  const block = matching?.block;
   if (!block) {
     failures.push("required runtime function is not defined in migrations: " + displayName);
     continue;
