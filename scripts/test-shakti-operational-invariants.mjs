@@ -40,6 +40,9 @@ if (!/auth\.activeOrganizationId/.test(tenantDb)) {
 if (!/auth\.memberships\.some\(\(m\) => m\.status === "VERIFIED" && m\.organization_id === auth\.activeOrganizationId\)/.test(tenantDb)) {
   failures.push("Tenant transaction invariant missing: active organization must have verified membership.");
 }
+if (!/select exists \(select 1 from organization_memberships where identity_id=\$1 and organization_id=\$2 and status='VERIFIED'\)/.test(tenantDb)) {
+  failures.push("Tenant transaction invariant missing: authoritative database membership must be revalidated inside the transaction.");
+}
 if (!/auth\.memberships\.length\s*===\s*0/.test(auth) || !/!organizationId/.test(auth) || !/m\.status\s*===\s*"VERIFIED"/.test(auth)) {
   failures.push("Authorization fail-closed invariant missing for empty organization/membership context.");
 }
