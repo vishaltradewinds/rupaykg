@@ -899,3 +899,72 @@ test("Shakti RLS credential rows are current-owner-readable and owner-mutation-o
     await ownerPool.end();
   }
 });
+
+
+test("Shakti RLS field-sync evidence is identity/device/tenant isolated", { skip: !enabled }, async () => {
+  const runtimePool = new Pool({ connectionString: process.env.DATABASE_URL });
+  const ownerPool = new Pool({ connectionString: process.env.RUPAYKG_TEST_OWNER_DATABASE_URL });
+  const suffix = randomBytes(8).toString("hex");
+  let identityId = "", identityBId = "", organizationA = "", organizationB = "", roleA = "", membershipA = "", deviceA = "", envelopeA = "";
+  try {
+    organizationA = (await ownerPool.query<{ id: string }>("insert into organizations(name,organization_type,status) values($1,'test_fixture','VERIFIED') returning id", ["TEST-RLS-SYNC-A-" + suffix])).rows[0]!.id;
+    organizationB = (await ownerPool.query<{ id: string }>("insert into organizations(name,organization_type,status) values($1,'test_fixture','VERIFIED') returning id", ["TEST-RLS-SYNC-B-" + suffix])).rows[0]!.id;
+    identityId = (await ownerPool.query<{ id: string }>("insert into identities(external_subject,display_name,email,status) values($1,$2,$3,'VERIFIED') returning id", ["rls-sync:" + suffix, "RLS Sync " + suffix, "rls-sync-" + suffix + "@example.invalid"])).rows[0]!.id;
+    identityBId = (await ownerPool.query<{ id: string }>("insert into identities(external_subject,display_name,email,status) values($1,$2,$3,'VERIFIED') returning id", ["rls-sync-other:" + suffix, "RLS Sync Other " + suffix, "rls-sync-other-" + suffix + "@example.invalid"])).rows[0]!.id;
+    roleA = (await ownerPool.query<{ id: string }>("insert into roles(organization_id,name,permissions,geography_scope) values($1,'tenant_test_role','[]'::jsonb,'[]'::jsonb) returning id", [organizationA])).rows[0]!.id;
+    membershipA = (await ownerPool.query<{ id: string }>("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED') returning id", [identityId, organizationA, roleA])).rows[0]!.id;
+    deviceA = (await ownerPool.query<{ id: string }>("insert into field_devices(device_id,identity_id,organization_id,status,registered_by_identity_id,registered_at) values($1,$2,$3,'VERIFIED',$2,now()) returning id", ["RLS-SYNC-DEVICE-" + suffix, identityId, organizationA])).rows[0]!.id;
+    envelopeA = (await ownerPool.query<{ id: string }>("insert into field_sync_envelopes(device_id,identity_id,idempotency_key,client_sequence,captured_at,payload,payload_hash) values($1,$2,$3,1,now(),'{}'::jsonb,'RLS-SYNC-HASH') returning id", [deviceA, identityId, "RLS-SYNC-" + suffix])).rows[0]!.id;
+
+    const client = await runtimePool.connect();
+    try {
+      await client.query("begin");
+      await client.query("set local role rupaykg_app_runtime");
+      await client.query("select app.set_request_context($1,$2)", [identityId, organizationA]);
+
+      const visible = await client.query<{ id: string }>("select id from field_sync_envelopes where id=$1", [envelopeA]);
+      assert.equal(visible.rows.length, 1);
+
+      await assert.rejects(
+        () => client.query("insert into field_sync_envelopes(device_id,identity_id,idempotency_key,client_sequence,captured_at,payload,payload_hash) values($1,$2,$3,2,now(),'{}'::jsonb,'RLS-CROSS')", [deviceA, identityBId, "RLS-SYNC-MISMATCH-" + suffix]),
+        /row-level security|policy|identity must match/i,
+      );
+      await assert.rejects(
+        () => client.query("delete from field_sync_envelopes where id=$1", [envelopeA]),
+        /permission denied|row-level security|policy/i,
+      );
+      await client.query("rollback");
+    } catch (error) {
+      try { await client.query("rollback"); } catch {}
+      throw error;
+    } finally {
+      client.release();
+    }
+
+    const otherClient = await runtimePool.connect();
+    try {
+      await otherClient.query("begin");
+      await otherClient.query("set local role rupaykg_app_runtime");
+      await otherClient.query("select app.set_request_context($1,$2)", [identityBId, organizationB]);
+      const hidden = await otherClient.query<{ id: string }>("select id from field_sync_envelopes where id=$1", [envelopeA]);
+      assert.equal(hidden.rows.length, 0);
+      await otherClient.query("rollback");
+    } catch (error) {
+      try { await otherClient.query("rollback"); } catch {}
+      throw error;
+    } finally {
+      otherClient.release();
+    }
+  } finally {
+    if (envelopeA) await ownerPool.query("delete from field_sync_envelopes where id=$1", [envelopeA]);
+    if (deviceA) await ownerPool.query("delete from field_devices where id=$1", [deviceA]);
+    if (membershipA) await ownerPool.query("delete from organization_memberships where id=$1", [membershipA]);
+    if (roleA) await ownerPool.query("delete from roles where id=$1", [roleA]);
+    if (identityBId) await ownerPool.query("delete from identities where id=$1", [identityBId]);
+    if (identityId) await ownerPool.query("delete from identities where id=$1", [identityId]);
+    if (organizationA) await ownerPool.query("delete from organizations where id=$1", [organizationA]);
+    if (organizationB) await ownerPool.query("delete from organizations where id=$1", [organizationB]);
+    await runtimePool.end();
+    await ownerPool.end();
+  }
+});
