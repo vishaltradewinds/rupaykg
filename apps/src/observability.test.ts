@@ -92,7 +92,7 @@ test("runtime attestation records the executing Node runtime without application
   assertSupportedNodeRuntime();
   const attestation = buildRuntimeAttestation();
   assert.equal(attestation.event, "rupaykg.runtime.attestation");
-  assert.match(attestation.nodeVersion, /^v\\d+\\.\\d+\\.\\d+$/);
+  assert.match(attestation.nodeVersion, /^v\d+\.\d+\.\d+$/);
   assert.equal(attestation.runtime, "node");
   assert.ok(attestation.platform);
   assert.ok(attestation.arch);
