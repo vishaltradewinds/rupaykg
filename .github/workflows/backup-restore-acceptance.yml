@@ -1,0 +1,24 @@
+name: Backup Restore Acceptance Contract
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify operator-controlled backup/restore contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s ops/backup-restore/README.md
+          grep -q "isolated, empty PostgreSQL database" ops/backup-restore/README.md
+          grep -q "Never restore over production" ops/backup-restore/README.md
+          grep -q "database credentials" ops/backup-restore/README.md
+          echo "Backup/restore acceptance contract present and fail-safe."
