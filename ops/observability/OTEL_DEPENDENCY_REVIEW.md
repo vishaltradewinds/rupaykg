@@ -39,3 +39,8 @@ No SDK dependency is being introduced merely to make the control appear GREEN.
 OpenTelemetry JavaScript SDK 3.0 announcement: https://opentelemetry.io/blog/2026/otel-js-sdk-3-0/
 OpenTelemetry JavaScript Node.js guidance: https://opentelemetry.io/docs/languages/js/getting-started/nodejs/
 OpenTelemetry JavaScript instrumentation guidance: https://opentelemetry.io/docs/languages/js/instrumentation/
+
+
+## Repository runtime gate
+
+`apps/package.json` now declares `engines.node >=22.15.0`, matching the minimum runtime required by OpenTelemetry JavaScript SDK 3.x. This is a repository contract, not proof that the deployed production runtime already satisfies it. Deployment evidence remains required.
