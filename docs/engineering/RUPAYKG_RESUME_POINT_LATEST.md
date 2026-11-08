@@ -797,3 +797,10 @@
 - Checkpoint: `e5ac495493a0bae711a1073e2dfda528ac918e04`.
 - Exact-head CI: **NOT VERIFIED**.
 - Production remains **READ-ONLY/HOLD**.
+
+### 2026-11-08 — Credential lifecycle latest-event acceptance strengthened
+- Extended the existing credential/registry atomicity DB acceptance test to prove that a value-bearing lifecycle transition cannot commit when a later registry event makes the required lifecycle event stale.
+- The test now exercises `TRANSFERRED` followed by a stale `ACTIVATED` event and requires commit failure with the latest-event guard.
+- Checkpoint: `3efea00694dfa889ce369bb7d75338e268b1a3ff`.
+- Exact-head CI: **NOT VERIFIED** until GitHub reports a workflow run for this head.
+- Production remains **READ-ONLY/HOLD**.
