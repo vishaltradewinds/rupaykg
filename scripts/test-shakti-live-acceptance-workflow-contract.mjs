@@ -64,8 +64,10 @@ if (!fs.existsSync("ops/tenant-isolation/PROVISION_CONTROLLED_DDL_ROLE.sql")) {
   failures.push("Approval-gated controlled DDL-role provisioning plan is missing.");
 }
 
-if (!/npm run migrate -w @rupaykg\/api/.test(controlledMigration)) {
-  failures.push("Controlled production migration must use the repository migration runner.");
+if (!/npm run migrate -w @rupaykg\/api/.test(controlledMigration)
+ || !/MIGRATION_MAX_VERSION="$MIGRATION_MAX_VERSION" npm run migrate -w @rupaykg\/api/.test(controlledMigration)
+ || !/MIGRATION_MAX_VERSION: "099"/.test(controlledMigration)) {
+  failures.push("Controlled production migration must use the repository migration runner with an explicit 099 cutover ceiling.");
 }
 if (!/Migration complete\. RLS activation remains a separate controlled DDL gate\./.test(controlledMigration)) {
   failures.push("Controlled production migration must not silently activate RLS.");
