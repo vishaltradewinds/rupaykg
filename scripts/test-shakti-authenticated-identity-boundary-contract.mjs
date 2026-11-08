@@ -18,7 +18,7 @@ if (/body[^\n]*identityId|text\(body,"identityId"\)|body\.identityId/.test(route
 if (!route.includes("insert into organizations") || !route.includes("insert into organization_memberships") || !route.includes("insert into stakeholder_applications")) {
   throw new Error("Onboarding organization, membership, and application writes must remain inside the identity transaction");
 }
-if (/await pool\\.(query|connect)\\(/.test(route)) {
+if (/await pool\.(query|connect)\(/.test(route)) {
   throw new Error("Onboarding application route contains a direct pool query/connect");
 }
 console.log("Shakti onboarding authenticated-identity boundary contract PASSED");
