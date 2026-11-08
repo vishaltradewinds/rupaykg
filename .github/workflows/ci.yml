@@ -57,7 +57,7 @@ jobs:
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "select case when exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'app' and p.proname = 'set_identity_context') then 1 else 1/0 end"
       - name: Assert protected Shakti core RLS is active in disposable CI DB
         run: |
-          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "select case when count(*) = 5 and bool_and(c.relrowsecurity) then 1 else 1/0 end from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'public' and c.relname in ('activities','measurements','evidence','carbon_calculations','epr_obligations')"
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "select case when count(*) = 5 and bool_and(c.relrowsecurity) then 1 else 1/0 end from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relname in ('activities','measurements','evidence','carbon_calculations','epr_obligations')"
       - run: npm run typecheck
       - run: npm run build
       - name: Browser smoke test production web build
@@ -68,9 +68,7 @@ jobs:
           preview_pid=$!
           trap 'kill "$preview_pid" 2>/dev/null || true' EXIT
           for attempt in {1..30}; do
-            if curl --fail --silent http://127.0.0.1:4173/ >/dev/null; then
-              break
-            fi
+            if curl --fail --silent http://127.0.0.1:4173/ >/dev/null; then break; fi
             sleep 1
           done
           html="$(curl --fail --silent http://127.0.0.1:4173/)"
@@ -109,7 +107,7 @@ jobs:
           set -euo pipefail
           registry="apps/src/registry-routes.ts"
           test "$(grep -c 'withTenantTransaction(pool' "$registry")" -ge 8
-          ! grep -q 'pool\\.query\\|pool\\.connect' "$registry"
+          ! grep -q 'pool\.query\|pool\.connect' "$registry"
           for route in "/api/v1/settlements" "/api/v1/settlements/:settlementId/authorize" "/api/v1/settlements/:settlementId/settle" "/api/v1/settlements/:settlementId/confirm"; do
             grep -Fq "app.post(\"$route\"" "$registry"
           done
@@ -117,6 +115,8 @@ jobs:
           grep -Fq 'canActForOrganization(auth,payeeId)' "$registry"
           grep -Fq 'payerId!==currentOwner' "$registry"
           echo "Shakti registry tenant-boundary contract PASSED: registry mutations remain transaction-bound and settlement authorization remains bilateral."
+      - name: Run Shakti onboarding identity-boundary contract
+        run: node scripts/test-shakti-onboarding-identity-boundary-contract.mjs
       - name: Run tests including disposable PostgreSQL acceptance
         env:
           DATABASE_URL: postgresql://rupaykg_app_runtime:ci-runtime-only-password@localhost:5432/rupaykg
