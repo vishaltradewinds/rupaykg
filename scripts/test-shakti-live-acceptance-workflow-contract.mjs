@@ -4,6 +4,8 @@ import fs from "node:fs";
 const failures = [];
 const workflow = fs.readFileSync(".github/workflows/tenant-isolation-live-acceptance.yml", "utf8");
 const boundary = fs.readFileSync("ops/tenant-isolation/VERIFY_SECURITY_DEFINER_BOUNDARIES.sql", "utf8");
+const activation = fs.readFileSync("ops/tenant-isolation/ACTIVATE_RLS.sql", "utf8");
+const ddlPreflight = fs.readFileSync("ops/tenant-isolation/VERIFY_DDL_ROLE_PRE_RLS.sql", "utf8");
 
 if (/psql "\$RUPAYKG_RUNTIME_DATABASE_URL" \\\\/.test(workflow)) {
   failures.push("SECURITY DEFINER acceptance step contains a double-backslash shell continuation; this passes a literal backslash instead of continuing the command.");
@@ -31,6 +33,29 @@ if (!/not has_function_privilege\('public', 'app\.set_request_context/.test(boun
  || !/not has_function_privilege\('public', 'app\.is_verified_org_member/.test(boundary)
  || !/not has_function_privilege\('public', 'app\.authenticate_bearer_session/.test(boundary)) {
   failures.push("Boundary verification must fail closed on PUBLIC EXECUTE.");
+}
+
+const protectedTables = [
+  "organizations", "roles", "activities", "obligations", "credentials",
+  "settlements", "audit_events", "resource_flows", "field_devices",
+  "organization_memberships", "measurements", "evidence", "verifications",
+  "carbon_calculations", "mrv_observations",
+  "evidence_verification_requirements", "chain_of_custody_links"
+];
+
+if (protectedTables.length !== 17) {
+  failures.push(`Static Shakti protected-table inventory changed unexpectedly: expected 17, found ${protectedTables.length}.`);
+}
+for (const table of protectedTables) {
+  if (!activation.includes(`('${table}')`) || !ddlPreflight.includes(`'${table}'`)) {
+    failures.push(`Protected-table inventory missing from activation/preflight contract: ${table}`);
+  }
+}
+if (!/\) <> 17 then/.test(activation) || !/\) = 17/.test(ddlPreflight)) {
+  failures.push("RLS activation and DDL preflight must assert ownership of the same 17 protected tenant tables.");
+}
+if (/<> 18/.test(activation) || /= 18/.test(ddlPreflight)) {
+  failures.push("Tenant-isolation activation/preflight must not contain the obsolete 18-table ownership assertion.");
 }
 
 if (failures.length) {
