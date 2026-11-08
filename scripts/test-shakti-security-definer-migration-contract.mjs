@@ -27,6 +27,12 @@ for (const grant of requiredRuntimeExecutes) {
   if (!boundaryMigration.includes(grant)) failures.push("101_security_definer_schema_boundary.sql: missing explicit runtime grant: " + grant);
 }
 
+const runtimeGrantLines = boundaryMigration.split(/\r?\n/).map((line) => line.trim()).filter((line) => /^grant execute on function app\./i.test(line));
+const approvedRuntimeGrantSet = new Set(requiredRuntimeExecutes);
+for (const grantLine of runtimeGrantLines) {
+  if (!approvedRuntimeGrantSet.has(grantLine)) failures.push("101_security_definer_schema_boundary.sql: unapproved runtime EXECUTE grant: " + grantLine);
+}
+
 for (const file of files) {
   const source = await readFile(path.join(dir, file), "utf8");
   const functionStarts = [...source.matchAll(/create\s+(?:or\s+replace\s+)?function\b/gi)].map((m) => m.index ?? 0);
