@@ -1,4 +1,5 @@
 import { readdir, readFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -18,9 +19,14 @@ try {
     create table if not exists schema_migrations (
       version text primary key,
       filename text not null,
-      applied_at timestamptz not null default now()
+      applied_at timestamptz not null default now(),
+      checksum text
     )
   `);
+
+  await pool.query("alter table schema_migrations add column if not exists checksum text");
+  // Existing rows created before checksum enforcement are backfilled once; subsequent
+  // runs fail closed if an already-applied migration's content changes.
 
   // Support both CI/source execution (/repo/apps/src) and the production
   // container (/app/apps/dist/src). Never assume a single filesystem root.
@@ -40,13 +46,21 @@ try {
   for (const filename of files) {
     const prefix = filename.split("_", 1)[0];
     const version = (prefixCounts.get(prefix) ?? 0) > 1 ? filename.replace(/\.sql$/, "") : prefix;
-    const existing = await pool.query<{ version: string; filename: string }>(
-      "select version, filename from schema_migrations where version = $1",
+    const sql = await readFile(path.join(migrationDir, filename), "utf8");
+    const checksum = createHash("sha256").update(sql).digest("hex");
+    const existing = await pool.query<{ version: string; filename: string; checksum: string | null }>(
+      "select version, filename, checksum from schema_migrations where version = $1",
       [version],
     );
     if (existing.rows[0]) {
       if (existing.rows[0].filename !== filename) {
         throw new Error(`Migration version ${version} is already recorded as ${existing.rows[0].filename}, not ${filename}`);
+      }
+      if (existing.rows[0].checksum && existing.rows[0].checksum !== checksum) {
+        throw new Error(`Migration ${filename} checksum mismatch: applied content has changed`);
+      }
+      if (!existing.rows[0].checksum) {
+        await pool.query("update schema_migrations set checksum = $2 where version = $1 and checksum is null", [version, checksum]);
       }
       continue;
     }
@@ -56,14 +70,13 @@ try {
       throw new Error(`Protected Shakti migration ${filename} requires explicit RUPAYKG_ALLOW_PROTECTED_SHAKTI_MIGRATIONS=1`);
     }
 
-    const sql = await readFile(path.join(migrationDir, filename), "utf8");
     const client = await pool.connect();
     try {
       await client.query("begin");
       await client.query(sql);
       await client.query(
-        "insert into schema_migrations(version, filename) values ($1, $2)",
-        [version, filename],
+        "insert into schema_migrations(version, filename, checksum) values ($1, $2, $3)",
+        [version, filename, checksum],
       );
       await client.query("commit");
       console.log(`Applied ${filename}`);
