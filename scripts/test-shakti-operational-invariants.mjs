@@ -22,7 +22,7 @@ for (const [name, pattern] of requiredWorkflowInvariants) {
 }
 
 const requiredMigrationInvariants = [
-  ["protected migration allowlist", /authority_hierarchy_context\|platform_execution_context\|runtime_grant_reconciliation\|core_tenant_rls_activation_gate/],
+  ["protected migration allowlist", /authority_hierarchy_context\|context_identity_bootstrap\|context_organization_id\|platform_execution_context\|runtime_grant_reconciliation\|core_tenant_rls_activation_gate/],
   ["explicit protected gate", /RUPAYKG_ALLOW_PROTECTED_SHAKTI_MIGRATIONS/],
   ["legacy numeric migration compatibility", /prefixCounts/],
   ["duplicate-prefix disambiguation", /filename\.replace\(\/\\\.sql\$\/, ""\)/],
@@ -40,7 +40,7 @@ if (!/auth\.activeOrganizationId/.test(tenantDb)) {
 if (!/auth\.memberships\.some\(\(m\) => m\.status === "VERIFIED" && m\.organization_id === auth\.activeOrganizationId\)/.test(tenantDb)) {
   failures.push("Tenant transaction invariant missing: active organization must have verified membership.");
 }
-if (!/select exists \(select 1 from organization_memberships where identity_id=\$1 and organization_id=\$2 and status='VERIFIED'\)/.test(tenantDb)) {
+if (!/select exists \(select 1 from organization_memberships om join organizations o on o.id=om.organization_id and o.status='VERIFIED' where om.identity_id=\$1 and om.organization_id=\$2 and om.status='VERIFIED'\)/.test(tenantDb)) {
   failures.push("Tenant transaction invariant missing: authoritative database membership must be revalidated inside the transaction.");
 }
 if (!/auth\.memberships\.length\s*===\s*0/.test(auth) || !/!organizationId/.test(auth) || !/m\.status\s*===\s*"VERIFIED"/.test(auth)) {
