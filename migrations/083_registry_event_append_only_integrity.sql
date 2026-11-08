@@ -4,7 +4,8 @@
 create or replace function prevent_registry_event_mutation()
 returns trigger
 language plpgsql
-as $$
+set search_path = public, app
+as $
 begin
   raise exception 'registry events are immutable and append-only';
 end;
