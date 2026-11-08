@@ -119,6 +119,8 @@ jobs:
         run: node scripts/test-shakti-onboarding-identity-boundary-contract.mjs
       - name: Run Shakti authenticated-identity boundary contract
         run: node scripts/test-shakti-authenticated-identity-boundary-contract.mjs
+      - name: Run Shakti authority boundary contract
+        run: node scripts/test-shakti-authority-boundary-contract.mjs
       - name: Run Shakti execution-context grant reconciliation contract
         run: node scripts/test-shakti-execution-context-grants-contract.mjs
       - name: Run tests including disposable PostgreSQL acceptance
