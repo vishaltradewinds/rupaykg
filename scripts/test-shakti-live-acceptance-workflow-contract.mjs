@@ -37,6 +37,16 @@ if (!/Verify required DDL role safety/.test(controlledMigration)
  || !/rolsuper.*rolbypassrls/.test(controlledMigration)) {
   failures.push("Controlled production migration must verify the DDL role is not SUPERUSER or BYPASSRLS.");
 }
+if (!/EXPECTED_DDL_ROLE: rupaykg_ddl_migration/.test(controlledMigration)
+ || !/current_user = '\$EXPECTED_DDL_ROLE'/.test(controlledMigration)
+ || !/session_user = '\$EXPECTED_DDL_ROLE'/.test(controlledMigration)) {
+  failures.push("Controlled production migration must execute only as the dedicated rupaykg_ddl_migration role.");
+}
+if (!/EXPECTED_PRE_MIGRATION_VERSION: "096"/.test(controlledMigration)
+ || !/max\(version\).*\$EXPECTED_PRE_MIGRATION_VERSION/.test(controlledMigration)
+ || !/count\(\*\).*097.*098.*099/.test(controlledMigration)) {
+  failures.push("Controlled production migration must lock the cutover to the expected 096 baseline with no prior 097-099 application.");
+}
 if (!/Verify controlled DDL role owns protected tenant tables/.test(controlledMigration)
  || !/ddl_owner_assertion/.test(controlledMigration)
  || !/\)=17 then 1 else 0 end/.test(controlledMigration)) {
