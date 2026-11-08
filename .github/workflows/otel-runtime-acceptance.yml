@@ -6,6 +6,8 @@ on:
 permissions:
   contents: read
 
+# This workflow is intentionally workflow_dispatch-only. GitHub MCP access available to the CTO does not expose workflow dispatch or Actions secret values.
+
 jobs:
   otel-runtime-acceptance:
     runs-on: ubuntu-latest
