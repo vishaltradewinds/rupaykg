@@ -39,18 +39,18 @@ requirePattern("settlement authorization", settlementRoutes.authorize, /canPerfo
 requirePattern("settlement execution", settlementRoutes.execute, /canPerformHighRiskActionInDatabase\(c, auth, organizationId, "SETTLE_FUNDS"\)/);
 requirePattern("settlement confirmation", settlementRoutes.confirm, /canPerformHighRiskActionInDatabase\(c, auth, organizationId, "SETTLE_FUNDS"\)/);
 
-requirePattern("settlement creation binds payer to current registry owner", settlementRoutes.create, /payerId === currentOwner/);
-requirePattern("settlement parties are distinct", settlementRoutes.create, /payerId === payeeId/);
+requirePattern("settlement creation binds payer to current registry owner", settlementRoutes.create, /payerId\s*!==\s*currentOwner/);
+requirePattern("settlement parties are distinct", settlementRoutes.create, /payerId\s*===\s*payeeId/);
 requirePattern("settlement creation checks both organizations", settlementRoutes.create, /canActForOrganization\(auth, payerId\).*canActForOrganization\(auth, payeeId\)/);
 requirePattern("settlement authorization checks both organizations", settlementRoutes.authorize, /canActForOrganization\(auth, r\.rows\[0\]\.payer_id\).*canActForOrganization\(auth, r\.rows\[0\]\.payee_id\)/);
 requirePattern("settlement execution checks both organizations", settlementRoutes.execute, /canActForOrganization\(auth, r\.rows\[0\]\.payer_id\).*canActForOrganization\(auth, r\.rows\[0\]\.payee_id\)/);
 requirePattern("settlement confirmation checks both organizations", settlementRoutes.confirm, /canActForOrganization\(auth, r\.rows\[0\]\.payer_id\).*canActForOrganization\(auth, r\.rows\[0\]\.payee_id\)/);
 requirePattern("credential transfer requires verified destination organization", credentialRoutes.transfer, /select id from organizations where id=\$1 and status='VERIFIED'/);
-requirePattern("credential issuance selects latest provenance deterministically", credentialRoutes.issue, /order by m\.created_at desc,id desc limit 1/);
+requirePattern("credential issuance selects latest provenance deterministically", credentialRoutes.issue, /order by m\.created_at desc,\s*id desc limit 1/);
 
-requirePattern("settlement authorization state gate", settlementRoutes.authorize, /status !== "CREATED"/);
-requirePattern("settlement execution state gate", settlementRoutes.execute, /status !== "AUTHORIZED"/);
-requirePattern("settlement confirmation state gate", settlementRoutes.confirm, /status !== "RECONCILING"/);
+requirePattern("settlement authorization state gate", settlementRoutes.authorize, /status\s*!==\s*"CREATED"/);
+requirePattern("settlement execution state gate", settlementRoutes.execute, /status\s*!==\s*"AUTHORIZED"/);
+requirePattern("settlement confirmation state gate", settlementRoutes.confirm, /status\s*!==\s*"RECONCILING"/);
 requirePattern("settlement confirmation requires external execution reference", settlementRoutes.confirm, /EXTERNAL_REFERENCE_REQUIRED/);
 requirePattern("settlement confirmation rejects duplicate confirmation reference", settlementRoutes.confirm, /CONFIRMATION_REFERENCE_EXISTS/);
 requirePattern("settlement confirmation rejects duplicate reconciliation reference", settlementRoutes.confirm, /RECONCILIATION_REFERENCE_EXISTS/);
