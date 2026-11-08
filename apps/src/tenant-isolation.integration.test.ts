@@ -37,6 +37,7 @@ test("Shakti identity context rejects inactive identity and does not establish t
     );
   } finally {
     if (identityBId) await ownerPool.query("delete from identities where id=$1", [identityBId]);
+    if (identityBId) await ownerPool.query("delete from identities where id=$1", [identityBId]);
     if (identityId) await ownerPool.query("delete from identities where id=$1", [identityId]);
     await runtimePool.end();
     await ownerPool.end();
@@ -819,11 +820,12 @@ test("Shakti RLS credential rows are current-owner-readable and owner-mutation-o
   const runtimePool = new Pool({ connectionString: process.env.DATABASE_URL });
   const ownerPool = new Pool({ connectionString: process.env.RUPAYKG_TEST_OWNER_DATABASE_URL });
   const suffix = randomBytes(8).toString("hex");
-  let identityId = "", organizationA = "", organizationB = "", roleA = "", membershipA = "", credentialA = "", registryEventA = "";
+  let identityId = "", identityBId = "", organizationA = "", organizationB = "", roleA = "", membershipA = "", credentialA = "", registryEventA = "";
   try {
     organizationA = (await ownerPool.query<{ id: string }>("insert into organizations(name,organization_type,status) values($1,'test_fixture','VERIFIED') returning id", ["TEST-RLS-CREDENTIAL-A-" + suffix])).rows[0]!.id;
     organizationB = (await ownerPool.query<{ id: string }>("insert into organizations(name,organization_type,status) values($1,'test_fixture','VERIFIED') returning id", ["TEST-RLS-CREDENTIAL-B-" + suffix])).rows[0]!.id;
     identityId = (await ownerPool.query<{ id: string }>("insert into identities(external_subject,display_name,email,status) values($1,$2,$3,'VERIFIED') returning id", ["rls-credential:" + suffix, "RLS Credential " + suffix, "rls-credential-" + suffix + "@example.invalid"])).rows[0]!.id;
+    identityBId = (await ownerPool.query<{ id: string }>("insert into identities(external_subject,display_name,email,status) values($1,$2,$3,'VERIFIED') returning id", ["rls-credential-other:" + suffix, "RLS Credential Other " + suffix, "rls-credential-other-" + suffix + "@example.invalid"])).rows[0]!.id;
     roleA = (await ownerPool.query<{ id: string }>("insert into roles(organization_id,name,permissions,geography_scope) values($1,'tenant_test_role','[]'::jsonb,'[]'::jsonb) returning id", [organizationA])).rows[0]!.id;
     membershipA = (await ownerPool.query<{ id: string }>("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED') returning id", [identityId, organizationA, roleA])).rows[0]!.id;
     credentialA = (await ownerPool.query<{ id: string }>("insert into credentials(issuer_organization_id,trust_root_id,status) values($1,$2,'ELIGIBLE') returning id", [organizationA, "RLS-TRUST-" + suffix])).rows[0]!.id;
@@ -841,6 +843,15 @@ test("Shakti RLS credential rows are current-owner-readable and owner-mutation-o
 
       const updated = await client.query<{ id: string; trust_root_id: string }>("update credentials set trust_root_id=$1 where id=$2 returning id,trust_root_id", ["RLS-UPDATED-" + suffix, credentialA]);
       assert.equal(updated.rows[0]!.id, credentialA);
+
+      await assert.rejects(
+        () => client.query("insert into registry_events(credential_id,event_type,to_owner_id,recorded_by_identity_id,event_hash) values($1,'IDENTITY_MISMATCH',$2,$3,$4)", [credentialA, organizationA, identityBId, "RLS-MISMATCH-" + suffix]),
+        /row-level security|policy/i,
+      );
+      await assert.rejects(
+        () => client.query("insert into registry_events(credential_id,event_type,to_owner_id,recorded_by_identity_id,event_hash) values($1,'CROSS_TENANT',$2,$3,$4)", [credentialA, organizationB, identityId, "RLS-CROSS-" + suffix]),
+        /row-level security|policy/i,
+      );
 
       await assert.rejects(
         () => client.query("delete from credentials where id=$1", [credentialA]),
