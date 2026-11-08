@@ -516,3 +516,17 @@
 - Latest checkpoint commit: `4df80ded52f8b95492a9e04be8409586eafb3711`.
 - Exact-head CI: **NOT VERIFIED**.
 - Production remains **READ-ONLY/HOLD**.
+
+
+### 2026-11-08 — Credential ↔ registry lifecycle atomicity
+- Added protected migration `098_credential_registry_event_atomicity.sql`.
+- Value-bearing credential states now require the corresponding registry provenance event at transaction commit:
+  - ISSUED → ISSUED
+  - ACTIVE → ACTIVATED
+  - TRANSFERRED → TRANSFERRED
+  - RETIRED → RETIRED
+- Implemented as a deferred database constraint trigger so existing route ordering (state mutation followed by event append) remains valid while a missing event cannot commit.
+- Added deterministic contract and behavioral acceptance proving mutation-without-event rolls back and state+event commits.
+- Latest checkpoint commit: `3d21f5c20a67c1a98e46a09d0c030442bc0025a7`.
+- Exact-head CI: **NOT VERIFIED**.
+- Production remains **READ-ONLY/HOLD**.
