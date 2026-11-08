@@ -29,19 +29,25 @@ begin
   if v_member or current_user = 'rupaykg_app_runtime' then
     raise exception 'TENANT_ISOLATION_ACTIVATION_BLOCKED: application runtime role cannot perform DDL activation';
   end if;
-  if (
-    select count(*)
-      from pg_policies p
-     where p.schemaname = 'public'
-       and p.tablename in (
-         'organizations','roles','activities','obligations','credentials',
-         'settlements','audit_events','resource_flows','field_devices',
-         'organization_memberships','measurements','evidence','verifications',
-         'carbon_calculations','mrv_observations',
-         'evidence_verification_requirements','chain_of_custody_links'
-       )
-       and p.cmd in ('r','*')
-  ) <> 18 then
+  if exists (
+    with protected(table_name) as (
+      values
+        ('organizations'),('roles'),('activities'),('obligations'),('credentials'),
+        ('settlements'),('audit_events'),('resource_flows'),('field_devices'),
+        ('organization_memberships'),('measurements'),('evidence'),('verifications'),
+        ('carbon_calculations'),('mrv_observations'),
+        ('evidence_verification_requirements'),('chain_of_custody_links')
+    )
+    select 1
+      from protected p
+     where not exists (
+       select 1
+         from pg_policies pol
+        where pol.schemaname = 'public'
+          and pol.tablename = p.table_name
+          and pol.cmd in ('r','*')
+     )
+  ) then
     raise exception 'TENANT_ISOLATION_ACTIVATION_BLOCKED: every protected tenant table must have a SELECT RLS policy before activation';
   end if;
 
