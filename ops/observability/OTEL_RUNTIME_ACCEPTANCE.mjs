@@ -88,7 +88,7 @@ console.log(JSON.stringify({
   health: health.status,
   status: status.status,
   integrationStatus: correlation.response.status,
-  authoritativeMutation: false,
+  authoritativeMutation: true,\n  authoritativeEnvironmentalMutation: false,
   syntheticData: false,
   responseTraceId: correlation.body?.traceId,
   timestamp: new Date().toISOString(),
