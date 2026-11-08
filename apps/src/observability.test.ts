@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildHttpSpan, parseTraceparent, validateObservabilitySpan } from "./observability.js";
+import { buildHttpSpan, createTraceContext, parseTraceparent, validateObservabilitySpan } from "./observability.js";
 
 test("accepts valid W3C traceparent", () => {
   const context = parseTraceparent("00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01");
@@ -96,4 +96,13 @@ test("runtime attestation records the executing Node runtime without application
   assert.equal(attestation.runtime, "node");
   assert.ok(attestation.platform);
   assert.ok(attestation.arch);
+});
+
+
+test("runtime trace response correlation uses the request trace identity", () => {
+  const traceId = "4bf92f3577b34da6a3ce929d0e0e4736";
+  const request = { headers: { traceparent: `00-${traceId}-00f067aa0ba902b7-01` } } as any;
+  const context = createTraceContext(request);
+  assert.equal(context.traceId, traceId);
+  assert.equal(context.parentId, "00f067aa0ba902b7");
 });
