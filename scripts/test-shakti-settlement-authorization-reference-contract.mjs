@@ -17,6 +17,9 @@ for (const required of [
   "settlements_authorization_reference_uq",
   "prevent_settlement_authorization_reference_mutation",
   "settlement authorization reference cannot be changed after assignment",
+  "authorized settlement requires verification timestamp",
+  "authorized settlement requires authorization reference",
+  "settlement authorization verification timestamp cannot be changed after authorization",
 ]) {
   if (!migration.includes(required)) failures.push("missing authorization-reference database integrity control: " + required);
 }
