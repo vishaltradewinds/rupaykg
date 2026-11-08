@@ -49,7 +49,7 @@ Before changing the control matrix to GREEN, retain:
 
 ## Current state
 
-The repository currently has a transport-neutral OTEL-compatible span contract and deterministic validation. It does **not** yet contain an approved OpenTelemetry SDK/exporter dependency, collector deployment, or production runtime evidence.
+The repository now contains pinned OpenTelemetry SDK/exporter dependencies, an ESM bootstrap, transport-neutral span validation, application-path span instrumentation, and an executable runtime acceptance probe. It does **not** yet contain production collector connectivity evidence, end-to-end production trace evidence, or telemetry-failure acceptance evidence.
 
 Therefore this document is an implementation contract and acceptance gate, not a production deployment claim.
 
@@ -67,6 +67,6 @@ The repository now includes `ops/observability/OTEL_RUNTIME_ACCEPTANCE.mjs`. It 
 - `RUPAYKG_BEARER_TOKEN`
 - `RUPAYKG_ORGANIZATION_ID`
 
-The probe verifies authoritative PostgreSQL-backed health/status, sends a deterministic W3C `traceparent`, exercises the authenticated external-integration mediator, and fails if the acceptance response claims synthetic data or authoritative environmental mutation. It records the supplied trace identity and HTTP outcomes as evidence.
+The probe verifies authoritative PostgreSQL-backed health/status, sends a deterministic W3C `traceparent`, exercises the authenticated external-integration mediator, verifies that the response preserves the supplied trace identity, and fails if the acceptance response claims synthetic data or authoritative environmental mutation. It records the supplied and returned trace identity plus HTTP outcomes as evidence.
 
 A manual `workflow_dispatch` workflow is provided at `.github/workflows/otel-runtime-acceptance.yml`. It is evidence-producing but is not itself proof that a production collector received the spans. Collector receipt, end-to-end span correlation, redaction under live telemetry, and telemetry-failure acceptance remain separate gates.
