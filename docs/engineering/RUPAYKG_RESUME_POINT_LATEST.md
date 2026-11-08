@@ -587,3 +587,12 @@
 - Latest checkpoint commit: `26d4e748be0a7806a9787fde6b4807c430b39e0d`.
 - Exact-head CI: **NOT VERIFIED**.
 - Production remains **READ-ONLY/HOLD**.
+
+
+### 2026-11-08 — Verifier registry read boundary hardened
+- Tightened the deterministic verifier-access contract for migration `099_registry_event_assigned_verifier_read.sql`.
+- The assigned-verifier policy is explicitly required to be **SELECT-only**; the contract also preserves the existing no-write-authority boundary.
+- Current authority requirements remain: assigned identity, APPROVED verification, VERIFIED identity, and active verification permission.
+- Latest checkpoint commit: `b78442dc50b395e1be3b4987f3ce0d8329cc92d6`.
+- Exact-head CI: **NOT VERIFIED**.
+- Production remains **READ-ONLY/HOLD**.
