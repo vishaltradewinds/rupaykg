@@ -970,6 +970,88 @@ test("Shakti RLS field-sync evidence is identity/device/tenant isolated", { skip
 });
 
 
+test("Shakti assigned verifier registry read is scoped to approved active verifier", { skip: !enabled }, async () => {
+  const runtimePool = new Pool({ connectionString: process.env.DATABASE_URL });
+  const ownerPool = new Pool({ connectionString: process.env.RUPAYKG_TEST_OWNER_DATABASE_URL });
+  const suffix = randomBytes(8).toString("hex");
+  let orgA = "", orgB = "", verifierId = "", otherVerifierId = "", roleA = "", roleOther = "", membershipA = "", membershipOther = "";
+  let credentialA = "", verificationA = "", eventA = "";
+  try {
+    orgA = (await ownerPool.query<{ id: string }>("insert into organizations(name,organization_type,status) values($1,'test_fixture','VERIFIED') returning id", ["TEST-VERIFIER-A-" + suffix])).rows[0]!.id;
+    orgB = (await ownerPool.query<{ id: string }>("insert into organizations(name,organization_type,status) values($1,'test_fixture','VERIFIED') returning id", ["TEST-VERIFIER-B-" + suffix])).rows[0]!.id;
+    verifierId = (await ownerPool.query<{ id: string }>("insert into identities(external_subject,display_name,email,status) values($1,$2,$3,'VERIFIED') returning id", ["verifier:" + suffix, "Verifier " + suffix, "verifier-" + suffix + "@example.invalid"])).rows[0]!.id;
+    otherVerifierId = (await ownerPool.query<{ id: string }>("insert into identities(external_subject,display_name,email,status) values($1,$2,$3,'VERIFIED') returning id", ["other-verifier:" + suffix, "Other Verifier " + suffix, "other-verifier-" + suffix + "@example.invalid"])).rows[0]!.id;
+    roleA = (await ownerPool.query<{ id: string }>("insert into roles(organization_id,name,permissions,geography_scope) values($1,'verifier','["verification:approve"]'::jsonb,'[]'::jsonb) returning id", [orgA])).rows[0]!.id;
+    roleOther = (await ownerPool.query<{ id: string }>("insert into roles(organization_id,name,permissions,geography_scope) values($1,'verifier','["verification:approve"]'::jsonb,'[]'::jsonb) returning id", [orgB])).rows[0]!.id;
+    membershipA = (await ownerPool.query<{ id: string }>("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED') returning id", [verifierId, orgA, roleA])).rows[0]!.id;
+    membershipOther = (await ownerPool.query<{ id: string }>("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED') returning id", [otherVerifierId, orgB, roleOther])).rows[0]!.id;
+
+    credentialA = (await ownerPool.query<{ id: string }>("insert into credentials(issuer_organization_id,trust_root_id,status) values($1,$2,'ELIGIBLE') returning id", [orgA, "VERIFIER-TRUST-" + suffix])).rows[0]!.id;
+    verificationA = (await ownerPool.query<{ id: string }>("insert into verifications(credential_id,verifier_identity_id,decision) values($1,$2,'APPROVED') returning id", [credentialA, verifierId])).rows[0]!.id;
+    eventA = (await ownerPool.query<{ id: string }>("insert into registry_events(credential_id,event_type,to_owner_id,recorded_by_identity_id,event_hash) values($1,'ISSUED',$2,$3,$4) returning id", [credentialA, orgA, verifierId, "VERIFIER-EVENT-" + suffix])).rows[0]!.id;
+
+    const client = await runtimePool.connect();
+    try {
+      await client.query("begin");
+      await client.query("set local role rupaykg_app_runtime");
+      await client.query("select app.set_request_context($1,$2)", [verifierId, orgA]);
+      const visible = await client.query<{ id: string }>("select id from registry_events where id=$1", [eventA]);
+      assert.equal(visible.rows.length, 1);
+      await assert.rejects(() => client.query("insert into registry_events(credential_id,event_type,to_owner_id,recorded_by_identity_id,event_hash) values($1,'VERIFIER_WRITE',$2,$3,$4)", [credentialA, orgA, verifierId, "VERIFIER-WRITE-" + suffix]), /permission denied|row-level security|policy/i);
+      await client.query("rollback");
+    } catch (error) {
+      try { await client.query("rollback"); } catch {}
+      throw error;
+    } finally {
+      client.release();
+    }
+
+    await ownerPool.query("update identities set status='SUSPENDED' where id=$1", [verifierId]);
+    const suspendedClient = await runtimePool.connect();
+    try {
+      await suspendedClient.query("begin");
+      await suspendedClient.query("set local role rupaykg_app_runtime");
+      await assert.rejects(() => suspendedClient.query("select app.set_identity_context($1)", [verifierId]), /Identity is not active/i);
+      await suspendedClient.query("rollback");
+    } catch (error) {
+      try { await suspendedClient.query("rollback"); } catch {}
+      throw error;
+    } finally {
+      suspendedClient.release();
+    }
+
+    await ownerPool.query("update identities set status='VERIFIED' where id=$1", [verifierId]);
+    const otherClient = await runtimePool.connect();
+    try {
+      await otherClient.query("begin");
+      await otherClient.query("set local role rupaykg_app_runtime");
+      await otherClient.query("select app.set_request_context($1,$2)", [otherVerifierId, orgB]);
+      const hidden = await otherClient.query<{ id: string }>("select id from registry_events where id=$1", [eventA]);
+      assert.equal(hidden.rows.length, 0);
+      await otherClient.query("rollback");
+    } catch (error) {
+      try { await otherClient.query("rollback"); } catch {}
+      throw error;
+    } finally {
+      otherClient.release();
+    }
+  } finally {
+    if (eventA) await ownerPool.query("delete from registry_events where id=$1", [eventA]);
+    if (verificationA) await ownerPool.query("delete from verifications where id=$1", [verificationA]);
+    if (credentialA) await ownerPool.query("delete from credentials where id=$1", [credentialA]);
+    if (membershipOther) await ownerPool.query("delete from organization_memberships where id=$1", [membershipOther]);
+    if (membershipA) await ownerPool.query("delete from organization_memberships where id=$1", [membershipA]);
+    if (roleOther) await ownerPool.query("delete from roles where id=$1", [roleOther]);
+    if (roleA) await ownerPool.query("delete from roles where id=$1", [roleA]);
+    if (otherVerifierId) await ownerPool.query("delete from identities where id=$1", [otherVerifierId]);
+    if (verifierId) await ownerPool.query("delete from identities where id=$1", [verifierId]);
+    if (orgB) await ownerPool.query("delete from organizations where id=$1", [orgB]);
+    if (orgA) await ownerPool.query("delete from organizations where id=$1", [orgA]);
+    await runtimePool.end();
+    await ownerPool.end();
+  }
+});
+
 test("Shakti credential lifecycle cannot commit without matching registry provenance", { skip: !enabled }, async () => {
   const runtimePool = new Pool({ connectionString: process.env.DATABASE_URL });
   const ownerPool = new Pool({ connectionString: process.env.RUPAYKG_TEST_OWNER_DATABASE_URL });
