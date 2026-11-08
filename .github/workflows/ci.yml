@@ -101,6 +101,20 @@ jobs:
         run: node scripts/test-shakti-platform-admin-authorization-contract.mjs
       - name: Run multi-party authorization contract
         run: node scripts/test-shakti-multi-party-authorization-contract.mjs
+      - name: Run registry tenant-boundary contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          registry="apps/src/registry-routes.ts"
+          test "$(grep -c 'withTenantTransaction(pool' "$registry")" -ge 8
+          ! grep -q 'pool\\.query\\|pool\\.connect' "$registry"
+          for route in "/api/v1/settlements" "/api/v1/settlements/:settlementId/authorize" "/api/v1/settlements/:settlementId/settle" "/api/v1/settlements/:settlementId/confirm"; do
+            grep -Fq "app.post(\"$route\"" "$registry"
+          done
+          grep -Fq 'canActForOrganization(auth,payerId)' "$registry"
+          grep -Fq 'canActForOrganization(auth,payeeId)' "$registry"
+          grep -Fq 'payerId!==currentOwner' "$registry"
+          echo "Shakti registry tenant-boundary contract PASSED: registry mutations remain transaction-bound and settlement authorization remains bilateral."
       - name: Run tests including disposable PostgreSQL acceptance
         env:
           DATABASE_URL: postgresql://rupaykg_app_runtime:ci-runtime-only-password@localhost:5432/rupaykg
