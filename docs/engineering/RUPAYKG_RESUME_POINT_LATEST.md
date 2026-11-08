@@ -776,3 +776,10 @@
 - Checkpoint: `e622d14f7e49cd2f30bbcb8b6c3abd05f45907b0`.
 - Exact-head CI: **NOT VERIFIED**.
 - Production remains **READ-ONLY/HOLD**.
+
+### 2026-11-08 — Assigned-verifier write-authority negative gate
+- Strengthened the deterministic verifier contract to fail closed if migration 099 introduces INSERT/UPDATE/DELETE policy or runtime DML grants, or embeds direct registry-event writes.
+- This preserves the verifier helper as read-only access only.
+- Checkpoint: `6a12789edfb18d8a3513c9dc4c5ed82f97d8c44c`.
+- Exact-head CI: **NOT VERIFIED**.
+- Production remains **READ-ONLY/HOLD**.
