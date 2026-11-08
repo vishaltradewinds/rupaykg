@@ -679,3 +679,12 @@
 - Latest checkpoint commit: `482fafa507b4cec366f6fe39be2d728415a2164f`.
 - Exact-head CI: **NOT VERIFIED**.
 - Production remains **READ-ONLY/HOLD**.
+
+
+### 2026-11-08 — Verifier acceptance semantics corrected
+- Hardened the assigned-verifier registry-read integration fixture so the approved verifier is no longer also the registry-event recorder.
+- Added a separate verified issuer/operator identity and membership in the owner organization; the lifecycle event is recorded by that issuer identity.
+- The verifier remains read-only in the acceptance path and is still explicitly denied registry-event insertion.
+- Latest checkpoint commit: `612bf9acbbfc904262ff78637c1d1c98d2b59f57`.
+- Exact-head CI: **NOT VERIFIED**.
+- Production remains **READ-ONLY/HOLD**.
