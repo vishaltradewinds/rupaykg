@@ -1,4 +1,4 @@
-name: OTEL Failure Isolation Acceptance
+name: OTEL Failure Isolation Acceptance\n\n# Production collector outage injection remains an operator-controlled gate.\n# This workflow proves the application and live PostgreSQL transaction path independently.
 
 on:
   workflow_dispatch:
