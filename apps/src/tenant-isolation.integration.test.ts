@@ -1048,6 +1048,10 @@ test("Shakti assigned verifier registry read is scoped to approved active verifi
       await client.query("select app.set_request_context($1,$2)", [verifierId, orgA]);
       const visible = await client.query<{ id: string }>("select id from registry_events where id=$1", [eventA]);
       assert.equal(visible.rows.length, 1);
+      await ownerPool.query("update verifications set decision='REJECTED' where id=$1", [verificationA]);
+      const hiddenAfterDecisionRevocation = await client.query<{ id: string }>("select id from registry_events where id=$1", [eventA]);
+      assert.equal(hiddenAfterDecisionRevocation.rows.length, 0);
+      await ownerPool.query("update verifications set decision='APPROVED' where id=$1", [verificationA]);
       await assert.rejects(() => client.query("insert into registry_events(credential_id,event_type,to_owner_id,recorded_by_identity_id,event_hash) values($1,'VERIFIER_WRITE',$2,$3,$4)", [credentialA, orgA, verifierId, "VERIFIER-WRITE-" + suffix]), /permission denied|row-level security|policy/i);
       await client.query("rollback");
     } catch (error) {
