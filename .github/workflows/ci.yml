@@ -151,8 +151,10 @@ jobs:
         run: node scripts/test-shakti-settlement-lifecycle-active-tenant-contract.mjs
       - name: Run Shakti settlement lifecycle integrity contract
         run: node scripts/test-shakti-settlement-lifecycle-integrity-contract.mjs
-      - node scripts/test-shakti-settlement-verified-party-boundary-contract.mjs
-      - node scripts/test-shakti-verified-organization-transition-lock-contract.mjs
+      - name: Run Shakti settlement verified-party boundary contract
+        run: node scripts/test-shakti-settlement-verified-party-boundary-contract.mjs
+      - name: Run Shakti verified-organization transition-lock contract
+        run: node scripts/test-shakti-verified-organization-transition-lock-contract.mjs
       - name: Run Shakti settlement confirmation-reference contract
         run: node scripts/test-shakti-settlement-confirmation-reference-contract.mjs
       - name: Run Shakti settlement authorization-reference contract
@@ -181,8 +183,10 @@ jobs:
         run: node scripts/test-shakti-field-sync-idempotency-replay-contract.mjs
       - name: Run Shakti field-sync append-only integrity contract
         run: node scripts/test-shakti-field-sync-append-only-integrity-contract.mjs
-      - node scripts/test-shakti-field-sync-concurrency-conflict-contract.mjs
-      - node scripts/test-shakti-field-device-enrollment-race-contract.mjs
+      - name: Run Shakti field-sync concurrency-conflict contract
+        run: node scripts/test-shakti-field-sync-concurrency-conflict-contract.mjs
+      - name: Run Shakti field-device enrollment-race contract
+        run: node scripts/test-shakti-field-device-enrollment-race-contract.mjs
       - name: Run Shakti context pool isolation contract
         run: node scripts/test-shakti-context-pool-isolation-contract.mjs
       - name: Run Shakti RLS write contract
