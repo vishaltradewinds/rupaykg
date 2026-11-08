@@ -556,3 +556,115 @@ test("Shakti RLS carbon calculations are tenant-isolated on parent activity scop
     await runtimePool.end(); await ownerPool.end();
   }
 });
+
+
+test("Shakti RLS EPR obligations are tenant-isolated for insert, read and update", { skip: !enabled }, async () => {
+  const runtimePool = new Pool({ connectionString: process.env.DATABASE_URL });
+  const ownerPool = new Pool({ connectionString: process.env.RUPAYKG_TEST_OWNER_DATABASE_URL });
+  const suffix = randomBytes(8).toString("hex");
+  let identityId = "", organizationA = "", organizationB = "", roleA = "", membershipA = "", obligationA = "", obligationB = "", schemeId = "", eprObligationA = "", eprObligationB = "";
+  try {
+    const runtimeRole = (await ownerPool.query<{ exists: boolean }>(
+      "select exists(select 1 from pg_roles where rolname='rupaykg_app_runtime') as exists",
+    )).rows[0]!.exists;
+    if (!runtimeRole) throw new Error("RLS runtime role is not provisioned in the test database");
+
+    organizationA = (await ownerPool.query<{ id: string }>(
+      "insert into organizations(name,organization_type,status) values($1,'test_fixture','VERIFIED') returning id",
+      ["TEST-RLS-EPR-A-" + suffix],
+    )).rows[0]!.id;
+    organizationB = (await ownerPool.query<{ id: string }>(
+      "insert into organizations(name,organization_type,status) values($1,'test_fixture','VERIFIED') returning id",
+      ["TEST-RLS-EPR-B-" + suffix],
+    )).rows[0]!.id;
+    identityId = (await ownerPool.query<{ id: string }>(
+      "insert into identities(external_subject,display_name,email,status) values($1,$2,$3,'VERIFIED') returning id",
+      ["rls-epr:" + suffix, "RLS EPR " + suffix, "rls-epr-" + suffix + "@example.invalid"],
+    )).rows[0]!.id;
+    roleA = (await ownerPool.query<{ id: string }>(
+      "insert into roles(organization_id,name,permissions,geography_scope) values($1,'tenant_test_role','[\"activity:write\"]'::jsonb,'[]'::jsonb) returning id",
+      [organizationA],
+    )).rows[0]!.id;
+    membershipA = (await ownerPool.query<{ id: string }>(
+      "insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED') returning id",
+      [identityId, organizationA, roleA],
+    )).rows[0]!.id;
+
+    schemeId = (await ownerPool.query<{ id: string }>(
+      "insert into epr_schemes(code,name,authority,status,metadata) values($1,'RLS EPR Test Scheme','TEST_AUTHORITY','VERIFIED','{}'::jsonb) returning id",
+      ["RLS-EPR-" + suffix],
+    )).rows[0]!.id;
+    obligationA = (await ownerPool.query<{ id: string }>(
+      "insert into obligations(organization_id,obligation_type,period_start,period_end,required_quantity,status) values($1,'RLS_EPR','2026-01-01','2026-12-31',10,'OPEN') returning id",
+      [organizationA],
+    )).rows[0]!.id;
+    obligationB = (await ownerPool.query<{ id: string }>(
+      "insert into obligations(organization_id,obligation_type,period_start,period_end,required_quantity,status) values($1,'RLS_EPR','2026-01-01','2026-12-31',20,'OPEN') returning id",
+      [organizationB],
+    )).rows[0]!.id;
+    eprObligationA = (await ownerPool.query<{ id: string }>(
+      "insert into epr_obligations(obligation_id,scheme_id,obligated_organization_id,category_code,target_quantity,fulfilled_quantity,status) values($1,$2,$3,'RLS',10,0,'OPEN') returning id",
+      [obligationA, schemeId, organizationA],
+    )).rows[0]!.id;
+    eprObligationB = (await ownerPool.query<{ id: string }>(
+      "insert into epr_obligations(obligation_id,scheme_id,obligated_organization_id,category_code,target_quantity,fulfilled_quantity,status) values($1,$2,$3,'RLS',20,0,'OPEN') returning id",
+      [obligationB, schemeId, organizationB],
+    )).rows[0]!.id;
+
+    const client = await runtimePool.connect();
+    try {
+      await client.query("begin");
+      await client.query("set local role rupaykg_app_runtime");
+      await client.query("select app.set_request_context($1,$2)", [identityId, organizationA]);
+
+      const visible = await client.query<{ id: string; obligated_organization_id: string }>(
+        "select id, obligated_organization_id from epr_obligations where id in ($1,$2) order by id",
+        [eprObligationA, eprObligationB],
+      );
+      assert.equal(visible.rows.length, 1);
+      assert.equal(visible.rows[0]!.id, eprObligationA);
+      assert.equal(visible.rows[0]!.obligated_organization_id, organizationA);
+
+      const updated = await client.query<{ id: string; fulfilled_quantity: string }>(
+        "update epr_obligations set fulfilled_quantity=3 where id=$1 returning id, fulfilled_quantity",
+        [eprObligationA],
+      );
+      assert.equal(updated.rows[0]!.id, eprObligationA);
+      assert.equal(updated.rows[0]!.fulfilled_quantity, "3");
+
+      await assert.rejects(
+        () => client.query(
+          "insert into epr_obligations(obligation_id,scheme_id,obligated_organization_id,category_code,target_quantity,fulfilled_quantity,status) values($1,$2,$3,'RLS_CROSS',20,0,'OPEN')",
+          [obligationB, schemeId, organizationB],
+        ),
+        /row-level security|policy/i,
+      );
+      await assert.rejects(
+        () => client.query(
+          "update epr_obligations set fulfilled_quantity=4 where id=$1",
+          [eprObligationB],
+        ),
+        /row-level security|policy/i,
+      );
+      await client.query("rollback");
+    } catch (error) {
+      try { await client.query("rollback"); } catch {}
+      throw error;
+    } finally {
+      client.release();
+    }
+  } finally {
+    if (eprObligationA) await ownerPool.query("delete from epr_obligations where id=$1", [eprObligationA]);
+    if (eprObligationB) await ownerPool.query("delete from epr_obligations where id=$1", [eprObligationB]);
+    if (obligationA) await ownerPool.query("delete from obligations where id=$1", [obligationA]);
+    if (obligationB) await ownerPool.query("delete from obligations where id=$1", [obligationB]);
+    if (schemeId) await ownerPool.query("delete from epr_schemes where id=$1", [schemeId]);
+    if (membershipA) await ownerPool.query("delete from organization_memberships where id=$1", [membershipA]);
+    if (roleA) await ownerPool.query("delete from roles where id=$1", [roleA]);
+    if (identityId) await ownerPool.query("delete from identities where id=$1", [identityId]);
+    if (organizationA) await ownerPool.query("delete from organizations where id=$1", [organizationA]);
+    if (organizationB) await ownerPool.query("delete from organizations where id=$1", [organizationB]);
+    await runtimePool.end();
+    await ownerPool.end();
+  }
+});
