@@ -7,6 +7,18 @@
 revoke create on schema public from public;
 revoke create on schema app from public;
 
+-- PostgreSQL grants EXECUTE on newly-created functions to PUBLIC by default.
+-- Remove that default for the migration owner so future SECURITY DEFINER
+-- functions do not reopen the PUBLIC execution boundary after this migration.
+do $shakti$
+begin
+  execute format(
+    'alter default privileges for role %I revoke execute on functions from public',
+    current_user
+  );
+end
+$shakti$;
+
 do $shakti$
 declare
   fn record;
