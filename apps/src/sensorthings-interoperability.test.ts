@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mapRupayKgMeasurementToSensorThings } from "./sensorthings-interoperability.js";
+import { mapRupayKgMeasurementToSensorThings, validateSensorThingsDocument } from "./sensorthings-interoperability.js";
 
 test("maps a RupayKg measurement to SensorThings entities without changing the source value", () => {
   const doc = mapRupayKgMeasurementToSensorThings({
@@ -29,6 +29,7 @@ test("maps a RupayKg measurement to SensorThings entities without changing the s
   assert.equal(doc.observation.datastream["@iot.id"], "rupaykg:datastream:EDGE-001:mass-kg");
   assert.equal(doc.datastream.observedProperty["@iot.id"], "rupaykg:observed-property:mass-kg");
   assert.deepEqual(doc.location?.location.coordinates, [77.4126, 23.2599]);
+  assert.deepEqual(validateSensorThingsDocument(doc), { ok: true });
 });
 
 test("rejects incomplete or invalid measurement identity", () => {
@@ -52,4 +53,28 @@ test("rejects incomplete or invalid measurement identity", () => {
     phenomenonTime: "2026-11-08T09:00:00Z",
     latitude: Number.NaN,
   }), /latitude/);
+});
+
+
+test("rejects broken SensorThings relationship graph", () => {
+  const doc = mapRupayKgMeasurementToSensorThings({
+    deviceId: "EDGE-002",
+    measurementId: "measurement-002",
+    organizationId: "org-002",
+    observedProperty: {
+      id: "mass-kg",
+      name: "Mass",
+      definition: "urn:mass-kg",
+    },
+    value: 10,
+    unit: { name: "kilogram", symbol: "kg", definition: "urn:kg" },
+    phenomenonTime: "2026-11-08T09:00:00Z",
+  });
+
+  doc.observation.datastream["@iot.id"] = "rupaykg:datastream:tampered";
+
+  assert.deepEqual(validateSensorThingsDocument(doc), {
+    ok: false,
+    error: "observation identity, datastream relationship and phenomenonTime are required",
+  });
 });
