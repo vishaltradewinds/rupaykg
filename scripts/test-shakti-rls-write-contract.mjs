@@ -14,6 +14,9 @@ for (const table of protectedTables) {
   if (!test.includes("insert into " + table)) failures.push("RLS write coverage missing for " + table);
 }
 if (!test.includes("row-level security|policy")) failures.push("cross-tenant RLS rejection assertions missing");
+if (!test.includes("update measurements set value=4 where id=$1")) failures.push("measurement cross-tenant update rejection coverage missing");
+if (!test.includes("update evidence set status='VERIFIED' where id=$1")) failures.push("evidence same-tenant update coverage missing");
+if (!test.includes("update carbon_calculations set result='2' where id=$1")) failures.push("carbon calculation same-tenant update coverage missing");
 if (!test.includes("epr_obligations") || !test.includes("update epr_obligations")) failures.push("EPR obligation RLS mutation coverage missing");
 if (failures.length) {
   console.error("Shakti RLS write contract FAILED:");
