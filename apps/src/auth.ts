@@ -66,7 +66,7 @@ export async function authenticate(request: FastifyRequest, pool: Pool | null): 
 
 export function canActForOrganization(auth: AuthContext, organizationId: string): boolean {
   if (!organizationId || auth.memberships.length === 0) return false;
-  return auth.memberships.some((m) => m.organization_id === organizationId)
+  return auth.memberships.some((m) => m.status === "VERIFIED" && m.organization_id === organizationId)
     && (auth.bilateralOrganizationScope || !auth.activeOrganizationId || auth.activeOrganizationId === organizationId);
 }
 
