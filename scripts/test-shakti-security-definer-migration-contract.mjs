@@ -18,9 +18,9 @@ for (const [name, pattern] of requiredBoundaryControls) {
 }
 
 const requiredDynamicRevokeControls = [
-  ["SECURITY DEFINER catalog scan", /select\\s+n\\.nspname\\s+as\\s+schema_name[\\s\\S]*?p\\.prosecdef[\\s\\S]*?n\\.nspname\\s*=\\s*['"]app['"]/i],
-  ["SECURITY DEFINER identity-argument extraction", /pg_get_function_identity_arguments\\(p\\.oid\\)/i],
-  ["SECURITY DEFINER dynamic revoke uses identity arguments", /revoke\\s+all\\s+on\\s+function\\s+%I\\.%I\\(%s\\)\\s+from\\s+public/i],
+  ["SECURITY DEFINER catalog scan", /select\s+n\.nspname\s+as\s+schema_name[\s\S]*?p\.prosecdef[\s\S]*?n\.nspname\s*=\s*['"]app['"]/i],
+  ["SECURITY DEFINER identity-argument extraction", /pg_get_function_identity_arguments\(p\.oid\)/i],
+  ["SECURITY DEFINER dynamic revoke uses identity arguments", /revoke\s+all\s+on\s+function\s+%I\.%I\(%s\)\s+from\s+public/i],
 ];
 for (const [name, pattern] of requiredDynamicRevokeControls) {
   if (!pattern.test(boundaryMigration)) failures.push("101_security_definer_schema_boundary.sql: missing " + name);
