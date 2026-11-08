@@ -37,6 +37,9 @@ if (!/withTenantTransaction/.test(tenantDb) || !/set_request_context/.test(tenan
 if (!/auth\.activeOrganizationId/.test(tenantDb)) {
   failures.push("Tenant transaction invariant missing: active organization context is required.");
 }
+if (!/auth\.memberships\.some\(\(m\) => m\.status === "VERIFIED" && m\.organization_id === auth\.activeOrganizationId\)/.test(tenantDb)) {
+  failures.push("Tenant transaction invariant missing: active organization must have verified membership.");
+}
 if (!/auth\.memberships\.length\s*===\s*0/.test(auth) || !/!organizationId/.test(auth) || !/m\.status\s*===\s*"VERIFIED"/.test(auth)) {
   failures.push("Authorization fail-closed invariant missing for empty organization/membership context.");
 }
