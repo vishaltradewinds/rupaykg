@@ -2,9 +2,6 @@ name: CI
 
 on:
   workflow_dispatch:
-
-permissions:
-  contents: read
   push:
     branches: [main, cto/20261107-protected-migration-ci]
   pull_request:
