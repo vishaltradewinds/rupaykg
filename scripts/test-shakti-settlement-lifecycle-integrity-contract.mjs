@@ -15,6 +15,7 @@ const required = [
   "reconciliationReference",
   "confirmation_reference=$1 and id<>$2",
   "reconciliation_reference=$1 and id<>$2",
+  "confirmation_reference=$2,reconciliation_reference=$3",
   "insert into settlement_events",
   "'AUTHORIZED'",
   "'EXECUTING'",
