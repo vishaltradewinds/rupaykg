@@ -29,6 +29,12 @@
 - Re-read the committed contract after the change.
 - No production database changes.
 
+## 2026-11-08 — Protected migration inventory reconciliation
+- Strengthened `scripts/test-shakti-migration-integrity-contract.mjs` to bind the protected migration inventory across both `apps/src/migrate.ts` and `.github/workflows/ci.yml`.
+- This closes a drift class where the migration runner and CI protected-migration gate could diverge silently.
+- Re-read the committed contract after the change.
+- No production database changes.
+
 ## Exact current engineering heads
 - PR #331: 50e463df30f18a30e6a192da447a451d1816ea55
 - PR #332: a636a26e81cdaac88c69247e333b88c64a7ececa
