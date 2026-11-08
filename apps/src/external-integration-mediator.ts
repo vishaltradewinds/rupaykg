@@ -1,4 +1,5 @@
 import type { Pool } from "pg";
+import { trace } from "@opentelemetry/api";
 import { validateIntegrationEnvelope, type ExternalIntegrationEnvelope } from "./external-integration-contract.js";
 import { withTenantTransaction } from "./tenant-db.js";
 import type { AuthContext } from "./auth.js";
@@ -18,7 +19,12 @@ export async function acceptExternalIntegrationMessage(
     throw Object.assign(new Error("Integration actor identity does not match the authenticated identity"), { code: "ACTOR_FORBIDDEN" });
   }
 
-  return withTenantTransaction(pool, auth, async client => {
+  const tracer = trace.getTracer("rupaykg-integrations");
+  return tracer.startActiveSpan("rupaykg.external_integration.accept", async span => {
+    span.setAttribute("rupaykg.operation", "external_integration_accept");
+    span.setAttribute("rupaykg.authoritative_mutation", true);
+    try {
+      return await withTenantTransaction(pool, auth, async client => {
     const existing = await client.query<{ id: string; status: string; payload: unknown; schema: string; kind: string; target_system: string; source_system: string }>(
       "select id,status,payload,schema,kind,target_system,source_system from external_integration_messages where integration_id=$1 and organization_id=$2 and idempotency_key=$3 for update",
       [envelope.integrationId, envelope.organizationId, envelope.idempotencyKey],
@@ -59,5 +65,12 @@ export async function acceptExternalIntegrationMessage(
     );
 
     return { accepted: true, duplicate: false, messageId: inserted.rows[0]!.id };
+      });
+    } catch (error) {
+      span.recordException(error instanceof Error ? error : new Error(String(error)));
+      throw error;
+    } finally {
+      span.end();
+    }
   });
 }
