@@ -117,6 +117,8 @@ jobs:
           echo "Shakti registry tenant-boundary contract PASSED: registry mutations remain transaction-bound and settlement authorization remains bilateral."
       - name: Run Shakti onboarding identity-boundary contract
         run: node scripts/test-shakti-onboarding-identity-boundary-contract.mjs
+      - name: Run Shakti execution-context grant reconciliation contract
+        run: node scripts/test-shakti-execution-context-grants-contract.mjs
       - name: Run tests including disposable PostgreSQL acceptance
         env:
           DATABASE_URL: postgresql://rupaykg_app_runtime:ci-runtime-only-password@localhost:5432/rupaykg
