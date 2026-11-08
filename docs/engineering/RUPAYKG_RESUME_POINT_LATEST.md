@@ -7,6 +7,14 @@
 - Secondary evidence repository: rupaykg-aistudio
 - Production Neon remains READ-ONLY / HOLD.
 
+## 2026-11-08 — SECURITY DEFINER runtime-function contract scoping
+- Reworked `scripts/test-shakti-security-definer-migration-contract.mjs` so the six approved runtime SECURITY DEFINER functions are matched by their actual function signature and scoped function block, rather than a broad migration-wide regex.
+- This removes a false-positive class where a function name could appear before a different function's `SECURITY DEFINER` clause and still satisfy the contract.
+- Re-read the authoritative migration definitions for all six runtime functions and confirmed the expected signatures are present with `SECURITY DEFINER` and the approved `search_path = public, app` boundary.
+- Code checkpoint: `d66ebebf7d65b5b606dccbe7a0f70a87fe05599b`.
+- Exact-head GitHub Actions workflow runs: `[]`; combined statuses: `[]`. CI is **NOT VERIFIED**.
+- Production remains **READ-ONLY/HOLD**; no production DDL/DML, role/grant, RLS activation, deployment, or certification performed.
+
 ## 2026-11-08 — SECURITY DEFINER boundary hardening
 - Added protected migration `101_security_definer_schema_boundary.sql`.
 - Revokes `CREATE` on `public` and `app` schemas from `PUBLIC` so untrusted callers cannot inject objects into SECURITY DEFINER search paths.
