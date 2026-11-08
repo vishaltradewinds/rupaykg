@@ -44,3 +44,8 @@ The transport-neutral span contract now includes deterministic validation for W3
 
 
 See `ops/observability/OTEL_DEPLOYMENT_CONTRACT.md` for the production dependency, collector, correlation, failure-behaviour and acceptance evidence contract.
+
+
+## Dependency compatibility review
+
+The OpenTelemetry dependency review is recorded in `ops/observability/OTEL_DEPENDENCY_REVIEW.md`. Production SDK adoption remains blocked until the deployed Node.js runtime version, pinned SDK/exporter versions, license review, ESM startup ordering, OTLP configuration and runtime evidence are proven.
