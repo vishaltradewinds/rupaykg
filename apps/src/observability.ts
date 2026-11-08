@@ -37,7 +37,7 @@ export type RuntimeAttestation = {
 };
 
 export function assertSupportedNodeRuntime(): void {
-  const match = /^v(\\d+)\\.(\\d+)\\.(\\d+)/.exec(process.version);
+  const match = /^v(\d+)\.(\d+)\.(\d+)/.exec(process.version);
   if (!match) throw new Error("Unable to determine Node.js runtime version");
   const major = Number(match[1]);
   const minor = Number(match[2]);
