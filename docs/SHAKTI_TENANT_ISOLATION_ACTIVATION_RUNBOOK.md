@@ -39,13 +39,14 @@ Expected runtime result:
 - `runtime_role_owns_no_protected_tables = true`
 
 7. Run authenticated tenant transactions through the application and verify `app.current_identity_id()` and `app.current_organization_id()`.
-8. Verify the authentication/bootstrap path is RLS-compatible before activation. Run `ops/tenant-isolation/VERIFY_AUTH_BOOTSTRAP.sql` using the exact intended application runtime login and preserve its output. The ordinary application runtime must not depend on unrestricted pre-context reads of `organization_memberships`; authentication must use the explicitly governed `app.authenticate_bearer_session(text)` SECURITY DEFINER bootstrap path (or another separately governed authentication database role). The bootstrap function must have an explicit `search_path`, public EXECUTE revoked, runtime EXECUTE granted, and must return only verified memberships attached to the presented bearer session. Do not enable RLS while bearer authentication still requires an unscoped runtime query of the protected membership table.
-9. Run the authentication bootstrap contract tests and execute the tenant-isolation integration suite with `RUPAYKG_RUN_DB_INTEGRATION_TESTS=1`.
-10. Confirm organization A cannot read or mutate organization B state.
-11. Only after steps 1–10 pass, execute `ops/tenant-isolation/ACTIVATE_RLS.sql` using the controlled migration/DDL role, not the application runtime role. The script is fail-closed and aborts before RLS changes if the executing role is SUPERUSER, BYPASSRLS, the application runtime role, or does not own the protected tenant tables.
-12. Execute `ops/tenant-isolation/VERIFY_RLS_NEGATIVE_TEST.sql` and preserve the PASS output as acceptance evidence. The test must prove tenant A cannot read or mutate tenant B and is transactional/rollback-safe.
-13. Repeat the complete application runtime acceptance suite, including cross-tenant negative tests.
-14. Record database role, migration fingerprint, preflight output, activation output, negative-test output, application test evidence, deployment commit and rollback procedure.
+8. Verify the controlled 097-099 migration result before activation. Preserve the controlled migration evidence artifact and confirm the exact filename/version mapping for 097-099, the post-migration runtime security contract, and the post-migration assertion that RLS remains disabled. Do not proceed if any of these gates fail.
+9. Verify the authentication/bootstrap path is RLS-compatible before activation. Run `ops/tenant-isolation/VERIFY_AUTH_BOOTSTRAP.sql` using the exact intended application runtime login and preserve its output. The ordinary application runtime must not depend on unrestricted pre-context reads of `organization_memberships`; authentication must use the explicitly governed `app.authenticate_bearer_session(text)` SECURITY DEFINER bootstrap path (or another separately governed authentication database role). The bootstrap function must have an explicit `search_path`, public EXECUTE revoked, runtime EXECUTE granted, and must return only verified memberships attached to the presented bearer session. Do not enable RLS while bearer authentication still requires an unscoped runtime query of the protected membership table.
+10. Run the authentication bootstrap contract tests and execute the tenant-isolation integration suite with `RUPAYKG_RUN_DB_INTEGRATION_TESTS=1`.
+11. Confirm organization A cannot read or mutate organization B state.
+12. Only after steps 1–11 pass, execute `ops/tenant-isolation/ACTIVATE_RLS.sql` using the controlled migration/DDL role, not the application runtime role. The script is fail-closed and aborts before RLS changes if the executing role is SUPERUSER, BYPASSRLS, the application runtime role, or does not own the protected tenant tables.
+13. Execute `ops/tenant-isolation/VERIFY_RLS_NEGATIVE_TEST.sql and preserve the PASS output as acceptance evidence. The test must prove tenant A cannot read or mutate tenant B and is transactional/rollback-safe.
+14. Repeat the complete application runtime acceptance suite, including cross-tenant negative tests.
+15. Record database role, migration fingerprint, preflight output, activation output, negative-test output, application test evidence, deployment commit and rollback procedure.
 
 ## Rollback
 
