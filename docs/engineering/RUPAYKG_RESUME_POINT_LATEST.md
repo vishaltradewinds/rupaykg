@@ -818,3 +818,10 @@
 - Checkpoint: `c84fd2272799673a4070a1632a7d644e023b0831`.
 - Exact-head CI: **NOT VERIFIED**.
 - Production remains **READ-ONLY/HOLD**.
+
+### 2026-11-08 — Operational invariant coverage extended
+- Found a coverage gap in `test-shakti-operational-invariants.mjs`: its protected-migration identity list stopped at migration 090 even though CI and the migration gate now protect 091–100.
+- Added explicit invariant bindings for protected migrations 091 through 100, including settlement RLS/lifecycle, registry provenance controls, credential RLS/immutability/atomicity, field-sync RLS, assigned-verifier read, and runtime credential column scope.
+- Checkpoint: `470f95a726e9738523ae9179a43c7da74bff456a`.
+- Exact-head CI: **NOT VERIFIED**.
+- Production remains **READ-ONLY/HOLD**.
