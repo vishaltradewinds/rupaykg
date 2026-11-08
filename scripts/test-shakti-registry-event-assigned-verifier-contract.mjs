@@ -6,6 +6,8 @@ const required = [
   "security definer",
   "v.verifier_identity_id = app.current_identity_id()",
   "v.decision = 'APPROVED'",
+  "i.status = 'VERIFIED'",
+  "has_verification_permission(v.verifier_identity_id)",
   "revoke all on function app.is_assigned_approved_verifier(uuid) from public",
   "grant execute on function app.is_assigned_approved_verifier(uuid) to rupaykg_app_runtime",
   "create policy shakti_registry_events_select_assigned_verifier",
