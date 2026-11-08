@@ -12,8 +12,9 @@ All must be true before activation:
 2. The effective runtime role is **not** SUPERUSER and does **not** have BYPASSRLS.
 3. Authentication resolves a verified identity and active organization.
 4. Every tenant-scoped transaction executes `app.set_request_context(identity_id, organization_id)` before business-state access.
-5. Administrative operations use explicit privileged paths and are not performed through the ordinary tenant runtime role.
-6. Cross-tenant negative tests pass.
+5. The runtime role has the required DML privileges on protected tables; RLS remains the row-level boundary.
+6. Administrative operations use explicit privileged paths and are not performed through the ordinary tenant runtime role.
+7. Cross-tenant negative tests pass.
 
 ## Activation sequence
 
