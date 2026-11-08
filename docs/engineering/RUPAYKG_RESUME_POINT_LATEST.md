@@ -471,3 +471,13 @@
 - Latest checkpoint commit: `90a5d3e25fb2eab03efb71a145b258238d04a03a`.
 - Exact-head CI: **NOT VERIFIED**.
 - Production remains **READ-ONLY/HOLD**.
+
+
+### 2026-11-08 — Credential tenant boundary
+- Added protected migration `095_credentials_tenant_rls.sql`.
+- Credential reads are now scoped to the issuer/current authoritative registry owner; issuance is scoped to the active issuer organization; updates require current authoritative owner context.
+- Runtime credential DELETE is explicitly revoked.
+- Added deterministic Shakti credential RLS contract and CI protected-migration gate.
+- Latest checkpoint commit: `719f5908d1f9476d9566b8b7711095a433ed7cf6`.
+- Exact-head CI: **NOT VERIFIED**.
+- Production remains **READ-ONLY/HOLD**.
