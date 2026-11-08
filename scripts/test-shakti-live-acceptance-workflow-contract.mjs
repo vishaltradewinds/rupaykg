@@ -47,6 +47,11 @@ if (!/EXPECTED_PRE_MIGRATION_VERSION: "096"/.test(controlledMigration)
  || !/count\(\*\).*097.*098.*099/.test(controlledMigration)) {
   failures.push("Controlled production migration must lock the cutover to the expected 096 baseline with no prior 097-099 application.");
 }
+if (!/current_user = 'rupaykg_ddl_migration'/.test(ddlPreflight)
+ || !/current_user = session_user/.test(ddlPreflight)
+ || !/pg_has_role\(current_user, 'rupaykg_app_runtime', 'member'\)/.test(ddlPreflight)) {
+  failures.push("DDL preflight must pin execution to the dedicated login role and prove governed runtime-role membership for the negative acceptance path.");
+}
 if (!/Verify controlled DDL role owns protected tenant tables/.test(controlledMigration)
  || !/ddl_owner_assertion/.test(controlledMigration)
  || !/\)=17 then 1 else 0 end/.test(controlledMigration)) {
