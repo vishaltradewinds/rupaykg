@@ -38,8 +38,8 @@ create or replace function app.set_request_context(
 returns void
 language plpgsql
 security definer
-set search_path = public, app
-as $$
+set search_path = pg_catalog, public, app
+as $
 begin
   if p_identity_id is null or p_organization_id is null then
     raise exception 'Tenant request context requires identity_id and organization_id';
@@ -80,4 +80,5 @@ end $$;
 grant usage on schema app to rupaykg_app_runtime;
 grant execute on function app.current_identity_id() to rupaykg_app_runtime;
 grant execute on function app.current_organization_id() to rupaykg_app_runtime;
+revoke all on function app.set_request_context(uuid,uuid) from public;
 grant execute on function app.set_request_context(uuid,uuid) to rupaykg_app_runtime;
