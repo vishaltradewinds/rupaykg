@@ -386,3 +386,14 @@
 - Exact-head CI remains **NOT VERIFIED** until a GitHub Actions run is observed for this head.
 - Production Neon/RLS/deployment remains **READ-ONLY/HOLD**.
 - Next action: continue protected-core/multi-party behavioral acceptance and verify the resulting exact-head CI evidence before any production-state change.
+
+
+### 2026-11-08 — Settlement tenant-boundary RLS hardening
+- Added protected migration `091_settlement_tenant_rls.sql`.
+- Settlement rows: bilateral SELECT for payer/payee; INSERT/UPDATE restricted to payer tenant.
+- Settlement events: bilateral SELECT; INSERT restricted to payer tenant; no runtime UPDATE/DELETE grants.
+- Added deterministic settlement tenant-RLS contract and wired it into CI.
+- Added disposable PostgreSQL behavioral acceptance covering bilateral settlement visibility, payer-only mutation, cross-tenant event rejection, and append-only event protection.
+- Protected migration gate and CI RLS assertions now include `settlements` and `settlement_events`.
+- Latest code head: `37109b07d45c2f421c5bfe5b8ff6e66e3ac42d8c`.
+- CI exact-head verification: pending; production remains READ-ONLY/HOLD.
