@@ -39,7 +39,7 @@ A status must not be inferred from legacy/reference repositories.
 | Ecosystem | CPCB/EPR integration | CPCB/EPR routes and migrations exist | AMBER |
 | Ecosystem | BEE/CCTS integration | CCTS methodology registry and carbon governance exist | AMBER |
 | Ecosystem | External system acceptance | Provider-neutral adapter conformance harness now verifies correlation, failure isolation and fail-closed behaviour; provider-specific remote conformance and production acceptance remain open | OPEN |
-| Ecosystem | OGC SensorThings interoperability | Deterministic mapper, tenant-scoped read-only PostgreSQL export and route-level authorization/negative-test coverage implemented; actual target SensorThings consumer/conformance and production acceptance remain open | AMBER |
+| Ecosystem | OGC SensorThings interoperability | Deterministic mapper, tenant-scoped read-only PostgreSQL export, route authorization/negative-test coverage and repository-side document consumer-conformance validation implemented; target consumer/conformance and production acceptance remain open | AMBER |
 | Ecosystem | Reference ecosystem adoption control | Shakti adoption matrix plus repository-to-reference implementation crosswalk now exist; external conformance/field acceptance remains outstanding | AMBER |
 | Security | Production identity | Production identity provisioning controls exist | AMBER |
 | Security | Runtime least privilege | Tenant isolation contract defines non-BYPASSRLS runtime role; field-sync business transactions now establish transaction-local tenant context; production role provisioning/proof remains | OPEN |
