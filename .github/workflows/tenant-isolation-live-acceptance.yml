@@ -29,6 +29,22 @@ jobs:
             exit 1
           fi
 
+      - name: Verify Shakti migration baseline
+        run: |
+          set -euo pipefail
+          mkdir -p tenant-isolation-evidence
+          psql "$RUPAYKG_DDL_DATABASE_URL" \
+            -v ON_ERROR_STOP=1 \
+            -c "select current_database() as database, current_user as user_name, session_user as session_user;" \
+            -c "select version, filename, applied_at from schema_migrations where version in ('097','098','099') order by version;" \
+            2>&1 | tee tenant-isolation-evidence/migration-baseline.txt
+          for version in 097 098 099; do
+            if ! grep -q "^ *${version} *|" tenant-isolation-evidence/migration-baseline.txt; then
+              echo "Required Shakti migration ${version} is not applied to the acceptance database."
+              exit 1
+            fi
+          done
+
       - name: Verify controlled DDL role preflight
         run: |
           set -euo pipefail
@@ -104,5 +120,5 @@ jobs:
       - name: Acceptance result
         run: |
           echo "TENANT ISOLATION LIVE ACCEPTANCE PASSED."
-          echo "Evidence: non-BYPASSRLS runtime role + required privileges + RLS enabled + cross-tenant read/mutate denial."
+          echo "Evidence: Shakti migrations 097-099 + non-BYPASSRLS runtime role + required privileges + RLS enabled + cross-tenant read/mutate denial."
           echo "Evidence artifact: tenant-isolation-live-acceptance-${GITHUB_RUN_ID}"
