@@ -27,6 +27,10 @@ const requiredGrants = [
   "grant insert on table public.organization_verification_evidence to rupaykg_app_runtime;",
   "grant insert, update on table public.stakeholder_applications to rupaykg_app_runtime;",
   "grant update on table public.stakeholder_application_approvals to rupaykg_app_runtime;",
+  "grant insert on table public.audit_events to rupaykg_app_runtime;",
+  "grant update on table public.organization_geography_scopes to rupaykg_app_runtime;",
+  "grant update on table public.organization_verification_evidence to rupaykg_app_runtime;",
+  "grant update on table public.organizations to rupaykg_app_runtime;",
 ];
 
 const missing = requiredGrants.filter((line) => !grantSource.includes(line));
