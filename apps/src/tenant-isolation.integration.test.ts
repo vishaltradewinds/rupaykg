@@ -970,6 +970,50 @@ test("Shakti RLS field-sync evidence is identity/device/tenant isolated", { skip
 });
 
 
+
+test("Shakti credential runtime privilege is status-only", { skip: !enabled }, async () => {
+  const runtimePool = new Pool({ connectionString: process.env.DATABASE_URL });
+  const ownerPool = new Pool({ connectionString: process.env.RUPAYKG_TEST_OWNER_DATABASE_URL });
+  const suffix = randomBytes(8).toString("hex");
+  let organizationA = "", identityId = "", roleA = "", membershipA = "", credentialA = "";
+  try {
+    organizationA = (await ownerPool.query<{ id: string }>("insert into organizations(name,organization_type,status) values($1,'test_fixture','VERIFIED') returning id", ["TEST-CRED-PRIV-" + suffix])).rows[0]!.id;
+    identityId = (await ownerPool.query<{ id: string }>("insert into identities(external_subject,display_name,email,status) values($1,$2,$3,'VERIFIED') returning id", ["cred-priv:" + suffix, "Credential Privilege " + suffix, "cred-priv-" + suffix + "@example.invalid"])).rows[0]!.id;
+    roleA = (await ownerPool.query<{ id: string }>("insert into roles(organization_id,name,permissions,geography_scope) values($1,'operator','[]'::jsonb,'[]'::jsonb) returning id", [organizationA])).rows[0]!.id;
+    membershipA = (await ownerPool.query<{ id: string }>("insert into organization_memberships(identity_id,organization_id,role_id,status) values($1,$2,$3,'VERIFIED') returning id", [identityId, organizationA, roleA])).rows[0]!.id;
+    credentialA = (await ownerPool.query<{ id: string }>("insert into credentials(issuer_organization_id,trust_root_id,status) values($1,$2,'ELIGIBLE') returning id", [organizationA, "PRIV-TRUST-" + suffix])).rows[0]!.id;
+
+    const client = await runtimePool.connect();
+    try {
+      await client.query("begin");
+      await client.query("set local role rupaykg_app_runtime");
+      await client.query("select app.set_request_context($1,$2)", [identityId, organizationA]);
+      await assert.rejects(
+        () => client.query("update credentials set trust_root_id=$2 where id=$1", [credentialA, "PRIV-CHANGED-" + suffix]),
+        /permission denied|not permitted/i,
+      );
+      await assert.rejects(
+        () => client.query("update credentials set status='ACTIVE', trust_root_id=$2 where id=$1", [credentialA, "PRIV-COMBINED-" + suffix]),
+        /permission denied|not permitted/i,
+      );
+      await client.query("rollback");
+    } catch (error) {
+      try { await client.query("rollback"); } catch {}
+      throw error;
+    } finally {
+      client.release();
+    }
+  } finally {
+    if (credentialA) await ownerPool.query("delete from credentials where id=$1", [credentialA]);
+    if (membershipA) await ownerPool.query("delete from organization_memberships where id=$1", [membershipA]);
+    if (roleA) await ownerPool.query("delete from roles where id=$1", [roleA]);
+    if (identityId) await ownerPool.query("delete from identities where id=$1", [identityId]);
+    if (organizationA) await ownerPool.query("delete from organizations where id=$1", [organizationA]);
+    await runtimePool.end();
+    await ownerPool.end();
+  }
+});
+
 test("Shakti assigned verifier registry read is scoped to approved active verifier", { skip: !enabled }, async () => {
   const runtimePool = new Pool({ connectionString: process.env.DATABASE_URL });
   const ownerPool = new Pool({ connectionString: process.env.RUPAYKG_TEST_OWNER_DATABASE_URL });
