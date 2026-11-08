@@ -55,3 +55,9 @@ The endpoint is an interoperability export boundary, not a regulatory or MRV dec
 Repository route-level coverage now exercises authenticated organization-scoped export, cross-organization measurement denial, missing authentication, organization-header rejection, missing-measurement 404 behavior, and the non-synthetic response boundary. These tests use a controlled fake database boundary and therefore do not substitute for live production evidence.
 
 Runtime acceptance remains open until this endpoint is exercised against the target production database and the resulting representation is validated by an actual SensorThings consumer/conformance test suite.
+
+## Consumer conformance gate
+
+A deterministic `validateSensorThingsDocument()` gate now verifies the exported interoperability document's core entity identities and relationship graph, including Thing/Sensor/ObservedProperty/Datastream/Observation linkage and GeoJSON location validity.
+
+This is a repository-side consumer-contract gate. It does not establish official OGC certification or prove acceptance by a third-party SensorThings implementation. Target-consumer interoperability and production acceptance remain separate evidence gates.
