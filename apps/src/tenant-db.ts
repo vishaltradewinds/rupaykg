@@ -63,7 +63,7 @@ export async function withTenantTransaction<T>(
   try {
     await client.query("begin");
     const membership = await client.query<{ ok: boolean }>(
-      "select exists (select 1 from organization_memberships where identity_id=$1 and organization_id=$2 and status='VERIFIED') as ok",
+      "select exists (select 1 from organization_memberships om join organizations o on o.id=om.organization_id and o.status='VERIFIED' where om.identity_id=$1 and om.organization_id=$2 and om.status='VERIFIED') as ok",
       [auth.identityId, auth.activeOrganizationId],
     );
     if (membership.rows[0]?.ok !== true) {
