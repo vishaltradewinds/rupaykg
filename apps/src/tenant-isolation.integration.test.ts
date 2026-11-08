@@ -420,10 +420,24 @@ test("Shakti RLS child-row scope follows the parent activity tenant", { skip: !e
       assert.equal(visible.rows[0]!.id, measurementA);
       assert.equal(visible.rows[0]!.activity_id, activityA);
 
+      const sameTenantUpdate = await client.query<{ id: string; value: string }>(
+        "update measurements set value=1.5 where id=$1 returning id,value",
+        [measurementA],
+      );
+      assert.equal(sameTenantUpdate.rows[0]!.id, measurementA);
+      assert.equal(sameTenantUpdate.rows[0]!.value, "1.5");
+
       await assert.rejects(
         () => client.query(
           "insert into measurements(activity_id,value,unit,method,source,measured_at,metadata) values($1,3,'kg','RLS_TEST','fixture',now(),'{}'::jsonb)",
           [activityB],
+        ),
+        /row-level security|policy/i,
+      );
+      await assert.rejects(
+        () => client.query(
+          "update measurements set value=4 where id=$1",
+          [measurementB],
         ),
         /row-level security|policy/i,
       );
