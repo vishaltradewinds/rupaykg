@@ -874,3 +874,11 @@
 - Checkpoint: `928c0b4925ac7f834c0f65bbf290e186a7adc2ad`.
 - Exact-head CI: **NOT VERIFIED** until GitHub reports a workflow run for this head.
 - Production remains **READ-ONLY/HOLD**.
+
+### 2026-11-08 — Identity-liveness function boundary correction
+- Re-inspection found the previous identity-liveness contract boundary fix contained a one-character delimiter typo: it checked for `$;` instead of PostgreSQL's `$$;` terminator for the two hardening functions.
+- Corrected the executable boundary to support the actual `$$;` hardening delimiter and the `$shakti$;` completion delimiter.
+- This restores function-scoped contract inspection rather than accidental whole-file inspection.
+- Checkpoint: `4fcb3cd747459636b5a2c13de3bff7fb714d29dd`.
+- Exact-head CI: **NOT VERIFIED** until GitHub reports a workflow run for this head.
+- Production remains **READ-ONLY/HOLD**.
