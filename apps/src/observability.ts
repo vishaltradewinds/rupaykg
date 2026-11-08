@@ -77,13 +77,13 @@ export function validateObservabilitySpan(span: ObservabilitySpan): void {
   if (span.parentSpanId && (!validHex(span.parentSpanId, 16) || /^0+$/.test(span.parentSpanId))) {
     throw new Error("Invalid OTEL parentSpanId");
   }
-  if (!/^\\d+$/.test(span.startTimeUnixNano) || !/^\\d+$/.test(span.endTimeUnixNano)) {
+  if (!/^\d+$/.test(span.startTimeUnixNano) || !/^\\d+$/.test(span.endTimeUnixNano)) {
     throw new Error("OTEL span timestamps must be Unix nanoseconds");
   }
   if (BigInt(span.endTimeUnixNano) < BigInt(span.startTimeUnixNano)) {
     throw new Error("OTEL span end time precedes start time");
   }
-  const forbidden = /^(authorization|cookie|set-cookie|request\\.body|response\\.body|payload|token|password|secret)$/i;
+  const forbidden = /^(authorization|cookie|set-cookie|request\.body|response\.body|payload|token|password|secret)$/i;
   for (const key of Object.keys(span.attributes)) {
     if (forbidden.test(key)) throw new Error(`Forbidden sensitive span attribute: ${key}`);
   }
