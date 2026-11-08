@@ -650,3 +650,15 @@
 - Latest checkpoint commit: `9dfafa944ce87b75e943a0f228213909ad7d3ee5`.
 - Exact-head CI: **NOT VERIFIED**.
 - Production remains **READ-ONLY/HOLD**.
+
+
+### 2026-11-08 — Credential runtime acceptance completed
+- Strengthened the disposable DB acceptance to prove the intended positive/negative boundary:
+  - runtime `status` update is permitted;
+  - authority-field `trust_root_id` update is denied;
+  - mixed `status + trust_root_id` update is denied;
+  - runtime credential DELETE is denied.
+- The positive status mutation is rolled back before the negative checks, so the lifecycle atomicity trigger is not conflated with privilege acceptance.
+- Latest checkpoint commit: `fcfa4ee6258ce986ceeed5368f0be6d96c25c934`.
+- Exact-head CI: **NOT VERIFIED**.
+- Production remains **READ-ONLY/HOLD**.
